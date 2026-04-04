@@ -37,5 +37,5 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-      - run: npm install -g npm@latest
-      - run: npm publish --provenance --access public
+      - run: npm install -g npm@11.11.0 && npm install -g npm@latest
+      - run: NODE_AUTH_TOKEN="" npm publish --provenance --access public
