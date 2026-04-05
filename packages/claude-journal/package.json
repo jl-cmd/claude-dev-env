@@ -1,6 +1,6 @@
 {
     "name": "claude-journal",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Memory and session management for Claude Code. Includes /dream, /session-log, and /session-tidy.",
     "type": "module",
     "bin": {

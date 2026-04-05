@@ -1,5 +1,5 @@
 {
-    "packages/claude-dev-env": "1.4.1",
-    "packages/claude-journal": "1.3.0",
-    "packages/claude-deep-research": "1.0.0"
+    "packages/claude-dev-env": "1.5.0",
+    "packages/claude-journal": "1.4.0",
+    "packages/claude-deep-research": "1.1.0"
 }

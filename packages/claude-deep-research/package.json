@@ -1,6 +1,6 @@
 {
     "name": "claude-deep-research",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Official-docs-first deep research plugin for Claude Code. Includes /deep-research and /research-mode.",
     "type": "module",
     "bin": {
