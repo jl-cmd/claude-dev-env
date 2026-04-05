@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.2.0...claude-dev-env-v1.2.1) (2026-04-05)
+
+
+### Bug Fixes
+
+* **installer:** resolve duplicated hooks path in merged hook commands ([ec6034a](https://github.com/jl-cmd/claude-code-config/commit/ec6034a5e6a484c53f732e0bdea99fe1f3a8cdc2))
+* **notification:** gracefully handle missing notify-send in Linux hooks ([f8598a4](https://github.com/jl-cmd/claude-code-config/commit/f8598a4c2e524ce5d3d71a1fe69879f74964b3cf))
+
 ## [1.2.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.1.0...claude-dev-env-v1.2.0) (2026-04-04)
 
 
