@@ -3,6 +3,10 @@
 import os
 import platform
 import subprocess
+import json
+import time
+import uuid
+import shutil
 
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "claude-notifications")
 NTFY_BASE_URL = f"https://ntfy.sh/{NTFY_TOPIC}"
@@ -12,6 +16,8 @@ LINUX_NOTIFICATION_TIMEOUT_MS = "3000"
 TOAST_DISPLAY_DURATION_MILLISECONDS = 6000
 DEFAULT_LINUX_TOAST_TITLE = "Claude Code"
 DEFAULT_LINUX_TOAST_MESSAGE = "Waiting for your input"
+DEBUG_LOG_PATH = "debug-4e2ac7.log"
+DEBUG_SESSION_ID = "4e2ac7"
 
 TOAST_SCRIPT_TEMPLATE = r'''
 Add-Type -AssemblyName System.Windows.Forms
@@ -104,6 +110,24 @@ def is_wsl() -> bool:
         return False
 
 
+def _debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    payload = {
+        "sessionId": DEBUG_SESSION_ID,
+        "id": f"log_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}",
+        "timestamp": int(time.time() * 1000),
+        "location": location,
+        "message": message,
+        "data": data,
+        "runId": run_id,
+        "hypothesisId": hypothesis_id,
+    }
+    try:
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as debug_file:
+            debug_file.write(json.dumps(payload) + "\n")
+    except OSError:
+        pass
+
+
 def build_toast_script(title: str, message: str) -> str:
     safe_title = title.replace('"', '`"').replace("'", "`'")
     safe_message = message.replace('"', '`"').replace("'", "`'")
@@ -156,15 +180,45 @@ def notify_ntfy(title: str, message: str, priority: str = "high") -> None:
 
 
 def notify_linux() -> None:
-    subprocess.Popen(
-        [
-            "notify-send", "-t", LINUX_NOTIFICATION_TIMEOUT_MS,
-            "-u", "normal", "-i", "dialog-warning",
-            DEFAULT_LINUX_TOAST_TITLE, DEFAULT_LINUX_TOAST_MESSAGE,
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+    notify_command = [
+        "notify-send", "-t", LINUX_NOTIFICATION_TIMEOUT_MS,
+        "-u", "normal", "-i", "dialog-warning",
+        DEFAULT_LINUX_TOAST_TITLE, DEFAULT_LINUX_TOAST_MESSAGE,
+    ]
+    # #region agent log
+    _debug_log(
+        run_id="pre-fix",
+        hypothesis_id="H1",
+        location="hooks/notification/notification_utils.py:189",
+        message="notify_linux environment snapshot",
+        data={
+            "notify_send_path": shutil.which("notify-send"),
+            "display": os.environ.get("DISPLAY"),
+            "wayland_display": os.environ.get("WAYLAND_DISPLAY"),
+            "path_has_usr_bin": "/usr/bin" in os.environ.get("PATH", ""),
+        },
     )
+    # #endregion
+    try:
+        subprocess.Popen(
+            notify_command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError as error:
+        # #region agent log
+        _debug_log(
+            run_id="post-fix",
+            hypothesis_id="H2",
+            location="hooks/notification/notification_utils.py:207",
+            message="notify_linux FileNotFoundError",
+            data={
+                "error": str(error),
+                "notify_command": notify_command,
+            },
+        )
+        # #endregion
+        return
 
 
 def sound_windows() -> None:
