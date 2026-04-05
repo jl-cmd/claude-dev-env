@@ -29,7 +29,7 @@ Scan the current repo root for these directories:
 | `commands/` | Slash commands (.md) | `~/.claude/commands/` |
 | `agents/` | Agent definitions (.md) | `~/.claude/agents/` |
 | `skills/` | Skill packages (subdirs) | `~/.claude/skills/` |
-| `hooks/` | Hook scripts + hooks.json | Merge into `~/.claude/settings.json` |
+| `hooks/` | Hook scripts (+ optional hooks.json manifest) | Merge into `~/.claude/settings.json` |
 
 Use Glob to find which directories exist and count files in each. Report findings to the user.
 
@@ -96,6 +96,10 @@ If hooks/hooks.json exists:
   - Check for duplicate matcher groups (idempotent — skip if already present)
   - Append new groups
 - Write settings.json with `JSON.stringify(data, null, 4)`
+
+Important runtime note:
+- `~/.claude/settings.json` is the runtime source of truth for hooks.
+- `hooks/hooks.json` is a packaging/install manifest input for merge workflows, not a runtime file Claude reads directly.
 
 Print summary:
 ```
@@ -176,8 +180,8 @@ When ready to publish: `npm publish`
 ## Remember
 
 - Zero external dependencies — only Node.js built-ins
-- hooks.json in the repo stays canonical (python3 + ${CLAUDE_PLUGIN_ROOT})
-- Rewriting happens only in the destination settings.json
+- If present, hooks.json in the repo stays canonical (python3 + ${CLAUDE_PLUGIN_ROOT})
+- Rewriting happens only in the destination settings.json (runtime source of truth)
 - path.join() everywhere — never concatenate paths with `/` or `\`
 - Idempotent: running twice produces the same result
 - Log every file action so the user sees what changed

@@ -175,7 +175,7 @@ Displays updated context
 
 ### With Hooks
 
-**SessionStart Hook** (~/.claude/hooks/hooks.json):
+**SessionStart Hook** (~/.claude/settings.json):
 ```json
 {
   "name": "auto-load-project-context",
