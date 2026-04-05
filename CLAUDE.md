@@ -1,18 +1,24 @@
 # Development Environment
 
-## Plugin Ecosystem
+## Monorepo Structure
 
-claude-code-config is the primary plugin providing rules, docs, agents, commands, skills, and hooks. All behavioral rules live in `.claude/rules/` files. Additional plugins: claude-journal, claude-deep-research, claude-workflow, GSD (npx get-shit-done-cc).
+This is an npm workspaces monorepo with three packages in `packages/`:
+
+- `packages/claude-dev-env/` -- main package: rules, docs, commands, agents, skills, hooks
+- `packages/claude-journal/` -- journal skills: dream, session-log, session-tidy
+- `packages/claude-deep-research/` -- research skills and agent: deep-research, research-mode
+
+The main installer (`packages/claude-dev-env/bin/install.mjs`) discovers and installs content from workspace siblings. Each package also has a standalone installer for independent use. Additional external plugins: claude-workflow, GSD (npx get-shit-done-cc).
 
 ## Docs
 
-Reference documents in `docs/` are available but not auto-loaded. Skills can `@` import them as needed.
+Reference documents in `packages/claude-dev-env/docs/` are available but not auto-loaded. Skills can `@` import them as needed.
 
-- `docs/CODE_RULES.md` -- hook-enforced code standards
-- `docs/TEST_QUALITY.md` -- testing quality guidelines
-- `docs/emotion-informed-prompt-design.md` -- emotion-informed prompt design (Anthropic research + best practices)
-- `docs/REACT_PATTERNS.md` -- React patterns
-- `docs/DJANGO_PATTERNS.md` -- Django patterns
+- `packages/claude-dev-env/docs/CODE_RULES.md` -- hook-enforced code standards
+- `packages/claude-dev-env/docs/TEST_QUALITY.md` -- testing quality guidelines
+- `packages/claude-dev-env/docs/emotion-informed-prompt-design.md` -- emotion-informed prompt design (Anthropic research + best practices)
+- `packages/claude-dev-env/docs/REACT_PATTERNS.md` -- React patterns
+- `packages/claude-dev-env/docs/DJANGO_PATTERNS.md` -- Django patterns
 
 ## Agent Gate
 

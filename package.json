@@ -1,30 +1,8 @@
 {
-    "name": "claude-dev-env",
-    "version": "1.4.0",
-    "description": "Claude Code development standards — rules, hooks, agents, commands, and skills",
-    "type": "module",
-    "bin": {
-        "claude-dev-env": "bin/install.mjs"
-    },
-    "files": [
-        "bin/",
-        "rules/",
-        "docs/",
-        "commands/",
-        "agents/",
-        "skills/",
-        "hooks/"
+    "private": true,
+    "workspaces": [
+        "packages/*"
     ],
-    "keywords": [
-        "claude-code",
-        "plugin",
-        "cli",
-        "tdd",
-        "code-quality"
-    ],
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/jl-cmd/claude-code-config.git"
-    }
+    "name": "claude-code-config",
+    "description": "Claude Code plugin ecosystem monorepo"
 }
