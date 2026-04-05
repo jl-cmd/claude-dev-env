@@ -12,21 +12,6 @@ const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
 const PACKAGE_NAME = 'claude-dev-env';
 
 const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents'];
-const DEBUG_LOG_PROMISES = [];
-
-function emitDebugLog(payload) {
-    const normalizedPayload = {
-        ...payload,
-        id: payload.id ?? `log_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-    };
-    const requestPromise = fetch('http://127.0.0.1:7406/ingest/5f8afc41-3591-4b21-9ef8-c5789988a50e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4e2ac7'},body:JSON.stringify(normalizedPayload)}).catch(()=>{});
-    DEBUG_LOG_PROMISES.push(requestPromise);
-}
-
-async function flushDebugLogs() {
-    if (DEBUG_LOG_PROMISES.length === 0) return;
-    await Promise.allSettled(DEBUG_LOG_PROMISES);
-}
 
 function detectPython() {
     const candidates = [
@@ -97,26 +82,14 @@ function mergeHooks(pythonCommand) {
     if (!settings.hooks) settings.hooks = {};
     const installedHooksDir = join(CLAUDE_HOME, 'hooks');
     const pluginRootDir = CLAUDE_HOME;
-    // #region agent log
-    emitDebugLog({sessionId:'4e2ac7',runId:'mergeHooks-pre',hypothesisId:'H1',location:'bin/install.mjs:95',message:'mergeHooks path roots',data:{claudeHome:CLAUDE_HOME,installedHooksDir,exampleTemplate:hooksConfig?.hooks?.UserPromptSubmit?.[0]?.hooks?.[0]?.command ?? null},timestamp:Date.now()});
-    // #endregion
     let groupCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(hooksConfig.hooks)) {
         if (!settings.hooks[eventType]) settings.hooks[eventType] = [];
         for (const sourceGroup of matcherGroups) {
             const rewrittenHooks = sourceGroup.hooks.map(hook => {
                 let command = hook.command;
-                // #region agent log
-                emitDebugLog({sessionId:'4e2ac7',runId:'mergeHooks-map',hypothesisId:'H2',location:'bin/install.mjs:102',message:'template command before replacement',data:{eventType,matcher:sourceGroup.matcher,originalCommand:hook.command},timestamp:Date.now()});
-                // #endregion
                 command = command.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootDir.replace(/\\/g, '/'));
-                // #region agent log
-                emitDebugLog({sessionId:'4e2ac7',runId:'mergeHooks-map',hypothesisId:'H3',location:'bin/install.mjs:105',message:'command after CLAUDE_PLUGIN_ROOT replacement',data:{eventType,matcher:sourceGroup.matcher,rewrittenCommand:command,hasDoubleHooksSegment:command.includes('/hooks/hooks/')},timestamp:Date.now()});
-                // #endregion
                 command = command.replace(/^python3\b/, pythonCommand);
-                // #region agent log
-                emitDebugLog({sessionId:'4e2ac7',runId:'mergeHooks-map',hypothesisId:'H4',location:'bin/install.mjs:108',message:'final rewritten command',data:{eventType,matcher:sourceGroup.matcher,pythonCommand,finalCommand:command},timestamp:Date.now()});
-                // #endregion
                 return { ...hook, command };
             });
             const existingIndex = settings.hooks[eventType].findIndex(
@@ -146,7 +119,7 @@ function writeManifest(installedFiles) {
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
 }
 
-async function install() {
+function install() {
     console.log(`\nInstalling ${PACKAGE_NAME}...\n`);
     const pythonCommand = detectPython();
     if (!pythonCommand) {
@@ -217,10 +190,9 @@ async function install() {
         console.log(`  hooks: ${summary.hookFiles.created + summary.hookFiles.updated} files, ${summary.hookGroups} groups in settings.json`);
     }
     console.log(`  python: ${pythonCommand}\n`);
-    await flushDebugLogs();
 }
 
-async function uninstall() {
+function uninstall() {
     console.log(`\nUninstalling ${PACKAGE_NAME}...\n`);
     if (!existsSync(MANIFEST_FILE)) {
         console.error('No installation manifest found. Nothing to uninstall.');
@@ -264,7 +236,6 @@ async function uninstall() {
         } catch { /* leave non-empty dirs */ }
     }
     console.log(`\nRemoved ${removed} files.\n`);
-    await flushDebugLogs();
 }
 
 function printHelp() {
@@ -282,5 +253,5 @@ Install location: ~/.claude/
 
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) printHelp();
-else if (args.includes('--uninstall')) await uninstall();
-else await install();
+else if (args.includes('--uninstall')) uninstall();
+else install();

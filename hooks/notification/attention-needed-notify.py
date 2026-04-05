@@ -11,7 +11,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from notification_utils import (
-    _debug_log,
     notify_ntfy,
     is_wsl,
     notify_windows,
@@ -45,19 +44,6 @@ def main() -> None:
 
     project_name = get_project_name()
     question_text = get_question_from_stdin()
-    # #region agent log
-    _debug_log(
-        run_id="pre-fix",
-        hypothesis_id="H3",
-        location="hooks/notification/attention-needed-notify.py:50",
-        message="notification hook routing decision",
-        data={
-            "system": system,
-            "is_wsl": wsl_mode,
-            "question_length": len(question_text),
-        },
-    )
-    # #endregion
 
     notify_ntfy(title=project_name, message=question_text)
 
