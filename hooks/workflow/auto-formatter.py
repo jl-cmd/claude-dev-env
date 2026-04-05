@@ -1,10 +1,45 @@
 #!/usr/bin/env python3
 
+import importlib
 import json
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
+
+NOTIFICATION_UTILS_DIRECTORY = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "notification"
+)
+sys.path.insert(0, NOTIFICATION_UTILS_DIRECTORY)
+
+
+def load_notification_utils() -> ModuleType | None:
+    try:
+        return importlib.import_module("notification_utils")
+    except ImportError:
+        return None
+
+
+def send_format_notification(file_path: str, formatter_name: str) -> None:
+    notification_module = load_notification_utils()
+    if notification_module is None:
+        return
+
+    notification_title = "Auto-Formatter"
+    notification_body = f"{formatter_name} formatted: {Path(file_path).name}"
+
+    try:
+        if notification_module.is_wsl():
+            notification_module.notify_wsl(notification_title, notification_body)
+        elif platform.system() == "Linux":
+            notification_module.notify_linux()
+        elif platform.system() == "Windows":
+            notification_module.notify_windows(notification_title, notification_body)
+    except (AttributeError, OSError):
+        pass
+
 
 PYTHON_EXTENSIONS = {".py"}
 JS_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs"}
@@ -89,6 +124,8 @@ def main() -> None:
             try:
                 format_run = subprocess.run(each_formatter_command, capture_output=True, text=True, timeout=PYTHON_FORMAT_TIMEOUT_SECONDS)
                 if format_run.returncode == 0:
+                    formatter_name = each_formatter_command[0] if each_formatter_command[0] != sys.executable else each_formatter_command[2]
+                    send_format_notification(file_path, formatter_name)
                     break
             except FileNotFoundError:
                 continue
@@ -98,12 +135,14 @@ def main() -> None:
         if not has_prettier_config(file_path):
             sys.exit(0)
         try:
-            subprocess.run(
+            prettier_run = subprocess.run(
                 ["npx", "--yes", "prettier", "--write", file_path],
                 capture_output=True,
                 text=True,
                 timeout=JS_FORMAT_TIMEOUT_SECONDS,
             )
+            if prettier_run.returncode == 0:
+                send_format_notification(file_path, "prettier")
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 

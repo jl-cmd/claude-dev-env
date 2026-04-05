@@ -40,6 +40,18 @@ Multiple GitHub accounts configured via SSH. The `git-account-switcher.py` hook 
 
 Settings.json hooks are machine-specific only. Plugin hooks are registered via the plugin system. The two do not overlap.
 
+### Hook System Architecture
+
+- **Runner pattern**: `run-hook-wrapper.js` (Node.js) -> `run-hook.py` (Python) -> individual hook
+- **Hook directory**: `hooks/` with subfolders: `session/`, `notification/`, `advisory/`, `validation/`, `lifecycle/`, `blocking/`, `git-hooks/`, `github-action/`, `workflow/`, `validators/`
+- **Event types**: SessionStart, UserPromptSubmit, PreToolUse (can block), PostToolUse, SubagentStop, Stop
+- **Adding hooks**: Create Python file in appropriate subfolder, register in settings.json using `run-hook-wrapper.js` pattern with explicit timeouts (10000-30000ms)
+- **Blocking hooks**: exit 2 with `hookSpecificOutput.permissionDecision`; advisory hooks exit 0
+
+## Bulk Operations
+
+For bulk updates (replace all, rename all, change all, fix all), use a Python script with `--preview`/`--apply` flags instead of line-by-line edits.
+
 ## Gotchas
 
 - Python command varies by platform. Detect which of `python3`, `python`, or `py -3` resolves to Python 3.12+.

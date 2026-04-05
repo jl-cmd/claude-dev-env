@@ -1,9 +1,67 @@
 import json
+import os
 import re
 import sys
 
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PR_GUIDE_PATH = os.path.join(PLUGIN_ROOT, "docs", "PR_DESCRIPTION_GUIDE.md")
 
-def main():
+REQUIRED_PR_SECTION_HEADERS = [
+    "description",
+    "why",
+    "how",
+]
+
+MINIMUM_PR_BODY_LENGTH = 50
+
+VAGUE_LANGUAGE_PATTERN = re.compile(
+    r'\b(fix(?:ed)? (?:bug|issue|it)|update(?:d)? code|minor changes|various (?:fixes|updates|improvements))\b',
+    re.IGNORECASE,
+)
+
+
+def extract_body_from_command(command: str) -> str:
+    heredoc_match = re.search(r'--body\s+"\$\(cat <<', command)
+    if heredoc_match:
+        return command[heredoc_match.start():]
+
+    body_match = re.search(r'--body\s+"([^"]*)"', command) or re.search(r"--body\s+'([^']*)'", command)
+    if body_match:
+        return body_match.group(1)
+
+    short_flag_match = re.search(r'-b\s+"([^"]*)"', command) or re.search(r"-b\s+'([^']*)'", command)
+    if short_flag_match:
+        return short_flag_match.group(1)
+
+    return ""
+
+
+def validate_pr_body(body: str) -> list[str]:
+    violations = []
+    body_lower = body.lower()
+
+    missing_required_sections = [
+        header for header in REQUIRED_PR_SECTION_HEADERS
+        if f"## {header}" not in body_lower and f"**{header}" not in body_lower
+    ]
+
+    if missing_required_sections:
+        formatted_sections = ", ".join(f"'{each_section.title()}'" for each_section in missing_required_sections)
+        violations.append(f"Missing required section(s): {formatted_sections}")
+
+    stripped_body = re.sub(r'#.*', '', body).strip()
+    stripped_body = re.sub(r'\*\*.*?\*\*', '', stripped_body).strip()
+    if len(stripped_body) < MINIMUM_PR_BODY_LENGTH:
+        violations.append("PR body too short -- provide meaningful context for reviewers")
+
+    vague_matches = VAGUE_LANGUAGE_PATTERN.findall(body)
+    if vague_matches:
+        violations.append(f"Vague language detected: {', '.join(vague_matches)} -- be specific about what changed and why")
+
+    return violations
+
+
+def main() -> None:
     try:
         input_data = json.load(sys.stdin)
     except json.JSONDecodeError:
@@ -19,62 +77,29 @@ def main():
 
     is_pr_create = "gh pr create" in command and ("--body" in command or "-b " in command)
     is_pr_edit = "gh pr edit" in command and "--body" in command
-    is_commit = re.search(r'git commit\b', command) and ("-m " in command or "-m\"" in command or "-m'" in command)
 
-    if not (is_pr_create or is_pr_edit or is_commit):
+    if not (is_pr_create or is_pr_edit):
         sys.exit(0)
 
-    body = ""
-    if is_pr_create or is_pr_edit:
-        body_match = re.search(r'--body\s+"([^"]*)"', command) or re.search(r"--body\s+'([^']*)'", command)
-        if body_match:
-            body = body_match.group(1)
-        heredoc_match = re.search(r'--body\s+"\$\(cat <<', command)
-        if heredoc_match:
-            body = command[heredoc_match.start():]
-
-    if is_commit:
-        msg_match = re.search(r'-m\s+"([^"]*)"', command) or re.search(r"-m\s+'([^']*)'", command)
-        if msg_match:
-            body = msg_match.group(1)
-        heredoc_match = re.search(r'-m\s+"\$\(cat <<', command)
-        if heredoc_match:
-            body = command[heredoc_match.start():]
+    body = extract_body_from_command(command)
 
     if not body:
         sys.exit(0)
 
-    violations = []
-
-    if is_pr_create or is_pr_edit:
-        if "## Summary" not in body and "## summary" not in body.lower():
-            violations.append("Missing '## Summary' section")
-
-        has_file_bold = bool(re.search(r'\*\*\w+\.\w+\*\*', body))
-        has_bullet_section = bool(re.search(r'###.*(?:test|config|fix)', body, re.IGNORECASE))
-
-        if not has_file_bold and not has_bullet_section:
-            violations.append("Production changes must be grouped by file with **filename** bold headers explaining WHY")
-
-        jargon_patterns = [
-            (r'\bDexie\b', "Dexie (say 'database' or 'local database')"),
-            (r'\bReact Query\b', "React Query (say 'cache' or 'data cache')"),
-            (r'\bsyncStatus\b', "syncStatus (describe the behavior, not the field)"),
-            (r'\blocalUpdatedAt\b', "localUpdatedAt (describe the behavior, not the field)"),
-            (r'\bpullStartedAt\b', "pullStartedAt (describe the behavior, not the field)"),
-            (r'\buseMutation\b', "useMutation (describe what it does for the user)"),
-        ]
-        for pattern, name in jargon_patterns:
-            if re.search(pattern, body):
-                violations.append(f"Jargon detected: {name}")
+    violations = validate_pr_body(body)
 
     if violations:
         violation_list = "; ".join(violations)
+        pr_guide_reference = f" @{PR_GUIDE_PATH}" if os.path.exists(PR_GUIDE_PATH) else ""
+        denial_reason = (
+            f"BLOCKED: [PR_DESCRIPTION] {violation_list}. "
+            f"Follow the PR description guide:{pr_guide_reference}"
+        )
         result = {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
-                "permissionDecisionReason": f"BLOCKED: [PR_DESCRIPTION_STYLE] {violation_list}. Use the pr-description-writer custom agent: Agent(subagent_type=\"pr-description-writer\", team_name=\"your-team\", prompt=\"Write PR description for the current branch\").",
+                "permissionDecisionReason": denial_reason,
             }
         }
         print(json.dumps(result))
