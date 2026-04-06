@@ -11,6 +11,10 @@
         "packages/claude-deep-research": {
             "release-type": "node",
             "package-name": "claude-deep-research"
+        },
+        "packages/claude-prompt-tools": {
+            "release-type": "node",
+            "package-name": "claude-prompt-tools"
         }
     }
 }

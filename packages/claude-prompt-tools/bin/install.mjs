@@ -1,19 +1,15 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, unlinkSync, rmSync } from 'node:fs';
 import { join, dirname, resolve, relative } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
-const PACKAGE_NAME = 'claude-dev-env';
-
-const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents'];
-const WORKSPACE_SIBLINGS = ['claude-journal', 'claude-deep-research', 'claude-prompt-tools'];
+const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-prompt-tools-manifest.json');
+const PACKAGE_NAME = 'claude-prompt-tools';
 
 function detectPython() {
     const candidates = [
@@ -59,10 +55,10 @@ function copyTree(sourceBase, destBase) {
         stats.paths.push(destFile);
         if (existed) {
             stats.updated++;
-            console.log(`  \u21bb ${join(relative(CLAUDE_HOME, destBase), relativePath)} (updated)`);
+            console.log(`  ↻ ${join(relative(CLAUDE_HOME, destBase), relativePath)} (updated)`);
         } else {
             stats.created++;
-            console.log(`  \u2713 ${join(relative(CLAUDE_HOME, destBase), relativePath)} (new)`);
+            console.log(`  ✓ ${join(relative(CLAUDE_HOME, destBase), relativePath)} (new)`);
         }
     }
     return stats;
@@ -116,72 +112,6 @@ function mergeHooks(pythonCommand) {
     return groupCount;
 }
 
-function findSiblingPackage(packageName) {
-    const workspaceRoot = resolve(PACKAGE_ROOT, '..', '..');
-    const workspacePath = join(workspaceRoot, 'packages', packageName);
-    if (existsSync(join(workspacePath, 'package.json'))) {
-        return workspacePath;
-    }
-    const require = createRequire(import.meta.url);
-    try {
-        const packageJsonPath = require.resolve(join(packageName, 'package.json'));
-        return dirname(packageJsonPath);
-    } catch { /* not found */ }
-    return null;
-}
-
-function installSiblingContent(siblingRoot, allInstalledFiles) {
-    const siblingName = JSON.parse(readFileSync(join(siblingRoot, 'package.json'), 'utf8')).name;
-    console.log(`  Installing sibling: ${siblingName}`);
-    let totalFiles = 0;
-    const skillsSource = join(siblingRoot, 'skills');
-    if (existsSync(skillsSource)) {
-        const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
-        for (const skillDir of skillDirs) {
-            const stats = copyTree(join(skillsSource, skillDir.name), join(CLAUDE_HOME, 'skills', skillDir.name));
-            allInstalledFiles.push(...stats.paths);
-            totalFiles += stats.created + stats.updated;
-        }
-    }
-    const agentsSource = join(siblingRoot, 'agents');
-    if (existsSync(agentsSource)) {
-        const stats = copyTree(agentsSource, join(CLAUDE_HOME, 'agents'));
-        allInstalledFiles.push(...stats.paths);
-        totalFiles += stats.created + stats.updated;
-    }
-    const rulesSource = join(siblingRoot, 'rules');
-    if (existsSync(rulesSource)) {
-        const stats = copyTree(rulesSource, join(CLAUDE_HOME, 'rules'));
-        allInstalledFiles.push(...stats.paths);
-        totalFiles += stats.created + stats.updated;
-    }
-    const hooksSource = join(siblingRoot, 'hooks');
-    if (existsSync(hooksSource)) {
-        const filesToCopy = collectFiles(hooksSource).filter(file => !file.endsWith('hooks.json'));
-        const hooksDestination = join(CLAUDE_HOME, 'hooks');
-        for (const sourceFile of filesToCopy) {
-            const relativePath = relative(hooksSource, sourceFile);
-            const destFile = join(hooksDestination, relativePath);
-            mkdirSync(dirname(destFile), { recursive: true });
-            const existed = existsSync(destFile);
-            copyFileSync(sourceFile, destFile);
-            allInstalledFiles.push(destFile);
-            totalFiles++;
-            if (existed) {
-                console.log(`  ↻ ${join('hooks', relativePath)} (updated)`);
-            } else {
-                console.log(`  ✓ ${join('hooks', relativePath)} (new)`);
-            }
-        }
-    }
-    return totalFiles;
-}
-
-function writeManifest(installedFiles) {
-    const manifest = { package: PACKAGE_NAME, version: '1.0.0', installedAt: new Date().toISOString(), files: installedFiles };
-    writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
-}
-
 function install() {
     console.log(`\nInstalling ${PACKAGE_NAME}...\n`);
     const pythonCommand = detectPython();
@@ -193,14 +123,8 @@ function install() {
     mkdirSync(CLAUDE_HOME, { recursive: true });
     const allInstalledFiles = [];
     const summary = {};
-    for (const directory of CONTENT_DIRECTORIES) {
-        const sourceDir = join(PACKAGE_ROOT, directory);
-        if (!existsSync(sourceDir)) continue;
-        const destDir = join(CLAUDE_HOME, directory);
-        const stats = copyTree(sourceDir, destDir);
-        summary[directory] = stats;
-        allInstalledFiles.push(...stats.paths);
-    }
+
+    // Install skills (each subdirectory as its own skill)
     const skillsSource = join(PACKAGE_ROOT, 'skills');
     if (existsSync(skillsSource)) {
         const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
@@ -213,19 +137,19 @@ function install() {
             skillsUpdated += stats.updated;
             skillPaths.push(...stats.paths);
         }
-        summary.skills = { created: skillsCreated, updated: skillsUpdated, paths: skillPaths };
+        summary.skills = { created: skillsCreated, updated: skillsUpdated };
         allInstalledFiles.push(...skillPaths);
     }
-    let siblingCount = 0;
-    for (const siblingName of WORKSPACE_SIBLINGS) {
-        const siblingRoot = findSiblingPackage(siblingName);
-        if (siblingRoot) {
-            siblingCount += installSiblingContent(siblingRoot, allInstalledFiles);
-        }
+
+    // Install rules
+    const rulesSource = join(PACKAGE_ROOT, 'rules');
+    if (existsSync(rulesSource)) {
+        const stats = copyTree(rulesSource, join(CLAUDE_HOME, 'rules'));
+        summary.rules = stats;
+        allInstalledFiles.push(...stats.paths);
     }
-    if (siblingCount > 0) {
-        summary.siblings = siblingCount;
-    }
+
+    // Install hook files (excluding hooks.json)
     const hooksSource = join(PACKAGE_ROOT, 'hooks');
     if (existsSync(hooksSource)) {
         const hooksDestination = join(CLAUDE_HOME, 'hooks');
@@ -247,20 +171,19 @@ function install() {
         summary.hookGroups = groupCount;
         console.log(`  Hook groups: ${groupCount} merged into settings.json`);
     }
-    writeManifest(allInstalledFiles);
+
+    // Write manifest
+    const manifest = { package: PACKAGE_NAME, version: '1.0.0', installedAt: new Date().toISOString(), files: allInstalledFiles };
+    writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
+
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
-    for (const directory of CONTENT_DIRECTORIES) {
-        if (summary[directory]) {
-            const { created, updated } = summary[directory];
-            console.log(`  ${directory}: ${created + updated} files (${created} new, ${updated} updated)`);
-        }
-    }
     if (summary.skills) {
         const { created, updated } = summary.skills;
         console.log(`  skills: ${created + updated} files (${created} new, ${updated} updated)`);
     }
-    if (summary.siblings) {
-        console.log(`  workspace siblings: ${summary.siblings} files`);
+    if (summary.rules) {
+        const { created, updated } = summary.rules;
+        console.log(`  rules: ${created + updated} files (${created} new, ${updated} updated)`);
     }
     if (summary.hookFiles) {
         console.log(`  hooks: ${summary.hookFiles.created + summary.hookFiles.updated} files, ${summary.hookGroups} groups in settings.json`);
@@ -279,10 +202,12 @@ function uninstall() {
     for (const filePath of manifest.files) {
         if (existsSync(filePath)) {
             unlinkSync(filePath);
-            console.log(`  \u2717 ${relative(CLAUDE_HOME, filePath)} (removed)`);
+            console.log(`  ✗ ${relative(CLAUDE_HOME, filePath)} (removed)`);
             removed++;
         }
     }
+
+    // Clean hook entries from settings.json
     const settingsPath = join(CLAUDE_HOME, 'settings.json');
     if (existsSync(settingsPath)) {
         const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
@@ -302,24 +227,31 @@ function uninstall() {
             console.log('  Hook entries removed from settings.json');
         }
     }
+
     unlinkSync(MANIFEST_FILE);
-    for (const directory of [...CONTENT_DIRECTORIES, 'skills', 'hooks']) {
+
+    // Clean up empty directories
+    for (const directory of ['skills', 'rules', 'hooks']) {
         const dirPath = join(CLAUDE_HOME, directory);
-        try {
-            if (existsSync(dirPath) && readdirSync(dirPath).length === 0) {
-                rmSync(dirPath, { recursive: true });
-            }
-        } catch { /* leave non-empty dirs */ }
+        if (!existsSync(dirPath)) continue;
+        for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+            const subDir = join(dirPath, entry.name);
+            try {
+                if (entry.isDirectory() && readdirSync(subDir).length === 0) {
+                    rmSync(subDir, { recursive: true });
+                }
+            } catch { /* leave non-empty dirs */ }
+        }
     }
     console.log(`\nRemoved ${removed} files.\n`);
 }
 
 function printHelp() {
     console.log(`
-${PACKAGE_NAME} - Claude Code development standards installer
+${PACKAGE_NAME} - Prompt engineering skills and workflow hooks installer
 
 Usage:
-  npx ${PACKAGE_NAME}              Install rules, hooks, agents, commands, skills
+  npx ${PACKAGE_NAME}              Install prompt skills, hooks, and rules
   npx ${PACKAGE_NAME} --uninstall  Remove installed files and hooks
   npx ${PACKAGE_NAME} --help       Show this help
 
