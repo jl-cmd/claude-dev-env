@@ -3,18 +3,6 @@
         "packages/claude-dev-env": {
             "release-type": "node",
             "package-name": "claude-dev-env"
-        },
-        "packages/claude-journal": {
-            "release-type": "node",
-            "package-name": "claude-journal"
-        },
-        "packages/claude-deep-research": {
-            "release-type": "node",
-            "package-name": "claude-deep-research"
-        },
-        "packages/claude-prompt-tools": {
-            "release-type": "node",
-            "package-name": "claude-prompt-tools"
         }
     }
 }

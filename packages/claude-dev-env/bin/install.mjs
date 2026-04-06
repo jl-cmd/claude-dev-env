@@ -5,7 +5,6 @@ import { join, dirname, resolve, relative } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,7 +12,6 @@ const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
 const PACKAGE_NAME = 'claude-dev-env';
 
 const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents'];
-const WORKSPACE_SIBLINGS = ['claude-journal', 'claude-deep-research', 'claude-prompt-tools'];
 
 function detectPython() {
     const candidates = [
@@ -116,67 +114,6 @@ function mergeHooks(pythonCommand) {
     return groupCount;
 }
 
-function findSiblingPackage(packageName) {
-    const workspaceRoot = resolve(PACKAGE_ROOT, '..', '..');
-    const workspacePath = join(workspaceRoot, 'packages', packageName);
-    if (existsSync(join(workspacePath, 'package.json'))) {
-        return workspacePath;
-    }
-    const require = createRequire(import.meta.url);
-    try {
-        const packageJsonPath = require.resolve(join(packageName, 'package.json'));
-        return dirname(packageJsonPath);
-    } catch { /* not found */ }
-    return null;
-}
-
-function installSiblingContent(siblingRoot, allInstalledFiles) {
-    const siblingName = JSON.parse(readFileSync(join(siblingRoot, 'package.json'), 'utf8')).name;
-    console.log(`  Installing sibling: ${siblingName}`);
-    let totalFiles = 0;
-    const skillsSource = join(siblingRoot, 'skills');
-    if (existsSync(skillsSource)) {
-        const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
-        for (const skillDir of skillDirs) {
-            const stats = copyTree(join(skillsSource, skillDir.name), join(CLAUDE_HOME, 'skills', skillDir.name));
-            allInstalledFiles.push(...stats.paths);
-            totalFiles += stats.created + stats.updated;
-        }
-    }
-    const agentsSource = join(siblingRoot, 'agents');
-    if (existsSync(agentsSource)) {
-        const stats = copyTree(agentsSource, join(CLAUDE_HOME, 'agents'));
-        allInstalledFiles.push(...stats.paths);
-        totalFiles += stats.created + stats.updated;
-    }
-    const rulesSource = join(siblingRoot, 'rules');
-    if (existsSync(rulesSource)) {
-        const stats = copyTree(rulesSource, join(CLAUDE_HOME, 'rules'));
-        allInstalledFiles.push(...stats.paths);
-        totalFiles += stats.created + stats.updated;
-    }
-    const hooksSource = join(siblingRoot, 'hooks');
-    if (existsSync(hooksSource)) {
-        const filesToCopy = collectFiles(hooksSource).filter(file => !file.endsWith('hooks.json'));
-        const hooksDestination = join(CLAUDE_HOME, 'hooks');
-        for (const sourceFile of filesToCopy) {
-            const relativePath = relative(hooksSource, sourceFile);
-            const destFile = join(hooksDestination, relativePath);
-            mkdirSync(dirname(destFile), { recursive: true });
-            const existed = existsSync(destFile);
-            copyFileSync(sourceFile, destFile);
-            allInstalledFiles.push(destFile);
-            totalFiles++;
-            if (existed) {
-                console.log(`  ↻ ${join('hooks', relativePath)} (updated)`);
-            } else {
-                console.log(`  ✓ ${join('hooks', relativePath)} (new)`);
-            }
-        }
-    }
-    return totalFiles;
-}
-
 function writeManifest(installedFiles) {
     const manifest = { package: PACKAGE_NAME, version: '1.0.0', installedAt: new Date().toISOString(), files: installedFiles };
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
@@ -216,16 +153,6 @@ function install() {
         summary.skills = { created: skillsCreated, updated: skillsUpdated, paths: skillPaths };
         allInstalledFiles.push(...skillPaths);
     }
-    let siblingCount = 0;
-    for (const siblingName of WORKSPACE_SIBLINGS) {
-        const siblingRoot = findSiblingPackage(siblingName);
-        if (siblingRoot) {
-            siblingCount += installSiblingContent(siblingRoot, allInstalledFiles);
-        }
-    }
-    if (siblingCount > 0) {
-        summary.siblings = siblingCount;
-    }
     const hooksSource = join(PACKAGE_ROOT, 'hooks');
     if (existsSync(hooksSource)) {
         const hooksDestination = join(CLAUDE_HOME, 'hooks');
@@ -258,9 +185,6 @@ function install() {
     if (summary.skills) {
         const { created, updated } = summary.skills;
         console.log(`  skills: ${created + updated} files (${created} new, ${updated} updated)`);
-    }
-    if (summary.siblings) {
-        console.log(`  workspace siblings: ${summary.siblings} files`);
     }
     if (summary.hookFiles) {
         console.log(`  hooks: ${summary.hookFiles.created + summary.hookFiles.updated} files, ${summary.hookGroups} groups in settings.json`);
