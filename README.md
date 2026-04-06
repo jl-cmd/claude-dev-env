@@ -22,12 +22,13 @@ That's it. The installer will:
 2. Copy 13 rules, 5 docs, 34 agents, 11 commands, and 14+ skills to `~/.claude/`
 3. Copy hook scripts to `~/.claude/hooks/`
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
-5. Install journal skills (dream, session-log, session-tidy) and research skills + agent (deep-research, research-mode)
+5. Install prompt tools (prompt-generator, agent-prompt, prompt-workflow hooks), journal skills (dream, session-log, session-tidy), and research skills + agent (deep-research, research-mode)
 6. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
 
-You can also install the journal or research skills on their own:
+You can also install individual skill bundles on their own:
 
 ```bash
+npx claude-prompt-tools     # prompt-generator, agent-prompt, prompt-workflow hooks
 npx claude-journal          # dream, session-log, session-tidy
 npx claude-deep-research    # deep-research, research-mode, deep-research agent
 ```
@@ -175,6 +176,7 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Bash | `block-main-commit` | Blocks direct commits to main/master branch |
 | Bash | `pr-description-enforcer` | Enforces PR description structure and style |
 | Bash | `test-preflight-check` | Validates server health and database before test runs |
+| Task\|Agent | `agent-execution-intent-gate` | Enforces structured execution intent and scope anchors for prompt-workflow launches |
 | AskUserQuestion | `attention-needed-notify` | Desktop notification when Claude needs your input |
 
 #### Other Events
@@ -182,6 +184,7 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Event | Hook | What it does |
 |-------|------|-------------|
 | SessionStart | `plugin-data-dir-cleanup` | Cleans stale plugin data on session start |
+| Stop | `prompt-workflow-stop-guard` | Blocks leakage and enforces deterministic audit coverage for prompt-workflow responses |
 | Stop | `attention-needed-notify` | Desktop notification when Claude stops |
 | Stop | `hedging-language-blocker` | Blocks responses with hedging language (anti-hallucination) |
 | SessionEnd | `session-end-cleanup` | Cleans temporary state on session end |
@@ -215,7 +218,7 @@ claude plugin install anthropics/claude-code-workflows      # Official: python-d
 claude plugin install jl-cmd/claude-workflow                # Workflow definitions with YAML schemas
 ```
 
-Note: claude-journal and claude-deep-research are now included automatically when you install claude-dev-env. They are also available as standalone npm packages (`npx claude-journal`, `npx claude-deep-research`).
+Note: claude-prompt-tools, claude-journal, and claude-deep-research are now included automatically when you install claude-dev-env. They are also available as standalone npm packages (`npx claude-prompt-tools`, `npx claude-journal`, `npx claude-deep-research`).
 
 GSD (project management) is available as an npm package:
 ```bash
