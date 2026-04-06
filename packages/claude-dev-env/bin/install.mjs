@@ -28,6 +28,13 @@ const INSTALL_GROUPS = {
     prompts: {
         description: 'Prompt engineering tools',
         skills: ['prompt-generator', 'agent-prompt'],
+        includeHookFiles: [
+            'blocking/agent-execution-intent-gate.py',
+            'blocking/prompt_workflow_gate_core.py',
+            'blocking/prompt-workflow-stop-guard.py',
+            'HOOK_SPECS_PROMPT_WORKFLOW.md',
+        ],
+        includeRules: ['prompt-workflow-context-controls.md'],
     },
     journal: {
         description: 'Session logging and memory',
@@ -162,20 +169,45 @@ function install(selectedGroups) {
     const allowedDirectories = selectedGroups
         ? new Set(selectedGroups.flatMap(groupName => INSTALL_GROUPS[groupName].includeDirectories || []))
         : null;
-    const shouldInstallHooks = selectedGroups
+    const shouldInstallAllHooks = selectedGroups
         ? selectedGroups.some(groupName => INSTALL_GROUPS[groupName].includeAllHooks)
         : true;
+    const allowedHookFiles = selectedGroups
+        ? new Set(selectedGroups.flatMap(groupName => INSTALL_GROUPS[groupName].includeHookFiles || []))
+        : null;
+    const allowedRules = selectedGroups
+        ? new Set(selectedGroups.flatMap(groupName => INSTALL_GROUPS[groupName].includeRules || []))
+        : null;
 
     const allInstalledFiles = [];
     const summary = {};
     for (const directory of CONTENT_DIRECTORIES) {
-        if (allowedDirectories && !allowedDirectories.has(directory)) continue;
+        const hasFullAccess = !allowedDirectories || allowedDirectories.has(directory);
+        const hasPartialRules = directory === 'rules' && allowedRules && allowedRules.size > 0;
+        if (!hasFullAccess && !hasPartialRules) continue;
         const sourceDir = join(PACKAGE_ROOT, directory);
         if (!existsSync(sourceDir)) continue;
         const destDir = join(CLAUDE_HOME, directory);
-        const stats = copyTree(sourceDir, destDir);
-        summary[directory] = stats;
-        allInstalledFiles.push(...stats.paths);
+        if (hasFullAccess) {
+            const stats = copyTree(sourceDir, destDir);
+            summary[directory] = stats;
+            allInstalledFiles.push(...stats.paths);
+        } else if (hasPartialRules) {
+            let rulesCreated = 0;
+            let rulesUpdated = 0;
+            for (const ruleFile of allowedRules) {
+                const sourcePath = join(sourceDir, ruleFile);
+                if (!existsSync(sourcePath)) continue;
+                const destPath = join(destDir, ruleFile);
+                mkdirSync(dirname(destPath), { recursive: true });
+                const existed = existsSync(destPath);
+                copyFileSync(sourcePath, destPath);
+                allInstalledFiles.push(destPath);
+                if (existed) { rulesUpdated++; } else { rulesCreated++; }
+                console.log(`  ${existed ? '\u21bb' : '\u2713'} ${join(directory, ruleFile)} (${existed ? 'updated' : 'new'})`);
+            }
+            summary[directory] = { created: rulesCreated, updated: rulesUpdated, paths: [] };
+        }
     }
     const skillsSource = join(PACKAGE_ROOT, 'skills');
     if (existsSync(skillsSource)) {
@@ -193,11 +225,18 @@ function install(selectedGroups) {
         summary.skills = { created: skillsCreated, updated: skillsUpdated, paths: skillPaths };
         allInstalledFiles.push(...skillPaths);
     }
-    if (shouldInstallHooks) {
+    const shouldInstallAnyHooks = shouldInstallAllHooks || (allowedHookFiles && allowedHookFiles.size > 0);
+    if (shouldInstallAnyHooks) {
         const hooksSource = join(PACKAGE_ROOT, 'hooks');
         if (existsSync(hooksSource)) {
             const hooksDestination = join(CLAUDE_HOME, 'hooks');
-            const filesToCopy = collectFiles(hooksSource).filter(file => !file.endsWith('hooks.json'));
+            const filesToCopy = collectFiles(hooksSource)
+                .filter(file => !file.endsWith('hooks.json'))
+                .filter(file => {
+                    if (shouldInstallAllHooks) return true;
+                    const relativePath = relative(hooksSource, file).replace(/\\/g, '/');
+                    return allowedHookFiles.has(relativePath);
+                });
             let hooksCreated = 0;
             let hooksUpdated = 0;
             for (const sourceFile of filesToCopy) {
