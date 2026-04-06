@@ -1,6 +1,6 @@
 {
-    "packages/claude-dev-env": "1.5.0",
+    "packages/claude-dev-env": "1.6.0",
     "packages/claude-journal": "1.4.0",
     "packages/claude-deep-research": "1.1.0",
-    "packages/claude-prompt-tools": "1.0.0"
+    "packages/claude-prompt-tools": "1.1.0"
 }
