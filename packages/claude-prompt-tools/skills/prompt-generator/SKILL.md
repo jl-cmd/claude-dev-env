@@ -31,6 +31,29 @@ Use this skill when the user needs a structured prompt artifact; for one-line re
 
 When invoked with arguments (e.g. `/prompt-generator improve this: [paste]`), treat `$ARGUMENTS` as the prompt to refine.
 
+## Interactive discovery mode (default)
+
+When invoked with a task description, gather context before asking questions.
+
+### Phase 1: Discover
+
+Run 3-5 parallel tool calls to research the task's scope:
+- Glob/Grep for files, packages, configs, and references related to the task
+- Identify the repo path, package structure, consumer references, deployment paths
+- Note boundaries: what should and should not change
+
+### Phase 2: Present
+
+Issue a single AskUserQuestion with all fields pre-populated from discovery:
+- Each field shows researched options with a recommended default
+- Include: scope, target paths, consumer references, boundaries, naming options
+- Fields the user didn't mention but discovery surfaced should appear with "[discovered]" label
+- Keep the form scannable -- one line per field, recommended option first
+
+### Phase 3: Build
+
+On receipt, proceed to the Workflow below using confirmed answers as input. Skip Step 3 (collect missing facts) -- the form already collected them.
+
 ## Workflow (run in order)
 
 ### 1. Classify the prompt type
