@@ -14,7 +14,7 @@ jobs:
       issues: write
       pull-requests: write
     outputs:
-      root_released: ${{ steps.release.outputs.release_created }}
+      dev_env_released: ${{ steps.release.outputs['packages/claude-dev-env--release_created'] }}
     steps:
       - uses: actions/checkout@v5
       - id: release
@@ -26,7 +26,7 @@ jobs:
 
   publish:
     needs: release
-    if: ${{ needs.release.outputs.root_released == 'true' }}
+    if: ${{ needs.release.outputs.dev_env_released == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,5 +37,7 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-      - run: npm install -g npm@11.11.0 && npm install -g npm@latest
-      - run: NODE_AUTH_TOKEN="" npm publish --provenance --access public
+      - run: npm publish --provenance --access public
+        working-directory: packages/claude-dev-env
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

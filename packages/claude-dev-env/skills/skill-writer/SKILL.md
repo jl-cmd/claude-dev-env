@@ -1,270 +1,204 @@
 ---
 name: skill-writer
-description: Guide users through creating Agent Skills for Codex. Use when the user wants to create, write, author, or design a new Skill, or needs help with SKILL.md files, frontmatter, or skill structure.
+description: >-
+  Write, create, or improve Claude Code skills (SKILL.md files) with correct
+  frontmatter, progressive disclosure, and prompt-engineering principles.
+  Covers workflow skills, enforcement rules, advisory guidance, reference
+  lookups, and automation scripts.
 ---
+@packages/claude-dev-env/skills/skill-writer/REFERENCE.md
 
-# Writing Skills
+# Skill writer
 
-## Overview
+**Core principle:** A skill is a prompt -- the SKILL.md body is injected into Claude's context when triggered. The same principles that make prompts effective make skills effective.
 
-Create well-structured Agent Skills for Codex that follow superpowers patterns and validation requirements.
+**Canonical source:** https://platform.claude.com/docs/en/claude-code/skills -- the official reference for skill structure, frontmatter fields, progressive disclosure, and string substitutions.
 
-**Core principle:** Skills encode expertise. A good skill prevents the same mistake from happening twice.
+## Skill-only output rule (overrides all other delivery instructions)
 
-**Announce at start:** "I'm using the skill-writer skill to create a new skill."
+This skill produces skill artifacts. It does not perform the underlying task the skill would automate.
 
-**Context:** Skills complement agents. Skills are invoked inline; agents run as subprocesses. Use skills for workflows that need conversation context.
+When this skill is active, your response contains exactly one of:
+1. **Clarifying questions** to gather information needed to write a better skill (Step 3) -- then stop and wait.
+2. **The skill artifact** in fenced code blocks (SKILL.md and optionally REFERENCE.md) -- then stop.
 
-## The Process
+Prohibited responses: executing the task the skill would automate, proposing implementation changes unrelated to skill authoring, explaining what *you would do* to accomplish the underlying task.
 
-### Step 1: Understand the Need
+## When this skill applies
 
-Ask clarifying questions (one at a time):
+Trigger for any request to **author**, **refine**, or **restructure** a Claude Code skill: SKILL.md files, skill frontmatter, skill body content, reference files, or skill directory structure.
 
-1. What specific capability should this Skill provide?
-2. When should Codex use this Skill?
-3. Is this critical (must follow exactly) or advisory (adapt to context)?
-4. Does this fit in an existing workflow pipeline?
+Use this skill when the user needs a structured skill artifact; for quick answers about skill syntax, answer directly in plain text.
 
-**Keep it focused:** One Skill = one capability
-- Good: "PDF form filling", "plan review", "TDD enforcement"
-- Too broad: "Document processing", "code quality"
+When invoked with arguments (e.g. `/skill-writer improve this: [paste]`), treat `$ARGUMENTS` as the skill content to refine.
 
-### Step 2: Choose Format
+## Workflow (run in order)
 
-**CRITICAL DECISION:** Advisory vs Superpowers format.
+### 1. Classify the skill type
 
-| Format | When to Use | Key Signals |
-|--------|-------------|-------------|
-| **Superpowers** | Rules that MUST be followed | Production failures if violated, anti-patterns to block, non-negotiable workflows |
-| **Advisory** | Helpful guidance | Best practices, tips, adaptable to context |
+Pick one primary:
 
-**If in doubt:** If you're tempted to say "should" instead of "MUST", it's advisory.
+| Type | Purpose | Example |
+|------|---------|---------|
+| `workflow` | Multi-step process with sequential phases | TDD enforcement, plan review, PR submission |
+| `enforcement` | Rules that constrain behavior | Code standards, comment preservation, commit rules |
+| `advisory` | Guidance where multiple approaches are valid | Best practices, design patterns, optimization tips |
+| `reference` | Lookup material loaded on demand | API docs, field mappings, configuration tables |
+| `automation` | Script-driven with tool calls | PDF form filling, browser automation, file processing |
 
-### Step 3: Choose Location
+### 2. Set degree of freedom
 
-**Personal Skills** (`~/.Codex/skills/`):
-- Individual workflows
-- Experimental skills
+Match specificity to task fragility:
 
-**Project Skills** (`.Codex/skills/`):
-- Team conventions
-- Project-specific expertise
-- Committed to git
+- **High:** Multiple valid approaches; use numbered goals and acceptance criteria. The skill states *what* to achieve, not *how*.
+- **Medium:** Preferred pattern exists; use structured steps with room for adaptation. The skill states a recommended approach but allows deviation when justified.
+- **Low:** Fragile or safety-critical; use exact steps, exact field names, and boundary constraints. The skill states precisely what to do and what not to do.
 
-### Step 4: Write Frontmatter
+### 3. Collect missing facts
+
+Ask 1-3 short questions if needed. Focus on:
+- What capability does the skill provide? (one skill = one capability)
+- When should the skill trigger? (specific phrases, file patterns, workflow position)
+- What tools does the skill need? (Bash, Read, Grep, MCP tools)
+- What does the skill produce? (output format, files created, state changes)
+- Where does it fit in existing workflows? (before/after other skills)
+
+### 4. Choose location
+
+**Personal skills** (`~/.claude/skills/` or package-managed):
+- Individual workflows, experimental skills, cross-project utilities
+
+**Project skills** (`.claude/skills/`):
+- Team conventions, project-specific expertise, committed to git
+
+### 5. Write frontmatter
+
+Apply official constraints from the canonical source:
 
 ```yaml
 ---
-name: skill-name
-description: [What it does] + [When to use it] + [Trigger phrases]
+name: skill-name-here
+description: >-
+  [What it does] in third person. [When to use it].
+  Triggers: '[phrase 1]', '[phrase 2]', '[phrase 3]'.
 ---
 ```
 
-**Name rules:**
-- Lowercase, hyphens only, max 64 chars
-- Must match directory name
+**Name:** lowercase, hyphens, numbers only. Max 64 chars. No `anthropic` or `claude`. Must match directory name.
 
-**Description formula:** `[What] + [When] + [Triggers]`
+**Description:** max 1024 chars. Third person. No XML tags. Include trigger phrases that match how users naturally ask for this capability.
 
-```yaml
-# Good
-description: Review implementation plans against AGENTS.md standards. Use after writing-plans and before executing-plans to validate TDD compliance and right-sized engineering.
+**Optional fields** -- include only when needed:
+- `allowed-tools` -- when the skill requires specific tools (e.g., `Bash(node *), Read`)
+- `argument-hint` -- when the skill accepts arguments (e.g., `[filename] [format]`)
+- `paths` -- when the skill applies only to certain file types (e.g., `"*.py"` or `["*.ts", "*.tsx"]`)
+- `context: fork` -- when the skill needs isolated execution without conversation history
+- `disable-model-invocation: true` -- when the skill should only trigger via explicit `/name` invocation
+- `effort` -- when the skill benefits from a specific thinking depth (`low`, `medium`, `high`, `max`)
 
-# Bad
-description: Helps with plans
-```
+See REFERENCE.md for the complete field table with types, defaults, and constraints.
 
-### Step 5: Write Content
+### 6. Build the skill body
 
-#### Superpowers Format Structure
+Apply prompt-engineering principles -- a skill body is a prompt. Source: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
+
+**Structure with XML section tags** where content mixes instructions, context, and examples. Anthropic: "Use consistent, descriptive tag names across your prompts. Nest tags when content has a natural hierarchy." For skills under ~20 lines, use concise plain structure instead.
+
+**Set a role** when the skill benefits from focused behavior. Anthropic: "Setting a role in the system prompt focuses Claude's behavior and tone for your use case. Even a single sentence makes a difference."
+
+**Add motivation behind constraints.** Anthropic: "Providing context or motivation behind your instructions... can help Claude better understand your goals and deliver more targeted responses." State *why* a rule exists, not just *what* it forbids.
+
+**Frame positively.** State the desired behavior directly. Anthropic: "Your response should be composed of smoothly flowing prose paragraphs" provides clearer guidance than a prohibition-only instruction. Write "validate field names before filling" rather than "never guess field names."
+
+**Emotion-informed framing.** Anthropic's emotion concepts research (2026) found internal activation patterns that causally influence output quality. Apply to skill writing: (1) provide clear success criteria and escape routes; (2) use collaborative framing; (3) frame tasks as interesting problems; (4) invite transparency -- include "say so if you're unsure" when appropriate; (5) use constructive, forward-looking tone.
+
+**Golden rule check.** Anthropic: "Show your prompt to a colleague with minimal context on the task and ask them to follow it. If they'd be confused, Claude will be too." Apply the same test to the skill body.
+
+**Progressive disclosure.** Keep the SKILL.md body under 500 lines. Move heavy content (field tables, long examples, lookup data, scripts) into REFERENCE.md or separate files that load only when referenced.
+
+#### Body structure template
 
 ```markdown
 # Skill Name
 
-## Overview
+**Core principle:** [One sentence capturing the essential insight]
 
-Brief description.
-
-**Core principle:** [One sentence that captures the essential insight]
-
-**Announce at start:** "I'm using the [skill] skill to [purpose]."
-
-**Context:** [Where this fits in the workflow pipeline]
+## When this skill applies
+[Trigger conditions, workflow position]
 
 ## The Process
 
 ### Step 1: [First Action]
-[Narrative instructions, not verbose checklists]
+[Instructions -- narrative, not verbose checklists]
 
 ### Step 2: [Second Action]
-[Continue with clear steps]
+[Continue with clear sequential steps]
 
 ## Output Format
-
-[What the skill produces - be specific]
-
-## After Completion
-
-[What happens next - reference sub-skills if applicable]
-
-**If [condition]:**
-- [Action]
-- **REQUIRED SUB-SKILL:** Use [skill-name]
-
-## Red Flags - STOP
-
-[List signals that mean something is wrong]
-
-- [Red flag 1]
-- [Red flag 2]
-
-## Rationalization Prevention
-
-| Excuse | Reality |
-|--------|---------|
-| "[Common shortcut]" | [Why it fails] |
-| "[Another excuse]" | [Why it fails] |
-
-## Remember
-
-- [Key point 1]
-- [Key point 2]
-- [Key point 3]
-```
-
-#### Advisory Format Structure
-
-```markdown
-# Skill Name
-
-## Overview
-
-Brief description of what this Skill does.
-
-**Announce at start:** "I'm using the [skill] skill."
-
-## Instructions
-
-Step-by-step guidance:
-1. First step
-2. Second step
-3. Handle edge cases
+[What the skill produces -- be specific]
 
 ## Examples
-
-Concrete usage examples.
-
-## Best practices
-
-- Key conventions
-- Common pitfalls
+[3-5 concrete scenarios with inputs and expected outputs]
 ```
 
-#### Ironclad Format (Critical Rules)
+### 7. Control output format
 
-For skills where violations cause production failures:
+If the skill produces structured output, specify the format explicitly. Use XML format indicators when the skill should produce tagged sections. Match the formatting style in the skill body to the desired output style -- Anthropic notes the prompt's own formatting influences the response.
 
-```markdown
-<EXTREMELY_IMPORTANT>
-# Skill Name
+### 8. Add examples
 
-**This skill is MANDATORY for [context].**
+Include 3-5 concrete examples showing the skill in action. Wrap in `<example>` tags with diverse, representative inputs. Anthropic: "Include 3-5 examples for best results. You can also ask Claude to evaluate your examples for relevance and diversity."
 
-IF you are [doing task], YOU DO NOT HAVE A CHOICE. YOU MUST FOLLOW THIS SKILL.
+Examples should cover:
+- A typical use case
+- An edge case or boundary condition
+- A case where the skill should decline or ask for clarification
 
-## MANDATORY FIRST RESPONSE PROTOCOL
+### 9. Self-check
 
-Before doing ANYTHING:
+Before delivering, verify against this rubric:
 
-1. [ ] [First verification]
-2. [ ] [Second verification]
-3. [ ] [Third verification]
+- [ ] Description is third person with trigger phrases
+- [ ] Under 500 lines
+- [ ] States what to do in positive terms (not prohibition-heavy)
+- [ ] Degree of freedom matches task fragility
+- [ ] Progressive disclosure used (heavy content in REFERENCE.md)
+- [ ] No time-sensitive claims unless clearly dated
+- [ ] Examples are concrete, not abstract
+- [ ] Frontmatter fields are valid per official docs
+- [ ] If tools needed: specifies `allowed-tools`
+- [ ] If arguments expected: includes `argument-hint`
+- [ ] Workflow steps are sequential and numbered
+- [ ] Golden rule: a colleague could follow this skill without extra context
+- [ ] Motivation provided for constraints (why, not just what)
+- [ ] One skill = one capability (not a bundle of loosely related features)
+- [ ] String substitutions used correctly (`$ARGUMENTS`, `${CLAUDE_SKILL_DIR}`, etc.)
 
-**Responding WITHOUT completing this checklist = automatic failure.**
+### 10. Deliver
 
-## Critical Rules - NO EXCEPTIONS
+Final artifact as **fenced code blocks** the user can paste as-is: one block for SKILL.md, optionally one for REFERENCE.md. The fenced blocks are your entire response -- no surrounding commentary or explanation.
 
-### Rule 1: [Rule Name]
+## Claude 4.6 considerations
 
-**NEVER [forbidden action].**
+When writing skills for current Claude models, apply these patterns:
 
-- [ ] FORBIDDEN: [specific example]
-- [x] REQUIRED: [correct approach]
+- **Overtriggering:** Dial back aggressive language. Anthropic: "Where you might have said 'CRITICAL: You MUST use this tool when...', you can use more normal prompting like 'Use this tool when...'." Skills that shout get ignored or cause erratic behavior -- write in a direct, conversational tone.
+- **Overeagerness:** Include scope constraints. Anthropic: "Claude Opus 4.5 and Claude Opus 4.6 have a tendency to overengineer by creating extra files, adding unnecessary abstractions, or building in flexibility that wasn't requested." Skills should state their boundary clearly.
+- **Overthinking:** Anthropic: "Replace blanket defaults with more targeted instructions. Instead of 'Default to using [tool],' add guidance like 'Use [tool] when it would enhance your understanding of the problem.'" Write conditional triggers, not blanket rules.
+- **Conservative vs proactive action:** For skills that should act, use explicit language. For skills that should advise, include: "Default to providing information and recommendations. Proceed with changes only when the user explicitly requests them."
 
-**WHY:** [Production consequence]
+## Autonomy and safety pattern
 
-## Common Rationalizations That Mean You're About To Fail
+For `automation` and `enforcement` skill types, include reversibility guidance. Anthropic provides this pattern:
 
-- **"[Excuse 1]"** -> WRONG. [Reality]
-- **"[Excuse 2]"** -> WRONG. [Reality]
-
-</EXTREMELY_IMPORTANT>
-
----
-
-## Implementation Guide
-
-[Supporting material outside the critical wrapper]
+```text
+Consider the reversibility and potential impact of your actions. You are encouraged to take local, reversible actions like editing files or running tests, but for actions that are hard to reverse, affect shared systems, or could be destructive, ask the user before proceeding.
 ```
 
-### Step 6: Validate
+## Conflict resolution
 
-**Structure:**
-- [ ] SKILL.md in correct location
-- [ ] Directory name matches `name` field
-- [ ] Valid YAML frontmatter
+When skill-writing guidance conflicts across sources, defer to the authority tier:
 
-**Content (Superpowers format):**
-- [ ] Has Overview with Core principle
-- [ ] Has "Announce at start"
-- [ ] Has Context (pipeline placement)
-- [ ] Steps are narrative, not verbose checklists
-- [ ] Has Red Flags section
-- [ ] Has Rationalization Prevention table
-- [ ] Has Remember section
-- [ ] References sub-skills where appropriate
-
-**Content (Ironclad format):**
-- [ ] `<EXTREMELY_IMPORTANT>` wrapper
-- [ ] Absolute language ("MUST", "NEVER", "NO EXCEPTIONS")
-- [ ] Checkbox protocol
-- [ ] WHY explanations with consequences
-- [ ] Rationalizations are specific, not generic
-
-### Step 7: Test
-
-1. Restart Codex to load the skill
-2. Ask questions that should trigger it
-3. Verify activation and behavior
-
-## Red Flags - STOP
-
-- Skill is too broad ("handles documents")
-- No clear trigger phrases in description
-- Steps say "consider" or "might" in Ironclad format
-- No workflow context (where does this fit?)
-- Rationalizations are generic ("I'll do it later")
-- Missing WHY explanations for rules
-
-## Rationalization Prevention
-
-| Excuse | Reality |
-|--------|---------|
-| "This skill is simple, doesn't need structure" | Simple skills become complex. Structure prevents drift. |
-| "I'll add the rationalization section later" | Later never comes. Add it now. |
-| "Nobody will try to shortcut this" | Developers always shortcut. Block it proactively. |
-| "The description is good enough" | Vague descriptions mean skill never activates. |
-| "Advisory format is fine for critical rules" | Critical rules need Ironclad format or they get ignored. |
-
-## Remember
-
-- **Core principle first** - captures the essential insight
-- **Announce at start** - makes skill usage visible
-- **Context placement** - skills fit in pipelines
-- **Red flags** - catch problems early
-- **Rationalizations** - block shortcuts proactively
-- **Sub-skill references** - connect to related workflows
-- One skill = one capability
-- Specific triggers in description
-- Test activation before shipping
+1. **Tier 1 (primary):** Anthropic -- the model provider's own documentation is authoritative for Claude behavior
+2. **Tier 2 (strong secondary):** OpenAI, Google DeepMind, Microsoft Research -- major lab guidance often transfers across models
+3. **Tier 3 (supplementary):** Community resources, courses, individual blogs -- valuable for patterns and intuition, not authoritative on model specifics
