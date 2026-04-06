@@ -19,6 +19,26 @@ def _run_hook(payload: dict) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _full_checklist_rows() -> str:
+    return (
+        "checklist_results:\n"
+        "- structured_scoped_instructions\n"
+        "- sequential_steps_present\n"
+        "- positive_framing\n"
+        "- acceptance_criteria_defined\n"
+        "- safety_reversibility_language\n"
+        "- no_destructive_shortcuts_guidance\n"
+        "- concrete_output_contract\n"
+        "- scope_boundary_present\n"
+        "- explicit_scope_anchors_present\n"
+        "- all_instructions_artifact_bound\n"
+        "- no_ambiguous_scope_terms\n"
+        "- completion_boundary_measurable\n"
+        "- citation_grounding_policy_present\n"
+        "- source_priority_rules_present\n"
+    )
+
+
 def test_blocks_internal_object_leak_without_debug_intent() -> None:
     payload = {
         "last_assistant_message": '{"pipeline_mode": "internal_section_refinement_with_final_audit"}',
@@ -49,15 +69,76 @@ def test_blocks_missing_checklist_rows() -> None:
     assert "Deterministic checklist rows missing" in response["reason"]
 
 
+def test_blocks_missing_checklist_container_for_prompt_workflow_output() -> None:
+    payload = {
+        "last_assistant_message": (
+            "overall_status: pass\n"
+            "target_local_roots\n"
+            "target_canonical_roots\n"
+            "target_file_globs\n"
+            "comparison_basis\n"
+            "completion_boundary\n"
+            "base_minimal_instruction_layer: true\n"
+            "on_demand_skill_loading: true\n"
+        ),
+    }
+    result = _run_hook(payload)
+    response = json.loads(result.stdout)
+    assert response["decision"] == "block"
+    assert "Deterministic checklist container missing" in response["reason"]
+
+
+def test_blocks_missing_context_control_signals() -> None:
+    payload = {
+        "last_assistant_message": (
+            "overall_status: pass\n"
+            + _full_checklist_rows()
+            + "target_local_roots\n"
+            + "target_canonical_roots\n"
+            + "target_file_globs\n"
+            + "comparison_basis\n"
+            + "completion_boundary\n"
+            + "base_minimal_instruction_layer: true\n"
+        ),
+    }
+    result = _run_hook(payload)
+    response = json.loads(result.stdout)
+    assert response["decision"] == "block"
+    assert "Runtime context-control signals missing" in response["reason"]
+    assert "on_demand_skill_loading: true" in response["reason"]
+
+
 def test_blocks_ambiguous_scope_phrasing() -> None:
     payload = {
         "last_assistant_message": (
-            "scope block includes target_local_roots target_canonical_roots "
-            "target_file_globs comparison_basis completion_boundary "
-            "and applies to this session."
+            "overall_status: pass\n"
+            + _full_checklist_rows()
+            + "scope block includes target_local_roots target_canonical_roots "
+            + "target_file_globs comparison_basis completion_boundary "
+            + "base_minimal_instruction_layer: true\n"
+            + "on_demand_skill_loading: true\n"
+            + "and applies to this session."
         ),
     }
     result = _run_hook(payload)
     response = json.loads(result.stdout)
     assert response["decision"] == "block"
     assert "Ambiguous scope phrasing detected" in response["reason"]
+
+
+def test_allows_fully_structured_prompt_workflow_output() -> None:
+    payload = {
+        "last_assistant_message": (
+            "overall_status: pass\n"
+            + _full_checklist_rows()
+            + "target_local_roots\n"
+            + "target_canonical_roots\n"
+            + "target_file_globs\n"
+            + "comparison_basis\n"
+            + "completion_boundary\n"
+            + "base_minimal_instruction_layer: true\n"
+            + "on_demand_skill_loading: true\n"
+        ),
+    }
+    result = _run_hook(payload)
+    assert result.stdout.strip() == ""

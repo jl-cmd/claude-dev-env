@@ -13,6 +13,9 @@ def test_context_control_rule_exists_with_required_sections() -> None:
     assert "Base Minimal Instruction Layer" in text
     assert "On-Demand Skill Loading" in text
     assert "Compaction and Caching Strategy" in text
+    assert "Runtime Enforcement Signals" in text
+    assert "base_minimal_instruction_layer: true" in text
+    assert "on_demand_skill_loading: true" in text
 
 
 def test_hook_spec_exists_with_required_gates() -> None:
@@ -20,3 +23,5 @@ def test_hook_spec_exists_with_required_gates() -> None:
     assert "Execution Intent (PreToolUse Task/Agent)" in text
     assert "Leakage + Checklist + Scope (Stop)" in text
     assert "Required Deterministic Checklist Rows" in text
+    assert "structured execution intent contract" in text
+    assert "Runtime Context-Control Signals" in text

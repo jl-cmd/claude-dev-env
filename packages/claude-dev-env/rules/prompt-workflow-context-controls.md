@@ -31,6 +31,15 @@ Examples:
 - Load research-heavy skills only when citation/deep-research behavior is requested.
 - Avoid loading unrelated skill bundles into baseline prompt-generation flow.
 
+## Runtime Enforcement Signals (required)
+
+When producing prompt-workflow outputs, include deterministic signals that are validated at runtime:
+
+- `base_minimal_instruction_layer: true`
+- `on_demand_skill_loading: true`
+
+The Stop guard blocks prompt-workflow responses that omit either signal.
+
 ## Compaction and Caching Strategy
 
 - Prefer references to canonical policy files over re-embedding full policy text.

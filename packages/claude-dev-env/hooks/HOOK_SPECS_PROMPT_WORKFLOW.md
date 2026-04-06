@@ -8,8 +8,14 @@ Deterministic runtime gates for prompt workflows.
 - Event: `PreToolUse`
 - Matcher: `Task|Agent`
 - Fail condition:
-  - Missing explicit execution marker (`execution_intent: explicit` or equivalent explicit-intent markers)
-  - Missing required scope anchors in launch payload
+  - Missing structured execution intent contract field:
+    - `tool_input.execution_intent: explicit|execute|delegate`, or
+    - `tool_input.execution_intent_explicit: true`, or
+    - `tool_input.metadata.execution_intent: explicit|execute|delegate`
+  - Missing required scope anchors in launch payload (always enforced when execution launch is evaluated)
+- Compatibility fallback:
+  - Text markers are only accepted when `PROMPT_WORKFLOW_ALLOW_TEXT_INTENT_FALLBACK=1` is set.
+  - Fallback usage is logged to stderr.
 - Action: `deny` with concrete missing requirement list.
 
 ## Gate: Leakage + Checklist + Scope (Stop)
@@ -18,9 +24,11 @@ Deterministic runtime gates for prompt workflows.
 - Event: `Stop`
 - Fail condition:
   - Raw internal refinement object appears in assistant output without explicit debug intent
-  - Audit output present but required deterministic checklist rows missing
+  - Prompt-workflow response detected but deterministic checklist container is missing
+  - Prompt-workflow response detected and required deterministic checklist rows are missing
+  - Prompt-workflow response detected and required scope anchors are missing
+  - Prompt-workflow response detected and runtime context-control signals are missing
   - Scope-bound text uses banned ambiguous scope terms
-  - Scope block implied but required anchors are missing
 - Action: `block` with correction reason.
 
 ## Required Scope Anchors
@@ -47,6 +55,13 @@ Deterministic runtime gates for prompt workflows.
 - `completion_boundary_measurable`
 - `citation_grounding_policy_present`
 - `source_priority_rules_present`
+
+## Runtime Context-Control Signals
+
+- `base_minimal_instruction_layer: true`
+- `on_demand_skill_loading: true`
+
+These two signals are runtime-checked by the Stop guard whenever a prompt-workflow response is detected.
 
 ## Deterministic Boundary
 
