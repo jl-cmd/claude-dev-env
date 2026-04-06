@@ -64,6 +64,7 @@ Use this command:
 5. **Final output**
    - One complete prompt block that is copy-pasteable.
    - Internal refinement object is not shown unless debug output was requested.
+   - Default output must not leak the raw internal refinement object fields.
 
 ## Deterministic Checklist Coverage
 
@@ -113,8 +114,46 @@ If `overall_status` is `fail`:
 
 - Prompt refinement remains inside `/prompt-generator`.
 - `/agent-prompt` is used only after explicit execution/delegation intent.
+- Execution launch metadata includes `execution_intent: explicit`.
 - Final refined prompt content is treated as artifact text during refinement and audit.
 - Execution steps (when requested) are bound to scope block artifacts.
+
+## Scope-Phrasing Validation
+
+- Reject ambiguous scope wording such as "this session", "current files", "here", "above", or "as needed" when used as scope boundaries.
+- Require artifact-bound replacements using explicit roots, globs, comparison basis, and measurable completion boundary.
+
+## Runtime Hook Gate Validation
+
+Validate fail-closed runtime gates:
+
+1. **Execution-intent gate (PreToolUse Task/Agent)**
+   - Deny execution when `execution_intent: explicit` marker is missing.
+   - Deny execution when required scope anchors are missing from launch payload.
+2. **Stop leakage/scope/checklist gate**
+   - Block responses that leak raw internal refinement object fields unless debug intent is explicit.
+   - Block responses missing deterministic checklist rows when audit output is present.
+   - Block responses using ambiguous scope phrasing in scope-bound sections.
+
+## Context-Footprint Controls
+
+- Keep baseline prompt-workflow policy minimal by default.
+- Store stable enforcement text in hooks/rules; avoid repeating full policy blocks in prompt artifacts.
+- Load heavy skills on demand based on explicit task intent.
+- Prefer canonical references and compact outputs over repeated long policy text.
+
+## Deterministic vs Semantic Boundary
+
+- **Deterministic (fail-closed):**
+  - Missing execution intent marker
+  - Missing required scope anchors
+  - Raw internal object leakage without debug intent
+  - Missing required checklist rows in audit output
+  - Ambiguous scope terms in scope-bound text
+- **Semantic-only (auditor layer):**
+  - Overall quality/readability of scope wording beyond banned-term checks
+  - Whether instruction binding quality is "good enough" beyond explicit anchor presence
+  - Whether context compaction is optimal for a specific task
 
 ## Doc Alignment Validation
 

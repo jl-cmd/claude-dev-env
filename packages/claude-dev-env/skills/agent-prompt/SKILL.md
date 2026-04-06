@@ -9,8 +9,8 @@ description: >-
   agent delegation with prompt quality.
 ---
 
-@~/.claude/skills/prompt-generator/SKILL.md
-@~/.claude/skills/prompt-generator/REFERENCE.md
+@packages/claude-dev-env/skills/prompt-generator/SKILL.md
+@packages/claude-dev-env/skills/prompt-generator/REFERENCE.md
 
 # Agent Prompt
 
@@ -20,7 +20,7 @@ The prompt-generator skill above defines the prompt-crafting workflow. This skil
 
 ## When this skill applies
 
-Trigger when the user explicitly wants to delegate or execute a task with an agent.
+Trigger only when the user explicitly wants to delegate or execute a task with an agent.
 
 `/prompt-generator` is the default owner for prompt authoring and refinement. This skill starts after explicit execution intent.
 
@@ -68,6 +68,7 @@ Use simplified mode when either condition is true:
 
 This mode is triggered when execution input includes `pipeline_mode: internal_section_refinement_with_final_audit` or equivalent execution-ready orchestration metadata.
 If present, carry forward the scope block (`target_local_roots`, `target_canonical_roots`, `target_file_globs`, `comparison_basis`, `completion_boundary`) so execution remains artifact-bound.
+Execution launch payload must include `execution_intent: explicit`.
 
 1. Spawn exactly 6 refinement agents, one per section in fixed order:
    - `role`
@@ -116,6 +117,7 @@ When building the prompt in step 4, these adjustments ensure the agent can work 
 
 **Context completeness** -- include file paths, line numbers, function names, branch state, and anything you learned during step 9. The agent cannot see this conversation.
 Bind execution steps to the scope block artifacts passed from refinement output whenever available.
+Keep runtime context compact: include only actionable facts required for execution.
 
 **Acceptance criteria** -- state what "done" looks like. For code: include the test command. For research: specify the output format and save location.
 
@@ -135,7 +137,7 @@ Bind execution steps to the scope block artifacts passed from refinement output 
 
 After merge, run one dedicated audit agent that validates the full prompt against:
 
-- Prompt-generator rubric requirements (`~/.claude/skills/prompt-generator/SKILL.md`)
+- Prompt-generator rubric requirements (`packages/claude-dev-env/skills/prompt-generator/SKILL.md`)
 - The deterministic checklist from the handoff artifact
 - Embedded research-mode evidence constraints below
 
@@ -172,7 +174,7 @@ The audit agent must enforce these constraints as policy text in the audit promp
   4. Reputable external sources with URLs
   5. Blogs/community posts (lowest)
 
-Policy source: `~/.claude/plugins/cache/claude-deep-research/deep-research/1.0.0/skills/research-mode/SKILL.md`
+Policy source: `packages/claude-dev-env/skills/prompt-generator/REFINEMENT_PIPELINE_RUNBOOK.md`
 
 ## Section-refinement acceptance criteria
 
@@ -192,6 +194,7 @@ Section-refinement orchestration is done only when all are true:
 - Gather context before crafting -- do not send an agent in blind
 - Start only after explicit user execution intent; keep prompt authoring/refinement in `/prompt-generator`
 - Default to `section_refinement_with_final_audit` orchestration for execution tasks unless user requests simplified mode
+- Include `execution_intent: explicit` in Task/Agent launch prompts so runtime hooks can enforce deterministic gating
 - If the task is too small for an agent (single file read, quick grep), say so and just do it directly
 - Include obstacle handling: "When encountering obstacles, do not use destructive actions as a shortcut (e.g. --no-verify, discarding unfamiliar files)" -- agents without this guidance may take irreversible shortcuts
 - Frame agent tasks with collaborative language and include permission to express uncertainty — agents produce higher-quality output with collaborative briefing (Anthropic emotion concepts research, 2026)
