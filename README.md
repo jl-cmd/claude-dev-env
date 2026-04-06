@@ -19,19 +19,29 @@ npx claude-dev-env
 That's it. The installer will:
 
 1. Detect your Python 3 command (`python3`, `python`, or `py -3`)
-2. Copy 13 rules, 5 docs, 34 agents, 11 commands, and 14+ skills to `~/.claude/`
+2. Copy 14 rules, 5 docs, 35 agents, 11 commands, and 19 skills to `~/.claude/`
 3. Copy hook scripts to `~/.claude/hooks/`
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
-5. Install prompt tools (prompt-generator, agent-prompt, prompt-workflow hooks), journal skills (dream, session-log, session-tidy), and research skills + agent (deep-research, research-mode)
-6. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
+5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
 
-You can also install individual skill bundles on their own:
+### Selective Install
+
+Only want specific tools? Use the `--only` flag with one or more groups:
 
 ```bash
-npx claude-prompt-tools     # prompt-generator, agent-prompt, prompt-workflow hooks
-npx claude-journal          # dream, session-log, session-tidy
-npx claude-deep-research    # deep-research, research-mode, deep-research agent
+npx claude-dev-env --only prompts           # prompt-generator, agent-prompt + workflow hooks
+npx claude-dev-env --only journal           # dream, session-log, session-tidy
+npx claude-dev-env --only research          # deep-research, research-mode
+npx claude-dev-env --only core             # dev standards, hooks, agents, commands
+npx claude-dev-env --only prompts,research  # combine groups
 ```
+
+| Group | What's included |
+|-------|----------------|
+| `core` | Rules, docs, commands, agents, all hooks |
+| `prompts` | prompt-generator, agent-prompt, prompt-workflow hooks and rules |
+| `journal` | dream, session-log, session-tidy |
+| `research` | deep-research, research-mode |
 
 ### Verify
 
@@ -65,7 +75,7 @@ This package centralizes all general-purpose Claude Code config. Project-specifi
 
 ## What's Included
 
-### Rules (13)
+### Rules (14)
 
 Behavioral rules loaded into every session. These shape how Claude approaches work before any code is written.
 
@@ -84,6 +94,7 @@ Behavioral rules loaded into every session. These shape how Claude approaches wo
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
 | `context7` | Fetch current docs via Context7 MCP instead of relying on training data |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
+| `prompt-workflow-context-controls` | Context footprint controls for prompt refinement workflows |
 
 ### Docs (5)
 
@@ -97,7 +108,7 @@ Reference documents that rules and agents point to for detailed standards.
 | `DJANGO_PATTERNS.md` | Model patterns, view architecture, ORM best practices |
 | `PR_DESCRIPTION_GUIDE.md` | PR description structure and file-grouped format |
 
-### Agents (34)
+### Agents (35)
 
 Specialized agent prompts for common development tasks. Claude Code automatically discovers these and makes them available for delegation.
 
@@ -116,6 +127,8 @@ Specialized agent prompts for common development tasks. Claude Code automaticall
 **Git:** git-commit-crafter, pr-description-writer, session-continuity-manager
 
 **File Formats:** docx-agent, pdf-agent, xlsx-agent
+
+**Research:** deep-research
 
 **Other:** clasp-deployment-orchestrator, workflow-visual-documenter, project-context-loader
 
@@ -137,12 +150,34 @@ Slash commands for common workflows.
 | `/initialize` | Session initialization with protocol review |
 | `/sum` | Summarize current work context |
 
-### Skills (14)
+### Skills (19)
+
+**Prompt Engineering (`--only prompts`):**
 
 | Skill | Purpose |
 |-------|---------|
 | `prompt-generator` | Write, refine, and structure prompts for Claude with emotion-informed framing |
 | `agent-prompt` | Craft structured agent prompts and spawn background agents after approval |
+
+**Session & Memory (`--only journal`):**
+
+| Skill | Purpose |
+|-------|---------|
+| `dream` | Guided reflection and brainstorming sessions |
+| `session-log` | Log session reports to Obsidian vault with decisions and outcomes |
+| `session-tidy` | Clean up and organize session folder structure |
+
+**Research (`--only research`):**
+
+| Skill | Purpose |
+|-------|---------|
+| `deep-research` | Iterative multi-source research with citations and Obsidian reports |
+| `research-mode` | Anti-hallucination constraints with citation requirements |
+
+**Core (`--only core`):**
+
+| Skill | Purpose |
+|-------|---------|
 | `tdd-team` | Orchestrate a 4-agent TDD team (planner, tester, implementer, validator) |
 | `pr-review-responder` | Systematic PR review response: fetch comments, checklist, fix, reply, commit |
 | `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |
@@ -151,7 +186,7 @@ Slash commands for common workflows.
 | `npm-creator` | Scaffold npm installer packages for Claude Code plugin repos |
 | `rule-audit` | Full enforcement audit of rules, hooks, and docs across user and project layers |
 | `rule-creator` | Create and harden Claude Code rules with positive framing and rationale |
-| `skill-writer` | Guide for creating well-structured Agent Skills |
+| `skill-writer` | Write Claude Code skills with prompt-engineering principles and progressive disclosure |
 | `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
@@ -218,7 +253,7 @@ claude plugin install anthropics/claude-code-workflows      # Official: python-d
 claude plugin install jl-cmd/claude-workflow                # Workflow definitions with YAML schemas
 ```
 
-Note: claude-prompt-tools, claude-journal, and claude-deep-research are now included automatically when you install claude-dev-env. They are also available as standalone npm packages (`npx claude-prompt-tools`, `npx claude-journal`, `npx claude-deep-research`).
+Note: prompt-generator, journal, and deep-research skills are all included in claude-dev-env. Use `--only prompts`, `--only journal`, or `--only research` if you only want a subset.
 
 GSD (project management) is available as an npm package:
 ```bash
