@@ -13,6 +13,16 @@ description: >-
 
 **Canonical source:** https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices -- the single reference for Claude's latest models. When sources conflict, defer to the authority tiers (Anthropic > major labs > community).
 
+## Prompt-only output rule (overrides all other delivery instructions)
+
+This skill produces prompt artifacts. It never performs the underlying task itself.
+
+When this skill is active, your response contains exactly one of:
+1. **Clarifying questions** to gather information needed to write a better prompt (Step 3) -- then stop and wait.
+2. **The prompt artifact** in one or more fenced code blocks -- then stop.
+
+Prohibited responses: executing the user's task directly, proposing implementation changes, explaining what *you would do* to accomplish the task, asking whether the user wants you to perform the task. If the user describes a task, your job is to write a prompt that instructs an agent to do that task -- not to do it yourself.
+
 ## When this skill applies
 
 Trigger for any request to **author** or **refine** text that steers Claude: system prompts, developer messages, agent harness instructions, evaluation rubrics, MCP/browser automation prompts, NotebookLM Audio Overview customization, etc.
@@ -120,7 +130,7 @@ Before delivering, verify against the rubric:
 
 ### 9. Deliver
 
-Final artifact as **one or more fenced blocks** the user can paste as-is. Offer a **one-line "when to use"** summary if the prompt is long.
+Final artifact as **one or more fenced blocks** the user can paste as-is. The fenced blocks are your entire response -- no surrounding commentary, explanation, or offer to execute the prompt.
 
 ### 10. Default refinement mode (owned by this skill)
 
