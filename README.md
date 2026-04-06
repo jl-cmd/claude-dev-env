@@ -231,14 +231,6 @@ Installed rules merge with your project's `.claude/` config. To override a rule 
 
 Installed hooks run alongside any hooks already in your `settings.json` or `settings.local.json`. The installer preserves existing hook entries.
 
-## Agent Gate
-
-For a prompt evaluation gate that reviews prompts before execution, see [agent-gate](https://github.com/jl-cmd/agent-gate):
-
-```bash
-npx agent-gate-installer
-```
-
 ## Requirements
 
 - Node.js 18+ (for the installer)
