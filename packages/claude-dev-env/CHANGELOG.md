@@ -6,6 +6,13 @@
 
 * migrate `prompt-generator` and `agent-prompt` pipeline refinements from local `~/.claude/skills` into `packages/claude-dev-env/skills` so changes remain durable and release-managed in the canonical repository
 
+## [1.7.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.6.0...claude-dev-env-v1.7.0) (2026-04-06)
+
+
+### Features
+
+* **skill-writer:** rewrite to mirror prompt-generator structure ([#25](https://github.com/jl-cmd/claude-code-config/issues/25)) ([7f3137f](https://github.com/jl-cmd/claude-code-config/commit/7f3137fa0818aaa175fbfb49096b00082944e7ed))
+
 ## [1.6.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.5.0...claude-dev-env-v1.6.0) (2026-04-06)
 
 
