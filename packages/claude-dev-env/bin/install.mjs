@@ -13,6 +13,32 @@ const PACKAGE_NAME = 'claude-dev-env';
 
 const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents'];
 
+const INSTALL_GROUPS = {
+    core: {
+        description: 'Development standards, hooks, agents, commands',
+        skills: [
+            'anthropic-plan', 'everything-search', 'ingest',
+            'npm-creator', 'pr-review-responder', 'readability-review',
+            'recall', 'remember', 'rule-audit', 'rule-creator',
+            'skill-writer', 'tdd-team'
+        ],
+        includeDirectories: ['rules', 'docs', 'commands', 'agents'],
+        includeAllHooks: true,
+    },
+    prompts: {
+        description: 'Prompt engineering tools',
+        skills: ['prompt-generator', 'agent-prompt'],
+    },
+    journal: {
+        description: 'Session logging and memory',
+        skills: ['dream', 'session-log', 'session-tidy'],
+    },
+    research: {
+        description: 'Deep research and citation tools',
+        skills: ['deep-research', 'research-mode'],
+    },
+};
+
 function detectPython() {
     const candidates = [
         { command: 'python3', versionFlag: '--version' },
@@ -119,8 +145,9 @@ function writeManifest(installedFiles) {
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
 }
 
-function install() {
-    console.log(`\nInstalling ${PACKAGE_NAME}...\n`);
+function install(selectedGroups) {
+    const groupLabel = selectedGroups ? `groups: ${selectedGroups.join(', ')}` : 'all';
+    console.log(`\nInstalling ${PACKAGE_NAME} (${groupLabel})...\n`);
     const pythonCommand = detectPython();
     if (!pythonCommand) {
         console.error('ERROR: Python 3 not found. Install Python 3.8+ and ensure python3, python, or py is on PATH.');
@@ -128,9 +155,21 @@ function install() {
     }
     console.log(`  Python: ${pythonCommand}`);
     mkdirSync(CLAUDE_HOME, { recursive: true });
+
+    const allowedSkills = selectedGroups
+        ? new Set(selectedGroups.flatMap(groupName => INSTALL_GROUPS[groupName].skills || []))
+        : null;
+    const allowedDirectories = selectedGroups
+        ? new Set(selectedGroups.flatMap(groupName => INSTALL_GROUPS[groupName].includeDirectories || []))
+        : null;
+    const shouldInstallHooks = selectedGroups
+        ? selectedGroups.some(groupName => INSTALL_GROUPS[groupName].includeAllHooks)
+        : true;
+
     const allInstalledFiles = [];
     const summary = {};
     for (const directory of CONTENT_DIRECTORIES) {
+        if (allowedDirectories && !allowedDirectories.has(directory)) continue;
         const sourceDir = join(PACKAGE_ROOT, directory);
         if (!existsSync(sourceDir)) continue;
         const destDir = join(CLAUDE_HOME, directory);
@@ -145,6 +184,7 @@ function install() {
         let skillsUpdated = 0;
         const skillPaths = [];
         for (const skillDir of skillDirs) {
+            if (allowedSkills && !allowedSkills.has(skillDir.name)) continue;
             const stats = copyTree(join(skillsSource, skillDir.name), join(CLAUDE_HOME, 'skills', skillDir.name));
             skillsCreated += stats.created;
             skillsUpdated += stats.updated;
@@ -153,26 +193,28 @@ function install() {
         summary.skills = { created: skillsCreated, updated: skillsUpdated, paths: skillPaths };
         allInstalledFiles.push(...skillPaths);
     }
-    const hooksSource = join(PACKAGE_ROOT, 'hooks');
-    if (existsSync(hooksSource)) {
-        const hooksDestination = join(CLAUDE_HOME, 'hooks');
-        const filesToCopy = collectFiles(hooksSource).filter(file => !file.endsWith('hooks.json'));
-        let hooksCreated = 0;
-        let hooksUpdated = 0;
-        for (const sourceFile of filesToCopy) {
-            const relativePath = relative(hooksSource, sourceFile);
-            const destFile = join(hooksDestination, relativePath);
-            mkdirSync(dirname(destFile), { recursive: true });
-            const existed = existsSync(destFile);
-            copyFileSync(sourceFile, destFile);
-            allInstalledFiles.push(destFile);
-            if (existed) { hooksUpdated++; } else { hooksCreated++; }
+    if (shouldInstallHooks) {
+        const hooksSource = join(PACKAGE_ROOT, 'hooks');
+        if (existsSync(hooksSource)) {
+            const hooksDestination = join(CLAUDE_HOME, 'hooks');
+            const filesToCopy = collectFiles(hooksSource).filter(file => !file.endsWith('hooks.json'));
+            let hooksCreated = 0;
+            let hooksUpdated = 0;
+            for (const sourceFile of filesToCopy) {
+                const relativePath = relative(hooksSource, sourceFile);
+                const destFile = join(hooksDestination, relativePath);
+                mkdirSync(dirname(destFile), { recursive: true });
+                const existed = existsSync(destFile);
+                copyFileSync(sourceFile, destFile);
+                allInstalledFiles.push(destFile);
+                if (existed) { hooksUpdated++; } else { hooksCreated++; }
+            }
+            summary.hookFiles = { created: hooksCreated, updated: hooksUpdated };
+            console.log(`  Hook files: ${hooksCreated} new, ${hooksUpdated} updated`);
+            const groupCount = mergeHooks(pythonCommand);
+            summary.hookGroups = groupCount;
+            console.log(`  Hook groups: ${groupCount} merged into settings.json`);
         }
-        summary.hookFiles = { created: hooksCreated, updated: hooksUpdated };
-        console.log(`  Hook files: ${hooksCreated} new, ${hooksUpdated} updated`);
-        const groupCount = mergeHooks(pythonCommand);
-        summary.hookGroups = groupCount;
-        console.log(`  Hook groups: ${groupCount} merged into settings.json`);
     }
     writeManifest(allInstalledFiles);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
@@ -243,15 +285,45 @@ function printHelp() {
 ${PACKAGE_NAME} - Claude Code development standards installer
 
 Usage:
-  npx ${PACKAGE_NAME}              Install rules, hooks, agents, commands, skills
-  npx ${PACKAGE_NAME} --uninstall  Remove installed files and hooks
+  npx ${PACKAGE_NAME}              Install everything
+  npx ${PACKAGE_NAME} --only X     Install specific groups
+  npx ${PACKAGE_NAME} --uninstall  Remove installed files
   npx ${PACKAGE_NAME} --help       Show this help
+
+Groups:
+  core      Development standards, hooks, agents, commands
+  prompts   Prompt engineering tools
+  journal   Session logging and memory
+  research  Deep research and citation tools
+
+Examples:
+  npx ${PACKAGE_NAME} --only prompts
+  npx ${PACKAGE_NAME} --only prompts,research
 
 Install location: ~/.claude/
 `);
 }
 
 const args = process.argv.slice(2);
-if (args.includes('--help') || args.includes('-h')) printHelp();
-else if (args.includes('--uninstall')) uninstall();
-else install();
+if (args.includes('--help') || args.includes('-h')) {
+    printHelp();
+} else if (args.includes('--uninstall')) {
+    uninstall();
+} else {
+    const onlyIndex = args.indexOf('--only');
+    let selectedGroups = null;
+    if (onlyIndex !== -1) {
+        const onlyValue = args[onlyIndex + 1];
+        if (!onlyValue || onlyValue.startsWith('--')) {
+            console.error(`ERROR: --only requires a comma-separated list of groups.\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
+            process.exit(1);
+        }
+        selectedGroups = onlyValue.split(',').map(name => name.trim());
+        const invalidGroups = selectedGroups.filter(name => !INSTALL_GROUPS[name]);
+        if (invalidGroups.length > 0) {
+            console.error(`ERROR: Unknown group(s): ${invalidGroups.join(', ')}\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
+            process.exit(1);
+        }
+    }
+    install(selectedGroups);
+}
