@@ -6,6 +6,13 @@
 
 * migrate `prompt-generator` and `agent-prompt` pipeline refinements from local `~/.claude/skills` into `packages/claude-dev-env/skills` so changes remain durable and release-managed in the canonical repository
 
+## [1.9.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.8.2...claude-dev-env-v1.9.0) (2026-04-07)
+
+
+### Features
+
+* **claude-dev-env:** split Stop-hook gates into diagnostic and user channels ([#39](https://github.com/jl-cmd/claude-code-config/issues/39)) ([083ab3c](https://github.com/jl-cmd/claude-code-config/commit/083ab3c28ed29fd659067d34baa0bf31941a526f))
+
 ## [1.8.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.8.1...claude-dev-env-v1.8.2) (2026-04-07)
 
 
