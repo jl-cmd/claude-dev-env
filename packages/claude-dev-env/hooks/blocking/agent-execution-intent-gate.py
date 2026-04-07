@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 
 from prompt_workflow_gate_core import (
@@ -41,30 +40,11 @@ def main() -> None:
     combined_text = f"{description}\n{prompt_text}"
 
     if not has_structured_execution_intent(tool_input):
-        allow_text_fallback = os.getenv(
-            "PROMPT_WORKFLOW_ALLOW_TEXT_INTENT_FALLBACK", ""
-        ).strip().lower() in {"1", "true", "yes"}
-        text_intent_detected = has_explicit_execution_intent(combined_text)
-        if allow_text_fallback and text_intent_detected:
-            print(
-                "PROMPT-WORKFLOW GATE: compatibility text-intent fallback used; "
-                "structured execution intent contract should be provided.",
-                file=sys.stderr,
-            )
-        else:
-            fallback_note = ""
-            if text_intent_detected:
-                print(
-                    "PROMPT-WORKFLOW GATE: text intent marker detected without structured "
-                    "execution intent contract.",
-                    file=sys.stderr,
-                )
-                fallback_note = " Legacy text marker was detected but is not sufficient."
+        if not has_explicit_execution_intent(combined_text):
             _deny(
                 "BLOCKED: Missing structured execution intent signal for Agent/Task launch. "
                 "Provide `tool_input.execution_intent: explicit` or "
                 "`tool_input.execution_intent_explicit: true`."
-                + fallback_note
             )
             sys.exit(0)
 
