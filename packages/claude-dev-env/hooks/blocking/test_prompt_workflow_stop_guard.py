@@ -8,7 +8,6 @@ from pathlib import Path
 
 SCRIPT_PATH = Path(__file__).parent / "prompt-workflow-stop-guard.py"
 
-
 def _run_hook(payload: dict) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(SCRIPT_PATH)],
@@ -17,7 +16,6 @@ def _run_hook(payload: dict) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         check=False,
     )
-
 
 def _full_checklist_rows() -> str:
     return (
@@ -38,7 +36,6 @@ def _full_checklist_rows() -> str:
         "- source_priority_rules_present\n"
     )
 
-
 def test_blocks_internal_object_leak_without_debug_intent() -> None:
     payload = {
         "last_assistant_message": '{"pipeline_mode": "internal_section_refinement_with_final_audit"}',
@@ -49,7 +46,6 @@ def test_blocks_internal_object_leak_without_debug_intent() -> None:
     assert response["decision"] == "block"
     assert "Raw internal refinement object leakage" in response["reason"]
 
-
 def test_allows_internal_object_with_debug_intent() -> None:
     payload = {
         "last_assistant_message": '{"pipeline_mode": "internal_section_refinement_with_final_audit"}',
@@ -57,7 +53,6 @@ def test_allows_internal_object_with_debug_intent() -> None:
     }
     result = _run_hook(payload)
     assert result.stdout.strip() == ""
-
 
 def test_blocks_missing_checklist_rows() -> None:
     payload = {
@@ -67,7 +62,6 @@ def test_blocks_missing_checklist_rows() -> None:
     response = json.loads(result.stdout)
     assert response["decision"] == "block"
     assert "Deterministic checklist rows missing" in response["reason"]
-
 
 def test_blocks_missing_checklist_container_for_prompt_workflow_output() -> None:
     payload = {
@@ -87,7 +81,6 @@ def test_blocks_missing_checklist_container_for_prompt_workflow_output() -> None
     assert response["decision"] == "block"
     assert "Deterministic checklist container missing" in response["reason"]
 
-
 def test_blocks_missing_context_control_signals() -> None:
     payload = {
         "last_assistant_message": (
@@ -104,9 +97,8 @@ def test_blocks_missing_context_control_signals() -> None:
     result = _run_hook(payload)
     response = json.loads(result.stdout)
     assert response["decision"] == "block"
-    assert "Runtime context-control signals missing" in response["reason"]
-    assert "on_demand_skill_loading: true" in response["reason"]
-
+    assert "Runtime context-control preamble missing" in response["reason"]
+    assert "on-demand skill loading" in response["reason"]
 
 def test_blocks_ambiguous_scope_phrasing() -> None:
     payload = {
@@ -124,7 +116,6 @@ def test_blocks_ambiguous_scope_phrasing() -> None:
     response = json.loads(result.stdout)
     assert response["decision"] == "block"
     assert "Ambiguous scope phrasing detected" in response["reason"]
-
 
 def test_allows_fully_structured_prompt_workflow_output() -> None:
     payload = {

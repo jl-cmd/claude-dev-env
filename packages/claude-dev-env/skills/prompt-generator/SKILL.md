@@ -17,6 +17,8 @@ description: >-
 
 This skill produces prompt artifacts. It never performs the underlying task itself.
 
+**Hook-survival invariant (read first):** The fenced prompt block is the primary deliverable and MUST survive Stop-hook retries. If a Stop hook rejects the response, only the surrounding audit summary and runtime signal scaffolding may change between retries — the prompt block itself MUST be re-emitted in full on every retry. Recovery pattern: re-emit the complete fenced prompt block first, then adjust the audit summary. Trimming, summarizing, or deferring the prompt artifact to satisfy a hook gate is forbidden.
+
 When this skill is active, your response contains exactly one of:
 1. **Clarifying questions** to gather information needed to write a better prompt (Step 3) -- then stop and wait.
 2. **The prompt artifact** in one or more fenced code blocks -- then stop.
@@ -83,8 +85,7 @@ Before drafting, define a concrete scope block with:
 
 Use this scope block as the grounding contract for all generated instructions.
 Express work in artifact-bound terms (paths, globs, comparisons, measurable completion checks).
-Treat all five keys as required: do not draft or refine until each key is populated with concrete values.
-If a scope key is missing, stop and request the missing value before continuing.
+All five keys are required — stop and request any missing value before drafting.
 
 ### 4. Build the prompt
 
@@ -98,7 +99,7 @@ Apply these principles (source: https://platform.claude.com/docs/en/build-with-c
 
 **Frame positively.** Anthropic: state the desired outcome directly. "Your response should be composed of smoothly flowing prose paragraphs" provides clearer guidance than a prohibition-only instruction.
 
-**Emotion-informed framing.** Anthropic's emotion concepts research (2026) found that internal activation patterns causally influence output quality. Five patterns apply to prompt design: (1) provide clear criteria and escape routes — the model produces better results when success criteria are explicit and "say so if you're unsure" is an accepted response; (2) use collaborative framing — collaborative language ("help figure out", "work on this together") activates engagement states that correlate with higher quality; (3) frame tasks with positive engagement — presenting tasks as interesting problems activates curiosity states; (4) invite transparency — include "say so if you're unsure" or placeholder notation so the model expresses uncertainty directly; (5) use constructive, forward-looking tone — post-training RLHF creates a reflective default that benefits from energetic counterbalancing. Cross-model caveat: studied on Sonnet 4.5; the patterns align with Anthropic's best practices independently.
+**Emotion-informed framing.** Anthropic's emotion concepts research (2026) shows that internal activation patterns causally influence output quality. Apply: explicit success criteria with "say so if you're unsure" as an accepted answer; collaborative language ("help figure out", "work on this together"); framing tasks as interesting problems rather than chores; constructive, forward-looking tone. Cross-model caveat: studied on Sonnet 4.5; the patterns align with Anthropic's prompting best practices independently. Full pattern catalog and citations: `packages/claude-dev-env/docs/emotion-informed-prompt-design.md`.
 
 **Golden rule check.** Anthropic: "Show your prompt to a colleague with minimal context on the task and ask them to follow it. If they'd be confused, Claude will be too."
 
@@ -132,24 +133,16 @@ Anthropic notes Claude 4.6 is "more direct and grounded... less verbose: may ski
 
 Before delivering, verify against the rubric:
 
-- [ ] States desired behavior in positive terms
-- [ ] Output shape is specified if it matters (prose vs JSON vs XML vs structured outputs)
-- [ ] Communication style addressed (verbosity, summaries, preamble)
-- [ ] If tools exist: instructions tell Claude **when** to call each tool -- use natural phrasing ("Use this tool when...") over forceful directives to avoid overtriggering
-- [ ] No time-sensitive claims unless user asked for a snapshot date
-- [ ] For agent/tool prompts: includes a scope boundary ("Make requested changes and keep surrounding code stable")
-- [ ] For agent/tool prompts: includes autonomy/safety guidance (see pattern below)
-- [ ] For code/research prompts: includes grounding ("Read files before answering; say 'I don't know' when uncertain")
-- [ ] For research prompts: anti-hallucination ("Never speculate about code you have not opened")
-- [ ] For research prompts: structured approach ("Develop competing hypotheses, track confidence, self-critique")
-- [ ] Self-correction chain considered: would a generate-review-refine loop improve output?
-- [ ] For agentic prompts: state management addressed (context awareness, multi-window workflow, state tracking patterns)
-- [ ] Emotion-informed: uses collaborative framing (roles, motivation, partnership language)
-- [ ] Emotion-informed: includes permission to express uncertainty ("say so if unsure", placeholder notation)
-- [ ] Emotion-informed: proactive constraint awareness (inform about constraints upfront so the model can incorporate them into its plan)
-- [ ] For code prompts: includes anti-test-fixation ("Write general solutions, not code that only passes specific test cases; if tests seem wrong, flag them")
-- [ ] For agent prompts: includes temp file cleanup ("Clean up temporary files, scripts, or helper files created during the task")
-- [ ] For agent prompts: includes commit-and-execute pattern ("Choose an approach and commit; avoid revisiting decisions without new contradicting information")
+- [ ] Output shape, communication style, and degree of freedom match the task (prose vs JSON vs XML, verbosity level, fragility-based specificity)
+- [ ] Tool instructions use natural phrasing ("Use this tool when...") and tell Claude *when* to call each tool — no forceful directives that overtrigger
+- [ ] Scope boundary and concrete artifact anchors are explicit; no time-sensitive claims unless the user asked for a snapshot date
+- [ ] **Agent/tool prompts** include the autonomy/safety pattern, temp-file cleanup, and the commit-and-execute pattern
+- [ ] **Code prompts** include grounding ("read files first; say 'I don't know' when uncertain") and anti-test-fixation (general solutions, flag bad tests)
+- [ ] **Research prompts** include the structured-investigation pattern with competing hypotheses, confidence tracking, and self-critique
+- [ ] **Agentic prompts** that span multiple context windows address state management (context awareness, multi-window workflow, structured state files)
+- [ ] Emotion-informed framing is present: collaborative language, explicit success criteria, and explicit permission to express uncertainty ("say so if unsure")
+- [ ] Constraints are surfaced upfront (proactive constraint awareness) so the model can incorporate them into its plan, and each non-obvious constraint carries its motivation
+- [ ] Self-correction chaining is considered when the prompt must hold up over time (generate → review → refine)
 
 ### 9. Deliver
 
@@ -164,50 +157,64 @@ Use draft-only mode when the user explicitly requests it (for example: "just giv
 Fixed order:
 
 1. Base draft generation (this skill)
-2. Section refinement (`role`)
-3. Section refinement (`context`)
-4. Section refinement (`instructions`)
-5. Section refinement (`constraints`)
-6. Section refinement (`output_format`)
-7. Section refinement (`examples`)
-8. Merge to one canonical prompt
-9. Final audit pass/fail with evidence
-10. If fail: targeted fixes + capped re-audit rounds
+2. Section refinement for each required section in order: `role`, `context`, `instructions`, `constraints`, `output_format`, `examples`
+3. Merge to one canonical prompt
+4. Final audit pass/fail with evidence
+5. If fail: targeted fixes + capped re-audit rounds
 
 Required section list is immutable for this pipeline: `role`, `context`, `instructions`, `constraints`, `output_format`, `examples`.
 
-### 11. Internal refinement object format (required by default mode)
+### 11. User-facing audit shape and internal refinement object (default mode)
 
-When step 10 is active (default), build the refinement and audit state internally. Present the final merged prompt and a compact audit summary to the user. Keep the full internal object private unless the user explicitly asks for debug details.
+When step 10 is active (default), build the refinement and audit state internally and present the user with the compact audit shape below — never the raw internal object. Reveal the internal object only when the user explicitly asks for debug details ("show debug", "show internal", "raw internal object", "pipeline object").
 
-**Default user-facing audit output (compact table):**
+**Default user-facing audit — emit exactly this shape:**
 
-```
+```text
 **Audit: <overall_status>** | checklist_results: <pass_count>/14
 
-| Check | Status |
-|-------|--------|
-| structured_scoped_instructions | pass |
-| sequential_steps_present | pass |
-| positive_framing | pass |
-| acceptance_criteria_defined | pass |
-| safety_reversibility_language | pass |
-| no_destructive_shortcuts_guidance | pass |
-| concrete_output_contract | pass |
-| scope_boundary_present | pass |
-| explicit_scope_anchors_present | pass |
-| all_instructions_artifact_bound | pass |
-| no_ambiguous_scope_terms | pass |
-| completion_boundary_measurable | pass |
-| citation_grounding_policy_present | pass |
-| source_priority_rules_present | pass |
+| Check                             | Status | Evidence                                       |
+|-----------------------------------|--------|------------------------------------------------|
+| structured_scoped_instructions    | pass   | XML sections present in <instructions>         |
+| sequential_steps_present          | pass   | numbered steps inside <instructions>           |
+| positive_framing                  | pass   | desired outcome stated directly in <role>      |
+| acceptance_criteria_defined       | pass   | <output_format> lists acceptance items         |
+| safety_reversibility_language     | pass   | reversibility note in <constraints>            |
+| no_destructive_shortcuts_guidance | pass   | "no safety bypass" line in <constraints>       |
+| concrete_output_contract          | pass   | output schema fixed in <output_format>         |
+| scope_boundary_present            | pass   | "make requested changes only" in <constraints> |
+| explicit_scope_anchors_present    | pass   | scope_block populated with five keys           |
+| all_instructions_artifact_bound   | pass   | every step references concrete paths or globs  |
+| no_ambiguous_scope_terms          | pass   | no positional or time-relative phrasing        |
+| completion_boundary_measurable    | pass   | comparison_basis and completion_boundary set   |
+| citation_grounding_policy_present | pass   | source_refs cited per audited claim            |
+| source_priority_rules_present     | pass   | tier rules referenced in <constraints>         |
+
+Runtime signals: `base_minimal_instruction_layer: true` `on_demand_skill_loading: true`
+
+scope_block:
+- target_local_roots: [...]
+- target_canonical_roots: [...]
+- target_file_globs: [...]
+- comparison_basis: ...
+- completion_boundary: ...
+
+Result: the refined prompt artifact for the <task name> refinement is ready for user review.
 ```
 
-Replace `<overall_status>` with `pass` or `fail`. Replace `<pass_count>` with the actual count. Replace each row's `pass` with `fail` where applicable.
+Substitute real values for `<overall_status>`, `<pass_count>`, each row's `pass`/`fail`, the `scope_block` entries, and `<task name>`. Use one short evidence phrase per row. Append `execution_intent: explicit` after the runtime signals line when handing off to `/agent-prompt`. Refer to the prompt artifact by its position-independent identity (its role, purpose, or named scope) — avoid positional adverbs ("above", "below") and time-relative pointers ("just emitted", "the one I just sent"), because the hook flags them and because the audit must remain interpretable when re-rendered out of order.
 
-**Debug mode (full JSON, shown only when user requests debug details):**
+**Do not emit in user-facing audits** (each item below trips a Stop-hook gate, with the reason it was added):
 
-When the user explicitly asks for debug details ("show debug", "show internal", "raw internal object", "pipeline object"), output the full internal object:
+- Any `json` fenced code block — the internal-leak gate fires the moment one appears, because the only legitimate JSON in this skill is the debug-only object below.
+- An opening `{` at the start of the audit — same gate, since it signals raw-object output.
+- Internal-only object keys leaking into prose: `pipeline_mode`, `scope_block_validation`, `evidence_quotes`, `source_refs`, `corrective_edits`, `retry_count`, `audit_output_contract`, `section_output_contract`, `base_prompt_xml`, `required_sections`. They belong to the debug-only object below and nowhere else; the user-facing shape uses the column header `Evidence` and the named anchors instead.
+
+**Hook-recovery contract:**
+
+If a Stop hook rejects a user-facing audit, the next response must re-emit the complete fenced prompt artifact in full (per the Hook-survival invariant defined in the "Prompt-only output rule" section), then re-render the audit using this section's shape. Never trim the prompt block, the checklist, the runtime signals, or the scope anchors to satisfy a gate — fix the format, not the content.
+
+**Debug-only internal object** (output only when the user explicitly asks for debug details):
 
 ```json
 {
@@ -249,36 +256,14 @@ When the user explicitly asks for debug details ("show debug", "show internal", 
 }
 ```
 
-### 12. Deterministic compliance checklist fields (audit reports all)
+### 12. Per-row internal audit contract
 
-If step 10 is active (default), the audit must evaluate all 14 fields below. Each row name must appear as a literal substring in the user-facing output (the compact table satisfies this).
+Step 11's user-facing template enumerates the 14 checklist row names. For each row, maintain the four fields defined in the debug-only internal object in Step 11 (`status`, `evidence_quote`, `source_ref`, `fix_if_fail`). The compact table surfaces `status` and a one-phrase `Evidence` summary derived from `evidence_quote`. The remaining fields stay in the debug-only object and surface only when the user explicitly asks for debug details.
 
-- `structured_scoped_instructions`
-- `sequential_steps_present`
-- `positive_framing`
-- `acceptance_criteria_defined`
-- `safety_reversibility_language`
-- `no_destructive_shortcuts_guidance`
-- `concrete_output_contract`
-- `scope_boundary_present`
-- `explicit_scope_anchors_present`
-- `all_instructions_artifact_bound`
-- `no_ambiguous_scope_terms`
-- `completion_boundary_measurable`
-- `citation_grounding_policy_present`
-- `source_priority_rules_present`
+**Scope quality rule for generated prompts:**
 
-For each checklist row, maintain internally:
-- `status`: `pass|fail`
-- `evidence_quote`: exact quote used for verification
-- `source_ref`: URL or local path
-- `fix_if_fail`: concrete edit text (empty only if pass)
-
-The compact table (step 11) shows `status` per row. The `evidence_quote`, `source_ref`, and `fix_if_fail` fields are internal-only and appear only in debug mode.
-
-Scope quality rule for generated prompts:
 - Bind every major instruction to explicit artifacts from the scope block.
-- Prefer concrete references (paths/globs/comparisons) over context-relative wording.
+- Prefer concrete references (paths, globs, comparisons) over context-relative wording.
 
 ### 13. Source anchors for pipeline requirements
 
@@ -311,7 +296,6 @@ User-facing sequence:
 Execution-intent rule:
 - Treat `/prompt-generator` outputs as prompt artifacts.
 - Transition to `/agent-prompt` only after explicit execution/delegation intent from the user.
-- For execution handoff metadata, include `execution_intent: explicit`.
 
 ### 16. Context-footprint controls (low-context default)
 
@@ -331,8 +315,8 @@ When generating prompts for current Claude models, apply these patterns:
 - **Adaptive thinking replaces budget_tokens:** Claude 4.6 uses adaptive thinking (thinking: {type: "adaptive"}) where the model dynamically decides when and how much to think. Use the effort parameter (low | medium | high | max) to control depth. Anthropic: "In internal evaluations, adaptive thinking reliably drives better performance than extended thinking." Manual budget_tokens is deprecated.
 - **Subagent orchestration:** Include guidance for when subagents are warranted versus direct execution. Anthropic: "Use subagents when tasks can run in parallel, require isolated context, or involve independent workstreams that don't need to share state. For simple tasks, sequential operations, single-file edits, or tasks where you need to maintain context across steps, work directly rather than delegating."
 - **Conservative vs proactive action:** For tools that should act, use explicit language ("Change this function"). For tools that should advise, use: "Default to providing information... Only proceed with edits when the user explicitly requests them."
-- **Anti-hallucination:** Anthropic: "Never speculate about code you have not opened. If the user references a specific file, you MUST read the file before answering."
-- **Self-correction chaining:** Anthropic: "The most common chaining pattern is self-correction: generate a draft, have Claude review it against criteria, have Claude refine based on the review." Consider adding a generate-review-refine loop for prompts that must hold up over time.
+
+(Anti-hallucination grounding and self-correction chaining are covered in Step 4 / Step 8 of the workflow above.)
 
 ## Autonomy and safety pattern
 
