@@ -31,10 +31,7 @@ REQUIRED_CHECKLIST_ROWS: tuple[str, ...] = (
     "source_priority_rules_present",
 )
 
-REQUIRED_CONTEXT_CONTROL_SIGNALS: tuple[str, ...] = (
-    "base_minimal_instruction_layer: true",
-    "on_demand_skill_loading: true",
-)
+REQUIRED_CONTEXT_CONTROL_SIGNALS: tuple[str, ...] = ()
 
 AMBIGUOUS_SCOPE_TERMS: tuple[str, ...] = (
     "this session",

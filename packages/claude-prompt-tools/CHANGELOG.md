@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.1](https://github.com/jl-cmd/claude-code-config/compare/claude-prompt-tools-v1.2.0...claude-prompt-tools-v1.2.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* **prompt-generator:** compact table audit output instead of verbose JSON block
+* **prompt-tools:** remove unused context-control signal check from stop hook
+
+
 ## [1.2.0](https://github.com/jl-cmd/claude-code-config/compare/claude-prompt-tools-v1.1.1...claude-prompt-tools-v1.2.0) (2026-04-06)
 
 

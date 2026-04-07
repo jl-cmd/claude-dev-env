@@ -12,7 +12,6 @@ from prompt_workflow_gate_core import (
     has_checklist_container,
     has_internal_object_leak,
     is_prompt_workflow_response,
-    missing_context_control_signals,
     missing_checklist_rows,
     missing_scope_anchors,
 )
@@ -95,18 +94,6 @@ def main() -> None:
                     _build_block(
                         "PROMPT-WORKFLOW GATE: Required scope anchors missing: "
                         + ", ".join(missing_anchors)
-                    )
-                )
-            )
-            sys.exit(0)
-
-        missing_context_signals = missing_context_control_signals(assistant_message)
-        if missing_context_signals:
-            print(
-                json.dumps(
-                    _build_block(
-                        "PROMPT-WORKFLOW GATE: Runtime context-control signals missing: "
-                        + ", ".join(missing_context_signals)
                     )
                 )
             )

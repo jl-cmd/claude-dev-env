@@ -78,34 +78,12 @@ def test_blocks_missing_checklist_container_for_prompt_workflow_output() -> None
             "target_file_globs\n"
             "comparison_basis\n"
             "completion_boundary\n"
-            "base_minimal_instruction_layer: true\n"
-            "on_demand_skill_loading: true\n"
         ),
     }
     result = _run_hook(payload)
     response = json.loads(result.stdout)
     assert response["decision"] == "block"
     assert "Deterministic checklist container missing" in response["reason"]
-
-
-def test_blocks_missing_context_control_signals() -> None:
-    payload = {
-        "last_assistant_message": (
-            "overall_status: pass\n"
-            + _full_checklist_rows()
-            + "target_local_roots\n"
-            + "target_canonical_roots\n"
-            + "target_file_globs\n"
-            + "comparison_basis\n"
-            + "completion_boundary\n"
-            + "base_minimal_instruction_layer: true\n"
-        ),
-    }
-    result = _run_hook(payload)
-    response = json.loads(result.stdout)
-    assert response["decision"] == "block"
-    assert "Runtime context-control signals missing" in response["reason"]
-    assert "on_demand_skill_loading: true" in response["reason"]
 
 
 def test_blocks_ambiguous_scope_phrasing() -> None:
@@ -115,8 +93,6 @@ def test_blocks_ambiguous_scope_phrasing() -> None:
             + _full_checklist_rows()
             + "scope block includes target_local_roots target_canonical_roots "
             + "target_file_globs comparison_basis completion_boundary "
-            + "base_minimal_instruction_layer: true\n"
-            + "on_demand_skill_loading: true\n"
             + "and applies to this session."
         ),
     }
@@ -136,8 +112,6 @@ def test_allows_fully_structured_prompt_workflow_output() -> None:
             + "target_file_globs\n"
             + "comparison_basis\n"
             + "completion_boundary\n"
-            + "base_minimal_instruction_layer: true\n"
-            + "on_demand_skill_loading: true\n"
         ),
     }
     result = _run_hook(payload)

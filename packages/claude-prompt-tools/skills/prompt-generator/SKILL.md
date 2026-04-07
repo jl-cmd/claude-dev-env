@@ -178,12 +178,36 @@ Required section list is immutable for this pipeline: `role`, `context`, `instru
 
 ### 11. Internal refinement object format (required by default mode)
 
-When step 10 is active (default), build this object internally to drive refinement and audit.
+When step 10 is active (default), build the refinement and audit state internally. Present the final merged prompt and a compact audit summary to the user. Keep the full internal object private unless the user explicitly asks for debug details.
 
-Present the final merged prompt and audit result to the user.
+**Default user-facing audit output (compact table):**
 
-Share this raw object only when the user explicitly asks for debug details.
-Do not expose the raw internal object by default.
+```
+**Audit: <overall_status>** | checklist_results: <pass_count>/14
+
+| Check | Status |
+|-------|--------|
+| structured_scoped_instructions | pass |
+| sequential_steps_present | pass |
+| positive_framing | pass |
+| acceptance_criteria_defined | pass |
+| safety_reversibility_language | pass |
+| no_destructive_shortcuts_guidance | pass |
+| concrete_output_contract | pass |
+| scope_boundary_present | pass |
+| explicit_scope_anchors_present | pass |
+| all_instructions_artifact_bound | pass |
+| no_ambiguous_scope_terms | pass |
+| completion_boundary_measurable | pass |
+| citation_grounding_policy_present | pass |
+| source_priority_rules_present | pass |
+```
+
+Replace `<overall_status>` with `pass` or `fail`. Replace `<pass_count>` with the actual count. Replace each row's `pass` with `fail` where applicable.
+
+**Debug mode (full JSON, shown only when user requests debug details):**
+
+When the user explicitly asks for debug details ("show debug", "show internal", "raw internal object", "pipeline object"), output the full internal object:
 
 ```json
 {
@@ -213,13 +237,21 @@ Do not expose the raw internal object by default.
       "corrective_edits",
       "retry_count"
     ]
+  },
+  "checklist_results": {
+    "<row_name>": {
+      "status": "pass|fail",
+      "evidence_quote": "exact quote used for verification",
+      "source_ref": "URL or local path",
+      "fix_if_fail": "concrete edit text (empty only if pass)"
+    }
   }
 }
 ```
 
 ### 12. Deterministic compliance checklist fields (audit reports all)
 
-If step 10 is active (default), the final audit report must include all fields below with `pass|fail`, direct quote evidence, and source reference:
+If step 10 is active (default), the audit must evaluate all 14 fields below. Each row name must appear as a literal substring in the user-facing output (the compact table satisfies this).
 
 - `structured_scoped_instructions`
 - `sequential_steps_present`
@@ -236,11 +268,13 @@ If step 10 is active (default), the final audit report must include all fields b
 - `citation_grounding_policy_present`
 - `source_priority_rules_present`
 
-For each checklist row, require:
+For each checklist row, maintain internally:
 - `status`: `pass|fail`
 - `evidence_quote`: exact quote used for verification
 - `source_ref`: URL or local path
 - `fix_if_fail`: concrete edit text (empty only if pass)
+
+The compact table (step 11) shows `status` per row. The `evidence_quote`, `source_ref`, and `fix_if_fail` fields are internal-only and appear only in debug mode.
 
 Scope quality rule for generated prompts:
 - Bind every major instruction to explicit artifacts from the scope block.

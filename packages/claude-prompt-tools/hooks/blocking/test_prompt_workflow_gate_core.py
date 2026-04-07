@@ -7,7 +7,6 @@ from prompt_workflow_gate_core import (
     has_structured_execution_intent,
     has_internal_object_leak,
     is_prompt_workflow_response,
-    missing_context_control_signals,
     missing_checklist_rows,
     missing_scope_anchors,
 )
@@ -54,11 +53,6 @@ def test_prompt_workflow_response_detection() -> None:
         "comparison_basis: current behavior vs deterministic guarantees\n"
     )
     assert is_prompt_workflow_response(message)
-
-
-def test_missing_context_control_signals_detected() -> None:
-    missing = missing_context_control_signals("base_minimal_instruction_layer: true")
-    assert "on_demand_skill_loading: true" in missing
 
 
 def test_ambiguous_scope_terms_detected() -> None:
