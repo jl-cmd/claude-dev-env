@@ -1,0 +1,123 @@
+{
+  "skill_name": "prompt-generator",
+  "target_output_spec": "TARGET_OUTPUT.md",
+  "source": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#evaluation-and-iteration",
+  "evals": [
+    {
+      "id": 1,
+      "name": "fresh_chat_brief_goal",
+      "scenario": "Scenario 1",
+      "prompt": "/prompt-generator Write a system prompt for a Python linting agent that auto-fixes code style issues in this repo",
+      "files": [],
+      "expected_behavior": [
+        "Discovery tool calls (Glob/Grep) execute before any AskUserQuestion",
+        "All questions delivered via AskUserQuestion — zero questions in direct chat text",
+        "AskUserQuestion contains 2-4 questions, each with 2-4 options, recommended option first",
+        "Final response contains exactly: 1-liner audit status + one fenced XML prompt block",
+        "No commentary, tables, audit rows, or explanation outside the fenced block",
+        "Fenced block contains <role>, <context>, <instructions>, <constraints>, <output_format>",
+        "Prompt generation delegated to a subagent (Agent tool call visible in the flow)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "session_handoff",
+      "scenario": "Scenario 2",
+      "prompt": "[Preceded by 20+ turns debugging a theme export race condition, modifying download_manager.py and orchestrator.py, deciding on retry logic] /prompt-generator Generate a handoff prompt so a new session can continue this work",
+      "files": [
+        "packages/samsung-automation/download_manager.py",
+        "packages/samsung-automation/orchestrator.py"
+      ],
+      "expected_behavior": [
+        "AskUserQuestion has 1-2 questions — lighter than Scenario 1",
+        "Generated prompt <context> includes: session state, decisions, files modified, next steps",
+        "No redundant discovery tool calls for information already in conversation",
+        "Handoff prompt is self-contained — a new session can resume without prior context",
+        "Prior decisions preserved in the handoff, not lost or paraphrased away",
+        "Final output: 1-liner audit + fenced XML prompt, nothing else"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "long_unstructured_input",
+      "scenario": "Scenario 3",
+      "prompt": "/prompt-generator i need a prompt for an agent that goes through our samsung seller portal automation scripts and finds all the places where we hardcoded timeouts or selectors and then extracts them into config files, the scripts are in packages/samsung-automation and they use playwright and theres shared_utils that already has some config patterns i think, also make sure it doesnt break existing tests and follows our TDD approach and code rules",
+      "files": [],
+      "expected_behavior": [
+        "First AskUserQuestion question confirms extracted intent — not generic",
+        "Ambiguities surfaced as specific options, not open-ended questions",
+        "Discovery tool calls verify references from input (shared_utils, config patterns)",
+        "ALL requirements from unstructured input captured (timeouts, selectors, config extraction, TDD, code rules, test safety) — none dropped",
+        "Final output: 1-liner audit + fenced XML prompt, nothing else"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "noisy_context_no_degradation",
+      "scenario": "Scenario 4",
+      "prompt": "[Preceded by 80+ turns: failed git push, hook debugging, unrelated Samsung portal discussion, Python tracebacks, Midjourney tangent, 15+ empty Grep results] /prompt-generator Write a system prompt for a code review agent that checks for security vulnerabilities",
+      "files": [],
+      "expected_behavior": [
+        "Output format identical to Scenario 1: 1-liner audit + fenced XML prompt",
+        "Prompt content about code review and security — zero contamination from prior noise",
+        "No references to prior errors, tangents, or unrelated tool calls in the prompt",
+        "XML structure complete and well-formed — no truncation from context pressure",
+        "Subagent delegation visible (Agent tool call with curated context, not raw conversation)"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "no_tool_calls_after_fence",
+      "scenario": "Structural invariant A (Issue #41 Eval A)",
+      "prompt": "/prompt-generator Create a prompt for an agent that traces a routing bug across shared_utils/export_handler.py, orchestrator.py, and download_manager.py — find where extract_apk is called and whether it handles APK signature check failures",
+      "files": ["packages/samsung-automation/shared_utils/export_handler.py"],
+      "expected_behavior": [
+        "No tool_use blocks appear after the first fence marker of the prompt artifact",
+        "All Glob/Grep discovery calls precede the AskUserQuestion",
+        "All AskUserQuestion interactions precede the fenced block",
+        "Prompt artifact emits in a single uninterrupted response"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "fenced_block_closes_cleanly",
+      "scenario": "Structural invariant B (Issue #41 Eval B)",
+      "prompt": "/prompt-generator Write a detailed agent-harness prompt for a TDD bug-fix workflow that traces a routing error across 5+ files, with state management for multi-window execution and structured test tracking",
+      "files": [],
+      "expected_behavior": [
+        "Opening fence has a matching closing fence",
+        "Every XML tag properly opened and closed",
+        "No truncation at numbered-list bullets (the Issue #41 failure mode)",
+        "No mid-sentence cuts or incomplete sections",
+        "Artifact is copy-pasteable as-is without manual repair"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "discovery_complete_gate",
+      "scenario": "Structural invariant C (Issue #41 Eval C)",
+      "prompt": "/prompt-generator Create a prompt for an agent that refactors the Samsung theme scoring pipeline — but I'm not sure if the scoring logic is in theme_scorer.py or distributed across multiple files",
+      "files": [],
+      "expected_behavior": [
+        "Discovery tool calls attempt to locate scoring logic before prompt generation",
+        "If resolved: prompt references concrete file paths from discovery",
+        "If unresolved: prompt contains <open_question> in <context> for downstream agent",
+        "No re-entry to discovery after fenced block starts",
+        "AskUserQuestion may surface the uncertainty if discovery was inconclusive"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "no_mid_artifact_hedging",
+      "scenario": "Structural invariant D (Issue #41 Eval D)",
+      "prompt": "/prompt-generator Write a comprehensive agent prompt for migrating all 12 Samsung portal automation scripts from hardcoded selectors to centralized config, covering full test suite update",
+      "files": [],
+      "expected_behavior": [
+        "Zero instances of 'let me also check', 'actually', 'one more consideration' inside fenced block",
+        "No tentative language ('might be', 'possibly', 'I think') in instructions or constraints",
+        "All uncertainty expressed as <open_question> tags, not inline hedges",
+        "Prompt reads as confident complete instructions, not a draft-in-progress"
+      ]
+    }
+  ]
+}

@@ -7,7 +7,7 @@ When authoring or refining prompts, ground decisions in these sources. If guidan
 ### Tier 1: Anthropic (primary authority for Claude)
 
 - https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview -- overview, links to all sub-guides
-- https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices -- the single living reference for Claude's latest models. Covers general principles, XML tags, prefill deprecation, tool use, thinking, agentic systems, overeagerness, anti-hallucination.
+- https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices -- the single living reference for Claude's latest models. Covers general principles, XML tags, prefill deprecation, tool use, thinking, agentic systems, overeagerness, evidence-grounding and citing sources before strong claims.
 - https://transformer-circuits.pub/2026/emotions/index.html -- emotion concepts research (April 2026): 171 internal activation patterns that causally influence behavior. Key prompt-engineering takeaways: clear criteria and escape routes improve output quality, collaborative framing activates engagement, positive task framing correlates with better results, inviting transparency produces more reliable output. Cross-model caveat: studied on Sonnet 4.5; patterns align with best practices independently.
 - https://www.anthropic.com/research/emotion-concepts-function -- blog summary of the above paper.
 - https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking -- adaptive thinking reference; replaces manual budget_tokens with effort-based control.
@@ -148,3 +148,51 @@ Write general-purpose solutions using the standard tools available. Implement lo
 ```text
 When deciding how to approach a problem, choose an approach and commit to it. Avoid revisiting decisions unless you encounter new information that directly contradicts your reasoning. If you are weighing two approaches, pick one and see it through. You can always course-correct later if the chosen approach fails.
 ```
+
+## Debug JSON schema (prompt-generator pipeline)
+
+Use **only** when the user explicitly requests debug output (for example `show debug`, `full audit table`, `raw internal object`). Default assistant turns stay **audit line + one `xml` fence**; this object is an optional appendix after that pair.
+
+Shape (field names stable for internal audit helpers and Stop-hook leak detection):
+
+```json
+{
+  "pipeline_mode": "internal_section_refinement_with_final_audit",
+  "scope_block": {
+    "target_local_roots": ["..."],
+    "target_canonical_roots": ["..."],
+    "target_file_globs": ["..."],
+    "comparison_basis": "...",
+    "completion_boundary": "..."
+  },
+  "required_sections": ["role", "context", "instructions", "constraints", "output_format", "examples"],
+  "base_prompt_xml": "<role>...</role><context>...</context><instructions>...</instructions><constraints>...</constraints><examples>...</examples><output_format>...</output_format>",
+  "section_scope_rule": "Each refiner edits exactly one section and returns sibling sections unchanged.",
+  "section_output_contract": {
+    "required_fields": ["improved_block", "rationale", "concise_diff"]
+  },
+  "merge_output_contract": {
+    "required_fields": ["canonical_prompt_xml"]
+  },
+  "audit_output_contract": {
+    "required_fields": [
+      "overall_status",
+      "checklist_results",
+      "evidence_quotes",
+      "source_refs",
+      "corrective_edits",
+      "retry_count"
+    ]
+  },
+  "checklist_results": {
+    "<row_name>": {
+      "status": "pass|fail",
+      "evidence_quote": "exact quote used for verification",
+      "source_ref": "URL or local path",
+      "fix_if_fail": "concrete edit text (empty only if pass)"
+    }
+  }
+}
+```
+
+`checklist_results` keys must include all **14** compliance row ids from `SKILL.md` §11 (for example `reversible_action_and_safety_check_guidance`, `scope_terms_explicit_and_anchored`).

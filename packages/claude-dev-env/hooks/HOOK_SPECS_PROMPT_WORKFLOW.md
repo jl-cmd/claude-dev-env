@@ -46,12 +46,12 @@ Deterministic runtime gates for prompt workflows.
 - `positive_framing`
 - `acceptance_criteria_defined`
 - `safety_reversibility_language`
-- `no_destructive_shortcuts_guidance`
+- `reversible_action_and_safety_check_guidance`
 - `concrete_output_contract`
 - `scope_boundary_present`
 - `explicit_scope_anchors_present`
 - `all_instructions_artifact_bound`
-- `no_ambiguous_scope_terms`
+- `scope_terms_explicit_and_anchored`
 - `completion_boundary_measurable`
 - `citation_grounding_policy_present`
 - `source_priority_rules_present`
