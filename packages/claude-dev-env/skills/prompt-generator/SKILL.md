@@ -19,6 +19,8 @@ description: >-
 
 **Canonical source:** https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices — the single reference for Claude's latest models. When sources conflict, defer to the authority tiers (Anthropic > major labs > community).
 
+**Harness hygiene:** Re-test harness assumptions about what Claude cannot do alone on each model generation or major product release—stale compensations bottleneck performance as capabilities improve (Hook 1; [Harnessing Claude's intelligence](https://claude.com/blog/harnessing-claudes-intelligence), inventory `docs/references/anthropic-harnessing-claudes-intelligence-technique-inventory.md`).
+
 **Eval contract:** The user-visible behavior this skill must satisfy is defined in `packages/claude-dev-env/skills/prompt-generator/TARGET_OUTPUT.md`. Automated evals live in `packages/claude-dev-env/skills/prompt-generator/evals/prompt-generator.json`.
 
 **Terminology:** **Prompt artifact** — the full XML inside the single user-facing `xml` fence (the paste-ready handoff). **Scope block** — the five-key contract in §3A that grounds instructions. **Default refinement pipeline** — §10: base draft → section refine → merge → 14-row compliance audit → capped fixes (subagent-internal unless draft-only). **Light self-check** — §8: fast pre-return sanity pass (shape, tools, scope, patterns); *not* the compliance audit. **Compliance audit (14-row)** — §11: hook-keyed rows that set the `Audit: pass|fail` numerator. **Execution handoff** — `/agent-prompt` after explicit user intent to run work.
@@ -145,6 +147,12 @@ Apply principles from Anthropic’s prompting guide (see REFERENCE.md): XML sect
 
 **Commit-and-execute pattern.** Anthropic: "When you're deciding how to approach a problem, choose an approach and commit to it. Avoid revisiting decisions unless you encounter new information that directly contradicts your reasoning." For prompts that guide agents through multi-step work, include this pattern so the agent doesn't spin revisiting decisions.
 
+**Tool-return policy (agent-harness / tool-use prompts):** Require explicit justification before the harness tokenizes full tool outputs; when the next hop needs only a slice or a tool-to-tool handoff, steer authors toward code execution (bash/REPL) so only execution output reaches model-visible context—not every intermediate payload (Hook 2; [Harnessing Claude's intelligence](https://claude.com/blog/harnessing-claudes-intelligence)).
+
+**Bash + text-editor foundation:** Prefer bash and the text editor for file work; treat Agent Skills, programmatic tool calling, and the memory tool as compositions of those primitives—state which primitive stack the harness assumes (Hook 3; same post).
+
+**Progressive disclosure:** Avoid monolithic system prompts packed with rarely used task branches; keep short always-on summaries and load full bodies via a read path when relevant (skills YAML frontmatter pattern per [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)) (Hook 4; same post).
+
 **For long context** (20k+ tokens): put documents first, query/instructions last. Anthropic: "Queries at the end can improve response quality by up to 30% in tests." Ground responses in quotes from source material before analysis.
 
 ### 5. Control output format
@@ -172,6 +180,7 @@ Expand the light self-check with this internal checklist when useful:
 - [ ] **Code prompts** include read-before-claim grounding ("read files first; say 'I don't know' when uncertain") and anti-test-fixation (general solutions, flag bad tests)
 - [ ] **Research prompts** include the structured-investigation pattern with competing hypotheses, confidence tracking, and self-critique
 - [ ] **Agentic prompts** that span multiple context windows address state management (context awareness, multi-window workflow, structured state files)
+- [ ] **Agent-harness prompts** for long browse/search or multi-window work cite the context stack levers in **REFERENCE.md → Harness design patterns** (context editing, subagents, compaction, memory folder) (Hook 5)
 - [ ] Emotion-informed framing is present: collaborative language, explicit success criteria, and explicit permission to express uncertainty ("say so if unsure")
 - [ ] Constraints are surfaced upfront (proactive constraint awareness) so the model can incorporate them into its plan, and each non-obvious constraint carries its motivation
 - [ ] Self-correction chaining is considered when the prompt must hold up over time (generate → review → refine)
@@ -239,6 +248,7 @@ When the user explicitly asks for debug / full audit, emit the markdown table, `
 ### 14. Source anchors for pipeline requirements
 
 - Anthropic Prompting Best Practices: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
+- Harness economics (context stack, caching, typed tools, benchmarks): **REFERENCE.md → Harness design patterns**
 - Autonomy / reversibility / no safety-bypass: same + “Autonomy and safety pattern” below
 - Evidence-grounding / read-before-claim policy: `packages/claude-dev-env/skills/prompt-generator/REFINEMENT_PIPELINE_RUNBOOK.md`
 
@@ -301,5 +311,7 @@ Search for this information in a structured way. As you gather data, develop sev
 1. **Tier 1:** Anthropic documentation
 2. **Tier 2:** OpenAI, Google DeepMind, Microsoft Research
 3. **Tier 3:** Community / blogs
+
+**Out-of-scope guard (Hook 12):** [Harnessing Claude's intelligence](https://claude.com/blog/harnessing-claudes-intelligence) and `docs/references/anthropic-harnessing-claudes-intelligence-technique-inventory.md` cover harness evolution, context economics, caching, and declarative boundaries—not a substitute for a full security threat model or product-specific compliance catalog unless paired with other Tier 1 or governance sources.
 
 Full links: `REFERENCE.md`.

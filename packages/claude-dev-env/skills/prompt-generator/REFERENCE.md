@@ -11,6 +11,8 @@ When authoring or refining prompts, ground decisions in these sources. If guidan
 - https://transformer-circuits.pub/2026/emotions/index.html -- emotion concepts research (April 2026): 171 internal activation patterns that causally influence behavior. Key prompt-engineering takeaways: clear criteria and escape routes improve output quality, collaborative framing activates engagement, positive task framing correlates with better results, inviting transparency produces more reliable output. Cross-model caveat: studied on Sonnet 4.5; patterns align with best practices independently.
 - https://www.anthropic.com/research/emotion-concepts-function -- blog summary of the above paper.
 - https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking -- adaptive thinking reference; replaces manual budget_tokens with effort-based control.
+- https://claude.com/blog/harnessing-claudes-intelligence -- harness evolution: primitives Claude already knows, what to stop doing in the harness, deliberate boundaries (context economics, caching, typed tools). Local inventory: `docs/references/anthropic-harnessing-claudes-intelligence-technique-inventory.md`.
+- https://github.com/anthropics/skills/tree/main/skills/claude-api -- Anthropic `claude-api` Agent Skill for hands-on API/tool patterns from that post (Hook 10). Platform entry: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/claude-api-skill
 
 ### Tier 2: Major labs (strong secondary, often transfers across models)
 
@@ -36,6 +38,56 @@ When authoring or refining prompts, ground decisions in these sources. If guidan
 ### Conflict resolution rule
 
 If sources disagree on a technique, apply in order: Anthropic documentation first (it describes the actual model behavior), then OpenAI/Google/Microsoft (large-scale research with cross-model relevance), then community sources (patterns and intuition, not authoritative on model internals). When Tier 3 contradicts Tier 1, Tier 1 wins without exception.
+
+## Harness design patterns (Anthropic blog, April 2026)
+
+Primary URL: https://claude.com/blog/harnessing-claudes-intelligence. Structured inventory: `docs/references/anthropic-harnessing-claudes-intelligence-technique-inventory.md`.
+
+### Mechanism doc map (Hook 11)
+
+Jump from concept to the platform specs the post names:
+
+- [Bash tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool) / [Text editor tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/text-editor-tool)
+- [Code execution tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool) / [Programmatic tool calling](https://platform.claude.com/docs/en/agents-and-tools/tool-use/programmatic-tool-calling)
+- [Memory tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool)
+- [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
+- [Context windows](https://platform.claude.com/docs/en/build-with-claude/context-windows) / [Context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing) / [Compaction](https://platform.claude.com/docs/en/build-with-claude/compaction)
+- [Subagents](https://code.claude.com/docs/en/sub-agents)
+- [System prompts](https://platform.claude.com/docs/en/release-notes/system-prompts) / [Working with the Messages API](https://platform.claude.com/docs/en/build-with-claude/working-with-messages) / [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+- [Model migration guide — hard-coded filters](https://platform.claude.com/docs/en/about-claude/models/migration-guide#additional-recommended-changes)
+- [Harness design for long-running applications](https://www.anthropic.com/engineering/harness-design-long-running-apps)
+- [Claude Code auto-mode](https://www.anthropic.com/engineering/claude-code-auto-mode)
+- [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+
+### Context stack (Hook 5)
+
+- **Context editing:** Remove stale tool results and thinking blocks selectively ([Context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing)).
+- **Subagents:** Fork fresh windows for isolated subtasks; post cites **+2.8%** BrowseComp vs best single-agent for Opus 4.6 ([Subagents](https://code.claude.com/docs/en/sub-agents)).
+- **Compaction:** Summarize prior context for long horizons ([Compaction](https://platform.claude.com/docs/en/build-with-claude/compaction)); effectiveness varies by model generation (see Hook 9 table).
+- **Memory folder:** Persist agent-chosen state via the memory tool / files ([Memory tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool)).
+
+### Prompt caching (Hook 6)
+
+The [Messages API](https://platform.claude.com/docs/en/build-with-claude/working-with-messages) is stateless—re-supply prior actions, tool definitions, and instructions each turn. Maximize [prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) hits: **stable prefix first, dynamic tail last**; **append** new content via **messages** instead of rewriting the cached prompt; **avoid mid-session model switches** (caches are model-specific—use a **subagent** for a cheaper model); **treat the tool list as part of the cached prefix** and avoid churn; use **tool search** so dynamic discovery **appends** without invalidating the prefix; for multi-turn agents, **advance breakpoints** toward the latest message (**auto-caching**). Cached input tokens are priced at **10% of base input** per [pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+
+### Typed tools vs bash strings (Hook 7)
+
+Promote actions to **dedicated tools** with typed arguments when the harness must intercept, gate, render (e.g., **modals**), or audit—**hard-to-reverse** steps (e.g., external API calls) for user confirmation; **write/edit** paths with **staleness checks** so concurrent edits are not blindly overwritten ([Harnessing Claude's intelligence](https://claude.com/blog/harnessing-claudes-intelligence)).
+
+### Standing review: dedicated tools vs general bash + policy (Hook 8)
+
+Re-evaluate promotions as models improve—e.g., Claude Code **auto-mode** (secondary reviewer over bash strings) can **reduce** bespoke tools **only** where users accept that trust profile; **high-stakes** actions still warrant dedicated tools ([Claude Code auto-mode](https://www.anthropic.com/engineering/claude-code-auto-mode)).
+
+### Benchmark vignettes — motivation only, not guarantees (Hook 9)
+
+| Vignette | Outcome stated in the post |
+|----------|----------------------------|
+| SWE-bench Verified | Claude 3.5 Sonnet **49%** with bash + editor only (then SOTA framing) |
+| BrowseComp + output filtering | Opus 4.6 **45.3% → 61.6%** |
+| BrowseComp + subagents | Opus 4.6 **+2.8%** vs best single-agent |
+| BrowseComp + compaction | Sonnet 4.5 **43%** flat; Opus 4.5 **68%**; Opus 4.6 **84%** (same setup) |
+| BrowseComp-Plus + memory folder | Sonnet 4.5 **60.4% → 67.2%** |
+| Prompt caching | Cached tokens **10%** the cost of base input tokens |
 
 ## NotebookLM Audio Overview customization (example)
 
