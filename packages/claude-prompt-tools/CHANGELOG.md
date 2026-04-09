@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/jl-cmd/claude-code-config/compare/claude-prompt-tools-v1.3.0...claude-prompt-tools-v1.4.0) (2026-04-09)
+
+
+### Features
+
+* **prompt-generator:** eval contract and SKILL output rules ([#42](https://github.com/jl-cmd/claude-code-config/issues/42)) ([1e072c5](https://github.com/jl-cmd/claude-code-config/commit/1e072c5543c3d2f8e22e3732e98cba62176ad587))
+
 ## [1.3.0](https://github.com/jl-cmd/claude-code-config/compare/claude-prompt-tools-v1.2.1...claude-prompt-tools-v1.3.0) (2026-04-07)
 
 

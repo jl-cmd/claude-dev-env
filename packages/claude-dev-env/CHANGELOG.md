@@ -6,6 +6,13 @@
 
 * migrate `prompt-generator` and `agent-prompt` pipeline refinements from local `~/.claude/skills` into `packages/claude-dev-env/skills` so changes remain durable and release-managed in the canonical repository
 
+## [1.10.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.9.0...claude-dev-env-v1.10.0) (2026-04-09)
+
+
+### Features
+
+* **prompt-generator:** eval contract and SKILL output rules ([#42](https://github.com/jl-cmd/claude-code-config/issues/42)) ([1e072c5](https://github.com/jl-cmd/claude-code-config/commit/1e072c5543c3d2f8e22e3732e98cba62176ad587))
+
 ## [1.9.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.8.2...claude-dev-env-v1.9.0) (2026-04-07)
 
 
