@@ -61,16 +61,17 @@ Match `TARGET_OUTPUT.md`. Summary:
 |----------|---------|-------------|-----------------|
 | **1 — Fresh brief goal** | `/prompt-generator` with short goal; little session context | **3–5** parallel Glob/Grep (or equivalent) **before** any question | **One** form, **2–4** questions |
 | **2 — Session handoff** | User wants a prompt so a **new** session can continue this thread | **Conversation only** — skip redundant repo tools for facts already stated | **One** form, **1–2** questions |
-| **3 — Long unstructured input** | Many requirements / paths in one message | Verify repo references (packages, shared utils, configs) with targeted tools **before** questions | First question **confirms extracted intent**; ambiguities as **specific** options |
+| **3 — Long unstructured input** | Many requirements / paths in one message | Verify repo references (packages, shared utils, configs) with targeted tools **before** questions | First question **confirms extracted intent**; ambiguities as **specific** options; **every** user-stated requirement captured in the generated XML by name — track all requirements from the unstructured input and confirm coverage before shipping |
 | **4 — Noisy context** | Long unrelated thread before `/prompt-generator` | Build the subagent brief from: the user’s literal `/prompt-generator` text, a **≤120-word** summary of on-topic facts, and discovery notes—**exclude** raw stack traces and unrelated tangents | As needed (often Scenario 1-shaped) |
 
-**Handoff (Scenario 2):** `<context>` must be **self-contained** — state, **decisions**, files touched, next steps, constraints — so a new session needs no prior chat.
+**Handoff (Scenario 2):** `<context>` must be **self-contained** — state, **decisions**, files touched, next steps, constraints — so a new session needs no prior chat. Preserve prior decisions verbatim in the handoff; quote the exact decision text where precision matters rather than paraphrasing it away.
 
 ## Phase ordering (structural invariant A)
 
 For the **final** user-visible turn that ships the artifact:
 
 - Compose the message as **audit line → opening fence → XML → closing fence → end**; keep the byte stream free of `tool_use` blocks **between** the opening and closing fences.
+- **Completeness:** End every numbered step inside `<instructions>` with a complete sentence and a fully written list item. Balance every XML tag explicitly (open and close each `<role>`, `<context>`, `<instructions>`, `<constraints>`, `<output_format>`). The artifact must be copy-pasteable into a new file with zero manual repair.
 - Global pipeline: **discovery tools** (when applicable) → **AskUserQuestion** → **subagent** (draft + refinement + internal audit) → **one** orchestrator reply containing only audit line + fence.
 
 ## Interactive discovery mode (default)
@@ -111,7 +112,7 @@ Match specificity to task fragility:
 
 - **High:** Multiple valid approaches; numbered goals and acceptance criteria.
 - **Medium:** Preferred pattern exists; pseudocode or parameterised template.
-- **Low:** Fragile or safety-critical; numbered steps with explicit file paths, command names, and **allowed / disallowed action lists** (e.g. “Allowed: `pytest packages/foo/tests`; Disallowed: `git push --force` without user approval”).
+- **Low:** Fragile or safety-critical; numbered steps with explicit file paths, command names, and **permitted-action-only lists** (e.g. “Permitted: `pytest packages/foo/tests`; requires explicit user approval before: `git push --force`”).
 
 ### 3. Collect required missing facts
 
@@ -133,13 +134,13 @@ Use this scope block as the grounding contract for all generated instructions. E
 
 Apply principles from Anthropic’s prompting guide (see REFERENCE.md): XML sections, role, motivation in `<context>`, positive framing, emotion-informed collaborative tone where appropriate, **commit-and-execute** for multi-step agent prompts.
 
-**Structural invariant D:** Write `<instructions>` / `<constraints>` as direct imperatives (“Open `path/to/file.ts` and …”). Park unresolved items in `<open_question>` tags—one distinct question per tag with the exact decision you need.
+**Structural invariant D:** Write `<instructions>` / `<constraints>` as direct imperatives (“Open `path/to/file.ts` and …”). Park unresolved items in `<open_question>` tags—one distinct question per tag with the exact decision you need. Inside the fenced XML artifact, use only confident, definitive language: replace hedging phrases (“let me also check”, “actually”, “one more consideration”) and tentative qualifiers (“might be”, “possibly”, “I think”, “could be”) with direct assertions or move genuine uncertainty into `<open_question>` tags.
 
 **Set a role** in the system prompt. Anthropic: "Setting a role in the system prompt focuses Claude's behavior and tone for your use case. Even a single sentence makes a difference."
 
 **Add motivation behind constraints** in `<context>`. Anthropic: "Providing context or motivation behind your instructions... can help Claude better understand your goals and deliver more targeted responses." Claude generalizes from the explanation.
 
-**Frame positively.** Anthropic: state the desired outcome directly. "Your response should be composed of smoothly flowing prose paragraphs" provides clearer guidance than a prohibition-only instruction.
+**Frame positively (zero-negative-keyword rule).** Anthropic: state the desired outcome directly. "Your response should be composed of smoothly flowing prose paragraphs" provides clearer guidance than a prohibition-only instruction. Apply this rule absolutely inside the fenced XML artifact across all sections (`<role>`, `<context>`, `<instructions>`, `<constraints>`, `<output_format>`): every instruction states what to do, what to produce, what to enforce. Use affirmative directives exclusively: "only X", "always X", "ensure X", "require X." Banned keywords inside generated XML: "no", "not", "don't", "do not", "never", "avoid", "without", "refrain", "stop", "prevent", "exclude", "prohibit", "forbid", "reject." Also banned: indirect negative patterns such as "instead of X", "rather than X", "as opposed to." Example pass: "Ensure all functions have explicit return types." Example fail: "Do not leave return types implicit." When a boundary is needed, phrase it as what is permitted: "only run commands within the scoped paths" rather than a prohibition.
 
 **Emotion-informed framing.** Anthropic's emotion concepts research (2026) shows that internal activation patterns causally influence output quality. Apply: explicit success criteria with "say so if you're unsure" as an accepted answer; collaborative language ("help figure out", "work on this together"); framing tasks as interesting problems rather than chores; constructive, forward-looking tone. Cross-model caveat: studied on Sonnet 4.5; the patterns align with Anthropic's prompting best practices independently. Full pattern catalog and citations: `packages/claude-dev-env/docs/emotion-informed-prompt-design.md`.
 
