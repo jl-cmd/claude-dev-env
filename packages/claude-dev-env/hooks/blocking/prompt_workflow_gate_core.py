@@ -11,7 +11,6 @@ from prompt_workflow_gate_config import (
     COMPILED_NEGATIVE_INDIRECT_PATTERNS,
     COMPILED_NEGATIVE_KEYWORD_PATTERNS,
     DEBUG_INTENT_MARKERS,
-    FENCED_XML_BLOCK_PATTERN,
     INTERNAL_OBJECT_MARKERS,
     PROMPT_WORKFLOW_RESPONSE_MARKERS,
     REQUIRED_CHECKLIST_ROWS,
@@ -20,9 +19,61 @@ from prompt_workflow_gate_config import (
 )
 
 
+def _line_opens_xml_fence(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped.startswith("```"):
+        return False
+    remainder = stripped[3:].strip()
+    return remainder == "xml" or remainder.startswith("xml ")
+
+
+def _line_is_bare_fence_close(line: str) -> bool:
+    return line.strip() == "```"
+
+
+def _line_opens_inner_markdown_fence(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped.startswith("```"):
+        return False
+    return stripped != "```"
+
+
 def extract_fenced_xml_content(text: str) -> str:
-    all_matches = FENCED_XML_BLOCK_PATTERN.findall(text)
-    return "\n".join(all_matches)
+    """Extract bodies of ```xml fenced blocks.
+
+    The closing delimiter is a line whose stripped text is exactly three backticks.
+    Inner Markdown code fences (for example a line starting with three backticks
+    plus a language tag) are scanned until their own closing backtick line so the
+    outer ``xml`` fence does not end early.
+    """
+    results: list[str] = []
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines):
+        if _line_opens_xml_fence(lines[index]):
+            index += 1
+            body_lines: list[str] = []
+            while index < len(lines):
+                line = lines[index]
+                if _line_is_bare_fence_close(line):
+                    index += 1
+                    break
+                if _line_opens_inner_markdown_fence(line):
+                    body_lines.append(line)
+                    index += 1
+                    while index < len(lines):
+                        inner_line = lines[index]
+                        body_lines.append(inner_line)
+                        index += 1
+                        if _line_is_bare_fence_close(inner_line):
+                            break
+                    continue
+                body_lines.append(line)
+                index += 1
+            results.append("\n".join(body_lines))
+            continue
+        index += 1
+    return "\n".join(results)
 
 
 def missing_required_xml_sections(text: str) -> list[str]:

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Stop hook gate for prompt-workflow leakage and deterministic audit coverage."""
+"""Stop hook gate for prompt-workflow leakage and deterministic audit coverage.
+
+When every workflow gate passes, the fenced ``xml`` artifact body is copied to the
+system clipboard via :mod:`prompt_workflow_clipboard` (tkinter, then pyperclip).
+Set ``PROMPT_WORKFLOW_SKIP_CLIPBOARD=1`` to disable (tests, CI, headless).
+"""
 
 from __future__ import annotations
 
@@ -9,7 +14,9 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from prompt_workflow_clipboard import copy_text_to_system_clipboard
 from prompt_workflow_gate_core import (
+    extract_fenced_xml_content,
     find_ambiguous_scope_terms,
     find_negative_keywords_in_fenced_xml,
     has_debug_intent,
@@ -199,6 +206,10 @@ def main() -> None:
 
     if block is not None:
         sys.stdout.write(json.dumps(block) + "\n")
+    elif is_prompt_workflow_response(assistant_message):
+        artifact_text = extract_fenced_xml_content(assistant_message).strip()
+        if artifact_text:
+            copy_text_to_system_clipboard(artifact_text)
 
     sys.exit(0)
 

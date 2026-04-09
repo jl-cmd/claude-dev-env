@@ -96,14 +96,10 @@ NEGATIVE_INDIRECT_PATTERNS_IN_ARTIFACT: tuple[str, ...] = (
 
 REQUIRED_XML_SECTIONS: tuple[str, ...] = (
     "role",
-    "context",
+    "background",
     "instructions",
     "constraints",
     "output_format",
-)
-
-FENCED_XML_BLOCK_PATTERN: re.Pattern[str] = re.compile(
-    r"```xml\s*\n(.*?)```", re.DOTALL
 )
 
 COMPILED_NEGATIVE_KEYWORD_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
