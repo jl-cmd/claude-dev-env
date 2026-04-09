@@ -66,7 +66,7 @@ def test_blocks_missing_checklist_rows() -> None:
     assert response["decision"] == "block"
     assert "Deterministic checklist rows missing" in response["reason"]
 
-def test_blocks_missing_checklist_container_for_prompt_workflow_output() -> None:
+def test_allows_prompt_workflow_output_without_checklist_container() -> None:
     payload = {
         "last_assistant_message": (
             "overall_status: pass\n"
@@ -80,9 +80,7 @@ def test_blocks_missing_checklist_container_for_prompt_workflow_output() -> None
         ),
     }
     result = _run_hook(payload)
-    response = json.loads(result.stdout)
-    assert response["decision"] == "block"
-    assert "Deterministic checklist container missing" in response["reason"]
+    assert result.stdout.strip() == ""
 
 def test_blocks_missing_context_control_signals() -> None:
     payload = {

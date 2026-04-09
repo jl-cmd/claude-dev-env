@@ -83,6 +83,8 @@ def _check_checklist_container(assistant_message: str) -> dict | None:
     )
 
 def _check_missing_checklist_rows(assistant_message: str) -> dict | None:
+    if not has_checklist_container(assistant_message):
+        return None
     missing_rows = missing_checklist_rows(assistant_message)
     if not missing_rows:
         return None
@@ -152,7 +154,6 @@ def _evaluate_workflow_gates(assistant_message: str) -> dict | None:
     if not is_prompt_workflow_response(assistant_message):
         return None
     workflow_gate_checks: tuple[Callable[[str], dict | None], ...] = (
-        _check_checklist_container,
         _check_missing_checklist_rows,
         _check_missing_scope_anchors,
         _check_missing_context_signals,
