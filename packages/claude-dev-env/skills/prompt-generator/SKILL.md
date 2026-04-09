@@ -53,7 +53,7 @@ Match `TARGET_OUTPUT.md`. Summary:
 4. **Full audit table / JSON debug object:** Append only after the user uses an explicit debug phrase such as `show debug`, `full audit table`, or `raw internal object`.
 5. **Commit-and-execute:** Pick a drafting approach, run it to completion, ship the XML; change plans only when **new** facts from the user or tools contradict the earlier scope.
 
-**Required XML sections** inside the fence: `<role>`, `<context>`, `<instructions>`, `<constraints>`, `<output_format>`. Optional: `<examples>`, `<open_question>` (use for unresolved discovery — see structural invariant D in `TARGET_OUTPUT.md`).
+**Required XML sections** inside the fence: `<role>`, `<background>`, `<instructions>`, `<constraints>`, `<output_format>`. Optional: `<illustrations>`, `<open_question>` (use for unresolved discovery — see structural invariant D in `TARGET_OUTPUT.md`).
 
 ## Scenario router
 
@@ -64,14 +64,14 @@ Match `TARGET_OUTPUT.md`. Summary:
 | **3 — Long unstructured input** | Many requirements / paths in one message | Verify repo references (packages, shared utils, configs) with targeted tools **before** questions | First question **confirms extracted intent**; ambiguities as **specific** options; **every** user-stated requirement captured in the generated XML by name — track all requirements from the unstructured input and confirm coverage before shipping |
 | **4 — Noisy context** | Long unrelated thread before `/prompt-generator` | Build the subagent brief from: the user’s literal `/prompt-generator` text, a **≤120-word** summary of on-topic facts, and discovery notes—**exclude** raw stack traces and unrelated tangents | As needed (often Scenario 1-shaped) |
 
-**Handoff (Scenario 2):** `<context>` must be **self-contained** — state, **decisions**, files touched, next steps, constraints — so a new session needs no prior chat. Preserve prior decisions verbatim in the handoff; quote the exact decision text where precision matters rather than paraphrasing it away.
+**Handoff (Scenario 2):** `<background>` must be **self-contained** — state, **decisions**, files touched, next steps, constraints — so a new session needs no prior chat. Preserve prior decisions verbatim in the handoff; quote the exact decision text where precision matters rather than paraphrasing it away.
 
 ## Phase ordering (structural invariant A)
 
 For the **final** user-visible turn that ships the artifact:
 
 - Compose the message as **audit line → opening fence → XML → closing fence → end**; keep the byte stream free of `tool_use` blocks **between** the opening and closing fences.
-- **Completeness:** End every numbered step inside `<instructions>` with a complete sentence and a fully written list item. Balance every XML tag explicitly (open and close each `<role>`, `<context>`, `<instructions>`, `<constraints>`, `<output_format>`). The artifact must be copy-pasteable into a new file with zero manual repair.
+- **Completeness:** End every numbered step inside `<instructions>` with a complete sentence and a fully written list item. Balance every XML tag explicitly (open and close each `<role>`, `<background>`, `<instructions>`, `<constraints>`, `<output_format>`). The artifact must be copy-pasteable into a new file with zero manual repair.
 - Global pipeline: **discovery tools** (when applicable) → **AskUserQuestion** → **subagent** (draft + refinement + internal audit) → **one** orchestrator reply containing only audit line + fence.
 
 ## Interactive discovery mode (default)
@@ -116,7 +116,7 @@ Match specificity to task fragility:
 
 ### 3. Collect required missing facts
 
-If AskUserQuestion did not cover something essential, the drafting agent either (a) inserts `<open_question>` in `<context>` with the missing fact spelled out, or (b) signals the orchestrator to run **another** AskUserQuestion round **before** emitting the fence—avoid free-form clarification paragraphs in the orchestrator chat.
+If AskUserQuestion did not cover something essential, the drafting agent either (a) inserts `<open_question>` in `<background>` with the missing fact spelled out, or (b) signals the orchestrator to run **another** AskUserQuestion round **before** emitting the fence—avoid free-form clarification paragraphs in the orchestrator chat.
 
 ### 3A. Anchor scope to concrete artifacts (required)
 
@@ -132,15 +132,15 @@ Use this scope block as the grounding contract for all generated instructions. E
 
 ### 4. Build the prompt
 
-Apply principles from Anthropic’s prompting guide (see REFERENCE.md): XML sections, role, motivation in `<context>`, positive framing, emotion-informed collaborative tone where appropriate, **commit-and-execute** for multi-step agent prompts.
+Apply principles from Anthropic’s prompting guide (see REFERENCE.md): XML sections, role, motivation in `<background>`, positive framing, emotion-informed collaborative tone where appropriate, **commit-and-execute** for multi-step agent prompts.
 
 **Structural invariant D:** Write `<instructions>` / `<constraints>` as direct imperatives (“Open `path/to/file.ts` and …”). Park unresolved items in `<open_question>` tags—one distinct question per tag with the exact decision you need. Inside the fenced XML artifact, use only confident, definitive language: replace hedging phrases (“let me also check”, “actually”, “one more consideration”) and tentative qualifiers (“might be”, “possibly”, “I think”, “could be”) with direct assertions or move genuine uncertainty into `<open_question>` tags.
 
 **Set a role** in the system prompt. Anthropic: "Setting a role in the system prompt focuses Claude's behavior and tone for your use case. Even a single sentence makes a difference."
 
-**Add motivation behind constraints** in `<context>`. Anthropic: "Providing context or motivation behind your instructions... can help Claude better understand your goals and deliver more targeted responses." Claude generalizes from the explanation.
+**Add motivation behind constraints** in `<background>`. Anthropic: "Providing context or motivation behind your instructions... can help Claude better understand your goals and deliver more targeted responses." Claude generalizes from the explanation.
 
-**Frame positively (zero-negative-keyword rule).** Anthropic: state the desired outcome directly. "Your response should be composed of smoothly flowing prose paragraphs" provides clearer guidance than a prohibition-only instruction. Apply this rule absolutely inside the fenced XML artifact across all sections (`<role>`, `<context>`, `<instructions>`, `<constraints>`, `<output_format>`): every instruction states what to do, what to produce, what to enforce. Use affirmative directives exclusively: "only X", "always X", "ensure X", "require X." Banned keywords inside generated XML: "no", "not", "don't", "do not", "never", "avoid", "without", "refrain", "stop", "prevent", "exclude", "prohibit", "forbid", "reject", "cannot", "unless." Also banned: indirect negative patterns such as "instead of X", "rather than X", "as opposed to." Example pass: "Ensure all functions have explicit return types." Example fail: "Do not leave return types implicit." When a boundary is needed, phrase it as what is permitted: "only run commands within the scoped paths" rather than a prohibition.
+**Frame positively (zero-negative-keyword rule).** Anthropic: state the desired outcome directly. "Your response should be composed of smoothly flowing prose paragraphs" provides clearer guidance than a prohibition-only instruction. Apply this rule absolutely inside the fenced XML artifact across all sections (`<role>`, `<background>`, `<instructions>`, `<constraints>`, `<output_format>`): every instruction states what to do, what to produce, what to enforce. Use affirmative directives exclusively: "only X", "always X", "ensure X", "require X." Banned keywords inside generated XML: "no", "not", "don't", "do not", "never", "avoid", "without", "refrain", "stop", "prevent", "exclude", "prohibit", "forbid", "reject", "cannot", "unless." Also banned: indirect negative patterns such as "instead of X", "rather than X", "as opposed to." Example pass: "Ensure all functions have explicit return types." Example fail: "Do not leave return types implicit." When a boundary is needed, phrase it as what is permitted: "only run commands within the scoped paths" rather than a prohibition.
 
 **Emotion-informed framing.** Anthropic's emotion concepts research (2026) shows that internal activation patterns causally influence output quality. Apply: explicit success criteria with "say so if you're unsure" as an accepted answer; collaborative language ("help figure out", "work on this together"); framing tasks as interesting problems rather than chores; constructive, forward-looking tone. Cross-model caveat: studied on Sonnet 4.5; the patterns align with Anthropic's prompting best practices independently. Full pattern catalog and citations: `packages/claude-dev-env/docs/emotion-informed-prompt-design.md`.
 
@@ -164,9 +164,18 @@ State desired outcomes explicitly; use XML inside the generated prompt when mixi
 
 Tune verbosity in the **generated** prompt: summaries after tool use vs direct answers — as appropriate to the user’s AskUserQuestion answers.
 
-### 7. Add examples
+### 7. Add illustrations (`<illustrations>`)
 
-For format- or tone-sensitive **generated** prompts, include 3–5 `<example>` blocks where helpful.
+Use the optional `<illustrations>` section when concrete samples make format, tone, or structure obvious to the downstream reader.
+
+**Code and command samples inside `<illustrations>` (drafting subagent — follow in order):**
+
+1. **Indented block (default for chat-stable rendering):** Put each line of sample shell, Python, JSON, or config text at **four spaces** of indentation from the left margin of the XML text so the sample reads as a single monospaced block inside `<illustrations>` using **only** leading spaces on each sample line (plain text inside the XML).
+2. **Tilde fence:** When the sample needs explicit fence delimiters, use a **tilde** fence only: an opening line `~~~` plus an optional info word (e.g. `~~~bash`), the sample lines, then a closing line `~~~` alone on its own line.
+3. **Triple-backtick inner fence:** When the sample must use backtick fences, emit a **complete pair**: an opening line beginning with three backticks plus an info string (e.g. `` ```bash ``), the sample lines, then a closing line containing only three backticks. The prompt-workflow hook and clipboard path treat that pair as one unit inside the outer `` ```xml `` fence. For the **most stable on-screen rendering** in chat UIs, use step 1 or step 2 above before this option.
+4. **Cap count:** Include **three to five** distinct illustration blocks (narrative plus optional sample) unless the user’s brief asks for a different depth.
+
+These steps are **machine-facing obligations** for the orchestrator and drafting subagent. The person invoking `/prompt-generator` receives the finished fenced XML; the skill text above is what the model follows when filling `<illustrations>`.
 
 ### 8. Light self-check (subagent, pre-return)
 
@@ -185,7 +194,8 @@ Expand the light self-check with this internal checklist when useful:
 - [ ] Emotion-informed framing is present: collaborative language, explicit success criteria, and explicit permission to express uncertainty ("say so if unsure")
 - [ ] Constraints are surfaced upfront (proactive constraint awareness) so the model can incorporate them into its plan, and each non-obvious constraint carries its motivation
 - [ ] Self-correction chaining is considered when the prompt must hold up over time (generate → review → refine)
-- [ ] All five required XML sections (`<role>`, `<context>`, `<instructions>`, `<constraints>`, `<output_format>`) are present with both opening and closing tags in the fenced artifact
+- [ ] All five required XML sections (`<role>`, `<background>`, `<instructions>`, `<constraints>`, `<output_format>`) are present with both opening and closing tags in the fenced artifact
+- [ ] If `<illustrations>` is present, code or command samples inside it follow §7 (indented block, or tilde fence, or complete triple-backtick pair in that priority order)
 
 ### 9. Deliver (orchestrator)
 
@@ -197,25 +207,25 @@ Audit: pass 15/15
 
 (or `fail N/15 — …`), immediately followed by **one** fenced XML block; **send boundary** is immediately after the closing fence so the user receives a copy-ready pair (audit line + artifact) in one assistant message before the conversation continues.
 
-**Render-survival:** When the fenced XML uses tag names that **collide with HTML5 elements** (`context`, `section`, `summary`, `details`, `header`, `footer`, `main`, `aside`, `article`, `nav`, `figure`), or when the artifact is **very large**, **write the artifact to a file** and give the user the path together with the usual one-line audit. Add a brief **section inventory** (confirming the five required sections) so the user can trust the file even if the inline fence would render poorly. Details: **TARGET_OUTPUT.md — Structural invariant E**.
+**Render-survival:** When the fenced XML uses tag names that **collide with HTML5 elements** (`section`, `summary`, `details`, `header`, `footer`, `main`, `aside`, `article`, `nav`, `figure`), or when the artifact is **very large**, **write the artifact to a file** and give the user the path together with the usual one-line audit. Add a brief **section inventory** (confirming the five required sections) so the user can trust the file even if the inline fence would render poorly. Required grounding uses `<background>` (the old `context` name matched HTML). Details: **TARGET_OUTPUT.md — Structural invariant E**.
 
 ### 10. Default refinement mode (subagent-internal)
 
 For non-trivial requests, run inside the drafting subagent (use **draft-only** when the user explicitly asks for a quick draft / no refinement loop):
 
 1. Base draft
-2. Section refinement in order: `role`, `context`, `instructions`, `constraints`, `output_format`, `examples` (examples optional if unused)
+2. Section refinement in order: `role`, `background`, `instructions`, `constraints`, `output_format`, `illustrations` (illustrations optional if unused)
 3. Merge to one canonical XML prompt
 4. Final **15-row compliance audit** pass/fail with evidence (internal)
 5. If fail: targeted fixes + capped re-audit rounds
 
-Required section list is immutable for this pipeline: `role`, `context`, `instructions`, `constraints`, `output_format`, `examples`.
+Required section list is immutable for this pipeline: `role`, `background`, `instructions`, `constraints`, `output_format`, `illustrations`.
 
 ### 11. Compliance audit — 15-row checklist (internal, audit numerator)
 
 **Two-tier validation — tier 2:** The `15` in `Audit: pass 15/15` counts these **compliance** rows (stable ids for hooks). Tier 1 is the **light self-check** in §8—keep the steps separate so models do not merge them.
 
-**Runtime Stop hook:** In addition to the 15-row internal audit, the `prompt-workflow-stop-guard` Stop hook enforces **section presence** on prompt-workflow responses: any fenced Markdown XML block must include opening and closing tags for `role`, `context`, `instructions`, `constraints`, and `output_format`. Missing tags trigger a retry before the user sees a passing turn. Pair this with **Structural invariant E** in `TARGET_OUTPUT.md` so users still receive intact XML when chat renderers strip HTML-named tags.
+**Runtime Stop hook:** In addition to the 15-row internal audit, the `prompt-workflow-stop-guard` Stop hook enforces **section presence** on prompt-workflow responses: any fenced Markdown XML block must include opening and closing tags for `role`, `background`, `instructions`, `constraints`, and `output_format`. Missing tags trigger a retry before the user sees a passing turn. Pair this with **Structural invariant E** in `TARGET_OUTPUT.md` so users still receive intact XML when chat renderers strip HTML-named tags. `prompt_workflow_gate_core.extract_fenced_xml_content` scans each inner Markdown fence (` ```lang ` through its closing `` ``` `` line) as a unit so hooks and clipboard copy see the **full** XML body, including everything after inner fences inside `<illustrations>`.
 
 | # | Row name |
 |---|----------|

@@ -217,8 +217,8 @@ Shape (field names stable for internal audit helpers and Stop-hook leak detectio
     "comparison_basis": "...",
     "completion_boundary": "..."
   },
-  "required_sections": ["role", "context", "instructions", "constraints", "output_format", "examples"],
-  "base_prompt_xml": "<role>...</role><context>...</context><instructions>...</instructions><constraints>...</constraints><examples>...</examples><output_format>...</output_format>",
+  "required_sections": ["role", "background", "instructions", "constraints", "output_format", "illustrations"],
+  "base_prompt_xml": "<role>...</role><background>...</background><instructions>...</instructions><constraints>...</constraints><illustrations>...</illustrations><output_format>...</output_format>",
   "section_scope_rule": "Each refiner edits exactly one section and returns sibling sections unchanged.",
   "section_output_contract": {
     "required_fields": ["improved_block", "rationale", "concise_diff"]

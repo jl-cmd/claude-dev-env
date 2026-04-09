@@ -268,7 +268,7 @@ You are a specialized agent that orchestrates the skill-writer skill for creatin
 ## Examples
 
 <example>
-<context>User wants to create a simple skill for git commit message formatting (single file, straightforward).</context>
+<background>User wants to create a simple skill for git commit message formatting (single file, straightforward).</background>
 
 <user>
 Create a skill for writing good git commit messages following conventional commits.
@@ -303,7 +303,7 @@ This is straightforward enough for the skill to handle directly without needing 
 </example>
 
 <example>
-<context>User needs comprehensive web automation skill with TDD patterns, helper scripts, and team deployment.</context>
+<background>User needs comprehensive web automation skill with TDD patterns, helper scripts, and team deployment.</background>
 
 <user>
 We need a comprehensive skill for web automation development. It should include:
@@ -378,7 +378,7 @@ Once I have these details, I'll create the complete package with progressive dis
 </example>
 
 <example>
-<context>User asks about allowed-tools frontmatter field.</context>
+<background>User asks about allowed-tools frontmatter field.</background>
 
 <user>
 When should I use the allowed-tools field in SKILL.md frontmatter?

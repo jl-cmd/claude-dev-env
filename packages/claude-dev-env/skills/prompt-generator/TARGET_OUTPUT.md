@@ -36,7 +36,7 @@ This file is the **target output spec** for eval-driven iteration of the `prompt
 
 **Output:** Send audit line, then one `xml` fence with the full prompt, then stop—the handoff message is complete.
 
-**Handoff prompt quality:** `<context>` must include the bullet lists above so a new session can continue with **zero** access to this chat. Quote decision text verbatim where precision matters.
+**Handoff prompt quality:** `<background>` must include the bullet lists above so a new session can continue with **zero** access to this chat. Quote decision text verbatim where precision matters.
 
 ## Scenario 3: Long unstructured input
 
@@ -70,15 +70,15 @@ This file is the **target output spec** for eval-driven iteration of the `prompt
 ## Structural invariant B — Fenced block closes cleanly
 
 - Use one opening ``` and one closing ``` for the artifact.
-- Balance every XML tag; close `<instructions>`, `<context>`, etc. explicitly.
+- Balance every XML tag; close `<instructions>`, `<background>`, etc. explicitly.
 - End each numbered step inside `<instructions>` with a complete sentence and a fully written list item.
 - The user can copy from the opening ``` through the closing ``` into a new file without manual repair.
 
 ## Structural invariant C — Discovery before lock-in
 
-- When the user is unsure where logic lives, run discovery **before** you freeze the XML; record findings in `<context>` with paths from Glob/Grep.
+- When the user is unsure where logic lives, run discovery **before** you freeze the XML; record findings in `<background>` with paths from Glob/Grep.
 - If discovery finds the owner file(s), reference them with repo-relative paths in `<instructions>`.
-- If discovery is inconclusive, add `<open_question>` in `<context>` naming what you searched and what remains unknown.
+- If discovery is inconclusive, add `<open_question>` in `<background>` naming what you searched and what remains unknown.
 - After the opening fence of the artifact, treat the XML as frozen: finish editing inside that fence; route any new repo searches to a later user turn if needed.
 
 ## Structural invariant D — Certainty in instructions, questions in tags
@@ -89,9 +89,11 @@ This file is the **target output spec** for eval-driven iteration of the `prompt
 
 ## Structural invariant E — Render-survival for XML sections
 
-- **Problem:** Tag names used for prompt XML sections can overlap **HTML5 element names**. Chat renderers may treat those tokens as HTML and hide or alter the content between tags. High-risk examples include: `context`, `section`, `summary`, `details`, `header`, `footer`, `main`, `aside`, `article`, `nav`, `figure`. The raw assistant text may be complete while the **rendered** message looks like sections are missing (notably `<context>`).
-- **Primary mitigation:** When the fenced XML artifact **contains any tag whose local name is on that HTML-collision list**, or when the artifact is **large enough that render truncation is likely**, the orchestrator **must write the full artifact to a file** (default: under `data/prompts/` or a path the user supplied earlier) and **paste the absolute file path** in the chat message. Pair the path with a **short section inventory** confirming all five required sections (`role`, `context`, `instructions`, `constraints`, `output_format`) are present in the file.
-- **Fallback when file write is unavailable:** Escape the **opening angle bracket** of colliding tags (for example `&lt;context>` — user restores `<` when pasting) or use another distinctive wrapper **documented in the same message**, so the user can recover literal XML. State explicitly that the user should restore brackets when copying into another system.
+- **Problem (HTML):** Tag names used for prompt XML sections can overlap **HTML5 element names**. Chat renderers may treat those tokens as HTML and hide or alter the content between tags. High-risk examples include: `section`, `summary`, `details`, `header`, `footer`, `main`, `aside`, `article`, `nav`, `figure`. The former required name `context` matched an HTML element; **required** sections now use `<background>` for situational grounding so the name stays off that list. The raw assistant text may be complete while the **rendered** message looks like sections are missing.
+- **Problem (nested Markdown fences):** A ` ```bash ` (or other inner) line inside the outer ` ```xml ` block is still a line of text in the transcript, but many Markdown renderers treat it as **opening a nested code fence**, which **closes the outer fence early**. Everything after that point (including `</illustrations>` and other closing tags) can appear outside the code block or look “swallowed.” Hooks historically used a regex that stopped at the **first** triple-backtick line; `extract_fenced_xml_content` now walks inner fences (` ```lang ` … closing `` ``` ``) before accepting the outer `` ``` `` that ends the `xml` block.
+- **Primary mitigation:** When the fenced XML artifact **contains any tag whose local name is on the HTML-collision list**, or when the artifact is **large enough that render truncation is likely**, the orchestrator **must write the full artifact to a file** (default: under `data/prompts/` or a path the user supplied earlier) and **paste the absolute file path** in the chat message. Pair the path with a **short section inventory** confirming all five required sections (`role`, `background`, `instructions`, `constraints`, `output_format`) are present in the file.
+- **Authoring rules for code inside `<illustrations>` (orchestrator + drafting subagent — see `SKILL.md` §7):** (1) Format each sample line with **four leading spaces** inside `<illustrations>` as the default for stable rendered chat. (2) **Or** use a **tilde fence**: `~~~` + optional language on the opening line, body, then `~~~` on its own line. (3) **Or** use a **complete triple-backtick pair** (opening `` ```lang `` line, body, closing `` ``` `` line); hooks and clipboard treat the pair as one unit inside the outer `` ```xml `` fence.
+- **Fallback when file write is unavailable:** Escape the **opening angle bracket** of colliding tags (for example `&lt;section>` — user restores `<` when pasting) or use another distinctive wrapper **documented in the same message**, so the user can recover literal XML. State explicitly that the user should restore brackets when copying into another system.
 - **Structural safety net:** Regardless of renderer behavior, the **Stop hook section-presence gate** blocks any prompt-workflow response whose fenced XML is missing any required opening/closing section tag pair. Methodology: [Anthropic — Agent Skills: evaluation and iteration](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#evaluation-and-iteration).
 
 ## XML artifact (minimum sections)
@@ -99,12 +101,12 @@ This file is the **target output spec** for eval-driven iteration of the `prompt
 Include at least:
 
 - `<role>...</role>`
-- `<context>...</context>`
+- `<background>...</background>`
 - `<instructions>...</instructions>`
 - `<constraints>...</constraints>`
 - `<output_format>...</output_format>`
 
-Add `<examples>` when format or tone is easy to misunderstand; nest sections when the task has natural hierarchy.
+Add `<illustrations>` when format or tone is easy to misunderstand; nest sections when the task has natural hierarchy. **Long code samples belong in `<illustrations>`** using the same ordered choices as Structural invariant E: four-space-indented lines first, then tilde fences, then a complete triple-backtick pair if the brief requires backtick fences (see `SKILL.md` §7).
 
 ## Internal 15-row compliance checklist (audit numerator)
 

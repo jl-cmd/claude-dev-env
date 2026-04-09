@@ -2,12 +2,13 @@
 
 ## Unreleased
 
+## [1.15.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.15.0...claude-dev-env-v1.15.1) (2026-04-09)
+
 ### Documentation
 
-* migrate `prompt-generator` and `agent-prompt` pipeline refinements from local `~/.claude/skills` into `packages/claude-dev-env/skills` so changes remain durable and release-managed in the canonical repository
+* **prompt-generator:** align `SKILL.md` (including §7 ordered steps for code inside `<illustrations>`), `TARGET_OUTPUT.md`, eval spec (eval 13), runbook, `REFERENCE.md`, and `skill-writer-agent` samples with required `<background>` and optional `<illustrations>` naming and nested-fence notes ([#58](https://github.com/jl-cmd/claude-code-config/pull/58))
 
 ## [1.15.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.14.1...claude-dev-env-v1.15.0) (2026-04-09)
-
 
 ### Features
 
