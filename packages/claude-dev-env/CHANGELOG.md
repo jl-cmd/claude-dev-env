@@ -10,6 +10,13 @@
 
 * **claude-dev-env:** require fenced XML sections in prompt-workflow Stop hook; Structural invariant E (render-survival) and evals 10–12 for prompt-generator ([#54](https://github.com/jl-cmd/claude-code-config/pull/54))
 
+## [1.14.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.13.0...claude-dev-env-v1.14.0) (2026-04-09)
+
+
+### Features
+
+* **claude-dev-env:** prompt-workflow Stop gate for required XML sections (v1.13.1) ([#54](https://github.com/jl-cmd/claude-code-config/issues/54)) ([d0960d2](https://github.com/jl-cmd/claude-code-config/commit/d0960d21b0f8f8e8601ee80c26de424a52eeeb2d))
+
 ## [1.13.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.12.2...claude-dev-env-v1.13.0) (2026-04-09)
 
 
