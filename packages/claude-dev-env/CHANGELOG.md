@@ -6,6 +6,13 @@
 
 * migrate `prompt-generator` and `agent-prompt` pipeline refinements from local `~/.claude/skills` into `packages/claude-dev-env/skills` so changes remain durable and release-managed in the canonical repository
 
+## [1.12.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.12.0...claude-dev-env-v1.12.1) (2026-04-09)
+
+
+### Bug Fixes
+
+* **prompt-generator:** stop requiring checklist table in user-facing output ([#49](https://github.com/jl-cmd/claude-code-config/issues/49)) ([4c236c7](https://github.com/jl-cmd/claude-code-config/commit/4c236c74828d1d88714e3bdb0b1c46c12368542e))
+
 ## [1.12.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.11.0...claude-dev-env-v1.12.0) (2026-04-09)
 
 
