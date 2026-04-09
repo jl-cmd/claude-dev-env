@@ -29,7 +29,6 @@ const INSTALL_GROUPS = {
         description: 'Prompt engineering tools',
         skills: ['prompt-generator', 'agent-prompt'],
         includeHookFiles: [
-            'blocking/agent-execution-intent-gate.py',
             'blocking/prompt_workflow_gate_core.py',
             'blocking/prompt-workflow-stop-guard.py',
             'HOOK_SPECS_PROMPT_WORKFLOW.md',

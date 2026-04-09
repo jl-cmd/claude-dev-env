@@ -3,26 +3,12 @@
 from prompt_workflow_gate_core import (
     find_ambiguous_scope_terms,
     has_checklist_container,
-    has_explicit_execution_intent,
-    has_structured_execution_intent,
     has_internal_object_leak,
     is_prompt_workflow_response,
     missing_context_control_signals,
     missing_checklist_rows,
     missing_scope_anchors,
 )
-
-
-def test_execution_intent_marker_detected() -> None:
-    assert has_explicit_execution_intent("execution_intent: explicit")
-
-
-def test_structured_execution_intent_detected_from_contract_field() -> None:
-    assert has_structured_execution_intent({"execution_intent": "explicit"})
-
-
-def test_structured_execution_intent_detected_from_boolean_flag() -> None:
-    assert has_structured_execution_intent({"execution_intent_explicit": True})
 
 
 def test_internal_object_leak_detected() -> None:

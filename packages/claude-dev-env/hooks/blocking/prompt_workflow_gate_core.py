@@ -54,14 +54,6 @@ INTERNAL_OBJECT_MARKERS: tuple[str, ...] = (
     '"audit_output_contract": {',
 )
 
-EXPLICIT_EXECUTION_MARKERS: tuple[str, ...] = (
-    "/agent-prompt",
-    "execution_intent: explicit",
-    "execution_intent_explicit: true",
-    "explicit execution intent",
-    "explicit delegation intent",
-)
-
 PROMPT_WORKFLOW_RESPONSE_MARKERS: tuple[str, ...] = (
     "checklist_results",
     "overall_status",
@@ -157,36 +149,6 @@ def find_negative_keywords_in_fenced_xml(
 def _contains_any_marker(text: str, markers: Iterable[str]) -> bool:
     lower_text = text.lower()
     return any(marker.lower() in lower_text for marker in markers)
-
-
-def has_explicit_execution_intent(text: str) -> bool:
-    return _contains_any_marker(text, EXPLICIT_EXECUTION_MARKERS)
-
-
-def has_structured_execution_intent(tool_input: object) -> bool:
-    if not isinstance(tool_input, dict):
-        return False
-
-    explicit_flag = tool_input.get("execution_intent_explicit")
-    if isinstance(explicit_flag, bool):
-        return explicit_flag
-
-    intent_value = tool_input.get("execution_intent")
-    if isinstance(intent_value, str):
-        normalized = intent_value.strip().lower()
-        return normalized in {"explicit", "execute", "delegation", "delegate"}
-    if isinstance(intent_value, bool):
-        return intent_value
-
-    metadata = tool_input.get("metadata")
-    if isinstance(metadata, dict):
-        metadata_intent = metadata.get("execution_intent")
-        if isinstance(metadata_intent, str):
-            return metadata_intent.strip().lower() in {"explicit", "execute", "delegate"}
-        if isinstance(metadata_intent, bool):
-            return metadata_intent
-
-    return False
 
 
 def has_debug_intent(text: str) -> bool:

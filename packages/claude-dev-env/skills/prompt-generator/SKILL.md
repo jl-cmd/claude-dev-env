@@ -263,7 +263,7 @@ When refining prompt text:
 
 ### 16. Optional execution handoff (`/agent-prompt`)
 
-Use `/agent-prompt` only after the user explicitly asks to execute. Append `execution_intent: explicit` in **debug** handoff notes when your tooling expects it — not in the default one-line audit.
+Use `/agent-prompt` only after the user explicitly asks to execute. Refinement subagents do not need `/agent-prompt` unless you are performing an execution handoff.
 
 ### 17. Context-footprint controls
 
