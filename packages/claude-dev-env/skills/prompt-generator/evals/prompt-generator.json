@@ -118,6 +118,21 @@
         "All uncertainty expressed as <open_question> tags, not inline hedges",
         "Prompt reads as confident complete instructions, not a draft-in-progress"
       ]
+    },
+    {
+      "id": 9,
+      "name": "zero_negative_phrasing_in_output",
+      "scenario": "Content quality gate A (anti-pattern elimination)",
+      "prompt": "/prompt-generator Write a system prompt for an agent that reviews TypeScript code for type safety, enforces strict null checks, and ensures all function signatures have complete type annotations",
+      "files": [],
+      "expected_behavior": [
+        "Fenced prompt artifact contains zero hard anti-pattern keywords: 'no', 'not', 'don't', 'do not', 'never', 'avoid', 'without', 'refrain', 'stop', 'prevent', 'exclude', 'prohibit', 'forbid', 'reject'",
+        "Zero indirect anti-patterns: 'instead of X' (implies X is bad), 'rather than X', 'as opposed to'",
+        "Every instruction phrased as a positive directive: what TO do, what TO produce, what TO enforce",
+        "Constraints section uses affirmative boundaries: 'only X', 'always X', 'ensure X', 'require X' — positive framing throughout",
+        "Example: 'Ensure all functions have explicit return types' passes; 'Do not leave return types implicit' fails; 'Avoid missing return types' fails",
+        "Applies to all sections inside the fenced block: <role>, <context>, <instructions>, <constraints>, <output_format>"
+      ]
     }
   ]
 }
