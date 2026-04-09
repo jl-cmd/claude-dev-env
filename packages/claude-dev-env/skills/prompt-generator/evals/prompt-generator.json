@@ -133,6 +133,43 @@
         "Example: 'Ensure all functions have explicit return types' passes; 'Do not leave return types implicit' fails; 'Avoid missing return types' fails",
         "Applies to all sections inside the fenced block: <role>, <context>, <instructions>, <constraints>, <output_format>"
       ]
+    },
+    {
+      "id": 10,
+      "name": "required_sections_present_in_artifact",
+      "scenario": "Section completeness gate (render-survival)",
+      "prompt": "/prompt-generator Write a system prompt for a Python linting agent that auto-fixes code style issues in this repo",
+      "files": [],
+      "expected_behavior": [
+        "Fenced XML block contains opening and closing tags for all five required sections: role, context, instructions, constraints, output_format",
+        "Each required section contains substantive content (minimum one sentence each)",
+        "The Stop hook section-presence check passes for this output (no missing section tags)",
+        "Sections appear in order: role first, output_format last among the five required sections"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "section_missing_triggers_hook_block",
+      "scenario": "Section completeness gate — failure path",
+      "prompt": "Synthetic eval: assistant final message is prompt-workflow shaped (overall_status, checklist, scope anchors, runtime signals) with a fenced Markdown XML block whose body omits the entire context section (no context opening/closing tags); observer asserts Stop hook behavior and successful retry.",
+      "files": [],
+      "expected_behavior": [
+        "The Stop hook runs _check_required_xml_sections and returns a block decision naming context as a missing section",
+        "The model retry includes all five required sections with both opening and closing tags",
+        "The retry output passes the section-presence gate (empty missing list from missing_required_xml_sections)"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "render_survival_file_fallback",
+      "scenario": "Render-layer mitigation",
+      "prompt": "/prompt-generator Write a comprehensive agent prompt for migrating a large Prisma schema and all related API routes, with step-by-step rollout, rollback, and verification — artifact sized like the migration prompt that triggered chat render stripping.",
+      "files": [],
+      "expected_behavior": [
+        "When the artifact exceeds a size threshold or contains XML section tag names that collide with HTML5 elements (context, section, summary, details, header, footer, main, aside, article, nav, figure), the orchestrator writes the full artifact to a file under data/prompts/ or a user-specified path",
+        "The file contains the complete XML with all tags preserved as literal text",
+        "The user-facing message states the file path and briefly inventories which required sections the artifact contains"
+      ]
     }
   ]
 }

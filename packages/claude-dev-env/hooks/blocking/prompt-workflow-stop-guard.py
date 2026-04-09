@@ -18,6 +18,7 @@ from prompt_workflow_gate_core import (
     is_prompt_workflow_response,
     missing_context_control_signals,
     missing_checklist_rows,
+    missing_required_xml_sections,
     missing_scope_anchors,
 )
 
@@ -150,10 +151,23 @@ def _check_negative_keywords_in_artifact(assistant_message: str) -> dict | None:
         ),
     )
 
+def _check_required_xml_sections(assistant_message: str) -> dict | None:
+    missing_sections = missing_required_xml_sections(assistant_message)
+    if not missing_sections:
+        return None
+    return _build_block(
+        brief_label="retrying: include all required XML sections",
+        full_reason=(
+            "PROMPT-WORKFLOW GATE: Fenced XML artifact missing required sections: "
+            + ", ".join(missing_sections)
+        ),
+    )
+
 def _evaluate_workflow_gates(assistant_message: str) -> dict | None:
     if not is_prompt_workflow_response(assistant_message):
         return None
     workflow_gate_checks: tuple[Callable[[str], dict | None], ...] = (
+        _check_required_xml_sections,
         _check_missing_checklist_rows,
         _check_missing_scope_anchors,
         _check_missing_context_signals,

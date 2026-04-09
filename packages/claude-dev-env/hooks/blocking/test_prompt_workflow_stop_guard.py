@@ -118,6 +118,16 @@ def test_blocks_ambiguous_scope_phrasing() -> None:
     assert response["decision"] == "block"
     assert "Ambiguous scope phrasing detected" in response["reason"]
 
+def _wrap_five_section_scaffold(inner_body: str) -> str:
+    return (
+        "<role>Test role sentence one.</role>\n"
+        "<context>Test context sentence one.</context>\n"
+        f"{inner_body}\n"
+        "<constraints>Test constraints sentence one.</constraints>\n"
+        "<output_format>Test output format sentence one.</output_format>\n"
+    )
+
+
 def _build_prompt_workflow_message_with_fenced_xml(fenced_xml_body: str) -> str:
     return (
         "Audit: pass 15/15\n"
@@ -137,7 +147,9 @@ def _build_prompt_workflow_message_with_fenced_xml(fenced_xml_body: str) -> str:
 
 
 def test_allows_positive_phrasing_inside_fenced_xml() -> None:
-    fenced_content = "<instructions>Ensure all functions have explicit return types.</instructions>"
+    fenced_content = _wrap_five_section_scaffold(
+        "<instructions>Ensure all functions have explicit return types.</instructions>"
+    )
     payload = {
         "last_assistant_message": _build_prompt_workflow_message_with_fenced_xml(fenced_content),
     }
@@ -172,7 +184,9 @@ def test_blocks_banned_pattern_inside_fenced_xml(
     fenced_xml_content: str,
 ) -> None:
     payload = {
-        "last_assistant_message": _build_prompt_workflow_message_with_fenced_xml(fenced_xml_content),
+        "last_assistant_message": _build_prompt_workflow_message_with_fenced_xml(
+            _wrap_five_section_scaffold(fenced_xml_content)
+        ),
     }
     result = _run_hook(payload)
     response = json.loads(result.stdout)
@@ -180,12 +194,15 @@ def test_blocks_banned_pattern_inside_fenced_xml(
 
 
 def test_permits_negative_keywords_outside_fenced_xml() -> None:
+    fenced_inner = _wrap_five_section_scaffold(
+        "<instructions>Ensure all functions have explicit return types.</instructions>"
+    )
     message = (
         "Audit: pass 15/15\n"
         "Do not skip the audit line.\n"
         "```xml\n"
-        "<instructions>Ensure all functions have explicit return types.</instructions>\n"
-        "```\n"
+        + fenced_inner
+        + "\n```\n"
         "overall_status: pass\n"
         + _full_checklist_rows()
         + "target_local_roots\n"
@@ -199,6 +216,23 @@ def test_permits_negative_keywords_outside_fenced_xml() -> None:
     payload = {"last_assistant_message": message}
     result = _run_hook(payload)
     assert result.stdout.strip() == ""
+
+
+def test_blocks_when_fenced_xml_missing_context_section() -> None:
+    fenced_body = (
+        "<role>Test role sentence one.</role>\n"
+        "<instructions>Test instructions sentence one.</instructions>\n"
+        "<constraints>Test constraints sentence one.</constraints>\n"
+        "<output_format>Test output format sentence one.</output_format>\n"
+    )
+    payload = {
+        "last_assistant_message": _build_prompt_workflow_message_with_fenced_xml(fenced_body),
+    }
+    result = _run_hook(payload)
+    response = json.loads(result.stdout)
+    assert response["decision"] == "block"
+    assert "context" in response["reason"]
+    assert "include all required XML sections" in response["systemMessage"]
 
 
 def test_allows_fully_structured_prompt_workflow_output() -> None:

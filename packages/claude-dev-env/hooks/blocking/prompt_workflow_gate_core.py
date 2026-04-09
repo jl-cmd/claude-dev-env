@@ -6,116 +6,36 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-REQUIRED_SCOPE_ANCHORS: tuple[str, ...] = (
-    "target_local_roots",
-    "target_canonical_roots",
-    "target_file_globs",
-    "comparison_basis",
-    "completion_boundary",
-)
-
-REQUIRED_CHECKLIST_ROWS: tuple[str, ...] = (
-    "structured_scoped_instructions",
-    "sequential_steps_present",
-    "positive_framing",
-    "acceptance_criteria_defined",
-    "safety_reversibility_language",
-    "reversible_action_and_safety_check_guidance",
-    "concrete_output_contract",
-    "scope_boundary_present",
-    "explicit_scope_anchors_present",
-    "all_instructions_artifact_bound",
-    "scope_terms_explicit_and_anchored",
-    "completion_boundary_measurable",
-    "citation_grounding_policy_present",
-    "source_priority_rules_present",
-    "artifact_language_confidence",
-)
-
-REQUIRED_CONTEXT_CONTROL_SIGNALS: tuple[str, ...] = (
-    "base_minimal_instruction_layer: true",
-    "on_demand_skill_loading: true",
-)
-
-AMBIGUOUS_SCOPE_TERMS: tuple[str, ...] = (
-    "this session",
-    "current files",
-    "here",
-    "above",
-    "as needed",
-)
-
-INTERNAL_OBJECT_MARKERS: tuple[str, ...] = (
-    '"pipeline_mode": "internal_section_refinement_with_final_audit"',
-    '"scope_block": {',
-    '"required_sections": [',
-    '"section_output_contract": {',
-    '"merge_output_contract": {',
-    '"audit_output_contract": {',
-)
-
-PROMPT_WORKFLOW_RESPONSE_MARKERS: tuple[str, ...] = (
-    "checklist_results",
-    "overall_status",
-    "scope anchors",
-    "target_local_roots",
-    "target_canonical_roots",
-    "target_file_globs",
-    "comparison_basis",
-    "completion_boundary",
-)
-
-DEBUG_INTENT_MARKERS: tuple[str, ...] = (
-    "debug",
-    "show internal",
-    "raw internal object",
-    "pipeline object",
-)
-
-
-NEGATIVE_KEYWORDS_IN_ARTIFACT: tuple[str, ...] = (
-    "no",
-    "not",
-    "don't",
-    "do not",
-    "never",
-    "avoid",
-    "without",
-    "refrain",
-    "stop",
-    "prevent",
-    "exclude",
-    "prohibit",
-    "forbid",
-    "reject",
-    "cannot",
-    "unless",
-)
-
-NEGATIVE_INDIRECT_PATTERNS_IN_ARTIFACT: tuple[str, ...] = (
-    r"instead of\s+\w+",
-    r"rather than\s+\w+",
-    r"as opposed to\s+\w+",
-)
-
-COMPILED_NEGATIVE_KEYWORD_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
-    re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
-    for keyword in NEGATIVE_KEYWORDS_IN_ARTIFACT
-)
-
-COMPILED_NEGATIVE_INDIRECT_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
-    re.compile(pattern, re.IGNORECASE)
-    for pattern in NEGATIVE_INDIRECT_PATTERNS_IN_ARTIFACT
-)
-
-FENCED_XML_BLOCK_PATTERN: re.Pattern[str] = re.compile(
-    r"```xml\s*\n(.*?)```", re.DOTALL
+from prompt_workflow_gate_config import (
+    AMBIGUOUS_SCOPE_TERMS,
+    COMPILED_NEGATIVE_INDIRECT_PATTERNS,
+    COMPILED_NEGATIVE_KEYWORD_PATTERNS,
+    DEBUG_INTENT_MARKERS,
+    FENCED_XML_BLOCK_PATTERN,
+    INTERNAL_OBJECT_MARKERS,
+    PROMPT_WORKFLOW_RESPONSE_MARKERS,
+    REQUIRED_CHECKLIST_ROWS,
+    REQUIRED_SCOPE_ANCHORS,
+    REQUIRED_XML_SECTIONS,
 )
 
 
 def extract_fenced_xml_content(text: str) -> str:
     all_matches = FENCED_XML_BLOCK_PATTERN.findall(text)
     return "\n".join(all_matches)
+
+
+def missing_required_xml_sections(text: str) -> list[str]:
+    fenced_body = extract_fenced_xml_content(text)
+    if not fenced_body.strip():
+        return []
+    missing_sections: list[str] = []
+    for section_name in REQUIRED_XML_SECTIONS:
+        open_tag = re.compile(rf"<{re.escape(section_name)}(\s[^>]*)?>")
+        close_tag = re.compile(rf"</{re.escape(section_name)}>")
+        if not open_tag.search(fenced_body) or not close_tag.search(fenced_body):
+            missing_sections.append(section_name)
+    return missing_sections
 
 
 def find_negative_keywords_in_fenced_xml(
@@ -192,6 +112,9 @@ def is_prompt_workflow_response(text: str) -> bool:
 
 
 def missing_context_control_signals(text: str) -> list[str]:
-    return [
-        signal for signal in REQUIRED_CONTEXT_CONTROL_SIGNALS if signal not in text.lower()
-    ]
+    required_signals: tuple[str, ...] = (
+        "base_minimal_instruction_layer: true",
+        "on_demand_skill_loading: true",
+    )
+    lowered = text.lower()
+    return [signal for signal in required_signals if signal not in lowered]

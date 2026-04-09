@@ -87,6 +87,13 @@ This file is the **target output spec** for eval-driven iteration of the `prompt
 - Place residual uncertainty only in `<open_question>` elements (one topic per tag) with a clear decision you need from the executor or user.
 - Use definitive phrasing inside instructions (e.g. “Run tests in `packages/foo` with `pytest tests/`”) so each step reads like an executable checklist.
 
+## Structural invariant E — Render-survival for XML sections
+
+- **Problem:** Tag names used for prompt XML sections can overlap **HTML5 element names**. Chat renderers may treat those tokens as HTML and hide or alter the content between tags. High-risk examples include: `context`, `section`, `summary`, `details`, `header`, `footer`, `main`, `aside`, `article`, `nav`, `figure`. The raw assistant text may be complete while the **rendered** message looks like sections are missing (notably `<context>`).
+- **Primary mitigation:** When the fenced XML artifact **contains any tag whose local name is on that HTML-collision list**, or when the artifact is **large enough that render truncation is likely**, the orchestrator **must write the full artifact to a file** (default: under `data/prompts/` or a path the user supplied earlier) and **paste the absolute file path** in the chat message. Pair the path with a **short section inventory** confirming all five required sections (`role`, `context`, `instructions`, `constraints`, `output_format`) are present in the file.
+- **Fallback when file write is unavailable:** Escape the **opening angle bracket** of colliding tags (for example `&lt;context>` — user restores `<` when pasting) or use another distinctive wrapper **documented in the same message**, so the user can recover literal XML. State explicitly that the user should restore brackets when copying into another system.
+- **Structural safety net:** Regardless of renderer behavior, the **Stop hook section-presence gate** blocks any prompt-workflow response whose fenced XML is missing any required opening/closing section tag pair. Methodology: [Anthropic — Agent Skills: evaluation and iteration](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#evaluation-and-iteration).
+
 ## XML artifact (minimum sections)
 
 Include at least:

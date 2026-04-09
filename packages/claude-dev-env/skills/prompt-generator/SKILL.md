@@ -185,6 +185,7 @@ Expand the light self-check with this internal checklist when useful:
 - [ ] Emotion-informed framing is present: collaborative language, explicit success criteria, and explicit permission to express uncertainty ("say so if unsure")
 - [ ] Constraints are surfaced upfront (proactive constraint awareness) so the model can incorporate them into its plan, and each non-obvious constraint carries its motivation
 - [ ] Self-correction chaining is considered when the prompt must hold up over time (generate → review → refine)
+- [ ] All five required XML sections (`<role>`, `<context>`, `<instructions>`, `<constraints>`, `<output_format>`) are present with both opening and closing tags in the fenced artifact
 
 ### 9. Deliver (orchestrator)
 
@@ -195,6 +196,8 @@ Audit: pass 15/15
 ```
 
 (or `fail N/15 — …`), immediately followed by **one** fenced XML block; **send boundary** is immediately after the closing fence so the user receives a copy-ready pair (audit line + artifact) in one assistant message before the conversation continues.
+
+**Render-survival:** When the fenced XML uses tag names that **collide with HTML5 elements** (`context`, `section`, `summary`, `details`, `header`, `footer`, `main`, `aside`, `article`, `nav`, `figure`), or when the artifact is **very large**, **write the artifact to a file** and give the user the path together with the usual one-line audit. Add a brief **section inventory** (confirming the five required sections) so the user can trust the file even if the inline fence would render poorly. Details: **TARGET_OUTPUT.md — Structural invariant E**.
 
 ### 10. Default refinement mode (subagent-internal)
 
@@ -211,6 +214,8 @@ Required section list is immutable for this pipeline: `role`, `context`, `instru
 ### 11. Compliance audit — 15-row checklist (internal, audit numerator)
 
 **Two-tier validation — tier 2:** The `15` in `Audit: pass 15/15` counts these **compliance** rows (stable ids for hooks). Tier 1 is the **light self-check** in §8—keep the steps separate so models do not merge them.
+
+**Runtime Stop hook:** In addition to the 15-row internal audit, the `prompt-workflow-stop-guard` Stop hook enforces **section presence** on prompt-workflow responses: any fenced Markdown XML block must include opening and closing tags for `role`, `context`, `instructions`, `constraints`, and `output_format`. Missing tags trigger a retry before the user sees a passing turn. Pair this with **Structural invariant E** in `TARGET_OUTPUT.md` so users still receive intact XML when chat renderers strip HTML-named tags.
 
 | # | Row name |
 |---|----------|
