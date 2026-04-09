@@ -9,7 +9,7 @@ This file is the **target output spec** for eval-driven iteration of the `prompt
 - **Clarity bar:** Every deliverable (AskUserQuestion fields, audit line, XML body) states concrete outcomes, explicit formats, and checkable done-when signals—aligned with Anthropic [Be clear and direct](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#be-clear-and-direct) and [Control the format of responses](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#control-the-format-of-responses). Prefer what to do and how to verify it over empty prohibitions or vague quality adjectives.
 - **Questions:** Deliver every clarifying question through **AskUserQuestion** (one form per round), with **2–4** options per question and the **recommended** option listed **first**. Tag discovery-sourced options **`[discovered]`** when they came from repo search.
 - **Final assistant message (complete handoff in one send):**
-  1. **Audit line:** `Audit: pass 14/14` or `Audit: fail N/14 — [reason]`
+  1. **Audit line:** `Audit: pass 15/15` or `Audit: fail N/15 — [reason]`
   2. **Artifact:** the full XML prompt inside **one** Markdown code fence whose language tag is `xml`
   3. **Send boundary:** stop typing as soon as the closing fence ends—the message body is exactly those two blocks back-to-back, ready to copy; your next tokens belong to the user’s following turn
 - **Full audit table / JSON debug bundle:** Stay internal until the user names debug with a phrase such as `show debug`, `full audit table`, or `raw internal object`; then append the table/JSON after the usual audit line + XML fence.
@@ -99,6 +99,6 @@ Include at least:
 
 Add `<examples>` when format or tone is easy to misunderstand; nest sections when the task has natural hierarchy.
 
-## Internal 14-row compliance checklist (audit numerator)
+## Internal 15-row compliance checklist (audit numerator)
 
-The `14` in `Audit: pass 14/14` maps to the named rows in `SKILL.md` (§11 **Compliance audit — 14-row checklist**), including `reversible_action_and_safety_check_guidance` and `scope_terms_explicit_and_anchored`. **Default user path:** keep the table internal; print the expanded table + JSON only after an explicit debug request. On failure, set the audit line to `Audit: fail N/14 — [primary theme]` where the theme names one concrete gap (e.g. `scope_block missing completion_boundary`, `output_format lacks acceptance checks`).
+The `15` in `Audit: pass 15/15` maps to the named rows in `SKILL.md` (§11 **Compliance audit — 15-row checklist**), including `reversible_action_and_safety_check_guidance` and `scope_terms_explicit_and_anchored`. **Default user path:** keep the table internal; print the expanded table + JSON only after an explicit debug request. On failure, set the audit line to `Audit: fail N/15 — [primary theme]` where the theme names one concrete gap (e.g. `scope_block missing completion_boundary`, `output_format lacks acceptance checks`).

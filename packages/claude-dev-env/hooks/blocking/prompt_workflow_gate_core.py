@@ -29,6 +29,7 @@ REQUIRED_CHECKLIST_ROWS: tuple[str, ...] = (
     "completion_boundary_measurable",
     "citation_grounding_policy_present",
     "source_priority_rules_present",
+    "artifact_language_confidence",
 )
 
 REQUIRED_CONTEXT_CONTROL_SIGNALS: tuple[str, ...] = (
@@ -78,6 +79,79 @@ DEBUG_INTENT_MARKERS: tuple[str, ...] = (
     "raw internal object",
     "pipeline object",
 )
+
+
+NEGATIVE_KEYWORDS_IN_ARTIFACT: tuple[str, ...] = (
+    "no",
+    "not",
+    "don't",
+    "do not",
+    "never",
+    "avoid",
+    "without",
+    "refrain",
+    "stop",
+    "prevent",
+    "exclude",
+    "prohibit",
+    "forbid",
+    "reject",
+    "cannot",
+    "unless",
+)
+
+NEGATIVE_INDIRECT_PATTERNS_IN_ARTIFACT: tuple[str, ...] = (
+    r"instead of\s+\w+",
+    r"rather than\s+\w+",
+    r"as opposed to\s+\w+",
+)
+
+COMPILED_NEGATIVE_KEYWORD_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
+    for keyword in NEGATIVE_KEYWORDS_IN_ARTIFACT
+)
+
+COMPILED_NEGATIVE_INDIRECT_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in NEGATIVE_INDIRECT_PATTERNS_IN_ARTIFACT
+)
+
+FENCED_XML_BLOCK_PATTERN: re.Pattern[str] = re.compile(
+    r"```xml\s*\n(.*?)```", re.DOTALL
+)
+
+
+def extract_fenced_xml_content(text: str) -> str:
+    all_matches = FENCED_XML_BLOCK_PATTERN.findall(text)
+    return "\n".join(all_matches)
+
+
+def find_negative_keywords_in_fenced_xml(
+    text: str,
+) -> list[dict[str, str | int]]:
+    fenced_content = extract_fenced_xml_content(text)
+    if not fenced_content:
+        return []
+    fenced_lines = fenced_content.splitlines()
+    all_violations: list[dict[str, str | int]] = []
+    for line_index, each_line in enumerate(fenced_lines):
+        for each_pattern in COMPILED_NEGATIVE_KEYWORD_PATTERNS:
+            each_match = each_pattern.search(each_line)
+            if each_match:
+                all_violations.append({
+                    "keyword": each_match.group(),
+                    "line_number": line_index + 1,
+                    "line_text": each_line.strip(),
+                })
+        for each_pattern in COMPILED_NEGATIVE_INDIRECT_PATTERNS:
+            each_match = each_pattern.search(each_line)
+            if each_match:
+                all_violations.append({
+                    "keyword": each_match.group(),
+                    "line_number": line_index + 1,
+                    "line_text": each_line.strip(),
+                })
+    return all_violations
 
 
 def _contains_any_marker(text: str, markers: Iterable[str]) -> bool:

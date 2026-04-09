@@ -11,6 +11,7 @@ from pathlib import Path
 
 from prompt_workflow_gate_core import (
     find_ambiguous_scope_terms,
+    find_negative_keywords_in_fenced_xml,
     has_debug_intent,
     has_checklist_container,
     has_internal_object_leak,
@@ -130,6 +131,23 @@ def _check_ambiguous_scope(assistant_message: str) -> dict | None:
         ),
     )
 
+def _check_negative_keywords_in_artifact(assistant_message: str) -> dict | None:
+    violations = find_negative_keywords_in_fenced_xml(assistant_message)
+    if not violations:
+        return None
+    violation_descriptions = [
+        f"  line {each_violation['line_number']}: \"{each_violation['keyword']}\" in: {each_violation['line_text']}"
+        for each_violation in violations
+    ]
+    return _build_block(
+        brief_label="retrying: rephrase negative keywords in artifact",
+        full_reason=(
+            "PROMPT-WORKFLOW GATE: Banned negative keywords found inside fenced XML artifact. "
+            "Rephrase as positive directives (what TO do, not what to avoid):\n"
+            + "\n".join(violation_descriptions)
+        ),
+    )
+
 def _evaluate_workflow_gates(assistant_message: str) -> dict | None:
     if not is_prompt_workflow_response(assistant_message):
         return None
@@ -139,6 +157,7 @@ def _evaluate_workflow_gates(assistant_message: str) -> dict | None:
         _check_missing_scope_anchors,
         _check_missing_context_signals,
         _check_ambiguous_scope,
+        _check_negative_keywords_in_artifact,
     )
     for check in workflow_gate_checks:
         block = check(assistant_message)

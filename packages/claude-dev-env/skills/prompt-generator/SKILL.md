@@ -23,13 +23,13 @@ description: >-
 
 **Eval contract:** The user-visible behavior this skill must satisfy is defined in `packages/claude-dev-env/skills/prompt-generator/TARGET_OUTPUT.md`. Automated evals live in `packages/claude-dev-env/skills/prompt-generator/evals/prompt-generator.json`.
 
-**Terminology:** **Prompt artifact** — the full XML inside the single user-facing `xml` fence (the paste-ready handoff). **Scope block** — the five-key contract in §3A that grounds instructions. **Default refinement pipeline** — §10: base draft → section refine → merge → 14-row compliance audit → capped fixes (subagent-internal unless draft-only). **Light self-check** — §8: fast pre-return sanity pass (shape, tools, scope, patterns); *not* the compliance audit. **Compliance audit (14-row)** — §11: hook-keyed rows that set the `Audit: pass|fail` numerator. **Execution handoff** — `/agent-prompt` after explicit user intent to run work.
+**Terminology:** **Prompt artifact** — the full XML inside the single user-facing `xml` fence (the paste-ready handoff). **Scope block** — the five-key contract in §3A that grounds instructions. **Default refinement pipeline** — §10: base draft → section refine → merge → 15-row compliance audit → capped fixes (subagent-internal unless draft-only). **Light self-check** — §8: fast pre-return sanity pass (shape, tools, scope, patterns); *not* the compliance audit. **Compliance audit (15-row)** — §11: hook-keyed rows that set the `Audit: pass|fail` numerator. **Execution handoff** — `/agent-prompt` after explicit user intent to run work.
 
 **Hook-survival invariant (read first):** The fenced XML artifact is the primary deliverable and MUST survive Stop-hook retries. If a Stop hook rejects the response, only the surrounding audit summary and runtime signal scaffolding may change between retries—the XML inside the fence MUST be re-emitted in full on every retry. Recovery pattern: re-emit the complete fenced XML first, then adjust the audit line. Trimming, summarizing, or deferring the prompt artifact to satisfy a hook gate is forbidden.
 
 **Turn shape:** Each orchestrator turn is either **AskUserQuestion** only (then wait for answers), or **`Audit: …` + exactly one `xml` fenced block** (then **send boundary**)—per `TARGET_OUTPUT.md`. Do not substitute free-form question paragraphs for AskUserQuestion; do not append commentary after the closing fence on the default path.
 
-**Happy path:** (1) Choose scenario **1–4** from the router table. (2) Run discovery when that scenario calls for repo tools. (3) Collect answers through **AskUserQuestion** (one form per round, **2–4** options per field, recommended first). (4) Subagent produces XML, runs **light self-check**, then **14-row compliance audit** + refinement loop. (5) Orchestrator prints **`Audit: pass 14/14`** or **`Audit: fail N/14 — [reason]`** and the **complete fenced XML**. (6) **Send boundary:** end the message immediately after the closing fence. (7) If the user names a debug phrase, append the full table / JSON per `TARGET_OUTPUT.md`.
+**Happy path:** (1) Choose scenario **1–4** from the router table. (2) Run discovery when that scenario calls for repo tools. (3) Collect answers through **AskUserQuestion** (one form per round, **2–4** options per field, recommended first). (4) Subagent produces XML, runs **light self-check**, then **15-row compliance audit** + refinement loop. (5) Orchestrator prints **`Audit: pass 15/15`** or **`Audit: fail N/15 — [reason]`** and the **complete fenced XML**. (6) **Send boundary:** end the message immediately after the closing fence. (7) If the user names a debug phrase, append the full table / JSON per `TARGET_OUTPUT.md`.
 
 **Clarity bar:** Ship concrete, outcome-first copy everywhere (AskUserQuestion fields, audit line, XML body): name *what* to do, *where* it applies, and *how* to verify done—per [Be clear and direct](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#be-clear-and-direct) and [Control the format of responses](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#control-the-format-of-responses). This skill **authors** prompts; downstream execution stays out of the default path until `/agent-prompt`.
 
@@ -39,7 +39,7 @@ description: >-
 
 **Hook-survival invariant:** Treat the fenced XML as the immutable payload for the user. On every Stop-hook retry, print the **same full** XML between the opening and closing fences; adjust only the one-line audit prefix (or other non-fence scaffolding) if a hook requires a format tweak. Re-emit the **entire** XML body before tweaking surrounding text—never shorten the artifact to pass a gate.
 
-**Orchestrator vs subagent:** The **orchestrator** runs ordered discovery, issues **AskUserQuestion**, and owns the **final** user-visible line: audit + fence. The **subagent** owns base draft, per-section refinement, merge, and the **14-row compliance audit**, returning **only** final XML plus pass/fail counts (no user-facing table)—unless the user asked for **draft-only** / **no refinement**, in which case you may draft inline with the same output shape. Keep hook retries internal; expose at most one short line such as `Retrying: scope anchor missing` before the successful audit + fence.
+**Orchestrator vs subagent:** The **orchestrator** runs ordered discovery, issues **AskUserQuestion**, and owns the **final** user-visible line: audit + fence. The **subagent** owns base draft, per-section refinement, merge, and the **15-row compliance audit**, returning **only** final XML plus pass/fail counts (no user-facing table)—unless the user asked for **draft-only** / **no refinement**, in which case you may draft inline with the same output shape. Keep hook retries internal; expose at most one short line such as `Retrying: scope anchor missing` before the successful audit + fence.
 
 **Interaction shape:** Route clarifications through **AskUserQuestion** only. Close each successful artifact turn with **audit line + one fenced XML block**; keep implementation plans **inside** that XML for the downstream consumer, not as a chat to-do list.
 
@@ -49,7 +49,7 @@ Match `TARGET_OUTPUT.md`. Summary:
 
 1. **Questions:** Use **AskUserQuestion** for every clarification (one multi-field form per round); keep normal assistant text free of standalone question paragraphs.
 2. **Options:** Supply **2–4** options per question, **recommended option first**; label discovery-sourced choices **`[discovered]`**.
-3. **Final message (exactly):** Line 1 = `Audit: pass 14/14` or `Audit: fail N/14 — [short reason]`; immediately after, output **one** Markdown code fence whose language tag is `xml` and whose body is the **complete** prompt; **send boundary** = right after that fence closes—the visible message is exactly those two consecutive blocks, copy-ready together, before any later user message.
+3. **Final message (exactly):** Line 1 = `Audit: pass 15/15` or `Audit: fail N/15 — [short reason]`; immediately after, output **one** Markdown code fence whose language tag is `xml` and whose body is the **complete** prompt; **send boundary** = right after that fence closes—the visible message is exactly those two consecutive blocks, copy-ready together, before any later user message.
 4. **Full audit table / JSON debug object:** Append only after the user uses an explicit debug phrase such as `show debug`, `full audit table`, or `raw internal object`.
 5. **Commit-and-execute:** Pick a drafting approach, run it to completion, ship the XML; change plans only when **new** facts from the user or tools contradict the earlier scope.
 
@@ -94,9 +94,9 @@ Issue **one** AskUserQuestion with all fields populated from discovery and the u
 Spawn a **subagent** (Agent tool) with:
 
 - Scenario id (1–4), user goal, discovery summary, AskUserQuestion answers
-- Instruction: produce **one** well-formed XML prompt (required sections) + run the internal refinement loop and **14-row compliance audit**; return **only** the final XML string and a pass/fail + fail count for that audit (no user-facing table)
+- Instruction: produce **one** well-formed XML prompt (required sections) + run the internal refinement loop and **15-row compliance audit**; return **only** the final XML string and a pass/fail + fail count for that audit (no user-facing table)
 
-The orchestrator then prints **`Audit: pass 14/14`** or **`Audit: fail N/14 — [reason]`** immediately followed by the fenced XML. Keep subagent reasoning in the Agent transcript; the user-facing turn contains **only** audit + artifact.
+The orchestrator then prints **`Audit: pass 15/15`** or **`Audit: fail N/15 — [reason]`** immediately followed by the fenced XML. Keep subagent reasoning in the Agent transcript; the user-facing turn contains **only** audit + artifact.
 
 **Draft-only:** If the user explicitly requests no refinement (“quick draft”, “no refinement loop”), the subagent may skip Steps 10–12 below but must still return valid XML and a honest audit line.
 
@@ -140,7 +140,7 @@ Apply principles from Anthropic’s prompting guide (see REFERENCE.md): XML sect
 
 **Add motivation behind constraints** in `<context>`. Anthropic: "Providing context or motivation behind your instructions... can help Claude better understand your goals and deliver more targeted responses." Claude generalizes from the explanation.
 
-**Frame positively (zero-negative-keyword rule).** Anthropic: state the desired outcome directly. "Your response should be composed of smoothly flowing prose paragraphs" provides clearer guidance than a prohibition-only instruction. Apply this rule absolutely inside the fenced XML artifact across all sections (`<role>`, `<context>`, `<instructions>`, `<constraints>`, `<output_format>`): every instruction states what to do, what to produce, what to enforce. Use affirmative directives exclusively: "only X", "always X", "ensure X", "require X." Banned keywords inside generated XML: "no", "not", "don't", "do not", "never", "avoid", "without", "refrain", "stop", "prevent", "exclude", "prohibit", "forbid", "reject." Also banned: indirect negative patterns such as "instead of X", "rather than X", "as opposed to." Example pass: "Ensure all functions have explicit return types." Example fail: "Do not leave return types implicit." When a boundary is needed, phrase it as what is permitted: "only run commands within the scoped paths" rather than a prohibition.
+**Frame positively (zero-negative-keyword rule).** Anthropic: state the desired outcome directly. "Your response should be composed of smoothly flowing prose paragraphs" provides clearer guidance than a prohibition-only instruction. Apply this rule absolutely inside the fenced XML artifact across all sections (`<role>`, `<context>`, `<instructions>`, `<constraints>`, `<output_format>`): every instruction states what to do, what to produce, what to enforce. Use affirmative directives exclusively: "only X", "always X", "ensure X", "require X." Banned keywords inside generated XML: "no", "not", "don't", "do not", "never", "avoid", "without", "refrain", "stop", "prevent", "exclude", "prohibit", "forbid", "reject", "cannot", "unless." Also banned: indirect negative patterns such as "instead of X", "rather than X", "as opposed to." Example pass: "Ensure all functions have explicit return types." Example fail: "Do not leave return types implicit." When a boundary is needed, phrase it as what is permitted: "only run commands within the scoped paths" rather than a prohibition.
 
 **Emotion-informed framing.** Anthropic's emotion concepts research (2026) shows that internal activation patterns causally influence output quality. Apply: explicit success criteria with "say so if you're unsure" as an accepted answer; collaborative language ("help figure out", "work on this together"); framing tasks as interesting problems rather than chores; constructive, forward-looking tone. Cross-model caveat: studied on Sonnet 4.5; the patterns align with Anthropic's prompting best practices independently. Full pattern catalog and citations: `packages/claude-dev-env/docs/emotion-informed-prompt-design.md`.
 
@@ -170,7 +170,7 @@ For format- or tone-sensitive **generated** prompts, include 3–5 `<example>` b
 
 ### 8. Light self-check (subagent, pre-return)
 
-**Two-tier validation — tier 1:** Before the subagent returns XML, run a quick pass on output shape, tool phrasing, scope anchors, and safety / research / agentic patterns as applicable (see REFERENCE.md and patterns below). This **light self-check** is not interchangeable with the **14-row compliance audit** in §11; tier 2 supplies the hook-keyed pass/fail counts for the `Audit:` line.
+**Two-tier validation — tier 1:** Before the subagent returns XML, run a quick pass on output shape, tool phrasing, scope anchors, and safety / research / agentic patterns as applicable (see REFERENCE.md and patterns below). This **light self-check** is not interchangeable with the **15-row compliance audit** in §11; tier 2 supplies the hook-keyed pass/fail counts for the `Audit:` line.
 
 Expand the light self-check with this internal checklist when useful:
 
@@ -191,10 +191,10 @@ Expand the light self-check with this internal checklist when useful:
 The orchestrator’s **only** delivery to the user is:
 
 ```text
-Audit: pass 14/14
+Audit: pass 15/15
 ```
 
-(or `fail N/14 — …`), immediately followed by **one** fenced XML block; **send boundary** is immediately after the closing fence so the user receives a copy-ready pair (audit line + artifact) in one assistant message before the conversation continues.
+(or `fail N/15 — …`), immediately followed by **one** fenced XML block; **send boundary** is immediately after the closing fence so the user receives a copy-ready pair (audit line + artifact) in one assistant message before the conversation continues.
 
 ### 10. Default refinement mode (subagent-internal)
 
@@ -203,14 +203,14 @@ For non-trivial requests, run inside the drafting subagent (use **draft-only** w
 1. Base draft
 2. Section refinement in order: `role`, `context`, `instructions`, `constraints`, `output_format`, `examples` (examples optional if unused)
 3. Merge to one canonical XML prompt
-4. Final **14-row compliance audit** pass/fail with evidence (internal)
+4. Final **15-row compliance audit** pass/fail with evidence (internal)
 5. If fail: targeted fixes + capped re-audit rounds
 
 Required section list is immutable for this pipeline: `role`, `context`, `instructions`, `constraints`, `output_format`, `examples`.
 
-### 11. Compliance audit — 14-row checklist (internal, audit numerator)
+### 11. Compliance audit — 15-row checklist (internal, audit numerator)
 
-**Two-tier validation — tier 2:** The `14` in `Audit: pass 14/14` counts these **compliance** rows (stable ids for hooks). Tier 1 is the **light self-check** in §8—keep the steps separate so models do not merge them.
+**Two-tier validation — tier 2:** The `15` in `Audit: pass 15/15` counts these **compliance** rows (stable ids for hooks). Tier 1 is the **light self-check** in §8—keep the steps separate so models do not merge them.
 
 | # | Row name |
 |---|----------|
@@ -228,6 +228,7 @@ Required section list is immutable for this pipeline: `role`, `context`, `instru
 | 12 | completion_boundary_measurable |
 | 13 | citation_grounding_policy_present |
 | 14 | source_priority_rules_present |
+| 15 | artifact_language_confidence |
 
 For each row, maintain `status`, `evidence_quote`, `source_ref`, and `fix_if_fail` internally (see **REFERENCE.md** debug schema). A debug-path markdown table surfaces `status` and a one-phrase evidence summary. **Default user-visible path:** omit this table; **debug path:** after phrases like `show debug` or `full audit table`, print the table plus evidence snippets.
 

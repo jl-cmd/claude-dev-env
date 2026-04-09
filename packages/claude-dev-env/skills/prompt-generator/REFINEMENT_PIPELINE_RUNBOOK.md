@@ -84,6 +84,7 @@ Audit report must include all check IDs:
 - `completion_boundary_measurable`
 - `citation_grounding_policy_present`
 - `source_priority_rules_present`
+- `artifact_language_confidence`
 
 ## Citation and Grounding Validation
 
@@ -134,6 +135,8 @@ Validate fail-closed runtime gates:
    - Block responses that leak raw internal refinement object fields unless debug intent is explicit.
    - Block responses missing deterministic checklist rows when audit output is present.
    - Block responses using ambiguous scope phrasing in scope-bound sections.
+   - Block responses containing negative keywords (no, not, don't, never, avoid, etc.) inside fenced XML artifacts.
+   - Block responses containing hedging language (might be, possibly, I think, etc.) inside fenced XML artifacts.
 
 ## Context-Footprint Controls
 
@@ -150,6 +153,8 @@ Validate fail-closed runtime gates:
   - Raw internal object leakage without debug intent
   - Missing required checklist rows in audit output
   - Ambiguous scope terms in scope-bound text
+  - Negative keywords inside fenced XML artifacts
+  - Hedging language inside fenced XML artifacts
 - **Semantic-only (auditor layer):**
   - Overall quality/readability of scope wording beyond banned-term checks
   - Whether instruction binding quality is "good enough" beyond explicit anchor presence

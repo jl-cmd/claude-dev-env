@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT_PATH = Path(__file__).parent / "prompt-workflow-stop-guard.py"
 
@@ -34,6 +36,7 @@ def _full_checklist_rows() -> str:
         "- completion_boundary_measurable\n"
         "- citation_grounding_policy_present\n"
         "- source_priority_rules_present\n"
+        "- artifact_language_confidence\n"
     )
 
 def test_blocks_internal_object_leak_without_debug_intent() -> None:
@@ -116,6 +119,89 @@ def test_blocks_ambiguous_scope_phrasing() -> None:
     response = json.loads(result.stdout)
     assert response["decision"] == "block"
     assert "Ambiguous scope phrasing detected" in response["reason"]
+
+def _build_prompt_workflow_message_with_fenced_xml(fenced_xml_body: str) -> str:
+    return (
+        "Audit: pass 15/15\n"
+        "```xml\n"
+        + fenced_xml_body
+        + "\n```\n"
+        "overall_status: pass\n"
+        + _full_checklist_rows()
+        + "target_local_roots\n"
+        "target_canonical_roots\n"
+        "target_file_globs\n"
+        "comparison_basis\n"
+        "completion_boundary\n"
+        "base_minimal_instruction_layer: true\n"
+        "on_demand_skill_loading: true\n"
+    )
+
+
+def test_allows_positive_phrasing_inside_fenced_xml() -> None:
+    fenced_content = "<instructions>Ensure all functions have explicit return types.</instructions>"
+    payload = {
+        "last_assistant_message": _build_prompt_workflow_message_with_fenced_xml(fenced_content),
+    }
+    result = _run_hook(payload)
+    assert result.stdout.strip() == ""
+
+
+BANNED_KEYWORD_TEST_CASES: list[tuple[str, str]] = [
+    ("do_not", "<instructions>Do not leave return types implicit.</instructions>"),
+    ("avoid", "<instructions>Avoid missing return types.</instructions>"),
+    ("never", "<constraints>Never store credentials in plain text.</constraints>"),
+    ("without", "<instructions>Deploy without running tests first.</instructions>"),
+    ("prevent", "<constraints>Prevent unauthorized access to the API.</constraints>"),
+    ("reject", "<constraints>Reject all unsigned commits.</constraints>"),
+    ("cannot", "<constraints>The API cannot accept unauthenticated requests.</constraints>"),
+    ("unless", "<constraints>Skip the build step unless the user explicitly approves.</constraints>"),
+    ("must_not", "<constraints>The script must not produce duplicates.</constraints>"),
+    ("must_never", "<constraints>You must never store credentials in environment variables.</constraints>"),
+    ("instead_of", "<instructions>Use explicit types instead of implicit ones.</instructions>"),
+    ("rather_than", "<constraints>Prefer explicit types rather than inferred ones.</constraints>"),
+    ("as_opposed_to", "<instructions>Use Grid as opposed to floats for layout.</instructions>"),
+]
+
+
+@pytest.mark.parametrize(
+    ("banned_pattern_name", "fenced_xml_content"),
+    BANNED_KEYWORD_TEST_CASES,
+    ids=[each_case[0] for each_case in BANNED_KEYWORD_TEST_CASES],
+)
+def test_blocks_banned_pattern_inside_fenced_xml(
+    banned_pattern_name: str,
+    fenced_xml_content: str,
+) -> None:
+    payload = {
+        "last_assistant_message": _build_prompt_workflow_message_with_fenced_xml(fenced_xml_content),
+    }
+    result = _run_hook(payload)
+    response = json.loads(result.stdout)
+    assert response["decision"] == "block"
+
+
+def test_permits_negative_keywords_outside_fenced_xml() -> None:
+    message = (
+        "Audit: pass 15/15\n"
+        "Do not skip the audit line.\n"
+        "```xml\n"
+        "<instructions>Ensure all functions have explicit return types.</instructions>\n"
+        "```\n"
+        "overall_status: pass\n"
+        + _full_checklist_rows()
+        + "target_local_roots\n"
+        "target_canonical_roots\n"
+        "target_file_globs\n"
+        "comparison_basis\n"
+        "completion_boundary\n"
+        "base_minimal_instruction_layer: true\n"
+        "on_demand_skill_loading: true\n"
+    )
+    payload = {"last_assistant_message": message}
+    result = _run_hook(payload)
+    assert result.stdout.strip() == ""
+
 
 def test_allows_fully_structured_prompt_workflow_output() -> None:
     payload = {
