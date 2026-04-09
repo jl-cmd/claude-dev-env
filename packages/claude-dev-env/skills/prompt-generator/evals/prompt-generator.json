@@ -72,10 +72,10 @@
       "prompt": "/prompt-generator Create a prompt for an agent that traces a routing bug across shared_utils/export_handler.py, orchestrator.py, and download_manager.py — find where extract_apk is called and whether it handles APK signature check failures",
       "files": ["packages/samsung-automation/shared_utils/export_handler.py"],
       "expected_behavior": [
-        "No tool_use blocks appear after the first fence marker of the prompt artifact",
+        "No tool_use blocks appear after the first fence marker of the canonical prompt artifact",
         "All Glob/Grep discovery calls precede the AskUserQuestion",
         "All AskUserQuestion interactions precede the fenced block",
-        "Prompt artifact emits in a single uninterrupted response"
+        "Review the last successful Audit + fenced xml pair; blocked retry attempts preserved by flattened transcript exports do not count as additional delivered artifacts"
       ]
     },
     {
@@ -85,7 +85,7 @@
       "prompt": "/prompt-generator Write a detailed agent-harness prompt for a TDD bug-fix workflow that traces a routing error across 5+ files, with state management for multi-window execution and structured test tracking",
       "files": [],
       "expected_behavior": [
-        "Opening fence has a matching closing fence",
+        "The canonical prompt artifact has one opening xml fence and one matching closing fence; flattened transcript exports are normalized to that same boundary before review",
         "Every XML tag properly opened and closed",
         "No truncation at numbered-list bullets (the Issue #41 failure mode)",
         "No mid-sentence cuts or incomplete sections",
@@ -102,8 +102,8 @@
         "Discovery tool calls attempt to locate scoring logic before prompt generation",
         "If resolved: prompt references concrete file paths from discovery",
         "If unresolved: prompt contains <open_question> in <background> for downstream agent",
-        "No re-entry to discovery after fenced block starts",
-        "AskUserQuestion may surface the uncertainty if discovery was inconclusive"
+        "No re-entry to discovery after the canonical artifact fence starts",
+        "AskUserQuestion may surface the uncertainty if discovery was inconclusive; when discovery resolves concrete paths before the artifact, absence of <open_question> is expected"
       ]
     },
     {

@@ -54,3 +54,9 @@ These two signals are runtime-checked by the Stop guard whenever a prompt-workfl
 ## Deterministic Boundary
 
 These hooks enforce only structural/runtime checks. Semantic quality remains in auditor layer.
+
+## Reviewing Flattened Transcript Exports
+
+- Live prompt-workflow responses still require an explicit `Audit:` line plus one outer `xml` fence. The Stop guard and clipboard path continue to evaluate that literal boundary.
+- Saved transcript exports can flatten blocked retry turns and omit the outer fence lines. Normalize those files with `prompt_workflow_gate_core.normalize_prompt_workflow_export(...)`, then evaluate the rebuilt message with `extract_fenced_xml_content(...)` or `extract_fenced_xml_content_from_export(...)`.
+- Fence-relative evals review the **last successful Audit + artifact pair** after normalization. Earlier blocked retries in the flattened transcript remain diagnostic evidence and do not count as extra delivered artifacts.
