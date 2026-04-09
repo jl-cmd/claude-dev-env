@@ -6,6 +6,14 @@
 
 * migrate `prompt-generator` and `agent-prompt` pipeline refinements from local `~/.claude/skills` into `packages/claude-dev-env/skills` so changes remain durable and release-managed in the canonical repository
 
+## [1.12.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.12.1...claude-dev-env-v1.12.2) (2026-04-09)
+
+
+### Bug Fixes
+
+* **hooks:** remove PreToolUse agent-execution-intent-gate ([#51](https://github.com/jl-cmd/claude-code-config/pull/51)) ([a0d15cd](https://github.com/jl-cmd/claude-code-config/commit/a0d15cd79152983e4bde40010804a9974ad4b750))
+
+
 ## [1.12.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.12.0...claude-dev-env-v1.12.1) (2026-04-09)
 
 
