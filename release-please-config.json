@@ -3,10 +3,6 @@
         "packages/claude-dev-env": {
             "release-type": "node",
             "package-name": "claude-dev-env"
-        },
-        "packages/claude-prompt-tools": {
-            "release-type": "node",
-            "package-name": "claude-prompt-tools"
         }
     }
 }
