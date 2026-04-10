@@ -18,6 +18,8 @@ No external delegation. The orchestrator helps the user transform gaps into eval
 
 ## Phase 3: Write Skill -- Delegate to `/skill-writer`
 
+**Full package path:** If the user approved a package plan from `prompt-generator/templates/skill-from-ground-up.md` (net-new) or `prompt-generator/templates/skill-refinement-package.md` (existing baseline), paste the approved architecture summary, baseline inventory, planned deltas, and checkpoint list into the skill-writer handoff so file order and scope stay aligned.
+
 Invoke `/skill-writer` with the following context in your prompt:
 
 ```

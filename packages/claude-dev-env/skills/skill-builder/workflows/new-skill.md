@@ -7,6 +7,18 @@ Full evaluation-driven lifecycle for building a new skill from scratch.
 - The user has a task or domain they want to capture as a skill
 - No existing skill for this capability (or intentionally starting fresh)
 
+### Ground-up package layout (required before multi-file implementation)
+
+When the outcome includes **ARCHITECTURE.md**, **REFERENCE / EXAMPLES / WORKFLOWS**, and **`evals/*.json`** under a workspace (Anthropic-style progressive disclosure plus checkpointed rollout):
+
+1. Read `prompt-generator/templates/skill-from-ground-up.md` from the claude-dev-env `skills/` tree (repository path: `packages/claude-dev-env/skills/prompt-generator/templates/skill-from-ground-up.md`).
+2. Run `/prompt-generator` using that template (substitute tokens per its table) **before** Phase 3 expands the repo; align the XML scope block with this workflow’s workspace and evidence rules.
+3. Keep Phase 1–2 artifacts honest: eval prompts and expectations stay grounded in **real** user scenarios; the template reinforces eval rows that reference pasted or explicitly approved evidence only.
+
+Skip this block only when the user explicitly wants a **single-file** SKILL.md with no staged package plan.
+
+Refinements to an **existing** skill package use `prompt-generator/templates/skill-refinement-package.md` instead (see `improve-skill.md`).
+
 ---
 
 ## Phase 1: Identify Gaps

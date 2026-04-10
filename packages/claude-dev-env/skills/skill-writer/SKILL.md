@@ -32,6 +32,24 @@ Use this skill when the user needs a structured skill artifact; for quick answer
 
 When invoked with arguments (e.g. `/skill-writer improve this: [paste]`), treat `$ARGUMENTS` as the skill content to refine.
 
+### Ground-up multi-file packages (required)
+
+When the user is creating a **new** skill as a **package** (workspace with `ARCHITECTURE.md`, `REFERENCE.md`, `EXAMPLES.md`, `WORKFLOWS.md`, `evals/*.json`, per-file human review), **before** drafting `SKILL.md`:
+
+1. Read `packages/claude-dev-env/skills/prompt-generator/templates/skill-from-ground-up.md` (installed layout: sibling folder `prompt-generator/templates/skill-from-ground-up.md` under the same `skills/` parent).
+2. Ensure `/prompt-generator` has run with that template filled so architecture-first steps, checkpoint gates, and eval evidence rules are already agreed.
+
+If the task is **only** editing an existing `SKILL.md` or a small single-file tweak, this subsection does not apply.
+
+### Refinement multi-file packages (required)
+
+When the user is **refining** an existing skill as a **package** (baseline skill directory, `ARCHITECTURE.md` with planned deltas, checkpointed updates to REFERENCE / EXAMPLES / WORKFLOWS / `evals/`), **before** rewriting multiple files:
+
+1. Read `packages/claude-dev-env/skills/prompt-generator/templates/skill-refinement-package.md` (installed layout: `prompt-generator/templates/skill-refinement-package.md` under the same `skills/` parent).
+2. Ensure `/prompt-generator` has run with that template filled so baseline root, workspace root, observation inputs, and evidence rules are fixed before edits proceed.
+
+If the change set is a **small single-file** tweak, this subsection does not apply.
+
 ## Workflow (run in order)
 
 ### 1. Classify the skill type

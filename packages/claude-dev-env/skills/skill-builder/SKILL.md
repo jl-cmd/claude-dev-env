@@ -58,6 +58,24 @@ The feedback loop: observe Claude B's behavior, bring insights back, refine the 
 | 5. Iterate | Review results, refine, re-test | This skill + `/skill-writer` + Phase 4 |
 | 6. Polish | Description optimization, trigger eval, final check | `skill-creator` description optimizer |
 
+## Ground-up skill package (required reference)
+
+When building a **new** skill as a **full package** (architecture inventory, progressive disclosure files, `evals/`, **human checkpoint after each file**), treat the following as **mandatory** before implementation:
+
+- **Read:** `prompt-generator/templates/skill-from-ground-up.md` inside the claude-dev-env `skills/` directory (repository path: `packages/claude-dev-env/skills/prompt-generator/templates/skill-from-ground-up.md`).
+- **Do:** Run `/prompt-generator` with that file’s token table filled so the downstream session follows architecture-first sequencing, per-file review gates, and eval rows tied only to user-pasted or explicitly approved evidence.
+
+Use this **together with** gap-analysis and eval-scenario templates in this package; the ground-up template supplies the **orchestration contract** for the multi-file layout Anthropic recommends.
+
+## Refinement skill package (required reference)
+
+When **improving** an existing skill as a **multi-file** or **checkpointed** package (baseline directory plus planned deltas, observation-grounded evals), treat the following as **mandatory** before Phase 2–6 file work in `improve-skill.md` or package-aware steps in `polish-skill.md`:
+
+- **Read:** `prompt-generator/templates/skill-refinement-package.md` (repository path: `packages/claude-dev-env/skills/prompt-generator/templates/skill-refinement-package.md`).
+- **Do:** Run `/prompt-generator` with that file’s token table filled (`[[BASELINE_SKILL_ROOT]]`, `[[WORKSPACE_ROOT]]`, observation gap path, evidence rule) so rollout stays architecture-first, delta-focused, and tied to real observation or approved excerpts.
+
+Net-new packages without a baseline skill directory use `skill-from-ground-up.md` instead.
+
 ## Principles (apply across all phases)
 
 1. **Evals before documentation.** Never write extensive skill content without evaluation scenarios to validate it.
@@ -85,3 +103,5 @@ See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact invocation patt
 | `references/delegation-map.md` | Integration map for skill-writer and skill-creator |
 | `templates/gap-analysis.md` | Template for Phase 1 gap documentation |
 | `templates/eval-scenario.json` | Eval template matching skill-creator schema |
+| `../prompt-generator/templates/skill-from-ground-up.md` | Required orchestration template for **net-new** full skill packages (architecture-first, checkpoints, evidence-backed evals) |
+| `../prompt-generator/templates/skill-refinement-package.md` | Required orchestration template for **existing-skill** multi-file refinements and package-aware polish (baseline + delta, checkpoints, evidence-backed evals) |
