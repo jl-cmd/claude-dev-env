@@ -39,6 +39,12 @@ When authoring or refining prompts, ground decisions in these sources. If guidan
 
 If sources disagree on a technique, apply in order: Anthropic documentation first (it describes the actual model behavior), then OpenAI/Google/Microsoft (large-scale research with cross-model relevance), then community sources (patterns and intuition, not authoritative on model internals). When Tier 3 contradicts Tier 1, Tier 1 wins without exception.
 
+### Outcome preview gate and digest (`prompt-generator`)
+
+Human checkpoint before the paste-ready artifact ships: the orchestrator runs an **Outcome preview** turn (`### Outcome preview` bullets built from the **preview summary**, defined in SKILL.md Terminology) plus **AskUserQuestion** (**Ship** recommended first, two contextual alternates, **Refine with free text**), then emits `Audit`, a single ` ```xml ` fence, and **`## Outcome digest`** after the fence. Rationale matches collaborative checkpoints in `templates/skill-from-ground-up.md` and the refinement pattern in `templates/skill-refinement-package.md`. `ARCHITECTURE.md` lists all files in this skill package.
+
+**Clipboard safety:** `prompt_workflow_gate_core.extract_fenced_xml_content` concatenates every ` ```xml ` block in the message—follow the sample formatting rules in SKILL.md section 7 so clipboard copy stays the lone artifact body. Full contract: `TARGET_OUTPUT.md`.
+
 ## Harness design patterns (Anthropic blog, April 2026)
 
 Primary URL: https://claude.com/blog/harnessing-claudes-intelligence. Structured inventory: `docs/references/anthropic-harnessing-claudes-intelligence-technique-inventory.md`.
@@ -203,7 +209,7 @@ When deciding how to approach a problem, choose an approach and commit to it. Av
 
 ## Debug JSON schema (prompt-generator pipeline)
 
-Use **only** when the user explicitly requests debug output (for example `show debug`, `full audit table`, `raw internal object`). Default assistant turns stay **audit line + one `xml` fence**; this object is an optional appendix after that pair.
+Use **only** when the user explicitly requests debug output (for example `show debug`, `full audit table`, `raw internal object`). Default assistant turns complete the normal handoff first: **audit line** + one `xml` fence + **`## Outcome digest`** + optional hook validation block (defined in SKILL.md Terminology; see also `TARGET_OUTPUT.md`); this JSON object is an optional appendix **after** that handoff (and after any hook validation block).
 
 Shape (field names stable for internal audit helpers and Stop-hook leak detection):
 
@@ -247,4 +253,4 @@ Shape (field names stable for internal audit helpers and Stop-hook leak detectio
 }
 ```
 
-`checklist_results` keys must include all **14** compliance row ids from `SKILL.md` §11 (for example `reversible_action_and_safety_check_guidance`, `scope_terms_explicit_and_anchored`).
+`checklist_results` keys must include all **15** compliance row ids from `SKILL.md` §11 (for example `reversible_action_and_safety_check_guidance`, `scope_terms_explicit_and_anchored`).

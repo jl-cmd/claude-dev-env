@@ -13,8 +13,10 @@
         "Discovery tool calls (Glob/Grep) execute before any AskUserQuestion",
         "All questions delivered via AskUserQuestion — zero questions in direct chat text",
         "AskUserQuestion contains 2-4 questions, each with 2-4 options, recommended option first",
-        "Final response contains exactly: 1-liner audit status + one fenced XML prompt block",
-        "No commentary, tables, audit rows, or explanation outside the fenced block",
+        "After internal drafting finishes, one assistant turn shows ### Outcome preview with bullets only: what executing the generated prompt will produce, primary inputs or tools, done-when, short sample (TARGET_OUTPUT.md)",
+        "That same turn uses AskUserQuestion (2-4 options): recommended option first = user confirms the preview matches their intent and proceeds to the final handoff; two options offer scope or emphasis shifts grounded in discovery; one option collects free-text refinements and triggers another drafting pass (at most three such preview rounds unless the user raises the cap in chat)",
+        "Final response: Audit line, one Markdown code fence tagged xml with the full prompt, then ## Outcome digest after the closing fence",
+        "No second outer ```xml fence in the digest (samples use four spaces or tilde fences only)",
         "Fenced block contains <role>, <background>, <instructions>, <constraints>, <output_format>",
         "Prompt generation delegated to a subagent (Agent tool call visible in the flow)"
       ]
@@ -34,7 +36,8 @@
         "No redundant discovery tool calls for information already in conversation",
         "Handoff prompt is self-contained — a new session can resume without prior context",
         "Prior decisions preserved in the handoff, not lost or paraphrased away",
-        "Final output: 1-liner audit + fenced XML prompt, nothing else"
+        "After internal drafting finishes, ### Outcome preview bullets plus AskUserQuestion as in eval id 1 (confirm match as recommended first option; two contextual alternates; free-text refine option; preview loop cap)",
+        "Final output: 1-liner audit + fenced XML prompt + ## Outcome digest after the fence"
       ]
     },
     {
@@ -48,7 +51,8 @@
         "Ambiguities surfaced as specific options, not open-ended questions",
         "Discovery tool calls verify references from input (shared_utils, config patterns)",
         "ALL requirements from unstructured input captured (timeouts, selectors, config extraction, TDD, code rules, test safety) — none dropped",
-        "Final output: 1-liner audit + fenced XML prompt, nothing else"
+        "After internal drafting finishes, ### Outcome preview bullets plus AskUserQuestion as in eval id 1 (confirm match as recommended first option; two contextual alternates; free-text refine option; preview loop cap)",
+        "Final output: 1-liner audit + fenced XML prompt + ## Outcome digest after the fence"
       ]
     },
     {
@@ -58,7 +62,8 @@
       "prompt": "[Preceded by 80+ turns: failed git push, hook debugging, unrelated Samsung portal discussion, Python tracebacks, Midjourney tangent, 15+ empty Grep results] /prompt-generator Write a system prompt for a code review agent that checks for security vulnerabilities",
       "files": [],
       "expected_behavior": [
-        "Output format identical to Scenario 1: 1-liner audit + fenced XML prompt",
+        "Output format matches Scenario 1: 1-liner audit + fenced XML prompt + ## Outcome digest after the fence",
+        "After internal drafting finishes, ### Outcome preview bullets plus AskUserQuestion as in eval id 1 (confirm match as recommended first option; two contextual alternates; free-text refine option; preview loop cap)",
         "Prompt content about code review and security — zero contamination from prior noise",
         "No references to prior errors, tangents, or unrelated tool calls in the prompt",
         "XML structure complete and well-formed — no truncation from context pressure",
@@ -74,8 +79,8 @@
       "expected_behavior": [
         "No tool_use blocks appear after the first fence marker of the canonical prompt artifact",
         "All Glob/Grep discovery calls precede the AskUserQuestion",
-        "All AskUserQuestion interactions precede the fenced block",
-        "Review the last successful Audit + fenced xml pair; blocked retry attempts preserved by flattened transcript exports do not count as additional delivered artifacts"
+        "AskUserQuestion interactions precede the subagent; Outcome preview AskUserQuestion precedes the final Audit line and xml fence",
+        "Review the last successful Audit + fenced xml pair; blocked retry attempts preserved by exported conversation logs do not count as additional delivered artifacts"
       ]
     },
     {
@@ -85,7 +90,7 @@
       "prompt": "/prompt-generator Write a detailed agent-harness prompt for a TDD bug-fix workflow that traces a routing error across 5+ files, with state management for multi-window execution and structured test tracking",
       "files": [],
       "expected_behavior": [
-        "The canonical prompt artifact has one opening xml fence and one matching closing fence; flattened transcript exports are normalized to that same boundary before review",
+        "The canonical prompt artifact has one opening xml fence and one matching closing fence; exported conversation logs are normalized to that same boundary before review",
         "Every XML tag properly opened and closed",
         "No truncation at numbered-list bullets (the Issue #41 failure mode)",
         "No mid-sentence cuts or incomplete sections",
@@ -181,6 +186,21 @@
         "prompt_workflow_gate_core.extract_fenced_xml_content includes text after inner ```bash ... ``` lines up to the final closing ``` of the xml fence",
         "missing_required_xml_sections sees closing tags for role, background, instructions, constraints, output_format when those appear after nested fences",
         "SKILL.md §7 states ordered authoring steps for <illustrations>: four-space-indented sample lines, then tilde fences, then a complete triple-backtick pair when required"
+      ]
+    },
+    {
+      "id": 14,
+      "name": "outcome_preview_gate_and_digest_placement",
+      "scenario": "Outcome preview + post-fence digest (refinement contract)",
+      "prompt": "/prompt-generator Write a short user-task prompt for triaging GitHub issues by label in this repo",
+      "files": [],
+      "expected_behavior": [
+        "Subagent returns final XML plus preview summary fields for orchestrator use",
+        "### Outcome preview markdown block precedes AskUserQuestion; bullets cover executor output, inputs or tools, done when, sample excerpt (~20 lines max)",
+        "AskUserQuestion: recommended first option labels accepting the described outcome and proceeding (SKILL.md may phrase this as 'Ship this outcome profile' or equivalent); plus two contextual alternates and a free-text refinement path; at most three preview rounds unless user extends cap in chat",
+        "At most three preview refinement loops unless user raises cap in chat",
+        "Final handoff order: Audit line, single ```xml fence, ## Outcome digest, then optional hook validation block (defined in SKILL.md Terminology) after digest",
+        "extract_fenced_xml_content returns only the XML body (digest uses no second ```xml fence)"
       ]
     }
   ]
