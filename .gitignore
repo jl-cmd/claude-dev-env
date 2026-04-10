@@ -15,3 +15,6 @@ eval_*
 eval-*
 **/eval_*
 **/eval-*
+
+# Draft prompt artifacts (file-based validation loop)
+data/prompts/.draft-prompt.xml

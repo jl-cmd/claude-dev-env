@@ -13,5 +13,6 @@ Baseline inventory of files in the prompt-generator skill package.
 | `evals/prompt-generator.json` | Scenario eval rows |
 | `templates/skill-from-ground-up.md` | Net-new skill checkpoint template |
 | `templates/skill-refinement-package.md` | Existing-skill refinement template |
-| `hooks/blocking/prompt-workflow-stop-guard.py` | Stop gate + clipboard |
+| `hooks/blocking/prompt_workflow_validate.py` | Validator CLI (file-based loop) |
 | `hooks/blocking/prompt_workflow_gate_core.py` | Fence extraction, markers |
+| `hooks/blocking/prompt_workflow_clipboard.py` | Clipboard copy for artifacts |

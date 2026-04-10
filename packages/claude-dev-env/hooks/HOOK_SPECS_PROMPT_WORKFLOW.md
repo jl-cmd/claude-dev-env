@@ -6,18 +6,20 @@ Deterministic runtime gates for prompt workflows.
 
 The former `agent-execution-intent-gate.py` hook is **removed**. Native Agent/Task launches do not carry stable custom metadata; enforcing scope text on every spawn blocked legitimate `/agent-prompt` and refinement delegations. Scope and checklist rules remain enforced by the Stop guard when a prompt-workflow response is detected.
 
-## Gate: Leakage + Checklist + Scope (Stop)
+## Gate: Leakage + Checklist + Scope (file-based validation loop)
 
-- Hook: `hooks/blocking/prompt-workflow-stop-guard.py`
-- Event: `Stop`
-- Fail condition:
+- Validator: `hooks/blocking/prompt_workflow_validate.py`
+- Invocation: CLI against `data/prompts/.draft-prompt.xml` (exit 0 allowed, exit 2 blocked)
+- Fail conditions:
   - Raw internal refinement object appears in assistant output without explicit debug intent
   - Prompt-workflow response detected but deterministic checklist container is missing
   - Prompt-workflow response detected and required deterministic checklist rows are missing
   - Prompt-workflow response detected and required scope anchors are missing
   - Prompt-workflow response detected and runtime context-control signals are missing
   - Scope-bound text uses banned ambiguous scope terms
-- Action: `block` with correction reason.
+  - Banned negative keywords found inside fenced XML artifact
+  - Fenced XML artifact missing required sections
+- Enforcement: The drafting subagent writes the draft file, runs the validator, reads stderr violations (each prefixed with `[reason_code]`), edits the file, and re-runs until exit 0.
 
 ## Required Scope Anchors
 
@@ -49,7 +51,7 @@ The former `agent-execution-intent-gate.py` hook is **removed**. Native Agent/Ta
 - `base_minimal_instruction_layer: true`
 - `on_demand_skill_loading: true`
 
-These two signals are runtime-checked by the Stop guard whenever a prompt-workflow response is detected.
+These two signals are checked by the validator CLI whenever a prompt-workflow response is detected.
 
 ## Deterministic Boundary
 

@@ -31,7 +31,8 @@ const INSTALL_GROUPS = {
         includeHookFiles: [
             'blocking/prompt_workflow_gate_config.py',
             'blocking/prompt_workflow_gate_core.py',
-            'blocking/prompt-workflow-stop-guard.py',
+            'blocking/prompt_workflow_validate.py',
+            'blocking/prompt_workflow_clipboard.py',
             'HOOK_SPECS_PROMPT_WORKFLOW.md',
         ],
         includeRules: ['prompt-workflow-context-controls.md'],

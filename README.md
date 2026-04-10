@@ -219,7 +219,7 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Event | Hook | What it does |
 |-------|------|-------------|
 | SessionStart | `plugin-data-dir-cleanup` | Cleans stale plugin data on session start |
-| Stop | `prompt-workflow-stop-guard` | Blocks leakage and enforces deterministic audit coverage for prompt-workflow responses |
+| CLI | `prompt_workflow_validate.py` | File-based validation loop for prompt-workflow draft artifacts (replaces former Stop hook) |
 | Stop | `attention-needed-notify` | Desktop notification when Claude stops |
 | Stop | `hedging-language-blocker` | Blocks responses with hedging language (anti-hallucination) |
 | SessionEnd | `session-end-cleanup` | Cleans temporary state on session end |

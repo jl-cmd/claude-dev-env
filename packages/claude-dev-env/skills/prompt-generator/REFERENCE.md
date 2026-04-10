@@ -7,8 +7,8 @@ When authoring or refining prompts, ground decisions in these sources. If guidan
 ### Tier 1: Anthropic (primary authority for Claude)
 
 - https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview -- overview, links to all sub-guides
-- https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices -- the single living reference for Claude's latest models. Covers general principles, XML tags, prefill deprecation, tool use, thinking, agentic systems, overeagerness, evidence-grounding and citing sources before strong claims.
-- https://transformer-circuits.pub/2026/emotions/index.html -- emotion concepts research (April 2026): 171 internal activation patterns that causally influence behavior. Key prompt-engineering takeaways: clear criteria and escape routes improve output quality, collaborative framing activates engagement, positive task framing correlates with better results, inviting transparency produces more reliable output. Cross-model caveat: studied on Sonnet 4.5; patterns align with best practices independently.
+- https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices -- the single living reference for Claude's latest models.
+- https://transformer-circuits.pub/2026/emotions/index.html -- emotion concepts research (April 2026). Key takeaways: clear criteria and escape routes, collaborative framing, positive task framing, inviting transparency. Full catalog: `packages/claude-dev-env/docs/emotion-informed-prompt-design.md`.
 - https://www.anthropic.com/research/emotion-concepts-function -- blog summary of the above paper.
 - https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking -- adaptive thinking reference; replaces manual budget_tokens with effort-based control.
 - https://claude.com/blog/harnessing-claudes-intelligence -- harness evolution: primitives Claude already knows, what to stop doing in the harness, deliberate boundaries (context economics, caching, typed tools). Local inventory: `docs/references/anthropic-harnessing-claudes-intelligence-technique-inventory.md`.
@@ -37,7 +37,11 @@ When authoring or refining prompts, ground decisions in these sources. If guidan
 
 ### Conflict resolution rule
 
-If sources disagree on a technique, apply in order: Anthropic documentation first (it describes the actual model behavior), then OpenAI/Google/Microsoft (large-scale research with cross-model relevance), then community sources (patterns and intuition, not authoritative on model internals). When Tier 3 contradicts Tier 1, Tier 1 wins without exception.
+If sources disagree, apply tier order: Anthropic first, then OpenAI/Google/Microsoft, then community. Tier 1 wins when conflicting with lower tiers.
+
+### Outcome preview gate and digest (`prompt-generator`)
+
+See SKILL.md §§107-115 (Phases 4-5) and `TARGET_OUTPUT.md` for the full contract. **Clipboard safety:** `extract_fenced_xml_content` concatenates every ` ```xml ` block—follow §7 sample formatting so clipboard copy stays the lone artifact body.
 
 ### Outcome preview gate and digest (`prompt-generator`)
 
@@ -74,7 +78,7 @@ Jump from concept to the platform specs the post names:
 
 ### Prompt caching (Hook 6)
 
-The [Messages API](https://platform.claude.com/docs/en/build-with-claude/working-with-messages) is stateless—re-supply prior actions, tool definitions, and instructions each turn. Maximize [prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) hits: **stable prefix first, dynamic tail last**; **append** new content via **messages** instead of rewriting the cached prompt; **avoid mid-session model switches** (caches are model-specific—use a **subagent** for a cheaper model); **treat the tool list as part of the cached prefix** and avoid churn; use **tool search** so dynamic discovery **appends** without invalidating the prefix; for multi-turn agents, **advance breakpoints** toward the latest message (**auto-caching**). Cached input tokens are priced at **10% of base input** per [pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+The Messages API is stateless. Maximize [prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching): **stable prefix first, dynamic tail last**; **append** via messages; **avoid mid-session model switches** (use a subagent for cheaper models); **treat tool list as cached prefix**; use **tool search** to append without invalidation; **advance breakpoints** toward the latest message. Cached tokens cost **10% of base input**.
 
 ### Typed tools vs bash strings (Hook 7)
 
@@ -179,12 +183,6 @@ Search for this information in a structured way. As you gather data, develop sev
 </research_approach>
 ```
 
-Key elements:
-- Define clear **success criteria** for the research question
-- Encourage **source verification** across multiple sources
-- Track **competing hypotheses** with confidence levels
-- **Self-critique** approach and plan regularly
-
 ## Evaluation loop
 
 For prompt drafts that must hold up over time:
@@ -209,7 +207,7 @@ When deciding how to approach a problem, choose an approach and commit to it. Av
 
 ## Debug JSON schema (prompt-generator pipeline)
 
-Use **only** when the user explicitly requests debug output (for example `show debug`, `full audit table`, `raw internal object`). Default assistant turns complete the normal handoff first: **audit line** + one `xml` fence + **`## Outcome digest`** + optional hook validation block (defined in SKILL.md Terminology; see also `TARGET_OUTPUT.md`); this JSON object is an optional appendix **after** that handoff (and after any hook validation block).
+Use **only** when the user explicitly requests debug output (for example `show debug`, `full audit table`, `raw internal object`). Default assistant turns complete the normal handoff first: one `xml` fence + **`## Outcome digest`** (see also `TARGET_OUTPUT.md`); this JSON object is an optional appendix **after** that handoff.
 
 Shape (field names stable for internal audit helpers and Stop-hook leak detection):
 
