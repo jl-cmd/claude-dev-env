@@ -5,3 +5,13 @@ __pycache__/
 
 # Logs
 *.log
+
+# Local tooling state
+.serena/
+
+# Eval artifacts
+eval*
+eval_*
+eval-*
+**/eval_*
+**/eval-*
