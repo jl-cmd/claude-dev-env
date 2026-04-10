@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [1.17.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.16.1...claude-dev-env-v1.17.0) (2026-04-10)
+
+
+### Features
+
+* **claude-dev-env:** add skill package prompt templates and workflow wiring ([#66](https://github.com/jl-cmd/claude-code-config/issues/66)) ([387e418](https://github.com/jl-cmd/claude-code-config/commit/387e418dce69a337ef288171ba4f120818dc527a))
+
 ## [1.16.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.16.0...claude-dev-env-v1.16.1) (2026-04-10)
 
 
