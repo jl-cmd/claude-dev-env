@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## [1.16.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.16.0...claude-dev-env-v1.16.1) (2026-04-10)
+
+
+### Bug Fixes
+
+* **ci:** sync claude-dev-env version with manifest and pin release PR title ([69f978e](https://github.com/jl-cmd/claude-code-config/commit/69f978e2bb99324e0ba0123993124ef950bd328b))
+* **ci:** unblock release-please for claude-dev-env npm publish ([4253536](https://github.com/jl-cmd/claude-code-config/commit/4253536074c01d09e53092d2d22d106d3cafe491))
+
 ## [1.16.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.15.1...claude-dev-env-v1.16.0) (2026-04-09)
 
 
