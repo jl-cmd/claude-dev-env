@@ -2,7 +2,9 @@
     "packages": {
         "packages/claude-dev-env": {
             "release-type": "node",
-            "package-name": "claude-dev-env"
+            "package-name": "claude-dev-env",
+            "changelog-path": "CHANGELOG.md",
+            "pull-request-title-pattern": "chore(main): release claude-dev-env ${version}"
         }
     }
 }
