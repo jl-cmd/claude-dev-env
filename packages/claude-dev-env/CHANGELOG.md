@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [1.17.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.1...claude-dev-env-v1.17.2) (2026-04-10)
+
+
+### Refactoring
+
+* **prompt-workflow:** replace Stop hook with file-based validation loop ([#75](https://github.com/jl-cmd/claude-code-config/issues/75)) ([43758b1](https://github.com/jl-cmd/claude-code-config/commit/43758b16d4bd46df3e368c76be119f3ba2201458))
+
 ## [1.17.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.0...claude-dev-env-v1.17.1) (2026-04-10)
 
 
