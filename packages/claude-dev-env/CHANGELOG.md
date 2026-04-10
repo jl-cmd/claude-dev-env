@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [1.17.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.0...claude-dev-env-v1.17.1) (2026-04-10)
+
+
+### Documentation
+
+* **prompt-generator:** replace jargon with plain language ([#73](https://github.com/jl-cmd/claude-code-config/issues/73)) ([0c66d92](https://github.com/jl-cmd/claude-code-config/commit/0c66d926f09f2db779a64784efa5a38797b264c2))
+
 ## [1.17.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.16.1...claude-dev-env-v1.17.0) (2026-04-10)
 
 
