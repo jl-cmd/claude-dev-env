@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
+import datetime
 import json
 import os
 import re
 import sys
+from pathlib import Path
 
 CLAUDE_DIRECTORY_PATH = os.path.normpath(os.path.expanduser("~/.claude"))
 
@@ -25,10 +27,6 @@ DESTRUCTIVE_BASH_PATTERNS = [
     (re.compile(r'\bDROP\s+TABLE\b', re.IGNORECASE), "DROP TABLE (destroys database table)"),
     (re.compile(r'\bDROP\s+DATABASE\b', re.IGNORECASE), "DROP DATABASE (destroys entire database)"),
     (re.compile(r'\bTRUNCATE\s+TABLE\b', re.IGNORECASE), "TRUNCATE TABLE (removes all table rows)"),
-    (re.compile(r'\bgh\s+api\b.*/(comments|reviews)\b.*-X\s+POST', re.IGNORECASE), "gh api comment/review POST (visible to others)"),
-    (re.compile(r'\bgh\s+pr\s+comment\b', re.IGNORECASE), "gh pr comment (visible to others)"),
-    (re.compile(r'\bgh\s+pr\s+review\b', re.IGNORECASE), "gh pr review (visible to others)"),
-    (re.compile(r'\bgh\s+issue\s+comment\b', re.IGNORECASE), "gh issue comment (visible to others)"),
 ]
 
 def find_destructive_pattern(command: str) -> str | None:
@@ -36,6 +34,51 @@ def find_destructive_pattern(command: str) -> str | None:
         if pattern_regex.search(command):
             return pattern_description
     return None
+
+
+def find_redirected_gh_pattern(command: str) -> str | None:
+    redirected_gh_bash_patterns = [
+        (re.compile(r'\bgh\s+api\b.*/(comments|reviews)\b.*-X\s+POST', re.IGNORECASE), "gh api comment/review POST"),
+        (re.compile(r'\bgh\s+pr\s+comment\b', re.IGNORECASE), "gh pr comment"),
+        (re.compile(r'\bgh\s+pr\s+review\b', re.IGNORECASE), "gh pr review"),
+        (re.compile(r'\bgh\s+issue\s+comment\b', re.IGNORECASE), "gh issue comment"),
+    ]
+    for pattern_regex, pattern_description in redirected_gh_bash_patterns:
+        if pattern_regex.search(command):
+            return pattern_description
+    return None
+
+
+def _append_destructive_gate_log_entry(brief_label: str, full_reason: str) -> None:
+    destructive_gate_log_path = Path.home() / ".claude" / "logs" / "destructive-gate.log"
+    try:
+        destructive_gate_log_path.parent.mkdir(parents=True, exist_ok=True)
+        timestamp_iso = datetime.datetime.now().isoformat()
+        log_entry = f"{timestamp_iso}\t{brief_label}\t{full_reason}\n"
+        with destructive_gate_log_path.open("a", encoding="utf-8") as log_handle:
+            log_handle.write(log_entry)
+    except OSError:
+        pass
+
+
+def _build_silent_gh_deny_response(matched_description: str) -> dict:
+    gh_gate_user_facing_prefix = "[gh-gate]"
+    brief_label = f"blocked redirected {matched_description}"
+    full_reason = (
+        f"GH-REDIRECT GATE: {matched_description} already executed by "
+        "gh-wsl-to-windows-redirect.py via PowerShell. Denying the original "
+        "Bash call prevents duplicate execution."
+    )
+    _append_destructive_gate_log_entry(brief_label, full_reason)
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": full_reason,
+        },
+        "suppressOutput": True,
+        "systemMessage": f"{gh_gate_user_facing_prefix} {brief_label}",
+    }
 
 
 def targets_only_claude_directory(command: str) -> bool:
@@ -72,6 +115,12 @@ def main() -> None:
         sys.exit(0)
 
     command = tool_input.get("command", "")
+
+    redirected_gh_description = find_redirected_gh_pattern(command)
+    if redirected_gh_description is not None:
+        print(json.dumps(_build_silent_gh_deny_response(redirected_gh_description)))
+        sys.exit(0)
+
     matched_description = find_destructive_pattern(command)
 
     if matched_description is not None and targets_only_claude_directory(command):
