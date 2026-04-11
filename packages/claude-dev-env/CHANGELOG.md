@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [1.17.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.2...claude-dev-env-v1.17.3) (2026-04-11)
+
+
+### Bug Fixes
+
+* **hooks:** prevent duplicate write-visible gh calls under bypassPermissions mode ([#85](https://github.com/jl-cmd/claude-code-config/issues/85)) ([5522ea5](https://github.com/jl-cmd/claude-code-config/commit/5522ea555f6ce5ba7e6e7a1d1f6d8692602012a7))
+
 ## [1.17.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.1...claude-dev-env-v1.17.2) (2026-04-10)
 
 
