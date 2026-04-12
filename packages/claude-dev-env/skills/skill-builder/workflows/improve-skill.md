@@ -55,7 +55,7 @@ From here, follow the same phases as `${CLAUDE_SKILL_DIR}/workflows/new-skill.md
 
 Whenever Phases 2–6 will touch **multiple files**, **progressive disclosure layout**, or use **checkpointed file-by-file rollout**, treat this as **required** before expanding or rewriting the tree:
 
-1. Read `prompt-generator/templates/skill-refinement-package.md` from the claude-dev-env `skills/` tree (repository path: `packages/claude-dev-env/skills/prompt-generator/templates/skill-refinement-package.md`).
+1. Read `prompt-generator/templates/skill-refinement-package.md` from the claude-dev-env `skills/` tree (repository path: `skills/prompt-generator/templates/skill-refinement-package.md` in [jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
 2. Run `/prompt-generator` with that template’s token table filled: set `[[BASELINE_SKILL_ROOT]]` to the existing skill directory, `[[WORKSPACE_ROOT]]` to your iteration workspace (in-place or snapshot per user preference), and `[[DESIGN_INPUT_GLOB]]` to this workflow’s observation-based `gap-analysis.md` when it exists.
 
 Use `skill-from-ground-up.md` **only** for **greenfield** packages where no baseline skill directory exists yet; use `skill-refinement-package.md` for every refinement anchored to an existing skill.

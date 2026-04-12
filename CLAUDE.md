@@ -8,7 +8,9 @@ This is an npm workspaces monorepo with three packages in `packages/`:
 - `packages/claude-journal/` -- journal skills: dream, session-log, session-tidy
 - `packages/claude-deep-research/` -- research skills and agent: deep-research, research-mode
 
-The main installer (`packages/claude-dev-env/bin/install.mjs`) discovers and installs content from workspace siblings. Each package also has a standalone installer for independent use. Additional external plugins: claude-workflow, GSD (npx get-shit-done-cc).
+The main installer (`packages/claude-dev-env/bin/install.mjs`) discovers and installs content from workspace siblings and npm dependencies. Each package also has a standalone installer for independent use. Additional external plugins: claude-workflow, GSD (npx get-shit-done-cc).
+
+The prompt-generator skill, the agent-prompt skill, and the prompt-workflow blocking hooks live in the standalone @jl-cmd/prompt-generator package — claude-dev-env declares it as a runtime dependency and installs it transparently.
 
 ## Docs
 

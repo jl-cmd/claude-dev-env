@@ -12,7 +12,7 @@ Final optimization pass for a skill that is functionally complete.
 
 When the polish pass will touch **more than frontmatter alone** (for example `REFERENCE.md`, `EXAMPLES.md`, `WORKFLOWS.md`, link structure, or eval JSON), or the user wants **checkpointed** multi-file updates alongside description work:
 
-1. Read `prompt-generator/templates/skill-refinement-package.md` (repository path: `packages/claude-dev-env/skills/prompt-generator/templates/skill-refinement-package.md`).
+1. Read `prompt-generator/templates/skill-refinement-package.md` (repository path: `skills/prompt-generator/templates/skill-refinement-package.md` in [jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
 2. Run `/prompt-generator` with tokens filled so `ARCHITECTURE.md` records baseline inventory, planned deltas for polish, and evidence rules for any new trigger or behavior evals.
 
 Purely **single-field** `description` edits with no structural package changes can skip this block.

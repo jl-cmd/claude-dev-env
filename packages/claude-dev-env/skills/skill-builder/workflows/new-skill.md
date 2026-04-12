@@ -11,7 +11,7 @@ Full evaluation-driven lifecycle for building a new skill from scratch.
 
 When the outcome includes **ARCHITECTURE.md**, **REFERENCE / EXAMPLES / WORKFLOWS**, and **`evals/*.json`** under a workspace (Anthropic-style progressive disclosure plus checkpointed rollout):
 
-1. Read `prompt-generator/templates/skill-from-ground-up.md` from the claude-dev-env `skills/` tree (repository path: `packages/claude-dev-env/skills/prompt-generator/templates/skill-from-ground-up.md`).
+1. Read `prompt-generator/templates/skill-from-ground-up.md` from the claude-dev-env `skills/` tree (repository path: `skills/prompt-generator/templates/skill-from-ground-up.md` in [jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
 2. Run `/prompt-generator` using that template (substitute tokens per its table) **before** Phase 3 expands the repo; align the XML scope block with this workflow’s workspace and evidence rules.
 3. Keep Phase 1–2 artifacts honest: eval prompts and expectations stay grounded in **real** user scenarios; the template reinforces eval rows that reference pasted or explicitly approved evidence only.
 

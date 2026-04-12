@@ -24,6 +24,8 @@ That's it. The installer will:
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
 
+The `--only prompts` group sources the prompt-generator skill, the agent-prompt skill, and the prompt-workflow hooks from [@jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator) — a standalone npm package that claude-dev-env declares as a runtime dependency. No separate installation is required; `npx claude-dev-env` installs it transparently.
+
 ### Selective Install
 
 Only want specific tools? Use the `--only` flag with one or more groups:
@@ -94,7 +96,6 @@ Behavioral rules loaded into every session. These shape how Claude approaches wo
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
 | `context7` | Fetch current docs via Context7 MCP instead of relying on training data |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
-| `prompt-workflow-context-controls` | Context footprint controls for prompt refinement workflows |
 
 ### Docs (5)
 
@@ -219,7 +220,6 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Event | Hook | What it does |
 |-------|------|-------------|
 | SessionStart | `plugin-data-dir-cleanup` | Cleans stale plugin data on session start |
-| CLI | `prompt_workflow_validate.py` | File-based validation loop for prompt-workflow draft artifacts (replaces former Stop hook) |
 | Stop | `attention-needed-notify` | Desktop notification when Claude stops |
 | Stop | `hedging-language-blocker` | Blocks responses with hedging language (anti-hallucination) |
 | SessionEnd | `session-end-cleanup` | Cleans temporary state on session end |
