@@ -52,7 +52,7 @@ Settings.json hooks are machine-specific only. Plugin hooks are registered via t
 - **Hook directory**: `hooks/` with subfolders: `session/`, `notification/`, `advisory/`, `validation/`, `lifecycle/`, `blocking/`, `git-hooks/`, `github-action/`, `workflow/`, `validators/`
 - **Event types**: SessionStart, UserPromptSubmit, PreToolUse (can block), PostToolUse, SubagentStop, Stop
 - **Adding hooks**: Create Python file in appropriate subfolder, register in settings.json using `run-hook-wrapper.js` pattern with explicit timeouts (10000-30000ms)
-- **Blocking hooks**: exit 2 with `hookSpecificOutput.permissionDecision`; advisory hooks exit 0
+- **Blocking hooks**: For `PreToolUse` denials, Claude Code documents **exit 0** and JSON on **stdout** with `hookSpecificOutput.permissionDecision` (see [hooks reference](https://code.claude.com/docs/en/hooks)); **exit 2** + stderr also blocks but **does not** parse JSON. Advisory hooks exit 0 without deny.
 
 ## Bulk Operations
 

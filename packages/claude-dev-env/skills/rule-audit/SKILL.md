@@ -89,8 +89,8 @@ For EACH hook entry in settings.json (both layers):
   - hook_script_path (extract from the command string after the last quote)
   - Read the actual script file
   - purpose (what rule does this hook enforce?)
-  - enforcement_type: "blocking" (exit 2 / permissionDecision deny) | "advisory" (stdout message) | "validation" (post-check)
-  - method: "exit_code_2" (deprecated) | "permissionDecision" (current) | "stdout" | "other"
+  - enforcement_type: "blocking" (exit 2 stderr, or PreToolUse exit 0 + JSON deny) | "advisory" (stdout message) | "validation" (post-check)
+  - method: "exit_code_2_stderr" | "pretooluse_json_stdout" (hookSpecificOutput.permissionDecision; see https://code.claude.com/docs/en/hooks) | "stdout" | "other"
   - which_rule_file (which .Codex/rules/*.md or AGENTS.md rule does this correspond to?)
   - orphaned (hook exists on disk but NOT in settings.json?)
 ```
