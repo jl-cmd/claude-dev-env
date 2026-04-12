@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.19.0...claude-dev-env-v1.19.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* **hooks:** wire Zoekt redirector into PreToolUse ([#96](https://github.com/jl-cmd/claude-code-config/issues/96)) ([897c941](https://github.com/jl-cmd/claude-code-config/commit/897c94192d21a55de747c0b4325385d572bff9f0))
+
 ## [1.19.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.18.0...claude-dev-env-v1.19.0) (2026-04-12)
 
 
