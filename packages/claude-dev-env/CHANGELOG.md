@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [1.17.4](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.3...claude-dev-env-v1.17.4) (2026-04-12)
+
+
+### Refactoring
+
+* **zoekt-hook:** phase 2 guidance API on main ([#86](https://github.com/jl-cmd/claude-code-config/issues/86)) ([#90](https://github.com/jl-cmd/claude-code-config/issues/90)) ([e069818](https://github.com/jl-cmd/claude-code-config/commit/e0698188d4646e0069c5900a4bd0e669f5a79d68))
+
 ## [1.17.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.2...claude-dev-env-v1.17.3) (2026-04-11)
 
 
