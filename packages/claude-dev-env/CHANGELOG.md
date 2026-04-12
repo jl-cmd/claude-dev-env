@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [1.17.5](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.4...claude-dev-env-v1.17.5) (2026-04-12)
+
+
+### Refactoring
+
+* source prompts install group from @jl-cmd/prompt-generator npm dependency ([#93](https://github.com/jl-cmd/claude-code-config/issues/93)) ([ca11cd3](https://github.com/jl-cmd/claude-code-config/commit/ca11cd34f6c8ab44277b305cab9755fe86fb184b))
+
 ## [1.17.4](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.3...claude-dev-env-v1.17.4) (2026-04-12)
 
 
