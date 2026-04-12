@@ -1,6 +1,31 @@
 # Changelog
 
-## Unreleased
+## [1.18.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.5...claude-dev-env-v1.18.0) (2026-04-12)
+
+
+### Extraction Migration
+
+* **prompt-generator:** delete in-tree copies now sourced from @jl-cmd/prompt-generator dependency
+
+  Removed 11 in-tree artifacts (2 skill directories, 5 hook scripts, 3 test files,
+  1 hook spec, 1 rule file) that are now installed from the @jl-cmd/prompt-generator
+  npm package via install.mjs discoverDependencyGroups().
+
+  Removed artifacts:
+  - skills/prompt-generator/ (8 files)
+  - skills/agent-prompt/ (1 file)
+  - hooks/blocking/prompt_workflow_gate_config.py
+  - hooks/blocking/prompt_workflow_gate_core.py
+  - hooks/blocking/prompt_workflow_validate.py
+  - hooks/blocking/prompt_workflow_clipboard.py
+  - hooks/blocking/test_prompt_workflow_gate_core.py
+  - hooks/blocking/test_prompt_workflow_clipboard.py
+  - hooks/blocking/test_prompt_workflow_validate.py
+  - hooks/HOOK_SPECS_PROMPT_WORKFLOW.md
+  - rules/prompt-workflow-context-controls.md
+
+  Rollback: revert this commit and pin @jl-cmd/prompt-generator below 1.0.0 in
+  package.json to restore in-tree copies.
 
 ## [1.17.5](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.4...claude-dev-env-v1.17.5) (2026-04-12)
 
