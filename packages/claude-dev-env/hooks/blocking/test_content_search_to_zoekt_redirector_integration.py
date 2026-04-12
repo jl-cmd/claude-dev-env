@@ -13,7 +13,7 @@ class ContentSearchHookIntegrationTests(unittest.TestCase):
         hook_directory = pathlib.Path(__file__).resolve().parent
         if str(hook_directory) not in sys.path:
             sys.path.insert(0, str(hook_directory))
-        from content_search_zoekt_redirect_guidance import get_zoekt_redirect_message
+        from content_search_zoekt_redirect_guidance import get_zoekt_redirect_guidance
 
         hook_path = hook_directory / "content-search-to-zoekt-redirector.py"
         destructive_gate_label_prefix = "[destructive-gate]"
@@ -38,7 +38,7 @@ class ContentSearchHookIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["hookSpecificOutput"]["permissionDecisionReason"],
-            get_zoekt_redirect_message(),
+            get_zoekt_redirect_guidance(),
         )
         self.assertEqual(
             payload["hookSpecificOutput"]["permissionDecision"],

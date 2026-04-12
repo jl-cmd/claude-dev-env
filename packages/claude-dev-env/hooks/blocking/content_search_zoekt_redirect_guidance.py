@@ -1,7 +1,7 @@
 """Zoekt MCP usage and repo-to-disk path mapping for PreToolUse permissionDecisionReason."""
 
 
-def get_zoekt_redirect_message() -> str:
+def get_zoekt_redirect_guidance() -> str:
     return (
         "Use Zoekt MCP instead: mcp__zoekt__search(query=\"your pattern\"). "
         "Supports regex, 'file:pattern' for file filtering, 'lang:py' for language. "
@@ -17,7 +17,3 @@ def get_zoekt_redirect_message() -> str:
         "Example pattern only — yours will differ: if Zoekt shows \"acme-lib - src/foo.py\" and that repo "
         "lives at /srv/checkout/acme-lib/ on your machine, edit /srv/checkout/acme-lib/src/foo.py."
     )
-
-
-def get_zoekt_redirect_guidance() -> str:
-    return get_zoekt_redirect_message()

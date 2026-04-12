@@ -11,7 +11,7 @@ if str(HOOK_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(HOOK_DIRECTORY))
 
 from content_search_zoekt_block_payload import build_block_payload
-from content_search_zoekt_redirect_guidance import get_zoekt_redirect_message
+from content_search_zoekt_redirect_guidance import get_zoekt_redirect_guidance
 
 
 class BuildBlockPayloadTests(unittest.TestCase):
@@ -37,7 +37,7 @@ class BuildBlockPayloadTests(unittest.TestCase):
         cap_characters = 10_000
         payload = build_block_payload(
             brief_label="blocked Bash(grep); use Zoekt MCP",
-            permission_decision_reason=get_zoekt_redirect_message(),
+            permission_decision_reason=get_zoekt_redirect_guidance(),
         )
         serialized = json.dumps(payload)
         self.assertLessEqual(
