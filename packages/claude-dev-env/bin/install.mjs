@@ -5,13 +5,76 @@ import { join, dirname, resolve, relative } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
 const PACKAGE_NAME = 'claude-dev-env';
+const packageRequire = createRequire(import.meta.url);
 
 const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents'];
+
+function resolveDependencyPackageRoot(dependencyPackageName) {
+    const dependencyPackageJsonPath = packageRequire.resolve(
+        `${dependencyPackageName}/package.json`
+    );
+    return dirname(dependencyPackageJsonPath);
+}
+
+function discoverDependencyGroups() {
+    const ownPackageJsonPath = join(PACKAGE_ROOT, 'package.json');
+    const ownPackageJson = JSON.parse(readFileSync(ownPackageJsonPath, 'utf8'));
+    const dependencies = ownPackageJson.dependencies || {};
+    const discoveredGroups = {};
+    for (const dependencyName of Object.keys(dependencies)) {
+        let dependencyRoot;
+        try {
+            dependencyRoot = resolveDependencyPackageRoot(dependencyName);
+        } catch {
+            console.error(`  WARNING: Could not resolve dependency ${dependencyName}, skipping`);
+            continue;
+        }
+        const dependencyPackageJson = JSON.parse(
+            readFileSync(join(dependencyRoot, 'package.json'), 'utf8')
+        );
+        const groupName = dependencyPackageJson.claudeDevEnv?.groupName
+            || dependencyName.replace(/^@[^/]+\//, '');
+        const group = {
+            description: dependencyPackageJson.description || dependencyName,
+            packageRoot: dependencyRoot,
+        };
+        const skillsDirectory = join(dependencyRoot, 'skills');
+        if (existsSync(skillsDirectory)) {
+            group.skills = readdirSync(skillsDirectory, { withFileTypes: true })
+                .filter(entry => entry.isDirectory())
+                .map(entry => entry.name);
+        }
+        const hooksDirectory = join(dependencyRoot, 'hooks');
+        if (existsSync(hooksDirectory)) {
+            const hookFiles = collectFiles(hooksDirectory)
+                .filter(file => !file.endsWith('hooks.json'))
+                .filter(file => {
+                    const baseName = file.replace(/\\/g, '/').split('/').pop();
+                    return !baseName.startsWith('test_');
+                })
+                .map(file => relative(hooksDirectory, file).replace(/\\/g, '/'));
+            if (hookFiles.length > 0) {
+                group.includeHookFiles = hookFiles;
+            }
+        }
+        const rulesDirectory = join(dependencyRoot, 'rules');
+        if (existsSync(rulesDirectory)) {
+            const ruleFiles = readdirSync(rulesDirectory)
+                .filter(file => file.endsWith('.md'));
+            if (ruleFiles.length > 0) {
+                group.includeRules = ruleFiles;
+            }
+        }
+        discoveredGroups[groupName] = group;
+    }
+    return discoveredGroups;
+}
 
 const INSTALL_GROUPS = {
     core: {
@@ -25,18 +88,6 @@ const INSTALL_GROUPS = {
         includeDirectories: ['rules', 'docs', 'commands', 'agents'],
         includeAllHooks: true,
     },
-    prompts: {
-        description: 'Prompt engineering tools',
-        skills: ['prompt-generator', 'agent-prompt'],
-        includeHookFiles: [
-            'blocking/prompt_workflow_gate_config.py',
-            'blocking/prompt_workflow_gate_core.py',
-            'blocking/prompt_workflow_validate.py',
-            'blocking/prompt_workflow_clipboard.py',
-            'HOOK_SPECS_PROMPT_WORKFLOW.md',
-        ],
-        includeRules: ['prompt-workflow-context-controls.md'],
-    },
     journal: {
         description: 'Session logging and memory',
         skills: ['dream', 'session-log', 'session-tidy'],
@@ -45,6 +96,7 @@ const INSTALL_GROUPS = {
         description: 'Deep research and citation tools',
         skills: ['deep-research', 'research-mode'],
     },
+    ...discoverDependencyGroups(),
 };
 
 function detectPython() {
@@ -100,8 +152,8 @@ function copyTree(sourceBase, destBase) {
     return stats;
 }
 
-function mergeHooks(pythonCommand) {
-    const hooksJsonPath = join(PACKAGE_ROOT, 'hooks', 'hooks.json');
+function mergeHooks(hooksSourceRoot, pythonCommand) {
+    const hooksJsonPath = join(hooksSourceRoot, 'hooks', 'hooks.json');
     if (!existsSync(hooksJsonPath)) return 0;
     const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
     const settingsPath = join(CLAUDE_HOME, 'settings.json');
@@ -164,21 +216,34 @@ function install(selectedGroups) {
     console.log(`  Python: ${pythonCommand}`);
     mkdirSync(CLAUDE_HOME, { recursive: true });
 
+    const activeGroups = selectedGroups
+        ? selectedGroups.map(groupName => ({ groupName, ...INSTALL_GROUPS[groupName] }))
+        : Object.entries(INSTALL_GROUPS).map(([groupName, group]) => ({ groupName, ...group }));
+
     const allowedSkills = selectedGroups
-        ? new Set(selectedGroups.flatMap(groupName => INSTALL_GROUPS[groupName].skills || []))
+        ? new Set(activeGroups.flatMap(group => group.skills || []))
         : null;
     const allowedDirectories = selectedGroups
-        ? new Set(selectedGroups.flatMap(groupName => INSTALL_GROUPS[groupName].includeDirectories || []))
+        ? new Set(activeGroups.flatMap(group => group.includeDirectories || []))
         : null;
     const shouldInstallAllHooks = selectedGroups
-        ? selectedGroups.some(groupName => INSTALL_GROUPS[groupName].includeAllHooks)
+        ? activeGroups.some(group => group.includeAllHooks)
         : true;
     const allowedHookFiles = selectedGroups
-        ? new Set(selectedGroups.flatMap(groupName => INSTALL_GROUPS[groupName].includeHookFiles || []))
+        ? new Set(activeGroups.flatMap(group => group.includeHookFiles || []))
         : null;
     const allowedRules = selectedGroups
-        ? new Set(selectedGroups.flatMap(groupName => INSTALL_GROUPS[groupName].includeRules || []))
+        ? new Set(activeGroups.flatMap(group => group.includeRules || []))
         : null;
+
+    const dependencyRoots = [...new Set(
+        activeGroups.filter(group => group.packageRoot).map(group => group.packageRoot)
+    )];
+    const builtinGroupsActive = activeGroups.some(group => !group.packageRoot);
+    const allSourceRoots = [
+        ...(builtinGroupsActive ? [PACKAGE_ROOT] : []),
+        ...dependencyRoots,
+    ];
 
     const allInstalledFiles = [];
     const summary = {};
@@ -186,36 +251,50 @@ function install(selectedGroups) {
         const hasFullAccess = !allowedDirectories || allowedDirectories.has(directory);
         const hasPartialRules = directory === 'rules' && allowedRules && allowedRules.size > 0;
         if (!hasFullAccess && !hasPartialRules) continue;
-        const sourceDir = join(PACKAGE_ROOT, directory);
-        if (!existsSync(sourceDir)) continue;
-        const destDir = join(CLAUDE_HOME, directory);
-        if (hasFullAccess) {
-            const stats = copyTree(sourceDir, destDir);
-            summary[directory] = stats;
-            allInstalledFiles.push(...stats.paths);
-        } else if (hasPartialRules) {
-            let rulesCreated = 0;
-            let rulesUpdated = 0;
-            for (const ruleFile of allowedRules) {
-                const sourcePath = join(sourceDir, ruleFile);
-                if (!existsSync(sourcePath)) continue;
-                const destPath = join(destDir, ruleFile);
-                mkdirSync(dirname(destPath), { recursive: true });
-                const existed = existsSync(destPath);
-                copyFileSync(sourcePath, destPath);
-                allInstalledFiles.push(destPath);
-                if (existed) { rulesUpdated++; } else { rulesCreated++; }
-                console.log(`  ${existed ? '\u21bb' : '\u2713'} ${join(directory, ruleFile)} (${existed ? 'updated' : 'new'})`);
+        for (const sourceRoot of allSourceRoots) {
+            const sourceDir = join(sourceRoot, directory);
+            if (!existsSync(sourceDir)) continue;
+            const destDir = join(CLAUDE_HOME, directory);
+            if (hasFullAccess) {
+                const stats = copyTree(sourceDir, destDir);
+                if (!summary[directory]) {
+                    summary[directory] = stats;
+                } else {
+                    summary[directory].created += stats.created;
+                    summary[directory].updated += stats.updated;
+                    summary[directory].paths.push(...stats.paths);
+                }
+                allInstalledFiles.push(...stats.paths);
+            } else if (hasPartialRules) {
+                let rulesCreated = 0;
+                let rulesUpdated = 0;
+                for (const ruleFile of allowedRules) {
+                    const sourcePath = join(sourceDir, ruleFile);
+                    if (!existsSync(sourcePath)) continue;
+                    const destPath = join(destDir, ruleFile);
+                    mkdirSync(dirname(destPath), { recursive: true });
+                    const existed = existsSync(destPath);
+                    copyFileSync(sourcePath, destPath);
+                    allInstalledFiles.push(destPath);
+                    if (existed) { rulesUpdated++; } else { rulesCreated++; }
+                    console.log(`  ${existed ? '\u21bb' : '\u2713'} ${join(directory, ruleFile)} (${existed ? 'updated' : 'new'})`);
+                }
+                if (!summary[directory]) {
+                    summary[directory] = { created: rulesCreated, updated: rulesUpdated, paths: [] };
+                } else {
+                    summary[directory].created += rulesCreated;
+                    summary[directory].updated += rulesUpdated;
+                }
             }
-            summary[directory] = { created: rulesCreated, updated: rulesUpdated, paths: [] };
         }
     }
-    const skillsSource = join(PACKAGE_ROOT, 'skills');
-    if (existsSync(skillsSource)) {
+    let skillsCreated = 0;
+    let skillsUpdated = 0;
+    const skillPaths = [];
+    for (const sourceRoot of allSourceRoots) {
+        const skillsSource = join(sourceRoot, 'skills');
+        if (!existsSync(skillsSource)) continue;
         const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
-        let skillsCreated = 0;
-        let skillsUpdated = 0;
-        const skillPaths = [];
         for (const skillDir of skillDirs) {
             if (allowedSkills && !allowedSkills.has(skillDir.name)) continue;
             const stats = copyTree(join(skillsSource, skillDir.name), join(CLAUDE_HOME, 'skills', skillDir.name));
@@ -223,13 +302,17 @@ function install(selectedGroups) {
             skillsUpdated += stats.updated;
             skillPaths.push(...stats.paths);
         }
-        summary.skills = { created: skillsCreated, updated: skillsUpdated, paths: skillPaths };
-        allInstalledFiles.push(...skillPaths);
     }
+    summary.skills = { created: skillsCreated, updated: skillsUpdated, paths: skillPaths };
+    allInstalledFiles.push(...skillPaths);
     const shouldInstallAnyHooks = shouldInstallAllHooks || (allowedHookFiles && allowedHookFiles.size > 0);
     if (shouldInstallAnyHooks) {
-        const hooksSource = join(PACKAGE_ROOT, 'hooks');
-        if (existsSync(hooksSource)) {
+        let totalHooksCreated = 0;
+        let totalHooksUpdated = 0;
+        let totalHookGroups = 0;
+        for (const sourceRoot of allSourceRoots) {
+            const hooksSource = join(sourceRoot, 'hooks');
+            if (!existsSync(hooksSource)) continue;
             const hooksDestination = join(CLAUDE_HOME, 'hooks');
             const filesToCopy = collectFiles(hooksSource)
                 .filter(file => !file.endsWith('hooks.json'))
@@ -238,8 +321,6 @@ function install(selectedGroups) {
                     const relativePath = relative(hooksSource, file).replace(/\\/g, '/');
                     return allowedHookFiles.has(relativePath);
                 });
-            let hooksCreated = 0;
-            let hooksUpdated = 0;
             for (const sourceFile of filesToCopy) {
                 const relativePath = relative(hooksSource, sourceFile);
                 const destFile = join(hooksDestination, relativePath);
@@ -247,14 +328,15 @@ function install(selectedGroups) {
                 const existed = existsSync(destFile);
                 copyFileSync(sourceFile, destFile);
                 allInstalledFiles.push(destFile);
-                if (existed) { hooksUpdated++; } else { hooksCreated++; }
+                if (existed) { totalHooksUpdated++; } else { totalHooksCreated++; }
             }
-            summary.hookFiles = { created: hooksCreated, updated: hooksUpdated };
-            console.log(`  Hook files: ${hooksCreated} new, ${hooksUpdated} updated`);
-            const groupCount = mergeHooks(pythonCommand);
-            summary.hookGroups = groupCount;
-            console.log(`  Hook groups: ${groupCount} merged into settings.json`);
+            const groupCount = mergeHooks(sourceRoot, pythonCommand);
+            totalHookGroups += groupCount;
         }
+        summary.hookFiles = { created: totalHooksCreated, updated: totalHooksUpdated };
+        console.log(`  Hook files: ${totalHooksCreated} new, ${totalHooksUpdated} updated`);
+        summary.hookGroups = totalHookGroups;
+        console.log(`  Hook groups: ${totalHookGroups} merged into settings.json`);
     }
     writeManifest(allInstalledFiles);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
@@ -331,14 +413,14 @@ Usage:
   npx ${PACKAGE_NAME} --help       Show this help
 
 Groups:
-  core      Development standards, hooks, agents, commands
-  prompts   Prompt engineering tools
-  journal   Session logging and memory
-  research  Deep research and citation tools
+  core              Development standards, hooks, agents, commands
+  prompt-generator  Prompt engineering tools
+  journal           Session logging and memory
+  research          Deep research and citation tools
 
 Examples:
-  npx ${PACKAGE_NAME} --only prompts
-  npx ${PACKAGE_NAME} --only prompts,research
+  npx ${PACKAGE_NAME} --only prompt-generator
+  npx ${PACKAGE_NAME} --only prompt-generator,research
 
 Install location: ~/.claude/
 `);
