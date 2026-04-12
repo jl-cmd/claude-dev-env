@@ -8,7 +8,10 @@ import sys
 from content_search_zoekt_bash_block_reason import block_reason_for_bash_command
 from content_search_zoekt_block_payload import build_block_payload
 from content_search_zoekt_indexed_paths import is_in_indexed_repo, is_specific_file
-from content_search_zoekt_redirect_guidance import get_zoekt_redirect_guidance
+from content_search_zoekt_redirect_guidance import (
+    get_zoekt_redirect_guidance,
+    get_zoekt_redirect_reason_brief,
+)
 
 
 def main() -> None:
@@ -45,7 +48,8 @@ def main() -> None:
     short_label = f"blocked {block_reason}; use Zoekt MCP"
     payload = build_block_payload(
         brief_label=short_label,
-        permission_decision_reason=get_zoekt_redirect_guidance(),
+        permission_decision_reason=get_zoekt_redirect_reason_brief(),
+        additional_context=get_zoekt_redirect_guidance(),
     )
     print(json.dumps(payload))
     sys.exit(0)

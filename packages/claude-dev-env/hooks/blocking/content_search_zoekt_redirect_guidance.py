@@ -1,4 +1,10 @@
-"""Zoekt MCP usage and repo-to-disk path mapping for PreToolUse permissionDecisionReason."""
+"""Zoekt MCP usage and repo-to-disk path mapping for PreToolUse outputs."""
+
+
+def get_zoekt_redirect_reason_brief() -> str:
+    return (
+        "Use Zoekt MCP (e.g. mcp__zoekt__search) instead of Grep/Search in Zoekt-indexed trees."
+    )
 
 
 def get_zoekt_redirect_guidance() -> str:
