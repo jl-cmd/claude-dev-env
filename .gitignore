@@ -9,6 +9,12 @@ __pycache__/
 # Local tooling state
 .serena/
 
+.planning/
+_npv/
+
+/docs/references/bdd in action.pdf
+**/bdd in action.pdf
+
 # Eval artifacts
 eval*
 eval_*
