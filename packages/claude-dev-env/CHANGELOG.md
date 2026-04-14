@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.19.1...claude-dev-env-v1.19.2) (2026-04-14)
+
+
+### Bug Fixes
+
+* **claude-dev-env:** convert 400-line file cap from blocking to advisory ([#101](https://github.com/jl-cmd/claude-code-config/issues/101)) ([8b2dddc](https://github.com/jl-cmd/claude-code-config/commit/8b2dddc11273c145732b4f00ccf7e4649f9c007c))
+
 ## [1.19.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.19.0...claude-dev-env-v1.19.1) (2026-04-12)
 
 
