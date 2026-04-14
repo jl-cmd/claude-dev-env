@@ -2,15 +2,17 @@
 """
 CODE_RULES.md enforcer - blocks code that violates mandatory rules.
 
-Checks (all blocking):
+Checks (blocking):
 1. No comments (# or // in code, excluding shebangs/type: ignore)
 2. Imports at top (no imports inside functions)
 3. Logging f-strings (log_* calls must use format args)
-4. File line count (>400 blocks)
-5. Windows API None (win32gui calls with None parameter)
-6. Magic values (literals in function bodies)
-7. E2E test naming (no online/offline in test names)
-8. Constants outside config (UPPER_SNAKE = in non-config files)
+4. Windows API None (win32gui calls with None parameter)
+5. Magic values (literals in function bodies)
+6. E2E test naming (no online/offline in test names)
+7. Constants outside config (UPPER_SNAKE = in non-config files)
+
+Advisory only (non-blocking):
+- File line count: stderr warning at 400 lines (soft) and 1000 lines (hard)
 """
 import json
 import re
@@ -26,6 +28,9 @@ TEST_PATH_PATTERNS = {"test_", "_test.", ".spec.", "conftest", "/tests/", "\\tes
 HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\.claude/hooks/"}
 WORKFLOW_REGISTRY_PATTERNS = {"/workflow/", "\\workflow\\", "_tab.py", "/states.py", "\\states.py", "/modules.py", "\\modules.py"}
 MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
+
+ADVISORY_LINE_THRESHOLD_SOFT = 400
+ADVISORY_LINE_THRESHOLD_HARD = 1000
 
 
 def get_file_extension(file_path: str) -> str:
@@ -308,12 +313,27 @@ def check_logging_fstrings(content: str) -> list[str]:
     return issues
 
 
-def check_file_line_count(content: str) -> list[str]:
-    """Check file line count."""
-    line_count = content.count("\n") + 1
-    if line_count > 400:
-        return [f"File has {line_count} lines (max 400) - split into smaller modules"]
-    return []
+def advise_file_line_count(content: str, file_path: str) -> None:
+    """Emit non-blocking stderr advisories when a file crosses size smell thresholds.
+
+    Thresholds are smell signals, not hard caps. See CODE_RULES.md "File length guidance"
+    for rationale. Soft threshold aligns with Clean Code Ch. 5 / Fowler "Large Class".
+    Hard threshold matches pylint default max-module-lines and SonarQube S104 default.
+    """
+    line_count = len(content.splitlines())
+    if line_count >= ADVISORY_LINE_THRESHOLD_HARD:
+        print(
+            f"[CODE_RULES advisory] {file_path}: {line_count} lines - "
+            f"exceeds pylint/SonarQube default ({ADVISORY_LINE_THRESHOLD_HARD}); "
+            f"strongly consider splitting by responsibility (SRP / cohesion)",
+            file=sys.stderr,
+        )
+    elif line_count >= ADVISORY_LINE_THRESHOLD_SOFT:
+        print(
+            f"[CODE_RULES advisory] {file_path}: {line_count} lines - "
+            f"consider splitting (Clean Code Ch. 5; Fowler 'Large Class' smell)",
+            file=sys.stderr,
+        )
 
 
 def check_windows_api_none(content: str) -> list[str]:
@@ -485,7 +505,7 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_e2e_test_naming(content, file_path))
 
     if extension in ALL_CODE_EXTENSIONS:
-        all_issues.extend(check_file_line_count(content))
+        advise_file_line_count(content, file_path)
 
     return all_issues
 

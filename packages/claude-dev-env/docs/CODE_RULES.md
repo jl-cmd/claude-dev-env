@@ -44,7 +44,7 @@ These rules are automatically enforced by `code-rules-enforcer.py`. Violations b
 | No NEW comments | `#` / `//` in new code only (existing comments NEVER removed; shebangs, type:, noqa, eslint, docstrings exempt) |
 | Imports at top | No `import` inside function bodies |
 | Logging format args | No `log_*(f"...")` - use `log_*("...", arg)` |
-| File line count | Max 400 lines per file |
+| File line count | Advisory only — see [File length guidance](#65-file-length-guidance) |
 | Magic values | No literals in function bodies (0, 1, -1 exempt). Includes string templates — if you strip the interpolations from an f-string and the remaining literal text is structural (paths, URLs, patterns), those fragments are magic values that belong in config |
 | Constants location | No `UPPER_SNAKE =` outside `config/` |
 
@@ -121,6 +121,28 @@ def function_name(
 
 ---
 
+## 6.5 FILE LENGTH GUIDANCE
+
+File length is a **smell signal, not a hard threshold**. Long files often hide multiple responsibilities, but legitimately long files exist (migrations, generated code, registries, fixtures). The hook surfaces advisories instead of blocking.
+
+**Two advisory thresholds (non-blocking, stderr only):**
+
+| Threshold | Source basis | Hook behavior |
+|-----------|--------------|---------------|
+| `>= 400` lines | Robert C. Martin, *Clean Code* (2008), Ch. 5 "Formatting" — small files preferred; Martin Fowler, *Refactoring* — "Large Class" code smell | Soft advisory: "consider splitting" |
+| `>= 1000` lines | pylint default `max-module-lines=1000`; SonarQube rule S104 default `1000` | Strong nudge: "exceeds widely-used static-analysis defaults" |
+
+**What we deliberately reject:**
+
+- **Hard numeric blocks** — Google's Python Style Guide imposes no file-length cap (only a ~40-line function review hint at https://google.github.io/styleguide/pyguide.html). A blocking rule produces false positives on legitimate cases.
+- **A single magic number** — Different sources land at 200 (*Clean Code* preference), 750 (some SonarQube language profiles), or 1000 (pylint, Sonar Java). No source justifies a single universal cap.
+
+**When to actually split:**
+
+The size signal matters *because* of what it usually indicates: multiple responsibilities (Single Responsibility Principle — Robert C. Martin, *Agile Software Development*, 2002), poor cohesion (Steve McConnell, *Code Complete 2e*, 2004, Ch. 5–6), or the "Large Class" / "Long Function" smells (Fowler). Use the readability rubric (`~/.claude/skills/readability-review/SKILL.md`) when an advisory fires — split based on cohesion, not line count.
+
+---
+
 ## 7. RIGHT-SIZED ENGINEERING
 
 **Simple > Clever. Functions > Classes. Concrete > Abstract.**
@@ -175,7 +197,7 @@ Hook will enforce:
 [⚡] No magic values
 [⚡] Imports at top
 [⚡] Logging format args
-[⚡] File under 400 lines
+[ ] File length reasonable (advisory at 400, strong nudge at 1000 — see §6.5)
 [⚡] Constants in config/
 
 Manual check:
