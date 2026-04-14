@@ -31,7 +31,7 @@ Review every change against these rules. Flag each violation with its rule name.
 - Flag `Any`, `any`, and `# type: ignore` when the diff lacks a justifying note.
 
 ## Structure
-- Flag files that exceed 400 lines after the change.
+- Flag files over 1000 lines; note files over 400 lines as a soft smell.
 - Flag functions longer than 30 lines.
 - Require exactly 1 blank line between top-level functions (project convention); flag 2-blank-line separators.
 - Require all `import` statements at the top of the file; flag imports inside function bodies.
