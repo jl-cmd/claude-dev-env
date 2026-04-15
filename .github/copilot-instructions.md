@@ -33,9 +33,9 @@ Review every change against these rules. Flag each violation with its rule name.
 ## Structure
 - Flag files over 1000 lines; note files over 400 lines as a soft smell.
 - Flag functions longer than 30 lines.
-- Require exactly 1 blank line between top-level functions (project convention); flag 2-blank-line separators.
+- Require top-level function spacing to follow the language and existing file convention; for Python, require the standard 2 blank lines between top-level functions, and do not flag 1-vs-2 blank-line differences in other file types unless the surrounding file clearly establishes a convention.
 - Require all `import` statements at the top of the file; flag imports inside function bodies.
-- Require logging calls for production output; flag `print()` in production code.
+- Require logging calls for application/runtime output; flag `print()` there, but allow `print()` in hook entrypoints and CLI tools when stdout is the integration contract (for example `print(json.dumps(...))`).
 - Require `%`-style arguments inside `log_*` / `logger.*` calls (`logger.info("msg %s", value)`); flag f-strings inside logging calls.
 
 ## Design
@@ -47,7 +47,7 @@ Review every change against these rules. Flag each violation with its rule name.
 - Require a `TODO:` comment on scaffolding or placeholder code explaining what replaces it and why.
 
 ## Tests
-- Require a paired test in the same PR for every new production code path (TDD).
+- Require a paired test in the same PR for every new production code path (BDD: agree behaviors first, then failing specification before production code).
 - Require mocks to include every field the code under test reads; flag partial mocks.
 - Flag tests that only assert a constant equals itself or that a symbol exists.
 

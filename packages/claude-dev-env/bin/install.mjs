@@ -13,7 +13,7 @@ const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
 const PACKAGE_NAME = 'claude-dev-env';
 const packageRequire = createRequire(import.meta.url);
 
-const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents'];
+const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts'];
 
 function resolveDependencyPackageRoot(dependencyPackageName) {
     const dependencyPackageJsonPath = packageRequire.resolve(
@@ -150,6 +150,23 @@ function copyTree(sourceBase, destBase) {
         }
     }
     return stats;
+}
+
+/**
+ * If destPath exists and differs from incomingPath, copy the existing file to
+ * ~/.claude/backups/CLAUDE.md.<timestamp>.bak before the installer overwrites it.
+ */
+function backupClaudeHubBeforeOverwrite(destPath, incomingPath) {
+    if (!existsSync(destPath)) return null;
+    const existingBytes = readFileSync(destPath);
+    const incomingBytes = readFileSync(incomingPath);
+    if (existingBytes.equals(incomingBytes)) return null;
+    const backupsDir = join(CLAUDE_HOME, 'backups');
+    mkdirSync(backupsDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = join(backupsDir, `CLAUDE.md.${stamp}.bak`);
+    copyFileSync(destPath, backupPath);
+    return backupPath;
 }
 
 function mergeHooks(hooksSourceRoot, pythonCommand) {
@@ -338,6 +355,19 @@ function install(selectedGroups) {
         summary.hookGroups = totalHookGroups;
         console.log(`  Hook groups: ${totalHookGroups} merged into settings.json`);
     }
+    const claudeHubSource = join(PACKAGE_ROOT, 'CLAUDE.md');
+    if (existsSync(claudeHubSource)) {
+        const claudeHubDest = join(CLAUDE_HOME, 'CLAUDE.md');
+        const backupPath = backupClaudeHubBeforeOverwrite(claudeHubDest, claudeHubSource);
+        if (backupPath) {
+            console.log(
+                `  \u21bb ${relative(CLAUDE_HOME, backupPath)} (previous CLAUDE.md hub preserved)`
+            );
+        }
+        copyFileSync(claudeHubSource, claudeHubDest);
+        allInstalledFiles.push(claudeHubDest);
+        console.log(`  \u2713 ${relative(CLAUDE_HOME, claudeHubDest)} (hub)`);
+    }
     writeManifest(allInstalledFiles);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {
@@ -423,6 +453,9 @@ Examples:
   npx ${PACKAGE_NAME} --only prompt-generator,research
 
 Install location: ~/.claude/
+
+If ~/.claude/CLAUDE.md already exists and differs from the package copy, the installer
+writes the previous contents to ~/.claude/backups/CLAUDE.md.<timestamp>.bak first.
 `);
 }
 

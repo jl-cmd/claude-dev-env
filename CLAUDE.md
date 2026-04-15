@@ -8,15 +8,16 @@ This is an npm workspaces monorepo with three packages in `packages/`:
 - `packages/claude-journal/` -- journal skills: dream, session-log, session-tidy
 - `packages/claude-deep-research/` -- research skills and agent: deep-research, research-mode
 
-The main installer (`packages/claude-dev-env/bin/install.mjs`) discovers and installs content from workspace siblings and npm dependencies. Each package also has a standalone installer for independent use. Additional external plugins: claude-workflow, GSD (npx get-shit-done-cc).
+The main installer (`packages/claude-dev-env/bin/install.mjs`) discovers and installs content from workspace siblings and npm dependencies. Each package also has a standalone installer for independent use. Additional external plugins: claude-workflow, GSD (npx get-shit-done-cc). When the installer updates `~/.claude/CLAUDE.md`, any existing hub file that differs from the package copy is saved first under `~/.claude/backups/CLAUDE.md.<timestamp>.bak`.
 
 The prompt-generator skill, the agent-prompt skill, and the prompt-workflow blocking hooks live in the standalone @jl-cmd/prompt-generator package — claude-dev-env declares it as a runtime dependency and installs it transparently.
 
 ## Docs
 
-Reference documents in `packages/claude-dev-env/docs/` are available but not auto-loaded. Skills can `@` import them as needed.
+Reference documents in `packages/claude-dev-env/docs/` are available but not auto-loaded. Skills can `@` import them as needed. Canonical text for several policies lives in `packages/claude-dev-env/system-prompts/software-engineer.xml` (for example `<code_quality>` and `<behavior_protocol>`); the installer copies that file to `~/.claude/system-prompts/`. Shipped `docs/CODE_RULES.md` and many `rules/*.md` files are one-line pointers into that XML (see JonEcho/llm-settings PR 17 for the consolidation pattern).
 
-- `packages/claude-dev-env/docs/CODE_RULES.md` -- hook-enforced code standards
+- `packages/claude-dev-env/system-prompts/software-engineer.xml` -- canonical system prompt sections for Claude Code
+- `packages/claude-dev-env/docs/CODE_RULES.md` -- pointer to `<code_quality>` (hook-enforced standards live in the XML)
 - `packages/claude-dev-env/docs/TEST_QUALITY.md` -- testing quality guidelines
 - `packages/claude-dev-env/docs/emotion-informed-prompt-design.md` -- emotion-informed prompt design (Anthropic research + best practices)
 - `packages/claude-dev-env/docs/REACT_PATTERNS.md` -- React patterns

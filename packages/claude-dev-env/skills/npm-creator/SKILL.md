@@ -74,8 +74,8 @@ For each detected directory from Step 1:
 - Copy files from package to CLAUDE_HOME, preserving directory structure
 - For skills/, copy recursively (each skill is a subdirectory)
 - For each file, log with status icon:
-  - New file: `  ✓ rules/tdd.md (new)`
-  - Existing file: `  ↻ rules/tdd.md (updated)`
+  - New file: `  ✓ rules/bdd.md (new)`
+  - Existing file: `  ↻ rules/bdd.md (updated)`
 
 If CLAUDE.md generation is enabled:
 - Concatenate all rules/*.md under `# Project Rules (from <package-name> plugin)`
@@ -112,7 +112,7 @@ Installed <package-name>:
 
 **Uninstall mode (`--uninstall` flag):**
 - Remove only files matching the package's file list (never delete user-created files)
-- Log each removal: `  ✗ rules/tdd.md (removed)`
+- Log each removal: `  ✗ rules/bdd.md (removed)`
 - Remove hook entries from settings.json by matching command paths
 - Remove generated CLAUDE.md if it exists
 - Print removal summary
