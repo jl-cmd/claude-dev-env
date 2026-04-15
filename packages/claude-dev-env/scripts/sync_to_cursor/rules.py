@@ -36,7 +36,7 @@ def _limit_lines(text: str, max_lines: int) -> str:
         "\n".join(lines[:max_lines])
         + "\n\n_(Truncated for Cursor rule length; see the synced reference in `.cursor/docs/` "
         "(`CODE_RULES.md` or `TEST_QUALITY.md` as applicable) and follow its canonical source "
-        "under `~/.claude/docs` when needed.)_"
+        "under `~/.claude/system-prompts/software-engineer.xml` when needed.)_"
     )
 
 
@@ -191,9 +191,11 @@ class RuleMapping:
 
 
 def _frontmatter(description: str, always_apply: bool, globs: str | None) -> str:
-    lines = ["---", f"description: {description}"]
+    escaped_description = description.replace('"', '\\"')
+    lines = ["---", f'description: "{escaped_description}"']
     if globs:
-        lines.append(f"globs: {globs}")
+        escaped_globs = globs.replace('"', '\\"')
+        lines.append(f'globs: "{escaped_globs}"')
     lines.append(f"alwaysApply: {'true' if always_apply else 'false'}")
     lines.append("---")
     return "\n".join(lines) + "\n"

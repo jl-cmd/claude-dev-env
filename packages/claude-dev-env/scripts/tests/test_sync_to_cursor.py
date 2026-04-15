@@ -49,7 +49,7 @@ def test_limit_lines_footer_mentions_cursor_docs() -> None:
     out = mod._limit_lines(long_body, mod.MAX_RULE_BODY_LINES)
     assert ".cursor/docs" in out
     assert "synced reference" in out
-    assert "~/.claude/docs" in out
+    assert "~/.claude/system-prompts/software-engineer.xml" in out
 
 
 def test_sync_canonical_docs_copies_byte_identical(tmp_path: Path) -> None:
@@ -192,7 +192,6 @@ def test_check_skips_optional_mapping_when_source_missing(tmp_path: Path) -> Non
         check=True,
         cwd=str(_SCRIPTS_DIR),
     )
-    # Remove an optional source (tasklings-preferences has always_apply=False)
     (claude / "rules" / "tasklings-preferences.md").unlink()
     subprocess_result = subprocess.run(
         [sys.executable, str(_SYNC_SCRIPT), "--check"],
