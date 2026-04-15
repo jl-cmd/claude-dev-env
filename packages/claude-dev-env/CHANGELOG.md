@@ -121,6 +121,10 @@
   Rollback: revert this commit and pin @jl-cmd/prompt-generator below 1.0.0 in
   package.json to restore in-tree copies.
 
+### Documentation
+
+* Documentation aligned with extraction: top-level CLAUDE.md, top-level README.md, and the GitHub issue-redirect template now describe @jl-cmd/prompt-generator as the source of the prompt-generator surface.
+
 ## [1.17.5](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.17.4...claude-dev-env-v1.17.5) (2026-04-12)
 
 

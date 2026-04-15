@@ -62,8 +62,8 @@ The feedback loop: observe Claude B's behavior, bring insights back, refine the 
 
 When building a **new** skill as a **full package** (architecture inventory, progressive disclosure files, `evals/`, **human checkpoint after each file**), treat the following as **mandatory** before implementation:
 
-- **Read:** `prompt-generator/templates/skill-from-ground-up.md` inside the claude-dev-env `skills/` directory (repository path: `packages/claude-dev-env/skills/prompt-generator/templates/skill-from-ground-up.md`).
-- **Do:** Run `/prompt-generator` with that file’s token table filled so the downstream session follows architecture-first sequencing, per-file review gates, and eval rows tied only to user-pasted or explicitly approved evidence.
+- **Read:** the installed `@jl-cmd/prompt-generator` template `prompt-generator/templates/skill-from-ground-up.md` (upstream repository path: `skills/prompt-generator/templates/skill-from-ground-up.md` in [jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
+- **Do:** Run `/prompt-generator` using that installed template with the file’s token table filled so the downstream session follows architecture-first sequencing, per-file review gates, and eval rows tied only to user-pasted or explicitly approved evidence.
 
 Use this **together with** gap-analysis and eval-scenario templates in this package; the ground-up template supplies the **orchestration contract** for the multi-file layout Anthropic recommends.
 
@@ -71,7 +71,7 @@ Use this **together with** gap-analysis and eval-scenario templates in this pack
 
 When **improving** an existing skill as a **multi-file** or **checkpointed** package (baseline directory plus planned deltas, observation-grounded evals), treat the following as **mandatory** before Phase 2–6 file work in `improve-skill.md` or package-aware steps in `polish-skill.md`:
 
-- **Read:** `prompt-generator/templates/skill-refinement-package.md` (repository path: `packages/claude-dev-env/skills/prompt-generator/templates/skill-refinement-package.md`).
+- **Read:** `prompt-generator/templates/skill-refinement-package.md` (repository path: `skills/prompt-generator/templates/skill-refinement-package.md` in [jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
 - **Do:** Run `/prompt-generator` with that file’s token table filled (`[[BASELINE_SKILL_ROOT]]`, `[[WORKSPACE_ROOT]]`, observation gap path, evidence rule) so rollout stays architecture-first, delta-focused, and tied to real observation or approved excerpts.
 
 Net-new packages without a baseline skill directory use `skill-from-ground-up.md` instead.
