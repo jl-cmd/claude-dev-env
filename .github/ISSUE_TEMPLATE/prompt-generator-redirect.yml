@@ -1,5 +1,5 @@
 name: "Report a prompt-generator bug (redirect)"
-description: "Bugs, feature requests, and PRs for prompt-generator, agent-prompt, prompt-workflow hooks, or @jl-cmd/prompt-generator belong in jl-cmd/prompt-generator. This template redirects you there."
+description: "Bugs and feature requests for prompt-generator, agent-prompt, prompt-workflow hooks, or @jl-cmd/prompt-generator belong in jl-cmd/prompt-generator. This template redirects you there."
 title: "[redirect] "
 labels:
   - redirect
@@ -9,7 +9,7 @@ body:
     attributes:
       value: |
         This issue belongs in https://github.com/jl-cmd/prompt-generator/issues — please file it there.
-        The prompt-generator skill, the agent-prompt skill, and the prompt-workflow blocking hooks were extracted from this monorepo into the standalone @jl-cmd/prompt-generator package. claude-code-config no longer owns bug reports for those surfaces.
+        The prompt-generator skill, the agent-prompt skill, and the prompt-workflow blocking hooks live in the standalone @jl-cmd/prompt-generator package. Bug reports for those surfaces belong in jl-cmd/prompt-generator.
   - type: checkboxes
     attributes:
       label: Redirect acknowledgement
