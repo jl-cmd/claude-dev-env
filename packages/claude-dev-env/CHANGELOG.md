@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.19.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.19.2...claude-dev-env-v1.19.3) (2026-04-15)
+
+
+### Bug Fixes
+
+* address code review feedback on PR [#100](https://github.com/jl-cmd/claude-code-config/issues/100) ([33d336f](https://github.com/jl-cmd/claude-code-config/commit/33d336fa54814f0a5f0465fc64a6b0aae219288f))
+
+
+### Documentation
+
+* align with prompt-generator extraction and add issue redirect ([4d0a5ba](https://github.com/jl-cmd/claude-code-config/commit/4d0a5ba78cb504feafebc1e33267abbad4181cbc))
+
 ## [1.19.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.19.1...claude-dev-env-v1.19.2) (2026-04-14)
 
 
