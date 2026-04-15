@@ -142,6 +142,39 @@ def test_manifest_includes_docs_entries(tmp_path: Path) -> None:
     assert "output_hash" in de["docs/CODE_RULES.md"]
 
 
+def test_merge_code_standards_with_pointer_style_code_rules(tmp_path: Path) -> None:
+    mod = _load_sync_module()
+    rules_directory = tmp_path / "rules"
+    docs_directory = tmp_path / "docs"
+    rules_directory.mkdir(parents=True, exist_ok=True)
+    docs_directory.mkdir(parents=True, exist_ok=True)
+    (rules_directory / "code-standards.md").write_text(
+        "# Code standards stub\n\n- Use full words\n", encoding="utf-8"
+    )
+    (docs_directory / "CODE_RULES.md").write_text(
+        "# CODE_RULES pointer: canonical code-quality policy lives in"
+        " `~/.claude/system-prompts/software-engineer.xml` under `<code_quality>`.\n",
+        encoding="utf-8",
+    )
+    merged = mod.merge_code_standards(
+        (rules_directory / "code-standards.md", docs_directory / "CODE_RULES.md")
+    )
+    assert merged.strip(), "output must not be empty for pointer-style CODE_RULES.md"
+    assert mod.CODE_RULES_POINTER_FALLBACK in merged
+
+
+def test_sync_canonical_docs_deletes_stale_copy_when_source_removed(tmp_path: Path) -> None:
+    mod = _load_sync_module()
+    claude = tmp_path / ".claude"
+    cursor = tmp_path / ".cursor"
+    _minimal_code_rules_and_test_quality(claude / "docs")
+    mod._sync_canonical_docs(claude, cursor, dry_run=False, quiet=True)
+    assert (cursor / "docs" / "CODE_RULES.md").is_file()
+    (claude / "docs" / "CODE_RULES.md").unlink()
+    mod._sync_canonical_docs(claude, cursor, dry_run=False, quiet=True)
+    assert not (cursor / "docs" / "CODE_RULES.md").is_file()
+
+
 def test_merge_reference_headers_point_at_cursor_docs(tmp_path: Path) -> None:
     mod = _load_sync_module()
     rules_directory = tmp_path / "rules"
