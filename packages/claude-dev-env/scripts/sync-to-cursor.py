@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-GENERATOR_VERSION = "1.2.1"
+GENERATOR_VERSION = "1.2.2"
 
 CANONICAL_DOC_FILES: tuple[str, ...] = ("CODE_RULES.md", "TEST_QUALITY.md")
 MAX_RULE_BODY_LINES = 50
@@ -129,8 +129,9 @@ def _limit_lines(text: str, max_lines: int) -> str:
         return text
     return (
         "\n".join(lines[:max_lines])
-        + "\n\n_(Truncated for Cursor rule length; full text in `.cursor/docs/` — see "
-        "`CODE_RULES.md` or `TEST_QUALITY.md` as applicable; synced from `~/.claude/docs`.)_"
+        + "\n\n_(Truncated for Cursor rule length; see the synced reference in `.cursor/docs/` "
+        "(`CODE_RULES.md` or `TEST_QUALITY.md` as applicable) and follow its canonical source "
+        "under `~/.claude/docs` when needed.)_"
     )
 
 
@@ -151,12 +152,14 @@ def _strip_code_standards_blockquote(md: str) -> str:
 
 
 def merge_code_standards(sources: tuple[Path, ...]) -> str:
-    cs = _strip_code_standards_blockquote(sources[0].read_text(encoding="utf-8"))
-    cs = "\n".join(
-        ln for ln in cs.splitlines() if not ln.strip().startswith("- TDD ")
+    code_standards_markdown = _strip_code_standards_blockquote(
+        sources[0].read_text(encoding="utf-8")
     )
-    cr = sources[1].read_text(encoding="utf-8")
-    sec = _parse_h2_sections(cr)
+    code_standards_markdown = "\n".join(
+        ln for ln in code_standards_markdown.splitlines() if not ln.strip().startswith("- TDD ")
+    )
+    code_rules_markdown = sources[1].read_text(encoding="utf-8")
+    sections_by_heading = _parse_h2_sections(code_rules_markdown)
     include_order = [
         "COMMENT PRESERVATION (ABSOLUTE RULE)",
         "CORE PRINCIPLES",
@@ -166,9 +169,13 @@ def merge_code_standards(sources: tuple[Path, ...]) -> str:
         "6. COMPLETE TYPE HINTS",
         "9. SELF-CONTAINED COMPONENTS",
     ]
-    chunks = [cs, "", "## Reference (full text: `.cursor/docs/CODE_RULES.md`)"]
+    chunks = [
+        code_standards_markdown,
+        "",
+        "## Reference (full text: `.cursor/docs/CODE_RULES.md`)",
+    ]
     for title in include_order:
-        body = sec.get(title, "")
+        body = sections_by_heading.get(title, "")
         if title == "CORE PRINCIPLES":
             body = _filter_core_principles(body)
         if body:
@@ -179,8 +186,8 @@ def merge_code_standards(sources: tuple[Path, ...]) -> str:
 
 def merge_test_quality(sources: tuple[Path, ...]) -> str:
     testing = sources[0].read_text(encoding="utf-8").strip()
-    tq = sources[1].read_text(encoding="utf-8")
-    sec = _parse_h2_sections(tq)
+    test_quality_markdown = sources[1].read_text(encoding="utf-8")
+    sections_by_heading = _parse_h2_sections(test_quality_markdown)
     include_order = [
         "Delete Useless Tests",
         "Test Dependencies MUST FAIL",
@@ -190,7 +197,7 @@ def merge_test_quality(sources: tuple[Path, ...]) -> str:
     ]
     chunks = [testing, "", "## Reference (full text: `.cursor/docs/TEST_QUALITY.md`)"]
     for title in include_order:
-        body = sec.get(title, "")
+        body = sections_by_heading.get(title, "")
         if body:
             chunks.append(f"## {title}\n\n{body}")
     merged = "\n\n".join(chunks)
@@ -279,9 +286,7 @@ def _frontmatter(desc: str, always_apply: bool, globs: str | None) -> str:
     lines = ["---", f"description: {desc}"]
     if globs:
         lines.append(f"globs: {globs}")
-        lines.append("alwaysApply: false")
-    else:
-        lines.append("alwaysApply: true")
+    lines.append(f"alwaysApply: {'true' if always_apply else 'false'}")
     lines.append("---")
     return "\n".join(lines) + "\n"
 
@@ -291,12 +296,12 @@ def _full_mdc(mapping: RuleMapping, body: str) -> str:
 
 
 def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
-    r = claude / "rules"
-    d = claude / "docs"
+    rules_directory = claude / "rules"
+    docs_directory = claude / "docs"
     return (
         RuleMapping(
             "code-standards",
-            (r / "code-standards.md", d / "CODE_RULES.md"),
+            (rules_directory / "code-standards.md", docs_directory / "CODE_RULES.md"),
             "code-standards.mdc",
             True,
             None,
@@ -305,7 +310,7 @@ def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
         ),
         RuleMapping(
             "tasklings-preferences",
-            (r / "tasklings-preferences.md",),
+            (rules_directory / "tasklings-preferences.md",),
             "tasklings-preferences.mdc",
             False,
             r"Y:/Craft a Tale/Behavioral App/Project/**",
@@ -315,7 +320,7 @@ def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
         ),
         RuleMapping(
             "right-sized-engineering",
-            (r / "right-sized-engineering.md",),
+            (rules_directory / "right-sized-engineering.md",),
             "right-sized-engineering.mdc",
             True,
             None,
@@ -324,7 +329,7 @@ def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
         ),
         RuleMapping(
             "bdd",
-            (r / "bdd.md",),
+            (rules_directory / "bdd.md",),
             "bdd.mdc",
             True,
             None,
@@ -333,7 +338,7 @@ def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
         ),
         RuleMapping(
             "test-quality",
-            (r / "testing.md", d / "TEST_QUALITY.md"),
+            (rules_directory / "testing.md", docs_directory / "TEST_QUALITY.md"),
             "test-quality.mdc",
             False,
             TEST_GLOBS,
@@ -342,7 +347,7 @@ def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
         ),
         RuleMapping(
             "research-mode",
-            (r / "research-mode.md",),
+            (rules_directory / "research-mode.md",),
             "research-mode.mdc",
             True,
             None,
@@ -351,7 +356,7 @@ def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
         ),
         RuleMapping(
             "conservative-action",
-            (r / "conservative-action.md",),
+            (rules_directory / "conservative-action.md",),
             "conservative-action.mdc",
             True,
             None,
@@ -360,7 +365,7 @@ def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
         ),
         RuleMapping(
             "explore-thoroughly",
-            (r / "explore-thoroughly.md",),
+            (rules_directory / "explore-thoroughly.md",),
             "explore-thoroughly.mdc",
             True,
             None,
@@ -508,8 +513,6 @@ def main() -> int:
     ):
         print(f"SKIP     all {summary['skip']} rule(s) unchanged")
 
-    if args.check and stale_check:
-        return 1
     return 0
 
 

@@ -12,7 +12,7 @@ description: >-
 
 # BDD protocol (on-demand)
 
-The always-on sequence lives in `.claude/system-prompts/software-engineer.xml` under `<behavior_protocol>` (Deliberate Discovery → Illustrate → Formulate → Automate). This skill adds **depth** you load when you need algorithms, catalogs, or layout guidance.
+The always-on sequence lives in `~/.claude/system-prompts/software-engineer.xml` under `<behavior_protocol>` (Deliberate Discovery → Illustrate → Formulate → Automate). This skill adds **depth** you load when you need algorithms, catalogs, or layout guidance.
 
 ## When to use this skill
 

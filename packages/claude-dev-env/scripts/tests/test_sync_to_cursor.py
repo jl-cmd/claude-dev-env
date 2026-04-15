@@ -8,20 +8,19 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-
-import pytest
+import types
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 _SYNC_SCRIPT = _SCRIPTS_DIR / "sync-to-cursor.py"
 
 
-def _load_sync_module():
+def _load_sync_module() -> types.ModuleType:
     spec = importlib.util.spec_from_file_location("sync_to_cursor", _SYNC_SCRIPT)
     assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["sync_to_cursor"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    sync_module = importlib.util.module_from_spec(spec)
+    sys.modules["sync_to_cursor"] = sync_module
+    spec.loader.exec_module(sync_module)
+    return sync_module
 
 
 def _minimal_rule_files(claude_rules: Path) -> None:
@@ -55,7 +54,8 @@ def test_limit_lines_footer_mentions_cursor_docs() -> None:
     long_body = "\n".join(f"line {index}" for index in range(mod.MAX_RULE_BODY_LINES + 5))
     out = mod._limit_lines(long_body, mod.MAX_RULE_BODY_LINES)
     assert ".cursor/docs" in out
-    assert "full text in `.cursor/docs/`" in out
+    assert "synced reference" in out
+    assert "~/.claude/docs" in out
 
 
 def test_sync_canonical_docs_copies_byte_identical(tmp_path: Path) -> None:
@@ -93,12 +93,12 @@ def test_check_fails_when_doc_source_changes_without_resync(tmp_path: Path) -> N
         cwd=str(_SCRIPTS_DIR),
     )
     (claude / "docs" / "CODE_RULES.md").write_bytes(b"changed\n")
-    result = subprocess.run(
+    subprocess_result = subprocess.run(
         [sys.executable, str(_SYNC_SCRIPT), "--check"],
         env=env,
         cwd=str(_SCRIPTS_DIR),
     )
-    assert result.returncode != 0
+    assert subprocess_result.returncode != 0
 
 
 def test_check_passes_after_resync(tmp_path: Path) -> None:
@@ -113,12 +113,12 @@ def test_check_passes_after_resync(tmp_path: Path) -> None:
         check=True,
         cwd=str(_SCRIPTS_DIR),
     )
-    result = subprocess.run(
+    subprocess_result = subprocess.run(
         [sys.executable, str(_SYNC_SCRIPT), "--check"],
         env=env,
         cwd=str(_SCRIPTS_DIR),
     )
-    assert result.returncode == 0
+    assert subprocess_result.returncode == 0
 
 
 def test_manifest_includes_docs_entries(tmp_path: Path) -> None:
@@ -144,11 +144,11 @@ def test_manifest_includes_docs_entries(tmp_path: Path) -> None:
 
 def test_merge_reference_headers_point_at_cursor_docs(tmp_path: Path) -> None:
     mod = _load_sync_module()
-    r = tmp_path / "rules"
-    d = tmp_path / "docs"
-    r.mkdir(parents=True, exist_ok=True)
-    d.mkdir(parents=True, exist_ok=True)
-    (r / "code-standards.md").write_text("# CS\n", encoding="utf-8")
+    rules_directory = tmp_path / "rules"
+    docs_directory = tmp_path / "docs"
+    rules_directory.mkdir(parents=True, exist_ok=True)
+    docs_directory.mkdir(parents=True, exist_ok=True)
+    (rules_directory / "code-standards.md").write_text("# CS\n", encoding="utf-8")
     cr_body = "\n\n".join(
         f"## {t}\n\nbody"
         for t in [
@@ -161,11 +161,13 @@ def test_merge_reference_headers_point_at_cursor_docs(tmp_path: Path) -> None:
             "9. SELF-CONTAINED COMPONENTS",
         ]
     )
-    (d / "CODE_RULES.md").write_text(cr_body, encoding="utf-8")
-    merged = mod.merge_code_standards((r / "code-standards.md", d / "CODE_RULES.md"))
+    (docs_directory / "CODE_RULES.md").write_text(cr_body, encoding="utf-8")
+    merged = mod.merge_code_standards(
+        (rules_directory / "code-standards.md", docs_directory / "CODE_RULES.md")
+    )
     assert ".cursor/docs/CODE_RULES.md" in merged
 
-    (r / "testing.md").write_text("# T\n", encoding="utf-8")
+    (rules_directory / "testing.md").write_text("# T\n", encoding="utf-8")
     tq_body = "\n\n".join(
         f"## {t}\n\nbody"
         for t in [
@@ -176,6 +178,8 @@ def test_merge_reference_headers_point_at_cursor_docs(tmp_path: Path) -> None:
             "Test File Organization",
         ]
     )
-    (d / "TEST_QUALITY.md").write_text(tq_body, encoding="utf-8")
-    merged_tq = mod.merge_test_quality((r / "testing.md", d / "TEST_QUALITY.md"))
+    (docs_directory / "TEST_QUALITY.md").write_text(tq_body, encoding="utf-8")
+    merged_tq = mod.merge_test_quality(
+        (rules_directory / "testing.md", docs_directory / "TEST_QUALITY.md")
+    )
     assert ".cursor/docs/TEST_QUALITY.md" in merged_tq

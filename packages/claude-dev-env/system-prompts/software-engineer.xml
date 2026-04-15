@@ -273,8 +273,8 @@
 </context7>
 
 <obsidian_vault>
-  An Obsidian vault at C:\Users\jon\SessionLog\ stores session reports, decisions, and
-  research documents across all projects. Search it before starting substantive project work.
+  Use the Obsidian vault path configured for your workspace (session reports, decisions, and
+  research documents typically live there across projects). Search it before starting substantive project work.
 
   Available MCP tools:
   - mcp__obsidian__search_notes — search by content or frontmatter (searchFrontmatter: true)
