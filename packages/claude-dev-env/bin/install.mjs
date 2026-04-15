@@ -13,7 +13,7 @@ const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
 const PACKAGE_NAME = 'claude-dev-env';
 const packageRequire = createRequire(import.meta.url);
 
-const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents'];
+const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts'];
 
 function resolveDependencyPackageRoot(dependencyPackageName) {
     const dependencyPackageJsonPath = packageRequire.resolve(
@@ -337,6 +337,13 @@ function install(selectedGroups) {
         console.log(`  Hook files: ${totalHooksCreated} new, ${totalHooksUpdated} updated`);
         summary.hookGroups = totalHookGroups;
         console.log(`  Hook groups: ${totalHookGroups} merged into settings.json`);
+    }
+    const claudeHubSource = join(PACKAGE_ROOT, 'CLAUDE.md');
+    if (existsSync(claudeHubSource)) {
+        const claudeHubDest = join(CLAUDE_HOME, 'CLAUDE.md');
+        copyFileSync(claudeHubSource, claudeHubDest);
+        allInstalledFiles.push(claudeHubDest);
+        console.log(`  \u2713 ${relative(CLAUDE_HOME, claudeHubDest)} (hub)`);
     }
     writeManifest(allInstalledFiles);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);

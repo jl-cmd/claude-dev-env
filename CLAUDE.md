@@ -14,9 +14,10 @@ The prompt-generator skill, the agent-prompt skill, and the prompt-workflow bloc
 
 ## Docs
 
-Reference documents in `packages/claude-dev-env/docs/` are available but not auto-loaded. Skills can `@` import them as needed.
+Reference documents in `packages/claude-dev-env/docs/` are available but not auto-loaded. Skills can `@` import them as needed. Canonical text for several policies lives in `packages/claude-dev-env/system-prompts/software-engineer.xml` (for example `<code_quality>` and `<behavior_protocol>`); the installer copies that file to `~/.claude/system-prompts/`. Shipped `docs/CODE_RULES.md` and many `rules/*.md` files are one-line pointers into that XML (see JonEcho/llm-settings PR 17 for the consolidation pattern).
 
-- `packages/claude-dev-env/docs/CODE_RULES.md` -- hook-enforced code standards
+- `packages/claude-dev-env/system-prompts/software-engineer.xml` -- canonical system prompt sections for Claude Code
+- `packages/claude-dev-env/docs/CODE_RULES.md` -- pointer to `<code_quality>` (hook-enforced standards live in the XML)
 - `packages/claude-dev-env/docs/TEST_QUALITY.md` -- testing quality guidelines
 - `packages/claude-dev-env/docs/emotion-informed-prompt-design.md` -- emotion-informed prompt design (Anthropic research + best practices)
 - `packages/claude-dev-env/docs/REACT_PATTERNS.md` -- React patterns

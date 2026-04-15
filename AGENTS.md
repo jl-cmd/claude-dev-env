@@ -22,8 +22,11 @@ Primary working paths under `packages/claude-dev-env/`:
 
 ## Standards and Source of Truth
 
+Canonical fragments for code quality, behavior protocol, git workflow, and related areas ship in `packages/claude-dev-env/system-prompts/software-engineer.xml` (installed to `~/.claude/system-prompts/`). Several markdown files are thin pointers into that XML.
+
 Core standards docs live in:
 
+- `packages/claude-dev-env/system-prompts/software-engineer.xml`
 - `packages/claude-dev-env/docs/CODE_RULES.md`
 - `packages/claude-dev-env/docs/TEST_QUALITY.md`
 - `packages/claude-dev-env/docs/REACT_PATTERNS.md`

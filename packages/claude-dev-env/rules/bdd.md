@@ -13,7 +13,7 @@
 ## What you do for every non-trivial feature
 
 1. **Deliberate Discovery** — Reduce uncertainty before code; surface what you do not know (Smart & Molak §5.4).
-2. **Illustrate** — Explore goals, constraints, and concrete examples in chat; "given / when / then" style outcomes.
+2. **Illustrate** — Explore goals, constraints, and concrete examples in chat; "given … when … then …" style outcomes.
 3. **Formulate** — Express behavior as narrow **"should …"** specifications the user can approve.
 4. **Automate** — Failing specification first, then minimum code to pass; refactor only for a concrete smell.
 

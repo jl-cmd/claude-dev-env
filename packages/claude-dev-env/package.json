@@ -13,7 +13,10 @@
         "commands/",
         "agents/",
         "skills/",
-        "hooks/"
+        "hooks/",
+        "system-prompts/",
+        "scripts/",
+        "CLAUDE.md"
     ],
     "keywords": [
         "claude-code",
