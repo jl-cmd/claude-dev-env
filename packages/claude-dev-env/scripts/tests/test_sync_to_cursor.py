@@ -13,6 +13,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import sync_to_cursor as mod
+from sync_to_cursor.rules import _read_paths_glob
 
 _SYNC_SCRIPT = _SCRIPTS_DIR / "sync-to-cursor.py"
 
@@ -162,6 +163,54 @@ def test_sync_canonical_docs_deletes_stale_copy_when_source_removed(tmp_path: Pa
     (claude / "docs" / "CODE_RULES.md").unlink()
     mod._sync_canonical_docs(claude, cursor, dry_run=False, quiet=True)
     assert not (cursor / "docs" / "CODE_RULES.md").is_file()
+
+
+def test_dry_run_does_not_create_output_directory(tmp_path: Path) -> None:
+    claude = tmp_path / ".claude"
+    cursor = tmp_path / ".cursor"
+    _minimal_rule_files(claude / "rules")
+    _minimal_code_rules_and_test_quality(claude / "docs")
+    env = {**os.environ, "LLM_SETTINGS_ROOT": str(tmp_path)}
+    subprocess.run(
+        [sys.executable, str(_SYNC_SCRIPT), "--dry-run", "--quiet"],
+        env=env,
+        check=True,
+        cwd=str(_SCRIPTS_DIR),
+    )
+    assert not (cursor / "rules").exists(), "--dry-run must not create the output directory"
+
+
+def test_check_skips_optional_mapping_when_source_missing(tmp_path: Path) -> None:
+    claude = tmp_path / ".claude"
+    cursor = tmp_path / ".cursor"
+    _minimal_rule_files(claude / "rules")
+    _minimal_code_rules_and_test_quality(claude / "docs")
+    env = {**os.environ, "LLM_SETTINGS_ROOT": str(tmp_path)}
+    subprocess.run(
+        [sys.executable, str(_SYNC_SCRIPT), "--force"],
+        env=env,
+        check=True,
+        cwd=str(_SCRIPTS_DIR),
+    )
+    # Remove an optional source (tasklings-preferences has always_apply=False)
+    (claude / "rules" / "tasklings-preferences.md").unlink()
+    subprocess_result = subprocess.run(
+        [sys.executable, str(_SYNC_SCRIPT), "--check"],
+        env=env,
+        cwd=str(_SCRIPTS_DIR),
+    )
+    assert subprocess_result.returncode == 0, "--check must pass when only optional sources are missing"
+
+
+def test_tasklings_glob_derived_from_frontmatter(tmp_path: Path) -> None:
+    rules_directory = tmp_path / "rules"
+    rules_directory.mkdir(parents=True)
+    (rules_directory / "tasklings-preferences.md").write_text(
+        '---\npaths:\n  - "Y:/MyProject/**"\n  - "Z:/Other/**"\n---\n\n# Tasklings\n',
+        encoding="utf-8",
+    )
+    glob_value = _read_paths_glob(rules_directory / "tasklings-preferences.md")
+    assert glob_value == "Y:/MyProject/**,Z:/Other/**"
 
 
 def test_merge_reference_headers_point_at_cursor_docs(tmp_path: Path) -> None:

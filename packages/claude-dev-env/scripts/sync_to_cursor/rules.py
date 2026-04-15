@@ -203,6 +203,31 @@ def _full_mdc(mapping: RuleMapping, body: str) -> str:
     return _frontmatter(mapping.description, mapping.always_apply, mapping.globs) + "\n" + HEADER + "\n" + body + "\n"
 
 
+def _read_paths_glob(rule_file: Path) -> str | None:
+    """Read `paths:` list from a Claude rule's YAML frontmatter; return as comma-separated Cursor glob string."""
+    if not rule_file.is_file():
+        return None
+    lines = rule_file.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    is_in_paths = False
+    all_paths: list[str] = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if line.startswith("paths:"):
+            is_in_paths = True
+            continue
+        if is_in_paths:
+            if line.startswith(" ") or line.startswith("\t"):
+                path_value = line.strip().lstrip("-").strip().strip('"').strip("'")
+                if path_value:
+                    all_paths.append(path_value)
+            else:
+                is_in_paths = False
+    return ",".join(all_paths) if all_paths else None
+
+
 def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
     rules_directory = claude / "rules"
     docs_directory = claude / "docs"
@@ -221,7 +246,7 @@ def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
             (rules_directory / "tasklings-preferences.md",),
             "tasklings-preferences.mdc",
             False,
-            r"Y:/Craft a Tale/Behavioral App/Project/**",
+            _read_paths_glob(rules_directory / "tasklings-preferences.md"),
             "Tasklings: Prefer / Do / Always engineering preferences (scoped path)",
             "verbatim",
             True,

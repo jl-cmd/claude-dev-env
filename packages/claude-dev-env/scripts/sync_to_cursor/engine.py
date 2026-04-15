@@ -41,7 +41,9 @@ def _run_check(
         out_path = out_dir / each_mapping.output_name
         missing = [source for source in each_mapping.sources if not source.is_file()]
         if missing:
-            return 1
+            if each_mapping.always_apply:
+                return 1
+            continue
         src_hash = _sources_hash(each_mapping.sources)
         prev = entries_meta.get(key, {})
         if src_hash != prev.get("sources_hash"):
@@ -155,7 +157,8 @@ def run(argv: list[str] | None = None) -> int:
     if args.check:
         return _run_check(mappings, out_dir, entries_meta, claude, cursor, docs_entries_meta)
 
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if not args.dry_run:
+        out_dir.mkdir(parents=True, exist_ok=True)
     new_docs_entries = sync_canonical_docs(claude, cursor, args.dry_run, args.quiet)
 
     summary, new_entries = _sync_rules(
