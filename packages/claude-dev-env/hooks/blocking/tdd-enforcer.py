@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-TDD enforcement hook.
+BDD Automate-phase reminder (production code touch).
 
-Prompts confirmation when writing/editing production code files.
+Prompts confirmation when writing or editing production code files.
 Skips: Test files, config files, documentation.
 """
 import json
@@ -51,7 +51,7 @@ def main() -> None:
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",
-            "additionalContext": "[TDD] Writing production code. Confirm you have a failing test first."
+            "additionalContext": "[BDD] Writing production code. Confirm you have a failing specification (test) first."
         }
     }
     print(json.dumps(result))

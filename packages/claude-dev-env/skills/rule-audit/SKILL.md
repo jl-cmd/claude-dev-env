@@ -129,7 +129,7 @@ Build a matrix of where each concept appears:
 ```
 | Rule/Concept | AGENTS.md | rules/*.md | docs/*.md | hooks | Count |
 |---|---|---|---|---|---|
-| TDD first | line 52, 92 | tdd.md | - | tdd-enforcer.py | 3 advisory + 1 hook |
+| BDD first | line 52, 92 | bdd.md | - | tdd-enforcer.py | 3 advisory + 1 hook |
 | No magic values | - | code-standards.md | CODE_RULES.md:49 | code-rules-enforcer.py | 2 advisory + 1 hook |
 | ... | ... | ... | ... | ... | ... |
 ```
@@ -174,7 +174,7 @@ If both user and project layers exist, compare them:
 ```
 | Rule/Concept | User Layer File | Project Layer File | Verdict |
 |---|---|---|---|
-| TDD first | code-standards.md | AGENTS.md line 5 | DUPLICATE — remove from project |
+| BDD first | code-standards.md | AGENTS.md line 5 | DUPLICATE — remove from project |
 | No magic values | code-standards.md | rules/code-quality.md | DUPLICATE — remove from project |
 | Use pytest fixtures | (not present) | rules/testing.md | PROJECT-ONLY — keep |
 | Django migrations | docs/DJANGO_PATTERNS.md | AGENTS.md line 22 | DUPLICATE — remove from project |

@@ -12,7 +12,7 @@
 - No magic values (everything named)
 - No abbreviations (full words)
 - Complete type hints
-- TDD (test first)
+- BDD (discovery first, then failing specification before production code)
 
 ## Function Parameters - Required vs Optional
 

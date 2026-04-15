@@ -152,11 +152,15 @@ Always: Functions when no state, concrete classes, simple imports
 
 ---
 
-## 8. TDD PROCESS
+## 8. BDD PROCESS
 
-1. **RED** - Failing test first
-2. **GREEN** - Minimum code to pass
-3. **REFACTOR** - Only if valuable
+**Discovery before code.** Follow `~/.claude/rules/bdd.md` and `<behavior_protocol>` in the system prompt.
+
+**Automate (Red / Green / Refactor):**
+
+1. **RED** — Failing specification (test) first
+2. **GREEN** — Minimum code to pass
+3. **REFACTOR** — Only when it improves clarity
 
 ---
 

@@ -46,7 +46,7 @@ Hook folders are organized under `packages/claude-dev-env/hooks/` by purpose (fo
 
 - Prefer `rg` / `rg --files` for search when available.
 - For broad or repetitive edits, use scripted updates with preview/apply flow rather than manual line-by-line editing.
-- Validate behavior with focused tests before and after refactors (TDD expectation).
+- Validate behavior with focused tests before and after refactors (BDD expectation: discovery, then failing specification, then code).
 
 ## Environment Gotchas
 

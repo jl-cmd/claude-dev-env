@@ -47,7 +47,7 @@ Review every change against these rules. Flag each violation with its rule name.
 - Require a `TODO:` comment on scaffolding or placeholder code explaining what replaces it and why.
 
 ## Tests
-- Require a paired test in the same PR for every new production code path (TDD).
+- Require a paired test in the same PR for every new production code path (BDD: agree behaviors first, then failing specification before production code).
 - Require mocks to include every field the code under test reads; flag partial mocks.
 - Flag tests that only assert a constant equals itself or that a symbol exists.
 
