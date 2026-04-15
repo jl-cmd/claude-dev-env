@@ -12,83 +12,86 @@ from sync_to_cursor.canonical_docs import check_canonical_docs, sync_canonical_d
 from sync_to_cursor.constants import GENERATOR_VERSION
 from sync_to_cursor.hashing import sha256_bytes
 from sync_to_cursor.paths import llm_layout_paths
-from sync_to_cursor.rules import _full_mdc, apply_transform, build_mappings
+from sync_to_cursor.rules import RuleMapping, _full_mdc, apply_transform, build_mappings
 
 
-def run(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Sync Claude rules to Cursor .mdc files")
-    ap.add_argument("--force", action="store_true", help="Regenerate all outputs")
-    ap.add_argument("--dry-run", action="store_true", help="Print actions only")
-    ap.add_argument("--check", action="store_true", help="Exit 1 if anything stale")
-    ap.add_argument("--quiet", action="store_true", help="Minimal output when up to date")
-    args = ap.parse_args(argv)
+def _load_manifest(manifest_path: Path) -> dict:
+    if not manifest_path.is_file():
+        return {}
+    try:
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
 
-    claude, cursor, out_dir, manifest_path = llm_layout_paths()
 
-    mappings = build_mappings(claude)
-    old_manifest: dict = {}
-    if manifest_path.is_file():
-        try:
-            old_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            old_manifest = {}
+def _sources_hash(paths: tuple[Path, ...]) -> str:
+    return sha256_bytes(b"\x00".join(p.read_bytes() for p in paths))
 
-    entries_meta: dict = old_manifest.get("entries", {})
-    docs_entries_meta: dict = old_manifest.get("docs_entries", {})
 
-    def sources_hash(paths: tuple[Path, ...]) -> str:
-        return sha256_bytes(b"\x00".join(p.read_bytes() for p in paths))
-
-    if args.check:
-        for m in mappings:
-            key = f"rules/{m.output_name}"
-            out_path = out_dir / m.output_name
-            missing = [p for p in m.sources if not p.is_file()]
-            if missing:
-                return 1
-            src_hash = sources_hash(m.sources)
-            prev = entries_meta.get(key, {})
-            if src_hash != prev.get("sources_hash"):
-                return 1
-            prev_out = prev.get("output_hash", "")
-            if out_path.is_file() and prev_out:
-                if sha256_bytes(out_path.read_bytes()) != prev_out:
-                    return 1
-            elif not out_path.is_file():
-                return 1
-        if out_dir.is_dir():
-            for p in out_dir.glob("*.mdc"):
-                if p.name not in {x.output_name for x in mappings}:
-                    return 1
-        if not check_canonical_docs(claude, cursor, docs_entries_meta):
+def _run_check(
+    mappings: tuple[RuleMapping, ...],
+    out_dir: Path,
+    entries_meta: dict,
+    claude: Path,
+    cursor: Path,
+    docs_entries_meta: dict,
+) -> int:
+    for each_mapping in mappings:
+        key = f"rules/{each_mapping.output_name}"
+        out_path = out_dir / each_mapping.output_name
+        missing = [source for source in each_mapping.sources if not source.is_file()]
+        if missing:
             return 1
-        return 0
+        src_hash = _sources_hash(each_mapping.sources)
+        prev = entries_meta.get(key, {})
+        if src_hash != prev.get("sources_hash"):
+            return 1
+        prev_out = prev.get("output_hash", "")
+        if out_path.is_file() and prev_out:
+            if sha256_bytes(out_path.read_bytes()) != prev_out:
+                return 1
+        elif not out_path.is_file():
+            return 1
+    if out_dir.is_dir():
+        for each_path in out_dir.glob("*.mdc"):
+            if each_path.name not in {x.output_name for x in mappings}:
+                return 1
+    if not check_canonical_docs(claude, cursor, docs_entries_meta):
+        return 1
+    return 0
 
-    summary = {"skip": 0, "update": 0, "tampered": 0, "warn": 0, "orphan": 0}
+
+def _sync_rules(
+    mappings: tuple[RuleMapping, ...],
+    out_dir: Path,
+    entries_meta: dict,
+    *,
+    force: bool,
+    dry_run: bool,
+    quiet: bool,
+    cursor: Path,
+) -> tuple[dict, dict]:
+    summary: dict = {"skip": 0, "update": 0, "tampered": 0, "warn": 0, "orphan": 0}
     new_entries: dict = {}
+    write_allowed = not dry_run
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    write_allowed = not args.dry_run
-
-    new_docs_entries = sync_canonical_docs(claude, cursor, args.dry_run, args.quiet)
-
-    for m in mappings:
-        key = f"rules/{m.output_name}"
-        out_path = out_dir / m.output_name
-        missing = [p for p in m.sources if not p.is_file()]
+    for each_mapping in mappings:
+        key = f"rules/{each_mapping.output_name}"
+        out_path = out_dir / each_mapping.output_name
+        missing = [source for source in each_mapping.sources if not source.is_file()]
         if missing:
             summary["warn"] += 1
-            if not args.quiet:
-                print(f"WARN     rules/{m.output_name} (missing source: {missing})")
+            if not quiet:
+                print(f"WARN     rules/{each_mapping.output_name} (missing source: {missing})")
             continue
 
-        src_hash = sources_hash(m.sources)
+        src_hash = _sources_hash(each_mapping.sources)
         prev = entries_meta.get(key, {})
         prev_src = prev.get("sources_hash", "")
         prev_out = prev.get("output_hash", "")
 
         if (
-            not args.force
+            not force
             and out_path.is_file()
             and prev_src == src_hash
             and prev_out
@@ -99,38 +102,71 @@ def run(argv: list[str] | None = None) -> int:
             continue
 
         if (
-            not args.force
+            not force
             and out_path.is_file()
             and prev_src == src_hash
             and prev_out
             and sha256_bytes(out_path.read_bytes()) != prev_out
         ):
             summary["tampered"] += 1
-            if not args.quiet:
-                print(f"TAMPERED rules/{m.output_name} (manual edit; regenerating)")
+            if not quiet:
+                print(f"TAMPERED rules/{each_mapping.output_name} (manual edit; regenerating)")
 
         summary["update"] += 1
-        if not args.quiet:
-            print(f"UPDATE   rules/{m.output_name}")
+        if not quiet:
+            print(f"UPDATE   rules/{each_mapping.output_name}")
 
         body = apply_transform(
-            m.transform,
-            m.sources,
-            strip_leading_frontmatter=m.strip_leading_frontmatter,
+            each_mapping.transform,
+            each_mapping.sources,
+            strip_leading_frontmatter=each_mapping.strip_leading_frontmatter,
         )
-        full = _full_mdc(m, body)
+        full = _full_mdc(each_mapping, body)
         out_hash = sha256_bytes(full.encode("utf-8"))
         new_entries[key] = {"sources_hash": src_hash, "output_hash": out_hash}
 
         if write_allowed:
             out_path.write_text(full, encoding="utf-8", newline="\n")
 
-    expected = {m.output_name for m in mappings}
-    for p in out_dir.glob("*.mdc"):
-        if p.name not in expected:
+    expected = {each_mapping.output_name for each_mapping in mappings}
+    for each_path in out_dir.glob("*.mdc"):
+        if each_path.name not in expected:
             summary["orphan"] += 1
-            if not args.quiet:
-                print(f"WARN     {p.relative_to(cursor)} (orphan — not generated by this tool)")
+            if not quiet:
+                print(f"WARN     {each_path.relative_to(cursor)} (orphan — not generated by this tool)")
+
+    return summary, new_entries
+
+
+def run(argv: list[str] | None = None) -> int:
+    argument_parser = argparse.ArgumentParser(description="Sync Claude rules to Cursor .mdc files")
+    argument_parser.add_argument("--force", action="store_true", help="Regenerate all outputs")
+    argument_parser.add_argument("--dry-run", action="store_true", help="Print actions only")
+    argument_parser.add_argument("--check", action="store_true", help="Exit 1 if anything stale")
+    argument_parser.add_argument("--quiet", action="store_true", help="Minimal output when up to date")
+    args = argument_parser.parse_args(argv)
+
+    claude, cursor, out_dir, manifest_path = llm_layout_paths()
+    mappings = build_mappings(claude)
+    old_manifest = _load_manifest(manifest_path)
+    entries_meta: dict = old_manifest.get("entries", {})
+    docs_entries_meta: dict = old_manifest.get("docs_entries", {})
+
+    if args.check:
+        return _run_check(mappings, out_dir, entries_meta, claude, cursor, docs_entries_meta)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    new_docs_entries = sync_canonical_docs(claude, cursor, args.dry_run, args.quiet)
+
+    summary, new_entries = _sync_rules(
+        mappings,
+        out_dir,
+        entries_meta,
+        force=args.force,
+        dry_run=args.dry_run,
+        quiet=args.quiet,
+        cursor=cursor,
+    )
 
     manifest_out = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -138,7 +174,7 @@ def run(argv: list[str] | None = None) -> int:
         "entries": new_entries,
         "docs_entries": new_docs_entries,
     }
-    if write_allowed:
+    if not args.dry_run:
         manifest_path.write_text(json.dumps(manifest_out, indent=2) + "\n", encoding="utf-8")
 
     if (

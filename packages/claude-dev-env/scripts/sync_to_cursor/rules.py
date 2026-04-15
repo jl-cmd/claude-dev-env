@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from sync_to_cursor.constants import HEADER, MAX_RULE_BODY_LINES, TEST_GLOBS
+from sync_to_cursor.constants import CODE_RULES_POINTER_FALLBACK, HEADER, MAX_RULE_BODY_LINES, TEST_GLOBS
 
 
-def _parse_h2_sections(md: str) -> dict[str, str]:
-    parts = re.split(r"^## ", md, flags=re.MULTILINE)
+def _parse_h2_sections(markdown: str) -> dict[str, str]:
+    parts = re.split(r"^## ", markdown, flags=re.MULTILINE)
     sections: dict[str, str] = {}
     for part in parts[1:]:
         title_line, _, body = part.partition("\n")
@@ -40,8 +40,8 @@ def _limit_lines(text: str, max_lines: int) -> str:
     )
 
 
-def _strip_code_standards_blockquote(md: str) -> str:
-    lines = md.splitlines()
+def _strip_code_standards_blockquote(markdown: str) -> str:
+    lines = markdown.splitlines()
     out: list[str] = []
     i = 0
     while i < len(lines):
@@ -61,10 +61,13 @@ def merge_code_standards(sources: tuple[Path, ...]) -> str:
         sources[0].read_text(encoding="utf-8")
     )
     code_standards_markdown = "\n".join(
-        ln for ln in code_standards_markdown.splitlines() if not ln.strip().startswith("- TDD ")
+        line for line in code_standards_markdown.splitlines() if not line.strip().startswith("- TDD ")
     )
     code_rules_markdown = sources[1].read_text(encoding="utf-8")
     sections_by_heading = _parse_h2_sections(code_rules_markdown)
+    if not sections_by_heading:
+        chunks = [code_standards_markdown, "", CODE_RULES_POINTER_FALLBACK]
+        return _limit_lines("\n\n".join(chunks), MAX_RULE_BODY_LINES)
     include_order = [
         "COMMENT PRESERVATION (ABSOLUTE RULE)",
         "CORE PRINCIPLES",
@@ -187,8 +190,8 @@ class RuleMapping:
     strip_leading_frontmatter: bool = False
 
 
-def _frontmatter(desc: str, always_apply: bool, globs: str | None) -> str:
-    lines = ["---", f"description: {desc}"]
+def _frontmatter(description: str, always_apply: bool, globs: str | None) -> str:
+    lines = ["---", f"description: {description}"]
     if globs:
         lines.append(f"globs: {globs}")
     lines.append(f"alwaysApply: {'true' if always_apply else 'false'}")

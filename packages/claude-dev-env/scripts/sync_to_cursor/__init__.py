@@ -2,6 +2,7 @@
 
 from sync_to_cursor.constants import (
     CANONICAL_DOC_FILES,
+    CODE_RULES_POINTER_FALLBACK,
     GENERATOR_VERSION,
     HEADER,
     MAX_RULE_BODY_LINES,
@@ -12,6 +13,7 @@ from sync_to_cursor.rules import _limit_lines, merge_code_standards, merge_test_
 
 __all__ = [
     "CANONICAL_DOC_FILES",
+    "CODE_RULES_POINTER_FALLBACK",
     "GENERATOR_VERSION",
     "HEADER",
     "MAX_RULE_BODY_LINES",

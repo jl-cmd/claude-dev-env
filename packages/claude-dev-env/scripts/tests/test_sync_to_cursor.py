@@ -134,7 +134,6 @@ def test_manifest_includes_docs_entries(tmp_path: Path) -> None:
 
 
 def test_merge_code_standards_with_pointer_style_code_rules(tmp_path: Path) -> None:
-    mod = _load_sync_module()
     rules_directory = tmp_path / "rules"
     docs_directory = tmp_path / "docs"
     rules_directory.mkdir(parents=True, exist_ok=True)
@@ -155,7 +154,6 @@ def test_merge_code_standards_with_pointer_style_code_rules(tmp_path: Path) -> N
 
 
 def test_sync_canonical_docs_deletes_stale_copy_when_source_removed(tmp_path: Path) -> None:
-    mod = _load_sync_module()
     claude = tmp_path / ".claude"
     cursor = tmp_path / ".cursor"
     _minimal_code_rules_and_test_quality(claude / "docs")
