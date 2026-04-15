@@ -1,0 +1,155 @@
+"""Sync Claude rules to Cursor .mdc files and manifest."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+from sync_to_cursor.canonical_docs import check_canonical_docs, sync_canonical_docs
+from sync_to_cursor.constants import GENERATOR_VERSION
+from sync_to_cursor.hashing import sha256_bytes
+from sync_to_cursor.paths import llm_layout_paths
+from sync_to_cursor.rules import _full_mdc, apply_transform, build_mappings
+
+
+def run(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Sync Claude rules to Cursor .mdc files")
+    ap.add_argument("--force", action="store_true", help="Regenerate all outputs")
+    ap.add_argument("--dry-run", action="store_true", help="Print actions only")
+    ap.add_argument("--check", action="store_true", help="Exit 1 if anything stale")
+    ap.add_argument("--quiet", action="store_true", help="Minimal output when up to date")
+    args = ap.parse_args(argv)
+
+    claude, cursor, out_dir, manifest_path = llm_layout_paths()
+
+    mappings = build_mappings(claude)
+    old_manifest: dict = {}
+    if manifest_path.is_file():
+        try:
+            old_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            old_manifest = {}
+
+    entries_meta: dict = old_manifest.get("entries", {})
+    docs_entries_meta: dict = old_manifest.get("docs_entries", {})
+
+    def sources_hash(paths: tuple[Path, ...]) -> str:
+        return sha256_bytes(b"\x00".join(p.read_bytes() for p in paths))
+
+    if args.check:
+        for m in mappings:
+            key = f"rules/{m.output_name}"
+            out_path = out_dir / m.output_name
+            missing = [p for p in m.sources if not p.is_file()]
+            if missing:
+                return 1
+            src_hash = sources_hash(m.sources)
+            prev = entries_meta.get(key, {})
+            if src_hash != prev.get("sources_hash"):
+                return 1
+            prev_out = prev.get("output_hash", "")
+            if out_path.is_file() and prev_out:
+                if sha256_bytes(out_path.read_bytes()) != prev_out:
+                    return 1
+            elif not out_path.is_file():
+                return 1
+        if out_dir.is_dir():
+            for p in out_dir.glob("*.mdc"):
+                if p.name not in {x.output_name for x in mappings}:
+                    return 1
+        if not check_canonical_docs(claude, cursor, docs_entries_meta):
+            return 1
+        return 0
+
+    summary = {"skip": 0, "update": 0, "tampered": 0, "warn": 0, "orphan": 0}
+    new_entries: dict = {}
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    write_allowed = not args.dry_run
+
+    new_docs_entries = sync_canonical_docs(claude, cursor, args.dry_run, args.quiet)
+
+    for m in mappings:
+        key = f"rules/{m.output_name}"
+        out_path = out_dir / m.output_name
+        missing = [p for p in m.sources if not p.is_file()]
+        if missing:
+            summary["warn"] += 1
+            if not args.quiet:
+                print(f"WARN     rules/{m.output_name} (missing source: {missing})")
+            continue
+
+        src_hash = sources_hash(m.sources)
+        prev = entries_meta.get(key, {})
+        prev_src = prev.get("sources_hash", "")
+        prev_out = prev.get("output_hash", "")
+
+        if (
+            not args.force
+            and out_path.is_file()
+            and prev_src == src_hash
+            and prev_out
+            and sha256_bytes(out_path.read_bytes()) == prev_out
+        ):
+            summary["skip"] += 1
+            new_entries[key] = {"sources_hash": src_hash, "output_hash": prev_out}
+            continue
+
+        if (
+            not args.force
+            and out_path.is_file()
+            and prev_src == src_hash
+            and prev_out
+            and sha256_bytes(out_path.read_bytes()) != prev_out
+        ):
+            summary["tampered"] += 1
+            if not args.quiet:
+                print(f"TAMPERED rules/{m.output_name} (manual edit; regenerating)")
+
+        summary["update"] += 1
+        if not args.quiet:
+            print(f"UPDATE   rules/{m.output_name}")
+
+        body = apply_transform(
+            m.transform,
+            m.sources,
+            strip_leading_frontmatter=m.strip_leading_frontmatter,
+        )
+        full = _full_mdc(m, body)
+        out_hash = sha256_bytes(full.encode("utf-8"))
+        new_entries[key] = {"sources_hash": src_hash, "output_hash": out_hash}
+
+        if write_allowed:
+            out_path.write_text(full, encoding="utf-8", newline="\n")
+
+    expected = {m.output_name for m in mappings}
+    for p in out_dir.glob("*.mdc"):
+        if p.name not in expected:
+            summary["orphan"] += 1
+            if not args.quiet:
+                print(f"WARN     {p.relative_to(cursor)} (orphan — not generated by this tool)")
+
+    manifest_out = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generator_version": GENERATOR_VERSION,
+        "entries": new_entries,
+        "docs_entries": new_docs_entries,
+    }
+    if write_allowed:
+        manifest_path.write_text(json.dumps(manifest_out, indent=2) + "\n", encoding="utf-8")
+
+    if (
+        not args.quiet
+        and summary["skip"]
+        and not any((summary["update"], summary["tampered"], summary["warn"], summary["orphan"]))
+    ):
+        print(f"SKIP     all {summary['skip']} rule(s) unchanged")
+
+    return 0
+
+
+def main() -> int:
+    return run(sys.argv[1:])

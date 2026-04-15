@@ -2,25 +2,19 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-import types
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+import sync_to_cursor as mod
+
 _SYNC_SCRIPT = _SCRIPTS_DIR / "sync-to-cursor.py"
-
-
-def _load_sync_module() -> types.ModuleType:
-    spec = importlib.util.spec_from_file_location("sync_to_cursor", _SYNC_SCRIPT)
-    assert spec and spec.loader
-    sync_module = importlib.util.module_from_spec(spec)
-    sys.modules["sync_to_cursor"] = sync_module
-    spec.loader.exec_module(sync_module)
-    return sync_module
 
 
 def _minimal_rule_files(claude_rules: Path) -> None:
@@ -50,7 +44,6 @@ def _minimal_code_rules_and_test_quality(claude_docs: Path) -> tuple[bytes, byte
 
 
 def test_limit_lines_footer_mentions_cursor_docs() -> None:
-    mod = _load_sync_module()
     long_body = "\n".join(f"line {index}" for index in range(mod.MAX_RULE_BODY_LINES + 5))
     out = mod._limit_lines(long_body, mod.MAX_RULE_BODY_LINES)
     assert ".cursor/docs" in out
@@ -59,7 +52,6 @@ def test_limit_lines_footer_mentions_cursor_docs() -> None:
 
 
 def test_sync_canonical_docs_copies_byte_identical(tmp_path: Path) -> None:
-    mod = _load_sync_module()
     claude = tmp_path / ".claude"
     cursor = tmp_path / ".cursor"
     docs = claude / "docs"
@@ -70,7 +62,6 @@ def test_sync_canonical_docs_copies_byte_identical(tmp_path: Path) -> None:
 
 
 def test_sync_canonical_docs_skips_missing_with_no_dst(tmp_path: Path) -> None:
-    mod = _load_sync_module()
     claude = tmp_path / ".claude"
     cursor = tmp_path / ".cursor"
     (claude / "docs").mkdir(parents=True)
@@ -176,7 +167,6 @@ def test_sync_canonical_docs_deletes_stale_copy_when_source_removed(tmp_path: Pa
 
 
 def test_merge_reference_headers_point_at_cursor_docs(tmp_path: Path) -> None:
-    mod = _load_sync_module()
     rules_directory = tmp_path / "rules"
     docs_directory = tmp_path / "docs"
     rules_directory.mkdir(parents=True, exist_ok=True)
