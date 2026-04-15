@@ -3,7 +3,7 @@
 import shutil
 from pathlib import Path
 
-from sync_to_cursor.constants import CANONICAL_DOC_FILES
+from sync_to_cursor.config import CANONICAL_DOC_FILES
 from sync_to_cursor.hashing import sha256_bytes
 
 

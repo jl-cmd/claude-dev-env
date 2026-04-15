@@ -151,7 +151,8 @@ def test_merge_code_standards_with_pointer_style_code_rules(tmp_path: Path) -> N
         (rules_directory / "code-standards.md", docs_directory / "CODE_RULES.md")
     )
     assert merged.strip(), "output must not be empty for pointer-style CODE_RULES.md"
-    assert mod.CODE_RULES_POINTER_FALLBACK in merged
+    assert "software-engineer.xml" in merged
+    assert "code_quality" in merged
 
 
 def test_sync_canonical_docs_deletes_stale_copy_when_source_removed(tmp_path: Path) -> None:

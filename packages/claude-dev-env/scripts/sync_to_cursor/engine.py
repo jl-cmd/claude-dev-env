@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sync_to_cursor.canonical_docs import check_canonical_docs, sync_canonical_docs
-from sync_to_cursor.constants import GENERATOR_VERSION
+from sync_to_cursor.config import GENERATOR_VERSION
 from sync_to_cursor.hashing import sha256_bytes
 from sync_to_cursor.paths import llm_layout_paths
 from sync_to_cursor.rules import RuleMapping, _full_mdc, apply_transform, build_mappings
