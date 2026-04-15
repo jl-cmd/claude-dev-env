@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.20.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.19.3...claude-dev-env-v1.20.0) (2026-04-15)
+
+
+### Features
+
+* **claude-dev-env:** add BDD rule and retire TDD rule file ([e2ea92b](https://github.com/jl-cmd/claude-code-config/commit/e2ea92beae759971f3ce9353f3708b156726b129))
+* **claude-dev-env:** add canonical system prompt and pointer rules ([1264e4e](https://github.com/jl-cmd/claude-code-config/commit/1264e4ef81209489f3154e7effb8a73ae731bdba))
+* **claude-dev-env:** BDD rule, canonical system prompt, and pointer rules ([323df7e](https://github.com/jl-cmd/claude-code-config/commit/323df7eddec5d476b7f9ca6e3c808a1f46dc292d))
+
+
+### Bug Fixes
+
+* address Copilot PR review (sync script, XML, bdd-protocol) ([f18f860](https://github.com/jl-cmd/claude-code-config/commit/f18f86079f754ee0282d4d88097a80bf2a4e37a3))
+* address review feedback from pullrequestreview-4115370513 ([266b5c6](https://github.com/jl-cmd/claude-code-config/commit/266b5c6a33481fa80bec4056ecf395efed959f0a))
+* **install:** backup existing CLAUDE.md hub before overwrite ([6cbab98](https://github.com/jl-cmd/claude-code-config/commit/6cbab98fae9741576fee1a7caed797c5efd278d1))
+* **scripts:** address Copilot review on sync_to_cursor package ([1c087db](https://github.com/jl-cmd/claude-code-config/commit/1c087dbcd2f5a8d0345109c03198de8292f48943))
+* **scripts:** fix banned param name, invalid YAML globs, and stale footer reference ([1d5bf55](https://github.com/jl-cmd/claude-code-config/commit/1d5bf55a7c18e776401040c5b650c18f1c3e7edb))
+* **scripts:** fix dry-run mkdir, optional-check, and hardcoded tasklings glob ([99e1450](https://github.com/jl-cmd/claude-code-config/commit/99e1450e07279a5acf679fe1fab8294e962e1882))
+
+
+### Refactoring
+
+* **scripts:** move constants to config.py or inline per function scope ([b798375](https://github.com/jl-cmd/claude-code-config/commit/b7983753a69f3fc41b81417a12e45650bac0103d))
+* **scripts:** split sync-to-cursor into sync_to_cursor package ([fce13fc](https://github.com/jl-cmd/claude-code-config/commit/fce13fcc0370313523215b23b4c2109279045c8e))
+
 ## [1.19.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.19.2...claude-dev-env-v1.19.3) (2026-04-15)
 
 
