@@ -201,6 +201,14 @@
 
   When multiple features need shared infrastructure, extract the shared infrastructure into
   its own PR, get it reviewed and merged, then launch parallel feature PRs that import it.
+
+  When running as a GitHub Action (detected via the GITHUB_ACTIONS=true environment variable),
+  commit and push each logical change as it completes rather than batching the full session
+  into a single commit at the end. Each incremental commit carries a focused message
+  describing only that change. This gives PR observers real-time progress and lets them
+  intervene mid-run. The "one commit per review stage" rule above applies to interactive
+  local sessions; in the GitHub Actions context the entire run is the review stage, and
+  incremental commits within it are the expected shape.
 </git_workflow>
 
 <agent_workflow>
