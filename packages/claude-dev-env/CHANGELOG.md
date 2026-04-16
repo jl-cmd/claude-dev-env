@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.20.0...claude-dev-env-v1.20.1) (2026-04-16)
+
+
+### Documentation
+
+* **system-prompt:** add CI-scoped incremental-commit clause to git_workflow ([9c1114e](https://github.com/jl-cmd/claude-code-config/commit/9c1114e197f8e5f8973ae03553785c771d9662fe))
+
 ## [1.20.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.19.3...claude-dev-env-v1.20.0) (2026-04-15)
 
 
