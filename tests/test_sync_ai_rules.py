@@ -416,3 +416,45 @@ class TestFirstSyncPolicyWithExistingContent:
         exit_code = run_sync_with_canonical_body()
 
         assert exit_code == 0
+
+
+class TestEmptyEnvVarFallback:
+    """workflow_dispatch sets env vars to empty strings when client_payload is absent."""
+
+    def should_use_default_raw_url_when_env_var_is_empty(
+        self, git_repo: Path, sync_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("RAW_URL", "")
+        monkeypatch.setenv("SOURCE_COMMIT", "")
+
+        with patch(
+            "sync_ai_rules.fetch_canonical_body", return_value=CANONICAL_BODY
+        ) as mock_fetch:
+            with patch("sync_ai_rules.open_github_issue"):
+                exit_code = sync_ai_rules.main()
+
+        assert exit_code == 0
+        mock_fetch.assert_called_once_with(sync_ai_rules.DEFAULT_RAW_URL)
+
+    def should_use_unknown_placeholder_when_source_commit_is_empty(
+        self, git_repo: Path, sync_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SOURCE_COMMIT", "")
+
+        run_sync_with_canonical_body()
+
+        copilot_path = git_repo / ".github" / "copilot-instructions.md"
+        header_content = copilot_path.read_text(encoding="utf-8")
+        assert sync_ai_rules.UNKNOWN_COMMIT_PLACEHOLDER in header_content
+
+    def should_treat_empty_force_initial_overwrite_as_false(
+        self, git_repo: Path, sync_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        bugbot_path = git_repo / ".cursor" / "BUGBOT.md"
+        bugbot_path.parent.mkdir(parents=True, exist_ok=True)
+        bugbot_path.write_text("Existing human content.\n", encoding="utf-8")
+        monkeypatch.setenv("FORCE_INITIAL_OVERWRITE", "")
+
+        exit_code = run_sync_with_canonical_body()
+
+        assert exit_code != 0

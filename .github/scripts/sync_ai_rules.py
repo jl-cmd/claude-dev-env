@@ -288,10 +288,10 @@ def report_drift_errors(
 def main() -> int:
     github_token = os.environ.get("GITHUB_TOKEN", "")
     github_repository = os.environ.get("GITHUB_REPOSITORY", "")
-    source_commit = os.environ.get("SOURCE_COMMIT", UNKNOWN_COMMIT_PLACEHOLDER)
-    raw_url = os.environ.get("RAW_URL", DEFAULT_RAW_URL)
+    source_commit = os.environ.get("SOURCE_COMMIT") or UNKNOWN_COMMIT_PLACEHOLDER
+    raw_url = os.environ.get("RAW_URL") or DEFAULT_RAW_URL
     should_force_initial_overwrite = (
-        os.environ.get("FORCE_INITIAL_OVERWRITE", "false").lower() == "true"
+        (os.environ.get("FORCE_INITIAL_OVERWRITE") or "false").lower() == "true"
     )
 
     if Path(OPT_OUT_SENTINEL_PATH).exists():
