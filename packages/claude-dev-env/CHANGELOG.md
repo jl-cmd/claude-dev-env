@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.23.1...claude-dev-env-v1.24.0) (2026-04-17)
+
+
+### Features
+
+* **bugteam:** batch findings into one PR review per loop for tree-shaped comments ([#158](https://github.com/jl-cmd/claude-code-config/issues/158)) ([db503ae](https://github.com/jl-cmd/claude-code-config/commit/db503aecc21810a7c47a673afe9ecd7f32419965))
+
 ## [1.23.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.23.0...claude-dev-env-v1.23.1) (2026-04-17)
 
 
