@@ -1,6 +1,6 @@
 # Obsidian Vault Context
 
-An Obsidian vault at `C:\Users\jon\SessionLog\` stores session reports, decisions, and research documents across all projects.
+An Obsidian vault stores session reports, decisions, and research documents across all projects. Its filesystem location is configured per user via the `OBSIDIAN_VAULT_PATH` environment variable (or the equivalent path exposed by the user's Obsidian MCP server). Do not assume a specific OS path; resolve the vault location from the configured MCP tools before reading files directly.
 
 ## Available MCP Tools
 
