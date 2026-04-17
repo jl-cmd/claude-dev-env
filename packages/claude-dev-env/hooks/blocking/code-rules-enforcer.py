@@ -302,10 +302,17 @@ def check_imports_at_top(content: str) -> list[str]:
     return issues
 
 
+LOGGING_FSTRING_PATTERN = re.compile(
+    r'\b(?:log_(?:debug|info|warning|error|critical|exception)'
+    r'|(?:logger|logging|log)\.(?:debug|info|warning|error|critical|exception))'
+    r'\s*\(\s*(?:[rR][fF]|[fF][rR]?)["\']'
+)
+
+
 def check_logging_fstrings(content: str) -> list[str]:
     """Check for f-strings in logging calls."""
     issues = []
-    pattern = re.compile(r'\blog_(debug|info|warning|error|critical)\s*\(\s*f["\']')
+    pattern = LOGGING_FSTRING_PATTERN
 
     for line_number, line in enumerate(content.split("\n"), 1):
         if pattern.search(line):
