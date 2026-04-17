@@ -126,12 +126,20 @@ def enumerate_installation_repos(token: str) -> list[dict[str, object]]:
             )
             break
         if status_code != HTTP_STATUS_OK or response_body is None:
+            print(
+                f"::error::Enumeration failed with HTTP {status_code}",
+                file=sys.stderr,
+            )
             break
         page_repos = response_body.get("repositories", [])
         all_repos.extend(page_repos)
         if len(page_repos) < REPOS_PER_PAGE:
             break
         page_number += 1
+    print(
+        f"::notice::Enumeration returned {len(all_repos)} repositories",
+        file=sys.stderr,
+    )
     return all_repos
 
 
