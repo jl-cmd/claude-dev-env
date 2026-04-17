@@ -24,7 +24,7 @@ JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx"}
 ALL_CODE_EXTENSIONS = PYTHON_EXTENSIONS | JAVASCRIPT_EXTENSIONS
 
 CONFIG_PATH_PATTERNS = {"config/", "config\\", "/config.", "\\config.", "settings.py"}
-TEST_PATH_PATTERNS = {"test_", "_test.", ".spec.", "conftest", "/tests/", "\\tests\\", "/tests.py", "\\tests.py"}
+TEST_PATH_PATTERNS = {"test_", "_test.", ".spec.", "/tests/", "\\tests\\", "/tests.py", "\\tests.py"}
 HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\.claude/hooks/"}
 WORKFLOW_REGISTRY_PATTERNS = {"/workflow/", "\\workflow\\", "_tab.py", "/states.py", "\\states.py", "/modules.py", "\\modules.py"}
 MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
@@ -56,6 +56,9 @@ def is_config_file(file_path: str) -> bool:
 def is_test_file(file_path: str) -> bool:
     """Check if file is a test file."""
     path_lower = file_path.lower()
+    basename_lower = path_lower.replace("\\", "/").rsplit("/", 1)[-1]
+    if basename_lower == "conftest.py":
+        return True
     return any(pattern in path_lower for pattern in TEST_PATH_PATTERNS)
 
 
