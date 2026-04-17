@@ -162,7 +162,7 @@ def is_target_repo(repo: dict[str, object]) -> bool:
     if not is_included:
         full_name = repo.get("full_name", "")
         print(
-            f"::debug::Excluding {full_name}: owner_match={is_owned_by_target_account} "
+            f"::notice::Excluding {full_name}: owner_match={is_owned_by_target_account} "
             f"archived={is_archived} push={has_push_permission} "
             f"source_repo={is_source_repo} upstream_fork={is_upstream_fork}",
             file=sys.stderr,
