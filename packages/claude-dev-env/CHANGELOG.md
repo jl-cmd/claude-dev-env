@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.21.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.20.1...claude-dev-env-v1.21.0) (2026-04-17)
+
+
+### Features
+
+* **rules:** restore full rule content gutted in llm-settings PR[#17](https://github.com/jl-cmd/claude-code-config/issues/17) ([83fafd7](https://github.com/jl-cmd/claude-code-config/commit/83fafd710518b6a7dd805274c882fede2bf8877d))
+* **rules:** restore full rule content gutted in llm-settings PR[#17](https://github.com/jl-cmd/claude-code-config/issues/17) ([c6281a2](https://github.com/jl-cmd/claude-code-config/commit/c6281a27793a9f57aec0cfdda3a6cad27992d10c))
+
+
+### Bug Fixes
+
+* **rules:** remove hardcoded personal vault path from distributable rule ([7f90f29](https://github.com/jl-cmd/claude-code-config/commit/7f90f29ceb7d3a564832daf4d2a170d298e1d2a1))
+
 ## [1.20.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.20.0...claude-dev-env-v1.20.1) (2026-04-16)
 
 
