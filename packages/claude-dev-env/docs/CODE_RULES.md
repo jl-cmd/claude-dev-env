@@ -10,7 +10,9 @@ Compact reference for agents. Hook-enforced rules marked with ⚡.
 
 - Existing comments are SACRED — never delete, rewrite, or "clean up" existing comments
 - New inline comments are not needed — write self-documenting code instead
+- Module-level docstrings are allowed in all files
 - Docstrings for new files/methods/classes are allowed
+- **Test files are exempt:** comments and docstrings inside test functions are allowed
 - The hook enforces BOTH directions: blocks new inline comments AND blocks deletion of existing comments
 
 **Scope:** Only evaluate comments on lines YOU are actively changing. If code is untouched, its comments are untouched.
@@ -41,12 +43,12 @@ These rules are automatically enforced by `code-rules-enforcer.py`. Violations b
 
 | Rule | What's Checked |
 |------|----------------|
-| No NEW comments | `#` / `//` in new code only (existing comments NEVER removed; shebangs, type:, noqa, eslint, docstrings exempt) |
+| No NEW comments | `#` / `//` in new production code only (existing comments NEVER removed; shebangs, type:, noqa, eslint, docstrings, module docstrings, and all test files exempt) |
 | Imports at top | No `import` inside function bodies |
 | Logging format args | No `log_*(f"...")` - use `log_*("...", arg)` |
 | File line count | Advisory only — see [File length guidance](#65-file-length-guidance) |
-| Magic values | No literals in function bodies (0, 1, -1 exempt). Includes string templates — if you strip the interpolations from an f-string and the remaining literal text is structural (paths, URLs, patterns), those fragments are magic values that belong in config |
-| Constants location | No `UPPER_SNAKE =` outside `config/` |
+| Magic values | No literals in production function bodies (0, 1, -1 exempt). **Test files exempt.** Includes string templates — if you strip the interpolations from an f-string and the remaining literal text is structural (paths, URLs, patterns), those fragments are magic values that belong in config |
+| Constants location | No `UPPER_SNAKE =` outside `config/` in **production code**. **Test files may define local constants.** |
 
 ---
 

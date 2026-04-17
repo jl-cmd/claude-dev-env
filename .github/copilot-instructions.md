@@ -3,9 +3,10 @@
 Review every change against these rules. Flag each violation with its rule name. Treat rules as mandatory standards; honor file-level exception markers where they appear.
 
 ## Comments
-- Flag every new inline comment (`#` or `//`) added to modified code; require self-documenting names.
+- Flag every new inline comment (`#` or `//`) added to modified **production** code; require self-documenting names.
 - Preserve every existing comment as-is; treat comments in the surrounding file as sacred.
-- Allow docstrings on new functions, methods, classes, or modules.
+- Allow docstrings on new functions, methods, classes, or modules (including module-level docstrings).
+- **Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`) are fully exempt** — comments and docstrings inside test functions are allowed.
 - Exempt markers: shebangs, `# type:`, `# noqa`, `// eslint-...`.
 
 ## Naming
@@ -21,10 +22,11 @@ Review every change against these rules. Flag each violation with its rule name.
 - Require component names that describe what the component is (`Overlay` for `Screen`, `Validator` for `Handler`).
 
 ## Magic values and configuration
-- Require named constants for numeric, string, and boolean literals in function bodies; exempt `0`, `1`, `-1`, empty string, and `True`/`False` where the meaning is obvious.
-- Treat structural fragments inside f-strings (paths, URLs, query patterns, regex) as magic values; require extraction to a named constant.
-- Require `UPPER_SNAKE_CASE` constants to live in `config/` (`config/timing.py`, `config/constants.py`, `config/selectors.py`); flag definitions located elsewhere.
-- Require a search of existing `config/` files for reuse before adding any new constant.
+- Require named constants for numeric, string, and boolean literals in **production** function bodies; exempt `0`, `1`, `-1`, empty string, and `True`/`False` where the meaning is obvious.
+- **Test files are exempt** — inline literals in test functions and test-local constants are allowed.
+- Treat structural fragments inside f-strings (paths, URLs, query patterns, regex) as magic values in production code; require extraction to a named constant.
+- Require `UPPER_SNAKE_CASE` constants in **production code** to live in `config/` (`config/timing.py`, `config/constants.py`, `config/selectors.py`); flag definitions located elsewhere. Test files may define local constants without using `config/`.
+- Require a search of existing `config/` files for reuse before adding any new production constant.
 
 ## Types
 - Require type hints on all function parameters and return values; flag missing hints.
