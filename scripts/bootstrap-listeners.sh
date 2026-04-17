@@ -38,7 +38,7 @@ Options:
 EOF
 }
 
-log_info() { echo "[INFO] $*"; }
+log_info() { echo "[INFO] $*" >&2; }
 log_warn() { echo "[WARN] $*" >&2; }
 log_error() { echo "[ERROR] $*" >&2; }
 
@@ -117,9 +117,16 @@ deploy_to_repo() {
     trap 'rm -rf "${work_dir}"' RETURN
 
     log_info "Cloning ${repo_full_name} (shallow)..."
-    if ! gh repo clone "${repo_full_name}" "${work_dir}" -- --depth 1 --quiet; then
+    if ! gh repo clone "${repo_full_name}" "${work_dir}" -- --depth 1 --quiet --config core.longpaths=true --config core.sparseCheckout=true --no-checkout; then
         log_warn "Failed to clone ${repo_full_name}, skipping"
         echo "clone-failed"
+        return
+    fi
+
+    git -C "${work_dir}" sparse-checkout set --no-cone '/*' '!/.planning/' >/dev/null 2>&1 || true
+    if ! git -C "${work_dir}" checkout >/dev/null 2>&1; then
+        log_warn "Checkout failed for ${repo_full_name}, skipping"
+        echo "checkout-failed"
         return
     fi
 
@@ -129,7 +136,7 @@ deploy_to_repo() {
     cp "${LISTENER_WORKFLOW_SOURCE}" "${work_dir}/${LISTENER_WORKFLOW_DEST}"
     cp "${LISTENER_SCRIPT_SOURCE}" "${work_dir}/${LISTENER_SCRIPT_DEST}"
 
-    if git -C "${work_dir}" diff --quiet HEAD 2>/dev/null; then
+    if [[ -z "$(git -C "${work_dir}" status --porcelain)" ]]; then
         log_info "${repo_full_name}: already up to date, skipping"
         echo "skipped"
         return
