@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.21.2...claude-dev-env-v1.22.0) (2026-04-17)
+
+
+### Features
+
+* add /findbugs, /fixbugs, /bugteam skills for autonomous code-quality audit-and-fix cycles ([#135](https://github.com/jl-cmd/claude-code-config/issues/135)) ([ef2a89b](https://github.com/jl-cmd/claude-code-config/commit/ef2a89b458f9fa9bacb1b4e0532c9c2c883f945e))
+
 ## [1.21.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.21.1...claude-dev-env-v1.21.2) (2026-04-17)
 
 
