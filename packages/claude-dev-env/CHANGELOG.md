@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.21.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.21.0...claude-dev-env-v1.21.1) (2026-04-17)
+
+
+### Maintenance
+
+* **rules:** add test-file exemptions to CODE_RULES and copilot-instructions ([0a87255](https://github.com/jl-cmd/claude-code-config/commit/0a87255943145fa79b6ec9b42f7e98d02389146c))
+* **rules:** add test-file exemptions to CODE_RULES and copilot-instructions ([70f5e0f](https://github.com/jl-cmd/claude-code-config/commit/70f5e0f58f9789dd9eda413bdf864de0e12510ba))
+
 ## [1.21.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.20.1...claude-dev-env-v1.21.0) (2026-04-17)
 
 
