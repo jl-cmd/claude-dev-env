@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.21.1...claude-dev-env-v1.21.2) (2026-04-17)
+
+
+### Bug Fixes
+
+* **sync:** force-add listener destinations past gitignore wildcards ([#130](https://github.com/jl-cmd/claude-code-config/issues/130)) ([7dbb1af](https://github.com/jl-cmd/claude-code-config/commit/7dbb1af2cb8a39f2e3a77431d8f97cd6ebcdfa3a))
+
 ## [1.21.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.21.0...claude-dev-env-v1.21.1) (2026-04-17)
 
 
