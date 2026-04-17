@@ -43,7 +43,7 @@ These rules are automatically enforced by `code-rules-enforcer.py`. Violations b
 
 | Rule | What's Checked |
 |------|----------------|
-| No NEW comments | `#` / `//` in new production code only (existing comments NEVER removed; shebangs, type:, noqa, eslint, docstrings, module docstrings, and all test files exempt) |
+| No NEW comments | `#` / `//` in new production code only (existing comments NEVER removed; exempt markers: shebangs, `# type:`, `# noqa`, `# pylint:`, `# pragma:`, `// @ts-`, `// eslint-`, `// prettier-`, `/// `; docstrings and module docstrings are always allowed; all test files are exempt) |
 | Imports at top | No `import` inside function bodies |
 | Logging format args | No `log_*(f"...")` - use `log_*("...", arg)` |
 | File line count | Advisory only — see [File length guidance](#65-file-length-guidance) |
