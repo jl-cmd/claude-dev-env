@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional
 
 
@@ -30,30 +31,39 @@ RECONCILIATION_WAIT_SECONDS = 60
 STALE_LISTENER_THRESHOLD_DAYS = 14
 REPOS_PER_PAGE = 100
 RETRY_AFTER_DEFAULT_SECONDS = 60
+GITHUB_API_REQUEST_TIMEOUT_SECONDS = 30
+LISTENER_POLL_MAX_ATTEMPTS = 10
+LISTENER_POLL_INTERVAL_SECONDS = 30
+HTTP_STATUS_OK = 200
+HTTP_STATUS_NO_CONTENT = 204
+HTTP_STATUS_FORBIDDEN = 403
 HTTP_STATUS_NOT_FOUND = 404
 HTTP_STATUS_TOO_MANY_REQUESTS = 429
-HTTP_STATUS_FORBIDDEN = 403
-HTTP_STATUS_NO_CONTENT = 204
 SECONDS_PER_DAY = 86400
 
-DISPATCH_STATUS_SENT = "sent"
+DISPATCH_STATUS_SUCCEEDED = "succeeded"
+NETWORK_ERROR_STATUS_CODE = 0
 DISPATCH_STATUS_OPTED_OUT = "opted-out"
 DISPATCH_STATUS_FAILED = "dispatch-failed"
 LISTENER_STATUS_MISSING = "listener-missing"
 LISTENER_STATUS_PENDING = "pending"
+LISTENER_STATUS_POLL_ERROR = "poll-error"
+LISTENER_CONCLUSION_SUCCESS = "success"
+LISTENER_CONCLUSION_FAILURE = "failure"
+UNKNOWN_COMMIT_PLACEHOLDER = "unknown"
 
 
 def make_github_api_request(
     path: str,
     token: str,
     method: str = "GET",
-    payload: Optional[dict] = None,
-) -> tuple[int, Optional[dict]]:
+    payload: Optional[dict[str, object]] = None,
+) -> tuple[int, Optional[dict[str, object]], Optional[int]]:
     url = f"{GITHUB_API_BASE_URL}{path}"
-    body_bytes = json.dumps(payload).encode("utf-8") if payload else None
+    payload_bytes = json.dumps(payload).encode("utf-8") if payload else None
     api_request = urllib.request.Request(
         url,
-        data=body_bytes,
+        data=payload_bytes,
         headers={
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
@@ -63,26 +73,61 @@ def make_github_api_request(
         method=method,
     )
     try:
-        with urllib.request.urlopen(api_request) as http_response:
+        with urllib.request.urlopen(
+            api_request, timeout=GITHUB_API_REQUEST_TIMEOUT_SECONDS
+        ) as http_response:
             status_code = http_response.status
             if status_code == HTTP_STATUS_NO_CONTENT:
-                return status_code, None
-            return status_code, json.loads(http_response.read().decode("utf-8"))
+                return status_code, None, None
+            return (
+                status_code,
+                json.loads(http_response.read().decode("utf-8")),
+                None,
+            )
     except urllib.error.HTTPError as http_error:
-        return http_error.code, None
+        retry_after_header = http_error.headers.get("Retry-After")
+        retry_after_seconds: Optional[int] = None
+        if retry_after_header is not None:
+            try:
+                retry_after_seconds = int(retry_after_header)
+            except (TypeError, ValueError):
+                try:
+                    parsed_moment = parsedate_to_datetime(retry_after_header)
+                except (TypeError, ValueError):
+                    parsed_moment = None
+                if parsed_moment is not None:
+                    if parsed_moment.tzinfo is None:
+                        parsed_moment = parsed_moment.replace(tzinfo=timezone.utc)
+                    retry_after_seconds = max(
+                        0,
+                        int(
+                            (
+                                parsed_moment - datetime.now(timezone.utc)
+                            ).total_seconds()
+                        ),
+                    )
+        return http_error.code, None, retry_after_seconds
+    except (urllib.error.URLError, TimeoutError):
+        return 0, None, None
 
 
-def enumerate_installation_repos(token: str) -> list[dict]:
-    all_repos: list[dict] = []
+def enumerate_installation_repos(token: str) -> list[dict[str, object]]:
+    all_repos: list[dict[str, object]] = []
     page_number = 1
     while True:
         path = (
             f"/installation/repositories?per_page={REPOS_PER_PAGE}&page={page_number}"
         )
-        status_code, body = make_github_api_request(path, token)
-        if status_code != 200 or body is None:
+        status_code, response_body, _ = make_github_api_request(path, token)
+        if status_code == NETWORK_ERROR_STATUS_CODE:
+            print(
+                "::error::Network error during enumeration; aborting run",
+                file=sys.stderr,
+            )
             break
-        page_repos = body.get("repositories", [])
+        if status_code != HTTP_STATUS_OK or response_body is None:
+            break
+        page_repos = response_body.get("repositories", [])
         all_repos.extend(page_repos)
         if len(page_repos) < REPOS_PER_PAGE:
             break
@@ -90,7 +135,7 @@ def enumerate_installation_repos(token: str) -> list[dict]:
     return all_repos
 
 
-def is_target_repo(repo: dict) -> bool:
+def is_target_repo(repo: dict[str, object]) -> bool:
     owner_login = repo.get("owner", {}).get("login", "")
     is_owned_by_target_account = owner_login in ("JonEcho", "jl-cmd")
     is_archived = repo.get("archived", True)
@@ -98,7 +143,7 @@ def is_target_repo(repo: dict) -> bool:
     is_source_repo = repo.get("full_name") == SOURCE_REPO_FULL_NAME
     is_upstream_fork = repo.get("fork", False) and not is_owned_by_target_account
 
-    return (
+    is_included = (
         is_owned_by_target_account
         and not is_archived
         and has_push_permission
@@ -106,32 +151,56 @@ def is_target_repo(repo: dict) -> bool:
         and not is_upstream_fork
     )
 
+    if not is_included:
+        full_name = repo.get("full_name", "")
+        print(
+            f"::debug::Excluding {full_name}: owner_match={is_owned_by_target_account} "
+            f"archived={is_archived} push={has_push_permission} "
+            f"source_repo={is_source_repo} upstream_fork={is_upstream_fork}",
+            file=sys.stderr,
+        )
+    return is_included
+
 
 def check_opt_out_sentinel(owner: str, repo_name: str, token: str) -> bool:
     path = f"/repos/{owner}/{repo_name}/contents/{OPT_OUT_SENTINEL_RELATIVE_PATH}"
-    status_code, _ = make_github_api_request(path, token)
-    return status_code == 200
+    status_code, _, _ = make_github_api_request(path, token)
+    return status_code == HTTP_STATUS_OK
+
+
+def parse_iso_timestamp(timestamp_text: str) -> Optional[datetime]:
+    if not timestamp_text:
+        return None
+    try:
+        return datetime.fromisoformat(timestamp_text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def dispatch_sync_event_with_retry(
     owner: str,
     repo_name: str,
     token: str,
-    dispatch_payload: dict,
+    dispatch_payload: dict[str, object],
 ) -> bool:
     path = f"/repos/{owner}/{repo_name}/dispatches"
-    status_code, _ = make_github_api_request(
+    status_code, _, retry_after_seconds = make_github_api_request(
         path, token, method="POST", payload=dispatch_payload
     )
 
-    if status_code in (HTTP_STATUS_FORBIDDEN, HTTP_STATUS_TOO_MANY_REQUESTS):
+    if status_code == HTTP_STATUS_TOO_MANY_REQUESTS:
+        sleep_seconds = (
+            retry_after_seconds
+            if retry_after_seconds is not None
+            else RETRY_AFTER_DEFAULT_SECONDS
+        )
         print(
             f"::warning::Rate limited dispatching to {owner}/{repo_name}, retrying after "
-            f"{RETRY_AFTER_DEFAULT_SECONDS}s",
+            f"{sleep_seconds}s",
             file=sys.stderr,
         )
-        time.sleep(RETRY_AFTER_DEFAULT_SECONDS)
-        status_code, _ = make_github_api_request(
+        time.sleep(sleep_seconds)
+        status_code, _, _ = make_github_api_request(
             path, token, method="POST", payload=dispatch_payload
         )
 
@@ -156,23 +225,53 @@ def poll_listener_run_conclusion(
         f"/{LISTENER_WORKFLOW_FILENAME}/runs"
         f"?event=repository_dispatch&per_page=1"
     )
-    status_code, body = make_github_api_request(path, token)
-    if status_code == HTTP_STATUS_NOT_FOUND or body is None:
-        return LISTENER_STATUS_MISSING
+    dispatched_at_parsed = parse_iso_timestamp(dispatched_at)
 
-    all_workflow_runs = body.get("workflow_runs", [])
-    if not all_workflow_runs:
-        return LISTENER_STATUS_MISSING
+    all_attempts_were_network_errors = True
+    for attempt_index in range(LISTENER_POLL_MAX_ATTEMPTS):
+        status_code, response_body, _ = make_github_api_request(path, token)
+        if status_code == HTTP_STATUS_NOT_FOUND:
+            return LISTENER_STATUS_MISSING
+        if status_code == NETWORK_ERROR_STATUS_CODE:
+            time.sleep(LISTENER_POLL_INTERVAL_SECONDS)
+            continue
+        all_attempts_were_network_errors = False
+        if status_code != HTTP_STATUS_OK or response_body is None:
+            return LISTENER_STATUS_POLL_ERROR
 
-    most_recent_run = all_workflow_runs[0]
-    run_created_at = most_recent_run.get("created_at", "")
-    if run_created_at < dispatched_at:
-        return LISTENER_STATUS_PENDING
+        all_workflow_runs = response_body.get("workflow_runs", [])
+        if not all_workflow_runs:
+            if attempt_index == LISTENER_POLL_MAX_ATTEMPTS - 1:
+                return LISTENER_STATUS_MISSING
+            time.sleep(LISTENER_POLL_INTERVAL_SECONDS)
+            continue
 
-    conclusion = most_recent_run.get("conclusion")
-    if conclusion is None:
-        return LISTENER_STATUS_PENDING
-    return conclusion
+        most_recent_run = all_workflow_runs[0]
+        run_created_at_text = most_recent_run.get("created_at", "")
+        run_created_at_parsed = parse_iso_timestamp(run_created_at_text)
+
+        run_is_for_current_dispatch = (
+            dispatched_at_parsed is not None
+            and run_created_at_parsed is not None
+            and run_created_at_parsed >= dispatched_at_parsed
+        )
+        if not run_is_for_current_dispatch:
+            if attempt_index == LISTENER_POLL_MAX_ATTEMPTS - 1:
+                return LISTENER_STATUS_PENDING
+            time.sleep(LISTENER_POLL_INTERVAL_SECONDS)
+            continue
+
+        conclusion = most_recent_run.get("conclusion")
+        if isinstance(conclusion, str):
+            return conclusion
+
+        if attempt_index == LISTENER_POLL_MAX_ATTEMPTS - 1:
+            return LISTENER_STATUS_PENDING
+        time.sleep(LISTENER_POLL_INTERVAL_SECONDS)
+
+    if all_attempts_were_network_errors:
+        return LISTENER_STATUS_POLL_ERROR
+    return LISTENER_STATUS_PENDING
 
 
 def is_listener_stale(
@@ -186,11 +285,11 @@ def is_listener_stale(
         f"/{LISTENER_WORKFLOW_FILENAME}/runs"
         f"?per_page=1"
     )
-    status_code, body = make_github_api_request(path, token)
-    if status_code == HTTP_STATUS_NOT_FOUND or body is None:
+    status_code, response_body, _ = make_github_api_request(path, token)
+    if status_code == HTTP_STATUS_NOT_FOUND or response_body is None:
         return True
 
-    all_workflow_runs = body.get("workflow_runs", [])
+    all_workflow_runs = response_body.get("workflow_runs", [])
     if not all_workflow_runs:
         return True
 
@@ -242,10 +341,14 @@ def build_stale_section(all_stale_repos: list[str]) -> str:
     return f"\n\n## Stale listeners\n\nThese repos have no listener run in the past {STALE_LISTENER_THRESHOLD_DAYS} days:\n\n{stale_entries}"
 
 
+def resolve_source_commit_from_environment() -> str:
+    return os.environ.get("SOURCE_COMMIT") or UNKNOWN_COMMIT_PLACEHOLDER
+
+
 def main() -> int:
     jonecho_token = os.environ.get("JONECHO_TOKEN", "")
     jlcmd_token = os.environ.get("JLCMD_TOKEN", "")
-    source_commit = os.environ.get("SOURCE_COMMIT", "unknown")
+    source_commit = resolve_source_commit_from_environment()
     source_sha = os.environ.get("SOURCE_SHA", "")
     dispatched_at = datetime.now(timezone.utc).isoformat()
 
@@ -268,7 +371,7 @@ def main() -> int:
 
     token_by_owner = {"JonEcho": jonecho_token, "jl-cmd": jlcmd_token}
 
-    all_candidate_repos: list[dict] = []
+    all_candidate_repos: list[dict[str, object]] = []
     for owner, token in token_by_owner.items():
         if not token:
             print(
@@ -285,10 +388,19 @@ def main() -> int:
     all_dispatched_repos: list[tuple[str, str, str]] = []
 
     for repo in all_target_repos:
-        owner = repo["owner"]["login"]
-        repo_name = repo["name"]
-        full_repo_name = repo["full_name"]
-        token = token_by_owner.get(owner, "")
+        owner = (repo.get("owner") or {}).get("login")
+        repo_name = repo.get("name")
+        full_repo_name = repo.get("full_name")
+        if not owner or not repo_name or not full_repo_name:
+            print(f"::debug::Skipping malformed repo entry: {repo}", file=sys.stderr)
+            continue
+        token = token_by_owner.get(owner)
+        if token is None:
+            print(
+                f"::warning::No installation token available for owner {owner}; skipping {full_repo_name}",
+                file=sys.stderr,
+            )
+            continue
 
         if check_opt_out_sentinel(owner, repo_name, token):
             dispatch_status_by_repo[full_repo_name] = DISPATCH_STATUS_OPTED_OUT
@@ -298,7 +410,7 @@ def main() -> int:
             owner, repo_name, token, dispatch_payload
         )
         if dispatch_succeeded:
-            dispatch_status_by_repo[full_repo_name] = DISPATCH_STATUS_SENT
+            dispatch_status_by_repo[full_repo_name] = DISPATCH_STATUS_SUCCEEDED
             all_dispatched_repos.append((owner, repo_name, full_repo_name))
         else:
             dispatch_status_by_repo[full_repo_name] = DISPATCH_STATUS_FAILED
@@ -306,9 +418,21 @@ def main() -> int:
 
         time.sleep(DISPATCH_RATE_LIMIT_SLEEP_SECONDS)
 
-    if not all_dispatched_repos and not dispatch_status_by_repo:
+    if not dispatch_status_by_repo:
         write_step_summary("No target repos found.")
         return 0
+
+    if not all_dispatched_repos:
+        summary = (
+            "## Fan-out AI Rules — Dispatch Summary\n\n"
+            + build_summary_table(dispatch_status_by_repo, {}, {})
+        )
+        write_step_summary(summary)
+        print(
+            compute_exit_summary_line(dispatch_status_by_repo, {}),
+            file=sys.stderr,
+        )
+        return compute_exit_code(dispatch_status_by_repo, {})
 
     print(
         f"Dispatched to {len(all_dispatched_repos)} repos. "
@@ -329,7 +453,7 @@ def main() -> int:
         )
         conclusion_by_repo[full_repo_name] = conclusion
 
-        if conclusion == "failure":
+        if conclusion == LISTENER_CONCLUSION_FAILURE:
             print(
                 f"::error::Drift detected or sync failed in {full_repo_name}",
                 file=sys.stderr,
@@ -337,6 +461,10 @@ def main() -> int:
             notes_by_repo[full_repo_name] = "drift or sync error"
         elif conclusion == LISTENER_STATUS_MISSING:
             notes_by_repo[full_repo_name] = "listener not installed"
+        elif conclusion == LISTENER_STATUS_POLL_ERROR:
+            notes_by_repo[full_repo_name] = "poll error"
+        elif conclusion == LISTENER_STATUS_PENDING:
+            notes_by_repo[full_repo_name] = "pending after retries"
 
         if is_listener_stale(owner, repo_name, token, stale_threshold_seconds):
             all_stale_repos.append(full_repo_name)
@@ -350,16 +478,68 @@ def main() -> int:
     )
     write_step_summary(summary)
 
-    all_dispatches_failed = all(
+    exit_summary_line = compute_exit_summary_line(
+        dispatch_status_by_repo, conclusion_by_repo
+    )
+    print(exit_summary_line, file=sys.stderr)
+
+    return compute_exit_code(dispatch_status_by_repo, conclusion_by_repo)
+
+
+def compute_exit_summary_line(
+    dispatch_status_by_repo: dict[str, str],
+    conclusion_by_repo: dict[str, str],
+) -> str:
+    dispatch_success_count = sum(
+        1 for status in dispatch_status_by_repo.values() if status == DISPATCH_STATUS_SUCCEEDED
+    )
+    dispatch_failed_count = sum(
+        1 for status in dispatch_status_by_repo.values() if status == DISPATCH_STATUS_FAILED
+    )
+    dispatch_opted_out_count = sum(
+        1 for status in dispatch_status_by_repo.values() if status == DISPATCH_STATUS_OPTED_OUT
+    )
+    conclusion_success_count = sum(
+        1 for each_conclusion in conclusion_by_repo.values() if each_conclusion == LISTENER_CONCLUSION_SUCCESS
+    )
+    conclusion_failure_count = sum(
+        1 for each_conclusion in conclusion_by_repo.values() if each_conclusion == LISTENER_CONCLUSION_FAILURE
+    )
+    conclusion_pending_count = sum(
+        1 for each_conclusion in conclusion_by_repo.values() if each_conclusion == LISTENER_STATUS_PENDING
+    )
+    conclusion_poll_error_count = sum(
+        1 for each_conclusion in conclusion_by_repo.values() if each_conclusion == LISTENER_STATUS_POLL_ERROR
+    )
+    return (
+        f"dispatch_success={dispatch_success_count} "
+        f"dispatch_failed={dispatch_failed_count} "
+        f"dispatch_opted_out={dispatch_opted_out_count} "
+        f"conclusion_success={conclusion_success_count} "
+        f"conclusion_failure={conclusion_failure_count} "
+        f"conclusion_pending={conclusion_pending_count} "
+        f"conclusion_poll_error={conclusion_poll_error_count}"
+    )
+
+
+def compute_exit_code(
+    dispatch_status_by_repo: dict[str, str],
+    conclusion_by_repo: dict[str, str],
+) -> int:
+    any_dispatch_failed = any(
         status == DISPATCH_STATUS_FAILED
         for status in dispatch_status_by_repo.values()
-        if status != DISPATCH_STATUS_OPTED_OUT
     )
-    if all_dispatches_failed and any(
-        status == DISPATCH_STATUS_FAILED for status in dispatch_status_by_repo.values()
-    ):
+    failing_conclusions = {
+        LISTENER_CONCLUSION_FAILURE,
+        LISTENER_STATUS_PENDING,
+        LISTENER_STATUS_POLL_ERROR,
+    }
+    any_conclusion_failed = any(
+        each_conclusion in failing_conclusions for each_conclusion in conclusion_by_repo.values()
+    )
+    if any_dispatch_failed or any_conclusion_failed:
         return 1
-
     return 0
 
 

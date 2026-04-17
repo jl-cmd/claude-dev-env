@@ -6,10 +6,13 @@ import json
 import os
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
 
 SYNC_HEADER_START_MARKER = "<!-- SYNC-HEADER-START -->"
@@ -35,12 +38,35 @@ SOURCE_REPO_TRAILER_KEY = "Source-Repo"
 SOURCE_PATH_TRAILER_KEY = "Source-Path"
 SYNC_SOURCE_COMMIT_TRAILER_KEY = "Sync-Source-Commit"
 GITHUB_API_BASE_URL = "https://api.github.com"
+GITHUB_API_VERSION_HEADER = "2022-11-28"
 HEADER_SEPARATOR_LENGTH = 2
+SHA_DISPLAY_LENGTH = 16
 UNKNOWN_COMMIT_PLACEHOLDER = "unknown"
+FETCH_CANONICAL_TIMEOUT_SECONDS = 30
+FETCH_CANONICAL_MAX_ATTEMPTS = 3
+FETCH_CANONICAL_BACKOFF_BASE_SECONDS = 2
+FETCH_CANONICAL_BACKOFF_EXPONENT_BASE = 2
+GITHUB_API_REQUEST_TIMEOUT_SECONDS = 30
+CANONICAL_BODY_MINIMUM_LENGTH_BYTES = 100
+COMMIT_PUSH_MAX_ATTEMPTS = 3
+COMMIT_PUSH_RETRY_SLEEP_SECONDS = 5
+DRIFT_ISSUE_LABEL = "ai-rules-drift"
+HTTP_STATUS_OK = 200
+HTTP_STATUS_CREATED = 201
+
+
+class DriftError(TypedDict):
+    destination_path: str
+    message: str
+
+
+def normalize_line_endings(text: str) -> str:
+    return text.replace("\r\n", "\n")
 
 
 def compute_sha256(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+    normalized_content = normalize_line_endings(content)
+    return hashlib.sha256(normalized_content.encode("utf-8")).hexdigest()
 
 
 def build_sync_header(source_commit: str, synced_at: str) -> str:
@@ -57,18 +83,25 @@ def build_sync_header(source_commit: str, synced_at: str) -> str:
     )
 
 
-def build_destination_content(body: str, source_commit: str, synced_at: str) -> str:
-    return build_sync_header(source_commit, synced_at) + "\n" + body
+def build_destination_content(
+    canonical_body: str, source_commit: str, synced_at: str
+) -> str:
+    return build_sync_header(source_commit, synced_at) + "\n" + canonical_body
 
 
 def strip_sync_header(content: str) -> Optional[str]:
     """Return body with sync header removed, or None if header sentinels are absent."""
-    start_position = content.find(SYNC_HEADER_START_MARKER)
-    end_position = content.find(SYNC_HEADER_END_MARKER)
-    if start_position == -1 or end_position == -1:
+    normalized_content = normalize_line_endings(content)
+    start_position = normalized_content.find(SYNC_HEADER_START_MARKER)
+    end_position = normalized_content.find(SYNC_HEADER_END_MARKER)
+    if (
+        start_position == -1
+        or end_position == -1
+        or end_position < start_position
+    ):
         return None
     after_end_marker = end_position + len(SYNC_HEADER_END_MARKER)
-    remaining = content[after_end_marker:]
+    remaining = normalized_content[after_end_marker:]
     if remaining.startswith("\n\n"):
         return remaining[HEADER_SEPARATOR_LENGTH:]
     if remaining.startswith("\n"):
@@ -77,22 +110,37 @@ def strip_sync_header(content: str) -> Optional[str]:
 
 
 def fetch_canonical_body(raw_url: str) -> str:
-    with urllib.request.urlopen(raw_url) as http_response:
-        return http_response.read().decode("utf-8")
+    last_exception: Optional[BaseException] = None
+    for attempt_index in range(FETCH_CANONICAL_MAX_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(
+                raw_url, timeout=FETCH_CANONICAL_TIMEOUT_SECONDS
+            ) as http_response:
+                return http_response.read().decode("utf-8")
+        except (urllib.error.URLError, TimeoutError) as fetch_error:
+            last_exception = fetch_error
+            if attempt_index == FETCH_CANONICAL_MAX_ATTEMPTS - 1:
+                break
+            sleep_seconds = FETCH_CANONICAL_BACKOFF_BASE_SECONDS * (
+                FETCH_CANONICAL_BACKOFF_EXPONENT_BASE ** attempt_index
+            )
+            time.sleep(sleep_seconds)
+    assert last_exception is not None
+    raise last_exception
 
 
 def find_last_bot_commit_hash(destination_path: str) -> Optional[str]:
     """Return the hash of the most recent github-actions[bot] commit touching destination_path."""
     completed = subprocess.run(
-        ["git", "log", "--format=%H %ae", "--", destination_path],
+        ["git", "log", "--format=%H %ce", "--", destination_path],
         capture_output=True,
         text=True,
         check=True,
     )
-    for log_line in completed.stdout.splitlines():
-        parts = log_line.split(" ", 1)
-        if len(parts) == 2 and parts[1].strip() == BOT_AUTHOR_EMAIL:
-            return parts[0]
+    for each_log_line in completed.stdout.splitlines():
+        hash_and_email = each_log_line.split(" ", 1)
+        if len(hash_and_email) == 2 and hash_and_email[1].strip() == BOT_AUTHOR_EMAIL:
+            return hash_and_email[0]
     return None
 
 
@@ -151,14 +199,20 @@ def check_destination_policy(
                 f"sync header markers are absent. The file appears to have been manually "
                 f"replaced. Re-run with `force_initial_overwrite=true` to overwrite."
             )
+        if not existing_content.strip():
+            print(
+                f"::warning::Destination {destination_path} lost its sync header; "
+                f"treating as first sync.",
+                file=sys.stderr,
+            )
         return None
 
     actual_body_sha256 = compute_sha256(existing_body)
     if actual_body_sha256 != stored_body_sha256:
         return (
             f"Drift detected in {destination_path}: "
-            f"expected body SHA256={stored_body_sha256[:16]}…, "
-            f"actual={actual_body_sha256[:16]}…"
+            f"expected body SHA256={stored_body_sha256[:SHA_DISPLAY_LENGTH]}…, "
+            f"actual={actual_body_sha256[:SHA_DISPLAY_LENGTH]}…"
         )
     return None
 
@@ -190,9 +244,13 @@ def open_github_issue(
     github_token: str,
     repository: str,
     title: str,
-    body: str,
+    issue_body_text: str,
+    labels: Optional[list[str]] = None,
 ) -> None:
-    issue_payload = json.dumps({"title": title, "body": body}).encode("utf-8")
+    issue_payload_dict: dict[str, object] = {"title": title, "body": issue_body_text}
+    if labels:
+        issue_payload_dict["labels"] = labels
+    issue_payload = json.dumps(issue_payload_dict).encode("utf-8")
     api_request = urllib.request.Request(
         f"{GITHUB_API_BASE_URL}/repos/{repository}/issues",
         data=issue_payload,
@@ -200,12 +258,81 @@ def open_github_issue(
             "Authorization": f"Bearer {github_token}",
             "Accept": "application/vnd.github+json",
             "Content-Type": "application/json",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": GITHUB_API_VERSION_HEADER,
         },
         method="POST",
     )
-    with urllib.request.urlopen(api_request):
-        pass
+    with urllib.request.urlopen(
+        api_request, timeout=GITHUB_API_REQUEST_TIMEOUT_SECONDS
+    ) as http_response:
+        status_code = http_response.status
+    if status_code != HTTP_STATUS_CREATED:
+        print(
+            f"::error::Issue creation returned status {status_code}",
+            file=sys.stderr,
+        )
+        raise RuntimeError(f"Issue creation returned status {status_code}")
+
+
+def find_existing_drift_issue(
+    github_token: str,
+    repository: str,
+    label: str,
+) -> Optional[int]:
+    encoded_label = urllib.parse.quote(label, safe="")
+    url = (
+        f"{GITHUB_API_BASE_URL}/repos/{repository}/issues"
+        f"?state=open&labels={encoded_label}&per_page=1"
+    )
+    api_request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {github_token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": GITHUB_API_VERSION_HEADER,
+        },
+        method="GET",
+    )
+    with urllib.request.urlopen(
+        api_request, timeout=GITHUB_API_REQUEST_TIMEOUT_SECONDS
+    ) as http_response:
+        all_open_issues = json.loads(http_response.read().decode("utf-8"))
+    if not isinstance(all_open_issues, list) or not all_open_issues:
+        return None
+    first_issue = all_open_issues[0]
+    issue_number = first_issue.get("number")
+    if isinstance(issue_number, int):
+        return issue_number
+    return None
+
+
+def add_issue_comment(
+    github_token: str,
+    repository: str,
+    issue_number: int,
+    comment_body: str,
+) -> None:
+    comment_payload = json.dumps({"body": comment_body}).encode("utf-8")
+    api_request = urllib.request.Request(
+        f"{GITHUB_API_BASE_URL}/repos/{repository}/issues/{issue_number}/comments",
+        data=comment_payload,
+        headers={
+            "Authorization": f"Bearer {github_token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": GITHUB_API_VERSION_HEADER,
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(
+        api_request, timeout=GITHUB_API_REQUEST_TIMEOUT_SECONDS
+    ) as http_response:
+        response_body_text = http_response.read().decode("utf-8")
+        comment_status_code = http_response.status
+    if comment_status_code != HTTP_STATUS_CREATED:
+        raise RuntimeError(
+            f"Comment creation returned status {comment_status_code}: {response_body_text}"
+        )
 
 
 def write_step_summary(text: str) -> None:
@@ -244,43 +371,102 @@ def commit_and_push_sync(
         ],
         check=True,
     )
-    subprocess.run(["git", "push"], check=True)
+
+    current_branch_name = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+    last_push_error: Optional[subprocess.CalledProcessError] = None
+    for attempt_index in range(COMMIT_PUSH_MAX_ATTEMPTS):
+        try:
+            subprocess.run(["git", "fetch", "origin"], check=True)
+            subprocess.run(
+                ["git", "pull", "--rebase", "origin", current_branch_name],
+                check=True,
+            )
+            subprocess.run(["git", "push"], check=True)
+            return
+        except subprocess.CalledProcessError as push_error:
+            last_push_error = push_error
+            subprocess.run(
+                ["git", "rebase", "--abort"],
+                check=False,
+                capture_output=True,
+            )
+            if attempt_index == COMMIT_PUSH_MAX_ATTEMPTS - 1:
+                break
+            time.sleep(COMMIT_PUSH_RETRY_SLEEP_SECONDS)
+    assert last_push_error is not None
+    raise last_push_error
 
 
 def report_drift_errors(
-    all_errors: list[str],
+    all_errors: list[DriftError],
     github_token: str,
     github_repository: str,
 ) -> None:
-    for error_message in all_errors:
-        print(f"::error::{error_message}", file=sys.stderr)
+    for each_error in all_errors:
+        print(f"::error::{each_error['message']}", file=sys.stderr)
 
-    issue_body = (
+    affected_destination_paths: list[str] = [
+        each_destination_path
+        for each_destination_path in DESTINATION_PATHS
+        if any(
+            each_error["destination_path"] == each_destination_path
+            for each_error in all_errors
+        )
+    ]
+
+    issue_body_text = (
         "## AI Rules Sync: Drift Detected\n\n"
-        + "\n".join(f"- {error_message}" for error_message in all_errors)
+        + "\n".join(f"- {each_error['message']}" for each_error in all_errors)
         + "\n\n**Action required:** Resolve the drift manually, or delete the affected "
         "file(s) and re-run with `force_initial_overwrite=true`."
     )
 
-    if github_token and github_repository:
-        for destination_path in DESTINATION_PATHS:
-            has_drift_for_path = any(destination_path in error for error in all_errors)
-            if has_drift_for_path:
-                try:
-                    open_github_issue(
-                        github_token,
-                        github_repository,
-                        f"AI rules sync: drift detected in {destination_path}",
-                        issue_body,
-                    )
-                except Exception as issue_error:
-                    print(
-                        f"::warning::Failed to open GitHub Issue: {issue_error}",
-                        file=sys.stderr,
-                    )
+    if github_token and github_repository and affected_destination_paths:
+        try:
+            existing_issue_number = find_existing_drift_issue(
+                github_token, github_repository, DRIFT_ISSUE_LABEL
+            )
+        except Exception as lookup_error:
+            print(
+                f"::warning::Failed to look up existing drift issue: {lookup_error}",
+                file=sys.stderr,
+            )
+            existing_issue_number = None
+
+        try:
+            if existing_issue_number is not None:
+                add_issue_comment(
+                    github_token,
+                    github_repository,
+                    existing_issue_number,
+                    issue_body_text,
+                )
+            else:
+                issue_title = (
+                    "AI rules sync: drift detected in "
+                    + ", ".join(affected_destination_paths)
+                )
+                open_github_issue(
+                    github_token,
+                    github_repository,
+                    issue_title,
+                    issue_body_text,
+                    labels=[DRIFT_ISSUE_LABEL],
+                )
+        except Exception as issue_error:
+            print(
+                f"::warning::Failed to open GitHub Issue: {issue_error}",
+                file=sys.stderr,
+            )
 
     drift_summary = "## Sync failed: drift detected\n\n" + "\n".join(
-        f"- {error}" for error in all_errors
+        f"- {each_error['message']}" for each_error in all_errors
     )
     write_step_summary(drift_summary)
 
@@ -310,16 +496,29 @@ def main() -> int:
         print("::error::Canonical file is empty.", file=sys.stderr)
         return 1
 
+    if len(canonical_body.encode("utf-8")) < CANONICAL_BODY_MINIMUM_LENGTH_BYTES:
+        print(
+            f"::error::Canonical body shorter than "
+            f"{CANONICAL_BODY_MINIMUM_LENGTH_BYTES} bytes; suspected truncation",
+            file=sys.stderr,
+        )
+        return 1
+
     canonical_body_sha256 = compute_sha256(canonical_body)
 
-    all_policy_errors: list[str] = []
+    all_policy_errors: list[DriftError] = []
     for destination_path in DESTINATION_PATHS:
-        policy_error = check_destination_policy(
+        policy_error_message = check_destination_policy(
             destination_path,
             should_force_initial_overwrite,
         )
-        if policy_error:
-            all_policy_errors.append(policy_error)
+        if policy_error_message:
+            all_policy_errors.append(
+                DriftError(
+                    destination_path=destination_path,
+                    message=policy_error_message,
+                )
+            )
 
     if all_policy_errors:
         report_drift_errors(all_policy_errors, github_token, github_repository)
@@ -349,7 +548,7 @@ def main() -> int:
         f"- Source commit: `{source_commit}`\n"
         f"- Body SHA256: `{canonical_body_sha256}`\n"
         f"- Destinations updated: "
-        + ", ".join(f"`{path}`" for path in all_written_paths)
+        + ", ".join(f"`{each_path}`" for each_path in all_written_paths)
     )
     write_step_summary(success_summary)
     return 0

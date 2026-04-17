@@ -1,9 +1,11 @@
 """Specifications for the AI rules sync listener script."""
 
+import os
 import subprocess
+import urllib.error
 from pathlib import Path
 from typing import Generator
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -98,7 +100,11 @@ def count_commits(work_dir: Path) -> int:
 def run_sync_with_canonical_body(canonical_body: str = CANONICAL_BODY) -> int:
     with patch("sync_ai_rules.fetch_canonical_body", return_value=canonical_body):
         with patch("sync_ai_rules.open_github_issue"):
-            return sync_ai_rules.main()
+            with patch(
+                "sync_ai_rules.find_existing_drift_issue", return_value=None
+            ):
+                with patch("sync_ai_rules.add_issue_comment"):
+                    return sync_ai_rules.main()
 
 
 class TestBuildSyncHeader:
@@ -371,7 +377,11 @@ class TestSyncDriftScenario:
 
         with patch("sync_ai_rules.fetch_canonical_body", return_value=CANONICAL_BODY):
             with patch("sync_ai_rules.open_github_issue") as mock_open_issue:
-                sync_ai_rules.main()
+                with patch(
+                    "sync_ai_rules.find_existing_drift_issue", return_value=None
+                ):
+                    with patch("sync_ai_rules.add_issue_comment"):
+                        sync_ai_rules.main()
 
         mock_open_issue.assert_called_once()
         call_args = mock_open_issue.call_args
@@ -431,7 +441,11 @@ class TestEmptyEnvVarFallback:
             "sync_ai_rules.fetch_canonical_body", return_value=CANONICAL_BODY
         ) as mock_fetch:
             with patch("sync_ai_rules.open_github_issue"):
-                exit_code = sync_ai_rules.main()
+                with patch(
+                    "sync_ai_rules.find_existing_drift_issue", return_value=None
+                ):
+                    with patch("sync_ai_rules.add_issue_comment"):
+                        exit_code = sync_ai_rules.main()
 
         assert exit_code == 0
         mock_fetch.assert_called_once_with(sync_ai_rules.DEFAULT_RAW_URL)
@@ -489,3 +503,292 @@ class TestGitignoreWildcard:
         bugbot_path = git_repo / ".cursor" / "BUGBOT.md"
         assert copilot_path.exists()
         assert bugbot_path.exists()
+
+
+class TestStripSyncHeaderMarkerOrder:
+    """When the end marker appears before the start marker, strip should return None."""
+
+    def should_return_none_when_end_marker_precedes_start_marker(self) -> None:
+        content = (
+            f"{sync_ai_rules.SYNC_HEADER_END_MARKER}\n"
+            f"body in between\n"
+            f"{sync_ai_rules.SYNC_HEADER_START_MARKER}\n"
+        )
+
+        assert sync_ai_rules.strip_sync_header(content) is None
+
+
+class TestFindLastBotCommitUsesCommitterEmail:
+    """Drift detection uses the committer email, not the author email."""
+
+    def should_detect_bot_commit_when_author_is_human_and_committer_is_bot(
+        self, git_repo: Path
+    ) -> None:
+        destination_path = ".github/copilot-instructions.md"
+        full_path = git_repo / destination_path
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text("body content\n", encoding="utf-8")
+
+        env_with_committer_override = {
+            **os.environ,
+            "GIT_COMMITTER_NAME": sync_ai_rules.BOT_AUTHOR_NAME,
+            "GIT_COMMITTER_EMAIL": sync_ai_rules.BOT_AUTHOR_EMAIL,
+            "GIT_AUTHOR_NAME": "Human Contributor",
+            "GIT_AUTHOR_EMAIL": "human@example.com",
+        }
+        subprocess.run(
+            ["git", "add", destination_path],
+            cwd=str(git_repo),
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "sync commit with bot committer"],
+            cwd=str(git_repo),
+            check=True,
+            capture_output=True,
+            env=env_with_committer_override,
+        )
+
+        bot_commit_hash = sync_ai_rules.find_last_bot_commit_hash(destination_path)
+
+        assert bot_commit_hash is not None
+
+
+class TestCrlfLineEndingsRoundTrip:
+    """CRLF line endings in existing content must not break SHA comparison or header strip."""
+
+    def should_strip_sync_header_when_content_has_crlf_endings(self) -> None:
+        lf_content = sync_ai_rules.build_destination_content(
+            "# Body\n\nLine one.\n", "abc", "2024-01-01T00:00:00+00:00"
+        )
+        crlf_content = lf_content.replace("\n", "\r\n")
+
+        stripped = sync_ai_rules.strip_sync_header(crlf_content)
+
+        assert stripped == "# Body\n\nLine one.\n"
+        assert "\r" not in stripped
+
+    def should_produce_same_sha_for_lf_and_crlf_versions(self) -> None:
+        lf_body = "# Body\n\nLine one.\n"
+        crlf_body = lf_body.replace("\n", "\r\n")
+
+        assert sync_ai_rules.compute_sha256(lf_body) == sync_ai_rules.compute_sha256(
+            crlf_body
+        )
+
+
+class TestWhitespaceOnlyDestinationWarning:
+    """Whitespace-only file with prior bot commit should warn and continue."""
+
+    def should_log_warning_when_destination_is_whitespace_only_after_bot_history(
+        self,
+        git_repo: Path,
+        sync_env: None,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        run_sync_with_canonical_body()
+
+        bugbot_path = git_repo / ".cursor" / "BUGBOT.md"
+        bugbot_path.write_text("   \n\n", encoding="utf-8")
+        capsys.readouterr()
+
+        run_sync_with_canonical_body()
+
+        captured = capsys.readouterr()
+        assert "lost its sync header" in captured.err
+        assert ".cursor/BUGBOT.md" in captured.err
+
+
+def make_urlopen_context_manager(
+    status: int = 201, body_bytes: bytes = b"{}"
+) -> MagicMock:
+    fake_response = MagicMock()
+    fake_response.status = status
+    fake_response.read.return_value = body_bytes
+    context_manager = MagicMock()
+    context_manager.__enter__.return_value = fake_response
+    context_manager.__exit__.return_value = False
+    return context_manager
+
+
+class TestDriftReportCombinesDestinationsIntoSingleIssue:
+    """When two destinations drift in one run, only one issue should be opened."""
+
+    def should_open_exactly_one_issue_when_both_destinations_drift(self) -> None:
+        all_errors: list[sync_ai_rules.DriftError] = [
+            sync_ai_rules.DriftError(
+                destination_path=".github/copilot-instructions.md",
+                message="Drift in copilot file",
+            ),
+            sync_ai_rules.DriftError(
+                destination_path=".cursor/BUGBOT.md",
+                message="Drift in bugbot file",
+            ),
+        ]
+
+        with patch.object(
+            sync_ai_rules, "find_existing_drift_issue", return_value=None
+        ) as mock_find:
+            with patch.object(sync_ai_rules, "open_github_issue") as mock_open_issue:
+                with patch.object(
+                    sync_ai_rules, "add_issue_comment"
+                ) as mock_add_comment:
+                    sync_ai_rules.report_drift_errors(
+                        all_errors, FAKE_GITHUB_TOKEN, FAKE_GITHUB_REPOSITORY
+                    )
+
+        assert mock_find.call_count == 1
+        assert mock_open_issue.call_count == 1
+        assert mock_add_comment.call_count == 0
+
+    def should_add_exactly_one_comment_when_existing_issue_exists(self) -> None:
+        all_errors: list[sync_ai_rules.DriftError] = [
+            sync_ai_rules.DriftError(
+                destination_path=".github/copilot-instructions.md",
+                message="Drift in copilot file",
+            ),
+            sync_ai_rules.DriftError(
+                destination_path=".cursor/BUGBOT.md",
+                message="Drift in bugbot file",
+            ),
+        ]
+
+        with patch.object(
+            sync_ai_rules, "find_existing_drift_issue", return_value=42
+        ):
+            with patch.object(sync_ai_rules, "open_github_issue") as mock_open_issue:
+                with patch.object(
+                    sync_ai_rules, "add_issue_comment"
+                ) as mock_add_comment:
+                    sync_ai_rules.report_drift_errors(
+                        all_errors, FAKE_GITHUB_TOKEN, FAKE_GITHUB_REPOSITORY
+                    )
+
+        assert mock_open_issue.call_count == 0
+        assert mock_add_comment.call_count == 1
+
+
+class TestCommitAndPushSyncAbortsRebaseOnConflict:
+    """When push fails and retries, rebase --abort must run before the next attempt."""
+
+    def should_invoke_rebase_abort_between_push_attempts(self) -> None:
+        recorded_commands: list[list[str]] = []
+
+        def fake_run(
+            command_args: list[str],
+            *runner_args: object,
+            **runner_kwargs: object,
+        ) -> subprocess.CompletedProcess[str]:
+            recorded_commands.append(command_args)
+            if command_args[:3] == ["git", "rev-parse", "--abbrev-ref"]:
+                return subprocess.CompletedProcess(
+                    command_args, 0, stdout="main\n", stderr=""
+                )
+            is_push_command = command_args[:2] == ["git", "push"]
+            push_attempt_index = sum(
+                1 for recorded in recorded_commands[:-1] if recorded[:2] == ["git", "push"]
+            )
+            if is_push_command and push_attempt_index == 0:
+                raise subprocess.CalledProcessError(1, command_args)
+            return subprocess.CompletedProcess(
+                command_args, 0, stdout="", stderr=""
+            )
+
+        with patch("sync_ai_rules.subprocess.run", side_effect=fake_run):
+            with patch("sync_ai_rules.time.sleep"):
+                sync_ai_rules.commit_and_push_sync(
+                    [".github/copilot-instructions.md"], "abc", "sha"
+                )
+
+        rebase_abort_positions = [
+            each_index
+            for each_index, command in enumerate(recorded_commands)
+            if command[:3] == ["git", "rebase", "--abort"]
+        ]
+        push_positions = [
+            each_index
+            for each_index, command in enumerate(recorded_commands)
+            if command[:2] == ["git", "push"]
+        ]
+        assert len(push_positions) >= 2
+        assert rebase_abort_positions, "expected at least one git rebase --abort call between push attempts"
+        assert len(rebase_abort_positions) >= len(push_positions) - 1
+        for each_index in range(len(push_positions) - 1):
+            assert any(
+                push_positions[each_index] < abort_position < push_positions[each_index + 1]
+                for abort_position in rebase_abort_positions
+            )
+
+
+class TestOpenGithubIssueRaisesOnNonCreatedStatus:
+    """Issue creation must raise RuntimeError when status is anything other than 201."""
+
+    def should_raise_runtime_error_when_status_is_ok_instead_of_created(self) -> None:
+        fake_context = make_urlopen_context_manager(status=sync_ai_rules.HTTP_STATUS_OK)
+
+        with patch("urllib.request.urlopen", return_value=fake_context):
+            with pytest.raises(RuntimeError):
+                sync_ai_rules.open_github_issue(
+                    FAKE_GITHUB_TOKEN,
+                    FAKE_GITHUB_REPOSITORY,
+                    "title",
+                    "body",
+                )
+
+
+class TestCanonicalBodyMinimumLengthFloor:
+    """Short canonical bodies must cause main() to exit with a nonzero code."""
+
+    def should_exit_nonzero_when_canonical_body_is_too_short(
+        self, git_repo: Path, sync_env: None
+    ) -> None:
+        with patch("sync_ai_rules.fetch_canonical_body", return_value="short\n"):
+            with patch("sync_ai_rules.find_existing_drift_issue", return_value=None):
+                with patch("sync_ai_rules.add_issue_comment"):
+                    with patch("sync_ai_rules.open_github_issue"):
+                        exit_code = sync_ai_rules.main()
+
+        assert exit_code == 1
+
+
+class TestFetchCanonicalBodyRetry:
+    """The fetch retry loop handles transient failures with bounded attempts."""
+
+    def should_return_body_when_first_attempt_succeeds(self) -> None:
+        fake_context = make_urlopen_context_manager(
+            status=sync_ai_rules.HTTP_STATUS_OK, body_bytes=b"full canonical body"
+        )
+        with patch("urllib.request.urlopen", return_value=fake_context) as mock_urlopen:
+            body_text = sync_ai_rules.fetch_canonical_body("https://example.com/raw")
+
+        assert body_text == "full canonical body"
+        assert mock_urlopen.call_count == 1
+
+    def should_retry_then_succeed_when_first_attempt_fails(self) -> None:
+        fake_ok_context = make_urlopen_context_manager(
+            status=sync_ai_rules.HTTP_STATUS_OK, body_bytes=b"full canonical body"
+        )
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=[urllib.error.URLError("first"), fake_ok_context],
+        ) as mock_urlopen:
+            with patch("sync_ai_rules.time.sleep"):
+                body_text = sync_ai_rules.fetch_canonical_body(
+                    "https://example.com/raw"
+                )
+
+        assert body_text == "full canonical body"
+        assert mock_urlopen.call_count == 2
+
+    def should_raise_after_max_attempts(self) -> None:
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=[urllib.error.URLError("x")]
+            * sync_ai_rules.FETCH_CANONICAL_MAX_ATTEMPTS,
+        ) as mock_urlopen:
+            with patch("sync_ai_rules.time.sleep"):
+                with pytest.raises(urllib.error.URLError):
+                    sync_ai_rules.fetch_canonical_body("https://example.com/raw")
+
+        assert mock_urlopen.call_count == sync_ai_rules.FETCH_CANONICAL_MAX_ATTEMPTS
