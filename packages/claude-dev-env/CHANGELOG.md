@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.22.1...claude-dev-env-v1.23.0) (2026-04-17)
+
+
+### Features
+
+* **claude.md:** add task_scope directive — scope-match + ambiguity gate ([#154](https://github.com/jl-cmd/claude-code-config/issues/154)) ([4ac22c9](https://github.com/jl-cmd/claude-code-config/commit/4ac22c9037dd167cc4de734bd9242437907dced2)), closes [#111](https://github.com/jl-cmd/claude-code-config/issues/111)
+
 ## [1.22.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.22.0...claude-dev-env-v1.22.1) (2026-04-17)
 
 
