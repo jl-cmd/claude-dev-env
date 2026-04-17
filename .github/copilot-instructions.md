@@ -21,7 +21,7 @@ Review every change against these rules. Flag each violation with its rule name.
 - Flag banned function-name prefixes: `handle`, `process`, `manage`, `do`.
 - Require component names that describe what the component is (`Overlay` for `Screen`, `Validator` for `Handler`).
 
-## Magic values and configuration
+## Magic values & configuration
 - Require named constants for numeric, string, and boolean literals in **production** function bodies; exempt `0`, `1`, `-1`, empty string, and `True`/`False` where the meaning is obvious.
 - **Test files are exempt** — inline literals in test functions and test-local constants are allowed.
 - Treat structural fragments inside f-strings (paths, URLs, query patterns, regex) as magic values in production code; require extraction to a named constant.
