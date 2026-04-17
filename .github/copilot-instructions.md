@@ -26,6 +26,7 @@ Review every change against these rules. Flag each violation with its rule name.
 - **Test files are exempt** — inline literals in test functions and test-local constants are allowed.
 - Treat structural fragments inside f-strings (paths, URLs, query patterns, regex) as magic values in production code; require extraction to a named constant.
 - Require `UPPER_SNAKE_CASE` constants in **production code** to live in `config/` (`config/timing.py`, `config/constants.py`, `config/selectors.py`); flag definitions located elsewhere. Test files may define local constants without using `config/`.
+- Allow `UPPER_SNAKE_CASE` constants outside `config/` in: Django migration files (`/migrations/`), workflow state and module registries (`_tab.py`, `states.py`, `modules.py`, `/workflow/`), and test files (as above) — these are registry or framework-native conventions, not misplaced configuration.
 - Require a search of existing `config/` files for reuse before adding any new production constant.
 
 ## Types
