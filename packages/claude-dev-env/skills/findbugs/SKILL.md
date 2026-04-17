@@ -30,9 +30,18 @@ Determine the audit target in this order:
 
 ### Step 2: Capture the full PR diff
 
-When a PR exists: `gh pr diff <number> -R <owner>/<repo> > .findbugs-pr.patch`.
+Resolve the temp diff path **once, Claude-side**, before invoking any shell command. Use Python's `tempfile.gettempdir()` which honors `TMPDIR`, `TEMP`, and `TMP` in the platform-correct order and falls back to `C:\Users\<user>\AppData\Local\Temp` on Windows or `/tmp` on Unix. Avoid hand-rolled env var chains. The lookup works on macOS, Linux, Windows cmd.exe, and PowerShell:
 
-When falling back to merge-base diff: `git diff <merge-base>...HEAD > .findbugs-pr.patch`.
+```
+import tempfile
+diff_temp_path = Path(tempfile.gettempdir()) / f"findbugs-pr-{os.getpid()}.patch"
+```
+
+`os.getpid()` supplies the per-invocation suffix that prevents collisions with parallel `/findbugs` runs (a UUID or timestamp is equally acceptable). Capture the resolved absolute path as `<diff_temp_path>` and pass that **literal** path to every shell command that follows. Shell-side parameter expansion (`${TMPDIR:-/tmp}`, `$$`, `%TEMP%`) is forbidden because cmd.exe and PowerShell do not honor it.
+
+When a PR exists: `gh pr diff <number> -R <owner>/<repo> > "<diff_temp_path>"`.
+
+When falling back to merge-base diff: `git diff <merge-base>...HEAD > "<diff_temp_path>"`.
 
 The audit's authoritative scope is this single diff file. Do not inject extra files, related history, or "files Claude edited this session" — those introduce anchoring bias.
 
@@ -63,7 +72,7 @@ The XML prompt skeleton:
 </context>
 
 <scope>
-  <diff_path>.findbugs-pr.patch (absolute path)</diff_path>
+  <diff_path><diff_temp_path> (absolute scoped temp path from Step 2)</diff_path>
   <scope_rule>Audit only lines added or modified in the diff. Pre-existing code on untouched lines is out of scope.</scope_rule>
 </scope>
 
@@ -122,7 +131,7 @@ When the agent returns, report concisely:
 
 Offer the next step without auto-executing it: `Want me to spawn clean-coder to fix the P0/P1 findings?`
 
-Delete `.findbugs-pr.patch` after the audit completes (or moves to a fix flow). Temporary diff files do not belong in the working tree.
+Delete the scoped temp diff at `<diff_temp_path>` after the audit completes (or moves to a fix flow). Temporary diff files do not belong in the working tree.
 
 Do not paste the full agent transcript or the XML prompt unless the user asks.
 
@@ -153,7 +162,7 @@ Want me to spawn clean-coder to fix the P0/P1 findings?
 - **Clean-room prompt.** The agent's prompt is self-contained — no references to chat history, no anchoring hints, no expected outcomes.
 - **No clean-coder auto-spawn.** Always ask before fixing.
 - **Trust the agent's verdict.** Pass through P0/P1/P2 categorizations as the agent assigned them; do not re-rank.
-- **Temp file cleanup.** Delete `.findbugs-pr.patch` when the audit ends.
+- **Temp file cleanup.** Delete the scoped `<diff_temp_path>` when the audit ends.
 
 ## Examples
 

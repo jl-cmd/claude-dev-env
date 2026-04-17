@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _claude_permissions_common import (  # noqa: E402
     append_if_missing,
@@ -29,6 +29,12 @@ from _claude_permissions_common import (  # noqa: E402
 CLAUDE_USER_SETTINGS_PATH: Path = Path.home() / ".claude" / "settings.json"
 
 
+def is_valid_project_root(candidate_path: Path) -> bool:
+    git_marker_path = candidate_path / ".git"
+    claude_marker_path = candidate_path / ".claude"
+    return git_marker_path.exists() or claude_marker_path.exists()
+
+
 def add_rules_to_allow_list(settings: dict[str, Any], rules_to_add: list[str]) -> int:
     permissions_section = ensure_dict_section(settings, "permissions")
     existing_allow_list = ensure_list_entry(permissions_section, "allow")
@@ -43,7 +49,9 @@ def add_directory_to_additional_directories(
     settings: dict[str, Any], directory_path: str
 ) -> int:
     permissions_section = ensure_dict_section(settings, "permissions")
-    existing_directories = ensure_list_entry(permissions_section, "additionalDirectories")
+    existing_directories = ensure_list_entry(
+        permissions_section, "additionalDirectories"
+    )
     if append_if_missing(existing_directories, directory_path):
         return 1
     return 0
@@ -58,6 +66,14 @@ def add_auto_mode_environment_entry(settings: dict[str, Any], entry_text: str) -
 
 
 def grant_permissions_for_current_directory() -> None:
+    project_root_path = Path.cwd()
+    if not is_valid_project_root(project_root_path):
+        print(
+            f"ERROR: cwd {project_root_path} is not a project root "
+            f"(no .git or .claude). Run from a project root.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     project_path = get_current_project_path()
     permission_rules = build_permission_rules(project_path, PERMISSION_ALLOW_TOOLS)
     environment_entry = AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE.format(

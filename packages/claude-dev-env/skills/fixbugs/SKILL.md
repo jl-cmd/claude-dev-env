@@ -23,6 +23,7 @@ Refusal cases:
 - **No findings in session.** Respond exactly: `No findings in this session. Run /findbugs first.` and stop.
 - **Most recent /findbugs returned zero bugs.** Respond exactly: `No bugs to fix.` and stop.
 - **Filter excludes every finding.** Respond: `No bugs match the filter <args>.` and stop.
+- **Agent-prompt skill not installed.** Before Step 1, verify the `agent-prompt` skill is in the available skills list. If missing, respond: `agent-prompt skill not installed. /fixbugs hands off to it; install it first.` and stop.
 
 ## The Process
 

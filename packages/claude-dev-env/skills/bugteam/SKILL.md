@@ -45,20 +45,11 @@ User wants automated convergence on a clean PR without babysitting each step. Ty
 
 Refusal cases — check in order; first match short-circuits and stops:
 
-1. **Agent teams not enabled.** Verify by reading `~/.claude/settings.json` and `os.environ` directly:
-
-  ```python
-  import json, os
-  from pathlib import Path
-  settings = json.loads(Path.home().joinpath('.claude', 'settings.json').read_text(encoding='utf-8'))
-  is_enabled_in_settings = settings.get('env', {}).get('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS') == '1'
-  is_enabled_in_environment = os.environ.get('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS') == '1'
-  ```
-
-  If neither is `'1'`, respond: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 not set. /bugteam requires the agent teams feature. See https://code.claude.com/docs/en/agent-teams#enable-agent-teams.` and stop.
-2. **Claude Code version too old.** Run `claude --version`. If older than v2.1.32, respond: `Claude Code v<version> is older than the v2.1.32 minimum for agent teams. Upgrade first.` and stop.
-3. **No PR or upstream diff.** Respond exactly: `No PR or upstream diff. /bugteam needs a target.` and stop.
-4. **Working tree dirty with uncommitted changes the user did not stage.** Respond: `Uncommitted changes detected. Stash, commit, or revert before /bugteam.` and stop. Reason: the fix teammate will commit the working tree, mixing user-uncommitted work into automated fixes.
+- **Agent teams not enabled.** Check `claude config get env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` and `~/.claude/settings.json`. If neither sets it to `"1"`, respond: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 not set. /bugteam requires the agent teams feature. See https://code.claude.com/docs/en/agent-teams#enable-agent-teams.` and stop.
+- **Claude Code version too old.** Run `claude --version`. If older than v2.1.32, respond: `Claude Code v<version> is older than the v2.1.32 minimum for agent teams. Upgrade first.` and stop.
+- **No PR or upstream diff.** Respond exactly: `No PR or upstream diff. /bugteam needs a target.` and stop.
+- **Working tree dirty with uncommitted changes the user did not stage.** Respond: `Uncommitted changes detected. Stash, commit, or revert before /bugteam.` and stop. Reason: the fix teammate will commit the working tree, mixing user-uncommitted work into automated fixes.
+- **Required subagents not installed.** Before Step 0, verify `code-quality-agent` and `clean-coder` subagent types exist in the available agents list. If either is missing, respond: `Required subagent type <name> not installed. /bugteam needs both code-quality-agent and clean-coder available.` and stop.
 
 ## The Process
 
@@ -80,8 +71,10 @@ Refusal cases — check in order; first match short-circuits and stops:
 Before spawning any teammates, grant the team session write access to the project's `.claude/**` tree:
 
 ```bash
-python scripts/grant_project_claude_permissions.py
+python "${CLAUDE_SKILL_DIR}/grant_project_claude_permissions.py"
 ```
+
+Note: `${CLAUDE_SKILL_DIR}` is a Claude Code host-managed token, pre-substituted by the runtime before any shell sees it. Unlike `${TMPDIR}` and similar shell parameter expansions, it does not depend on the shell's expansion semantics, so it works identically on Unix and Windows shells.
 
 The script reads `Path.cwd()` and writes idempotent allow rules into `~/.claude/settings.json`. Run from the project root. If it fails (non-zero exit), surface the error and stop — do not proceed without the grant.
 
@@ -103,7 +96,9 @@ This session is the **team lead**. Create a team using the agent teams feature. 
 
 Team specification:
 
-- **Team name:** `bugteam-pr-<number>` (or `bugteam-<head-branch>` if no PR)
+- **Team name:** `bugteam-pr-<number>-<YYYYMMDDHHMMSS>` (or `bugteam-<sanitized-head-branch>-<YYYYMMDDHHMMSS>` if no PR). The timestamp is captured at team-creation time from the lead session and prevents two concurrent invocations on the same PR from colliding.
+- **Branch-name sanitization (no-PR fallback only):** Before substituting `<head-branch>` into the team_name template, replace every character that is NOT in `[A-Za-z0-9._-]` with `-`. This whitelist covers safe portable filename characters and rejects all OS-reserved or shell-special chars including `/ \ : * ? < > | "` and ASCII control chars (0x00–0x1F). Example: `feat/foo*bar` → `feat-foo-bar`; team_name becomes `bugteam-feat-foo-bar-<YYYYMMDDHHMMSS>`. Apply this sanitization BEFORE the team_name is captured, not after — every downstream use of `team_name` (team creation, scoped temp dir, cleanup) sees the safe form.
+- **Per-team temp directory (resolved once, reused everywhere):** After team_name is captured, resolve a portable absolute path with a Claude-side lookup using Python's `tempfile.gettempdir()`, which honors `TMPDIR`, `TEMP`, and `TMP` in the platform-correct order and falls back to `C:\Users\<user>\AppData\Local\Temp` on Windows or `/tmp` on Unix: `Path(tempfile.gettempdir()) / team_name` (requires `import tempfile`). The `team_name` value already carries the `bugteam-` prefix, so do NOT add it again here. Avoid hand-rolled env var chains. Capture the resolved absolute path as `<team_temp_dir>` and pass that literal path to every shell command that follows. Shell-side parameter expansion (`${TMPDIR:-/tmp}`) is forbidden because cmd.exe and PowerShell do not expand it.
 - **Roles defined up front (spawned per loop, not at team creation):**
   - `bugfind` — uses teammate role `code-quality-agent`, model sonnet
   - `bugfix` — uses teammate role `clean-coder`, model sonnet
@@ -119,7 +114,8 @@ last_action="fresh"
 last_findings=""
 audit_log=""
 starting_sha="$(git rev-parse HEAD)"   # captured once, used in the final report
-team_name="bugteam-pr-<number>"
+team_name="bugteam-pr-<number>-<YYYYMMDDHHMMSS>"  # no-PR fallback uses sanitized branch
+team_temp_dir="<resolved-absolute-path>/<team_name>"
 loop_comment_index=""                  # reset at every AUDIT, see scope note below
 ```
 
@@ -179,13 +175,16 @@ Repeat until an exit condition fires:
 
 ### AUDIT action (clean-room teammate, fresh per loop)
 
-Capture a fresh PR diff for this loop:
+Capture a fresh PR diff for this loop into the per-team scoped directory so concurrent `/bugteam` runs do not collide. Use the literal `<team_temp_dir>` resolved once in Step 2 — do NOT rewrite the path with shell expansion:
 
 ```
-gh pr diff <number> -R <owner>/<repo> > .bugteam-loop-<N>.patch
+mkdir -p "<team_temp_dir>"
+gh pr diff <number> -R <owner>/<repo> > "<team_temp_dir>/loop-<N>.patch"
 ```
 
-Spawn a NEW `bugfind` teammate for this loop using the `code-quality-agent` teammate role. The teammate is fresh: no prior loop's findings, no chat history, no inherited audit context. Per the docs: *"The lead's conversation history does not carry over."* — and we further guarantee independence by spawning a new teammate per loop rather than reusing one.
+`<team_temp_dir>` is the absolute path captured in Step 2 (already includes the sanitized team_name and timestamp suffix, and `team_name` itself is already prefixed with `bugteam-`). Claude resolves the portable temp root once via `Path(tempfile.gettempdir()) / team_name` (requires `import tempfile`) and passes the literal absolute path to every shell command. `tempfile.gettempdir()` honors `TMPDIR`, `TEMP`, and `TMP` in the platform-correct order and falls back to `C:\Users\<user>\AppData\Local\Temp` on Windows or `/tmp` on Unix, so this works identically on macOS, Linux, Windows cmd.exe, and PowerShell because the shell never has to interpret `${TMPDIR:-/tmp}` or `%TEMP%`.
+
+Spawn a NEW `bugfind` teammate for this loop using the `code-quality-agent` subagent type. The teammate is fresh: no prior loop's findings, no chat history, no inherited audit context. Per the docs: *"The lead's conversation history does not carry over."* — and we further guarantee independence by spawning a new teammate per loop rather than reusing one.
 
 The teammate's spawn prompt is the full XML below — copy it verbatim with the placeholders substituted. **Forbid all conversation references** in the spawn prompt. No "as we discussed," "the earlier issue," "fix from the prior loop," "you previously identified." Each loop's audit teammate has no idea other loops happened.
 
@@ -199,7 +198,7 @@ The teammate's spawn prompt is the full XML below — copy it verbatim with the 
 </context>
 
 <scope>
-  <diff_path>absolute path to .bugteam-loop-N.patch</diff_path>
+  <diff_path>Absolute path to the loop-N patch file under team_temp_dir from Step 2 (same path as gh pr diff redirect in AUDIT)</diff_path>
   <scope_rule>Audit only lines added or modified in the diff. Pre-existing code on untouched lines is out of scope.</scope_rule>
 </scope>
 
@@ -377,7 +376,7 @@ If `git rev-parse HEAD` did not change, exit reason = `stuck — bugfix teammate
 When the cycle exits (any reason):
 
 1. **Clean up the team as the lead.** Per the docs: *"When you're done, ask the lead to clean up: 'Clean up the team'. This removes the shared team resources. When the lead runs cleanup, it checks for active teammates and fails if any are still running, so shut them down first."* The lead is THIS session — call cleanup directly. If any teammate is still alive (e.g., from an aborted shutdown), shut it down first.
-2. Delete every `.bugteam-loop-*.patch` from the working directory.
+2. Delete the per-team scoped temp directory using Python: `shutil.rmtree(team_temp_dir, ignore_errors=True)` (requires `import shutil`). This works on every platform without OS-detection branching. Pass the literal absolute path Claude resolved at Step 2 — do NOT defer to the shell, and never use shell `${TMPDIR:-/tmp}` or `%TEMP%` expansion at this step either.
 
 ### Step 4.5: Finalize the PR description (mandatory)
 
@@ -407,7 +406,7 @@ If Step 4.5 fails for any reason (agent error, hook block, network), surface the
 After team cleanup completes — including on error, cap-reached, or stuck exits — run:
 
 ```bash
-python scripts/revoke_project_claude_permissions.py
+python "${CLAUDE_SKILL_DIR}/revoke_project_claude_permissions.py"
 ```
 
 This removes the allow rules and additionalDirectories entry that Step 0 added. Revoke is non-negotiable: leaving the grant in place means future sessions inherit elevated permissions on this project's `.claude/**` tree without the user opting in. Run this even if Step 4 cleanup partially failed; surface the cleanup error separately in the final report.
@@ -445,6 +444,7 @@ If exit = `cap reached`, name the remaining bug count and recommend `/findbugs` 
 - **One commit per fix action.** Loops produce one commit per loop, not one per bug.
 - **No `--force`, no `--amend`, no rebase, no base change** at any point.
 - **Lead-only cleanup.** Per the docs: *"Always use the lead to clean up. Teammates should not run cleanup because their team context may not resolve correctly, potentially leaving resources in an inconsistent state."* This session is the lead; teammates never call cleanup.
+- **Cleanup the per-team scoped temp directory on exit.** The resolved `<team_temp_dir>` (absolute literal captured in Step 2) is deleted entirely so no loop patches leak between runs.
 - **Cleanup all `.bugteam-*` files on exit.** `.bugteam-loop-*.patch`, `.bugteam-loop-*.outcomes.xml`, `.bugteam-final.diff`, `.bugteam-original-body.md`, `.bugteam-final-body.md`. Working directory ends clean.
 - **Teammates own audit/fix comment posting.** Bugfind posts the loop comment and finding comments (with issue-comment fallback). Bugfix posts the fix replies after committing. The lead never calls `gh pr comment` or `gh api repos/.../comments` for these.
 - **Lead owns the final PR description rewrite only** (Step 4.5), and only via the `pr-description-writer` agent. The lead does not compose the description inline.
