@@ -53,21 +53,12 @@ def path_contains_glob_metacharacters(candidate_path: str) -> bool:
     )
 
 
-def path_contains_whitespace(candidate_path: str) -> bool:
-    return any(each_character.isspace() for each_character in candidate_path)
-
-
 def get_current_project_path() -> str:
     normalized_project_path = str(Path.cwd()).replace("\\", "/")
     if path_contains_glob_metacharacters(normalized_project_path):
         raise ValueError(
             f"Current directory path contains glob metacharacters and cannot "
             f"be used to build permission rules safely: {normalized_project_path}"
-        )
-    if path_contains_whitespace(normalized_project_path):
-        raise ValueError(
-            f"Current directory path contains whitespace and cannot be used "
-            f"to build permission rules safely: {normalized_project_path}"
         )
     return normalized_project_path
 
