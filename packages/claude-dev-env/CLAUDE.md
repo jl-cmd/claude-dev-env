@@ -35,6 +35,10 @@
 - ☐ Tests (no existence checks, no constant value tests)
 - ☐ Self-checked before proposing?
 
+## Additional Non-overlapping Rules
+
+- **task_scope:** Match every action to what was explicitly requested. When intent is ambiguous, research official docs and present options via AskUserQuestion before making any changes. Proceed with edits only on explicit instruction.
+
 ## Compaction
 When compacting, always preserve:
 - Active task and current goal
