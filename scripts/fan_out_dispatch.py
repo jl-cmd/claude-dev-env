@@ -147,14 +147,12 @@ def is_target_repo(repo: dict[str, object]) -> bool:
     owner_login = repo.get("owner", {}).get("login", "")
     is_owned_by_target_account = owner_login in ("JonEcho", "jl-cmd")
     is_archived = repo.get("archived", True)
-    has_push_permission = repo.get("permissions", {}).get("push", False)
     is_source_repo = repo.get("full_name") == SOURCE_REPO_FULL_NAME
     is_upstream_fork = repo.get("fork", False) and not is_owned_by_target_account
 
     is_included = (
         is_owned_by_target_account
         and not is_archived
-        and has_push_permission
         and not is_source_repo
         and not is_upstream_fork
     )
@@ -163,8 +161,8 @@ def is_target_repo(repo: dict[str, object]) -> bool:
         full_name = repo.get("full_name", "")
         print(
             f"::notice::Excluding {full_name}: owner_match={is_owned_by_target_account} "
-            f"archived={is_archived} push={has_push_permission} "
-            f"source_repo={is_source_repo} upstream_fork={is_upstream_fork}",
+            f"archived={is_archived} source_repo={is_source_repo} "
+            f"upstream_fork={is_upstream_fork}",
             file=sys.stderr,
         )
     return is_included

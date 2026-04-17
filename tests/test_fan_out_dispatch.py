@@ -48,10 +48,10 @@ class TestIsTargetRepo:
 
         assert fan_out_dispatch.is_target_repo(repo) is False
 
-    def should_exclude_repos_without_push_permission(self) -> None:
+    def should_include_repos_even_when_permissions_push_is_absent(self) -> None:
         repo = make_repo_fixture("JonEcho/read-only", has_push=False)
 
-        assert fan_out_dispatch.is_target_repo(repo) is False
+        assert fan_out_dispatch.is_target_repo(repo) is True
 
     def should_exclude_the_source_repo_itself(self) -> None:
         repo = make_repo_fixture("jl-cmd/claude-code-config")
