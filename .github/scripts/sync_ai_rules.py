@@ -234,7 +234,7 @@ def commit_and_push_sync(
 ) -> None:
     subprocess.run(["git", "config", "user.name", BOT_AUTHOR_NAME], check=True)
     subprocess.run(["git", "config", "user.email", BOT_AUTHOR_EMAIL], check=True)
-    subprocess.run(["git", "add"] + all_written_paths, check=True)
+    subprocess.run(["git", "add", "-f"] + all_written_paths, check=True)
     subprocess.run(
         [
             "git",

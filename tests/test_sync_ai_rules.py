@@ -458,3 +458,34 @@ class TestEmptyEnvVarFallback:
         exit_code = run_sync_with_canonical_body()
 
         assert exit_code != 0
+
+
+class TestGitignoreWildcard:
+    """Some target repos have a bare '*' pattern in .gitignore that would swallow new files."""
+
+    def should_succeed_when_gitignore_excludes_everything(
+        self, git_repo: Path, sync_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        gitignore_path = git_repo / ".gitignore"
+        gitignore_path.write_text("*\n!.gitignore\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "add", ".gitignore"],
+            cwd=str(git_repo),
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Add permissive gitignore"],
+            cwd=str(git_repo),
+            check=True,
+            capture_output=True,
+        )
+        monkeypatch.setenv("FORCE_INITIAL_OVERWRITE", "true")
+
+        exit_code = run_sync_with_canonical_body()
+
+        assert exit_code == 0
+        copilot_path = git_repo / ".github" / "copilot-instructions.md"
+        bugbot_path = git_repo / ".cursor" / "BUGBOT.md"
+        assert copilot_path.exists()
+        assert bugbot_path.exists()
