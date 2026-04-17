@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.23.0...claude-dev-env-v1.23.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* **bugteam:** allow project paths containing spaces ([#155](https://github.com/jl-cmd/claude-code-config/issues/155)) ([6d23d54](https://github.com/jl-cmd/claude-code-config/commit/6d23d541292e853bd9c1329307ea20169f803dce))
+
 ## [1.23.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.22.1...claude-dev-env-v1.23.0) (2026-04-17)
 
 
