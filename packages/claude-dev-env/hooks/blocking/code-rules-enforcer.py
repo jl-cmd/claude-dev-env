@@ -14,6 +14,7 @@ Checks (blocking):
 Advisory only (non-blocking):
 - File line count: stderr warning at 400 lines (soft) and 1000 lines (hard)
 """
+import ast
 import json
 import re
 import sys
@@ -481,6 +482,80 @@ def check_constants_outside_config(content: str, file_path: str) -> list[str]:
     return issues
 
 
+BANNED_IDENTIFIERS: frozenset[str] = frozenset({"result", "data", "output", "response", "value", "item", "temp"})
+MAX_BANNED_IDENTIFIER_ISSUES: int = 3
+BANNED_IDENTIFIER_MESSAGE_SUFFIX: str = "use descriptive name (see CODE_RULES Naming section)"
+BANNED_IDENTIFIER_SKIP_ADVISORY: str = (
+    "banned-identifier check skipped: file did not parse as Python"
+)
+
+
+def _collect_banned_names_from_target(target: ast.expr) -> list[ast.Name]:
+    """Return every banned ast.Name reachable through tuple/list unpacking or starred targets."""
+    if isinstance(target, ast.Name):
+        if target.id in BANNED_IDENTIFIERS:
+            return [target]
+        return []
+    if isinstance(target, (ast.Tuple, ast.List)):
+        banned_names: list[ast.Name] = []
+        for each_element in target.elts:
+            banned_names.extend(_collect_banned_names_from_target(each_element))
+        return banned_names
+    if isinstance(target, ast.Starred):
+        return _collect_banned_names_from_target(target.value)
+    return []
+
+
+def _collect_banned_names_from_node(node: ast.AST) -> list[ast.Name]:
+    """Return banned ast.Name nodes introduced by a single binding construct."""
+    if isinstance(node, ast.Assign):
+        banned_names: list[ast.Name] = []
+        for each_target in node.targets:
+            banned_names.extend(_collect_banned_names_from_target(each_target))
+        return banned_names
+    if isinstance(node, ast.AnnAssign):
+        return _collect_banned_names_from_target(node.target)
+    if isinstance(node, (ast.For, ast.AsyncFor)):
+        return _collect_banned_names_from_target(node.target)
+    if isinstance(node, ast.comprehension):
+        return _collect_banned_names_from_target(node.target)
+    if isinstance(node, ast.withitem):
+        if node.optional_vars is None:
+            return []
+        return _collect_banned_names_from_target(node.optional_vars)
+    if isinstance(node, ast.NamedExpr):
+        return _collect_banned_names_from_target(node.target)
+    return []
+
+
+def check_banned_identifiers(content: str, file_path: str) -> list[str]:
+    """Flag assignments to identifiers banned by the project Naming rules."""
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        print(f"{file_path}: {BANNED_IDENTIFIER_SKIP_ADVISORY}", file=sys.stderr)
+        return []
+
+    banned_name_nodes: list[ast.Name] = []
+    for each_node in ast.walk(parsed_tree):
+        banned_name_nodes.extend(_collect_banned_names_from_node(each_node))
+
+    banned_name_nodes.sort(key=lambda each_name: (each_name.lineno, each_name.col_offset))
+
+    issues: list[str] = []
+    for each_name in banned_name_nodes:
+        issues.append(
+            f"Line {each_name.lineno}: Banned identifier '{each_name.id}' - {BANNED_IDENTIFIER_MESSAGE_SUFFIX}"
+        )
+        if len(issues) >= MAX_BANNED_IDENTIFIER_ISSUES:
+            break
+
+    return issues
+
+
 def validate_content(content: str, file_path: str, old_content: str = "") -> list[str]:
     """Run all applicable validators on content.
 
@@ -501,6 +576,7 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_windows_api_none(content))
         all_issues.extend(check_magic_values(content, file_path))
         all_issues.extend(check_constants_outside_config(content, file_path))
+        all_issues.extend(check_banned_identifiers(content, file_path))
 
     elif extension in JAVASCRIPT_EXTENSIONS:
         if not is_test_file(file_path):
