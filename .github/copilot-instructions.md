@@ -1,4 +1,4 @@
-# Code Review Instructions for Copilot
+# Code Review Instructions for LLMs
 
 Review every change against these rules. Flag each violation with its rule name. Treat rules as mandatory standards; honor file-level exception markers where they appear.
 
@@ -54,4 +54,4 @@ Review every change against these rules. Flag each violation with its rule name.
 - Flag tests that only assert a constant equals itself or that a symbol exists.
 
 ## Scope of review
-- Apply these rules only to lines the PR adds or modifies; leave untouched code alone.
+- Apply these rules only to lines the PR adds or modifies; leave unrelated code alone.
