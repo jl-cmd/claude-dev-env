@@ -19,7 +19,7 @@ npx claude-dev-env
 That's it. The installer will:
 
 1. Detect your Python 3 command (`python3`, `python`, or `py -3`)
-2. Copy 13 rules, 5 docs, 35 agents, 11 commands, and 19 skills to `~/.claude/`
+2. Copy 13 rules, 5 docs, 35 agents, 11 commands, and 22 skills to `~/.claude/`
 3. Copy hook scripts to `~/.claude/hooks/`
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
@@ -151,7 +151,7 @@ Slash commands for common workflows.
 | `/initialize` | Session initialization with protocol review |
 | `/sum` | Summarize current work context |
 
-### Skills (19)
+### Skills (22)
 
 **Prompt Engineering (`--only prompts`):**
 
@@ -191,6 +191,9 @@ Slash commands for common workflows.
 | `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
+| `findbugs` | Single-shot clean-room code-quality audit on the current PR diff (zero conversation context, returns P0/P1/P2 findings with file:line evidence) |
+| `fixbugs` | Recover the most recent `/findbugs` findings, package them as a goal, and hand off to `/agent-prompt` to spawn a background sonnet clean-coder fix agent |
+| `bugteam` | Autonomous audit-and-fix loop using Claude Code's agent teams feature (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and v2.1.32+); fresh teammates per loop, 10-loop cap, scoped permission grant/revoke wrapping the cycle |
 
 ### Hooks
 
