@@ -117,16 +117,27 @@ deploy_to_repo() {
     trap 'rm -rf "${work_dir}"' RETURN
 
     log_info "Cloning ${repo_full_name} (shallow)..."
-    if ! gh repo clone "${repo_full_name}" "${work_dir}" -- --depth 1 --quiet --config core.longpaths=true --config core.sparseCheckout=true --no-checkout; then
+    if ! gh repo clone "${repo_full_name}" "${work_dir}" -- --depth 1 --quiet --config core.longpaths=true 2>&1 | grep -v "^Cloning into" >/dev/null; then
+        :
+    fi
+    if [[ ! -d "${work_dir}/.git" ]]; then
         log_warn "Failed to clone ${repo_full_name}, skipping"
         echo "clone-failed"
         return
     fi
 
-    git -C "${work_dir}" sparse-checkout set --no-cone '/*' '!/.planning/' >/dev/null 2>&1 || true
-    if ! git -C "${work_dir}" checkout >/dev/null 2>&1; then
-        log_warn "Checkout failed for ${repo_full_name}, skipping"
-        echo "checkout-failed"
+    local workflow_matches=0
+    local script_matches=0
+    if [[ -f "${work_dir}/${LISTENER_WORKFLOW_DEST}" ]] && cmp -s "${LISTENER_WORKFLOW_SOURCE}" "${work_dir}/${LISTENER_WORKFLOW_DEST}"; then
+        workflow_matches=1
+    fi
+    if [[ -f "${work_dir}/${LISTENER_SCRIPT_DEST}" ]] && cmp -s "${LISTENER_SCRIPT_SOURCE}" "${work_dir}/${LISTENER_SCRIPT_DEST}"; then
+        script_matches=1
+    fi
+
+    if [[ ${workflow_matches} -eq 1 && ${script_matches} -eq 1 ]]; then
+        log_info "${repo_full_name}: already up to date, skipping"
+        echo "skipped"
         return
     fi
 
@@ -136,24 +147,18 @@ deploy_to_repo() {
     cp "${LISTENER_WORKFLOW_SOURCE}" "${work_dir}/${LISTENER_WORKFLOW_DEST}"
     cp "${LISTENER_SCRIPT_SOURCE}" "${work_dir}/${LISTENER_SCRIPT_DEST}"
 
-    if [[ -z "$(git -C "${work_dir}" status --porcelain)" ]]; then
-        log_info "${repo_full_name}: already up to date, skipping"
-        echo "skipped"
-        return
-    fi
-
     if [[ "${DRY_RUN}" == "true" ]]; then
         log_info "[DRY RUN] Would create branch and PR in ${repo_full_name}"
         echo "dry-run"
         return
     fi
 
-    git -C "${work_dir}" checkout -b "${BOOTSTRAP_BRANCH_NAME}"
-    git -C "${work_dir}" add \
+    git -C "${work_dir}" checkout -b "${BOOTSTRAP_BRANCH_NAME}" >/dev/null 2>&1
+    git -C "${work_dir}" add -f \
         "${LISTENER_WORKFLOW_DEST}" \
-        "${LISTENER_SCRIPT_DEST}"
-    git -C "${work_dir}" commit -m "chore: bootstrap AI rules sync listener (v1)"
-    git -C "${work_dir}" push origin "${BOOTSTRAP_BRANCH_NAME}"
+        "${LISTENER_SCRIPT_DEST}" >/dev/null 2>&1
+    git -C "${work_dir}" commit -m "chore: bootstrap AI rules sync listener (v1)" >/dev/null 2>&1
+    git -C "${work_dir}" push origin "${BOOTSTRAP_BRANCH_NAME}" >/dev/null 2>&1
 
     local pr_body
     pr_body=$(cat <<EOF
