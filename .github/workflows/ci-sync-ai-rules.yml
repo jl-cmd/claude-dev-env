@@ -1,0 +1,36 @@
+name: CI — Sync AI Rules Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/scripts/sync_ai_rules.py"
+      - "scripts/fan_out_dispatch.py"
+      - "tests/test_sync_ai_rules.py"
+      - "tests/test_fan_out_dispatch.py"
+      - "tests/fixtures/sync-ai-rules/**"
+      - "pytest.ini"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Configure git identity for test repos
+        run: |
+          git config --global user.email "ci@github.com"
+          git config --global user.name "CI"
+
+      - name: Run sync AI rules test suite
+        run: python -m pytest tests/test_sync_ai_rules.py tests/test_fan_out_dispatch.py -v

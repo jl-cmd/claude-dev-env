@@ -1,0 +1,46 @@
+name: Fan-out AI Rules
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/copilot-instructions.md"]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  fan-out:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Mint installation token for JonEcho account
+        id: jonecho-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: JonEcho
+
+      - name: Mint installation token for jl-cmd org
+        id: jlcmd-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: jl-cmd
+
+      - name: Enumerate targets, dispatch sync events, and reconcile
+        env:
+          JONECHO_TOKEN: ${{ steps.jonecho-token.outputs.token }}
+          JLCMD_TOKEN: ${{ steps.jlcmd-token.outputs.token }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          SOURCE_SHA: ${{ hashFiles('.github/copilot-instructions.md') }}
+        run: python scripts/fan_out_dispatch.py
