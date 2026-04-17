@@ -2,7 +2,7 @@
 
 > **Reference:** TEST_QUALITY.md - Load when writing or reviewing tests.
 
-@${CLAUDE_PLUGIN_ROOT}/docs/TEST_QUALITY.md
+@~/.claude/docs/TEST_QUALITY.md
 
 ## Complete Mocks for Testability
 
