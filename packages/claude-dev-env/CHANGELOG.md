@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.22.0...claude-dev-env-v1.22.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* centralize /bugteam permission scripts and harden portability ([#138](https://github.com/jl-cmd/claude-code-config/issues/138)) ([815428b](https://github.com/jl-cmd/claude-code-config/commit/815428b84d1787b6713a91a6daee07bfcf3e90b7))
+
 ## [1.22.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.21.2...claude-dev-env-v1.22.0) (2026-04-17)
 
 
