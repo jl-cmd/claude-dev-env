@@ -1,13 +1,19 @@
 # AI Rules Sync
 
 `jl-cmd/claude-code-config` is the single source of truth for AI code-review rules.
-Every push to `.github/copilot-instructions.md` on `main` automatically propagates the file
-to two destinations in every active repository owned by `JonEcho` or `jl-cmd`:
+Every push to `.github/copilot-instructions.md` on `main` runs the fan-out dispatcher, which
+notifies every target repository (including **this** repo) to run the listener.
+
+In **downstream** repos, the listener writes both:
 
 - `.github/copilot-instructions.md` — read by GitHub Copilot code review
 - `.cursor/BUGBOT.md` — read by Cursor Bugbot ([docs](https://cursor.com/docs/bugbot))
 
-The two destination files are always byte-identical modulo their auto-generated headers.
+In **`jl-cmd/claude-code-config` only**, the canonical Copilot file is edited on `main` directly;
+the listener updates **`.cursor/BUGBOT.md` only** so it never overwrites the headerless source
+with a generated header.
+
+The two mirrored files are always byte-identical modulo their auto-generated headers.
 The source repo always wins; manual edits to any destination are treated as errors.
 
 ---
@@ -24,11 +30,11 @@ jl-cmd/claude-code-config
            │
            │  POST /repos/{owner}/{repo}/dispatches  (one per target)
            ▼
-  Each target repo:
+  Each target repo (including jl-cmd/claude-code-config):
   .github/workflows/sync-ai-rules.yml  (listener)
            │
-           ├─▶  .github/copilot-instructions.md
-           └─▶  .cursor/BUGBOT.md
+           ├─▶  .github/copilot-instructions.md  (downstream repos only)
+           └─▶  .cursor/BUGBOT.md  (all targets; canonical repo: this path only)
                         │
                         │  ~60s later
                         ▼

@@ -12,6 +12,18 @@ import pytest
 import sync_ai_rules
 
 
+class TestEffectiveDestinationPaths:
+    def should_sync_only_bugbot_in_canonical_repository(self) -> None:
+        assert sync_ai_rules.effective_destination_paths(
+            sync_ai_rules.SOURCE_REPO
+        ) == sync_ai_rules.BUGBOT_ONLY_DESTINATION_PATHS
+
+    def should_sync_both_destinations_in_downstream_repositories(self) -> None:
+        assert sync_ai_rules.effective_destination_paths(
+            "JonEcho/any-repo"
+        ) == sync_ai_rules.DESTINATION_PATHS
+
+
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "sync-ai-rules"
 CANONICAL_BODY = (FIXTURE_DIR / "source_body.md").read_text(encoding="utf-8")
 FAKE_SOURCE_COMMIT = "abc123def456"
@@ -59,6 +71,12 @@ def git_repo(
     )
     subprocess.run(
         ["git", "commit", "-m", "Initial commit"],
+        cwd=str(work_dir),
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "branch", "-M", "main"],
         cwd=str(work_dir),
         check=True,
         capture_output=True,

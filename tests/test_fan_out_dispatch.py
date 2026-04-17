@@ -53,10 +53,10 @@ class TestIsTargetRepo:
 
         assert fan_out_dispatch.is_target_repo(repo) is True
 
-    def should_exclude_the_source_repo_itself(self) -> None:
+    def should_include_the_source_repo_for_bugbot_sync(self) -> None:
         repo = make_repo_fixture("jl-cmd/claude-code-config")
 
-        assert fan_out_dispatch.is_target_repo(repo) is False
+        assert fan_out_dispatch.is_target_repo(repo) is True
 
     def should_exclude_repos_owned_by_other_accounts(self) -> None:
         repo = make_repo_fixture("some-other-org/their-project")

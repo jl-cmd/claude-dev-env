@@ -21,6 +21,7 @@ DESTINATION_PATHS: tuple[str, ...] = (
     ".github/copilot-instructions.md",
     ".cursor/BUGBOT.md",
 )
+BUGBOT_ONLY_DESTINATION_PATHS: tuple[str, ...] = (".cursor/BUGBOT.md",)
 OPT_OUT_SENTINEL_PATH = ".github/sync-ai-rules.optout"
 SOURCE_REPO = "jl-cmd/claude-code-config"
 SOURCE_FILE_PATH = ".github/copilot-instructions.md"
@@ -87,6 +88,13 @@ def build_destination_content(
     canonical_body: str, source_commit: str, synced_at: str
 ) -> str:
     return build_sync_header(source_commit, synced_at) + "\n" + canonical_body
+
+
+def effective_destination_paths(github_repository: str) -> tuple[str, ...]:
+    """Canonical repo stores the headerless source; only BUGBOT is written there."""
+    if github_repository == SOURCE_REPO:
+        return BUGBOT_ONLY_DESTINATION_PATHS
+    return DESTINATION_PATHS
 
 
 def strip_sync_header(content: str) -> Optional[str]:
@@ -506,8 +514,10 @@ def main() -> int:
 
     canonical_body_sha256 = compute_sha256(canonical_body)
 
+    destination_paths = effective_destination_paths(github_repository)
+
     all_policy_errors: list[DriftError] = []
-    for destination_path in DESTINATION_PATHS:
+    for destination_path in destination_paths:
         policy_error_message = check_destination_policy(
             destination_path,
             should_force_initial_overwrite,
@@ -527,7 +537,7 @@ def main() -> int:
     synced_at = datetime.now(timezone.utc).isoformat()
     all_written_paths: list[str] = []
 
-    for destination_path in DESTINATION_PATHS:
+    for destination_path in destination_paths:
         was_written = write_destination_if_needed(
             destination_path,
             canonical_body,
