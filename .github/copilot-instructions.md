@@ -7,7 +7,7 @@ Review every change against these rules. Flag each violation with its rule name.
 - Preserve every existing comment as-is; treat comments in the surrounding file as sacred.
 - Allow docstrings on new functions, methods, classes, or modules (including module-level docstrings).
 - **Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`) are fully exempt** — comments and docstrings inside test functions are allowed.
-- Exempt markers: shebangs, `# type:`, `# noqa`, `// eslint-...`.
+- Exempt markers: shebangs, `# type:`, `# noqa`, `# pylint:`, `# pragma:`, `// @ts-...`, `// eslint-...`, `// prettier-...`, and `/// ` triple-slash reference directives.
 
 ## Naming
 - Require full words: `context` for `ctx`, `configuration` for `cfg`, `message` for `msg`, `button` for `btn`, `index` for `idx`, `count` for `cnt`, `element` for `elem`, `value` for `val`, `temporary_value` for `tmp`.
