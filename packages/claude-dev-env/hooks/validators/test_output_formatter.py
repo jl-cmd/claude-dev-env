@@ -1,5 +1,7 @@
 """Tests for output formatting."""
 
+import os
+
 import pytest
 
 from .output_formatter import (

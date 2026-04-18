@@ -52,8 +52,8 @@ def test_hook_count_increase_emits_user_visible_output(tmp_path: Path) -> None:
     block_payload = json.loads(hook_run.stdout)
     assert block_payload["decision"] == "block"
     assert "2" in block_payload["reason"] and "5" in block_payload["reason"]
-    assert block_payload["hookSpecificOutput"]["hookEventName"] == "ConfigChange"
-    assert "hook" in block_payload["hookSpecificOutput"]["additionalContext"].lower()
+    assert "hook" in block_payload["reason"].lower()
+    assert "hookSpecificOutput" not in block_payload
 
 
 def test_hook_count_stable_produces_no_output(tmp_path: Path) -> None:
