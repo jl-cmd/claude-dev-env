@@ -37,7 +37,11 @@ def check_magic_values(tree: ast.AST, filename: str) -> List[Violation]:
             operand = node.operand
             if isinstance(operand, ast.UnaryOp):
                 continue
-            if isinstance(operand, ast.Constant) and isinstance(operand.value, int):
+            if (
+                isinstance(operand, ast.Constant)
+                and isinstance(operand.value, int)
+                and not isinstance(operand.value, bool)
+            ):
                 negated_literal_ids.add(id(operand))
                 outermost_unary = _walk_up_unary_minus(node, parent_by_child_id)
                 negation_depth = _count_unary_minus_depth(outermost_unary)
@@ -57,6 +61,8 @@ def check_magic_values(tree: ast.AST, filename: str) -> List[Violation]:
             continue
         if isinstance(node, ast.Constant):
             if not isinstance(node.value, int):
+                continue
+            if isinstance(node.value, bool):
                 continue
             if id(node) in negated_literal_ids:
                 continue

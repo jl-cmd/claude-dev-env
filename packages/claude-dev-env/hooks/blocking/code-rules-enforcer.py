@@ -411,7 +411,7 @@ def check_magic_values(content: str, file_path: str) -> list[str]:
     inside_function = False
 
     number_pattern = re.compile(r"(?<![.\w])(\d+\.?\d*)(?![.\w])")
-    allowed_numbers = {"0", "1", "-1", "0.0", "1.0", "2", "100"}
+    allowed_numbers = {"0", "1", "-1", "0.0", "1.0"}
 
     for line_number, line in enumerate(lines, 1):
         stripped = line.strip()

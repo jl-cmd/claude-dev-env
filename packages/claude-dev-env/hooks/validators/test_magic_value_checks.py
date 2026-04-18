@@ -150,6 +150,18 @@ ANNOTATED_LITERAL_TYPE = '''
 X: Literal[42] = 42
 '''
 
+TRUE_LITERAL_IN_FUNCTION = '''
+def configure():
+    is_enabled = True
+    return is_enabled
+'''
+
+FALSE_LITERAL_IN_FUNCTION = '''
+def configure():
+    is_disabled = False
+    return is_disabled
+'''
+
 
 class TestMagicValues:
     def test_named_constants_pass(self) -> None:
@@ -306,3 +318,13 @@ class TestMagicValues:
         tree = ast.parse(ANNOTATED_LITERAL_TYPE)
         violations = check_magic_values(tree, "test.py")
         assert any("42" in violation.message for violation in violations)
+
+    def test_check_magic_values_should_not_flag_True_literal(self) -> None:
+        tree = ast.parse(TRUE_LITERAL_IN_FUNCTION)
+        violations = check_magic_values(tree, "test.py")
+        assert violations == []
+
+    def test_check_magic_values_should_not_flag_False_literal(self) -> None:
+        tree = ast.parse(FALSE_LITERAL_IN_FUNCTION)
+        violations = check_magic_values(tree, "test.py")
+        assert violations == []
