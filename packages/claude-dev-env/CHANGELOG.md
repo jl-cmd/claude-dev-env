@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.25.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.24.0...claude-dev-env-v1.25.0) (2026-04-18)
+
+
+### Features
+
+* **code-rules-enforcer:** block Any annotations and unjustified # type: ignore ([#177](https://github.com/jl-cmd/claude-code-config/issues/177)) ([1fbdef5](https://github.com/jl-cmd/claude-code-config/commit/1fbdef56788e7e067e21fd8f3f96d99cca113188))
+* **code-rules-enforcer:** enforce banned identifiers (result, data, etc.) ([#176](https://github.com/jl-cmd/claude-code-config/issues/176)) ([60e450a](https://github.com/jl-cmd/claude-code-config/commit/60e450a2511e922e30aae889618835ef6fa763ed))
+* **code-rules-enforcer:** flag structural literals inside f-strings ([#174](https://github.com/jl-cmd/claude-code-config/issues/174)) ([f370bed](https://github.com/jl-cmd/claude-code-config/commit/f370bed70296bb42a9d5c80dc832cefde481f2ef))
+* **code-rules-enforcer:** require is_/has_/should_/can_ prefixes on booleans ([#173](https://github.com/jl-cmd/claude-code-config/issues/173)) ([821a141](https://github.com/jl-cmd/claude-code-config/commit/821a1419da3e29340a31074122694a9e6b079151))
+* **hooks:** add gh-body-file blocker to prevent backtick corruption on GitHub ([#123](https://github.com/jl-cmd/claude-code-config/issues/123)) ([9a668b6](https://github.com/jl-cmd/claude-code-config/commit/9a668b6973545c3d8e2b58f31c0320592c91756b))
+* **skill:** add obsidian-vault on-demand skill ([#110](https://github.com/jl-cmd/claude-code-config/issues/110)) ([#159](https://github.com/jl-cmd/claude-code-config/issues/159)) ([c26e577](https://github.com/jl-cmd/claude-code-config/commit/c26e57772aedc391c99c549fb15f73989d3c4739))
+* **tdd-enforcer:** block production writes without a fresh matching test ([#178](https://github.com/jl-cmd/claude-code-config/issues/178)) ([dea30d6](https://github.com/jl-cmd/claude-code-config/commit/dea30d61c1e1846853f676362044907927e2d349))
+
+
+### Bug Fixes
+
+* **code-rules-enforcer:** align magic-value allowlist with CODE_RULES (drop 2, 100) ([#162](https://github.com/jl-cmd/claude-code-config/issues/162)) ([8193f91](https://github.com/jl-cmd/claude-code-config/commit/8193f91feabf4448af82f7ee1fe139e848455ad0))
+* **code-rules-enforcer:** anchor conftest pattern to .py filename ([#172](https://github.com/jl-cmd/claude-code-config/issues/172)) ([5aaf055](https://github.com/jl-cmd/claude-code-config/commit/5aaf0557a6ec31a1bc66d40d1a19a3efad91c7d9))
+* **code-rules-enforcer:** flag f-strings in logger.*/logging.*/log.* calls ([#170](https://github.com/jl-cmd/claude-code-config/issues/170)) ([934e80c](https://github.com/jl-cmd/claude-code-config/commit/934e80c845ae186e83bbc1ba8bb1ada9a27cb41e))
+* **code-rules-enforcer:** recognize .test.{ts,tsx,js} files as tests ([#163](https://github.com/jl-cmd/claude-code-config/issues/163)) ([72566c1](https://github.com/jl-cmd/claude-code-config/commit/72566c1713fa986f697fe0dbf9f8d4009680232e))
+* **code-rules-enforcer:** scope TYPE_CHECKING import bypass to its block only ([#171](https://github.com/jl-cmd/claude-code-config/issues/171)) ([88feb8f](https://github.com/jl-cmd/claude-code-config/commit/88feb8f58c2cc2fd339ba79f534b150712e72590))
+* **magic-value-checks:** align validator allowlist with CODE_RULES (drop 2, 100) ([#164](https://github.com/jl-cmd/claude-code-config/issues/164)) ([4dbbdc0](https://github.com/jl-cmd/claude-code-config/commit/4dbbdc0ea65a38cb52e17978828eaae6dd91bf68))
+* **magic-value-checks:** exempt numbers nested inside dict/tuple/list-valued constants ([#166](https://github.com/jl-cmd/claude-code-config/issues/166)) ([330c32b](https://github.com/jl-cmd/claude-code-config/commit/330c32bae5eca554ee8fb123bafb86f1990af1da))
+* **magic-value-checks:** skip test and config files to match Pre-Write hook ([#175](https://github.com/jl-cmd/claude-code-config/issues/175)) ([9305efb](https://github.com/jl-cmd/claude-code-config/commit/9305efbbe5614e3e9ef2ca144291b3d79fd079f1))
+
+
+### Documentation
+
+* **code-rules:** document full tool-marker comment-exemption list ([#167](https://github.com/jl-cmd/claude-code-config/issues/167)) ([401360c](https://github.com/jl-cmd/claude-code-config/commit/401360c81ca089ecc3c5df82d0fd8a4c37dcbbb8))
+* **code-rules:** document migration and workflow-registry UPPER_SNAKE exemptions ([#165](https://github.com/jl-cmd/claude-code-config/issues/165)) ([ab2c4d5](https://github.com/jl-cmd/claude-code-config/commit/ab2c4d5d46f4f4fe60d573998eab93da1e365b9a))
+
 ## [1.24.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.23.1...claude-dev-env-v1.24.0) (2026-04-17)
 
 
