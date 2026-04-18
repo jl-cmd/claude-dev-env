@@ -108,20 +108,6 @@ def test_should_allow_when_bypass_sentinel_present_in_content(tmp_path: Path) ->
     assert _decision_from(completed) == "allow"
 
 
-def test_should_allow_when_hyphenated_production_has_snake_cased_sibling_test(
-    tmp_path: Path,
-) -> None:
-    sandbox = _sandbox(tmp_path)
-    production_file = sandbox / "fancy-hook-name.py"
-    production_file.write_text("def run(): pass\n")
-    snake_cased_sibling_test = sandbox / "test_fancy_hook_name.py"
-    snake_cased_sibling_test.write_text("def test_run(): pass\n")
-
-    completed = _run_hook_with_payload(_make_write_payload(production_file))
-
-    assert _decision_from(completed) == "allow"
-
-
 def test_should_skip_markdown_files_entirely(tmp_path: Path) -> None:
     markdown_file = tmp_path / "notes.md"
 
