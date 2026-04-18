@@ -25,6 +25,8 @@ description: >-
 This file is 400+ lines. The list below is for the LLM reading this skill — partial reads (e.g., `head -100`) miss what comes later, so this section ensures the full scope is visible from the top. (Per Anthropic's [Skill authoring best practices — Structure longer reference files with table of contents](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#structure-longer-reference-files-with-table-of-contents).)
 
 - When this skill applies — refusal cases (4) and trigger conditions
+- Utility scripts — pre-flight checks (`scripts/`, executed not loaded as context)
+- Pre-audit code rules gate — `validate_content` / hook parity before each AUDIT
 - The Process — Progress checklist + Steps 0–6
   - Step 0 — Grant project permissions
   - Step 1 — Resolve PR scope
@@ -50,6 +52,20 @@ Refusal cases — check in order; first match short-circuits and stops:
 - **Missing PR or upstream diff.** Respond exactly: `No PR or upstream diff. /bugteam needs a target.` and stop.
 - **Working tree dirty with uncommitted changes the user did not stage.** Respond: `Uncommitted changes detected. Stash, commit, or revert before /bugteam.` and stop. Reason: the fix teammate will commit the working tree, mixing user-uncommitted work into automated fixes.
 - **Required subagents not installed.** Before Step 0, verify `code-quality-agent` and `clean-coder` subagent types exist in the available agents list. If either is missing, respond: `Required subagent type <name> not installed. /bugteam needs both code-quality-agent and clean-coder available.` and stop.
+
+## Utility scripts
+
+Fragile or repeatable shell sequences belong in `scripts/` (see Anthropic [Skill authoring best practices — Progressive disclosure](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns): utility scripts are **executed**, not loaded into context). Details: [`scripts/README.md`](scripts/README.md).
+
+### Pre-flight (recommended before Step 0)
+
+From the repository root, run:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/scripts/bugteam_preflight.py"
+```
+
+If the exit code is non-zero, stop and fix failing checks before granting permissions. Optional: `BUGTEAM_PREFLIGHT_SKIP=1` skips pre-flight (emergency only). Optional: `--pre-commit` when `.pre-commit-config.yaml` exists.
 
 ## The Process
 
@@ -202,20 +218,39 @@ If the audit returns zero findings, the teammate still posts ONE review with `ev
 
 ### Step 3: The cycle
 
-Repeat until an exit condition fires:
+Repeat until an exit condition fires.
 
-1. Increment `loop_count`. If `loop_count > 10`, exit reason = `cap reached`.
-2. Decide the next action:
-   - `last_action in {"fresh", "fixed"}` → run **AUDIT**
-   - `last_action == "audited"` and `last_findings.total > 0` → run **FIX**
+**Ordering principle:** Mandatory **CODE_RULES** checks (`validate_content` from `hooks/blocking/code_rules_enforcer.py`) must pass on the PR-scoped file set **before** any **AUDIT** (bugfind) teammate runs. The **clean-coder** teammate clears gate failures; then the **code-quality-agent** teammate audits. This mirrors “CI green, then review,” without relying on GitHub Actions — the script is the gate.
+
+1. Decide the next action from `last_action` and `last_findings`:
    - `last_action == "audited"` and `last_findings.total == 0` → exit reason = `converged`
-   - `last_action == "fixed"` and `git rev-parse HEAD` did not change since pre-FIX → exit reason = `stuck` (see FIX action for detection)
-3. Execute the chosen action (see action specs below).
-4. Update `last_action`, `last_findings`, and append to `audit_log`.
-5. Print a one-line progress marker so the user can watch convergence:
-   - After audit: `Loop <N> audit: <P0>P0 / <P1>P1 / <P2>P2`
-   - After fix: `Loop <N> fix: commit <sha7> (<files_changed> files, +<add>/-<del>)`
-6. Loop.
+   - `last_action == "fixed"` and `git rev-parse HEAD` did not change since pre-FIX → exit reason = `stuck` (see FIX action)
+   - `last_action in {"fresh", "fixed"}` → go to **pre-audit path** (below), then **AUDIT**
+   - `last_action == "audited"` and `last_findings.total > 0` → go to **FIX** (below)
+
+2. **Pre-audit path** (only when the next step is **AUDIT**):
+   1. From the repository root, run the gate script (align `--base` with the PR base branch from Step 1, e.g. `origin/main` or `origin/develop`):
+
+      ```bash
+      python "${CLAUDE_SKILL_DIR}/scripts/bugteam_code_rules_gate.py" --base origin/<baseRefName>
+      ```
+
+      Use `git merge-base` + `git diff --name-only` inside the script; see [`scripts/README.md`](scripts/README.md). The lead runs this (not a teammate).
+   2. If exit code **0** → continue to step 3 (AUDIT spawn) below.
+   3. If exit code **non-zero** → spawn a NEW **clean-coder** teammate — **standards-fix pass** — with instructions: read the script’s stderr, edit the repo until a **re-run** of the **same** gate command exits **0**, then one commit, `git push`, shutdown. Repeat standards-fix spawns until the gate exits **0** or **5** failed gate rounds (each round = one teammate session after a non-zero gate). If still non-zero after 5 rounds → exit reason = `error: code rules gate failed pre-audit`.
+   4. After gate exit **0**, increment `loop_count`. If `loop_count > 10`, exit reason = `cap reached` (counts **audits**, not standards-only rounds).
+   5. Execute **AUDIT action** (spawn bugfind). Print progress: `Loop <N> audit: ...`
+
+3. **FIX path** (when `last_action == "audited"` and `last_findings.total > 0`):
+   1. Increment `loop_count`. If `loop_count > 10`, exit reason = `cap reached`.
+   2. Execute **FIX action** (spawn bugfix clean-coder for audit findings). Print: `Loop <N> fix: commit ...`
+   3. Set `last_action = "fixed"`, update `audit_log`, loop to step 1 (next iteration will hit **pre-audit path** before the next AUDIT).
+
+4. After **AUDIT**, update `last_action`, `last_findings`, `audit_log`; print the audit progress line if not already printed.
+
+5. Loop.
+
+**Note:** The first iteration uses **pre-audit path** then **AUDIT**. After a **FIX** for audit findings, the next iteration runs **pre-audit path** again (gate → then AUDIT), so `validate_content` stays green before semantic audit.
 
 ### AUDIT action (clean-room teammate, fresh per loop)
 
@@ -332,7 +367,7 @@ After the teammate writes the XML and returns, the lead reads `.bugteam-loop-<N>
 
 `last_action = "audited"`. `last_findings = parsed`. Append `(loop=N, action="audit", counts={P0,P1,P2}, sha=current_HEAD, review_url=<url>, finding_count=<n>, fallback_count=<n>)` to `audit_log`.
 
-**Parallel auditors from loop 4 onward (`loop_count >= 4`).** Once the cycle has made it through three full audit/fix rounds without converging, the next audit spawns THREE bugfind teammates in parallel — named `bugfind-loop-<N>-a`, `bugfind-loop-<N>-b`, `bugfind-loop-<N>-c` — each with an identical spawn prompt (same diff path, same rubric, same loop number). `a` is the post-owner; `b` and `c` write their outcome XML to `<team_temp_dir>/loop-<N>-b.outcomes.xml` and `...-c.outcomes.xml` respectively, then shut down. `a` reads all three outcome XML files, merges findings by `(file, line, category_letter)` (same tuple collapses to one finding, keeping the longest description and the highest severity of the group), re-assigns merged-finding IDs as `loopN-K`, and posts the single per-loop review per the standard posting protocol above. The lead shuts down `b` and `c` first, then `a` after its post completes.
+**Parallel auditors from loop 4 onward (`loop_count >= 4`).** The **pre-audit code rules gate** must still pass immediately before this step (Step 3). Once the cycle has made it through three full audit/fix rounds without converging, the next audit spawns THREE bugfind teammates in parallel — named `bugfind-loop-<N>-a`, `bugfind-loop-<N>-b`, `bugfind-loop-<N>-c` — each with an identical spawn prompt (same diff path, same rubric, same loop number). `a` is the post-owner; `b` and `c` write their outcome XML to `<team_temp_dir>/loop-<N>-b.outcomes.xml` and `...-c.outcomes.xml` respectively, then shut down. `a` reads all three outcome XML files, merges findings by `(file, line, category_letter)` (same tuple collapses to one finding, keeping the longest description and the highest severity of the group), re-assigns merged-finding IDs as `loopN-K`, and posts the single per-loop review per the standard posting protocol above. The lead shuts down `b` and `c` first, then `a` after its post completes.
 
 ### FIX action (fresh teammate, only sees latest audit)
 
@@ -488,7 +523,8 @@ If exit = `cap reached`, name the remaining bug count and recommend `/findbugs` 
 - **Grant before any spawn, revoke before any return.** Step 0 grants project `.claude/**` permissions; Step 5 revokes. Both are mandatory. Revoke runs on every exit path including error, cap-reached, and stuck.
 - **Fresh teammate per loop.** Both bugfind and bugfix are spawned new each loop and shut down after their action. Reusing a teammate across loops accumulates context inside that teammate's window — defeats clean-room.
 - **One up-front confirmation = whole cycle.** The `/bugteam` invocation authorizes the entire cycle; every subsequent decision runs on that single authorization.
-- **10-loop hard cap.** Counted as audits performed. Worst case = 10 audits + 10 fixes = 20 teammate spawns + 20 shutdowns.
+- **10-loop hard cap.** Counted as **AUDIT** completions (increment in Step 3). Standards-fix passes before an audit do not advance `loop_count`. Worst case includes extra clean-coder spawns for the code-rules gate.
+- **Code rules gate before every AUDIT.** Run `scripts/bugteam_code_rules_gate.py` until exit **0** before spawning **bugfind**. Same `validate_content` logic as `hooks/blocking/code_rules_enforcer.py`.
 - **Clean-room audits, every loop.** Each bugfind teammate's spawn prompt contains only the PR scope, audit rubric, and the current loop number. Prior loop history stays in the lead.
 - **Targeted fixes.** Each fix teammate sees ONLY the most recent audit's findings. Prior loops are invisible to the fix teammate.
 - **Sonnet for both teammates.** Predictable cost, fits-purpose for code work.
