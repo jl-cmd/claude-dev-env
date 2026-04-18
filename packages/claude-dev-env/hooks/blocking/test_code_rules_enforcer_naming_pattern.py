@@ -1,4 +1,4 @@
-"""Unit tests for code-rules-enforcer boolean naming-pattern check."""
+"""Unit tests for code_rules_enforcer boolean naming-pattern check."""
 
 import importlib.util
 import pathlib
@@ -11,7 +11,7 @@ if str(_HOOK_DIRECTORY) not in sys.path:
 
 _hook_spec = importlib.util.spec_from_file_location(
     "code_rules_enforcer",
-    _HOOK_DIRECTORY / "code-rules-enforcer.py",
+    _HOOK_DIRECTORY / "code_rules_enforcer.py",
 )
 assert _hook_spec is not None
 assert _hook_spec.loader is not None

@@ -2,7 +2,7 @@
 
 Single source of truth for CONFIG / TEST / HOOK-INFRASTRUCTURE /
 WORKFLOW-REGISTRY / MIGRATION path pattern sets. Both Pre-Write
-(``code-rules-enforcer.py``) and pre-push (``magic_value_checks.py``)
+(``code_rules_enforcer.py``) and pre-push (``magic_value_checks.py``)
 scanners must short-circuit on the same file categories; drift between
 the two produced the "inconsistent verdicts" bug this module prevents.
 

@@ -39,7 +39,7 @@ Expose constants via helper functions: `isMaxLevel(level)` > `level >= MAXIMUM_L
 
 ## ⚡ HOOK-ENFORCED RULES
 
-These rules are automatically enforced by `code-rules-enforcer.py`. Violations block Write/Edit.
+These rules are automatically enforced by `code_rules_enforcer.py`. Violations block Write/Edit.
 
 | Rule | What's Checked |
 |------|----------------|

@@ -14,7 +14,7 @@ from types import ModuleType
 
 
 def _load_enforcer_module() -> ModuleType:
-    module_path = Path(__file__).parent / "code-rules-enforcer.py"
+    module_path = Path(__file__).parent / "code_rules_enforcer.py"
     spec = importlib.util.spec_from_file_location("code_rules_enforcer", module_path)
     assert spec is not None
     assert spec.loader is not None

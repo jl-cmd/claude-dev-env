@@ -24,7 +24,7 @@ Review every change against these rules. Flag each violation with its rule name.
 ## Magic Values and Configuration
 - Require named constants for numeric, string, and boolean literals in function bodies; exempt `0`, `1`, `-1`, empty string, and `True`/`False` where the meaning is obvious.
 - Treat structural fragments inside f-strings (paths, URLs, query patterns, regex) as magic values; require extraction to a named constant.
-- Require `UPPER_SNAKE_CASE` constants to live in `config/` (`config/timing.py`, `config/constants.py`, `config/selectors.py`); flag definitions located elsewhere unless the file path matches a hook exemption (same as `code-rules-enforcer.py` and `CODE_RULES.md`):
+- Require `UPPER_SNAKE_CASE` constants to live in `config/` (`config/timing.py`, `config/constants.py`, `config/selectors.py`); flag definitions located elsewhere unless the file path matches a hook exemption (same as `code_rules_enforcer.py` and `CODE_RULES.md`):
   - Django migrations: path contains `/migrations/`
   - Workflow registries: path (normalized to forward slashes) contains the substring `/workflow/`, `_tab.py`, `/states.py`, or `/modules.py`
   - Test files: `test_`, `_test.`, `.spec.`, `conftest`, or path under `/tests/`

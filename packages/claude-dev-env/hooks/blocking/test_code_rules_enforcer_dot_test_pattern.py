@@ -1,11 +1,11 @@
-"""Regression tests for .test.{ts,tsx,js} recognition in code-rules-enforcer."""
+"""Regression tests for .test.{ts,tsx,js} recognition in code_rules_enforcer."""
 
 import importlib.util
 import pathlib
 
 
 def _load_enforcer_module():
-    enforcer_path = pathlib.Path(__file__).parent / "code-rules-enforcer.py"
+    enforcer_path = pathlib.Path(__file__).parent / "code_rules_enforcer.py"
     spec = importlib.util.spec_from_file_location("code_rules_enforcer", enforcer_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

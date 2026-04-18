@@ -42,7 +42,7 @@
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code-rules-enforcer.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_rules_enforcer.py",
             "timeout": 15
           },
           {

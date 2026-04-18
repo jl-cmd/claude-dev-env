@@ -9,7 +9,7 @@ from pathlib import Path
 from types import ModuleType
 
 
-ENFORCER_FILENAME = "code-rules-enforcer.py"
+ENFORCER_FILENAME = "code_rules_enforcer.py"
 ENFORCER_MODULE_NAME = "code_rules_enforcer_under_test"
 
 

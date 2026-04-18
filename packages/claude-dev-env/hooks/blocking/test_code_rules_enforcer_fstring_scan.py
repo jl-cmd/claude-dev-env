@@ -1,4 +1,4 @@
-"""Unit tests for code-rules-enforcer f-string structural literal scanner."""
+"""Unit tests for code_rules_enforcer f-string structural literal scanner."""
 
 import importlib.util
 import pathlib
@@ -10,7 +10,7 @@ if str(_HOOK_DIR) not in sys.path:
 
 hook_spec = importlib.util.spec_from_file_location(
     "code_rules_enforcer",
-    _HOOK_DIR / "code-rules-enforcer.py",
+    _HOOK_DIR / "code_rules_enforcer.py",
 )
 assert hook_spec is not None
 assert hook_spec.loader is not None
@@ -132,12 +132,12 @@ def test_should_not_leak_escaped_braces_into_flag_message() -> None:
 
 
 def test_should_not_flag_enforcer_hook_itself() -> None:
-    hook_path = _HOOK_DIR / "code-rules-enforcer.py"
+    hook_path = _HOOK_DIR / "code_rules_enforcer.py"
     with open(hook_path, encoding="utf-8") as each_file:
         enforcer_source = each_file.read()
     issues = check_fstring_structural_literals(
         enforcer_source,
-        "packages/claude-dev-env/hooks/blocking/code-rules-enforcer.py",
+        "packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py",
     )
     assert issues == [], (
         f"the enforcer hook should not flag itself, got: {issues}"

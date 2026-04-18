@@ -292,7 +292,7 @@ def run_git_checks() -> ValidatorResult:
 
 
 def run_comment_checks(files: List[Path]) -> ValidatorResult:
-    """Comment preservation is enforced by code-rules-enforcer hook.
+    """Comment preservation is enforced by code_rules_enforcer hook.
 
     The hook compares old vs new content to block NEW comments and
     block DELETION of existing comments. This standalone validator
@@ -303,7 +303,7 @@ def run_comment_checks(files: List[Path]) -> ValidatorResult:
         name="No Comments",
         checks="26",
         passed=True,
-        output="Handled by code-rules-enforcer hook (old vs new comparison)",
+        output="Handled by code_rules_enforcer hook (old vs new comparison)",
     )
 
 

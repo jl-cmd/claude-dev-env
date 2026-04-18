@@ -18,7 +18,7 @@ def _copilot_instructions_text() -> str:
 
 
 def test_bugbot_documents_upper_snake_exemptions_matching_hook() -> None:
-    """code-rules-enforcer exempts migrations, workflow registries, and tests."""
+    """code_rules_enforcer exempts migrations, workflow registries, and tests."""
     text = _bugbot_text()
     assert "/migrations/" in text
     assert "_tab.py" in text
@@ -69,7 +69,7 @@ def test_copilot_instructions_upper_snake_path_exemptions() -> None:
     assert "conftest" in text
     assert "/tests/" in text
     assert "hook" not in lower
-    assert "code-rules-enforcer" not in lower
+    assert "code_rules_enforcer" not in lower
 
 
 def test_copilot_instructions_file_length_is_advisory_smell_not_hard_gate() -> None:
@@ -81,7 +81,7 @@ def test_copilot_instructions_file_length_is_advisory_smell_not_hard_gate() -> N
     assert "advisory" in lower
     assert "hard gate" in lower or "not a hard gate" in lower
     assert "hard limit" not in lower
-    assert "code-rules-enforcer" not in lower
+    assert "code_rules_enforcer" not in lower
     assert "hook" not in lower
 
 

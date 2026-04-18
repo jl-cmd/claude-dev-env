@@ -207,7 +207,7 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Write\|Edit | `sensitive-file-protector` | Blocks writes to .env, credentials, and sensitive files |
 | Write\|Edit | `hook-format-validator` | Validates hook file format on write |
 | Write\|Edit | `run_all_validators` | Runs the full validation suite (30+ checks) |
-| Write\|Edit | `code-rules-enforcer` | Blocks CODE_RULES.md violations (comments, magic values, imports) |
+| Write\|Edit | `code_rules_enforcer` | Blocks CODE_RULES.md violations (comments, magic values, imports) |
 | Write\|Edit | `tdd-enforcer` | Prompts TDD confirmation when writing production code |
 | Edit | `refactor-guard` | Ensures refactoring happens only after green tests |
 | Edit | `migration-safety-advisor` | Warns about risky database migration patterns |

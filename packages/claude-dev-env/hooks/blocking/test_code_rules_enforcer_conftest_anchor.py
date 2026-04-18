@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ENFORCER_MODULE_NAME = "code_rules_enforcer_under_test"
-ENFORCER_SOURCE_PATH = Path(__file__).parent / "code-rules-enforcer.py"
+ENFORCER_SOURCE_PATH = Path(__file__).parent / "code_rules_enforcer.py"
 
 
 def load_enforcer_module() -> object:

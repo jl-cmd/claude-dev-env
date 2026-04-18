@@ -91,7 +91,7 @@ Paragraph breaks between logical groups. Related lines cluster. Returns visually
 
 ## Hook-Enforced Rules (violations block your Write/Edit)
 
-These are enforced by `code-rules-enforcer.py`. If you violate them, your file write will be rejected.
+These are enforced by `code_rules_enforcer.py`. If you violate them, your file write will be rejected.
 
 | Rule | What Will Block You |
 |------|-------------------|

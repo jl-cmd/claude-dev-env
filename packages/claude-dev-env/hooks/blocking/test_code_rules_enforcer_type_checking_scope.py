@@ -1,4 +1,4 @@
-"""Unit tests for TYPE_CHECKING-scoped import exemption in code-rules-enforcer."""
+"""Unit tests for TYPE_CHECKING-scoped import exemption in code_rules_enforcer."""
 
 import importlib.util
 import pathlib
@@ -10,7 +10,7 @@ if str(_HOOK_DIR) not in sys.path:
 
 hook_spec = importlib.util.spec_from_file_location(
     "code_rules_enforcer",
-    _HOOK_DIR / "code-rules-enforcer.py",
+    _HOOK_DIR / "code_rules_enforcer.py",
 )
 assert hook_spec is not None
 assert hook_spec.loader is not None

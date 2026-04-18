@@ -130,7 +130,7 @@ Build a matrix of where each concept appears:
 | Rule/Concept | AGENTS.md | rules/*.md | docs/*.md | hooks | Count |
 |---|---|---|---|---|---|
 | BDD first | line 52, 92 | bdd.md | - | tdd-enforcer.py | 3 advisory + 1 hook |
-| No magic values | - | code-standards.md | CODE_RULES.md:49 | code-rules-enforcer.py | 2 advisory + 1 hook |
+| No magic values | - | code-standards.md | CODE_RULES.md:49 | code_rules_enforcer.py | 2 advisory + 1 hook |
 | ... | ... | ... | ... | ... | ... |
 ```
 
