@@ -7,6 +7,13 @@ import sys
 from pathlib import Path
 
 CLAUDE_DIRECTORY_PATH = os.path.normpath(os.path.expanduser("~/.claude"))
+GH_REDIRECT_ACTIVE_ENV_VAR = "CLAUDE_GH_REDIRECT_ACTIVE"
+GH_REDIRECT_ACTIVE_TRUTHY_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def gh_redirect_is_active() -> bool:
+    env_var_value = os.environ.get(GH_REDIRECT_ACTIVE_ENV_VAR, "").strip().lower()
+    return env_var_value in GH_REDIRECT_ACTIVE_TRUTHY_VALUES
 
 # Projects where git reset --hard is explicitly allowed by the user.
 # Add your own project paths here, e.g.:
@@ -116,10 +123,11 @@ def main() -> None:
 
     command = tool_input.get("command", "")
 
-    redirected_gh_description = find_redirected_gh_pattern(command)
-    if redirected_gh_description is not None:
-        print(json.dumps(_build_silent_gh_deny_response(redirected_gh_description)))
-        sys.exit(0)
+    if gh_redirect_is_active():
+        redirected_gh_description = find_redirected_gh_pattern(command)
+        if redirected_gh_description is not None:
+            print(json.dumps(_build_silent_gh_deny_response(redirected_gh_description)))
+            sys.exit(0)
 
     matched_description = find_destructive_pattern(command)
 
