@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-HOOK_PATH = Path(__file__).parent / "config-change-guard.py"
+HOOK_PATH = Path(__file__).parent / "config_change_guard.py"
 
 
 def _run_hook(

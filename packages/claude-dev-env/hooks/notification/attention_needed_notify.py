@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from notification_utils import (
     notify_ntfy,
+    notify_discord,
     is_wsl,
     notify_windows,
     notify_wsl,
@@ -23,6 +24,7 @@ from notification_utils import (
 )
 
 DEFAULT_MESSAGE = "Input needed"
+ATTENTION_WEBHOOK_SECRET_ID = os.environ.get("BWS_DISCORD_ATTENTION_SECRET_ID", "")
 
 
 def get_question_from_stdin() -> str:
@@ -46,6 +48,11 @@ def main() -> None:
     question_text = get_question_from_stdin()
 
     notify_ntfy(title=project_name, message=question_text)
+    notify_discord(
+        title=project_name,
+        message=question_text,
+        webhook_secret_id=ATTENTION_WEBHOOK_SECRET_ID,
+    )
 
     if system == "Windows":
         sound_windows()

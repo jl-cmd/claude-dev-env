@@ -10,7 +10,7 @@ if str(_HOOK_DIR) not in sys.path:
 
 hook_spec = importlib.util.spec_from_file_location(
     "gh_body_arg_blocker",
-    _HOOK_DIR / "gh-body-arg-blocker.py",
+    _HOOK_DIR / "gh_body_arg_blocker.py",
 )
 assert hook_spec is not None
 assert hook_spec.loader is not None

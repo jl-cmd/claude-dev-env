@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 
-SCRIPT_PATH = Path(__file__).parent / "destructive-command-blocker.py"
+SCRIPT_PATH = Path(__file__).parent / "destructive_command_blocker.py"
 GH_GATE_USER_FACING_PREFIX = "[gh-gate]"
 GH_REDIRECT_ACTIVE_ENV_VAR = "CLAUDE_GH_REDIRECT_ACTIVE"
 GH_REDIRECT_ACTIVE_VALUE = "1"

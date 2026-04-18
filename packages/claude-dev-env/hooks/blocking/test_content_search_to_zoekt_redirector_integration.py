@@ -18,7 +18,7 @@ class ContentSearchHookIntegrationTests(unittest.TestCase):
             get_zoekt_redirect_reason_brief,
         )
 
-        hook_path = hook_directory / "content-search-to-zoekt-redirector.py"
+        hook_path = hook_directory / "content_search_to_zoekt_redirector.py"
         destructive_gate_label_prefix = "[destructive-gate]"
         destructive_gate_label_prefix_value = f"{destructive_gate_label_prefix} "
         expected_decision = "deny"

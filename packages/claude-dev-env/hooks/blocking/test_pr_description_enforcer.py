@@ -15,7 +15,7 @@ from _gh_body_arg_utils import get_logical_first_line
 
 hook_spec = importlib.util.spec_from_file_location(
     "pr_description_enforcer",
-    _HOOK_DIR / "pr-description-enforcer.py",
+    _HOOK_DIR / "pr_description_enforcer.py",
 )
 assert hook_spec is not None
 assert hook_spec.loader is not None
@@ -213,7 +213,7 @@ def test_read_body_file_rejects_relative_path_traversal(tmp_path) -> None:
     _HOOK_DIR = pathlib.Path(__file__).parent
     if str(_HOOK_DIR) not in sys.path:
         sys.path.insert(0, str(_HOOK_DIR))
-    spec = importlib.util.spec_from_file_location('pde', _HOOK_DIR / 'pr-description-enforcer.py')
+    spec = importlib.util.spec_from_file_location('pde', _HOOK_DIR / 'pr_description_enforcer.py')
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     import os, pytest
@@ -229,7 +229,7 @@ def test_read_body_file_rejects_relative_path_traversal(tmp_path) -> None:
 def test_read_body_file_allows_absolute_path_outside_cwd(tmp_path) -> None:
     import importlib.util, pathlib, sys
     _HOOK_DIR = pathlib.Path(__file__).parent
-    spec = importlib.util.spec_from_file_location('pde2', _HOOK_DIR / 'pr-description-enforcer.py')
+    spec = importlib.util.spec_from_file_location('pde2', _HOOK_DIR / 'pr_description_enforcer.py')
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     body_file = tmp_path / 'body.md'
@@ -241,7 +241,7 @@ def test_read_body_file_allows_absolute_path_outside_cwd(tmp_path) -> None:
 def test_reassemble_split_quoted_value_returns_none_for_unclosed_quote() -> None:
     import importlib.util, pathlib, sys
     _HOOK_DIR = pathlib.Path(__file__).parent
-    spec = importlib.util.spec_from_file_location('pde3', _HOOK_DIR / 'pr-description-enforcer.py')
+    spec = importlib.util.spec_from_file_location('pde3', _HOOK_DIR / 'pr_description_enforcer.py')
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     result = m._reassemble_split_quoted_value("'unclosed", [])
@@ -272,7 +272,7 @@ def test_body_file_path_traversal_returns_none() -> None:
     import importlib.util
     import pathlib
     _HOOK_DIR = pathlib.Path(__file__).parent
-    spec = importlib.util.spec_from_file_location('pde_t', _HOOK_DIR / 'pr-description-enforcer.py')
+    spec = importlib.util.spec_from_file_location('pde_t', _HOOK_DIR / 'pr_description_enforcer.py')
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     result = m._resolve_body_file_value("../../../etc/passwd")
@@ -303,7 +303,7 @@ def test_read_body_file_rejects_absolute_symlink_outside_cwd(tmp_path: pathlib.P
     import importlib.util
     import pytest
     _HOOK_DIR = pathlib.Path(__file__).parent
-    spec = importlib.util.spec_from_file_location('pde_sym', _HOOK_DIR / 'pr-description-enforcer.py')
+    spec = importlib.util.spec_from_file_location('pde_sym', _HOOK_DIR / 'pr_description_enforcer.py')
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     target_file = tmp_path / "secret.txt"
@@ -321,7 +321,7 @@ def test_read_body_file_allows_real_absolute_file_inside_cwd(tmp_path: pathlib.P
     """Real absolute file path that exists must be read successfully."""
     import importlib.util
     _HOOK_DIR = pathlib.Path(__file__).parent
-    spec = importlib.util.spec_from_file_location('pde_abs', _HOOK_DIR / 'pr-description-enforcer.py')
+    spec = importlib.util.spec_from_file_location('pde_abs', _HOOK_DIR / 'pr_description_enforcer.py')
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     body_file = tmp_path / "body.md"
@@ -334,7 +334,7 @@ def test_read_body_file_allows_in_cwd_symlink_pointing_into_cwd(tmp_path: pathli
     """Symlink inside cwd pointing to another file inside cwd must be readable."""
     import importlib.util
     _HOOK_DIR = pathlib.Path(__file__).parent
-    spec = importlib.util.spec_from_file_location('pde_inlink', _HOOK_DIR / 'pr-description-enforcer.py')
+    spec = importlib.util.spec_from_file_location('pde_inlink', _HOOK_DIR / 'pr_description_enforcer.py')
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     real_file = tmp_path / "real.md"

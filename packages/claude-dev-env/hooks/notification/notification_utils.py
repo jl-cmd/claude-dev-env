@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 
+import json
 import os
 import platform
 import subprocess
+from typing import Optional
 
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
+BWS_FETCH_TIMEOUT_SECONDS = 10
+BWS_EXECUTABLE_NAME = "bws"
+BWS_SECRET_GET_OUTPUT_FORMAT = "json"
+BWS_SECRET_JSON_VALUE_FIELD = "value"
+DISCORD_WEBHOOK_CONTENT_TYPE_HEADER = "Content-Type: application/json"
+DISCORD_WEBHOOK_USERNAME = "Claude Code"
 NTFY_BASE_URL = f"https://ntfy.sh/{NTFY_TOPIC}" if NTFY_TOPIC else ""
 WINDOWS_CHIMES_PATH = os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "Media", "Windows Battery Critical.wav")
 LINUX_NOTIFICATION_SOUND = os.environ.get("NOTIFICATION_SOUND", "/usr/share/sounds/freedesktop/stereo/message.oga")
@@ -152,6 +160,54 @@ def notify_ntfy(title: str, message: str, priority: str = "high") -> None:
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass
+
+
+def fetch_bws_secret(secret_id: str) -> Optional[str]:
+    if not secret_id:
+        return None
+    try:
+        completed_bws_process = subprocess.run(
+            [BWS_EXECUTABLE_NAME, "secret", "get", secret_id, "--output", BWS_SECRET_GET_OUTPUT_FORMAT],
+            capture_output=True,
+            text=True,
+            timeout=BWS_FETCH_TIMEOUT_SECONDS,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        return None
+    try:
+        parsed_payload = json.loads(completed_bws_process.stdout)
+    except json.JSONDecodeError:
+        return None
+    secret_value = parsed_payload.get(BWS_SECRET_JSON_VALUE_FIELD)
+    if isinstance(secret_value, str):
+        return secret_value
+    return None
+
+
+def notify_discord(title: str, message: str, webhook_secret_id: str) -> None:
+    if not webhook_secret_id:
+        return
+    webhook_url = fetch_bws_secret(webhook_secret_id)
+    if not webhook_url:
+        return
+    discord_payload = json.dumps({
+        "username": DISCORD_WEBHOOK_USERNAME,
+        "content": f"**{title}**\n{message}",
+    })
+    try:
+        subprocess.Popen(
+            [
+                "curl", "-s",
+                "-H", DISCORD_WEBHOOK_CONTENT_TYPE_HEADER,
+                "-d", discord_payload,
+                webhook_url,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
     except FileNotFoundError:
         pass

@@ -90,11 +90,17 @@ def candidate_test_paths_for(production_path: Path) -> list[Path]:
     all_candidates: list[Path] = []
 
     if extension == ".py":
-        all_candidates.append(directory / f"test_{stem}.py")
-        all_candidates.append(directory / f"{stem}_test.py")
+        all_stem_variants = [stem]
+        snake_cased_stem = stem.replace("-", "_")
+        if snake_cased_stem != stem:
+            all_stem_variants.append(snake_cased_stem)
+        for each_stem_variant in all_stem_variants:
+            all_candidates.append(directory / f"test_{each_stem_variant}.py")
+            all_candidates.append(directory / f"{each_stem_variant}_test.py")
         nearest_tests_directory = find_nearest_tests_directory(directory)
         if nearest_tests_directory is not None:
-            all_candidates.append(nearest_tests_directory / f"test_{stem}.py")
+            for each_stem_variant in all_stem_variants:
+                all_candidates.append(nearest_tests_directory / f"test_{each_stem_variant}.py")
         return all_candidates
 
     if extension in {".tsx", ".ts", ".jsx", ".js"}:

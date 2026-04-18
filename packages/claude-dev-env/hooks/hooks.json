@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/content-search-to-zoekt-redirector.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/content_search_to_zoekt_redirector.py",
             "timeout": 10
           }
         ]
@@ -17,22 +17,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/write-existing-file-blocker.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/write_existing_file_blocker.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/sensitive-file-protector.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/sensitive_file_protector.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pyautogui-scroll-blocker.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pyautogui_scroll_blocker.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validation/hook-format-validator.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validation/hook_format_validator.py",
             "timeout": 15
           },
           {
@@ -47,12 +47,12 @@
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/tdd-enforcer.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/tdd_enforcer.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validation/code-style-validator.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validation/code_style_validator.py",
             "timeout": 15
           }
         ]
@@ -62,12 +62,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/advisory/refactor-guard.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/advisory/refactor_guard.py",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/advisory/migration-safety-advisor.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/advisory/migration_safety_advisor.py",
             "timeout": 15
           }
         ]
@@ -77,27 +77,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/destructive-command-blocker.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/destructive_command_blocker.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/block-main-commit.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/block_main_commit.py",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pr-description-enforcer.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pr_description_enforcer.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/test-preflight-check.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/test_preflight_check.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/content-search-to-zoekt-redirector.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/content_search_to_zoekt_redirector.py",
             "timeout": 10
           }
         ]
@@ -107,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/parallel-task-blocker.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/parallel_task_blocker.py",
             "timeout": 10
           }
         ]
@@ -117,7 +117,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/notification/attention-needed-notify.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/notification/attention_needed_notify.py",
             "timeout": 15
           }
         ]
@@ -129,12 +129,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/bulk-edit-reminder.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/bulk_edit_reminder.py",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/code-rules-reminder.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/code_rules_reminder.py",
             "timeout": 15
           }
         ]
@@ -146,7 +146,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/plugin-data-dir-cleanup.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/plugin_data_dir_cleanup.py",
             "timeout": 10
           }
         ]
@@ -158,12 +158,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/notification/attention-needed-notify.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/notification/attention_needed_notify.py",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/hedging-language-blocker.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/hedging_language_blocker.py",
             "timeout": 10
           }
         ]
@@ -175,7 +175,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/session-end-cleanup.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/session_end_cleanup.py",
             "timeout": 15
           }
         ]
@@ -187,7 +187,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/config-change-guard.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/config_change_guard.py",
             "timeout": 10
           }
         ]
@@ -209,7 +209,7 @@
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/auto-formatter.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/auto_formatter.py",
             "timeout": 30
           }
         ]
@@ -219,7 +219,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/investigation-tracker-reset.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/investigation_tracker_reset.py",
             "timeout": 10
           }
         ]
@@ -231,7 +231,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/notification/claude-notification-handler.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/notification/claude_notification_handler.py",
             "timeout": 15
           }
         ]

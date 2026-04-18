@@ -1,4 +1,4 @@
-"""Tests for sync-to-cursor.py: canonical docs copy, manifest, and truncation footer."""
+"""Tests for sync_to_cursor.py: canonical docs copy, manifest, and truncation footer."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 import sync_to_cursor as mod
 from sync_to_cursor.rules import _read_paths_glob
 
-_SYNC_SCRIPT = _SCRIPTS_DIR / "sync-to-cursor.py"
+_SYNC_SCRIPT = _SCRIPTS_DIR / "sync_to_cursor.py"
 
 
 def _minimal_rule_files(claude_rules: Path) -> None:

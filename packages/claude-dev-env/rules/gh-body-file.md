@@ -74,6 +74,6 @@ gh issue create --title "T" --body 'Use `x` to do `y`'
 
 ## Enforcement
 
-A PreToolUse hook (`gh-body-arg-blocker.py`) blocks any Bash call that uses
+A PreToolUse hook (`gh_body_arg_blocker.py`) blocks any Bash call that uses
 `gh <subcommand> ... --body <arg>` (without `-file`) and returns a corrective
 message directing you to use `--body-file` instead.

@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from notification_utils import (
     notify_ntfy,
+    notify_discord,
     is_wsl,
     notify_windows,
     notify_wsl,
@@ -16,6 +17,8 @@ from notification_utils import (
     get_project_name,
 )
 
+ATTENTION_WEBHOOK_SECRET_ID = os.environ.get("BWS_DISCORD_ATTENTION_SECRET_ID", "")
+
 
 def send_desktop_and_push_notification(
     project_name: str,
@@ -23,6 +26,11 @@ def send_desktop_and_push_notification(
     ntfy_priority: str,
 ) -> None:
     notify_ntfy(title=project_name, message=notification_message, priority=ntfy_priority)
+    notify_discord(
+        title=project_name,
+        message=notification_message,
+        webhook_secret_id=ATTENTION_WEBHOOK_SECRET_ID,
+    )
     system = platform.system()
     if system == "Windows":
         sound_windows()

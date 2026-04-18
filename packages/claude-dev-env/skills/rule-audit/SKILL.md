@@ -129,7 +129,7 @@ Build a matrix of where each concept appears:
 ```
 | Rule/Concept | AGENTS.md | rules/*.md | docs/*.md | hooks | Count |
 |---|---|---|---|---|---|
-| BDD first | line 52, 92 | bdd.md | - | tdd-enforcer.py | 3 advisory + 1 hook |
+| BDD first | line 52, 92 | bdd.md | - | tdd_enforcer.py | 3 advisory + 1 hook |
 | No magic values | - | code-standards.md | CODE_RULES.md:49 | code_rules_enforcer.py | 2 advisory + 1 hook |
 | ... | ... | ... | ... | ... | ... |
 ```
@@ -143,8 +143,8 @@ For each rule/concept, classify its enforcement level:
 ```
 | Level | Description | Example |
 |---|---|---|
-| ENFORCED | Hook blocks the action deterministically | destructive-command-blocker.py |
-| VALIDATED | PostToolUse checks after the fact | mypy_validator.py, auto-formatter.py |
+| ENFORCED | Hook blocks the action deterministically | destructive_command_blocker.py |
+| VALIDATED | PostToolUse checks after the fact | mypy_validator.py, auto_formatter.py |
 | ADVISORY | In AGENTS.md/rules but no hook backs it | most rules |
 | REDUNDANT | Codex already does this by default | "write clean code" |
 | ORPHANED | Hook exists but no corresponding rule | hook with no rule backing |

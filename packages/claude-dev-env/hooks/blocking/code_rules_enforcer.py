@@ -17,7 +17,7 @@ Advisory only (non-blocking):
 
 Companion tests live alongside this file as
 ``test_code_rules_enforcer_<suffix>.py``; the ``<suffix>`` split keeps each
-concern focused. The separate ``tdd-enforcer.py`` hook currently scans only
+concern focused. The separate ``tdd_enforcer.py`` hook currently scans only
 for the exact candidate ``test_code_rules_enforcer.py`` and does not accept
 the suffix variants, so edits to this file include the bypass sentinel
 ``# pragma: no-tdd-gate`` until the TDD hook learns the suffix convention.
