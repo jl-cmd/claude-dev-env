@@ -33,16 +33,25 @@ subprocess.run(["gh", "pr", "create", "--title", "My PR", "--body-file", body_pa
 
 ### PowerShell (Windows — preferred for this repo)
 
+`Set-Content -Encoding utf8` writes UTF-8-**with-BOM** on Windows PowerShell 5.1,
+which causes `gh` to treat the leading BOM as part of the first heading character
+and can corrupt rendering. Use the BOM-free pattern below — it works on both
+Windows PowerShell 5.1 and PowerShell 7+.
+
 ```powershell
 $bodyPath = [System.IO.Path]::ChangeExtension((New-TemporaryFile).FullName, '.md')
-@'
+$body = @'
 ## Summary
 
 Fixes `foo` by updating `bar`.
-'@ | Set-Content -Path $bodyPath -Encoding utf8
+'@
+[IO.File]::WriteAllText($bodyPath, $body, [Text.UTF8Encoding]::new($false))
 
 gh pr create --title "My PR" --body-file $bodyPath
 ```
+
+On PowerShell 7+ you can alternatively use `Set-Content -Encoding utf8NoBOM`,
+but the `[IO.File]::WriteAllText` pattern above is version-agnostic.
 
 ### Bash
 

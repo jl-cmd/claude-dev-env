@@ -14,19 +14,20 @@ logical line, then use shlex.split(..., posix=False) on that line so '--body'
 appearing inside a quoted flag value or in heredoc body content on non-continuation
 lines does not trigger a false positive. Both '--body value' and '--body=value' forms are blocked,
 as are their short '-b' equivalents. '--body-file' and '--body-file=...' are allowed.
-Falls back to a conservative approve if the logical line is unparseable.
+Fails CLOSED on shlex ValueError when the logical line matches an affected
+subcommand AND contains a bare '--body'/'-b' literal (exactly the heredoc
+pattern this hook must catch); otherwise approves unparseable input.
 """
 
 import json
 import re
-import shlex
 import sys
 
 from _gh_body_arg_utils import (
     all_body_flags,
     all_body_flag_prefixes,
-    all_value_flags,
     get_logical_first_line,
+    iter_significant_tokens,
 )
 
 _GH_BODY_SUBCOMMANDS = re.compile(
@@ -35,6 +36,10 @@ _GH_BODY_SUBCOMMANDS = re.compile(
     r"pr\s+(?:create|edit|comment|review)"
     r")\b",
     re.IGNORECASE,
+)
+
+_BARE_BODY_TOKEN_PATTERN = re.compile(
+    r"(?<!\S)(?:--body|-b)(?:=|(?![-\w]))",
 )
 
 _BASH_TOOL_NAME = "Bash"
@@ -49,14 +54,19 @@ _CORRECTIVE_MESSAGE = (
     "      f.write(body_text)\n"
     "      body_path = f.name\n"
     "  # then: gh ... --body-file body_path\n\n"
-    "Safe PowerShell pattern:\n"
+    "Safe PowerShell pattern (BOM-free, works on 5.1 and 7+):\n"
     "  $bodyPath = [System.IO.Path]::ChangeExtension((New-TemporaryFile).FullName, '.md')\n"
-    "  @'\n"
+    "  $body = @'\n"
     "  <your markdown body>\n"
-    "  '@ | Set-Content -Path $bodyPath -Encoding utf8\n"
+    "  '@\n"
+    "  [IO.File]::WriteAllText($bodyPath, $body, [Text.UTF8Encoding]::new($false))\n"
     "  gh ... --body-file $bodyPath\n\n"
     "See ~/.claude/rules/gh-body-file.md for full guidance."
 )
+
+
+def _logical_line_has_bare_body_token(logical_line: str) -> bool:
+    return bool(_BARE_BODY_TOKEN_PATTERN.search(logical_line))
 
 
 def _uses_body_string_arg(command: str) -> bool:
@@ -68,26 +78,22 @@ def _uses_body_string_arg(command: str) -> bool:
     and quoted values retain their surrounding quotes as part of the token, so
     '--body' embedded in a quoted value cannot be mistaken for a standalone flag.
     Detects both '--body value'/'--body=value' forms and their short '-b'
-    equivalents. Falls back to a conservative approve if the line is unparseable.
+    equivalents. Fails CLOSED on shlex ValueError when the logical line matches
+    an affected subcommand and contains a bare --body / -b token literal, since
+    heredoc-wrapped --body arguments are exactly the pattern this hook exists
+    to block; otherwise approves unparseable input (out of scope).
     """
-    logical_line = get_logical_first_line(command)
-    if not _GH_BODY_SUBCOMMANDS.search(logical_line):
+    if not _GH_BODY_SUBCOMMANDS.search(get_logical_first_line(command)):
         return False
     try:
-        tokens = shlex.split(logical_line, posix=False)
+        significant_tokens = list(iter_significant_tokens(command))
     except ValueError:
-        return False
-    should_skip_next_token = False
-    for each_token in tokens:
-        if should_skip_next_token:
-            should_skip_next_token = False
-            continue
-        if each_token in all_body_flags or any(
-            each_token.startswith(each_prefix) for each_prefix in all_body_flag_prefixes
-        ):
+        return _logical_line_has_bare_body_token(get_logical_first_line(command))
+    for each_token, _remaining_tokens in significant_tokens:
+        if each_token in all_body_flags:
             return True
-        if each_token in all_value_flags:
-            should_skip_next_token = True
+        if any(each_token.startswith(each_prefix) for each_prefix in all_body_flag_prefixes):
+            return True
     return False
 
 
