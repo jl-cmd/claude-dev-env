@@ -52,6 +52,7 @@ TYPE_CHECKING_BLOCK_PATTERN = re.compile(r"^(?P<indent>\s*)if\s+(typing\.)?TYPE_
 IMPORT_STATEMENT_PREFIXES: tuple[str, ...] = ("import ", "from ")
 NOT_INSIDE_TYPE_CHECKING_BLOCK = -1
 MAX_ISSUES_PER_CHECK = 3
+FILE_GLOBAL_UPPER_SNAKE_PATTERN = re.compile(r"^_?[A-Z][A-Z0-9_]*$")
 
 
 def get_file_extension(file_path: str) -> str:
@@ -984,6 +985,114 @@ def check_boolean_naming(content: str, file_path: str) -> list[str]:
     return issues
 
 
+
+def _is_upper_snake_constant_name(name: str) -> bool:
+    """Return True for UPPER_SNAKE identifiers including those with a leading underscore."""
+    return bool(FILE_GLOBAL_UPPER_SNAKE_PATTERN.match(name))
+
+
+def _collect_module_level_upper_snake_constants(
+    module_tree: ast.Module,
+) -> dict[str, int]:
+    """Return mapping of module-level UPPER_SNAKE constant name to its line number."""
+    constants_by_name: dict[str, int] = {}
+    for each_node in module_tree.body:
+        if isinstance(each_node, ast.Assign):
+            for each_target in each_node.targets:
+                if isinstance(each_target, ast.Name) and _is_upper_snake_constant_name(each_target.id):
+                    constants_by_name.setdefault(each_target.id, each_node.lineno)
+        elif isinstance(each_node, ast.AnnAssign):
+            if isinstance(each_node.target, ast.Name) and _is_upper_snake_constant_name(each_node.target.id):
+                constants_by_name.setdefault(each_node.target.id, each_node.lineno)
+    return constants_by_name
+
+
+def _build_parent_map(module_tree: ast.Module) -> dict[int, ast.AST]:
+    """Map child node id() to its parent node for ancestor walking."""
+    parent_by_child_id: dict[int, ast.AST] = {}
+    for each_parent in ast.walk(module_tree):
+        for each_child in ast.iter_child_nodes(each_parent):
+            parent_by_child_id[id(each_child)] = each_parent
+    return parent_by_child_id
+
+
+def _resolve_enclosing_function_qname(
+    load_node: ast.Name,
+    parent_by_child_id: dict[int, ast.AST],
+) -> Optional[str]:
+    """Return 'ClassName.function_name' or 'function_name' for the enclosing function.
+
+    Returns None when the reference is at module scope (no enclosing function).
+    Decorator expressions on a function/method count as belonging to that function.
+    """
+    enclosing_function_name: Optional[str] = None
+    enclosing_class_name: Optional[str] = None
+    current_ancestor = parent_by_child_id.get(id(load_node))
+    while current_ancestor is not None:
+        if isinstance(current_ancestor, (ast.FunctionDef, ast.AsyncFunctionDef)) and enclosing_function_name is None:
+            enclosing_function_name = current_ancestor.name
+        elif isinstance(current_ancestor, ast.ClassDef):
+            enclosing_class_name = current_ancestor.name
+            break
+        current_ancestor = parent_by_child_id.get(id(current_ancestor))
+    if enclosing_function_name is None:
+        return None
+    if enclosing_class_name is not None:
+        return f"{enclosing_class_name}.{enclosing_function_name}"
+    return enclosing_function_name
+
+
+def check_file_global_constants_use_count(content: str, file_path: str) -> list[str]:
+    """Flag module-level UPPER_SNAKE constants referenced by only one function/method.
+
+    Enforces jl-cmd/claude-code-config#180: a file-global constant used by just
+    one caller belongs in that caller's scope. Test files and non-Python files
+    are exempt. Constants with zero function references are out of scope.
+    Hook infrastructure files define module-level scalar constants by
+    convention and are exempt to avoid self-blocking.
+    """
+    if is_test_file(file_path):
+        return []
+    if get_file_extension(file_path) not in PYTHON_EXTENSIONS:
+        return []
+    if file_path.replace("\\", "/").endswith("hooks/blocking/code_rules_enforcer.py"):
+        return []
+
+    try:
+        module_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    constants_by_name = _collect_module_level_upper_snake_constants(module_tree)
+    if not constants_by_name:
+        return []
+
+    parent_by_child_id = _build_parent_map(module_tree)
+    callers_by_constant: dict[str, set[str]] = {name: set() for name in constants_by_name}
+    for each_node in ast.walk(module_tree):
+        if not isinstance(each_node, ast.Name):
+            continue
+        if not isinstance(each_node.ctx, ast.Load):
+            continue
+        if each_node.id not in callers_by_constant:
+            continue
+        enclosing_qname = _resolve_enclosing_function_qname(each_node, parent_by_child_id)
+        if enclosing_qname is not None:
+            callers_by_constant[each_node.id].add(enclosing_qname)
+
+    issues: list[str] = []
+    for each_constant_name, line_number in sorted(constants_by_name.items(), key=lambda pair: pair[1]):
+        caller_count = len(callers_by_constant[each_constant_name])
+        if caller_count == 1:
+            issues.append(
+                f"Line {line_number}: File-global constant {each_constant_name} used by only 1 function/method - move to method scope or add a second caller"
+            )
+        if len(issues) >= MAX_ISSUES_PER_CHECK:
+            break
+
+    return issues
+
+
 def validate_content(content: str, file_path: str, old_content: str = "") -> list[str]:
     """Run all applicable validators on content.
 
@@ -1005,6 +1114,7 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_magic_values(content, file_path))
         all_issues.extend(check_fstring_structural_literals(content, file_path))
         all_issues.extend(check_constants_outside_config(content, file_path))
+        all_issues.extend(check_file_global_constants_use_count(content, file_path))
         all_issues.extend(check_type_escape_hatches(content, file_path))
         all_issues.extend(check_banned_identifiers(content, file_path))
         all_issues.extend(check_boolean_naming(content, file_path))
