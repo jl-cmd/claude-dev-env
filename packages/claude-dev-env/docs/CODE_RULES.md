@@ -63,6 +63,8 @@ The "Constants location" rule is enforced at Write time. The hook exempts these 
 
 Any production file outside these families that defines an UPPER_SNAKE at module scope is still flagged and must be moved to `config/`.
 
+> See also: [File-global constants use-count rule](../rules/file-global-constants.md) for the use-count requirement on file-global constants outside `config/`.
+
 ---
 
 ## 3. REUSE CONSTANTS (DRY CONFIG)

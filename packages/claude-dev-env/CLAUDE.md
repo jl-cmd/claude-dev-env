@@ -3,6 +3,12 @@
 ## Code Rules
 @~/.claude/docs/CODE_RULES.md
 
+## File-Global Constants
+
+**file_global_constants_use_count:** Every module-level constant in production code outside `config/` must be referenced by at least two methods, functions, or classes in the same file. One reference → move to `config/` and import as a local alias. Zero references → delete (dead code). Test files are exempt.
+
+Full rule including the decision table, examples, and exemption details: [`packages/claude-dev-env/rules/file-global-constants.md`](rules/file-global-constants.md).
+
 ## Core Philosophy
 
 **TDD IS NON-NEGOTIABLE.** Build it right, build it simple. Maintainable > Clever.
