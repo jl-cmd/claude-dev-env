@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.25.0...claude-dev-env-v1.25.1) (2026-04-18)
+
+
+### Maintenance
+
+* task_scope directive + root doc cleanup ([#181](https://github.com/jl-cmd/claude-code-config/issues/181)) ([13e929c](https://github.com/jl-cmd/claude-code-config/commit/13e929c2af14346995995c068c0bd69bc2ef1d1f))
+
 ## [1.25.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.24.0...claude-dev-env-v1.25.0) (2026-04-18)
 
 
