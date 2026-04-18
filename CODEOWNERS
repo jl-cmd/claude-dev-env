@@ -1,4 +1,0 @@
-# Single-maintainer CODEOWNERS for prompt-generator issue-redirect template.
-# Future: replace @jl-cmd with a team handle (e.g. @jl-cmd/prompt-generator-maintainers)
-# when a formal team is created in the organization.
-/.github/ISSUE_TEMPLATE/prompt-generator-redirect.yml @jl-cmd
