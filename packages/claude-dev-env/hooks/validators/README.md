@@ -119,7 +119,11 @@ repos:
     hooks:
       - id: python-style-checks
         name: Python Style Checks
-        entry: python hooks/validators/python_style_checks.py
+        entry: python packages/claude-dev-env/hooks/validators/python_style_checks.py
+        args: []
+        pass_filenames: true
+        # Invokes the script directly via its ``__main__`` block so the
+        # ``validators`` package qualifier does not need PYTHONPATH setup.
         language: system
         types: [python]
 ```

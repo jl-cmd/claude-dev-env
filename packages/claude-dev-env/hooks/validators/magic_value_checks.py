@@ -12,11 +12,11 @@ import sys
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Set, Tuple, Type
 
-from exempt_paths import (
+from .exempt_paths import (
     is_config_file,
     is_test_file,
 )
-from validator_base import Violation
+from .validator_base import Violation
 
 
 ALLOWED_NUMBERS: FrozenSet[int] = frozenset({-1, 0, 1})

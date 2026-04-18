@@ -4,11 +4,11 @@ import ast
 
 import pytest
 
-from type_safety_checks import (
+from .type_safety_checks import (
     check_missing_type_hints,
     check_any_type,
 )
-from validator_base import Violation
+from .validator_base import Violation
 
 
 GOOD_FULLY_TYPED = '''

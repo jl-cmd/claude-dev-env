@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from magic_value_checks import (
+from .magic_value_checks import (
     check_magic_values,
     validate_file,
 )
-from validator_base import Violation
+from .validator_base import Violation
 
 
 MAGIC_NUMBER_SOURCE = "x = 42\n"

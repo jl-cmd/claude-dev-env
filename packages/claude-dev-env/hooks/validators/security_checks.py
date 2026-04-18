@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from validator_base import Violation
+from .validator_base import Violation
 
 
 SECRET_PATTERNS: frozenset[str] = frozenset({

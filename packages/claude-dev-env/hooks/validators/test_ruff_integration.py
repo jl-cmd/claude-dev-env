@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from ruff_integration import RuffResult, check_ruff_available, run_ruff_check
+from .ruff_integration import RuffResult, check_ruff_available, run_ruff_check
 
 
 def test_ruff_result_dataclass() -> None:

@@ -6,7 +6,7 @@ from typing import List
 
 import pytest
 
-from file_structure_checks import (
+from .file_structure_checks import (
     Violation,
     check_multiple_requirements_txt,
     check_empty_init_files,

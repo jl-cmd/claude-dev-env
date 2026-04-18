@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from abbreviation_checks import (
+from .abbreviation_checks import (
     check_single_letter_variables,
     validate_file,
 )
-from validator_base import Violation
+from .validator_base import Violation
 
 
 GOOD_DESCRIPTIVE_NAMES = '''

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from validator_base import Violation
+from .validator_base import Violation
 
 
 def check_useless_tests(tree: ast.AST, filename: str) -> List[Violation]:

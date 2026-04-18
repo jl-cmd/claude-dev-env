@@ -2,7 +2,7 @@
 
 import pytest
 
-from output_formatter import (
+from .output_formatter import (
     OutputFormatter,
     OutputMode,
     format_violation_with_context,

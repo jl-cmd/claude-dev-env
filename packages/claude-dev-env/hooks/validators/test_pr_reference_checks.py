@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from pr_reference_checks import (
+from .pr_reference_checks import (
     check_pr_references,
     validate_file,
 )
-from validator_base import Violation
+from .validator_base import Violation
 
 
 GOOD_NO_REFERENCES = '''

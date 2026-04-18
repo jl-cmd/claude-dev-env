@@ -2,8 +2,8 @@
 
 import pytest
 
-from todo_checks import check_untracked_todos
-from validator_base import Violation
+from .todo_checks import check_untracked_todos
+from .validator_base import Violation
 
 
 GOOD_TODO_WITH_ISSUE = '''

@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import List, Set
 
-from validator_base import Violation
+from .validator_base import Violation
 
 
 ALLOWED_SINGLE_LETTERS: Set[str] = frozenset({"i", "j", "k", "_"})

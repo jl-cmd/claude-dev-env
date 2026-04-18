@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from git_checks import (
+from .git_checks import (
     Violation,
     check_single_commit_when_pr_exists,
     check_draft_pr_state,

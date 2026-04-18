@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from validator_base import Violation
+from .validator_base import Violation
 
 
 MAX_FUNCTION_LINES = 30

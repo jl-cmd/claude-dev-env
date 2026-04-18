@@ -2,7 +2,7 @@
 
 import pytest
 
-from validator_base import Violation
+from .validator_base import Violation
 
 
 class TestViolation:

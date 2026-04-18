@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from mypy_integration import MypyResult, check_mypy_available, run_mypy_check
+from .mypy_integration import MypyResult, check_mypy_available, run_mypy_check
 
 
 def test_mypy_result_dataclass() -> None:

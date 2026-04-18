@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from validator_base import Violation
+from .validator_base import Violation
 
 
 TODO_PATTERN = re.compile(r"#\s*(TODO|FIXME)\b(?!.*#\d+)", re.IGNORECASE)

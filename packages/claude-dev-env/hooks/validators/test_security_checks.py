@@ -4,12 +4,12 @@ import ast
 
 import pytest
 
-from security_checks import (
+from .security_checks import (
     check_hardcoded_secrets,
     check_sql_injection,
     check_xss_risk,
 )
-from validator_base import Violation
+from .validator_base import Violation
 
 
 GOOD_NO_SECRETS = '''

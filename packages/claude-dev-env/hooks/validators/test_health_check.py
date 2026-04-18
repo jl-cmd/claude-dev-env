@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from health_check import (
+from .health_check import (
     ValidatorHealth,
     check_validator_exists,
     check_all_validators,

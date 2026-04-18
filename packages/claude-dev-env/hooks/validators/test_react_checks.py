@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from react_checks import check_no_class_components, Violation
+from .react_checks import check_no_class_components, Violation
 
 
 def test_class_component_extends_component_should_fail(tmp_path: Path) -> None:

@@ -7,7 +7,7 @@ from typing import List
 
 import pytest
 
-from test_safety_checks import (
+from .test_safety_checks import (
     Violation,
     check_no_skip_decorators,
     check_debug_guard_in_dev_scripts,

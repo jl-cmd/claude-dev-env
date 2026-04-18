@@ -4,12 +4,12 @@ import ast
 
 import pytest
 
-from python_antipattern_checks import (
+from .python_antipattern_checks import (
     check_mutable_default_args,
     check_bare_except,
     check_print_in_production,
 )
-from validator_base import Violation
+from .validator_base import Violation
 
 
 GOOD_NONE_DEFAULT = '''

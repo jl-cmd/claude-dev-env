@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from code_quality_checks import (
+from .code_quality_checks import (
     check_function_length,
     check_nesting_depth,
     check_file_length,
 )
-from validator_base import Violation
+from .validator_base import Violation
 
 
 GOOD_SHORT_FUNCTION = '''

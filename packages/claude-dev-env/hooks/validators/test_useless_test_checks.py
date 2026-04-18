@@ -4,10 +4,10 @@ import ast
 
 import pytest
 
-from useless_test_checks import (
+from .useless_test_checks import (
     check_useless_tests,
 )
-from validator_base import Violation
+from .validator_base import Violation
 
 
 GOOD_BEHAVIOR_TEST = '''
