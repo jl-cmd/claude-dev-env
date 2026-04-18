@@ -247,3 +247,55 @@ def test_directory_skip_components_excludes_pluralized_conftest() -> None:
     actual_directory_skip_components = _PRODUCTION_MODULE._directory_skip_components()
 
     assert "conftests" not in actual_directory_skip_components
+
+
+def test_should_skip_silently_when_posix_path_has_dotclaude_segment(tmp_path: Path) -> None:
+    dotclaude_production_file = tmp_path / ".claude" / "agents" / "reviewer.py"
+
+    completed = _run_hook_with_payload(
+        _make_write_payload(dotclaude_production_file, "def review(): pass\n")
+    )
+
+    assert completed.returncode == 0
+    assert completed.stdout.strip() == ""
+
+
+def test_should_skip_silently_when_windows_backslash_path_has_dotclaude_segment() -> None:
+    windows_style_path = "C:\\Users\\dev\\.claude\\agents\\reviewer.py"
+
+    completed = _run_hook_with_payload({
+        "tool_name": "Write",
+        "tool_input": {"file_path": windows_style_path, "content": "def review(): pass\n"},
+    })
+
+    assert completed.returncode == 0
+    assert completed.stdout.strip() == ""
+
+
+def test_should_skip_silently_when_mixed_separator_path_has_dotclaude_segment() -> None:
+    mixed_separator_path = "C:/Users/dev\\.claude/agents\\reviewer.py"
+
+    completed = _run_hook_with_payload({
+        "tool_name": "Write",
+        "tool_input": {"file_path": mixed_separator_path, "content": "def review(): pass\n"},
+    })
+
+    assert completed.returncode == 0
+    assert completed.stdout.strip() == ""
+
+
+def test_should_not_skip_when_dotclaude_is_only_a_filename_substring(tmp_path: Path) -> None:
+    sandbox = _sandbox(tmp_path)
+    substring_production_file = sandbox / "my.claude.helpers.py"
+    substring_production_file.write_text("def help(): pass\n")
+
+    completed = _run_hook_with_payload(_make_write_payload(substring_production_file))
+
+    assert _decision_from(completed) == "deny"
+
+
+def test_is_inside_dotclaude_segment_helper_matches_only_exact_segments() -> None:
+    assert _PRODUCTION_MODULE._is_inside_dotclaude_segment("/home/user/.claude/agent.py") is True
+    assert _PRODUCTION_MODULE._is_inside_dotclaude_segment("C:\\Users\\dev\\.claude\\agent.py") is True
+    assert _PRODUCTION_MODULE._is_inside_dotclaude_segment("/src/my.claude.helpers.py") is False
+    assert _PRODUCTION_MODULE._is_inside_dotclaude_segment("/src/app/service.py") is False

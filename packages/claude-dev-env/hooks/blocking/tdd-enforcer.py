@@ -18,6 +18,15 @@ SKIP_PATTERNS = {
     'conftest', 'fixture', 'mock', 'stub'
 }
 SKIP_EXTENSIONS = {'.md', '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.txt'}
+DOTCLAUDE_PATH_SEGMENTS = frozenset({".claude"})
+
+
+def _is_inside_dotclaude_segment(file_path_string: str) -> bool:
+    normalized_path = file_path_string.replace("\\", "/")
+    for each_segment in normalized_path.split("/"):
+        if each_segment and each_segment in DOTCLAUDE_PATH_SEGMENTS:
+            return True
+    return False
 
 
 def _freshness_seconds() -> int:
@@ -219,6 +228,9 @@ def main() -> None:
     file_path = tool_input.get("file_path", "")
 
     if not file_path:
+        sys.exit(0)
+
+    if _is_inside_dotclaude_segment(file_path):
         sys.exit(0)
 
     path = Path(file_path)
