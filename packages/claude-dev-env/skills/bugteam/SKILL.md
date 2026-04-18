@@ -22,7 +22,7 @@ description: >-
 
 ## Contents
 
-This file is 400+ lines. The list below is for the LLM reading this skill — partial reads (e.g., `head -100`) miss what comes later, so this section ensures the full scope is visible from the top. (Per Anthropic's [Skill authoring best practices — Structure longer reference files with table of contents](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#structure-longer-reference-files-with-table-of-contents).)
+This file is the orchestration core. The list below is for the LLM reading this skill — partial reads (e.g., `head -100`) miss what comes later, so this section ensures the full scope is visible from the top. (Per Anthropic's [Skill authoring best practices — Structure longer reference files with table of contents](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#structure-longer-reference-files-with-table-of-contents).)
 
 - When this skill applies — refusal cases (4) and trigger conditions
 - Utility scripts — pre-flight checks (`scripts/`, executed not loaded as context)
@@ -37,9 +37,9 @@ This file is 400+ lines. The list below is for the LLM reading this skill — pa
   - Step 4.5 — Finalize the PR description (via pr-description-writer)
   - Step 5 — Revoke project permissions
   - Step 6 — Print the final report
-- Constraints — invariants the implementer must preserve
-- Examples — five end-to-end scenarios
-- Why this design — rationale for agent-teams + clean-room + grant/revoke
+- [`PROMPTS.md`](PROMPTS.md) — AUDIT spawn-prompt XML, FIX spawn-prompt XML, the 10 audit categories (A–J), and both outcome XML schemas. Load before spawning bugfind or bugfix, or when parsing teammate outcome XML.
+- [`EXAMPLES.md`](EXAMPLES.md) — six end-to-end scenarios (converged, cap reached, stuck, partial-fix, no-PR, dirty-tree). Load when an unfamiliar exit condition appears.
+- [`CONSTRAINTS.md`](CONSTRAINTS.md) — invariants plus "Why this design" rationale. Load when a constraint question arises.
 
 ## When this skill applies
 
@@ -287,103 +287,7 @@ Agent(
 
 Each loop calls `Agent` again with a fresh `Agent` invocation so the teammate starts with its own context window. The docs guarantee this: *"The lead's conversation history does not carry over."* Spawning per loop keeps every audit independent.
 
-Keep the spawn prompt self-contained: reference only the PR scope, audit rubric, and this loop number. Write each instruction as a standalone statement so the teammate reads the prompt as a fresh brief and every audit starts from first principles.
-
-```xml
-<context>
-  <repo>owner/repo</repo>
-  <branch>head ref</branch>
-  <base_branch>base ref</base_branch>
-  <pr_url>full URL</pr_url>
-  <loop>N</loop>
-</context>
-
-<scope>
-  <diff_path>Absolute path to the loop-N patch file under team_temp_dir from Step 2 (same path as gh pr diff redirect in AUDIT)</diff_path>
-  <scope_rule>Audit only lines added or modified in the diff. Pre-existing code on untouched lines is out of scope.</scope_rule>
-</scope>
-
-<bug_categories>
-  Investigate each category explicitly. For each, return either at least
-  one finding OR a verified-clean entry with the evidence used to clear it:
-  A. API contract verification (signatures, return types, async/await correctness)
-  B. Selector / query / engine compatibility
-  C. Resource cleanup and lifecycle (file handles, connections, processes, locks)
-  D. Variable scoping, ordering, and unbound references
-  E. Dead code and unused imports
-  F. Silent failures (catch-all excepts, unconditional success returns, missing error propagation)
-  G. Off-by-one, bounds, and integer overflow
-  H. Security boundaries (injection, path traversal, auth bypass, secret leakage)
-  I. Concurrency hazards (race conditions, missing awaits, shared mutable state)
-  J. Magic values and configuration drift
-</bug_categories>
-
-<constraints>
-  - Read-only on source code: the audit does not modify any source file.
-  - Cite file:line for every finding.
-  - When the diff alone does not provide enough context to confirm a bug,
-    list it under "Open questions" rather than assert it.
-</constraints>
-
-<comment_posting>
-  1. Audit the diff against the 10 categories above. Buffer the findings
-     in memory; all posting happens at step 6 once anchors are validated.
-  2. Assign each finding a stable finding_id of exactly the form `loopN-K`
-     where K is 1-based within this loop.
-  3. Validate every finding's (file, line) against the captured diff. Split
-     findings into two buckets: anchored (line is in the diff) and
-     unanchored (line is not in the diff — goes into the review body's
-     "Findings without a diff anchor" section per Step 2.5).
-  4. Build the review body per Step 2.5's review-body shape, filling in the
-     P0/P1/P2 counts and the unanchored-findings list (if any).
-  5. For each anchored finding, write its body to its own temp file:
-
-       **[severity] one-line title**
-       Category: <letter> (<category name>)
-       <2-3 sentence description with concrete trace>
-
-       _From /bugteam audit loop N._
-
-  6. Post ONE review via Step 2.5's per-loop review CLI shape. Harvest the
-     parent review `html_url` from the response JSON and the `comments[]`
-     child entries (each with its own `id` and `html_url`). Match child
-     entries to anchored findings in index order.
-  7. If the review POST itself fails, use Step 2.5's Review POST failure
-     fallback (single issue comment with full body and all findings inline).
-  8. Write every body (review body, each finding body, any fallback body)
-     to its own temp file. Load each file into the JSON payload via jq's
-     `--rawfile` or `-Rs`, then pipe the jq output to `gh api ... --input -`
-     so every body reaches GitHub as file contents inside the JSON payload.
-</comment_posting>
-
-<output_format>
-  Write the outcome XML below to .bugteam-loop-N.outcomes.xml in the
-  working directory. Return only that path on stdout. The schema:
-</output_format>
-```
-
-Outcome XML schema (bugfind writes this):
-
-```xml
-<bugteam_audit loop="<N>" review_url="<url>">
-  <finding
-    finding_id="loop<N>-<index>"
-    severity="P0|P1|P2"
-    category="<letter>"
-    file="<path>"
-    line="<int>"
-    finding_comment_id="<gh child comment id, or empty if unanchored/review-fallback>"
-    finding_comment_url="<url of child comment, OR review_url if unanchored, OR fallback issue comment URL>"
-    used_fallback="true|false"
-  >
-    <title>one-line title</title>
-    <description>2-3 sentence description with concrete trace</description>
-  </finding>
-  <verified_clean>
-    <category letter="<letter>" name="<name>" evidence="brief evidence + cleared conclusion"/>
-  </verified_clean>
-</bugteam_audit>
-```
+See [`PROMPTS.md`](PROMPTS.md) for the AUDIT spawn-prompt XML and bugfind outcome schema. Substitute placeholders (repo, branch, base_branch, pr_url, loop, diff_path) and pass the result as the `prompt` argument.
 
 After the teammate writes the XML and returns, the lead reads `.bugteam-loop-<N>.outcomes.xml` with the `Read` tool, parses it, and populates `loop_comment_index` from `<finding>` elements.
 
@@ -465,77 +369,7 @@ SendMessage(
 
 If the shutdown response returns `approve: false`, treat it the same as the bugfind refusal case above: exit reason = `error: bugfix teammate refused shutdown`, jump to Step 4 teardown then Step 5 revoke.
 
-Prompt skeleton:
-
-```xml
-<context>
-  <repo>owner/repo</repo>
-  <branch>head</branch>
-  <base_branch>base</base_branch>
-  <pr_url>url</pr_url>
-  <loop>N</loop>
-</context>
-
-<bugs_to_fix>
-  [for each P0/P1/P2 finding from last_findings:]
-  <bug
-    finding_id="loop<N>-<index>"
-    severity="P0|P1|P2"
-    file="<path>"
-    line="<int>"
-    category="<letter>"
-    finding_comment_id="<id>"
-    finding_comment_url="<url>"
-  >
-    <description>...</description>
-  </bug>
-</bugs_to_fix>
-
-<execution>
-  1. Read each referenced file before editing.
-  2. Apply each fix you can address.
-  3. Run `python -m py_compile` (or language-equivalent) on every modified file.
-  4. git add by explicit path, then git commit with a message summarizing the bugs fixed.
-     - If the commit fails because a git hook (pre-commit, commit-msg, etc.) blocked it,
-       capture the hook's stderr, write status=hook_blocked for every finding in this loop
-       (the commit was atomic; if it failed, no finding was applied), populate hook_output
-       on each outcome, and return WITHOUT retrying. The lead will treat this loop as no-progress.
-  5. git push with a plain fast-forward push (the default, no flag overrides).
-  6. For each bug, post a fix reply to its finding_comment_id via the
-     Step 2.5 reply CLI shape:
-     - "Fixed in <commit_sha>" if the bug was addressed by your commit
-     - "Could not address this loop: <one-line reason>" if you skipped or failed it
-     - "Hook blocked the fix commit: <one-line summary>" if the commit was hook-blocked
-     Use the Fix reply CLI shape from Step 2.5 (`jq -Rs | gh api .../comments/<id>/replies --input -`). Write every reply body to a temp file first.
-  7. Write `.bugteam-loop-<N>.outcomes.xml` (schema below) and return its path.
-</execution>
-
-<outcome_xml_schema>
-  <bugteam_fix loop="<N>" commit_sha="<sha or empty if no commit>">
-    <outcome
-      finding_id="loop<N>-<index>"
-      status="fixed|could_not_address|hook_blocked"
-      commit_sha="<sha if fixed, empty otherwise>"
-      reply_comment_id="<id of the reply posted>"
-      reply_comment_url="<url of the reply posted>"
-    >
-      <reason>only present when status=could_not_address; one-line reason text</reason>
-      <hook_output>only present when status=hook_blocked; verbatim stderr from the blocked hook</hook_output>
-    </outcome>
-  </bugteam_fix>
-</outcome_xml_schema>
-
-<constraints>
-  - Modify only files referenced in bugs_to_fix.
-  - One commit on the existing branch, then push.
-  - Keep the branch linear and the PR base fixed; append one new commit per
-    loop and fast-forward push only.
-  - Let every git hook run on every commit.
-  - git add by explicit path — name each file being staged.
-  - Preserve existing comments on lines you do not modify.
-  - Type hints on every signature you touch.
-</constraints>
-```
+See [`PROMPTS.md`](PROMPTS.md) for the FIX spawn-prompt XML and bugfix outcome schema. Substitute placeholders (repo, branch, base_branch, pr_url, loop, and the per-finding bug entries built from `last_findings`) and pass the result as the `prompt` argument.
 
 Verify the fix actually committed and pushed:
 
@@ -650,101 +484,8 @@ If exit = `cap reached`, name the remaining bug count and recommend `/findbugs` 
 
 ## Constraints
 
-- **Agent teams required, not parallel subagents.** The skill MUST use Claude Code's agent teams feature (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). Spawning `code-quality-agent` and `clean-coder` as parallel subagents from the lead's context = fail; the clean-room property requires independent teammate sessions.
-- **Orchestrator-only `TeamCreate`.** Only the lead session (this session, when `/bugteam` is invoked) calls `TeamCreate`. Teammates never call `TeamCreate` — if a teammate's spawn prompt instructs it to, that is a skill defect. When additional parallel work is needed (e.g., parallel auditors from loop 4 onward, supplementary audit of adjacent files), the lead spawns additional teammates into the EXISTING team by passing the current `team_name` to every `Agent(...)` call. Multiple teammate "sets" live inside one team under one orchestrator. The runtime enforces this: `TeamCreate` called while the session already leads a team returns the error `Already leading team "<name>". A leader can only manage one team at a time. Use TeamDelete to end the current team before creating a new one.` — direct quote from the runtime's response when this invariant is violated.
-- **Grant before any spawn, revoke before any return.** Step 0 grants project `.claude/**` permissions; Step 5 revokes. Both are mandatory. Revoke runs on every exit path including error, cap-reached, and stuck.
-- **Fresh teammate per loop.** Both bugfind and bugfix are spawned new each loop and shut down after their action. Reusing a teammate across loops accumulates context inside that teammate's window — defeats clean-room.
-- **One up-front confirmation = whole cycle.** The `/bugteam` invocation authorizes the entire cycle; every subsequent decision runs on that single authorization.
-- **10-loop hard cap.** Counted as **AUDIT** completions (increment in Step 3). Standards-fix passes before an audit do not advance `loop_count`. Worst case includes extra clean-coder spawns for the code-rules gate.
-- **Code rules gate before every AUDIT.** Run `scripts/bugteam_code_rules_gate.py` until exit **0** before spawning **bugfind**. Same `validate_content` logic as `hooks/blocking/code_rules_enforcer.py`.
-- **Clean-room audits, every loop.** Each bugfind teammate's spawn prompt contains only the PR scope, audit rubric, and the current loop number. Prior loop history stays in the lead.
-- **Targeted fixes.** Each fix teammate sees ONLY the most recent audit's findings. Prior loops are invisible to the fix teammate.
-- **Sonnet for both teammates.** Predictable cost, fits-purpose for code work.
-- **Fix teammate receives the latest audit as its input contract.** Passing the audit's findings to the fix teammate is the input contract — each loop's fix run operates on the current audit's output and only that.
-- **One commit per fix action.** Loops produce one commit per loop, not one per bug.
-- **Linear branch, fixed PR base.** Every loop appends one forward-only commit; existing commits and the PR base stay intact throughout the cycle.
-- **Lead-only cleanup.** Per the docs: *"Always use the lead to clean up. Teammates should not run cleanup because their team context may not resolve correctly, potentially leaving resources in an inconsistent state."* This session is the lead, and cleanup runs here only.
-- **Cleanup the per-team scoped temp directory on exit.** The resolved `<team_temp_dir>` (absolute literal captured in Step 2) is deleted entirely so no loop patches leak between runs.
-- **Cleanup all `.bugteam-*` files on exit.** `.bugteam-loop-*.patch`, `.bugteam-loop-*.outcomes.xml`, `.bugteam-final.diff`, `.bugteam-original-body.md`, `.bugteam-final-body.md`. Working directory ends clean.
-- **Teammates own audit/fix comment posting.** Bugfind posts ONE per-loop review (parent body + child finding comments in a single batched POST, with review-fallback to a top-level issue comment). Bugfix posts the fix replies after committing. All comment, review, and reply POSTs belong to the teammates; the lead's single PR-write action is the final description rewrite at Step 4.5.
-- **Lead owns the final PR description rewrite only** (Step 4.5), and only via the `pr-description-writer` agent. The lead does not compose the description inline.
-- **One review per loop, findings as child comments of that review.** Each loop posts a single pull-request review whose body is the loop header and whose `comments[]` are the anchored findings. Each loop's review stands alone — one review created per loop, fully self-contained on the PR conversation.
-- **PR description rewrite on every exit.** Step 4.5 runs on `converged`, `cap reached`, and `stuck`. On `error`, the rewrite is best-effort; if it fails, surface the error in the final report and continue to revoke.
-- **Outcome XML, not JSON.** Both teammates write structured outcome data (findings or fix outcomes) to `.bugteam-loop-<N>.outcomes.xml`. The lead reads these files between actions. XML chosen for parser robustness against multi-line, special-character, and quoted reason fields.
+See [`CONSTRAINTS.md`](CONSTRAINTS.md).
 
 ## Examples
 
-<example>
-User: `/bugteam`
-Claude: [resolves PR #42, runs loop]
-
-`Loop 1 audit: 1P0 / 2P1 / 0P2`
-`Loop 1 fix: commit a1b2c3d (3 files, +18/-7)`
-`Loop 2 audit: 0P0 / 1P1 / 0P2`
-`Loop 2 fix: commit e4f5g6h (1 file, +5/-2)`
-`Loop 3 audit: 0P0 / 0P1 / 0P2 → converged`
-
-`/bugteam exit: converged`
-`Loops: 3`
-`Starting commit: 9d8c7b6`
-`Final commit: e4f5g6h`
-`Net change: 4 files, +23/-9`
-</example>
-
-<example>
-User: `/bugteam`
-Claude: [runs 10 loops without convergence]
-
-`Loop 10 audit: 0P0 / 1P1 / 2P2`
-
-`/bugteam exit: cap reached`
-`Loops: 10`
-`Remaining: 0P0 / 1P1 / 2P2 — run /findbugs for human triage`
-</example>
-
-<example>
-User: `/bugteam`
-Claude: [loop 4 fix produces no commit]
-
-`Loop 4 fix: clean-coder reported no changes (could not address remaining bugs)`
-`/bugteam exit: stuck`
-`Unresolved findings (3): src/cache.py:88 (P0 race condition); ...`
-</example>
-
-<example>
-User: `/bugteam` (mixed-outcome path: some findings fixed, others skipped)
-Claude: [resolves PR #99, runs loop with partial-fix outcomes]
-
-`Loop 1 audit: 1P0 / 3P1 / 0P2`
-`Loop 1 fix: commit a1b2c3d (2 files, +8/-3) — 2 fixed, 2 could_not_address`
-`Loop 2 audit: 0P0 / 2P1 / 0P2`
-`Loop 2 fix: 0 fixed, 2 could_not_address (no commit)`
-
-`/bugteam exit: stuck`
-`Loops: 2`
-`Unresolved findings (2): src/auth.py:45 (P1: file is generated, cannot edit); src/legacy.py:200 (P1: rewrite scope exceeds the bug)`
-
-The bugfix teammate writes one outcome per finding to `.bugteam-loop-2.outcomes.xml`. Findings with `status=could_not_address` carry their `<reason>` text, and the teammate posts a matching reply to each finding comment so the reviewer sees why each bug stayed open.
-</example>
-
-<example>
-User: `/bugteam` (no PR or upstream diff)
-Claude: `No PR or upstream diff. /bugteam needs a target.`
-</example>
-
-<example>
-User: `/bugteam` (uncommitted changes in working tree)
-Claude: `Uncommitted changes detected. Stash, commit, or revert before /bugteam.`
-</example>
-
-## Why this design
-
-The three sibling skills compose, but `/bugteam` solves a problem they cannot solve in sequence:
-
-- `/findbugs` audits once and stops.
-- `/fixbugs` fixes the findings of one audit and stops.
-- A human-driven `/findbugs` → `/fixbugs` → `/findbugs` → `/fixbugs` cycle works but requires the user to drive it.
-
-`/bugteam` automates that cycle. The clean-room property is preserved by spawning a fresh audit agent each loop with no inherited context — every audit is independent of the prior loop's verdict. The 10-loop cap is the safety: pathological cases (audit agent oscillating, fix agent regressing) cannot run away.
-
-The single up-front confirmation is the explicit trade — `/bugteam` is more autonomous than `/findbugs`+`/fixbugs` chained manually. The user accepts that autonomy by typing the command. Stop conditions and the loop log give the user full visibility on exit.
+See [`EXAMPLES.md`](EXAMPLES.md).
