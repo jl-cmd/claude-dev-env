@@ -10,6 +10,7 @@ Checks (blocking):
 5. Magic values (literals in function bodies)
 6. E2E test naming (no online/offline in test names)
 7. Constants outside config (UPPER_SNAKE = in non-config files)
+8. Boolean naming (is_/has_/should_/can_ prefix required)
 
 Advisory only (non-blocking):
 - File line count: stderr warning at 400 lines (soft) and 1000 lines (hard)
@@ -34,6 +35,10 @@ MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
 
 ADVISORY_LINE_THRESHOLD_SOFT = 400
 ADVISORY_LINE_THRESHOLD_HARD = 1000
+
+BOOLEAN_NAME_PREFIXES: tuple[str, ...] = ("is_", "has_", "should_", "can_")
+BOOLEAN_NAMING_ISSUE_CAP = 3
+UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 TYPE_CHECKING_BLOCK_PATTERN = re.compile(r"^(?P<indent>\s*)if\s+(typing\.)?TYPE_CHECKING\s*:\s*$")
@@ -813,6 +818,137 @@ def check_banned_identifiers(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _is_bool_constant(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, bool)
+
+
+def _rhs_names_if_all_bool(value_node: ast.AST, target_node: ast.AST) -> list[str]:
+    """Return names from a tuple assignment target when every RHS element is a bool constant.
+
+    Handles cases like `valid, permitted = True, False` where target is a Tuple
+    and value is a Tuple of bool constants. Returns empty list otherwise.
+    """
+    if not isinstance(target_node, ast.Tuple):
+        return []
+    if not isinstance(value_node, ast.Tuple):
+        return []
+    if len(target_node.elts) != len(value_node.elts):
+        return []
+    if not all(_is_bool_constant(element) for element in value_node.elts):
+        return []
+    names: list[str] = []
+    for element in target_node.elts:
+        if isinstance(element, ast.Name):
+            names.append(element.id)
+    return names
+
+
+def _assign_target_names_for_bool(node: ast.Assign) -> list[str]:
+    if not node.targets:
+        return []
+    names: list[str] = []
+    for target in node.targets:
+        if isinstance(target, ast.Name) and _is_bool_constant(node.value):
+            names.append(target.id)
+        else:
+            names.extend(_rhs_names_if_all_bool(node.value, target))
+    return names
+
+
+def _annassign_target_name_for_bool(node: ast.AnnAssign) -> list[str]:
+    if not isinstance(node.target, ast.Name):
+        return []
+    annotation_is_bool = isinstance(node.annotation, ast.Name) and node.annotation.id == "bool"
+    value_is_bool = node.value is not None and _is_bool_constant(node.value)
+    if annotation_is_bool and value_is_bool:
+        return [node.target.id]
+    return []
+
+
+def _walrus_name_for_bool(node: ast.NamedExpr) -> list[str]:
+    if not isinstance(node.target, ast.Name):
+        return []
+    if not _is_bool_constant(node.value):
+        return []
+    return [node.target.id]
+
+
+def _collect_boolean_assignments(tree: ast.Module) -> list[tuple[str, int, bool]]:
+    """Collect boolean-constant assignments with (name, line_number, is_upper_snake_scope).
+
+    `is_upper_snake_scope` is True for module-level statements and direct class body
+    statements, where UPPER_SNAKE constants are acceptable (dataclass fields, class
+    constants). Function/method scope is False.
+
+    Invariant: relies on `ast.walk` returning the same node instances that were
+    stored in `upper_snake_scope_ids` via their `id()`. Do not call this helper
+    on a tree that has been rebuilt through an `ast.NodeTransformer` — the
+    transformer may replace nodes with fresh instances, and the identity-based
+    scope tagging will silently fail for the replaced nodes.
+    """
+    upper_snake_scope_ids: set[int] = set()
+    for statement in tree.body:
+        upper_snake_scope_ids.add(id(statement))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for class_statement in node.body:
+                upper_snake_scope_ids.add(id(class_statement))
+    collected: list[tuple[str, int, bool]] = []
+    for node in ast.walk(tree):
+        names: list[str] = []
+        line_number = 0
+        if isinstance(node, ast.Assign):
+            names = _assign_target_names_for_bool(node)
+            line_number = node.lineno
+        elif isinstance(node, ast.AnnAssign):
+            names = _annassign_target_name_for_bool(node)
+            line_number = node.lineno
+        elif isinstance(node, ast.NamedExpr):
+            names = _walrus_name_for_bool(node)
+            line_number = node.lineno
+        if not names:
+            continue
+        is_in_upper_snake_scope = id(node) in upper_snake_scope_ids
+        for name in names:
+            collected.append((name, line_number, is_in_upper_snake_scope))
+    return collected
+
+
+def check_boolean_naming(content: str, file_path: str) -> list[str]:
+    """Flag boolean assignments whose target name lacks a required prefix."""
+    if is_test_file(file_path):
+        return []
+    if is_hook_infrastructure(file_path):
+        return []
+    if is_config_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError as parse_error:
+        print(
+            f"[CODE_RULES advisory] {file_path}: boolean-naming check skipped - "
+            f"SyntaxError at line {parse_error.lineno}: {parse_error.msg}",
+            file=sys.stderr,
+        )
+        return []
+    issues: list[str] = []
+    for name, line_number, is_in_upper_snake_scope in _collect_boolean_assignments(tree):
+        if len(name) == 1:
+            continue
+        if is_in_upper_snake_scope and UPPER_SNAKE_CONSTANT_PATTERN.match(name):
+            continue
+        if name.startswith(BOOLEAN_NAME_PREFIXES):
+            continue
+        issues.append(
+            f"Line {line_number}: Boolean {name} - prefix with is_/has_/should_/can_"
+        )
+        if len(issues) >= BOOLEAN_NAMING_ISSUE_CAP:
+            break
+    return issues
+
+
 def validate_content(content: str, file_path: str, old_content: str = "") -> list[str]:
     """Run all applicable validators on content.
 
@@ -836,6 +972,7 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_constants_outside_config(content, file_path))
         all_issues.extend(check_type_escape_hatches(content, file_path))
         all_issues.extend(check_banned_identifiers(content, file_path))
+        all_issues.extend(check_boolean_naming(content, file_path))
 
     elif extension in JAVASCRIPT_EXTENSIONS:
         if not is_test_file(file_path):
