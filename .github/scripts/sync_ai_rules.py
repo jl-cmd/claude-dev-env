@@ -14,17 +14,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, TypedDict
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from config.sync_ai_rules_paths import (
+    BUGBOT_ONLY_DESTINATION_PATHS,
+    DESTINATION_PATHS,
+    SOURCE_FILE_PATH,
+)
 
 SYNC_HEADER_START_MARKER = "<!-- SYNC-HEADER-START -->"
 SYNC_HEADER_END_MARKER = "<!-- SYNC-HEADER-END -->"
-DESTINATION_PATHS: tuple[str, ...] = (
-    ".github/copilot-instructions.md",
-    ".cursor/BUGBOT.md",
-)
-BUGBOT_ONLY_DESTINATION_PATHS: tuple[str, ...] = (".cursor/BUGBOT.md",)
 OPT_OUT_SENTINEL_PATH = ".github/sync-ai-rules.optout"
 SOURCE_REPO = "jl-cmd/claude-code-config"
-SOURCE_FILE_PATH = ".github/copilot-instructions.md"
 LISTENER_WORKFLOW_RELATIVE_PATH = ".github/workflows/sync-ai-rules.yml"
 RAW_GITHUB_CONTENT_BASE_URL = "https://raw.githubusercontent.com"
 DEFAULT_SOURCE_BRANCH = "main"

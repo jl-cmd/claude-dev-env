@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/scripts/sync_ai_rules.py"
+      - "config/sync_ai_rules_paths.py"
       - "scripts/fan_out_dispatch.py"
       - "tests/test_sync_ai_rules.py"
       - "tests/test_fan_out_dispatch.py"

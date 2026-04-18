@@ -24,6 +24,41 @@ class TestEffectiveDestinationPaths:
         ) == sync_ai_rules.DESTINATION_PATHS
 
 
+class TestCanonicalRepositoryMain:
+    def should_write_only_bugbot_and_leave_copilot_untouched(
+        self, git_repo: Path, sync_env: None
+    ) -> None:
+        copilot_path = git_repo / ".github" / "copilot-instructions.md"
+        copilot_path.parent.mkdir(parents=True, exist_ok=True)
+        human_content = "# Human headerless source\n\nPreserved.\n"
+        copilot_path.write_text(human_content, encoding="utf-8")
+        subprocess.run(
+            ["git", "add", str(copilot_path)],
+            cwd=str(git_repo),
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Seed human copilot source"],
+            cwd=str(git_repo),
+            check=True,
+            capture_output=True,
+        )
+
+        exit_code = run_sync_with_canonical_body(
+            github_repository=sync_ai_rules.SOURCE_REPO
+        )
+
+        assert exit_code == 0
+        assert copilot_path.read_text(encoding="utf-8") == human_content
+        bugbot_path = git_repo / ".cursor" / "BUGBOT.md"
+        assert bugbot_path.exists()
+        stripped_body = sync_ai_rules.strip_sync_header(
+            bugbot_path.read_text(encoding="utf-8")
+        )
+        assert stripped_body == CANONICAL_BODY
+
+
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "sync-ai-rules"
 CANONICAL_BODY = (FIXTURE_DIR / "source_body.md").read_text(encoding="utf-8")
 FAKE_SOURCE_COMMIT = "abc123def456"
@@ -115,14 +150,18 @@ def count_commits(work_dir: Path) -> int:
     return int(completed.stdout.strip())
 
 
-def run_sync_with_canonical_body(canonical_body: str = CANONICAL_BODY) -> int:
-    with patch("sync_ai_rules.fetch_canonical_body", return_value=canonical_body):
-        with patch("sync_ai_rules.open_github_issue"):
-            with patch(
-                "sync_ai_rules.find_existing_drift_issue", return_value=None
-            ):
-                with patch("sync_ai_rules.add_issue_comment"):
-                    return sync_ai_rules.main()
+def run_sync_with_canonical_body(
+    canonical_body: str = CANONICAL_BODY,
+    github_repository: str = FAKE_GITHUB_REPOSITORY,
+) -> int:
+    with patch.dict(os.environ, {"GITHUB_REPOSITORY": github_repository}, clear=False):
+        with patch("sync_ai_rules.fetch_canonical_body", return_value=canonical_body):
+            with patch("sync_ai_rules.open_github_issue"):
+                with patch(
+                    "sync_ai_rules.find_existing_drift_issue", return_value=None
+                ):
+                    with patch("sync_ai_rules.add_issue_comment"):
+                        return sync_ai_rules.main()
 
 
 class TestBuildSyncHeader:

@@ -1,0 +1,10 @@
+"""Relative paths for the sync-ai-rules listener."""
+
+BUGBOT_DESTINATION_PATH = ".cursor/BUGBOT.md"
+COPILOT_DESTINATION_PATH = ".github/copilot-instructions.md"
+SOURCE_FILE_PATH = COPILOT_DESTINATION_PATH
+DESTINATION_PATHS: tuple[str, ...] = (
+    COPILOT_DESTINATION_PATH,
+    BUGBOT_DESTINATION_PATH,
+)
+BUGBOT_ONLY_DESTINATION_PATHS: tuple[str, ...] = (BUGBOT_DESTINATION_PATH,)
