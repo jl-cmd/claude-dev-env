@@ -27,8 +27,8 @@ JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx"}
 ALL_CODE_EXTENSIONS = PYTHON_EXTENSIONS | JAVASCRIPT_EXTENSIONS
 
 CONFIG_PATH_PATTERNS = {"config/", "config\\", "/config.", "\\config.", "settings.py"}
-TEST_PATH_PATTERNS = {"test_", "_test.", ".spec.", "/tests/", "\\tests\\", "/tests.py", "\\tests.py"}
-HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\.claude/hooks/"}
+TEST_PATH_PATTERNS = {"test_", "_test.", ".test.", ".spec.", "/tests/", "\\tests\\", "/tests.py", "\\tests.py"}
+HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\.claude/hooks/", "/packages/claude-dev-env/hooks/", "\\packages\\claude-dev-env\\hooks\\"}
 WORKFLOW_REGISTRY_PATTERNS = {"/workflow/", "\\workflow\\", "_tab.py", "/states.py", "\\states.py", "/modules.py", "\\modules.py"}
 MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
 
