@@ -7,8 +7,8 @@ description: >-
   returns zero bugs or a 10-loop safety cap is reached. One up-front
   confirmation authorizes the entire cycle. Each audit teammate is spawned
   fresh per loop to prevent anchoring bias. Wraps the cycle with project
-  permission grant/revoke. Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
-  and Claude Code v2.1.32+. Triggers: '/bugteam', 'run the bug team',
+  permission grant/revoke. Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1.
+  Triggers: '/bugteam', 'run the bug team',
   'auto-fix the PR until clean', 'loop audit and fix'.
 ---
 
@@ -48,7 +48,6 @@ User wants automated convergence on a clean PR without babysitting each step. Ty
 Refusal cases — check in order; first match short-circuits and stops:
 
 - **Agent teams not enabled.** Check `claude config get env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` and `~/.claude/settings.json`. If neither sets it to `"1"`, respond: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 not set. /bugteam requires the agent teams feature. See https://code.claude.com/docs/en/agent-teams#enable-agent-teams.` and stop.
-- **Claude Code version too old.** Run `claude --version`. If older than v2.1.32, respond: `Claude Code v<version> is older than the v2.1.32 minimum for agent teams. Upgrade first.` and stop.
 - **Missing PR or upstream diff.** Respond exactly: `No PR or upstream diff. /bugteam needs a target.` and stop.
 - **Working tree dirty with uncommitted changes the user did not stage.** Respond: `Uncommitted changes detected. Stash, commit, or revert before /bugteam.` and stop. Reason: the fix teammate will commit the working tree, mixing user-uncommitted work into automated fixes.
 - **Required subagents not installed.** Before Step 0, verify `code-quality-agent` and `clean-coder` subagent types exist in the available agents list. If either is missing, respond: `Required subagent type <name> not installed. /bugteam needs both code-quality-agent and clean-coder available.` and stop.
@@ -108,7 +107,17 @@ Capture: `<owner>/<repo>`, head branch, base branch, PR number, PR URL. This sco
 
 ### Step 2: Create the agent team
 
-This session is the **team lead**. Create a team using the agent teams feature. Per the docs: *"After enabling agent teams, tell Claude to create an agent team and describe the task and the team structure you want in natural language. Claude creates the team, spawns teammates, and coordinates work based on your prompt."*
+This session is the **team lead**. Create the team by calling the `TeamCreate` tool with these exact arguments:
+
+```
+TeamCreate(
+  team_name="<team_name>",
+  description="Bugteam audit/fix loop for PR <number> (<owner>/<repo>)",
+  agent_type="team-lead"
+)
+```
+
+`<team_name>` is the value built below under **Team name** (sanitization + timestamp already applied). `TeamCreate` is the tool that resolves the docs' phrasing: *"tell Claude to create an agent team and describe the task and the team structure you want in natural language. Claude creates the team, spawns teammates, and coordinates work based on your prompt."*
 
 Team specification:
 
@@ -263,9 +272,22 @@ gh pr diff <number> -R <owner>/<repo> > "<team_temp_dir>/loop-<N>.patch"
 
 `<team_temp_dir>` is the absolute path captured in Step 2 (already includes the sanitized team_name and timestamp suffix, and `team_name` itself is already prefixed with `bugteam-`). Claude resolves the portable temp root once via `Path(tempfile.gettempdir()) / team_name` (requires `import tempfile`) and passes the literal absolute path to every shell command. `tempfile.gettempdir()` honors `TMPDIR`, `TEMP`, and `TMP` in the platform-correct order and falls back to `C:\Users\<user>\AppData\Local\Temp` on Windows or `/tmp` on Unix, so this works identically on macOS, Linux, Windows cmd.exe, and PowerShell: Claude resolves the literal path once and every shell receives the same absolute value.
 
-Spawn a NEW `bugfind` teammate for this loop using the `code-quality-agent` subagent type. The teammate is fresh: no prior loop's findings, no chat history, no inherited audit context. Per the docs: *"The lead's conversation history does not carry over."* — and we further guarantee independence by spawning a new teammate per loop rather than reusing one.
+Spawn a fresh `bugfind` teammate for this loop by calling the `Agent` tool with these exact arguments:
 
-The teammate's spawn prompt is the full XML below — copy it verbatim with the placeholders substituted. **Keep the spawn prompt context-free.** Reference only the PR scope, audit rubric, and this loop number. Write each instruction as a standalone statement so the teammate treats the prompt as a fresh brief — every audit starts from first principles.
+```
+Agent(
+  subagent_type="code-quality-agent",
+  name="bugfind",
+  team_name="<team_name>",
+  model="sonnet",
+  description="Bugfind audit loop <N>",
+  prompt="<audit XML from the block below, with placeholders substituted>"
+)
+```
+
+Each loop calls `Agent` again with a fresh `Agent` invocation so the teammate starts with its own context window. The docs guarantee this: *"The lead's conversation history does not carry over."* Spawning per loop keeps every audit independent.
+
+Keep the spawn prompt self-contained: reference only the PR scope, audit rubric, and this loop number. Write each instruction as a standalone statement so the teammate reads the prompt as a fresh brief and every audit starts from first principles.
 
 ```xml
 <context>
@@ -363,19 +385,85 @@ Outcome XML schema (bugfind writes this):
 </bugteam_audit>
 ```
 
-After the teammate writes the XML and returns, the lead reads `.bugteam-loop-<N>.outcomes.xml`, parses it, and populates `loop_comment_index` from `<finding>` elements. Then **shut down the bugfind teammate**: `Ask the bugfind teammate to shut down`. Per the docs: *"The lead sends a shutdown request. The teammate can approve, exiting gracefully, or reject with an explanation."* If the teammate rejects shutdown, force-shut by failing the team and starting Step 5 cleanup with exit reason = `error: bugfind teammate refused shutdown`.
+After the teammate writes the XML and returns, the lead reads `.bugteam-loop-<N>.outcomes.xml` with the `Read` tool, parses it, and populates `loop_comment_index` from `<finding>` elements.
+
+**Expected path: self-termination.** In practice, teammates self-terminate when their task is complete — the `Agent` call returns and the teammate's session ends automatically. When that happens, no `SendMessage` shutdown is needed and the cycle proceeds directly to the next action.
+
+**Fallback path: lead-initiated shutdown.** If the teammate has not self-terminated after the `Agent` call returns (observable as the teammate still appearing in the active-teammates list), send a shutdown message:
+
+```
+SendMessage(
+  to="bugfind",
+  message={
+    "type": "shutdown_request",
+    "reason": "audit loop <N> complete; outcome XML captured"
+  }
+)
+```
+
+The teammate replies with `{type: "shutdown_response", approve: true}` and exits. If `approve` comes back `false`, treat this as a fatal error: set exit reason = `error: bugfind teammate refused shutdown` and jump to Step 4 teardown followed by Step 5 revoke.
 
 `last_action = "audited"`. `last_findings = parsed`. Append `(loop=N, action="audit", counts={P0,P1,P2}, sha=current_HEAD, review_url=<url>, finding_count=<n>, fallback_count=<n>)` to `audit_log`.
 
-**Parallel auditors from loop 4 onward (`loop_count >= 4`).** The **pre-audit code rules gate** must still pass immediately before this step (Step 3). Once the cycle has made it through three full audit/fix rounds without converging, the next audit spawns THREE bugfind teammates in parallel — named `bugfind-loop-<N>-a`, `bugfind-loop-<N>-b`, `bugfind-loop-<N>-c` — each with an identical spawn prompt (same diff path, same rubric, same loop number). `a` is the post-owner; `b` and `c` write their outcome XML to `<team_temp_dir>/loop-<N>-b.outcomes.xml` and `...-c.outcomes.xml` respectively, then shut down. `a` reads all three outcome XML files, merges findings by `(file, line, category_letter)` (same tuple collapses to one finding, keeping the longest description and the highest severity of the group), re-assigns merged-finding IDs as `loopN-K`, and posts the single per-loop review per the standard posting protocol above. The lead shuts down `b` and `c` first, then `a` after its post completes.
+**Parallel auditors from loop 4 onward (`loop_count >= 4`).** The pre-audit code rules gate must still pass immediately before this step (Step 3). After three full audit/fix rounds without convergence, spawn three bugfind teammates concurrently by issuing three `Agent` calls in a single assistant message so they run in parallel:
+
+```
+Agent(subagent_type="code-quality-agent", name="bugfind-loop-<N>-a", team_name="<team_name>", model="sonnet", description="Bugfind audit loop <N> variant a", prompt="<audit XML; write outcome to .bugteam-loop-<N>.outcomes.xml; post the per-loop review; read and merge b/c outcomes from <team_temp_dir>/loop-<N>-b.outcomes.xml and <team_temp_dir>/loop-<N>-c.outcomes.xml>")
+Agent(subagent_type="code-quality-agent", name="bugfind-loop-<N>-b", team_name="<team_name>", model="sonnet", description="Bugfind audit loop <N> variant b", prompt="<audit XML; write outcome to <team_temp_dir>/loop-<N>-b.outcomes.xml; skip PR posting>")
+Agent(subagent_type="code-quality-agent", name="bugfind-loop-<N>-c", team_name="<team_name>", model="sonnet", description="Bugfind audit loop <N> variant c", prompt="<audit XML; write outcome to <team_temp_dir>/loop-<N>-c.outcomes.xml; skip PR posting>")
+```
+
+Teammate `-a` is the post-owner: it reads all three outcome XML files using their explicit absolute paths — its own outcome at `.bugteam-loop-<N>.outcomes.xml` (working directory), and the sibling outcomes at `<team_temp_dir>/loop-<N>-b.outcomes.xml` and `<team_temp_dir>/loop-<N>-c.outcomes.xml` — then merges findings by `(file, line, category_letter)` (same tuple collapses to one finding, keeping the longest description and the highest severity of the group), re-assigns merged-finding IDs as `loopN-K`, and posts the single per-loop review per the standard posting protocol above. The `-a` spawn prompt must include both sibling paths as literal absolute values so `-a` can read them with the `Read` tool by path without any discovery step.
+
+Shut down `-b` and `-c` first with two parallel `SendMessage` calls, then shut down `-a` after its post completes:
+
+```
+SendMessage(to="bugfind-loop-<N>-b", message={"type": "shutdown_request", "reason": "variant XML captured"})
+SendMessage(to="bugfind-loop-<N>-c", message={"type": "shutdown_request", "reason": "variant XML captured"})
+```
+
+then
+
+```
+SendMessage(to="bugfind-loop-<N>-a", message={"type": "shutdown_request", "reason": "merged review posted"})
+```
 
 ### FIX action (fresh teammate, only sees latest audit)
 
-Spawn a NEW `bugfix` teammate for this loop using the `clean-coder` teammate role, model sonnet. The teammate sees ONLY the most recent audit's findings — no prior-loop findings, no prior-loop fix history, no chat history.
+Spawn a fresh `bugfix` teammate for this loop by calling the `Agent` tool with these exact arguments:
 
-The teammate receives the **finding comment URL and id for each finding** (from `loop_comment_index`) and **owns the reply posting**. After committing fixes, the teammate posts one reply per finding: `Fixed in <commit_sha>` for addressed findings, `Could not address this loop: <one-line reason>` for skipped or failed findings. Same one-identity model as bugfind: teammate posts, lead does not.
+```
+Agent(
+  subagent_type="clean-coder",
+  name="bugfix",
+  team_name="<team_name>",
+  model="sonnet",
+  description="Bugfix loop <N>",
+  prompt="<fix XML from the block below, with placeholders substituted>"
+)
+```
 
-After all replies are posted, the teammate writes its own outcome XML (see schema below), returns, and the lead **shuts down the bugfix teammate** the same way as the bugfind shutdown.
+The teammate sees only the most recent audit's findings — each `Agent` call starts with a fresh context window, so prior-loop findings, prior-loop fix history, and prior chat history stay inside the lead.
+
+Pass the **finding comment URL and id for each finding** (from `loop_comment_index`) inside the XML prompt so the teammate owns reply posting. After committing fixes, the teammate posts one reply per finding: `Fixed in <commit_sha>` for addressed findings, `Could not address this loop: <one-line reason>` for skipped or failed findings. Same one-identity model as bugfind: teammate posts, lead waits.
+
+After all replies are posted, the teammate writes its own outcome XML (see schema below) and returns.
+
+**Expected path: self-termination.** In practice, teammates self-terminate when their task is complete — the `Agent` call returns and the teammate's session ends automatically. When that happens, no `SendMessage` shutdown is needed and the cycle proceeds directly to the next action.
+
+**Fallback path: lead-initiated shutdown.** If the teammate has not self-terminated after the `Agent` call returns, send a shutdown message:
+
+```
+SendMessage(
+  to="bugfix",
+  message={
+    "type": "shutdown_request",
+    "reason": "fix loop <N> complete; commit <sha7> pushed"
+  }
+)
+```
+
+If the shutdown response returns `approve: false`, treat it the same as the bugfind refusal case above: exit reason = `error: bugfix teammate refused shutdown`, jump to Step 4 teardown then Step 5 revoke.
 
 Prompt skeleton:
 
@@ -460,10 +548,33 @@ If `git rev-parse HEAD` did not change, exit reason = `stuck — bugfix teammate
 
 ### Step 4: Tear down the team and clean working tree
 
-When the cycle exits (any reason):
+When the cycle exits (any reason), run these steps in order from THIS session (the lead):
 
-1. **Clean up the team as the lead.** Per the docs: *"When you're done, ask the lead to clean up: 'Clean up the team'. This removes the shared team resources. When the lead runs cleanup, it checks for active teammates and fails if any are still running, so shut them down first."* The lead is THIS session — call cleanup directly. If any teammate is still alive (e.g., from an aborted shutdown), shut it down first.
-2. Delete the per-team scoped temp directory using Python: `shutil.rmtree(team_temp_dir, ignore_errors=True)` (requires `import shutil`). This works on every platform without OS-detection branching. Pass the literal absolute path Claude resolved at Step 2; Claude performs the path resolution so every shell receives the same literal value at cleanup time.
+1. **Confirm every teammate has shut down.** Any teammate still alive (for example, from an aborted shutdown mid-loop) must receive a shutdown message first. For each remaining teammate name:
+
+   ```
+   SendMessage(to="<teammate_name>", message={"type": "shutdown_request", "reason": "bugteam cycle ending"})
+   ```
+
+   The docs state: *"When the lead runs cleanup, it checks for active teammates and fails if any are still running, so shut them down first."*
+
+   If any teammate returns `approve: false` during this cleanup shutdown, log the refusing teammate name (e.g., `cleanup warning: <teammate_name> refused shutdown_request`) and force-proceed to step 2 (`TeamDelete`) anyway. `TeamDelete` may fail if active teammates remain; if it does, surface the error in the final report with the refusing teammate name so the user can manually clean up. Do not abort the cleanup sequence — continue through temp-dir deletion, Step 4.5, and Step 5 regardless.
+
+2. **Clean up the team** by calling `TeamDelete` with no arguments — it reads `<team_name>` from the current session's team context:
+
+   ```
+   TeamDelete()
+   ```
+
+   The docs state: *"When you're done, ask the lead to clean up: 'Clean up the team'."* `TeamDelete` is the tool that resolves that sentence.
+
+3. **Delete the per-team scoped temp directory** by running this Python one-liner through the `Bash` tool (same literal `<team_temp_dir>` path resolved at Step 2):
+
+   ```
+   python -c "import shutil; shutil.rmtree(r'<team_temp_dir>', ignore_errors=True)"
+   ```
+
+   `shutil.rmtree(..., ignore_errors=True)` works identically on Windows and Unix, so the lead uses one command regardless of platform.
 
 ### Step 4.5: Finalize the PR description (mandatory)
 
@@ -471,7 +582,27 @@ After teardown and before permission revoke, the lead rewrites the PR body to re
 
 The lead delegates the body authoring to the `pr-description-writer` agent so the global mandatory-pr-description-writer hook accepts the subsequent `gh pr edit`. The lead does NOT compose the body inline.
 
-`pr-description-writer` is provided by the global git-workflow rule in `claude-code-config` (as the `pr-description-writer` agent type). If that agent is not available in the current environment, fall back to spawning a `general-purpose` agent with the same brief — the global hook treats agent-authored bodies the same regardless of the specific agent type. If neither agent is available, log a warning in the final report and skip Step 4.5; the original PR body remains.
+`pr-description-writer` is provided by the global git-workflow rule in `claude-code-config`. Invoke it with the `Agent` tool:
+
+```
+Agent(
+  subagent_type="pr-description-writer",
+  description="Rewrite PR <number> body from cumulative diff",
+  prompt="<brief from step 3 below>"
+)
+```
+
+If `pr-description-writer` is not in the available agents list for the current environment, fall back to `general-purpose` with the same brief — the global hook treats agent-authored bodies the same regardless of the specific agent type:
+
+```
+Agent(
+  subagent_type="general-purpose",
+  description="Rewrite PR <number> body from cumulative diff",
+  prompt="<brief from step 3 below>"
+)
+```
+
+When neither agent is available, log a warning in the final report and skip Step 4.5 so the original PR body stays in place.
 
 Steps:
 
@@ -520,6 +651,7 @@ If exit = `cap reached`, name the remaining bug count and recommend `/findbugs` 
 ## Constraints
 
 - **Agent teams required, not parallel subagents.** The skill MUST use Claude Code's agent teams feature (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). Spawning `code-quality-agent` and `clean-coder` as parallel subagents from the lead's context = fail; the clean-room property requires independent teammate sessions.
+- **Orchestrator-only `TeamCreate`.** Only the lead session (this session, when `/bugteam` is invoked) calls `TeamCreate`. Teammates never call `TeamCreate` — if a teammate's spawn prompt instructs it to, that is a skill defect. When additional parallel work is needed (e.g., parallel auditors from loop 4 onward, supplementary audit of adjacent files), the lead spawns additional teammates into the EXISTING team by passing the current `team_name` to every `Agent(...)` call. Multiple teammate "sets" live inside one team under one orchestrator. The runtime enforces this: `TeamCreate` called while the session already leads a team returns the error `Already leading team "<name>". A leader can only manage one team at a time. Use TeamDelete to end the current team before creating a new one.` — direct quote from the runtime's response when this invariant is violated.
 - **Grant before any spawn, revoke before any return.** Step 0 grants project `.claude/**` permissions; Step 5 revokes. Both are mandatory. Revoke runs on every exit path including error, cap-reached, and stuck.
 - **Fresh teammate per loop.** Both bugfind and bugfix are spawned new each loop and shut down after their action. Reusing a teammate across loops accumulates context inside that teammate's window — defeats clean-room.
 - **One up-front confirmation = whole cycle.** The `/bugteam` invocation authorizes the entire cycle; every subsequent decision runs on that single authorization.
