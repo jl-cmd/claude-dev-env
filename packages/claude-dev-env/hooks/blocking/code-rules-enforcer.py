@@ -36,6 +36,12 @@ ADVISORY_LINE_THRESHOLD_SOFT = 400
 ADVISORY_LINE_THRESHOLD_HARD = 1000
 
 
+TYPE_CHECKING_BLOCK_PATTERN = re.compile(r"^(?P<indent>\s*)if\s+(typing\.)?TYPE_CHECKING\s*:\s*$")
+IMPORT_STATEMENT_PREFIXES: tuple[str, ...] = ("import ", "from ")
+NOT_INSIDE_TYPE_CHECKING_BLOCK = -1
+MAX_ISSUES_PER_CHECK = 3
+
+
 def get_file_extension(file_path: str) -> str:
     """Extract lowercase file extension."""
     dot_index = file_path.rfind(".")
@@ -271,34 +277,65 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
 
 
 def check_imports_at_top(content: str) -> list[str]:
-    """Check for imports inside functions (Python only)."""
-    issues = []
+    """Check for imports inside functions (Python only).
+
+    An import lexically inside an ``if TYPE_CHECKING:`` block is exempt.
+    An import inside a function body is flagged even if the file uses TYPE_CHECKING
+    elsewhere at module scope.
+
+    Only the innermost ``if TYPE_CHECKING:`` block is tracked: a second, nested
+    ``if TYPE_CHECKING:`` header overwrites the outer block's indent so that when
+    control dedents back to the outer block's body, the tracker resets.
+
+    Known limitation: nested ``if TYPE_CHECKING:`` blocks are NOT supported. After
+    a nested inner block ends, subsequent lines at the OUTER block's body indent
+    are treated as outside any TYPE_CHECKING scope, so function-body imports there
+    WILL be flagged as violations even though they are lexically guarded by the
+    outer block. Rewrite to a single top-level ``if TYPE_CHECKING:`` block to avoid
+    this false positive. Nested TYPE_CHECKING blocks are rare in practice, so this
+    simpler single-level tracking is preferred over maintaining a stack of indent
+    levels. The pinned behavior is covered by
+    ``test_should_track_only_innermost_type_checking_block``.
+    """
+    issues: list[str] = []
     lines = content.split("\n")
     inside_function = False
     function_indent = 0
+    type_checking_block_indent = NOT_INSIDE_TYPE_CHECKING_BLOCK
 
-    for line_number, line in enumerate(lines, 1):
-        stripped = line.strip()
+    for line_number, each_line in enumerate(lines, 1):
+        stripped = each_line.strip()
 
         if not stripped:
             continue
 
-        func_match = re.match(r"^(\s*)(async\s+)?def\s+\w+", line)
-        if func_match:
+        current_indent = len(each_line) - len(each_line.lstrip())
+
+        if type_checking_block_indent != NOT_INSIDE_TYPE_CHECKING_BLOCK:
+            if current_indent <= type_checking_block_indent:
+                type_checking_block_indent = NOT_INSIDE_TYPE_CHECKING_BLOCK
+
+        type_checking_match = TYPE_CHECKING_BLOCK_PATTERN.match(each_line)
+        if type_checking_match:
+            type_checking_block_indent = len(type_checking_match.group("indent"))
+            continue
+
+        function_match = re.match(r"^(\s*)(async\s+)?def\s+\w+", each_line)
+        if function_match:
             inside_function = True
-            function_indent = len(func_match.group(1)) if func_match.group(1) else 0
+            function_indent = len(function_match.group(1)) if function_match.group(1) else 0
             continue
 
         if inside_function:
-            current_indent = len(line) - len(line.lstrip())
             if current_indent <= function_indent and stripped and not stripped.startswith(("#", "@", ")")):
                 inside_function = False
 
-        if inside_function:
-            if stripped.startswith(("import ", "from ")) and "TYPE_CHECKING" not in content[:500]:
+        is_inside_type_checking_block = type_checking_block_indent != NOT_INSIDE_TYPE_CHECKING_BLOCK
+        if inside_function and not is_inside_type_checking_block:
+            if stripped.startswith(IMPORT_STATEMENT_PREFIXES):
                 issues.append(f"Line {line_number}: Import inside function - move to top of file")
 
-        if len(issues) >= 3:
+        if len(issues) >= MAX_ISSUES_PER_CHECK:
             break
 
     return issues
