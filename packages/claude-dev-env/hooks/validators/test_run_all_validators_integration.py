@@ -4,9 +4,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
-
 VALIDATORS_DIR = Path(__file__).parent
 HOOKS_DIR = VALIDATORS_DIR.parent
 PACKAGE_MODULE = f"{VALIDATORS_DIR.name}.run_all_validators"
