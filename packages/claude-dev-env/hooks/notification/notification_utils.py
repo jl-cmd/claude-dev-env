@@ -4,8 +4,8 @@ import os
 import platform
 import subprocess
 
-NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "claude-notifications")
-NTFY_BASE_URL = f"https://ntfy.sh/{NTFY_TOPIC}"
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
+NTFY_BASE_URL = f"https://ntfy.sh/{NTFY_TOPIC}" if NTFY_TOPIC else ""
 WINDOWS_CHIMES_PATH = os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "Media", "Windows Battery Critical.wav")
 LINUX_NOTIFICATION_SOUND = os.environ.get("NOTIFICATION_SOUND", "/usr/share/sounds/freedesktop/stereo/message.oga")
 LINUX_NOTIFICATION_TIMEOUT_MS = "3000"
@@ -138,6 +138,8 @@ def notify_windows(title: str, message: str) -> None:
 
 
 def notify_ntfy(title: str, message: str, priority: str = "high") -> None:
+    if not NTFY_TOPIC:
+        return
     try:
         subprocess.Popen(
             [
