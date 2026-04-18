@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.26.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.25.2...claude-dev-env-v1.26.0) (2026-04-18)
+
+
+### Features
+
+* **bugteam:** preflight, code-rules gate, and audit workflow ([#189](https://github.com/jl-cmd/claude-code-config/issues/189)) ([56bfe8a](https://github.com/jl-cmd/claude-code-config/commit/56bfe8a10a7e697a90bfd1461bd07e2c1f54c671))
+* **code-rules-enforcer:** enforce file-global constants use count ([#180](https://github.com/jl-cmd/claude-code-config/issues/180)) ([#195](https://github.com/jl-cmd/claude-code-config/issues/195)) ([7caf07b](https://github.com/jl-cmd/claude-code-config/commit/7caf07b6f8579848f51e36ac942faba6a8027ead))
+* **notifications:** add Discord push via Bitwarden Secrets Manager alongside ntfy ([#196](https://github.com/jl-cmd/claude-code-config/issues/196)) ([2ae4fdb](https://github.com/jl-cmd/claude-code-config/commit/2ae4fdb8ff11adeb654d93bfe04e0214ffb8fd3b))
+
+
+### Bug Fixes
+
+* **code-rules-enforcer:** mask string literals in magic-value scan ([#190](https://github.com/jl-cmd/claude-code-config/issues/190)) ([1d5bd3e](https://github.com/jl-cmd/claude-code-config/commit/1d5bd3e3b9e24c92c85da965fddd3d8143a3c140))
+* **hooks:** repair six pre-existing test failures on main ([#186](https://github.com/jl-cmd/claude-code-config/issues/186)) ([826fcb2](https://github.com/jl-cmd/claude-code-config/commit/826fcb25b531bd8634c4f0085dafb29bc2cd7fef))
+* **validators:** remove unused pytest import from integration test ([#198](https://github.com/jl-cmd/claude-code-config/issues/198)) ([c437237](https://github.com/jl-cmd/claude-code-config/commit/c43723784dd9261edd63fd9962856ae6b2f6e569))
+
+
+### Documentation
+
+* **bugteam:** literal tool calls + evals suite for deterministic traces ([#184](https://github.com/jl-cmd/claude-code-config/issues/184)) ([db62fbb](https://github.com/jl-cmd/claude-code-config/commit/db62fbbf5ebb9e555be3c9deadb73ff88b5fce58))
+* **bugteam:** split SKILL.md into progressive-disclosure layout ([#143](https://github.com/jl-cmd/claude-code-config/issues/143)) ([#200](https://github.com/jl-cmd/claude-code-config/issues/200)) ([e61670e](https://github.com/jl-cmd/claude-code-config/commit/e61670e2ff4f1a7a6051ca3d1b77c3de1e887f8d))
+
+
+### Maintenance
+
+* **code-rules:** add file-global constants use-count rule ([#180](https://github.com/jl-cmd/claude-code-config/issues/180)) ([f966341](https://github.com/jl-cmd/claude-code-config/commit/f966341ab6e99a8c7fa885186138a9b5d346eb6b))
+
+
+### Refactoring
+
+* **code-rules-enforcer:** rename file to PEP 8 snake_case ([#191](https://github.com/jl-cmd/claude-code-config/issues/191)) ([02f730a](https://github.com/jl-cmd/claude-code-config/commit/02f730acdf26cf608fc5a4e5962e00dbdb69426b))
+* **validators:** use package-qualified imports for validators/ ([#194](https://github.com/jl-cmd/claude-code-config/issues/194)) ([519e8b5](https://github.com/jl-cmd/claude-code-config/commit/519e8b51d0673cd7f781abafe10eab791656f25c))
+
+
+### Reverts
+
+* **tdd-enforcer:** drop hyphen-to-underscore stem fallback ([#197](https://github.com/jl-cmd/claude-code-config/issues/197)) ([3ffd257](https://github.com/jl-cmd/claude-code-config/commit/3ffd257606ca66f8df8b46f649d80dec16e5a3df))
+
 ## [1.25.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.25.1...claude-dev-env-v1.25.2) (2026-04-18)
 
 
