@@ -24,7 +24,10 @@ Review every change against these rules. Flag each violation with its rule name.
 ## Magic Values and Configuration
 - Require named constants for numeric, string, and boolean literals in function bodies; exempt `0`, `1`, `-1`, empty string, and `True`/`False` where the meaning is obvious.
 - Treat structural fragments inside f-strings (paths, URLs, query patterns, regex) as magic values; require extraction to a named constant.
-- Require `UPPER_SNAKE_CASE` constants to live in `config/` (`config/timing.py`, `config/constants.py`, `config/selectors.py`); flag definitions located elsewhere.
+- Require `UPPER_SNAKE_CASE` constants to live in `config/` (`config/timing.py`, `config/constants.py`, `config/selectors.py`); flag definitions located elsewhere unless the file path matches a hook exemption (same as `code-rules-enforcer.py` and `CODE_RULES.md`):
+  - Django migrations: path contains `/migrations/`
+  - Workflow registries: path (normalized to forward slashes) contains the substring `/workflow/`, `_tab.py`, `/states.py`, or `/modules.py`
+  - Test files: `test_`, `_test.`, `.spec.`, `conftest`, or path under `/tests/`
 - Require a search of existing `config/` files for reuse before adding any new constant.
 
 ## Types
@@ -33,7 +36,7 @@ Review every change against these rules. Flag each violation with its rule name.
 - Flag bare `object` used as an escape hatch in place of a proper type.
 
 ## Structure
-- Flag files over 400 lines (hard limit); this is hook-enforced and non-negotiable.
+- Flag files that grow past advisory thresholds: soft advisory at 400 lines, stronger advisory at 1000 lines (hook writes to stderr only; line count does not block writes).
 - Flag functions longer than 30 lines.
 - Require exactly 1 blank line between top-level functions (project convention); flag 2-blank-line separators.
 - Require all `import` statements at the top of the file; flag imports inside function bodies.

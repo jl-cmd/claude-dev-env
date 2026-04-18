@@ -50,6 +50,19 @@ These rules are automatically enforced by `code-rules-enforcer.py`. Violations b
 | Magic values | No literals in production function bodies (0, 1, -1 exempt). **Test files exempt.** Includes string templates — if you strip the interpolations from an f-string and the remaining literal text is structural (paths, URLs, patterns), those fragments are magic values that belong in config |
 | Constants location | No `UPPER_SNAKE =` outside `config/` in **production code**. **Test files may define local constants.** |
 
+### Where UPPER_SNAKE is allowed
+
+The "Constants location" rule is enforced at Write time. The hook exempts these path families where UPPER_SNAKE identifiers are either the canonical home or the native convention rather than misplaced scalar constants:
+
+| Path pattern | Why it is exempt |
+|---|---|
+| `config/*` | Canonical home for scalar constants. |
+| `/migrations/` (Django migrations) | Migration files are self-contained by framework convention; their UPPER_SNAKE identifiers are operation names, not misplaced configuration. |
+| `/workflow/`, `_tab.py`, `/states.py`, `/modules.py` (path normalized to forward slashes, matched as substrings) | Workflow state and module registries declare `StateDefinition` / `WorkflowModule` instances as module-level singletons using UPPER_SNAKE names. These are registry entries, not constants to hoist. |
+| Test files (`test_*.py`, `*_test.py`, `*.spec.*`, `conftest.py`, paths under `/tests/`) | Test files may define local constants without using `config/`. |
+
+Any production file outside these families that defines an UPPER_SNAKE at module scope is still flagged and must be moved to `config/`.
+
 ---
 
 ## 3. REUSE CONSTANTS (DRY CONFIG)
