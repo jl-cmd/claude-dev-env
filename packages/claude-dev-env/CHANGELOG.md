@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.25.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.25.1...claude-dev-env-v1.25.2) (2026-04-18)
+
+
+### Bug Fixes
+
+* **hooks:** make GH-REDIRECT duplicate guard opt-in via env var ([#187](https://github.com/jl-cmd/claude-code-config/issues/187)) ([3462eb2](https://github.com/jl-cmd/claude-code-config/commit/3462eb29c8b7002ffb71d0af194ccd4bcdaffcff))
+* **hooks:** skip blocking TDD gate for .claude path segments ([#183](https://github.com/jl-cmd/claude-code-config/issues/183)) ([7d37285](https://github.com/jl-cmd/claude-code-config/commit/7d37285605cc42b24ca2999884cff206e0c6c315))
+* **ntfy:** remove public fallback topic ([#188](https://github.com/jl-cmd/claude-code-config/issues/188)) ([40eeb59](https://github.com/jl-cmd/claude-code-config/commit/40eeb59e84e71e1fdd258a442df5b9a08ca0fcf2))
+
 ## [1.25.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.25.0...claude-dev-env-v1.25.1) (2026-04-18)
 
 
