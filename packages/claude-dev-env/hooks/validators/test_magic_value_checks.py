@@ -1,13 +1,20 @@
 """Tests for magic value detection."""
 
 import ast
+import tempfile
+from pathlib import Path
 
 import pytest
 
 from magic_value_checks import (
     check_magic_values,
+    validate_file,
 )
 from validator_base import Violation
+
+
+MAGIC_NUMBER_SOURCE = "x = 42\n"
+NON_TEST_TEMPDIR_PREFIX = "src_"
 
 
 GOOD_NAMED_CONSTANTS = '''
@@ -328,3 +335,83 @@ class TestMagicValues:
         tree = ast.parse(FALSE_LITERAL_IN_FUNCTION)
         violations = check_magic_values(tree, "test.py")
         assert violations == []
+
+
+class TestValidateFilePathExemptions:
+    def test_validate_file_should_skip_test_underscore_py_files(
+        self, tmp_path: Path
+    ) -> None:
+        tests_directory = tmp_path / "tests"
+        tests_directory.mkdir()
+        test_module_path = tests_directory / "test_foo.py"
+        test_module_path.write_text(MAGIC_NUMBER_SOURCE, encoding="utf-8")
+
+        assert validate_file(test_module_path) == []
+
+    def test_validate_file_should_skip_config_directory(
+        self, tmp_path: Path
+    ) -> None:
+        config_directory = tmp_path / "config"
+        config_directory.mkdir()
+        constants_path = config_directory / "constants.py"
+        constants_path.write_text(MAGIC_NUMBER_SOURCE, encoding="utf-8")
+
+        assert validate_file(constants_path) == []
+
+    def test_validate_file_should_skip_settings_py(self, tmp_path: Path) -> None:
+        settings_path = tmp_path / "settings.py"
+        settings_path.write_text(MAGIC_NUMBER_SOURCE, encoding="utf-8")
+
+        assert validate_file(settings_path) == []
+
+    def test_validate_file_should_skip_uppercase_config_directory(
+        self, tmp_path: Path
+    ) -> None:
+        """Case-insensitive match so Config/ on case-preserving filesystems skips."""
+        uppercase_config_directory = tmp_path / "Config"
+        uppercase_config_directory.mkdir()
+        constants_path = uppercase_config_directory / "constants.py"
+        constants_path.write_text(MAGIC_NUMBER_SOURCE, encoding="utf-8")
+
+        assert validate_file(constants_path) == []
+
+    def test_validate_file_should_skip_mixed_case_tests_directory(
+        self, tmp_path: Path
+    ) -> None:
+        """Case-insensitive match so src/Tests/ short-circuits the same way src/tests/ does."""
+        mixed_case_tests_directory = tmp_path / "Tests"
+        mixed_case_tests_directory.mkdir()
+        test_module_path = mixed_case_tests_directory / "test_foo.py"
+        test_module_path.write_text(MAGIC_NUMBER_SOURCE, encoding="utf-8")
+
+        assert validate_file(test_module_path) == []
+
+    def test_validate_file_should_skip_conftest_helpers(
+        self, tmp_path: Path
+    ) -> None:
+        """Naked ``conftest`` substring matches conftest_helpers.py and similar."""
+        conftest_helpers_path = tmp_path / "conftest_helpers.py"
+        conftest_helpers_path.write_text(MAGIC_NUMBER_SOURCE, encoding="utf-8")
+
+        assert validate_file(conftest_helpers_path) == []
+
+    def test_validate_file_should_still_scan_production_py_files(self) -> None:
+        """Use tempfile with a non-test prefix instead of the pytest tmp_path fixture.
+
+        pytest's tmp_path produces directories like ``pytest-of-<user>/pytest-N/
+        test_validate_file_should_still_scan_production_py_files0/`` whose names
+        contain ``test_`` and ``pytest-`` -- both match TEST_PATH_PATTERNS, so
+        validate_file would short-circuit via is_test_file and make this
+        regression a false green.
+        """
+        with tempfile.TemporaryDirectory(
+            prefix=NON_TEST_TEMPDIR_PREFIX
+        ) as temporary_root:
+            source_directory = Path(temporary_root) / "src"
+            source_directory.mkdir()
+            production_path = source_directory / "app.py"
+            production_path.write_text(MAGIC_NUMBER_SOURCE, encoding="utf-8")
+
+            violations = validate_file(production_path)
+            assert len(violations) == 1
+            assert "42" in violations[0].message
