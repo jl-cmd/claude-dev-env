@@ -11,6 +11,7 @@ const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
 const PACKAGE_NAME = 'claude-dev-env';
+const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
 
 const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts'];
@@ -218,7 +219,7 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
 }
 
 function writeManifest(installedFiles) {
-    const manifest = { package: PACKAGE_NAME, version: '1.0.0', installedAt: new Date().toISOString(), files: installedFiles };
+    const manifest = { package: PACKAGE_NAME, version: PACKAGE_VERSION, installedAt: new Date().toISOString(), files: installedFiles };
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
 }
 
