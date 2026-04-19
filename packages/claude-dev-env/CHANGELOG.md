@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.0...claude-dev-env-v1.26.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* **reconcile:** /bugteam audit of range 7d37285..84a6c9d ([#203](https://github.com/jl-cmd/claude-code-config/issues/203)) ([dd2b9de](https://github.com/jl-cmd/claude-code-config/commit/dd2b9dea7bcef9f7fb22e2531c95a29cb6b966fd))
+
 ## [1.26.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.25.2...claude-dev-env-v1.26.0) (2026-04-18)
 
 
