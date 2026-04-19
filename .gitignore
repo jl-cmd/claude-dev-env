@@ -8,6 +8,7 @@ __pycache__/
 
 # Local tooling state
 .serena/
+.claude/worktrees/
 
 .planning/
 _npv/
