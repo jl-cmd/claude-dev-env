@@ -18,8 +18,8 @@ Each invariant cites the normative section or companion file it derives from.
 
 | # | Invariant | Citation |
 |---|---|---|
-| I-1 | `Bash(grant_project_claude_permissions.py)` precedes every `TeamCreate`. | `SKILL.md` § Step 0 |
-| I-2 | `Bash(revoke_project_claude_permissions.py)` runs exactly once per invocation, after the last `TeamDelete`, on every exit path (converged, stuck, cap reached, error). | `SKILL.md` § Step 5 |
+| I-1 | `Bash` invoking `scripts/grant_project_claude_permissions.py` precedes every `TeamCreate`. | `SKILL.md` § Step 0 |
+| I-2 | `Bash` invoking `scripts/revoke_project_claude_permissions.py` runs exactly once per invocation, after the last `TeamDelete`, on every exit path (converged, stuck, cap reached, error). | `SKILL.md` § Step 5 |
 | I-3 | Exactly one `TeamCreate` and exactly one `TeamDelete` per invocation. | `SKILL.md` § Step 2; § Step 4 |
 | I-4 | Before `TeamDelete`, no teammate remains active without cleanup: either the teammate self-terminated after `Agent` returned, or the lead sent a matching `SendMessage(..., shutdown_request)` (including parallel-auditor shutdowns). No orphaned teammates when `TeamDelete` runs. | `SKILL.md` § AUDIT action (**Shutdown**); § FIX action (**Shutdown**); § Step 4 |
 | I-5 | `Agent` calls are fresh per loop — the same `name` is never reused across loops without an intervening shutdown. | `CONSTRAINTS.md` — **Fresh teammate per loop** |
@@ -105,7 +105,7 @@ The harness does not yet exist; this document defines its contract.
 
 | # | Tool call | Source |
 |---|---|---|
-| 1 | `Bash("python .../grant_project_claude_permissions.py")` | `SKILL.md` § Step 0 |
+| 1 | `Bash("python .../scripts/grant_project_claude_permissions.py")` | `SKILL.md` § Step 0 |
 | 2 | `Bash("gh pr view --json number,baseRefName,headRefName,url")` | `SKILL.md` § Step 1 |
 | 3 | `Bash("git rev-parse HEAD")` → captures `starting_sha` | `SKILL.md` § Step 2 — **Loop state** block |
 | 4 | `TeamCreate(team_name="bugteam-pr-42-<ts>", description=..., agent_type="team-lead")` | `SKILL.md` § Step 2 |
@@ -131,7 +131,7 @@ The harness does not yet exist; this document defines its contract.
 | 24 | `Write(".bugteam-final-body.md", <returned body>)` | `SKILL.md` § Step 4.5 step 4 |
 | 25 | `Bash("gh pr edit 42 -R ... --body-file .bugteam-final-body.md")` | `SKILL.md` § Step 4.5 step 4 |
 | 26 | `Bash("rm .bugteam-final.diff .bugteam-original-body.md .bugteam-final-body.md")` | `SKILL.md` § Step 4.5 step 5 (lead may add `.bugteam-loop-*.outcomes.xml` in the same or a separate `rm` — reconcile on first real run) |
-| 27 | `Bash("python .../revoke_project_claude_permissions.py")` | `SKILL.md` § Step 5 |
+| 27 | `Bash("python .../scripts/revoke_project_claude_permissions.py")` | `SKILL.md` § Step 5 |
 
 **Pass criteria.**
 - All Layer A invariants hold.

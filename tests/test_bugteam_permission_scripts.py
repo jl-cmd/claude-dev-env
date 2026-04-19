@@ -15,6 +15,7 @@ GRANT_SCRIPT = (
     / "claude-dev-env"
     / "skills"
     / "bugteam"
+    / "scripts"
     / "grant_project_claude_permissions.py"
 )
 REVOKE_SCRIPT = (
@@ -23,6 +24,7 @@ REVOKE_SCRIPT = (
     / "claude-dev-env"
     / "skills"
     / "bugteam"
+    / "scripts"
     / "revoke_project_claude_permissions.py"
 )
 

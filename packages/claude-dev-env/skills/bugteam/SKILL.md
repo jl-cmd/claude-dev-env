@@ -16,7 +16,7 @@ description: >-
 
 **Core principle:** Agent team runs audit–fix until convergence. Bugfind: clean-room audit (fresh context each loop). Bugfix: addresses findings. Hard cap: 10 audit loops. Grant `.claude/**` permissions at start, revoke always at end.
 
-Subagents fold back into the lead context; agent-team teammates do not — that separation is the clean-room guarantee.
+Subagents fold back into the lead context; agent-team teammates do not — that separation is the clean-room guarantee. Verbatim doc quotes and URLs: [`sources.md`](sources.md).
 
 ## Contents
 
@@ -54,7 +54,7 @@ Refusals — first match wins; respond with the quoted line exactly and stop:
 
 ## Utility scripts
 
-Shell-heavy steps live under `scripts/` (run, do not paste into context). [`scripts/README.md`](scripts/README.md).
+Shell-heavy steps live under `scripts/` (run, do not paste into context). Utility scripts are **executed**, not loaded as primary context ([`sources.md`](sources.md) § Progressive disclosure and utility scripts). [`scripts/README.md`](scripts/README.md).
 
 ### Pre-flight (before Step 0)
 
@@ -82,7 +82,7 @@ Non-zero → fix before grant. `BUGTEAM_PREFLIGHT_SKIP=1` emergency only. `--pre
 ### Step 0: Grant project permissions (once, first)
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/grant_project_claude_permissions.py"
+python "${CLAUDE_SKILL_DIR}/scripts/grant_project_claude_permissions.py"
 ```
 
 `${CLAUDE_SKILL_DIR}` is host-substituted before the shell runs (unlike normal env expansion). Idempotent writes to `~/.claude/settings.json` from repo root. Non-zero → stop. Revoke in Step 5 on every exit path.
@@ -109,15 +109,13 @@ TeamCreate(
 )
 ```
 
-**Team name:** `bugteam-pr-<number>-<YYYYMMDDHHMMSS>` or `bugteam-<sanitized-head>-<YYYYMMDDHHMMSS>` if no PR. Timestamp avoids collisions.
+**Team name:** `bugteam-pr-<number>-<YYYYMMDDHHMMSS>` or `bugteam-<sanitized-head>-<YYYYMMDDHHMMSS>` if no PR. Timestamp avoids collisions. `TeamCreate` implements natural-language team creation ([`sources.md`](sources.md) § Team creation in natural language).
 
 **Sanitize head branch (no-PR only):** replace characters outside `[A-Za-z0-9._-]` with `-` (e.g. `feat/foo*bar` → `feat-foo-bar`). Apply once; reuse everywhere below.
 
 **`<team_temp_dir>`:** `Path(tempfile.gettempdir()) / team_name` (lead resolves once to an absolute path; every shell gets that literal string).
 
-**Roles (spawned per loop, not here):** bugfind → `code-quality-agent` sonnet; bugfix → `clean-coder` sonnet. **Display:** inherit `teammateMode` from `~/.claude.json`.
-
-Reference subagent types by name when spawning teammates.
+**Roles (spawned per loop, not here):** bugfind → `code-quality-agent` sonnet; bugfix → `clean-coder` sonnet. **Display:** inherit `teammateMode` from `~/.claude.json`. Reference subagent types by name when spawning teammates ([`sources.md`](sources.md) § Referencing subagent types when spawning teammates).
 
 **Loop state (lead; not a single script):**
 
@@ -230,7 +228,7 @@ Agent(
 )
 ```
 
-Fresh `Agent` each loop; teammate context excludes lead history. [`PROMPTS.md`](PROMPTS.md): XML + outcome schema. Lead reads `.bugteam-loop-<N>.outcomes.xml`, fills `loop_comment_index`.
+Fresh `Agent` each loop; teammate context excludes lead history ([`sources.md`](sources.md) § Teammate context isolation). [`PROMPTS.md`](PROMPTS.md): XML + outcome schema. Lead reads `.bugteam-loop-<N>.outcomes.xml`, fills `loop_comment_index`.
 
 **Shutdown:** If `Agent` returned and the teammate already ended, skip. Otherwise:
 
@@ -289,7 +287,7 @@ On failure: log in final report; continue to Step 5.
 ### Step 5: Revoke permissions (always)
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/revoke_project_claude_permissions.py"
+python "${CLAUDE_SKILL_DIR}/scripts/revoke_project_claude_permissions.py"
 ```
 
 Removes Step 0 grant — run even if Step 4 partially failed (log separately).

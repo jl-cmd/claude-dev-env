@@ -6,6 +6,10 @@ Scripts in this directory are **executed** by the lead or teammates. They are no
 |--------|---------|
 | `bugteam_preflight.py` | Run pytest (when configured) and optional `pre-commit` before `/bugteam`. |
 | `bugteam_code_rules_gate.py` | Run `validate_content` from `code-rules-enforcer.py` on PR-scoped files (`git diff` vs merge-base). Exit `1` if any mandatory rule fails. Invoked **before each audit**; the fixer clears it before the auditor runs. |
+| `grant_project_claude_permissions.py` | Idempotent grant of Edit/Write/Read on `cwd/.claude/**` into `~/.claude/settings.json`. |
+| `revoke_project_claude_permissions.py` | Removes the matching grant entries from `~/.claude/settings.json`. |
+| `test_claude_permissions_common.py` | Pytest module for path normalization and glob-metacharacter guards in `_claude_permissions_common.py`. |
+| `_claude_permissions_common.py` | Shared helpers for the grant/revoke scripts (atomic JSON writes, settings sections). |
 
 ## `bugteam_preflight.py`
 
