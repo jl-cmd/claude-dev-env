@@ -6,7 +6,7 @@ Evaluation-driven iteration set for the `bugteam` skill, following [Anthropic �
 
 Evals are split into two layers. Both layers run against the same trace but carry different failure semantics.
 
-**Layer A — Ironclad invariants.** Order-and-presence rules that MUST hold on every run regardless of fixture, regardless of model choice, regardless of the exact number of loops taken. Every Layer A assertion is cited to a specific line in `SKILL.md` — if the assertion fails, either the run diverged from the skill or the skill text is ambiguous and needs patching.
+**Layer A — Ironclad invariants.** Order-and-presence rules that MUST hold on every run regardless of fixture, regardless of model choice, regardless of the exact number of loops taken. Citations use **section headings and companion files** (`SKILL.md`, `CONSTRAINTS.md`, `reference/*.md`) — not fragile line numbers — so layout edits to `SKILL.md` do not invalidate the contract. If an assertion fails, either the run diverged from the skill or the cited text is ambiguous and needs patching.
 
 **Layer B — Fixture-dependent expectations.** The concrete tool trace predicted for a specific fixture (fixed PR state, canned audit XML, canned fix XML). Layer B is prediction — reality may diverge in small ways (extra `Bash("git rev-parse HEAD")` checkpoints the lead inserts for sanity; retry loops on transient failures; consolidated cleanup calls) without indicating a skill defect. Layer B failures trigger reconciliation, not auto-failure.
 
@@ -14,23 +14,23 @@ Evals are split into two layers. Both layers run against the same trace but carr
 
 ## Ironclad invariants (Layer A, apply to every eval)
 
-Each invariant cites the skill line it derives from.
+Each invariant cites the normative section or companion file it derives from.
 
 | # | Invariant | Citation |
 |---|---|---|
-| I-1 | `Bash(grant_project_claude_permissions.py)` precedes every `TeamCreate`. | SKILL.md Step 0 |
-| I-2 | `Bash(revoke_project_claude_permissions.py)` runs exactly once per invocation, after the last `TeamDelete`, on every exit path (converged, stuck, cap reached, error). | SKILL.md Step 5 |
-| I-3 | Exactly one `TeamCreate` and exactly one `TeamDelete` per invocation. | SKILL.md Step 2, Step 4 |
-| I-4 | Every `Agent(name=...)` spawn is followed (before `TeamDelete`) by a matching `SendMessage(to=..., message={type: "shutdown_request", ...})`. No orphaned teammates. | SKILL.md AUDIT shutdown, FIX shutdown, Step 4.1 |
-| I-5 | `Agent` calls are fresh per loop — the same `name` is never reused across loops without an intervening shutdown. | SKILL.md Constraints: "Fresh teammate per loop" |
-| I-6 | Both audit and fix `Agent` calls pass `model="sonnet"`. | SKILL.md Step 2 roles list, Constraints: "Sonnet for both teammates" |
+| I-1 | `Bash(grant_project_claude_permissions.py)` precedes every `TeamCreate`. | `SKILL.md` § Step 0 |
+| I-2 | `Bash(revoke_project_claude_permissions.py)` runs exactly once per invocation, after the last `TeamDelete`, on every exit path (converged, stuck, cap reached, error). | `SKILL.md` § Step 5 |
+| I-3 | Exactly one `TeamCreate` and exactly one `TeamDelete` per invocation. | `SKILL.md` § Step 2; § Step 4 |
+| I-4 | Before `TeamDelete`, no teammate remains active without cleanup: either the teammate self-terminated after `Agent` returned, or the lead sent a matching `SendMessage(..., shutdown_request)` (including parallel-auditor shutdowns). No orphaned teammates when `TeamDelete` runs. | `SKILL.md` § AUDIT action (**Shutdown**); § FIX action (**Shutdown**); § Step 4 |
+| I-5 | `Agent` calls are fresh per loop — the same `name` is never reused across loops without an intervening shutdown. | `CONSTRAINTS.md` — **Fresh teammate per loop** |
+| I-6 | Both audit and fix `Agent` calls pass `model="sonnet"`. | `SKILL.md` § Step 2 (**Roles**); `CONSTRAINTS.md` — **Sonnet for both teammates** |
 | I-7 | `TeamDelete()` is called with no arguments. | TeamDelete schema: no required params, no properties |
-| I-8 | Loop count ≤ 10 audits. 11th audit never fires. | SKILL.md: "10-loop hard cap" |
-| I-9 | From loop 4 onward without convergence, the audit phase emits three parallel `Agent` calls in a single assistant message with names `bugfind-loop-<N>-a/b/c`. | SKILL.md AUDIT action: "Parallel auditors from loop 4 onward" |
-| I-10 | Lead reads `.bugteam-loop-<N>.outcomes.xml` with the `Read` tool after each audit, before the next action. | SKILL.md: "the lead reads `.bugteam-loop-<N>.outcomes.xml` with the `Read` tool" |
-| I-11 | On exit of any kind, ordering is: `TeamDelete` → temp-dir cleanup → Step 4.5 PR rewrite → revoke. | SKILL.md Step 4, Step 4.5, Step 5 ordering |
-| I-12 | Lead never posts PR review comments, finding comments, or fix replies. The only lead-side PR mutation is the final `gh pr edit --body-file` in Step 4.5. | SKILL.md Constraints: "Teammates own audit/fix comment posting", "Lead owns the final PR description rewrite only" |
-| I-13 | Only the orchestrator (lead session) invokes `TeamCreate`. Every teammate `Agent(...)` call passes `team_name=<lead_team_name>`. No teammate ever calls `TeamCreate`. When supplementary work arises mid-cycle (parallel auditors, adjacent-file audits, infrastructure fixes), the lead spawns additional teammates into the existing team rather than creating a second team. | SKILL.md Constraints: "Orchestrator-only TeamCreate"; runtime error: `Already leading team "<name>". A leader can only manage one team at a time.` |
+| I-8 | Loop count ≤ 10 audits. 11th audit never fires. | `SKILL.md` YAML `description` (10-loop cap); § Step 3 (**Pre-audit** / **FIX** increment rules) |
+| I-9 | From loop 4 onward without convergence, the audit phase emits three parallel `Agent` calls in a single assistant message with names `bugfind-loop-<N>-a/b/c`. | `SKILL.md` § AUDIT action (**Parallel auditors**); `reference/audit-and-teammates.md` § **Parallel auditors** |
+| I-10 | Lead reads `.bugteam-loop-<N>.outcomes.xml` with the `Read` tool after each audit, before the next action. | `SKILL.md` § AUDIT action |
+| I-11 | On exit of any kind, ordering is: teammate shutdowns → `TeamDelete` → temp-dir cleanup → Step 4.5 PR rewrite → revoke. | `SKILL.md` § Step 4; § Step 4.5; § Step 5; `reference/teardown-publish-permissions.md` § **Step 4** / **Step 4.5** / **Step 5** |
+| I-12 | Lead never posts PR review comments, finding comments, or fix replies. The only lead-side PR mutation is the final `gh pr edit --body-file` in Step 4.5. | `CONSTRAINTS.md` — **Teammates own audit/fix comment posting**; **Lead owns the final PR description rewrite only** |
+| I-13 | Only the orchestrator (lead session) invokes `TeamCreate`. Every teammate `Agent(...)` call passes `team_name=<lead_team_name>`. No teammate ever calls `TeamCreate`. When supplementary work arises mid-cycle (parallel auditors, adjacent-file audits, infrastructure fixes), the lead spawns additional teammates into the existing team rather than creating a second team. | `CONSTRAINTS.md` — **Orchestrator-only `TeamCreate`** (runtime error quoted there) |
 
 Any eval failing one or more Layer A invariants fails the run.
 
@@ -105,33 +105,33 @@ The harness does not yet exist; this document defines its contract.
 
 | # | Tool call | Source |
 |---|---|---|
-| 1 | `Bash("python .../grant_project_claude_permissions.py")` | SKILL.md Step 0 |
-| 2 | `Bash("gh pr view --json number,baseRefName,headRefName,url")` | SKILL.md Step 1 |
-| 3 | `Bash("git rev-parse HEAD")` → captures `starting_sha` | SKILL.md:125 |
-| 4 | `TeamCreate(team_name="bugteam-pr-42-<ts>", description=..., agent_type="team-lead")` | SKILL.md Step 2 |
-| 5 | `Bash("mkdir -p <team_temp_dir>")` | SKILL.md AUDIT action |
-| 6 | `Bash("gh pr diff 42 -R ... > <team_temp_dir>/loop-1.patch")` | SKILL.md AUDIT action |
-| 7 | `Agent(subagent_type="code-quality-agent", name="bugfind", team_name=..., model="sonnet", description=..., prompt=<audit XML loop 1>)` | SKILL.md AUDIT action |
-| 8 | `Read(".bugteam-loop-1.outcomes.xml")` | SKILL.md AUDIT action |
-| 9 | `SendMessage(to="bugfind", message={type: "shutdown_request", reason: "audit loop 1 complete; outcome XML captured"})` | SKILL.md AUDIT shutdown |
-| 10 | `Agent(subagent_type="clean-coder", name="bugfix", team_name=..., model="sonnet", description=..., prompt=<fix XML loop 1>)` | SKILL.md FIX action |
-| 11 | `Read(".bugteam-loop-1.outcomes.xml")` — bugfix outcome XML overwrites same filename | SKILL.md FIX action |
-| 12 | `Bash("git rev-parse HEAD")` → verify HEAD advanced | SKILL.md:499, 502 |
-| 13 | `Bash("git fetch origin <branch> && git rev-parse origin/<branch>")` → verify push landed | SKILL.md:500 |
-| 14 | `SendMessage(to="bugfix", message={type: "shutdown_request", reason: "fix loop 1 complete; commit <sha7> pushed"})` | SKILL.md FIX shutdown |
-| 15 | `Bash("gh pr diff 42 -R ... > <team_temp_dir>/loop-2.patch")` | SKILL.md AUDIT action |
-| 16 | `Agent(subagent_type="code-quality-agent", name="bugfind", ...)` (loop 2) | SKILL.md AUDIT action |
-| 17 | `Read(".bugteam-loop-2.outcomes.xml")` — zero findings | SKILL.md AUDIT action |
-| 18 | `SendMessage(to="bugfind", message={type: "shutdown_request", reason: "audit loop 2 complete; zero findings"})` | SKILL.md AUDIT shutdown |
-| 19 | `TeamDelete()` | SKILL.md Step 4 |
-| 20 | `Bash("python -c \"import shutil; shutil.rmtree(r'<team_temp_dir>', ignore_errors=True)\"")` | SKILL.md Step 4 |
-| 21 | `Bash("gh pr diff 42 -R ... > .bugteam-final.diff")` | SKILL.md:564 |
-| 22 | `Bash("gh pr view 42 -R ... --json body --jq .body > .bugteam-original-body.md")` | SKILL.md:565 |
-| 23 | `Agent(subagent_type="pr-description-writer", description=..., prompt=<brief>)` | SKILL.md Step 4.5 |
-| 24 | `Write(".bugteam-final-body.md", <returned body>)` | SKILL.md:571 |
-| 25 | `Bash("gh pr edit 42 -R ... --body-file .bugteam-final-body.md")` | SKILL.md:572 |
-| 26 | `Bash("rm .bugteam-final.diff .bugteam-original-body.md .bugteam-final-body.md .bugteam-loop-*.outcomes.xml")` | SKILL.md:573, 621 |
-| 27 | `Bash("python .../revoke_project_claude_permissions.py")` | SKILL.md Step 5 |
+| 1 | `Bash("python .../grant_project_claude_permissions.py")` | `SKILL.md` § Step 0 |
+| 2 | `Bash("gh pr view --json number,baseRefName,headRefName,url")` | `SKILL.md` § Step 1 |
+| 3 | `Bash("git rev-parse HEAD")` → captures `starting_sha` | `SKILL.md` § Step 2 — **Loop state** block |
+| 4 | `TeamCreate(team_name="bugteam-pr-42-<ts>", description=..., agent_type="team-lead")` | `SKILL.md` § Step 2 |
+| 5 | `Bash("mkdir -p <team_temp_dir>")` | `SKILL.md` § AUDIT action |
+| 6 | `Bash("gh pr diff 42 -R ... > <team_temp_dir>/loop-1.patch")` | `SKILL.md` § AUDIT action |
+| 7 | `Agent(subagent_type="code-quality-agent", name="bugfind", team_name=..., model="sonnet", description=..., prompt=<audit XML loop 1>)` | `SKILL.md` § AUDIT action |
+| 8 | `Read(".bugteam-loop-1.outcomes.xml")` | `SKILL.md` § AUDIT action |
+| 9 | `SendMessage(to="bugfind", message={type: "shutdown_request", reason: "audit loop 1 complete; outcome XML captured"})` | `SKILL.md` § AUDIT action (**Shutdown** fallback) |
+| 10 | `Agent(subagent_type="clean-coder", name="bugfix", team_name=..., model="sonnet", description=..., prompt=<fix XML loop 1>)` | `SKILL.md` § FIX action |
+| 11 | `Read(".bugteam-loop-1.outcomes.xml")` — bugfix outcome XML overwrites same filename | `SKILL.md` § FIX action |
+| 12 | `Bash("git rev-parse HEAD")` → verify HEAD advanced | `SKILL.md` § FIX action (**Verify**) |
+| 13 | `Bash("git fetch origin <branch> && git rev-parse origin/<branch>")` → verify push landed | `SKILL.md` § FIX action (**Verify**) |
+| 14 | `SendMessage(to="bugfix", message={type: "shutdown_request", reason: "fix loop 1 complete; commit <sha7> pushed"})` | `SKILL.md` § FIX action (**Shutdown** fallback) |
+| 15 | `Bash("gh pr diff 42 -R ... > <team_temp_dir>/loop-2.patch")` | `SKILL.md` § AUDIT action |
+| 16 | `Agent(subagent_type="code-quality-agent", name="bugfind", ...)` (loop 2) | `SKILL.md` § AUDIT action |
+| 17 | `Read(".bugteam-loop-2.outcomes.xml")` — zero findings | `SKILL.md` § AUDIT action |
+| 18 | `SendMessage(to="bugfind", message={type: "shutdown_request", reason: "audit loop 2 complete; zero findings"})` | `SKILL.md` § AUDIT action (**Shutdown** fallback) |
+| 19 | `TeamDelete()` | `SKILL.md` § Step 4 |
+| 20 | `Bash("python -c \"import shutil; shutil.rmtree(r'<team_temp_dir>', ignore_errors=True)\"")` | `SKILL.md` § Step 4 |
+| 21 | `Bash("gh pr diff 42 -R ... > .bugteam-final.diff")` | `SKILL.md` § Step 4.5 step 1 |
+| 22 | `Bash("gh pr view 42 -R ... --json body --jq .body > .bugteam-original-body.md")` | `SKILL.md` § Step 4.5 step 2 |
+| 23 | `Agent(subagent_type="pr-description-writer", description=..., prompt=<brief>)` | `SKILL.md` § Step 4.5 |
+| 24 | `Write(".bugteam-final-body.md", <returned body>)` | `SKILL.md` § Step 4.5 step 4 |
+| 25 | `Bash("gh pr edit 42 -R ... --body-file .bugteam-final-body.md")` | `SKILL.md` § Step 4.5 step 4 |
+| 26 | `Bash("rm .bugteam-final.diff .bugteam-original-body.md .bugteam-final-body.md")` | `SKILL.md` § Step 4.5 step 5 (lead may add `.bugteam-loop-*.outcomes.xml` in the same or a separate `rm` — reconcile on first real run) |
+| 27 | `Bash("python .../revoke_project_claude_permissions.py")` | `SKILL.md` § Step 5 |
 
 **Pass criteria.**
 - All Layer A invariants hold.
@@ -228,7 +228,7 @@ Patch this table to match observation and annotate each correction.
 - Every finding's outcome XML carries `used_fallback="true"` and the issue-comment URL as `finding_comment_url`.
 - Cycle continues to the FIX action without aborting.
 
-**Open item for the real run.** The exact `gh api` payload shape for the issue-comments fallback is specified at `SKILL.md:164-171` as `jq -Rs | gh api .../issues/<number>/comments --input -`. Before running Eval 10 for real, confirm the teammate obeys this shape — the fixture must assert the endpoint path and the `--input -` pattern.
+**Open item for the real run.** The issue-comments fallback shape is `jq -Rs | gh api .../issues/<number>/comments --input -` (`SKILL.md` § Step 2.5 **Review POST fails**; full narrative in `reference/github-pr-reviews.md` § **Review POST failure fallback**). Before running Eval 10 for real, confirm the teammate obeys this shape — the fixture must assert the endpoint path and the `--input -` pattern.
 
 ---
 
@@ -327,8 +327,8 @@ The adjacent-audit teammate writes its own outcome XML, self-terminates. Lead re
 1. **Cycle 0 — Reconcile predictions with reality.** On the first real run, diff every Layer B predicted trace against the observed trace. Patch this file to match reality and annotate each correction with a reason.
 2. **Baseline.** Run every eval with the skill unloaded. Record which cases the base model handles from memory versus which it gets wrong.
 3. **Treatment.** Run every eval with the skill loaded. Layer A invariants must pass on every case. Layer B mismatches trigger Cycle 0 reconciliation.
-4. **Regress on change.** Every edit to `SKILL.md` re-runs the full suite. A passing→failing transition on any Layer A invariant blocks the change. A Layer B mismatch after a `SKILL.md` edit triggers a patch to the affected eval trace in the same commit.
-5. **Extend on gotcha.** When the skill misfires in real use, add a new eval that reproduces the miss before patching `SKILL.md`.
+4. **Regress on change.** Every edit to normative text in `SKILL.md`, `CONSTRAINTS.md`, `PROMPTS.md`, or `reference/*.md` sections that Layer A cites re-runs the full suite. A passing→failing transition on any Layer A invariant blocks the change. A Layer B mismatch after such an edit triggers a patch to the affected eval trace in the same commit.
+5. **Extend on gotcha.** When the skill misfires in real use, add a new eval that reproduces the miss before patching the orchestration or companion files.
 
 ## Harness sketch (future work)
 
@@ -341,6 +341,6 @@ A minimal Python harness under `packages/claude-dev-env/skills/bugteam/evals/`:
 
 ## Open research items flagged during this pass
 
-1. **GitHub REST review-POST payload shape.** Eval 9 and Eval 10 depend on the exact body shape of `POST /pulls/<number>/reviews`. `SKILL.md:138-158` specifies the `jq -n --rawfile ... --argjson ... | gh api ... --input -` shape. Before running Eval 9/10 for real, fetch the current GitHub REST reference to confirm the request schema (fields `commit_id`, `event`, `body`, `comments[]`) and the multi-line anchor `{path, start_line, start_side, line, side, body}` shape still apply. Record the confirmed version and URL here.
-2. **`SendMessage` shutdown origination — RESOLVED.** `SendMessage` tool docs include the line "Don't originate `shutdown_request` unless asked." `TeamCreate` tool docs explicitly direct the lead to originate `{type: "shutdown_request"}` for teammate cleanup. Real-run observation (loop 1 of eval run 2026-04-18) resolved the contradiction: teammates self-terminate when their task is complete — the `Agent` call returns and the teammate's session ends without any `SendMessage`. The cycle proceeded correctly without the lead ever needing to originate a `shutdown_request`. `SKILL.md` has been updated to document self-termination as the expected path and lead-originated `SendMessage(shutdown_request)` as a fallback for teammates that do not self-terminate after the `Agent` call returns. The literal `SendMessage` call shapes remain in `SKILL.md` for that fallback case.
+1. **GitHub REST review-POST payload shape.** Eval 9 and Eval 10 depend on the exact body shape of `POST /pulls/<number>/reviews`. The `jq -n --rawfile ... --argjson ... | gh api ... --input -` fence lives in `SKILL.md` § Step 2.5 (**Review POST**); expanded copy in `reference/github-pr-reviews.md` § **Per-loop review**. Before running Eval 9/10 for real, fetch the current GitHub REST reference to confirm the request schema (fields `commit_id`, `event`, `body`, `comments[]`) and the multi-line anchor `{path, start_line, start_side, line, side, body}` shape still apply. Record the confirmed version and URL here.
+2. **`SendMessage` shutdown origination — RESOLVED.** `SendMessage` tool docs include the line "Don't originate `shutdown_request` unless asked." `TeamCreate` tool docs explicitly direct the lead to originate `{type: "shutdown_request"}` for teammate cleanup. Real-run observation (loop 1 of eval run 2026-04-18) resolved the contradiction: teammates self-terminate when their task is complete — the `Agent` call returns and the teammate's session ends without any `SendMessage`. The cycle proceeded correctly without the lead ever needing to originate a `shutdown_request`. `SKILL.md` § AUDIT / FIX actions document self-termination as the expected path and lead-originated `SendMessage(shutdown_request)` as a fallback; `reference/audit-and-teammates.md` carries the longer shutdown narrative. Layer A **I-4** encodes “no orphaned teammates,” not “always send SendMessage.”
 3. **Model override redundancy.** `code-quality-agent` and `clean-coder` may already pin `model` in their agent definitions. The explicit `model="sonnet"` in every spawn is insurance, but on the first real run confirm no conflict between the lead-passed model and the agent-frontmatter model.
