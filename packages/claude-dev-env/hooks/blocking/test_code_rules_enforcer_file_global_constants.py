@@ -165,12 +165,14 @@ def test_should_flag_private_upper_snake_constant_used_by_only_one_function() ->
     ), f"Expected private UPPER_SNAKE to be flagged, got: {issues}"
 
 
-def test_should_accept_constant_referenced_only_at_module_scope() -> None:
+def test_should_flag_constant_referenced_only_at_module_scope() -> None:
     source = "A = 1\nB = A + 1\n"
     issues = code_rules_enforcer.check_file_global_constants_use_count(
         source, PRODUCTION_FILE_PATH
     )
-    assert issues == [], f"Expected module-scope reference to not count, got: {issues}"
+    assert any("A" in issue and "only 1 function/method" in issue for issue in issues), (
+        f"Expected single module-scope reference to be flagged, got: {issues}"
+    )
 
 
 def test_should_skip_non_python_files() -> None:

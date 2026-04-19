@@ -9,11 +9,13 @@ import subprocess
 import sys
 import platform
 import os
+import time
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from notification_utils import notify_discord
 
-NTFY_TOPIC = "claude-02633f9d93ea8794"
+NTFY_TOPIC = os.environ.get("CLAUDE_NTFY_TOPIC", "")
 DEFAULT_MESSAGE = "Task completed"
 ACTIVITY_WEBHOOK_SECRET_ID = os.environ.get("BWS_DISCORD_ACTIVITY_SECRET_ID", "")
 
@@ -25,8 +27,6 @@ LOG_FILE = os.path.join(CACHE_DIR, "subagent-notify-debug.log")
 def log_debug(message: str) -> None:
     """Append debug message to log file."""
     try:
-        from datetime import datetime
-
         with open(LOG_FILE, "a") as f:
             f.write(f"{datetime.now().isoformat()} - {message}\n")
     except Exception:
@@ -60,8 +60,6 @@ def get_task_info_from_stdin() -> str:
             return f"Agent {agent_id} completed" if agent_id else DEFAULT_MESSAGE
 
         # Find the Task tool call that spawned this agent (with retry for race condition)
-        import time
-
         tool_use_id = None
         for attempt in range(3):
             with open(transcript_path, "r") as f:
@@ -118,6 +116,8 @@ def get_project_name() -> str:
 
 def notify_ntfy(title: str, message: str, priority: str = "default") -> None:
     """Send push notification via ntfy.sh with title and message."""
+    if not NTFY_TOPIC:
+        return
     try:
         subprocess.Popen(
             [

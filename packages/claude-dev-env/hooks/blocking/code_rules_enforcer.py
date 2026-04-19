@@ -1036,6 +1036,8 @@ def _resolve_enclosing_function_qname(
             break
         current_ancestor = parent_by_child_id.get(id(current_ancestor))
     if enclosing_function_name is None:
+        if enclosing_class_name is not None:
+            return f"<class:{enclosing_class_name}>"
         return None
     if enclosing_class_name is not None:
         return f"{enclosing_class_name}.{enclosing_function_name}"
@@ -1077,7 +1079,9 @@ def check_file_global_constants_use_count(content: str, file_path: str) -> list[
         if each_node.id not in callers_by_constant:
             continue
         enclosing_qname = _resolve_enclosing_function_qname(each_node, parent_by_child_id)
-        if enclosing_qname is not None:
+        if enclosing_qname is None:
+            callers_by_constant[each_node.id].add("<module-scope>")
+        else:
             callers_by_constant[each_node.id].add(enclosing_qname)
 
     issues: list[str] = []

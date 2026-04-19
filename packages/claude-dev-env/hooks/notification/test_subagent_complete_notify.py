@@ -56,6 +56,13 @@ def test_main_forwards_activity_secret_id_to_notify_discord() -> None:
     assert call_kwargs["message"] == FIXTURE_TASK_DESCRIPTION
 
 
+def test_notify_ntfy_skips_when_topic_unset() -> None:
+    module_under_test = load_hook_with_environment({"CLAUDE_NTFY_TOPIC": ""})
+    with patch.object(module_under_test.subprocess, "Popen") as popen_spy:
+        module_under_test.notify_ntfy(title="t", message="m")
+    assert popen_spy.call_count == 0
+
+
 def test_main_skips_notify_discord_when_task_description_is_empty() -> None:
     module_under_test = load_hook_with_environment(
         {"BWS_DISCORD_ACTIVITY_SECRET_ID": FIXTURE_ACTIVITY_SECRET_ID}
