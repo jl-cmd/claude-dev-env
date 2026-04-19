@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.26.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.1...claude-dev-env-v1.26.2) (2026-04-19)
+
+
+### Bug Fixes
+
+* **bugteam:** gate UTF-8 on Windows and optional --only-under scope ([#205](https://github.com/jl-cmd/claude-code-config/issues/205)) ([5ea5e50](https://github.com/jl-cmd/claude-code-config/commit/5ea5e501a536b2294536913302fe1a4fe5497bd8))
+
+
+### Documentation
+
+* **bugteam:** add sources.md; move Claude permission scripts under scripts/ ([#206](https://github.com/jl-cmd/claude-code-config/issues/206)) ([9b8d865](https://github.com/jl-cmd/claude-code-config/commit/9b8d865909bc6ba2a6d288082c517bda04dcd0f4))
+* **bugteam:** concise SKILL, reference/, sources, eval citations ([#207](https://github.com/jl-cmd/claude-code-config/issues/207)) ([819dafa](https://github.com/jl-cmd/claude-code-config/commit/819dafa920a20b361f8e9125fbf2bcbf54aef490))
+
 ## [1.26.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.0...claude-dev-env-v1.26.1) (2026-04-19)
 
 
