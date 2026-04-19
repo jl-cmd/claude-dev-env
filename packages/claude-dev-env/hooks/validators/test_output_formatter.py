@@ -1,6 +1,7 @@
 """Tests for output formatting."""
 
 import os
+import sys
 
 import pytest
 
@@ -95,11 +96,15 @@ class TestJsonFlag:
         import json
         import subprocess
 
+        validators_directory = os.path.dirname(os.path.abspath(__file__))
+        hooks_directory = os.path.normpath(
+            os.path.join(validators_directory, os.pardir)
+        )
         result = subprocess.run(
-            ["python", "run_all_validators.py", "--json"],
+            [sys.executable, "-m", "validators.run_all_validators", "--json"],
             capture_output=True,
             text=True,
-            cwd=os.path.dirname(os.path.abspath(__file__)),
+            cwd=hooks_directory,
         )
 
         output = result.stdout.strip()

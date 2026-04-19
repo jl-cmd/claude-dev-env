@@ -13,27 +13,11 @@ import os
 import stat
 import sys
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import NoReturn
 
 
 TEXT_FILE_ENCODING: str = "utf-8"
-GLOB_METACHARACTERS_IN_PATH: tuple[str, ...] = (
-    "*",
-    "?",
-    "[",
-    "]",
-    "(",
-    ")",
-    "{",
-    "}",
-    ",",
-)
-
-JSON_INDENT_SPACES: int = 2
 PERMISSION_ALLOW_TOOLS: tuple[str, ...] = ("Edit", "Write", "Read")
-
-DEFAULT_SETTINGS_FILE_MODE: int = 0o600
-ATOMIC_WRITE_TEMPORARY_SUFFIX: str = ".tmp"
 
 AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE: str = (
     "Trusted local workspace: {project_path}/.claude/** is the user's "
@@ -47,9 +31,20 @@ def exit_with_error(message: str) -> NoReturn:
 
 
 def path_contains_glob_metacharacters(candidate_path: str) -> bool:
+    glob_metacharacters_in_path: tuple[str, ...] = (
+        "*",
+        "?",
+        "[",
+        "]",
+        "(",
+        ")",
+        "{",
+        "}",
+        ",",
+    )
     return any(
         each_character in candidate_path
-        for each_character in GLOB_METACHARACTERS_IN_PATH
+        for each_character in glob_metacharacters_in_path
     )
 
 
@@ -76,10 +71,10 @@ def build_permission_rules(
     ]
 
 
-def load_settings(settings_path: Path) -> dict[str, Any]:
+def load_settings(settings_path: Path) -> dict[str, object]:
     if not settings_path.exists():
         return {}
-    parsed_settings: dict[str, Any] = {}
+    parsed_settings: dict[str, object] = {}
     try:
         raw_text = settings_path.read_text(encoding=TEXT_FILE_ENCODING)
     except OSError as read_error:
@@ -100,11 +95,21 @@ def load_settings(settings_path: Path) -> dict[str, Any]:
     return parsed_settings
 
 
+def serialize_settings_to_json_text(settings: dict[str, object]) -> str:
+    json_indent_width_columns: int = len("  ")
+    return json.dumps(
+        settings,
+        indent=json_indent_width_columns,
+        sort_keys=True,
+    )
+
+
 def get_mode_to_preserve(settings_path: Path) -> int:
+    default_settings_file_mode: int = 0o600
     try:
         stat_result = os.stat(settings_path)
     except FileNotFoundError:
-        return DEFAULT_SETTINGS_FILE_MODE
+        return default_settings_file_mode
     except OSError as stat_error:
         exit_with_error(f"Failed to stat {settings_path}: {stat_error}")
     return stat.S_IMODE(stat_result.st_mode)
@@ -122,13 +127,12 @@ def write_atomically_with_mode(
         writer.write(serialized_content)
 
 
-def save_settings(settings_path: Path, settings: dict[str, Any]) -> None:
+def save_settings(settings_path: Path, settings: dict[str, object]) -> None:
+    atomic_write_temporary_suffix: str = ".tmp"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
-    serialized_settings = json.dumps(
-        settings, indent=JSON_INDENT_SPACES, sort_keys=True
-    )
+    serialized_settings = serialize_settings_to_json_text(settings)
     temporary_path = settings_path.with_suffix(
-        settings_path.suffix + ATOMIC_WRITE_TEMPORARY_SUFFIX
+        settings_path.suffix + atomic_write_temporary_suffix
     )
     mode_to_preserve = get_mode_to_preserve(settings_path)
     try:
@@ -149,7 +153,7 @@ def save_settings(settings_path: Path, settings: dict[str, Any]) -> None:
                 pass
 
 
-def append_if_missing(target_list: list[str], new_value: str) -> bool:
+def append_if_missing(target_list: list[object], new_value: str) -> bool:
     if new_value in target_list:
         return False
     target_list.append(new_value)
@@ -157,8 +161,8 @@ def append_if_missing(target_list: list[str], new_value: str) -> bool:
 
 
 def ensure_dict_section(
-    settings: dict[str, Any], section_name: str
-) -> dict[str, Any]:
+    settings: dict[str, object], section_name: str
+) -> dict[str, object]:
     """Return an existing dict section or create an empty one if absent.
 
     A missing key and an explicit JSON null are treated identically: both
@@ -168,7 +172,7 @@ def ensure_dict_section(
     """
     existing_section = settings.get(section_name)
     if existing_section is None:
-        replacement_section: dict[str, Any] = {}
+        replacement_section: dict[str, object] = {}
         settings[section_name] = replacement_section
         return replacement_section
     if not isinstance(existing_section, dict):
@@ -180,7 +184,7 @@ def ensure_dict_section(
     return existing_section
 
 
-def ensure_list_entry(section: dict[str, Any], entry_name: str) -> list[Any]:
+def ensure_list_entry(section: dict[str, object], entry_name: str) -> list[object]:
     """Return an existing list entry or create an empty one if absent.
 
     A missing key and an explicit JSON null are treated identically: both
@@ -190,7 +194,7 @@ def ensure_list_entry(section: dict[str, Any], entry_name: str) -> list[Any]:
     """
     existing_entry = section.get(entry_name)
     if existing_entry is None:
-        replacement_entry: list[Any] = []
+        replacement_entry: list[object] = []
         section[entry_name] = replacement_entry
         return replacement_entry
     if not isinstance(existing_entry, list):
@@ -203,7 +207,7 @@ def ensure_list_entry(section: dict[str, Any], entry_name: str) -> list[Any]:
 
 
 def prune_empty_list_then_empty_section(
-    settings: dict[str, Any], section_key: str, list_key: str
+    settings: dict[str, object], section_key: str, list_key: str
 ) -> None:
     section = settings.get(section_key)
     if not isinstance(section, dict):

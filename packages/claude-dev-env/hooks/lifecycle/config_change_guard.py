@@ -69,6 +69,7 @@ def guard_hook_injection(file_path: str) -> None:
             "reason": block_reason,
         }
         print(json.dumps(block_payload))
+        return
 
     try:
         with open(known_hook_count_file, "w") as count_file:

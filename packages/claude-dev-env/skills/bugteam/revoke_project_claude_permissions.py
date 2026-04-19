@@ -9,7 +9,6 @@ autoMode sections so repeated grant/revoke cycles leave no dead structure.
 
 import sys
 from pathlib import Path
-from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -25,25 +24,24 @@ from _claude_permissions_common import (  # noqa: E402
 )
 
 
-CLAUDE_USER_SETTINGS_PATH: Path = Path.home() / ".claude" / "settings.json"
-
-
 def is_valid_project_root(candidate_path: Path) -> bool:
     git_marker_path = candidate_path / ".git"
     claude_marker_path = candidate_path / ".claude"
     return git_marker_path.exists() or claude_marker_path.exists()
 
 
-def remove_values_from_list(target_list: list[str], values_to_remove: set[str]) -> int:
+def remove_values_from_list(target_list: list[object], values_to_remove: set[str]) -> int:
     original_length = len(target_list)
     target_list[:] = [
-        each_value for each_value in target_list if each_value not in values_to_remove
+        each_value
+        for each_value in target_list
+        if not (isinstance(each_value, str) and each_value in values_to_remove)
     ]
     return original_length - len(target_list)
 
 
 def remove_rules_from_allow_list(
-    settings: dict[str, Any], rules_to_remove: list[str]
+    settings: dict[str, object], rules_to_remove: list[str]
 ) -> int:
     permissions_section = settings.get("permissions")
     if not isinstance(permissions_section, dict):
@@ -55,7 +53,7 @@ def remove_rules_from_allow_list(
 
 
 def remove_directory_from_additional_directories(
-    settings: dict[str, Any], directory_path: str
+    settings: dict[str, object], directory_path: str
 ) -> int:
     permissions_section = settings.get("permissions")
     if not isinstance(permissions_section, dict):
@@ -67,7 +65,7 @@ def remove_directory_from_additional_directories(
 
 
 def remove_auto_mode_environment_entry(
-    settings: dict[str, Any], entry_text: str
+    settings: dict[str, object], entry_text: str
 ) -> int:
     auto_mode_section = settings.get("autoMode")
     if not isinstance(auto_mode_section, dict):
@@ -78,7 +76,7 @@ def remove_auto_mode_environment_entry(
     return remove_values_from_list(existing_environment, {entry_text})
 
 
-def prune_settings_after_revoke(settings: dict[str, Any]) -> None:
+def prune_settings_after_revoke(settings: dict[str, object]) -> None:
     prune_empty_list_then_empty_section(settings, "permissions", "allow")
     prune_empty_list_then_empty_section(
         settings, "permissions", "additionalDirectories"
@@ -87,6 +85,7 @@ def prune_settings_after_revoke(settings: dict[str, Any]) -> None:
 
 
 def revoke_permissions_for_current_directory() -> None:
+    claude_user_settings_path: Path = Path.home() / ".claude" / "settings.json"
     project_root_path = Path.cwd()
     if not is_valid_project_root(project_root_path):
         print(
@@ -100,7 +99,7 @@ def revoke_permissions_for_current_directory() -> None:
     environment_entry = AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE.format(
         project_path=project_path
     )
-    settings = load_settings(CLAUDE_USER_SETTINGS_PATH)
+    settings = load_settings(claude_user_settings_path)
     rules_removed_count = remove_rules_from_allow_list(settings, permission_rules)
     directories_removed_count = remove_directory_from_additional_directories(
         settings, project_path
@@ -115,13 +114,13 @@ def revoke_permissions_for_current_directory() -> None:
     )
     if total_changes_count == 0:
         print(f"Project path: {project_path}")
-        print(f"Settings file: {CLAUDE_USER_SETTINGS_PATH}")
+        print(f"Settings file: {claude_user_settings_path}")
         print("No changes to revoke; settings file left untouched.")
         return
     prune_settings_after_revoke(settings)
-    save_settings(CLAUDE_USER_SETTINGS_PATH, settings)
+    save_settings(claude_user_settings_path, settings)
     print(f"Project path: {project_path}")
-    print(f"Settings file: {CLAUDE_USER_SETTINGS_PATH}")
+    print(f"Settings file: {claude_user_settings_path}")
     print(f"Allow rules removed: {rules_removed_count} of {len(permission_rules)}")
     print(f"Additional directories removed: {directories_removed_count}")
     print(

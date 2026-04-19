@@ -6,7 +6,10 @@ import sys
 from dataclasses import dataclass
 from typing import List
 
-from .config import DEFAULT_BASE_BRANCH_WHEN_UNKNOWN
+try:
+    from .validator_defaults import DEFAULT_BASE_BRANCH_WHEN_UNKNOWN
+except ImportError:
+    from validator_defaults import DEFAULT_BASE_BRANCH_WHEN_UNKNOWN
 
 
 SUBPROCESS_TIMEOUT_SECONDS = 30

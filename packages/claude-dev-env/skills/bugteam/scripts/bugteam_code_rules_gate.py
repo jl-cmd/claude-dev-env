@@ -46,6 +46,8 @@ def resolve_merge_base(repository_root: Path, base_reference: str) -> str:
         cwd=str(repository_root),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if merge_result.returncode != 0:
@@ -58,6 +60,35 @@ def resolve_merge_base(repository_root: Path, base_reference: str) -> str:
     return merge_result.stdout.strip()
 
 
+def filter_paths_under_prefixes(
+    file_paths: list[Path],
+    repository_root: Path,
+    prefix_list: list[str],
+) -> list[Path]:
+    if not prefix_list:
+        return file_paths
+    normalized_prefixes = [
+        each.strip().replace("\\", "/").rstrip("/")
+        for each in prefix_list
+        if each.strip()
+    ]
+    if not normalized_prefixes:
+        return file_paths
+    resolved_root = repository_root.resolve()
+    filtered: list[Path] = []
+    for each_path in file_paths:
+        try:
+            relative_posix = each_path.resolve().relative_to(resolved_root).as_posix()
+        except ValueError:
+            continue
+        if any(
+            relative_posix == prefix or relative_posix.startswith(prefix + "/")
+            for prefix in normalized_prefixes
+        ):
+            filtered.append(each_path)
+    return filtered
+
+
 def paths_from_git_diff(repository_root: Path, base_reference: str) -> list[Path]:
     merge_base = resolve_merge_base(repository_root, base_reference)
     name_result = subprocess.run(
@@ -65,6 +96,8 @@ def paths_from_git_diff(repository_root: Path, base_reference: str) -> list[Path
         cwd=str(repository_root),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if name_result.returncode != 0:
@@ -109,6 +142,8 @@ def is_file_new_at_base(
         cwd=str(repository_root),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     return cat_result.returncode != 0
@@ -124,6 +159,8 @@ def added_lines_for_file(
         cwd=str(repository_root),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if diff_result.returncode != 0:
@@ -301,6 +338,17 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
         help="Merge-base ref for git diff (default: origin/main).",
     )
     parser.add_argument(
+        "--only-under",
+        action="append",
+        default=[],
+        dest="only_under",
+        metavar="PREFIX",
+        help=(
+            "After resolving the merge-base diff, keep only files whose repo-relative path "
+            "uses POSIX slashes and starts with PREFIX or equals PREFIX (repeatable)."
+        ),
+    )
+    parser.add_argument(
         "paths",
         nargs="*",
         type=Path,
@@ -321,6 +369,13 @@ def main(argv: list[str] | None = None) -> int:
         file_paths = [repository_root / path for path in arguments.paths]
         return run_gate(validate_content, file_paths, repository_root, added_lines_map=None)
     file_paths = paths_from_git_diff(repository_root, arguments.base)
+    file_paths = filter_paths_under_prefixes(
+        file_paths,
+        repository_root,
+        arguments.only_under,
+    )
+    if not file_paths:
+        return 0
     scoped_added_lines = added_lines_by_file(repository_root, arguments.base, file_paths)
     return run_gate(
         validate_content,

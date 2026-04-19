@@ -8,7 +8,6 @@ the changes applied. No-op when the entries already exist.
 
 import sys
 from pathlib import Path
-from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -26,16 +25,13 @@ from _claude_permissions_common import (  # noqa: E402
 )
 
 
-CLAUDE_USER_SETTINGS_PATH: Path = Path.home() / ".claude" / "settings.json"
-
-
 def is_valid_project_root(candidate_path: Path) -> bool:
     git_marker_path = candidate_path / ".git"
     claude_marker_path = candidate_path / ".claude"
     return git_marker_path.exists() or claude_marker_path.exists()
 
 
-def add_rules_to_allow_list(settings: dict[str, Any], rules_to_add: list[str]) -> int:
+def add_rules_to_allow_list(settings: dict[str, object], rules_to_add: list[str]) -> int:
     permissions_section = ensure_dict_section(settings, "permissions")
     existing_allow_list = ensure_list_entry(permissions_section, "allow")
     return sum(
@@ -46,7 +42,7 @@ def add_rules_to_allow_list(settings: dict[str, Any], rules_to_add: list[str]) -
 
 
 def add_directory_to_additional_directories(
-    settings: dict[str, Any], directory_path: str
+    settings: dict[str, object], directory_path: str
 ) -> int:
     permissions_section = ensure_dict_section(settings, "permissions")
     existing_directories = ensure_list_entry(
@@ -57,7 +53,9 @@ def add_directory_to_additional_directories(
     return 0
 
 
-def add_auto_mode_environment_entry(settings: dict[str, Any], entry_text: str) -> int:
+def add_auto_mode_environment_entry(
+    settings: dict[str, object], entry_text: str
+) -> int:
     auto_mode_section = ensure_dict_section(settings, "autoMode")
     existing_environment = ensure_list_entry(auto_mode_section, "environment")
     if append_if_missing(existing_environment, entry_text):
@@ -66,6 +64,7 @@ def add_auto_mode_environment_entry(settings: dict[str, Any], entry_text: str) -
 
 
 def grant_permissions_for_current_directory() -> None:
+    claude_user_settings_path: Path = Path.home() / ".claude" / "settings.json"
     project_root_path = Path.cwd()
     if not is_valid_project_root(project_root_path):
         print(
@@ -79,7 +78,7 @@ def grant_permissions_for_current_directory() -> None:
     environment_entry = AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE.format(
         project_path=project_path
     )
-    settings = load_settings(CLAUDE_USER_SETTINGS_PATH)
+    settings = load_settings(claude_user_settings_path)
     rules_added_count = add_rules_to_allow_list(settings, permission_rules)
     directories_added_count = add_directory_to_additional_directories(
         settings, project_path
@@ -92,12 +91,12 @@ def grant_permissions_for_current_directory() -> None:
     )
     if total_changes_count == 0:
         print(f"Project path: {project_path}")
-        print(f"Settings file: {CLAUDE_USER_SETTINGS_PATH}")
+        print(f"Settings file: {claude_user_settings_path}")
         print("No changes needed; settings file left untouched.")
         return
-    save_settings(CLAUDE_USER_SETTINGS_PATH, settings)
+    save_settings(claude_user_settings_path, settings)
     print(f"Project path: {project_path}")
-    print(f"Settings file: {CLAUDE_USER_SETTINGS_PATH}")
+    print(f"Settings file: {claude_user_settings_path}")
     print(f"Allow rules added: {rules_added_count} of {len(permission_rules)}")
     print(f"Additional directories added: {directories_added_count}")
     print(f"Auto-mode environment entries added: {environment_entries_added_count}")
