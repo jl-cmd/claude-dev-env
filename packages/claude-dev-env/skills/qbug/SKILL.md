@@ -94,6 +94,7 @@ Then call `Agent`:
 ```
 Agent(
   subagent_type="clean-coder",
+  model="sonnet",
   description="qbug audit/fix cycle for PR <number>",
   prompt="<filled cycle XML; see § Subagent cycle prompt>",
   run_in_background=False
