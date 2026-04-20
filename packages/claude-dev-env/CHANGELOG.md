@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.27.0...claude-dev-env-v1.28.0) (2026-04-20)
+
+
+### Features
+
+* **skills:** add /qbug — required-baseline single-subagent PR review ([#223](https://github.com/jl-cmd/claude-code-config/issues/223)) ([712876b](https://github.com/jl-cmd/claude-code-config/commit/712876b2f44fcc4ec1a56aa2a4f52063dbd7a4c2))
+
 ## [1.27.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.5...claude-dev-env-v1.27.0) (2026-04-20)
 
 
