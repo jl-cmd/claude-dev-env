@@ -6,11 +6,18 @@ Blocks writes to production source files when no matching test exists
 or the matching test has not been modified within the configured
 freshness window. Enforces "TDD IS NON-NEGOTIABLE" from CLAUDE.md.
 """
+import ast
 import json
 import re
 import sys
 import time
 from pathlib import Path
+
+_hooks_root_path_string = str(Path(__file__).resolve().parent.parent)
+if _hooks_root_path_string not in sys.path:
+    sys.path.insert(0, _hooks_root_path_string)
+
+from config.messages import USER_FACING_TDD_NOTICE
 
 PRODUCTION_EXTENSIONS = {'.py', '.ts', '.tsx', '.js', '.jsx'}
 SKIP_PATTERNS = {
@@ -33,8 +40,41 @@ def _freshness_seconds() -> int:
     return 600
 
 
-def _bypass_sentinel() -> str:
-    return "# pragma: no-tdd-gate"
+def _constants_only_allowed_node_types() -> tuple[type, ...]:
+    return (
+        ast.Import,
+        ast.ImportFrom,
+        ast.Assign,
+        ast.AnnAssign,
+    )
+
+
+def _is_module_docstring_expression(module_level_node: ast.stmt) -> bool:
+    if not isinstance(module_level_node, ast.Expr):
+        return False
+    expression_value = module_level_node.value
+    if not isinstance(expression_value, ast.Constant):
+        return False
+    return isinstance(expression_value.value, str)
+
+
+def _is_constants_only_python_content(content: str) -> bool:
+    if not content.strip():
+        return False
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return False
+    if not parsed_tree.body:
+        return False
+    allowed_node_types = _constants_only_allowed_node_types()
+    for each_top_level_node in parsed_tree.body:
+        if isinstance(each_top_level_node, allowed_node_types):
+            continue
+        if _is_module_docstring_expression(each_top_level_node):
+            continue
+        return False
+    return True
 
 
 def _tests_directory_name() -> str:
@@ -154,13 +194,17 @@ def has_fresh_test(
 
 def build_deny_reason(production_path: Path, all_candidates: list[Path]) -> str:
     candidate_lines = "\n".join(f"  - {each_path}" for each_path in all_candidates)
+    hook_source_path = Path(__file__).resolve()
     return (
         f"[TDD] Blocking write to production file: {production_path}\n"
         f"No matching test file exists, or it has not been modified within the last "
         f"{_freshness_seconds()} seconds.\n"
         f"Expected one of:\n{candidate_lines}\n"
-        f"Write a failing test first (RED), then the minimum code to pass it (GREEN).\n"
-        f"Bypass (discouraged): include the sentinel '{_bypass_sentinel()}' in the file content."
+        f"Write a failing test first (RED), then the minimum code to pass it (GREEN).\n\n"
+        f"If this file legitimately does not need a test (for example, a module containing only "
+        f"module-level constants with no behavior), that is a hook enhancement, not a bypass. "
+        f"Propose an exemption rule in {hook_source_path} so every similar file benefits "
+        f"automatically. Do not add escape-hatch markers to production files."
     )
 
 
@@ -180,7 +224,9 @@ def emit_deny(reason: str) -> None:
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
             "permissionDecisionReason": reason,
-        }
+        },
+        "suppressOutput": True,
+        "systemMessage": USER_FACING_TDD_NOTICE,
     }
     print(json.dumps(deny_payload))
 
@@ -252,7 +298,7 @@ def main() -> None:
 
     # Block production code - require confirmation
     written_content = _extract_written_content(tool_name, tool_input)
-    if _bypass_sentinel() in written_content:
+    if tool_name == "Write" and ext == ".py" and _is_constants_only_python_content(written_content):
         emit_allow()
         sys.exit(0)
 
