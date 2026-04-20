@@ -11,6 +11,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "config"))
+from messages import USER_FACING_NOTICE
+
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 RESEARCH_MODE_SKILL_SEARCH_PATHS = [
@@ -99,14 +102,19 @@ def main() -> None:
 
     formatted_term_list = ", ".join(f'"{term}"' for term in found_hedging_terms)
 
-    research_mode_content = "(Could not load research-mode skill file)"
+    resolved_skill_path: str | None = None
     for each_skill_path in RESEARCH_MODE_SKILL_SEARCH_PATHS:
-        try:
-            with open(each_skill_path, encoding="utf-8") as skill_file:
-                research_mode_content = skill_file.read()
-                break
-        except OSError:
-            continue
+        if os.path.exists(each_skill_path):
+            resolved_skill_path = each_skill_path
+            break
+
+    if resolved_skill_path is not None:
+        skill_reference = f"under the research-mode constraints defined in:\n\n{resolved_skill_path}"
+    else:
+        skill_reference = (
+            "under research-mode constraints "
+            "(no research-mode skill installed; verify with sources or reply 'I don't know')"
+        )
 
     block_response = {
         "decision": "block",
@@ -114,12 +122,13 @@ def main() -> None:
             f"ANTI-HALLUCINATION GUARDRAIL: Your response contains hedging language: "
             f"{formatted_term_list}. "
             f"These words signal unverified claims. You MUST rewrite your response "
-            f"with these constraints active:\n\n"
-            f"{research_mode_content}\n\n"
+            f"{skill_reference}\n\n"
             f"Do NOT simply remove the hedging word and keep the unverified claim. "
             f"Either VERIFY it with a source or replace it with 'I don't know'.\n\n"
             f"You MUST re-output the complete, revised response with the corrections applied."
         ),
+        "systemMessage": USER_FACING_NOTICE,
+        "suppressOutput": True,
     }
 
     print(json.dumps(block_response))
