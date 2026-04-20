@@ -11,10 +11,14 @@ Keep the spawn prompt self-contained: reference only the PR scope, audit rubric,
   <base_branch>base ref</base_branch>
   <pr_url>full URL</pr_url>
   <loop>N</loop>
+  <pr_number>N</pr_number>
+  <worktree_path>absolute path from Step 1 per-PR workspace</worktree_path>
 </context>
 
+cd into `<worktree_path>` before any git, gh, or file operation.
+
 <scope>
-  <diff_path>Absolute path to the loop-N patch file under team_temp_dir from Step 2 (same path as gh pr diff redirect in AUDIT)</diff_path>
+  <diff_path>Absolute path to the per-PR patch file: <team_temp_dir>/pr-<N>/loop-<L>.patch (same path as gh pr diff redirect in AUDIT)</diff_path>
   <scope_rule>Audit only lines added or modified in the diff. Pre-existing code on untouched lines is out of scope.</scope_rule>
 </scope>
 
@@ -72,8 +76,8 @@ Keep the spawn prompt self-contained: reference only the PR scope, audit rubric,
 </comment_posting>
 
 <output_format>
-  Write the outcome XML below to .bugteam-loop-N.outcomes.xml in the
-  working directory. Return only that path on stdout. The schema:
+  Write the outcome XML below to .bugteam-pr<N>-loop<L>.outcomes.xml inside
+  the PR's worktree directory (<worktree_path>). Return only that path on stdout. The schema:
 </output_format>
 ```
 
@@ -100,7 +104,7 @@ Keep the spawn prompt self-contained: reference only the PR scope, audit rubric,
 </bugteam_audit>
 ```
 
-After the teammate writes the XML and returns, the lead reads `.bugteam-loop-<N>.outcomes.xml` with the `Read` tool, parses it, and populates `loop_comment_index` from `<finding>` elements.
+After the teammate writes the XML and returns, the lead reads `.bugteam-pr<N>-loop<L>.outcomes.xml` from the PR's worktree directory with the `Read` tool, parses it, and populates `loop_comment_index` from `<finding>` elements.
 
 ## FIX spawn-prompt XML (bugfix teammate)
 
@@ -111,7 +115,11 @@ After the teammate writes the XML and returns, the lead reads `.bugteam-loop-<N>
   <base_branch>base</base_branch>
   <pr_url>url</pr_url>
   <loop>N</loop>
+  <pr_number>N</pr_number>
+  <worktree_path>absolute path from Step 1 per-PR workspace</worktree_path>
 </context>
+
+cd into `<worktree_path>` before any git, gh, or file operation.
 
 <bugs_to_fix>
   [for each P0/P1/P2 finding from last_findings:]
@@ -144,7 +152,7 @@ After the teammate writes the XML and returns, the lead reads `.bugteam-loop-<N>
      - "Could not address this loop: <one-line reason>" if you skipped or failed it
      - "Hook blocked the fix commit: <one-line summary>" if the commit was hook-blocked
      Use the Fix reply CLI shape from Step 2.5 (`jq -Rs | gh api .../comments/<id>/replies --input -`). Write every reply body to a temp file first.
-  7. Write `.bugteam-loop-<N>.outcomes.xml` (schema below) and return its path.
+  7. Write `.bugteam-pr<N>-loop<L>.outcomes.xml` inside `<worktree_path>` (schema below) and return its path.
 </execution>
 
 <outcome_xml_schema>

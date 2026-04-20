@@ -51,6 +51,7 @@ Refusals — first match wins; respond with the quoted line exactly and stop:
 - **No PR or upstream diff.** `No PR or upstream diff. /bugteam needs a target.`
 - **Dirty tree.** `Uncommitted changes detected. Stash, commit, or revert before /bugteam.`
 - **Missing subagents.** Before Step 0, confirm `code-quality-agent` and `clean-coder` exist. Else: `Required subagent type <name> not installed. /bugteam needs both code-quality-agent and clean-coder available.`
+- **Lead role must be held by the orchestrator.** Run /bugteam in the session that received the user's command. The orchestrator session calls TeamCreate directly. Runtime confirms a single lead per team: `Already leading team "<name>". A leader can only manage one team at a time.`
 
 ## Utility scripts
 
@@ -89,17 +90,23 @@ python "${CLAUDE_SKILL_DIR}/scripts/grant_project_claude_permissions.py"
 
 ### Step 1: Resolve PR scope (once)
 
-Same as `/findbugs`:
-
-1. `gh pr view --json number,baseRefName,headRefName,url`
-2. Else `git merge-base HEAD origin/<default>` then `git diff <merge-base>...HEAD`
-3. Else refuse above.
+Accept one or more PR numbers from the invocation. For each PR, run `gh pr view --json number,baseRefName,headRefName,url` (falling back to the merge-base diff path when no PR exists). Capture `all_prs = [{number, owner, repo, baseRef, headRef, url}, ...]`. A single-PR invocation produces a one-element list and follows the same downstream rules.
 
 Keep: owner/repo, branches, PR number, URL — for all loops.
 
+#### Per-PR workspace
+
+For each PR in all_prs:
+
+1. Create `<team_temp_dir>/pr-<N>/`.
+2. Run `git worktree add "<team_temp_dir>/pr-<N>/worktree" origin/<headRef>`.
+3. Record the absolute worktree path alongside the PR's other fields.
+
+Teammates spawned for a PR operate inside that PR's worktree. Step 4 teardown runs `git worktree remove "<team_temp_dir>/pr-<N>/worktree"` for each PR before `TeamDelete`.
+
 ### Step 2: Create the agent team
 
-Lead calls `TeamCreate`:
+**This session is the lead.** The orchestrator calls `TeamCreate` directly:
 
 ```
 TeamCreate(
@@ -109,7 +116,7 @@ TeamCreate(
 )
 ```
 
-**Team name:** `bugteam-pr-<number>-<YYYYMMDDHHMMSS>` or `bugteam-<sanitized-head>-<YYYYMMDDHHMMSS>` if no PR. Timestamp avoids collisions. `TeamCreate` implements natural-language team creation ([`sources.md`](sources.md) § Team creation in natural language).
+**Team name:** For a single-PR invocation use `bugteam-pr-<number>-<YYYYMMDDHHMMSS>`. For a multi-PR invocation use `bugteam-<YYYYMMDDHHMMSS>`. The timestamp is captured once at team-creation time. Apply the no-PR fallback (`bugteam-<sanitized-head>-<YYYYMMDDHHMMSS>`) only when no PR resolves at all. `TeamCreate` implements natural-language team creation ([`sources.md`](sources.md) § Team creation in natural language).
 
 **Sanitize head branch (no-PR only):** replace characters outside `[A-Za-z0-9._-]` with `-` (e.g. `feat/foo*bar` → `feat-foo-bar`). Apply once; reuse everywhere below.
 
@@ -186,7 +193,9 @@ jq -n \
 
 ### Step 3: The cycle
 
-Repeat until exit. **Gate:** `validate_content` / `hooks/blocking/code_rules_enforcer.py` on PR-scoped files before every AUDIT (`bugteam_code_rules_gate.py`). Lead runs gate; clean-coder clears failures; then bugfind audits.
+Run the AUDIT-FIX cycle for each PR in all_prs, reusing the same team across PRs. The 10-loop cap applies per PR. Exit reasons (converged, cap reached, stuck, error) are tracked per PR; the final report lists one outcome line per PR.
+
+**Gate:** `validate_content` / `hooks/blocking/code_rules_enforcer.py` on PR-scoped files before every AUDIT (`bugteam_code_rules_gate.py`). Lead runs gate; clean-coder clears failures; then bugfind audits.
 
 1. From `last_action` / `last_findings`:
    - `last_action == "audited"` and `last_findings.total == 0` → exit `converged`
@@ -213,29 +222,29 @@ First pass: pre-audit → AUDIT. After a FIX, the next pass runs pre-audit again
 ### AUDIT action
 
 ```bash
-mkdir -p "<team_temp_dir>"
-gh pr diff <number> -R <owner>/<repo> > "<team_temp_dir>/loop-<N>.patch"
+mkdir -p "<team_temp_dir>/pr-<N>"
+gh pr diff <N> -R <owner>/<repo> > "<team_temp_dir>/pr-<N>/loop-<L>.patch"
 ```
 
 ```
 Agent(
   subagent_type="code-quality-agent",
-  name="bugfind",
+  name="bugfind-pr<N>-loop<L>",
   team_name="<team_name>",
   model="sonnet",
-  description="Bugfind audit loop <N>",
+  description="Bugfind audit PR <N> loop <L>",
   prompt="<audit XML; see PROMPTS.md>"
 )
 ```
 
-Fresh `Agent` each loop; teammate context excludes lead history ([`sources.md`](sources.md) § Teammate context isolation). [`PROMPTS.md`](PROMPTS.md): XML + outcome schema. Lead reads `.bugteam-loop-<N>.outcomes.xml`, fills `loop_comment_index`.
+Fresh `Agent` each loop; teammate context excludes lead history ([`sources.md`](sources.md) § Teammate context isolation). [`PROMPTS.md`](PROMPTS.md): XML + outcome schema. Lead reads `.bugteam-pr<N>-loop<L>.outcomes.xml`, fills `loop_comment_index`.
 
 **Shutdown:** If `Agent` returned and the teammate already ended, skip. Otherwise:
 
 ```
 SendMessage(
-  to="bugfind",
-  message={"type": "shutdown_request", "reason": "audit loop <N> complete; outcome XML captured"}
+  to="bugfind-pr<N>-loop<L>",
+  message={"type": "shutdown_request", "reason": "audit PR <N> loop <L> complete; outcome XML captured"}
 )
 ```
 
@@ -243,24 +252,24 @@ SendMessage(
 
 `last_action = "audited"`; append audit line to `audit_log`.
 
-**Parallel auditors (`loop_count >= 4`):** gate passes immediately before; after three full audit/fix rounds without convergence, issue three `Agent` calls in one assistant message (parallel). `-a` posts the review and merges outcomes from `-b`/`-c` (read `.bugteam-loop-<N>.outcomes.xml` plus `<team_temp_dir>/loop-<N>-b.outcomes.xml` and `...-c...`); merge key `(file, line, category_letter)`; re-id `loopN-K`. `-b`/`-c` write sibling XML only; prompts must pass literal absolute sibling paths. Shutdown: parallel `SendMessage` to `b` and `c`, then `a`.
+**Parallel auditors (`loop_count >= 4`):** gate passes immediately before; after three full audit/fix rounds without convergence, issue three `Agent` calls in one assistant message (parallel). `-a` posts the review and merges outcomes from `-b`/`-c` (read `.bugteam-pr<N>-loop<L>.outcomes.xml` plus `<team_temp_dir>/pr-<N>/loop-<L>-b.outcomes.xml` and `...-c...`); merge key `(file, line, category_letter)`; re-id `loopN-K`. `-b`/`-c` write sibling XML only; prompts must pass literal absolute sibling paths. Shutdown: parallel `SendMessage` to `b` and `c`, then `a`.
 
 ### FIX action
 
 ```
 Agent(
   subagent_type="clean-coder",
-  name="bugfix",
+  name="bugfix-pr<N>-loop<L>",
   team_name="<team_name>",
   model="sonnet",
-  description="Bugfix loop <N>",
+  description="Bugfix PR <N> loop <L>",
   prompt="<fix XML; see PROMPTS.md>"
 )
 ```
 
 Pass finding comment URLs/ids from `loop_comment_index` in XML. Replies: `Fixed in <sha>` or `Could not address this loop: <reason>`.
 
-**Shutdown:** same as bugfind; else `SendMessage(to="bugfix", message={"type": "shutdown_request", "reason": "fix loop <N> complete; commit <sha7> pushed"})`. `approve: false` → `error: bugfix teammate refused shutdown` → Step 4 then 5.
+**Shutdown:** same as bugfind; else `SendMessage(to="bugfix-pr<N>-loop<L>", message={"type": "shutdown_request", "reason": "fix PR <N> loop <L> complete; commit <sha7> pushed"})`. `approve: false` → `error: bugfix teammate refused shutdown` → Step 4 then 5.
 
 [`PROMPTS.md`](PROMPTS.md): fix XML + schema. Verify: `git rev-parse HEAD` advanced; `git fetch origin <branch> && git rev-parse origin/<branch>` matches `HEAD`. Unchanged HEAD → `stuck — bugfix teammate could not address findings`.
 
