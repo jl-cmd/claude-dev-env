@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.5](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.4...claude-dev-env-v1.26.5) (2026-04-20)
+
+
+### Bug Fixes
+
+* **hedging-hook:** suppress skill dump from user chat output ([#215](https://github.com/jl-cmd/claude-code-config/issues/215)) ([cb31d66](https://github.com/jl-cmd/claude-code-config/commit/cb31d668495bb3cf9172886bd276b290e1ace9e9))
+
 ## [1.26.4](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.3...claude-dev-env-v1.26.4) (2026-04-20)
 
 
