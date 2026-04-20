@@ -6,6 +6,9 @@
     "bin": {
         "claude-dev-env": "bin/install.mjs"
     },
+    "scripts": {
+        "test": "node --test bin/*.test.mjs"
+    },
     "files": [
         "bin/",
         "rules/",

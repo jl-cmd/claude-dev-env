@@ -3,9 +3,10 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync } from 'node:fs';
 import { join, dirname, resolve, relative } from 'node:path';
 import { homedir } from 'node:os';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { installAllGitHooks } from './git_hooks_installer.mjs';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -355,6 +356,27 @@ function install(selectedGroups) {
         console.log(`  Hook files: ${totalHooksCreated} new, ${totalHooksUpdated} updated`);
         summary.hookGroups = totalHookGroups;
         console.log(`  Hook groups: ${totalHookGroups} merged into settings.json`);
+
+        console.warn(
+            '  Warning: git hook installation sets core.hooksPath globally — '
+            + 'the hook will run in every git repo on this machine.',
+        );
+        const gitHookInstallationResult = installAllGitHooks({ claudeHomeDirectory: CLAUDE_HOME });
+        summary.gitHooks = {
+            shimPaths: gitHookInstallationResult.createdShimPaths,
+            hooksPathConfiguration: gitHookInstallationResult.hooksPathConfigurationResult,
+        };
+        const hooksPathConfigurationAction = gitHookInstallationResult.hooksPathConfigurationResult.action;
+        if (hooksPathConfigurationAction === 'set') {
+            allInstalledFiles.push(...gitHookInstallationResult.createdShimPaths);
+            console.log(`  Git hooks: configured core.hooksPath -> ${gitHookInstallationResult.gitHooksDirectory}`);
+        } else if (hooksPathConfigurationAction === 'already-set') {
+            allInstalledFiles.push(...gitHookInstallationResult.createdShimPaths);
+            console.log('  Git hooks: core.hooksPath already points to claude-dev-env, no change');
+        } else {
+            console.warn(`  Git hooks: ${gitHookInstallationResult.hooksPathConfigurationResult.reason}`);
+        }
+        console.log(`  Git hook shims: ${gitHookInstallationResult.createdShimPaths.length} files (pre-commit, pre-push, post-commit)`);
     }
     const claudeHubSource = join(PACKAGE_ROOT, 'CLAUDE.md');
     if (existsSync(claudeHubSource)) {
@@ -386,6 +408,50 @@ function install(selectedGroups) {
     }
     console.log(`  python: ${pythonCommand}\n`);
 }
+
+function normalizePathForComparison(rawPath) {
+    return rawPath.trim().replaceAll('\\', '/');
+}
+
+
+function pathsAreEquivalent(storedPath, installedPath) {
+    const normalizedStored = normalizePathForComparison(storedPath);
+    const normalizedInstalled = normalizePathForComparison(installedPath);
+    if (normalizedStored === normalizedInstalled) {
+        return true;
+    }
+    const isMaybeCaseInsensitive = process.platform === 'win32' || process.platform === 'darwin';
+    return isMaybeCaseInsensitive && normalizedStored.toLowerCase() === normalizedInstalled.toLowerCase();
+}
+
+
+function unsetGlobalGitHooksPathIfOurs() {
+    const installedGitHooksDirectory = join(CLAUDE_HOME, 'hooks', 'git-hooks');
+    let currentHooksPath = '';
+    try {
+        currentHooksPath = execFileSync('git', ['config', '--global', '--get', 'core.hooksPath'], {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+    } catch (gitReadError) {
+        if (gitReadError.status === 1) {
+            return;
+        }
+        const stderrDetail = gitReadError.stderr ? ` stderr: ${gitReadError.stderr.trim()}` : '';
+        console.warn(`  Git hooks: could not read core.hooksPath during uninstall (${gitReadError.message}${stderrDetail}) — hooks path may need manual cleanup`);
+        return;
+    }
+    if (!pathsAreEquivalent(currentHooksPath, installedGitHooksDirectory)) {
+        return;
+    }
+    try {
+        execFileSync('git', ['config', '--global', '--unset', 'core.hooksPath'], { stdio: 'ignore' });
+        console.log('  Git hooks: unset global core.hooksPath');
+    } catch (gitUnsetError) {
+        console.warn(`  Git hooks: could not unset core.hooksPath (${gitUnsetError.message})`);
+    }
+}
+
 
 function uninstall() {
     console.log(`\nUninstalling ${PACKAGE_NAME}...\n`);
@@ -421,6 +487,7 @@ function uninstall() {
             console.log('  Hook entries removed from settings.json');
         }
     }
+    unsetGlobalGitHooksPathIfOurs();
     unlinkSync(MANIFEST_FILE);
     for (const directory of [...CONTENT_DIRECTORIES, 'skills', 'hooks']) {
         const dirPath = join(CLAUDE_HOME, directory);
