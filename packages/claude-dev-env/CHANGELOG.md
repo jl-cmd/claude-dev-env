@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.26.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.2...claude-dev-env-v1.26.3) (2026-04-20)
+
+
+### Bug Fixes
+
+* **claude-dev-env:** record real package version in install manifest ([#210](https://github.com/jl-cmd/claude-code-config/issues/210)) ([3fb739c](https://github.com/jl-cmd/claude-code-config/commit/3fb739c8f0d32d493b8b9a69280f0843a43ab653))
+* **hooks:** remove 6 hook entries referencing scripts that are not in the package ([#212](https://github.com/jl-cmd/claude-code-config/issues/212)) ([1a16d33](https://github.com/jl-cmd/claude-code-config/commit/1a16d33f4140f485ff8efff4aef7a06af48c9001))
+
 ## [1.26.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.1...claude-dev-env-v1.26.2) (2026-04-19)
 
 
