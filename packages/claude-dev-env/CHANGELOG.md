@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.4](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.3...claude-dev-env-v1.26.4) (2026-04-20)
+
+
+### Bug Fixes
+
+* **bugteam:** orchestrator is lead; multi-PR supported via one team + per-PR worktrees ([#217](https://github.com/jl-cmd/claude-code-config/issues/217)) ([d1c9a03](https://github.com/jl-cmd/claude-code-config/commit/d1c9a03a18d1f1350c4497029e5e5d2b6fd96b8d))
+
 ## [1.26.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.2...claude-dev-env-v1.26.3) (2026-04-20)
 
 
