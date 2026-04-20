@@ -219,7 +219,10 @@ def test_read_body_file_rejects_relative_path_traversal(tmp_path) -> None:
     import os, pytest
     sentinel_file = tmp_path / 'secret.txt'
     sentinel_file.write_text('secret')
-    rel_path = os.path.relpath(str(sentinel_file))
+    try:
+        rel_path = os.path.relpath(str(sentinel_file))
+    except ValueError:
+        pytest.skip('tmp_path on different drive than cwd; relpath undefined on Windows')
     if '..' not in rel_path:
         pytest.skip('file is under cwd, not a traversal case')
     with pytest.raises(m.PathTraversalError):
