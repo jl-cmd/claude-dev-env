@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.27.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.5...claude-dev-env-v1.27.0) (2026-04-20)
+
+
+### Features
+
+* **hooks:** externalize git reset --hard allow-list to settings.json ([#220](https://github.com/jl-cmd/claude-code-config/issues/220)) ([2c21fd9](https://github.com/jl-cmd/claude-code-config/commit/2c21fd97540022586e83239816dfbafd6dc76a88))
+* **hooks:** ship native git pre-commit/pre-push hooks with CODE_RULES gate ([#213](https://github.com/jl-cmd/claude-code-config/issues/213)) ([efb7524](https://github.com/jl-cmd/claude-code-config/commit/efb7524c6d1083052961085132441b8817c3a14e))
+
+
+### Bug Fixes
+
+* **tdd-hook:** eliminate pragma bypass, add AST constants-only exemption, adopt split-channel output ([#221](https://github.com/jl-cmd/claude-code-config/issues/221)) ([034b314](https://github.com/jl-cmd/claude-code-config/commit/034b314ac1c62c64c1a6a80fd32fc8cf3c339406))
+
+
+### Maintenance
+
+* **hooks:** remove code_rules_enforcer.py from PreToolUse Write|Edit ([#214](https://github.com/jl-cmd/claude-code-config/issues/214)) ([cb65d82](https://github.com/jl-cmd/claude-code-config/commit/cb65d82c452880d085d9b9a2b7926c4b83679141))
+
 ## [1.26.5](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.26.4...claude-dev-env-v1.26.5) (2026-04-20)
 
 
