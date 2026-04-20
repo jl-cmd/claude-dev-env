@@ -3,7 +3,9 @@ import datetime
 import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 CLAUDE_DIRECTORY_PATH = os.path.normpath(os.path.expanduser("~/.claude"))
@@ -15,10 +17,59 @@ def gh_redirect_is_active() -> bool:
     env_var_value = os.environ.get(GH_REDIRECT_ACTIVE_ENV_VAR, "").strip().lower()
     return env_var_value in GH_REDIRECT_ACTIVE_TRUTHY_VALUES
 
-# Projects where git reset --hard is explicitly allowed by the user.
-# Add your own project paths here, e.g.:
-# os.path.normpath("C:/Users/you/your-project"),
-ALLOW_GIT_RESET_HARD_PROJECTS: list[str] = []
+def directory_is_ephemeral(directory_path: str) -> bool:
+    ephemeral_auto_allow_disabled_env_var = "CLAUDE_DESTRUCTIVE_DISABLE_EPHEMERAL_AUTO_ALLOW"
+    truthy_string_values = frozenset({"1", "true", "yes", "on"})
+    if os.environ.get(ephemeral_auto_allow_disabled_env_var, "").strip().lower() in truthy_string_values:
+        return False
+    forward_slash_normalized_directory_path = os.path.normpath(directory_path).replace("\\", "/").lower()
+    all_ephemeral_path_segments = ("/worktrees/", "/worktree/", "/tmp/", "/temp/")
+    for each_segment in all_ephemeral_path_segments:
+        if each_segment in forward_slash_normalized_directory_path + "/":
+            return True
+    system_temporary_root = os.path.normpath(tempfile.gettempdir()).replace("\\", "/").lower()
+    if forward_slash_normalized_directory_path.startswith(system_temporary_root + "/") or forward_slash_normalized_directory_path == system_temporary_root:
+        return True
+    try:
+        git_rev_parse_completion = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=directory_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if git_rev_parse_completion.returncode != 0:
+        return False
+    git_directory_path_normalized = git_rev_parse_completion.stdout.strip().replace("\\", "/").lower()
+    return "/.git/worktrees/" in git_directory_path_normalized or "/worktrees/" in git_directory_path_normalized
+
+
+def load_allow_git_reset_hard_projects() -> list[str]:
+    allow_git_reset_hard_settings_key = "allowGitResetHardProjects"
+    settings_path = Path(CLAUDE_DIRECTORY_PATH) / "settings.json"
+    try:
+        raw_settings_text = settings_path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    try:
+        parsed_settings = json.loads(raw_settings_text)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed_settings, dict):
+        return []
+    hooks_section = parsed_settings.get("hooks")
+    if not isinstance(hooks_section, dict):
+        return []
+    raw_allow_list = hooks_section.get(allow_git_reset_hard_settings_key)
+    if not isinstance(raw_allow_list, list):
+        return []
+    return [
+        each_project_path
+        for each_project_path in raw_allow_list
+        if isinstance(each_project_path, str)
+    ]
 
 DESTRUCTIVE_BASH_PATTERNS = [
     (re.compile(r'\brm\s+-[a-z]*r[a-z]*f|\brm\s+-[a-z]*f[a-z]*r', re.IGNORECASE), "rm -rf (destructive recursive forced delete)"),
@@ -136,15 +187,17 @@ def main() -> None:
 
     # Allow git reset --hard in explicitly approved projects (case-insensitive for Windows drive letters)
     if matched_description is not None and "git reset --hard" in matched_description:
-        cwd = os.path.normpath(os.getcwd()).lower()
-        command_lower = command.lower()
-        for allowed_project in ALLOW_GIT_RESET_HARD_PROJECTS:
-            allowed_lower = allowed_project.lower()
-            if cwd.startswith(allowed_lower):
+        current_working_directory = os.getcwd()
+        if directory_is_ephemeral(current_working_directory):
+            sys.exit(0)
+        current_working_directory_lowercased = os.path.normpath(current_working_directory).lower()
+        for allowed_project in load_allow_git_reset_hard_projects():
+            allowed_project_lowercased = os.path.normpath(allowed_project).lower()
+            if current_working_directory_lowercased.startswith(allowed_project_lowercased):
                 sys.exit(0)
             # Also check the cd target in the command itself
             for path_match in re.findall(r'cd\s+"([^"]+)"', command):
-                if os.path.normpath(path_match).lower().startswith(allowed_lower):
+                if os.path.normpath(path_match).lower().startswith(allowed_project_lowercased):
                     sys.exit(0)
 
     if matched_description is not None:
