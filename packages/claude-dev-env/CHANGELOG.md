@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.28.0...claude-dev-env-v1.28.1) (2026-04-21)
+
+
+### Maintenance
+
+* **qbug:** pin clean-coder subagent to sonnet via skill override ([#225](https://github.com/jl-cmd/claude-code-config/issues/225)) ([6dc93ee](https://github.com/jl-cmd/claude-code-config/commit/6dc93ee395556a000291f74470439f2248192c9e))
+
 ## [1.28.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.27.0...claude-dev-env-v1.28.0) (2026-04-20)
 
 
