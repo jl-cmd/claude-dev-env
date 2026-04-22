@@ -9,13 +9,14 @@ import tempfile
 
 HOOK_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "hedging_language_blocker.py")
 _HOOKS_DIR = os.path.dirname(HOOK_SCRIPT_PATH)
-_CONFIG_DIR = os.path.join(_HOOKS_DIR, "..", "config")
+_HOOKS_ROOT = os.path.join(_HOOKS_DIR, "..")
+_HOOK_CONFIG_DIR = os.path.join(_HOOKS_ROOT, "config")
 if _HOOKS_DIR not in sys.path:
     sys.path.insert(0, _HOOKS_DIR)
-if _CONFIG_DIR not in sys.path:
-    sys.path.insert(0, _CONFIG_DIR)
+if _HOOKS_ROOT not in sys.path:
+    sys.path.insert(0, _HOOKS_ROOT)
 import hedging_language_blocker
-from messages import USER_FACING_NOTICE
+from config.messages import USER_FACING_NOTICE
 
 RESEARCH_MODE_SKILL_BODY_MARKER = "Three anti-hallucination constraints are ALWAYS active."
 HEDGING_MESSAGE = "This is likely correct."
@@ -64,8 +65,8 @@ def run_hook_with_patched_search_paths(
     return completed_process
 
 
-def test_user_facing_notice_importable_from_config_messages():
-    config_messages_path = os.path.join(_CONFIG_DIR, "messages.py")
+def test_user_facing_notice_matches_config_messages_module():
+    config_messages_path = os.path.join(_HOOK_CONFIG_DIR, "messages.py")
     specification = importlib.util.spec_from_file_location("messages", config_messages_path)
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)

@@ -1,4 +1,4 @@
-"""Smoke tests for hooks.config.messages — verify user-facing notice constants exist."""
+"""Smoke tests for config.messages — verify user-facing notice constants exist."""
 
 import sys
 

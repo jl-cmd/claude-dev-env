@@ -10,9 +10,19 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "config"))
-from messages import USER_FACING_NOTICE
+
+def _insert_hooks_tree_for_imports() -> None:
+    hooks_tree = Path(__file__).resolve().parent.parent
+    hooks_tree_string = str(hooks_tree)
+    if hooks_tree_string not in sys.path:
+        sys.path.insert(0, hooks_tree_string)
+
+
+_insert_hooks_tree_for_imports()
+
+from config.messages import USER_FACING_NOTICE
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

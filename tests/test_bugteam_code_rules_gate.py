@@ -38,8 +38,15 @@ def run_git(working_directory: Path, *git_arguments: str) -> subprocess.Complete
     )
 
 
+def disable_inherited_git_hooks(repository_root: Path) -> None:
+    isolation_directory = repository_root / ".git" / "pytest-hook-isolation"
+    isolation_directory.mkdir(parents=True, exist_ok=True)
+    run_git(repository_root, "config", "core.hooksPath", str(isolation_directory))
+
+
 def init_repo_with_main(repository_root: Path) -> None:
     run_git(repository_root, "init", "--initial-branch=main")
+    disable_inherited_git_hooks(repository_root)
     run_git(repository_root, "config", "user.email", "test@example.com")
     run_git(repository_root, "config", "user.name", "Test User")
 

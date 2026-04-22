@@ -25,3 +25,7 @@ eval-*
 
 # Draft prompt artifacts (file-based validation loop)
 data/prompts/.draft-prompt.xml
+
+# Per-user project-path registry; lives in ~/.claude/ and must never land in the repo
+project-paths.json
+**/project-paths.json

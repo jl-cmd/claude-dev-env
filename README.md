@@ -65,6 +65,25 @@ Removes only the files this package installed (tracked via manifest) and cleans 
 npx claude-dev-env --uninstall
 ```
 
+### Bootstrap the project-path registry (one-time, post-install)
+
+The `es.exe` path rewriter hook and the untracked-repo detector both read their state from a per-user registry at `~/.claude/project-paths.json`. This file maps short repo names (the keys Claude can use in `es.exe` commands) to absolute paths. It is per-user data and never lives in this repo — it is gitignored.
+
+After installing or updating `claude-dev-env`, run the bootstrap script once to populate the registry by scanning for `.git` directories with Everything's command-line binary:
+
+```bash
+python packages/claude-dev-env/scripts/setup_project_paths.py
+```
+
+Requirements:
+
+- Everything (from voidtools) installed with its service running
+- `es.exe` available on `PATH`
+
+The script discovers candidate repos via `es.exe`, filters out ephemeral locations (`temp`, `tmp`, `worktree`, `node_modules`, `.cache`, `$recycle.bin`), shows the proposed mapping, and writes `~/.claude/project-paths.json` only after you confirm at the prompt. The file is atomically replaced on write and merges with any entries already present.
+
+Once the registry is populated, Claude's `es.exe <repo-name>` calls are rewritten to `es.exe "<absolute-path>"` before Bash runs, so searches resolve deterministically without retries.
+
 ## What This Solves
 
 Without shared config, every repo needs its own `.claude/rules/`, `.claude/hooks/`, `.claude/agents/`, etc. That means:
