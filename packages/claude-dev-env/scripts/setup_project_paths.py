@@ -18,9 +18,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-_hooks_dir = Path(__file__).resolve().parent.parent / "hooks"
-if str(_hooks_dir) not in sys.path:
-    sys.path.insert(0, str(_hooks_dir))
+_hooks_dir_string = str(Path(__file__).resolve().parent.parent / "hooks")
+while _hooks_dir_string in sys.path:
+    sys.path.remove(_hooks_dir_string)
+sys.path.insert(0, _hooks_dir_string)
+
+for _cached_module_name in list(sys.modules):
+    if _cached_module_name == "config" or _cached_module_name.startswith("config."):
+        del sys.modules[_cached_module_name]
 
 from config.project_paths_reader import registry_file_path
 from config.setup_project_paths_constants import (
