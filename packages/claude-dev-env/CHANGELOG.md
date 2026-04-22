@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.29.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.29.2...claude-dev-env-v1.29.3) (2026-04-22)
+
+
+### Bug Fixes
+
+* **tests:** eliminate remaining preflight skips and subprocess flakiness ([#250](https://github.com/jl-cmd/claude-code-config/issues/250)) ([f787b81](https://github.com/jl-cmd/claude-code-config/commit/f787b819249d547fa0cb778b39ba29f351c7bcfd))
+* **tests:** use tmp_path as subprocess cwd to stabilize on UNC worktrees ([#248](https://github.com/jl-cmd/claude-code-config/issues/248)) ([492e567](https://github.com/jl-cmd/claude-code-config/commit/492e567764df2f813262bc637cb93834057e00ee))
+
 ## [1.29.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.29.1...claude-dev-env-v1.29.2) (2026-04-22)
 
 
