@@ -208,7 +208,7 @@ def test_extract_body_reassembles_split_quoted_equals_value() -> None:
     assert extract_body_from_command(command) == "this body has multiple words"
 
 
-def test_read_body_file_rejects_relative_path_traversal(tmp_path) -> None:
+def test_read_body_file_rejects_relative_path_traversal(tmp_path, monkeypatch) -> None:
     import importlib.util, pathlib, sys
     _HOOK_DIR = pathlib.Path(__file__).parent
     if str(_HOOK_DIR) not in sys.path:
@@ -217,14 +217,15 @@ def test_read_body_file_rejects_relative_path_traversal(tmp_path) -> None:
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     import os, pytest
-    sentinel_file = tmp_path / 'secret.txt'
+    sentinel_directory = tmp_path / 'sentinel'
+    sentinel_directory.mkdir()
+    working_directory = tmp_path / 'workdir'
+    working_directory.mkdir()
+    sentinel_file = sentinel_directory / 'secret.txt'
     sentinel_file.write_text('secret')
-    try:
-        rel_path = os.path.relpath(str(sentinel_file))
-    except ValueError:
-        pytest.skip('tmp_path on different drive than cwd; relpath undefined on Windows')
-    if '..' not in rel_path:
-        pytest.skip('file is under cwd, not a traversal case')
+    monkeypatch.chdir(working_directory)
+    rel_path = os.path.relpath(str(sentinel_file))
+    assert '..' in rel_path, 'chdir to a sibling of the sentinel must produce a traversal relpath'
     with pytest.raises(m.PathTraversalError):
         m._read_body_file_contents(rel_path)
 

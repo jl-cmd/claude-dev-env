@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import sync_to_cursor as mod
+from sync_to_cursor.engine import run as run_sync_to_cursor
 from sync_to_cursor.rules import _read_paths_glob
-
-_SYNC_SCRIPT = _SCRIPTS_DIR / "sync_to_cursor.py"
 
 
 def _minimal_rule_files(claude_rules: Path) -> None:
@@ -72,66 +71,45 @@ def test_sync_canonical_docs_skips_missing_with_no_dst(tmp_path: Path) -> None:
     assert not (cursor / "docs" / "TEST_QUALITY.md").is_file()
 
 
-def test_check_fails_when_doc_source_changes_without_resync(tmp_path: Path) -> None:
+def test_check_fails_when_doc_source_changes_without_resync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     claude = tmp_path / ".claude"
-    cursor = tmp_path / ".cursor"
     _minimal_rule_files(claude / "rules")
     _minimal_code_rules_and_test_quality(claude / "docs")
-    env = {**os.environ, "LLM_SETTINGS_ROOT": str(tmp_path)}
-    subprocess.run(
-        [sys.executable, str(_SYNC_SCRIPT), "--force"],
-        env=env,
-        check=True,
-        cwd=str(tmp_path),
-    )
+    monkeypatch.setenv("LLM_SETTINGS_ROOT", str(tmp_path))
+    assert run_sync_to_cursor(["--force"]) == 0
     (claude / "docs" / "CODE_RULES.md").write_bytes(b"changed\n")
-    subprocess_result = subprocess.run(
-        [sys.executable, str(_SYNC_SCRIPT), "--check"],
-        env=env,
-        cwd=str(tmp_path),
-    )
-    assert subprocess_result.returncode != 0
+    assert run_sync_to_cursor(["--check"]) != 0
 
 
-def test_check_passes_after_resync(tmp_path: Path) -> None:
+def test_check_passes_after_resync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    claude = tmp_path / ".claude"
+    _minimal_rule_files(claude / "rules")
+    _minimal_code_rules_and_test_quality(claude / "docs")
+    monkeypatch.setenv("LLM_SETTINGS_ROOT", str(tmp_path))
+    assert run_sync_to_cursor(["--force"]) == 0
+    assert run_sync_to_cursor(["--check"]) == 0
+
+
+def test_manifest_includes_docs_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     claude = tmp_path / ".claude"
     cursor = tmp_path / ".cursor"
     _minimal_rule_files(claude / "rules")
     _minimal_code_rules_and_test_quality(claude / "docs")
-    env = {**os.environ, "LLM_SETTINGS_ROOT": str(tmp_path)}
-    subprocess.run(
-        [sys.executable, str(_SYNC_SCRIPT), "--force"],
-        env=env,
-        check=True,
-        cwd=str(tmp_path),
-    )
-    subprocess_result = subprocess.run(
-        [sys.executable, str(_SYNC_SCRIPT), "--check"],
-        env=env,
-        cwd=str(tmp_path),
-    )
-    assert subprocess_result.returncode == 0
-
-
-def test_manifest_includes_docs_entries(tmp_path: Path) -> None:
-    claude = tmp_path / ".claude"
-    cursor = tmp_path / ".cursor"
-    _minimal_rule_files(claude / "rules")
-    _minimal_code_rules_and_test_quality(claude / "docs")
-    env = {**os.environ, "LLM_SETTINGS_ROOT": str(tmp_path)}
-    subprocess.run(
-        [sys.executable, str(_SYNC_SCRIPT), "--force"],
-        env=env,
-        check=True,
-        cwd=str(tmp_path),
-    )
+    monkeypatch.setenv("LLM_SETTINGS_ROOT", str(tmp_path))
+    assert run_sync_to_cursor(["--force"]) == 0
     manifest = json.loads((cursor / ".sync-manifest.json").read_text(encoding="utf-8"))
     assert "docs_entries" in manifest
-    de = manifest["docs_entries"]
-    assert "docs/CODE_RULES.md" in de
-    assert "docs/TEST_QUALITY.md" in de
-    assert "sources_hash" in de["docs/CODE_RULES.md"]
-    assert "output_hash" in de["docs/CODE_RULES.md"]
+    docs_entries = manifest["docs_entries"]
+    assert "docs/CODE_RULES.md" in docs_entries
+    assert "docs/TEST_QUALITY.md" in docs_entries
+    assert "sources_hash" in docs_entries["docs/CODE_RULES.md"]
+    assert "output_hash" in docs_entries["docs/CODE_RULES.md"]
 
 
 def test_merge_code_standards_with_pointer_style_code_rules(tmp_path: Path) -> None:
@@ -166,40 +144,28 @@ def test_sync_canonical_docs_deletes_stale_copy_when_source_removed(tmp_path: Pa
     assert not (cursor / "docs" / "CODE_RULES.md").is_file()
 
 
-def test_dry_run_does_not_create_output_directory(tmp_path: Path) -> None:
+def test_dry_run_does_not_create_output_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     claude = tmp_path / ".claude"
     cursor = tmp_path / ".cursor"
     _minimal_rule_files(claude / "rules")
     _minimal_code_rules_and_test_quality(claude / "docs")
-    env = {**os.environ, "LLM_SETTINGS_ROOT": str(tmp_path)}
-    subprocess.run(
-        [sys.executable, str(_SYNC_SCRIPT), "--dry-run", "--quiet"],
-        env=env,
-        check=True,
-        cwd=str(tmp_path),
-    )
+    monkeypatch.setenv("LLM_SETTINGS_ROOT", str(tmp_path))
+    assert run_sync_to_cursor(["--dry-run", "--quiet"]) == 0
     assert not (cursor / "rules").exists(), "--dry-run must not create the output directory"
 
 
-def test_check_skips_optional_mapping_when_source_missing(tmp_path: Path) -> None:
+def test_check_skips_optional_mapping_when_source_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     claude = tmp_path / ".claude"
-    cursor = tmp_path / ".cursor"
     _minimal_rule_files(claude / "rules")
     _minimal_code_rules_and_test_quality(claude / "docs")
-    env = {**os.environ, "LLM_SETTINGS_ROOT": str(tmp_path)}
-    subprocess.run(
-        [sys.executable, str(_SYNC_SCRIPT), "--force"],
-        env=env,
-        check=True,
-        cwd=str(tmp_path),
-    )
+    monkeypatch.setenv("LLM_SETTINGS_ROOT", str(tmp_path))
+    assert run_sync_to_cursor(["--force"]) == 0
     (claude / "rules" / "tasklings-preferences.md").unlink()
-    subprocess_result = subprocess.run(
-        [sys.executable, str(_SYNC_SCRIPT), "--check"],
-        env=env,
-        cwd=str(tmp_path),
-    )
-    assert subprocess_result.returncode == 0, "--check must pass when only optional sources are missing"
+    assert run_sync_to_cursor(["--check"]) == 0, "--check must pass when only optional sources are missing"
 
 
 def test_tasklings_glob_derived_from_frontmatter(tmp_path: Path) -> None:
