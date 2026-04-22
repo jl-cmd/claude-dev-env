@@ -7,6 +7,7 @@ from pathlib import Path
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
+sys.modules.pop("config", None)
 
 import config
 

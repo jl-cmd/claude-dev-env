@@ -14,9 +14,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, TypedDict
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT in sys.path:
+    sys.path.remove(_REPO_ROOT)
+sys.path.insert(0, _REPO_ROOT)
+sys.modules.pop("config", None)
 
 from config.sync_ai_rules_paths import (
     BUGBOT_ONLY_DESTINATION_PATHS,

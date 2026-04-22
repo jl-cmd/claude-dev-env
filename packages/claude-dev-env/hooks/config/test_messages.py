@@ -1,5 +1,9 @@
 """Smoke tests for hooks.config.messages — verify user-facing notice constants exist."""
 
+import sys
+
+sys.modules.pop("config", None)
+
 from config import messages
 
 

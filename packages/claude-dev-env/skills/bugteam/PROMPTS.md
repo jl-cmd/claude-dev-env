@@ -29,7 +29,7 @@ cd into `<worktree_path>` before any git, gh, or file operation.
   B. Selector / query / engine compatibility
   C. Resource cleanup and lifecycle (file handles, connections, processes, locks)
   D. Variable scoping, ordering, and unbound references
-  E. Dead code and unused imports
+  E. Dead code: dead parameters, dead locals, dead imports, dead branches, dead returns, and unused imports
   F. Silent failures (catch-all excepts, unconditional success returns, missing error propagation)
   G. Off-by-one, bounds, and integer overflow
   H. Security boundaries (injection, path traversal, auth bypass, secret leakage)

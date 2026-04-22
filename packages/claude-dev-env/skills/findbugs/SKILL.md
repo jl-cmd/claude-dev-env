@@ -47,12 +47,12 @@ The audit's authoritative scope is this single diff file. Do not inject extra fi
 
 ### Step 3: Spawn the code-quality-agent — clean room
 
-Call the Agent tool with:
+Call the Agent tool twice in a single message (primary + Haiku secondary per the audit contract's Haiku secondary section):
 
-- `subagent_type: code-quality-agent`
-- `model: sonnet`
-- `description: "PR bug audit"`
-- `run_in_background: false` — the user invoked `/findbugs` to get a result on this turn
+- Primary: `subagent_type: code-quality-agent`, `model: sonnet`, `description: "PR bug audit"`, `run_in_background: false`
+- Secondary: `subagent_type: code-quality-agent`, `model: haiku`, `description: "PR bug audit (secondary)"`, `run_in_background: false`
+
+After both return, merge per the contract's Haiku secondary section (de-dup key, max-wins severity, malformed-output fallback) before reporting to the user.
 
 **The agent prompt must be self-contained and context-free.** Specifically:
 
@@ -98,25 +98,17 @@ The XML prompt skeleton:
 </constraints>
 
 <output_format>
-  P0 = will not run / data corruption
-  P1 = regression or silent failure
-  P2 = dead code, minor smell
+  Follow the shared audit contract at ../bugteam/reference/audit-contract.md:
 
-  ## Summary
-  Total: N (P0=N, P1=N, P2=N)
+  - Severity: P0 = will not run / data corruption; P1 = regression or silent
+    failure; P2 = dead code, minor smell.
+  - Per category, produce either Shape A (structured finding) or Shape B
+    (proof-of-absence). Bare "verified clean" labels are REJECTED.
+  - Run the contract's adversarial second pass after the primary list.
 
-  ## Findings
-  ### [P_] short title
-  File: file/path:line
-  Category: A-J
-  Issue: 2-3 sentence description with concrete trace
-  Evidence: code excerpt or grep result
-
-  ## Verified clean
-  Per category investigated, name the evidence and the conclusion.
-
-  ## Open questions
-  Anything ambiguous from the diff alone.
+  Preamble: `Total: N (P0=N, P1=N, P2=N)`. Emit findings and proof-of-absence
+  entries in the JSON shapes defined by the contract. Include an "Open
+  questions" section for items the diff alone cannot resolve.
 </output_format>
 ```
 

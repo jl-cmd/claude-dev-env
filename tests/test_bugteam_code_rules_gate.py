@@ -52,28 +52,19 @@ def write_file(repository_root: Path, relative_path: str, content: str) -> None:
 
 def stage_and_commit(repository_root: Path, commit_message: str) -> None:
     run_git(repository_root, "add", "-A")
-    run_git(repository_root, "commit", "-m", commit_message)
+    run_git(repository_root, "commit", "--no-verify", "-m", commit_message)
 
 
 def copy_enforcer_into(repository_root: Path) -> None:
-    source_enforcer = (
-        REPO_ROOT
-        / "packages"
-        / "claude-dev-env"
-        / "hooks"
-        / "blocking"
-        / "code_rules_enforcer.py"
+    blocking_source = REPO_ROOT / "packages" / "claude-dev-env" / "hooks" / "blocking"
+    blocking_destination = (
+        repository_root / "packages" / "claude-dev-env" / "hooks" / "blocking"
     )
-    destination = (
-        repository_root
-        / "packages"
-        / "claude-dev-env"
-        / "hooks"
-        / "blocking"
-        / "code_rules_enforcer.py"
-    )
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(source_enforcer.read_text(encoding="utf-8"), encoding="utf-8")
+    blocking_destination.mkdir(parents=True, exist_ok=True)
+    for filename in ("code_rules_enforcer.py", "code_rules_path_utils.py"):
+        source_path = blocking_source / filename
+        destination_path = blocking_destination / filename
+        destination_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 def copy_gate_script_into(repository_root: Path) -> Path:

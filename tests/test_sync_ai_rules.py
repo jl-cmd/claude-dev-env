@@ -117,7 +117,7 @@ def git_repo(
         capture_output=True,
     )
     subprocess.run(
-        ["git", "push", "--set-upstream", "origin", "HEAD:main"],
+        ["git", "push", "--no-verify", "--set-upstream", "origin", "HEAD:main"],
         cwd=str(work_dir),
         check=True,
         capture_output=True,

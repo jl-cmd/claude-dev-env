@@ -7,6 +7,69 @@ import sys
 from pathlib import Path
 
 
+def verify_git_hooks_path(repository_root: Path | None = None) -> int:
+    """Check that core.hooksPath resolves to the claude-dev-env git-hooks directory.
+
+    When *repository_root* is provided, queries the effective config for that
+    repository (``git -C <root> config --get``), which detects repo-level
+    overrides such as Husky or lefthook. Falls back to the current working
+    directory's effective config when *repository_root* is None.
+
+    Returns zero when the configured path ends with the expected hooks suffix.
+    Returns non-zero and prints a correction message when unset or pointing elsewhere.
+    """
+    expected_hooks_path_suffix = "hooks/git-hooks"
+    enforcement_absent_message = (
+        "Git-side CODE_RULES enforcement is not active on this host.\n"
+        "Run: npx claude-dev-env .\n"
+        "Or set core.hooksPath at any scope, e.g.:\n"
+        "  git config --global core.hooksPath ~/.claude/hooks/git-hooks"
+    )
+    git_command: list[str] = ["git"]
+    if repository_root is not None:
+        git_command.extend(["-C", str(repository_root)])
+    git_command.extend(["config", "--get", "core.hooksPath"])
+    try:
+        query_result = subprocess.run(
+            git_command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except FileNotFoundError:
+        print(
+            "bugteam_preflight: git is not installed or not available on PATH.\n"
+            f"{enforcement_absent_message}",
+            file=sys.stderr,
+        )
+        return 1
+    except OSError as os_error:
+        print(
+            f"bugteam_preflight: failed to run git: {os_error}\n"
+            f"{enforcement_absent_message}",
+            file=sys.stderr,
+        )
+        return 1
+    if query_result.returncode != 0:
+        print(
+            f"bugteam_preflight: {enforcement_absent_message}",
+            file=sys.stderr,
+        )
+        return 1
+    configured_path = query_result.stdout.strip().replace("\\", "/").rstrip("/")
+    if not configured_path.endswith(expected_hooks_path_suffix):
+        print(
+            f"bugteam_preflight: core.hooksPath is '{configured_path}' — "
+            f"expected path ending in '{expected_hooks_path_suffix}'.\n"
+            f"{enforcement_absent_message}",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
 def find_repository_root(start: Path) -> Path:
     resolved = start.resolve()
     candidates = [resolved, *resolved.parents]
@@ -109,6 +172,9 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.repo_root is not None
         else find_repository_root(start)
     )
+    hooks_path_exit_code = verify_git_hooks_path(repository_root)
+    if hooks_path_exit_code != 0:
+        return hooks_path_exit_code
     if not arguments.no_pytest and has_pytest_configuration(repository_root):
         if not has_discoverable_tests(repository_root):
             print(
