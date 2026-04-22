@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.29.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.28.1...claude-dev-env-v1.29.0) (2026-04-22)
+
+
+### Features
+
+* **agents:** add caveman agent and output style ([#238](https://github.com/jl-cmd/claude-code-config/issues/238)) ([5c874b5](https://github.com/jl-cmd/claude-code-config/commit/5c874b5344754478b542d5b8e58922cc996bd526))
+* **hooks:** es.exe path-rewriter + untracked-repo detector + setup script ([#230](https://github.com/jl-cmd/claude-code-config/issues/230)) ([528bb18](https://github.com/jl-cmd/claude-code-config/commit/528bb18b90484c4c2295a4d13772a045e515ac99))
+* **scripts:** groq_bugteam.py — Groq-backed single-pass bugteam ([#237](https://github.com/jl-cmd/claude-code-config/issues/237)) ([fdaa52a](https://github.com/jl-cmd/claude-code-config/commit/fdaa52a85e4ddd4f974b74b05a88097e9ea426fa))
+* **skills:** add copilot-review skill ([#228](https://github.com/jl-cmd/claude-code-config/issues/228)) ([e1e0742](https://github.com/jl-cmd/claude-code-config/commit/e1e0742a60135bdb68c257732a9052c2a6bbae4b))
+* **skills:** bugteam/qbug spawn Opus 4.7 at xhigh effort ([#239](https://github.com/jl-cmd/claude-code-config/issues/239)) ([3523527](https://github.com/jl-cmd/claude-code-config/commit/3523527e57c911cdb931374113098b4776bdf660))
+
+
+### Bug Fixes
+
+* **qbug:** close audit-cycle leaks, enforce 1-loop convergence ([#231](https://github.com/jl-cmd/claude-code-config/issues/231)) ([39154b4](https://github.com/jl-cmd/claude-code-config/commit/39154b42c9338a44ac440ce5388506a3373f9fb3))
+
+
+### Maintenance
+
+* make AGENTS.md canonical for AI-rules sync ([#236](https://github.com/jl-cmd/claude-code-config/issues/236)) ([2c6d77d](https://github.com/jl-cmd/claude-code-config/commit/2c6d77d644b6c1491461312d0f14fa5e426d8fe8))
+
 ## [1.28.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.28.0...claude-dev-env-v1.28.1) (2026-04-21)
 
 
