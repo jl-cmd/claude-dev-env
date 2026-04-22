@@ -248,6 +248,8 @@ def should_write_fixed_file(
 def is_safe_relative_path(each_path: str) -> bool:
     if os.path.isabs(each_path):
         return False
+    if each_path.startswith(("/", "\\")):
+        return False
     normalized = os.path.normpath(each_path)
     if normalized.startswith(".." + os.sep) or normalized == "..":
         return False

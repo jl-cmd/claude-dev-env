@@ -17,6 +17,14 @@ def _agents_instructions_text() -> str:
     return agents_path.read_text(encoding="utf-8")
 
 
+def _agents_instructions_part1_text() -> str:
+    text = _agents_instructions_text()
+    part2_marker = "\n## Part 2"
+    if part2_marker in text:
+        return text.split(part2_marker, maxsplit=1)[0]
+    return text
+
+
 def _copilot_instructions_part1_text() -> str:
     text = _copilot_instructions_text()
     part_marker = "\n## Part 2"
@@ -65,8 +73,8 @@ def test_bugbot_file_length_matches_hook_advisory_behavior() -> None:
 
 
 def test_agents_instructions_upper_snake_path_exemptions() -> None:
-    """GitHub AGENTS instructions document UPPER_SNAKE path exemptions without naming implementation files."""
-    text = _agents_instructions_text()
+    """AGENTS Part 1 (static rubric) documents UPPER_SNAKE path exemptions without naming implementation files."""
+    text = _agents_instructions_part1_text()
     lower = text.lower()
     assert "/migrations/" in text
     assert "/workflow/" in text
@@ -81,8 +89,8 @@ def test_agents_instructions_upper_snake_path_exemptions() -> None:
 
 
 def test_agents_instructions_file_length_is_advisory_smell_not_hard_gate() -> None:
-    """AGENTS instructions describe length as advisory context, not a blocking rule."""
-    text = _agents_instructions_text()
+    """AGENTS Part 1 (static rubric) describes length as advisory context, not a blocking rule."""
+    text = _agents_instructions_part1_text()
     lower = text.lower()
     assert "400" in text
     assert "1000" in text
