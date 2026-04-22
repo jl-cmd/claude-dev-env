@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.29.1...claude-dev-env-v1.29.2) (2026-04-22)
+
+
+### Bug Fixes
+
+* stabilize 4 baseline test failures on main ([#246](https://github.com/jl-cmd/claude-code-config/issues/246)) ([ffc7879](https://github.com/jl-cmd/claude-code-config/commit/ffc7879bc52cb43af4f970610e387a972b8bdf37))
+
 ## [1.29.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.29.0...claude-dev-env-v1.29.1) (2026-04-22)
 
 
