@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.29.0...claude-dev-env-v1.29.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* **setup_project_paths:** evict stale config bindings before import ([#244](https://github.com/jl-cmd/claude-code-config/issues/244)) ([905b271](https://github.com/jl-cmd/claude-code-config/commit/905b271104d382ed770ce244fb237d473d30df9e))
+
 ## [1.29.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.28.1...claude-dev-env-v1.29.0) (2026-04-22)
 
 
