@@ -33,7 +33,15 @@ tests/test_sync_ai_rules.py packages/claude-dev-env/hooks/``) resolve
 intends. The setup and restore are both gated on ``isinstance(collector,
 pytest.Module)`` so they fire exactly once per ``test_sync_ai_rules.py``
 collection even though the file also raises ``pytest_collectstart`` events
-for each nested class and function.
+for each nested class and function. To keep the start/report hooks symmetric
+across rootdir shifts and nested collection layouts, ``pytest_collectstart``
+pushes a single ``_PendingSysPathRestore`` tuple — pairing the matched
+collector's ``nodeid`` with the pre-insert ``sys.path`` snapshot — and
+``pytest_collectreport`` pops only when ``report.nodeid`` equals the
+top-of-stack entry's nodeid. Bundling both fields in one tuple keeps the
+nodeid and snapshot invariantly in sync, so a future refactor cannot drift
+one ahead of the other and leave ``pytest_collectreport`` popping a
+snapshot that never had a matching collectstart.
 
 The ``sys.path`` baseline (repo root, ``.github/scripts``, hook tree) is
 established declaratively via ``pytest.ini``'s ``pythonpath``, so CI targeted
@@ -52,6 +60,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+from typing import NamedTuple
 
 import pytest
 
@@ -62,7 +71,14 @@ _HOOK_LOCAL_DIRECTORY_PATH = os.path.join(
     _REPO_ROOT_DIRECTORY_PATH,
     "packages", "claude-dev-env", "hooks", "git-hooks",
 )
-_sys_path_snapshot_before_repo_root_insert: list[list[str]] = []
+
+
+class _PendingSysPathRestore(NamedTuple):
+    matched_module_nodeid: str
+    sys_path_snapshot: list[str]
+
+
+_pending_sys_path_restores: list[_PendingSysPathRestore] = []
 
 
 def _evict_cached_config_bindings() -> None:
@@ -86,15 +102,21 @@ def pytest_collectstart(collector: pytest.Collector) -> None:
     _evict_cached_config_bindings()
     while _HOOK_LOCAL_DIRECTORY_PATH in sys.path:
         sys.path.remove(_HOOK_LOCAL_DIRECTORY_PATH)
-    _sys_path_snapshot_before_repo_root_insert.append(list(sys.path))
+    _pending_sys_path_restores.append(
+        _PendingSysPathRestore(
+            matched_module_nodeid=collector.nodeid,
+            sys_path_snapshot=list(sys.path),
+        )
+    )
     if not sys.path or sys.path[0] != _REPO_ROOT_DIRECTORY_PATH:
         sys.path.insert(0, _REPO_ROOT_DIRECTORY_PATH)
 
 
 def pytest_collectreport(report: pytest.CollectReport) -> None:
-    if not _sys_path_snapshot_before_repo_root_insert:
+    if not _pending_sys_path_restores:
         return
-    if report.nodeid != f"tests/{_SYNC_AI_RULES_TEST_FILENAME}":
+    if report.nodeid != _pending_sys_path_restores[-1].matched_module_nodeid:
         return
-    sys.path[:] = _sys_path_snapshot_before_repo_root_insert.pop()
+    pending_restore = _pending_sys_path_restores.pop()
+    sys.path[:] = pending_restore.sys_path_snapshot
     _evict_cached_config_bindings()
