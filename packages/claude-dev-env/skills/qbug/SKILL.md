@@ -106,7 +106,7 @@ Then call `Agent` twice in the same message — the primary clean-coder and the 
 ```
 Agent(
   subagent_type="clean-coder",
-  model="sonnet",
+  model="opus",
   description="qbug primary audit/fix cycle for PR <number>",
   prompt="<filled cycle XML; see § Subagent cycle prompt>",
   run_in_background=False

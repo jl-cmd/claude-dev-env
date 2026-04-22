@@ -2,8 +2,8 @@
 name: bugteam
 description: >-
   Claude Code agent team on the open pull request: run the CODE_RULES gate,
-  spawn a fresh clean-room audit (code-quality-agent, sonnet) and a fix pass
-  (clean-coder, sonnet), post per-loop GitHub review threads from teammates,
+  spawn a fresh clean-room audit (code-quality-agent, opus) and a fix pass
+  (clean-coder, opus), post per-loop GitHub review threads from teammates,
   stop at zero findings or a 10-audit safety cap. Grants then revokes
   `.claude/**` edit permission around the run. SKILL.md is the orchestration
   checklist; `reference/` holds expanded prose by domain; CONSTRAINTS,
@@ -122,7 +122,7 @@ TeamCreate(
 
 **`<team_temp_dir>`:** `Path(tempfile.gettempdir()) / team_name` (lead resolves once to an absolute path; every shell gets that literal string).
 
-**Roles (spawned per loop, not here):** bugfind → `code-quality-agent` sonnet; bugfix → `clean-coder` sonnet. **Display:** inherit `teammateMode` from `~/.claude.json`. Reference subagent types by name when spawning teammates ([`sources.md`](sources.md) § Referencing subagent types when spawning teammates).
+**Roles (spawned per loop, not here):** bugfind → `code-quality-agent` opus (4.7) at xhigh effort; bugfix → `clean-coder` opus (4.7) at xhigh effort. `model="opus"` resolves to Opus 4.7 on the Anthropic API and runs at the model's default `xhigh` effort level — see [`CONSTRAINTS.md`](CONSTRAINTS.md) § **Opus 4.7 at xhigh effort for both teammates** for rationale. **Display:** inherit `teammateMode` from `~/.claude.json`. Reference subagent types by name when spawning teammates ([`sources.md`](sources.md) § Referencing subagent types when spawning teammates).
 
 **Loop state (lead; not a single script):**
 
@@ -231,7 +231,7 @@ Agent(
   subagent_type="code-quality-agent",
   name="bugfind-pr<N>-loop<L>",
   team_name="<team_name>",
-  model="sonnet",
+  model="opus",
   description="Bugfind audit PR <N> loop <L>",
   prompt="<audit XML; see PROMPTS.md>"
 )
@@ -261,7 +261,7 @@ Agent(
   subagent_type="clean-coder",
   name="bugfix-pr<N>-loop<L>",
   team_name="<team_name>",
-  model="sonnet",
+  model="opus",
   description="Bugfix PR <N> loop <L>",
   prompt="<fix XML; see PROMPTS.md>"
 )

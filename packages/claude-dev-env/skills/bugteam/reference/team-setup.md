@@ -35,8 +35,8 @@ This session is the **team lead**. Create the team with `TeamCreate` using the e
 - **Per-team temp directory (resolved once, reused everywhere):** After `team_name` is captured, resolve a portable absolute path with a Claude-side lookup using Python’s `tempfile.gettempdir()`, which honors `TMPDIR`, `TEMP`, and `TMP` in the platform-correct order and falls back to `C:\Users\<user>\AppData\Local\Temp` on Windows or `/tmp` on Unix: `Path(tempfile.gettempdir()) / team_name` (requires `import tempfile`). The `team_name` value already carries the `bugteam-` prefix; keep it as-is here. Let `tempfile.gettempdir()` perform the lookup; use its result directly. Capture the resolved absolute path as `<team_temp_dir>` and pass that literal path to every shell command that follows. Claude performs all temp-root resolution so every shell (bash, cmd.exe, PowerShell) receives the same literal absolute value.
 
 - **Roles defined up front (spawned per loop, not at team creation):**
-  - `bugfind` — teammate role `code-quality-agent`, model sonnet
-  - `bugfix` — teammate role `clean-coder`, model sonnet
+  - `bugfind` — teammate role `code-quality-agent`, model opus (Opus 4.7 at default xhigh effort)
+  - `bugfix` — teammate role `clean-coder`, model opus (Opus 4.7 at default xhigh effort)
 
 - **Display mode:** inherit the user’s default (`teammateMode` in `~/.claude.json`); do not override.
 

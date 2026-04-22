@@ -23,7 +23,7 @@ Each invariant cites the normative section or companion file it derives from.
 | I-3 | Exactly one `TeamCreate` and exactly one `TeamDelete` per invocation. | `SKILL.md` § Step 2; § Step 4 |
 | I-4 | Before `TeamDelete`, no teammate remains active without cleanup: either the teammate self-terminated after `Agent` returned, or the lead sent a matching `SendMessage(..., shutdown_request)` (including parallel-auditor shutdowns). No orphaned teammates when `TeamDelete` runs. | `SKILL.md` § AUDIT action (**Shutdown**); § FIX action (**Shutdown**); § Step 4 |
 | I-5 | `Agent` calls are fresh per loop — the same `name` is never reused across loops without an intervening shutdown. | `CONSTRAINTS.md` — **Fresh teammate per loop** |
-| I-6 | Both audit and fix `Agent` calls pass `model="sonnet"`. | `SKILL.md` § Step 2 (**Roles**); `CONSTRAINTS.md` — **Sonnet for both teammates** |
+| I-6 | Both audit and fix `Agent` calls pass `model="opus"` (resolves to Opus 4.7 via the Anthropic API alias; effort remains the Claude Code/model-config default `xhigh`). | `SKILL.md` § Step 2 (**Roles**); `CONSTRAINTS.md` — **Opus 4.7 at xhigh effort for both teammates** |
 | I-7 | `TeamDelete()` is called with no arguments. | TeamDelete schema: no required params, no properties |
 | I-8 | Loop count ≤ 10 audits. 11th audit never fires. | `SKILL.md` YAML `description` (10-loop cap); § Step 3 (**Pre-audit** / **FIX** increment rules) |
 | I-9 | From loop 4 onward without convergence, the audit phase emits three parallel `Agent` calls in a single assistant message with names `bugfind-loop-<N>-a/b/c`. | `SKILL.md` § AUDIT action (**Parallel auditors**); `reference/audit-and-teammates.md` § **Parallel auditors** |
@@ -111,10 +111,10 @@ The harness does not yet exist; this document defines its contract.
 | 4 | `TeamCreate(team_name="bugteam-pr-42-<ts>", description=..., agent_type="team-lead")` | `SKILL.md` § Step 2 |
 | 5 | `Bash("mkdir -p <team_temp_dir>")` | `SKILL.md` § AUDIT action |
 | 6 | `Bash("gh pr diff 42 -R ... > <team_temp_dir>/loop-1.patch")` | `SKILL.md` § AUDIT action |
-| 7 | `Agent(subagent_type="code-quality-agent", name="bugfind", team_name=..., model="sonnet", description=..., prompt=<audit XML loop 1>)` | `SKILL.md` § AUDIT action |
+| 7 | `Agent(subagent_type="code-quality-agent", name="bugfind", team_name=..., model="opus", description=..., prompt=<audit XML loop 1>)` | `SKILL.md` § AUDIT action |
 | 8 | `Read(".bugteam-loop-1.outcomes.xml")` | `SKILL.md` § AUDIT action |
 | 9 | `SendMessage(to="bugfind", message={type: "shutdown_request", reason: "audit loop 1 complete; outcome XML captured"})` | `SKILL.md` § AUDIT action (**Shutdown** fallback) |
-| 10 | `Agent(subagent_type="clean-coder", name="bugfix", team_name=..., model="sonnet", description=..., prompt=<fix XML loop 1>)` | `SKILL.md` § FIX action |
+| 10 | `Agent(subagent_type="clean-coder", name="bugfix", team_name=..., model="opus", description=..., prompt=<fix XML loop 1>)` | `SKILL.md` § FIX action |
 | 11 | `Read(".bugteam-loop-1.outcomes.xml")` — bugfix outcome XML overwrites same filename | `SKILL.md` § FIX action |
 | 12 | `Bash("git rev-parse HEAD")` → verify HEAD advanced | `SKILL.md` § FIX action (**Verify**) |
 | 13 | `Bash("git fetch origin <branch> && git rev-parse origin/<branch>")` → verify push landed | `SKILL.md` § FIX action (**Verify**) |
@@ -302,7 +302,7 @@ Agent(
   subagent_type="code-quality-agent",
   name="bugfind-adjacent",
   team_name="<lead_team_name>",          // same team as bugfind/bugfix
-  model="sonnet",
+  model="opus",
   description="Supplementary audit of adjacent infrastructure",
   prompt=<brief naming the specific adjacent files + observed symptom>
 )
@@ -343,4 +343,4 @@ A minimal Python harness under `packages/claude-dev-env/skills/bugteam/evals/`:
 
 1. **GitHub REST review-POST payload shape.** Eval 9 and Eval 10 depend on the exact body shape of `POST /pulls/<number>/reviews`. The `jq -n --rawfile ... --argjson ... | gh api ... --input -` fence lives in `SKILL.md` § Step 2.5 (**Review POST**); expanded copy in `reference/github-pr-reviews.md` § **Per-loop review**. Before running Eval 9/10 for real, fetch the current GitHub REST reference to confirm the request schema (fields `commit_id`, `event`, `body`, `comments[]`) and the multi-line anchor `{path, start_line, start_side, line, side, body}` shape still apply. Record the confirmed version and URL here.
 2. **`SendMessage` shutdown origination — RESOLVED.** `SendMessage` tool docs include the line "Don't originate `shutdown_request` unless asked." `TeamCreate` tool docs explicitly direct the lead to originate `{type: "shutdown_request"}` for teammate cleanup. Real-run observation (loop 1 of eval run 2026-04-18) resolved the contradiction: teammates self-terminate when their task is complete — the `Agent` call returns and the teammate's session ends without any `SendMessage`. The cycle proceeded correctly without the lead ever needing to originate a `shutdown_request`. `SKILL.md` § AUDIT / FIX actions document self-termination as the expected path and lead-originated `SendMessage(shutdown_request)` as a fallback; `reference/audit-and-teammates.md` carries the longer shutdown narrative. Layer A **I-4** encodes “no orphaned teammates,” not “always send SendMessage.”
-3. **Model override redundancy.** `code-quality-agent` and `clean-coder` may already pin `model` in their agent definitions. The explicit `model="sonnet"` in every spawn is insurance, but on the first real run confirm no conflict between the lead-passed model and the agent-frontmatter model.
+3. **Model override redundancy.** `clean-coder` pins `model: opus` in its agent definition, while `code-quality-agent` currently uses `model: inherit`. The explicit `model="opus"` in every spawn is insurance against frontmatter drift; on the first real run, confirm the resolved model is `claude-opus-4-7` and that effort defaults to `xhigh` (Claude Code shows the active effort next to the spinner per the model-config docs). If a teammate's frontmatter ever pins a non-default `effort:` value, that frontmatter overrides the model default for that subagent (https://code.claude.com/docs/en/model-config — *"Frontmatter effort applies when that skill or subagent is active, overriding the session level but not the environment variable."*).
