@@ -82,13 +82,13 @@ def test_check_fails_when_doc_source_changes_without_resync(tmp_path: Path) -> N
         [sys.executable, str(_SYNC_SCRIPT), "--force"],
         env=env,
         check=True,
-        cwd=str(_SCRIPTS_DIR),
+        cwd=str(tmp_path),
     )
     (claude / "docs" / "CODE_RULES.md").write_bytes(b"changed\n")
     subprocess_result = subprocess.run(
         [sys.executable, str(_SYNC_SCRIPT), "--check"],
         env=env,
-        cwd=str(_SCRIPTS_DIR),
+        cwd=str(tmp_path),
     )
     assert subprocess_result.returncode != 0
 
@@ -103,12 +103,12 @@ def test_check_passes_after_resync(tmp_path: Path) -> None:
         [sys.executable, str(_SYNC_SCRIPT), "--force"],
         env=env,
         check=True,
-        cwd=str(_SCRIPTS_DIR),
+        cwd=str(tmp_path),
     )
     subprocess_result = subprocess.run(
         [sys.executable, str(_SYNC_SCRIPT), "--check"],
         env=env,
-        cwd=str(_SCRIPTS_DIR),
+        cwd=str(tmp_path),
     )
     assert subprocess_result.returncode == 0
 
@@ -123,7 +123,7 @@ def test_manifest_includes_docs_entries(tmp_path: Path) -> None:
         [sys.executable, str(_SYNC_SCRIPT), "--force"],
         env=env,
         check=True,
-        cwd=str(_SCRIPTS_DIR),
+        cwd=str(tmp_path),
     )
     manifest = json.loads((cursor / ".sync-manifest.json").read_text(encoding="utf-8"))
     assert "docs_entries" in manifest
@@ -176,7 +176,7 @@ def test_dry_run_does_not_create_output_directory(tmp_path: Path) -> None:
         [sys.executable, str(_SYNC_SCRIPT), "--dry-run", "--quiet"],
         env=env,
         check=True,
-        cwd=str(_SCRIPTS_DIR),
+        cwd=str(tmp_path),
     )
     assert not (cursor / "rules").exists(), "--dry-run must not create the output directory"
 
@@ -191,13 +191,13 @@ def test_check_skips_optional_mapping_when_source_missing(tmp_path: Path) -> Non
         [sys.executable, str(_SYNC_SCRIPT), "--force"],
         env=env,
         check=True,
-        cwd=str(_SCRIPTS_DIR),
+        cwd=str(tmp_path),
     )
     (claude / "rules" / "tasklings-preferences.md").unlink()
     subprocess_result = subprocess.run(
         [sys.executable, str(_SYNC_SCRIPT), "--check"],
         env=env,
-        cwd=str(_SCRIPTS_DIR),
+        cwd=str(tmp_path),
     )
     assert subprocess_result.returncode == 0, "--check must pass when only optional sources are missing"
 
