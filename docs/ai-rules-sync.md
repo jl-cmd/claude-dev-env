@@ -1,15 +1,15 @@
 # AI Rules Sync
 
 `jl-cmd/claude-code-config` is the single source of truth for AI code-review rules.
-Every push to `.github/copilot-instructions.md` on `main` runs the fan-out dispatcher, which
+Every push to `AGENTS.md` on `main` runs the fan-out dispatcher, which
 notifies every target repository (including **this** repo) to run the listener.
 
 In **downstream** repos, the listener writes both:
 
-- `.github/copilot-instructions.md` — read by GitHub Copilot code review
+- `AGENTS.md` — read by tooling that consumes AGENTS.md (including Copilot)
 - `.cursor/BUGBOT.md` — read by Cursor Bugbot ([docs](https://cursor.com/docs/bugbot))
 
-In **`jl-cmd/claude-code-config` only**, the canonical Copilot file is edited on `main` directly;
+In **`jl-cmd/claude-code-config` only**, the canonical AGENTS file is edited on `main` directly;
 the listener updates **`.cursor/BUGBOT.md` only** so it never overwrites the headerless source
 with a generated header.
 
@@ -22,7 +22,7 @@ The source repo always wins; manual edits to any destination are treated as erro
 
 ```
 jl-cmd/claude-code-config
-  .github/copilot-instructions.md  ← edit only here
+  AGENTS.md  ← edit only here
            │
            │  push to main
            ▼
@@ -33,7 +33,7 @@ jl-cmd/claude-code-config
   Each target repo (including jl-cmd/claude-code-config):
   .github/workflows/sync-ai-rules.yml  (listener)
            │
-           ├─▶  .github/copilot-instructions.md  (downstream repos only)
+           ├─▶  AGENTS.md  (downstream repos only)
            └─▶  .cursor/BUGBOT.md  (all targets; canonical repo: this path only)
                         │
                         │  ~60s later
@@ -46,7 +46,7 @@ jl-cmd/claude-code-config
 
 ## Editing rules
 
-**Always edit `.github/copilot-instructions.md` in `jl-cmd/claude-code-config`.**
+**Always edit `AGENTS.md` in `jl-cmd/claude-code-config`.**
 Never edit destination files directly — any manual change is detected as drift, fails the
 next sync run, and opens a GitHub Issue in the affected repo.
 

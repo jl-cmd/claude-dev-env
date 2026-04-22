@@ -12,9 +12,9 @@ def _bugbot_text() -> str:
     return bugbot_path.read_text(encoding="utf-8")
 
 
-def _copilot_instructions_text() -> str:
-    copilot_path = _repository_root() / ".github" / "copilot-instructions.md"
-    return copilot_path.read_text(encoding="utf-8")
+def _agents_instructions_text() -> str:
+    agents_path = _repository_root() / "AGENTS.md"
+    return agents_path.read_text(encoding="utf-8")
 
 
 def test_bugbot_documents_upper_snake_exemptions_matching_hook() -> None:
@@ -56,9 +56,9 @@ def test_bugbot_file_length_matches_hook_advisory_behavior() -> None:
     assert "hard limit" not in lower
 
 
-def test_copilot_instructions_upper_snake_path_exemptions() -> None:
-    """GitHub Copilot instructions document UPPER_SNAKE path exemptions without naming implementation files."""
-    text = _copilot_instructions_text()
+def test_agents_instructions_upper_snake_path_exemptions() -> None:
+    """GitHub AGENTS instructions document UPPER_SNAKE path exemptions without naming implementation files."""
+    text = _agents_instructions_text()
     lower = text.lower()
     assert "/migrations/" in text
     assert "/workflow/" in text
@@ -72,9 +72,9 @@ def test_copilot_instructions_upper_snake_path_exemptions() -> None:
     assert "code_rules_enforcer" not in lower
 
 
-def test_copilot_instructions_file_length_is_advisory_smell_not_hard_gate() -> None:
-    """Copilot instructions describe length as advisory context, not a blocking rule."""
-    text = _copilot_instructions_text()
+def test_agents_instructions_file_length_is_advisory_smell_not_hard_gate() -> None:
+    """AGENTS instructions describe length as advisory context, not a blocking rule."""
+    text = _agents_instructions_text()
     lower = text.lower()
     assert "400" in text
     assert "1000" in text
@@ -85,9 +85,9 @@ def test_copilot_instructions_file_length_is_advisory_smell_not_hard_gate() -> N
     assert "hook" not in lower
 
 
-def test_copilot_workflow_registry_phrasing_describes_substring_match() -> None:
+def test_agents_workflow_registry_phrasing_describes_substring_match() -> None:
     """Workflow exemption must describe path substring matching, not basename-only matching."""
-    text = _copilot_instructions_text()
+    text = _agents_instructions_text()
     workflow_label = "Workflow registries:"
     workflow_bullet_start = text.index(workflow_label)
     newline_after_bullet = text.index("\n", workflow_bullet_start)

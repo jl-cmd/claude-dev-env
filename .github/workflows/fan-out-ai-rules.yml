@@ -3,7 +3,7 @@ name: Fan-out AI Rules
 on:
   push:
     branches: [main]
-    paths: [".github/copilot-instructions.md"]
+    paths: ["AGENTS.md"]
   workflow_dispatch:
   schedule:
     - cron: "0 12 * * 1"
@@ -42,5 +42,5 @@ jobs:
           JONECHO_TOKEN: ${{ steps.jonecho-token.outputs.token }}
           JLCMD_TOKEN: ${{ steps.jlcmd-token.outputs.token }}
           SOURCE_COMMIT: ${{ github.sha }}
-          SOURCE_SHA: ${{ hashFiles('.github/copilot-instructions.md') }}
+          SOURCE_SHA: ${{ hashFiles('AGENTS.md') }}
         run: python scripts/fan_out_dispatch.py

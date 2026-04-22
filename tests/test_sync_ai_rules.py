@@ -25,21 +25,21 @@ class TestEffectiveDestinationPaths:
 
 
 class TestCanonicalRepositoryMain:
-    def should_write_only_bugbot_and_leave_copilot_untouched(
+    def should_write_only_bugbot_and_leave_agents_untouched(
         self, git_repo: Path, sync_env: None
     ) -> None:
-        copilot_path = git_repo / ".github" / "copilot-instructions.md"
-        copilot_path.parent.mkdir(parents=True, exist_ok=True)
+        agents_path = git_repo / "AGENTS.md"
+        agents_path.parent.mkdir(parents=True, exist_ok=True)
         human_content = "# Human headerless source\n\nPreserved.\n"
-        copilot_path.write_text(human_content, encoding="utf-8")
+        agents_path.write_text(human_content, encoding="utf-8")
         subprocess.run(
-            ["git", "add", str(copilot_path)],
+            ["git", "add", str(agents_path)],
             cwd=str(git_repo),
             check=True,
             capture_output=True,
         )
         subprocess.run(
-            ["git", "commit", "-m", "Seed human copilot source"],
+            ["git", "commit", "-m", "Seed human agents source"],
             cwd=str(git_repo),
             check=True,
             capture_output=True,
@@ -50,7 +50,7 @@ class TestCanonicalRepositoryMain:
         )
 
         assert exit_code == 0
-        assert copilot_path.read_text(encoding="utf-8") == human_content
+        assert agents_path.read_text(encoding="utf-8") == human_content
         bugbot_path = git_repo / ".cursor" / "BUGBOT.md"
         assert bugbot_path.exists()
         stripped_body = sync_ai_rules.strip_sync_header(
@@ -255,13 +255,13 @@ class TestSyncNoDestinationScenario:
 
         assert exit_code == 0
 
-    def should_create_copilot_instructions_file(
+    def should_create_agents_file(
         self, git_repo: Path, sync_env: None
     ) -> None:
         run_sync_with_canonical_body()
 
-        copilot_path = git_repo / ".github" / "copilot-instructions.md"
-        assert copilot_path.exists()
+        agents_path = git_repo / "AGENTS.md"
+        assert agents_path.exists()
 
     def should_create_bugbot_file(self, git_repo: Path, sync_env: None) -> None:
         run_sync_with_canonical_body()
@@ -274,10 +274,10 @@ class TestSyncNoDestinationScenario:
     ) -> None:
         run_sync_with_canonical_body()
 
-        copilot_path = git_repo / ".github" / "copilot-instructions.md"
+        agents_path = git_repo / "AGENTS.md"
         bugbot_path = git_repo / ".cursor" / "BUGBOT.md"
 
-        for destination in (copilot_path, bugbot_path):
+        for destination in (agents_path, bugbot_path):
             content = destination.read_text(encoding="utf-8")
             stripped_body = sync_ai_rules.strip_sync_header(content)
             assert stripped_body == CANONICAL_BODY
@@ -287,8 +287,8 @@ class TestSyncNoDestinationScenario:
     ) -> None:
         run_sync_with_canonical_body()
 
-        copilot_path = git_repo / ".github" / "copilot-instructions.md"
-        assert FAKE_SOURCE_COMMIT in copilot_path.read_text(encoding="utf-8")
+        agents_path = git_repo / "AGENTS.md"
+        assert FAKE_SOURCE_COMMIT in agents_path.read_text(encoding="utf-8")
 
     def should_create_exactly_one_bot_commit(
         self, git_repo: Path, sync_env: None
@@ -514,8 +514,8 @@ class TestEmptyEnvVarFallback:
 
         run_sync_with_canonical_body()
 
-        copilot_path = git_repo / ".github" / "copilot-instructions.md"
-        header_content = copilot_path.read_text(encoding="utf-8")
+        agents_path = git_repo / "AGENTS.md"
+        header_content = agents_path.read_text(encoding="utf-8")
         assert sync_ai_rules.UNKNOWN_COMMIT_PLACEHOLDER in header_content
 
     def should_treat_empty_force_initial_overwrite_as_false(
@@ -556,9 +556,9 @@ class TestGitignoreWildcard:
         exit_code = run_sync_with_canonical_body()
 
         assert exit_code == 0
-        copilot_path = git_repo / ".github" / "copilot-instructions.md"
+        agents_path = git_repo / "AGENTS.md"
         bugbot_path = git_repo / ".cursor" / "BUGBOT.md"
-        assert copilot_path.exists()
+        assert agents_path.exists()
         assert bugbot_path.exists()
 
 
@@ -581,7 +581,7 @@ class TestFindLastBotCommitUsesCommitterEmail:
     def should_detect_bot_commit_when_author_is_human_and_committer_is_bot(
         self, git_repo: Path
     ) -> None:
-        destination_path = ".github/copilot-instructions.md"
+        destination_path = "AGENTS.md"
         full_path = git_repo / destination_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text("body content\n", encoding="utf-8")
@@ -675,8 +675,8 @@ class TestDriftReportCombinesDestinationsIntoSingleIssue:
     def should_open_exactly_one_issue_when_both_destinations_drift(self) -> None:
         all_errors: list[sync_ai_rules.DriftError] = [
             sync_ai_rules.DriftError(
-                destination_path=".github/copilot-instructions.md",
-                message="Drift in copilot file",
+                destination_path="AGENTS.md",
+                message="Drift in agents file",
             ),
             sync_ai_rules.DriftError(
                 destination_path=".cursor/BUGBOT.md",
@@ -702,8 +702,8 @@ class TestDriftReportCombinesDestinationsIntoSingleIssue:
     def should_add_exactly_one_comment_when_existing_issue_exists(self) -> None:
         all_errors: list[sync_ai_rules.DriftError] = [
             sync_ai_rules.DriftError(
-                destination_path=".github/copilot-instructions.md",
-                message="Drift in copilot file",
+                destination_path="AGENTS.md",
+                message="Drift in agents file",
             ),
             sync_ai_rules.DriftError(
                 destination_path=".cursor/BUGBOT.md",
@@ -755,7 +755,7 @@ class TestCommitAndPushSyncAbortsRebaseOnConflict:
         with patch("sync_ai_rules.subprocess.run", side_effect=fake_run):
             with patch("sync_ai_rules.time.sleep"):
                 sync_ai_rules.commit_and_push_sync(
-                    [".github/copilot-instructions.md"], "abc", "sha"
+                    ["AGENTS.md"], "abc", "sha"
                 )
 
         rebase_abort_positions = [

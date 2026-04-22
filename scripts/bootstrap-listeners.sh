@@ -167,7 +167,7 @@ deploy_to_repo() {
 This PR installs the sync-ai-rules listener workflow and helper script.
 
 **What it does:** On each \`repository_dispatch\` event from \`${SOURCE_REPO}\`, this workflow
-syncs \`.github/copilot-instructions.md\` and \`.cursor/BUGBOT.md\` from the canonical
+syncs \`AGENTS.md\` and \`.cursor/BUGBOT.md\` from the canonical
 source of truth. No new secrets are required — only the default \`GITHUB_TOKEN\` is used.
 
 **Docs:** ${DOCS_LINK}

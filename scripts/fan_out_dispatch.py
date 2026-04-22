@@ -18,7 +18,7 @@ from typing import Optional
 
 
 SOURCE_REPO_FULL_NAME = "jl-cmd/claude-code-config"
-SOURCE_FILE_RELATIVE_PATH = ".github/copilot-instructions.md"
+SOURCE_FILE_RELATIVE_PATH = "AGENTS.md"
 RAW_GITHUB_CONTENT_BASE_URL = "https://raw.githubusercontent.com"
 DEFAULT_SOURCE_BRANCH = "main"
 DISPATCH_EVENT_TYPE = "sync-ai-rules"

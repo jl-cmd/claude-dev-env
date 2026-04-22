@@ -1,6 +1,6 @@
 """Tests for magic-value allowlist alignment with CODE_RULES §HOOK-ENFORCED.
 
-CODE_RULES.md and .github/copilot-instructions.md both state that only
+CODE_RULES.md and AGENTS.md both state that only
 0, 1, and -1 (plus their float forms 0.0, 1.0) are exempt from the
 magic-value check. Prior to this change, the hook silently allowed 2
 and 100 as well, making the hook more permissive than the written rule.
