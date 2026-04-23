@@ -7,7 +7,9 @@ team, no 10-loop convergence: one audit call, one fix call, one commit and
 push per PR.
 
 Stateless and PII-free. All GitHub identifiers arrive on stdin as JSON;
-``GROQ_API_KEY`` is read from the environment. Output is JSON on stdout.
+``GROQ_API_KEY`` is read from the environment after loading
+``packages/claude-dev-env/.env`` when that file exists (gitignored; see
+``.env.example``). Output is JSON on stdout.
 
 Pipeline (per invocation):
   1. Read PR metadata, unified diff, file contents from stdin.
@@ -74,12 +76,16 @@ from config.groq_bugteam_config import (
     MAXIMUM_DIFF_CHARACTERS,
     MAXIMUM_FILE_CONTENT_CHARACTERS,
     MAXIMUM_FINDINGS_PER_PR,
+    MISSING_API_KEY_ERROR,
     NO_FINDINGS_REVIEW_BODY,
     PIPELINE_FAILURE_EXIT_CODE,
     REVIEW_BODY_HEADER_TEMPLATE,
     TEXT_CLAMP_HEAD_PARTS,
     TEXT_CLAMP_TOTAL_PARTS,
 )
+
+from groq_bugteam_dotenv import load_claude_dev_env_dotenv_file
+
 
 @dataclass(frozen=True)
 class GroqCallResult:
@@ -283,7 +289,10 @@ def should_write_fixed_file(
 def is_safe_relative_path(each_path: str) -> bool:
     if os.path.isabs(each_path):
         return False
-    if each_path.startswith(("/", "\\")):
+    posix_style_each_path = each_path.replace("\\", "/")
+    if posix_style_each_path.startswith("/"):
+        return False
+    if each_path.startswith("\\"):
         return False
     normalized = os.path.normpath(each_path)
     if normalized.startswith(".." + os.sep) or normalized == "..":
@@ -471,9 +480,10 @@ def build_review_body(
 
 
 def run_pipeline(input_data: dict) -> dict:
+    load_claude_dev_env_dotenv_file()
     api_key = os.environ.get("GROQ_API_KEY", "").strip()
     if not api_key:
-        return {"error": "GROQ_API_KEY not set in environment"}
+        return {"error": MISSING_API_KEY_ERROR}
 
     diff_text = input_data.get("diff", "")
     files_content = input_data.get("files_content", {})
@@ -599,7 +609,7 @@ def run_pipeline(input_data: dict) -> dict:
     }
 
 
-def main() -> None:
+def run_default_pipeline_main() -> None:
     try:
         stdin_text = sys.stdin.read()
         input_data = json.loads(stdin_text)
@@ -616,6 +626,21 @@ def main() -> None:
     sys.stdout.write("\n")
     if "error" in pipeline_outcome:
         sys.exit(PIPELINE_FAILURE_EXIT_CODE)
+
+
+from groq_bugteam_spec import (
+    apply_fix_from_spec,
+    is_spec_mode_invocation,
+    run_spec_mode_main,
+)
+
+
+def main() -> None:
+    load_claude_dev_env_dotenv_file()
+    if is_spec_mode_invocation(sys.argv[1:]):
+        run_spec_mode_main()
+        return
+    run_default_pipeline_main()
 
 
 if __name__ == "__main__":

@@ -124,6 +124,10 @@ TeamCreate(
 
 **Roles (spawned per loop, not here):** bugfind → `code-quality-agent` opus (4.7) at xhigh effort; bugfix → `clean-coder` opus (4.7) at xhigh effort. `model="opus"` resolves to Opus 4.7 on the Anthropic API and runs at the model's default `xhigh` effort level — see [`CONSTRAINTS.md`](CONSTRAINTS.md) § **Opus 4.7 at xhigh effort for both teammates** for rationale. **Display:** inherit `teammateMode` from `~/.claude.json`. Reference subagent types by name when spawning teammates ([`sources.md`](sources.md) § Referencing subagent types when spawning teammates).
 
+**Optional Groq-backed FIX path (explicit opt-in only):** the default flow above always uses Opus teammates. A separate optional path exists only when the user explicitly sets `BUGTEAM_FIX_IMPLEMENTER=groq-coder` before invocation: spawn the FIX teammate with `subagent_type="groq-coder"`. Before Step 3, `groq_bugteam.py` loads `packages/claude-dev-env/.env` when that file exists (gitignored; start from `packages/claude-dev-env/.env.example`). If `GROQ_API_KEY` is still unset after that load, stop and prompt the user to create `packages/claude-dev-env/.env` from the example path above—do not continue the Groq path without a key. Any other `BUGTEAM_FIX_IMPLEMENTER` value (or unset) keeps `clean-coder` on Opus. The FIX spawn XML in [`PROMPTS.md`](PROMPTS.md) is identical for both implementers.
+
+**`--bugbot-retrigger` flag:** when present on the `/bugteam` invocation, after every successful FIX push in Step 3, post an additional `bugbot run` issue comment via the Step 2.5 issue-comments fallback endpoint (`POST .../issues/{issue}/comments`) to re-trigger Cursor's bugbot on the new commit. Omit when the flag is absent.
+
 **Loop state (lead; not a single script):**
 
 ```bash

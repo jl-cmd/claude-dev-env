@@ -12,6 +12,7 @@ import re
 import sys
 import urllib.error
 
+import groq_bugteam_dotenv
 import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -497,8 +498,13 @@ class TestDecodeSubprocessStderr:
 
 
 class TestRunPipelineRefusals:
-    def test_rejects_missing_api_key(self, monkeypatch):
+    def test_rejects_missing_api_key(self, monkeypatch, tmp_path):
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        monkeypatch.setattr(
+            groq_bugteam_dotenv,
+            "claude_dev_env_dotenv_path",
+            lambda: tmp_path / "missing.env",
+        )
         result = groq_bugteam.run_pipeline({"diff": "anything"})
         assert "error" in result
         assert "GROQ_API_KEY" in result["error"]

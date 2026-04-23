@@ -70,3 +70,14 @@ def test_fix_budget_exceeds_audit_budget():
         groq_bugteam_config.GROQ_FIX_MAX_COMPLETION_TOKENS
         > groq_bugteam_config.GROQ_AUDIT_MAX_COMPLETION_TOKENS
     )
+
+
+def test_spec_implementer_prompt_is_distinct_from_fix_prompt():
+    assert (
+        groq_bugteam_config.SPEC_IMPLEMENTER_SYSTEM_PROMPT
+        != groq_bugteam_config.FIX_SYSTEM_PROMPT
+    )
+
+
+def test_spec_implementer_prompt_contains_mechanical_discipline_marker():
+    assert "mechanical edits only" in groq_bugteam_config.SPEC_IMPLEMENTER_SYSTEM_PROMPT

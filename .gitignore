@@ -29,3 +29,6 @@ data/prompts/.draft-prompt.xml
 # Per-user project-path registry; lives in ~/.claude/ and must never land in the repo
 project-paths.json
 **/project-paths.json
+
+# Local Groq API key for packages/claude-dev-env/scripts/groq_bugteam.py
+packages/claude-dev-env/.env

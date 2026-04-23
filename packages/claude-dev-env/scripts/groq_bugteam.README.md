@@ -58,6 +58,7 @@ The caller posts the review to GitHub. This script does not touch the GitHub API
 ## Required environment
 
 - `GROQ_API_KEY` — from https://console.groq.com/keys. Free tier is enough for a single PR.
+- **Local file (preferred):** copy `packages/claude-dev-env/.env.example` to `packages/claude-dev-env/.env`, set `GROQ_API_KEY=...` inside the copy. That path is gitignored; `groq_bugteam.py` loads it on startup when the file exists (without overriding variables already exported in your shell).
 - `git` on PATH, configured to push to the target remote.
 - Python 3.10+. No external deps (stdlib `urllib.request` only).
 
@@ -65,6 +66,7 @@ The caller posts the review to GitHub. This script does not touch the GitHub API
 
 ```bash
 # Assumes you already have a git worktree checked out to the PR head branch.
+# Either use packages/claude-dev-env/.env (see Required environment) or:
 export GROQ_API_KEY=gsk_...
 
 python3 - <<'EOF' | python3 packages/claude-dev-env/scripts/groq_bugteam.py
