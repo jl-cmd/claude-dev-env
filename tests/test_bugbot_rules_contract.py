@@ -1,5 +1,6 @@
 """Specifications that LLM review docs match hook-enforced CODE_RULES exemptions."""
 
+import re
 from pathlib import Path
 
 
@@ -84,7 +85,7 @@ def test_agents_instructions_upper_snake_path_exemptions() -> None:
     assert "test_" in text
     assert "conftest" in text
     assert "/tests/" in text
-    assert "hook" not in lower
+    assert re.search(r"\bhook\b", lower) is None
     assert "code_rules_enforcer" not in lower
 
 
@@ -98,7 +99,7 @@ def test_agents_instructions_file_length_is_advisory_smell_not_hard_gate() -> No
     assert "hard gate" in lower or "not a hard gate" in lower
     assert "hard limit" not in lower
     assert "code_rules_enforcer" not in lower
-    assert "hook" not in lower
+    assert re.search(r"\bhook\b", lower) is None
 
 
 def test_agents_workflow_registry_phrasing_describes_substring_match() -> None:

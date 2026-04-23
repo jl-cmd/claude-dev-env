@@ -169,7 +169,7 @@ Rationale (normative for tool authors, not a loophole): Anthropic’s Agent Skil
 
 **Source repository (public):** [github.com/jl-cmd/claude-code-config](https://github.com/jl-cmd/claude-code-config)
 
-1. **MUST obtain** a checkout of `packages/claude-dev-env` from that repository—clone the full repo or copy only that subtree (for example into `vendor/claude-dev-env` in your project). The gate loads `hooks/blocking/code_rules_enforcer.py` relative to the script path; **MUST** preserve this layout under one `claude-dev-env` directory: `skills/bugteam/scripts/*.py` and `hooks/blocking/` (including the enforcer and its dependencies).
+1. **MUST obtain** a checkout of `packages/claude-dev-env` from that repository—clone the full repo or copy only that subtree (for example into `vendor/claude-dev-env` in your project). The gate imports the blocking code-rules implementation from `hooks/blocking/` relative to the script path; **MUST** preserve this layout under one `claude-dev-env` directory: `skills/bugteam/scripts/*.py` and `hooks/blocking/` (including that tree and its dependencies).
 
 2. **MUST** set a root for invocations (example environment variable): `CLAUDE_DEV_ENV_ROOT=/absolute/path/to/packages/claude-dev-env` (the directory that directly contains `hooks/` and `skills/`).
 

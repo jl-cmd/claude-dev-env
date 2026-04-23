@@ -90,7 +90,7 @@ def test_suppresses_output_on_gh_redirect_deny() -> None:
 
 
 def test_asks_on_rm_rf_still_works() -> None:
-    payload = _make_bash_payload("rm -rf /tmp/somewhere")
+    payload = _make_bash_payload("rm -rf /var/log/myapp")
     result = _run_hook(payload)
     response = json.loads(result.stdout)
     assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
@@ -159,10 +159,287 @@ def test_gh_api_post_comment_is_allowed_when_redirect_env_var_is_unset() -> None
     assert result.returncode == 0
 
 
-def test_rm_rf_still_asks_when_redirect_env_var_is_unset() -> None:
-    payload = _make_bash_payload("rm -rf /tmp/somewhere")
+def _run_rm_hook(payload: dict) -> subprocess.CompletedProcess[str]:
+    child_environment = os.environ.copy()
+    child_environment.pop(GH_REDIRECT_ACTIVE_ENV_VAR, None)
+    child_environment.pop("CLAUDE_DESTRUCTIVE_DISABLE_EPHEMERAL_AUTO_ALLOW", None)
+    return subprocess.run(
+        [sys.executable, str(SCRIPT_PATH)],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        check=False,
+        env=child_environment,
+    )
 
-    result = _run_hook(payload, gh_redirect_active=False)
+
+def test_rm_rf_asks_when_target_is_non_ephemeral_path() -> None:
+    payload = _make_bash_payload("rm -rf /var/log/myapp")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_allowed_when_target_is_under_tmp_segment() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/some_scratch_dir")
+
+    result = _run_rm_hook(payload)
+
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
+
+
+def test_rm_rf_allowed_when_target_is_under_os_temp_directory() -> None:
+    system_temp_subdirectory = Path(tempfile.mkdtemp(prefix="rm_target_"))
+    forward_slash_temp_path = str(system_temp_subdirectory).replace("\\", "/")
+    payload = _make_bash_payload(f"rm -rf {forward_slash_temp_path}")
+
+    result = _run_rm_hook(payload)
+
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
+
+
+def test_rm_rf_allowed_when_target_is_under_worktrees_segment() -> None:
+    payload = _make_bash_payload("rm -rf /Users/me/repo/worktrees/feature_branch/build")
+
+    result = _run_rm_hook(payload)
+
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
+
+
+def test_rm_rf_asks_when_target_is_bare_worktrees_directory() -> None:
+    payload = _make_bash_payload("rm -rf /Users/me/repo/worktrees")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_rm_includes_option_with_equals_sign() -> None:
+    payload = _make_bash_payload("rm -rf --files0-from=/tmp/list /tmp/scratch")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_allowed_when_both_targets_are_ephemeral() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/first_dir /tmp/second_dir")
+
+    result = _run_rm_hook(payload)
+
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
+
+
+def test_rm_rf_asks_when_any_target_is_non_ephemeral() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/scratch /etc/passwd")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_double_dash_includes_hyphen_prefixed_non_ephemeral_target() -> None:
+    payload = _make_bash_payload("rm -rf -- /tmp/scratch -non_ephemeral")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_command_is_compound_with_ampersand() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/reply && gh pr checks 19")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_target_is_bare_tmp_root() -> None:
+    payload = _make_bash_payload("rm -rf /tmp")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_target_is_double_slash_tmp_root() -> None:
+    payload = _make_bash_payload("rm -rf //tmp")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_target_is_bare_os_temp_root() -> None:
+    payload = _make_bash_payload(f"rm -rf {tempfile.gettempdir()}")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_ephemeral_auto_allow_disabled_via_env_var() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/scratch")
+
+    child_environment = os.environ.copy()
+    child_environment.pop(GH_REDIRECT_ACTIVE_ENV_VAR, None)
+    child_environment["CLAUDE_DESTRUCTIVE_DISABLE_EPHEMERAL_AUTO_ALLOW"] = "1"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH)],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        check=False,
+        env=child_environment,
+    )
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_recursive_force_long_flags_allowed_under_tmp() -> None:
+    payload = _make_bash_payload("rm --recursive --force /tmp/long_flag_scratch")
+
+    result = _run_rm_hook(payload)
+
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
+
+
+def test_rm_rf_asks_when_quoted_dotdot_traverses_out_of_ephemeral_root() -> None:
+    payload = _make_bash_payload('rm -rf /tmp/".."/etc')
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_allowed_when_quoted_path_is_legitimate_ephemeral() -> None:
+    payload = _make_bash_payload('rm -rf "/tmp/some scratch dir"')
+
+    result = _run_rm_hook(payload)
+
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
+
+
+def test_rm_rf_asks_when_single_quoted_dotdot_traverses_out_of_ephemeral() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/'..'/etc")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_target_is_glob_wildcard_under_tmp() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/*")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_target_is_question_mark_glob_under_tmp() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/?")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_target_is_bracket_glob_under_tmp() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/[abc]")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_target_is_worktrees_glob() -> None:
+    payload = _make_bash_payload("rm -rf /worktrees/*")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_target_is_os_temp_root_glob() -> None:
+    system_temporary_root = tempfile.gettempdir()
+    forward_slash_temp_root = system_temporary_root.replace("\\", "/")
+    payload = _make_bash_payload(f"rm -rf {forward_slash_temp_root}/*")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_allowed_when_unquoted_windows_backslash_target_is_ephemeral() -> None:
+    system_temporary_root = tempfile.gettempdir()
+    windows_style_target = system_temporary_root.replace("/", "\\") + "\\scratch"
+    payload = _make_bash_payload(f"rm -rf {windows_style_target}")
+
+    result = _run_rm_hook(payload)
+
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
+
+
+def test_rm_rf_allowed_when_unquoted_windows_backslash_target_contains_worktrees_segment() -> None:
+    payload = _make_bash_payload(
+        r"rm -rf C:\Users\developer\project\worktrees\feature_branch\build"
+    )
+
+    result = _run_rm_hook(payload)
+
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
+
+
+def test_rm_rf_allowed_when_finding_example_windows_backslash_ephemeral_target() -> None:
+    payload = _make_bash_payload(
+        r"rm -rf C:\Users\jon\AppData\Local\Temp\scratch"
+    )
+
+    result = _run_rm_hook(payload)
+
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
+
+
+def test_rm_rf_asks_when_target_is_literal_tmp_star_finding_example() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/*")
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_target_basename_is_wildcard_with_prefix_under_tmp() -> None:
+    payload = _make_bash_payload("rm -rf /tmp/foo*")
+
+    result = _run_rm_hook(payload)
 
     response = json.loads(result.stdout)
     assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
