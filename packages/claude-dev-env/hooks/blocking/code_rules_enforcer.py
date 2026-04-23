@@ -493,18 +493,24 @@ def check_magic_values(content: str, file_path: str) -> list[str]:
 
 def _extract_fstring_literal_parts(
     joined_string_node: ast.JoinedStr,
+    interpolation_placeholder: str = "INTERP",
 ) -> tuple[str, str]:
     """Return (display_body, shape_body) for an f-string node.
 
     ``display_body`` concatenates only the literal segments for use in the
     human-readable flag message. ``shape_body`` substitutes each interpolation
-    slot with the placeholder word ``INTERP`` so regex patterns for path
-    shape (``\\w+/\\w+/\\w+``) still match across interpolation boundaries
+    slot with ``interpolation_placeholder`` so callers can choose a token that
+    both preserves structural shape and does not collide with literal text in
+    the source. The default ``"INTERP"`` keeps regex patterns for path shape
+    (``\\w+/\\w+/\\w+``) matching across interpolation boundaries
     (e.g. ``/api/v1/{id}/home`` keeps its three path segments instead of
-    collapsing to ``/api/v1//home``). Escaped braces (``{{`` / ``}}``) are
-    already decoded by :mod:`ast` into their literal forms.
+    collapsing to ``/api/v1//home``). Callers that will compare shape bodies
+    verbatim — such as the skeleton builder — should pass their final token
+    here directly rather than post-processing with ``.replace``, since that
+    would corrupt literal text containing the default placeholder. Escaped
+    braces (``{{`` / ``}}``) are already decoded by :mod:`ast` into their
+    literal forms.
     """
-    interpolation_placeholder = "INTERP"
     display_segments: list[str] = []
     shape_segments: list[str] = []
     for each_part in joined_string_node.values:
@@ -967,9 +973,9 @@ def _assign_target_names_for_bool(node: ast.Assign) -> list[str]:
 def _annassign_target_name_for_bool(node: ast.AnnAssign) -> list[str]:
     if not isinstance(node.target, ast.Name):
         return []
-    annotation_is_bool = isinstance(node.annotation, ast.Name) and node.annotation.id == "bool"
-    value_is_bool = node.value is not None and _is_bool_constant(node.value)
-    if annotation_is_bool and value_is_bool:
+    is_annotation_bool_type = isinstance(node.annotation, ast.Name) and node.annotation.id == "bool"
+    is_value_bool_constant = node.value is not None and _is_bool_constant(node.value)
+    if is_annotation_bool_type and is_value_bool_constant:
         return [node.target.id]
     return []
 
@@ -1057,6 +1063,218 @@ def check_boolean_naming(content: str, file_path: str) -> list[str]:
             break
     return issues
 
+
+
+def _decorator_name_contains_skip(decorator_node: ast.expr) -> bool:
+    """Return True when a decorator AST node references an identifier containing 'skip'."""
+    if isinstance(decorator_node, ast.Name):
+        return "skip" in decorator_node.id.lower()
+    if isinstance(decorator_node, ast.Attribute):
+        return "skip" in decorator_node.attr.lower()
+    if isinstance(decorator_node, ast.Call):
+        return _decorator_name_contains_skip(decorator_node.func)
+    return False
+
+
+def check_skip_decorators_in_tests(content: str, file_path: str) -> list[str]:
+    """Flag @skip decorators on test functions in test files.
+
+    Tests must fail on missing dependencies rather than skip silently.
+    Only applies to test files; production files are exempt.
+    Only flags decorators applied to functions whose names start with 'test'.
+    """
+    if not is_test_file(file_path):
+        return []
+
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(syntax_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not each_node.name.startswith("test"):
+            continue
+        for each_decorator in each_node.decorator_list:
+            if _decorator_name_contains_skip(each_decorator):
+                issues.append(
+                    f"Line {each_decorator.lineno}: @skip decorator on test"
+                    f" — tests must fail on missing deps"
+                )
+                if len(issues) >= MAX_ISSUES_PER_CHECK:
+                    return issues
+
+    return issues
+
+
+def _collect_assert_nodes_bounded(node: ast.AST) -> list[ast.Assert]:
+    """Collect Assert nodes under node without crossing scope boundaries.
+
+    Terminates descent at FunctionDef, AsyncFunctionDef, ClassDef, and Lambda
+    nodes so that assertions belonging to nested scopes are not attributed to
+    the enclosing function body.
+    """
+    scope_boundary_types = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+    assertions: list[ast.Assert] = []
+    nodes_to_visit: list[ast.AST] = list(ast.iter_child_nodes(node))
+    while nodes_to_visit:
+        current = nodes_to_visit.pop()
+        if isinstance(current, ast.Assert):
+            assertions.append(current)
+        if isinstance(current, scope_boundary_types):
+            continue
+        nodes_to_visit.extend(ast.iter_child_nodes(current))
+    return assertions
+
+
+def _collect_body_assertions(statement_nodes: list[ast.stmt]) -> list[ast.Assert]:
+    """Collect Assert nodes from a function body without descending into nested scopes."""
+    assertions: list[ast.Assert] = []
+    for each_stmt in statement_nodes:
+        if isinstance(each_stmt, ast.Assert):
+            assertions.append(each_stmt)
+            continue
+        if isinstance(each_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        assertions.extend(_collect_assert_nodes_bounded(each_stmt))
+    return assertions
+
+
+def _is_existence_only_assertion(call_node: ast.Call) -> bool:
+    """Return True when a Call node is callable() or hasattr()."""
+    function_reference = call_node.func
+    if isinstance(function_reference, ast.Name):
+        return function_reference.id in ("callable", "hasattr")
+    if isinstance(function_reference, ast.Attribute):
+        return function_reference.attr in ("callable", "hasattr")
+    return False
+
+
+def _test_body_has_only_existence_assertions(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    """Return True when a test function body contains only existence-check assertions."""
+    assertion_nodes = _collect_body_assertions(function_node.body)
+    if not assertion_nodes:
+        return False
+
+    non_existence_assertions = 0
+    for each_assert in assertion_nodes:
+        test_expr = each_assert.test
+        if isinstance(test_expr, ast.Call) and _is_existence_only_assertion(test_expr):
+            continue
+        if isinstance(test_expr, ast.Compare):
+            comparators = test_expr.comparators
+            ops = test_expr.ops
+            if (
+                len(ops) == 1
+                and isinstance(ops[0], ast.IsNot)
+                and len(comparators) == 1
+                and isinstance(comparators[0], ast.Constant)
+                and comparators[0].value is None
+            ):
+                continue
+        non_existence_assertions += 1
+
+    return non_existence_assertions == 0
+
+
+def check_existence_check_tests(content: str, file_path: str) -> list[str]:
+    """Flag test functions containing only existence-check assertions.
+
+    Tests asserting only callable(x), hasattr(m, 'name'), or x is not None
+    verify nothing about behavior. They should be deleted or replaced with
+    assertions that exercise actual functionality.
+    Only applies to test files.
+    """
+    if not is_test_file(file_path):
+        return []
+
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(syntax_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not each_node.name.startswith("test"):
+            continue
+        if _test_body_has_only_existence_assertions(each_node):
+            issues.append(
+                f"Line {each_node.lineno}: existence-check test"
+                f" — delete or replace with a behavior test"
+            )
+            if len(issues) >= MAX_ISSUES_PER_CHECK:
+                return issues
+
+    return issues
+
+
+def _is_upper_snake_name(name: str) -> bool:
+    """Return True when an identifier is written in UPPER_SNAKE_CASE."""
+    return bool(UPPER_SNAKE_CONSTANT_PATTERN.match(name))
+
+
+def _assert_is_constant_equality_only(assert_node: ast.Assert) -> bool:
+    """Return True when the assertion compares an UPPER_SNAKE name to a literal."""
+    test_expr = assert_node.test
+    if not isinstance(test_expr, ast.Compare):
+        return False
+    if len(test_expr.ops) != 1 or not isinstance(test_expr.ops[0], ast.Eq):
+        return False
+    left = test_expr.left
+    right = test_expr.comparators[0]
+    is_left_upper_snake = isinstance(left, ast.Name) and _is_upper_snake_name(left.id)
+    is_right_upper_snake = isinstance(right, ast.Name) and _is_upper_snake_name(right.id)
+    if is_left_upper_snake and is_right_upper_snake:
+        return False
+    is_left_a_literal = isinstance(left, ast.Constant)
+    is_right_a_literal = isinstance(right, ast.Constant)
+    return (
+        (is_left_upper_snake and is_right_a_literal)
+        or (is_right_upper_snake and is_left_a_literal)
+    )
+
+
+def check_constant_equality_tests(content: str, file_path: str) -> list[str]:
+    """Flag test functions whose sole assertion compares a constant to a literal.
+
+    Tests like 'assert CACHE_DIR == "cache"' cover no behavior — they just
+    verify the constant has not changed. Such tests should be deleted.
+    Only applies to test files; production files are exempt.
+    """
+    if not is_test_file(file_path):
+        return []
+
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(syntax_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not each_node.name.startswith("test"):
+            continue
+        all_assertions = _collect_body_assertions(each_node.body)
+        if not all_assertions:
+            continue
+        if len(all_assertions) > 1:
+            continue
+        if _assert_is_constant_equality_only(all_assertions[0]):
+            issues.append(
+                f"Line {each_node.lineno}: constant-value test"
+                f" — delete; tests must cover behavior"
+            )
+            if len(issues) >= MAX_ISSUES_PER_CHECK:
+                return issues
+
+    return issues
 
 
 def _is_upper_snake_constant_name(name: str) -> bool:
@@ -1170,6 +1388,549 @@ def check_file_global_constants_use_count(content: str, file_path: str) -> list[
     return issues
 
 
+def _collect_optional_param_defaults(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> dict[str, ast.expr]:
+    """Return mapping of param name to its default AST node for params with defaults."""
+    arguments = function_node.args
+    all_args = arguments.posonlyargs + arguments.args
+    defaults_aligned = [None] * (len(all_args) - len(arguments.defaults)) + list(arguments.defaults)
+    param_defaults: dict[str, ast.expr] = {}
+    for each_arg, each_default in zip(all_args, defaults_aligned):
+        if each_default is not None:
+            param_defaults[each_arg.arg] = each_default
+    for each_kwarg, each_kwdefault in zip(arguments.kwonlyargs, arguments.kw_defaults):
+        if each_kwdefault is not None:
+            param_defaults[each_kwarg.arg] = each_kwdefault
+    return param_defaults
+
+
+_NON_LITERAL_DEFAULT_SENTINEL = object()
+
+
+def _is_non_literal_default(value: object) -> bool:
+    """Return True when a value is the sentinel for a non-literal default."""
+    return value is _NON_LITERAL_DEFAULT_SENTINEL
+
+
+def _ast_constant_value(node: ast.expr) -> object:
+    """Return the Python value of a Constant node, or a stable sentinel for non-constants.
+
+    Non-literal defaults (e.g. DEFAULT_TIMEOUT) return a single shared sentinel
+    so that the unused-optional check can identify and skip them rather than
+    treating every non-literal as automatically different.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value
+    return _NON_LITERAL_DEFAULT_SENTINEL
+
+
+def _call_passes_keyword_argument_differing_from_default(
+    call_node: ast.Call,
+    param_name: str,
+    default_value: object,
+) -> bool:
+    """Return True when a Call passes param_name with a value different from default.
+
+    Returns True conservatively when **kwargs expansion is present, because the
+    expansion may pass the parameter with an unknown value — treating it as
+    indeterminate prevents false positives from the unused-optional check.
+    """
+    for each_keyword in call_node.keywords:
+        if each_keyword.arg is None:
+            return True
+        if each_keyword.arg == param_name:
+            passed_value = _ast_constant_value(each_keyword.value)
+            return passed_value != default_value
+    return False
+
+
+def _call_has_kwargs_expansion(call_node: ast.Call) -> bool:
+    """Return True when a Call contains a **kwargs expansion (arg=None in AST keywords)."""
+    return any(each_keyword.arg is None for each_keyword in call_node.keywords)
+
+
+def _call_has_starargs_expansion(call_node: ast.Call) -> bool:
+    """Return True when a Call contains a *args expansion (Starred node in positional args)."""
+    return any(isinstance(each_arg, ast.Starred) for each_arg in call_node.args)
+
+
+def _call_passes_positional_argument_for_param(
+    call_node: ast.Call,
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    param_name: str,
+    default_value: object,
+) -> bool:
+    """Return True when a Call passes param_name positionally with a varied value.
+
+    Returns False when **kwargs expansion is present (the keyword helper covers
+    that case). Returns True conservatively when *args expansion is present,
+    because the expanded iterable may provide the parameter at runtime.
+    """
+    if _call_has_kwargs_expansion(call_node):
+        return False
+    if _call_has_starargs_expansion(call_node):
+        return True
+    all_args = function_node.args.posonlyargs + function_node.args.args
+    try:
+        param_index = next(
+            each_index
+            for each_index, each_arg in enumerate(all_args)
+            if each_arg.arg == param_name
+        )
+    except StopIteration:
+        return False
+    if param_index >= len(call_node.args):
+        return False
+    passed_value = _ast_constant_value(call_node.args[param_index])
+    return passed_value != default_value
+
+
+def _function_name_from_call(call_node: ast.Call) -> str | None:
+    """Return the function name for direct calls only, or None.
+
+    Only direct calls (ast.Name) are matched as same-file call sites.
+    Attribute calls like obj.foo() are not counted because the receiver
+    object may not be the same file's definition — returning the attr name
+    would cause false positives against any local function sharing that name.
+    """
+    if isinstance(call_node.func, ast.Name):
+        return call_node.func.id
+    return None
+
+
+BUILTIN_DICT_METHOD_NAMES: frozenset[str] = frozenset({
+    "get", "items", "keys", "values", "update", "pop",
+    "setdefault", "copy", "clear",
+})
+
+
+def _collect_mock_dict_keys(assign_value: ast.expr) -> set[str] | None:
+    """Return the string key set for a dict literal, or None if not a dict literal."""
+    if not isinstance(assign_value, ast.Dict):
+        return None
+    key_names: set[str] = set()
+    for each_key in assign_value.keys:
+        if isinstance(each_key, ast.Constant) and isinstance(each_key.value, str):
+            key_names.add(each_key.value)
+    return key_names
+
+
+def _target_binds_name(target_node: ast.AST, variable_name: str) -> bool:
+    """Return True when an assignment target binds variable_name.
+
+    Handles the recursive assignment target shapes Python permits:
+    a bare ``Name``, a ``Tuple`` or ``List`` of targets (including
+    nested ones), and a ``Starred`` wrapper around any of the above.
+    """
+    if isinstance(target_node, ast.Name):
+        return target_node.id == variable_name
+    if isinstance(target_node, (ast.Tuple, ast.List)):
+        return any(_target_binds_name(each_element, variable_name) for each_element in target_node.elts)
+    if isinstance(target_node, ast.Starred):
+        return _target_binds_name(target_node.value, variable_name)
+    return False
+
+
+def _function_arguments_bind_name(
+    arguments_node: ast.arguments,
+    variable_name: str,
+) -> bool:
+    """Return True when any parameter slot declares variable_name."""
+    all_positional_arguments = list(arguments_node.posonlyargs) + list(arguments_node.args)
+    for each_argument in all_positional_arguments + list(arguments_node.kwonlyargs):
+        if each_argument.arg == variable_name:
+            return True
+    if arguments_node.vararg is not None and arguments_node.vararg.arg == variable_name:
+        return True
+    if arguments_node.kwarg is not None and arguments_node.kwarg.arg == variable_name:
+        return True
+    return False
+
+
+def _node_binds_name(node: ast.AST, variable_name: str) -> bool:
+    """Return True when a single AST node binds variable_name in its enclosing scope."""
+    if isinstance(node, ast.Assign):
+        return any(_target_binds_name(each_target, variable_name) for each_target in node.targets)
+    if isinstance(node, ast.AnnAssign):
+        return _target_binds_name(node.target, variable_name)
+    if isinstance(node, ast.AugAssign):
+        return _target_binds_name(node.target, variable_name)
+    if isinstance(node, (ast.For, ast.AsyncFor)):
+        return _target_binds_name(node.target, variable_name)
+    if isinstance(node, (ast.With, ast.AsyncWith)):
+        for each_item in node.items:
+            optional_target = each_item.optional_vars
+            if optional_target is not None and _target_binds_name(optional_target, variable_name):
+                return True
+        return False
+    if isinstance(node, ast.ExceptHandler):
+        return node.name == variable_name
+    if isinstance(node, ast.NamedExpr):
+        return _target_binds_name(node.target, variable_name)
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
+        for each_alias in node.names:
+            bound_name = each_alias.asname if each_alias.asname is not None else each_alias.name.split(".")[0]
+            if bound_name == variable_name:
+                return True
+        return False
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return node.name == variable_name
+    return False
+
+
+def _body_binds_name_recursively(body_statements: list[ast.stmt], variable_name: str) -> bool:
+    """Return True when any node reachable within body_statements binds variable_name.
+
+    Walks the body using a stack, descending into control-flow constructs
+    (if/for/while/try/with) but treating nested function, async-function,
+    class, and lambda definitions as opaque: their bodies belong to a
+    different scope and do not affect bindings in the enclosing one.
+    Function/class definitions themselves still bind their own name in
+    the enclosing scope, which is handled by _node_binds_name.
+    """
+    nodes_to_visit: list[ast.AST] = list(body_statements)
+    while nodes_to_visit:
+        current_node = nodes_to_visit.pop()
+        if _node_binds_name(current_node, variable_name):
+            return True
+        if isinstance(current_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        nodes_to_visit.extend(ast.iter_child_nodes(current_node))
+    return False
+
+
+def _scope_shadows_name(
+    scope_node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
+    variable_name: str,
+) -> bool:
+    """Return True when scope_node locally binds variable_name.
+
+    Detects every binding form Python treats as a local assignment:
+    plain ``Assign``, annotated ``AnnAssign``, augmented ``AugAssign``,
+    ``for`` targets, ``with`` as-targets, ``except`` handler names,
+    walrus ``NamedExpr`` targets, ``import`` and ``from`` bindings
+    (base name or ``as`` alias), nested function/class definitions
+    (whose own name binds locally), and function parameters for
+    ``FunctionDef`` / ``AsyncFunctionDef`` scopes. Bindings are
+    detected at any nesting depth inside control-flow constructs;
+    nested function, async-function, class, and lambda bodies are
+    treated as opaque because their contents live in a different scope.
+    """
+    if isinstance(scope_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if _function_arguments_bind_name(scope_node.args, variable_name):
+            return True
+    return _body_binds_name_recursively(list(scope_node.body), variable_name)
+
+
+def _walk_scope_skipping_shadowed(
+    scope_node: ast.AST,
+    variable_name: str,
+) -> list[ast.AST]:
+    """Walk all nodes in a scope, skipping nested function/class bodies that shadow variable_name."""
+    collected: list[ast.AST] = []
+    nodes_to_visit: list[ast.AST] = [scope_node]
+    while nodes_to_visit:
+        current = nodes_to_visit.pop()
+        collected.append(current)
+        for each_child in ast.iter_child_nodes(current):
+            if (
+                isinstance(each_child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                and each_child is not scope_node
+                and _scope_shadows_name(each_child, variable_name)
+            ):
+                continue
+            nodes_to_visit.append(each_child)
+    return collected
+
+
+def _collect_mock_field_accesses_in_scope(
+    scope_node: ast.AST,
+    mock_name: str,
+) -> list[tuple[str, int]]:
+    """Return (field_name, line_number) for attribute or subscript accesses on mock_name within a scope.
+
+    Skips nested function/class bodies that locally redefine the same mock
+    variable to avoid false positives from name shadowing.
+    """
+    accesses: list[tuple[str, int]] = []
+    for each_node in _walk_scope_skipping_shadowed(scope_node, mock_name):
+        if isinstance(each_node, ast.Attribute):
+            if isinstance(each_node.value, ast.Name) and each_node.value.id == mock_name:
+                if isinstance(each_node.ctx, ast.Load):
+                    if each_node.attr in BUILTIN_DICT_METHOD_NAMES:
+                        continue
+                    accesses.append((each_node.attr, each_node.lineno))
+        elif isinstance(each_node, ast.Subscript):
+            if isinstance(each_node.value, ast.Name) and each_node.value.id == mock_name:
+                if isinstance(each_node.ctx, ast.Load):
+                    slice_node = each_node.slice
+                    if isinstance(slice_node, ast.Constant) and isinstance(slice_node.value, str):
+                        accesses.append((slice_node.value, each_node.lineno))
+    return accesses
+
+
+def _collect_mock_attribute_assignments_in_scope(
+    scope_node: ast.AST,
+    mock_name: str,
+) -> set[str]:
+    """Return field names assigned on a mock variable within a scope.
+
+    Collects both attribute assignments (mock_x.field = ...) and subscript
+    assignments with constant string keys (mock_x['field'] = ...).
+
+    Skips nested function/class bodies that locally redefine the same mock
+    variable, mirroring _collect_mock_field_accesses_in_scope so an outer
+    mock's known-fields set cannot absorb assignments made on a shadowed
+    inner mock of the same name.
+    """
+    assigned_fields: set[str] = set()
+    for each_node in _walk_scope_skipping_shadowed(scope_node, mock_name):
+        if not isinstance(each_node, ast.Assign):
+            continue
+        for each_target in each_node.targets:
+            if (
+                isinstance(each_target, ast.Attribute)
+                and isinstance(each_target.value, ast.Name)
+                and each_target.value.id == mock_name
+            ):
+                assigned_fields.add(each_target.attr)
+            elif (
+                isinstance(each_target, ast.Subscript)
+                and isinstance(each_target.value, ast.Name)
+                and each_target.value.id == mock_name
+                and isinstance(each_target.slice, ast.Constant)
+                and isinstance(each_target.slice.value, str)
+            ):
+                assigned_fields.add(each_target.slice.value)
+    return assigned_fields
+
+
+def _collect_scoped_mock_definitions(
+    module_tree: ast.Module,
+) -> list[tuple[int, str, set[str], int, ast.AST]]:
+    """Return (scope_id, mock_name, declared_keys, definition_line, scope_node) for each mock.
+
+    Keyed by (scope_node id, variable_name) so the same mock name in two different
+    test functions is tracked independently. Scope is the enclosing function node,
+    or the module node for module-level assignments.
+    """
+    scope_definitions: list[tuple[int, str, set[str], int, ast.AST]] = []
+    for each_scope in ast.walk(module_tree):
+        if not isinstance(each_scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Module)):
+            continue
+        scope_body = each_scope.body
+        for each_stmt in scope_body:
+            if not isinstance(each_stmt, ast.Assign):
+                continue
+            for each_target in each_stmt.targets:
+                if not isinstance(each_target, ast.Name):
+                    continue
+                target_name = each_target.id
+                if not (target_name.startswith("mock_") or target_name.startswith("MOCK_")):
+                    continue
+                mock_keys = _collect_mock_dict_keys(each_stmt.value)
+                if mock_keys is not None:
+                    scope_definitions.append(
+                        (id(each_scope), target_name, mock_keys, each_stmt.lineno, each_scope)
+                    )
+                elif isinstance(each_stmt.value, ast.Call):
+                    scope_definitions.append(
+                        (id(each_scope), target_name, set(), each_stmt.lineno, each_scope)
+                    )
+    return scope_definitions
+
+
+def check_incomplete_mocks(content: str, file_path: str) -> None:
+    """Emit stderr advisories when a mock dict/object is missing fields that are accessed.
+
+    Scans test files for variables named mock_* or MOCK_* whose value is a dict
+    literal. Each mock definition is keyed by (scope_node_id, variable_name) so
+    the same name in different test functions is checked independently. Advisories
+    are deduplicated per (mock_name, field_name) pair within each scope.
+
+    This is advisory-only (no return value, no blocking).
+    """
+    if not is_test_file(file_path):
+        return
+
+    try:
+        module_tree = ast.parse(content)
+    except SyntaxError:
+        return
+
+    all_scoped_definitions = _collect_scoped_mock_definitions(module_tree)
+
+    for _scope_id, mock_name, declared_keys, definition_line, scope_node in all_scoped_definitions:
+        assigned_attributes = _collect_mock_attribute_assignments_in_scope(scope_node, mock_name)
+        all_known_fields = declared_keys | assigned_attributes
+        field_accesses = _collect_mock_field_accesses_in_scope(scope_node, mock_name)
+        already_advised: set[tuple[str, str]] = set()
+        for accessed_field, access_line in field_accesses:
+            if accessed_field in all_known_fields:
+                continue
+            advisory_key = (mock_name, accessed_field)
+            if advisory_key in already_advised:
+                continue
+            already_advised.add(advisory_key)
+            print(
+                f"[CODE_RULES advisory] Line {definition_line}: mock {mock_name}"
+                f" missing field {accessed_field} accessed at line {access_line}",
+                file=sys.stderr,
+            )
+
+
+def _build_fstring_skeleton(joined_str_node: ast.JoinedStr) -> str:
+    """Collapse interpolations in an f-string to a placeholder to form a pattern skeleton.
+
+    Injects the skeleton placeholder directly via _extract_fstring_literal_parts
+    instead of post-processing, so literal text in the source that happens to
+    contain the default placeholder (or any other substring) is preserved
+    verbatim and cannot collide with interpolation slots.
+    """
+    skeleton_interpolation_placeholder = "<x>"
+    _display_body, shape_body = _extract_fstring_literal_parts(
+        joined_str_node,
+        interpolation_placeholder=skeleton_interpolation_placeholder,
+    )
+    return shape_body
+
+
+def check_duplicated_format_patterns(content: str, file_path: str) -> None:
+    """Emit stderr advisories when an f-string skeleton appears 3+ times in a production file.
+
+    Collapses each f-string's interpolations to '<x>' placeholders, then counts
+    skeleton occurrences per file. When any skeleton appears three or more times,
+    it suggests the pattern belongs in a helper or model method.
+
+    This is advisory-only (no return value, no blocking). Skips test files,
+    config files, workflow registry files, migration files, and hook infrastructure.
+    """
+    if is_test_file(file_path):
+        return
+    if is_config_file(file_path):
+        return
+    if is_workflow_registry_file(file_path):
+        return
+    if is_migration_file(file_path):
+        return
+    if is_hook_infrastructure(file_path):
+        return
+
+    try:
+        module_tree = ast.parse(content)
+    except SyntaxError:
+        return
+
+    minimum_repetition_count = 3
+    minimum_literal_character_count = 5
+
+    skeleton_occurrences: dict[str, list[int]] = {}
+    literal_length_by_skeleton: dict[str, int] = {}
+    for each_node in ast.walk(module_tree):
+        if not isinstance(each_node, ast.JoinedStr):
+            continue
+        skeleton = _build_fstring_skeleton(each_node)
+        literal_body, _shape_body = _extract_fstring_literal_parts(each_node)
+        if skeleton not in skeleton_occurrences:
+            skeleton_occurrences[skeleton] = []
+            literal_length_by_skeleton[skeleton] = len(literal_body)
+        skeleton_occurrences[skeleton].append(each_node.lineno)
+
+    for skeleton, line_numbers in skeleton_occurrences.items():
+        if len(line_numbers) < minimum_repetition_count:
+            continue
+        if literal_length_by_skeleton[skeleton] < minimum_literal_character_count:
+            continue
+        print(
+            f"[CODE_RULES advisory] f-string pattern {skeleton!r} appears"
+            f" {len(line_numbers)} times — consider encapsulating in a helper or model.",
+            file=sys.stderr,
+        )
+
+
+def check_unused_optional_parameters(content: str, file_path: str) -> list[str]:
+    """Flag optional parameters never varied at same-file call sites.
+
+    A parameter with a default value that every same-file caller either omits
+    or always passes with the identical default literal is never varied and
+    should be inlined or dropped per the YAGNI API surface rule.
+
+    Skips test files, config files, workflow registry files, migration files,
+    and hook infrastructure files.  Only checks functions that have at least
+    one same-file call site.
+
+    Scope limit (v1): only module-level functions are analyzed. Methods defined
+    inside a ClassDef are skipped because the positional-index calculation would
+    need to account for the implicit self/cls parameter, which is absent at
+    call sites using attribute access (obj.method(...)). Method analysis is out
+    of scope for this version.
+    """
+    if is_test_file(file_path):
+        return []
+    if is_config_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path):
+        return []
+    if is_migration_file(file_path):
+        return []
+    if is_hook_infrastructure(file_path):
+        return []
+
+    try:
+        module_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    all_function_nodes: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+    for each_node in module_tree.body:
+        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            all_function_nodes[each_node.name] = each_node
+
+    all_call_nodes: list[ast.Call] = [
+        each_node
+        for each_node in ast.walk(module_tree)
+        if isinstance(each_node, ast.Call)
+    ]
+
+    issues: list[str] = []
+    for function_name, function_node in all_function_nodes.items():
+        param_defaults = _collect_optional_param_defaults(function_node)
+        if not param_defaults:
+            continue
+
+        same_file_calls = [
+            each_call
+            for each_call in all_call_nodes
+            if _function_name_from_call(each_call) == function_name
+        ]
+        if not same_file_calls:
+            continue
+
+        for param_name, default_node in param_defaults.items():
+            default_value = _ast_constant_value(default_node)
+            if _is_non_literal_default(default_value):
+                continue
+            is_param_varied = any(
+                _call_passes_keyword_argument_differing_from_default(
+                    each_call, param_name, default_value
+                )
+                or _call_passes_positional_argument_for_param(
+                    each_call, function_node, param_name, default_value
+                )
+                for each_call in same_file_calls
+            )
+            if not is_param_varied:
+                issues.append(
+                    f"Line {function_node.lineno}: optional parameter {param_name}"
+                    f" is never varied — inline default or drop"
+                )
+                if len(issues) >= MAX_ISSUES_PER_CHECK:
+                    return issues
+
+    return issues
+
+
 def validate_content(content: str, file_path: str, old_content: str = "") -> list[str]:
     """Run all applicable validators on content.
 
@@ -1197,6 +1958,12 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_type_escape_hatches(content, file_path))
         all_issues.extend(check_banned_identifiers(content, file_path))
         all_issues.extend(check_boolean_naming(content, file_path))
+        all_issues.extend(check_skip_decorators_in_tests(content, file_path))
+        all_issues.extend(check_existence_check_tests(content, file_path))
+        all_issues.extend(check_constant_equality_tests(content, file_path))
+        all_issues.extend(check_unused_optional_parameters(content, file_path))
+        check_incomplete_mocks(content, file_path)
+        check_duplicated_format_patterns(content, file_path)
 
     elif extension in JAVASCRIPT_EXTENSIONS:
         if not is_test_file(file_path):

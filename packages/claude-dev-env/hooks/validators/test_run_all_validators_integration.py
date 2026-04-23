@@ -1,21 +1,12 @@
 """Integration test for new validators in run_all_validators.py"""
 
 import subprocess
-import sys
-from pathlib import Path
 
-VALIDATORS_DIR = Path(__file__).parent
-HOOKS_DIR = VALIDATORS_DIR.parent
-PACKAGE_MODULE = f"{VALIDATORS_DIR.name}.run_all_validators"
+from .run_all_validators import run_validators_entrypoint_subprocess
 
 
 def run_validators_help() -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-m", PACKAGE_MODULE, "--help"],
-        capture_output=True,
-        text=True,
-        cwd=str(HOOKS_DIR),
-    )
+    return run_validators_entrypoint_subprocess(["--help"])
 
 
 class TestNewValidatorsIntegration:

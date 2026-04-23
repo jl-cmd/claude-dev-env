@@ -1,6 +1,8 @@
 """Tests for run_all_validators.py."""
 
+import os
 import sys
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -8,6 +10,7 @@ import pytest
 
 from .run_all_validators import (
     ValidatorResult,
+    _hooks_subprocess_working_directory_and_environment,
     add_timing,
     build_json_output,
     create_timing_metrics,
@@ -258,3 +261,22 @@ class TestVersionHeader:
         assert "version" in json_output
         assert "timestamp" in json_output
         assert isinstance(json_output["version"], str)
+
+
+class TestHooksSubprocessWorkingDirectory:
+    def test_unc_path_fallback_on_windows_uses_tempdir_when_temp_unset(self) -> None:
+        mock_hooks_directory = MagicMock()
+        mock_hooks_directory.resolve.return_value = Path("\\\\server\\share\\hooks")
+        environment_without_temp = {
+            each_key: each_value
+            for each_key, each_value in os.environ.items()
+            if each_key not in ("TEMP", "TMP")
+        }
+        with patch("validators.run_all_validators.hooks_dir", mock_hooks_directory), patch(
+            "validators.run_all_validators.sys.platform", "win32"
+        ), patch("validators.run_all_validators.os.environ", environment_without_temp):
+            working_directory_string, _environment = (
+                _hooks_subprocess_working_directory_and_environment()
+            )
+        assert working_directory_string == tempfile.gettempdir()
+        assert not working_directory_string.startswith("\\\\")

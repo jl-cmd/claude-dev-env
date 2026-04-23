@@ -23,7 +23,7 @@ Before doing ANYTHING:
 3. [ ] Fix comments ONE AT A TIME, marking complete as you go
 4. [ ] Draft reply for EVERY comment (DO NOT post directly)
 5. [ ] Create ONE review fix commit (DO NOT squash with original)
-6. [ ] Run pre-push-review skill before pushing
+6. [ ] Push — the git pre-push hook (installed via `npx claude-dev-env`) runs automatically
 7. [ ] Verify ALL draft replies are prepared
 
 **Responding WITHOUT completing this checklist = automatic failure.**
@@ -112,15 +112,17 @@ git commit -m "fix: address code review feedback
 Addresses review comments from PR #{number}"
 ```
 
-### Rule 6: Run Pre-Push Review
+### Rule 6: Pre-Push Gate Fires Automatically
 
-**NEVER push without running pre-push-review skill.**
+**The git pre-push hook (installed via `npx claude-dev-env`) runs automatically on every `git push`.** It covers lint, magic values, boolean naming, imports, and all code-rules enforcer checks — no manual invocation needed.
 
-- [ ] FORBIDDEN: Pushing without pre-push-review
+- [ ] FORBIDDEN: Pushing without gate passing
 - [ ] FORBIDDEN: Manually handling draft conversion
-- [x] REQUIRED: Invoke pre-push-review skill which handles all 24 checks + draft conversion
+- [x] REQUIRED: Run `git push`; the pre-push hook fires and blocks if any check fails
 
-**WHY:** Pre-push-review catches ALL patterns reviewers flag: code style, draft status, commit structure. Delegating to it ensures nothing is missed.
+Use `/qbug` only when you want a full multi-loop PR audit with subagents after the PR is open — it is NOT a substitute for the pre-push gate and refuses when no PR exists yet.
+
+**WHY:** The pre-push hook catches ALL patterns reviewers flag: code style, draft status, commit structure. It fires automatically so nothing is missed.
 
 ### Rule 7: Verify All Drafts Complete
 
@@ -136,7 +138,7 @@ Addresses review comments from PR #{number}"
 - **"Let me fix this one quickly before making the checklist"** -> WRONG. Without checklist you will miss others.
 - **"I'll post the replies myself to save time"** -> WRONG. User controls what gets posted.
 - **"This is a small fix, I can squash it"** -> WRONG. Squashing hides the delta from reviewers.
-- **"Pre-push review is overkill for review fixes"** -> WRONG. It catches style issues you introduced while fixing.
+- **"Pre-push review is overkill for review fixes"** -> WRONG. The git pre-push hook catches style issues you introduced while fixing; it fires automatically on every push.
 
 </EXTREMELY_IMPORTANT>
 
@@ -151,7 +153,7 @@ PR Review Response Complete
 
 Fetched: {X} comments (with per_page=100)
 Fixed: {X} issues
-Pre-push review: PASSED (all 24 checks)
+Pre-push hook: PASSED (fired automatically on git push)
 Draft replies: {X} prepared for user
 Commits: 2 (original + review fix, NOT squashed)
 

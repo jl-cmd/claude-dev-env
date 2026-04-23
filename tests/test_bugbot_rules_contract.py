@@ -1,6 +1,5 @@
 """Specifications that LLM review docs match hook-enforced CODE_RULES exemptions."""
 
-import re
 from pathlib import Path
 
 
@@ -32,6 +31,33 @@ def _copilot_instructions_part1_text() -> str:
     if part_marker in text:
         return text.split(part_marker, maxsplit=1)[0]
     return text
+
+
+def _slice_named_section(
+    document_text: str, section_heading: str, section_end_marker: str
+) -> str:
+    start_offset = document_text.find(section_heading)
+    assert start_offset != -1, (
+        f"Section heading {section_heading!r} not found in document "
+        f"(first 200 chars: {document_text[:200]!r})"
+    )
+    after_start = document_text[start_offset:]
+    end_offset = after_start.find(section_end_marker)
+    if end_offset == -1:
+        return after_start
+    return after_start[:end_offset]
+
+
+def _magic_values_configuration_section(document_text: str) -> str:
+    return _slice_named_section(
+        document_text,
+        section_heading="### Magic values & configuration",
+        section_end_marker="\n### Types",
+    )
+
+
+def _structure_section(document_text: str) -> str:
+    return _slice_named_section(document_text, section_heading="### Structure", section_end_marker="\n### ")
 
 
 def test_bugbot_documents_upper_snake_exemptions_matching_hook() -> None:
@@ -85,8 +111,9 @@ def test_agents_instructions_upper_snake_path_exemptions() -> None:
     assert "test_" in text
     assert "conftest" in text
     assert "/tests/" in text
-    assert re.search(r"\bhook\b", lower) is None
-    assert "code_rules_enforcer" not in lower
+    magic_values_section_lower = _magic_values_configuration_section(text).lower()
+    assert "hook" not in magic_values_section_lower
+    assert "code_rules_enforcer" not in magic_values_section_lower
 
 
 def test_agents_instructions_file_length_is_advisory_smell_not_hard_gate() -> None:
@@ -98,8 +125,9 @@ def test_agents_instructions_file_length_is_advisory_smell_not_hard_gate() -> No
     assert "advisory" in lower
     assert "hard gate" in lower or "not a hard gate" in lower
     assert "hard limit" not in lower
-    assert "code_rules_enforcer" not in lower
-    assert re.search(r"\bhook\b", lower) is None
+    structure_section_lower = _structure_section(text).lower()
+    assert "code_rules_enforcer" not in structure_section_lower
+    assert "hook" not in structure_section_lower
 
 
 def test_agents_workflow_registry_phrasing_describes_substring_match() -> None:
