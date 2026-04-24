@@ -12,20 +12,25 @@ import re
 import sys
 import urllib.error
 
-import groq_bugteam_dotenv
-import pytest
-
-sys.path.insert(0, str(pathlib.Path(__file__).parent))
+scripts_directory = pathlib.Path(__file__).parent
+scripts_directory_string = str(scripts_directory)
+if scripts_directory_string not in sys.path:
+    sys.path.insert(0, scripts_directory_string)
 for _cached in list(sys.modules):
     if _cached == "config" or _cached.startswith("config."):
         del sys.modules[_cached]
+
+import groq_bugteam_dotenv  # noqa: E402
+import pytest  # noqa: E402
 
 from config import groq_bugteam_config  # noqa: E402
 
 
 def _load_groq_bugteam_module():
     scripts_directory = pathlib.Path(__file__).parent
-    sys.path.insert(0, str(scripts_directory))
+    scripts_directory_string = str(scripts_directory)
+    if scripts_directory_string not in sys.path:
+        sys.path.insert(0, scripts_directory_string)
     for cached_module_name in list(sys.modules):
         if cached_module_name == "config" or cached_module_name.startswith("config."):
             del sys.modules[cached_module_name]

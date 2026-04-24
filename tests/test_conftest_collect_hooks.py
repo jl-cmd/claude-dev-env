@@ -10,12 +10,31 @@ that symmetry across standard and nested nodeids.
 
 from __future__ import annotations
 
+import importlib.util
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-import conftest
+
+REPOSITORY_ROOT_PATH = Path(__file__).resolve().parent.parent
+ROOT_CONFTEST_PATH = REPOSITORY_ROOT_PATH / "conftest.py"
+ROOT_CONFTEST_MODULE_NAME = "_root_conftest_under_test"
+
+
+def _load_root_conftest_module():
+    module_spec = importlib.util.spec_from_file_location(
+        ROOT_CONFTEST_MODULE_NAME, ROOT_CONFTEST_PATH
+    )
+    assert module_spec is not None, f"cannot locate root conftest at {ROOT_CONFTEST_PATH}"
+    loaded_module = importlib.util.module_from_spec(module_spec)
+    assert module_spec.loader is not None
+    module_spec.loader.exec_module(loaded_module)
+    return loaded_module
+
+
+conftest = _load_root_conftest_module()
 
 
 SYNC_AI_RULES_TEST_FILENAME = "test_sync_ai_rules.py"
