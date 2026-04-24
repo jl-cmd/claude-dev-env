@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.30.0...claude-dev-env-v1.30.1) (2026-04-24)
+
+
+### Documentation
+
+* add SOLID principles guidance with right-sized engineering reconciliation ([#254](https://github.com/jl-cmd/claude-code-config/issues/254)) ([c13a05b](https://github.com/jl-cmd/claude-code-config/commit/c13a05bbd1694459b25b1938156556f3456e3bc9))
+
 ## [1.30.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.29.3...claude-dev-env-v1.30.0) (2026-04-24)
 
 
