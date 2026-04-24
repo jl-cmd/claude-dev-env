@@ -29,6 +29,9 @@ code_rules_enforcer = _load_enforcer_module()
 PRODUCTION_FILE_PATH = "packages/claude-dev-env/hooks/blocking/example_production.py"
 TEST_FILE_PATH = "packages/claude-dev-env/hooks/blocking/test_example.py"
 TYPESCRIPT_FILE_PATH = "packages/claude-dev-env/hooks/blocking/example.ts"
+TOP_LEVEL_CONFIG_FILE_PATH = "config/timing.py"
+NESTED_CONFIG_FILE_PATH = "packages/claude-dev-env/hooks/config/example_constants.py"
+BACKSLASH_CONFIG_FILE_PATH = "packages\\claude-dev-env\\hooks\\config\\example_constants.py"
 
 
 def test_should_flag_constant_used_by_only_one_function() -> None:
@@ -181,3 +184,39 @@ def test_should_skip_non_python_files() -> None:
         source, TYPESCRIPT_FILE_PATH
     )
     assert issues == [], f"Expected TypeScript file to be skipped, got: {issues}"
+
+
+def test_should_exempt_top_level_config_files() -> None:
+    source = "UPPER = 1\n\ndef lonely_caller():\n    return UPPER\n"
+    issues = code_rules_enforcer.check_file_global_constants_use_count(
+        source, TOP_LEVEL_CONFIG_FILE_PATH
+    )
+    assert issues == [], (
+        f"Expected config/ file to be exempt per file-global-constants rule, got: {issues}"
+    )
+
+
+def test_should_exempt_nested_config_files() -> None:
+    source = (
+        "ATTACHMENT_TYPE_HOOK_SUCCESS = 'hook_success'\n"
+        "\n"
+        "OUTCOME_BY_ATTACHMENT_TYPE = {\n"
+        "    ATTACHMENT_TYPE_HOOK_SUCCESS: 'success',\n"
+        "}\n"
+    )
+    issues = code_rules_enforcer.check_file_global_constants_use_count(
+        source, NESTED_CONFIG_FILE_PATH
+    )
+    assert issues == [], (
+        f"Expected nested config/ file to be exempt per file-global-constants rule, got: {issues}"
+    )
+
+
+def test_should_exempt_backslash_config_path() -> None:
+    source = "UPPER = 1\n\ndef lonely_caller():\n    return UPPER\n"
+    issues = code_rules_enforcer.check_file_global_constants_use_count(
+        source, BACKSLASH_CONFIG_FILE_PATH
+    )
+    assert issues == [], (
+        f"Expected backslash config path to be exempt, got: {issues}"
+    )
