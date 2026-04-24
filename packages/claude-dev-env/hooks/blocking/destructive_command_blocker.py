@@ -291,6 +291,186 @@ def _ephemeral_recursive_rm_auto_allow_granted(command: str, matched_description
     return matched_description.startswith(("rm -rf", "rm --recursive")) and rm_targets_only_ephemeral_paths(command)
 
 
+SHELL_EXPANSION_CHARACTERS_THAT_EXECUTE_CODE = ("$", "`")
+
+
+def _extract_leading_cd_target(command: str) -> str | None:
+    """Return the target of a ``cd`` that starts the command, or None if absent.
+
+    Uses ``shlex.split`` with POSIX rules to tokenize the command so adjacent
+    quoted string concatenation (``"/tmp/a""/../../etc"``) resolves to the
+    same path the shell would cd to (``/tmp/a/../../etc``). A regex-based
+    extractor cannot see past the first quoted segment and would
+    misclassify the cd target as ephemeral while the shell ends up
+    somewhere else entirely.
+
+    Returns None when the command does not start with ``cd``, when tokenization
+    fails (unbalanced quotes), when the cd target is missing, or when the
+    target contains any shell-expansion character (``$`` for variable /
+    command substitution, `` ` `` for backtick subshell) that the shell
+    would resolve *before* cd runs. Hook authors cannot safely know what
+    ``$(rm -rf ~)`` expands to, so the conservative answer is "don't
+    auto-allow".
+    """
+    try:
+        all_command_tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return None
+    if len(all_command_tokens) < 2 or all_command_tokens[0] != "cd":
+        return None
+    cd_target_token = all_command_tokens[1]
+    for each_shell_expansion_character in SHELL_EXPANSION_CHARACTERS_THAT_EXECUTE_CODE:
+        if each_shell_expansion_character in cd_target_token:
+            return None
+    return cd_target_token
+
+
+def _resolve_declared_effective_working_directory(command: str, tool_input: dict) -> str | None:
+    """Return the declared cwd for the command, or None when none is declared.
+
+    Precedence: leading ``cd "X"`` in the command, then the
+    ``tool_input['cwd']`` field passed in by the Bash tool call. Returns
+    None when neither source is present so the broad auto-allow gate never
+    depends on the hook process's own ``os.getcwd()`` (which can itself be
+    ephemeral when Claude Code runs inside a worktree, and would otherwise
+    auto-allow every destructive command). Paths are user-expanded and
+    normalized so downstream ``directory_is_ephemeral`` comparisons see a
+    canonical form on both POSIX and Windows.
+    """
+    leading_cd_target = _extract_leading_cd_target(command)
+    if leading_cd_target is not None:
+        return os.path.normpath(os.path.expanduser(leading_cd_target))
+    tool_input_cwd_value = tool_input.get("cwd") if isinstance(tool_input, dict) else None
+    if isinstance(tool_input_cwd_value, str) and tool_input_cwd_value.strip():
+        return os.path.normpath(os.path.expanduser(tool_input_cwd_value))
+    return None
+
+
+def _effective_working_directory_is_ephemeral(command: str, tool_input: dict) -> bool:
+    """Return True when the command's declared effective cwd is a specific ephemeral directory.
+
+    Auto-allow trust model: if the destructive command declares (via leading
+    ``cd`` or ``tool_input['cwd']``) that it will execute inside a concrete
+    ephemeral directory (a temp-dir subfolder, a git worktrees directory, or
+    a subfolder of the OS temp root), treat that directory as a disposable
+    trust boundary and skip the destructive-action prompt. Rejects bare
+    ephemeral roots (``/tmp``, ``/temp``, the OS temp root, ``/worktrees``,
+    ``/worktree``) so auto-allow only triggers inside a named scratch area,
+    not at the root of a shared scratch namespace. Returns False when no
+    cwd is declared; the narrower target-based auto-allow still applies in
+    that case.
+    """
+    declared_effective_cwd = _resolve_declared_effective_working_directory(command, tool_input)
+    if declared_effective_cwd is None:
+        return False
+    if _path_is_bare_ephemeral_root(declared_effective_cwd):
+        return False
+    return directory_is_ephemeral(declared_effective_cwd)
+
+
+CWD_SCOPED_DESTRUCTIVE_DESCRIPTIONS_ELIGIBLE_FOR_BROAD_EPHEMERAL_AUTO_ALLOW = (
+    "rm -rf",
+    "rm --recursive",
+    "git reset --hard",
+)
+
+
+def _destructive_match_is_cwd_scoped(matched_description: str) -> bool:
+    """Return True when the matched destructive pattern's blast radius is bounded by cwd.
+
+    ``rm -rf``, ``rm --recursive``, and ``git reset --hard`` only affect
+    files inside the working directory (or paths resolved relative to it
+    when the rm target is relative). Patterns whose blast radius is NOT
+    bounded by cwd — ``git push --force`` / ``git push -f`` (remote
+    history rewrite), ``git clean`` variants (untracked deletion outside
+    what the user can audit at the current prompt), ``mkfs`` / ``dd``
+    (raw device), ``DROP TABLE`` / ``DROP DATABASE`` / ``TRUNCATE TABLE``
+    (database) — must still prompt even when the command runs from an
+    ephemeral worktree. Being in a scratch directory is not a trust zone
+    for remote or out-of-band effects.
+    """
+    return matched_description.startswith(
+        CWD_SCOPED_DESTRUCTIVE_DESCRIPTIONS_ELIGIBLE_FOR_BROAD_EPHEMERAL_AUTO_ALLOW
+    )
+
+
+def _command_contains_any_non_cwd_scoped_destructive_pattern(command: str) -> bool:
+    """Return True when the command matches any destructive pattern outside the cwd-scoped whitelist.
+
+    ``find_destructive_pattern`` returns the *first* match in the
+    ``DESTRUCTIVE_BASH_PATTERNS`` table, which puts ``rm -rf`` at index 0.
+    That means a compound like ``cd /tmp/scratch && rm -rf cache &&
+    git push --force`` reports ``rm -rf`` to the main gate, passes the
+    cwd-scoped whitelist, and ends up auto-allowing the remote
+    force-push even though the whitelist docstring says non-cwd-scoped
+    patterns must still prompt. This helper scans *every* destructive
+    pattern and returns True the moment it finds one that is not in the
+    cwd-scoped whitelist, so the broad auto-allow can decline the whole
+    command rather than trust the first-match report.
+    """
+    for each_pattern_regex, each_pattern_description in DESTRUCTIVE_BASH_PATTERNS:
+        if each_pattern_regex.search(command) and not each_pattern_description.startswith(
+            CWD_SCOPED_DESTRUCTIVE_DESCRIPTIONS_ELIGIBLE_FOR_BROAD_EPHEMERAL_AUTO_ALLOW
+        ):
+            return True
+    return False
+
+
+def _command_rm_targets_include_unsafe_path(command: str, tool_input: dict) -> bool:
+    """Return True when the command contains an ``rm`` whose targets are unsafe.
+
+    Unsafe means any of: bare ephemeral root (``/tmp``, ``/temp``, the OS
+    temp root, ``/worktrees``, ``/worktree``), bare named worktrees
+    container, absolute path outside the ephemeral namespace, relative
+    path that resolves (against the declared effective cwd) outside the
+    ephemeral namespace, wildcard glob metacharacter in the target
+    basename, or unsafe ``rm`` flag before ``--`` (``--files0-from=...``,
+    unknown long option, non-whitelisted short flag) as enforced by
+    ``_rm_flags_before_double_dash_are_unsafe``.
+
+    Fails closed: returns True on parse failure (``ValueError`` from
+    unbalanced quotes) or when a relative target is encountered without
+    a declared effective cwd to resolve it against. The broad auto-allow
+    must decline rather than grant on input the hook cannot conclusively
+    bound.
+    """
+    try:
+        all_command_tokens = _split_command_preserving_windows_backslashes(command)
+    except ValueError:
+        return True
+    declared_effective_cwd = _resolve_declared_effective_working_directory(command, tool_input)
+    for each_token_index in range(len(all_command_tokens)):
+        if all_command_tokens[each_token_index] != "rm":
+            continue
+        tokens_after_rm = all_command_tokens[each_token_index + 1:]
+        if _rm_flags_before_double_dash_are_unsafe(tokens_after_rm):
+            return True
+        all_target_tokens = _collect_rm_target_tokens(tokens_after_rm)
+        for each_target_token in all_target_tokens:
+            each_expanded_target = os.path.expanduser(each_target_token)
+            each_is_absolute = (
+                os.path.isabs(each_expanded_target)
+                or each_expanded_target.replace("\\", "/").startswith("/")
+            )
+            if each_is_absolute:
+                each_resolved_target = os.path.normpath(each_expanded_target)
+            else:
+                if declared_effective_cwd is None:
+                    return True
+                each_resolved_target = os.path.normpath(
+                    os.path.join(declared_effective_cwd, each_expanded_target)
+                )
+            if _path_basename_is_shell_glob_wildcard(each_resolved_target):
+                return True
+            if _path_is_bare_ephemeral_root(each_resolved_target):
+                return True
+            if _path_is_bare_named_worktrees_container(each_resolved_target):
+                return True
+            if not directory_is_ephemeral(each_resolved_target):
+                return True
+    return False
+
+
 def _git_reset_hard_allowed_for_command(command: str, current_working_directory: str) -> bool:
     if directory_is_ephemeral(current_working_directory):
         return True
@@ -328,6 +508,15 @@ def main() -> None:
     matched_description = find_destructive_pattern(command)
 
     if matched_description is not None and targets_only_claude_directory(command):
+        sys.exit(0)
+
+    if (
+        matched_description is not None
+        and _destructive_match_is_cwd_scoped(matched_description)
+        and _effective_working_directory_is_ephemeral(command, tool_input)
+        and not _command_rm_targets_include_unsafe_path(command, tool_input)
+        and not _command_contains_any_non_cwd_scoped_destructive_pattern(command)
+    ):
         sys.exit(0)
 
     if matched_description is not None and _ephemeral_recursive_rm_auto_allow_granted(command, matched_description):
