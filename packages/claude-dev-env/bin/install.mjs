@@ -7,6 +7,7 @@ import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { installAllGitHooks } from './git_hooks_installer.mjs';
+import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -377,6 +378,21 @@ function install(selectedGroups) {
             console.warn(`  Git hooks: ${gitHookInstallationResult.hooksPathConfigurationResult.reason}`);
         }
         console.log(`  Git hook shims: ${gitHookInstallationResult.createdShimPaths.length} files (pre-commit, pre-push, post-commit)`);
+
+        const mypyIniInstallResult = installMypyIniForClaudeHooks({
+            homeDirectory: homedir(),
+            claudeHooksDirectory: join(CLAUDE_HOME, 'hooks'),
+        });
+        if (mypyIniInstallResult.action === 'created') {
+            allInstalledFiles.push(mypyIniInstallResult.path);
+            console.log(`  ✓ ${relative(homedir(), mypyIniInstallResult.path)} (new — enables mypy to resolve config.messages imports)`);
+        } else if (mypyIniInstallResult.action === 'already-configured') {
+            console.log(`  .mypy.ini: already configured for Claude hooks`);
+        } else {
+            console.warn(`  WARNING: .mypy.ini exists at ${mypyIniInstallResult.path} without the expected mypy_path.`);
+            console.warn(`    To enable mypy for Claude hooks, add this line under [mypy]:`);
+            console.warn(`      ${mypyIniInstallResult.expectedLine}`);
+        }
     }
     const claudeHubSource = join(PACKAGE_ROOT, 'CLAUDE.md');
     if (existsSync(claudeHubSource)) {

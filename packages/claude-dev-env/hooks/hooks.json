@@ -133,6 +133,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/hedging_language_blocker.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/question_to_user_enforcer.py",
+            "timeout": 10
           }
         ]
       }
