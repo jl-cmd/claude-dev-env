@@ -169,6 +169,44 @@ Always: Functions when no state, concrete classes, simple imports
 
 ---
 
+## 7.5 SOLID PRINCIPLES
+
+**Apply where two or more concrete implementations already share a contract. For code with a single concretion, §7 (Right-Sized Engineering) takes precedence: use concrete classes, functions when no state, and direct imports.**
+
+Reference: Robert C. Martin, *Agile Software Development: Principles, Patterns, and Practices* (2002), Ch. 8–12.
+
+| Letter | Principle | What it means here |
+|--------|-----------|--------------------|
+| **S** | Single Responsibility Principle | A class, function, or module has one reason to change. One unit = one axis of variation. Ties to §6.5 (file length as smell signal) and Fowler's "Large Class" / "Long Function" smells. |
+| **O** | Open/Closed Principle | Extend behavior by adding new code. Favor a new branch/handler/subclass over editing the same switch in five places. |
+| **L** | Liskov Substitution Principle | A subtype must be usable anywhere its parent type is expected without surprising the caller. If a subclass override breaks caller assumptions, flatten the hierarchy or prefer composition. |
+| **I** | Interface Segregation Principle | Each client depends on exactly the methods it calls. Split one fat interface into several role-specific ones so each caller imports only the role it needs. |
+| **D** | Dependency Inversion Principle | When two or more concretions exist or are imminent, depend on the shared abstraction. With exactly one concretion, import the concrete type directly (see §7). |
+
+### Reconciling SOLID with Right-Sized Engineering (§7)
+
+SOLID was written for OO codebases where most abstract types have two or more concrete subclasses. In this codebase:
+
+- **SRP always applies.** Functions, classes, and modules must have one reason to change regardless of paradigm. This is the only SOLID letter that applies immediately, without waiting for a second implementation.
+- **OCP, LSP, ISP, DIP apply where two or more concrete implementations already share a contract.** A single concrete class satisfies SOLID by default. Introduce interfaces, ABCs, or DI containers only when the second concretion lands.
+- **For code with fewer than two concretions, §7 wins:** concrete classes, functions when no state, direct imports. Refactor toward OCP/DIP at the commit that introduces the second concrete implementation (YAGNI).
+
+### Signals that SOLID is being misapplied
+
+- Creating an interface or ABC with exactly one implementation (violates §7 DIP guard)
+- Splitting a cohesive 80-line class with one reason to change into four 20-line classes because "SRP" — SRP counts distinct change reasons; size is a separate signal tracked in §6.5
+- Abstract factories for types that have exactly one concrete product
+- Dependency-injection containers where every injected type has exactly one concrete implementation across production and tests
+
+### When SOLID adds value
+
+- Two or more concrete implementations already exist → DIP and ISP earn their keep
+- A class shows multiple unrelated change reasons in git history → SRP split is justified
+- Subclass overrides break caller assumptions → LSP violation; fix or flatten the hierarchy
+- Editing the same `if`/`switch` block every time a new case is added → OCP refactor is justified
+
+---
+
 ## 8. TDD PROCESS
 
 1. **RED** - Failing test first
@@ -221,5 +259,7 @@ Manual check:
 [ ] No abbreviations?
 [ ] Complete type hints?
 [ ] Self-contained components?
+[ ] SRP holds (one reason to change per function/class/module)?
+[ ] OCP/LSP/ISP/DIP only applied where abstractions already earn their keep (see §7.5)?
 [ ] Readability: /check or /readability-review
 ```

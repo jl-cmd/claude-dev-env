@@ -9,6 +9,14 @@
 
 Full rule including the decision table, examples, and exemption details: [`packages/claude-dev-env/rules/file-global-constants.md`](rules/file-global-constants.md).
 
+## SOLID Principles
+
+**SRP (Single Responsibility)** always applies: one reason to change per function, class, or module — regardless of paradigm.
+
+**OCP, LSP, ISP, DIP** apply where two or more concrete implementations already share a contract. With a single concretion, Right-Sized Engineering takes precedence: use concrete classes, functions when no state, and direct imports. Refactor toward OCP/DIP at the commit that introduces the second concrete implementation.
+
+Full rule including the reconciliation with Right-Sized Engineering, misapplication signals, and when-it-adds-value criteria: [`packages/claude-dev-env/docs/CODE_RULES.md`](docs/CODE_RULES.md) §7.5.
+
 ## Core Philosophy
 
 **TDD IS NON-NEGOTIABLE.** Build it right, build it simple. Maintainable > Clever.
