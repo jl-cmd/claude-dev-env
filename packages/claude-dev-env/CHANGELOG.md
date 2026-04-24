@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.30.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.29.3...claude-dev-env-v1.30.0) (2026-04-24)
+
+
+### Features
+
+* **agents:** expand code-quality-agent zero-defect generation guide ([#251](https://github.com/jl-cmd/claude-code-config/issues/251)) ([5da7abf](https://github.com/jl-cmd/claude-code-config/commit/5da7abf435f363404d76d10ec296cf42bd8818c7))
+* **enforcer:** expand gate with 6 new checks, retire pre-push-review skill ([#232](https://github.com/jl-cmd/claude-code-config/issues/232)) ([5c81b39](https://github.com/jl-cmd/claude-code-config/commit/5c81b3982bc7c6a9df3c0083d6e4044d08ff3905))
+* **hooks:** auto-allow rm -rf in ephemeral target paths ([#235](https://github.com/jl-cmd/claude-code-config/issues/235)) ([cc8d263](https://github.com/jl-cmd/claude-code-config/commit/cc8d263af6bc403e4915b6f65173750ed28901c0))
+* **skills:** add monitor-open-prs and groq-backed FIX pipeline ([#241](https://github.com/jl-cmd/claude-code-config/issues/241)) ([e2f1182](https://github.com/jl-cmd/claude-code-config/commit/e2f118220ce860f40437ed023f183668acfdcd7a))
+
+
+### Bug Fixes
+
+* **groq-bugteam:** address Cursor Bugbot PR [#237](https://github.com/jl-cmd/claude-code-config/issues/237) review ([#242](https://github.com/jl-cmd/claude-code-config/issues/242)) ([e21c2f3](https://github.com/jl-cmd/claude-code-config/commit/e21c2f3edfd0fe5b1676c50c7a9a2523c352f5ad))
+* **tests:** resolve full-suite config namespace collision ([#253](https://github.com/jl-cmd/claude-code-config/issues/253)) ([798bd18](https://github.com/jl-cmd/claude-code-config/commit/798bd183823bb44f1797548ece410c827c54fbcc))
+
 ## [1.29.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.29.2...claude-dev-env-v1.29.3) (2026-04-22)
 
 
