@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.31.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.30.1...claude-dev-env-v1.31.0) (2026-04-25)
+
+
+### Features
+
+* **agents:** positive framing + rules-aware bug finder ([#263](https://github.com/jl-cmd/claude-code-config/issues/263)) ([d8a85be](https://github.com/jl-cmd/claude-code-config/commit/d8a85bea3de34a3ddc30910cda785224e0228f48))
+* **hooks:** auto-allow cwd-scoped destructive commands in ephemeral worktrees ([#256](https://github.com/jl-cmd/claude-code-config/issues/256)) ([2000728](https://github.com/jl-cmd/claude-code-config/commit/2000728afdfc8425a9062be63c14e9549e2db121))
+* **hooks:** enforce structured user questions via AskUserQuestion ([#260](https://github.com/jl-cmd/claude-code-config/issues/260)) ([0f65c5d](https://github.com/jl-cmd/claude-code-config/commit/0f65c5d5c502f14084abec8a245a1d84f4844020))
+* **hooks:** hook-log extractor to Neon (phases 1-5) ([#257](https://github.com/jl-cmd/claude-code-config/issues/257)) ([ce4bc51](https://github.com/jl-cmd/claude-code-config/commit/ce4bc51c073efa16b693d4277ccaac11e1590a15))
+* **installer:** abort install when package source has unmerged git conflicts ([#262](https://github.com/jl-cmd/claude-code-config/issues/262)) ([cc36a42](https://github.com/jl-cmd/claude-code-config/commit/cc36a4261a5eebc708f1707c6661612a313f4fd4))
+
+
+### Bug Fixes
+
+* **hooks:** exempt config/ from file-global-constants use-count rule ([#259](https://github.com/jl-cmd/claude-code-config/issues/259)) ([c0e345e](https://github.com/jl-cmd/claude-code-config/commit/c0e345ef9aae02aaa71dd0d8a8c9caae4fe12bb1))
+
+
+### Maintenance
+
+* **hooks:** record Themes hook-log isolation migration ([#261](https://github.com/jl-cmd/claude-code-config/issues/261)) ([d92b260](https://github.com/jl-cmd/claude-code-config/commit/d92b2606ee5017222da05da5f95946acb25003aa))
+
 ## [1.30.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.30.0...claude-dev-env-v1.30.1) (2026-04-24)
 
 
