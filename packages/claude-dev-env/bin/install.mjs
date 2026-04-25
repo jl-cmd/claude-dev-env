@@ -18,6 +18,70 @@ const packageRequire = createRequire(import.meta.url);
 
 const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts'];
 
+export function collectPackageSourceConflicts(packageDirectory) {
+    const gitConflictStatusCodes = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
+    const porcelainStatusLineMinLength = 4;
+    const porcelainStatusCodeLength = 2;
+    const porcelainPathOffset = 3;
+    const gitNotARepoExitStatus = 128;
+    const gitNotARepoStderrMarker = 'not a git repository';
+    const gitBinaryMissingErrorCode = 'ENOENT';
+    let porcelainOutput;
+    try {
+        porcelainOutput = execFileSync(
+            'git',
+            ['status', '--porcelain', '-z', '--', '.'],
+            {
+                cwd: packageDirectory,
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'pipe'],
+            },
+        );
+    } catch (gitInvocationError) {
+        const isGitBinaryMissing = gitInvocationError.code === gitBinaryMissingErrorCode;
+        if (isGitBinaryMissing) {
+            console.error(
+                '  Note: source-state guard skipped — git binary not available on PATH.',
+            );
+            return [];
+        }
+        const stderrText = gitInvocationError.stderr ? gitInvocationError.stderr.toString() : '';
+        const isNotARepoFailure = gitInvocationError.status === gitNotARepoExitStatus
+            && stderrText.includes(gitNotARepoStderrMarker);
+        if (isNotARepoFailure) {
+            return [];
+        }
+        throw gitInvocationError;
+    }
+    const allConflicts = [];
+    for (const rawRecord of porcelainOutput.split('\0')) {
+        if (rawRecord.length < porcelainStatusLineMinLength) continue;
+        const statusCode = rawRecord.slice(0, porcelainStatusCodeLength);
+        if (!gitConflictStatusCodes.has(statusCode)) continue;
+        const conflictPath = rawRecord.slice(porcelainPathOffset);
+        allConflicts.push({ statusCode, path: conflictPath });
+    }
+    return allConflicts;
+}
+
+function abortWhenPackageSourceHasConflicts(packageDirectory) {
+    const conflicts = collectPackageSourceConflicts(packageDirectory);
+    if (conflicts.length === 0) return;
+    console.error(
+        `\nERROR: ${PACKAGE_NAME} source has unmerged conflicts under ${packageDirectory}:\n`,
+    );
+    for (const conflict of conflicts) {
+        console.error(`  ${conflict.statusCode} ${conflict.path}`);
+    }
+    console.error(
+        '\nResolve the conflicts in the package source before running the installer.',
+    );
+    console.error(
+        'Installing from a conflicted source can copy stale or broken files into ~/.claude/.\n',
+    );
+    process.exit(1);
+}
+
 function resolveDependencyPackageRoot(dependencyPackageName) {
     const dependencyPackageJsonPath = packageRequire.resolve(
         `${dependencyPackageName}/package.json`
@@ -228,6 +292,7 @@ function writeManifest(installedFiles) {
 function install(selectedGroups) {
     const groupLabel = selectedGroups ? `groups: ${selectedGroups.join(', ')}` : 'all';
     console.log(`\nInstalling ${PACKAGE_NAME} (${groupLabel})...\n`);
+    abortWhenPackageSourceHasConflicts(PACKAGE_ROOT);
     const pythonCommand = detectPython();
     if (!pythonCommand) {
         console.error('ERROR: Python 3 not found. Install Python 3.8+ and ensure python3, python, or py is on PATH.');
