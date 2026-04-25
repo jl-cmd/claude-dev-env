@@ -291,9 +291,6 @@ def _ephemeral_recursive_rm_auto_allow_granted(command: str, matched_description
     return matched_description.startswith(("rm -rf", "rm --recursive")) and rm_targets_only_ephemeral_paths(command)
 
 
-SHELL_EXPANSION_CHARACTERS_THAT_EXECUTE_CODE = ("$", "`")
-
-
 def _extract_leading_cd_target(command: str) -> str | None:
     """Return the target of a ``cd`` that starts the command, or None if absent.
 
@@ -312,6 +309,7 @@ def _extract_leading_cd_target(command: str) -> str | None:
     ``$(rm -rf ~)`` expands to, so the conservative answer is "don't
     auto-allow".
     """
+    shell_expansion_characters_that_execute_code = ("$", "`")
     try:
         all_command_tokens = shlex.split(command, posix=True)
     except ValueError:
@@ -319,7 +317,7 @@ def _extract_leading_cd_target(command: str) -> str | None:
     if len(all_command_tokens) < 2 or all_command_tokens[0] != "cd":
         return None
     cd_target_token = all_command_tokens[1]
-    for each_shell_expansion_character in SHELL_EXPANSION_CHARACTERS_THAT_EXECUTE_CODE:
+    for each_shell_expansion_character in shell_expansion_characters_that_execute_code:
         if each_shell_expansion_character in cd_target_token:
             return None
     return cd_target_token
@@ -398,15 +396,15 @@ def _command_contains_any_non_cwd_scoped_destructive_pattern(command: str) -> bo
     """Return True when the command matches any destructive pattern outside the cwd-scoped whitelist.
 
     ``find_destructive_pattern`` returns the *first* match in the
-    ``DESTRUCTIVE_BASH_PATTERNS`` table, which puts ``rm -rf`` at index 0.
-    That means a compound like ``cd /tmp/scratch && rm -rf cache &&
-    git push --force`` reports ``rm -rf`` to the main gate, passes the
-    cwd-scoped whitelist, and ends up auto-allowing the remote
-    force-push even though the whitelist docstring says non-cwd-scoped
-    patterns must still prompt. This helper scans *every* destructive
-    pattern and returns True the moment it finds one that is not in the
-    cwd-scoped whitelist, so the broad auto-allow can decline the whole
-    command rather than trust the first-match report.
+    ``DESTRUCTIVE_BASH_PATTERNS`` table, where ``rm -rf`` sits at the
+    very front. That means a compound like ``cd /tmp/scratch && rm -rf
+    cache && git push --force`` reports ``rm -rf`` to the main gate,
+    passes the cwd-scoped whitelist, and ends up auto-allowing the
+    remote force-push even though the whitelist docstring says
+    non-cwd-scoped patterns must still prompt. This helper scans *every*
+    destructive pattern and returns True the moment it finds one that
+    is not in the cwd-scoped whitelist, so the broad auto-allow can
+    decline the whole command rather than trust the first-match report.
     """
     for each_pattern_regex, each_pattern_description in DESTRUCTIVE_BASH_PATTERNS:
         if each_pattern_regex.search(command) and not each_pattern_description.startswith(

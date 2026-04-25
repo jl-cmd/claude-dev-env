@@ -1,0 +1,2 @@
+-r requirements-hook-logs.txt
+pytest>=7.0

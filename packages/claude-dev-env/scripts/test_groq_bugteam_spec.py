@@ -36,14 +36,6 @@ def _load_spec_module():
 groq_bugteam_spec = _load_spec_module()
 
 
-def test_apply_fix_from_spec_is_callable():
-    assert callable(groq_bugteam_spec.apply_fix_from_spec)
-
-
-def test_run_spec_mode_main_is_callable():
-    assert callable(groq_bugteam_spec.run_spec_mode_main)
-
-
 def test_is_spec_mode_invocation_detects_flag_value_pair():
     assert groq_bugteam_spec.is_spec_mode_invocation(["--mode", "spec"]) is True
     assert groq_bugteam_spec.is_spec_mode_invocation(["--mode", "pipeline"]) is False

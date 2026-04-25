@@ -21,10 +21,6 @@ def _load_config_module():
 groq_bugteam_config = _load_config_module()
 
 
-def test_spec_implementer_prompt_exists():
-    assert hasattr(groq_bugteam_config, "SPEC_IMPLEMENTER_SYSTEM_PROMPT")
-
-
 def test_spec_implementer_prompt_is_non_empty_string():
     prompt_text = groq_bugteam_config.SPEC_IMPLEMENTER_SYSTEM_PROMPT
     assert isinstance(prompt_text, str)
