@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.31.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.31.0...claude-dev-env-v1.31.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* **hooks:** address Copilot review findings on Stop-wrapper debounce ([#268](https://github.com/jl-cmd/claude-code-config/issues/268)) ([f5e6fdd](https://github.com/jl-cmd/claude-code-config/commit/f5e6fdd3ea6bcede17da9531dfa3740e59325e72))
+* **logifix:** always run full LCore relaunch count ([#264](https://github.com/jl-cmd/claude-code-config/issues/264)) ([42c1e0d](https://github.com/jl-cmd/claude-code-config/commit/42c1e0d590f429a5888197e1a70ab27eed001e4c))
+
+
+### Performance
+
+* **hooks:** debounce Stop-hook extractor to eliminate per-turn latency ([#267](https://github.com/jl-cmd/claude-code-config/issues/267)) ([b390af4](https://github.com/jl-cmd/claude-code-config/commit/b390af46a78ad51991847303cb66577194a82465))
+
+
+### Tests
+
+* **hooks:** rename misnamed Stop-wrapper timestamp test ([#269](https://github.com/jl-cmd/claude-code-config/issues/269)) ([21dac4b](https://github.com/jl-cmd/claude-code-config/commit/21dac4b9bd5b560be15c4091032cba1254cad118))
+
 ## [1.31.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.30.1...claude-dev-env-v1.31.0) (2026-04-25)
 
 
