@@ -222,7 +222,7 @@ def test_main_spawns_when_timestamp_older_than_debounce_window(
     assert len(captured_commands) == 1
 
 
-def test_main_writes_current_timestamp_after_spawn(
+def test_main_writes_current_timestamp_to_file(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
