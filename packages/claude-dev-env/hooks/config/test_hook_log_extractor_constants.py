@@ -21,6 +21,10 @@ from config.hook_log_extractor_constants import (
     QUERY_NAME_PATTERN,
     SENTINEL_INSERT_FAILURE_MESSAGE,
     SENTINEL_SELECT_FAILURE_MESSAGE,
+    STOP_WRAPPER_DEBOUNCE_SECONDS,
+    STOP_WRAPPER_LAST_RUN_TIMESTAMP_FILE,
+    WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG,
+    WINDOWS_DETACHED_PROCESS_FLAG,
 )
 
 
@@ -94,3 +98,18 @@ def test_resolver_falls_back_to_home_when_claude_home_is_whitespace(
 def test_lock_retry_constants_are_positive_and_bounded() -> None:
     assert LOCK_MAXIMUM_RETRY_COUNT > 0
     assert LOCK_RETRY_SLEEP_SECONDS > 0
+
+
+def test_stop_wrapper_debounce_seconds_is_positive() -> None:
+    assert STOP_WRAPPER_DEBOUNCE_SECONDS > 0
+
+
+def test_stop_wrapper_last_run_timestamp_file_is_under_claude_home() -> None:
+    assert ".state" in STOP_WRAPPER_LAST_RUN_TIMESTAMP_FILE
+    assert STOP_WRAPPER_LAST_RUN_TIMESTAMP_FILE.endswith(".txt")
+
+
+def test_windows_creation_flags_are_distinct_nonzero_bits() -> None:
+    assert WINDOWS_DETACHED_PROCESS_FLAG > 0
+    assert WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG > 0
+    assert WINDOWS_DETACHED_PROCESS_FLAG != WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG

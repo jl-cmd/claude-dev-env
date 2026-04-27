@@ -216,6 +216,19 @@ BWS_RUN_SEPARATOR: str = "--"
 BWS_RUN_SUBCOMMAND: str = "run"
 STOP_WRAPPER_EXTRACTOR_SCRIPT_NAME: str = "hook_log_extractor.py"
 
+STOP_WRAPPER_DEBOUNCE_SECONDS: int = 60
+STOP_WRAPPER_LAST_RUN_TIMESTAMP_FILE: str = str(
+    _resolve_claude_home_directory()
+    / "logs"
+    / "hooks"
+    / ".state"
+    / "stop_wrapper_last_run.txt"
+)
+
+WINDOWS_OS_NAME: str = "nt"
+WINDOWS_DETACHED_PROCESS_FLAG: int = 0x00000008
+WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG: int = 0x00000200
+
 LOCK_MAXIMUM_RETRY_COUNT: int = 30
 LOCK_RETRY_SLEEP_SECONDS: float = 0.1
 
