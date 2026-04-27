@@ -69,6 +69,8 @@ def _is_within_debounce_window() -> bool:
     except (OSError, ValueError):
         return False
     seconds_since_previous_spawn = time.time() - previous_timestamp
+    if seconds_since_previous_spawn < 0:
+        return False
     return seconds_since_previous_spawn < STOP_WRAPPER_DEBOUNCE_SECONDS
 
 
@@ -76,6 +78,24 @@ def _record_current_timestamp() -> None:
     timestamp_path = _last_run_timestamp_path()
     timestamp_path.parent.mkdir(parents=True, exist_ok=True)
     timestamp_path.write_text(str(time.time()))
+
+
+def _clear_recorded_timestamp() -> None:
+    """Remove the debounce timestamp regardless of which process wrote it.
+
+    The unlink is unconditional: if process A writes a timestamp, process
+    B observes it and debounces, then A's spawn fails, A's rollback here
+    deletes the timestamp B already saw. The next Stop hook then spawns
+    a fresh extractor instead of debouncing the remainder of the window.
+    Consequence is benign because the extractor's own offset-file lock
+    (LOCK_MAXIMUM_RETRY_COUNT in hook_log_extractor_constants) serializes
+    concurrent extractor runs, so at most one extra extractor briefly
+    waits on the lock. Scoping the rollback to A's own write would
+    require a per-process sentinel and tighter atomicity than the
+    benefit warrants for this Stop-hook fast path.
+    """
+    timestamp_path = _last_run_timestamp_path()
+    timestamp_path.unlink(missing_ok=True)
 
 
 def _can_use_bws() -> bool:
@@ -136,10 +156,13 @@ def main() -> int:
         if _is_within_debounce_window():
             return EXIT_CODE_SUCCESS
         _record_current_timestamp()
-        if _can_use_bws():
-            _spawn_with_bws()
-        else:
-            _spawn_without_bws()
+        try:
+            if _can_use_bws():
+                _spawn_with_bws()
+            else:
+                _spawn_without_bws()
+        except Exception:
+            _clear_recorded_timestamp()
     except Exception:
         pass
     return EXIT_CODE_SUCCESS

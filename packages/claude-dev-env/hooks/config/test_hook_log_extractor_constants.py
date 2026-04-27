@@ -105,11 +105,19 @@ def test_stop_wrapper_debounce_seconds_is_positive() -> None:
 
 
 def test_stop_wrapper_last_run_timestamp_file_is_under_claude_home() -> None:
-    assert ".state" in STOP_WRAPPER_LAST_RUN_TIMESTAMP_FILE
-    assert STOP_WRAPPER_LAST_RUN_TIMESTAMP_FILE.endswith(".txt")
+    expected_path = (
+        hook_log_extractor_constants._resolve_claude_home_directory()
+        / "logs"
+        / "hooks"
+        / ".state"
+        / "stop_wrapper_last_run.txt"
+    )
+    assert Path(STOP_WRAPPER_LAST_RUN_TIMESTAMP_FILE) == expected_path
 
 
 def test_windows_creation_flags_are_distinct_nonzero_bits() -> None:
     assert WINDOWS_DETACHED_PROCESS_FLAG > 0
     assert WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG > 0
-    assert WINDOWS_DETACHED_PROCESS_FLAG != WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG
+    assert (
+        WINDOWS_DETACHED_PROCESS_FLAG & WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG
+    ) == 0
