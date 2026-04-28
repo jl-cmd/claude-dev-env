@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.32.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.31.1...claude-dev-env-v1.32.0) (2026-04-28)
+
+
+### Features
+
+* **hooks:** block unsafe shutil.rmtree on Windows with force_rmtree replacement ([#273](https://github.com/jl-cmd/claude-code-config/issues/273)) ([aad3a77](https://github.com/jl-cmd/claude-code-config/commit/aad3a77d77eb142bf19c095c9fe8738ac8388e17))
+* **skills:** add /rebase skill ([#270](https://github.com/jl-cmd/claude-code-config/issues/270)) ([3d60a8a](https://github.com/jl-cmd/claude-code-config/commit/3d60a8a6a53801391fcc76853647258fcc1df60a))
+
+
+### Bug Fixes
+
+* **hooks:** add SessionStart cleanup for Bash session-env directory on Windows ([#271](https://github.com/jl-cmd/claude-code-config/issues/271)) ([be62cd3](https://github.com/jl-cmd/claude-code-config/commit/be62cd33da4833ba2e00a83f303ba603dceeb356))
+
+
+### Maintenance
+
+* **bugteam:** auto-fix core.hooksPath override in preflight ([#272](https://github.com/jl-cmd/claude-code-config/issues/272)) ([bd1f94d](https://github.com/jl-cmd/claude-code-config/commit/bd1f94d57d1e1729049031af461dbc66a917939b))
+
 ## [1.31.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.31.0...claude-dev-env-v1.31.1) (2026-04-27)
 
 
