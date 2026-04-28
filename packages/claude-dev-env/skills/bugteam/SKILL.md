@@ -65,6 +65,14 @@ python "${CLAUDE_SKILL_DIR}/scripts/bugteam_preflight.py"
 
 Non-zero → fix before grant. `BUGTEAM_PREFLIGHT_SKIP=1` emergency only. `--pre-commit` if `.pre-commit-config.yaml` exists.
 
+**Auto-remediation for `core.hooksPath`:** when preflight fails with stderr containing `core.hooksPath` (the message starts with `bugteam_preflight: core.hooksPath is`, or `Git-side CODE_RULES enforcement is not active`), Claude must auto-invoke the fix script — do not fall through to `AskUserQuestion`, do not punt to the user, do not ask for confirmation:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/scripts/bugteam_fix_hookspath.py"
+```
+
+The fix script removes any non-canonical local-scope override on the active repository, sets the global `core.hooksPath` to `~/.claude/hooks/git-hooks` if missing or wrong, and re-runs `bugteam_preflight.py`. Its exit code becomes the preflight outcome. Exit 0 → continue to Step 0. Non-zero only when the canonical hooks directory is missing (run `npx claude-dev-env .` first) or `git config --global` writes are blocked. Other preflight failures (pytest, pre-commit) still require manual fixes — the auto-remediation only applies to the `core.hooksPath` failure mode.
+
 ## The Process
 
 ### Progress checklist

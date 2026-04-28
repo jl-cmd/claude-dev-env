@@ -5,6 +5,7 @@ Scripts in this directory are **executed** by the lead or teammates. They are no
 | Script | Purpose |
 |--------|---------|
 | `bugteam_preflight.py` | Run pytest (when configured) and optional `pre-commit` before `/bugteam`. |
+| `bugteam_fix_hookspath.py` | Auto-remediate a stale local `core.hooksPath` override, set canonical global value, re-run `bugteam_preflight.py`. Invoked by Claude when preflight reports a `core.hooksPath` failure. |
 | `bugteam_code_rules_gate.py` | Run `validate_content` from `code-rules-enforcer.py` on PR-scoped files (`git diff` vs merge-base). Exit `1` if any mandatory rule fails. Invoked **before each audit**; the fixer clears it before the auditor runs. |
 | `grant_project_claude_permissions.py` | Idempotent grant of Edit/Write/Read on `cwd/.claude/**` into `~/.claude/settings.json`. |
 | `revoke_project_claude_permissions.py` | Removes the matching grant entries from `~/.claude/settings.json`. |
@@ -23,6 +24,22 @@ python "${CLAUDE_SKILL_DIR}/scripts/bugteam_preflight.py"
 - Skips pytest when `pytest.ini` / `pyproject.toml` exists but no `test_*.py` / `*_test.py` files are found under the repo root.
 - Pytest exit code `5` (no tests collected) is treated as success.
 - Add `--pre-commit` to run `pre-commit run --all-files` when `.pre-commit-config.yaml` exists.
+
+## `bugteam_fix_hookspath.py`
+
+From the repository root:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/scripts/bugteam_fix_hookspath.py"
+```
+
+- Removes any local-scope `core.hooksPath` value that does not end in `hooks/git-hooks`.
+- Sets `git config --global core.hooksPath ~/.claude/hooks/git-hooks` when the global value is unset or non-canonical.
+- Refuses to run (exit non-zero) when `~/.claude/hooks/git-hooks` does not exist on disk — install via `npx claude-dev-env .` first.
+- Idempotent: a second invocation is a clean no-op.
+- Re-runs `bugteam_preflight.py --no-pytest` and propagates its exit code.
+
+The bugteam SKILL invokes this automatically when preflight stderr indicates a `core.hooksPath` failure, so Claude does not surface the error to the user.
 
 ## `bugteam_code_rules_gate.py`
 
