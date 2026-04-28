@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.33.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.32.0...claude-dev-env-v1.33.0) (2026-04-28)
+
+
+### Features
+
+* **bugteam:** close Copilot review gap with K-N rubric + post-merge fixes for [#270](https://github.com/jl-cmd/claude-code-config/issues/270)-[#273](https://github.com/jl-cmd/claude-code-config/issues/273) ([#276](https://github.com/jl-cmd/claude-code-config/issues/276)) ([ec5143f](https://github.com/jl-cmd/claude-code-config/commit/ec5143fe1b41ed6291b99af980179811e3ea99b6))
+
+
+### Bug Fixes
+
+* **bugteam:** evict cached config module before importing scripts/config/ ([#278](https://github.com/jl-cmd/claude-code-config/issues/278)) ([106841d](https://github.com/jl-cmd/claude-code-config/commit/106841d6f15a1d5da8f84af050a28349ccace1fc))
+
 ## [1.32.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.31.1...claude-dev-env-v1.32.0) (2026-04-28)
 
 
