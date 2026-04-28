@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.modules.pop("config", None)
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
