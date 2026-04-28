@@ -39,6 +39,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/tdd_enforcer.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/windows_rmtree_blocker.py",
+            "timeout": 10
           }
         ]
       },
@@ -88,6 +93,11 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/content_search_to_zoekt_redirector.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/windows_rmtree_blocker.py",
             "timeout": 10
           }
         ]

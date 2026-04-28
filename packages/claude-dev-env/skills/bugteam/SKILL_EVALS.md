@@ -124,7 +124,7 @@ The harness does not yet exist; this document defines its contract.
 | 17 | `Read(".bugteam-loop-2.outcomes.xml")` — zero findings | `SKILL.md` § AUDIT action |
 | 18 | `SendMessage(to="bugfind", message={type: "shutdown_request", reason: "audit loop 2 complete; zero findings"})` | `SKILL.md` § AUDIT action (**Shutdown** fallback) |
 | 19 | `TeamDelete()` | `SKILL.md` § Step 4 |
-| 20 | `Bash("python -c \"import shutil; shutil.rmtree(r'<team_temp_dir>', ignore_errors=True)\"")` | `SKILL.md` § Step 4 |
+| 20 | `Bash("python -c \"import os, shutil, stat, sys; h = lambda f, p, *_: (os.chmod(p, stat.S_IWRITE), f(p)); shutil.rmtree(r'<team_temp_dir>', **({'onexc': h} if sys.version_info >= (3, 12) else {'onerror': h}))\"")` | `SKILL.md` § Step 4 (Windows-safe teardown) |
 | 21 | `Bash("gh pr diff 42 -R ... > .bugteam-final.diff")` | `SKILL.md` § Step 4.5 step 1 |
 | 22 | `Bash("gh pr view 42 -R ... --json body --jq .body > .bugteam-original-body.md")` | `SKILL.md` § Step 4.5 step 2 |
 | 23 | `Agent(subagent_type="pr-description-writer", description=..., prompt=<brief>)` | `SKILL.md` § Step 4.5 |

@@ -24,7 +24,7 @@ When the cycle exits (any reason), run these steps in order from **this** sessio
 
 2. **Clean up the team** with `TeamDelete()` (no arguments — reads `<team_name>` from session context). Maps to “clean up the team” in the docs; quote: [`../sources.md`](../sources.md).
 
-3. **Delete the per-team temp directory** using the Python one-liner in `SKILL.md` with the same literal `<team_temp_dir>` from Step 2. `shutil.rmtree(..., ignore_errors=True)` is portable across Windows and Unix.
+3. **Delete the per-team temp directory** using the Python one-liner in `SKILL.md` with the same literal `<team_temp_dir>` from Step 2. The one-liner uses an `onexc`/`onerror` handler that strips the Windows ReadOnly attribute and retries the failing syscall — `ignore_errors=True` is unsafe on Windows because it silently swallows ReadOnly-attribute failures (see `~/.claude/rules/windows-filesystem-safe.md`).
 
 ## Step 4.5 — Finalize the PR description (mandatory)
 

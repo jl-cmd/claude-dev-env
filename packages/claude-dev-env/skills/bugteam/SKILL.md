@@ -291,7 +291,13 @@ Pass finding comment URLs/ids from `loop_comment_index` in XML. Replies: `Fixed 
 
 2. `TeamDelete()`
 
-3. `python -c "import shutil; shutil.rmtree(r'<team_temp_dir>', ignore_errors=True)"`
+3. Windows-safe teardown — `ignore_errors=True` silently swallows ReadOnly-attribute failures on Windows (see `~/.claude/rules/windows-filesystem-safe.md`). Use the inline `force_rmtree` helper:
+
+   ```bash
+   python -c "import os, shutil, stat, sys; \
+   h = lambda f, p, *_: (os.chmod(p, stat.S_IWRITE), f(p)); \
+   shutil.rmtree(r'<team_temp_dir>', **({'onexc': h} if sys.version_info >= (3, 12) else {'onerror': h}))"
+   ```
 
 ### Step 4.5: PR description
 
