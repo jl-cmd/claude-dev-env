@@ -179,6 +179,7 @@ class TestMainReadsSessionIdFromStdin:
         with (
             patch.object(cleanup, "prune_session_env", side_effect=fake_prune),
             patch("sys.stdin", stdin_payload),
+            patch.object(cleanup.sys, "platform", "win32"),
         ):
             cleanup.main()
         assert captured_call["session_id"] == "session-from-stdin"
@@ -197,6 +198,7 @@ class TestMainReadsSessionIdFromStdin:
         with (
             patch.object(cleanup, "prune_session_env", side_effect=fake_prune),
             patch("sys.stdin", stdin_payload),
+            patch.object(cleanup.sys, "platform", "win32"),
         ):
             cleanup.main()
         assert captured_call["session_id"] == ""

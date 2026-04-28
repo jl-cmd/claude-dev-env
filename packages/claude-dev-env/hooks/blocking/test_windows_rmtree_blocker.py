@@ -76,6 +76,12 @@ def test_allows_ignore_errors_false() -> None:
     )
 
 
+def test_blocks_rmtree_with_nested_parens_in_args() -> None:
+    assert payload_contains_unsafe_rmtree(
+        "shutil.rmtree(Path(target).resolve(), ignore_errors=True)"
+    )
+
+
 def test_extract_payload_handles_write_content() -> None:
     extracted = extract_payload_text("Write", {"content": "abc"})
     assert extracted == "abc"
@@ -98,6 +104,7 @@ def test_extract_payload_returns_empty_for_unknown_tool() -> None:
 
 def _run_hook(hook_input: dict) -> tuple[str, int]:
     captured = io.StringIO()
+    exit_code = 0
     sys.stdin = io.StringIO(json.dumps(hook_input))
     try:
         with redirect_stdout(captured):

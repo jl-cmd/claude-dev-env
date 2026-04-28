@@ -11,16 +11,23 @@ The default failure mode is shipping a rebase that compiled but doesn't run. Thi
 
 ## When to rebase vs. merge
 
+> **Decision thresholds**
+>
+> | Threshold | Value |
+> |---|---|
+> | Maximum commits for solo rebase | 5 |
+> | Divergence age that triggers merge-instead | 2 weeks |
+
 **Default to rebase** when:
 
 - Solo branch (you are the only author of the commits being rebased).
-- 1–5 commits ahead of base.
+- 1–5 commits ahead of base (see Decision thresholds above).
 - Stacked PR whose base just merged via squash.
 
 **Default to merge** when:
 
 - Branch has multiple authors (force-push would clobber their state).
-- More than ~5 commits or more than ~2 weeks of divergence (rebase complexity grows non-linearly).
+- More than 5 commits or more than 2 weeks of divergence (see Decision thresholds above; rebase complexity grows non-linearly).
 - The user said "merge", not "rebase".
 - Open PR with approving reviews already on the current SHA (force-push invalidates them).
 
@@ -74,10 +81,10 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
 6. **Audit auto-merged files.** Files that git merged without conflict markers are not automatically correct. After each commit applies, run:
 
    ```
-   git diff --name-only --diff-filter=M HEAD@{1}
+   git diff --name-only --diff-filter=M ORIG_HEAD
    ```
 
-   For each modified file with no conflict markers, eyeball the changes — auto-merge can produce duplicate blocks (when both sides added similar content) or silently drop content (when both sides removed adjacent lines). Pay extra attention to `config/`, `constants.*`, and `__init__.py` files where additions often sit near each other.
+   Use `ORIG_HEAD`, which git sets at rebase start; the reflog index `HEAD@{1}` shifts as each rebase step runs and is unreliable mid-rebase. For each modified file with no conflict markers, eyeball the changes — auto-merge can produce duplicate blocks (when both sides added similar content) or silently drop content (when both sides removed adjacent lines). Pay extra attention to `config/`, `constants.*`, and `__init__.py` files where additions often sit near each other.
 
 7. **At every conflict, take both sides' intent seriously.** Read both, then decide based on the post-rebase logical state. Do not reflex-pick HEAD or `origin/main`. Document the resolution reasoning in the commit message if it is non-obvious.
 
@@ -88,10 +95,10 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
 8. **Real import check.** For Python:
 
    ```
-   python -c "import <every_top_level_module_in_changed_packages>"
+   python -m compileall -q <package>
    ```
 
-   This catches the most common rebase failure: an import that survived the rebase pointing at a name the rebased commits removed or renamed.
+   Follow immediately with the test-collection step below. `compileall` catches import-time failures across every module file; combined with `--collect-only` it surfaces `NameError`, `AttributeError`, and `ImportError` cases that a syntax-only check misses.
 
 9. **Test collection.** `pytest --collect-only -q` on the changed packages catches NameError, AttributeError, and ImportError surfaces beyond plain imports.
 
@@ -102,7 +109,7 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
     - **Preferred:** `mcp__serena__find_referencing_symbols` (symbol-aware; ignores false matches in comments and string literals).
     - **Fallback:** `mcp__zoekt__search` for cross-repo or large trees.
     - **Then:** the `Grep` tool (e.g., `Grep(pattern="<symbol>", type="py")`) for fast in-repo scans.
-    - **Last resort:** `grep -rn "<symbol>" --include='*.py' --include='*.ts' --include='*.json' .`
+    - **Last resort:** `grep -rn "<symbol>" .` (let ripgrep defaults and `.gitignore` handle scoping)
 
     Any reference outside the rebased commits' own changes is a stale reference. Either update it (with user authorization) or surface it and refuse to push.
 
@@ -117,7 +124,7 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
     - Ask for explicit authorization.
     - If denied: leave the rebase result locally, report merge-instead as the alternative, stop.
 
-14. **Refuse to force-push** `main`, `master`, `release/*`, `production`, or any branch with more than one author in `git log --format='%ae' origin/<branch> | sort -u`. Surface the refusal; do not ask for authorization on these.
+14. **Refuse to force-push** `main`, `master`, `release/*`, `production`, or any branch with more than one unique author. Count unique authors in a cross-platform way: `git log --format='%ae' origin/<branch> | python -c "import sys; print(len(set(sys.stdin)))"`. This form works on both Windows (PowerShell) and Unix without shell pipeline extensions. Surface the refusal; do not ask for authorization on these.
 
 15. **Always `--force-with-lease=<branch>:<sha>`**, never bare `--force`. Pin the lease to the SHA you started from so concurrent pushes are detected as a lease mismatch instead of clobbered.
 

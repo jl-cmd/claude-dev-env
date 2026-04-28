@@ -35,7 +35,46 @@ cd into `<worktree_path>` before any git, gh, or file operation.
   H. Security boundaries (injection, path traversal, auth bypass, secret leakage)
   I. Concurrency hazards (race conditions, missing awaits, shared mutable state)
   J. Magic values and configuration drift
+  Copilot-derived addendum (K–N) — verify each one explicitly. Return at
+  least one finding per category OR a verified-clean entry that names the
+  exact files and lines you walked.
+  K. Collection naming. Every tuple, list, set, dict, mapping, or sequence
+     parameter must follow the CODE_RULES.md §5 "Extended naming rules"
+     prefix discipline:
+       - module-level constant whose value is a tuple/list/set/dict/frozenset
+         literal MUST start with `ALL_` (e.g. `ALL_THEMES_INSERT_REQUIRED_COLUMN_NAMES`)
+       - function/method parameter whose annotation is `list[...]`, `tuple[...]`,
+         `set[...]`, `dict[...]`, `Iterable[...]`, `Sequence[...]`, `Mapping[...]`,
+         or `frozenset[...]` MUST start with `all_` (e.g. `all_column_value_pairs`)
+       - exempt: dict/map names that follow the `X_by_Y` pattern (e.g.
+         `price_by_product`)
+  L. Library print / direct stdout. In any module that is not a CLI entry
+     point (`__main__`, `*_cli.py`, `scripts/*.py`), every `print(...)`,
+     `sys.stdout.write(...)`, `sys.stderr.write(...)` call is a finding.
+     The fix is to route through a `logger` call OR to make the output
+     stream an explicit parameter so callers can redirect it.
+  M. String-literal magic values. Treat domain-identifier string literals
+     (database column names, table names, HTTP header names, status enums,
+     environment-variable names) inside a function body as magic values
+     even when the existing number-only check would let them pass. The
+     fix is to extract them into `config/` and reference the imported
+     name. Do not flag plain log messages, error messages, or one-off
+     human-readable strings.
+  N. Wrapper plumb-through. When a public function delegates to an
+     inner function defined in the same package, every optional kwarg
+     accepted by the inner function MUST appear in the public wrapper
+     unless the wrapper docstring explicitly states the kwarg is fixed
+     to a sentinel default. Silently dropping `loud_banner_stream`,
+     `timeout`, `dry_run`, or any similar optional kwarg is a finding.
 </bug_categories>
+
+<copilot_derived_addendum_source>
+  The K–N categories were added after Copilot raised real findings on
+  PR #70 (writer.py / summary.py) and PR #73 (constants.py / writer.py /
+  tracker.py) that converged "0 P0 / 0 P1 / 0 P2" under the original
+  A–J rubric. See ~/.claude/skills/bugteam/reference/copilot-gap-analysis.md
+  for the inventory and the validators that now back categories K and L.
+</copilot_derived_addendum_source>
 
 <constraints>
   - Read-only on source code: the audit does not modify any source file.

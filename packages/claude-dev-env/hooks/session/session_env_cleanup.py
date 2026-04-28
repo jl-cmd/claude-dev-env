@@ -36,9 +36,10 @@ def _insert_hooks_tree_for_imports() -> None:
 _insert_hooks_tree_for_imports()
 
 from config.session_env_cleanup_constants import (
-    RMTREE_ONEXC_PYTHON_VERSION,
+    ALL_RMTREE_ONEXC_PYTHON_VERSION_PARTS,
     SESSION_ENV_DIRECTORY,
     SESSION_ID_PATTERN,
+    SESSION_ID_PAYLOAD_KEY,
     STALE_AGE_SECONDS,
     WINDOWS_PLATFORM_TAG,
 )
@@ -57,7 +58,7 @@ def _strip_read_only_and_retry(
 
 
 def _force_rmtree(target_path: str) -> None:
-    rmtree_onexc_python_version = RMTREE_ONEXC_PYTHON_VERSION
+    rmtree_onexc_python_version = ALL_RMTREE_ONEXC_PYTHON_VERSION_PARTS
     try:
         if sys.version_info >= rmtree_onexc_python_version:
             shutil.rmtree(target_path, onexc=_strip_read_only_and_retry)
@@ -103,10 +104,10 @@ def _read_session_id_from_stdin() -> str:
         return ""
     if not isinstance(payload, dict):
         return ""
-    raw_session_id = payload.get("session_id")
+    raw_session_id = payload.get(SESSION_ID_PAYLOAD_KEY)
     if not isinstance(raw_session_id, str):
         return ""
-    if not session_id_pattern.match(raw_session_id):
+    if not session_id_pattern.fullmatch(raw_session_id):
         return ""
     return raw_session_id
 

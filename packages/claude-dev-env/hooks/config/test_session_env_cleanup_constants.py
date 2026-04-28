@@ -11,7 +11,7 @@ for each_sys_path_entry in (str(_CONFIG_DIRECTORY), str(_HOOKS_ROOT)):
     if each_sys_path_entry not in sys.path:
         sys.path.insert(0, each_sys_path_entry)
 
-from config.session_env_cleanup_constants import SESSION_ID_PATTERN
+from config.session_env_cleanup_constants import SESSION_ID_PATTERN, SESSION_ID_PAYLOAD_KEY
 
 
 class TestSessionIdPatternAccepts:
@@ -29,6 +29,11 @@ class TestSessionIdPatternAccepts:
         underscore_input = "session_42_alpha"
         matched = SESSION_ID_PATTERN.fullmatch(underscore_input)
         assert matched.group(0) == underscore_input
+
+
+class TestSessionIdPayloadKey:
+    def test_session_id_payload_key_matches_hook_protocol_field(self) -> None:
+        assert SESSION_ID_PAYLOAD_KEY == "session_id"
 
 
 class TestSessionIdPatternRejects:

@@ -5,17 +5,28 @@ import subprocess
 import sys
 from pathlib import Path
 
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from config.bugteam_fix_hookspath_constants import (
+    ALL_CANONICAL_HOOKS_DIRECTORY_COMPONENTS,
+    ALL_HOME_ENV_VAR_NAMES,
+    HOOKS_PATH_SUFFIX,
+    PREFLIGHT_NO_PYTEST_FLAG,
+    PREFLIGHT_REPO_ROOT_FLAG,
+)
+
 
 def _expected_hooks_path_suffix() -> str:
-    return "hooks/git-hooks"
+    return HOOKS_PATH_SUFFIX
 
 
-def _canonical_hooks_directory_components() -> tuple[str, ...]:
-    return (".claude", "hooks", "git-hooks")
+def _canonical_hooks_directory_components() -> tuple[str, str, str]:
+    return ALL_CANONICAL_HOOKS_DIRECTORY_COMPONENTS
 
 
-def _home_env_var_names() -> tuple[str, ...]:
-    return ("HOME", "USERPROFILE")
+def _home_env_var_names() -> tuple[str, str]:
+    return ALL_HOME_ENV_VAR_NAMES
 
 
 def resolve_canonical_hooks_directory(
@@ -82,7 +93,7 @@ def read_global_core_hooks_path(
 def unset_local_core_hooks_path(
     repository_root: Path,
     environment_overrides: dict[str, str] | None,
-) -> None:
+) -> int:
     git_command = [
         "git",
         "-C",
@@ -92,13 +103,14 @@ def unset_local_core_hooks_path(
         "--unset-all",
         "core.hooksPath",
     ]
-    subprocess.run(
+    completed_process = subprocess.run(
         git_command,
         capture_output=True,
         text=True,
         check=False,
         env=environment_overrides,
     )
+    return completed_process.returncode
 
 
 def set_global_core_hooks_path(
@@ -144,8 +156,8 @@ def rerun_preflight(
     rerun_command = [
         sys.executable,
         str(preflight_script_path),
-        "--no-pytest",
-        "--repo-root",
+        PREFLIGHT_NO_PYTEST_FLAG,
+        PREFLIGHT_REPO_ROOT_FLAG,
         str(repository_root),
     ]
     completed_process = subprocess.run(
@@ -156,7 +168,7 @@ def rerun_preflight(
     return completed_process.returncode
 
 
-def parse_arguments(argv: list[str]) -> argparse.Namespace:
+def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Auto-fix core.hooksPath when bugteam preflight detects a stale override. "
@@ -178,7 +190,7 @@ def main(
     *,
     environment_overrides: dict[str, str] | None = None,
 ) -> int:
-    arguments = parse_arguments(sys.argv[1:] if argv is None else argv)
+    arguments = parse_arguments(argv)
     start_directory = Path.cwd()
     repository_root = (
         arguments.repo_root.resolve()
@@ -206,7 +218,16 @@ def main(
         for each_value in local_hooks_path_values
     )
     if has_non_canonical_local_override:
-        unset_local_core_hooks_path(repository_root, environment_overrides)
+        unset_local_returncode = unset_local_core_hooks_path(
+            repository_root, environment_overrides
+        )
+        if unset_local_returncode != 0:
+            print(
+                "bugteam_fix_hookspath: failed to unset local core.hooksPath on "
+                f"{repository_root} (git exit {unset_local_returncode}).",
+                file=sys.stderr,
+            )
+            return 1
         print(
             "bugteam_fix_hookspath: removed stale local core.hooksPath override on "
             f"{repository_root}",

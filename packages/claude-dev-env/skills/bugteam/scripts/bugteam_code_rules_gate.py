@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib.util
 import re
 import subprocess
@@ -239,6 +240,97 @@ def is_code_path(file_path: Path) -> bool:
     return suffix in {".py", ".js", ".ts", ".tsx", ".jsx"}
 
 
+def check_database_column_string_magic(content: str, file_path: str) -> list[str]:
+    """Flag string literals that look like database/HTTP column or key names inside function bodies.
+
+    Triggers when a snake_case string literal appears as the first element of a
+    two-element tuple inside a function body (the characteristic column-name/value
+    pair pattern). Files under ``config/`` and test files are exempt.
+    """
+    if "/config/" in file_path.replace("\\", "/") or "\\config\\" in file_path:
+        return []
+    if "/tests/" in file_path.replace("\\", "/") or file_path.endswith(("_test.py", ".spec.py")):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    column_key_pattern = re.compile(r"^[a-z][a-z0-9_]{2,}$")
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for each_child in ast.walk(node):
+            if not isinstance(each_child, ast.Tuple):
+                continue
+            if len(each_child.elts) != 2:
+                continue
+            first_element = each_child.elts[0]
+            if not isinstance(first_element, ast.Constant):
+                continue
+            if not isinstance(first_element.value, str):
+                continue
+            literal_text = first_element.value
+            if not column_key_pattern.match(literal_text):
+                continue
+            if literal_text in {"true", "false", "none", "null"}:
+                continue
+            issues.append(
+                f"Line {first_element.lineno}: Column-name string magic {literal_text!r} - extract to config"
+            )
+            if len(issues) >= 3:
+                return issues
+    return issues
+
+
+def check_wrapper_plumb_through(content: str, file_path: str) -> list[str]:
+    """Flag public wrappers that drop optional kwargs of a same-file delegate.
+
+    Walks the AST. For every public function (name does not start with '_'),
+    if its body contains exactly one direct call to another same-file
+    function and that delegate's signature accepts optional kwargs that the
+    wrapper does not also accept, emit a finding with both line numbers.
+    """
+    if file_path.endswith((".js", ".ts", ".tsx", ".jsx")):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    function_signatures: dict[str, set[str]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            optional_kwargs: set[str] = set()
+            for each_kwonly, each_default in zip(node.args.kwonlyargs, node.args.kw_defaults):
+                if each_default is not None:
+                    optional_kwargs.add(each_kwonly.arg)
+            function_signatures[node.name] = optional_kwargs
+    issues: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name.startswith("_"):
+            continue
+        wrapper_kwargs = function_signatures.get(node.name, set())
+        for each_call in ast.walk(node):
+            if not isinstance(each_call, ast.Call):
+                continue
+            if not isinstance(each_call.func, ast.Attribute):
+                continue
+            delegate_name = each_call.func.attr
+            delegate_kwargs = function_signatures.get(delegate_name)
+            if delegate_kwargs is None:
+                continue
+            missing = delegate_kwargs - wrapper_kwargs
+            if missing:
+                issues.append(
+                    f"Line {node.lineno}: Wrapper {node.name!r} drops optional kwargs {sorted(missing)!r} of delegate {delegate_name!r}"
+                )
+                if len(issues) >= 3:
+                    return issues
+    return issues
+
+
 def parse_added_line_numbers(unified_diff_text: str) -> set[int]:
     header_regex = hunk_header_pattern()
     added_line_numbers: set[int] = set()
@@ -404,6 +496,8 @@ def run_gate(
             continue
         relative = resolved.relative_to(repository_root.resolve())
         issues = validate_content(content, str(relative).replace("\\", "/"), old_content=content)
+        issues.extend(check_database_column_string_magic(content, str(relative).replace("\\", "/")))
+        issues.extend(check_wrapper_plumb_through(content, str(relative).replace("\\", "/")))
         if not issues:
             continue
         added_for_file = None if added_lines_map is None else added_lines_map.get(resolved)

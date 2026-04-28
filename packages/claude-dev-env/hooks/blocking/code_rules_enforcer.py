@@ -60,6 +60,13 @@ NOT_INSIDE_TYPE_CHECKING_BLOCK = -1
 MAX_ISSUES_PER_CHECK = 3
 FILE_GLOBAL_UPPER_SNAKE_PATTERN = re.compile(r"^_?[A-Z][A-Z0-9_]*$")
 
+COLLECTION_TYPE_NAMES: frozenset[str] = frozenset({
+    "list", "tuple", "set", "frozenset", "dict",
+    "Iterable", "Sequence", "Mapping", "MutableMapping", "FrozenSet",
+})
+COLLECTION_BY_NAME_PATTERN: re.Pattern[str] = re.compile(r"^[a-z][a-z0-9]*_by_[a-z][a-z0-9_]*$")
+CLI_FILE_PATH_MARKERS: tuple[str, ...] = ("/scripts/", "\\scripts\\", "_cli.py", "/cli.py", "\\cli.py")
+
 
 def get_file_extension(file_path: str) -> str:
     """Extract lowercase file extension."""
@@ -1933,6 +1940,106 @@ def check_unused_optional_parameters(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _annotation_names_collection(annotation_node: ast.expr | None) -> bool:
+    if annotation_node is None:
+        return False
+    if isinstance(annotation_node, ast.Name):
+        return annotation_node.id in COLLECTION_TYPE_NAMES
+    if isinstance(annotation_node, ast.Subscript):
+        return _annotation_names_collection(annotation_node.value)
+    if isinstance(annotation_node, ast.Attribute):
+        return annotation_node.attr in COLLECTION_TYPE_NAMES
+    return False
+
+
+def check_collection_prefix(content: str, file_path: str) -> list[str]:
+    if is_test_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for node in tree.body:
+        target_name: str | None = None
+        target_line = 0
+        is_collection_value = False
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            target_name = node.target.id
+            target_line = node.lineno
+            is_collection_value = _annotation_names_collection(node.annotation)
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target_name = node.targets[0].id
+            target_line = node.lineno
+            is_collection_value = isinstance(node.value, (ast.Tuple, ast.List, ast.Set, ast.Dict))
+        if target_name is None or not is_collection_value:
+            continue
+        if not UPPER_SNAKE_CONSTANT_PATTERN.match(target_name):
+            continue
+        if target_name.startswith("ALL_") or COLLECTION_BY_NAME_PATTERN.match(target_name.lower()):
+            continue
+        issues.append(
+            f"Line {target_line}: Collection constant {target_name} - prefix with ALL_ (CODE_RULES §5)"
+        )
+        if len(issues) >= MAX_ISSUES_PER_CHECK:
+            break
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for each_arg in _collect_annotated_arguments(node):
+            if not _annotation_names_collection(each_arg.annotation):
+                continue
+            if each_arg.arg in {"self", "cls"}:
+                continue
+            if each_arg.arg.startswith("all_") or COLLECTION_BY_NAME_PATTERN.match(each_arg.arg):
+                continue
+            issues.append(
+                f"Line {each_arg.lineno}: Collection parameter {each_arg.arg} - prefix with all_ (CODE_RULES §5)"
+            )
+            if len(issues) >= MAX_ISSUES_PER_CHECK:
+                return issues
+    return issues
+
+
+def _is_cli_entry_point(file_path: str) -> bool:
+    path_lower = file_path.lower().replace("\\", "/")
+    return any(marker.replace("\\", "/") in path_lower for marker in CLI_FILE_PATH_MARKERS)
+
+
+def check_library_print(content: str, file_path: str) -> list[str]:
+    if is_test_file(file_path) or is_config_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    if _is_cli_entry_point(file_path):
+        return []
+    if get_file_extension(file_path) not in PYTHON_EXTENSIONS:
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        function_reference = node.func
+        if isinstance(function_reference, ast.Name) and function_reference.id == "print":
+            issues.append(
+                f"Line {node.lineno}: Library print() - route through logger or accept an explicit stream parameter"
+            )
+        elif isinstance(function_reference, ast.Attribute) and function_reference.attr == "write":
+            value_node = function_reference.value
+            if isinstance(value_node, ast.Attribute) and isinstance(value_node.value, ast.Name):
+                if value_node.value.id == "sys" and value_node.attr in {"stdout", "stderr"}:
+                    issues.append(
+                        f"Line {node.lineno}: sys.{value_node.attr}.write - route through logger"
+                    )
+        if len(issues) >= MAX_ISSUES_PER_CHECK:
+            break
+    return issues
+
+
 def validate_content(content: str, file_path: str, old_content: str = "") -> list[str]:
     """Run all applicable validators on content.
 
@@ -1964,6 +2071,8 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_existence_check_tests(content, file_path))
         all_issues.extend(check_constant_equality_tests(content, file_path))
         all_issues.extend(check_unused_optional_parameters(content, file_path))
+        all_issues.extend(check_collection_prefix(content, file_path))
+        all_issues.extend(check_library_print(content, file_path))
         check_incomplete_mocks(content, file_path)
         check_duplicated_format_patterns(content, file_path)
 

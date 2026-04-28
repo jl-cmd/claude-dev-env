@@ -53,9 +53,7 @@ Two things to know about the handler:
 If a skill or runbook genuinely needs a one-line shell invocation, the equivalent without `ignore_errors=True` is:
 
 ```bash
-python -c "import os, shutil, stat, sys; \
-def _h(f, p, *_): os.chmod(p, stat.S_IWRITE); f(p); \
-shutil.rmtree(r'<path>', **({'onexc': _h} if sys.version_info >= (3, 12) else {'onerror': _h}))"
+python -c "import os, shutil, stat, sys; h = lambda f, p, *_: (os.chmod(p, stat.S_IWRITE), f(p)); shutil.rmtree(r'<path>', **({'onexc': h} if sys.version_info >= (3, 12) else {'onerror': h}))"
 ```
 
 Prefer the multi-line `force_rmtree` helper — the one-liner is hard to read and easy to mis-quote.
