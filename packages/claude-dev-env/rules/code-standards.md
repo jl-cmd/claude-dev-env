@@ -3,8 +3,6 @@
 > **MANDATORY REFERENCE:** CODE_RULES.md - Load for ALL code generation.
 > This is the single source of truth for code standards. Non-negotiable.
 
-@~/.claude/docs/CODE_RULES.md
-
 **Key principles (see CODE_RULES.md for complete reference):**
 - Self-documenting code (no comments)
 - Centralized configuration (one source of truth)

@@ -1,3 +1,7 @@
+---
+paths: **/*.py
+---
+
 # File-Global Constants
 
 This rule extends the `constants-location` rule defined in `~/.claude/docs/CODE_RULES.md` — see the ⚡ HOOK-ENFORCED RULES table, Constants location row.
