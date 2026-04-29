@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.34.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.33.0...claude-dev-env-v1.34.0) (2026-04-29)
+
+
+### Features
+
+* **hooks:** add InstructionsLoaded observability logger for rule audits ([#285](https://github.com/jl-cmd/claude-code-config/issues/285)) ([d4090cb](https://github.com/jl-cmd/claude-code-config/commit/d4090cb6313f8db47bec829ecfb94d6f51fc47e5))
+* **rules:** pwsh-only shell-invocation policy + audit/migrate scripts ([#280](https://github.com/jl-cmd/claude-code-config/issues/280)) ([d992cdd](https://github.com/jl-cmd/claude-code-config/commit/d992cdd8f1f305f2f36cb9be7705f85f9c502267))
+* **skills:** add caveman skill counterpart to caveman agent ([#279](https://github.com/jl-cmd/claude-code-config/issues/279)) ([316ee60](https://github.com/jl-cmd/claude-code-config/commit/316ee60bb6c879188f5e258fc454bfd9b302b101))
+* **skills:** add pr-converge skill for bugbot ↔ bugteam convergence ([#281](https://github.com/jl-cmd/claude-code-config/issues/281)) ([ee115d8](https://github.com/jl-cmd/claude-code-config/commit/ee115d84200971a82c763a63490a1fe75885db42))
+
+
+### Performance
+
+* **rules:** add path-scoped frontmatter to domain-specific rules ([#284](https://github.com/jl-cmd/claude-code-config/issues/284)) ([3fd8017](https://github.com/jl-cmd/claude-code-config/commit/3fd8017dcde4ece98a2ccf512e099447958e3a3e))
+
 ## [1.33.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.32.0...claude-dev-env-v1.33.0) (2026-04-28)
 
 
