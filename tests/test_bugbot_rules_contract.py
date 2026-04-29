@@ -116,15 +116,16 @@ def test_agents_instructions_upper_snake_path_exemptions() -> None:
     assert "code_rules_enforcer" not in magic_values_section_lower
 
 
-def test_agents_instructions_file_length_is_advisory_smell_not_hard_gate() -> None:
-    """AGENTS Part 1 (static rubric) describes length as advisory context, not a blocking rule."""
+def test_agents_instructions_file_length_is_advisory_signal() -> None:
+    """AGENTS Part 1 (static rubric) describes length as an advisory signal emitted to stderr."""
     text = _agents_instructions_part1_text()
     lower = text.lower()
     assert "400" in text
     assert "1000" in text
     assert "advisory" in lower
-    assert "hard gate" in lower or "not a hard gate" in lower
+    assert "stderr" in lower
     assert "hard limit" not in lower
+    assert "hard gate" not in lower
     structure_section_lower = _structure_section(text).lower()
     assert "code_rules_enforcer" not in structure_section_lower
     assert "hook" not in structure_section_lower
