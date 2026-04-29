@@ -4,7 +4,7 @@ AUTO-GENERATED — DO NOT EDIT.
 Source of truth: jl-cmd/claude-code-config/AGENTS.md
 Synced by: .github/workflows/sync-ai-rules.yml
 Source commit: unknown
-Synced at: 2026-04-22T10:35:36.390264+00:00
+Synced at: 2026-04-29T11:05:06.537233+00:00
 -->
 <!-- SYNC-HEADER-END -->
 
@@ -139,6 +139,8 @@ def is_retry_limit_reached(attempt_count: int) -> bool:
 ### Design
 
 - Favor functions over classes when state is absent; favor concrete classes over abstract base classes for single implementations; flag dependency-injection frameworks, single-type factories, and multi-level inheritance hierarchies.
+- Require Single Responsibility (SOLID: **S**) for every new function, class, and module: one reason to change. Flag cohesive code split for line-count aesthetics rather than distinct change reasons (for example, a cohesive 80-line class broken into four 20-line classes "because SRP").
+- Apply Open/Closed, Liskov Substitution, Interface Segregation, and Dependency Inversion (SOLID: **O / L / I / D**) only when two or more concrete implementations already exist or are imminent. Flag new interfaces, ABCs, abstract factories, or dependency-injection scaffolding introduced to satisfy SOLID when a single concrete implementation covers the use case (same guard as the `abstract base classes for single implementations` flag above). Full reconciliation with right-sized engineering: `~/.claude/docs/CODE_RULES.md` §7.5.
 - Add optional parameters only when a caller actually varies the value (YAGNI).
 - Require construction logic (paths, URLs, formatting, transformations) to live inside model methods; flag the same string-building pattern duplicated across call sites.
 - Require self-contained components: each component owns its own state, modals, overlays, and toasts; parents render `<Child />` alone.
