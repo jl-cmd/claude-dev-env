@@ -224,6 +224,18 @@
           }
         ]
       }
+    ],
+    "InstructionsLoaded": [
+      {
+        "matcher": "session_start|nested_traversal|path_glob_match|include|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/observability/instructions_loaded_logger.py",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
