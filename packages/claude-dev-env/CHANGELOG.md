@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.34.0...claude-dev-env-v1.34.1) (2026-04-30)
+
+
+### Bug Fixes
+
+* **skill/pr-converge:** run loop in main session, not background subagent ([#287](https://github.com/jl-cmd/claude-code-config/issues/287)) ([8ea8416](https://github.com/jl-cmd/claude-code-config/commit/8ea8416d9cd541b677016a6ae2d394dcd4baaf42))
+
 ## [1.34.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.33.0...claude-dev-env-v1.34.0) (2026-04-29)
 
 
