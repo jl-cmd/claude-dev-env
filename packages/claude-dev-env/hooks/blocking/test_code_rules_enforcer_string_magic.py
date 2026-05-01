@@ -121,3 +121,114 @@ def test_should_skip_in_config_files() -> None:
     source = "def env_keys() -> list[str]:\n    return ['STRIPE_SECRET', 'DB_HOST']\n"
     issues = code_rules_enforcer.check_string_literal_magic(source, CONFIG_FILE_PATH)
     assert issues == [], f"Config files exempt, got: {issues}"
+
+
+def test_should_not_flag_default_argument_string_literal() -> None:
+    source = (
+        "def consume(key: str = 'STRIPE_SECRET') -> str:\n"
+        "    return key\n"
+    )
+    issues = code_rules_enforcer.check_string_literal_magic(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Default argument value (signature, not body) must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_decorator_string_literal() -> None:
+    source = (
+        "from functools import lru_cache\n"
+        "\n"
+        "def cache_with_tag(tag: str):\n"
+        "    return lru_cache\n"
+        "\n"
+        "@cache_with_tag('STRIPE_SECRET')\n"
+        "def consume() -> str:\n"
+        "    return 'hello'\n"
+    )
+    issues = code_rules_enforcer.check_string_literal_magic(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Decorator argument (not body) must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_annotation_literal_type_argument() -> None:
+    source = (
+        "from typing import Literal\n"
+        "\n"
+        "def consume(method: Literal['STRIPE_SECRET']) -> str:\n"
+        "    return method\n"
+    )
+    issues = code_rules_enforcer.check_string_literal_magic(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Literal type annotation (signature, not body) must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_default_arg_of_nested_function_when_scanning_outer() -> None:
+    source = (
+        "def outer() -> None:\n"
+        "    def inner(key: str = 'STRIPE_SECRET') -> str:\n"
+        "        return key\n"
+        "    return None\n"
+    )
+    issues = code_rules_enforcer.check_string_literal_magic(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Nested function's default arg (signature) must not be flagged from outer scan, got: {issues}"
+    )
+
+
+def test_should_flag_class_attribute_in_nested_class_body() -> None:
+    source = (
+        "def outer() -> str:\n"
+        "    class Inner:\n"
+        "        attribute: str = 'STRIPE_SECRET'\n"
+        "    return 'no_magic_here'\n"
+    )
+    issues = code_rules_enforcer.check_string_literal_magic(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("STRIPE_SECRET" in each_issue for each_issue in issues), (
+        f"Nested ClassDef body executes when outer() runs; class attribute must be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_class_attribute_in_nested_class_inside_function() -> None:
+    source = (
+        "def outer() -> None:\n"
+        "    class Inner:\n"
+        "        KEY: str = 'STRIPE_SECRET'\n"
+        "    return None\n"
+    )
+    issues = code_rules_enforcer.check_string_literal_magic(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("STRIPE_SECRET" in each_issue for each_issue in issues), (
+        f"Class-level attribute inside a nested ClassDef inside outer fn body must be flagged "
+        f"(it executes when outer() runs), got: {issues}"
+    )
+
+
+def test_should_still_flag_literal_in_nested_function_body() -> None:
+    source = (
+        "def outer() -> str:\n"
+        "    def inner() -> str:\n"
+        "        return 'STRIPE_SECRET'\n"
+        "    return inner()\n"
+    )
+    issues = code_rules_enforcer.check_string_literal_magic(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("STRIPE_SECRET" in each_issue for each_issue in issues), (
+        f"Inner function's body magic literal must still be flagged via inner scan, got: {issues}"
+    )
+    assert len(issues) == 1, (
+        f"Inner literal must be flagged exactly once (no duplicate from outer walk), got: {issues}"
+    )

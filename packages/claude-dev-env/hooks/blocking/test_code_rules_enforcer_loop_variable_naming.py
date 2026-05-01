@@ -94,3 +94,17 @@ def test_should_flag_async_for_loop_variable() -> None:
     assert any("marker" in each_issue for each_issue in issues), (
         f"Expected async-for variable flagged, got: {issues}"
     )
+
+
+def test_should_exempt_underscore_throwaway_loop_variable() -> None:
+    source = (
+        "def consume(count: int) -> None:\n"
+        "    for _ in range(count):\n"
+        "        return None\n"
+    )
+    issues = code_rules_enforcer.check_loop_variable_naming(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Throwaway '_' loop variable must be exempt (Python idiom for 'value intentionally unused'), got: {issues}"
+    )

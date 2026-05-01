@@ -97,3 +97,41 @@ def test_should_not_flag_optional_when_param_uses_x_by_y_pattern() -> None:
     assert not any("price_by_product" in each_issue for each_issue in issues), (
         f"X_by_Y-pattern parameter must not be flagged, got: {issues}"
     )
+
+
+def test_should_flag_qualified_typing_optional_set_parameter() -> None:
+    source = (
+        "import typing\n"
+        "\n"
+        "def consume(numbers: typing.Optional[set[int]] = None) -> None:\n"
+        "    return None\n"
+    )
+    issues = code_rules_enforcer.check_collection_prefix(source, PRODUCTION_FILE_PATH)
+    assert any("numbers" in each_issue for each_issue in issues), (
+        f"Expected typing.Optional[set[int]] (ast.Attribute outer subscript) flagged, got: {issues}"
+    )
+
+
+def test_should_flag_qualified_typing_union_with_none_parameter() -> None:
+    source = (
+        "import typing\n"
+        "\n"
+        "def consume(numbers: typing.Union[set[int], None] = None) -> None:\n"
+        "    return None\n"
+    )
+    issues = code_rules_enforcer.check_collection_prefix(source, PRODUCTION_FILE_PATH)
+    assert any("numbers" in each_issue for each_issue in issues), (
+        f"Expected typing.Union[set[int], None] (ast.Attribute outer subscript) flagged, got: {issues}"
+    )
+
+
+def test_should_flag_module_level_qualified_typing_optional_constant() -> None:
+    source = (
+        "import typing\n"
+        "\n"
+        "RAW_NUMBERS: typing.Optional[set[int]] = None\n"
+    )
+    issues = code_rules_enforcer.check_collection_prefix(source, PRODUCTION_FILE_PATH)
+    assert any("RAW_NUMBERS" in each_issue for each_issue in issues), (
+        f"Expected typing.Optional[set[int]] module-level constant flagged, got: {issues}"
+    )

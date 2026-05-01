@@ -97,3 +97,59 @@ def test_should_flag_multiple_inline_collections_in_same_function() -> None:
         source, PRODUCTION_FILE_PATH
     )
     assert len(issues) == 2, f"Expected 2 flagged literals, got: {issues}"
+
+
+def test_should_not_flag_default_argument_set_literal() -> None:
+    source = (
+        "def consume(keys: set[str] = {'a', 'b', 'c'}) -> set[str]:\n"
+        "    return keys\n"
+    )
+    issues = code_rules_enforcer.check_inline_literal_collections(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Default argument value (signature, not body) must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_default_argument_list_literal() -> None:
+    source = (
+        "def consume(suffixes: list[str] = ['.py', '.js', '.ts']) -> list[str]:\n"
+        "    return suffixes\n"
+    )
+    issues = code_rules_enforcer.check_inline_literal_collections(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Default argument list (signature, not body) must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_default_arg_set_of_nested_function_from_outer_scan() -> None:
+    source = (
+        "def outer() -> None:\n"
+        "    def inner(keys: set[str] = {'a', 'b', 'c'}) -> set[str]:\n"
+        "        return keys\n"
+        "    return None\n"
+    )
+    issues = code_rules_enforcer.check_inline_literal_collections(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Nested function's default-arg set (signature) must not be flagged from outer scan, got: {issues}"
+    )
+
+
+def test_should_still_flag_set_literal_in_nested_function_body() -> None:
+    source = (
+        "def outer() -> bool:\n"
+        "    def inner(value: str) -> bool:\n"
+        "        return value in {'a', 'b', 'c'}\n"
+        "    return inner('a')\n"
+    )
+    issues = code_rules_enforcer.check_inline_literal_collections(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert len(issues) == 1, (
+        f"Inner function's body set literal must be flagged exactly once (no duplicate from outer walk), got: {issues}"
+    )
