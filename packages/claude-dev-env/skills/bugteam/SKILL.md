@@ -81,9 +81,7 @@ The fix script removes any non-canonical local-scope override on the active repo
 [ ] Step 0: project permissions granted
 [ ] Step 1: PR scope resolved
 [ ] Step 2: agent team created + loop state set
-[ ] Step 2.6: INITIAL standards review against cumulative PR diff
 [ ] Step 3: cycle complete (converged | cap reached | stuck | error)
-[ ] Step 3.5: FINAL standards review against cumulative PR diff
 [ ] Step 4: team torn down + working tree clean
 [ ] Step 4.5: PR description rewritten (or skip warning logged)
 [ ] Step 5: project permissions revoked
@@ -205,23 +203,6 @@ jq -n \
 
 **Endpoints:** `POST .../pulls/{pull}/reviews`; `POST .../pulls/{pull}/comments/{id}/replies`; fallback `POST .../issues/{issue}/comments` (`issue` = PR number).
 
-### Step 2.6: INITIAL standards review (once, before Loop 1 audit)
-
-Run BEFORE the first pre-audit gate fires. Spawn a fresh `code-quality-agent`
-teammate inside the same team and drive it through the K–N addendum (see
-PROMPTS.md `<copilot_derived_addendum_source>`). The teammate audits the
-cumulative PR diff (`gh pr diff <N>`) instead of a single loop's incremental
-patch; clean-room context is preserved by the same agent-team isolation as
-the per-loop bugfind teammate. Findings are posted using the same Step 2.5
-review-shape with body `## /bugteam INITIAL standards review against PR #<N>
-cumulative diff: <P0>P0 / <P1>P1 / <P2>P2`. Findings advance the audit/fix
-cycle exactly as if they had been raised in Loop 1: the lead increments
-`loop_count` to 1, sets `last_action = "audited"` with the merged
-`last_findings`, and Step 3 begins on the FIX branch. When the INITIAL
-review returns zero findings, `loop_count` stays at 0 and Step 3 begins on
-the AUDIT branch as before. Failure on this phase logs the error and
-proceeds to Step 3 unchanged so the legacy A–J cycle still runs.
-
 ### Step 3: The cycle
 
 Run the AUDIT-FIX cycle for each PR in all_prs, reusing the same team across PRs. The 10-loop cap applies per PR. Exit reasons (converged, cap reached, stuck, error) are tracked per PR; the final report lists one outcome line per PR.
@@ -304,19 +285,6 @@ Pass finding comment URLs/ids from `loop_comment_index` in XML. Replies: `Fixed 
 
 [`PROMPTS.md`](PROMPTS.md): fix XML + schema. Verify: `git rev-parse HEAD` advanced; `git fetch origin <branch> && git rev-parse origin/<branch>` matches `HEAD`. Unchanged HEAD → `stuck — bugfix teammate could not address findings`.
 
-### Step 3.5: FINAL standards review (once, after convergence)
-
-Run AFTER Step 3 exits with `converged`, `cap reached`, or `stuck`, and
-BEFORE Step 4 teardown. Spawn one more fresh `code-quality-agent` teammate;
-audit the cumulative PR diff against the K–N addendum a second time. Post
-the review with body `## /bugteam FINAL standards review against PR #<N>
-cumulative diff: <P0>P0 / <P1>P1 / <P2>P2`. When findings remain, the
-exit reason is upgraded to `error: final standards review found <P0>+<P1>+<P2>
-unresolved finding(s)` and the loop log gains an extra `final-review` line.
-A clean FINAL review preserves the existing exit reason. Failure on this
-phase logs the error and continues to Step 4 unchanged so teardown,
-permission revoke, and the final report still run.
-
 ### Step 4: Teardown
 
 1. For each live teammate: `SendMessage(to="<name>", message={"type": "shutdown_request", "reason": "bugteam cycle ending"})`. `approve: false` on cleanup → log and continue.
@@ -361,10 +329,8 @@ Final commit: <current_HEAD_sha7>
 Net change: <total_files> files, +<total_add>/-<total_del>
 
 Loop log:
-  initial standards review: 1P0 0P1 2P2
   1 audit: 3P0 2P1 0P2
   ...
-  final standards review: 0P0 0P1 0P2
 ```
 
 `cap reached` → suggest `/findbugs`. `stuck` → which findings. `error` → detail + loop.
