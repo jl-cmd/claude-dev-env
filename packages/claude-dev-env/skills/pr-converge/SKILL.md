@@ -58,12 +58,28 @@ Capture `number` (`<NUMBER>`), `headRefOid` (`current_head`), owner/repo (from `
 
 #### `phase == BUGBOT`
 
-a. Fetch the latest Cursor Bugbot review:
+a. Fetch Cursor Bugbot reviews newest-first and walk backwards until the first clean review:
+
    ```bash
    gh api repos/<OWNER>/<REPO>/pulls/<NUMBER>/reviews \
-     --jq '[.[] | select(.user.login=="cursor[bot]")] | sort_by(.submitted_at) | last'
+     --jq '[.[] | select(.user.login=="cursor[bot]")] | sort_by(.submitted_at) | reverse'
    ```
-   Capture `commit_id`, `state`, `submitted_at`, and the body. Bugbot's body contains either `Cursor Bugbot has reviewed your changes and found <N> potential issue` (findings exist) or text indicating no issues found.
+
+   Track dirty reviews in a temp file as you walk; the Fix protocol reads it back later in this tick:
+
+   ```bash
+   dirty_reviews_path=$(mktemp "${TMPDIR:-/tmp}/pr-converge-bugbot.XXXXXX")
+   : > "$dirty_reviews_path"
+   ```
+
+   Iterate from index 0 (most recent) toward older entries:
+
+   - Classify each review's body — **dirty** when it contains `Cursor Bugbot has reviewed your changes and found <N> potential issue`; **clean** otherwise.
+   - For a dirty review, append one JSON line to `$dirty_reviews_path` with `{review_id, commit_id, submitted_at, body}`.
+   - Stop at the first clean review. Older reviews are presumed addressed at that clean checkpoint and are not re-read.
+   - When index 0 is itself clean, `$dirty_reviews_path` stays empty.
+
+   Capture `commit_id`, `state`, `submitted_at`, and body of the index-0 review for the decision branches below. When a branch routes to the **Fix protocol**, read every entry from `$dirty_reviews_path` and address all of them — not just index 0.
 
 b. Fetch unaddressed inline comments from `cursor[bot]` on `current_head`:
    ```bash

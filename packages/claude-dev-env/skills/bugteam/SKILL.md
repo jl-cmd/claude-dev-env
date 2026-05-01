@@ -141,7 +141,7 @@ TeamCreate(
 ```bash
 loop_count=0
 last_action="fresh"
-last_findings=""
+last_findings='{"total": 0}'
 audit_log=""
 starting_sha="$(git rev-parse HEAD)"
 team_name="bugteam-pr-<number>-<YYYYMMDDHHMMSS>"
@@ -208,6 +208,22 @@ jq -n \
 Run the AUDIT-FIX cycle for each PR in all_prs, reusing the same team across PRs. The 10-loop cap applies per PR. Exit reasons (converged, cap reached, stuck, error) are tracked per PR; the final report lists one outcome line per PR.
 
 **Gate:** `validate_content` / `hooks/blocking/code_rules_enforcer.py` on PR-scoped files before every AUDIT (`bugteam_code_rules_gate.py`). Lead runs gate; clean-coder clears failures; then bugfind audits.
+
+**Pre-cycle: walk prior bugteam reviews end-first** (once per PR, after Step 2 and before iteration begins, when `last_action == "fresh"`). A re-invocation of `/bugteam` on a PR with prior loops detects whether the most recent loop already cleaned this HEAD (short-circuit) and otherwise records that prior loops were dirty so the AUDIT runs against the latest diff with that signal in mind:
+
+```bash
+dirty_review_count=0
+gh api "repos/<owner>/<repo>/pulls/<number>/reviews" \
+  --jq '[.[] | select(.body | startswith("## /bugteam loop "))] | sort_by(.submitted_at) | reverse'
+```
+
+Iterate from index 0 (most recent) toward older entries:
+
+- A bugteam review body that ends with `→ clean` is **clean**; any other `## /bugteam loop ...` body is **dirty**.
+- For a dirty review, increment `dirty_review_count` by one. The review's specific finding bodies are not carried forward — bugteam's AUDIT regenerates findings against the current HEAD's diff each loop, so prior bodies are stale by definition. The count alone is the carried signal.
+- Stop at the first clean review. Older reviews are presumed addressed at that clean checkpoint and are not re-read.
+- When index 0 is itself clean AND its `commit_id` matches `git rev-parse HEAD`, the PR is already converged on this HEAD — set `last_action="audited"`, `last_findings='{"total": 0}'`, fall through to step 1's `converged` exit, skip Step 3 iteration entirely.
+- When `dirty_review_count > 0`, log the count and proceed into the normal iteration; the next AUDIT regenerates anchored findings against the current HEAD so `loop_comment_index` stays correct. Unlike `pr-converge` — where Cursor Bugbot's prior dirty-review *bodies* are read back by the Fix protocol because each dirty body lists specific findings the loop must still address — bugteam's per-loop bodies are anchored to the diff at *that loop's* HEAD, so re-applying them against a newer diff would be incorrect. The count is sufficient signal that "prior loops did not converge here."
 
 1. From `last_action` / `last_findings`:
    - `last_action == "audited"` and `last_findings.total == 0` → exit `converged`
