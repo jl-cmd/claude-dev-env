@@ -188,34 +188,6 @@ def test_should_flag_when_every_call_passes_the_exact_default() -> None:
     )
 
 
-def test_check_unused_optional_parameters_stops_at_max_issues_per_check() -> None:
-    source = (
-        "def make_url_one(path: str, prefix: str = '/api') -> str:\n"
-        "    return f'{prefix}{path}'\n"
-        "def make_url_two(path: str, prefix: str = '/api') -> str:\n"
-        "    return f'{prefix}{path}'\n"
-        "def make_url_three(path: str, prefix: str = '/api') -> str:\n"
-        "    return f'{prefix}{path}'\n"
-        "def make_url_four(path: str, prefix: str = '/api') -> str:\n"
-        "    return f'{prefix}{path}'\n"
-        "def make_url_five(path: str, prefix: str = '/api') -> str:\n"
-        "    return f'{prefix}{path}'\n"
-        "\n"
-        "def call_all() -> None:\n"
-        "    make_url_one('/a')\n"
-        "    make_url_two('/b')\n"
-        "    make_url_three('/c')\n"
-        "    make_url_four('/d')\n"
-        "    make_url_five('/e')\n"
-    )
-    issues = code_rules_enforcer.check_unused_optional_parameters(
-        source, UNUSED_OPTIONAL_PRODUCTION_FILE_PATH
-    )
-    assert len(issues) == code_rules_enforcer.MAX_ISSUES_PER_CHECK, (
-        f"Expected exactly MAX_ISSUES_PER_CHECK issues, got {len(issues)}: {issues}"
-    )
-
-
 INCOMPLETE_MOCK_TEST_FILE_PATH = "packages/app/tests/test_orders.py"
 INCOMPLETE_MOCK_PRODUCTION_FILE_PATH = "packages/app/services/orders.py"
 
@@ -675,22 +647,20 @@ def test_advisory_should_still_flag_actual_method_body_constant() -> None:
     assert "MAXIMUM_RETRIES" in advisory_issues[0]
 
 
-def test_advisory_cap_matches_max_issues_per_check_constant() -> None:
-    many_constants_source = (
-        "def crowded_function():\n"
-        "    ALPHA_CONSTANT = 1\n"
-        "    BETA_CONSTANT = 2\n"
-        "    GAMMA_CONSTANT = 3\n"
-        "    DELTA_CONSTANT = 4\n"
-        "    EPSILON_CONSTANT = 5\n"
+def test_advisory_should_flag_annotated_function_body_constant() -> None:
+    source_with_annotated_function_body_constant = (
+        "def example_function() -> None:\n"
+        "    MAXIMUM_RETRIES: int = 3\n"
+        "    return None\n"
     )
     advisory_issues = code_rules_enforcer.check_constants_outside_config_advisory(
-        many_constants_source,
+        source_with_annotated_function_body_constant,
         "example_module.py",
     )
-    assert len(advisory_issues) == code_rules_enforcer.MAX_ISSUES_PER_CHECK, (
-        "Advisory cap must equal MAX_ISSUES_PER_CHECK, not a hardcoded literal"
+    assert len(advisory_issues) == 1, (
+        "Annotated function-body UPPER_SNAKE constant (PEP 526) must surface as advisory"
     )
+    assert "MAXIMUM_RETRIES" in advisory_issues[0]
 
 
 def test_advisory_should_flag_outer_constants_after_nested_def() -> None:
@@ -957,4 +927,86 @@ def test_should_still_advise_when_duplicated_fstring_literal_is_long(capsys: obj
     assert "/api/" in captured.err, (
         "Expected the existing /api/<x> path-shape advisory to still fire, "
         f"got: {captured.err!r}"
+    )
+
+
+LOOP_NAMING_PRODUCTION_FILE_PATH = "packages/app/services/loop_naming.py"
+
+
+def test_check_loop_variable_naming_flags_missing_each_prefix() -> None:
+    source = (
+        "def consume() -> None:\n"
+        "    for marker in []:\n"
+        "        return None\n"
+    )
+    issues = code_rules_enforcer.check_loop_variable_naming(
+        source, LOOP_NAMING_PRODUCTION_FILE_PATH
+    )
+    assert any("marker" in each_issue for each_issue in issues), (
+        f"Expected 'marker' loop variable flagged, got: {issues}"
+    )
+
+
+INLINE_LITERAL_PRODUCTION_FILE_PATH = "packages/app/services/inline_literal.py"
+
+
+def test_check_inline_literal_collections_flags_three_string_set_in_function() -> None:
+    source = (
+        "def is_known(value: str) -> bool:\n"
+        "    return value in {'true', 'false', 'none'}\n"
+    )
+    issues = code_rules_enforcer.check_inline_literal_collections(
+        source, INLINE_LITERAL_PRODUCTION_FILE_PATH
+    )
+    assert len(issues) == 1, f"Expected 3-element string set flagged, got: {issues}"
+
+
+STRING_MAGIC_PRODUCTION_FILE_PATH = "packages/app/services/string_magic.py"
+
+
+def test_check_string_literal_magic_flags_env_var_name() -> None:
+    source = (
+        "import os\n"
+        "\n"
+        "def fetch_secret() -> str:\n"
+        "    return os.environ['STRIPE_SECRET']\n"
+    )
+    issues = code_rules_enforcer.check_string_literal_magic(
+        source, STRING_MAGIC_PRODUCTION_FILE_PATH
+    )
+    assert any("STRIPE_SECRET" in each_issue for each_issue in issues), (
+        f"Expected env-var name flagged, got: {issues}"
+    )
+
+
+CONSTANTS_OUTSIDE_CONFIG_PRODUCTION_FILE_PATH = "packages/app/services/encoding.py"
+
+
+def test_check_constants_outside_config_flags_annotated_assignment() -> None:
+    source = "TEXT_FILE_ENCODING: str = 'utf-8'\n"
+    issues = code_rules_enforcer.check_constants_outside_config(
+        source, CONSTANTS_OUTSIDE_CONFIG_PRODUCTION_FILE_PATH
+    )
+    assert any("TEXT_FILE_ENCODING" in each_issue for each_issue in issues), (
+        f"Expected annotated UPPER_SNAKE assignment flagged, got: {issues}"
+    )
+
+
+def test_check_constants_outside_config_reports_more_than_three_constants() -> None:
+    source = (
+        "ALPHA_VALUE = 1\n"
+        "BETA_VALUE = 2\n"
+        "GAMMA_VALUE = 3\n"
+        "DELTA_VALUE = 4\n"
+        "EPSILON_VALUE = 5\n"
+        "\n"
+        "def consumer() -> int:\n"
+        "    return ALPHA_VALUE + BETA_VALUE\n"
+    )
+    issues = code_rules_enforcer.check_constants_outside_config(
+        source, CONSTANTS_OUTSIDE_CONFIG_PRODUCTION_FILE_PATH
+    )
+    expected_constant_count = 5
+    assert len(issues) == expected_constant_count, (
+        f"Expected all {expected_constant_count} constants reported, got {len(issues)}: {issues}"
     )

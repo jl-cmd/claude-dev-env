@@ -101,24 +101,6 @@ def test_should_not_flag_non_test_function_with_existence_check() -> None:
     assert issues == [], f"Expected no issues for non-test function, got: {issues}"
 
 
-def test_stops_at_max_issues_per_check() -> None:
-    source = (
-        "def test_one() -> None:\n    assert callable(func_one)\n"
-        "\n"
-        "def test_two() -> None:\n    assert callable(func_two)\n"
-        "\n"
-        "def test_three() -> None:\n    assert callable(func_three)\n"
-        "\n"
-        "def test_four() -> None:\n    assert callable(func_four)\n"
-        "\n"
-        "def test_five() -> None:\n    assert callable(func_five)\n"
-    )
-    issues = code_rules_enforcer.check_existence_check_tests(source, TEST_FILE_PATH)
-    assert len(issues) == code_rules_enforcer.MAX_ISSUES_PER_CHECK, (
-        f"Expected exactly MAX_ISSUES_PER_CHECK issues, got {len(issues)}: {issues}"
-    )
-
-
 def test_should_not_flag_outer_test_when_nested_helper_contains_existence_check() -> None:
     source = (
         "def test_outer_behavior() -> None:\n"

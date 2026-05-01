@@ -50,14 +50,12 @@ ADVISORY_LINE_THRESHOLD_SOFT = 400
 ADVISORY_LINE_THRESHOLD_HARD = 1000
 
 BOOLEAN_NAME_PREFIXES: tuple[str, ...] = ("is_", "has_", "should_", "can_")
-BOOLEAN_NAMING_ISSUE_CAP = 3
 UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 TYPE_CHECKING_BLOCK_PATTERN = re.compile(r"^(?P<indent>\s*)if\s+(typing\.)?TYPE_CHECKING\s*:\s*$")
 IMPORT_STATEMENT_PREFIXES: tuple[str, ...] = ("import ", "from ")
 NOT_INSIDE_TYPE_CHECKING_BLOCK = -1
-MAX_ISSUES_PER_CHECK = 3
 FILE_GLOBAL_UPPER_SNAKE_PATTERN = re.compile(r"^_?[A-Z][A-Z0-9_]*$")
 
 COLLECTION_TYPE_NAMES: frozenset[str] = frozenset({
@@ -354,9 +352,6 @@ def check_imports_at_top(content: str) -> list[str]:
         if inside_function and not is_inside_type_checking_block:
             if stripped.startswith(IMPORT_STATEMENT_PREFIXES):
                 issues.append(f"Line {line_number}: Import inside function - move to top of file")
-
-        if len(issues) >= MAX_ISSUES_PER_CHECK:
-            break
 
     return issues
 
@@ -758,7 +753,7 @@ def check_constants_outside_config(content: str, file_path: str) -> list[str]:
     inside_function = False
     inside_class = False
 
-    constant_pattern = re.compile(r"^([A-Z][A-Z0-9_]{2,})\s*=\s*[^=]")
+    constant_pattern = re.compile(r"^([A-Z][A-Z0-9_]{2,})(?:\s*:\s*[^=]+)?\s*=\s*[^=]")
 
     for line_number, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -787,9 +782,6 @@ def check_constants_outside_config(content: str, file_path: str) -> list[str]:
                 if constant_name not in ("__all__",):
                     issues.append(f"Line {line_number}: Constant {constant_name} - move to config/")
 
-        if len(issues) >= 3:
-            break
-
     return issues
 
 
@@ -811,12 +803,11 @@ def _scan_function_body_constants(content: str) -> list[str]:
 
     Only lines inside a function body (tracked via an indent stack) are
     flagged. Module-level assignments and class-body assignments are ignored.
-    Returns at most MAX_ISSUES_PER_CHECK entries.
     """
     advisory_issues: list[str] = []
     lines = content.split("\n")
     function_indent_stack: list[int] = []
-    constant_pattern = re.compile(r"^([A-Z][A-Z0-9_]{2,})\s*=\s*[^=]")
+    constant_pattern = re.compile(r"^([A-Z][A-Z0-9_]{2,})(?:\s*:\s*[^=]+)?\s*=\s*[^=]")
 
     for line_number, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -845,9 +836,6 @@ def _scan_function_body_constants(content: str) -> list[str]:
                 advisory_issues.append(
                     f"Line {line_number}: Function-local constant {constant_name} - consider moving to config/"
                 )
-
-        if len(advisory_issues) >= MAX_ISSUES_PER_CHECK:
-            break
 
     return advisory_issues
 
@@ -1066,8 +1054,6 @@ def check_boolean_naming(content: str, file_path: str) -> list[str]:
         issues.append(
             f"Line {line_number}: Boolean {name} - prefix with is_/has_/should_/can_"
         )
-        if len(issues) >= BOOLEAN_NAMING_ISSUE_CAP:
-            break
     return issues
 
 
@@ -1110,8 +1096,6 @@ def check_skip_decorators_in_tests(content: str, file_path: str) -> list[str]:
                     f"Line {each_decorator.lineno}: @skip decorator on test"
                     f" — tests must fail on missing deps"
                 )
-                if len(issues) >= MAX_ISSUES_PER_CHECK:
-                    return issues
 
     return issues
 
@@ -1215,8 +1199,6 @@ def check_existence_check_tests(content: str, file_path: str) -> list[str]:
                 f"Line {each_node.lineno}: existence-check test"
                 f" — delete or replace with a behavior test"
             )
-            if len(issues) >= MAX_ISSUES_PER_CHECK:
-                return issues
 
     return issues
 
@@ -1278,8 +1260,6 @@ def check_constant_equality_tests(content: str, file_path: str) -> list[str]:
                 f"Line {each_node.lineno}: constant-value test"
                 f" — delete; tests must cover behavior"
             )
-            if len(issues) >= MAX_ISSUES_PER_CHECK:
-                return issues
 
     return issues
 
@@ -1391,8 +1371,6 @@ def check_file_global_constants_use_count(content: str, file_path: str) -> list[
             issues.append(
                 f"Line {line_number}: File-global constant {each_constant_name} used by only 1 function/method - move to method scope or add a second caller"
             )
-        if len(issues) >= MAX_ISSUES_PER_CHECK:
-            break
 
     return issues
 
@@ -1934,10 +1912,11 @@ def check_unused_optional_parameters(content: str, file_path: str) -> list[str]:
                     f"Line {function_node.lineno}: optional parameter {param_name}"
                     f" is never varied — inline default or drop"
                 )
-                if len(issues) >= MAX_ISSUES_PER_CHECK:
-                    return issues
 
     return issues
+
+
+UNION_TYPING_NAMES: frozenset[str] = frozenset({"Optional", "Union"})
 
 
 def _annotation_names_collection(annotation_node: ast.expr | None) -> bool:
@@ -1945,10 +1924,27 @@ def _annotation_names_collection(annotation_node: ast.expr | None) -> bool:
         return False
     if isinstance(annotation_node, ast.Name):
         return annotation_node.id in COLLECTION_TYPE_NAMES
-    if isinstance(annotation_node, ast.Subscript):
-        return _annotation_names_collection(annotation_node.value)
     if isinstance(annotation_node, ast.Attribute):
         return annotation_node.attr in COLLECTION_TYPE_NAMES
+    if isinstance(annotation_node, ast.BinOp) and isinstance(annotation_node.op, ast.BitOr):
+        return (
+            _annotation_names_collection(annotation_node.left)
+            or _annotation_names_collection(annotation_node.right)
+        )
+    if isinstance(annotation_node, ast.Subscript):
+        outer_value = annotation_node.value
+        is_optional_or_union_subscript = (
+            isinstance(outer_value, ast.Name) and outer_value.id in UNION_TYPING_NAMES
+        )
+        if is_optional_or_union_subscript:
+            slice_node = annotation_node.slice
+            if isinstance(slice_node, ast.Tuple):
+                return any(
+                    _annotation_names_collection(each_element)
+                    for each_element in slice_node.elts
+                )
+            return _annotation_names_collection(slice_node)
+        return _annotation_names_collection(outer_value)
     return False
 
 
@@ -1983,8 +1979,6 @@ def check_collection_prefix(content: str, file_path: str) -> list[str]:
         issues.append(
             f"Line {target_line}: Collection constant {target_name} - prefix with ALL_ (CODE_RULES §5)"
         )
-        if len(issues) >= MAX_ISSUES_PER_CHECK:
-            break
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -1998,8 +1992,6 @@ def check_collection_prefix(content: str, file_path: str) -> list[str]:
             issues.append(
                 f"Line {each_arg.lineno}: Collection parameter {each_arg.arg} - prefix with all_ (CODE_RULES §5)"
             )
-            if len(issues) >= MAX_ISSUES_PER_CHECK:
-                return issues
     return issues
 
 
@@ -2035,8 +2027,212 @@ def check_library_print(content: str, file_path: str) -> list[str]:
                     issues.append(
                         f"Line {node.lineno}: sys.{value_node.attr}.write - route through logger"
                     )
-        if len(issues) >= MAX_ISSUES_PER_CHECK:
-            break
+    return issues
+
+
+SELF_AND_CLS_PARAMETER_NAMES: frozenset[str] = frozenset({"self", "cls"})
+LOOP_INDEX_LETTER_EXEMPTIONS: frozenset[str] = frozenset({"i", "j", "k"})
+EACH_PREFIX = "each_"
+BARE_EACH_TOKEN = "each"
+INLINE_COLLECTION_MIN_LENGTH = 3
+ALL_CAPS_WITH_UNDERSCORE_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
+DOTTED_SEGMENT_PATTERN = re.compile(r"^\.[a-z][a-z0-9_]*$")
+
+
+def _is_magic_string_literal(string_value: str) -> bool:
+    if not string_value:
+        return False
+    if ALL_CAPS_WITH_UNDERSCORE_PATTERN.match(string_value):
+        return True
+    if DOTTED_SEGMENT_PATTERN.match(string_value):
+        return True
+    return False
+
+
+def _collect_docstring_node_ids(tree: ast.Module) -> set[int]:
+    docstring_ids: set[int] = set()
+    docstring_owner_node_types = (
+        ast.Module,
+        ast.FunctionDef,
+        ast.AsyncFunctionDef,
+        ast.ClassDef,
+    )
+    for node in ast.walk(tree):
+        if not isinstance(node, docstring_owner_node_types):
+            continue
+        if not node.body:
+            continue
+        first_statement = node.body[0]
+        if not isinstance(first_statement, ast.Expr):
+            continue
+        first_value = first_statement.value
+        if isinstance(first_value, ast.Constant) and isinstance(first_value.value, str):
+            docstring_ids.add(id(first_value))
+    return docstring_ids
+
+
+def _collect_fstring_part_node_ids(tree: ast.Module) -> set[int]:
+    fstring_part_ids: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.JoinedStr):
+            continue
+        for each_value in node.values:
+            if isinstance(each_value, ast.Constant) and isinstance(each_value.value, str):
+                fstring_part_ids.add(id(each_value))
+    return fstring_part_ids
+
+
+def check_string_literal_magic(content: str, file_path: str) -> list[str]:
+    if is_test_file(file_path):
+        return []
+    if is_config_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    docstring_node_ids = _collect_docstring_node_ids(tree)
+    fstring_part_node_ids = _collect_fstring_part_node_ids(tree)
+    issues: list[str] = []
+    flagged_node_ids: set[int] = set()
+    for function_node in ast.walk(tree):
+        if not isinstance(function_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for descendant in ast.walk(function_node):
+            if descendant is function_node:
+                continue
+            if not isinstance(descendant, ast.Constant):
+                continue
+            if not isinstance(descendant.value, str):
+                continue
+            if id(descendant) in flagged_node_ids:
+                continue
+            if id(descendant) in docstring_node_ids:
+                continue
+            if id(descendant) in fstring_part_node_ids:
+                continue
+            if not _is_magic_string_literal(descendant.value):
+                continue
+            flagged_node_ids.add(id(descendant))
+            issues.append(
+                f"Line {descendant.lineno}: string magic value {descendant.value!r}"
+                f" - extract to config/"
+            )
+    return issues
+
+
+def check_inline_literal_collections(content: str, file_path: str) -> list[str]:
+    if is_test_file(file_path):
+        return []
+    if is_config_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    flagged_node_ids: set[int] = set()
+    for function_node in ast.walk(tree):
+        if not isinstance(function_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for descendant in ast.walk(function_node):
+            if descendant is function_node:
+                continue
+            if not isinstance(descendant, (ast.Set, ast.List)):
+                continue
+            if id(descendant) in flagged_node_ids:
+                continue
+            all_elements = descendant.elts
+            if len(all_elements) < INLINE_COLLECTION_MIN_LENGTH:
+                continue
+            if not all(isinstance(each_element, ast.Constant) for each_element in all_elements):
+                continue
+            flagged_node_ids.add(id(descendant))
+            collection_kind = "set" if isinstance(descendant, ast.Set) else "list"
+            issues.append(
+                f"Line {descendant.lineno}: inline {collection_kind} literal of {len(all_elements)}"
+                f" constants in function body - extract to config/"
+            )
+    return issues
+
+
+def check_loop_variable_naming(content: str, file_path: str) -> list[str]:
+    if is_test_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.For, ast.AsyncFor)):
+            continue
+        target = node.target
+        if not isinstance(target, ast.Name):
+            continue
+        target_name = target.id
+        if target_name in LOOP_INDEX_LETTER_EXEMPTIONS:
+            continue
+        if target_name == BARE_EACH_TOKEN:
+            issues.append(
+                f"Line {target.lineno}: loop variable 'each' is a bare token without subject"
+                f" - rename to each_<subject> (CODE_RULES §5)"
+            )
+            continue
+        if target_name.startswith(EACH_PREFIX) and len(target_name) > len(EACH_PREFIX):
+            continue
+        issues.append(
+            f"Line {target.lineno}: loop variable {target_name!r} - prefix with each_ (CODE_RULES §5)"
+        )
+    return issues
+
+
+def check_parameter_annotations(content: str, file_path: str) -> list[str]:
+    if is_test_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for each_arg in _collect_annotated_arguments(node):
+            if each_arg.arg in SELF_AND_CLS_PARAMETER_NAMES:
+                continue
+            if each_arg.annotation is None:
+                issues.append(
+                    f"Line {each_arg.lineno}: parameter {each_arg.arg!r} on {node.name!r} missing type annotation (CODE_RULES §6)"
+                )
+    return issues
+
+
+def check_return_annotations(content: str, file_path: str) -> list[str]:
+    if is_test_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.returns is None:
+            issues.append(
+                f"Line {node.lineno}: function {node.name!r} missing return type annotation (CODE_RULES §6)"
+            )
     return issues
 
 
@@ -2061,8 +2257,7 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_magic_values(content, file_path))
         all_issues.extend(check_fstring_structural_literals(content, file_path))
         all_issues.extend(check_constants_outside_config(content, file_path))
-        for each_advisory in check_constants_outside_config_advisory(content, file_path):
-            print(f"[CODE_RULES advisory] {file_path}: {each_advisory}", file=sys.stderr)
+        all_issues.extend(check_constants_outside_config_advisory(content, file_path))
         all_issues.extend(check_file_global_constants_use_count(content, file_path))
         all_issues.extend(check_type_escape_hatches(content, file_path))
         all_issues.extend(check_banned_identifiers(content, file_path))
@@ -2073,6 +2268,11 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_unused_optional_parameters(content, file_path))
         all_issues.extend(check_collection_prefix(content, file_path))
         all_issues.extend(check_library_print(content, file_path))
+        all_issues.extend(check_parameter_annotations(content, file_path))
+        all_issues.extend(check_return_annotations(content, file_path))
+        all_issues.extend(check_loop_variable_naming(content, file_path))
+        all_issues.extend(check_inline_literal_collections(content, file_path))
+        all_issues.extend(check_string_literal_magic(content, file_path))
         check_incomplete_mocks(content, file_path)
         check_duplicated_format_patterns(content, file_path)
 

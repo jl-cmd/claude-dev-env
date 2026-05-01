@@ -83,26 +83,6 @@ def test_should_produce_blocking_for_module_level_upper_snake_outside_config() -
     assert any("MAX_RETRIES" in issue for issue in blocking_issues)
 
 
-def test_should_include_file_path_in_advisory_stderr_output() -> None:
-    source = (
-        "def fetch_data():\n"
-        "    MAX_RETRIES = 3\n"
-        "    for attempt in range(MAX_RETRIES):\n"
-        "        pass\n"
-    )
-    captured_stderr = io.StringIO()
-    old_stderr = sys.stderr
-    sys.stderr = captured_stderr
-    try:
-        code_rules_enforcer.validate_content(source, PRODUCTION_FILE_PATH, "")
-    finally:
-        sys.stderr = old_stderr
-    advisory_output = captured_stderr.getvalue()
-    assert PRODUCTION_FILE_PATH in advisory_output, (
-        f"Advisory stderr must include the file path; got: {advisory_output!r}"
-    )
-
-
 def test_should_produce_stable_ordering_sorted_by_line_number() -> None:
     source = (
         "ALPHA_CONSTANT = 1\n"

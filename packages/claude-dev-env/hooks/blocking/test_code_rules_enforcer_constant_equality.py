@@ -110,21 +110,3 @@ def test_should_not_flag_non_test_function() -> None:
     assert issues == [], f"Expected no issues for non-test function, got: {issues}"
 
 
-def test_stops_at_max_issues_per_check() -> None:
-    source = (
-        "ALPHA = 1\nBETA = 2\nGAMMA = 3\nDELTA = 4\nEPSILON = 5\n"
-        "\n"
-        "def test_alpha() -> None:\n    assert ALPHA == 1\n"
-        "\n"
-        "def test_beta() -> None:\n    assert BETA == 2\n"
-        "\n"
-        "def test_gamma() -> None:\n    assert GAMMA == 3\n"
-        "\n"
-        "def test_delta() -> None:\n    assert DELTA == 4\n"
-        "\n"
-        "def test_epsilon() -> None:\n    assert EPSILON == 5\n"
-    )
-    issues = code_rules_enforcer.check_constant_equality_tests(source, TEST_FILE_PATH)
-    assert len(issues) == code_rules_enforcer.MAX_ISSUES_PER_CHECK, (
-        f"Expected exactly MAX_ISSUES_PER_CHECK issues, got {len(issues)}: {issues}"
-    )

@@ -148,19 +148,6 @@ def test_should_skip_workflow_registry_files() -> None:
     assert issues == []
 
 
-def test_should_cap_issues_at_three() -> None:
-    source = (
-        "def f() -> None:\n"
-        "    one = True\n"
-        "    two = False\n"
-        "    three = True\n"
-        "    four = False\n"
-        "    five = True\n"
-    )
-    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
-    assert len(issues) == 3
-
-
 def test_should_not_flag_syntax_error_as_issue() -> None:
     source = "def f(:\n    valid = True\n"
     issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
