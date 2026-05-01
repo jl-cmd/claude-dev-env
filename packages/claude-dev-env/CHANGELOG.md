@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.35.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.34.1...claude-dev-env-v1.35.0) (2026-05-01)
+
+
+### Features
+
+* **pr-converge:** walk bugbot reviews end-to-clean, not last-only ([#295](https://github.com/jl-cmd/claude-code-config/issues/295)) ([554cd2f](https://github.com/jl-cmd/claude-code-config/commit/554cd2f619967bfc6d8e872297c0239b613dcdf7))
+
+
+### Bug Fixes
+
+* **commands:** restore Bash for /readability-review, drop ghost skill ref ([#298](https://github.com/jl-cmd/claude-code-config/issues/298)) ([16ce658](https://github.com/jl-cmd/claude-code-config/commit/16ce658d74a6886e1f85c7825c9601815ed201dd))
+* **enforcer:** close gate gaps so audits stop re-finding violations ([#291](https://github.com/jl-cmd/claude-code-config/issues/291)) ([368948b](https://github.com/jl-cmd/claude-code-config/commit/368948b2806a336859dccf82060c7512db574ad7))
+* **enforcer:** scope body checks to bodies, exempt _, qualify typing.Optional (PR [#291](https://github.com/jl-cmd/claude-code-config/issues/291) follow-up) ([#299](https://github.com/jl-cmd/claude-code-config/issues/299)) ([5a65457](https://github.com/jl-cmd/claude-code-config/commit/5a654577715d0d25ac5ddf4651b80a144c75f519))
+
+
+### Documentation
+
+* **bugteam:** mark copilot-gap-analysis.md patch plan historical (PR [#292](https://github.com/jl-cmd/claude-code-config/issues/292) follow-up) ([#297](https://github.com/jl-cmd/claude-code-config/issues/297)) ([6b51a27](https://github.com/jl-cmd/claude-code-config/commit/6b51a27ff6d1ce30e6f5adb903fa50631511fad2))
+
+
+### Maintenance
+
+* remove 20 unused agents and clean dangling references ([#294](https://github.com/jl-cmd/claude-code-config/issues/294)) ([51b9ce6](https://github.com/jl-cmd/claude-code-config/commit/51b9ce6a341c5668d0c8008035cbfa67d8d6ecbc))
+
+
+### Refactoring
+
+* **bugteam:** remove K-N rubric categories from audit prompt ([#292](https://github.com/jl-cmd/claude-code-config/issues/292)) ([a3a483b](https://github.com/jl-cmd/claude-code-config/commit/a3a483bb3197381e6bd1b87a4c6f1f13937f1a28)), closes [#291](https://github.com/jl-cmd/claude-code-config/issues/291)
+
 ## [1.34.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.34.0...claude-dev-env-v1.34.1) (2026-04-30)
 
 
