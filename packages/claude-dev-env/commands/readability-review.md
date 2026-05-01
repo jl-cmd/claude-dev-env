@@ -1,6 +1,6 @@
 ---
 description: "8-dimension readability review: scores and FIXES code to 160/160. Also handles paste-rewrite via arguments."
-allowed-tools: Skill, Read, Edit, Grep, Glob
+allowed-tools: Skill, Read, Edit, Grep, Glob, Bash
 ---
 
 Invoke the `readability-review` skill to review and fix code readability.

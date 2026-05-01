@@ -49,7 +49,7 @@ Missing details in implementation guides
 **Web Automation stubs →**
 - Automation: automation-agent or automation skill
 - Google Sheets: sheets orchestrator agent
-- Config issues: config-extraction skill
+- Config issues: clean-coder agent (extracts magic values to `config/` per CODE_RULES.md)
 
 **Web framework stubs →**
 - Models/views/forms: domain-specific agent
