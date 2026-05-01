@@ -1,14 +1,14 @@
 ---
 description: "8-dimension readability review: scores and FIXES code to 160/160. Also handles paste-rewrite via arguments."
-allowed-tools: Task, Read, Edit, Grep, Glob
+allowed-tools: Skill, Read, Edit, Grep, Glob
 ---
 
-Launch the readability-review agent to review and fix code readability.
+Invoke the `readability-review` skill to review and fix code readability.
 
 ## Steps
 
-1. Launch a `readability-review-agent` via the Task tool
-2. The agent will: load its rubric → discover target code → read it → score every function → FIX anything below 16/20 → report
+1. Invoke the `readability-review` skill via the Skill tool
+2. The skill will: load its rubric → discover target code → read it → score every function → FIX anything below 16/20 → report
 
 ## User Arguments
 

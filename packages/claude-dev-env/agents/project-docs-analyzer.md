@@ -8,7 +8,6 @@ color: cyan
 You analyze project documentation to prevent code duplication and provide implementation guidance.
 
 **Use before:** implementing new features (check for duplication)
-**Works with:** refactoring-specialist (identify reusable utilities)
 
 ## Primary Responsibilities
 

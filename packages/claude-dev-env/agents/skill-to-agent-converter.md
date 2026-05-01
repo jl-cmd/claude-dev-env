@@ -162,7 +162,6 @@ Trigger this agent when:
 
 Do NOT use this agent when:
 
-- User wants to create a brand-new agent from scratch (use agent-writer instead)
 - No skills exist to convert
 - User wants to modify existing agent (direct editing is better)
 - User wants to create a skill (different workflow)

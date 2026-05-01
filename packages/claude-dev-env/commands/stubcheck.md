@@ -49,7 +49,7 @@ Missing details in implementation guides
 **Web Automation stubs →**
 - Automation: automation-agent or automation skill
 - Google Sheets: sheets orchestrator agent
-- Config issues: config-extraction-agent or config-extraction skill
+- Config issues: config-extraction skill
 
 **Web framework stubs →**
 - Models/views/forms: domain-specific agent
@@ -81,7 +81,6 @@ Incomplete matching logic
 [HIGH] tests/test_integration.py:234
 Missing integration test
 → Recommendation: Follow TDD workflow
-→ Agent: tdd-test-writer
 
 Would you like me to fix CRITICAL stubs now?
 ```

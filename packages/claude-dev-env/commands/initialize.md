@@ -17,7 +17,6 @@ Read CLAUDE.md now and focus on:
 **Agent Decision Tree:**
 - Automation work → check available agents for automation patterns
 - Web App Development → check available agents for framework-specific patterns
-- Configuration/Architecture → config-extraction-agent, parallel-workflow-coordinator
 
 **Never skip agent check to "save time" or because request "seems simple"**
 

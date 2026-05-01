@@ -33,7 +33,7 @@ color: cyan
 
 You handle all documentation tasks: orchestrating doc workflows, analyzing project docs, and writing user-facing guides.
 
-**Works with:** clean-coder (identify reusable utilities), validation-expert (path changes trigger doc updates)
+**Works with:** clean-coder (identify reusable utilities)
 
 ## Mode 1: Documentation Orchestration
 
