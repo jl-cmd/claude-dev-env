@@ -56,16 +56,100 @@ def test_should_flag_bare_each_without_subject() -> None:
     )
 
 
-def test_should_not_flag_tuple_unpacking_targets() -> None:
+def test_should_flag_tuple_unpacking_targets_lacking_each_prefix() -> None:
     source = (
         "def consume() -> None:\n"
-        "    for key, value in {}.items():\n"
+        "    for accessed_field, access_line in []:\n"
         "        return None\n"
     )
     issues = code_rules_enforcer.check_loop_variable_naming(
         source, PRODUCTION_FILE_PATH
     )
-    assert issues == [], f"Tuple-unpack targets exempt, got: {issues}"
+    assert any("accessed_field" in each_issue for each_issue in issues), (
+        f"Expected 'accessed_field' tuple-unpack target flagged, got: {issues}"
+    )
+    assert any("access_line" in each_issue for each_issue in issues), (
+        f"Expected 'access_line' tuple-unpack target flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_tuple_unpacking_when_all_targets_have_each_prefix() -> None:
+    source = (
+        "def consume() -> None:\n"
+        "    for each_key, each_value in {}.items():\n"
+        "        return None\n"
+    )
+    issues = code_rules_enforcer.check_loop_variable_naming(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Tuple-unpack with each_ prefix on all targets must pass, got: {issues}"
+    )
+
+
+def test_should_exempt_underscore_inside_tuple_unpacking() -> None:
+    source = (
+        "def consume() -> None:\n"
+        "    for _, each_position in []:\n"
+        "        return None\n"
+    )
+    issues = code_rules_enforcer.check_loop_variable_naming(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"'_' must remain exempt inside tuple unpacking, got: {issues}"
+    )
+
+
+def test_should_flag_partially_compliant_tuple_unpacking() -> None:
+    source = (
+        "def consume() -> None:\n"
+        "    for each_key, raw_value in {}.items():\n"
+        "        return None\n"
+    )
+    issues = code_rules_enforcer.check_loop_variable_naming(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("raw_value" in each_issue for each_issue in issues), (
+        f"Mixed-compliance tuple unpack must flag the offender, got: {issues}"
+    )
+    assert not any("each_key" in each_issue for each_issue in issues), (
+        f"each_key compliant target must not be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_nested_tuple_unpacking_targets() -> None:
+    source = (
+        "def consume() -> None:\n"
+        "    for outer_label, (inner_first, inner_second) in []:\n"
+        "        return None\n"
+    )
+    issues = code_rules_enforcer.check_loop_variable_naming(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("inner_first" in each_issue for each_issue in issues), (
+        f"Nested tuple-unpack targets must be inspected, got: {issues}"
+    )
+    assert any("inner_second" in each_issue for each_issue in issues), (
+        f"Nested tuple-unpack targets must be inspected, got: {issues}"
+    )
+
+
+def test_should_flag_starred_tuple_unpacking_target() -> None:
+    source = (
+        "def consume() -> None:\n"
+        "    for first, *rest in []:\n"
+        "        return None\n"
+    )
+    issues = code_rules_enforcer.check_loop_variable_naming(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("first" in each_issue for each_issue in issues), (
+        f"First tuple-unpack target must be flagged, got: {issues}"
+    )
+    assert any("rest" in each_issue for each_issue in issues), (
+        f"Starred tuple-unpack target must be flagged, got: {issues}"
+    )
 
 
 def test_should_not_flag_list_comprehension_target() -> None:

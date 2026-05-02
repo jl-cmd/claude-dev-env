@@ -87,7 +87,7 @@ Full rule including the decision table, examples, and reference-counting details
 
 ### Structure
 
-- File length is advisory: a soft note above ~400 lines, a stronger note above ~1000 lines. The file's role (migrations, generated code, registries, large fixtures) justifies any size.
+- File length is advisory (stderr only): a soft note above ~400 lines, a stronger note above ~1000 lines. The file's role (migrations, generated code, registries, large fixtures) justifies any size.
 - Functions stay at 30 lines or fewer. If it's longer, flag as advisory ONLY.
 - Top-level functions follow the language's blank-line convention: Python uses two blank lines between top-level functions. Other languages defer to file-established convention.
 - `import` statements live at the top of the file.

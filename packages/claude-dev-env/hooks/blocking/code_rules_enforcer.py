@@ -863,20 +863,27 @@ BANNED_IDENTIFIER_SKIP_ADVISORY: str = (
 )
 
 
+def _collect_target_names(target: ast.expr) -> list[ast.Name]:
+    """Return every ast.Name reachable through tuple/list/starred unpacking targets."""
+    if isinstance(target, ast.Name):
+        return [target]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: list[ast.Name] = []
+        for each_element in target.elts:
+            names.extend(_collect_target_names(each_element))
+        return names
+    if isinstance(target, ast.Starred):
+        return _collect_target_names(target.value)
+    return []
+
+
 def _collect_banned_names_from_target(target: ast.expr) -> list[ast.Name]:
     """Return every banned ast.Name reachable through tuple/list unpacking or starred targets."""
-    if isinstance(target, ast.Name):
-        if target.id in BANNED_IDENTIFIERS:
-            return [target]
-        return []
-    if isinstance(target, (ast.Tuple, ast.List)):
-        banned_names: list[ast.Name] = []
-        for each_element in target.elts:
-            banned_names.extend(_collect_banned_names_from_target(each_element))
-        return banned_names
-    if isinstance(target, ast.Starred):
-        return _collect_banned_names_from_target(target.value)
-    return []
+    return [
+        each_name_node
+        for each_name_node in _collect_target_names(target)
+        if each_name_node.id in BANNED_IDENTIFIERS
+    ]
 
 
 def _collect_banned_names_from_node(node: ast.AST) -> list[ast.Name]:
@@ -2187,23 +2194,21 @@ def check_loop_variable_naming(content: str, file_path: str) -> list[str]:
     for node in ast.walk(tree):
         if not isinstance(node, (ast.For, ast.AsyncFor)):
             continue
-        target = node.target
-        if not isinstance(target, ast.Name):
-            continue
-        target_name = target.id
-        if target_name in LOOP_INDEX_LETTER_EXEMPTIONS:
-            continue
-        if target_name == BARE_EACH_TOKEN:
+        for each_name_node in _collect_target_names(node.target):
+            target_name = each_name_node.id
+            if target_name in LOOP_INDEX_LETTER_EXEMPTIONS:
+                continue
+            if target_name == BARE_EACH_TOKEN:
+                issues.append(
+                    f"Line {each_name_node.lineno}: loop variable 'each' is a bare token without subject"
+                    f" - rename to each_<subject> (CODE_RULES §5)"
+                )
+                continue
+            if target_name.startswith(EACH_PREFIX) and len(target_name) > len(EACH_PREFIX):
+                continue
             issues.append(
-                f"Line {target.lineno}: loop variable 'each' is a bare token without subject"
-                f" - rename to each_<subject> (CODE_RULES §5)"
+                f"Line {each_name_node.lineno}: loop variable {target_name!r} - prefix with each_ (CODE_RULES §5)"
             )
-            continue
-        if target_name.startswith(EACH_PREFIX) and len(target_name) > len(EACH_PREFIX):
-            continue
-        issues.append(
-            f"Line {target.lineno}: loop variable {target_name!r} - prefix with each_ (CODE_RULES §5)"
-        )
     return issues
 
 
