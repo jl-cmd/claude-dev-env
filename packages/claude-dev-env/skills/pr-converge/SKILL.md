@@ -6,17 +6,43 @@ description: >-
   session: fetches the latest reviewer state, applies TDD fixes for any
   findings, pushes one commit per tick, replies inline, and re-triggers the
   reviewer. To loop automatically, invoke as `/loop /pr-converge` — the /loop
-  skill self-paces re-entry via ScheduleWakeup. Convergence requires a
-  back-to-back clean cycle (bugbot CLEAN immediately followed by bugteam CLEAN
-  with no intervening fixes), at which point the PR is flipped to ready for
-  review and the loop terminates. Triggers: '/pr-converge', 'drive PR to
-  convergence', 'loop bugbot and bugteam', 'babysit bugbot and bugteam',
-  'until both are clean', 'converge this PR'.
+  skill self-paces re-entry via ScheduleWakeup. When ScheduleWakeup is not
+  available (orchestrated teams disabled, restricted tool scope), drive
+  re-entry via the AHK auto-continue workflow — see §Alternative loop driver
+  in the Table of Contents below.
+  Convergence requires a back-to-back clean cycle (bugbot CLEAN immediately
+  followed by bugteam CLEAN with no intervening fixes), at which point the PR
+  is flipped to ready for review and the loop terminates. Triggers:
+  '/pr-converge', 'drive PR to convergence', 'loop bugbot and bugteam',
+  'babysit bugbot and bugteam', 'until both are clean', 'converge this PR'.
 ---
 
 # PR Converge
 
 Runs one tick of the bugbot ↔ bugteam convergence loop in the main session. Designed to be invoked under `/loop /pr-converge` so the parent's ScheduleWakeup paces re-entry. Self-terminates the loop on convergence (back-to-back clean) by flipping the PR to ready for review and omitting the next ScheduleWakeup.
+
+## Table of contents
+
+1. [Why the work runs in the main session, not a background subagent](#why-the-work-runs-in-the-main-session-not-a-background-subagent)
+2. [When this skill applies](#when-this-skill-applies)
+3. [Invocation modes](#invocation-modes)
+4. [Alternative loop driver: AHK auto-continue](#alternative-loop-driver-ahk-auto-continue) — used when `/loop` + ScheduleWakeup is out of scope
+   - [One-time setup at the start of the loop](#one-time-setup-at-the-start-of-the-loop)
+   - [Per-tick behavior under this driver](#per-tick-behavior-under-this-driver)
+   - [Convergence cleanup](#convergence-cleanup)
+   - [Gotchas](#gotchas)
+5. [State across ticks](#state-across-ticks)
+6. [Per-tick work](#per-tick-work)
+   - [Step 1: Resolve current HEAD and PR context](#step-1-resolve-current-head-and-pr-context)
+   - [Step 2: Branch on `phase`](#step-2-branch-on-phase)
+   - [Step 3: Re-trigger bugbot](#step-3-re-trigger-bugbot)
+   - [Step 3.5: Enforce the safety cap](#step-35-enforce-the-safety-cap)
+   - [Step 4: Schedule the next wakeup (only when invoked under `/loop`)](#step-4-schedule-the-next-wakeup-only-when-invoked-under-loop)
+7. [Fix protocol](#fix-protocol)
+8. [Stop conditions](#stop-conditions)
+9. [Safety cap](#safety-cap)
+10. [Ground rules](#ground-rules)
+11. [Examples](#examples)
 
 ## Why the work runs in the main session, not a background subagent
 
@@ -30,6 +56,59 @@ The user is on a PR branch and wants both reviewers — Cursor's Bugbot AND the 
 
 - **`/loop /pr-converge`** (recommended): loops automatically. The /loop skill runs each tick and uses ScheduleWakeup to pace re-entry. Termination on convergence is automatic; the skill omits the next wakeup at the convergence tick.
 - **`/pr-converge`** (manual): runs exactly one tick and returns. Useful for ad-hoc state checks or for advancing the loop one step manually. The user re-runs the skill (or wraps it in `/loop`) to continue.
+
+## Alternative loop driver: AHK auto-continue
+
+Use this when `/loop` + ScheduleWakeup is not in scope (orchestrated teams disabled, restricted tool registry, or the user wants a visibly-running pacer pinned to their session). The per-tick work is unchanged; what changes is who fires the next tick. Instead of ScheduleWakeup re-entering the skill, an external AutoHotkey utility auto-types `continue` into the active Claude Code window every 5 minutes, and the model treats each `continue` as the next tick trigger.
+
+### One-time setup at the start of the loop
+
+The skill bundles its driver scripts under `scripts/` and resolves them at runtime via `$HOME\.claude\skills\pr-converge\scripts\…` (the same convention `/logifix` uses). The bundled `.cmd` launchers locate their siblings via `%~dp0`, so they need no path arguments — only the AHK target PID.
+
+Run these two commands in order (PowerShell-friendly Bash escaping):
+
+1. Resolve the PID of the GUI ancestor that hosts this Claude Code session:
+   ```bash
+   pwsh -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\skills\pr-converge\scripts\caller-window-pid.ps1"
+   ```
+   Capture the printed integer as `caller_pid`. Verify it points at the right window before continuing:
+   ```bash
+   pwsh -NoProfile -Command "Get-Process -Id $caller_pid | Select-Object Id,ProcessName,MainWindowTitle"
+   ```
+2. Launch the auto-typer attached to that PID with auto-start enabled. The bundled launcher accepts the PID as its first arg and the `--start-on` flag is forwarded to the AHK script:
+   ```bash
+   "$HOME\.claude\skills\pr-converge\scripts\cursor-agents-continue.cmd" $caller_pid --start-on
+   ```
+   AutoHotkey v2 must be installed at `C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe`.
+
+### Per-tick behavior under this driver
+
+- Run Steps 1–3.5 of **Per-tick work** exactly as written (this explicitly includes the safety cap at Step 3.5).
+- **Skip Step 4** (`ScheduleWakeup`) entirely — the auto-typer is the pacer.
+- End every assistant response with the literal sentence `Awaiting next "continue" tick.` so the next iteration is unambiguously identifiable in the transcript.
+- When the next user message is `continue` (auto-typed by AHK) or any close paraphrase, treat it as the next tick of `/pr-converge` and re-enter from Step 1 against the freshest PR state.
+
+### Convergence cleanup
+
+On back-to-back clean (the existing convergence rule), after `gh pr ready`, kill the auto-typer:
+
+```bash
+pwsh -NoProfile -Command "Get-Process AutoHotkey64 -ErrorAction SilentlyContinue | Stop-Process -Force"
+```
+
+Report convergence in the same one-sentence shape as the standard flow, plus a second sentence noting the auto-typer was stopped. The skill returns; no next tick fires.
+
+### Gotchas
+
+- **Resolver fallback semantics matter.** `caller-window-pid.ps1` walks up the parent process chain, terminates at `explorer.exe`, and falls back to the foreground window when no GUI ancestor is found. Always verify `MainWindowTitle` after capture — if it isn't the Claude Code session, the auto-typer will fire `continue` into the wrong window and the loop stalls silently.
+- **Tick-duration vs. 5-minute cadence.** The auto-typer fires every 5 minutes regardless of model activity. A tick that runs longer than 5 minutes will receive a queued `continue` while still in flight; Claude Code processes these sequentially, so there's no corruption, but the loop pace becomes irregular. Don't try to "fix" this by shortening the AHK interval — the `bugbot run` cadence already has its own pacing baked into the standard flow.
+- **AHK runs as `#SingleInstance Force`.** Re-running the launcher replaces the prior instance silently. Safe to re-issue if the loop appears stalled.
+- **`Stop-Process -Force` on `AutoHotkey64` is broad.** It kills every AHK instance, not just the one this skill started. When the user has unrelated AHK utilities running, scope the kill by command-line match instead:
+  ```bash
+  pwsh -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='AutoHotkey64.exe'\" | Where-Object CommandLine -like '*cursor-agents-continue.ahk*' | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+  ```
+- **State-line responsibility is unchanged.** The state line (phase, bugbot_clean_at, inline_lag_streak, tick_count) is still emitted at the end of every tick — it's how the next tick reads prior state. The auto-typer only fires `continue`; it does not preserve state for you.
+- **Safety cap still applies.** `tick_count >= 30` terminates the loop and kills the auto-typer in this mode just as it omits ScheduleWakeup in `/loop` mode. The structural-failure interpretation is the same.
 
 ## State across ticks
 
