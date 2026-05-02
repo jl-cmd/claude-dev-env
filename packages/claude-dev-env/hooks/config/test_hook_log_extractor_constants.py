@@ -24,7 +24,7 @@ from config.hook_log_extractor_constants import (
     STOP_WRAPPER_DEBOUNCE_SECONDS,
     STOP_WRAPPER_LAST_RUN_TIMESTAMP_FILE,
     WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG,
-    WINDOWS_DETACHED_PROCESS_FLAG,
+    WINDOWS_CREATE_NO_WINDOW_FLAG,
 )
 
 
@@ -116,8 +116,8 @@ def test_stop_wrapper_last_run_timestamp_file_is_under_claude_home() -> None:
 
 
 def test_windows_creation_flags_are_distinct_nonzero_bits() -> None:
-    assert WINDOWS_DETACHED_PROCESS_FLAG > 0
+    assert WINDOWS_CREATE_NO_WINDOW_FLAG > 0
     assert WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG > 0
     assert (
-        WINDOWS_DETACHED_PROCESS_FLAG & WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG
+        WINDOWS_CREATE_NO_WINDOW_FLAG & WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG
     ) == 0

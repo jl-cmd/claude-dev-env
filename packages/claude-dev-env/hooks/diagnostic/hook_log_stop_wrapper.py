@@ -9,8 +9,11 @@ stay near zero. The wrapper:
    path: a small file read, well under 10ms).
 2. Otherwise records the current timestamp, then launches the extractor
    as a fully detached background process (no stdio, separate process
-   group on POSIX or DETACHED_PROCESS|CREATE_NEW_PROCESS_GROUP on
-   Windows) and returns without waiting for it.
+   group on POSIX or CREATE_NO_WINDOW|CREATE_NEW_PROCESS_GROUP on
+   Windows) and returns without waiting for it. CREATE_NO_WINDOW
+   prevents a console flash on Windows even when the wrapper goes
+   through ``bws run`` first; DETACHED_PROCESS would let the
+   grandchild python.exe allocate a fresh console.
 
 Bitwarden injection: when both ``bws`` is on PATH and
 ``BWS_ACCESS_TOKEN`` is set, the extractor is launched via
@@ -45,7 +48,7 @@ from config.hook_log_extractor_constants import (
     STOP_WRAPPER_EXTRACTOR_SCRIPT_NAME,
     STOP_WRAPPER_LAST_RUN_TIMESTAMP_FILE,
     WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG,
-    WINDOWS_DETACHED_PROCESS_FLAG,
+    WINDOWS_CREATE_NO_WINDOW_FLAG,
     WINDOWS_OS_NAME,
 )
 
@@ -113,7 +116,7 @@ def _detached_spawn_keyword_arguments() -> dict[str, object]:
     }
     if os.name == WINDOWS_OS_NAME:
         spawn_arguments["creationflags"] = (
-            WINDOWS_DETACHED_PROCESS_FLAG
+            WINDOWS_CREATE_NO_WINDOW_FLAG
             | WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG
         )
         startup_info = subprocess.STARTUPINFO()
