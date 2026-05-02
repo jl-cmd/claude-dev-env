@@ -137,3 +137,21 @@ class TestCollectHookSymmetry:
         pending_restore = conftest._pending_sys_path_restores[-1]
         assert pending_restore.matched_module_nodeid == NESTED_SUBTREE_NODEID
         assert isinstance(pending_restore.sys_path_snapshot, list)
+
+    def should_remove_shared_pr_loop_scripts_from_sys_path_for_sync_ai_rules(
+        self, isolated_collect_hook_state: None
+    ) -> None:
+        leaked_shared_scripts_entry = str(
+            conftest._SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH.resolve()
+        )
+        sys.path.insert(0, leaked_shared_scripts_entry)
+
+        conftest.pytest_collectstart(
+            _make_module_collector(nodeid=STANDARD_NODEID)
+        )
+
+        assert leaked_shared_scripts_entry not in sys.path, (
+            "sync_ai_rules collection must evict the shared-scripts sys.path entry "
+            "so `from config import ...` resolves to the repository's top-level "
+            "config/ package, not _shared/pr-loop/scripts/config/"
+        )

@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { collectPackageSourceConflicts } from './install.mjs';
+import { collectPackageSourceConflicts, CONTENT_DIRECTORIES } from './install.mjs';
 
 
 function createTemporaryGitRepository() {
@@ -124,6 +124,14 @@ test('collectPackageSourceConflicts returns empty when directory is not inside a
     } finally {
         rmSync(standaloneDirectory, { recursive: true, force: true });
     }
+});
+
+
+test('CONTENT_DIRECTORIES includes _shared so installer copies _shared/pr-loop/ to ~/.claude/_shared/', () => {
+    assert.ok(
+        CONTENT_DIRECTORIES.includes('_shared'),
+        '_shared must be in CONTENT_DIRECTORIES so the installer copies _shared/pr-loop/ alongside skills/',
+    );
 });
 
 

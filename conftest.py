@@ -1,10 +1,15 @@
 """Root pytest configuration: evicts conflicting ``config`` imports during collection.
 
-Three different objects share the top-level name ``config``:
+Four different objects share the top-level name ``config``:
 
 - Repository package ``config/`` (for example ``config.sync_ai_rules_paths``).
 - ``packages/claude-dev-env/hooks/config/`` (hook messages and shared hook tests).
 - ``packages/claude-dev-env/hooks/git-hooks/config.py`` (flat constants for shims).
+- ``packages/claude-dev-env/_shared/pr-loop/scripts/config/`` (shared PR-loop
+  script constants). The shared scripts insert their own directory on
+  ``sys.path`` at module-load time so they can ``from config.X import Y`` when
+  installed under ``~/.claude/_shared/``; under pytest that insert leaks across
+  collection boundaries unless this conftest evicts it.
 
 ``pytest.ini`` puts ``packages/claude-dev-env/hooks`` before ``.`` on ``pythonpath``
 so hook tests resolve ``hooks/config`` instead of the repository package. Only one
@@ -47,6 +52,14 @@ _REPOSITORY_ROOT_PATH = Path(__file__).resolve().parent
 _GIT_HOOKS_DIRECTORY_PATH = _REPOSITORY_ROOT_PATH / "packages" / "claude-dev-env" / "hooks" / "git-hooks"
 _HOOKS_ROOT_DIRECTORY_PATH = _REPOSITORY_ROOT_PATH / "packages" / "claude-dev-env" / "hooks"
 _HOOK_LOCAL_DIRECTORY_PATH = str(_GIT_HOOKS_DIRECTORY_PATH)
+_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH = (
+    _REPOSITORY_ROOT_PATH
+    / "packages"
+    / "claude-dev-env"
+    / "_shared"
+    / "pr-loop"
+    / "scripts"
+)
 
 
 class _PendingSysPathRestore(NamedTuple):
@@ -101,6 +114,10 @@ def _cached_config_is_flat_git_hooks_module() -> bool:
     return _cached_config_module_resolves_inside(_GIT_HOOKS_DIRECTORY_PATH)
 
 
+def _cached_config_resolves_inside_shared_pr_loop_scripts() -> bool:
+    return _cached_config_module_resolves_inside(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
+
+
 def _config_module_is_currently_cached() -> bool:
     return "config" in sys.modules
 
@@ -153,11 +170,15 @@ def pytest_collectstart(collector: pytest.Collector) -> None:
         _evict_config_module()
         _remove_path_if_present(_GIT_HOOKS_DIRECTORY_PATH)
         _remove_path_if_present(_HOOKS_ROOT_DIRECTORY_PATH)
+        _remove_path_if_present(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
         return
 
     _ensure_hooks_root_on_sys_path()
 
     resolved_git_hooks_directory_path = _GIT_HOOKS_DIRECTORY_PATH.resolve()
+    resolved_shared_pr_loop_scripts_path = (
+        _SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH.resolve()
+    )
 
     is_inside_git_hooks = _path_is_inside_directory(
         resolved_collected_path, resolved_git_hooks_directory_path
@@ -170,10 +191,31 @@ def pytest_collectstart(collector: pytest.Collector) -> None:
         )
         if collector_expects_flat_config and cached_config_binding_is_wrong_for_git_hooks:
             _evict_config_module()
+        _remove_path_if_present(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
+        return
+
+    is_inside_shared_pr_loop_scripts = _path_is_inside_directory(
+        resolved_collected_path, resolved_shared_pr_loop_scripts_path
+    )
+    if is_inside_shared_pr_loop_scripts:
+        cached_config_binding_is_wrong_for_shared_scripts = (
+            _config_module_is_currently_cached()
+            and not _cached_config_resolves_inside_shared_pr_loop_scripts()
+        )
+        if cached_config_binding_is_wrong_for_shared_scripts:
+            _evict_config_module()
         return
 
     any_git_hooks_entry_was_removed = _remove_path_if_present(_GIT_HOOKS_DIRECTORY_PATH)
-    if any_git_hooks_entry_was_removed or _cached_config_is_flat_git_hooks_module():
+    any_shared_scripts_entry_was_removed = _remove_path_if_present(
+        _SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH
+    )
+    if (
+        any_git_hooks_entry_was_removed
+        or any_shared_scripts_entry_was_removed
+        or _cached_config_is_flat_git_hooks_module()
+        or _cached_config_resolves_inside_shared_pr_loop_scripts()
+    ):
         _evict_config_module()
 
 
@@ -184,4 +226,5 @@ def pytest_collectreport(report: pytest.CollectReport) -> None:
         return
     pending_restore = _pending_sys_path_restores.pop()
     sys.path[:] = pending_restore.sys_path_snapshot
+    _remove_path_if_present(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
     _evict_config_module()
