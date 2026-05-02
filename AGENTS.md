@@ -32,7 +32,7 @@ This file is **rules-only**. Repo layout, build commands, and workflow guidance 
 
 ### Comments
 
-- New production code uses self-documenting identifier names. New inline comments added in production code are findings. New standalone comment lines are advisory ONLY.
+- New production code uses self-documenting identifier names. New `#`/`//` inline comments added in production code are findings; new `#`/`//` standalone comment lines and `/* ... */` block comments at line start (non-docblock) are advisory ONLY. Docstrings, `/** ... */` JSDoc docblocks, and standalone directive-marker lines (the markers listed below) are exempt. Python inline directive markers (`# noqa`, `# type:`, `# pylint:`, `# pragma:` mid-line) are also exempt; inline JS/TS directive markers (`// @ts-...`, `// eslint-...`, `// prettier-...` mid-line) remain findings.
 - **IMPORTANT:** Existing comments remain exactly as written. Comments in the surrounding file are sacred.
 - Docstrings on new functions, methods, classes, and modules (including module-level docstrings) are welcome.
 - **Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`) are fully exempt** — inline comments and docstrings inside test functions are welcome.
@@ -68,20 +68,21 @@ This file is **rules-only**. Repo layout, build commands, and workflow guidance 
 - Production code extracts structural fragments inside f-strings (paths, URLs, query patterns, regex) into named constants.
 - **IMPORTANT:** Production code places `UPPER_SNAKE_CASE` constants under `config/` (`config/timing.py`, `config/constants.py`, `config/selectors.py`). Path exemptions (treat paths as case-insensitive, normalize backslashes to forward slashes, then check whether each pattern below appears anywhere in the path as a substring):
   - Django migrations: path contains `/migrations/`
-  - Workflow registries: path contains the substring `/workflow/`, `_tab.py`, `/states.py`, or `/modules.py` (the exemption applies when the workflow segment appears in the path, so `pkg/states.py` qualifies while a top-level `states.py` follows the standard `config/` rule)
+  - Workflow registries: path contains any of these substrings — `/workflow/`, `_tab.py`, `/states.py`, or `/modules.py`. Each substring matches independently against the path; `pkg/states.py` qualifies because `/states.py` appears as a substring, while a top-level `states.py` follows the standard `config/` rule.
   - Test files: path or filename matches common test layout signals (`test_`, `_test.`, `.spec.`, `conftest`, `/tests/`); test files may define local constants directly.
 - New constants reuse existing entries where the value or semantic name already lives in another `config/` file.
 
 #### File-global constants
 
-For every file-global constant declared at module scope in production code outside `config/`, count how many methods, functions, or classes in the same file consume it. **0 references:** dead code; the diff removes the constant. **1 reference:** the value moves to `config/` with a local alias inlined inside the consuming method. **2+ references:** the constant stays at file scope. Test files and `config/` files are exempt.
+For every file-global constant declared at module scope in production code outside `config/`, count how many methods, functions, classes, or module-level expressions in the same file consume it. **0 references:** dead code; the diff removes the constant. **1 reference:** the value moves to `config/`, and the consumer takes one of these green-light forms — a local alias inside the consuming method, a class attribute (when the sole consumer is a class), an inlined local constant (when the value avoids reintroducing a magic literal), or a direct module-scope reference (when the sole consumer is a module-level expression); see the linked rule for the full decision table. **2+ references:** the constant stays at file scope. Test files and `config/` files are exempt.
 
 Full rule including the decision table, examples, and reference-counting details: [`packages/claude-dev-env/rules/file-global-constants.md`](packages/claude-dev-env/rules/file-global-constants.md).
 
 ### Types
 
 - Function parameters and return values carry type annotations.
-- `Any`, `any`, and `# type: ignore` carry a one-line note explaining the constraint.
+- Python `# type: ignore` directives carry a second trailing `#` comment with ≥5 characters of justification (e.g. `# type: ignore[misc]  # stubs missing in foo library`). Plain trailing text without a leading `#` does not satisfy the rule. The trailing reason comment is part of the directive and exempt from the comment-preservation rule.
+- `Any` (Python) and `any` (TypeScript/JavaScript) annotations are findings — author should replace with an explicit type.
 - Concrete types match the value's actual shape.
 
 ### Structure
