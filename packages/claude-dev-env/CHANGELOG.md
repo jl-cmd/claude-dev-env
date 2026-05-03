@@ -1,5 +1,54 @@
 # Changelog
 
+## [1.36.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.35.0...claude-dev-env-v1.36.0) (2026-05-03)
+
+
+### Features
+
+* **_shared/pr-loop:** Phase 1 consolidation of shared PR-loop docs ([#289](https://github.com/jl-cmd/claude-code-config/issues/289)) ([4716035](https://github.com/jl-cmd/claude-code-config/commit/4716035868c3bc08c2a035647515bd8126222211))
+* **cursor:** add parallel-debug skill for AHK-paced pr-converge loop ([#342](https://github.com/jl-cmd/claude-code-config/issues/342)) ([9223afe](https://github.com/jl-cmd/claude-code-config/commit/9223afe184a20be63354b57920f2a1786cf8a01b))
+* **enforcer:** add CLI abbreviations to BANNED_IDENTIFIERS ([#314](https://github.com/jl-cmd/claude-code-config/issues/314)) ([1ec0407](https://github.com/jl-cmd/claude-code-config/commit/1ec0407a5839b1e3f7a9e45886fa4c55e7e81120))
+* **enforcer:** block hardcoded user paths in production code ([#316](https://github.com/jl-cmd/claude-code-config/issues/316)) ([7dd4c1e](https://github.com/jl-cmd/claude-code-config/commit/7dd4c1e21ee450438edea3c508b94d6a62234a41))
+* **enforcer:** exempt args from ban when RHS is parse_args() ([#334](https://github.com/jl-cmd/claude-code-config/issues/334)) ([f09c859](https://github.com/jl-cmd/claude-code-config/commit/f09c859bb525251557997bfb81aa09fe4275f2a2))
+* **enforcer:** flag loop-var unpacking targets lacking each_ prefix ([#310](https://github.com/jl-cmd/claude-code-config/issues/310)) ([af852b9](https://github.com/jl-cmd/claude-code-config/commit/af852b96d48dea31e24b338c603d2270df9372c1))
+* **enforcer:** flag stuttering all_/ALL_ collection prefix ([#313](https://github.com/jl-cmd/claude-code-config/issues/313)) ([0d122b7](https://github.com/jl-cmd/claude-code-config/commit/0d122b7f46b12863653ee9aa39a4dc36e9cff54b))
+* **enforcer:** flag unused module-level imports in production code ([#318](https://github.com/jl-cmd/claude-code-config/issues/318)) ([50503f1](https://github.com/jl-cmd/claude-code-config/commit/50503f1c716baa20c38b6de08e830942d260bd0f))
+* **enforcer:** require dedup guard around sys.path.insert ([#317](https://github.com/jl-cmd/claude-code-config/issues/317)) ([668199c](https://github.com/jl-cmd/claude-code-config/commit/668199c2ad673708cc658c30ee052d46ade0d2c0))
+* **pr-converge:** add AHK auto-continue loop driver ([#326](https://github.com/jl-cmd/claude-code-config/issues/326)) ([7c86c79](https://github.com/jl-cmd/claude-code-config/commit/7c86c797ff2513991e989cd3cd4be81b2f445f5f))
+* **pr-converge:** add mergeability + Copilot gates and post-convergence Copilot follow-up ([#337](https://github.com/jl-cmd/claude-code-config/issues/337)) ([cec288b](https://github.com/jl-cmd/claude-code-config/commit/cec288bc051748c485a5213ac7b832ce1976e31e))
+* **pr-converge:** scripts, workflows, and AHK pacer lifecycle ([#332](https://github.com/jl-cmd/claude-code-config/issues/332)) ([1dd4773](https://github.com/jl-cmd/claude-code-config/commit/1dd477346b7c8935b27e66a93e86b67585bba4b1))
+* **rules:** centralize gh-paginate rule and apply to pr-converge ([#301](https://github.com/jl-cmd/claude-code-config/issues/301)) ([c20cac4](https://github.com/jl-cmd/claude-code-config/commit/c20cac46610d8f6afc5ff7b6bfe5e1e421540b61))
+* **skills:** add resume-review skill for structural resume audits ([#341](https://github.com/jl-cmd/claude-code-config/issues/341)) ([668412e](https://github.com/jl-cmd/claude-code-config/commit/668412e4184f8b639f88a04281b848a8fc9603d8))
+* **skills:** decouple team lifecycle from bugteam invocation ([#344](https://github.com/jl-cmd/claude-code-config/issues/344)) ([2e96a88](https://github.com/jl-cmd/claude-code-config/commit/2e96a885c21664957959f75f877f82a9a5feae7a))
+* **skills:** Phase 2 rewire bugteam/qbug to _shared/pr-loop/ scripts ([#290](https://github.com/jl-cmd/claude-code-config/issues/290)) ([c771418](https://github.com/jl-cmd/claude-code-config/commit/c7714186ebee84a56d1db5eb505e63d5ecdcced2))
+
+
+### Bug Fixes
+
+* **enforcer:** hardcoded user path Copilot follow-ups (PR [#316](https://github.com/jl-cmd/claude-code-config/issues/316) review) ([#339](https://github.com/jl-cmd/claude-code-config/issues/339)) ([1a207e2](https://github.com/jl-cmd/claude-code-config/commit/1a207e229db991a469cc0b96d0856e3551c1d2c1))
+* **enforcer:** PR [#313](https://github.com/jl-cmd/claude-code-config/issues/313) follow-up — stuttering imports/classes + mypy path ([#335](https://github.com/jl-cmd/claude-code-config/issues/335)) ([e207777](https://github.com/jl-cmd/claude-code-config/commit/e2077779ddacf8c475fb57945679708298eae305))
+* **hooks:** fail-safe PreToolUse stdin JSON for es and rmtree hooks ([#336](https://github.com/jl-cmd/claude-code-config/issues/336)) ([c7e1de5](https://github.com/jl-cmd/claude-code-config/commit/c7e1de50ddb39335ae76549dbc67cabe5558654b))
+* **hooks:** harden es_exe_path_rewriter tool_input typing (PR [#336](https://github.com/jl-cmd/claude-code-config/issues/336) review) ([#347](https://github.com/jl-cmd/claude-code-config/issues/347)) ([6bf9d55](https://github.com/jl-cmd/claude-code-config/commit/6bf9d55200ac13ec7bbb587d0405167738db3ebe))
+* **hooks:** use CREATE_NO_WINDOW so Stop-hook extractor does not flash a console ([#324](https://github.com/jl-cmd/claude-code-config/issues/324)) ([af0c0ae](https://github.com/jl-cmd/claude-code-config/commit/af0c0aec5bf7aacd1f5c349820cda9b65731bb79))
+* **pr-loop:** follow-up for Copilot + Bugbot reviews on [#289](https://github.com/jl-cmd/claude-code-config/issues/289) ([#329](https://github.com/jl-cmd/claude-code-config/issues/329)) ([5125cd0](https://github.com/jl-cmd/claude-code-config/commit/5125cd05b8b5c462e80c35e93096a0871a1a7309))
+
+
+### Documentation
+
+* **agents:** align AGENTS.md with hook-enforced and canonical rules ([#300](https://github.com/jl-cmd/claude-code-config/issues/300)) ([b035d73](https://github.com/jl-cmd/claude-code-config/commit/b035d738d1b45573442131b064c6c1205e73c408))
+* bugteam workflow split + pr-converge state schema ([#331](https://github.com/jl-cmd/claude-code-config/issues/331)) ([9be50cc](https://github.com/jl-cmd/claude-code-config/commit/9be50cc8444a2401e383663250405871eb87fbd6))
+* **clean-coder:** align agent prompt with hook-enforced and canonical rules ([#302](https://github.com/jl-cmd/claude-code-config/issues/302)) ([ae702e6](https://github.com/jl-cmd/claude-code-config/commit/ae702e68e4963fe5fc406057ac664ec9680856be))
+* **pr-converge:** skip duplicate bugbot run when eyes reaction present ([#327](https://github.com/jl-cmd/claude-code-config/issues/327)) ([4acb35b](https://github.com/jl-cmd/claude-code-config/commit/4acb35bef056c7e681727118d5e400679b8c0d97))
+
+
+### Tests
+
+* **enforcer:** add meta-test for check_* cap convention ([#315](https://github.com/jl-cmd/claude-code-config/issues/315)) ([9ce9839](https://github.com/jl-cmd/claude-code-config/commit/9ce9839f4ef9408dd324db0f9fc15a5080b4c56c))
+* **enforcer:** address Copilot cap-meta review on PR [#333](https://github.com/jl-cmd/claude-code-config/issues/333) ([#338](https://github.com/jl-cmd/claude-code-config/issues/338)) ([d826b59](https://github.com/jl-cmd/claude-code-config/commit/d826b599e86d994648d4a3cb78fbcf0ad11bc5c4))
+* **enforcer:** lock prefix-position requirement for boolean naming ([#312](https://github.com/jl-cmd/claude-code-config/issues/312)) ([b9d8d3d](https://github.com/jl-cmd/claude-code-config/commit/b9d8d3d1dc009c14469bb3868327cac4a0156eb7))
+* **enforcer:** lock symmetric operand handling for constant-equality ([#311](https://github.com/jl-cmd/claude-code-config/issues/311)) ([5eed9bb](https://github.com/jl-cmd/claude-code-config/commit/5eed9bb56a7fa1fd6734f45521ecaa1082da78f4))
+* **enforcer:** tighten cap meta allowlists for PR [#315](https://github.com/jl-cmd/claude-code-config/issues/315) Bugbot ([#333](https://github.com/jl-cmd/claude-code-config/issues/333)) ([3ef9ee8](https://github.com/jl-cmd/claude-code-config/commit/3ef9ee8981d9cb4429d7925a82d2f68977bf6ba2))
+
 ## [1.35.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.34.1...claude-dev-env-v1.35.0) (2026-05-01)
 
 
