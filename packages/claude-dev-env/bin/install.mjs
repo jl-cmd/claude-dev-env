@@ -289,7 +289,17 @@ function writeManifest(installedFiles) {
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
 }
 
-function install(selectedGroups) {
+function install(selectedGroups, options = {}) {
+    const isUpdateRefresh = Boolean(options.isUpdateRefresh);
+    if (isUpdateRefresh && !selectedGroups && existsSync(MANIFEST_FILE)) {
+        console.log(
+            `${PACKAGE_NAME}: --update — removing prior managed files under ${CLAUDE_HOME}, then reinstalling from the package.\n`,
+        );
+        purgeManagedInstallation({ requireManifest: false });
+    } else if (isUpdateRefresh) {
+        const installScope = selectedGroups ? `groups: ${selectedGroups.join(', ')}` : 'full';
+        console.log(`${PACKAGE_NAME}: --update — re-running ${installScope} install into ${CLAUDE_HOME}\n`);
+    }
     const groupLabel = selectedGroups ? `groups: ${selectedGroups.join(', ')}` : 'all';
     console.log(`\nInstalling ${PACKAGE_NAME} (${groupLabel})...\n`);
     abortWhenPackageSourceHasConflicts(PACKAGE_ROOT);
@@ -534,11 +544,13 @@ function unsetGlobalGitHooksPathIfOurs() {
 }
 
 
-function uninstall() {
-    console.log(`\nUninstalling ${PACKAGE_NAME}...\n`);
+function purgeManagedInstallation({ requireManifest }) {
     if (!existsSync(MANIFEST_FILE)) {
-        console.error('No installation manifest found. Nothing to uninstall.');
-        process.exit(1);
+        if (requireManifest) {
+            console.error('No installation manifest found. Nothing to uninstall.');
+            process.exit(1);
+        }
+        return 0;
     }
     const manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
     let removed = 0;
@@ -581,12 +593,18 @@ function uninstall() {
     console.log(`\nRemoved ${removed} files.\n`);
 }
 
+function uninstall() {
+    console.log(`\nUninstalling ${PACKAGE_NAME}...\n`);
+    purgeManagedInstallation({ requireManifest: true });
+}
+
 function printHelp() {
     console.log(`
 ${PACKAGE_NAME} - Claude Code development standards installer
 
 Usage:
   npx ${PACKAGE_NAME}              Install everything
+  npx ${PACKAGE_NAME} --update     Full install: remove prior manifest-tracked files first, then reinstall
   npx ${PACKAGE_NAME} --only X     Install specific groups
   npx ${PACKAGE_NAME} --uninstall  Remove installed files
   npx ${PACKAGE_NAME} --help       Show this help
@@ -608,7 +626,9 @@ writes the previous contents to ~/.claude/backups/CLAUDE.md.<timestamp>.bak firs
 `);
 }
 
-const args = process.argv.slice(2);
+const rawArgs = process.argv.slice(2);
+const args = rawArgs.filter((flag) => flag !== '--update');
+const isUpdateRefresh = rawArgs.includes('--update');
 if (args.includes('--help') || args.includes('-h')) {
     printHelp();
 } else if (args.includes('--uninstall')) {
@@ -629,5 +649,5 @@ if (args.includes('--help') || args.includes('-h')) {
             process.exit(1);
         }
     }
-    install(selectedGroups);
+    install(selectedGroups, { isUpdateRefresh });
 }

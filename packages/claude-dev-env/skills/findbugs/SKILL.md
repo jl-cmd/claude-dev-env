@@ -121,7 +121,7 @@ When the agent returns, report concisely:
 - The cleared categories so the user can see coverage breadth
 - Any open questions the agent could not resolve from the diff alone
 
-Offer the next step without auto-executing it: `Want me to spawn clean-coder to fix the P0/P1 findings?`
+Offer the next step without auto-executing it: `Want me to run /fixbugs for the P0/P1 findings?`
 
 Delete the scoped temp diff at `<diff_temp_path>` after the audit completes (or moves to a fix flow). Temporary diff files do not belong in the working tree.
 
@@ -143,7 +143,7 @@ Verified clean: <category>, <category>, <category>
 Open questions:
   <if any>
 
-Want me to spawn clean-coder to fix the P0/P1 findings?
+Want me to run /fixbugs for the P0/P1 findings?
 ```
 
 ## Constraints
@@ -177,7 +177,7 @@ Claude: [resolves PR #42 from current branch, fetches full diff, spawns code-qua
 
 `Open questions: none`
 
-`Want me to spawn clean-coder to fix the P0 + P1s?`
+`Want me to run /fixbugs for the P0 + P1s?`
 </example>
 
 <example>

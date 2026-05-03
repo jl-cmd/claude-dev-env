@@ -31,13 +31,24 @@ Adds nothing beyond common. Single subagent loops internally and returns a final
 
 ### pr-converge
 
-Adds:
-- `phase` — `BUGBOT` \| `BUGTEAM` (which reviewer the current tick fetches from)
-- `bugbot_clean_at` — HEAD SHA at which Cursor Bugbot last reported clean, or `null`
-- `inline_lag_streak` — int, consecutive ticks where bugbot's review body claims findings but inline-comments API returns zero matches
-- `tick_count` — int, increments on every tick (safety cap: 30 → terminate)
+Adds the same **traffic** fields whether they live in **`state.json`** or in the **conversation state line**; only the **store** differs.
 
-State persists across ticks via the assistant's plain-text state line in conversation context. Each tick reads the prior state line and emits the updated one.
+| Field | Type | Purpose |
+|---|---|---|
+| `phase` | enum | `BUGBOT` \| `BUGTEAM` — which reviewer the current tick drives |
+| `current_head` | str | PR `headRefOid` / `git rev-parse` for the PR under work (each tick; from `view_pr_context.py` when no file store) |
+| `bugbot_clean_at` | str \| null | HEAD SHA at which Cursor Bugbot last reported clean, or `null` (reset on every push) |
+| `inline_lag_streak` | int | Consecutive ticks where bugbot's review body claims findings but inline-comments API returns zero rows for `current_head` |
+| `tick_count` | int | Observability only — **no ceiling**; loop ends on convergence or **Stop conditions** in `pr-converge` |
+
+**Dual persistence** (normative: `skills/pr-converge/SKILL.md` § State across ticks, § Multi-PR orchestration model):
+
+| Mode | When it applies | Source of truth | `tick_count` bump |
+|---|---|---|---|
+| **`state.json`** | File exists at `<TMPDIR>/pr-converge-<session_id>/state.json` (multi-PR orchestration or other file-backed session) | JSON: top-level `session_id`; per-PR objects under `prs[<number>]` with `owner`, `repo`, `branch`, `phase`, `current_head`, `bugbot_clean_at`, `inline_lag_streak`, `tick_count`, `last_action`, `status`, `last_updated`. Optional sibling `converged.log` (append-only; multi-PR only). Writes use lock + atomic replace per skill **Concurrency** | **Orchestrator only** at tick start (locked merge for every non-terminal PR); **never** bump `tick_count` in Step 1 when this file is in use |
+| **Conversation state line** | **No** `state.json` (typical single-PR `/pr-converge` in Cursor) | Persist **`phase`**, **`bugbot_clean_at`**, **`inline_lag_streak`**, **`tick_count`** as **plain text** in each assistant turn; next tick reads them from the **most recent assistant message**. **`current_head` is not serialized in that line** — re-resolve each tick via `view_pr_context.py` (same contract as `skills/pr-converge/SKILL.md` § State across ticks). | **Step 1** increments `tick_count` in that line **only** when no `state.json` — must not double-count with any file-backed path |
+
+**`status` (file-backed `prs[...]` only):** `fresh` \| `in_progress` \| `awaiting_bugbot` \| `awaiting_bugteam` \| `converged` \| `blocked`
 
 ### monitor-many
 
@@ -58,11 +69,11 @@ Adds per-PR JSON state file at `~/.claude/skills/monitor-many/state/<owner>-<rep
 
 - bugteam: cleared on each new `/bugteam` invocation
 - qbug: cleared on each new `/qbug` invocation
-- pr-converge: `bugbot_clean_at` resets to `null` on every push (a new commit invalidates prior clean by definition); `phase` cycles each tick
+- pr-converge: `bugbot_clean_at` resets to `null` on every push (a new commit invalidates prior clean by definition); `phase` cycles each tick. With `state.json`, orchestrator reads that file at tick start; without it, rely on the prior conversation state line — **never** mix both increment rules for `tick_count` on the same run
 - monitor-many: persists across orchestrator runs; only `last_seen_comment_id` advances monotonically
 
 ## Convergence checks
 
 - bugteam, qbug: `last_action == "audited"` AND `last_findings.total == 0` → `converged`
-- pr-converge: `bugbot_clean_at == current_head` AND most-recent bugteam exit is `converged` AND no push during the bugteam tick → back-to-back clean → `gh pr ready`
+- pr-converge: `bugbot_clean_at == current_head` AND most-recent bugteam exit is `converged` AND no push during the bugteam tick → back-to-back clean → `gh pr ready` (read `current_head` / `bugbot_clean_at` from `state.json` when file-backed, else from the conversation state line and Step 1 `view_pr_context.py` output)
 - monitor-many: no unresolved comments requiring code changes AND required checks green AND review policy satisfied → `gh pr ready`

@@ -3,7 +3,7 @@ name: fixbugs
 description: >-
   Fixes the bugs surfaced by the most recent /findbugs invocation by handing
   the findings to /agent-prompt, which authors a structured XML prompt and
-  spawns a background sonnet clean-coder agent to implement every fix in one
+  spawns a background sonnet implementer (via /agent-prompt) to apply every fix in one
   commit on the existing branch. Default scope: all severities. Optional
   argument filters by severity (e.g. /fixbugs P0, /fixbugs P0+P1).
   Triggers: '/fixbugs', 'fix all the bugs', 'apply the audit fixes',
@@ -66,8 +66,8 @@ Fix the following bugs surfaced by /findbugs on
 [for each filtered finding, one bullet:]
 - [<severity>] <file:line> (<category>): <description>
 
-Deploy a clean-coder background agent (model: sonnet) to implement all fixes
-in one commit on the existing branch and push. Constraints:
+Deploy a background implementer (model: sonnet) to implement all fixes
+in one commit on the existing branch and push. The implementer must **Read** the clean-coder agent file first (`~/.claude/agents/clean-coder.md`; Windows `%USERPROFILE%\.claude\agents\clean-coder.md`) and treat it as binding; on Cursor use `Task` + `generalPurpose` with that Read in the prompt when `clean-coder` is not a valid `Task` subtype. Constraints:
 - Modify only the files referenced in the bug list above.
 - Do NOT change the PR base, do NOT rebase, do NOT amend, do NOT --force.
 - Do NOT skip git hooks (no --no-verify, no --no-gpg-sign).
@@ -106,7 +106,7 @@ When `/fixbugs` short-circuits (no findings, no PR, empty filter, zero bugs), th
 <example>
 User: `/findbugs` → returns `1 P0 / 2 P1 / 0 P2`
 User: `/fixbugs`
-Claude: [recovers all 3 findings, resolves PR scope, invokes /agent-prompt with a goal targeting all 3 bugs; /agent-prompt presents the XML + Outcome digest + AskUserQuestion; on Launch it, the background sonnet clean-coder spawns]
+Claude: [recovers all 3 findings, resolves PR scope, invokes /agent-prompt with a goal targeting all 3 bugs; /agent-prompt presents the XML + Outcome digest + AskUserQuestion; on Launch it, the background sonnet implementer spawns]
 </example>
 
 <example>

@@ -14,23 +14,23 @@ Evals are split into two layers. Both layers run against the same trace but carr
 
 ## Ironclad invariants (Layer A, apply to every eval)
 
-Each invariant cites the normative section or companion file it derives from.
+Each invariant cites the normative section or companion file it derives from. **Path A vs Path B:** `SKILL.md` **Path routing** splits harnesses. Invariants **I-1, I-3, I-4, I-7, I-9, I-11 (teammate shutdown → `TeamDelete` prefix), I-13** apply to **Path A only**. **Path B** substitutes per [`reference/workflow-path-b-task-harness.md`](reference/workflow-path-b-task-harness.md): no `TeamCreate` / `TeamDelete`; parallel auditors use parallel **`Task`** calls; **I-12 Path B** — the **lead** runs Step 2.5 `gh api` posts. **I-2, I-5, I-6, I-8, I-10** apply to **both** paths (revoke once; fresh spawn per loop; `model="opus"` on audit/fix workers; cap; read outcome XML).
 
 | # | Invariant | Citation |
 |---|---|---|
-| I-1 | `Bash` invoking `scripts/grant_project_claude_permissions.py` precedes every `TeamCreate`. | `SKILL.md` § Step 0 |
-| I-2 | `Bash` invoking `scripts/revoke_project_claude_permissions.py` runs exactly once per invocation, after the last `TeamDelete`, on every exit path (converged, stuck, cap reached, error). | `SKILL.md` § Step 5 |
-| I-3 | Exactly one `TeamCreate` and exactly one `TeamDelete` per invocation. | `SKILL.md` § Step 2; § Step 4 |
-| I-4 | Before `TeamDelete`, no teammate remains active without cleanup: either the teammate self-terminated after `Agent` returned, or the lead sent a matching `SendMessage(..., shutdown_request)` (including parallel-auditor shutdowns). No orphaned teammates when `TeamDelete` runs. | `SKILL.md` § AUDIT action (**Shutdown**); § FIX action (**Shutdown**); § Step 4 |
-| I-5 | `Agent` calls are fresh per loop — the same `name` is never reused across loops without an intervening shutdown. | `CONSTRAINTS.md` — **Fresh teammate per loop** |
-| I-6 | Both audit and fix `Agent` calls pass `model="opus"` (resolves to Opus 4.7 via the Anthropic API alias; effort remains the Claude Code/model-config default `xhigh`). | `SKILL.md` § Step 2 (**Roles**); `CONSTRAINTS.md` — **Opus 4.7 at xhigh effort for both teammates** |
-| I-7 | `TeamDelete()` is called with no arguments. | TeamDelete schema: no required params, no properties |
+| I-1 | **Path A:** `Bash` invoking `scripts/grant_project_claude_permissions.py` precedes every `TeamCreate`. **Path B:** grant precedes first audit **`Task`**. | `SKILL.md` § Step 0; § Path routing |
+| I-2 | `Bash` invoking `scripts/revoke_project_claude_permissions.py` runs exactly once per invocation on every exit path, **after** teardown that applies to that path (`TeamDelete` only on Path A). | `SKILL.md` § Step 5 |
+| I-3 | **Path A:** Exactly one `TeamCreate` and exactly one `TeamDelete` per invocation. **Path B:** zero `TeamCreate` / `TeamDelete`. | `SKILL.md` § Step 2; § Step 4 |
+| I-4 | **Path A:** Before `TeamDelete`, no teammate remains active without cleanup (self-terminated `Agent` or `SendMessage` shutdown). | `SKILL.md` § AUDIT/FIX shutdown; § Step 4 |
+| I-5 | **Path A:** `Agent` calls are fresh per loop. **Path B:** `Task` calls for audit/fix are fresh per loop (same `name` discipline where the host exposes naming). | `CONSTRAINTS.md` — **Fresh teammate per loop**; deltas **Clean-room note** |
+| I-6 | Both paths: audit and fix worker spawns pass `model="opus"` on `Agent` **or** `Task` as documented in `SKILL.md` § AUDIT/FIX. | `SKILL.md` § Step 2 (**Roles**); `CONSTRAINTS.md` — **Opus 4.7 at xhigh effort for both teammates** |
+| I-7 | **Path A:** `TeamDelete()` is called with no arguments. **Path B:** omit. | `SKILL.md` § Step 4 |
 | I-8 | Loop count ≤ 10 audits. 11th audit never fires. | `SKILL.md` YAML `description` (10-loop cap); § Step 3 (**Pre-audit** / **FIX** increment rules) |
-| I-9 | From loop 4 onward without convergence, the audit phase emits three parallel `Agent` calls in a single assistant message with names `bugfind-loop-<N>-a/b/c`. | `SKILL.md` § AUDIT action (**Parallel auditors**); `reference/audit-and-teammates.md` § **Parallel auditors** |
+| I-9 | **Path A:** From loop 4 onward without convergence, three parallel `Agent` calls in one message. **Path B:** three parallel **`Task`** calls. | `SKILL.md` § AUDIT action (**Parallel auditors**); `reference/workflow-path-b-task-harness.md` |
 | I-10 | Lead reads `.bugteam-loop-<N>.outcomes.xml` with the `Read` tool after each audit, before the next action. | `SKILL.md` § AUDIT action |
-| I-11 | On exit of any kind, ordering is: teammate shutdowns → `TeamDelete` → temp-dir cleanup → Step 4.5 PR rewrite → revoke. | `SKILL.md` § Step 4; § Step 4.5; § Step 5; `reference/teardown-publish-permissions.md` § **Step 4** / **Step 4.5** / **Step 5** |
-| I-12 | Lead never posts PR review comments, finding comments, or fix replies. The only lead-side PR mutation is the final `gh pr edit --body-file` in Step 4.5. | `CONSTRAINTS.md` — **Teammates own audit/fix comment posting**; **Lead owns the final PR description rewrite only** |
-| I-13 | Only the orchestrator (lead session) invokes `TeamCreate`. Every teammate `Agent(...)` call passes `team_name=<lead_team_name>`. No teammate ever calls `TeamCreate`. When supplementary work arises mid-cycle (parallel auditors, adjacent-file audits, infrastructure fixes), the lead spawns additional teammates into the existing team rather than creating a second team. | `CONSTRAINTS.md` — **Orchestrator-only `TeamCreate`** (runtime error quoted there) |
+| I-11 | **Path A:** `git worktree remove` each PR → teammate shutdowns → `TeamDelete` → `rmtree` `<team_temp_dir>` → Step 4.5 → revoke. **Path B:** `git worktree remove` each PR → (omit shutdown / `TeamDelete`) → `rmtree` → Step 4.5 → revoke. | `SKILL.md` § Step 4; § Step 4.5; § Step 5; `reference/workflow-path-a-orchestrated-teams.md` § Step 4; `reference/workflow-path-b-task-harness.md` § Step 4 |
+| I-12 | **Path A:** Lead never posts PR review / finding / fix replies except Step 4.5 body. **Path B:** Lead performs Step 2.5 posts per deltas; Step 4.5 unchanged. | `CONSTRAINTS.md` — **Audit/fix comment posting** |
+| I-13 | **Path A:** Only the lead invokes `TeamCreate`; every teammate `Agent(..., team_name=...)`. **Path B:** no `TeamCreate`; `Task` spawns omit `team_name`. | `CONSTRAINTS.md` — **Path A — orchestrator-only `TeamCreate`**; `reference/workflow-path-b-task-harness.md` |
 
 Any eval failing one or more Layer A invariants fails the run.
 
@@ -46,23 +46,25 @@ The harness does not yet exist; this document defines its contract.
 
 ---
 
-## Eval 1 — Refusal: agent teams not enabled
+## Eval 1 — Path B: agent teams env unset (Task harness, not a refusal)
 
 **Scenario.** `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unset in both `claude config` and `~/.claude/settings.json`.
 
 **Trigger.** `/bugteam`
 
-**Layer A invariants.** None fire downstream — this is a pre-cycle refusal.
+**Layer A invariants.** Path B subset (I-2, I-5, I-6, I-8, I-10; I-1/I-3/I-4/I-7/I-9/I-11/I-13 N/A or Path-B-shaped).
 
-**Layer B predicted trace.**
+**Layer B predicted trace (Path B smoke).**
 1. `Bash("claude config get env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS")` → empty.
-2. `Read("~/.claude/settings.json")` → settings without the env var.
-3. No grant script, no `TeamCreate`, no `Agent`.
+2. `Bash("python .../grant_project_claude_permissions.py")` runs (Step 0).
+3. **No** `TeamCreate`.
+4. At least one `Task(subagent_type="code-quality-agent", ...)` or host-equivalent for AUDIT; FIX rounds use the host-appropriate FIX `Task` from `workflow-path-b-task-harness.md` § **FIX spawn** (`clean-coder` subtype on Claude Code when accepted; `generalPurpose` + clean-coder **Read** preamble on Cursor when the enum rejects `clean-coder`).
+5. `Bash("python .../revoke_project_claude_permissions.py")` on exit.
 
 **Pass criteria.**
-- Final assistant message contains the exact string `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 not set. /bugteam requires the agent teams feature.`.
-- Zero `TeamCreate`, `Agent`, `SendMessage`, `TeamDelete` calls.
-- Zero invocations of the grant or revoke scripts.
+- **No** refusal string about missing agent teams.
+- Zero `TeamCreate`, zero `TeamDelete`, zero teammate `SendMessage` shutdowns.
+- Non-zero `Task` (or `Agent` without `team_name` only if the host maps Path B that way) carrying **`code-quality-agent`** / **fix worker under the clean-coder contract** (subtype `clean-coder` where accepted, else `generalPurpose` + `clean-coder.md` Read per `workflow-path-b-task-harness.md`).
 
 ---
 
@@ -95,11 +97,11 @@ The harness does not yet exist; this document defines its contract.
 
 ---
 
-## Eval 5 — Happy path: converges in 2 loops
+## Eval 5 — Happy path: converges in 2 loops (Path A fixture)
 
-**Scenario.** PR #42 contains three P1 bugs all addressable by the mock fix teammate. Loop 1 audit returns 3 findings; loop 1 fix commits cleanly; loop 2 audit returns zero findings.
+**Scenario.** PR #42 contains three P1 bugs all addressable by the mock fix teammate. Loop 1 audit returns 3 findings; loop 1 fix commits cleanly; loop 2 audit returns zero findings. **`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`** (Path A — `TeamCreate` + teammate `Agent`).
 
-**Layer A invariants.** I-1, I-2, I-3, I-4, I-5, I-6, I-7, I-10, I-11, I-12.
+**Layer A invariants.** Path A: I-1, I-2, I-3, I-4, I-5, I-6, I-7, I-10, I-11, I-12, I-13.
 
 **Layer B predicted trace.**
 
