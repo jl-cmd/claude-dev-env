@@ -33,10 +33,17 @@ def _load_enforcer_module() -> ModuleType:
 code_rules_enforcer = _load_enforcer_module()
 
 _BLOCKING_DIR = Path(__file__).resolve().parent
+_HOOKS_TREE_DIR = _BLOCKING_DIR.parent
 if str(_BLOCKING_DIR) not in sys.path:
     sys.path.insert(0, str(_BLOCKING_DIR))
+if str(_HOOKS_TREE_DIR) not in sys.path:
+    sys.path.insert(0, str(_HOOKS_TREE_DIR))
 
 from code_rules_path_utils import is_config_file as path_utils_is_config_file  # noqa: E402
+from config.stuttering_check_config import (  # noqa: E402
+    MAX_STUTTERING_PREFIX_ISSUES as config_max_stuttering_prefix_issues,
+    STUTTERING_ALL_PREFIX_PATTERN as config_stuttering_all_prefix_pattern,
+)
 
 PRODUCTION_FILE_PATH = "packages/claude-dev-env/hooks/blocking/example_production.py"
 
@@ -1010,3 +1017,58 @@ def test_check_constants_outside_config_reports_more_than_three_constants() -> N
     assert len(issues) == expected_constant_count, (
         f"Expected all {expected_constant_count} constants reported, got {len(issues)}: {issues}"
     )
+
+
+def test_stuttering_collection_prefix_flags_function_name_loop1_1() -> None:
+    source = "def all_all_process() -> None:\n    return None\n"
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, "packages/app/services/foo.py"
+    )
+    assert any("all_all_process" in each_issue for each_issue in issues), (
+        f"loop1-1: stuttering function name must be flagged, got: {issues}"
+    )
+
+
+def test_stuttering_collection_prefix_flags_with_as_binding_loop3_1() -> None:
+    source = "def f() -> None:\n    with open('x') as all_all_context:\n        pass\n"
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, "packages/app/services/foo.py"
+    )
+    assert any("all_all_context" in each_issue for each_issue in issues), (
+        f"loop3-1: stuttering with-as binding must be flagged, got: {issues}"
+    )
+
+
+def test_stuttering_collection_prefix_flags_except_as_binding_loop3_1() -> None:
+    source = (
+        "def f() -> None:\n"
+        "    try:\n"
+        "        pass\n"
+        "    except Exception as all_all_error:\n"
+        "        pass\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, "packages/app/services/foo.py"
+    )
+    assert any("all_all_error" in each_issue for each_issue in issues), (
+        f"loop3-1: stuttering except-as binding must be flagged, got: {issues}"
+    )
+
+
+def test_stuttering_constants_live_under_config_subpackage() -> None:
+    """Stuttering-prefix constants must be sourced from the hooks-tree config package.
+
+    Per CODE_RULES, module-level UPPER_SNAKE constants must live under a
+    directory segment named ``config``. This test pins the move so the
+    constants cannot regress to inline definition at the enforcer module's
+    top level. The enforcer's own bootstrap inserts the hooks tree onto
+    ``sys.path`` so ``config.stuttering_check_config`` resolves at runtime.
+    """
+    assert (
+        code_rules_enforcer.STUTTERING_ALL_PREFIX_PATTERN
+        is config_stuttering_all_prefix_pattern
+    ), "Enforcer must reuse the hooks-tree config STUTTERING_ALL_PREFIX_PATTERN object"
+    assert (
+        code_rules_enforcer.MAX_STUTTERING_PREFIX_ISSUES
+        == config_max_stuttering_prefix_issues
+    ), "Enforcer must reuse the hooks-tree config MAX_STUTTERING_PREFIX_ISSUES value"

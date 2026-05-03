@@ -32,11 +32,22 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Optional
 
-_BLOCKING_DIR = str(Path(__file__).resolve().parent)
-if _BLOCKING_DIR not in sys.path:
-    sys.path.insert(0, _BLOCKING_DIR)
+def _insert_blocking_and_hooks_trees_for_imports() -> None:
+    blocking_directory_string = str(Path(__file__).resolve().parent)
+    if blocking_directory_string not in sys.path:
+        sys.path.insert(0, blocking_directory_string)
+    hooks_tree_string = str(Path(__file__).resolve().parent.parent)
+    if hooks_tree_string not in sys.path:
+        sys.path.insert(0, hooks_tree_string)
+
+
+_insert_blocking_and_hooks_trees_for_imports()
 
 from code_rules_path_utils import is_config_file  # noqa: E402
+from config.stuttering_check_config import (  # noqa: E402
+    MAX_STUTTERING_PREFIX_ISSUES,
+    STUTTERING_ALL_PREFIX_PATTERN,
+)
 
 PYTHON_EXTENSIONS = {".py"}
 JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx"}
@@ -1988,10 +1999,10 @@ def check_collection_prefix(content: str, file_path: str) -> list[str]:
         issues.append(
             f"Line {target_line}: Collection constant {target_name} - prefix with ALL_ (CODE_RULES §5)"
         )
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    for each_walked_node in ast.walk(tree):
+        if not isinstance(each_walked_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        for each_arg in _collect_annotated_arguments(node):
+        for each_arg in _collect_annotated_arguments(each_walked_node):
             if not _annotation_names_collection(each_arg.annotation):
                 continue
             if each_arg.arg in {"self", "cls"}:
@@ -2001,6 +2012,87 @@ def check_collection_prefix(content: str, file_path: str) -> list[str]:
             issues.append(
                 f"Line {each_arg.lineno}: Collection parameter {each_arg.arg} - prefix with all_ (CODE_RULES §5)"
             )
+    return issues
+
+
+def _is_stuttering_all_name(name: str) -> bool:
+    return bool(STUTTERING_ALL_PREFIX_PATTERN.match(name))
+
+
+def _walk_assignment_targets(target: ast.expr) -> list[ast.Name]:
+    """Recursively collect ast.Name targets through tuple/list/starred unpacking."""
+    if isinstance(target, ast.Name):
+        return [target]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: list[ast.Name] = []
+        for each_element in target.elts:
+            names.extend(_walk_assignment_targets(each_element))
+        return names
+    if isinstance(target, ast.Starred):
+        return _walk_assignment_targets(target.value)
+    return []
+
+
+def _collect_stuttering_name_bindings(tree: ast.Module) -> list[tuple[str, int]]:
+    """Return (name, line_number) for every binding whose target name starts with two or more all_/ALL_ prefixes."""
+    bindings: list[tuple[str, int]] = []
+    for each_node in ast.walk(tree):
+        if isinstance(each_node, ast.Assign):
+            for each_target in each_node.targets:
+                for each_name in _walk_assignment_targets(each_target):
+                    if _is_stuttering_all_name(each_name.id):
+                        bindings.append((each_name.id, each_name.lineno))
+        elif isinstance(each_node, ast.AnnAssign) and isinstance(each_node.target, ast.Name):
+            if _is_stuttering_all_name(each_node.target.id):
+                bindings.append((each_node.target.id, each_node.target.lineno))
+        elif isinstance(each_node, (ast.For, ast.AsyncFor)):
+            for each_name in _walk_assignment_targets(each_node.target):
+                if _is_stuttering_all_name(each_name.id):
+                    bindings.append((each_name.id, each_name.lineno))
+        elif isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if _is_stuttering_all_name(each_node.name):
+                bindings.append((each_node.name, each_node.lineno))
+            for each_arg in _collect_annotated_arguments(each_node):
+                if _is_stuttering_all_name(each_arg.arg):
+                    bindings.append((each_arg.arg, each_arg.lineno))
+        elif isinstance(each_node, ast.NamedExpr) and isinstance(each_node.target, ast.Name):
+            if _is_stuttering_all_name(each_node.target.id):
+                bindings.append((each_node.target.id, each_node.target.lineno))
+        elif isinstance(each_node, ast.comprehension):
+            for each_name in _walk_assignment_targets(each_node.target):
+                if _is_stuttering_all_name(each_name.id):
+                    bindings.append((each_name.id, each_name.lineno))
+        elif isinstance(each_node, (ast.With, ast.AsyncWith)):
+            for each_with_item in each_node.items:
+                if each_with_item.optional_vars is None:
+                    continue
+                for each_name in _walk_assignment_targets(each_with_item.optional_vars):
+                    if _is_stuttering_all_name(each_name.id):
+                        bindings.append((each_name.id, each_name.lineno))
+        elif isinstance(each_node, ast.ExceptHandler):
+            if each_node.name is not None and _is_stuttering_all_name(each_node.name):
+                bindings.append((each_node.name, each_node.lineno))
+    return bindings
+
+
+def check_stuttering_collection_prefix(content: str, file_path: str) -> list[str]:
+    """Flag identifiers stuttering the all_/ALL_ collection prefix (e.g., all_all_users)."""
+    if is_test_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_name, each_line_number in _collect_stuttering_name_bindings(tree):
+        issues.append(
+            f"Line {each_line_number}: Stuttering collection prefix {each_name!r}"
+            f" - use a single all_/ALL_ prefix (CODE_RULES §5)"
+        )
+        if len(issues) >= MAX_STUTTERING_PREFIX_ISSUES:
+            break
     return issues
 
 
@@ -2286,6 +2378,7 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_constant_equality_tests(content, file_path))
         all_issues.extend(check_unused_optional_parameters(content, file_path))
         all_issues.extend(check_collection_prefix(content, file_path))
+        all_issues.extend(check_stuttering_collection_prefix(content, file_path))
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
         all_issues.extend(check_return_annotations(content, file_path))

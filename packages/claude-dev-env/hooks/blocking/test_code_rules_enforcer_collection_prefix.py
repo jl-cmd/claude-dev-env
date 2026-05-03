@@ -135,3 +135,161 @@ def test_should_flag_module_level_qualified_typing_optional_constant() -> None:
     assert any("RAW_NUMBERS" in each_issue for each_issue in issues), (
         f"Expected typing.Optional[set[int]] module-level constant flagged, got: {issues}"
     )
+
+
+def test_should_flag_function_local_double_all_prefix() -> None:
+    source = (
+        "def grant() -> None:\n"
+        "    all_all_permission_rules = []\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_permission_rules" in each_issue for each_issue in issues), (
+        f"PR #289 finding: stuttering all_all_ must be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_module_level_double_all_uppercase() -> None:
+    source = "ALL_ALL_PROVIDERS = []\n"
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("ALL_ALL_PROVIDERS" in each_issue for each_issue in issues), (
+        f"Stuttering ALL_ALL_ at module scope must be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_triple_all_prefix_stuttering() -> None:
+    source = (
+        "def consume() -> None:\n"
+        "    all_all_all_things = []\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_all_things" in each_issue for each_issue in issues), (
+        f"Triple all_ stuttering must be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_single_all_prefix() -> None:
+    source = (
+        "def consume() -> None:\n"
+        "    all_users = []\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Single all_ prefix is correct usage, must not flag, got: {issues}"
+    )
+
+
+def test_should_flag_stuttering_in_function_parameter() -> None:
+    source = (
+        "def consume(all_all_users: list) -> None:\n"
+        "    return None\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_users" in each_issue for each_issue in issues), (
+        f"Stuttering parameter name must be flagged, got: {issues}"
+    )
+
+
+def test_should_skip_stuttering_check_in_test_files() -> None:
+    source = (
+        "def test_something() -> None:\n"
+        "    all_all_results = []\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, "packages/app/tests/test_foo.py"
+    )
+    assert issues == [], f"Test files exempt, got: {issues}"
+
+
+def test_should_not_flag_all_all_when_used_as_substring() -> None:
+    source = (
+        "def consume() -> None:\n"
+        "    install_all_users = []\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"'all_all_' as substring inside install_all_users must not flag, got: {issues}"
+    )
+
+
+def test_should_flag_underscore_prefixed_uppercase_double_all() -> None:
+    source = "_ALL_ALL_PROVIDERS = []\n"
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("_ALL_ALL_PROVIDERS" in each_issue for each_issue in issues), (
+        f"Stuttering _ALL_ALL_ private constant must be flagged (regex symmetry), got: {issues}"
+    )
+
+
+def test_should_flag_underscore_prefixed_lowercase_double_all() -> None:
+    source = (
+        "def grant() -> None:\n"
+        "    _all_all_permission_rules = []\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("_all_all_permission_rules" in each_issue for each_issue in issues), (
+        f"Stuttering _all_all_ private local must be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_stuttering_function_name() -> None:
+    source = "def all_all_process() -> None:\n    return None\n"
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_process" in each_issue for each_issue in issues), (
+        f"Stuttering function name must be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_stuttering_async_function_name() -> None:
+    source = "async def all_all_fetch() -> None:\n    return None\n"
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_fetch" in each_issue for each_issue in issues), (
+        f"Stuttering async function name must be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_stuttering_walrus_target() -> None:
+    source = (
+        "def grant() -> None:\n"
+        "    if (all_all_result := compute()):\n"
+        "        return None\n"
+        "def compute() -> int:\n"
+        "    return 0\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_result" in each_issue for each_issue in issues), (
+        f"Stuttering walrus target must be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_stuttering_comprehension_target() -> None:
+    source = (
+        "def grant() -> list[int]:\n"
+        "    return [all_all_item for all_all_item in range(10)]\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_item" in each_issue for each_issue in issues), (
+        f"Stuttering comprehension target must be flagged, got: {issues}"
+    )
