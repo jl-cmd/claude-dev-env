@@ -255,6 +255,60 @@ class TestStdinParsingRobustness:
         assert stderr.strip() == ""
 
 
+class TestMalformedHookPayloadTypes:
+    def test_null_tool_input_exits_zero_without_stdout_or_stderr(self) -> None:
+        hook_input = {
+            "tool_name": "Bash",
+            "tool_input": None,
+        }
+        with patch(
+            "es_exe_path_rewriter.load_registry", return_value=REGISTRY_WITH_ONE_REPO
+        ):
+            stdout, stderr, exit_code = _run_main_with_input(hook_input)
+        assert exit_code == 0
+        assert stdout.strip() == ""
+        assert stderr.strip() == ""
+
+    def test_list_tool_input_exits_zero_without_stdout_or_stderr(self) -> None:
+        hook_input = {
+            "tool_name": "Bash",
+            "tool_input": ["es.exe", KNOWN_REPO_NAME],
+        }
+        with patch(
+            "es_exe_path_rewriter.load_registry", return_value=REGISTRY_WITH_ONE_REPO
+        ):
+            stdout, stderr, exit_code = _run_main_with_input(hook_input)
+        assert exit_code == 0
+        assert stdout.strip() == ""
+        assert stderr.strip() == ""
+
+    def test_string_tool_input_exits_zero_without_stdout_or_stderr(self) -> None:
+        hook_input = {
+            "tool_name": "Bash",
+            "tool_input": f"es.exe {KNOWN_REPO_NAME}",
+        }
+        with patch(
+            "es_exe_path_rewriter.load_registry", return_value=REGISTRY_WITH_ONE_REPO
+        ):
+            stdout, stderr, exit_code = _run_main_with_input(hook_input)
+        assert exit_code == 0
+        assert stdout.strip() == ""
+        assert stderr.strip() == ""
+
+    def test_non_string_command_exits_zero_without_stdout_or_stderr(self) -> None:
+        hook_input = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 12345, "description": "search"},
+        }
+        with patch(
+            "es_exe_path_rewriter.load_registry", return_value=REGISTRY_WITH_ONE_REPO
+        ):
+            stdout, stderr, exit_code = _run_main_with_input(hook_input)
+        assert exit_code == 0
+        assert stdout.strip() == ""
+        assert stderr.strip() == ""
+
+
 class TestNoOutputCases:
     def test_non_es_exe_command_produces_no_output(self) -> None:
         hook_input = _make_bash_input("git status")

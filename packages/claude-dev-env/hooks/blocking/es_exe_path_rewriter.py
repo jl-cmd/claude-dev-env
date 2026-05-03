@@ -139,11 +139,14 @@ def main() -> None:
         hook_input = read_hook_input_dictionary_from_stdin()
         if hook_input is None:
             sys.exit(0)
-        tool_name = hook_input.get("tool_name", "")
+        raw_tool_name = hook_input.get("tool_name", "")
+        raw_tool_input = hook_input.get("tool_input", {})
+        tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
+        tool_input = raw_tool_input if isinstance(raw_tool_input, dict) else {}
         if tool_name != BASH_TOOL_NAME:
             sys.exit(0)
-        tool_input = hook_input.get("tool_input", {})
-        command = tool_input.get("command", "")
+        raw_command = tool_input.get("command", "")
+        command = raw_command if isinstance(raw_command, str) else ""
         if not command_invokes_es_exe(command):
             sys.exit(0)
         known_registry = load_registry()
