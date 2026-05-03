@@ -900,15 +900,33 @@ def _collect_banned_names_from_target(target: ast.expr) -> list[ast.Name]:
     ]
 
 
+def _value_is_parse_args_namespace_call(value_node: ast.AST | None) -> bool:
+    if value_node is None:
+        return False
+    if not isinstance(value_node, ast.Call):
+        return False
+    callee = value_node.func
+    return isinstance(callee, ast.Attribute) and callee.attr == "parse_args"
+
+
+def _without_parse_args_namespace_exemption(
+    all_banned_names: list[ast.Name], value_node: ast.AST | None
+) -> list[ast.Name]:
+    if not _value_is_parse_args_namespace_call(value_node):
+        return all_banned_names
+    return [each_name for each_name in all_banned_names if each_name.id != "args"]
+
+
 def _collect_banned_names_from_node(node: ast.AST) -> list[ast.Name]:
     """Return banned ast.Name nodes introduced by a single binding construct."""
     if isinstance(node, ast.Assign):
         banned_names: list[ast.Name] = []
         for each_target in node.targets:
             banned_names.extend(_collect_banned_names_from_target(each_target))
-        return banned_names
+        return _without_parse_args_namespace_exemption(banned_names, node.value)
     if isinstance(node, ast.AnnAssign):
-        return _collect_banned_names_from_target(node.target)
+        banned_names = _collect_banned_names_from_target(node.target)
+        return _without_parse_args_namespace_exemption(banned_names, node.value)
     if isinstance(node, (ast.For, ast.AsyncFor)):
         return _collect_banned_names_from_target(node.target)
     if isinstance(node, ast.comprehension):
@@ -918,7 +936,8 @@ def _collect_banned_names_from_node(node: ast.AST) -> list[ast.Name]:
             return []
         return _collect_banned_names_from_target(node.optional_vars)
     if isinstance(node, ast.NamedExpr):
-        return _collect_banned_names_from_target(node.target)
+        banned_names = _collect_banned_names_from_target(node.target)
+        return _without_parse_args_namespace_exemption(banned_names, node.value)
     return []
 
 

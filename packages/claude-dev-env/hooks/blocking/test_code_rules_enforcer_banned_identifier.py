@@ -247,6 +247,57 @@ def test_should_flag_args_assignment() -> None:
     )
 
 
+def test_should_not_flag_args_assigned_parse_args_call() -> None:
+    content = (
+        "def main():\n"
+        "    parser = build_parser()\n"
+        "    args = parser.parse_args()\n"
+        "    return args\n"
+    )
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "args = parser.parse_args() is established argparse idiom; must not flag, "
+        f"got: {issues}"
+    )
+
+
+def test_should_not_flag_args_annotated_parse_args_call() -> None:
+    content = (
+        "def main():\n"
+        "    parser = build_parser()\n"
+        "    args: object = parser.parse_args()\n"
+        "    return args\n"
+    )
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert issues == [], f"Annotated parse_args binding must not flag, got: {issues}"
+
+
+def test_should_not_flag_args_walrus_parse_args_call() -> None:
+    content = (
+        "def main():\n"
+        "    parser = build_parser()\n"
+        "    if (args := parser.parse_args()):\n"
+        "        return args\n"
+        "    return None\n"
+    )
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert issues == [], f"Walrus parse_args binding must not flag, got: {issues}"
+
+
+def test_should_flag_args_assigned_parse_args_method_reference() -> None:
+    content = (
+        "def main():\n"
+        "    parser = build_parser()\n"
+        "    args = parser.parse_args\n"
+        "    return args\n"
+    )
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert any("'args'" in each_issue for each_issue in issues), (
+        "Method reference (no call) is not the namespace idiom; must flag, "
+        f"got: {issues}"
+    )
+
+
 def test_should_flag_kwargs_assignment() -> None:
     content = "def parse_command():\n    kwargs = collect()\n    return kwargs\n"
     issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
