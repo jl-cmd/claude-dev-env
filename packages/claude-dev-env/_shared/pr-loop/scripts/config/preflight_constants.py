@@ -14,6 +14,8 @@ PYTEST_INI_FILENAME: str = "pytest.ini"
 
 PYPROJECT_TOML_FILENAME: str = "pyproject.toml"
 
+PRE_COMMIT_CONFIG_YAML_FILENAME: str = ".pre-commit-config.yaml"
+
 PYTEST_TOML_TABLE_PREFIX: str = "[tool.pytest"
 
 ALL_TEST_FILE_PATTERNS_FOR_DISCOVERY: tuple[str, str] = (

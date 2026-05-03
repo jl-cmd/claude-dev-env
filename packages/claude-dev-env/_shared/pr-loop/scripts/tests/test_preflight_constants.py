@@ -54,6 +54,10 @@ def test_pytest_toml_table_prefix() -> None:
     assert constants_module.PYTEST_TOML_TABLE_PREFIX == "[tool.pytest"
 
 
+def test_pre_commit_config_yaml_filename() -> None:
+    assert constants_module.PRE_COMMIT_CONFIG_YAML_FILENAME == ".pre-commit-config.yaml"
+
+
 def test_all_test_file_patterns_for_discovery() -> None:
     assert constants_module.ALL_TEST_FILE_PATTERNS_FOR_DISCOVERY == (
         "test_*.py",

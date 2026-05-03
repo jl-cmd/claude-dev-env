@@ -17,6 +17,7 @@ from config.preflight_constants import (
     BUGTEAM_PREFLIGHT_SKIP_ENABLED_VALUE,
     BUGTEAM_PREFLIGHT_SKIP_ENV_VAR_NAME,
     GIT_DIRECTORY_NAME,
+    PRE_COMMIT_CONFIG_YAML_FILENAME,
     PYPROJECT_TOML_FILENAME,
     PYTEST_INI_FILENAME,
     PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
@@ -170,7 +171,7 @@ def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--pre-commit",
         action="store_true",
-        help="Run pre-commit when .pre-commit-config.yaml exists.",
+        help=f"Run pre-commit when {PRE_COMMIT_CONFIG_YAML_FILENAME} exists.",
     )
     parser.add_argument(
         "-v",
@@ -215,7 +216,7 @@ def main(all_arguments: list[str]) -> int:
             "preflight: no pytest configuration found; skipping pytest.",
             file=sys.stderr,
         )
-    if arguments.pre_commit and (repository_root / ".pre-commit-config.yaml").is_file():
+    if arguments.pre_commit and (repository_root / PRE_COMMIT_CONFIG_YAML_FILENAME).is_file():
         exit_code = run_pre_commit(repository_root)
         if exit_code != 0:
             return exit_code
