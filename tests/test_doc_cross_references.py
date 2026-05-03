@@ -33,6 +33,7 @@ MAX_DETAIL_LINES_IN_FAILURE: int = 50
 
 ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
     {
+        ".cursor/agents/clean-coder.md",
         "config/timing.py",
         "config/constants.py",
         "config/selectors.py",

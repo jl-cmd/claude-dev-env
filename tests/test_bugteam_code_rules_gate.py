@@ -5,15 +5,15 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-GATE_SCRIPT = (
+SHARED_PR_LOOP_SCRIPTS = (
     REPO_ROOT
     / "packages"
     / "claude-dev-env"
-    / "skills"
-    / "bugteam"
+    / "_shared"
+    / "pr-loop"
     / "scripts"
-    / "bugteam_code_rules_gate.py"
 )
+GATE_SCRIPT = SHARED_PR_LOOP_SCRIPTS / "code_rules_gate.py"
 SRC_RELATIVE_PATH = "packages/claude-dev-env/skills/bugteam/example_module.py"
 
 
@@ -74,19 +74,40 @@ def copy_enforcer_into(repository_root: Path) -> None:
         destination_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
 
 
+def copy_hooks_config_into(repository_root: Path) -> None:
+    hooks_config_source = REPO_ROOT / "packages" / "claude-dev-env" / "hooks" / "config"
+    hooks_config_destination = (
+        repository_root / "packages" / "claude-dev-env" / "hooks" / "config"
+    )
+    hooks_config_destination.mkdir(parents=True, exist_ok=True)
+    for each_python_file in hooks_config_source.glob("*.py"):
+        (hooks_config_destination / each_python_file.name).write_text(
+            each_python_file.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+
+
 def copy_gate_script_into(repository_root: Path) -> Path:
-    destination = (
+    destination_scripts = (
         repository_root
         / "packages"
         / "claude-dev-env"
-        / "skills"
-        / "bugteam"
+        / "_shared"
+        / "pr-loop"
         / "scripts"
-        / "bugteam_code_rules_gate.py"
     )
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(GATE_SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
-    return destination
+    destination_scripts.mkdir(parents=True, exist_ok=True)
+    destination_gate = destination_scripts / "code_rules_gate.py"
+    destination_gate.write_text(GATE_SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
+    destination_config = destination_scripts / "config"
+    destination_config.mkdir(parents=True, exist_ok=True)
+    source_config = SHARED_PR_LOOP_SCRIPTS / "config"
+    for each_config_file in source_config.glob("*.py"):
+        (destination_config / each_config_file.name).write_text(
+            each_config_file.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+    return destination_gate
 
 
 def invoke_gate(
@@ -97,10 +118,10 @@ def invoke_gate(
         repository_root
         / "packages"
         / "claude-dev-env"
-        / "skills"
-        / "bugteam"
+        / "_shared"
+        / "pr-loop"
         / "scripts"
-        / "bugteam_code_rules_gate.py"
+        / "code_rules_gate.py"
     )
     command = [sys.executable, str(gate_path), "--base", "main"]
     if extra_arguments:
@@ -120,6 +141,7 @@ def set_up_fixture_repo(tmp_path: Path) -> Path:
     init_repo_with_main(repository_root)
     copy_gate_script_into(repository_root)
     copy_enforcer_into(repository_root)
+    copy_hooks_config_into(repository_root)
     return repository_root
 
 

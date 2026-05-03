@@ -10,10 +10,10 @@ SCRIPT = (
     REPO_ROOT
     / "packages"
     / "claude-dev-env"
-    / "skills"
-    / "bugteam"
+    / "_shared"
+    / "pr-loop"
     / "scripts"
-    / "bugteam_preflight.py"
+    / "preflight.py"
 )
 
 

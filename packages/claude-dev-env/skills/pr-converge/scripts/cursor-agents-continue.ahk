@@ -37,6 +37,15 @@ AUTO_START_FLAG := "--start-on"
 
 INT32_MINIMUM_VALUE := -2147483648
 
+terminate_other_script_instances() {
+    stop_script := A_ScriptDir "\cursor-agents-continue-stop-others.ps1"
+    if !FileExist(stop_script)
+        return
+    RunWait('pwsh -NoProfile -NoLogo -ExecutionPolicy Bypass -File "' stop_script '" -KeepProcessId ' ProcessExist(), , "Hide")
+}
+
+terminate_other_script_instances()
+
 target_window_title := resolve_target_window_title_from_arguments()
 should_auto_start := has_auto_start_flag()
 is_enabled := false

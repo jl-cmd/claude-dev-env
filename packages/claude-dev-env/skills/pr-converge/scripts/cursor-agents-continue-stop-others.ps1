@@ -5,10 +5,10 @@ param(
 )
 
 $scriptMarker = 'cursor-agents-continue.ahk'
-$processes = Get-CimInstance Win32_Process -Filter "Name='AutoHotkey64.exe'" |
+$all_processes = Get-CimInstance Win32_Process -Filter "Name='AutoHotkey64.exe'" |
     Where-Object { $_.CommandLine -like "*$scriptMarker*" }
 
-foreach ($eachProcess in $processes) {
+foreach ($eachProcess in $all_processes) {
     if ($KeepProcessId -ne 0 -and $eachProcess.ProcessId -eq $KeepProcessId) {
         continue
     }

@@ -9,24 +9,16 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
-GRANT_SCRIPT = (
+_SHARED_PR_LOOP_SCRIPTS = (
     REPOSITORY_ROOT
     / "packages"
     / "claude-dev-env"
-    / "skills"
-    / "bugteam"
+    / "_shared"
+    / "pr-loop"
     / "scripts"
-    / "grant_project_claude_permissions.py"
 )
-REVOKE_SCRIPT = (
-    REPOSITORY_ROOT
-    / "packages"
-    / "claude-dev-env"
-    / "skills"
-    / "bugteam"
-    / "scripts"
-    / "revoke_project_claude_permissions.py"
-)
+GRANT_SCRIPT = _SHARED_PR_LOOP_SCRIPTS / "grant_project_claude_permissions.py"
+REVOKE_SCRIPT = _SHARED_PR_LOOP_SCRIPTS / "revoke_project_claude_permissions.py"
 
 
 def run_script(

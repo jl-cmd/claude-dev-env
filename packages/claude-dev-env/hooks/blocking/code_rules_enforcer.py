@@ -56,6 +56,11 @@ from config.stuttering_check_config import (  # noqa: E402
     STUTTERING_ALL_PREFIX_PATTERN,
 )
 from config.sys_path_insert_constants import MAX_SYS_PATH_INSERT_ISSUES, SYS_PATH_INSERT_GUIDANCE  # noqa: E402
+from config.unused_module_import_constants import (  # noqa: E402
+    MAX_UNUSED_IMPORT_ISSUES,
+    TYPE_CHECKING_IDENTIFIER,
+    UNUSED_IMPORT_GUIDANCE,
+)
 from config.stuttering_import_binding_constants import (  # noqa: E402
     AST_LINENO_ATTRIBUTE,
     MODULE_PATH_SEPARATOR,
@@ -2298,12 +2303,6 @@ def check_sys_path_insert_deduplication_guard(content: str, file_path: str) -> l
     return issues
 
 
-MAX_UNUSED_IMPORT_ISSUES: int = 25
-UNUSED_IMPORT_GUIDANCE: str = (
-    "remove unused import; if kept for side effects, mark with `# noqa: F401`"
-)
-
-
 def _import_alias_pairs(
     import_node: ast.Import | ast.ImportFrom,
 ) -> list[tuple[str, int, int | None]]:
@@ -2326,13 +2325,13 @@ def _import_alias_pairs(
 
 
 def _name_appears_outside_imports(
-    content_lines: list[str],
-    import_line_numbers: set[int],
+    all_content_lines: list[str],
+    all_import_line_numbers: set[int],
     name: str,
 ) -> bool:
     name_pattern = re.compile(rf"\b{re.escape(name)}\b")
-    for each_line_index, each_line in enumerate(content_lines, start=1):
-        if each_line_index in import_line_numbers:
+    for each_line_index, each_line in enumerate(all_content_lines, start=1):
+        if each_line_index in all_import_line_numbers:
             continue
         if name_pattern.search(each_line):
             return True
@@ -2375,7 +2374,7 @@ def check_unused_module_level_imports(content: str, file_path: str) -> list[str]
     )
     if file_declares_dunder_all:
         return []
-    if "TYPE_CHECKING" in content:
+    if TYPE_CHECKING_IDENTIFIER in content:
         return []
     content_lines = content.splitlines()
     import_line_numbers: set[int] = set()

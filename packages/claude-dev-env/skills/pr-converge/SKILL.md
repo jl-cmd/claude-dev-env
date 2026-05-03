@@ -118,7 +118,7 @@ Non-default behaviors worth burning in; add a bullet here when a real run fails 
 
 - **`ScheduleWakeup` is not in subagent tool registries** — a background `general-purpose` tick cannot schedule the next re-entry; only the parent session where this skill runs with `ScheduleWakeup` in the tool registry can call it.
 - **Bugbot only recognizes the literal re-trigger phrase `bugbot run`** — other comment text no-ops; prefer `trigger_bugbot.py` (temp body file) or
-  the bundled `scripts/post-bugbot-run.ps1` so backticks in prose never corrupt the PR comment.
+  the bundled `packages/claude-dev-env/skills/pr-converge/scripts/post-bugbot-run.ps1` so backticks in prose never corrupt the PR comment.
 - **Review body and inline comments can desync for the same `commit_id`** — “dirty body, zero inline rows at `current_head`” is **`inline_lag`**, not **`dirty`**; bump `inline_lag_streak`, wait 60s, retry fetch (Step 2 BUGBOT fourth branch; §Fix result → general-purpose steps 4c–4e).
 - **`state.json` without the §Concurrency lock loses merges** when several teammates finish in one wall-clock window.
 - **`tick_count` must not double-increment** — conversation line (Step 1) only when **no** `state.json`; with `state.json`, only the orchestrator bump in §Orchestrator `state.json` writes increments `tick_count`.

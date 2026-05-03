@@ -262,6 +262,3 @@ def pytest_collectreport(report: pytest.CollectReport) -> None:
         return
     pending_restore = _pending_sys_path_restores.pop()
     sys.path[:] = pending_restore.sys_path_snapshot
-    _remove_path_if_present(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
-    _remove_path_if_present(_PR_CONVERGE_SCRIPTS_DIRECTORY_PATH)
-    _evict_config_module()
