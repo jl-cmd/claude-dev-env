@@ -40,12 +40,51 @@ if str(_HOOKS_TREE_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOKS_TREE_DIR))
 
 from code_rules_path_utils import is_config_file as path_utils_is_config_file  # noqa: E402
+from config.banned_identifiers_constants import (  # noqa: E402
+    BANNED_IDENTIFIER_MESSAGE_SUFFIX as config_banned_identifier_message_suffix,
+    BANNED_IDENTIFIER_SKIP_ADVISORY as config_banned_identifier_skip_advisory,
+    MAX_BANNED_IDENTIFIER_ISSUES as config_max_banned_identifier_issues,
+)
 from config.stuttering_check_config import (  # noqa: E402
     MAX_STUTTERING_PREFIX_ISSUES as config_max_stuttering_prefix_issues,
     STUTTERING_ALL_PREFIX_PATTERN as config_stuttering_all_prefix_pattern,
 )
 
 PRODUCTION_FILE_PATH = "packages/claude-dev-env/hooks/blocking/example_production.py"
+
+
+def test_should_expose_all_banned_identifiers_from_config() -> None:
+    expected_banned_identifiers = frozenset({
+        "result", "data", "output", "response", "value", "item", "temp",
+        "argv", "args", "kwargs", "argc",
+    })
+    actual_banned_identifiers = getattr(
+        code_rules_enforcer, "ALL_BANNED_IDENTIFIERS", None
+    )
+    assert actual_banned_identifiers is not None, (
+        "Renamed constant ALL_BANNED_IDENTIFIERS must be importable from "
+        "config/banned_identifiers_constants.py and re-exposed on the "
+        f"enforcer module, got: {actual_banned_identifiers!r}"
+    )
+    assert expected_banned_identifiers <= actual_banned_identifiers, (
+        "ALL_BANNED_IDENTIFIERS must contain every expected banned identifier; "
+        f"missing: {expected_banned_identifiers - actual_banned_identifiers!r}"
+    )
+
+
+def test_should_source_banned_identifier_companion_constants_from_config() -> None:
+    assert (
+        code_rules_enforcer.MAX_BANNED_IDENTIFIER_ISSUES
+        is config_max_banned_identifier_issues
+    )
+    assert (
+        code_rules_enforcer.BANNED_IDENTIFIER_MESSAGE_SUFFIX
+        is config_banned_identifier_message_suffix
+    )
+    assert (
+        code_rules_enforcer.BANNED_IDENTIFIER_SKIP_ADVISORY
+        is config_banned_identifier_skip_advisory
+    )
 
 
 def test_should_flag_constant_used_only_in_class_level_decorator() -> None:

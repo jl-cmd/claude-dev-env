@@ -64,12 +64,12 @@ Refusals — first match wins; respond with the quoted line exactly and stop:
 
 ## Utility scripts
 
-Shell-heavy steps live under `scripts/` (run, do not paste into context). Utility scripts are **executed**, not loaded as primary context ([`sources.md`](sources.md) § Progressive disclosure and utility scripts). [`scripts/README.md`](scripts/README.md).
+Shell-heavy steps live under [`_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/) (run, do not paste into context). Utility scripts are **executed**, not loaded as primary context ([`sources.md`](sources.md) § Progressive disclosure and utility scripts).
 
 ### Pre-flight (before Step 0)
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/bugteam_preflight.py"
+python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/preflight.py"
 ```
 
 Non-zero → fix before grant. `BUGTEAM_PREFLIGHT_SKIP=1` emergency only. `--pre-commit` if `.pre-commit-config.yaml` exists.
@@ -77,10 +77,10 @@ Non-zero → fix before grant. `BUGTEAM_PREFLIGHT_SKIP=1` emergency only. `--pre
 **Auto-remediation for `core.hooksPath`:** when preflight fails with stderr containing `core.hooksPath` (the message starts with `bugteam_preflight: core.hooksPath is`, or `Git-side CODE_RULES enforcement is not active`), Claude must auto-invoke the fix script — do not fall through to `AskUserQuestion`, do not punt to the user, do not ask for confirmation:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/bugteam_fix_hookspath.py"
+python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/fix_hookspath.py"
 ```
 
-The fix script removes any non-canonical local-scope override on the active repository, sets the global `core.hooksPath` to `~/.claude/hooks/git-hooks` if missing or wrong, and re-runs `bugteam_preflight.py`. Its exit code becomes the preflight outcome. Exit 0 → continue to Step 0. Non-zero only when the canonical hooks directory is missing (run `npx claude-dev-env .` first) or `git config --global` writes are blocked. Other preflight failures (pytest, pre-commit) still require manual fixes — the auto-remediation only applies to the `core.hooksPath` failure mode.
+The fix script removes any non-canonical local-scope override on the active repository, sets the global `core.hooksPath` to `~/.claude/hooks/git-hooks` if missing or wrong, and re-runs `preflight.py`. Its exit code becomes the preflight outcome. Exit 0 → continue to Step 0. Non-zero only when the canonical hooks directory is missing (run `npx claude-dev-env .` first) or `git config --global` writes are blocked. Other preflight failures (pytest, pre-commit) still require manual fixes — the auto-remediation only applies to the `core.hooksPath` failure mode.
 
 ## The Process
 
@@ -100,7 +100,7 @@ The fix script removes any non-canonical local-scope override on the active repo
 ### Step 0: Grant project permissions (once, first)
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/grant_project_claude_permissions.py"
+python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/grant_project_claude_permissions.py"
 ```
 
 `${CLAUDE_SKILL_DIR}` is host-substituted before the shell runs (unlike normal env expansion). Idempotent writes to `~/.claude/settings.json` from repo root. Non-zero → stop. Revoke in Step 5 on every exit path.
@@ -196,7 +196,7 @@ jq -n \
 
 Run the AUDIT-FIX cycle for each PR in all_prs, reusing the same team across PRs. The 10-loop cap applies per PR. Exit reasons (converged, cap reached, stuck, error) are tracked per PR; the final report lists one outcome line per PR.
 
-**Gate:** `validate_content` / `hooks/blocking/code_rules_enforcer.py` on PR-scoped files before every AUDIT (`bugteam_code_rules_gate.py`). Lead runs gate; clean-coder clears failures; then bugfind audits.
+**Gate:** `validate_content` / `hooks/blocking/code_rules_enforcer.py` on PR-scoped files before every AUDIT (`_shared/pr-loop/scripts/code_rules_gate.py`). Lead runs gate; clean-coder clears failures; then bugfind audits.
 
 **Pre-cycle: walk prior bugteam reviews end-first** (once per PR, after Step 2 and before iteration begins, when `last_action == "fresh"`). A re-invocation of `/bugteam` on a PR with prior loops detects whether the most recent loop already cleaned this HEAD (short-circuit) and otherwise records that prior loops were dirty so the AUDIT runs against the latest diff with that signal in mind:
 
@@ -223,10 +223,10 @@ Iterate from index 0 (most recent) toward older entries:
 2. **Pre-audit** (only when the next step is AUDIT):
 
    ```bash
-   python "${CLAUDE_SKILL_DIR}/scripts/bugteam_code_rules_gate.py" --base origin/<baseRefName>
+   python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py" --base origin/<baseRefName>
    ```
 
-   Lead only; merge-base / diff details in [`scripts/README.md`](scripts/README.md). Non-zero → spawn **clean-coder** standards-fix (read stderr, edit, re-run **this same** command, one commit, `git push`, shutdown) until exit **0** or **5** failed gate rounds → `error: code rules gate failed pre-audit`. After **0**: `loop_count += 1`; if `loop_count > 10` → `cap reached`. Then **AUDIT** (bugfind); print `Loop <N> audit: ...`.
+   Lead only; merge-base / diff semantics: [`../../_shared/pr-loop/code-rules-gate.md`](../../_shared/pr-loop/code-rules-gate.md); shared script inventory: [`../../_shared/pr-loop/scripts/README.md`](../../_shared/pr-loop/scripts/README.md). Non-zero → spawn **clean-coder** standards-fix (read stderr, edit, re-run **this same** command, one commit, `git push`, shutdown) until exit **0** or **5** failed gate rounds → `error: code rules gate failed pre-audit`. After **0**: `loop_count += 1`; if `loop_count > 10` → `cap reached`. Then **AUDIT** (bugfind); print `Loop <N> audit: ...`.
 
 3. **FIX** (`last_action == "audited"` and `last_findings.total > 0`): `loop_count += 1`; if `loop_count > 10` → `cap reached`; **FIX** (bugfix); print `Loop <N> fix: ...`; `last_action = "fixed"`, update `audit_log`; loop to step 1.
 
@@ -288,7 +288,7 @@ On failure: log in final report; continue to Step 5.
 ### Step 5: Revoke permissions (always)
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/revoke_project_claude_permissions.py"
+python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/revoke_project_claude_permissions.py"
 ```
 
 Removes Step 0 grant — run even if Step 4 partially failed (log separately).

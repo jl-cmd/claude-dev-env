@@ -20,10 +20,10 @@ GATE_PATH_OVERRIDE_ENV_VAR: str = "CODE_RULES_GATE_PATH"
 CLAUDE_HOME_ENV_VAR: str = "CLAUDE_HOME"
 CLAUDE_HOME_DEFAULT_SUBDIRECTORY: str = ".claude"
 GATE_SCRIPT_RELATIVE_PATH: tuple[str, ...] = (
-    "skills",
-    "bugteam",
+    "_shared",
+    "pr-loop",
     "scripts",
-    "bugteam_code_rules_gate.py",
+    "code_rules_gate.py",
 )
 GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE: int = 2
 GATE_SCRIPT_NOT_FOUND_MESSAGE: str = (

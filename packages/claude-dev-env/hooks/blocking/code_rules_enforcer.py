@@ -44,6 +44,12 @@ def _insert_blocking_and_hooks_trees_for_imports() -> None:
 _insert_blocking_and_hooks_trees_for_imports()
 
 from code_rules_path_utils import is_config_file  # noqa: E402
+from config.banned_identifiers_constants import (  # noqa: E402
+    ALL_BANNED_IDENTIFIERS,
+    BANNED_IDENTIFIER_MESSAGE_SUFFIX,
+    BANNED_IDENTIFIER_SKIP_ADVISORY,
+    MAX_BANNED_IDENTIFIER_ISSUES,
+)
 from config.stuttering_check_config import (  # noqa: E402
     MAX_STUTTERING_PREFIX_ISSUES,
     STUTTERING_ALL_PREFIX_PATTERN,
@@ -866,17 +872,6 @@ def check_constants_outside_config_advisory(content: str, file_path: str) -> lis
     return _scan_function_body_constants(content)
 
 
-BANNED_IDENTIFIERS: frozenset[str] = frozenset({
-    "result", "data", "output", "response", "value", "item", "temp",
-    "argv", "args", "kwargs", "argc",
-})
-MAX_BANNED_IDENTIFIER_ISSUES: int = 3
-BANNED_IDENTIFIER_MESSAGE_SUFFIX: str = "use descriptive name (see CODE_RULES Naming section)"
-BANNED_IDENTIFIER_SKIP_ADVISORY: str = (
-    "banned-identifier check skipped: file did not parse as Python"
-)
-
-
 def _collect_target_names(target: ast.expr) -> list[ast.Name]:
     """Return every ast.Name reachable through tuple/list/starred unpacking targets."""
     if isinstance(target, ast.Name):
@@ -896,7 +891,7 @@ def _collect_banned_names_from_target(target: ast.expr) -> list[ast.Name]:
     return [
         each_name_node
         for each_name_node in _collect_target_names(target)
-        if each_name_node.id in BANNED_IDENTIFIERS
+        if each_name_node.id in ALL_BANNED_IDENTIFIERS
     ]
 
 

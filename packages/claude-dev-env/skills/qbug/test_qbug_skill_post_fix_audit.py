@@ -22,8 +22,8 @@ def _load_skill_text() -> str:
 
 def test_should_require_post_fix_gate_before_git_add() -> None:
     skill_text = _load_skill_text()
-    assert "bugteam_code_rules_gate" in skill_text, (
-        "FIX step must run bugteam_code_rules_gate against modified files"
+    assert "code_rules_gate" in skill_text, (
+        "FIX step must run code_rules_gate against modified files"
     )
     assert "post-fix" in skill_text.lower() or "post_fix" in skill_text.lower(), (
         "FIX step must reference a post-fix audit phase"

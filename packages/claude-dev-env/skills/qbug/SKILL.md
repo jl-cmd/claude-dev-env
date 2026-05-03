@@ -19,8 +19,8 @@ description: >-
 
 Shared artifacts with /bugteam are referenced below by path, using the `${CLAUDE_SKILL_DIR}` host-substitution convention (both skills land under `~/.claude/skills/` after install):
 
-- Pre-flight script: `${CLAUDE_SKILL_DIR}/../bugteam/scripts/bugteam_preflight.py`
-- Code-rules gate script: `${CLAUDE_SKILL_DIR}/../bugteam/scripts/bugteam_code_rules_gate.py`
+- Pre-flight script: `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/preflight.py`
+- Code-rules gate script: `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`
 - Bug category rubric A–J: [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md#audit-spawn-prompt-xml-bugfind-teammate)
 - **Audit contract** (finding schema, proof-of-absence, adversarial pass, Haiku secondary, post-fix self-audit, diagnostics JSON): [`bugteam/reference/audit-contract.md`](../bugteam/reference/audit-contract.md)
 - PR comment lifecycle shape: [`bugteam/SKILL.md`](../bugteam/SKILL.md#step-25-pr-comments-one-review-per-loop)
@@ -48,7 +48,7 @@ Refusals — first match wins; respond with the quoted line exactly and stop:
 ## Step 0: Pre-flight
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../bugteam/scripts/bugteam_preflight.py"
+python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/preflight.py"
 ```
 
 `${CLAUDE_SKILL_DIR}` is host-substituted before the shell runs. Non-zero → fix before continuing. `BUGTEAM_PREFLIGHT_SKIP=1` is emergency only. Add `--pre-commit` when `.pre-commit-config.yaml` exists.
@@ -97,7 +97,7 @@ import os
 from pathlib import Path
 
 skill_dir = Path(os.environ["CLAUDE_SKILL_DIR"])
-gate_script_path = (skill_dir / ".." / "bugteam" / "scripts" / "bugteam_code_rules_gate.py").resolve()
+gate_script_path = (skill_dir / ".." / ".." / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py").resolve()
 categories_file_path = (skill_dir / ".." / "bugteam" / "PROMPTS.md").resolve()
 ```
 

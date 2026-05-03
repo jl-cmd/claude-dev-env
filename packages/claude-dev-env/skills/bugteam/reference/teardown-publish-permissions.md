@@ -2,7 +2,7 @@
 
 ## Utility scripts (progressive disclosure)
 
-Fragile or repeatable shell sequences belong in `scripts/`. Anthropic: [Progressive disclosure patterns](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns) — utility scripts are **executed**, not loaded into context as primary reading. Details: [`../scripts/README.md`](../scripts/README.md).
+Fragile or repeatable shell sequences belong in `_shared/pr-loop/scripts/`. Anthropic: [Progressive disclosure patterns](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns) — utility scripts are **executed**, not loaded into context as primary reading. Script inventory and entry points: [`../../../_shared/pr-loop/scripts/README.md`](../../../_shared/pr-loop/scripts/README.md). Gate-only merge-base / diff semantics: [`../../../_shared/pr-loop/code-rules-gate.md`](../../../_shared/pr-loop/code-rules-gate.md).
 
 ### Pre-flight (recommended before Step 0)
 

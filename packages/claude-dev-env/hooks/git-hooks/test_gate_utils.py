@@ -44,7 +44,7 @@ def test_resolve_gate_script_path_defaults_to_claude_home_when_env_var_set(
     resolved_path, exact_allowed = gate_utils.resolve_gate_script_path()
 
     expected_path = (
-        tmp_path / "skills" / "bugteam" / "scripts" / "bugteam_code_rules_gate.py"
+        tmp_path / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py"
     )
     assert resolved_path == expected_path
     assert exact_allowed is None
@@ -63,10 +63,10 @@ def test_resolve_gate_script_path_falls_back_to_home_dot_claude_when_no_env_vars
     expected_path = (
         tmp_path
         / ".claude"
-        / "skills"
-        / "bugteam"
+        / "_shared"
+        / "pr-loop"
         / "scripts"
-        / "bugteam_code_rules_gate.py"
+        / "code_rules_gate.py"
     )
     assert resolved_path == expected_path
     assert exact_allowed is None
@@ -106,13 +106,13 @@ def test_is_safe_regular_file_accepts_exact_override_path(
     assert is_safe
 
 
-def test_is_safe_regular_file_rejects_claude_home_override_outside_home_dot_claude(
+def test_is_safe_regular_file_rejects_gate_outside_home_dot_claude_tree(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     attacker_home = tmp_path / "attacker_home"
     gate_under_attacker_home = (
-        attacker_home / "skills" / "bugteam" / "scripts" / "bugteam_code_rules_gate.py"
+        attacker_home / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py"
     )
     gate_under_attacker_home.parent.mkdir(parents=True)
     gate_under_attacker_home.write_text("", encoding="utf-8")
@@ -130,7 +130,7 @@ def test_is_safe_regular_file_accepts_gate_inside_home_dot_claude(
 ) -> None:
     home_dir = tmp_path / "real_home"
     gate_path = (
-        home_dir / ".claude" / "skills" / "bugteam" / "scripts" / "bugteam_code_rules_gate.py"
+        home_dir / ".claude" / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py"
     )
     gate_path.parent.mkdir(parents=True)
     gate_path.write_text("", encoding="utf-8")
@@ -148,7 +148,7 @@ def test_is_safe_regular_file_rejects_nonexistent_path_under_trusted_prefix(
     home_dir = tmp_path / "real_home"
     (home_dir / ".claude").mkdir(parents=True)
     missing_gate_path = (
-        home_dir / ".claude" / "skills" / "bugteam" / "scripts" / "missing_gate.py"
+        home_dir / ".claude" / "_shared" / "pr-loop" / "scripts" / "missing_gate.py"
     )
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home_dir))
 
@@ -182,7 +182,7 @@ def test_is_safe_regular_file_uses_claude_home_env_as_trust_root(
 ) -> None:
     custom_claude_home = tmp_path / "custom_claude"
     gate_path = (
-        custom_claude_home / "skills" / "bugteam" / "scripts" / "bugteam_code_rules_gate.py"
+        custom_claude_home / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py"
     )
     gate_path.parent.mkdir(parents=True)
     gate_path.write_text("", encoding="utf-8")
@@ -202,7 +202,7 @@ def test_resolve_gate_script_path_snapshot_is_consistent_with_is_safe_regular_fi
 ) -> None:
     custom_claude_home = tmp_path / "custom_claude"
     gate_path = (
-        custom_claude_home / "skills" / "bugteam" / "scripts" / "bugteam_code_rules_gate.py"
+        custom_claude_home / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py"
     )
     gate_path.parent.mkdir(parents=True)
     gate_path.write_text("", encoding="utf-8")
