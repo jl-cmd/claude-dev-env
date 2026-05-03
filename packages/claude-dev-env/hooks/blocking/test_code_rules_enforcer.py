@@ -41,9 +41,15 @@ if str(_HOOKS_TREE_DIR) not in sys.path:
 
 from code_rules_path_utils import is_config_file as path_utils_is_config_file  # noqa: E402
 from config.banned_identifiers_constants import (  # noqa: E402
+    ALL_BANNED_IDENTIFIERS as config_all_banned_identifiers,
     BANNED_IDENTIFIER_MESSAGE_SUFFIX as config_banned_identifier_message_suffix,
     BANNED_IDENTIFIER_SKIP_ADVISORY as config_banned_identifier_skip_advisory,
     MAX_BANNED_IDENTIFIER_ISSUES as config_max_banned_identifier_issues,
+)
+from config.hardcoded_user_path_constants import (  # noqa: E402
+    HARDCODED_USER_PATH_GUIDANCE as config_hardcoded_user_path_guidance,
+    HARDCODED_USER_PATH_PATTERN as config_hardcoded_user_path_pattern,
+    MAX_HARDCODED_USER_PATH_ISSUES as config_max_hardcoded_user_path_issues,
 )
 from config.stuttering_check_config import (  # noqa: E402
     MAX_STUTTERING_PREFIX_ISSUES as config_max_stuttering_prefix_issues,
@@ -85,6 +91,22 @@ def test_should_source_banned_identifier_companion_constants_from_config() -> No
         code_rules_enforcer.BANNED_IDENTIFIER_SKIP_ADVISORY
         is config_banned_identifier_skip_advisory
     )
+
+
+def test_should_reexport_hardcoded_user_path_pattern_from_config() -> None:
+    assert code_rules_enforcer.HARDCODED_USER_PATH_PATTERN is config_hardcoded_user_path_pattern
+
+
+def test_should_reexport_max_hardcoded_user_path_issues_from_config() -> None:
+    assert code_rules_enforcer.MAX_HARDCODED_USER_PATH_ISSUES == config_max_hardcoded_user_path_issues
+
+
+def test_should_reexport_hardcoded_user_path_guidance_from_config() -> None:
+    assert code_rules_enforcer.HARDCODED_USER_PATH_GUIDANCE == config_hardcoded_user_path_guidance
+
+
+def test_should_reexport_all_banned_identifiers_from_config() -> None:
+    assert code_rules_enforcer.ALL_BANNED_IDENTIFIERS is config_all_banned_identifiers
 
 
 def test_should_flag_constant_used_only_in_class_level_decorator() -> None:

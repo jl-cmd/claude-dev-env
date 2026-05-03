@@ -50,6 +50,11 @@ from config.banned_identifiers_constants import (  # noqa: E402
     BANNED_IDENTIFIER_SKIP_ADVISORY,
     MAX_BANNED_IDENTIFIER_ISSUES,
 )
+from config.hardcoded_user_path_constants import (  # noqa: E402
+    HARDCODED_USER_PATH_GUIDANCE,
+    HARDCODED_USER_PATH_PATTERN,
+    MAX_HARDCODED_USER_PATH_ISSUES,
+)
 from config.stuttering_check_config import (  # noqa: E402
     MAX_STUTTERING_PREFIX_ISSUES,
     STUTTERING_ALL_PREFIX_PATTERN,
@@ -2094,6 +2099,50 @@ def check_stuttering_collection_prefix(content: str, file_path: str) -> list[str
     return issues
 
 
+def check_hardcoded_user_paths(content: str, file_path: str) -> list[str]:
+    """Flag string literals naming a specific user's home directory.
+
+    Catches non-portable paths like `C:/Users/jon/...`, `/Users/alice/...`,
+    and `/home/bob/...` that surface in production code (PR #257 evidence).
+    Test files, config/ files, workflow registry files, migration files,
+    and hook infrastructure files are exempt. Hook infrastructure exemption
+    matches the pattern used by check_library_print and other check
+    functions, and prevents the enforcer from self-blocking on its own
+    HARDCODED_USER_PATH_PATTERN definition.
+    """
+    if is_test_file(file_path):
+        return []
+    if is_config_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    if is_hook_infrastructure(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    docstring_node_ids = _collect_docstring_node_ids(tree)
+    issues: list[str] = []
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.Constant):
+            continue
+        if not isinstance(each_node.value, str):
+            continue
+        if id(each_node) in docstring_node_ids:
+            continue
+        match = HARDCODED_USER_PATH_PATTERN.search(each_node.value)
+        if match is None:
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: hardcoded user path {match.group(0)!r}"
+            f" — {HARDCODED_USER_PATH_GUIDANCE}"
+        )
+        if len(issues) >= MAX_HARDCODED_USER_PATH_ISSUES:
+            break
+    return issues
+
+
 def _is_cli_entry_point(file_path: str) -> bool:
     path_lower = file_path.lower().replace("\\", "/")
     return any(marker.replace("\\", "/") in path_lower for marker in CLI_FILE_PATH_MARKERS)
@@ -2377,6 +2426,7 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_unused_optional_parameters(content, file_path))
         all_issues.extend(check_collection_prefix(content, file_path))
         all_issues.extend(check_stuttering_collection_prefix(content, file_path))
+        all_issues.extend(check_hardcoded_user_paths(content, file_path))
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
         all_issues.extend(check_return_annotations(content, file_path))
