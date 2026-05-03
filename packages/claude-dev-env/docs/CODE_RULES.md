@@ -50,6 +50,7 @@ These rules are automatically enforced by `code_rules_enforcer.py`. Violations b
 | Magic values | No literals in production function bodies (0, 1, -1 exempt). **Test files exempt.** Includes string templates — if you strip the interpolations from an f-string and the remaining literal text is structural (paths, URLs, patterns), those fragments are magic values that belong in config |
 | Constants location | No `UPPER_SNAKE =` outside `config/` in **production code**. **Test files may define local constants.** |
 | Hardcoded user paths | No string literals naming a specific user's home directory in production code (`C:/Users/jon/...`, `/Users/alice/...`, `/home/bob/...`). Use `pathlib.Path.home()` or `os.path.expanduser('~')`. **Test files and `config/` files are exempt.** |
+| sys.path.insert dedup | `sys.path.insert(0, X)` must be guarded by `if X not in sys.path:` (or equivalent membership test) so reloads do not push the same entry repeatedly. **Test files exempt.** |
 
 ### Where UPPER_SNAKE is allowed
 

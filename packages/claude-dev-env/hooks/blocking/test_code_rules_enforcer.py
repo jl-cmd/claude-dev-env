@@ -1133,3 +1133,62 @@ def test_stuttering_constants_live_under_config_subpackage() -> None:
         code_rules_enforcer.MAX_STUTTERING_PREFIX_ISSUES
         == config_max_stuttering_prefix_issues
     ), "Enforcer must reuse the hooks-tree config MAX_STUTTERING_PREFIX_ISSUES value"
+
+
+SYS_PATH_INSERT_PRODUCTION_FILE_PATH = "packages/app/services/loader.py"
+SYS_PATH_INSERT_HOOK_INFRASTRUCTURE_FILE_PATH = "/repo/.claude/hooks/blocking/some_hook.py"
+
+
+def test_sys_path_insert_should_flag_mismatched_guard_path() -> None:
+    source = (
+        "import sys\n"
+        'if "wrong_path" not in sys.path:\n'
+        '    sys.path.insert(0, "actual_path")\n'
+    )
+    issues = code_rules_enforcer.check_sys_path_insert_deduplication_guard(
+        source, SYS_PATH_INSERT_PRODUCTION_FILE_PATH
+    )
+    assert any("sys.path.insert" in each_issue for each_issue in issues), (
+        "Guard testing a different value than what is inserted must be flagged, "
+        f"got: {issues}"
+    )
+
+
+def test_sys_path_insert_should_not_flag_matching_guard_path() -> None:
+    source = (
+        "import sys\n"
+        'if "correct_path" not in sys.path:\n'
+        '    sys.path.insert(0, "correct_path")\n'
+    )
+    issues = code_rules_enforcer.check_sys_path_insert_deduplication_guard(
+        source, SYS_PATH_INSERT_PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Guard testing the same value that is inserted must not be flagged, got: {issues}"
+    )
+
+
+def test_sys_path_insert_should_not_flag_guarded_insert_in_class_body() -> None:
+    source = (
+        "import sys\n"
+        "class Configurator:\n"
+        "    target = '/some/path'\n"
+        "    if target not in sys.path:\n"
+        "        sys.path.insert(0, target)\n"
+    )
+    issues = code_rules_enforcer.check_sys_path_insert_deduplication_guard(
+        source, SYS_PATH_INSERT_PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Guarded sys.path.insert directly in a class body must not be flagged, got: {issues}"
+    )
+
+
+def test_sys_path_insert_should_skip_hook_infrastructure_files() -> None:
+    source = "import sys\nsys.path.insert(0, '/some/path')\n"
+    issues = code_rules_enforcer.check_sys_path_insert_deduplication_guard(
+        source, SYS_PATH_INSERT_HOOK_INFRASTRUCTURE_FILE_PATH
+    )
+    assert issues == [], (
+        f"Hook infrastructure files are exempt from this rule, got: {issues}"
+    )
