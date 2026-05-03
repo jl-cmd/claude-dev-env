@@ -110,3 +110,43 @@ def test_should_not_flag_non_test_function() -> None:
     assert issues == [], f"Expected no issues for non-test function, got: {issues}"
 
 
+def test_should_flag_literal_on_left_with_constant_on_right() -> None:
+    source = (
+        'CACHE_DIR = "cache"\n'
+        "\n"
+        "def test_cache_dir_right() -> None:\n"
+        '    assert "cache" == CACHE_DIR\n'
+    )
+    issues = code_rules_enforcer.check_constant_equality_tests(source, TEST_FILE_PATH)
+    assert any("constant" in issue.lower() for issue in issues), (
+        f"Expected 'cache' == CACHE_DIR flagged equally — equality is commutative, got: {issues}"
+    )
+
+
+def test_should_flag_numeric_literal_on_left_with_constant_on_right() -> None:
+    source = (
+        "MAX_SIZE = 100\n"
+        "\n"
+        "def test_max_size_right() -> None:\n"
+        "    assert 100 == MAX_SIZE\n"
+    )
+    issues = code_rules_enforcer.check_constant_equality_tests(source, TEST_FILE_PATH)
+    assert any("constant" in issue.lower() for issue in issues), (
+        f"Expected 100 == MAX_SIZE flagged equally, got: {issues}"
+    )
+
+
+def test_should_not_flag_two_upper_snake_constants_compared() -> None:
+    source = (
+        "EXPECTED = 5\n"
+        "ACTUAL = 5\n"
+        "\n"
+        "def test_two_constants() -> None:\n"
+        "    assert EXPECTED == ACTUAL\n"
+    )
+    issues = code_rules_enforcer.check_constant_equality_tests(source, TEST_FILE_PATH)
+    assert issues == [], (
+        f"Two-constant comparison is not constant-vs-literal, must not flag, got: {issues}"
+    )
+
+
