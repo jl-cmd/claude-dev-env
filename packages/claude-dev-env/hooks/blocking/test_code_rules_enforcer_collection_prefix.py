@@ -293,3 +293,36 @@ def test_should_flag_stuttering_comprehension_target() -> None:
     assert any("all_all_item" in each_issue for each_issue in issues), (
         f"Stuttering comprehension target must be flagged, got: {issues}"
     )
+
+
+def test_should_flag_stuttering_import_as_alias() -> None:
+    source = "import collections as all_all_collections\n"
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_collections" in each_issue for each_issue in issues), (
+        f"Stuttering import-as alias must be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_stuttering_from_import_as_alias() -> None:
+    source = "from collections import OrderedDict as all_all_ordered\n"
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_ordered" in each_issue for each_issue in issues), (
+        f"Stuttering from-import as alias must be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_stuttering_class_name() -> None:
+    source = (
+        "class all_all_models:\n"
+        "    value = 1\n"
+    )
+    issues = code_rules_enforcer.check_stuttering_collection_prefix(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("all_all_models" in each_issue for each_issue in issues), (
+        f"Stuttering class name must be flagged, got: {issues}"
+    )
