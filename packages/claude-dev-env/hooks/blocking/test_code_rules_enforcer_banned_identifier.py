@@ -229,3 +229,58 @@ def test_should_emit_stderr_advisory_on_syntax_error(
     captured = capsys.readouterr()  # type: ignore[attr-defined]
     assert "banned-identifier check skipped" in captured.err
     assert PRODUCTION_FILE_PATH in captured.err
+
+
+def test_should_flag_argv_assignment() -> None:
+    content = "def parse_command():\n    argv = collect()\n    return argv\n"
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert any("'argv'" in each_issue for each_issue in issues), (
+        f"Expected 'argv' flagged — use arguments_list, got: {issues}"
+    )
+
+
+def test_should_flag_args_assignment() -> None:
+    content = "def parse_command():\n    args = collect()\n    return args\n"
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert any("'args'" in each_issue for each_issue in issues), (
+        f"Expected 'args' flagged — use arguments, got: {issues}"
+    )
+
+
+def test_should_flag_kwargs_assignment() -> None:
+    content = "def parse_command():\n    kwargs = collect()\n    return kwargs\n"
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert any("'kwargs'" in each_issue for each_issue in issues), (
+        f"Expected 'kwargs' flagged — use keyword_arguments, got: {issues}"
+    )
+
+
+def test_should_flag_argc_assignment() -> None:
+    content = "def parse_command():\n    argc = count()\n    return argc\n"
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert any("'argc'" in each_issue for each_issue in issues), (
+        f"Expected 'argc' flagged — use argument_count, got: {issues}"
+    )
+
+
+def test_should_not_flag_args_as_function_parameter() -> None:
+    content = (
+        "def passthrough(*args, **kwargs):\n"
+        "    return args, kwargs\n"
+    )
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"*args/**kwargs parameters are Python convention, must not flag, got: {issues}"
+    )
+
+
+def test_should_not_flag_argv_substring_in_local_name() -> None:
+    content = (
+        "def parse_command():\n"
+        "    parsed_argv_entries = []\n"
+        "    return parsed_argv_entries\n"
+    )
+    issues = check_banned_identifiers(content, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Substring 'argv' inside parsed_argv_entries must not flag, got: {issues}"
+    )

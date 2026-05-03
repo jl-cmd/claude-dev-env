@@ -866,7 +866,10 @@ def check_constants_outside_config_advisory(content: str, file_path: str) -> lis
     return _scan_function_body_constants(content)
 
 
-BANNED_IDENTIFIERS: frozenset[str] = frozenset({"result", "data", "output", "response", "value", "item", "temp"})
+BANNED_IDENTIFIERS: frozenset[str] = frozenset({
+    "result", "data", "output", "response", "value", "item", "temp",
+    "argv", "args", "kwargs", "argc",
+})
 MAX_BANNED_IDENTIFIER_ISSUES: int = 3
 BANNED_IDENTIFIER_MESSAGE_SUFFIX: str = "use descriptive name (see CODE_RULES Naming section)"
 BANNED_IDENTIFIER_SKIP_ADVISORY: str = (
