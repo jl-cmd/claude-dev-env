@@ -26,6 +26,7 @@ assert _hook_spec.loader is not None
 _hook_module = importlib.util.module_from_spec(_hook_spec)
 _hook_spec.loader.exec_module(_hook_module)
 check_hardcoded_user_paths = _hook_module.check_hardcoded_user_paths
+HARDCODED_USER_PATH_PATTERN = _hook_module.HARDCODED_USER_PATH_PATTERN
 
 
 PRODUCTION_FILE_PATH = "packages/app/services/loader.py"
@@ -34,11 +35,28 @@ CONFIG_FILE_PATH = "packages/app/config/paths.py"
 HOOK_INFRASTRUCTURE_FILE_PATH = "/repo/packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py"
 
 
+def test_should_match_user_directory_without_consuming_following_separator() -> None:
+    windows = HARDCODED_USER_PATH_PATTERN.search("C:/Users/jon/more")
+    macos = HARDCODED_USER_PATH_PATTERN.search("/Users/bob/more")
+    linux = HARDCODED_USER_PATH_PATTERN.search("/home/alice/more")
+    assert windows is not None and windows.group(0) == "C:/Users/jon"
+    assert macos is not None and macos.group(0) == "/Users/bob"
+    assert linux is not None and linux.group(0) == "/home/alice"
+
+
 def test_should_flag_windows_user_path_with_forward_slashes() -> None:
     source = 'def find() -> str:\n    return "C:/Users/jon/notes.md"\n'
     issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
     assert any("C:/Users/jon" in each_issue for each_issue in issues), (
         f"Expected Windows user path flagged, got: {issues}"
+    )
+
+
+def test_should_flag_windows_user_path_when_users_segment_is_not_title_case() -> None:
+    source = 'def find() -> str:\n    return "c:/users/jon/notes.md"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert any("users" in each_issue.lower() for each_issue in issues), (
+        f"Expected Windows user path flagged (case-insensitive Users segment), got: {issues}"
     )
 
 
@@ -63,6 +81,14 @@ def test_should_flag_macos_user_path() -> None:
     issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
     assert any("/Users/bob" in each_issue for each_issue in issues), (
         f"Expected macOS user path flagged, got: {issues}"
+    )
+
+
+def test_should_flag_macos_user_path_when_home_is_entire_path() -> None:
+    source = 'def find() -> str:\n    return "/Users/bob"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert any("/Users/bob" in each_issue for each_issue in issues), (
+        f"Expected macOS user home literal flagged without trailing slash, got: {issues}"
     )
 
 
@@ -119,11 +145,12 @@ def test_should_suggest_path_home_or_expanduser_in_message() -> None:
         f"Error message should suggest Path.home() or os.path.expanduser('~'), got: {issues}"
     )
 
-def test_should_not_flag_url_route_with_home_segment() -> None:
+def test_should_flag_standalone_home_segment_for_symmetry_with_macos() -> None:
     source = 'def route() -> str:\n    return "/home/dashboard"\n'
     issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
-    assert issues == [], (
-        f"URL route '/home/dashboard' is not a user directory, got: {issues}"
+    assert any("/home/dashboard" in each_issue for each_issue in issues), (
+        f"Linux '/home/<segment>' is structurally indistinguishable from a real"
+        f" home directory and must flag for symmetry with macOS, got: {issues}"
     )
 
 
@@ -157,4 +184,108 @@ def test_should_not_flag_docstring_mentioning_user_path() -> None:
     issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
     assert issues == [], (
         f"Docstrings are allowed to mention paths, got: {issues}"
+    )
+
+
+def test_should_flag_linux_home_path_when_home_is_entire_path() -> None:
+    source = 'def find() -> str:\n    return "/home/alice"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert any("/home/alice" in each_issue for each_issue in issues), (
+        f"Expected Linux home literal flagged without trailing slash, got: {issues}"
+    )
+
+
+def test_should_not_flag_windows_public_shared_folder() -> None:
+    source = 'def find() -> str:\n    return "C:/Users/Public/Documents"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Windows 'C:/Users/Public' is a system shared folder, not a user home, got: {issues}"
+    )
+
+
+def test_should_not_flag_windows_shared_folder() -> None:
+    source = 'def find() -> str:\n    return "C:/Users/Shared/data"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Windows 'C:/Users/Shared' is a system shared folder, not a user home, got: {issues}"
+    )
+
+
+def test_should_not_flag_windows_all_users_folder() -> None:
+    source = 'def find() -> str:\n    return "C:/Users/All Users/AppData"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Windows 'C:/Users/All Users' is a legacy shared folder, not a user home, got: {issues}"
+    )
+
+
+def test_should_not_flag_macos_public_shared_folder() -> None:
+    source = 'def find() -> str:\n    return "/Users/Public/Documents"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"macOS '/Users/Public' is a default shared folder on every macOS install,"
+        f" not a user home — symmetry with the Windows exclusion, got: {issues}"
+    )
+
+
+def test_should_not_flag_windows_lowercase_public_shared_folder() -> None:
+    source = 'def find() -> str:\n    return "c:/users/public/Documents"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Windows 'c:/users/public' is the same shared folder regardless of case,"
+        f" the exclusion list must be case-insensitive, got: {issues}"
+    )
+
+
+def test_should_not_flag_windows_lowercase_shared_folder() -> None:
+    source = 'def find() -> str:\n    return "c:/users/shared/data"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Windows 'c:/users/shared' is a system shared folder regardless of case,"
+        f" got: {issues}"
+    )
+
+
+def test_should_not_flag_windows_lowercase_all_users_folder() -> None:
+    source = 'def find() -> str:\n    return "c:/users/all users/AppData"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Windows 'c:/users/all users' is a legacy shared folder regardless of case,"
+        f" got: {issues}"
+    )
+
+
+def test_should_not_flag_windows_mixed_case_public_shared_folder() -> None:
+    source = 'def find() -> str:\n    return "C:/Users/PuBlIc/Documents"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Windows 'C:/Users/PuBlIc' is the same shared folder in any casing,"
+        f" got: {issues}"
+    )
+
+
+def test_should_not_flag_windows_uppercase_public_shared_folder() -> None:
+    source = 'def find() -> str:\n    return "C:/Users/PUBLIC/Documents"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Windows 'C:/Users/PUBLIC' is the same shared folder in any casing,"
+        f" got: {issues}"
+    )
+
+
+def test_should_not_flag_macos_lowercase_shared_folder() -> None:
+    source = 'def find() -> str:\n    return "/Users/shared/data"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"macOS '/Users/shared' is a system shared folder regardless of case,"
+        f" got: {issues}"
+    )
+
+
+def test_should_not_flag_macos_lowercase_public_shared_folder() -> None:
+    source = 'def find() -> str:\n    return "/Users/public/Documents"\n'
+    issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"macOS '/Users/public' is a default shared folder regardless of case,"
+        f" got: {issues}"
     )
