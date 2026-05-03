@@ -1,12 +1,14 @@
 """Root pytest configuration: evicts conflicting ``config`` imports during collection.
 
-Four different objects share the top-level name ``config``:
+Five different objects share the top-level name ``config``:
 
 - Repository package ``config/`` (for example ``config.sync_ai_rules_paths``).
 - ``packages/claude-dev-env/hooks/config/`` (hook messages and shared hook tests).
 - ``packages/claude-dev-env/hooks/git-hooks/config.py`` (flat constants for shims).
 - ``packages/claude-dev-env/_shared/pr-loop/scripts/config/`` (shared PR-loop
-  script constants). The shared scripts insert their own directory on
+  script constants).
+- ``packages/claude-dev-env/skills/pr-converge/scripts/config/`` (pr-converge
+  skill script constants). The shared scripts insert their own directory on
   ``sys.path`` at module-load time so they can ``from config.X import Y`` when
   installed under ``~/.claude/_shared/``; under pytest that insert leaks across
   collection boundaries unless this conftest evicts it.
@@ -58,6 +60,14 @@ _SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH = (
     / "claude-dev-env"
     / "_shared"
     / "pr-loop"
+    / "scripts"
+)
+_PR_CONVERGE_SCRIPTS_DIRECTORY_PATH = (
+    _REPOSITORY_ROOT_PATH
+    / "packages"
+    / "claude-dev-env"
+    / "skills"
+    / "pr-converge"
     / "scripts"
 )
 
@@ -118,6 +128,10 @@ def _cached_config_resolves_inside_shared_pr_loop_scripts() -> bool:
     return _cached_config_module_resolves_inside(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
 
 
+def _cached_config_resolves_inside_pr_converge_scripts() -> bool:
+    return _cached_config_module_resolves_inside(_PR_CONVERGE_SCRIPTS_DIRECTORY_PATH)
+
+
 def _config_module_is_currently_cached() -> bool:
     return "config" in sys.modules
 
@@ -171,6 +185,7 @@ def pytest_collectstart(collector: pytest.Collector) -> None:
         _remove_path_if_present(_GIT_HOOKS_DIRECTORY_PATH)
         _remove_path_if_present(_HOOKS_ROOT_DIRECTORY_PATH)
         _remove_path_if_present(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
+        _remove_path_if_present(_PR_CONVERGE_SCRIPTS_DIRECTORY_PATH)
         return
 
     _ensure_hooks_root_on_sys_path()
@@ -192,6 +207,7 @@ def pytest_collectstart(collector: pytest.Collector) -> None:
         if collector_expects_flat_config and cached_config_binding_is_wrong_for_git_hooks:
             _evict_config_module()
         _remove_path_if_present(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
+        _remove_path_if_present(_PR_CONVERGE_SCRIPTS_DIRECTORY_PATH)
         return
 
     is_inside_shared_pr_loop_scripts = _path_is_inside_directory(
@@ -204,17 +220,37 @@ def pytest_collectstart(collector: pytest.Collector) -> None:
         )
         if cached_config_binding_is_wrong_for_shared_scripts:
             _evict_config_module()
+        _remove_path_if_present(_PR_CONVERGE_SCRIPTS_DIRECTORY_PATH)
+        return
+
+    resolved_pr_converge_scripts_path = _PR_CONVERGE_SCRIPTS_DIRECTORY_PATH.resolve()
+    is_inside_pr_converge_scripts = _path_is_inside_directory(
+        resolved_collected_path, resolved_pr_converge_scripts_path
+    )
+    if is_inside_pr_converge_scripts:
+        cached_config_binding_is_wrong_for_pr_converge_scripts = (
+            _config_module_is_currently_cached()
+            and not _cached_config_resolves_inside_pr_converge_scripts()
+        )
+        if cached_config_binding_is_wrong_for_pr_converge_scripts:
+            _evict_config_module()
+        _remove_path_if_present(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
         return
 
     any_git_hooks_entry_was_removed = _remove_path_if_present(_GIT_HOOKS_DIRECTORY_PATH)
     any_shared_scripts_entry_was_removed = _remove_path_if_present(
         _SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH
     )
+    any_pr_converge_scripts_entry_was_removed = _remove_path_if_present(
+        _PR_CONVERGE_SCRIPTS_DIRECTORY_PATH
+    )
     if (
         any_git_hooks_entry_was_removed
         or any_shared_scripts_entry_was_removed
+        or any_pr_converge_scripts_entry_was_removed
         or _cached_config_is_flat_git_hooks_module()
         or _cached_config_resolves_inside_shared_pr_loop_scripts()
+        or _cached_config_resolves_inside_pr_converge_scripts()
     ):
         _evict_config_module()
 
@@ -227,4 +263,5 @@ def pytest_collectreport(report: pytest.CollectReport) -> None:
     pending_restore = _pending_sys_path_restores.pop()
     sys.path[:] = pending_restore.sys_path_snapshot
     _remove_path_if_present(_SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH)
+    _remove_path_if_present(_PR_CONVERGE_SCRIPTS_DIRECTORY_PATH)
     _evict_config_module()

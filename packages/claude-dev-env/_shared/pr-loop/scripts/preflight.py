@@ -204,7 +204,7 @@ def main(all_arguments: list[str]) -> int:
     if not arguments.no_pytest and has_pytest_configuration(repository_root):
         if not has_discoverable_tests(repository_root):
             print(
-                "preflight: pytest configured but no tests found; skipping pytest.",
+                "bugteam_preflight: pytest configured but no tests found; skipping pytest.",
                 file=sys.stderr,
             )
         else:
@@ -213,7 +213,7 @@ def main(all_arguments: list[str]) -> int:
                 return exit_code
     elif not arguments.no_pytest:
         print(
-            "preflight: no pytest configuration found; skipping pytest.",
+            "bugteam_preflight: no pytest configuration found; skipping pytest.",
             file=sys.stderr,
         )
     if arguments.pre_commit and (repository_root / PRE_COMMIT_CONFIG_YAML_FILENAME).is_file():

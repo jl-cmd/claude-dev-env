@@ -155,3 +155,82 @@ class TestCollectHookSymmetry:
             "so `from config import ...` resolves to the repository's top-level "
             "config/ package, not _shared/pr-loop/scripts/config/"
         )
+
+    def should_remove_pr_converge_scripts_from_sys_path_for_git_hooks_collection(
+        self, isolated_collect_hook_state: None
+    ) -> None:
+        leaked_pr_converge_entry = str(
+            conftest._PR_CONVERGE_SCRIPTS_DIRECTORY_PATH.resolve()
+        )
+        sys.path.insert(0, leaked_pr_converge_entry)
+
+        git_hooks_test_file_path = (
+            conftest._GIT_HOOKS_DIRECTORY_PATH / "test_example_hook.py"
+        )
+        fake_git_hooks_collector = MagicMock(spec=pytest.Module)
+        fake_git_hooks_collector.nodeid = (
+            "packages/claude-dev-env/hooks/git-hooks/test_example_hook.py"
+        )
+        fake_git_hooks_collector.path = git_hooks_test_file_path
+
+        conftest.pytest_collectstart(fake_git_hooks_collector)
+
+        assert leaked_pr_converge_entry not in sys.path, (
+            "git-hooks collection must evict the pr-converge scripts sys.path entry "
+            "so `from config import ...` resolves to the flat git-hooks config, not "
+            "skills/pr-converge/scripts/config/"
+        )
+
+    def should_remove_pr_converge_scripts_from_sys_path_for_shared_pr_loop_collection(
+        self, isolated_collect_hook_state: None
+    ) -> None:
+        leaked_pr_converge_entry = str(
+            conftest._PR_CONVERGE_SCRIPTS_DIRECTORY_PATH.resolve()
+        )
+        sys.path.insert(0, leaked_pr_converge_entry)
+
+        shared_scripts_test_file_path = (
+            conftest._SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH
+            / "tests"
+            / "test_gh_util.py"
+        )
+        fake_shared_scripts_collector = MagicMock(spec=pytest.Module)
+        fake_shared_scripts_collector.nodeid = (
+            "packages/claude-dev-env/_shared/pr-loop/scripts/tests/test_gh_util.py"
+        )
+        fake_shared_scripts_collector.path = shared_scripts_test_file_path
+
+        conftest.pytest_collectstart(fake_shared_scripts_collector)
+
+        assert leaked_pr_converge_entry not in sys.path, (
+            "shared pr-loop scripts collection must evict the pr-converge scripts "
+            "sys.path entry so `from config import ...` resolves to "
+            "_shared/pr-loop/scripts/config/, not skills/pr-converge/scripts/config/"
+        )
+
+    def should_remove_shared_pr_loop_scripts_from_sys_path_for_pr_converge_collection(
+        self, isolated_collect_hook_state: None
+    ) -> None:
+        leaked_shared_scripts_entry = str(
+            conftest._SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH.resolve()
+        )
+        sys.path.insert(0, leaked_shared_scripts_entry)
+
+        pr_converge_test_file_path = (
+            conftest._PR_CONVERGE_SCRIPTS_DIRECTORY_PATH
+            / "tests"
+            / "test_pr_converge.py"
+        )
+        fake_pr_converge_collector = MagicMock(spec=pytest.Module)
+        fake_pr_converge_collector.nodeid = (
+            "packages/claude-dev-env/skills/pr-converge/scripts/tests/test_pr_converge.py"
+        )
+        fake_pr_converge_collector.path = pr_converge_test_file_path
+
+        conftest.pytest_collectstart(fake_pr_converge_collector)
+
+        assert leaked_shared_scripts_entry not in sys.path, (
+            "pr-converge scripts collection must evict the shared pr-loop scripts "
+            "sys.path entry so `from config import ...` resolves to "
+            "skills/pr-converge/scripts/config/, not _shared/pr-loop/scripts/config/"
+        )
