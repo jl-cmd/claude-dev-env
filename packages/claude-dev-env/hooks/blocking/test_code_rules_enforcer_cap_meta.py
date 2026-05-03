@@ -8,8 +8,10 @@ payload when a single file has many violations of the same kind.
 The convention is: every check_* function should either apply an
 explicit cap (a constant containing 'MAX_' AND a `break`/early return
 on length), or be explicitly listed below as a known-uncapped check
-along with the reason. New check_* functions added to the module
-without consideration will trip this test.
+along with the reason, or appear in VOID_ADVISORY_CHECK_FUNCTIONS_NO_ISSUE_LIST
+when the function returns None and never contributes issues to the
+blocking payload. New check_* functions added to the module without
+consideration will trip this test.
 """
 
 from __future__ import annotations
@@ -33,6 +35,13 @@ assert _hook_spec.loader is not None
 _hook_module = importlib.util.module_from_spec(_hook_spec)
 _hook_spec.loader.exec_module(_hook_module)
 
+VOID_ADVISORY_CHECK_FUNCTIONS_NO_ISSUE_LIST: frozenset[str] = frozenset(
+    {
+        "check_duplicated_format_patterns",
+        "check_incomplete_mocks",
+    }
+)
+
 KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW: frozenset[str] = frozenset(
     {
         "check_boolean_naming",
@@ -43,13 +52,11 @@ KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW: frozenset[str] = frozenset(
         "check_constant_equality_tests",
         "check_constants_outside_config",
         "check_constants_outside_config_advisory",
-        "check_duplicated_format_patterns",
         "check_e2e_test_naming",
         "check_existence_check_tests",
         "check_file_global_constants_use_count",
         "check_fstring_structural_literals",
         "check_imports_at_top",
-        "check_incomplete_mocks",
         "check_inline_literal_collections",
         "check_library_print",
         "check_logging_fstrings",
@@ -93,12 +100,18 @@ def test_every_check_function_either_caps_or_is_explicitly_pending() -> None:
         if _function_source_contains_cap(each_name)
     }
     uncapped_check_names = all_check_names - capped_check_names
-    unexpected_uncapped = uncapped_check_names - KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW
+    unexpected_uncapped = (
+        uncapped_check_names
+        - KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW
+        - VOID_ADVISORY_CHECK_FUNCTIONS_NO_ISSUE_LIST
+    )
     assert unexpected_uncapped == set(), (
         f"New check_* functions added without a cap and not on the pending-review list: "
         f"{sorted(unexpected_uncapped)}. Either apply a MAX_*_ISSUES cap with a break/return, "
         f"or explicitly add the function to KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW with a "
-        f"reason in the test header docstring."
+        f"reason in the test header docstring, or list it in "
+        f"VOID_ADVISORY_CHECK_FUNCTIONS_NO_ISSUE_LIST when it returns None and emits only "
+        f"stderr guidance."
     )
 
 
@@ -108,6 +121,32 @@ def test_pending_review_set_does_not_grow_silently() -> None:
     assert stale_pending == set(), (
         f"KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW lists functions that no longer exist: "
         f"{sorted(stale_pending)}. Either restore the function or remove it from the list."
+    )
+
+
+def test_pending_review_set_excludes_functions_that_already_match_cap_heuristic() -> None:
+    capped_but_still_pending = {
+        each_name
+        for each_name in KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW
+        if _function_source_contains_cap(each_name)
+    }
+    assert capped_but_still_pending == set(), (
+        f"KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW must not list checks that already satisfy the "
+        f"cap heuristic (would hide a later cap removal): {sorted(capped_but_still_pending)}. "
+        f"Remove those names from the pending set after capping."
+    )
+
+
+def test_void_advisory_checks_are_registered_and_disjoint() -> None:
+    all_check_names = set(_all_check_function_names())
+    assert VOID_ADVISORY_CHECK_FUNCTIONS_NO_ISSUE_LIST <= all_check_names, (
+        f"VOID_ADVISORY_CHECK_FUNCTIONS_NO_ISSUE_LIST references missing names: "
+        f"{sorted(VOID_ADVISORY_CHECK_FUNCTIONS_NO_ISSUE_LIST - all_check_names)}"
+    )
+    overlap = VOID_ADVISORY_CHECK_FUNCTIONS_NO_ISSUE_LIST & KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW
+    assert overlap == set(), (
+        f"Void-advisory checks must not also appear on the uncapped pending list: "
+        f"{sorted(overlap)}"
     )
 
 
