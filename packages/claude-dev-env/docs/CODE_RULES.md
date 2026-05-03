@@ -51,6 +51,7 @@ These rules are automatically enforced by `code_rules_enforcer.py`. Violations b
 | Constants location | No `UPPER_SNAKE =` outside `config/` in **production code**. **Test files may define local constants.** |
 | Hardcoded user paths | No string literals naming a specific user's home directory in production code (`C:/Users/jon/...`, `/Users/alice/...`, `/home/bob/...`). Use `pathlib.Path.home()` or `os.path.expanduser('~')`. **Test files and `config/` files are exempt.** |
 | sys.path.insert dedup | `sys.path.insert(0, X)` must be guarded by `if X not in sys.path:` (or equivalent membership test) so reloads do not push the same entry repeatedly. **Test files exempt.** |
+| Unused module-level imports | Module-level imports never referenced in the file body are flagged. Skipped for files declaring `__all__` (re-exports), files using `TYPE_CHECKING` (annotation-only imports), and lines marked `# noqa`. **Test files exempt.** |
 
 ### Where UPPER_SNAKE is allowed
 

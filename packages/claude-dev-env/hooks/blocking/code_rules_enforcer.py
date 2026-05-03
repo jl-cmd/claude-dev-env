@@ -2264,6 +2264,116 @@ def check_sys_path_insert_deduplication_guard(content: str, file_path: str) -> l
     return issues
 
 
+MAX_UNUSED_IMPORT_ISSUES: int = 25
+UNUSED_IMPORT_GUIDANCE: str = (
+    "remove unused import; if kept for side effects, mark with `# noqa: F401`"
+)
+
+
+def _import_alias_pairs(
+    import_node: ast.Import | ast.ImportFrom,
+) -> list[tuple[str, int, int | None]]:
+    """Return (binding_name, alias_line, from_keyword_line) for each name introduced.
+
+    The from-keyword line is None for plain `import X` statements; for
+    `from X import (...)` it carries the line of the `from` keyword so
+    callers can honor a `# noqa` placed on the opening line of a
+    multi-line import block.
+    """
+    bindings: list[tuple[str, int, int | None]] = []
+    from_keyword_line = import_node.lineno if isinstance(import_node, ast.ImportFrom) else None
+    for each_alias in import_node.names:
+        if each_alias.name == "*":
+            continue
+        binding_name = each_alias.asname if each_alias.asname else each_alias.name.split(".")[0]
+        alias_line = each_alias.lineno or import_node.lineno
+        bindings.append((binding_name, alias_line, from_keyword_line))
+    return bindings
+
+
+def _name_appears_outside_imports(
+    content_lines: list[str],
+    import_line_numbers: set[int],
+    name: str,
+) -> bool:
+    name_pattern = re.compile(rf"\b{re.escape(name)}\b")
+    for each_line_index, each_line in enumerate(content_lines, start=1):
+        if each_line_index in import_line_numbers:
+            continue
+        if name_pattern.search(each_line):
+            return True
+    return False
+
+
+def _line_carries_noqa_marker(line_text: str) -> bool:
+    return "# noqa" in line_text or "#noqa" in line_text
+
+
+def check_unused_module_level_imports(content: str, file_path: str) -> list[str]:
+    """Flag module-level imports that are never referenced in the rest of the file.
+
+    The rule is intentionally conservative — files declaring __all__ or
+    using TYPE_CHECKING are skipped to avoid false positives on
+    re-exports and annotation-only imports.
+    """
+    if is_test_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    file_declares_dunder_all = any(
+        (
+            isinstance(each_node, ast.Assign)
+            and any(
+                isinstance(each_target, ast.Name) and each_target.id == "__all__"
+                for each_target in each_node.targets
+            )
+        )
+        or (
+            isinstance(each_node, ast.AnnAssign)
+            and isinstance(each_node.target, ast.Name)
+            and each_node.target.id == "__all__"
+        )
+        for each_node in tree.body
+    )
+    if file_declares_dunder_all:
+        return []
+    if "TYPE_CHECKING" in content:
+        return []
+    content_lines = content.splitlines()
+    import_line_numbers: set[int] = set()
+    import_bindings: list[tuple[str, int, int | None]] = []
+    for each_node in tree.body:
+        if isinstance(each_node, (ast.Import, ast.ImportFrom)):
+            import_line_numbers.add(each_node.lineno)
+            for each_alias in each_node.names:
+                import_line_numbers.add(each_alias.lineno or each_node.lineno)
+            if isinstance(each_node, ast.ImportFrom) and each_node.module == "__future__":
+                continue
+            for each_binding in _import_alias_pairs(each_node):
+                import_bindings.append(each_binding)
+    issues: list[str] = []
+    for each_name, each_line_number, each_from_keyword_line in import_bindings:
+        if 1 <= each_line_number <= len(content_lines):
+            if _line_carries_noqa_marker(content_lines[each_line_number - 1]):
+                continue
+        if each_from_keyword_line is not None and 1 <= each_from_keyword_line <= len(content_lines):
+            if _line_carries_noqa_marker(content_lines[each_from_keyword_line - 1]):
+                continue
+        if _name_appears_outside_imports(content_lines, import_line_numbers, each_name):
+            continue
+        issues.append(
+            f"Line {each_line_number}: unused module-level import {each_name!r}"
+            f" — {UNUSED_IMPORT_GUIDANCE}"
+        )
+        if len(issues) >= MAX_UNUSED_IMPORT_ISSUES:
+            break
+    return issues
+
+
 def _is_cli_entry_point(file_path: str) -> bool:
     path_lower = file_path.lower().replace("\\", "/")
     return any(marker.replace("\\", "/") in path_lower for marker in CLI_FILE_PATH_MARKERS)
@@ -2549,6 +2659,7 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_stuttering_collection_prefix(content, file_path))
         all_issues.extend(check_hardcoded_user_paths(content, file_path))
         all_issues.extend(check_sys_path_insert_deduplication_guard(content, file_path))
+        all_issues.extend(check_unused_module_level_imports(content, file_path))
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
         all_issues.extend(check_return_annotations(content, file_path))
