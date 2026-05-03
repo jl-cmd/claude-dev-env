@@ -128,7 +128,7 @@ for each_user in all_users:
 
 ### Complete type hints
 
-Every parameter and return type is declared explicitly. `Any` is replaced with the concrete type. `# type: ignore` is replaced with a fix that resolves the underlying type issue.
+Every parameter and return type is declared explicitly. `Any` is replaced with the concrete type. When `# type: ignore` is genuinely necessary (a third-party type stub gap, an unavoidable runtime cast), append a trailing `# <reason>` of at least 5 characters explaining the constraint — the hook fires on bare `# type: ignore` without a justification. Output is mypy-clean: every file you write or edit passes `mypy_validator.py` at write time.
 
 ```python
 def fetch_orders_for_customer(customer_id: int) -> list[Order]:
@@ -148,6 +148,14 @@ def fetch_with_retries(url: str) -> str:
 ```
 
 String templates also count: when the structural literal text inside an f-string (paths, URLs, patterns) survives stripping the interpolations, that text is a magic value and belongs in config.
+
+Bare string literals also count when their shape is structural: a multi-segment path (`/api/v1/users`), a URL with scheme, a Windows drive prefix, a leading absolute path, a regex anchor (`^foo`, `bar$`), or a regex escape sequence (`\d`, `\w`, `\s`). Extract these to `config/constants.py`.
+
+Inline list and set literals of two or more constants in production function bodies move to `config/`. The hook fires on `[1, 2, 3]` or `{1, 2, 3}` inside a function body when every element is a constant — extract to a named module-level (or `config/`) constant.
+
+### Library print() and CLI markers
+
+Use logging for application and runtime output. `print()` is allowed when stdout is the integration contract: CLI entrypoints (paths under `/scripts/`, filenames ending `_cli.py`, `/cli.py`), or one-off automation helpers where the script's contract is its stdout (for example `print(json.dumps(...))`). The `check_library_print` hook fires on `print()` outside those path markers.
 
 ### Comment preservation
 
@@ -188,6 +196,8 @@ def fetch_with_retries(url: str) -> str:
 ### Constants location
 
 Production-code `UPPER_SNAKE = ...` at module scope outside `config/` is flagged. Exempt path families: `config/*`, `/migrations/`, `/workflow/`, `_tab.py`, `/states.py`, `/modules.py`, and all test files (`test_*.py`, `*_test.py`, `*.spec.*`, `conftest.py`, paths under `/tests/`).
+
+Function-local `UPPER_SNAKE_CASE = ...` (assigned inside a function body in production code) is a non-blocking advisory: it usually belongs in `config/`. Move the value when there is no caller-specific reason for the local form.
 
 ### Logging format
 
@@ -247,9 +257,78 @@ def render_dashboard(profile: Profile) -> Dashboard:
 
 When `profile` is already loaded, build the dashboard from it; fetch only when the data is genuinely absent.
 
+### Test quality rules
+
+Tests document behavior. The hook layer enforces several constraints on test files; clean-coder produces code that satisfies these on the first write.
+
+- **Mock completeness.** When a mock object stands in for a record, populate every attribute the production code path under test reads. The `check_incomplete_mocks` hook flags mocks missing fields the assertions touch.
+- **No decorators named `skip*` on test functions.** Tests fail with a clear error rather than skip when a system dependency is missing. The hook fires on any decorator (whether `@skip_if_missing_dependency`, `@unittest.skipIf`, `@pytest.mark.skip`, or any custom variant) whose identifier contains the substring `skip`.
+- **No existence-only tests.** A test whose entire body is `assert callable(x)`, `assert hasattr(module, "name")`, or `assert obj is not None` covers no behavior. Replace with an assertion that exercises the behavior — call the function and assert on its return value or side effect.
+- **No constant-equality tests.** A test whose sole assertion is `assert CACHE_DIR == "cache"` (or any `UPPER_SNAKE == LITERAL` pattern) just verifies the constant has not changed. Delete it or replace with a behavior assertion.
+- **No tautological assertions.** `assert CONSTANT == CONSTANT` and `assert hasattr(module, "name")` pass regardless of the implementation. Replace with assertions that would fail if the implementation regressed.
+- **Test through the public API.** Do not assert on private state, hook return values, internal class fields, `_protected_field`, `__private_field`, or `component.state.X`. If the test needs visibility the public API does not provide, the public API needs a method, not the test.
+- **For React components**, query in this priority order: `getByRole > getByLabelText > getByText > getByTestId`. Use `userEvent` over `fireEvent` (more realistic). Mock at API boundaries (network calls, external services), not internal hooks or utilities.
+- **Test infrastructure stays pragmatic.** A test helper file passes when all of these hold: ONE file (not a package); only `def` functions (no class definitions); no module-level state besides one or two simple constants; no caching, no lazy initialization, no abstractions added "for future use"; imports cover the test target plus stdlib only — no helper imports another helper.
+- **E2E spec test naming.** In `*.spec.*` files, do not include `online` or `offline` substrings inside `test()`, `it()`, or `describe()` titles — file scope defines online/offline behavior. The `check_e2e_test_naming` hook fires on these substrings inside spec test titles.
+
+### Required vs optional parameters
+
+Add an optional parameter the moment a caller actually varies the value (YAGNI). When every existing call site passes the same value, make the parameter required (or inline the value as a local constant). Remove parameters that no caller passes and no body reads. The `check_unused_optional_parameters` hook fires when an optional parameter has no call site that passes a value different from the default.
+
+### Platform safety and external tools
+
+Several patterns silently fail or corrupt output on Windows or in shell/CLI integrations. Avoid each pattern when generating new code.
+
+**Windows filesystem cleanup.** When generating Python code that removes a directory tree, do not call `shutil.rmtree` with the `ignore_errors=True` keyword argument. Files carrying the `ReadOnly` attribute (any file under `.git/objects/pack/`, anything Claude Code writes under `~/.claude/teams/`) raise `PermissionError`, which the keyword silently swallows; the tree stays on disk and cleanup looks successful but removes nothing. Linux is unaffected because `unlink` only needs write on the parent directory. Use a handler that strips `S_IWRITE` and retries the failing syscall:
+
+```python
+import os
+import shutil
+import stat
+import sys
+
+
+def _strip_read_only_and_retry(removal_function, target_path, *_exc_info):
+    try:
+        os.chmod(target_path, stat.S_IWRITE)
+        removal_function(target_path)
+    except OSError:
+        pass
+
+
+def force_rmtree(target_path: str) -> None:
+    handler_kw = (
+        {"onexc": _strip_read_only_and_retry}
+        if sys.version_info >= (3, 12)
+        else {"onerror": _strip_read_only_and_retry}
+    )
+    try:
+        shutil.rmtree(target_path, **handler_kw)
+    except OSError:
+        pass
+```
+
+`onexc` is Python 3.12+; `onerror` is the pre-3.12 form. `*_exc_info` collapses the signature difference between them. `removal_function` is whichever syscall the rmtree was attempting (`os.unlink` for files, `os.rmdir` for directories) — re-call it after `chmod` to finish the work that originally failed.
+
+**Windows directory creation in Node.** When generating Node code, prefer `mkdirSync(path, { recursive: true })` against any path that may already exist. Existing directories carrying the `ReadOnly` attribute raise without `recursive: true`. If a non-recursive call is intentional (you want the existence check to fail loudly), strip the attribute first via `os.chmod(path, stat.S_IWRITE)` (Python) or `(Get-Item $path -Force).Attributes = "Directory"` (PowerShell).
+
+**Windows API integer parameters.** Use `0` rather than `None` for unused integer parameters in `win32gui` calls. The `check_windows_api_none` hook fires on `win32gui.X(.., None)` patterns — the Win32 API rejects `None` for these positions.
+
+**`gh` CLI body content.** Every `gh` command that includes markdown body content uses `--body-file <path>` with a temporary file. Never pass body text via the `--body` argument or its `-b` shorthand: backticks in markdown body content are stored on GitHub as the literal string `\`` instead of rendering as code formatting. Affects: `gh issue create|edit|comment`, `gh pr create|edit|comment|review`. The `gh_body_arg_blocker.py` hook fires on the bash form.
+
 ### Test-file exemptions
 
 Tests are exempt from several gates: magic values, constants location, file-global use-count, and the new-inline-comment gate. Test-file detection covers `test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, and any path under `/tests/`.
+
+## Files Clean-Coder Does Not Create or Edit
+
+Several file classes are blocked from edit by the `sensitive_file_protector.py` hook or are otherwise out of scope for code generation:
+
+- **Lock files.** `package-lock.json`, `yarn.lock`, `Pipfile.lock`, `poetry.lock`, `pnpm-lock.yaml`, `composer.lock`. Lock files are regenerated by their package manager, not edited by hand.
+- **Secret and credential files.** `.env`, `.env.*`, `*.env`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `credentials.json`, `secrets.json`, `id_rsa`, `id_ed25519`. The hook denies edits — values belong in environment configuration outside the repository.
+- **Scratch helper files.** Do not generate files matching `scratch_*.py`, `debug_*.py`, `try_*.py`, `repro_*.py`, or temporary log/output files (`*.log` outside `logs/`, `output_*.txt`, `dump_*.json`). Investigate in memory or via tool output instead. If the task genuinely requires a one-off script, name it after the feature it supports and remove it before the task closes.
+- **Planning and audit artifacts.** `docs/plans/*.md`, `*.plan.md`, `SESSION_STATE.md`, `*.audit.json`, `*.audit.md`, `gate_audit_report.json` and similar. Plan documents live in `~/.claude/plans/` (untracked).
+- **Image assets.** `*.png`, `*.jpg`, `*.jpeg`, `*.gif`, `*.webp`, `*.avif`, `*.svg`, `*.ico` belong in external storage, not the repository.
 
 ## Hook-Enforced Rules (pass these gates to commit your write)
 
@@ -264,6 +343,30 @@ These gates are checked by `code_rules_enforcer.py`. Satisfying each gate lets y
 | File length | Advisory at 400 lines (soft), strong nudge at 1000 — emitted to stderr; the write proceeds |
 | Magic values | Literals inside production function bodies (0, 1, -1 exempt; structural f-string fragments included) |
 | Constants location | Module-level `UPPER_SNAKE = ...` outside `config/` in production code (exempt path families listed in Inline Rule Reference) |
+| Inline literal collections | `[1, 2, 3]` / `{1, 2, 3}` of two or more constants in production function bodies |
+| Bare string structural magic | String literals matching path / URL / regex shapes outside f-strings |
+| Banned identifiers | Variable named `result`, `data`, `output`, `response`, `value`, `item`, or `temp` in production code |
+| Boolean naming | Boolean assignments lacking the `is_` / `has_` / `should_` / `can_` prefix |
+| Loop variable naming | Loop variables not in `i` / `j` / `k` / `e` and not prefixed with `each_` |
+| Collection naming | Collection assignments lacking the `all_` prefix |
+| Parameter type annotations | Function parameter without an annotation |
+| Return type annotations | Function without a declared return type |
+| `Any` / `# type: ignore` | `Any` annotations and `# type: ignore` without a trailing reason of ≥5 characters |
+| Function-local UPPER_SNAKE | Advisory — `UPPER_SNAKE_CASE = ...` inside a function body suggests a constant that should live in `config/` |
+| File-global constant use count | Module-level UPPER_SNAKE constant used by exactly one function/method |
+| Library `print()` | `print()` outside CLI markers (`/scripts/`, `_cli.py`, `/cli.py`) |
+| Unused optional parameters | Optional parameter where every call site passes the same value as the default |
+| Skip decorators on tests | Any decorator named `skip*` applied to a `test_*` function |
+| Existence-only tests | Test body whose only assertions are `callable(x)`, `hasattr(...)`, or `x is not None` |
+| Constant-equality tests | Test whose sole assertion is `UPPER_SNAKE == LITERAL` |
+| Incomplete mocks | Advisory — mock objects missing fields the production code under test reads |
+| Duplicated format patterns | Advisory — identical format-string templates at multiple call sites |
+| `win32gui` calls with `None` | `win32gui.X(.., None)` for unused integer parameters — use `0` |
+| E2E spec test names | `online` / `offline` substring in `test()` / `it()` / `describe()` titles in `*.spec.*` files |
+| mypy validation | `mypy_validator.py` runs at write time — type errors block the write |
+| Sensitive files | Edits to `.env*`, `*.pem`, `*.key`, lock files, etc. (`sensitive_file_protector.py`) |
+| Windows-unsafe rmtree | The `shutil.rmtree` call with `ignore_errors=True` (`windows_rmtree_blocker.py`) |
+| `gh` body argument | `gh ... --body "..."` in shell calls — must use `--body-file` (`gh_body_arg_blocker.py`) |
 
 ## Code Generation Checklist (the first-attempt-quality evaluator)
 
@@ -340,12 +443,17 @@ Every line you write or modify will:
 - Satisfy every hook-enforced gate so each write succeeds on the first attempt
 - Return CLEAN from `/check`, `/review-code`, and `/readability-review`
 - Use complete type hints on every parameter and return
+- Pass `mypy_validator.py` cleanly — every file is mypy-clean at write time
+- Land in the format the project's `auto_formatter.py` produces — the formatter runs at write time, but generation should already match the canonical Black/Prettier output
+- Carry no `Any` annotations and no `# type: ignore` without a ≥5-character trailing reason
 - Pull every literal into a named constant (with the documented 0, 1, -1 exemptions)
 - Use full words throughout (every abbreviation expanded)
 - Self-document through naming alone (zero new inline comments)
 - Use guard clauses and early returns in place of every `else` block
 - Stay under 15 lines per function
 - Import constants from centralized config (or module-level for hooks)
+- Avoid platform pitfalls — no `shutil.rmtree` with `ignore_errors=True`, no `mkdirSync` against a possibly-existing path without `{ recursive: true }`, no `gh ... --body "..."` in shell calls
+- Avoid generating sensitive files, lock files, or scratch helpers (see "Files Clean-Coder Does Not Create or Edit")
 
 These standards apply to YOUR code — lines you add or change. Untouched code in the same file stays out of scope unless the task explicitly extends it.
 

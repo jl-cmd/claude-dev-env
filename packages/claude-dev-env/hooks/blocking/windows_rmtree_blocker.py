@@ -15,6 +15,19 @@ blocks it with a corrective message pointing to the force_rmtree replacement.
 import json
 import re
 import sys
+from pathlib import Path
+
+
+def _insert_hooks_tree_for_imports() -> None:
+    hooks_tree = Path(__file__).resolve().parent.parent
+    hooks_tree_string = str(hooks_tree)
+    if hooks_tree_string not in sys.path:
+        sys.path.insert(0, hooks_tree_string)
+
+
+_insert_hooks_tree_for_imports()
+
+from config.windows_rmtree_blocker_constants import PYTHON_FILE_EXTENSION
 
 
 def payload_contains_unsafe_rmtree(payload_text: str) -> bool:
@@ -29,6 +42,9 @@ def payload_contains_unsafe_rmtree(payload_text: str) -> bool:
 
 def extract_payload_text(tool_name: str, tool_input: dict) -> str:
     if tool_name in {"Write", "Edit"}:
+        file_path = tool_input.get("file_path", "")
+        if file_path and not file_path.endswith(PYTHON_FILE_EXTENSION):
+            return ""
         return tool_input.get("content", "") or tool_input.get("new_string", "") or ""
     if tool_name == "Bash":
         return tool_input.get("command", "") or ""
