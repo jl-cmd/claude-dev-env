@@ -29,7 +29,7 @@ This file is **rules-only**. Repo layout, build commands, and workflow guidance 
 - [Scope of review](#scope-of-review)
 - [Hook enforcement](#hook-enforcement)
 
-A subset of these rules is also enforced at write time by `code_rules_enforcer.py` and companion blocking hooks. Those rules are listed in **Hook enforcement** at the bottom of this file. Flag a violation in review regardless of whether the contributor's local environment runs the hooks — review and hooks are belt-and-suspenders coverage.
+Many bullets are implemented in `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` (`validate_content` for Python and a small JavaScript subset). The default `PreToolUse` `Write|Edit` chain in `packages/claude-dev-env/hooks/hooks.json` does **not** register that script today; other hooks there (for example `tdd_enforcer.py`, `windows_rmtree_blocker.py`, and the `run_all_validators` entrypoint) cover overlapping or adjacent concerns on a different trigger model. **Hook enforcement** below maps rules to their **source script** and notes Python-only coverage where it applies. Flag violations from the diff in review even when no local hook runs the same check.
 
 ---
 
@@ -156,15 +156,15 @@ Full rule including the decision table, examples, and reference-counting details
 
 ## Hook enforcement
 
-The following rules are also enforced at write time by `code_rules_enforcer.py` and companion blocking hooks. They block the file write before the contributor can save. Code-review tools that do not run hooks (Cursor BugBot, Copilot, external reviewers) flag the same violations from the diff alone.
+The table lists **where the rule is encoded** (the script or module that implements it). Registration for `PreToolUse`, `PostToolUse`, `Bash`, and other matchers lives in `packages/claude-dev-env/hooks/hooks.json`; a script can exist in the tree without being wired to every event. Rows that cite `code_rules_enforcer.py` apply to **Python** sources inside `validate_content` (plus the narrow JS/TS checks described in that function); they are **not** a guarantee that the same AST checks run for every language in the repo. Many additional `check_*` rules live in that module; this table is representative, not exhaustive.
 
-| Rule | Enforcing hook |
+| Rule | Source |
 |---|---|
-| No new inline comments in production diffs | `code_rules_enforcer.py` |
-| Imports at file top, never inside functions | `code_rules_enforcer.py` |
-| Logging format args (no f-strings inside `log_*` and `logger.*`) | `code_rules_enforcer.py` |
-| No literal values in production function bodies | `code_rules_enforcer.py` |
-| `UPPER_SNAKE_CASE` constants live under `config/` | `code_rules_enforcer.py` |
-| Production code paired with at least one new test | `tdd_enforcer.py` |
+| No new inline comments in production diffs | `code_rules_enforcer.py` (Python; JS/TS comment-change checks only where `validate_content` runs them) |
+| Imports at file top, never inside functions | `code_rules_enforcer.py` (Python) |
+| Logging format args (no f-strings inside `log_*` and `logger.*`) | `code_rules_enforcer.py` (Python) |
+| No literal values in production function bodies | `code_rules_enforcer.py` (Python) |
+| `UPPER_SNAKE_CASE` constants live under `config/` | `code_rules_enforcer.py` (Python) |
+| Production `Write|Edit` touches require a recently modified sibling test candidate | `tdd_enforcer.py` (heuristic freshness gate — not a proof that a brand-new test assertion shipped in the same PR) |
 | `shutil.rmtree` `ignore_errors=True` blocked on Windows | `windows_rmtree_blocker.py` |
-| `gh ... --body` blocked in favor of `--body-file` | `gh_body_arg_blocker.py` |
+| `gh ... --body` markdown bodies must use `--body-file` | Policy in [Platform and tooling](#platform-and-tooling); no `gh_body_arg_blocker.py` entry in the default `hooks.json` chain |
