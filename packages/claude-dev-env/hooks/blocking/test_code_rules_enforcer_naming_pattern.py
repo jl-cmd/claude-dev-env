@@ -161,3 +161,52 @@ def test_validate_content_invokes_boolean_naming_check() -> None:
     assert matching_issues, (
         f"expected validate_content to surface the boolean-naming issue, got {issues!r}"
     )
+
+
+def test_should_flag_substring_is_when_not_at_prefix_position() -> None:
+    source = "def f() -> None:\n    left_is_upper_snake = True\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_name(issues, "left_is_upper_snake", 2)
+    assert len(issues) == 1, (
+        f"'is_' in middle position must not satisfy the prefix rule, got: {issues}"
+    )
+
+
+def test_should_flag_substring_has_when_not_at_prefix_position() -> None:
+    source = "def f() -> None:\n    user_has_permission = True\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_name(issues, "user_has_permission", 2)
+    assert len(issues) == 1, (
+        f"'has_' in middle position must not satisfy the prefix rule, got: {issues}"
+    )
+
+
+def test_should_flag_substring_should_when_not_at_prefix_position() -> None:
+    source = "def f() -> None:\n    user_should_retry = True\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_name(issues, "user_should_retry", 2)
+    assert len(issues) == 1
+
+
+def test_should_flag_substring_can_when_not_at_prefix_position() -> None:
+    source = "def f() -> None:\n    user_can_edit = True\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_name(issues, "user_can_edit", 2)
+    assert len(issues) == 1
+
+
+def test_should_flag_right_is_literal_substring_match() -> None:
+    source = "def f() -> None:\n    right_is_literal = False\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_name(issues, "right_is_literal", 2)
+    assert len(issues) == 1, (
+        f"PR #232 finding: substring 'is_' in 'right_is_literal' must be flagged, got: {issues}"
+    )
+
+
+def test_should_allow_is_prefix_at_start_when_compound_word_follows() -> None:
+    source = "def f() -> None:\n    is_left_upper_snake = True\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"is_left_upper_snake has prefix at position 0, must pass, got: {issues}"
+    )
