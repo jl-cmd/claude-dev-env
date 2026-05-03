@@ -5,7 +5,7 @@ import json
 import io
 import pathlib
 import sys
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 
 _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:
@@ -165,19 +165,27 @@ def test_extract_payload_returns_content_for_write_without_file_path() -> None:
     assert extracted == "some python code"
 
 
-def _run_hook(hook_input: dict) -> tuple[str, int]:
-    captured = io.StringIO()
+def _run_hook_with_stdin_text(stdin_text: str) -> tuple[str, str, int]:
+    captured_stdout = io.StringIO()
+    captured_stderr = io.StringIO()
     exit_code = 0
-    sys.stdin = io.StringIO(json.dumps(hook_input))
+    sys.stdin = io.StringIO(stdin_text)
     try:
-        with redirect_stdout(captured):
+        with redirect_stdout(captured_stdout), redirect_stderr(captured_stderr):
             try:
                 hook_module.main()
             except SystemExit as exit_signal:
                 exit_code = exit_signal.code or 0
     finally:
         sys.stdin = sys.__stdin__
-    return captured.getvalue(), exit_code
+    return captured_stdout.getvalue(), captured_stderr.getvalue(), exit_code
+
+
+def _run_hook(hook_input: dict) -> tuple[str, int]:
+    stdout_text, _stderr_text, exit_code = _run_hook_with_stdin_text(
+        json.dumps(hook_input)
+    )
+    return stdout_text, exit_code
 
 
 def test_main_blocks_unsafe_bash_command() -> None:
@@ -243,3 +251,17 @@ def test_main_blocks_write_with_missing_file_path_and_unsafe_content() -> None:
     response_payload = json.loads(stdout_text)
     decision_block = response_payload["hookSpecificOutput"]
     assert decision_block["permissionDecision"] == "deny"
+
+
+def test_main_with_empty_stdin_exits_silently() -> None:
+    stdout_text, stderr_text, exit_code = _run_hook_with_stdin_text("")
+    assert exit_code == 0
+    assert stdout_text == ""
+    assert stderr_text == ""
+
+
+def test_main_with_invalid_json_stdin_exits_silently() -> None:
+    stdout_text, stderr_text, exit_code = _run_hook_with_stdin_text("{broken")
+    assert exit_code == 0
+    assert stdout_text == ""
+    assert stderr_text == ""

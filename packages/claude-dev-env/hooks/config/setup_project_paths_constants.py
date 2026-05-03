@@ -32,6 +32,10 @@ META_KEY = "_meta"
 
 UTF8_ENCODING = "utf-8"
 
+DECODE_ERRORS_POLICY = "replace"
+
+UTF8_BYTE_ORDER_MARK = "\ufeff"
+
 CONFIRMATION_PROMPT_TEXT = "Write this mapping to the config file? (yes/no): "
 
 ABORTED_NOTHING_WRITTEN_MESSAGE = "Aborted. Nothing written."

@@ -26,6 +26,7 @@ def _insert_hooks_tree_for_imports() -> None:
 _insert_hooks_tree_for_imports()
 
 from config.dynamic_stderr_handler import DynamicStderrHandler
+from config.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
 from config.path_rewriter_constants import (
     BASH_TOOL_NAME,
     HOOK_EVENT_NAME,
@@ -135,7 +136,9 @@ def _build_allow_response(rewritten_command: str, original_tool_input: dict) -> 
 
 def main() -> None:
     try:
-        hook_input = json.load(sys.stdin)
+        hook_input = read_hook_input_dictionary_from_stdin()
+        if hook_input is None:
+            sys.exit(0)
         tool_name = hook_input.get("tool_name", "")
         if tool_name != BASH_TOOL_NAME:
             sys.exit(0)

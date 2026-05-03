@@ -39,9 +39,8 @@ OTHER_REPO_NAME = "other-repo"
 OTHER_REPO_PATH = "C:\\Dev\\other-repo"
 
 
-def _run_main_with_input(hook_input: dict) -> tuple[str, str, int]:
-    """Return (stdout, stderr, exit_code) from running main() with the given hook input."""
-    stdin_text = json.dumps(hook_input)
+def _run_main_with_stdin_text(stdin_text: str) -> tuple[str, str, int]:
+    """Return (stdout, stderr, exit_code) from running main() with the given stdin text."""
     captured_stdout = StringIO()
     captured_stderr = StringIO()
     exit_code = 0
@@ -55,6 +54,11 @@ def _run_main_with_input(hook_input: dict) -> tuple[str, str, int]:
     except SystemExit as e:
         exit_code = e.code or 0
     return captured_stdout.getvalue(), captured_stderr.getvalue(), exit_code
+
+
+def _run_main_with_input(hook_input: dict) -> tuple[str, str, int]:
+    """Return (stdout, stderr, exit_code) from running main() with the given hook input."""
+    return _run_main_with_stdin_text(json.dumps(hook_input))
 
 
 def _make_bash_input(command: str, description: str = "search files") -> dict:
@@ -229,6 +233,26 @@ class TestEmittedJsonShape:
                     "permissionDecision", ""
                 )
                 assert decision != "deny", f"deny returned for command: {command!r}"
+
+
+class TestStdinParsingRobustness:
+    def test_empty_stdin_exits_zero_without_stdout_or_stderr(self) -> None:
+        stdout, stderr, exit_code = _run_main_with_stdin_text("")
+        assert exit_code == 0
+        assert stdout.strip() == ""
+        assert stderr.strip() == ""
+
+    def test_whitespace_only_stdin_exits_zero_without_stdout_or_stderr(self) -> None:
+        stdout, stderr, exit_code = _run_main_with_stdin_text("  \n\t ")
+        assert exit_code == 0
+        assert stdout.strip() == ""
+        assert stderr.strip() == ""
+
+    def test_invalid_json_stdin_exits_zero_without_stdout_or_stderr(self) -> None:
+        stdout, stderr, exit_code = _run_main_with_stdin_text("{not valid")
+        assert exit_code == 0
+        assert stdout.strip() == ""
+        assert stderr.strip() == ""
 
 
 class TestNoOutputCases:

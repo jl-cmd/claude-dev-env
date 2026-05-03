@@ -27,6 +27,7 @@ def _insert_hooks_tree_for_imports() -> None:
 
 _insert_hooks_tree_for_imports()
 
+from config.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
 from config.windows_rmtree_blocker_constants import PYTHON_FILE_EXTENSION
 
 
@@ -88,14 +89,14 @@ def main() -> None:
         "the work that originally failed.\n\n"
         "See ~/.claude/rules/windows-filesystem-safe.md for full guidance."
     )
-    try:
-        hook_input = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.stderr.write("windows_rmtree_blocker: malformed JSON on stdin\n")
+    hook_input = read_hook_input_dictionary_from_stdin()
+    if hook_input is None:
         sys.exit(0)
 
-    tool_name = hook_input.get("tool_name", "")
-    tool_input = hook_input.get("tool_input", {})
+    raw_tool_name = hook_input.get("tool_name", "")
+    raw_tool_input = hook_input.get("tool_input", {})
+    tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
+    tool_input = raw_tool_input if isinstance(raw_tool_input, dict) else {}
 
     payload_text = extract_payload_text(tool_name, tool_input)
 
