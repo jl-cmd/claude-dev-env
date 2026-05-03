@@ -38,6 +38,8 @@ Adds the same **traffic** fields whether they live in **`state.json`** or in the
 | `phase` | enum | `BUGBOT` \| `BUGTEAM` — which reviewer the current tick drives |
 | `current_head` | str | PR `headRefOid` / `git rev-parse` for the PR under work (each tick; from `view_pr_context.py` when no file store) |
 | `bugbot_clean_at` | str \| null | HEAD SHA at which Cursor Bugbot last reported clean, or `null` (reset on every push) |
+| `copilot_clean_at` | str \| null | HEAD SHA at which the GitHub Copilot reviewer (`copilot-pull-request-reviewer[bot]`) last reported clean (review `state == "APPROVED"`), or `null`. Reset on every push. Convergence gates require this equals `current_head` after bugbot+bugteam are clean (see `skills/pr-converge/SKILL.md` § Convergence gates). |
+| `merge_state_status` | str \| null | Last-observed `mergeStateStatus` from `gh pr view --json mergeable,mergeStateStatus,headRefOid` (e.g., `CLEAN`, `DIRTY`, `BLOCKED`, `BEHIND`, `UNKNOWN`), or `null` before the first check. Reset on every push. `DIRTY` triggers the rebase invocation; non-`CLEAN` non-`DIRTY` is a hard blocker per pr-converge `Stop conditions`. |
 | `inline_lag_streak` | int | Consecutive ticks where bugbot's review body claims findings but inline-comments API returns zero rows for `current_head` |
 | `tick_count` | int | Observability only — **no ceiling**; loop ends on convergence or **Stop conditions** in `pr-converge` |
 
@@ -69,11 +71,11 @@ Adds per-PR JSON state file at `~/.claude/skills/monitor-many/state/<owner>-<rep
 
 - bugteam: cleared on each new `/bugteam` invocation
 - qbug: cleared on each new `/qbug` invocation
-- pr-converge: `bugbot_clean_at` resets to `null` on every push (a new commit invalidates prior clean by definition); `phase` cycles each tick. With `state.json`, orchestrator reads that file at tick start; without it, rely on the prior conversation state line — **never** mix both increment rules for `tick_count` on the same run
+- pr-converge: `bugbot_clean_at`, `copilot_clean_at`, and `merge_state_status` all reset to `null` on every push (a new commit invalidates every reviewer's prior clean and the prior mergeability snapshot by definition); `phase` cycles each tick. With `state.json`, orchestrator reads that file at tick start; without it, rely on the prior conversation state line — **never** mix both increment rules for `tick_count` on the same run
 - monitor-many: persists across orchestrator runs; only `last_seen_comment_id` advances monotonically
 
 ## Convergence checks
 
 - bugteam, qbug: `last_action == "audited"` AND `last_findings.total == 0` → `converged`
-- pr-converge: `bugbot_clean_at == current_head` AND most-recent bugteam exit is `converged` AND no push during the bugteam tick → back-to-back clean → `gh pr ready` (read `current_head` / `bugbot_clean_at` from `state.json` when file-backed, else from the conversation state line and Step 1 `view_pr_context.py` output)
+- pr-converge: `bugbot_clean_at == current_head` AND most-recent bugteam exit is `converged` AND no push during the bugteam tick AND no outstanding Copilot findings on `current_head` AND `merge_state_status == "CLEAN"` (per `skills/pr-converge/SKILL.md` § Convergence gates) → back-to-back clean → `gh pr ready` (read `current_head` / `bugbot_clean_at` / `copilot_clean_at` / `merge_state_status` from `state.json` when file-backed, else from the conversation state line and Step 1 `view_pr_context.py` output)
 - monitor-many: no unresolved comments requiring code changes AND required checks green AND review policy satisfied → `gh pr ready`

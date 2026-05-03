@@ -14,9 +14,16 @@ description: >-
   ScheduleWakeup when the harness exposes it, otherwise use the AHK
   auto-continue driver (see workflows/ahk-auto-continue-loop.md). Pacing details
   live in workflows next to SKILL.md — load exactly one per Step 4.
-  Convergence requires a back-to-back clean cycle (bugbot CLEAN immediately
-  followed by second-audit CLEAN with no intervening fixes), at which point the PR
-  is flipped to ready for review and the loop terminates.
+  Convergence requires four gates on the same HEAD: (1) a back-to-back clean
+  cycle (bugbot CLEAN immediately followed by second-audit CLEAN with no
+  intervening fixes), (2) no outstanding Copilot reviewer findings, (3)
+  `mergeStateStatus == CLEAN` with `mergeable == MERGEABLE` (a `DIRTY`
+  state triggers the `rebase` skill; non-CLEAN non-DIRTY states are hard
+  blockers), and (4) the post-convergence Copilot review request returns
+  clean — or, if it surfaces findings, the PR is still flipped ready and a
+  follow-up draft PR is opened off the converged HEAD with those findings as
+  a checklist. After all gates pass the PR is flipped to ready for review and
+  the loop terminates.
   Multi-PR runs persist traffic in `<TMPDIR>/pr-converge-<session_id>/state.json`
   per §Multi-PR orchestration model; single-PR-only runs may use the conversation
   state line instead. Triggers: '/pr-converge', 'drive PR to
@@ -42,6 +49,7 @@ Each **invocation** runs **one tick** of the bugbot ↔ second-audit loop in the
 4. [Per-tick work](#per-tick-work)
    - [Step 1: Resolve current HEAD and PR context](#step-1-resolve-current-head-and-pr-context)
    - [Step 2: Branch on `phase`](#step-2-branch-on-phase)
+   - [Convergence gates](#convergence-gates)
    - [Step 3: Re-trigger bugbot](#step-3-re-trigger-bugbot)
    - [Step 4: Loop pacing](#step-4-loop-pacing)
 5. [Fix protocol](#fix-protocol)
@@ -114,6 +122,9 @@ Non-default behaviors worth burning in; add a bullet here when a real run fails 
 - **Review body and inline comments can desync for the same `commit_id`** — “dirty body, zero inline rows at `current_head`” is **`inline_lag`**, not **`dirty`**; bump `inline_lag_streak`, wait 60s, retry fetch (Step 2 BUGBOT fourth branch; §Fix result → general-purpose steps 4c–4e).
 - **`state.json` without the §Concurrency lock loses merges** when several teammates finish in one wall-clock window.
 - **`tick_count` must not double-increment** — conversation line (Step 1) only when **no** `state.json`; with `state.json`, only the orchestrator bump in §Orchestrator `state.json` writes increments `tick_count`.
+- **Back-to-back clean is necessary but not sufficient — `mergeStateStatus` gates the ready flip** — a PR can be back-to-back clean (bugbot CLEAN ∧ bugteam CLEAN at the same HEAD) yet still have merge conflicts with the base branch. Before flipping ready, run `check_pr_mergeability.py` and confirm `mergeStateStatus == "CLEAN"` AND `mergeable == "MERGEABLE"`. When `mergeStateStatus == "DIRTY"` (or `mergeable == "CONFLICTING"`), invoke the **`rebase`** skill ([`../rebase/SKILL.md`](../rebase/SKILL.md), Phase 1–4); after a successful rebase + force-with-lease push, the new HEAD invalidates prior clean state — reset `bugbot_clean_at = null`, `copilot_clean_at = null`, transition `phase = BUGBOT`, retrigger bugbot, schedule next tick. Non-`CLEAN` non-`DIRTY` states (`BLOCKED`, `BEHIND`, `UNKNOWN`) are hard blockers per §Stop conditions.
+- **Copilot findings on `current_head` block convergence** — Copilot (`copilot-pull-request-reviewer[bot]`) findings are evaluated *after* bugbot CLEAN ∧ bugteam CLEAN at the same HEAD. When `fetch_copilot_reviews.py` returns a review at `current_head` whose `state == "CHANGES_REQUESTED"` (or `state == "COMMENTED"` with a non-empty body) and there are unaddressed inline findings from `fetch_copilot_inline_comments.py`, treat the result as a Fix protocol input (same shape as bugbot dirty): TDD fix → push → reply inline → reset `bugbot_clean_at = null` AND `copilot_clean_at = null` → transition `phase = BUGBOT` → retrigger bugbot → schedule. The full back-to-back clean cycle must be met again. If no Copilot review exists on `current_head` yet, this gotcha does **not** apply — the proactive request happens in §Convergence gates step (c).
+- **Post-convergence Copilot request runs once, regardless of outcome** — after every other gate passes (bugbot CLEAN ∧ bugteam CLEAN ∧ no outstanding Copilot findings on HEAD ∧ `mergeStateStatus == "CLEAN"`), call `request_copilot_review.py` and wait one tick. A clean Copilot review marks the PR ready and terminates. A Copilot review with findings on `current_head` still marks the PR ready (this is the "we still allow it to be 'clean'" rule), but before terminating runs `open_followup_copilot_pr.py` to capture the findings as a draft PR off `current_head`. The follow-up PR runs its own `/pr-converge` cycle (queued for the user — never inline-spawn another converge loop in the same session). The reviewer ID literal is `copilot-pull-request-reviewer[bot]` with the `[bot]` suffix — `Copilot`, `copilot`, and `github-copilot` all silently no-op per [`../copilot-review/SKILL.md`](../copilot-review/SKILL.md).
 
 ## Second-audit execution (bugteam — Path A vs Path B)
 
@@ -409,14 +420,85 @@ c. Inspect the bugteam outcome. It reports either `convergence (zero findings)` 
 
 d. Decide based on the (post-second-audit) state — order matters; check pushed-during-second-audit FIRST so a convergence report against a stale HEAD never falsely terminates:
    - **Second audit pushed during this tick (i.e., `bugbot_clean_at` was just reset to `null` in step b):** Re-trigger bugbot in this same tick (Step 3) so the new HEAD enters bugbot's queue immediately, transition `phase = BUGBOT`, schedule next wakeup, return.
-   - **Second audit reports convergence AND `bugbot_clean_at == current_head` (no push during this tick):** This is back-to-back clean. Prefer:
-     ```bash
-     python "${CLAUDE_SKILL_DIR}/scripts/mark_pr_ready.py" \
-       --owner <OWNER> --repo <REPO> --number <NUMBER>
-     ```
-     When scripts are unavailable, `gh pr ready <NUMBER> --repo <OWNER>/<REPO>` is an equivalent human-visible outcome. When `state.json` is in use, append the convergence row to `<TMPDIR>/pr-converge-<session_id>/converged.log` per §Memory; when not, skip file append. Report: `PR #<NUMBER> converged: bugbot CLEAN at <SHA>, <SECOND_AUDIT_LABEL> CLEAN at <SHA>; marked ready for review` where `<SECOND_AUDIT_LABEL>` is always **`bugteam`** (second audit is the bugteam skill on Path A and Path B; background `Task` workers still execute that skill per `workflow-path-b-task-harness.md` when Path B applies). **Omit loop pacing** per the **Convergence** section of whichever pacing workflow was active.
+   - **Second audit reports convergence AND `bugbot_clean_at == current_head` (no push during this tick):** This is back-to-back clean — necessary, but not sufficient on its own. Run the **§Convergence gates** below to clear the Copilot-findings, mergeability, and post-convergence Copilot-request gates. Only when all four gates pass do you mark the PR ready and **omit loop pacing** per the **Convergence** section of whichever pacing workflow was active.
    - **Second audit reports convergence BUT `bugbot_clean_at != current_head` (no push during this tick):** Transition `phase = BUGBOT`, schedule next wakeup, return.
    - **Second audit reports findings without committing fixes:** apply the **Fix protocol** below; **Step 3** on the new HEAD runs after fix handoff per §Multi-PR or in-tick for single-PR. Transition `phase = BUGBOT`, schedule next wakeup, return.
+
+### Convergence gates
+
+Run **only** when Step 2 BUGTEAM reports `convergence (zero findings)` AND `bugbot_clean_at == current_head` (back-to-back clean) AND no push occurred during the bugteam tick. The gates run in order; the first one that fails determines next-tick behavior. Only after all four gates pass do you mark the PR ready.
+
+#### (a) Copilot findings gate
+
+Fetch the latest Copilot reviewer (`copilot-pull-request-reviewer[bot]`) review on the PR and any inline comments anchored to the most recent Copilot review on `current_head`:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/scripts/fetch_copilot_reviews.py" \
+  --owner <OWNER> --repo <REPO> --number <NUMBER>
+
+python "${CLAUDE_SKILL_DIR}/scripts/fetch_copilot_inline_comments.py" \
+  --owner <OWNER> --repo <REPO> --number <NUMBER> --commit "$current_head"
+```
+
+Decide (the four branches below cover every input combination — match the first whose predicate holds):
+
+- **A Copilot review exists at `current_head` AND its `classification == "dirty"` AND inline comments returned non-empty for the matching `pull_request_review_id`:** Treat as a Fix protocol input (same shape as bugbot dirty). Read every inline finding, apply the **Fix protocol** below (TDD test → production fix → push → reply inline on each thread), reset `bugbot_clean_at = null` AND `copilot_clean_at = null`, transition `phase = BUGBOT`, run **Step 3** (`trigger_bugbot.py`) on the new HEAD, schedule next wakeup, return. The full back-to-back-clean cycle plus all four gates must hold again on the new HEAD before convergence.
+- **A Copilot review exists at `current_head` AND its `classification == "dirty"` AND inline comments are empty for the matching `pull_request_review_id`:** Copilot posted findings only in the review body (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body and no inline threads). Treat the review body as the finding source: parse the body for actionable findings, apply the **Fix protocol** using the body excerpts in place of inline threads (TDD test → production fix → push). Post the reply as a top-level review reply on the Copilot review (not an inline-thread reply, because no inline threads exist) acknowledging the addressed findings and citing the new HEAD SHA. Reset `bugbot_clean_at = null` AND `copilot_clean_at = null`, transition `phase = BUGBOT`, run **Step 3** (`trigger_bugbot.py`) on the new HEAD, schedule next wakeup, return. Convergence still requires the full back-to-back-clean cycle on the new HEAD.
+- **A Copilot review exists at `current_head` AND its `classification == "clean"` (state `APPROVED`):** Set `copilot_clean_at = current_head`. Continue to gate **(b)**.
+- **No Copilot review has been posted on `current_head` yet:** Skip — gate **(c)** below issues the proactive request. Continue to gate **(b)**.
+
+#### (b) Mergeability gate
+
+Resolve the PR's mergeability state:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/scripts/check_pr_mergeability.py" \
+  --owner <OWNER> --repo <REPO> --number <NUMBER>
+```
+
+Output is `{"mergeable", "mergeStateStatus", "headRefOid"}`. Persist `mergeStateStatus` into `merge_state_status` (state line or `state.json`). Decide:
+
+- **`mergeStateStatus == "CLEAN"` AND `mergeable == "MERGEABLE"`:** Continue to gate **(c)**.
+- **`mergeStateStatus == "DIRTY"` (or `mergeable == "CONFLICTING"`):** Do **not** mark ready. Invoke the **`rebase`** skill ([`../rebase/SKILL.md`](../rebase/SKILL.md)) and follow its Phase 1–4 protocol against the PR's base ref. After a successful rebase + force-with-lease push, the new HEAD invalidates every prior clean state — reset `bugbot_clean_at = null`, `copilot_clean_at = null`, `merge_state_status = null`, transition `phase = BUGBOT`, run **Step 3** (`trigger_bugbot.py`) on the new HEAD, schedule next wakeup, return. The convergence loop re-runs from scratch on the new HEAD.
+- **`mergeStateStatus` is `BLOCKED`, `BEHIND`, or `UNKNOWN` for non-conflict reasons (e.g., required checks pending, branch behind base without conflicts that GitHub cannot auto-resolve):** This is a **hard blocker** per §Stop conditions — do not invent a fix. Report the specific `mergeStateStatus`, omit loop pacing per the active workflow, stop the AHK auto-typer if that path was in use.
+
+#### (c) Post-convergence Copilot review request
+
+Once gates (a) and (b) both pass with the strong outcomes (Copilot already clean at `current_head` *or* no Copilot review on `current_head` yet, AND `mergeStateStatus == "CLEAN"`), request a Copilot review:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/scripts/request_copilot_review.py" \
+  --owner <OWNER> --repo <REPO> --number <NUMBER>
+```
+
+The reviewer ID literal `copilot-pull-request-reviewer[bot]` (with the `[bot]` suffix) is load-bearing — `Copilot`, `copilot`, and `github-copilot` all silently no-op per [`../copilot-review/SKILL.md`](../copilot-review/SKILL.md). After the request, schedule the next wakeup (one ScheduleWakeup cycle, or AHK tick) and return — the next tick checks Copilot's response.
+
+When the next tick fires and `phase == BUGTEAM` with all prior state preserved, re-run gate **(a)** as the first thing. Decide:
+
+- **Copilot review at `current_head` is `clean` (state `APPROVED`):** Set `copilot_clean_at = current_head`. Mark the PR ready (`mark_pr_ready.py`), report convergence (see §(d) below for the report format), terminate per **§Stop conditions / Convergence**.
+- **Copilot review at `current_head` is `dirty`:** Still mark the current PR ready (this is the documented "we still allow it to be 'clean'" rule — the four gates are bugbot CLEAN ∧ bugteam CLEAN ∧ `mergeStateStatus == CLEAN` ∧ either Copilot CLEAN at HEAD or a follow-up PR captures Copilot findings). Before terminating, build a markdown findings file from `fetch_copilot_inline_comments.py` output (one checklist item per finding with file:line and excerpted body), then open a follow-up draft PR off `current_head`:
+
+  ```bash
+  python "${CLAUDE_SKILL_DIR}/scripts/open_followup_copilot_pr.py" \
+    --owner <OWNER> --repo <REPO> \
+    --parent-number <NUMBER> --head "$current_head" \
+    --findings-file <PATH_TO_FINDINGS_MD>
+  ```
+
+  The follow-up branch name is `chore/copilot-followup-<NUMBER>-<short_sha>` and the PR title is `chore: address Copilot findings from PR #<NUMBER>`. Queue `/pr-converge` on the new PR for the user to invoke (do **not** inline-spawn another converge loop in the same session). Report **both** PR URLs to the user. The current PR's convergence is final at the original HEAD; the new PR runs its own convergence cycle that itself satisfies all four gates.
+
+- **No Copilot review has appeared at `current_head` yet (still propagating):** Schedule one more wakeup cycle (270s when `ScheduleWakeup` is available, AHK cadence otherwise) and re-check on the next tick. After three consecutive empty waits, escalate as a hard blocker per §Stop conditions (Copilot has not produced a review on the requested commit despite the request).
+
+#### (d) Mark ready and report
+
+Only when all four gates pass — bugbot CLEAN ∧ bugteam CLEAN ∧ `mergeStateStatus == "CLEAN"` ∧ Copilot CLEAN at HEAD (or the post-convergence request returned dirty and the follow-up PR is open) — run:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/scripts/mark_pr_ready.py" \
+  --owner <OWNER> --repo <REPO> --number <NUMBER>
+```
+
+When scripts are unavailable, `gh pr ready <NUMBER> --repo <OWNER>/<REPO>` is an equivalent human-visible outcome. When `state.json` is in use, append the convergence row to `<TMPDIR>/pr-converge-<session_id>/converged.log` per §Memory; when not, skip file append. Report: `PR #<NUMBER> converged: bugbot CLEAN at <SHA>, bugteam CLEAN at <SHA>, mergeStateStatus CLEAN, copilot <CLEAN|FOLLOWUP_PR_URL>; marked ready for review`. **Omit loop pacing** per the **Convergence** section of whichever pacing workflow was active.
 
 ### Step 3: Re-trigger bugbot
 
@@ -526,16 +608,18 @@ The fix protocol is executed by a **`clean-coder` teammate** when **`state.json`
 
 ## Stop conditions
 
-- **Convergence** (back-to-back clean — second audit reports convergence AND `bugbot_clean_at == current_head` with no push during this tick): prefer `mark_pr_ready.py`; when unavailable use `gh pr ready`. When `state.json` is in use, append the convergence row to `<TMPDIR>/pr-converge-<session_id>/converged.log` per §Memory; otherwise skip file append. Report one-sentence summary, then **omit loop pacing** per **Convergence** in the pacing workflow from the Step 4 table (or omit `ScheduleWakeup` when no workflow file applies). End any ongoing loops once all PRs are converged. **Path A multi-PR:** when every `prs[...]` in `state.json` is now `converged` or `blocked`, run §Orchestrator team lifecycle teardown (`TeamDelete()`, clear `team_name`).
-- **Hard blocker:** API auth failure persists across two ticks, a CI regression whose root cause falls outside this PR, a hook rejection investigated through three commits and still unresolved, `inline_lag_streak >= 3`, or **bugteam** (either workflow) reports a stuck state. Report the specific blocker and the diagnosis, then **omit loop pacing** per the active workflow; stop the AHK auto-typer per `workflows/ahk-auto-continue-loop.md` **Stop / safety** if that path was in use. **Path A multi-PR:** mark the affected PR `blocked` in `state.json`; if every other PR is also terminal, run §Orchestrator team lifecycle teardown.
-- **User stops the loop:** user says "stop the converge loop" → **omit loop pacing** per the active workflow; stop the AHK auto-typer per `workflows/ahk-auto-continue-loop.md` **Stop / safety** if that path was in use. **Path A multi-PR:** the orchestrator is shutting down; run §Orchestrator team lifecycle teardown unconditionally (any in-flight teammates are released first via `SendMessage` shutdown_request).
+- **Convergence** (back-to-back clean ∧ no outstanding Copilot findings on `current_head` ∧ `mergeStateStatus == "CLEAN"` with `mergeable == "MERGEABLE"` ∧ post-convergence Copilot request resolved (either `clean` at `current_head`, or `dirty` with a follow-up PR opened per §Convergence gates (c)) — see §Convergence gates for the full ordered check): prefer `mark_pr_ready.py`; when unavailable use `gh pr ready`. When `state.json` is in use, append the convergence row to `<TMPDIR>/pr-converge-<session_id>/converged.log` per §Memory; otherwise skip file append. Report the §Convergence gates (d) summary line, then **omit loop pacing** per **Convergence** in the pacing workflow from the Step 4 table (or omit `ScheduleWakeup` when no workflow file applies). End any ongoing loops once all PRs are converged.
+- **Hard blocker:** API auth failure persists across two ticks, a CI regression whose root cause falls outside this PR, a hook rejection investigated through three commits and still unresolved, `inline_lag_streak >= 3`, **bugteam** (either workflow) reports a stuck state, or the post-convergence Copilot request fails to surface a review on `current_head` after three consecutive wakeup cycles. Report the specific blocker and the diagnosis, then **omit loop pacing** per the active workflow; stop the AHK auto-typer per `workflows/ahk-auto-continue-loop.md` **Stop / safety** if that path was in use.
+- **Hard blocker (`mergeStateStatus` non-CLEAN non-DIRTY):** `mergeStateStatus` is `BLOCKED`, `UNKNOWN`, or `BEHIND` (required checks pending, branch behind base without textual conflicts, or GitHub returns an indeterminate state). Investigate before retrying; the `rebase` skill addresses `DIRTY` (textual merge conflicts) — it does not address these states. Report the specific `mergeStateStatus`, then **omit loop pacing** per the active workflow; stop the AHK auto-typer per `workflows/ahk-auto-continue-loop.md` **Stop / safety** if that path was in use.
+- **User stops the loop:** user says "stop the converge loop" → **omit loop pacing** per the active workflow; stop the AHK auto-typer per `workflows/ahk-auto-continue-loop.md` **Stop / safety** if that path was in use.
 
 ## Ground rules
 
 - **Append commits.** Each tick adds at most one new fix commit. Multiple findings within one tick collapse into a single commit; the next tick handles the next round.
 - **Bugbot findings on the current SHA mean fix-then-push-then-`bugbot run`, not another naked `bugbot run`.** Unaddressed Bugbot errors require the Fix protocol before Step 3; posting `bugbot run` again without a new commit does not clear the review state.
 - **`bugbot_clean_at` resets on every push.** A new commit invalidates bugbot's prior clean by definition — bugbot must re-review the new HEAD before convergence can be claimed.
-- **Back-to-back clean is the ONLY termination criterion.** Convergence requires Bugbot clean and **bugteam** clean (team or background-agent workflow) against the same HEAD with no intervening fixes; either side clean alone counts as in-progress.
+- **`copilot_clean_at` and `merge_state_status` reset on every push.** The same invalidation rule applies to the Copilot reviewer's prior clean and the prior `gh pr view` mergeability snapshot — both must be re-checked on the new HEAD before §Convergence gates can pass.
+- **Convergence requires four gates on the same HEAD.** (1) Back-to-back clean (Bugbot ∧ **bugteam** — team or background-agent workflow — with no intervening fixes), (2) no outstanding Copilot findings on `current_head`, (3) `mergeStateStatus == "CLEAN"` with `mergeable == "MERGEABLE"`, and (4) the post-convergence Copilot request resolved (either Copilot clean at HEAD, or a follow-up PR opened off HEAD that captures the Copilot findings — see §Convergence gates). Any one gate failing leaves the PR in-progress.
 - **Clean Bugbot on `HEAD` means advance to second audit, not another `bugbot run`.** After Bugbot reports clean on the current SHA, set `bugbot_clean_at` and run the BUGTEAM phase per Step 2 — never post `bugbot run` as a substitute.
 - **The `bugbot run` comment is load-bearing.** Use the literal phrase `bugbot run` exactly — empirically the only re-trigger Cursor Bugbot recognizes; alternative phrasings silently no-op.
 - **`gh pr ready` / `mark_pr_ready.py` is the convergence action.** Mark the PR ready for review and stop there. Merge, additional reviewers, title, and body remain the user's decisions; the skill's contract ends at "ready for review."
@@ -593,4 +677,25 @@ Claude: [increments `inline_lag_streak` to 1, Step 4 inline-lag rules from the a
 <example>
 BUGTEAM tick with no agent teams: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unset; bugteam Path B applies inside `Skill({skill: "bugteam", ...})`.
 Claude: [invokes bugteam; bugteam runs Path B per `bugteam/SKILL.md` + `bugteam/reference/workflow-path-b-task-harness.md`; applies Step 2 §(b)–(d) unchanged against the skill outcome]
+</example>
+
+<example>
+Back-to-back clean reached, but `gh pr view` shows `mergeStateStatus: DIRTY` (the base branch advanced and produced merge conflicts).
+Claude: [runs §Convergence gates (b); does NOT mark ready; invokes the `rebase` skill per `../rebase/SKILL.md` Phase 1–4; after force-with-lease push, resets `bugbot_clean_at = null`, `copilot_clean_at = null`, `merge_state_status = null`, transitions `phase = BUGBOT`, posts `bugbot run` against the new HEAD, schedules next wakeup; the convergence loop re-runs from scratch on the new HEAD]
+</example>
+
+<example>
+Back-to-back clean reached, mergeability is CLEAN, and Copilot already posted a review at `current_head` whose `state == "CHANGES_REQUESTED"` with two unaddressed inline findings.
+Claude: [runs §Convergence gates (a); reads each finding, applies the Fix protocol (TDD test → fix → push → reply inline on both threads), resets `bugbot_clean_at = null` and `copilot_clean_at = null`, transitions `phase = BUGBOT`, posts `bugbot run` on the new HEAD, schedules next wakeup; the back-to-back-clean cycle plus all four gates must hold again on the new HEAD]
+</example>
+
+<example>
+Back-to-back clean reached, mergeability is CLEAN, no Copilot review exists yet on `current_head`. Claude requests Copilot via `request_copilot_review.py` and waits one tick.
+Next tick: Copilot review at `current_head` is `state: APPROVED`.
+Claude: [sets `copilot_clean_at = current_head`; runs `mark_pr_ready.py`; reports "PR #N converged: bugbot CLEAN at <SHA>, bugteam CLEAN at <SHA>, mergeStateStatus CLEAN, copilot CLEAN; marked ready for review"; applies **Convergence** from the active pacing workflow]
+</example>
+
+<example>
+Back-to-back clean reached, mergeability is CLEAN, post-convergence Copilot review fired and returned `state: CHANGES_REQUESTED` with inline findings on `current_head`.
+Claude: [still marks the PR ready (the four-gate rule allows convergence when a follow-up captures Copilot findings); builds a markdown findings checklist from `fetch_copilot_inline_comments.py`; runs `open_followup_copilot_pr.py` off `current_head` to create branch `chore/copilot-followup-<NUMBER>-<short_sha>` with title `chore: address Copilot findings from PR #<NUMBER>`; reports both PR URLs to the user; queues `/pr-converge` on the new PR for the user to invoke; current PR's convergence is final]
 </example>

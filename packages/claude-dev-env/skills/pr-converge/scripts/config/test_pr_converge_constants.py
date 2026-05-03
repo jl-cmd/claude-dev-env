@@ -96,3 +96,81 @@ def test_gh_repo_arg_template_renders_owner_slash_repo() -> None:
         owner="acme", repo="widget"
     )
     assert rendered == "acme/widget"
+
+
+def test_copilot_reviewer_login_carries_bot_suffix() -> None:
+    assert (
+        pr_converge_constants_module.COPILOT_REVIEWER_LOGIN
+        == "copilot-pull-request-reviewer[bot]"
+    )
+
+
+def test_copilot_reviewer_request_id_reuses_login_constant() -> None:
+    request_id = pr_converge_constants_module.COPILOT_REVIEWER_REQUEST_ID
+    login = pr_converge_constants_module.COPILOT_REVIEWER_LOGIN
+    assert request_id == login
+    assert request_id is login
+
+
+def test_copilot_clean_review_state_is_approved() -> None:
+    assert pr_converge_constants_module.COPILOT_CLEAN_REVIEW_STATE == "APPROVED"
+
+
+def test_copilot_dirty_review_states_lists_changes_requested_and_commented() -> None:
+    dirty_states = pr_converge_constants_module.ALL_COPILOT_DIRTY_REVIEW_STATES
+    assert "CHANGES_REQUESTED" in dirty_states
+    assert "COMMENTED" in dirty_states
+
+
+def test_copilot_soft_dirty_review_state_is_commented() -> None:
+    assert pr_converge_constants_module.COPILOT_SOFT_DIRTY_REVIEW_STATE == "COMMENTED"
+
+
+def test_mergeability_fields_lists_required_field_names() -> None:
+    fields_arg = pr_converge_constants_module.MERGEABILITY_FIELDS
+    for required_field in ("mergeable", "mergeStateStatus", "headRefOid"):
+        assert required_field in fields_arg
+
+
+def test_requested_reviewers_path_template_accepts_owner_repo_number() -> None:
+    rendered = (
+        pr_converge_constants_module.GH_REQUESTED_REVIEWERS_PATH_TEMPLATE.format(
+            owner="acme", repo="widget", number=42
+        )
+    )
+    assert rendered == "repos/acme/widget/pulls/42/requested_reviewers"
+
+
+def test_requested_reviewers_field_template_accepts_reviewer_id() -> None:
+    rendered = (
+        pr_converge_constants_module.GH_REQUESTED_REVIEWERS_FIELD_TEMPLATE.format(
+            reviewer_id="copilot-pull-request-reviewer[bot]"
+        )
+    )
+    assert rendered == "reviewers[]=copilot-pull-request-reviewer[bot]"
+
+
+def test_pr_base_ref_fields_lists_base_ref_name() -> None:
+    assert "baseRefName" in pr_converge_constants_module.PR_BASE_REF_FIELDS
+
+
+def test_copilot_followup_branch_template_renders_parent_number_and_sha() -> None:
+    rendered = (
+        pr_converge_constants_module.COPILOT_FOLLOWUP_BRANCH_TEMPLATE.format(
+            parent_number=312, short_sha="abc12345"
+        )
+    )
+    assert rendered == "chore/copilot-followup-312-abc12345"
+
+
+def test_copilot_followup_pr_title_template_renders_parent_number() -> None:
+    rendered = (
+        pr_converge_constants_module.COPILOT_FOLLOWUP_PR_TITLE_TEMPLATE.format(
+            parent_number=312
+        )
+    )
+    assert rendered == "chore: address Copilot findings from PR #312"
+
+
+def test_copilot_followup_short_sha_length_is_eight() -> None:
+    assert pr_converge_constants_module.COPILOT_FOLLOWUP_SHORT_SHA_LENGTH == 8

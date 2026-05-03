@@ -1,9 +1,9 @@
-"""Fetch unaddressed Cursor Bugbot inline comments for the latest Bugbot review on a commit.
+"""Fetch unaddressed Copilot inline comments for the latest Copilot review on a commit.
 
-Uses ``fetch_bugbot_reviews`` to find the newest submitted Bugbot review whose ``commit_id`` matches the caller
-``current_head``, then returns only ``cursor[bot]`` inline comments whose ``pull_request_review_id`` matches that
-review. This avoids misclassifying a PR when Bugbot posts more than one review on the same SHA: older inline threads
-stay anchored to the earlier review id even when they share the same commit id.
+Uses ``fetch_copilot_reviews`` to find the newest submitted Copilot review whose ``commit_id`` matches the caller
+``current_head``, then returns only ``copilot-pull-request-reviewer[bot]`` inline comments whose
+``pull_request_review_id`` matches that review. This avoids misclassifying a PR when Copilot posts more than one review
+on the same SHA: older inline threads stay anchored to the earlier review id even when they share the same commit id.
 
 Wraps the gh CLI invocation required by the gh-paginate rule for the comments list:
 ``gh api`` on ``repos/{owner}/{repo}/pulls/{number}/comments`` with ``--paginate --slurp`` and external JSON handling.
@@ -23,36 +23,36 @@ from evict_cached_config_modules import evict_cached_config_modules
 evict_cached_config_modules()
 
 from config.pr_converge_constants import (
-    CURSOR_BOT_LOGIN,
+    COPILOT_REVIEWER_LOGIN,
     GH_INLINE_COMMENTS_PATH_TEMPLATE,
 )
-from fetch_bugbot_reviews import fetch_bugbot_reviews
+from fetch_copilot_reviews import fetch_copilot_reviews
 from review_field_helpers import body_of, login_of
 
 
-def fetch_bugbot_inline_comments(
+def fetch_copilot_inline_comments(
     *,
     owner: str,
     repo: str,
     number: int,
     current_head: str,
 ) -> list[dict[str, object]]:
-    """Return cursor[bot] inline comments for the latest Bugbot review on ``current_head``.
+    """Return Copilot inline comments for the latest Copilot review on ``current_head``.
 
     Each entry contains comment_id, commit_id, path, line, and body.
     """
-    all_bugbot_reviews = fetch_bugbot_reviews(owner=owner, repo=repo, number=number)
-    latest_bugbot_review_for_head = next(
+    all_copilot_reviews = fetch_copilot_reviews(owner=owner, repo=repo, number=number)
+    latest_copilot_review_for_head = next(
         (
             each_review
-            for each_review in all_bugbot_reviews
+            for each_review in all_copilot_reviews
             if each_review.get("commit_id") == current_head
         ),
         None,
     )
-    if latest_bugbot_review_for_head is None:
+    if latest_copilot_review_for_head is None:
         return []
-    target_pull_request_review_id = latest_bugbot_review_for_head["review_id"]
+    target_pull_request_review_id = latest_copilot_review_for_head["review_id"]
     comments_endpoint = GH_INLINE_COMMENTS_PATH_TEMPLATE.format(
         owner=owner, repo=repo, number=number
     )
@@ -72,7 +72,9 @@ def fetch_bugbot_inline_comments(
         errors="replace",
     )
     pages: list[list[dict[str, object]]] = json.loads(completed.stdout)
-    all_flat_comments = [each_comment for each_page in pages for each_comment in each_page]
+    all_flat_comments = [
+        each_comment for each_page in pages for each_comment in each_page
+    ]
     return [
         {
             "comment_id": each_comment["id"],
@@ -82,7 +84,7 @@ def fetch_bugbot_inline_comments(
             "body": body_of(each_comment),
         }
         for each_comment in all_flat_comments
-        if login_of(each_comment) == CURSOR_BOT_LOGIN
+        if login_of(each_comment) == COPILOT_REVIEWER_LOGIN
         and each_comment.get("commit_id") == current_head
         and each_comment.get("pull_request_review_id") == target_pull_request_review_id
     ]
@@ -95,7 +97,7 @@ def main() -> int:
     parser.add_argument("--number", required=True, type=int)
     parser.add_argument("--commit", required=True, dest="current_head")
     parsed_arguments = parser.parse_args()
-    all_comments = fetch_bugbot_inline_comments(
+    all_comments = fetch_copilot_inline_comments(
         owner=parsed_arguments.owner,
         repo=parsed_arguments.repo,
         number=parsed_arguments.number,
