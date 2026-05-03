@@ -2,13 +2,38 @@
 
 Load when bugteam `SKILL.md` **Path routing** selects **Path A** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` equals **`1`** after trim). Execute **after** shared `SKILL.md` steps through **Step 2 loop state**; then use this file for **harness-only** steps. Shared gate scripts, Step 3 cycle numbering, Step 2.5 `jq`/`gh` payload shapes, `PROMPTS.md`, and outcome XML rules remain in **`SKILL.md`**.
 
-## Step 2 harness — `TeamCreate` and team metadata
+## Step 2 harness — lifecycle, `TeamCreate`, and team metadata
 
-**This session is the lead.** The orchestrator calls `TeamCreate` directly:
+**This session is the lead.** Step 2 first resolves the team lifecycle from the [Team lifecycle](../SKILL.md#team-lifecycle-path-a-only) table in `SKILL.md`, then either creates or attaches to a team.
+
+**Lifecycle resolution (read once, then apply):**
+
+```python
+import os
+import re
+
+mode = os.environ.get("BUGTEAM_TEAM_LIFECYCLE", "auto").strip().lower() or "auto"
+attached_team_name = os.environ.get("BUGTEAM_TEAM_NAME", "").strip()
+
+if mode == "attach" and not attached_team_name:
+    raise RuntimeError(
+        "BUGTEAM_TEAM_LIFECYCLE=attach requires BUGTEAM_TEAM_NAME to name an existing team."
+    )
+```
+
+The mode then drives Step 2's `TeamCreate` decision:
+
+- **`mode == "attach"`** — skip `TeamCreate` entirely. Set `team_name = attached_team_name`, `team_owned = false`. Continue to teammate spawns using that `team_name`.
+
+- **`mode == "owned"`** — call `TeamCreate(team_name=<computed_team_name>, ...)` (form below). On the runtime error matching `Already leading team "(.+)"\.` → **fail** with `Already leading team <existing>; rerun with BUGTEAM_TEAM_LIFECYCLE=attach BUGTEAM_TEAM_NAME=<existing>`. On success, set `team_owned = true`.
+
+- **`mode == "auto"`** (default) — call `TeamCreate(team_name=<computed_team_name>, ...)`. On the same runtime error, parse the existing team name with the regex `r'Already leading team "([^"]+)"'`, set `team_name = <existing>`, `team_owned = false`, and continue without retrying `TeamCreate`. On success, set `team_owned = true`. Both branches honor §Team name below.
+
+**`TeamCreate` call shape (only when `mode != "attach"` and the auto branch did not already attach):**
 
 ```
 TeamCreate(
-  team_name="<team_name>",
+  team_name="<computed_team_name>",
   description="Bugteam audit/fix loop for PR <number> (<owner>/<repo>)",
   agent_type="team-lead"
 )
@@ -81,8 +106,8 @@ Verify and outcome handling: unchanged from `SKILL.md` § FIX action (**Verify**
 
 Run **after** `SKILL.md` § Step 4 step 1 (`git worktree remove` for each PR).
 
-1. For each live teammate: `SendMessage(to="<name>", message={"type": "shutdown_request", "reason": "bugteam cycle ending"})`. `approve: false` on cleanup → log and continue.
+1. For each live teammate **spawned by this invocation**: `SendMessage(to="<name>", message={"type": "shutdown_request", "reason": "bugteam cycle ending"})`. `approve: false` on cleanup → log and continue. Teammates that pre-existed an attached team (mode `attach` or `auto` after the attach branch) are owned by the orchestrator, not this invocation — leave them alone.
 
-2. `TeamDelete()`
+2. `TeamDelete()` — **only when `team_owned=true`** (set in Step 2 lifecycle resolution). When `team_owned=false`, **skip `TeamDelete`** and log `cleanup: skipped TeamDelete (team not owned by this invocation; lifecycle=<mode>)`. The orchestrator that originally created the team owns teardown — see [Team lifecycle](../SKILL.md#team-lifecycle-path-a-only).
 
-Then continue with `SKILL.md` § Step 4 step 3 (shared `rmtree` on `<team_temp_dir>`).
+Then continue with `SKILL.md` § Step 4 step 3 (`<team_temp_dir>` cleanup, also gated on `team_owned`).

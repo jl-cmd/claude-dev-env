@@ -23,7 +23,7 @@ def _run_powershell(*, expression: str) -> str:
         + " | ConvertTo-Json -Compress -Depth 5"
     )
     completed = subprocess.run(
-        ["pwsh", "-NoProfile", "-NonInteractive", "-Command", command],
+        ["pwsh", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -102,7 +102,7 @@ def test_should_fail_when_number_without_repository() -> None:
         "catch { $_.Exception.Message }"
     )
     completed = subprocess.run(
-        ["pwsh", "-NoProfile", "-NonInteractive", "-Command", command],
+        ["pwsh", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -124,7 +124,7 @@ def test_should_reject_pull_url_with_trailing_junk() -> None:
         "catch { $_.Exception.Message }"
     )
     completed = subprocess.run(
-        ["pwsh", "-NoProfile", "-NonInteractive", "-Command", command],
+        ["pwsh", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -145,7 +145,7 @@ def test_should_fail_for_unrecognized_pull_string() -> None:
         "catch { $_.Exception.Message }"
     )
     completed = subprocess.run(
-        ["pwsh", "-NoProfile", "-NonInteractive", "-Command", command],
+        ["pwsh", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -170,6 +170,8 @@ def test_full_script_removes_temp_files_when_gh_stub_succeeds(tmp_path: Path) ->
             "pwsh",
             "-NoProfile",
             "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
             "-File",
             str(script_path),
             "acme/widget#9",

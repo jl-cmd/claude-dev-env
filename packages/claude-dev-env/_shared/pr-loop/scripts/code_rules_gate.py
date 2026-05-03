@@ -58,6 +58,18 @@ def resolve_claude_dev_env_root(starting_path: Path) -> Path:
     raise SystemExit(2)
 
 
+def _resolve_package_root_absolute(starting_path: Path) -> Path:
+    enforcer_relative = Path("hooks") / "blocking" / "code_rules_enforcer.py"
+    for each_starting_form in (
+        Path(starting_path).absolute(),
+        Path(starting_path).resolve(),
+    ):
+        for each_candidate in [each_starting_form, *each_starting_form.parents]:
+            if (each_candidate / enforcer_relative).is_file():
+                return each_candidate
+    raise SystemExit(2)
+
+
 def load_validate_content() -> ValidateContentCallable:
     package_root = resolve_claude_dev_env_root(Path(__file__).resolve())
     enforcer_path = package_root / "hooks" / "blocking" / "code_rules_enforcer.py"
@@ -73,7 +85,29 @@ def load_validate_content() -> ValidateContentCallable:
         print("code_rules_gate: could not load code_rules_enforcer.", file=sys.stderr)
         raise SystemExit(2)
     module = importlib.util.module_from_spec(specification)
-    specification.loader.exec_module(module)
+    package_root_for_imports = _resolve_package_root_absolute(Path(__file__).absolute())
+    hooks_root_path = str(package_root_for_imports / "hooks")
+    while hooks_root_path in sys.path:
+        sys.path.remove(hooks_root_path)
+    sys.path.insert(0, hooks_root_path)
+    saved_config_modules = {
+        each_module_name: sys.modules.pop(each_module_name)
+        for each_module_name in [
+            each_key for each_key in list(sys.modules)
+            if each_key == "config" or each_key.startswith("config.")
+        ]
+    }
+    try:
+        specification.loader.exec_module(module)
+    finally:
+        while hooks_root_path in sys.path:
+            sys.path.remove(hooks_root_path)
+        for each_module_name in [
+            each_key for each_key in list(sys.modules)
+            if each_key == "config" or each_key.startswith("config.")
+        ]:
+            sys.modules.pop(each_module_name, None)
+        sys.modules.update(saved_config_modules)
     return module.validate_content
 
 

@@ -19,6 +19,7 @@ description: >-
 
 - When this skill applies — refusal cases and trigger conditions
 - Discovery — live `gh search prs` across both owner scopes
+- Team lifecycle — single long-lived team for the whole sweep
 - Wrapping — `bws run` for GROQ_API_KEY injection
 - Dispatch — `/bugteam <numbers...>` with groq-coder + retrigger
 - Post-convergence polling — bugbot replies and re-invocation
@@ -40,6 +41,35 @@ Refusals — first match wins; respond with the quoted line exactly and stop:
 
 Call `scripts/discover_open_prs.discover_open_prs(all_owners=["jl-cmd", "JonEcho"])` to merge the live open-PR list across both scopes. The helper runs `gh search prs --owner <owner> --state open --json number,repository,url,headRefName,baseRefName` once per owner and flattens the result to a uniform dict shape with keys `number`, `owner`, `repo`, `head_ref`, `base_ref`, `url`. Empty scopes contribute empty lists; an entirely empty sweep returns `[]` and exits cleanly.
 
+## Team Lifecycle
+
+`/monitor-open-prs` dispatches one `/bugteam` per discovered PR — often more than ten in a sweep. Per-invocation `TeamCreate` / `TeamDelete` from each `/bugteam` would either collide on the runtime's `Already leading team` rule or tear down the wrong team mid-sweep, depending on dispatch order. The sweep instead owns a **single long-lived team for the whole sweep** and passes that team to every `/bugteam` invocation in attach mode. See [bugteam Team lifecycle](../bugteam/SKILL.md#team-lifecycle-path-a-only).
+
+**Before the first dispatch:**
+
+1. Capture `sweep_id = <YYYYMMDDHHMMSS>` once at sweep start. This is the same convention as bugteam's team-name timestamp.
+2. Compute `team_name = "bugteam-monitor-<sweep_id>"`.
+3. `TeamCreate(team_name=<team_name>, description="monitor-open-prs sweep <sweep_id>", agent_type="team-lead")`. The orchestrator (this session) becomes the lead.
+
+**For every `/bugteam` dispatch** (parallel fan-out or serial), prepend the two attach-mode env vars to the wrapped command so bugteam reuses the orchestrator's team and skips its own `TeamCreate` / `TeamDelete`:
+
+```bash
+bws run \
+  --project-id c69cedc5-aea1-4aa8-b350-b4300145d978 \
+  -- \
+  env BUGTEAM_TEAM_LIFECYCLE=attach \
+      BUGTEAM_TEAM_NAME=<team_name> \
+      BUGTEAM_FIX_IMPLEMENTER=groq-coder \
+  /bugteam --bugbot-retrigger <pr_numbers...>
+```
+
+**Teardown — only after every PR has exited polling** (see §Post-Convergence Polling): the sweep is done; no further `/bugteam` invocation will run. At that point, and only at that point:
+
+1. `TeamDelete()` (orchestrator is the lead; no arguments).
+2. Print one cleanup line into the §Final Report: `team teardown: TeamDelete <team_name>` (success) or the error message on failure.
+
+If a hard blocker or user stop ends the sweep early, the orchestrator is shutting down: still call `TeamDelete()` once after polling stops for the in-flight PRs.
+
 ## Secret Wrapping
 
 Every `/bugteam` dispatch runs inside `bws run` so `GROQ_API_KEY` is injected from Bitwarden Secrets Manager without touching the filesystem. The project and secret UUIDs are fixed for this skill:
@@ -59,9 +89,9 @@ The `bws run` subshell resolves the project's secrets and exports them for the w
 For each discovered PR:
 
 1. Resolve the PR's repo checkout (existing worktree or fresh `git clone`).
-2. From that checkout, invoke `/bugteam <pr_number>` under the `bws run` wrapper above.
+2. From that checkout, invoke `/bugteam <pr_number>` under the `bws run` wrapper from §Team Lifecycle (the wrapper already carries `BUGTEAM_TEAM_LIFECYCLE=attach` and `BUGTEAM_TEAM_NAME=<team_name>` so bugteam reuses the sweep-owned team).
 3. The `BUGTEAM_FIX_IMPLEMENTER=groq-coder` env var routes the FIX role to the `groq-coder` subagent. The `--bugbot-retrigger` flag tells bugteam to post `bugbot run` as an issue comment after every successful FIX push so Cursor's bugbot re-evaluates the new commit.
-4. Bugteam runs its own 10-loop audit/fix cycle per PR; this skill waits for each bugteam invocation to return before dispatching the next (or fanning out — see below).
+4. Bugteam runs its own 10-loop audit/fix cycle per PR; this skill waits for each bugteam invocation to return before dispatching the next (or fanning out — see below). Each invocation skips its own `TeamCreate` / `TeamDelete` because of attach mode — only the sweep owns team teardown (§Team Lifecycle).
 
 **Fan-out (optional):** when the discovered list has more than one PR, the skill may spawn `/bugteam` dispatches in parallel by issuing multiple `Agent` calls in a single assistant message. Each dispatch operates in its own per-PR worktree (bugteam Step 1.1). Serialize when the caller sets an explicit `--serial` flag.
 

@@ -157,6 +157,7 @@ Create once at session start; each teammate writes its result back before going 
 ```json
 {
   "session_id": "20260502050000",
+  "team_name": "bugteam-20260502050000",
   "prs": {
     "289": {
       "owner": "jl-cmd",
@@ -175,6 +176,8 @@ Create once at session start; each teammate writes its result back before going 
 }
 ```
 
+**`team_name` field (Path A only):** when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, the orchestrator owns a single long-lived team for the whole sweep — see §Orchestrator team lifecycle.
+
 **`status` values:** `fresh` | `in_progress` | `awaiting_bugbot` | `awaiting_bugteam` | `converged` | `blocked`
 
 **Write rule:** Teammates write their result by reading the current file, merging **only** their PR's keyed entry under `prs`, and persisting the merged document back. Writes are keyed on `pr_number`; other PRs' entries are untouched in the merge logic — **but** see **Concurrency** below so parallel teammates never clobber each other.
@@ -192,6 +195,33 @@ Create once at session start; each teammate writes its result back before going 
 2. **`phase` when only the orchestrator decides:** If the orchestrator applies a **Step 2 §Per-tick** phase transition (including **BUGTEAM §(d)** branches that set `phase = BUGBOT` without an immediate teammate `state.json` write) and no teammate merge occurs in the same tick for that PR, the orchestrator performs one locked merge that sets only `prs[<pr_number>].phase` (and `last_updated`) for the affected PR.
 
 **Orchestrator reads this file at the start of every tick** instead of relying on conversation context for cross-PR state.
+
+### Orchestrator team lifecycle (Path A only)
+
+**Applies when bugteam Path A is in use** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). When agent teams are disabled, this section is skipped and bugteam runs Path B with no team state. See [Team infrastructure detection](#team-infrastructure-detection-for-pr-converge-pacing-and-docs-cross-links-only) for the routing rule.
+
+**Why the orchestrator owns the team:** The bugteam skill's per-invocation `TeamCreate` / `TeamDelete` cycle assumes one bugteam invocation per session. In multi-PR converge, the orchestrator runs bugteam **per PR per BUGTEAM tick** — many invocations across the sweep. If each invocation tried to `TeamCreate`, the second one would fail with `Already leading team "<existing>"`; if each invocation called `TeamDelete` at exit, the next BUGTEAM tick would have nothing to attach to and would also create a fresh team that races other PRs' work. The orchestrator instead creates one team for the whole sweep and tears it down on full convergence — see [bugteam Team lifecycle](../bugteam/SKILL.md#team-lifecycle-path-a-only).
+
+**At session start (before the first tick spawns any teammate):**
+
+1. Compute `team_name = "bugteam-<session_id>"` using the same `session_id` as the §Per-PR state file.
+2. `TeamCreate(team_name=<team_name>, description="pr-converge sweep <session_id>", agent_type="team-lead")`. The orchestrator becomes the lead.
+3. Locked write to `state.json` (per §Concurrency): merge `team_name` at the document root.
+
+**At every BUGTEAM tick (per PR):** invoke bugteam in attach mode by setting both env vars before the call:
+
+- `BUGTEAM_TEAM_LIFECYCLE=attach`
+- `BUGTEAM_TEAM_NAME=<state.team_name>`
+
+When the orchestrator drives bugteam via `Skill({skill: "bugteam", ...})`, set both env vars in the parent process before the `Skill` invocation. When bugteam runs inside a delegated worker (typical multi-PR fan-out), the spawn prompt must export the same two env vars at the top of the worker's bash environment so bugteam reads them on entry.
+
+**Teardown (only when every PR is terminal):** the orchestrator scans `state.json` and considers the sweep done when **every** `prs[<pr_number>].status` is either `converged` or `blocked`. At that point, and only at that point:
+
+1. `TeamDelete()` (orchestrator is the lead; no arguments).
+2. Locked write to `state.json`: clear `team_name` from the document root (so a stale value cannot leak into a follow-up sweep).
+3. Continue with the §Memory cleanup of `<TMPDIR>/pr-converge-<session_id>/`.
+
+A user-stop or hard-blocker exit that ends the sweep before convergence still calls `TeamDelete()` here, because the orchestrator is shutting down. The only path that does **not** call `TeamDelete()` is "tick scheduled, sweep continuing" — which is the common case.
 
 ### Teammate spawning rules
 
@@ -496,9 +526,9 @@ The fix protocol is executed by a **`clean-coder` teammate** when **`state.json`
 
 ## Stop conditions
 
-- **Convergence** (back-to-back clean — second audit reports convergence AND `bugbot_clean_at == current_head` with no push during this tick): prefer `mark_pr_ready.py`; when unavailable use `gh pr ready`. When `state.json` is in use, append the convergence row to `<TMPDIR>/pr-converge-<session_id>/converged.log` per §Memory; otherwise skip file append. Report one-sentence summary, then **omit loop pacing** per **Convergence** in the pacing workflow from the Step 4 table (or omit `ScheduleWakeup` when no workflow file applies). End any ongoing loops once all PRs are converged.
-- **Hard blocker:** API auth failure persists across two ticks, a CI regression whose root cause falls outside this PR, a hook rejection investigated through three commits and still unresolved, `inline_lag_streak >= 3`, or **bugteam** (either workflow) reports a stuck state. Report the specific blocker and the diagnosis, then **omit loop pacing** per the active workflow; stop the AHK auto-typer per `workflows/ahk-auto-continue-loop.md` **Stop / safety** if that path was in use.
-- **User stops the loop:** user says "stop the converge loop" → **omit loop pacing** per the active workflow; stop the AHK auto-typer per `workflows/ahk-auto-continue-loop.md` **Stop / safety** if that path was in use.
+- **Convergence** (back-to-back clean — second audit reports convergence AND `bugbot_clean_at == current_head` with no push during this tick): prefer `mark_pr_ready.py`; when unavailable use `gh pr ready`. When `state.json` is in use, append the convergence row to `<TMPDIR>/pr-converge-<session_id>/converged.log` per §Memory; otherwise skip file append. Report one-sentence summary, then **omit loop pacing** per **Convergence** in the pacing workflow from the Step 4 table (or omit `ScheduleWakeup` when no workflow file applies). End any ongoing loops once all PRs are converged. **Path A multi-PR:** when every `prs[...]` in `state.json` is now `converged` or `blocked`, run §Orchestrator team lifecycle teardown (`TeamDelete()`, clear `team_name`).
+- **Hard blocker:** API auth failure persists across two ticks, a CI regression whose root cause falls outside this PR, a hook rejection investigated through three commits and still unresolved, `inline_lag_streak >= 3`, or **bugteam** (either workflow) reports a stuck state. Report the specific blocker and the diagnosis, then **omit loop pacing** per the active workflow; stop the AHK auto-typer per `workflows/ahk-auto-continue-loop.md` **Stop / safety** if that path was in use. **Path A multi-PR:** mark the affected PR `blocked` in `state.json`; if every other PR is also terminal, run §Orchestrator team lifecycle teardown.
+- **User stops the loop:** user says "stop the converge loop" → **omit loop pacing** per the active workflow; stop the AHK auto-typer per `workflows/ahk-auto-continue-loop.md` **Stop / safety** if that path was in use. **Path A multi-PR:** the orchestrator is shutting down; run §Orchestrator team lifecycle teardown unconditionally (any in-flight teammates are released first via `SendMessage` shutdown_request).
 
 ## Ground rules
 

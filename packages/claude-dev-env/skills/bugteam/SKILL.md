@@ -25,11 +25,26 @@ At `/bugteam` entry, evaluate **once** (same rule as pr-converge §Team infrastr
 
 Shared material is **everything else in this file** plus [`PROMPTS.md`](PROMPTS.md), [`EXAMPLES.md`](EXAMPLES.md), [`CONSTRAINTS.md`](CONSTRAINTS.md) — agent types, models, XML, gates, cycle state machine, Step 2.5 payload shapes, shared teardown `rmtree`, revoke, final report.
 
+## Team lifecycle (Path A only)
+
+The `TeamCreate` / `TeamDelete` pair has historically been bound to a single `/bugteam` invocation. That coupling fails when an orchestrator (`pr-converge` multi-PR mode, `monitor-open-prs`) needs to call `/bugteam` repeatedly inside one parent session: only one team can be led at a time, and a missed Step 4 leaks the team. To decouple, every Path A invocation reads `BUGTEAM_TEAM_LIFECYCLE` (defaults to `auto`) and may also read `BUGTEAM_TEAM_NAME`.
+
+| Mode | Step 2 behavior | Step 4 behavior | Use case |
+| --- | --- | --- | --- |
+| `owned` | `TeamCreate(<computed_team_name>)`. If the runtime returns `Already leading team "<existing>". A leader can only manage one team at a time.` → **error**: `Already leading team <existing>; rerun with BUGTEAM_TEAM_LIFECYCLE=attach BUGTEAM_TEAM_NAME=<existing>`. | `TeamDelete()` (lead-owned). | Pre-decoupling behavior. Use only when you know the session leads no other team. |
+| `attach` | Require `BUGTEAM_TEAM_NAME`. Treat that team as already-led; do **not** call `TeamCreate`. | **Skip** `TeamDelete` — the orchestrator owns teardown. | Orchestrators (pr-converge multi-PR, monitor-open-prs) that explicitly created a team and will tear it down themselves. |
+| `auto` (**default: `auto`**) | Try `TeamCreate(<computed_team_name>)`. On `Already leading team "<existing>"` → parse `<existing>`, attach (do **not** call `TeamCreate` again), set `team_owned=false`. On success → set `team_owned=true`. | If `team_owned=true` → `TeamDelete()`. Else → **skip** `TeamDelete`. | All callers when in doubt. Solo invocations behave like `owned`; nested or repeated invocations attach safely. |
+
+**`team_owned` flag** — set in Step 2 by all three modes (`owned` always `true`; `attach` always `false`; `auto` reflects the `TeamCreate` outcome). Read in Step 4 to decide whether to call `TeamDelete`. The same flag also gates `<team_temp_dir>` `rmtree`: when `team_owned=false`, only the per-PR subfolders this invocation created (`<team_temp_dir>/pr-<N>/`) are removed; the orchestrator's parent directory survives.
+
+**Path B note:** Path B does not use `TeamCreate` / `TeamDelete`, so `BUGTEAM_TEAM_LIFECYCLE` is read but only its `team_temp_dir` cleanup behavior applies. `team_owned` is treated as `true` by default in Path B; orchestrators driving Path B that share a temp directory should set `BUGTEAM_TEAM_LIFECYCLE=attach` so the per-PR subfolder cleanup rule applies.
+
 ## Contents
 
 Orchestration lives here; companion files hold prompts, invariants, examples, citations, and domain reference notes. Scan this list before a partial read.
 
 - [Path routing](#path-routing-mandatory-first-branch) — Path A vs Path B
+- [Team lifecycle](#team-lifecycle-path-a-only) — `owned` / `attach` / `auto` modes; orchestrator-owned teams
 - [`reference/workflow-path-a-orchestrated-teams.md`](reference/workflow-path-a-orchestrated-teams.md) — Path A harness (orchestrated teams)
 - [`reference/workflow-path-b-task-harness.md`](reference/workflow-path-b-task-harness.md) — Path B harness (Task harness)
 - When this skill applies — refusal cases and trigger conditions
@@ -125,6 +140,8 @@ Teammates or Task workers for a PR operate inside that PR's worktree. Step 4 tea
 
 Apply the path you chose in [Path routing](#path-routing-mandatory-first-branch): **Path A** — [`reference/workflow-path-a-orchestrated-teams.md`](reference/workflow-path-a-orchestrated-teams.md) § Step 2 (`TeamCreate`, team name, `team_temp_dir`, roles, optional Groq FIX, `--bugbot-retrigger`). **Path B** — [`reference/workflow-path-b-task-harness.md`](reference/workflow-path-b-task-harness.md) § Step 2 (no `TeamCreate` / `TeamDelete`; same worktrees and variables).
 
+Path A also resolves the team lifecycle here per [Team lifecycle](#team-lifecycle-path-a-only): pick the mode (`owned` / `attach` / `auto`) from `BUGTEAM_TEAM_LIFECYCLE`, set `team_name` (computed for `owned`/`auto` create paths; required `BUGTEAM_TEAM_NAME` for `attach` and `auto`'s attach branch), and set `team_owned` (`true` when `TeamCreate` succeeded in this invocation; `false` when attaching to an existing team). Step 4 reads `team_owned` to decide whether to call `TeamDelete`.
+
 **Loop state (lead; not a single script):**
 
 ```bash
@@ -135,6 +152,7 @@ audit_log=""
 starting_sha="$(git rev-parse HEAD)"
 team_name="bugteam-pr-<number>-<YYYYMMDDHHMMSS>"
 team_temp_dir="<absolute-path>/<team_name>"
+team_owned="true"   # set by Step 2 lifecycle resolution; see Team lifecycle table
 loop_comment_index=""
 ```
 
@@ -263,15 +281,25 @@ Pass finding comment URLs/ids from `loop_comment_index` in XML. Replies: `Fixed 
 
 1. For each PR in `all_prs`: `git worktree remove "<team_temp_dir>/pr-<N>/worktree"` (from Step 1) before tearing down the team harness — tolerate already-removed worktrees.
 
-2. Path-specific harness — [`reference/workflow-path-a-orchestrated-teams.md`](reference/workflow-path-a-orchestrated-teams.md) § Step 4 (teammate `SendMessage`, `TeamDelete`) or [`reference/workflow-path-b-task-harness.md`](reference/workflow-path-b-task-harness.md) § Step 4 (omit those).
+2. Path-specific harness — [`reference/workflow-path-a-orchestrated-teams.md`](reference/workflow-path-a-orchestrated-teams.md) § Step 4 (teammate `SendMessage`, `TeamDelete` **only when `team_owned=true`**) or [`reference/workflow-path-b-task-harness.md`](reference/workflow-path-b-task-harness.md) § Step 4 (omit those).
 
-3. Windows-safe `rmtree` on `<team_temp_dir>` — `ignore_errors=True` silently swallows ReadOnly-attribute failures on Windows (see `~/.claude/rules/windows-filesystem-safe.md`):
+3. **Windows-safe `rmtree` — gated by `team_owned` from [Team lifecycle](#team-lifecycle-path-a-only).** The Windows-safe handler strips the Windows ReadOnly attribute and retries the failing syscall (see `~/.claude/rules/windows-filesystem-safe.md`).
 
-   ```bash
-   python -c "import os, shutil, stat, sys; \
-   h = lambda f, p, *_: (os.chmod(p, stat.S_IWRITE), f(p)); \
-   shutil.rmtree(r'<team_temp_dir>', **({'onexc': h} if sys.version_info >= (3, 12) else {'onerror': h}))"
-   ```
+   - `team_owned=true` → remove the full `<team_temp_dir>`:
+
+     ```bash
+     python -c "import os, shutil, stat, sys; \
+     h = lambda f, p, *_: (os.chmod(p, stat.S_IWRITE), f(p)); \
+     shutil.rmtree(r'<team_temp_dir>', **({'onexc': h} if sys.version_info >= (3, 12) else {'onerror': h}))"
+     ```
+
+   - `team_owned=false` (attach mode) → for each PR in `all_prs`, remove only that PR's `<team_temp_dir>/pr-<N>/` subfolder. The orchestrator-owned parent `<team_temp_dir>` survives so the next attached invocation can write its own per-PR subfolders without colliding.
+
+     ```bash
+     python -c "import os, shutil, stat, sys; \
+     h = lambda f, p, *_: (os.chmod(p, stat.S_IWRITE), f(p)); \
+     shutil.rmtree(r'<team_temp_dir>/pr-<N>', **({'onexc': h} if sys.version_info >= (3, 12) else {'onerror': h}))"
+     ```
 
 ### Step 4.5: PR description
 
