@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.36.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.36.0...claude-dev-env-v1.36.1) (2026-05-04)
+
+
+### Refactoring
+
+* **bugteam:** wrap SKILL.md to 80 columns with PR 349 reflow script ([#350](https://github.com/jl-cmd/claude-code-config/issues/350)) ([e56d741](https://github.com/jl-cmd/claude-code-config/commit/e56d7410276e8de2a85a3cacf3e5cc4833ee9f02))
+* **pr-converge:** wrap SKILL.md to 80-character lines ([#349](https://github.com/jl-cmd/claude-code-config/issues/349)) ([c0c2032](https://github.com/jl-cmd/claude-code-config/commit/c0c2032588c2798c9d0d3b972643e18963b9b710))
+
 ## [1.36.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.35.0...claude-dev-env-v1.36.0) (2026-05-03)
 
 
