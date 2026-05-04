@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.36.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.36.2...claude-dev-env-v1.36.3) (2026-05-04)
+
+
+### Bug Fixes
+
+* **bugteam:** repair command wrapping ([#353](https://github.com/jl-cmd/claude-code-config/issues/353)) ([1dcaada](https://github.com/jl-cmd/claude-code-config/commit/1dcaada10120cf3bbfce31bef1ce40b76954863b))
+* **hooks:** address Copilot PR 318 review 4216464432 (unused imports) ([#346](https://github.com/jl-cmd/claude-code-config/issues/346)) ([1ebbc81](https://github.com/jl-cmd/claude-code-config/commit/1ebbc81ff9995ede85762dedd7113fd9a873896c))
+* **pr-converge:** keep AHK pacer resilient without pwsh ([#355](https://github.com/jl-cmd/claude-code-config/issues/355)) ([14d9703](https://github.com/jl-cmd/claude-code-config/commit/14d9703fdb88bbe0786215bfd6f4d006ae12ca7c))
+* **pr-converge:** preserve state path formatting ([#354](https://github.com/jl-cmd/claude-code-config/issues/354)) ([3ac1bcd](https://github.com/jl-cmd/claude-code-config/commit/3ac1bcdd3ff80741a776ac47e02f76cdc48f394e))
+* **pr-converge:** repair and harden SKILL.md reflow ([#357](https://github.com/jl-cmd/claude-code-config/issues/357)) ([21e74d8](https://github.com/jl-cmd/claude-code-config/commit/21e74d875ced3d75d17eb02effe8f88681776f99))
+
 ## [1.36.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.36.1...claude-dev-env-v1.36.2) (2026-05-04)
 
 
