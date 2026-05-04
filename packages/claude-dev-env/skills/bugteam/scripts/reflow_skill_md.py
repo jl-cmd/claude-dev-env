@@ -17,14 +17,15 @@ from __future__ import annotations
 
 import re
 import textwrap
-from pathlib import Path
 
-MAX_WIDTH = 80
-SKILL_PATH = Path(__file__).resolve().parent.parent / "SKILL.md"
-
-ORDERED_RE = re.compile(r"^(\s*)(\d+\.\s)(.*)$")
-BULLET_RE = re.compile(r"^(\s*)([-*]\s)(.*)$")
-UNFINISHED_MD_LINK_TARGET = re.compile(r"\]\([^)]*$")
+from config.reflow_skill_md_constants import (
+    BASH_CONTINUATION_MARKER_WIDTH,
+    BULLET_LIST_ITEM_PATTERN as BULLET_RE,
+    MAXIMUM_LINE_WIDTH as MAX_WIDTH,
+    ORDERED_LIST_ITEM_PATTERN as ORDERED_RE,
+    TARGET_SKILL_PATH as SKILL_PATH,
+    UNFINISHED_MARKDOWN_LINK_TARGET_PATTERN as UNFINISHED_MD_LINK_TARGET,
+)
 
 
 def wrap_paragraph_plain(text: str) -> list[str]:
@@ -55,11 +56,14 @@ def wrap_list_item(lead_ws: str, marker: str, body: str) -> list[str]:
     ).splitlines()
 
 
-def reflow_yaml_description_block(lines: list[str], body_start: int) -> tuple[list[str], int]:
+def reflow_yaml_description_block(
+    all_lines: list[str],
+    body_start: int,
+) -> tuple[list[str], int]:
     body_parts: list[str] = []
     index = body_start
-    while index < len(lines):
-        line = lines[index]
+    while index < len(all_lines):
+        line = all_lines[index]
         if line.strip() == "---":
             index += 1
             break
@@ -118,30 +122,30 @@ def merge_without_space(buffer: str, continuation: str) -> bool:
     return False
 
 
-def merge_soft_breaks(lines: list[str]) -> list[str]:
-    output: list[str] = []
+def merge_soft_breaks(all_lines: list[str]) -> list[str]:
+    reflowed_lines: list[str] = []
     index = 0
-    in_fence = False
-    while index < len(lines):
-        raw = lines[index]
+    is_inside_fence = False
+    while index < len(all_lines):
+        raw = all_lines[index]
         line = raw.rstrip("\n")
         if line.lstrip().startswith("```"):
-            in_fence = not in_fence
-            output.append(line)
+            is_inside_fence = not is_inside_fence
+            reflowed_lines.append(line)
             index += 1
             continue
-        if in_fence:
-            output.append(line)
+        if is_inside_fence:
+            reflowed_lines.append(line)
             index += 1
             continue
         if line.strip() == "":
-            output.append(line)
+            reflowed_lines.append(line)
             index += 1
             continue
         buffer_line = line
         index += 1
-        while index < len(lines):
-            next_raw = lines[index].rstrip("\n")
+        while index < len(all_lines):
+            next_raw = all_lines[index].rstrip("\n")
             if next_raw.strip() == "":
                 break
             if next_raw.lstrip().startswith("```"):
@@ -154,8 +158,8 @@ def merge_soft_breaks(lines: list[str]) -> list[str]:
             else:
                 buffer_line = f"{buffer_line.rstrip()} {stripped_next}"
             index += 1
-        output.append(buffer_line)
-    return output
+        reflowed_lines.append(buffer_line)
+    return reflowed_lines
 
 
 def reflow_merged_line(line: str) -> list[str]:
@@ -212,39 +216,39 @@ def reflow_merged_line(line: str) -> list[str]:
     return wrap_paragraph_plain(stripped)
 
 
-def reflow_markdown_body(lines: list[str]) -> list[str]:
-    merged = merge_soft_breaks(lines)
-    output: list[str] = []
+def reflow_markdown_body(all_lines: list[str]) -> list[str]:
+    merged = merge_soft_breaks(all_lines)
+    reflowed_lines: list[str] = []
     for each_line in merged:
         if each_line.strip() == "":
-            output.append("")
+            reflowed_lines.append("")
             continue
-        output.extend(reflow_merged_line(each_line))
-    return output
+        reflowed_lines.extend(reflow_merged_line(each_line))
+    return reflowed_lines
 
 
-def wrap_long_bash_fence_lines(lines: list[str]) -> list[str]:
+def wrap_long_bash_fence_lines(all_lines: list[str]) -> list[str]:
     """Hard-wrap only ```bash fence bodies that still exceed MAX_WIDTH."""
-    output: list[str] = []
-    in_bash_fence = False
-    for line in lines:
-        stripped = line.lstrip()
+    wrapped_lines: list[str] = []
+    is_inside_bash_fence = False
+    for each_line in all_lines:
+        stripped = each_line.lstrip()
         if stripped.startswith("```"):
-            if not in_bash_fence:
+            if not is_inside_bash_fence:
                 lang = stripped[3:].strip().lower()
-                in_bash_fence = lang == "bash"
+                is_inside_bash_fence = lang == "bash"
             else:
-                in_bash_fence = False
-            output.append(line)
+                is_inside_bash_fence = False
+            wrapped_lines.append(each_line)
             continue
-        if in_bash_fence and len(line) > MAX_WIDTH:
-            indent_len = len(line) - len(line.lstrip())
-            indent = line[:indent_len]
-            content = line.lstrip()
+        if is_inside_bash_fence and len(each_line) > MAX_WIDTH:
+            indent_len = len(each_line) - len(each_line.lstrip())
+            indent = each_line[:indent_len]
+            content = each_line.lstrip()
             wrapped_segments: list[str] = []
             rest = content
             while len(rest) > MAX_WIDTH - len(indent):
-                room = MAX_WIDTH - len(indent) - 2
+                room = MAX_WIDTH - len(indent) - BASH_CONTINUATION_MARKER_WIDTH
                 window = rest[:room]
                 break_at = window.rfind(" ")
                 if break_at <= 0:
@@ -254,10 +258,10 @@ def wrap_long_bash_fence_lines(lines: list[str]) -> list[str]:
                 wrapped_segments.append(indent + piece + " \\")
             if rest:
                 wrapped_segments.append(indent + ("  " if wrapped_segments else "") + rest)
-            output.extend(wrapped_segments)
+            wrapped_lines.extend(wrapped_segments)
         else:
-            output.append(line)
-    return output
+            wrapped_lines.append(each_line)
+    return wrapped_lines
 
 
 def main() -> None:

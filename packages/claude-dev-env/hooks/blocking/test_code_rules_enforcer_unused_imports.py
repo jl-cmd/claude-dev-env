@@ -165,7 +165,7 @@ def test_should_flag_each_unused_in_multi_import() -> None:
     )
 
 
-def test_should_not_flag_when_referenced_in_string_annotation() -> None:
+def test_should_not_flag_when_referenced_in_annotation() -> None:
     source = (
         "from typing import List\n\ndef run(xs: List[int]) -> None:\n    return None\n"
     )
@@ -241,4 +241,160 @@ def test_should_skip_star_import() -> None:
     issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
     assert issues == [], (
         f"Star imports cannot be meaningfully tracked - skip to avoid false positives, got: {issues}"
+    )
+
+
+def test_should_flag_when_name_only_appears_in_comment() -> None:
+    source = (
+        "import json\n"
+        "\n"
+        "# json reserved for later\n"
+        "def run() -> None:\n"
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert any("json" in each_issue for each_issue in issues), (
+        f"Mentions in comments must not count as references, got: {issues}"
+    )
+
+
+def test_should_not_skip_when_type_checking_only_in_string_constant() -> None:
+    source = (
+        'from config.constants import UNUSED_NAME\n'
+        '\n'
+        'HELP_TEXT = "See TYPE_CHECKING docs"\n'
+        '\n'
+        "def run() -> None:\n"
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert any("UNUSED_NAME" in each_issue for each_issue in issues), (
+        f"Substring TYPE_CHECKING in prose must not skip the scan, got: {issues}"
+    )
+
+
+def test_should_flag_when_noqa_lists_only_non_f401_codes() -> None:
+    source = (
+        "from config.constants import UNUSED  # noqa: E402\n"
+        "\n"
+        "def run() -> None:\n"
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert any("UNUSED" in each_issue for each_issue in issues), (
+        f"E402-only noqa must not suppress unused-import findings, got: {issues}"
+    )
+
+
+def test_should_skip_when_noqa_is_bare() -> None:
+    source = (
+        "from config.constants import UNUSED  # noqa\n"
+        "\n"
+        "def run() -> None:\n"
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert issues == [], f"Bare noqa must suppress unused import, got: {issues}"
+
+
+def test_should_flag_import_when_only_shadowed_local_name_is_loaded() -> None:
+    source = (
+        "import json\n"
+        "\n"
+        "def run(json: object) -> object:\n"
+        "    return json\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert any("json" in each_issue for each_issue in issues), (
+        f"Local shadow bindings must not count as import references, got: {issues}"
+    )
+
+
+def test_should_skip_when_type_checking_uses_imported_alias() -> None:
+    source = (
+        "from typing import TYPE_CHECKING as IS_TYPE_CHECKING\n"
+        "from config.constants import UNUSED_NAME\n"
+        "\n"
+        "if IS_TYPE_CHECKING:\n"
+        "    from somewhere import OtherName\n"
+        "\n"
+        "def run() -> None:\n"
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"TYPE_CHECKING imported aliases must skip annotation-only files, got: {issues}"
+    )
+
+
+def test_should_skip_when_type_checking_uses_module_alias() -> None:
+    source = (
+        "import typing as t\n"
+        "from config.constants import UNUSED_NAME\n"
+        "\n"
+        "if t.TYPE_CHECKING:\n"
+        "    from somewhere import OtherName\n"
+        "\n"
+        "def run() -> None:\n"
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"TYPE_CHECKING module aliases must skip annotation-only files, got: {issues}"
+    )
+
+
+def test_should_not_flag_when_referenced_in_quoted_annotation() -> None:
+    source = (
+        "from typing import List\n"
+        "\n"
+        "def run(xs: \"List[int]\") -> None:\n"
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Quoted annotations must count as import references, got: {issues}"
+    )
+
+
+def test_should_flag_when_noqa_only_appears_inside_string_literal() -> None:
+    source = (
+        "from config.constants import UNUSED; MARKER = '# noqa: F401'\n"
+        "\n"
+        "def run() -> None:\n"
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert any("UNUSED" in each_issue for each_issue in issues), (
+        f"String literal noqa text must not suppress unused imports, got: {issues}"
+    )
+
+
+def test_should_not_flag_when_class_body_binding_matches_import_used_in_method() -> None:
+    source = (
+        "import os\n"
+        "\n"
+        "class Foo:\n"
+        "    os = 'linux'\n"
+        "\n"
+        "    def bar(self) -> str:\n"
+        "        return os.path.join('a', 'b')\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Class body bindings must not shadow module-level imports inside methods, got: {issues}"
+    )
+
+
+def test_should_not_flag_when_comprehension_variable_matches_import_used_after() -> None:
+    source = (
+        "import os\n"
+        "\n"
+        "def run() -> str:\n"
+        "    result = [x for os in [1, 2, 3]]\n"
+        "    return os.path.join('a', 'b')\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Comprehension iteration variables must not shadow enclosing scope bindings, got: {issues}"
     )

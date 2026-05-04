@@ -100,12 +100,9 @@ def test_reflow_merged_line_preserves_long_markdown_reference_definition() -> No
     long_url_token = "x" * 90
     line = f"[bugbot-ref]: https://example.com/{long_url_token}"
     stripped_line = line.strip()
-    maximum_width = reflow_module.SKILL_REFLOW_MAXIMUM_WIDTH
+    maximum_width = reflow_module.MAX_WIDTH
     assert len(stripped_line) > maximum_width
-    matched_reference = (
-        reflow_module.MARKDOWN_REFERENCE_DEFINITION_PATTERN.match(stripped_line)
-    )
-    assert matched_reference is not None
+    assert reflow_module.REF_DEF_RE.match(stripped_line) is not None
     assert reflow_module.reflow_merged_line(line) == [stripped_line]
 
 

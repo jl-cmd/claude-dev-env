@@ -57,9 +57,11 @@ from config.stuttering_check_config import (  # noqa: E402
 )
 from config.sys_path_insert_constants import MAX_SYS_PATH_INSERT_ISSUES, SYS_PATH_INSERT_GUIDANCE  # noqa: E402
 from config.unused_module_import_constants import (  # noqa: E402
+    ALL_TYPING_MODULE_NAMES,
     MAX_UNUSED_IMPORT_ISSUES,
     TYPE_CHECKING_IDENTIFIER,
     UNUSED_IMPORT_GUIDANCE,
+    line_suppresses_unused_import_via_noqa,
 )
 from config.stuttering_import_binding_constants import (  # noqa: E402
     AST_LINENO_ATTRIBUTE,
@@ -2324,30 +2326,269 @@ def _import_alias_pairs(
     return bindings
 
 
-def _name_appears_outside_imports(
-    all_content_lines: list[str],
-    all_import_line_numbers: set[int],
-    name: str,
+def _import_statement_line_ranges(tree: ast.Module) -> list[tuple[int, int]]:
+    ranges: list[tuple[int, int]] = []
+    for each_node in tree.body:
+        if isinstance(each_node, (ast.Import, ast.ImportFrom)):
+            start_line = each_node.lineno
+            end_line = each_node.end_lineno or each_node.lineno
+            ranges.append((start_line, end_line))
+    return ranges
+
+
+def _line_number_falls_in_import_ranges(
+    line_number: int,
+    all_import_line_ranges: list[tuple[int, int]],
 ) -> bool:
-    name_pattern = re.compile(rf"\b{re.escape(name)}\b")
-    for each_line_index, each_line in enumerate(all_content_lines, start=1):
-        if each_line_index in all_import_line_numbers:
-            continue
-        if name_pattern.search(each_line):
+    for each_start, each_end in all_import_line_ranges:
+        if each_start <= line_number <= each_end:
             return True
     return False
 
 
-def _line_carries_noqa_marker(line_text: str) -> bool:
-    return "# noqa" in line_text or "#noqa" in line_text
+def _type_checking_guard_aliases(tree: ast.Module) -> tuple[set[str], set[str]]:
+    all_type_checking_names = {TYPE_CHECKING_IDENTIFIER}
+    all_type_checking_module_aliases = set(ALL_TYPING_MODULE_NAMES)
+    for each_statement in tree.body:
+        if isinstance(each_statement, ast.Import):
+            for each_alias in each_statement.names:
+                if each_alias.name in ALL_TYPING_MODULE_NAMES:
+                    all_type_checking_module_aliases.add(
+                        each_alias.asname or each_alias.name
+                    )
+        elif isinstance(each_statement, ast.ImportFrom):
+            if each_statement.module not in ALL_TYPING_MODULE_NAMES:
+                continue
+            for each_alias in each_statement.names:
+                if each_alias.name == TYPE_CHECKING_IDENTIFIER:
+                    all_type_checking_names.add(each_alias.asname or each_alias.name)
+    return all_type_checking_names, all_type_checking_module_aliases
+
+
+def _expression_guards_type_checking_block(
+    test_expression: ast.expr,
+    all_type_checking_names: set[str],
+    all_type_checking_module_aliases: set[str],
+) -> bool:
+    if isinstance(test_expression, ast.Name):
+        return test_expression.id in all_type_checking_names
+    if isinstance(test_expression, ast.Attribute):
+        if test_expression.attr != TYPE_CHECKING_IDENTIFIER:
+            return False
+        receiver = test_expression.value
+        return (
+            isinstance(receiver, ast.Name)
+            and receiver.id in all_type_checking_module_aliases
+        )
+    return False
+
+
+def _module_body_declares_type_checking_gate(tree: ast.Module) -> bool:
+    (
+        all_type_checking_names,
+        all_type_checking_module_aliases,
+    ) = _type_checking_guard_aliases(tree)
+    return any(
+        isinstance(each_statement, ast.If)
+        and _expression_guards_type_checking_block(
+            each_statement.test,
+            all_type_checking_names,
+            all_type_checking_module_aliases,
+        )
+        for each_statement in tree.body
+    )
+
+
+def _attribute_root_name_if_loaded(attribute_node: ast.Attribute) -> ast.Name | None:
+    current: ast.expr = attribute_node
+    while isinstance(current, ast.Attribute):
+        current = current.value
+    if isinstance(current, ast.Name) and isinstance(current.ctx, ast.Load):
+        return current
+    return None
+
+
+class _ScopeBindingCollector(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.binding_names: set[str] = set()
+        self.global_names: set[str] = set()
+
+    def collect_arguments(self, arguments: ast.arguments) -> None:
+        for each_argument in (
+            arguments.posonlyargs
+            + arguments.args
+            + arguments.kwonlyargs
+        ):
+            self.binding_names.add(each_argument.arg)
+        if arguments.vararg is not None:
+            self.binding_names.add(arguments.vararg.arg)
+        if arguments.kwarg is not None:
+            self.binding_names.add(arguments.kwarg.arg)
+
+    def visit_Global(self, node: ast.Global) -> None:
+        self.global_names.update(node.names)
+
+    def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
+        self.binding_names.update(node.names)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self.binding_names.add(node.name)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self.binding_names.add(node.name)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.binding_names.add(node.name)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return None
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if isinstance(node.ctx, ast.Store):
+            self.binding_names.add(node.id)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for each_alias in node.names:
+            self.binding_names.add(each_alias.asname or each_alias.name.split(".")[0])
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        for each_alias in node.names:
+            if each_alias.name != WILDCARD_IMPORT_SENTINEL:
+                self.binding_names.add(each_alias.asname or each_alias.name)
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        return None
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        return None
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        return None
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        return None
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+        if node.name is not None:
+            self.binding_names.add(node.name)
+        self.generic_visit(node)
+
+
+def _scope_binding_names(scope_node: ast.AST) -> tuple[set[str], set[str]]:
+    collector = _ScopeBindingCollector()
+    if isinstance(scope_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        collector.collect_arguments(scope_node.args)
+        for each_statement in scope_node.body:
+            collector.visit(each_statement)
+    elif isinstance(scope_node, ast.Lambda):
+        collector.collect_arguments(scope_node.args)
+        collector.visit(scope_node.body)
+    elif isinstance(scope_node, ast.ClassDef):
+        for each_statement in scope_node.body:
+            collector.visit(each_statement)
+    return collector.binding_names, collector.global_names
+
+
+def _load_name_is_shadowed(
+    load_node: ast.AST,
+    name: str,
+    parent_by_node_id: dict[int, ast.AST],
+) -> bool:
+    current = parent_by_node_id.get(id(load_node))
+    has_passed_function_scope = False
+    while current is not None:
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            has_passed_function_scope = True
+            binding_names, global_names = _scope_binding_names(current)
+            if name in global_names:
+                return False
+            if name in binding_names:
+                return True
+        elif isinstance(current, ast.ClassDef) and not has_passed_function_scope:
+            binding_names, global_names = _scope_binding_names(current)
+            if name in global_names:
+                return False
+            if name in binding_names:
+                return True
+        current = parent_by_node_id.get(id(current))
+    return False
+
+
+def _names_from_annotation_text(annotation_text: str) -> set[str]:
+    try:
+        annotation_tree = ast.parse(annotation_text, mode="eval")
+    except SyntaxError:
+        return set()
+    referenced_names: set[str] = set()
+    for each_node in ast.walk(annotation_tree):
+        if isinstance(each_node, ast.Name):
+            referenced_names.add(each_node.id)
+        elif isinstance(each_node, ast.Attribute):
+            root_name = _attribute_root_name_if_loaded(each_node)
+            if root_name is not None:
+                referenced_names.add(root_name.id)
+    return referenced_names
+
+
+def _collect_string_annotation_names(tree: ast.Module) -> set[str]:
+    referenced_names: set[str] = set()
+    for each_node in ast.walk(tree):
+        annotation = None
+        if isinstance(each_node, ast.arg):
+            annotation = each_node.annotation
+        elif isinstance(each_node, (ast.AnnAssign, ast.FunctionDef, ast.AsyncFunctionDef)):
+            annotation = each_node.annotation if isinstance(each_node, ast.AnnAssign) else each_node.returns
+        if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+            referenced_names.update(_names_from_annotation_text(annotation.value))
+    return referenced_names
+
+
+def _collect_load_names_outside_import_ranges(
+    tree: ast.Module,
+    all_import_line_ranges: list[tuple[int, int]],
+) -> set[str]:
+    parent_by_node_id = _build_parent_map(tree)
+    referenced_names: set[str] = set()
+    for each_node in ast.walk(tree):
+        if isinstance(each_node, ast.Name) and isinstance(each_node.ctx, ast.Load):
+            line_number = each_node.lineno
+            if line_number is None or _line_number_falls_in_import_ranges(
+                line_number,
+                all_import_line_ranges,
+            ):
+                continue
+            if _load_name_is_shadowed(each_node, each_node.id, parent_by_node_id):
+                continue
+            referenced_names.add(each_node.id)
+        elif isinstance(each_node, ast.Attribute) and isinstance(
+            each_node.ctx, ast.Load
+        ):
+            line_number = each_node.lineno
+            if line_number is None or _line_number_falls_in_import_ranges(
+                line_number,
+                all_import_line_ranges,
+            ):
+                continue
+            root_name = _attribute_root_name_if_loaded(each_node)
+            if root_name is not None and not _load_name_is_shadowed(
+                root_name,
+                root_name.id,
+                parent_by_node_id,
+            ):
+                referenced_names.add(root_name.id)
+    referenced_names.update(_collect_string_annotation_names(tree))
+    return referenced_names
 
 
 def check_unused_module_level_imports(content: str, file_path: str) -> list[str]:
     """Flag module-level imports that are never referenced in the rest of the file.
 
-    The rule is intentionally conservative — files declaring __all__ or
-    using TYPE_CHECKING are skipped to avoid false positives on
-    re-exports and annotation-only imports.
+    References are detected from AST ``Name`` / ``Attribute`` loads outside import
+    statements so mentions in comments or string literals do not count. Files
+    declaring ``__all__`` (including annotated assignments) are skipped. Files
+    whose module body includes ``if TYPE_CHECKING:`` (or
+    ``typing[._extensions].TYPE_CHECKING``) are skipped. Suppression honors bare
+    ``# noqa`` or an explicit ``F401`` code in the noqa list only.
     """
     if is_test_file(file_path):
         return []
@@ -2374,16 +2615,17 @@ def check_unused_module_level_imports(content: str, file_path: str) -> list[str]
     )
     if file_declares_dunder_all:
         return []
-    if TYPE_CHECKING_IDENTIFIER in content:
+    if _module_body_declares_type_checking_gate(tree):
         return []
     content_lines = content.splitlines()
-    import_line_numbers: set[int] = set()
+    import_line_ranges = _import_statement_line_ranges(tree)
+    referenced_names = _collect_load_names_outside_import_ranges(
+        tree,
+        import_line_ranges,
+    )
     import_bindings: list[tuple[str, int, int | None]] = []
     for each_node in tree.body:
         if isinstance(each_node, (ast.Import, ast.ImportFrom)):
-            import_line_numbers.add(each_node.lineno)
-            for each_alias in each_node.names:
-                import_line_numbers.add(each_alias.lineno or each_node.lineno)
             if isinstance(each_node, ast.ImportFrom) and each_node.module == "__future__":
                 continue
             for each_binding in _import_alias_pairs(each_node):
@@ -2391,12 +2633,16 @@ def check_unused_module_level_imports(content: str, file_path: str) -> list[str]
     issues: list[str] = []
     for each_name, each_line_number, each_from_keyword_line in import_bindings:
         if 1 <= each_line_number <= len(content_lines):
-            if _line_carries_noqa_marker(content_lines[each_line_number - 1]):
+            if line_suppresses_unused_import_via_noqa(content_lines[each_line_number - 1]):
                 continue
-        if each_from_keyword_line is not None and 1 <= each_from_keyword_line <= len(content_lines):
-            if _line_carries_noqa_marker(content_lines[each_from_keyword_line - 1]):
+        if each_from_keyword_line is not None and 1 <= each_from_keyword_line <= len(
+            content_lines
+        ):
+            if line_suppresses_unused_import_via_noqa(
+                content_lines[each_from_keyword_line - 1]
+            ):
                 continue
-        if _name_appears_outside_imports(content_lines, import_line_numbers, each_name):
+        if each_name in referenced_names:
             continue
         issues.append(
             f"Line {each_line_number}: unused module-level import {each_name!r}"
