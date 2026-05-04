@@ -19,6 +19,7 @@
         "hooks/",
         "system-prompts/",
         "scripts/",
+        "_shared/",
         "CLAUDE.md"
     ],
     "keywords": [
