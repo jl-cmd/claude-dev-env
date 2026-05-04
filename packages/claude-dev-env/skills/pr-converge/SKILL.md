@@ -23,7 +23,7 @@ description: >-
   still flipped ready and a follow-up draft PR is opened off the converged HEAD
   with those findings as a checklist. After all gates pass the PR is flipped to
   ready for review and the loop terminates. Multi-PR runs persist traffic in
-  `<TMPDIR>/pr-converge-<session_id>/state.json>` per §Multi-PR orchestration
+  `<TMPDIR>/pr-converge-<session_id>/state.json` per §Multi-PR orchestration
   model; single-PR-only runs may use the conversation state line instead.
   Triggers: '/pr-converge', 'drive PR to convergence', 'loop bugbot and
   bugteam', 'babysit bugbot and bugteam', 'until both are clean', 'converge this

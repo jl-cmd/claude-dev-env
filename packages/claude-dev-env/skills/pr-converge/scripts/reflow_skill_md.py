@@ -62,10 +62,6 @@ def reflow_yaml_description_block(lines: list[str], body_start: int) -> tuple[li
             body_parts.append(stripped)
         index += 1
     merged = " ".join(body_parts)
-    merged = merged.replace(
-        "`<TMPDIR>/pr-converge-<session_id>/state.json` per",
-        "`<TMPDIR>/pr-converge-<session_id>/state.json>` per",
-    )
     wrapped = textwrap.fill(
         merged,
         width=MAX_WIDTH,
