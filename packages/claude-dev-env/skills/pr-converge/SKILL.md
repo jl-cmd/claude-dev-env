@@ -1305,7 +1305,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/reply_to_inline_comment.py" \
           `fetch_copilot_inline_comments.py`; runs `open_followup_copilot_pr.py`
           off `current_head` to create branch
           `chore/copilot-followup-<NUMBER>-<short_sha>` with title `chore:
-          address Copilot findings from PR
-# <NUMBER>`; reports both PR URLs to the user; queues `/pr-converge` on the new
-# PR for the user to invoke; current PR's convergence is final]
+          address Copilot findings from PR #<NUMBER>`; reports both PR URLs to
+          the user; queues `/pr-converge` on the new PR for the user to invoke;
+          current PR's convergence is final]
 </example>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,27 @@ def test_find_repository_root_returns_git_root(tmp_path: Path) -> None:
     nested = tmp_path / "a" / "b"
     nested.mkdir(parents=True)
     assert preflight.find_repository_root(nested) == tmp_path.resolve()
+
+
+def test_load_preflight_moves_script_directory_to_front() -> None:
+    script_directory_resolved = str(SCRIPT.parent.resolve())
+    script_directory_absolute = str(SCRIPT.parent.absolute())
+    original_sys_path = list(sys.path)
+    try:
+        sys.path.insert(0, script_directory_resolved)
+        sys.path.insert(0, str(REPO_ROOT))
+        _load_preflight_module()
+        assert os.path.samefile(sys.path[0], script_directory_resolved)
+        assert sys.path[0] == script_directory_absolute
+        equivalent_count = sum(
+            1
+            for each_entry in sys.path
+            if os.path.exists(each_entry)
+            and os.path.samefile(each_entry, SCRIPT.parent)
+        )
+        assert equivalent_count == 1
+    finally:
+        sys.path[:] = original_sys_path
 
 
 def test_main_help_exits_zero() -> None:

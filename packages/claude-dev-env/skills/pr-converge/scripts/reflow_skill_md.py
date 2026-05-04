@@ -9,39 +9,68 @@ Run: python3 packages/claude-dev-env/skills/pr-converge/scripts/reflow_skill_md.
 
 from __future__ import annotations
 
-import re
+import sys
 import textwrap
 from pathlib import Path
+from re import Match
 
-MAX_WIDTH = 80
-SKILL_PATH = Path(__file__).resolve().parent.parent / "SKILL.md"
+script_directory = str(Path(__file__).resolve().parent)
+while script_directory in sys.path:
+    sys.path.remove(script_directory)
+if script_directory not in sys.path:
+    sys.path.insert(0, script_directory)
 
-ORDERED_RE = re.compile(r"^(\s*)(\d+\.\s)(.*)$")
-BULLET_RE = re.compile(r"^(\s*)([-*]\s)(.*)$")
-UNFINISHED_MD_LINK_TARGET = re.compile(r"\]\([^)]*$")
+from evict_cached_config_modules import evict_cached_config_modules
+
+evict_cached_config_modules()
+
+from config.pr_converge_constants import (
+    BASH_CONTINUATION_INDENT,
+    BASH_FENCE_LANGUAGE,
+    BASH_LINE_CONTINUATION_MARKER_WIDTH,
+    BASH_LINE_CONTINUATION_SUFFIX,
+    BASH_MINIMUM_SEGMENT_WIDTH,
+    BULLET_MARKDOWN_LIST_PATTERN,
+    CODE_FENCE_MARKER_LENGTH,
+    EXAMPLE_CLOSE_TAG,
+    EXAMPLE_OPEN_TAG,
+    LONG_ROW_PREVIEW_LIMIT,
+    MARKDOWN_CODE_FENCE_MARKER,
+    MARKDOWN_HEADING_PATTERN,
+    MARKDOWN_REFERENCE_DEFINITION_PATTERN,
+    ORDERED_MARKDOWN_LIST_PATTERN,
+    PR_CONVERGE_SKILL_PATH,
+    REFLOW_FRONT_MATTER_ERROR,
+    SKILL_REFLOW_MAXIMUM_WIDTH,
+    UNFINISHED_MARKDOWN_LINK_TARGET_PATTERN,
+    YAML_DESCRIPTION_PREFIX,
+    YAML_FRONT_MATTER_DELIMITER,
+)
 
 
 def wrap_paragraph_plain(text: str) -> list[str]:
+    """Wrap plain markdown paragraph text."""
     collapsed = " ".join(text.split())
     if not collapsed:
         return []
     return textwrap.fill(
         collapsed,
-        width=MAX_WIDTH,
+        width=SKILL_REFLOW_MAXIMUM_WIDTH,
         break_long_words=False,
         break_on_hyphens=False,
     ).splitlines()
 
 
-def wrap_list_item(lead_ws: str, marker: str, body: str) -> list[str]:
+def wrap_list_item(leading_whitespace: str, marker: str, body: str) -> list[str]:
+    """Wrap one markdown list item with hanging indentation."""
     collapsed = " ".join(body.split())
     if not collapsed:
-        return [lead_ws + marker.rstrip()]
-    prefix = lead_ws + marker
-    subsequent = lead_ws + (" " * len(marker))
+        return [leading_whitespace + marker.rstrip()]
+    prefix = leading_whitespace + marker
+    subsequent = leading_whitespace + (" " * len(marker))
     return textwrap.fill(
         collapsed,
-        width=MAX_WIDTH,
+        width=SKILL_REFLOW_MAXIMUM_WIDTH,
         initial_indent=prefix,
         subsequent_indent=subsequent,
         break_long_words=False,
@@ -49,22 +78,25 @@ def wrap_list_item(lead_ws: str, marker: str, body: str) -> list[str]:
     ).splitlines()
 
 
-def reflow_yaml_description_block(lines: list[str], body_start: int) -> tuple[list[str], int]:
-    body_parts: list[str] = []
+def reflow_yaml_description_block(
+    all_lines: list[str], body_start: int
+) -> tuple[list[str], int]:
+    """Reflow the front matter description block and return the next index."""
+    all_body_parts: list[str] = []
     index = body_start
-    while index < len(lines):
-        line = lines[index]
-        if line.strip() == "---":
+    while index < len(all_lines):
+        line = all_lines[index]
+        if line.strip() == YAML_FRONT_MATTER_DELIMITER:
             index += 1
             break
         stripped = line.lstrip()
         if stripped:
-            body_parts.append(stripped)
+            all_body_parts.append(stripped)
         index += 1
-    merged = " ".join(body_parts)
+    merged = " ".join(all_body_parts)
     wrapped = textwrap.fill(
         merged,
-        width=MAX_WIDTH,
+        width=SKILL_REFLOW_MAXIMUM_WIDTH,
         initial_indent="  ",
         subsequent_indent="  ",
         break_long_words=False,
@@ -74,23 +106,29 @@ def reflow_yaml_description_block(lines: list[str], body_start: int) -> tuple[li
 
 
 def is_table_line(line: str) -> bool:
+    """Return whether the markdown line is a table row."""
     return line.lstrip().startswith("|")
 
 
 def is_new_logical_line(stripped: str) -> bool:
+    """Return whether stripped text starts a separate markdown block."""
     if not stripped:
         return False
-    if stripped.startswith("```"):
-        return True
-    if stripped.startswith("#"):
-        return True
-    if stripped == "---":
+    if stripped.startswith(MARKDOWN_CODE_FENCE_MARKER):
         return True
     if is_table_line(stripped):
         return True
-    if stripped.startswith("<example>") or stripped.startswith("</example>"):
+    if stripped == YAML_FRONT_MATTER_DELIMITER:
         return True
-    if ORDERED_RE.match(stripped) or BULLET_RE.match(stripped):
+    if MARKDOWN_HEADING_PATTERN.match(stripped):
+        return True
+    if MARKDOWN_REFERENCE_DEFINITION_PATTERN.match(stripped):
+        return True
+    if stripped.startswith(EXAMPLE_OPEN_TAG) or stripped.startswith(EXAMPLE_CLOSE_TAG):
+        return True
+    if ORDERED_MARKDOWN_LIST_PATTERN.match(stripped) or BULLET_MARKDOWN_LIST_PATTERN.match(
+        stripped
+    ):
         return True
     return False
 
@@ -101,183 +139,291 @@ def merge_without_space(buffer: str, continuation: str) -> bool:
     stripped = continuation.lstrip()
     if not base or not stripped:
         return False
-    if stripped.startswith("/") and UNFINISHED_MD_LINK_TARGET.search(base):
+    if stripped.startswith("/") and UNFINISHED_MARKDOWN_LINK_TARGET_PATTERN.search(base):
         return True
     return False
 
 
-def merge_soft_breaks(lines: list[str]) -> list[str]:
-    output: list[str] = []
+def merge_soft_breaks(all_lines: list[str]) -> list[str]:
+    """Merge soft markdown line breaks outside fenced blocks."""
+    all_merged_lines: list[str] = []
     index = 0
-    in_fence = False
-    while index < len(lines):
-        raw = lines[index]
+    is_in_fence = False
+    while index < len(all_lines):
+        raw = all_lines[index]
         line = raw.rstrip("\n")
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
-            output.append(line)
+        if line.lstrip().startswith(MARKDOWN_CODE_FENCE_MARKER):
+            is_in_fence = not is_in_fence
+            all_merged_lines.append(line)
             index += 1
             continue
-        if in_fence:
-            output.append(line)
+        if is_in_fence:
+            all_merged_lines.append(line)
             index += 1
             continue
         if line.strip() == "":
-            output.append(line)
+            all_merged_lines.append(line)
             index += 1
             continue
-        buffer_line = line
+        buffer_line, index = merge_continuation_lines(all_lines, line, index + 1)
+        all_merged_lines.append(buffer_line)
+    return all_merged_lines
+
+
+def merge_continuation_lines(
+    all_lines: list[str], buffer_line: str, start_index: int
+) -> tuple[str, int]:
+    """Merge continuation lines until a markdown boundary appears."""
+    index = start_index
+    while index < len(all_lines):
+        next_raw = all_lines[index].rstrip("\n")
+        stripped_next = next_raw.lstrip()
+        if should_stop_soft_merge(next_raw, stripped_next):
+            break
+        buffer_line = combine_continuation_line(buffer_line, stripped_next)
         index += 1
-        while index < len(lines):
-            next_raw = lines[index].rstrip("\n")
-            if next_raw.strip() == "":
-                break
-            if next_raw.lstrip().startswith("```"):
-                break
-            stripped_next = next_raw.lstrip()
-            if is_new_logical_line(stripped_next):
-                break
-            if merge_without_space(buffer_line, stripped_next):
-                buffer_line = buffer_line.rstrip() + stripped_next
-            else:
-                buffer_line = f"{buffer_line.rstrip()} {stripped_next}"
-            index += 1
-        output.append(buffer_line)
-    return output
+    return buffer_line, index
+
+
+def should_stop_soft_merge(next_raw: str, stripped_next: str) -> bool:
+    """Return whether a candidate continuation starts a new markdown block."""
+    if next_raw.strip() == "":
+        return True
+    if stripped_next.startswith(MARKDOWN_CODE_FENCE_MARKER):
+        return True
+    return is_new_logical_line(stripped_next)
+
+
+def combine_continuation_line(buffer_line: str, stripped_next: str) -> str:
+    """Join a continuation with or without a separating space."""
+    if merge_without_space(buffer_line, stripped_next):
+        return buffer_line.rstrip() + stripped_next
+    return f"{buffer_line.rstrip()} {stripped_next}"
 
 
 def reflow_merged_line(line: str) -> list[str]:
+    """Reflow a merged markdown line according to its block type."""
     stripped = line.strip()
-    if stripped == "":
-        return [""]
-    if stripped.startswith("```"):
-        return [line]
-    if stripped.startswith("#"):
-        if len(stripped) <= MAX_WIDTH:
-            return [stripped]
-        title = stripped.lstrip("#").strip()
-        level = len(stripped) - len(stripped.lstrip("#"))
-        prefix = "#" * level + " "
-        return textwrap.fill(
-            title,
-            width=MAX_WIDTH,
-            initial_indent=prefix,
-            subsequent_indent=prefix,
-            break_long_words=False,
-            break_on_hyphens=False,
-        ).splitlines()
-    if stripped == "---":
-        return ["---"]
-    if is_table_line(stripped):
-        return [stripped]
-    if stripped.startswith("</example>"):
-        return [stripped]
-    if stripped.startswith("<example>"):
-        inner = stripped[len("<example>") :].strip()
-        if not inner:
-            return ["<example>"]
-        tag = "<example> "
-        subsequent = " " * len(tag)
-        return textwrap.fill(
-            " ".join(inner.split()),
-            width=MAX_WIDTH,
-            initial_indent=tag,
-            subsequent_indent=subsequent,
-            break_long_words=False,
-            break_on_hyphens=False,
-        ).splitlines()
-
-    ordered = ORDERED_RE.match(line)
+    structural_lines = reflow_structural_line(line, stripped)
+    if structural_lines is not None:
+        return structural_lines
+    ordered = ORDERED_MARKDOWN_LIST_PATTERN.match(line)
     if ordered:
-        return wrap_list_item(ordered.group(1), ordered.group(2), ordered.group(3))
-
-    bullet = BULLET_RE.match(line)
+        return wrap_match_list_item(ordered)
+    bullet = BULLET_MARKDOWN_LIST_PATTERN.match(line)
     if bullet:
-        return wrap_list_item(bullet.group(1), bullet.group(2), bullet.group(3))
-
+        return wrap_match_list_item(bullet)
     return wrap_paragraph_plain(stripped)
 
 
-def reflow_markdown_body(lines: list[str]) -> list[str]:
-    merged = merge_soft_breaks(lines)
-    output: list[str] = []
+def reflow_structural_line(line: str, stripped: str) -> list[str] | None:
+    """Return structural markdown lines that should not use paragraph wrapping."""
+    if stripped == "":
+        return [""]
+    if stripped.startswith(MARKDOWN_CODE_FENCE_MARKER):
+        return [line]
+    if MARKDOWN_HEADING_PATTERN.match(stripped):
+        return reflow_heading_line(stripped)
+    if (
+        stripped == YAML_FRONT_MATTER_DELIMITER
+        or is_table_line(stripped)
+        or MARKDOWN_REFERENCE_DEFINITION_PATTERN.match(stripped)
+    ):
+        return [stripped]
+    if stripped.startswith(EXAMPLE_CLOSE_TAG):
+        return [stripped]
+    if stripped.startswith(EXAMPLE_OPEN_TAG):
+        return reflow_example_line(stripped)
+    return None
+
+
+def wrap_match_list_item(match_result: Match[str]) -> list[str]:
+    """Wrap a regex-matched markdown list item."""
+    return wrap_list_item(
+        match_result.group("leading_whitespace"),
+        match_result.group("marker"),
+        match_result.group("body"),
+    )
+
+
+def reflow_heading_line(stripped: str) -> list[str]:
+    """Reflow one markdown heading line."""
+    if len(stripped) <= SKILL_REFLOW_MAXIMUM_WIDTH:
+        return [stripped]
+    title = stripped.lstrip("#").strip()
+    level = len(stripped) - len(stripped.lstrip("#"))
+    prefix = "#" * level + " "
+    return textwrap.fill(
+        title,
+        width=SKILL_REFLOW_MAXIMUM_WIDTH,
+        initial_indent=prefix,
+        subsequent_indent=prefix,
+        break_long_words=False,
+        break_on_hyphens=False,
+    ).splitlines()
+
+
+def reflow_example_line(stripped: str) -> list[str]:
+    """Reflow one example tag line."""
+    inner = stripped[len(EXAMPLE_OPEN_TAG) :].strip()
+    if not inner:
+        return [EXAMPLE_OPEN_TAG]
+    tag = f"{EXAMPLE_OPEN_TAG} "
+    subsequent = " " * len(tag)
+    return textwrap.fill(
+        " ".join(inner.split()),
+        width=SKILL_REFLOW_MAXIMUM_WIDTH,
+        initial_indent=tag,
+        subsequent_indent=subsequent,
+        break_long_words=False,
+        break_on_hyphens=False,
+    ).splitlines()
+
+
+def reflow_markdown_body(all_lines: list[str]) -> list[str]:
+    """Reflow markdown body lines after front matter."""
+    merged = merge_soft_breaks(all_lines)
+    all_reflowed_lines: list[str] = []
     for each_line in merged:
         if each_line.strip() == "":
-            output.append("")
+            all_reflowed_lines.append("")
             continue
-        output.extend(reflow_merged_line(each_line))
-    return output
+        all_reflowed_lines.extend(reflow_merged_line(each_line))
+    return all_reflowed_lines
 
 
-def wrap_long_bash_fence_lines(lines: list[str]) -> list[str]:
-    """Hard-wrap only ```bash fence bodies that still exceed MAX_WIDTH."""
-    output: list[str] = []
-    in_bash_fence = False
-    for line in lines:
-        stripped = line.lstrip()
-        if stripped.startswith("```"):
-            if not in_bash_fence:
-                lang = stripped[3:].strip().lower()
-                in_bash_fence = lang == "bash"
-            else:
-                in_bash_fence = False
-            output.append(line)
+def wrap_long_bash_fence_lines(all_lines: list[str]) -> list[str]:
+    """Hard-wrap only long ```bash fence body lines."""
+    all_wrapped_lines: list[str] = []
+    is_in_bash_fence = False
+    for each_line in all_lines:
+        stripped = each_line.lstrip()
+        if stripped.startswith(MARKDOWN_CODE_FENCE_MARKER):
+            is_in_bash_fence = is_next_line_in_bash_fence(stripped, is_in_bash_fence)
+            all_wrapped_lines.append(each_line)
             continue
-        if in_bash_fence and len(line) > MAX_WIDTH:
-            indent_len = len(line) - len(line.lstrip())
-            indent = line[:indent_len]
-            content = line.lstrip()
-            wrapped_segments: list[str] = []
-            rest = content
-            while len(rest) > MAX_WIDTH - len(indent):
-                room = MAX_WIDTH - len(indent) - 2
-                window = rest[:room]
-                break_at = window.rfind(" ")
-                if break_at <= 0:
-                    break_at = room
-                piece = rest[:break_at].rstrip()
-                rest = rest[break_at:].lstrip()
-                wrapped_segments.append(indent + piece + " \\")
-            if rest:
-                wrapped_segments.append(indent + ("  " if wrapped_segments else "") + rest)
-            output.extend(wrapped_segments)
-        else:
-            output.append(line)
-    return output
+        all_wrapped_lines.extend(wrap_bash_line_if_needed(each_line, is_in_bash_fence))
+    return all_wrapped_lines
+
+
+def is_next_line_in_bash_fence(stripped: str, is_in_bash_fence: bool) -> bool:
+    """Return the next bash-fence state after a fence marker."""
+    if is_in_bash_fence:
+        return False
+    language = stripped[CODE_FENCE_MARKER_LENGTH:].strip().lower()
+    return language == BASH_FENCE_LANGUAGE
+
+
+def wrap_bash_line_if_needed(each_line: str, is_in_bash_fence: bool) -> list[str]:
+    """Return a wrapped bash line when it exceeds the configured width."""
+    if not is_in_bash_fence:
+        return [each_line]
+    if len(each_line) <= SKILL_REFLOW_MAXIMUM_WIDTH:
+        return [each_line]
+    return wrap_long_bash_line(each_line)
+
+
+def wrap_long_bash_line(each_line: str) -> list[str]:
+    """Wrap one long bash fence line with continuation markers."""
+    indent_length = len(each_line) - len(each_line.lstrip())
+    indent = each_line[:indent_length]
+    minimum_content_width = (
+        BASH_LINE_CONTINUATION_MARKER_WIDTH + BASH_MINIMUM_SEGMENT_WIDTH
+    )
+    if len(indent) + minimum_content_width >= SKILL_REFLOW_MAXIMUM_WIDTH:
+        return [each_line]
+    rest = each_line.lstrip()
+    all_wrapped_segments: list[str] = []
+    while len(rest) > bash_tail_width(indent, bool(all_wrapped_segments)):
+        rest = append_bash_continuation_segment(rest, indent, all_wrapped_segments)
+    if rest:
+        continuation_indent = BASH_CONTINUATION_INDENT if all_wrapped_segments else ""
+        all_wrapped_segments.append(indent + continuation_indent + rest)
+    return all_wrapped_segments
+
+
+def bash_tail_width(indent: str, has_wrapped_segments: bool) -> int:
+    """Return content width left for the final bash segment."""
+    continuation_indent_length = (
+        len(BASH_CONTINUATION_INDENT) if has_wrapped_segments else 0
+    )
+    return SKILL_REFLOW_MAXIMUM_WIDTH - len(indent) - continuation_indent_length
+
+
+def append_bash_continuation_segment(
+    rest: str, indent: str, all_wrapped_segments: list[str]
+) -> str:
+    """Append one continuation segment and return remaining text."""
+    available_width = (
+        SKILL_REFLOW_MAXIMUM_WIDTH - len(indent) - BASH_LINE_CONTINUATION_MARKER_WIDTH
+    )
+    window = rest[:available_width]
+    break_at = window.rfind(" ")
+    if break_at <= 0:
+        break_at = available_width
+    piece = rest[:break_at].rstrip()
+    all_wrapped_segments.append(indent + piece + BASH_LINE_CONTINUATION_SUFFIX)
+    return rest[break_at:].lstrip()
+
+
+def split_front_matter(all_skill_lines: list[str]) -> tuple[list[str], int]:
+    """Return reflowed front matter and the body start index."""
+    all_front_matter_lines = [YAML_FRONT_MATTER_DELIMITER]
+    index = 1
+    while index < len(all_skill_lines):
+        line = all_skill_lines[index]
+        if line.startswith(YAML_DESCRIPTION_PREFIX):
+            all_front_matter_lines.append(line)
+            index += 1
+            all_description_lines, index = reflow_yaml_description_block(
+                all_skill_lines, index
+            )
+            all_front_matter_lines.extend(all_description_lines)
+            all_front_matter_lines.append(YAML_FRONT_MATTER_DELIMITER)
+            break
+        all_front_matter_lines.append(line)
+        index += 1
+    return all_front_matter_lines, index
+
+
+def reflow_skill_markdown(skill_markdown: str) -> str:
+    """Return reflowed pr-converge skill markdown."""
+    all_skill_lines = skill_markdown.splitlines()
+    if not all_skill_lines or all_skill_lines[0].strip() != YAML_FRONT_MATTER_DELIMITER:
+        raise SystemExit(REFLOW_FRONT_MATTER_ERROR)
+    all_front_matter_lines, index = split_front_matter(all_skill_lines)
+    all_body_lines = reflow_markdown_body(all_skill_lines[index:])
+    all_wrapped_body_lines = wrap_long_bash_fence_lines(all_body_lines)
+    return "\n".join(all_front_matter_lines + all_wrapped_body_lines) + "\n"
+
+
+def write_reflow_summary(reflowed_skill_markdown: str) -> None:
+    """Write the reflow summary to stdout."""
+    all_lines = reflowed_skill_markdown.splitlines()
+    all_long_rows = [
+        (i, len(each_line_text))
+        for i, each_line_text in enumerate(all_lines, 1)
+        if len(each_line_text) > SKILL_REFLOW_MAXIMUM_WIDTH
+    ]
+    sys.stdout.write(f"SKILL.md reflowed; lines: {len(all_lines)}\n")
+    sys.stdout.write(
+        "lines longer than %d: %d\n"
+        % (SKILL_REFLOW_MAXIMUM_WIDTH, len(all_long_rows))
+    )
+    if all_long_rows[:LONG_ROW_PREVIEW_LIMIT]:
+        sys.stdout.write(
+            f"first long: {all_long_rows[:LONG_ROW_PREVIEW_LIMIT]}\n"
+        )
 
 
 def main() -> None:
-    raw = SKILL_PATH.read_text(encoding="utf-8")
-    lines = raw.splitlines()
-    if not lines or lines[0].strip() != "---":
-        raise SystemExit("expected YAML front matter starting with ---")
-
-    out: list[str] = ["---"]
-    index = 1
-    while index < len(lines):
-        line = lines[index]
-        if line.startswith("description: >-"):
-            out.append(line)
-            index += 1
-            desc_lines, index = reflow_yaml_description_block(lines, index)
-            out.extend(desc_lines)
-            out.append("---")
-            break
-        out.append(line)
-        index += 1
-
-    body = reflow_markdown_body(lines[index:])
-    body = wrap_long_bash_fence_lines(body)
-
-    text = "\n".join(out + body) + "\n"
-    SKILL_PATH.write_text(text, encoding="utf-8", newline="\n")
-
-    all_lines = text.splitlines()
-    long_rows = [(i, len(ln)) for i, ln in enumerate(all_lines, 1) if len(ln) > MAX_WIDTH]
-    print("SKILL.md reflowed; lines:", len(all_lines))
-    print("lines longer than %d: %d" % (MAX_WIDTH, len(long_rows)))
-    if long_rows[:20]:
-        print("first long:", long_rows[:20])
+    """Reflow the pr-converge SKILL.md file in place."""
+    skill_path = PR_CONVERGE_SKILL_PATH
+    reflowed_skill_markdown = reflow_skill_markdown(
+        skill_path.read_text(encoding="utf-8")
+    )
+    skill_path.write_text(reflowed_skill_markdown, encoding="utf-8", newline="\n")
+    write_reflow_summary(reflowed_skill_markdown)
 
 
 if __name__ == "__main__":
