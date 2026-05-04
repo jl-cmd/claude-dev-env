@@ -200,9 +200,9 @@ the auto-remediation only applies to the `core.hooksPath` failure mode.
 ### Step 0: Grant project permissions (once, first)
 
 ```bash
-python
-"${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/grant_project_claude_permis \
-sions.py"
+python \
+"${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/"\
+"grant_project_claude_permissions.py"
 ```
 
 `${CLAUDE_SKILL_DIR}` is host-substituted before the shell runs (unlike normal
@@ -532,9 +532,9 @@ On failure: log in final report; continue to Step 5.
 ### Step 5: Revoke permissions (always)
 
 ```bash
-python
-"${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/revoke_project_claude_permi \
-ssions.py"
+python \
+"${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/"\
+"revoke_project_claude_permissions.py"
 ```
 
 Removes Step 0 grant — run even if Step 4 partially failed (log separately).
