@@ -45,3 +45,12 @@ def test_skill_tears_down_team_only_on_full_convergence():
 def test_state_schema_includes_team_name_field():
     skill_text = _skill_text()
     assert '"team_name"' in skill_text or "team_name:" in skill_text
+
+
+def test_skill_md_physical_lines_fit_eighty_column_limit():
+    skill_text = _skill_text()
+    for each_line_number, each_physical_line in enumerate(skill_text.splitlines(), 1):
+        assert len(each_physical_line) <= 80, (
+            "SKILL.md line %s exceeds 80 columns (%s chars)"
+            % (each_line_number, len(each_physical_line))
+        )
