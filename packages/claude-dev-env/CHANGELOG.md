@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.36.1...claude-dev-env-v1.36.2) (2026-05-04)
+
+
+### Bug Fixes
+
+* **claude-dev-env:** include _shared/ in published npm tarball ([#352](https://github.com/jl-cmd/claude-code-config/issues/352)) ([1a9d0e4](https://github.com/jl-cmd/claude-code-config/commit/1a9d0e40ac056054814196ab6684125ac24a03b7))
+
 ## [1.36.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.36.0...claude-dev-env-v1.36.1) (2026-05-04)
 
 
