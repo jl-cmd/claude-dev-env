@@ -92,3 +92,12 @@ def test_constraints_warn_against_owned_mode_inside_orchestrator():
     constraints_text = _constraints_text()
     assert "orchestrator" in constraints_text.lower()
     assert "attach" in constraints_text
+
+
+def test_skill_md_physical_lines_fit_eighty_column_limit():
+    skill_text = _skill_text()
+    for each_line_number, each_physical_line in enumerate(skill_text.splitlines(), 1):
+        assert len(each_physical_line) <= 80, (
+            "SKILL.md line %s exceeds 80 columns (%s chars)"
+            % (each_line_number, len(each_physical_line))
+        )
