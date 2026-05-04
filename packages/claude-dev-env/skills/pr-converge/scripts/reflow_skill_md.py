@@ -9,7 +9,19 @@ Run: python3 packages/claude-dev-env/skills/pr-converge/scripts/reflow_skill_md.
 
 from __future__ import annotations
 
+import sys
 import textwrap
+from pathlib import Path
+
+script_directory = str(Path(__file__).resolve().parent)
+
+while script_directory in sys.path:
+    sys.path.remove(script_directory)
+sys.path.insert(0, script_directory)
+
+from evict_cached_config_modules import evict_cached_config_modules
+
+evict_cached_config_modules()
 
 from config.reflow_skill_md_constants import (
     BASH_CONTINUATION_MARKER_WIDTH,

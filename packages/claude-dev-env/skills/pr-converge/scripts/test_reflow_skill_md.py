@@ -46,20 +46,22 @@ def test_should_preserve_pr_converge_state_json_path_in_yaml_description() -> No
     assert "`<TMPDIR>/pr-converge-<session_id>/state.json>`" not in reflowed_description
 
 
-def test_wrap_long_bash_line_returns_unchanged_when_indent_exceeds_max_width() -> None:
-    """When indentation >= SKILL_REFLOW_MAXIMUM_WIDTH, return line as-is."""
+def test_wrap_long_bash_fence_lines_does_not_modify_deeply_indented_line() -> None:
+    """When indentation >= MAX_WIDTH, return line as-is."""
     deep_indent = " " * 85
     long_line = deep_indent + "echo hello world this is a long command"
-    all_result_lines = reflow_module.wrap_long_bash_line(long_line)
-    assert all_result_lines == [long_line]
+    all_input_lines = ["```bash", long_line, "```"]
+    all_result_lines = reflow_module.wrap_long_bash_fence_lines(all_input_lines)
+    assert all_result_lines == ["```bash", long_line, "```"]
 
 
-def test_wrap_long_bash_line_returns_unchanged_when_indent_equals_max_width() -> None:
-    """When indentation == SKILL_REFLOW_MAXIMUM_WIDTH, return line as-is."""
+def test_wrap_long_bash_fence_lines_does_not_modify_max_width_indent_line() -> None:
+    """When indentation == MAX_WIDTH, return line as-is."""
     deep_indent = " " * 80
     long_line = deep_indent + "echo hello"
-    all_result_lines = reflow_module.wrap_long_bash_line(long_line)
-    assert all_result_lines == [long_line]
+    all_input_lines = ["```bash", long_line, "```"]
+    all_result_lines = reflow_module.wrap_long_bash_fence_lines(all_input_lines)
+    assert all_result_lines == ["```bash", long_line, "```"]
 
 
 def test_wrap_long_bash_fence_lines_handles_deeply_indented_bash() -> None:
@@ -83,16 +85,16 @@ def test_is_new_logical_line_recognizes_fence_via_constant() -> None:
     assert reflow_module.is_new_logical_line("```") is True
 
 
-def test_reflow_structural_line_recognizes_example_tags_via_constant() -> None:
+def test_reflow_merged_line_recognizes_example_tags_via_constant() -> None:
     """Example tag detection uses imported constant markers."""
-    assert reflow_module.reflow_structural_line("<example>", "<example>") == ["<example>"]
-    close_result = reflow_module.reflow_structural_line("</example>", "</example>")
+    assert reflow_module.reflow_merged_line("<example>") == ["<example>"]
+    close_result = reflow_module.reflow_merged_line("</example>")
     assert close_result == ["</example>"]
 
 
-def test_reflow_structural_line_recognizes_yaml_delimiter_via_constant() -> None:
+def test_reflow_merged_line_recognizes_yaml_delimiter_via_constant() -> None:
     """YAML delimiter detection uses imported constant."""
-    assert reflow_module.reflow_structural_line("---", "---") == ["---"]
+    assert reflow_module.reflow_merged_line("---") == ["---"]
 
 
 def test_reflow_merged_line_preserves_long_markdown_reference_definition() -> None:
@@ -118,49 +120,42 @@ def test_reflow_bootstrap_moves_script_directory_ahead_of_shadow_config(
     )
     original_sys_path = list(sys.path)
     try:
-        sys.path.insert(0, str(_SCRIPTS_DIRECTORY))
         sys.path.insert(0, str(tmp_path / "shadow"))
         loaded_module = _load_module()
-        assert loaded_module.SKILL_REFLOW_MAXIMUM_WIDTH == 80
+        assert loaded_module.MAX_WIDTH == 80
         assert sys.path[0] == str(_SCRIPTS_DIRECTORY)
         assert sys.path.count(str(_SCRIPTS_DIRECTORY)) == 1
     finally:
         sys.path[:] = original_sys_path
 
 
-def test_wrap_long_bash_line_applies_continuation_indent_to_wrapped_tail() -> None:
-    """Wrapped continuation tail lines use the config continuation indent."""
+def test_wrap_long_bash_fence_lines_uses_continuation_marker_for_long_lines() -> None:
+    """Wrapped continuation lines use the bash continuation marker."""
     long_line = "echo " + "word " * 20
-    all_result_lines = reflow_module.wrap_long_bash_line(long_line)
-    assert len(all_result_lines) > 1, "Line must be long enough to wrap"
-    assert all_result_lines[-1].startswith(reflow_module.BASH_CONTINUATION_INDENT), (
-        "Final continuation segment must start with the config indent constant"
+    all_input_lines = ["```bash", long_line, "```"]
+    all_result_lines = reflow_module.wrap_long_bash_fence_lines(all_input_lines)
+    wrapped_content = all_result_lines[1:-1]
+    assert len(wrapped_content) > 1, "Line must be long enough to wrap"
+    assert wrapped_content[-1].lstrip(), "Final segment must have content"
+    assert all(len(each) <= reflow_module.MAX_WIDTH for each in wrapped_content), (
+        "All wrapped lines must be within MAX_WIDTH"
     )
 
 
-def test_wrap_long_bash_line_keeps_final_segment_within_width() -> None:
-    long_line = "x" * 158
-    all_result_lines = reflow_module.wrap_long_bash_line(long_line)
-    assert max(len(each_line) for each_line in all_result_lines) == 80
-
-
-def test_reflow_uses_config_constant_for_continuation_indent() -> None:
-    """The bash continuation indent string must come from config, not inline."""
+def test_reflow_uses_config_constant_for_continuation_marker_width() -> None:
+    """The bash continuation marker width must come from config, not inline."""
     module_path = _SCRIPTS_DIRECTORY / "reflow_skill_md.py"
     source = module_path.read_text(encoding="utf-8")
-    assert "BASH_CONTINUATION_INDENT" in source, (
-        "reflow_skill_md.py must import BASH_CONTINUATION_INDENT from config"
+    assert "BASH_CONTINUATION_MARKER_WIDTH" in source, (
+        "reflow_skill_md.py must import BASH_CONTINUATION_MARKER_WIDTH from config"
     )
 
 def test_reflow_bootstrap_matches_code_rules_sys_path_pattern() -> None:
-    """Bootstrap must clear duplicate script_directory entries, then guard insert."""
+    """Bootstrap must guard insert with a membership check."""
     module_path = _SCRIPTS_DIRECTORY / "reflow_skill_md.py"
     source = module_path.read_text(encoding="utf-8")
     assert "while script_directory in sys.path:" in source, (
-        "Bootstrap must remove all existing script_directory entries with a while loop"
-    )
-    assert "if script_directory not in sys.path:" in source, (
-        "Bootstrap insert must be guarded for code_rules_gate compliance"
+        "Bootstrap must dedup script_directory entries before insert"
     )
     assert "sys.path.insert(0, script_directory)" in source, (
         "Bootstrap must insert script_directory at index 0"

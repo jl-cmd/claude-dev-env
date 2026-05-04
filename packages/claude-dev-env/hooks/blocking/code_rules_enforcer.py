@@ -2505,11 +2505,11 @@ def _load_name_is_shadowed(
             if name in binding_names:
                 return True
         elif isinstance(current, ast.ClassDef) and not has_passed_function_scope:
-            binding_names, global_names = _scope_binding_names(current)
-            if name in global_names:
-                return False
-            if name in binding_names:
-                return True
+            # Class body bindings are order-dependent (name resolution is
+            # dynamic, unlike function locals). A load before an assignment
+            # still resolves to the module-level name, so conservatively
+            # skip class-body shadow detection to avoid false positives.
+            pass
         current = parent_by_node_id.get(id(current))
     return False
 
