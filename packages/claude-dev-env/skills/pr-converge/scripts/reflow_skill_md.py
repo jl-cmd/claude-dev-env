@@ -17,7 +17,8 @@ script_directory = str(Path(__file__).resolve().parent)
 
 while script_directory in sys.path:
     sys.path.remove(script_directory)
-sys.path.insert(0, script_directory)
+if script_directory not in sys.path:
+    sys.path.insert(0, script_directory)
 
 from evict_cached_config_modules import evict_cached_config_modules
 

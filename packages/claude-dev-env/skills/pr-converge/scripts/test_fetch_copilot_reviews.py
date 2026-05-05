@@ -206,10 +206,10 @@ def test_should_classify_clean_review_when_state_is_commented_with_empty_body() 
 
 def test_should_dispatch_dirty_classification_off_copilot_dirty_review_states_tuple() -> None:
     source_text = (
-        Path(__file__).resolve().parent / "fetch_copilot_reviews.py"
+        Path(__file__).resolve().parent / "reviewer_specs.py"
     ).read_text(encoding="utf-8")
     assert "ALL_COPILOT_DIRTY_REVIEW_STATES" in source_text
-    assert "in ALL_COPILOT_DIRTY_REVIEW_STATES" in source_text
+    assert "all_dirty_states=ALL_COPILOT_DIRTY_REVIEW_STATES" in source_text
 
 
 def test_should_classify_clean_review_when_state_is_approved() -> None:
@@ -235,12 +235,98 @@ def test_should_classify_clean_review_when_state_is_approved() -> None:
     assert all_reviews[0]["classification"] == "clean"
 
 
-def test_should_reference_copilot_login_constant_directly_without_local_alias() -> None:
-    source_text = (
-        Path(__file__).resolve().parent / "fetch_copilot_reviews.py"
-    ).read_text(encoding="utf-8")
-    assert "copilot_reviewer_login = COPILOT_REVIEWER_LOGIN" not in source_text
-    assert "COPILOT_REVIEWER_LOGIN" in source_text
+def test_should_match_login_case_insensitively() -> None:
+    pages_payload = json.dumps(
+        [
+            [
+                {
+                    "id": 1,
+                    "user": {"login": "Copilot"},
+                    "state": "CHANGES_REQUESTED",
+                    "commit_id": "abc",
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                    "body": "uppercase login",
+                },
+                {
+                    "id": 2,
+                    "user": {"login": "GITHUB-COPILOT[bot]"},
+                    "state": "APPROVED",
+                    "commit_id": "abc",
+                    "submitted_at": "2026-01-02T00:00:00Z",
+                    "body": "screaming login",
+                },
+            ]
+        ]
+    )
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _completed(pages_payload)
+        all_reviews = fetch_copilot_reviews_module.fetch_copilot_reviews(
+            owner="acme", repo="widget", number=42
+        )
+    assert len(all_reviews) == 2
+    assert {each_review["review_id"] for each_review in all_reviews} == {1, 2}
+
+
+def test_should_match_login_containing_copilot_substring() -> None:
+    pages_payload = json.dumps(
+        [
+            [
+                {
+                    "id": 1,
+                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "state": "CHANGES_REQUESTED",
+                    "commit_id": "abc",
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                    "body": "canonical bot login",
+                },
+                {
+                    "id": 2,
+                    "user": {"login": "internal-copilot-fork[bot]"},
+                    "state": "CHANGES_REQUESTED",
+                    "commit_id": "abc",
+                    "submitted_at": "2026-01-02T00:00:00Z",
+                    "body": "non-canonical login still matches",
+                },
+            ]
+        ]
+    )
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _completed(pages_payload)
+        all_reviews = fetch_copilot_reviews_module.fetch_copilot_reviews(
+            owner="acme", repo="widget", number=42
+        )
+    assert {each_review["review_id"] for each_review in all_reviews} == {1, 2}
+
+
+def test_should_exclude_login_without_copilot_substring() -> None:
+    pages_payload = json.dumps(
+        [
+            [
+                {
+                    "id": 1,
+                    "user": {"login": "cursor[bot]"},
+                    "state": "CHANGES_REQUESTED",
+                    "commit_id": "abc",
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                    "body": "wrong bot",
+                },
+                {
+                    "id": 2,
+                    "user": {"login": "dependabot[bot]"},
+                    "state": "CHANGES_REQUESTED",
+                    "commit_id": "abc",
+                    "submitted_at": "2026-01-02T00:00:00Z",
+                    "body": "also wrong",
+                },
+            ]
+        ]
+    )
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _completed(pages_payload)
+        all_reviews = fetch_copilot_reviews_module.fetch_copilot_reviews(
+            owner="acme", repo="widget", number=42
+        )
+    assert all_reviews == []
 
 
 def test_should_raise_when_gh_subprocess_fails() -> None:

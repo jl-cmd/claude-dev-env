@@ -1,10 +1,10 @@
-"""Tests for fetch_copilot_inline_comments.
+"""Tests for fetch_claude_inline_comments.
 
 Covers:
 - gh command uses --paginate --slurp on the comments endpoint
-- only copilot-pull-request-reviewer[bot] inline comments are returned
+- only claude reviewer-bot inline comments are returned
 - comments not anchored to the requested commit are filtered out
-- comments on the same commit but from an older Copilot review are filtered out
+- comments on the same commit but from an older Claude review are filtered out
 - multi-page responses are flattened correctly
 - subprocess errors propagate
 """
@@ -22,9 +22,9 @@ import pytest
 
 
 def _load_module() -> ModuleType:
-    module_path = Path(__file__).parent / "fetch_copilot_inline_comments.py"
+    module_path = Path(__file__).parent / "fetch_claude_inline_comments.py"
     spec = importlib.util.spec_from_file_location(
-        "fetch_copilot_inline_comments", module_path
+        "fetch_claude_inline_comments", module_path
     )
     assert spec is not None
     assert spec.loader is not None
@@ -33,7 +33,7 @@ def _load_module() -> ModuleType:
     return module
 
 
-fetch_copilot_inline_comments_module = _load_module()
+fetch_claude_inline_comments_module = _load_module()
 
 
 def _completed(stdout: str) -> subprocess.CompletedProcess:
@@ -60,14 +60,14 @@ def test_should_invoke_gh_with_paginate_slurp_against_comments_endpoint() -> Non
     pages_payload = json.dumps([[]])
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=_default_review_for_head(commit="abc123", review_id=1),
         ),
         patch("subprocess.run") as mock_run,
     ):
         mock_run.return_value = _completed(pages_payload)
-        fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+        fetch_claude_inline_comments_module.fetch_claude_inline_comments(
             owner="acme", repo="widget", number=42, current_head="abc123"
         )
     invoked_argv = mock_run.call_args[0][0]
@@ -78,7 +78,7 @@ def test_should_invoke_gh_with_paginate_slurp_against_comments_endpoint() -> Non
     assert "--slurp" in invoked_argv
 
 
-def test_should_filter_to_copilot_reviewer_only() -> None:
+def test_should_filter_to_claude_reviewer_only() -> None:
     pages_payload = json.dumps(
         [
             [
@@ -93,10 +93,10 @@ def test_should_filter_to_copilot_reviewer_only() -> None:
                 },
                 {
                     "id": 101,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "claude[bot]"},
                     "commit_id": "abc123",
                     "pull_request_review_id": 1,
-                    "body": "copilot finding",
+                    "body": "claude finding",
                     "path": "x.py",
                     "line": 6,
                 },
@@ -105,15 +105,15 @@ def test_should_filter_to_copilot_reviewer_only() -> None:
     )
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=_default_review_for_head(commit="abc123", review_id=1),
         ),
         patch("subprocess.run") as mock_run,
     ):
         mock_run.return_value = _completed(pages_payload)
         all_inline_comments = (
-            fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
                 owner="acme", repo="widget", number=42, current_head="abc123"
             )
         )
@@ -127,7 +127,7 @@ def test_should_filter_out_comments_not_on_current_head() -> None:
             [
                 {
                     "id": 200,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "claude[bot]"},
                     "commit_id": "old_sha",
                     "pull_request_review_id": 1,
                     "body": "stale finding",
@@ -136,7 +136,7 @@ def test_should_filter_out_comments_not_on_current_head() -> None:
                 },
                 {
                     "id": 201,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "claude[bot]"},
                     "commit_id": "current_sha",
                     "pull_request_review_id": 2,
                     "body": "fresh finding",
@@ -148,15 +148,15 @@ def test_should_filter_out_comments_not_on_current_head() -> None:
     )
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=_default_review_for_head(commit="current_sha", review_id=2),
         ),
         patch("subprocess.run") as mock_run,
     ):
         mock_run.return_value = _completed(pages_payload)
         all_inline_comments = (
-            fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
                 owner="acme", repo="widget", number=42, current_head="current_sha"
             )
         )
@@ -164,7 +164,7 @@ def test_should_filter_out_comments_not_on_current_head() -> None:
     assert all_inline_comments[0]["comment_id"] == 201
 
 
-def test_should_ignore_inline_comments_from_older_copilot_review_on_same_commit() -> (
+def test_should_ignore_inline_comments_from_older_claude_review_on_same_commit() -> (
     None
 ):
     pages_payload = json.dumps(
@@ -172,7 +172,7 @@ def test_should_ignore_inline_comments_from_older_copilot_review_on_same_commit(
             [
                 {
                     "id": 300,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "claude[bot]"},
                     "commit_id": "same_sha",
                     "pull_request_review_id": 10,
                     "body": "stale dirty thread",
@@ -181,7 +181,7 @@ def test_should_ignore_inline_comments_from_older_copilot_review_on_same_commit(
                 },
                 {
                     "id": 301,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "claude[bot]"},
                     "commit_id": "same_sha",
                     "pull_request_review_id": 11,
                     "body": "current clean thread",
@@ -211,26 +211,26 @@ def test_should_ignore_inline_comments_from_older_copilot_review_on_same_commit(
     ]
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=reviews_newest_first,
         ),
         patch("subprocess.run") as mock_run,
     ):
         mock_run.return_value = _completed(pages_payload)
         all_inline_comments = (
-            fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
                 owner="acme", repo="widget", number=42, current_head="same_sha"
             )
         )
     assert [each_comment["comment_id"] for each_comment in all_inline_comments] == [301]
 
 
-def test_should_return_empty_when_no_copilot_review_exists_for_commit() -> None:
+def test_should_return_empty_when_no_claude_review_exists_for_commit() -> None:
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=[
                 {
                     "review_id": 1,
@@ -245,7 +245,7 @@ def test_should_return_empty_when_no_copilot_review_exists_for_commit() -> None:
         patch("subprocess.run") as mock_run,
     ):
         all_inline_comments = (
-            fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
                 owner="acme", repo="widget", number=42, current_head="missing_sha"
             )
         )
@@ -259,7 +259,7 @@ def test_should_flatten_across_pages() -> None:
             [
                 {
                     "id": 1,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "claude[bot]"},
                     "commit_id": "abc",
                     "pull_request_review_id": 9,
                     "body": "a",
@@ -270,7 +270,7 @@ def test_should_flatten_across_pages() -> None:
             [
                 {
                     "id": 2,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "claude[bot]"},
                     "commit_id": "abc",
                     "pull_request_review_id": 9,
                     "body": "b",
@@ -279,7 +279,7 @@ def test_should_flatten_across_pages() -> None:
                 },
                 {
                     "id": 3,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "claude[bot]"},
                     "commit_id": "abc",
                     "pull_request_review_id": 9,
                     "body": "c",
@@ -291,15 +291,15 @@ def test_should_flatten_across_pages() -> None:
     )
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=_default_review_for_head(commit="abc", review_id=9),
         ),
         patch("subprocess.run") as mock_run,
     ):
         mock_run.return_value = _completed(pages_payload)
         all_inline_comments = (
-            fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
                 owner="acme", repo="widget", number=42, current_head="abc"
             )
         )
@@ -316,7 +316,7 @@ def test_should_match_login_case_insensitively() -> None:
             [
                 {
                     "id": 300,
-                    "user": {"login": "Copilot"},
+                    "user": {"login": "Claude"},
                     "commit_id": "abc123",
                     "pull_request_review_id": 1,
                     "body": "uppercase login",
@@ -325,7 +325,7 @@ def test_should_match_login_case_insensitively() -> None:
                 },
                 {
                     "id": 301,
-                    "user": {"login": "GITHUB-COPILOT[bot]"},
+                    "user": {"login": "CLAUDE-CODE[bot]"},
                     "commit_id": "abc123",
                     "pull_request_review_id": 1,
                     "body": "screaming login",
@@ -337,28 +337,31 @@ def test_should_match_login_case_insensitively() -> None:
     )
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=_default_review_for_head(commit="abc123", review_id=1),
         ),
         patch("subprocess.run") as mock_run,
     ):
         mock_run.return_value = _completed(pages_payload)
         all_inline_comments = (
-            fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
                 owner="acme", repo="widget", number=42, current_head="abc123"
             )
         )
-    assert {each_comment["comment_id"] for each_comment in all_inline_comments} == {300, 301}
+    assert {each_comment["comment_id"] for each_comment in all_inline_comments} == {
+        300,
+        301,
+    }
 
 
-def test_should_match_login_containing_copilot_substring() -> None:
+def test_should_match_login_containing_claude_substring() -> None:
     pages_payload = json.dumps(
         [
             [
                 {
                     "id": 400,
-                    "user": {"login": "internal-copilot-fork[bot]"},
+                    "user": {"login": "anthropic-claude[bot]"},
                     "commit_id": "abc123",
                     "pull_request_review_id": 1,
                     "body": "non-canonical login still matches",
@@ -370,20 +373,62 @@ def test_should_match_login_containing_copilot_substring() -> None:
     )
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=_default_review_for_head(commit="abc123", review_id=1),
         ),
         patch("subprocess.run") as mock_run,
     ):
         mock_run.return_value = _completed(pages_payload)
         all_inline_comments = (
-            fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
                 owner="acme", repo="widget", number=42, current_head="abc123"
             )
         )
     assert len(all_inline_comments) == 1
     assert all_inline_comments[0]["comment_id"] == 400
+
+
+def test_should_exclude_login_without_claude_substring() -> None:
+    pages_payload = json.dumps(
+        [
+            [
+                {
+                    "id": 500,
+                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "commit_id": "abc123",
+                    "pull_request_review_id": 1,
+                    "body": "copilot finding",
+                    "path": "x.py",
+                    "line": 5,
+                },
+                {
+                    "id": 501,
+                    "user": {"login": "dependabot[bot]"},
+                    "commit_id": "abc123",
+                    "pull_request_review_id": 1,
+                    "body": "dependency bump",
+                    "path": "x.py",
+                    "line": 6,
+                },
+            ]
+        ]
+    )
+    with (
+        patch.object(
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
+            return_value=_default_review_for_head(commit="abc123", review_id=1),
+        ),
+        patch("subprocess.run") as mock_run,
+    ):
+        mock_run.return_value = _completed(pages_payload)
+        all_inline_comments = (
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
+                owner="acme", repo="widget", number=42, current_head="abc123"
+            )
+        )
+    assert all_inline_comments == []
 
 
 def test_should_raise_when_gh_subprocess_fails() -> None:
@@ -392,14 +437,14 @@ def test_should_raise_when_gh_subprocess_fails() -> None:
     )
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=_default_review_for_head(commit="abc", review_id=1),
         ),
         patch("subprocess.run", side_effect=failure),
     ):
         with pytest.raises(subprocess.CalledProcessError):
-            fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
                 owner="acme", repo="widget", number=42, current_head="abc"
             )
 
@@ -410,10 +455,10 @@ def test_should_return_entries_whose_keys_are_strings() -> None:
             [
                 {
                     "id": 101,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "claude[bot]"},
                     "commit_id": "abc123",
                     "pull_request_review_id": 1,
-                    "body": "copilot finding",
+                    "body": "claude finding",
                     "path": "x.py",
                     "line": 6,
                 }
@@ -422,15 +467,15 @@ def test_should_return_entries_whose_keys_are_strings() -> None:
     )
     with (
         patch.object(
-            fetch_copilot_inline_comments_module,
-            "fetch_copilot_reviews",
+            fetch_claude_inline_comments_module,
+            "fetch_claude_reviews",
             return_value=_default_review_for_head(commit="abc123", review_id=1),
         ),
         patch("subprocess.run") as mock_run,
     ):
         mock_run.return_value = _completed(pages_payload)
         all_inline_comments = (
-            fetch_copilot_inline_comments_module.fetch_copilot_inline_comments(
+            fetch_claude_inline_comments_module.fetch_claude_inline_comments(
                 owner="acme", repo="widget", number=42, current_head="abc123"
             )
         )

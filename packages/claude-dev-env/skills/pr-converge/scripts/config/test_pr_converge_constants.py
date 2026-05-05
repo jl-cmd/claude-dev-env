@@ -150,27 +150,3 @@ def test_requested_reviewers_field_template_accepts_reviewer_id() -> None:
     assert rendered == "reviewers[]=copilot-pull-request-reviewer[bot]"
 
 
-def test_pr_base_ref_fields_lists_base_ref_name() -> None:
-    assert "baseRefName" in pr_converge_constants_module.PR_BASE_REF_FIELDS
-
-
-def test_copilot_followup_branch_template_renders_parent_number_and_sha() -> None:
-    rendered = (
-        pr_converge_constants_module.COPILOT_FOLLOWUP_BRANCH_TEMPLATE.format(
-            parent_number=312, short_sha="abc12345"
-        )
-    )
-    assert rendered == "chore/copilot-followup-312-abc12345"
-
-
-def test_copilot_followup_pr_title_template_renders_parent_number() -> None:
-    rendered = (
-        pr_converge_constants_module.COPILOT_FOLLOWUP_PR_TITLE_TEMPLATE.format(
-            parent_number=312
-        )
-    )
-    assert rendered == "chore: address Copilot findings from PR #312"
-
-
-def test_copilot_followup_short_sha_length_is_eight() -> None:
-    assert pr_converge_constants_module.COPILOT_FOLLOWUP_SHORT_SHA_LENGTH == 8

@@ -1,21 +1,20 @@
 """Fetch GitHub Copilot reviewer reviews newest-first, classified as dirty or clean.
 
+Thin wrapper around ``reviewer_fetch_core.fetch_reviewer_reviews`` parameterised
+by ``copilot_spec``. Classification follows the review's ``state`` field
+(``APPROVED`` -> clean; ``CHANGES_REQUESTED`` -> dirty; ``COMMENTED`` with
+non-empty body -> dirty; everything else -> clean) - see ``reviewer_specs``.
+
 Wraps the gh CLI invocation required by the gh-paginate rule:
 ``gh api '...?per_page=100' --paginate --slurp`` piped through external Python
-JSON handling (instead of ``gh --jq``, which runs per-page and breaks cross-page
-operations like sort/reverse - see GitHub CLI #10459).
-
-Classification follows the review's ``state`` field:
-- ``APPROVED``                 -> ``"clean"``
-- ``CHANGES_REQUESTED``        -> ``"dirty"``
-- ``COMMENTED`` with non-empty body -> ``"dirty"`` (Copilot uses COMMENTED + body
-  to flag findings without a hard block)
-- everything else              -> ``"clean"`` (no actionable findings on PR)
+JSON handling (instead of ``gh --jq``, which runs per-page and breaks
+cross-page operations like sort/reverse - see GitHub CLI issue 10459).
 """
+
+from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -26,14 +25,8 @@ from evict_cached_config_modules import evict_cached_config_modules
 
 evict_cached_config_modules()
 
-from config.pr_converge_constants import (
-    ALL_COPILOT_DIRTY_REVIEW_STATES,
-    COPILOT_CLEAN_REVIEW_STATE,
-    COPILOT_REVIEWER_LOGIN,
-    COPILOT_SOFT_DIRTY_REVIEW_STATE,
-    GH_REVIEWS_PATH_TEMPLATE,
-)
-from review_field_helpers import body_of, login_of, state_of, submitted_at_of
+from reviewer_fetch_core import fetch_reviewer_reviews
+from reviewer_specs import copilot_spec
 
 
 def fetch_copilot_reviews(
@@ -42,63 +35,10 @@ def fetch_copilot_reviews(
     repo: str,
     number: int,
 ) -> list[dict[str, object]]:
-    """Return Copilot reviews newest-first, each with a clean/dirty classification.
-
-    Each entry contains review_id, commit_id, submitted_at, state, body, and classification.
-    """
-    reviews_endpoint = GH_REVIEWS_PATH_TEMPLATE.format(
-        owner=owner, repo=repo, number=number
+    """Return Copilot reviews newest-first, each with a classification."""
+    return fetch_reviewer_reviews(
+        copilot_spec, owner=owner, repo=repo, number=number
     )
-    gh_command: list[str] = [
-        "gh",
-        "api",
-        reviews_endpoint,
-        "--paginate",
-        "--slurp",
-    ]
-    completed = subprocess.run(
-        gh_command,
-        capture_output=True,
-        check=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    pages: list[list[dict[str, object]]] = json.loads(completed.stdout)
-    all_flat_reviews = [each_review for each_page in pages for each_review in each_page]
-    all_copilot_reviews = [
-        each_review
-        for each_review in all_flat_reviews
-        if login_of(each_review) == COPILOT_REVIEWER_LOGIN
-        and each_review.get("submitted_at") is not None
-        and each_review.get("id") is not None
-    ]
-    all_copilot_reviews.sort(
-        key=lambda each_review: submitted_at_of(each_review), reverse=True
-    )
-    return [
-        {
-            "review_id": each_review["id"],
-            "commit_id": each_review.get("commit_id"),
-            "submitted_at": each_review["submitted_at"],
-            "state": state_of(each_review),
-            "body": body_of(each_review),
-            "classification": _classify_review(each_review),
-        }
-        for each_review in all_copilot_reviews
-    ]
-
-
-def _classify_review(field_by_key: dict[str, object]) -> str:
-    review_state = state_of(field_by_key)
-    if review_state == COPILOT_CLEAN_REVIEW_STATE:
-        return "clean"
-    if review_state not in ALL_COPILOT_DIRTY_REVIEW_STATES:
-        return "clean"
-    state_requires_body = review_state == COPILOT_SOFT_DIRTY_REVIEW_STATE
-    if state_requires_body and not body_of(field_by_key):
-        return "clean"
-    return "dirty"
 
 
 def main() -> int:

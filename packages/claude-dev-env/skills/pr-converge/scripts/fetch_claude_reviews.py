@@ -1,9 +1,13 @@
-"""Fetch Cursor Bugbot reviews newest-first, classified as dirty or clean.
+"""Fetch Claude reviewer-bot reviews newest-first, classified as dirty or clean.
 
 Thin wrapper around ``reviewer_fetch_core.fetch_reviewer_reviews`` parameterised
-by ``bugbot_spec``. Wraps the gh CLI invocation required by the gh-paginate
-rule: ``gh api '...?per_page=100' --paginate --slurp`` piped through external
-Python JSON handling (instead of ``gh --jq``, which runs per-page and breaks
+by ``claude_spec``. Classification follows the review's ``state`` field
+(``APPROVED`` -> clean; ``CHANGES_REQUESTED`` -> dirty; ``COMMENTED`` with
+non-empty body -> dirty; everything else -> clean) - see ``reviewer_specs``.
+
+Wraps the gh CLI invocation required by the gh-paginate rule:
+``gh api '...?per_page=100' --paginate --slurp`` piped through external Python
+JSON handling (instead of ``gh --jq``, which runs per-page and breaks
 cross-page operations like sort/reverse - see GitHub CLI issue 10459).
 """
 
@@ -22,18 +26,18 @@ from evict_cached_config_modules import evict_cached_config_modules
 evict_cached_config_modules()
 
 from reviewer_fetch_core import fetch_reviewer_reviews
-from reviewer_specs import bugbot_spec
+from reviewer_specs import claude_spec
 
 
-def fetch_bugbot_reviews(
+def fetch_claude_reviews(
     *,
     owner: str,
     repo: str,
     number: int,
 ) -> list[dict[str, object]]:
-    """Return Cursor Bugbot reviews newest-first, each with a classification."""
+    """Return Claude reviews newest-first, each with a classification."""
     return fetch_reviewer_reviews(
-        bugbot_spec, owner=owner, repo=repo, number=number
+        claude_spec, owner=owner, repo=repo, number=number
     )
 
 
@@ -43,7 +47,7 @@ def main() -> int:
     parser.add_argument("--repo", required=True)
     parser.add_argument("--number", required=True, type=int)
     parsed_arguments = parser.parse_args()
-    all_reviews = fetch_bugbot_reviews(
+    all_reviews = fetch_claude_reviews(
         owner=parsed_arguments.owner,
         repo=parsed_arguments.repo,
         number=parsed_arguments.number,

@@ -25,7 +25,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/fetch_bugbot_reviews.py" \
   --owner <OWNER> --repo <REPO> --number <NUMBER>
 ```
 
-Output: JSON array of `{review_id, commit_id, submitted_at, body, classification}` where `classification` is `"dirty"` (body matches `Cursor Bugbot has reviewed your changes and found <N> potential issue`) or `"clean"`. Uses `--paginate --slurp` and flattens pages in Python — required by `../../../rules/gh-paginate.md` because `gh --paginate --jq` runs the filter per-page (gh CLI #10459).
+Output: JSON array of `{review_id, commit_id, submitted_at, state, body, classification}` where `classification` is `"dirty"` (body matches `Cursor Bugbot has reviewed your changes and found <N> potential issue`) or `"clean"`. Uses `--paginate --slurp` and flattens pages in Python — required by `../../../rules/gh-paginate.md` because `gh --paginate --jq` runs the filter per-page (gh CLI issue 10459). Login filter is a case-insensitive substring match on `cursor` (handles login-shape divergence between review-level and inline-comment endpoints).
 
 ### `fetch_bugbot_inline_comments.py`
 
@@ -86,7 +86,8 @@ Output: the new reply id from gh's JSON response, on stdout.
 Returns the mergeability state of the current PR as JSON. Wraps `gh pr view --json mergeable,mergeStateStatus,headRefOid` (single-object endpoint — no pagination needed). Used by the convergence gate to detect base-branch conflicts (`mergeStateStatus == "DIRTY"` / `mergeable == "CONFLICTING"`) before flipping the PR ready.
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/check_pr_mergeability.py"
+python "${CLAUDE_SKILL_DIR}/scripts/check_pr_mergeability.py" \
+--owner <OWNER> --repo <REPO> --number <NUMBER>
 ```
 
 Output: `{"mergeable", "mergeStateStatus", "headRefOid"}`.
@@ -100,7 +101,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/fetch_copilot_reviews.py" \
   --owner <OWNER> --repo <REPO> --number <NUMBER>
 ```
 
-Output: JSON array of `{review_id, commit_id, submitted_at, state, body, classification}` where `classification` is `"clean"` for `state == "APPROVED"`, `"dirty"` for `state == "CHANGES_REQUESTED"`, and `"dirty"` for `state == "COMMENTED"` with a non-empty body. Uses `--paginate --slurp` and flattens pages in Python — required by `../../../rules/gh-paginate.md`.
+Output: JSON array of `{review_id, commit_id, submitted_at, state, body, classification}` where `classification` is `"clean"` for `state == "APPROVED"`, `"dirty"` for `state == "CHANGES_REQUESTED"`, and `"dirty"` for `state == "COMMENTED"` with a non-empty body. Uses `--paginate --slurp` and flattens pages in Python — required by `../../../rules/gh-paginate.md`. Login filter is a case-insensitive substring match on `copilot` (handles the divergence where Copilot reviews come from `copilot-pull-request-reviewer[bot]` but its inline comments are authored by `Copilot`).
 
 ### `fetch_copilot_inline_comments.py`
 
@@ -124,17 +125,43 @@ python "${CLAUDE_SKILL_DIR}/scripts/request_copilot_review.py" \
 
 Output: none on success (gh's stdout is suppressed); `subprocess.CalledProcessError` on failure.
 
-### `open_followup_copilot_pr.py`
+### `fetch_claude_reviews.py`
 
-Opens a follow-up draft PR addressing Copilot findings from the parent PR. Subprocess sequence: resolve parent's `baseRefName` → `git fetch origin <head_sha>` → `git switch -c <new_branch> <head_sha>` → `git push -u origin <new_branch>` → `gh pr create --draft --base <base_ref> --head <new_branch> --title <...> --body-file <findings_file>` (per `../../../rules/gh-body-file.md`). Branch name format: `chore/copilot-followup-{parent_number}-{short_sha}`.
+Fetches every Claude reviewer-bot review on the PR newest-first, classified per the review's `state` field. Mirror of `fetch_copilot_reviews.py` for an Anthropic Claude PR review bot (e.g. `claude[bot]`, `claude-code[bot]`, or any login containing `claude`).
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/open_followup_copilot_pr.py" \
-  --owner <OWNER> --repo <REPO> --parent-number <PARENT_NUMBER> \
-  --head <HEAD_SHA> --findings-file <PATH_TO_FINDINGS_MD>
+python "${CLAUDE_SKILL_DIR}/scripts/fetch_claude_reviews.py" \
+  --owner <OWNER> --repo <REPO> --number <NUMBER>
 ```
 
-Output: the new PR URL on stdout, trimmed.
+Output: JSON array of `{review_id, commit_id, submitted_at, state, body, classification}` — same shape and same state-based classification rules as `fetch_copilot_reviews.py`. Login filter is a case-insensitive substring match on `claude`.
+
+### `fetch_claude_inline_comments.py`
+
+Fetches unaddressed Claude inline comments for the **newest submitted Claude review** on the requested `--commit` SHA (matches `pull_request_review_id` to the review returned by `fetch_claude_reviews.py` so stale inline threads from an older Claude review on the same SHA are ignored).
+
+```bash
+python "${CLAUDE_SKILL_DIR}/scripts/fetch_claude_inline_comments.py" \
+  --owner <OWNER> --repo <REPO> --number <NUMBER> --commit <CURRENT_HEAD>
+```
+
+Output: JSON array of `{comment_id, commit_id, path, line, body}`. Same `--paginate --slurp` pattern.
+
+## Shared modules
+
+The reviewer fetch scripts share their fetch and classification logic via two internal modules. Entry-point scripts (`fetch_bugbot_reviews.py`, `fetch_copilot_reviews.py`, `fetch_claude_reviews.py` and their inline-comment counterparts) are thin wrappers — they import a per-reviewer spec, call the shared core, and shape argparse / JSON output.
+
+### `reviewer_specs.py`
+
+Defines the `ReviewerSpec` frozen dataclass (two fields: `login_filter_substring` and `classify_review`) plus three module-level instances: `bugbot_spec`, `copilot_spec`, `claude_spec`. The state-based classifier used by Copilot and Claude is built via the shared `_make_state_based_classifier` factory; Bugbot has its own body-regex classifier because Bugbot uses `state == "COMMENTED"` for both clean and dirty reviews and only the body distinguishes them.
+
+Spec instances use lowercase names because they are frozen dataclass values rather than scalar configuration constants — keeps them out of the `UPPER_SNAKE` constants-location rule that requires module-level constants outside `config/` to be hoisted there.
+
+### `reviewer_fetch_core.py`
+
+Exports `fetch_reviewer_reviews(spec, ...)` and `fetch_reviewer_inline_comments(spec, ..., all_reviews=...)`. The inline-comments function takes pre-fetched reviews as an argument rather than fetching them internally, so each entry-point script keeps its own patchable `fetch_X_reviews` function for tests that mock the reviews fetch on the entry-point module.
+
+The core enforces the gh-paginate contract (`--paginate --slurp` + Python JSON flattening, never `gh --jq` for cross-page operations) and the case-insensitive substring login filter in one place.
 
 ## Tests
 

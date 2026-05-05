@@ -5,8 +5,7 @@ so the skill body emits one script invocation. Single-object endpoint - no
 pagination. Explicit ``--owner``/``--repo``/``--number`` targeting matches every
 sibling convergence-gate script (``fetch_*_reviews.py``,
 ``fetch_*_inline_comments.py``, ``request_copilot_review.py``,
-``mark_pr_ready.py``); under multi-PR orchestration or after
-``open_followup_copilot_pr.py`` switches the checkout, the gate is guaranteed
+``mark_pr_ready.py``); under multi-PR orchestration the gate is guaranteed
 to query the intended PR rather than whichever PR the current git context
 points at.
 

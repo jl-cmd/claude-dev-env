@@ -32,3 +32,5 @@ project-paths.json
 
 # Local Groq API key for packages/claude-dev-env/scripts/groq_bugteam.py
 packages/claude-dev-env/.env
+.claude/scheduled_tasks.lock
+.claude/settings.local.json

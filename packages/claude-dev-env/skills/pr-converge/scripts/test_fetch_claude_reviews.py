@@ -1,12 +1,12 @@
-"""Tests for fetch_bugbot_reviews.
+"""Tests for fetch_claude_reviews.
 
 Covers:
 - gh command uses --paginate --slurp (per gh-paginate rule)
 - per-page filter happens in Python after fetching all pages
-- only cursor[bot] reviews are returned
+- only claude reviewer-bot reviews are returned (case-insensitive substring match)
 - reviews are sorted newest-first by submitted_at
-- review bodies matching the bugbot dirty-pattern are classified "dirty"
-- review bodies without the pattern are classified "clean"
+- reviews with state APPROVED are classified "clean"
+- reviews with state CHANGES_REQUESTED or COMMENTED are classified "dirty"
 - subprocess errors propagate with stderr context
 """
 
@@ -23,8 +23,8 @@ import pytest
 
 
 def _load_module() -> ModuleType:
-    module_path = Path(__file__).parent / "fetch_bugbot_reviews.py"
-    spec = importlib.util.spec_from_file_location("fetch_bugbot_reviews", module_path)
+    module_path = Path(__file__).parent / "fetch_claude_reviews.py"
+    spec = importlib.util.spec_from_file_location("fetch_claude_reviews", module_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -32,7 +32,7 @@ def _load_module() -> ModuleType:
     return module
 
 
-fetch_bugbot_reviews_module = _load_module()
+fetch_claude_reviews_module = _load_module()
 
 
 def _completed(stdout: str) -> subprocess.CompletedProcess:
@@ -46,7 +46,7 @@ def test_should_invoke_gh_with_paginate_slurp_against_reviews_endpoint() -> None
     pages_payload = json.dumps([[]])
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = _completed(pages_payload)
-        fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+        fetch_claude_reviews_module.fetch_claude_reviews(
             owner="acme", repo="widget", number=42
         )
     invoked_argv = mock_run.call_args[0][0]
@@ -57,30 +57,32 @@ def test_should_invoke_gh_with_paginate_slurp_against_reviews_endpoint() -> None
     assert "--slurp" in invoked_argv
 
 
-def test_should_filter_to_cursor_bot_only() -> None:
+def test_should_filter_to_claude_reviewer_only() -> None:
     pages_payload = json.dumps(
         [
             [
                 {
                     "id": 1,
-                    "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "user": {"login": "cursor[bot]"},
+                    "state": "COMMENTED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-01T00:00:00Z",
-                    "body": "copilot stuff",
+                    "body": "bugbot stuff",
                 },
                 {
                     "id": 2,
-                    "user": {"login": "cursor[bot]"},
+                    "user": {"login": "claude[bot]"},
+                    "state": "CHANGES_REQUESTED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-02T00:00:00Z",
-                    "body": "Cursor Bugbot has reviewed your changes and found 1 potential issue.",
+                    "body": "claude finding",
                 },
             ]
         ]
     )
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = _completed(pages_payload)
-        all_reviews = fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
             owner="acme", repo="widget", number=42
         )
     assert len(all_reviews) == 1
@@ -93,33 +95,36 @@ def test_should_return_reviews_newest_first_across_pages() -> None:
             [
                 {
                     "id": 10,
-                    "user": {"login": "cursor[bot]"},
+                    "user": {"login": "claude[bot]"},
+                    "state": "APPROVED",
                     "commit_id": "old",
                     "submitted_at": "2026-01-01T00:00:00Z",
-                    "body": "Bugbot reviewed your changes and found no new issues!",
+                    "body": "lgtm",
                 }
             ],
             [
                 {
                     "id": 11,
-                    "user": {"login": "cursor[bot]"},
+                    "user": {"login": "claude[bot]"},
+                    "state": "CHANGES_REQUESTED",
                     "commit_id": "new",
                     "submitted_at": "2026-01-03T00:00:00Z",
-                    "body": "Cursor Bugbot has reviewed your changes and found 2 potential issues.",
+                    "body": "issues found",
                 },
                 {
                     "id": 12,
-                    "user": {"login": "cursor[bot]"},
+                    "user": {"login": "claude[bot]"},
+                    "state": "APPROVED",
                     "commit_id": "mid",
                     "submitted_at": "2026-01-02T00:00:00Z",
-                    "body": "Bugbot reviewed your changes and found no new issues!",
+                    "body": "lgtm",
                 },
             ],
         ]
     )
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = _completed(pages_payload)
-        all_reviews = fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
             owner="acme", repo="widget", number=42
         )
     submitted_at_sequence = [each_review["submitted_at"] for each_review in all_reviews]
@@ -130,47 +135,103 @@ def test_should_return_reviews_newest_first_across_pages() -> None:
     ]
 
 
-def test_should_classify_dirty_review_when_body_matches_bugbot_findings_pattern() -> (
-    None
-):
+def test_should_classify_dirty_review_when_state_is_changes_requested() -> None:
     pages_payload = json.dumps(
         [
             [
                 {
                     "id": 1,
-                    "user": {"login": "cursor[bot]"},
+                    "user": {"login": "claude[bot]"},
+                    "state": "CHANGES_REQUESTED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-01T00:00:00Z",
-                    "body": "Cursor Bugbot has reviewed your changes and found 3 potential issues.",
+                    "body": "Issues need addressing.",
                 }
             ]
         ]
     )
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = _completed(pages_payload)
-        all_reviews = fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
             owner="acme", repo="widget", number=42
         )
     assert all_reviews[0]["classification"] == "dirty"
 
 
-def test_should_classify_clean_review_when_body_lacks_findings_pattern() -> None:
+def test_should_classify_dirty_review_when_state_is_commented_with_body() -> None:
     pages_payload = json.dumps(
         [
             [
                 {
                     "id": 1,
-                    "user": {"login": "cursor[bot]"},
+                    "user": {"login": "claude[bot]"},
+                    "state": "COMMENTED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-01T00:00:00Z",
-                    "body": "Bugbot reviewed your changes and found no new issues!",
+                    "body": "Found a couple of nits inline.",
                 }
             ]
         ]
     )
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = _completed(pages_payload)
-        all_reviews = fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
+            owner="acme", repo="widget", number=42
+        )
+    assert all_reviews[0]["classification"] == "dirty"
+
+
+def test_should_classify_clean_review_when_state_is_commented_with_empty_body() -> None:
+    pages_payload = json.dumps(
+        [
+            [
+                {
+                    "id": 1,
+                    "user": {"login": "claude[bot]"},
+                    "state": "COMMENTED",
+                    "commit_id": "abc",
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                    "body": "",
+                }
+            ]
+        ]
+    )
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _completed(pages_payload)
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
+            owner="acme", repo="widget", number=42
+        )
+    assert all_reviews[0]["classification"] == "clean"
+
+
+def test_should_dispatch_dirty_classification_off_claude_dirty_review_states_tuple() -> (
+    None
+):
+    source_text = (
+        Path(__file__).resolve().parent / "reviewer_specs.py"
+    ).read_text(encoding="utf-8")
+    assert "ALL_CLAUDE_DIRTY_REVIEW_STATES" in source_text
+    assert "all_dirty_states=ALL_CLAUDE_DIRTY_REVIEW_STATES" in source_text
+
+
+def test_should_classify_clean_review_when_state_is_approved() -> None:
+    pages_payload = json.dumps(
+        [
+            [
+                {
+                    "id": 1,
+                    "user": {"login": "claude[bot]"},
+                    "state": "APPROVED",
+                    "commit_id": "abc",
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                    "body": "looks good",
+                }
+            ]
+        ]
+    )
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _completed(pages_payload)
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
             owner="acme", repo="widget", number=42
         )
     assert all_reviews[0]["classification"] == "clean"
@@ -182,82 +243,89 @@ def test_should_match_login_case_insensitively() -> None:
             [
                 {
                     "id": 1,
-                    "user": {"login": "Cursor"},
+                    "user": {"login": "Claude"},
+                    "state": "CHANGES_REQUESTED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-01T00:00:00Z",
-                    "body": "Cursor Bugbot has reviewed your changes and found 1 potential issue.",
+                    "body": "uppercase login",
                 },
                 {
                     "id": 2,
-                    "user": {"login": "CURSOR[bot]"},
+                    "user": {"login": "CLAUDE-CODE[bot]"},
+                    "state": "APPROVED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-02T00:00:00Z",
-                    "body": "Bugbot reviewed your changes and found no new issues!",
+                    "body": "screaming login",
                 },
             ]
         ]
     )
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = _completed(pages_payload)
-        all_reviews = fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
             owner="acme", repo="widget", number=42
         )
+    assert len(all_reviews) == 2
     assert {each_review["review_id"] for each_review in all_reviews} == {1, 2}
 
 
-def test_should_match_login_containing_cursor_substring() -> None:
+def test_should_match_login_containing_claude_substring() -> None:
     pages_payload = json.dumps(
         [
             [
                 {
                     "id": 1,
-                    "user": {"login": "cursor[bot]"},
+                    "user": {"login": "claude[bot]"},
+                    "state": "CHANGES_REQUESTED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-01T00:00:00Z",
-                    "body": "Cursor Bugbot has reviewed your changes and found 1 potential issue.",
+                    "body": "canonical bot login",
                 },
                 {
                     "id": 2,
-                    "user": {"login": "internal-cursor-fork[bot]"},
+                    "user": {"login": "anthropic-claude[bot]"},
+                    "state": "CHANGES_REQUESTED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-02T00:00:00Z",
-                    "body": "Cursor Bugbot has reviewed your changes and found 2 potential issues.",
+                    "body": "non-canonical login still matches",
                 },
             ]
         ]
     )
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = _completed(pages_payload)
-        all_reviews = fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
             owner="acme", repo="widget", number=42
         )
     assert {each_review["review_id"] for each_review in all_reviews} == {1, 2}
 
 
-def test_should_exclude_login_without_cursor_substring() -> None:
+def test_should_exclude_login_without_claude_substring() -> None:
     pages_payload = json.dumps(
         [
             [
                 {
                     "id": 1,
                     "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                    "state": "CHANGES_REQUESTED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-01T00:00:00Z",
-                    "body": "copilot finding",
+                    "body": "wrong bot",
                 },
                 {
                     "id": 2,
                     "user": {"login": "dependabot[bot]"},
+                    "state": "CHANGES_REQUESTED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-02T00:00:00Z",
-                    "body": "dependency bump",
+                    "body": "also wrong",
                 },
             ]
         ]
     )
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = _completed(pages_payload)
-        all_reviews = fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
             owner="acme", repo="widget", number=42
         )
     assert all_reviews == []
@@ -269,7 +337,7 @@ def test_should_raise_when_gh_subprocess_fails() -> None:
     )
     with patch("subprocess.run", side_effect=failure):
         with pytest.raises(subprocess.CalledProcessError):
-            fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+            fetch_claude_reviews_module.fetch_claude_reviews(
                 owner="acme", repo="widget", number=42
             )
 
@@ -280,17 +348,18 @@ def test_should_return_entries_whose_keys_are_strings() -> None:
             [
                 {
                     "id": 1,
-                    "user": {"login": "cursor[bot]"},
+                    "user": {"login": "claude[bot]"},
+                    "state": "APPROVED",
                     "commit_id": "abc",
                     "submitted_at": "2026-01-01T00:00:00Z",
-                    "body": "Bugbot reviewed your changes and found no new issues!",
+                    "body": "looks good",
                 }
             ]
         ]
     )
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = _completed(pages_payload)
-        all_reviews = fetch_bugbot_reviews_module.fetch_bugbot_reviews(
+        all_reviews = fetch_claude_reviews_module.fetch_claude_reviews(
             owner="acme", repo="widget", number=42
         )
     assert len(all_reviews) == 1

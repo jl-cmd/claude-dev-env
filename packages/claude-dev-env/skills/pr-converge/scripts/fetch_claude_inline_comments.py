@@ -1,7 +1,7 @@
-"""Fetch unaddressed Cursor Bugbot inline comments for the latest Bugbot review on a commit.
+"""Fetch unaddressed Claude inline comments for the latest Claude review on a commit.
 
 Thin wrapper around ``reviewer_fetch_core.fetch_reviewer_inline_comments``
-parameterised by ``bugbot_spec``. The ``fetch_bugbot_reviews`` call lives here
+parameterised by ``claude_spec``. The ``fetch_claude_reviews`` call lives here
 (rather than inside the core) so tests can patch it on this module to exercise
 the inline-comments fetch in isolation.
 
@@ -24,27 +24,27 @@ from evict_cached_config_modules import evict_cached_config_modules
 
 evict_cached_config_modules()
 
-from fetch_bugbot_reviews import fetch_bugbot_reviews
+from fetch_claude_reviews import fetch_claude_reviews
 from reviewer_fetch_core import fetch_reviewer_inline_comments
-from reviewer_specs import bugbot_spec
+from reviewer_specs import claude_spec
 
 
-def fetch_bugbot_inline_comments(
+def fetch_claude_inline_comments(
     *,
     owner: str,
     repo: str,
     number: int,
     current_head: str,
 ) -> list[dict[str, object]]:
-    """Return Bugbot inline comments for the latest Bugbot review on ``current_head``."""
-    all_bugbot_reviews = fetch_bugbot_reviews(owner=owner, repo=repo, number=number)
+    """Return Claude inline comments for the latest Claude review on ``current_head``."""
+    all_claude_reviews = fetch_claude_reviews(owner=owner, repo=repo, number=number)
     return fetch_reviewer_inline_comments(
-        bugbot_spec,
+        claude_spec,
         owner=owner,
         repo=repo,
         number=number,
         current_head=current_head,
-        all_reviews=all_bugbot_reviews,
+        all_reviews=all_claude_reviews,
     )
 
 
@@ -55,7 +55,7 @@ def main() -> int:
     parser.add_argument("--number", required=True, type=int)
     parser.add_argument("--commit", required=True, dest="current_head")
     parsed_arguments = parser.parse_args()
-    all_comments = fetch_bugbot_inline_comments(
+    all_comments = fetch_claude_inline_comments(
         owner=parsed_arguments.owner,
         repo=parsed_arguments.repo,
         number=parsed_arguments.number,
