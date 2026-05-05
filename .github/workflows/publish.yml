@@ -23,10 +23,15 @@ jobs:
       dev_env_released: ${{ steps.release.outputs['packages/claude-dev-env--release_created'] }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - id: release
         uses: release-please-oss/release-please-action@v5
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
