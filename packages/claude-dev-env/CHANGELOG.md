@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.37.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.37.0...claude-dev-env-v1.37.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* **bugteam:** 10 haiku parallel auditors + opus validator replaces 3 opus ([#373](https://github.com/jl-cmd/claude-code-config/issues/373)) ([e814025](https://github.com/jl-cmd/claude-code-config/commit/e81402538929604330e54022aa289bf7f9407b02))
+* **pr-converge:** harden single-PR fix routing — view_pr_context flags, clean-coder spawn, reply script ([#370](https://github.com/jl-cmd/claude-code-config/issues/370)) ([acb7b95](https://github.com/jl-cmd/claude-code-config/commit/acb7b954b096f0dda54ed032720848b26f23e461))
+
+
+### Documentation
+
+* **rules:** strip historical clutter from gh-paginate, add no-historical-clutter rule ([#371](https://github.com/jl-cmd/claude-code-config/issues/371)) ([ee32907](https://github.com/jl-cmd/claude-code-config/commit/ee3290784232828aac6373d56595ac4191667794))
+
 ## [1.37.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.36.3...claude-dev-env-v1.37.0) (2026-05-06)
 
 
