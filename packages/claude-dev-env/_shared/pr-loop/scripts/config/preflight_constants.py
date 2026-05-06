@@ -8,8 +8,6 @@ GIT_DIRECTORY_NAME: str = ".git"
 
 CLAUDE_DIRECTORY_NAME: str = ".claude"
 
-VENV_DIRECTORY_NAME: str = ".venv"
-
 PYTEST_INI_FILENAME: str = "pytest.ini"
 
 PYPROJECT_TOML_FILENAME: str = "pyproject.toml"
@@ -18,13 +16,16 @@ PRE_COMMIT_CONFIG_YAML_FILENAME: str = ".pre-commit-config.yaml"
 
 PYTEST_TOML_TABLE_PREFIX: str = "[tool.pytest"
 
-ALL_TEST_FILE_PATTERNS_FOR_DISCOVERY: tuple[str, str] = (
-    "test_*.py",
-    "*_test.py",
-)
+PYTEST_FAILED_FIRST_FLAG: str = "--ff"
 
-ALL_TESTS_DIRECTORY_IGNORE_PARTS: frozenset[str] = frozenset(
-    {"site-packages", VENV_DIRECTORY_NAME, "venv", "node_modules"}
+ALL_GIT_LS_FILES_TEST_DISCOVERY_SUBCOMMAND: tuple[str, ...] = (
+    "ls-files",
+    "--cached",
+    "--others",
+    "--exclude-standard",
+    "--",
+    "**/test_*.py",
+    "**/*_test.py",
 )
 
 ALL_REPOSITORY_ROOT_MARKER_FILENAMES: tuple[str, str] = (
@@ -44,4 +45,24 @@ ALL_PRE_COMMIT_RUN_ALL_FILES_COMMAND: tuple[str, str, str] = (
     "--all-files",
 )
 
+ALL_GIT_DIFF_NAME_ONLY_SUBCOMMAND: tuple[str, str] = (
+    "diff",
+    "--name-only",
+)
+
+PYTEST_SCOPE_ALL: str = "all"
+
+PYTEST_SCOPE_CHANGED: str = "changed"
+
+ALL_PYTEST_SCOPE_CHOICES: tuple[str, str] = (PYTEST_SCOPE_ALL, PYTEST_SCOPE_CHANGED)
+
+
+PYTHON_FILE_SUFFIX: str = ".py"
+
+PYTEST_TEST_FILENAME_PREFIX: str = "test_"
+
+PYTEST_TEST_FILENAME_SUFFIX: str = "_test"
+
 PYTEST_NO_TESTS_COLLECTED_EXIT_CODE: int = 5
+
+TESTS_DIRECTORY_NAME: str = "tests"

@@ -37,17 +37,25 @@ if _preflight_scripts_path_entry not in sys.path:
 from config.fix_hookspath_constants import HOOKS_PATH_VERIFICATION_SUFFIX
 from config.preflight_constants import (
     ALL_GIT_CONFIG_GET_CORE_HOOKS_PATH_SUBCOMMAND,
+    ALL_GIT_DIFF_NAME_ONLY_SUBCOMMAND,
+    ALL_GIT_LS_FILES_TEST_DISCOVERY_SUBCOMMAND,
     ALL_PRE_COMMIT_RUN_ALL_FILES_COMMAND,
-    ALL_TEST_FILE_PATTERNS_FOR_DISCOVERY,
-    ALL_TESTS_DIRECTORY_IGNORE_PARTS,
     BUGTEAM_PREFLIGHT_SKIP_ENABLED_VALUE,
     BUGTEAM_PREFLIGHT_SKIP_ENV_VAR_NAME,
     GIT_DIRECTORY_NAME,
     PRE_COMMIT_CONFIG_YAML_FILENAME,
     PYPROJECT_TOML_FILENAME,
+    PYTEST_FAILED_FIRST_FLAG,
     PYTEST_INI_FILENAME,
+    ALL_PYTEST_SCOPE_CHOICES,
     PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
+    PYTEST_SCOPE_ALL,
+    PYTEST_SCOPE_CHANGED,
+    PYTEST_TEST_FILENAME_PREFIX,
+    PYTEST_TEST_FILENAME_SUFFIX,
     PYTEST_TOML_TABLE_PREFIX,
+    PYTHON_FILE_SUFFIX,
+    TESTS_DIRECTORY_NAME,
 )
 
 
@@ -137,18 +145,41 @@ def has_pytest_configuration(root: Path) -> bool:
     return PYTEST_TOML_TABLE_PREFIX in text
 
 
-def has_discoverable_tests(root: Path) -> bool:
-    all_ignored_parts = ALL_TESTS_DIRECTORY_IGNORE_PARTS
-    test_filename_glob, test_suffix_glob = ALL_TEST_FILE_PATTERNS_FOR_DISCOVERY
-    for each_path in root.rglob(test_filename_glob):
-        if any(each_part in all_ignored_parts for each_part in each_path.parts):
-            continue
+def has_discoverable_tests(root: Path) -> bool | None:
+    git_marker = root / GIT_DIRECTORY_NAME
+    if not (git_marker.is_dir() or git_marker.is_file()):
         return True
-    for each_path in root.rglob(test_suffix_glob):
-        if any(each_part in all_ignored_parts for each_part in each_path.parts):
-            continue
-        return True
-    return False
+    command = ["git", "-C", str(root), *ALL_GIT_LS_FILES_TEST_DISCOVERY_SUBCOMMAND]
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
+    except FileNotFoundError:
+        print(
+            "bugteam_preflight: git is not installed or not available on PATH.",
+            file=sys.stderr,
+        )
+        return None
+    except subprocess.CalledProcessError as error:
+        error_detail = (error.stderr or "").strip()
+        print(
+            f"bugteam_preflight: git ls-files failed (exit {error.returncode}):"
+            + (f"\n{error_detail}" if error_detail else ""),
+            file=sys.stderr,
+        )
+        return None
+    except OSError as error:
+        print(
+            f"bugteam_preflight: failed to run git ls-files: {error}",
+            file=sys.stderr,
+        )
+        return None
+    return bool(completed.stdout.strip())
 
 
 def _pytest_exit_code_no_tests_collected() -> int:
@@ -156,10 +187,17 @@ def _pytest_exit_code_no_tests_collected() -> int:
     return pytest_no_tests_collected_exit_code
 
 
-def run_pytest(repository_root: Path, verbose: bool) -> int:
-    command = [sys.executable, "-m", "pytest"]
+def run_pytest(
+    repository_root: Path,
+    verbose: bool,
+    all_test_paths: list[Path] | None = None,
+) -> int:
+    command = [sys.executable, "-m", "pytest", PYTEST_FAILED_FIRST_FLAG]
     if not verbose:
         command.append("-q")
+    if all_test_paths is not None:
+        command.append("--")
+        command.extend(str(each_path) for each_path in all_test_paths)
     completed = subprocess.run(
         command,
         cwd=str(repository_root),
@@ -168,6 +206,99 @@ def run_pytest(repository_root: Path, verbose: bool) -> int:
     if completed.returncode == _pytest_exit_code_no_tests_collected():
         return 0
     return completed.returncode
+
+
+def get_changed_files(repository_root: Path, base_ref: str) -> list[Path] | None:
+    if base_ref.startswith("-"):
+        print(
+            f"bugteam_preflight: invalid base_ref '{base_ref}' starts "
+            f"with hyphen; falling back to full suite.",
+            file=sys.stderr,
+        )
+        return None
+    command = [
+        "git",
+        *ALL_GIT_DIFF_NAME_ONLY_SUBCOMMAND,
+        f"{base_ref}...HEAD",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(repository_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except FileNotFoundError:
+        print(
+            "bugteam_preflight: git is not installed or not available on PATH.\n"
+            f"bugteam_preflight: cannot determine changed files against "
+            f"{base_ref}; falling back to full suite.",
+            file=sys.stderr,
+        )
+        return None
+    except OSError as os_error:
+        print(
+            f"bugteam_preflight: failed to run git: {os_error}\n"
+            f"bugteam_preflight: cannot determine changed files against "
+            f"{base_ref}; falling back to full suite.",
+            file=sys.stderr,
+        )
+        return None
+    if completed.returncode != 0:
+        print(
+            f"bugteam_preflight: git diff against {base_ref} failed "
+            f"(exit {completed.returncode}); falling back to full suite.\n"
+            f"{completed.stderr.strip()}",
+            file=sys.stderr,
+        )
+        return None
+    return [
+        Path(each_line.strip())
+        for each_line in completed.stdout.splitlines()
+        if each_line.strip()
+    ]
+
+
+def _find_related_test_files(changed_path: Path, repository_root: Path) -> list[Path]:
+    if changed_path.suffix != PYTHON_FILE_SUFFIX:
+        return []
+    stem = changed_path.stem
+    test_prefix = PYTEST_TEST_FILENAME_PREFIX
+    test_suffix = PYTEST_TEST_FILENAME_SUFFIX
+    if (stem.startswith(test_prefix) or stem.endswith(test_suffix)) and (
+        repository_root / changed_path
+    ).is_file():
+        return [repository_root / changed_path]
+    full_path = repository_root / changed_path
+    parent = full_path.parent
+    adjacent_tests = parent / TESTS_DIRECTORY_NAME
+    top_tests = repository_root / TESTS_DIRECTORY_NAME
+    relative_parent = changed_path.parent
+    python_suffix = PYTHON_FILE_SUFFIX
+    all_candidates = [
+        parent / f"{test_prefix}{stem}{python_suffix}",
+        parent / f"{stem}{test_suffix}{python_suffix}",
+        adjacent_tests / f"{test_prefix}{stem}{python_suffix}",
+        adjacent_tests / f"{stem}{test_suffix}{python_suffix}",
+    ]
+    if relative_parent != Path("."):
+        all_candidates.extend([
+            top_tests / relative_parent / f"{test_prefix}{stem}{python_suffix}",
+            top_tests / relative_parent / f"{stem}{test_suffix}{python_suffix}",
+        ])
+    return sorted({each_candidate for each_candidate in all_candidates if each_candidate.is_file()})
+
+
+def discover_related_tests(
+    all_changed_files: list[Path], repository_root: Path
+) -> list[Path]:
+    related: set[Path] = set()
+    for each_file in all_changed_files:
+        related.update(_find_related_test_files(each_file, repository_root))
+    return sorted(related)
 
 
 def run_pre_commit(repository_root: Path) -> int:
@@ -205,6 +336,26 @@ def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Verbose pytest output.",
     )
+    parser.add_argument(
+        "--base-ref",
+        type=str,
+        default=None,
+        help=(
+            "Git base ref for scoped test selection (e.g., origin/main). "
+            "When set, only tests related to files changed vs this ref are run."
+        ),
+    )
+    parser.add_argument(
+        "--scope",
+        type=str,
+        choices=list(ALL_PYTEST_SCOPE_CHOICES),
+        default=None,
+        help=(
+            "Test selection scope. 'all' runs the full suite. "
+            "'changed' runs only tests related to changed files (requires --base-ref). "
+            "Defaults to 'changed' when --base-ref is provided, 'all' otherwise."
+        ),
+    )
     return parser.parse_args(all_arguments)
 
 
@@ -228,13 +379,58 @@ def main(all_arguments: list[str]) -> int:
     if hooks_path_exit_code != 0:
         return hooks_path_exit_code
     if not arguments.no_pytest and has_pytest_configuration(repository_root):
-        if not has_discoverable_tests(repository_root):
+        discovery_result = has_discoverable_tests(repository_root)
+        if discovery_result is None:
+            print(
+                "bugteam_preflight: test discovery failed; running full suite anyway.",
+                file=sys.stderr,
+            )
+        elif not discovery_result:
             print(
                 "bugteam_preflight: pytest configured but no tests found; skipping pytest.",
                 file=sys.stderr,
             )
-        else:
-            exit_code = run_pytest(repository_root, arguments.verbose)
+        if discovery_result is not False:
+            effective_scope = arguments.scope
+            if discovery_result is None:
+                effective_scope = PYTEST_SCOPE_ALL
+            if effective_scope is None:
+                effective_scope = (
+                    PYTEST_SCOPE_CHANGED
+                    if arguments.base_ref is not None
+                    else PYTEST_SCOPE_ALL
+                )
+            if effective_scope == PYTEST_SCOPE_CHANGED and arguments.base_ref is None:
+                print(
+                    "bugteam_preflight: --scope changed requires --base-ref; "
+                    "falling back to full suite.",
+                    file=sys.stderr,
+                )
+                effective_scope = PYTEST_SCOPE_ALL
+            if effective_scope == PYTEST_SCOPE_CHANGED and arguments.base_ref is not None:
+                all_changed = get_changed_files(repository_root, arguments.base_ref)
+                if all_changed is None:
+                    exit_code = run_pytest(repository_root, arguments.verbose)
+                else:
+                    all_related = discover_related_tests(all_changed, repository_root)
+                    if all_related:
+                        print(
+                            f"bugteam_preflight: running {len(all_related)} test(s) "
+                            f"related to changed files (scope=changed).",
+                            file=sys.stderr,
+                        )
+                        exit_code = run_pytest(
+                            repository_root, arguments.verbose, all_related
+                        )
+                    else:
+                        print(
+                            "bugteam_preflight: no related tests found; "
+                            "running full suite.",
+                            file=sys.stderr,
+                        )
+                        exit_code = run_pytest(repository_root, arguments.verbose)
+            else:
+                exit_code = run_pytest(repository_root, arguments.verbose)
             if exit_code != 0:
                 return exit_code
     elif not arguments.no_pytest:

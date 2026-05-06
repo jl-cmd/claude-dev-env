@@ -14,7 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -31,7 +31,10 @@ def _load_preflight_module() -> ModuleType:
 
 preflight = _load_preflight_module()
 
-from config.preflight_constants import PYTEST_NO_TESTS_COLLECTED_EXIT_CODE  # noqa: E402
+from config.preflight_constants import (  # noqa: E402
+    PYTEST_INI_FILENAME,
+    PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
+)
 
 
 def _make_completed_process(
@@ -260,38 +263,18 @@ def test_loop_variables_use_each_prefix_in_preflight_module() -> None:
     assert "for each_candidate in" in find_root_source
 
     discover_tests_source = inspect.getsource(preflight.has_discoverable_tests)
-    assert "for each_path in" in discover_tests_source
-    assert "for each_part in" in discover_tests_source
+    assert "ALL_GIT_LS_FILES_TEST_DISCOVERY_SUBCOMMAND" in discover_tests_source
 
 
 def test_preflight_uses_extracted_directory_marker_constants() -> None:
-    """preflight.py must reference extracted constants instead of inline string literals.
-
-    The CODE_RULES magic-values rule treats inline ``.git`` and ``.venv``
-    string literals in production function bodies as violations. Confirm
-    preflight.py imports them (or a frozenset that contains ``.venv``) from
-    config.preflight_constants instead.
-    """
     preflight_source = inspect.getsource(preflight)
     assert "GIT_DIRECTORY_NAME" in preflight_source
-    assert "ALL_TESTS_DIRECTORY_IGNORE_PARTS" in preflight_source
+    assert "ALL_GIT_LS_FILES_TEST_DISCOVERY_SUBCOMMAND" in preflight_source
     find_root_source = inspect.getsource(preflight.find_repository_root)
     assert "'.git'" not in find_root_source
     assert '".git"' not in find_root_source
     discover_tests_source = inspect.getsource(preflight.has_discoverable_tests)
-    assert "'.venv'" not in discover_tests_source
-    assert '".venv"' not in discover_tests_source
-
-
-def test_preflight_does_not_import_unused_venv_directory_name_constant() -> None:
-    """The ``VENV_DIRECTORY_NAME`` constant is not consumed by preflight.py
-    (``.venv`` reaches the function body via ``ALL_TESTS_DIRECTORY_IGNORE_PARTS``).
-    Importing the standalone name is dead code per the unused-imports rule."""
-    preflight_source = inspect.getsource(preflight)
-    assert "VENV_DIRECTORY_NAME" not in preflight_source, (
-        "Dead import must be removed; preflight.py reaches `.venv` via "
-        "ALL_TESTS_DIRECTORY_IGNORE_PARTS instead"
-    )
+    assert "ALL_GIT_LS_FILES_TEST_DISCOVERY_SUBCOMMAND" in discover_tests_source
 
 
 def test_preflight_stderr_uses_bugteam_preflight_prefix(
@@ -358,6 +341,193 @@ def test_preflight_bootstrap_moves_script_directory_to_front() -> None:
         sys.path[:] = original_sys_path
 
 
+def test_main_uses_correct_changed_files_function_name() -> None:
+    """main() must call get_changed_files, not the undefined get_all_changed_files."""
+    main_source = inspect.getsource(preflight.main)
+    assert "get_all_changed_files(" not in main_source
+
+
+def test_should_not_return_nonexistent_test_file(tmp_path: Path) -> None:
+    """A deleted test file path from git diff --name-only must not be returned.
+    Before the fix, _find_related_test_files returned paths without checking
+    whether the file exists on disk, which caused pytest to receive
+    nonexistent paths for deleted files.
+    """
+    repo_root = tmp_path
+    deleted_test_path = Path("test_deleted_module.py")
+    result = preflight._find_related_test_files(deleted_test_path, repo_root)
+    assert result == []
+
+
+def test_should_not_return_test_files_for_non_python_file(tmp_path: Path) -> None:
+    """A non-.py file must return an empty list regardless of file existence."""
+    repo_root = tmp_path
+    non_python_path = Path("readme.txt")
+    (repo_root / non_python_path).touch()
+    result = preflight._find_related_test_files(non_python_path, repo_root)
+    assert result == []
+
+
+def test_should_find_test_file_in_adjacent_tests_directory(tmp_path: Path) -> None:
+    """A source file with a matching test in the adjacent tests/ directory
+    must return that test file path."""
+    repo_root = tmp_path
+    source_path = Path("src/module.py")
+    (repo_root / source_path).parent.mkdir(parents=True)
+    (repo_root / source_path).touch()
+    adjacent_tests = repo_root / "src" / "tests"
+    adjacent_tests.mkdir(parents=True)
+    expected_test = adjacent_tests / "test_module.py"
+    expected_test.touch()
+    result = preflight._find_related_test_files(source_path, repo_root)
+    assert expected_test in result
+
+
+def test_should_find_test_file_in_top_level_tests_directory(tmp_path: Path) -> None:
+    """A source file with a matching test in the top-level tests/ directory
+    must return that test file path."""
+    repo_root = tmp_path
+    source_path = Path("src/module.py")
+    (repo_root / source_path).parent.mkdir(parents=True)
+    (repo_root / source_path).touch()
+    top_tests = repo_root / "tests" / "src"
+    top_tests.mkdir(parents=True)
+    expected_test = top_tests / "test_module.py"
+    expected_test.touch()
+    result = preflight._find_related_test_files(source_path, repo_root)
+    assert expected_test in result
+
+
+def test_main_should_warn_when_scope_changed_without_base_ref(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--scope changed with no --base-ref must warn and fall back to full suite."""
+    with (
+        patch.object(preflight, "verify_git_hooks_path", return_value=0),
+        patch.object(preflight, "has_pytest_configuration", return_value=True),
+        patch.object(preflight, "has_discoverable_tests", return_value=True),
+        patch.object(preflight, "run_pytest", return_value=0),
+    ):
+        exit_code = preflight.main(["--scope", "changed"])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "requires --base-ref" in captured.err, (
+        "Missing warning when --scope changed is used without --base-ref"
+    )
+
+
+def test_has_discoverable_tests_should_not_re_raise_on_git_failure(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """has_discoverable_tests must return None instead of re-raising on git failure."""
+    (tmp_path / ".git").mkdir()
+    with patch("subprocess.run", side_effect=subprocess.CalledProcessError(128, ["git"])):
+        result = preflight.has_discoverable_tests(tmp_path)
+    captured = capsys.readouterr()
+    assert result is None, (
+        "Should return None instead of propagating the exception"
+    )
+    assert "bugteam_preflight:" in captured.err
+    assert "git ls-files failed" in captured.err
+
+
+def test_main_should_not_double_print_when_git_ls_fails(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When git ls-files fails, main() must print a distinct failure warning and
+    run the full pytest suite instead of silently skipping tests."""
+    mock_hooks_result = _make_completed_process(
+        "/home/user/.claude/hooks/git-hooks\n", returncode=0
+    )
+    with (
+        patch("subprocess.run") as mock_run,
+        patch.object(preflight, "run_pytest", return_value=0) as mock_pytest,
+    ):
+        mock_run.side_effect = [
+            mock_hooks_result,
+            subprocess.CalledProcessError(128, ["git", "ls-files"]),
+        ]
+        exit_code = preflight.main([])
+    captured = capsys.readouterr()
+    assert "bugteam_preflight: test discovery failed" in captured.err, (
+        "Must print a distinct warning when discovery fails, not the 'no tests found' message"
+    )
+    assert "bugteam_preflight: pytest configured but no tests found" not in captured.err, (
+        "Must not print the 'no tests found' skip message when discovery fails"
+    )
+    mock_pytest.assert_called_once_with(ANY, False)
+
+
+def test_should_default_to_changed_scope_when_base_ref_provided() -> None:
+    """--base-ref without --scope must default to 'changed', not 'all'.
+
+    The help text says 'Defaults to changed when --base-ref is provided'.
+    Before the fix, the None -> PYTEST_SCOPE_ALL conversion ran before
+    checking --base-ref, so providing --base-ref without --scope still
+    ran the full suite without calling get_changed_files.
+    """
+    with (
+        patch.object(preflight, "verify_git_hooks_path", return_value=0),
+        patch.object(preflight, "has_pytest_configuration", return_value=True),
+        patch.object(preflight, "has_discoverable_tests", return_value=True),
+        patch.object(preflight, "get_changed_files") as mock_get_changed,
+        patch.object(preflight, "discover_related_tests", return_value=[]),
+        patch.object(preflight, "run_pytest", return_value=0),
+    ):
+        exit_code = preflight.main(["--base-ref", "origin/main"])
+    assert exit_code == 0
+    mock_get_changed.assert_called_once_with(
+        ANY, "origin/main"
+    )
+
+
+def test_should_default_to_all_scope_when_no_base_ref_no_scope(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Omitting both --scope and --base-ref must default to 'all'."""
+    with (
+        patch.object(preflight, "verify_git_hooks_path", return_value=0),
+        patch.object(preflight, "has_pytest_configuration", return_value=True),
+        patch.object(preflight, "has_discoverable_tests", return_value=True),
+        patch.object(preflight, "run_pytest", return_value=0),
+    ):
+        exit_code = preflight.main([])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "running full suite" not in captured.err, (
+        "Default scope=all should run directly without changed-scope messages"
+    )
+
+
+def test_explicit_scope_all_with_base_ref_should_not_call_get_changed_files(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Explicit --scope all with --base-ref must not auto-convert to 'changed'.
+
+    Before the fix, ``argparse`` defaulted ``--scope`` to ``PYTEST_SCOPE_ALL``
+    (``"all"``), making it impossible to distinguish "user typed --scope all"
+    versus "user omitted --scope". The code then auto-converted
+    ``effective_scope == "all"`` to ``"changed"`` whenever ``--base-ref`` was
+    present, silently overriding an explicit ``--scope all``.
+
+    After the fix, ``--scope`` defaults to ``None`` and is resolved to ``"all"``
+    only after argparse, so the user's explicit ``--scope all`` stays ``"all"``
+    and the full suite runs regardless of ``--base-ref``.
+    """
+    with (
+        patch.object(preflight, "verify_git_hooks_path", return_value=0),
+        patch.object(preflight, "has_pytest_configuration", return_value=True),
+        patch.object(preflight, "has_discoverable_tests", return_value=True),
+        patch.object(preflight, "get_changed_files") as mock_get_changed,
+        patch.object(preflight, "discover_related_tests", return_value=[]),
+        patch.object(preflight, "run_pytest", return_value=0),
+    ):
+        exit_code = preflight.main(["--scope", "all", "--base-ref", "origin/main"])
+    assert exit_code == 0
+    mock_get_changed.assert_not_called()
+
+
 def test_preflight_bootstrap_matches_code_rules_sys_path_pattern() -> None:
     """Bootstrap must clear duplicate script_directory entries, then guard insert."""
     module_path = Path(__file__).parent.parent / "preflight.py"
@@ -374,3 +544,127 @@ def test_preflight_bootstrap_matches_code_rules_sys_path_pattern() -> None:
     assert "sys.path.insert(0, _preflight_scripts_path_entry)" in source, (
         "Bootstrap must insert the absolute script directory at index 0"
     )
+
+
+def test_has_discoverable_tests_should_include_untracked_test_files(
+    tmp_path: Path,
+) -> None:
+    """has_discoverable_tests must include --others --exclude-standard
+    to discover untracked test files not yet in the git index."""
+    (tmp_path / ".git").mkdir()
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed_process("untracked_test.py\n", returncode=0)
+        preflight.has_discoverable_tests(tmp_path)
+    called_command = mock_run.call_args[0][0]
+    assert "--others" in called_command, (
+        "--others flag required to include untracked files in ls-files output"
+    )
+    assert "--exclude-standard" in called_command, (
+        "--exclude-standard flag required to respect .gitignore for untracked files"
+    )
+
+
+def test_run_pytest_should_use_positional_separator_before_test_paths() -> None:
+    """run_pytest must pass '--' before test paths so pytest does not misinterpret
+    paths starting with '-' as command-line options."""
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed_process("", returncode=0)
+        preflight.run_pytest(
+            Path("/fake/repository"),
+            verbose=False,
+            all_test_paths=[Path("test_copilot_finding.py")],
+        )
+    called_command = mock_run.call_args[0][0]
+    separator_index = called_command.index("--")
+    assert called_command[separator_index + 1:] == ["test_copilot_finding.py"], (
+        "All test paths must follow the '--' positional separator"
+    )
+
+
+# ---- Copilot finding 1: has_discoverable_tests in non-git directories ----
+
+
+def test_has_discoverable_tests_returns_true_when_no_git_marker(
+    tmp_path: Path,
+) -> None:
+    """has_discoverable_tests must return True without running git when the root
+    has no .git marker (e.g., repo root found via pytest.ini)."""
+    (tmp_path / PYTEST_INI_FILENAME).touch()
+    result = preflight.has_discoverable_tests(tmp_path)
+    assert result is True
+
+
+# ---- Copilot finding 2: base_ref command injection ----
+
+
+def test_get_changed_files_returns_none_when_base_ref_starts_with_hyphen(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """get_changed_files must return None and print a warning when base_ref
+    starts with '-', preventing option injection into git diff."""
+    result = preflight.get_changed_files(Path("/fake"), "-oMalicious")
+    assert result is None
+    captured = capsys.readouterr()
+    assert "base_ref" in captured.err
+    assert "hyphen" in captured.err
+
+
+# ---- Copilot finding 3: duplicate git failures when discovery_result is None ----
+
+
+def test_main_skips_changed_scope_when_discovery_result_is_none(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When has_discoverable_tests returns None (git unavailable), main must
+    not call get_changed_files even when --base-ref is provided."""
+    with (
+        patch.object(preflight, "verify_git_hooks_path", return_value=0),
+        patch.object(preflight, "has_pytest_configuration", return_value=True),
+        patch.object(preflight, "has_discoverable_tests", return_value=None),
+        patch.object(preflight, "get_changed_files") as mock_get_changed,
+        patch.object(preflight, "run_pytest", return_value=0),
+    ):
+        exit_code = preflight.main(["--base-ref", "origin/main"])
+    assert exit_code == 0
+    mock_get_changed.assert_not_called()
+
+
+# ---- Copilot finding 4: misleading no-related-tests message on git diff failure ----
+
+
+def test_main_does_not_print_no_related_tests_when_get_changed_files_returns_none(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When get_changed_files returns None (git diff failed), main must not
+    print the misleading 'no related tests found' message."""
+    with (
+        patch.object(preflight, "verify_git_hooks_path", return_value=0),
+        patch.object(preflight, "has_pytest_configuration", return_value=True),
+        patch.object(preflight, "has_discoverable_tests", return_value=True),
+        patch.object(preflight, "get_changed_files", return_value=None),
+        patch.object(preflight, "discover_related_tests", return_value=[]),
+        patch.object(preflight, "run_pytest", return_value=0),
+    ):
+        exit_code = preflight.main(["--scope", "changed", "--base-ref", "origin/main"])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "no related tests found" not in captured.err
+
+
+def test_main_prints_no_related_tests_when_get_changed_files_returns_empty(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When get_changed_files returns [] (no changed files, git succeeded),
+    main must print the 'no related tests found' message and run full suite."""
+    with (
+        patch.object(preflight, "verify_git_hooks_path", return_value=0),
+        patch.object(preflight, "has_pytest_configuration", return_value=True),
+        patch.object(preflight, "has_discoverable_tests", return_value=True),
+        patch.object(preflight, "get_changed_files", return_value=[]),
+        patch.object(preflight, "discover_related_tests", return_value=[]),
+        patch.object(preflight, "run_pytest", return_value=0),
+    ):
+        exit_code = preflight.main(["--scope", "changed", "--base-ref", "origin/main"])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "no related tests found" in captured.err
