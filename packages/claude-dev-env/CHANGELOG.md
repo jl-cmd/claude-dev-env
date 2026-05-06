@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.37.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.36.3...claude-dev-env-v1.37.0) (2026-05-06)
+
+
+### Features
+
+* **bg-agent:** add bg-agent skill for delegating tasks to background agents ([#362](https://github.com/jl-cmd/claude-code-config/issues/362)) ([ac01573](https://github.com/jl-cmd/claude-code-config/commit/ac01573ac8be0d9dcda5c789b28b07bcc2e4ce25))
+* **fresh-branch:** add fresh-branch skill for creating branches from origin/main ([#361](https://github.com/jl-cmd/claude-code-config/issues/361)) ([067a404](https://github.com/jl-cmd/claude-code-config/commit/067a4048d957d5b35189b0df02d86077f8edb453))
+* **gotcha:** add gotcha skill for capturing obstacles and creating fix PRs ([#363](https://github.com/jl-cmd/claude-code-config/issues/363)) ([bb8af45](https://github.com/jl-cmd/claude-code-config/commit/bb8af45b7cdebfcc65c65b5c181a6f1f49fd4e12))
+
+
+### Refactoring
+
+* **bugteam:** migrate from orchestrated teams to background subagents ([#368](https://github.com/jl-cmd/claude-code-config/issues/368)) ([1e093a6](https://github.com/jl-cmd/claude-code-config/commit/1e093a67bb1023616866b7839b8b1d0ea23d1238))
+* **pr-converge:** hub-and-spoke rewrite + Claude reviewer support ([#360](https://github.com/jl-cmd/claude-code-config/issues/360)) ([5461e0b](https://github.com/jl-cmd/claude-code-config/commit/5461e0b7dee87e7a4f6a586acefc39994aed7829))
+
+
+### Performance
+
+* **preflight:** replace rglob with git ls-files, add --ff and PR-scoped test selection ([#369](https://github.com/jl-cmd/claude-code-config/issues/369)) ([e65084b](https://github.com/jl-cmd/claude-code-config/commit/e65084bc760033a3c56b4485dacfb475a939ca43))
+
 ## [1.36.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.36.2...claude-dev-env-v1.36.3) (2026-05-04)
 
 
