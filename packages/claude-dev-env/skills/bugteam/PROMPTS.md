@@ -10,7 +10,7 @@ Keep the spawn prompt self-contained: reference only the PR scope, audit rubric,
   <branch>head ref</branch>
   <base_branch>base ref</base_branch>
   <pr_url>full URL</pr_url>
-  <loop>N</loop>
+  <loop>L</loop>
   <pr_number>N</pr_number>
   <worktree_path>absolute path from Step 1 per-PR workspace</worktree_path>
 </context>
@@ -45,11 +45,17 @@ cd into `<worktree_path>` before any git, gh, or file operation.
 </constraints>
 
 <comment_posting>
+  Sibling auditors (-b through -k): run only steps 1–3 (audit, assign IDs,
+  capture excerpt, validate anchors), then write outcome XML per <output_format> and return.
+  Skip steps 4–8 — sibling auditors do not post PR reviews.
+
+  Validator (-a) and single-opus auditors: run all steps below.
+
   1. Audit the diff against the 10 categories above. Buffer the findings
      in memory; all posting happens at step 6 once anchors are validated.
-  2. Assign each finding a stable finding_id of exactly the form `loopN-K`
-     where K is 1-based within this loop.
-  3. Validate every finding's (file, line) against the captured diff. Split
+  2. Assign each finding a stable finding_id of exactly the form `loop<L>-<K>`
+     where <K> is 1-based within this loop.
+  3. For each finding, capture a verbatim excerpt from the target file at the cited line. Populate the `<excerpt>` element in the outcome XML with it. Validate every finding's (file, line) against the captured diff. Split
      findings into two buckets: anchored (line is in the diff) and
      unanchored (line is not in the diff — goes into the review body's
      "Findings without a diff anchor" section per Step 2.5).
@@ -61,7 +67,7 @@ cd into `<worktree_path>` before any git, gh, or file operation.
        Category: <letter> (<category name>)
        <2-3 sentence description with concrete trace>
 
-       _From /bugteam audit loop N._
+       _From /bugteam audit loop <L>._
 
   6. Post ONE review via Step 2.5's per-loop review CLI shape. Harvest the
      parent review `html_url` from the response JSON and the `comments[]`
@@ -76,17 +82,17 @@ cd into `<worktree_path>` before any git, gh, or file operation.
 </comment_posting>
 
 <output_format>
-  For the primary (-a) auditor: write the outcome XML below to .bugteam-pr<N>-loop<L>.outcomes.xml inside
-  the PR's worktree directory (<worktree_path>). For sibling auditors (-b/-c): write to <run_temp_dir>/pr-<N>/loop-<L>-{b,c}.outcomes.xml (absolute path passed in prompt). Return only that path on stdout. The schema:
+  For the (-a) validator: write the outcome XML below to .bugteam-pr<N>-loop<L>.outcomes.xml inside
+  the PR's worktree directory (<worktree_path>). For sibling auditors (-b through -k): write to <run_temp_dir>/pr-<N>/loop-<L>-<letter>.outcomes.xml (absolute path passed in prompt). Sibling auditors do not post PR reviews; set review_url, finding_comment_id, and finding_comment_url to empty strings, and used_fallback to "false". Omit unanchored findings from sibling output — only the validator handles those. Return only that path on stdout. The schema:
 </output_format>
 ```
 
 ## AUDIT outcome XML schema (bugfind writes this)
 
 ```xml
-<bugteam_audit loop="<N>" review_url="<url>">
+<bugteam_audit loop="<L>" review_url="<url>">
   <finding
-    finding_id="loop<N>-<index>"
+    finding_id="loop<L>-<K>"
     severity="P0|P1|P2"
     category="<letter>"
     file="<path>"
@@ -96,6 +102,7 @@ cd into `<worktree_path>` before any git, gh, or file operation.
     used_fallback="true|false"
   >
     <title>one-line title</title>
+    <excerpt>verbatim source line or snippet from the file at the cited line</excerpt>
     <description>2-3 sentence description with concrete trace</description>
   </finding>
   <verified_clean>
@@ -114,7 +121,7 @@ After the teammate writes the XML and returns, the lead reads `.bugteam-pr<N>-lo
   <branch>head</branch>
   <base_branch>base</base_branch>
   <pr_url>url</pr_url>
-  <loop>N</loop>
+  <loop>L</loop>
   <pr_number>N</pr_number>
   <worktree_path>absolute path from Step 1 per-PR workspace</worktree_path>
 </context>
@@ -124,7 +131,7 @@ cd into `<worktree_path>` before any git, gh, or file operation.
 <bugs_to_fix>
   [for each P0/P1/P2 finding from last_findings:]
   <bug
-    finding_id="loop<N>-<index>"
+    finding_id="loop<L>-<K>"
     severity="P0|P1|P2"
     file="<path>"
     line="<int>"
@@ -156,9 +163,9 @@ cd into `<worktree_path>` before any git, gh, or file operation.
 </execution>
 
 <outcome_xml_schema>
-  <bugteam_fix loop="<N>" commit_sha="<sha or empty if no commit>">
+  <bugteam_fix loop="<L>" commit_sha="<sha or empty if no commit>">
     <outcome
-      finding_id="loop<N>-<index>"
+      finding_id="loop<L>-<K>"
       status="fixed|could_not_address|hook_blocked"
       commit_sha="<sha if fixed, empty otherwise>"
       reply_comment_id="<id of the reply posted>"

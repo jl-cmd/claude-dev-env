@@ -22,9 +22,9 @@ Each invariant cites the normative section or companion file it derives from. Al
 | I-2 | `Bash` invoking `scripts/revoke_project_claude_permissions.py` runs exactly once per invocation on every exit path, after teardown. | `SKILL.md` § Step 5 |
 | I-3 | Orchestration uses `Agent(..., run_in_background=true)` only — no `TeamCreate`, `TeamDelete`, `SendMessage`, or `Task` tool calls. | `SKILL.md` § Step 2; § Step 4 |
 | I-4 | `Agent` calls are fresh per loop (`run_in_background=true`; new `name` each loop). | `CONSTRAINTS.md` — **Fresh subagent per loop** |
-| I-5 | Audit and fix spawns pass `model="opus"` on every `Agent` call. | `SKILL.md` § AUDIT action; § FIX action; `CONSTRAINTS.md` — **Opus 4.7 at xhigh effort for both subagents** |
+| I-5 | Audit sibling spawns pass `model="haiku"`; validator and fix spawns pass `model="opus"`. | `SKILL.md` § AUDIT action (parallel auditors); § FIX action; `CONSTRAINTS.md` — **Opus 4.7 at xhigh effort for validator and fix subagents** |
 | I-6 | Loop count ≤ 10 audits. 11th audit never fires. | `SKILL.md` YAML `description` (10-loop cap); § Step 3 (**Pre-audit** / **FIX** increment rules) |
-| I-7 | From loop 4 onward without convergence, three parallel `Agent(..., run_in_background=true)` calls in one message for audit. | `SKILL.md` § AUDIT action (**Parallel auditors**) |
+| I-7 | From loop 4 onward without convergence, eleven parallel `Agent(..., run_in_background=true)` calls in one message for audit. | `SKILL.md` § AUDIT action (**Parallel auditors**) |
 | I-8 | Lead reads `.bugteam-pr<N>-loop<L>.outcomes.xml` with the `Read` tool after each audit, before the next action. | `SKILL.md` § AUDIT action |
 | I-9 | Teardown sequence: `git worktree remove` each PR → `rmtree` `<run_temp_dir>` → Step 4.5 → revoke. | `SKILL.md` § Step 4; § Step 4.5; § Step 5 |
 | I-10 | The bugfind subagent posts ONE per-loop review; the bugfix subagent posts fix replies. The lead's only PR-write action is the Step 4.5 description rewrite. | `CONSTRAINTS.md` — **Audit/fix comment posting** |
@@ -171,14 +171,14 @@ Patch this table to match observation and annotate each correction.
 
 **Layer B predicted behavior.**
 - Loops 1–3: single `Agent(name="bugfind-pr<N>-loop<L>", run_in_background=true)` per loop.
-- Loops 4–10: three parallel `Agent(name="bugfind-pr<N>-loop<L>-[abc]", run_in_background=true)` in a single assistant message per loop; lead awaits all three notifications then merges outcomes.
+- Loops 4–10: eleven parallel `Agent(name="bugfind-pr<N>-loop<L>-[a..k]", run_in_background=true)` in a single assistant message per loop (10 haiku + 1 opus validator); lead awaits the validator notification.
 - Each loop produces one `Agent(name="bugfix-pr<N>-loop<L>", run_in_background=true)`.
 - Exactly 10 audit phases, exactly 10 fix phases.
 - Steps 19–26 from Eval 5 fire at teardown.
 
 **Pass criteria.**
 - I-6 holds: exactly 10 audit phases.
-- I-7 holds: loops 4–10 each emit three audit `Agent` calls in a single assistant message.
+- I-7 holds: loops 4–10 each emit eleven audit `Agent` calls in a single assistant message.
 - Final report contains `/bugteam exit: cap reached` and the remaining bug count.
 
 **Process check.** The distinct `Agent(name=...)` audit-call count is a prediction. On the first real run, record the exact count and rewrite the formula here.

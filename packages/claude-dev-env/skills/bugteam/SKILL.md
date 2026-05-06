@@ -184,7 +184,7 @@ only PR write before Step 4.5 is the final description rewrite.
 
 Order: audit → buffer → validate anchors vs diff → single review POST.
 Review body states counts; zero findings → still one review, `comments: []`,
-body `## /bugteam loop <N> audit: 0P0 / 0P1 / 0P2 → clean`.
+body `## /bugteam loop <L> audit: 0P0 / 0P1 / 0P2 → clean`.
 
 **Payloads:** build JSON with `jq --rawfile` / `-Rs`, pipe to `gh api ...
 --input -` (avoids shell-quoting; satisfies `gh-body-backtick-guard`). Write
@@ -228,7 +228,7 @@ before POST.
 **Review body template (`<tmp_review_body.md>`):**
 
 ```
-## /bugteam loop <N> audit: <P0>P0 / <P1>P1 / <P2>P2
+## /bugteam loop <L> audit: <P0>P0 / <P1>P1 / <P2>P2
 
 ### Findings without a diff anchor
 (only if needed)
@@ -318,11 +318,11 @@ Non-zero → spawn **clean-coder** standards-fix (read stderr, edit, re-run
 **5**
 failed gate rounds → `error: code rules gate failed pre-audit`. After **0**:
 `loop_count += 1`; if `loop_count > 10` → `cap reached`. Then **AUDIT**
-(bugfind); print `Loop <N> audit: ...`.
+(bugfind); print `Loop <L> audit: ...`.
 
 3. **FIX** (`last_action == "audited"` and `last_findings.total > 0`):
    `loop_count += 1`; if `loop_count > 10` → `cap reached`; **FIX** (bugfix);
-   print `Loop <N> fix: ...`; `last_action = "fixed"`, update `audit_log`; loop
+   print `Loop <L> fix: ...`; `last_action = "fixed"`, update `audit_log`; loop
    to step 1.
 
 4. After **AUDIT**: update `last_action`, `last_findings`, `audit_log`; print
@@ -361,18 +361,31 @@ background-completion notification, then reads
 `last_action = "audited"`; append audit line to `audit_log`.
 
 **Parallel auditors (`loop_count >= 4`):** gate passes immediately before;
-after three full audit/fix rounds without convergence, issue three `Agent`
-calls in one assistant message (`run_in_background=true`): `-a` posts the
-review and merges outcomes from `-b`/`-c` (read
-`.bugteam-pr<N>-loop<L>.outcomes.xml` plus
-`<run_temp_dir>/pr-<N>/loop-<L>-b.outcomes.xml` and `...-c...`); merge key
-`(file, line, category_letter)`; re-id `loopN-K`. `-b`/`-c` write sibling XML
-only; prompts must pass literal absolute sibling paths. Output path
-contract: `-b`/`-c` write to `<run_temp_dir>/pr-<N>/loop-<L>-b.outcomes.xml`
-and `<run_temp_dir>/pr-<N>/loop-<L>-c.outcomes.xml`; `-a` writes to
-`<worktree_path>/.bugteam-pr<N>-loop<L>.outcomes.xml`.
-Lead awaits all three background-completion notifications before merging
-outcomes.
+after three full audit/fix rounds without convergence, issue eleven `Agent`
+calls in one assistant message (`run_in_background=true`):
+
+- **10 haiku auditors (`-b` through `-k`):** `subagent_type="code-quality-agent"`,
+  `model="haiku"`, write sibling XML to
+  `<run_temp_dir>/pr-<N>/loop-<L>-<letter>.outcomes.xml`, skip PR posting.
+  Prompts must pass literal absolute sibling paths.
+- **1 opus validator (`-a`):** `subagent_type="code-quality-agent"`,
+  `model="opus"`:
+  - Polls for all 10 sibling XMLs before proceeding (60s timeout, 2s interval). On timeout: log diagnostics entry, proceed with validated findings from available XMLs, report count in validator output.
+  - Validates each finding: file exists, line in bounds, excerpt contains the exact
+    text of the cited line, category is A–J, severity is P0/P1/P2.
+  - Hallucinated findings → quarantined to `<run_temp_dir>/pr-<N>/loop-<L>-diagnostics.json` under
+    `validator_rejected` (added alongside the required diagnostics keys defined in the shared audit contract).
+  - De-dups by `(file, line, category)`, max severity wins; on conflict, keep longest description text.
+  - Re-ids as `loop<L>-<K>`.
+  - Writes `<worktree_path>/.bugteam-pr<N>-loop<L>.outcomes.xml`, posts review.
+
+Lead awaits the opus validator (-a) background-completion notification (120s
+timeout). The validator independently polls all 10 sibling XMLs; the lead does
+not gate on haiku peer completion. On lead timeout: the validator did not post
+a merged review — treat as a hard blocker and abort the loop.
+
+The sibling-output paths in [`PROMPTS.md`](PROMPTS.md) must cover the full
+`-b` through `-k` range.
 
 ### FIX action
 
