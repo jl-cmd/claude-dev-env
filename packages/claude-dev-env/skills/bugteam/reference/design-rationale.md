@@ -2,13 +2,9 @@
 
 ## Core principle (expanded)
 
-A Claude Code **agent team** runs the audit-and-fix loop until convergence. The bugfind teammate audits clean-room (own context window, no chat history); the bugfix teammate addresses each audit's findings; both spawn fresh per loop. A 10-loop hard cap prevents runaway cost. Project permissions are granted at session start and revoked at session end.
+Background subagents (`Agent(..., run_in_background=true)`) run the audit-and-fix loop until convergence. The bugfind subagent audits clean-room (own context window, no chat history); the bugfix subagent addresses each audit’s findings; both spawn fresh per loop with no shared state. A 10-loop hard cap prevents runaway cost. Project permissions are granted at session start and revoked at session end.
 
-Teammate isolation versus subagents returning into the lead’s context is the clean-room property. Verbatim Anthropic quotes and URLs: [`../sources.md`](../sources.md).
-
-## Why not parallel subagents here
-
-Subagents return their results into the lead’s context, which accumulates across loops. Agent-team teammates are independent sessions with their own context windows and do not pollute the lead. The lead can shut down and respawn each loop so every audit starts fresh. For `/bugteam`, the independent-context property is required; parallel subagents fail the clean-room requirement. Supporting quotes: [`../sources.md`](../sources.md) (subagents vs agent teams).
+Fresh-spawn clean-room isolation: each `Agent` call creates a new subagent with its own context window and no access to prior conversation. After the subagent writes its outcome XML and self-terminates, the lead reads the file. Results never accumulate in the lead’s context beyond the XML artifact. Verbatim Anthropic quotes and URLs: [`../sources.md`](../sources.md).
 
 ## Table of contents in `SKILL.md`
 
@@ -20,9 +16,8 @@ The user wants automated convergence on a clean PR without babysitting each step
 
 ### Refusal reasons (detail)
 
-- **Agent teams off:** Without the feature flag, the workflow cannot run.
 - **No PR / diff:** There is nothing scoped to audit.
-- **Dirty tree:** The fix teammate will commit; uncommitted local work would be mixed into automated commits.
+- **Dirty tree:** The fix subagent will commit; uncommitted local work would be mixed into automated commits.
 - **Missing subagents:** Both `code-quality-agent` and `clean-coder` must exist in the environment before Step 0.
 
 Exact refusal strings remain in `SKILL.md`.

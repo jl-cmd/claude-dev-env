@@ -14,23 +14,20 @@ Evals are split into two layers. Both layers run against the same trace but carr
 
 ## Ironclad invariants (Layer A, apply to every eval)
 
-Each invariant cites the normative section or companion file it derives from. **Path A vs Path B:** `SKILL.md` **Path routing** splits harnesses. Invariants **I-1, I-3, I-4, I-7, I-9, I-11 (teammate shutdown → `TeamDelete` prefix), I-13** apply to **Path A only**. **Path B** substitutes per [`reference/workflow-path-b-task-harness.md`](reference/workflow-path-b-task-harness.md): no `TeamCreate` / `TeamDelete`; parallel auditors use parallel **`Task`** calls; **I-12 Path B** — the **lead** runs Step 2.5 `gh api` posts. **I-2, I-5, I-6, I-8, I-10** apply to **both** paths (revoke once; fresh spawn per loop; `model="opus"` on audit/fix workers; cap; read outcome XML).
+Each invariant cites the normative section or companion file it derives from. All spawns use `Agent(..., run_in_background=true)`. Invariants apply uniformly across all eval fixtures.
 
 | # | Invariant | Citation |
 |---|---|---|
-| I-1 | **Path A:** `Bash` invoking `scripts/grant_project_claude_permissions.py` precedes every `TeamCreate`. **Path B:** grant precedes first audit **`Task`**. | `SKILL.md` § Step 0; § Path routing |
-| I-2 | `Bash` invoking `scripts/revoke_project_claude_permissions.py` runs exactly once per invocation on every exit path, **after** teardown that applies to that path (`TeamDelete` only on Path A). | `SKILL.md` § Step 5 |
-| I-3 | **Path A:** Exactly one `TeamCreate` and exactly one `TeamDelete` per invocation. **Path B:** zero `TeamCreate` / `TeamDelete`. | `SKILL.md` § Step 2; § Step 4 |
-| I-4 | **Path A:** Before `TeamDelete`, no teammate remains active without cleanup (self-terminated `Agent` or `SendMessage` shutdown). | `SKILL.md` § AUDIT/FIX shutdown; § Step 4 |
-| I-5 | **Path A:** `Agent` calls are fresh per loop. **Path B:** `Task` calls for audit/fix are fresh per loop (same `name` discipline where the host exposes naming). | `CONSTRAINTS.md` — **Fresh teammate per loop**; deltas **Clean-room note** |
-| I-6 | Both paths: audit and fix worker spawns pass `model="opus"` on `Agent` **or** `Task` as documented in `SKILL.md` § AUDIT/FIX. | `SKILL.md` § Step 2 (**Roles**); `CONSTRAINTS.md` — **Opus 4.7 at xhigh effort for both teammates** |
-| I-7 | **Path A:** `TeamDelete()` is called with no arguments. **Path B:** omit. | `SKILL.md` § Step 4 |
-| I-8 | Loop count ≤ 10 audits. 11th audit never fires. | `SKILL.md` YAML `description` (10-loop cap); § Step 3 (**Pre-audit** / **FIX** increment rules) |
-| I-9 | **Path A:** From loop 4 onward without convergence, three parallel `Agent` calls in one message. **Path B:** three parallel **`Task`** calls. | `SKILL.md` § AUDIT action (**Parallel auditors**); `reference/workflow-path-b-task-harness.md` |
-| I-10 | Lead reads `.bugteam-loop-<N>.outcomes.xml` with the `Read` tool after each audit, before the next action. | `SKILL.md` § AUDIT action |
-| I-11 | **Path A:** `git worktree remove` each PR → teammate shutdowns → `TeamDelete` → `rmtree` `<team_temp_dir>` → Step 4.5 → revoke. **Path B:** `git worktree remove` each PR → (omit shutdown / `TeamDelete`) → `rmtree` → Step 4.5 → revoke. | `SKILL.md` § Step 4; § Step 4.5; § Step 5; `reference/workflow-path-a-orchestrated-teams.md` § Step 4; `reference/workflow-path-b-task-harness.md` § Step 4 |
-| I-12 | **Path A:** Lead never posts PR review / finding / fix replies except Step 4.5 body. **Path B:** Lead performs Step 2.5 posts per deltas; Step 4.5 unchanged. | `CONSTRAINTS.md` — **Audit/fix comment posting** |
-| I-13 | **Path A:** Only the lead invokes `TeamCreate`; every teammate `Agent(..., team_name=...)`. **Path B:** no `TeamCreate`; `Task` spawns omit `team_name`. | `CONSTRAINTS.md` — **Path A — orchestrator-only `TeamCreate`**; `reference/workflow-path-b-task-harness.md` |
+| I-1 | `Bash` invoking `scripts/grant_project_claude_permissions.py` precedes the first audit `Agent` spawn. | `SKILL.md` § Step 0 |
+| I-2 | `Bash` invoking `scripts/revoke_project_claude_permissions.py` runs exactly once per invocation on every exit path, after teardown. | `SKILL.md` § Step 5 |
+| I-3 | Orchestration uses `Agent(..., run_in_background=true)` only — no `TeamCreate`, `TeamDelete`, `SendMessage`, or `Task` tool calls. | `SKILL.md` § Step 2; § Step 4 |
+| I-4 | `Agent` calls are fresh per loop (`run_in_background=true`; new `name` each loop). | `CONSTRAINTS.md` — **Fresh subagent per loop** |
+| I-5 | Audit and fix spawns pass `model="opus"` on every `Agent` call. | `SKILL.md` § AUDIT action; § FIX action; `CONSTRAINTS.md` — **Opus 4.7 at xhigh effort for both subagents** |
+| I-6 | Loop count ≤ 10 audits. 11th audit never fires. | `SKILL.md` YAML `description` (10-loop cap); § Step 3 (**Pre-audit** / **FIX** increment rules) |
+| I-7 | From loop 4 onward without convergence, three parallel `Agent(..., run_in_background=true)` calls in one message for audit. | `SKILL.md` § AUDIT action (**Parallel auditors**) |
+| I-8 | Lead reads `.bugteam-pr<N>-loop<L>.outcomes.xml` with the `Read` tool after each audit, before the next action. | `SKILL.md` § AUDIT action |
+| I-9 | Teardown sequence: `git worktree remove` each PR → `rmtree` `<run_temp_dir>` → Step 4.5 → revoke. | `SKILL.md` § Step 4; § Step 4.5; § Step 5 |
+| I-10 | The bugfind subagent posts ONE per-loop review; the bugfix subagent posts fix replies. The lead's only PR-write action is the Step 4.5 description rewrite. | `CONSTRAINTS.md` — **Audit/fix comment posting** |
 
 Any eval failing one or more Layer A invariants fails the run.
 
@@ -46,25 +43,23 @@ The harness does not yet exist; this document defines its contract.
 
 ---
 
-## Eval 1 — Path B: agent teams env unset (Task harness, not a refusal)
+## Eval 1 — Smoke: background subagent spawns fire correctly
 
-**Scenario.** `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unset in both `claude config` and `~/.claude/settings.json`.
+**Scenario.** PR exists; PR is a clean target with no unusual pre-conditions.
 
 **Trigger.** `/bugteam`
 
-**Layer A invariants.** Path B subset (I-2, I-5, I-6, I-8, I-10; I-1/I-3/I-4/I-7/I-9/I-11/I-13 N/A or Path-B-shaped).
+**Layer A invariants.** I-1, I-2, I-3, I-4, I-5, I-8, I-9, I-10.
 
-**Layer B predicted trace (Path B smoke).**
-1. `Bash("claude config get env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS")` → empty.
-2. `Bash("python .../grant_project_claude_permissions.py")` runs (Step 0).
-3. **No** `TeamCreate`.
-4. At least one `Task(subagent_type="code-quality-agent", ...)` or host-equivalent for AUDIT; FIX rounds use the host-appropriate FIX `Task` from `workflow-path-b-task-harness.md` § **FIX spawn** (`clean-coder` subtype on Claude Code when accepted; `generalPurpose` + clean-coder **Read** preamble on Cursor when the enum rejects `clean-coder`).
+**Layer B predicted trace (smoke).**
+1. `Bash("python .../grant_project_claude_permissions.py")` runs (Step 0).
+2. `Agent(subagent_type="code-quality-agent", name="bugfind-pr...-loop1", run_in_background=true, model="opus", ...)` spawned for AUDIT.
+3. Lead awaits background-completion notification, then `Read(".bugteam-pr42-loop1.outcomes.xml")`.
+4. `Agent(subagent_type="clean-coder", name="bugfix-pr...-loop1", run_in_background=true, model="opus", ...)` spawned for FIX (if findings).
 5. `Bash("python .../revoke_project_claude_permissions.py")` on exit.
 
 **Pass criteria.**
-- **No** refusal string about missing agent teams.
-- Zero `TeamCreate`, zero `TeamDelete`, zero teammate `SendMessage` shutdowns.
-- Non-zero `Task` (or `Agent` without `team_name` only if the host maps Path B that way) carrying **`code-quality-agent`** / **fix worker under the clean-coder contract** (subtype `clean-coder` where accepted, else `generalPurpose` + `clean-coder.md` Read per `workflow-path-b-task-harness.md`).
+- Non-zero `Agent(subagent_type="code-quality-agent", run_in_background=true)` and `Agent(subagent_type="clean-coder", run_in_background=true)` calls.
 
 ---
 
@@ -75,7 +70,7 @@ The harness does not yet exist; this document defines its contract.
 **Layer B predicted trace.**
 1. `Bash("gh pr view --json ...")` → non-zero exit.
 2. `Bash("git merge-base HEAD origin/main")` → empty.
-3. No grant script, no `TeamCreate`.
+3. No grant script.
 
 **Pass criteria.** Assistant message matches `No PR or upstream diff. /bugteam needs a target.`. Zero downstream tool calls.
 
@@ -93,15 +88,15 @@ The harness does not yet exist; this document defines its contract.
 
 **Scenario.** `code-quality-agent` is present in the available-agents list; `clean-coder` is not.
 
-**Pass criteria.** Assistant message contains `Required subagent type clean-coder not installed.`. Zero grant script call, zero `TeamCreate`.
+**Pass criteria.** Assistant message contains `Required subagent type clean-coder not installed.`. Zero grant script call, zero `Agent` spawns.
 
 ---
 
-## Eval 5 — Happy path: converges in 2 loops (Path A fixture)
+## Eval 5 — Happy path: converges in 2 loops
 
-**Scenario.** PR #42 contains three P1 bugs all addressable by the mock fix teammate. Loop 1 audit returns 3 findings; loop 1 fix commits cleanly; loop 2 audit returns zero findings. **`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`** (Path A — `TeamCreate` + teammate `Agent`).
+**Scenario.** PR #42 contains three P1 bugs all addressable by the mock fix subagent. Loop 1 audit returns 3 findings; loop 1 fix commits cleanly; loop 2 audit returns zero findings.
 
-**Layer A invariants.** Path A: I-1, I-2, I-3, I-4, I-5, I-6, I-7, I-10, I-11, I-12, I-13.
+**Layer A invariants.** I-1, I-2, I-3, I-4, I-5, I-6, I-8, I-9, I-10.
 
 **Layer B predicted trace.**
 
@@ -109,41 +104,40 @@ The harness does not yet exist; this document defines its contract.
 |---|---|---|
 | 1 | `Bash("python .../scripts/grant_project_claude_permissions.py")` | `SKILL.md` § Step 0 |
 | 2 | `Bash("gh pr view --json number,baseRefName,headRefName,url")` | `SKILL.md` § Step 1 |
-| 3 | `Bash("git rev-parse HEAD")` → captures `starting_sha` | `SKILL.md` § Step 2 — **Loop state** block |
-| 4 | `TeamCreate(team_name="bugteam-pr-42-<ts>", description=..., agent_type="team-lead")` | `SKILL.md` § Step 2 |
-| 5 | `Bash("mkdir -p <team_temp_dir>")` | `SKILL.md` § AUDIT action |
-| 6 | `Bash("gh pr diff 42 -R ... > <team_temp_dir>/loop-1.patch")` | `SKILL.md` § AUDIT action |
-| 7 | `Agent(subagent_type="code-quality-agent", name="bugfind", team_name=..., model="opus", description=..., prompt=<audit XML loop 1>)` | `SKILL.md` § AUDIT action |
-| 8 | `Read(".bugteam-loop-1.outcomes.xml")` | `SKILL.md` § AUDIT action |
-| 9 | `SendMessage(to="bugfind", message={type: "shutdown_request", reason: "audit loop 1 complete; outcome XML captured"})` | `SKILL.md` § AUDIT action (**Shutdown** fallback) |
-| 10 | `Agent(subagent_type="clean-coder", name="bugfix", team_name=..., model="opus", description=..., prompt=<fix XML loop 1>)` | `SKILL.md` § FIX action |
-| 11 | `Read(".bugteam-loop-1.outcomes.xml")` — bugfix outcome XML overwrites same filename | `SKILL.md` § FIX action |
-| 12 | `Bash("git rev-parse HEAD")` → verify HEAD advanced | `SKILL.md` § FIX action (**Verify**) |
-| 13 | `Bash("git fetch origin <branch> && git rev-parse origin/<branch>")` → verify push landed | `SKILL.md` § FIX action (**Verify**) |
-| 14 | `SendMessage(to="bugfix", message={type: "shutdown_request", reason: "fix loop 1 complete; commit <sha7> pushed"})` | `SKILL.md` § FIX action (**Shutdown** fallback) |
-| 15 | `Bash("gh pr diff 42 -R ... > <team_temp_dir>/loop-2.patch")` | `SKILL.md` § AUDIT action |
-| 16 | `Agent(subagent_type="code-quality-agent", name="bugfind", ...)` (loop 2) | `SKILL.md` § AUDIT action |
-| 17 | `Read(".bugteam-loop-2.outcomes.xml")` — zero findings | `SKILL.md` § AUDIT action |
-| 18 | `SendMessage(to="bugfind", message={type: "shutdown_request", reason: "audit loop 2 complete; zero findings"})` | `SKILL.md` § AUDIT action (**Shutdown** fallback) |
-| 19 | `TeamDelete()` | `SKILL.md` § Step 4 |
-| 20 | `Bash("python -c \"import os, shutil, stat, sys; h = lambda f, p, *_: (os.chmod(p, stat.S_IWRITE), f(p)); shutil.rmtree(r'<team_temp_dir>', **({'onexc': h} if sys.version_info >= (3, 12) else {'onerror': h}))\"")` | `SKILL.md` § Step 4 (Windows-safe teardown) |
+| 3 | `Bash("git -C \"<run_temp_dir>/pr-42/worktree\" rev-parse HEAD")` → captures `starting_sha` | `SKILL.md` § Step 2 — **Loop state** block |
+| 4 | `Bash("mkdir -p <run_temp_dir>/pr-42")` | `SKILL.md` § AUDIT action |
+| 5 | `Bash("gh pr diff 42 -R ... > <run_temp_dir>/pr-42/loop-1.patch")` | `SKILL.md` § AUDIT action |
+| 6 | `Agent(subagent_type="code-quality-agent", name="bugfind-pr42-loop1", run_in_background=true, model="opus", description=..., prompt=<audit XML loop 1>)` | `SKILL.md` § AUDIT action |
+| 7 | Lead awaits background-completion notification | `SKILL.md` § AUDIT action |
+| 8 | `Read(".bugteam-pr42-loop1.outcomes.xml")` | `SKILL.md` § AUDIT action |
+| 9 | `Agent(subagent_type="clean-coder", name="bugfix-pr42-loop1", run_in_background=true, model="opus", description=..., prompt=<fix XML loop 1>)` | `SKILL.md` § FIX action |
+| 10 | Lead awaits background-completion notification | `SKILL.md` § FIX action |
+| 11 | `Read(".bugteam-pr42-loop1.outcomes.xml")` — bugfix outcome XML | `SKILL.md` § FIX action |
+| 12 | `Bash("git -C \"<run_temp_dir>/pr-42/worktree\" rev-parse HEAD")` → verify HEAD advanced | `SKILL.md` § FIX action (**Verify**) |
+| 13 | `Bash("git -C \"<run_temp_dir>/pr-42/worktree\" fetch origin <branch>")` → fetch remote state | `SKILL.md` § FIX action (**Verify**) |
+| 14 | `Bash("git -C \"<run_temp_dir>/pr-42/worktree\" rev-parse origin/<branch>")` → confirm matches HEAD | `SKILL.md` § FIX action (**Verify**) |
+| 15 | `Bash("gh pr diff 42 -R ... > <run_temp_dir>/pr-42/loop-2.patch")` | `SKILL.md` § AUDIT action |
+| 16 | `Agent(subagent_type="code-quality-agent", name="bugfind-pr42-loop2", run_in_background=true, ...)` (loop 2) | `SKILL.md` § AUDIT action |
+| 17 | Lead awaits background-completion notification | `SKILL.md` § AUDIT action |
+| 18 | `Read(".bugteam-pr42-loop2.outcomes.xml")` — zero findings | `SKILL.md` § AUDIT action |
+| 19 | `Bash("git worktree remove \"<run_temp_dir>/pr-42/worktree\"")` | `SKILL.md` § Step 4 step 1 |
+| 20 | `Bash("python -c \"...shutil.rmtree(r'<run_temp_dir>', ...)\"")` | `SKILL.md` § Step 4 step 2 (Windows-safe teardown) |
 | 21 | `Bash("gh pr diff 42 -R ... > .bugteam-final.diff")` | `SKILL.md` § Step 4.5 step 1 |
 | 22 | `Bash("gh pr view 42 -R ... --json body --jq .body > .bugteam-original-body.md")` | `SKILL.md` § Step 4.5 step 2 |
 | 23 | `Agent(subagent_type="pr-description-writer", description=..., prompt=<brief>)` | `SKILL.md` § Step 4.5 |
 | 24 | `Write(".bugteam-final-body.md", <returned body>)` | `SKILL.md` § Step 4.5 step 4 |
 | 25 | `Bash("gh pr edit 42 -R ... --body-file .bugteam-final-body.md")` | `SKILL.md` § Step 4.5 step 4 |
-| 26 | `Bash("rm .bugteam-final.diff .bugteam-original-body.md .bugteam-final-body.md")` | `SKILL.md` § Step 4.5 step 5 (lead may add `.bugteam-loop-*.outcomes.xml` in the same or a separate `rm` — reconcile on first real run) |
+| 26 | `Bash("rm .bugteam-final.diff .bugteam-original-body.md .bugteam-final-body.md")` | `SKILL.md` § Step 4.5 step 5 |
 | 27 | `Bash("python .../scripts/revoke_project_claude_permissions.py")` | `SKILL.md` § Step 5 |
 
 **Pass criteria.**
 - All Layer A invariants hold.
-- Exactly 2 `Agent(name="bugfind"...)` calls, exactly 1 `Agent(name="bugfix"...)` call.
-- Exactly 2 bugfind shutdown messages + 1 bugfix shutdown message.
+- Exactly 2 `Agent(name="bugfind-pr42-loop...")` calls, exactly 1 `Agent(name="bugfix-pr42-loop...")` call.
 - Final report contains `/bugteam exit: converged` and `Loops: 2`.
 
 **Process check after first real run.** Compare the observed trace against steps 1–27. Common expected divergences that should not fail the eval:
 - Extra `Bash("git rev-parse HEAD")` calls the lead inserts for bookkeeping.
-- Consolidated `Bash` calls (step 26 may split into two or three calls).
+- Consolidated `Bash` calls (step 25 may split into two or three calls).
 - Extra `Read` calls when the lead re-reads an outcome XML to quote specific findings.
 - Reordered but still-Layer-A-compliant cleanup sequencing.
 
@@ -151,40 +145,40 @@ Patch this table to match observation and annotate each correction.
 
 ---
 
-## Eval 6 — Stuck path: fix teammate produces no commit
+## Eval 6 — Stuck path: fix subagent produces no commit
 
-**Scenario.** Loop 1 audit finds 2 P1 bugs; the mock fix teammate reports both as `could_not_address` (no commit created).
+**Scenario.** Loop 1 audit finds 2 P1 bugs; the mock fix subagent reports both as `could_not_address` (no commit created).
 
-**Layer A invariants.** I-1, I-2, I-3, I-4, I-5, I-6, I-7, I-10, I-11, I-12. I-8 trivially holds.
+**Layer A invariants.** I-1, I-2, I-3, I-4, I-5, I-6, I-8, I-9, I-10. I-6 trivially holds.
 
-**Layer B predicted trace.** Identical to Eval 5 steps 1–14 with this divergence:
+**Layer B predicted trace.** Identical to Eval 5 steps 1–12 with this divergence:
 - Step 11 bugfix outcome XML marks every finding `status="could_not_address"`.
 - Step 12 `Bash("git rev-parse HEAD")` returns the pre-fix SHA unchanged.
-- Skill sets exit reason = `stuck`, skips loop 2, and falls through to `TeamDelete()`.
+- Skill sets exit reason = `stuck`, skips loop 2, and falls through to `rmtree`.
 
 **Pass criteria.**
 - Loop count stops at 1.
 - Final report contains `/bugteam exit: stuck` and names the two unresolved findings.
-- Steps 19–27 fire despite the stuck exit — I-2 and I-11 enforce this.
+- Steps 19–26 fire despite the stuck exit — I-2 and I-9 enforce this.
 
 ---
 
 ## Eval 7 — Cap reached: 10 loops, no convergence
 
-**Scenario.** Mock audit returns one P2 finding every loop. Mock fix teammate always commits but never clears the finding.
+**Scenario.** Mock audit returns one P2 finding every loop. Mock fix subagent always commits but never clears the finding.
 
-**Layer A invariants.** All of I-1 through I-12.
+**Layer A invariants.** All of I-1 through I-10.
 
 **Layer B predicted behavior.**
-- Loops 1–3: single `Agent(name="bugfind")` per loop.
-- Loops 4–10: three parallel `Agent(name="bugfind-loop-<N>-a/b/c")` in a single assistant message per loop, followed by two parallel `-b`/`-c` shutdowns and one `-a` shutdown.
-- Each loop produces one `Agent(name="bugfix")` and its matching shutdown.
+- Loops 1–3: single `Agent(name="bugfind-pr<N>-loop<L>", run_in_background=true)` per loop.
+- Loops 4–10: three parallel `Agent(name="bugfind-pr<N>-loop<L>-[abc]", run_in_background=true)` in a single assistant message per loop; lead awaits all three notifications then merges outcomes.
+- Each loop produces one `Agent(name="bugfix-pr<N>-loop<L>", run_in_background=true)`.
 - Exactly 10 audit phases, exactly 10 fix phases.
-- Steps 19–27 from Eval 5 fire at teardown.
+- Steps 19–26 from Eval 5 fire at teardown.
 
 **Pass criteria.**
-- I-8 holds: exactly 10 audit phases.
-- I-9 holds: loops 4–10 each emit three audit `Agent` calls in a single assistant message.
+- I-6 holds: exactly 10 audit phases.
+- I-7 holds: loops 4–10 each emit three audit `Agent` calls in a single assistant message.
 - Final report contains `/bugteam exit: cap reached` and the remaining bug count.
 
 **Process check.** The distinct `Agent(name=...)` audit-call count is a prediction. On the first real run, record the exact count and rewrite the formula here.
@@ -195,12 +189,12 @@ Patch this table to match observation and annotate each correction.
 
 **Scenario.** Loop 1 audit returns zero findings.
 
-**Layer A invariants.** I-1 through I-7, I-10, I-11, I-12.
+**Layer A invariants.** I-1, I-2, I-3, I-4, I-5, I-6, I-8, I-9, I-10.
 
-**Layer B predicted trace.** Eval 5 steps 1–9 and 19–27 only — no FIX phase because zero findings means the skill exits the loop at `last_action == "audited"` and `last_findings.total == 0`.
+**Layer B predicted trace.** Eval 5 steps 1–8 and 19–26 only — no FIX phase because zero findings means the skill exits the loop at `last_action == "audited"` and `last_findings.total == 0`.
 
 **Pass criteria.**
-- Exactly 1 `Agent(name="bugfind"...)` call, 0 `Agent(name="bugfix"...)` calls, 1 bugfind shutdown.
+- Exactly 1 `Agent(subagent_type="code-quality-agent", run_in_background=true)` call, 0 fix agent spawns.
 - Bugfind's outcome XML records zero findings; the per-loop review POST carries body `## /bugteam loop 1 audit: 0P0 / 0P1 / 0P2 → clean`.
 - Step 4.5 and Step 5 still fire.
 
@@ -212,7 +206,7 @@ Patch this table to match observation and annotate each correction.
 
 **Layer A invariants.** Same as Eval 5.
 
-**Layer B predicted teammate-side behavior** (observed via the recorded `gh api ... /reviews` POST payload in the bugfind teammate fixture).
+**Layer B predicted subagent-side behavior** (observed via the recorded `gh api ... /reviews` POST payload in the bugfind subagent fixture).
 - `comments[]` length in the POST body = 2 (anchored findings only).
 - Review body contains a `### Findings without a diff anchor` section listing the third finding.
 - Bugfix outcome XML marks all 3 findings with a `reply_comment_url`; the unanchored finding's `used_fallback="true"` and `finding_comment_url` equals the parent review URL.
@@ -242,9 +236,9 @@ Patch this table to match observation and annotate each correction.
 - Bugfix teammate outcome XML marks every finding `status="hook_blocked"` with populated `<hook_output>`.
 - Bugfix teammate posts `Hook blocked the fix commit: <one-line summary>` to each finding comment.
 - Lead's `Bash("git rev-parse HEAD")` after fix detects no SHA change → exit reason `stuck`.
-- Steps 19–27 from Eval 5 fire at teardown.
+- Steps 19–26 from Eval 5 fire at teardown.
 
-**Pass criteria.** Layer A I-2 and I-11 hold. Final report contains `/bugteam exit: stuck` and surfaces the hook_output summary.
+**Pass criteria.** Layer A I-2 and I-9 hold. Final report contains `/bugteam exit: stuck` and surfaces the hook_output summary.
 
 ---
 
@@ -252,13 +246,13 @@ Patch this table to match observation and annotate each correction.
 
 **Scenario.** The available-agents list does not include `pr-description-writer` but does include `general-purpose`.
 
-**Layer B predicted trace.** Eval 5 steps 1–22 identical; step 23 becomes:
+**Layer B predicted trace.** Eval 5 steps 1–21 identical; step 22 becomes:
 
 ```
 Agent(subagent_type="general-purpose", description="Rewrite PR 42 body from cumulative diff", prompt=<same brief>)
 ```
 
-Steps 24–27 follow normally.
+Steps 23–26 follow normally.
 
 **Pass criteria.** Exactly 1 `Agent(subagent_type="general-purpose", ...)` call for the description rewrite. `gh pr edit` fires. Final report carries no Step 4.5 skip warning.
 
@@ -268,7 +262,7 @@ Steps 24–27 follow normally.
 
 **Scenario.** Neither `pr-description-writer` nor `general-purpose` appear in the available-agents list.
 
-**Layer B predicted trace.** Eval 5 steps 1–22, then skip steps 23–25. Steps 26–27 still fire.
+**Layer B predicted trace.** Eval 5 steps 1–21, then skip steps 22–24. Steps 25–26 still fire.
 
 **Pass criteria.**
 - Zero `Agent` calls for PR description rewriting.
@@ -280,47 +274,14 @@ Steps 24–27 follow normally.
 
 ## Eval 14 — Permissions revoke on error path
 
-**Scenario.** Bugfind teammate refuses `shutdown_request` during loop 1, returning `{type: "shutdown_response", approve: false}`.
+**Scenario.** Bugfind subagent completes but writes no outcomes XML (background subagent completes notification arrives with no file at the expected path).
 
-**Layer B predicted trace.** Eval 5 steps 1–8, then:
-- Step 9 `SendMessage(to="bugfind", ...)` receives `approve: false`.
-- Skill sets exit reason = `error: bugfind teammate refused shutdown`.
-- Steps 19–27 all fire (Layer A I-2 and I-11 mandate this).
+**Layer B predicted trace.** Eval 5 steps 1–7, then:
+- Lead awaits notification and calls `Read(".bugteam-pr42-loop1.outcomes.xml")` → file missing.
+- Skill sets exit reason = `error: outcomes XML missing after bugfind loop 1`.
+- Teardown (steps 19–26 from Eval 5) all fire.
 
 **Pass criteria.** Final report surfaces the error and the loop number. Revoke fires despite the error.
-
----
-
-## Eval 15 — Orchestrator-only `TeamCreate` (supplementary work path)
-
-**Scenario.** A loop 1 audit surfaces a P0/P1 finding whose root cause sits in adjacent infrastructure the lead needs to fix before the cycle can converge (e.g., a broken CI hook, a misbehaving lint config, a wrong GitHub API shape in a teammate's own dependency). The lead recognizes supplementary work is needed and decides to spawn additional teammates to handle it.
-
-**Layer A invariants.** I-1, I-3, I-4, I-5, I-6, I-7, I-11, I-12, **I-13 (primary focus)**.
-
-**Layer B predicted trace.** Eval 5 steps 1–9 identical. At step 10 (where a standard cycle spawns `bugfix`), the lead decides the finding requires adjacent infrastructure work first. Rather than call `TeamCreate` for a new team, the lead spawns a supplementary teammate into the existing team:
-
-```
-Agent(
-  subagent_type="code-quality-agent",
-  name="bugfind-adjacent",
-  team_name="<lead_team_name>",          // same team as bugfind/bugfix
-  model="opus",
-  description="Supplementary audit of adjacent infrastructure",
-  prompt=<brief naming the specific adjacent files + observed symptom>
-)
-```
-
-The adjacent-audit teammate writes its own outcome XML, self-terminates. Lead reads the XML, decides fix strategy, spawns an adjacent-fix teammate into the same team. Cycle eventually returns to the standard `bugfix` spawn for the original finding(s). All spawns pass the same `team_name`.
-
-**Pass criteria.**
-- Layer A I-13 holds: zero `TeamCreate` calls beyond the single one at skill Step 2.
-- Every `Agent(...)` call in the session carries `team_name="<lead_team_name>"`. No teammate spawn omits `team_name`.
-- If the lead attempts a second `TeamCreate` call, the runtime returns the exact error quoted in I-13's citation; the lead treats this as a signal to spawn a teammate into the existing team instead.
-- Working behavior is unchanged from a single-set cycle: grant → TeamCreate (once) → Agent spawns (many, all same team_name) → SendMessage shutdowns as needed → TeamDelete (once) → temp cleanup → Step 4.5 → revoke.
-
-**Failure mode.** A second `TeamCreate` call in the session, or any `Agent(...)` call without `team_name` once the team exists. Either signals the orchestrator-only invariant has been violated and the clean-room/team semantics are broken.
-
-**Observation source for this eval.** This eval was added after a real /bugteam run on PR #184 where the lead discovered a broken hook mid-cycle and initially spawned a standalone subagent (no `team_name`) for the adjacent audit — a direct violation. The runtime had already prevented a second `TeamCreate` with the error quoted in I-13. The eval codifies the correct path (spawn as teammate into existing team) so future runs do not repeat the violation.
 
 ---
 
@@ -344,5 +305,5 @@ A minimal Python harness under `packages/claude-dev-env/skills/bugteam/evals/`:
 ## Open research items flagged during this pass
 
 1. **GitHub REST review-POST payload shape.** Eval 9 and Eval 10 depend on the exact body shape of `POST /pulls/<number>/reviews`. The `jq -n --rawfile ... --argjson ... | gh api ... --input -` fence lives in `SKILL.md` § Step 2.5 (**Review POST**); expanded copy in `reference/github-pr-reviews.md` § **Per-loop review**. Before running Eval 9/10 for real, fetch the current GitHub REST reference to confirm the request schema (fields `commit_id`, `event`, `body`, `comments[]`) and the multi-line anchor `{path, start_line, start_side, line, side, body}` shape still apply. Record the confirmed version and URL here.
-2. **`SendMessage` shutdown origination — RESOLVED.** `SendMessage` tool docs include the line "Don't originate `shutdown_request` unless asked." `TeamCreate` tool docs explicitly direct the lead to originate `{type: "shutdown_request"}` for teammate cleanup. Real-run observation (loop 1 of eval run 2026-04-18) resolved the contradiction: teammates self-terminate when their task is complete — the `Agent` call returns and the teammate's session ends without any `SendMessage`. The cycle proceeded correctly without the lead ever needing to originate a `shutdown_request`. `SKILL.md` § AUDIT / FIX actions document self-termination as the expected path and lead-originated `SendMessage(shutdown_request)` as a fallback; `reference/audit-and-teammates.md` carries the longer shutdown narrative. Layer A **I-4** encodes “no orphaned teammates,” not “always send SendMessage.”
+2. **Background subagent completion signal.** Real-run observation (loop 1 of eval run 2026-04-18) confirmed: background subagents self-terminate when their task is complete — the background-completion notification arrives and the lead reads the outcomes XML. No shutdown handshake required. `SKILL.md` § AUDIT / FIX actions document this flow. Layer A **I-4** encodes “fresh subagent per loop.”
 3. **Model override redundancy.** `clean-coder` pins `model: opus` in its agent definition, while `code-quality-agent` currently uses `model: inherit`. The explicit `model="opus"` in every spawn is insurance against frontmatter drift; on the first real run, confirm the resolved model is `claude-opus-4-7` and that effort defaults to `xhigh` (Claude Code shows the active effort next to the spinner per the model-config docs). If a teammate's frontmatter ever pins a non-default `effort:` value, that frontmatter overrides the model default for that subagent (https://code.claude.com/docs/en/model-config — *"Frontmatter effort applies when that skill or subagent is active, overriding the session level but not the environment variable."*).

@@ -8,23 +8,11 @@ Fragile or repeatable shell sequences belong in `_shared/pr-loop/scripts/`. Anth
 
 From the repository root, run the command in `SKILL.md`. If the exit code is non-zero, stop and fix failing checks before granting permissions. Optional: `BUGTEAM_PREFLIGHT_SKIP=1` skips pre-flight (emergency only). Optional: `--pre-commit` when `.pre-commit-config.yaml` exists.
 
-## Step 4 — Tear down the team and clean working tree
+## Step 4 — Clean working tree
 
 When the cycle exits (any reason), run these steps in order from **this** session (the lead).
 
-1. **Confirm every teammate has shut down.** Any teammate still alive (for example, from an aborted shutdown mid-loop) must receive a shutdown message first. For each remaining teammate name:
-
-   ```
-   SendMessage(to="<teammate_name>", message={"type": "shutdown_request", "reason": "bugteam cycle ending"})
-   ```
-
-   Product docs: the lead’s cleanup checks for active teammates — shut them down first. Verbatim quote: [`../sources.md`](../sources.md) (lead cleanup).
-
-   If any teammate returns `approve: false` during cleanup, log the name (for example `cleanup warning: <teammate_name> refused shutdown_request`) and **still** proceed to `TeamDelete`. `TeamDelete` may fail if teammates remain; if so, surface the error in the final report. Do not abort the sequence — continue through temp-dir deletion, Step 4.5, and Step 5.
-
-2. **Clean up the team** with `TeamDelete()` (no arguments — reads `<team_name>` from session context). Maps to “clean up the team” in the docs; quote: [`../sources.md`](../sources.md).
-
-3. **Delete the per-team temp directory** using the Python one-liner in `SKILL.md` with the same literal `<team_temp_dir>` from Step 2. The one-liner uses an `onexc`/`onerror` handler that strips the Windows ReadOnly attribute and retries the failing syscall — `ignore_errors=True` is unsafe on Windows because it silently swallows ReadOnly-attribute failures (see `~/.claude/rules/windows-filesystem-safe.md`).
+1. **Delete the per-run temp directory** using the Python one-liner in `SKILL.md` with the same literal `<run_temp_dir>` from Step 2. The one-liner uses an `onexc`/`onerror` handler that strips the Windows ReadOnly attribute and retries the failing syscall — `ignore_errors=True` is unsafe on Windows because it silently swallows ReadOnly-attribute failures (see `~/.claude/rules/windows-filesystem-safe.md`).
 
 ## Step 4.5 — Finalize the PR description (mandatory)
 

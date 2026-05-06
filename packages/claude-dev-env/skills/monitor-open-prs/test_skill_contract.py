@@ -16,11 +16,6 @@ def test_skill_has_frontmatter_name():
     assert "name: monitor-open-prs" in skill_text
 
 
-def test_skill_requires_agent_teams_env_var():
-    skill_text = _read_skill_text()
-    assert "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" in skill_text
-
-
 def test_skill_invokes_bugteam_with_groq_implementer():
     skill_text = _read_skill_text()
     assert "BUGTEAM_FIX_IMPLEMENTER" in skill_text

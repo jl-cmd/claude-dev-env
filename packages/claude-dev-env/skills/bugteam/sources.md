@@ -26,37 +26,13 @@ Direct quote:
 
 **Skill use:** Subagents return into the lead context (accumulates across loops); agent-team teammates do not pollute the lead. This skill needs the independent-context property.
 
-### Team creation in natural language
-
-Direct quote:
-
-> "tell Claude to create an agent team and describe the task and the team structure you want in natural language. Claude creates the team, spawns teammates, and coordinates work based on your prompt."
-
-**Skill use:** Maps to the `TeamCreate` tool step in the process section.
-
-### Referencing subagent types when spawning teammates
+### Referencing subagent types when spawning subagents
 
 Direct quote:
 
 > "When spawning a teammate, you can reference a subagent type from any subagent scope: project, user, plugin, or CLI-defined. This lets you define a role once... and reuse it both as a delegated subagent and as an agent team teammate."
 
 **Skill use:** Bugfind / bugfix roles reference `code-quality-agent` and `clean-coder` by subagent type name.
-
-### Lead cleanup and active teammates
-
-Direct quote:
-
-> "When the lead runs cleanup, it checks for active teammates and fails if any are still running, so shut them down first."
-
-**Skill use:** Step 4 shutdown sequence before `TeamDelete`.
-
-### Ending the team
-
-Direct quote:
-
-> "When you're done, ask the lead to clean up: 'Clean up the team'."
-
-**Skill use:** Maps to calling `TeamDelete()` after shutdown messages.
 
 ---
 

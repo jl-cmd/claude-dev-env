@@ -3,13 +3,9 @@ name: bugteam
 description: >-
   Open pull request audit–fix until convergence: CODE_RULES gate, clean-room
   audit (`code-quality-agent`, opus) and fix (`clean-coder`, opus), per-loop
-  GitHub reviews, 10-audit cap; grant then revoke `.claude/**`. **Path A** when
-  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (orchestrated teams, `TeamCreate`).
-  **Path B** otherwise (Task harness — workflow in
-  `reference/workflow-path-b-task-harness.md`). **This `SKILL.md` holds only
-  shared steps**; per-path harness lives in `reference/workflow-path-*.md`.
-  Triggers: '/bugteam', 'run the bug team', 'auto-fix the PR until clean', 'loop
-  audit and fix'.
+  GitHub reviews, 10-audit cap; grant then revoke `.claude/**`. Spawns
+  background subagents (`Agent(..., run_in_background=true)`). Triggers: '/bugteam', 'run
+  the bug team', 'auto-fix the PR until clean', 'loop audit and fix'.
 ---
 
 # Bugteam
@@ -18,103 +14,22 @@ description: >-
 `code-quality-agent`, fresh context each loop. **Bugfix:** `clean-coder`. Hard
 cap: 10 audit loops. Grant `.claude/**` at start, revoke always at end.
 
-**Path routing** picks **Path A** (orchestrated teams) vs **Path B** (Task
-harness). Harness execution — `TeamCreate`, `Agent`/`Task` spawns,
-`SendMessage`, `TeamDelete`, who runs Step 2.5 `gh api` — lives only in
-[`reference/workflow-path-a-orchestrated-teams.md`][path-a] and
-[`reference/workflow-path-b-task-harness.md`][path-b]. Verbatim doc quotes and
-URLs: [`sources.md`](sources.md).
-
-## Path routing (mandatory first branch)
-
-At `/bugteam` entry, evaluate **once** (same rule as pr-converge §Team
-infrastructure detection):
-
-- **Path A** — `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` set and equals **`1`**
-  after trim → load and follow
-  [`reference/workflow-path-a-orchestrated-teams.md`][path-a] for every harness
-  step (with this `SKILL.md` for shared material).
-- **Path B** — otherwise → load and follow
-  [`reference/workflow-path-b-task-harness.md`][path-b] for every harness step
-  (with this `SKILL.md` for shared material).
-
-Shared material is **everything else in this file** plus
-[`PROMPTS.md`](PROMPTS.md), [`EXAMPLES.md`](EXAMPLES.md),
-[`CONSTRAINTS.md`](CONSTRAINTS.md) — agent types, models, XML, gates, cycle
-state machine, Step 2.5 payload shapes, shared teardown `rmtree`, revoke, final
-report.
-
-## Team lifecycle (Path A only)
-
-The `TeamCreate` / `TeamDelete` pair has historically been bound to a single
-`/bugteam` invocation. That coupling fails when an orchestrator (`pr-converge`
-multi-PR mode, `monitor-open-prs`) needs to call `/bugteam` repeatedly inside
-one parent session: only one team can be led at a time, and a missed Step 4
-leaks the team. To decouple, every Path A invocation reads
-`BUGTEAM_TEAM_LIFECYCLE` (defaults to `auto`) and may also read
-`BUGTEAM_TEAM_NAME`.
-
-**`owned`**
-
-- **Step 2:** `TeamCreate(<computed_team_name>)`. If the runtime returns
-  `Already leading team "<existing>". A leader can only manage one team at a
-  time.` → **error**: `Already leading team <existing>; rerun with
-  BUGTEAM_TEAM_LIFECYCLE=attach BUGTEAM_TEAM_NAME=<existing>`.
-- **Step 4:** `TeamDelete()` (lead-owned).
-- **Use case:** Pre-decoupling behavior. Use only when you know the session
-  leads no other team.
-
-**`attach`**
-
-- **Step 2:** Require `BUGTEAM_TEAM_NAME`. Treat that team as already-led; do
-  **not** call `TeamCreate`.
-- **Step 4:** **Skip** `TeamDelete` — the orchestrator owns teardown.
-- **Use case:** Orchestrators (pr-converge multi-PR, monitor-open-prs) that
-  explicitly created a team and will tear it down themselves.
-
-### `auto` (**default: `auto`**)
-
-- **Step 2:** Try `TeamCreate(<computed_team_name>)`. On `Already leading team
-  "<existing>"` → parse `<existing>`, attach (do **not** call `TeamCreate`
-  again), set `team_owned=false`. On success → set `team_owned=true`.
-- **Step 4:** If `team_owned=true` → `TeamDelete()`. Else → **skip**
-  `TeamDelete`.
-- **Use case:** All callers when in doubt. Solo invocations behave like `owned`;
-  nested or repeated invocations attach safely.
-
-**`team_owned` flag** — set in Step 2 by all three modes
-(`owned` always `true`; `attach` always `false`; `auto` reflects the
-`TeamCreate` outcome). Read in Step
-4 to decide whether to call `TeamDelete`. The same flag also gates
-`<team_temp_dir>` `rmtree`: when `team_owned=false`, only the per-PR subfolders
-this invocation created (`<team_temp_dir>/pr-<N>/`) are removed; the
-orchestrator's parent directory survives.
-
-**Path B note:** Path B does not use `TeamCreate` / `TeamDelete`, so
-`BUGTEAM_TEAM_LIFECYCLE` is read but only its `team_temp_dir` cleanup behavior
-applies. `team_owned` is treated as `true` by default in Path B; orchestrators
-driving Path B that share a temp directory should set
-`BUGTEAM_TEAM_LIFECYCLE=attach` so the per-PR subfolder cleanup rule applies.
+Both audit and fix roles run as background subagents
+(`Agent(..., run_in_background=true)`). Verbatim doc quotes and URLs:
+[`sources.md`](sources.md).
 
 ## Contents
 
 Orchestration lives here; companion files hold prompts, invariants, examples,
 citations, and domain reference notes. Scan this list before a partial read.
 
-- [Path routing](#path-routing-mandatory-first-branch) — Path A vs Path B
-- [Team lifecycle](#team-lifecycle-path-a-only) — `owned` / `attach` / `auto`
-  modes; orchestrator-owned teams
-- [`reference/workflow-path-a-orchestrated-teams.md`][path-a] — Path A harness
-  (orchestrated teams)
-- [`reference/workflow-path-b-task-harness.md`][path-b] — Path B harness (Task
-  harness)
 - When this skill applies — refusal cases and trigger conditions
 - Utility scripts — pre-flight (`scripts/`, executed not inlined)
 - Pre-audit gate — `validate_content` before each AUDIT
 - The Process — checklist + Steps 0–6
   - Step 0 — Grant project permissions
   - Step 1 — Resolve PR scope
-  - Step 2 — Path harness + loop state
+  - Step 2 — Loop state
   - Step 2.5 — PR comment lifecycle (per-loop review + fix replies)
   - Step 3 — Cycle (AUDIT ↔ FIX, exits)
   - Step 4 — Teardown + clean tree
@@ -140,12 +55,6 @@ Refusals — first match wins; respond with the quoted line exactly and stop:
 - **Missing subagents.** Before Step 0, confirm `code-quality-agent` and
   `clean-coder` exist. Else: `Required subagent type <name> not installed.
   /bugteam needs both code-quality-agent and clean-coder available.`
-- **Lead role must be held by the orchestrator.** Run /bugteam in the session
-  that received the user's command. **Path A:** lead calls `TeamCreate` per
-  [`reference/workflow-path-a-orchestrated-teams.md`][path-a]; runtime may
-  return `Already leading team "<name>". A leader can only manage one team at a
-  time.` **Path B:** lead runs the Task harness per
-  [`reference/workflow-path-b-task-harness.md`][path-b]; no `TeamCreate`.
 
 ## Utility scripts
 
@@ -189,9 +98,9 @@ the auto-remediation only applies to the `core.hooksPath` failure mode.
 ```
 [ ] Step 0: project permissions granted
 [ ] Step 1: PR scope resolved
-[ ] Step 2: loop state set + path harness applied
+[ ] Step 2: loop state set
 [ ] Step 3: cycle complete (converged | cap reached | stuck | error)
-[ ] Step 4: team torn down + working tree clean
+[ ] Step 4: working tree clean
 [ ] Step 4.5: PR description rewritten (or skip warning logged)
 [ ] Step 5: project permissions revoked
 [ ] Step 6: final report printed
@@ -219,51 +128,49 @@ follows the same downstream rules.
 
 Keep: owner/repo, branches, PR number, URL — for all loops.
 
+**`<run_temp_dir>`:** `Path(tempfile.gettempdir()) / run_name` where
+`run_name = "bugteam-pr-<number>-<YYYYMMDDHHMMSS>"` for a single-PR invocation
+or `"bugteam-<YYYYMMDDHHMMSS>"` for multi-PR. Lead resolves once to an absolute
+path; every shell gets that literal string.
+
 #### Per-PR workspace
 
 For each PR in all_prs:
 
-1. Create `<team_temp_dir>/pr-<N>/`.
-2. Run `git worktree add "<team_temp_dir>/pr-<N>/worktree" origin/<headRef>`.
+1. Create `<run_temp_dir>/pr-<N>/`.
+2. Run `git worktree add "<run_temp_dir>/pr-<N>/worktree" origin/<headRef>`.
 3. Record the absolute worktree path alongside the PR's other fields.
 
-Teammates or Task workers for a PR operate inside that PR's worktree. Step 4
-teardown runs `git worktree remove "<team_temp_dir>/pr-<N>/worktree"` for each
-PR, then path-specific harness teardown per
-[`reference/workflow-path-a-orchestrated-teams.md`][path-a] or
-[`reference/workflow-path-b-task-harness.md`][path-b] § Step 4.
+Background subagents for a PR operate inside that PR's worktree. Step 4
+teardown runs `git worktree remove "<run_temp_dir>/pr-<N>/worktree"` for each
+PR before the shared `rmtree`.
 
-### Step 2: Path harness + loop state
+### Step 2: Loop state
 
-Apply the path you chose in [Path
-routing](#path-routing-mandatory-first-branch): **Path A** —
-[`reference/workflow-path-a-orchestrated-teams.md`][path-a] § Step 2
-(`TeamCreate`, team name, `team_temp_dir`, roles, optional Groq FIX,
-`--bugbot-retrigger`). **Path B** —
-[`reference/workflow-path-b-task-harness.md`][path-b] § Step 2 (no `TeamCreate`
-/ `TeamDelete`; same worktrees and variables).
-
-Path A also resolves the team lifecycle here per [Team
-lifecycle](#team-lifecycle-path-a-only): pick the mode (`owned` / `attach` /
-`auto`) from `BUGTEAM_TEAM_LIFECYCLE`, set `team_name` (computed for
-`owned`/`auto` create paths; required `BUGTEAM_TEAM_NAME` for `attach` and
-`auto`'s attach branch), and set `team_owned` (`true` when `TeamCreate`
-succeeded in this invocation; `false` when attaching to an existing team). Step
-4 reads `team_owned` to decide whether to call `TeamDelete`.
-
-**Loop state (lead; not a single script):**
+**Loop state (lead; not a single script; per-PR):** The variables
+below are tracked independently for each PR in `all_prs`. Each PR has its
+own cycle, state, and exit reason.
 
 ```bash
 loop_count=0
 last_action="fresh"
 last_findings='{"total": 0}'
 audit_log=""
-starting_sha="$(git rev-parse HEAD)"
-team_name="bugteam-pr-<number>-<YYYYMMDDHHMMSS>"
-team_temp_dir="<absolute-path>/<team_name>"
-team_owned="true" # set by Step 2 lifecycle resolution; see Team lifecycle table
+run_temp_dir="<absolute-path>/<run_name>"
+starting_sha="$(git -C "<run_temp_dir>/pr-<N>/worktree" rev-parse HEAD)"
 loop_comment_index=""
 ```
+
+**Optional Groq-backed FIX (explicit opt-in only):** when the user explicitly
+sets `BUGTEAM_FIX_IMPLEMENTER=groq-coder` before invocation, spawn the FIX
+subagent with `subagent_type="groq-coder"`. Requires `GROQ_API_KEY` in the
+environment (load from `packages/claude-dev-env/.env` when that file exists;
+prompt the user to create it from `.env.example` if still unset). Any other
+`BUGTEAM_FIX_IMPLEMENTER` value (or unset) uses `clean-coder`.
+
+**`--bugbot-retrigger` flag:** when present, the FIX subagent posts a `bugbot
+run` issue comment via the Step 2.5 issue-comments fallback endpoint after
+every successful FIX push, to re-trigger Cursor's bugbot on the new commit.
 
 **`loop_comment_index`:** reset each AUDIT start; filled during AUDIT; FIX
 consumes for replies; cleared after FIX. Entries: `{loop, finding_id,
@@ -271,10 +178,9 @@ finding_comment_id, finding_comment_url, used_fallback, fix_status}`.
 
 ### Step 2.5: PR comments (one review per loop)
 
-**Who posts:** Path A vs Path B —
-[`reference/workflow-path-a-orchestrated-teams.md`][path-a] § Step 2.5 and
-[`reference/workflow-path-b-task-harness.md`][path-b] § Step 2.5. Payloads and
-endpoints below are identical for both paths.
+**Who posts:** the AUDIT subagent posts one `POST .../pulls/<n>/reviews` per
+loop. The FIX subagent posts `.../comments/<id>/replies` after push. The lead's
+only PR write before Step 4.5 is the final description rewrite.
 
 Order: audit → buffer → validate anchors vs diff → single review POST.
 Review body states counts; zero findings → still one review, `comments: []`,
@@ -316,7 +222,7 @@ POST --input -`
 <tmp_fallback.md | gh api repos/<owner>/<repo>/issues/<number>/comments -X POST
 --input -`
 
-`<head_sha_at_post_time>`: `git rev-parse HEAD` in teammate cwd immediately
+`<head_sha_at_post_time>`: `git rev-parse HEAD` in subagent cwd immediately
 before POST.
 
 **Review body template (`<tmp_review_body.md>`):**
@@ -342,8 +248,7 @@ before POST.
 
 ### Step 3: The cycle
 
-Run the AUDIT-FIX cycle for each PR in all_prs, reusing the same team across
-PRs. The 10-loop cap applies per PR. Exit reasons (converged, cap reached,
+Run the AUDIT-FIX cycle for each PR in all_prs. The 10-loop cap applies per PR. Exit reasons (converged, cap reached,
 stuck, error) are tracked per PR; the final report lists one outcome line per
 PR.
 
@@ -360,9 +265,8 @@ dirty so the AUDIT runs against the latest diff with that signal in mind:
 
 ```bash
 dirty_review_count=0
-gh api "repos/<owner>/<repo>/pulls/<number>/reviews" \
---jq '[.[] | select(.body | startswith("## /bugteam loop "))] |
-sort_by(.submitted_at) | reverse'
+gh api "repos/<owner>/<repo>/pulls/<number>/reviews?per_page=100" --paginate --slurp \
+  | jq '[.[][] | select((.body // "") | startswith("## /bugteam loop "))] | sort_by(.submitted_at) | reverse'
 ```
 
 Iterate from index 0 (most recent) toward older entries:
@@ -432,85 +336,84 @@ before the next AUDIT.
 ### AUDIT action
 
 ```bash
-mkdir -p "<team_temp_dir>/pr-<N>"
-gh pr diff <N> -R <owner>/<repo> > "<team_temp_dir>/pr-<N>/loop-<L>.patch"
+mkdir -p "<run_temp_dir>/pr-<N>"
+gh pr diff <N> -R <owner>/<repo> > "<run_temp_dir>/pr-<N>/loop-<L>.patch"
 ```
 
-**Spawn and shutdown:** Path A —
-[`reference/workflow-path-a-orchestrated-teams.md`][path-a] § AUDIT. Path B —
-[`reference/workflow-path-b-task-harness.md`][path-b] § AUDIT. Same
-`prompt="<audit XML; see PROMPTS.md>"` and outcome files.
+**Spawn:**
 
-Fresh spawn each loop; Path A teammate context excludes lead history
-([`sources.md`](sources.md) § Teammate context isolation). Path B: fresh Task
-per loop for the same clean-room intent. [`PROMPTS.md`](PROMPTS.md): XML +
-outcome schema. Lead reads `.bugteam-pr<N>-loop<L>.outcomes.xml`, fills
-`loop_comment_index`.
+```
+Agent(
+  subagent_type="code-quality-agent",
+  name="bugfind-pr<N>-loop<L>",
+  model="opus",
+  run_in_background=true,
+  description="Bugfind audit PR <N> loop <L>",
+  prompt="<audit XML; see PROMPTS.md>"
+)
+```
+
+Fresh spawn each loop for clean-room isolation. Lead awaits the
+background-completion notification, then reads
+`.bugteam-pr<N>-loop<L>.outcomes.xml` from the worktree directory, fills
+`loop_comment_index`. [`PROMPTS.md`](PROMPTS.md): XML + outcome schema.
 
 `last_action = "audited"`; append audit line to `audit_log`.
 
 **Parallel auditors (`loop_count >= 4`):** gate passes immediately before;
-after three full audit/fix rounds without convergence, issue three spawns in
-one assistant message (parallel): Path A — three `Agent` calls; Path B —
-three `Task` calls — full rules in the workflow files § parallel auditors.
-`-a` posts
-the review and merges outcomes from `-b`/`-c` (read
+after three full audit/fix rounds without convergence, issue three `Agent`
+calls in one assistant message (`run_in_background=true`): `-a` posts the
+review and merges outcomes from `-b`/`-c` (read
 `.bugteam-pr<N>-loop<L>.outcomes.xml` plus
-`<team_temp_dir>/pr-<N>/loop-<L>-b.outcomes.xml` and `...-c...`); merge key
+`<run_temp_dir>/pr-<N>/loop-<L>-b.outcomes.xml` and `...-c...`); merge key
 `(file, line, category_letter)`; re-id `loopN-K`. `-b`/`-c` write sibling XML
-only; prompts must pass literal absolute sibling paths. Shutdown order: Path A
-workflow § parallel auditors; Path B: await all three Tasks.
+only; prompts must pass literal absolute sibling paths. Output path
+contract: `-b`/`-c` write to `<run_temp_dir>/pr-<N>/loop-<L>-b.outcomes.xml`
+and `<run_temp_dir>/pr-<N>/loop-<L>-c.outcomes.xml`; `-a` writes to
+`<worktree_path>/.bugteam-pr<N>-loop<L>.outcomes.xml`.
+Lead awaits all three background-completion notifications before merging
+outcomes.
 
 ### FIX action
 
-**Spawn and shutdown:** Path A —
-[`reference/workflow-path-a-orchestrated-teams.md`][path-a] § FIX. Path B —
-[`reference/workflow-path-b-task-harness.md`][path-b] § FIX.
+**Spawn:**
 
-Pass finding comment URLs/ids from `loop_comment_index` in XML. Replies: `Fixed
-in <sha>` or `Could not address this loop: <reason>`.
+```
+Agent(
+  subagent_type="clean-coder",
+  name="bugfix-pr<N>-loop<L>",
+  model="opus",
+  run_in_background=true,
+  description="Bugfix PR <N> loop <L>",
+  prompt="<fix XML; see PROMPTS.md>"
+)
+```
 
-[`PROMPTS.md`](PROMPTS.md): fix XML + schema. Verify: `git rev-parse HEAD`
-advanced; `git fetch origin <branch> && git rev-parse origin/<branch>` matches
+Pass finding comment URLs/ids from `loop_comment_index` in XML. Lead awaits the
+background-completion notification. Replies: `Fixed in <sha>` or `Could not
+address this loop: <reason>`.
+
+[`PROMPTS.md`](PROMPTS.md): fix XML + schema. Verify from worktree: `git -C "<run_temp_dir>/pr-<N>/worktree" rev-parse HEAD`
+advanced; `git -C "<run_temp_dir>/pr-<N>/worktree" fetch origin <branch> && git -C "<run_temp_dir>/pr-<N>/worktree" rev-parse origin/<branch>` matches
 `HEAD`. Unchanged HEAD →
-`stuck — bugfix teammate could not address findings`.
+`stuck — bugfix subagent could not address findings`.
 
 ### Step 4: Teardown
 
 1. For each PR in `all_prs`: `git worktree remove
-   "<team_temp_dir>/pr-<N>/worktree"` (from Step 1) before tearing down the team
-   harness — tolerate already-removed worktrees.
+   "<run_temp_dir>/pr-<N>/worktree"` (from Step 1) — tolerate already-removed
+   worktrees.
 
-2. Path-specific harness —
-   [`reference/workflow-path-a-orchestrated-teams.md`][path-a] § Step 4
-   (teammate `SendMessage`, `TeamDelete` **only when `team_owned=true`**) or
-   [`reference/workflow-path-b-task-harness.md`][path-b] § Step 4 (omit those).
+2. **Windows-safe `rmtree`** — strips the Windows ReadOnly attribute and retries
+   the failing syscall (see `~/.claude/rules/windows-filesystem-safe.md`).
+   Remove the full `<run_temp_dir>`:
 
-3. **Windows-safe `rmtree` — gated by `team_owned` from [Team
-   lifecycle](#team-lifecycle-path-a-only).** The Windows-safe handler strips
-   the Windows ReadOnly attribute and retries the failing syscall (see
-   `~/.claude/rules/windows-filesystem-safe.md`).
-
-   - `team_owned=true` → remove the full `<team_temp_dir>`:
-
-     ```bash
+   ```bash
 python -c "import os, shutil, stat, sys; \
 h = lambda f, p, *_: (os.chmod(p, stat.S_IWRITE), f(p)); \
-shutil.rmtree(r'<team_temp_dir>', **({'onexc': h} if sys.version_info >= (3, 12)
+shutil.rmtree(r'<run_temp_dir>', **({'onexc': h} if sys.version_info >= (3, 12)
 else {'onerror': h}))"
-     ```
-
-   - `team_owned=false` (attach mode) → for each PR in `all_prs`, remove only
-     that PR's `<team_temp_dir>/pr-<N>/` subfolder. The orchestrator-owned
-     parent `<team_temp_dir>` survives so the next attached invocation can write
-     its own per-PR subfolders without colliding.
-
-     ```bash
-python -c "import os, shutil, stat, sys; \
-h = lambda f, p, *_: (os.chmod(p, stat.S_IWRITE), f(p)); \
-shutil.rmtree(r'<team_temp_dir>/pr-<N>', **({'onexc': h} if sys.version_info >=
-(3, 12) else {'onerror': h}))"
-     ```
+   ```
 
 ### Step 4.5: PR description
 
@@ -572,7 +475,5 @@ See [`reference/README.md`](reference/README.md).
 
 See [`sources.md`](sources.md).
 
-[path-a]: reference/workflow-path-a-orchestrated-teams.md
-[path-b]: reference/workflow-path-b-task-harness.md
 [path-code-rules]: ../../_shared/pr-loop/code-rules-gate.md
 [path-scripts-readme]: ../../_shared/pr-loop/scripts/README.md

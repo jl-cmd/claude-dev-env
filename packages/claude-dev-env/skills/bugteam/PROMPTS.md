@@ -18,7 +18,7 @@ Keep the spawn prompt self-contained: reference only the PR scope, audit rubric,
 cd into `<worktree_path>` before any git, gh, or file operation.
 
 <scope>
-  <diff_path>Absolute path to the per-PR patch file: <team_temp_dir>/pr-<N>/loop-<L>.patch (same path as gh pr diff redirect in AUDIT)</diff_path>
+  <diff_path>Absolute path to the per-PR patch file: <run_temp_dir>/pr-<N>/loop-<L>.patch (same path as gh pr diff redirect in AUDIT)</diff_path>
   <scope_rule>Audit only lines added or modified in the diff. Pre-existing code on untouched lines is out of scope.</scope_rule>
 </scope>
 
@@ -76,8 +76,8 @@ cd into `<worktree_path>` before any git, gh, or file operation.
 </comment_posting>
 
 <output_format>
-  Write the outcome XML below to .bugteam-pr<N>-loop<L>.outcomes.xml inside
-  the PR's worktree directory (<worktree_path>). Return only that path on stdout. The schema:
+  For the primary (-a) auditor: write the outcome XML below to .bugteam-pr<N>-loop<L>.outcomes.xml inside
+  the PR's worktree directory (<worktree_path>). For sibling auditors (-b/-c): write to <run_temp_dir>/pr-<N>/loop-<L>-{b,c}.outcomes.xml (absolute path passed in prompt). Return only that path on stdout. The schema:
 </output_format>
 ```
 

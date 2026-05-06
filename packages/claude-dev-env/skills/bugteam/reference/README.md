@@ -4,10 +4,8 @@ Expanded material that used to live inline in `SKILL.md`. Load a file when the o
 
 | File | Domain |
 |------|--------|
-| [`workflow-path-a-orchestrated-teams.md`](workflow-path-a-orchestrated-teams.md) | **Path A only** — `TeamCreate`, `Agent` + `team_name`, `SendMessage`, `TeamDelete`, who posts Step 2.5 |
-| [`workflow-path-b-task-harness.md`](workflow-path-b-task-harness.md) | **Path B only** — `Task` harness (no `TeamCreate` / `TeamDelete`, lead Step 2.5 `gh api`, Step 4 omissions) |
-| [`design-rationale.md`](design-rationale.md) | Why agent teams (clean-room), table-of-contents habit, when `/bugteam` applies, refusal reasons |
-| [`team-setup.md`](team-setup.md) | Permissions grant (`CLAUDE_SKILL_DIR`), PR scope, `TeamCreate`, team name / sanitization / temp dir / roles / loop state |
+| [`design-rationale.md`](design-rationale.md) | Why clean-room subagents, table-of-contents habit, when `/bugteam` applies, refusal reasons |
+| [`team-setup.md`](team-setup.md) | Permissions grant (`CLAUDE_SKILL_DIR`), PR scope, run name / temp dir / loop state |
 | [`github-pr-reviews.md`](github-pr-reviews.md) | Per-loop reviews, `jq` + `gh api` payloads, anchors, fallbacks, REST endpoints |
 | [`audit-and-teammates.md`](audit-and-teammates.md) | Pre-audit gate, full cycle numbering, AUDIT and FIX actions, parallel auditors |
 | [`teardown-publish-permissions.md`](teardown-publish-permissions.md) | Utility scripts note, teardown, PR description rewrite, revoke, final report |
