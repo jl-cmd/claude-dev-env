@@ -67,6 +67,22 @@ BUGBOT_RUN_TEMPFILE_PREFIX: str = "pr-converge-bugbot-run-"
 
 PR_CONTEXT_FIELDS: str = "number,url,headRefOid,baseRefName,headRefName,isDraft"
 
+PR_DETACHED_HEAD_ARGS_ERROR: str = "--owner and --repo require --number; all three must be provided together for detached-HEAD PR resolution"
+
+PR_NUMBER_ARG_FLAG: str = "--number"
+
+PR_NUMBER_ARG_HELP: str = "PR number"
+
+PR_OWNER_ARG_FLAG: str = "--owner"
+
+PR_OWNER_ARG_HELP: str = "GitHub repository owner"
+
+PR_REPO_ARG_FLAG: str = "--repo"
+
+PR_REPO_ARG_HELP: str = "GitHub repository name"
+
+GH_REPO_FLAG: str = "--repo"
+
 MERGEABILITY_FIELDS: str = "mergeable,mergeStateStatus,headRefOid"
 
 GH_FIELD_BODY_AT_PREFIX: str = "body=@"

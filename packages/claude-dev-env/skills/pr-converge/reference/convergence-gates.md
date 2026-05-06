@@ -23,20 +23,25 @@ Decide (four branches; match first whose predicate holds):
 
 - **`classification == "dirty"` with non-empty inline comments matching
   `pull_request_review_id`:** Fix protocol input (same shape as bugbot
-  dirty). Apply Fix protocol on every inline finding (TDD test →
-  production fix → push → reply inline on each thread), reset
-  `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = BUGBOT`,
-  Step 3 on new HEAD, schedule next wakeup, return. Full
-  back-to-back-clean cycle plus all four gates must hold again on new HEAD.
+  dirty). Spawn Agent (subagent_type: clean-coder) to implement → push → reply inline on each thread via
+  `reply_to_inline_comment.py` → Step 3 in same tick (see
+  [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow) for
+  full contract).
+  Reset `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase =
+  BUGBOT`, schedule next wakeup, return. Full back-to-back-clean cycle
+  plus all four gates must hold again on new HEAD.
 - **`classification == "dirty"` with empty inline comments matching
   `pull_request_review_id`:** Copilot posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
-  threads). Parse body for actionable findings, apply Fix protocol using
-  body excerpts (TDD test → production fix → push). Post top-level review
-  reply acknowledging fixes and citing new HEAD SHA. Reset
-  `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase =
-  BUGBOT`, Step 3 on new HEAD, schedule next wakeup, return. Convergence
-  requires full back-to-back-clean on new HEAD.
+  threads). Parse body for actionable findings. Spawn Agent (subagent_type: clean-coder) to implement → push → post
+  top-level review reply citing new HEAD SHA → Step 3 in same tick (see
+  [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow) for
+  full contract).
+  Reset
+  `bugbot_clean_at = null` AND
+  `copilot_clean_at = null`, `phase = BUGBOT`, Step 3 on new HEAD,
+  schedule next wakeup, return. Convergence requires full
+  back-to-back-clean on new HEAD.
 - **`classification == "clean"` (state `APPROVED`):** Set
   `copilot_clean_at = current_head`. Continue to gate (b).
 - **No Copilot review on `current_head` yet:** Skip — gate (c) issues
@@ -89,13 +94,12 @@ Next tick with `phase == BUGTEAM` and prior state preserved → re-run gate
   current_head`. Mark PR ready (`mark_pr_ready.py`), report convergence
   per §(d), terminate per [stop-conditions.md](stop-conditions.md) / Convergence.
 - **Copilot review `dirty`:** Treat identically to gate (a) dirty path —
-  fix in same PR, restart convergence from BUGBOT. Apply Fix protocol on
-  every confirmed Copilot finding (TDD test → production fix → push →
-  reply inline on each thread; for body-only findings with empty inline,
-  parse body excerpts and post top-level review reply citing new HEAD).
-  Reset `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase =
-  BUGBOT`, Step 3 on new HEAD, schedule next wakeup, return. Full
-  back-to-back-clean cycle plus all four gates must hold again on new HEAD.
+  spawn Agent (subagent_type: clean-coder) to fix in same PR, restart convergence from BUGBOT. Follow [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow).
+  For body-only findings with empty inline, spawn Agent (subagent_type: clean-coder) to implement, then post top-level review reply
+  citing new HEAD SHA. Reset `bugbot_clean_at = null` AND
+  `copilot_clean_at = null`, `phase = BUGBOT`, schedule next wakeup,
+  return. Full back-to-back-clean cycle plus all four gates must hold
+  again on new HEAD.
 - **No Copilot review at `current_head` yet (still propagating):**
   Schedule one more wakeup (270s), re-check next tick. After three consecutive empty waits,
   escalate as hard blocker per [stop-conditions.md](stop-conditions.md).

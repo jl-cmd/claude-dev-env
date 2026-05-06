@@ -20,6 +20,8 @@ per [ground-rules.md](ground-rules.md).
 Orchestrator does not reply inline, trigger bugbot, or read repo source
 files during fix phase in multi-PR mode.
 
+### Single-PR fix workflow
+
 **Single-PR (no `state.json`) — same gates, main session executor:**
 
 - Read each referenced file:line.
