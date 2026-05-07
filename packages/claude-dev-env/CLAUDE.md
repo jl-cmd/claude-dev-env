@@ -42,6 +42,7 @@ Full rule including the reconciliation with Right-Sized Engineering, misapplicat
 
 ## Tool Policies
 - **context7:** Before writing code using any library/framework/SDK/API, call `resolve-library-id` then `query-docs` via Context7 MCP. Use the fetched docs to write code. Applies to all libs including React, Next.js, Django, Express, Prisma.
+- **gh MCP:** Always use `mcp__plugin_github_github__*` tools for any GitHub operations (branches, PRs, file operations). Do not use the `Bash` tool to invoke `gh` or `git` CLI for GitHub operations.
 
 ## Compaction
 When compacting, always preserve:

@@ -190,6 +190,17 @@ def test_should_deny_edit_when_pragma_sentinel_present_in_new_string_without_tes
     assert _decision_from(completed) == "deny"
 
 
+def _make_edit_payload(file_path: Path, old_string: str, new_string: str) -> dict:
+    return {
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": str(file_path),
+            "old_string": old_string,
+            "new_string": new_string,
+        },
+    }
+
+
 def test_should_allow_python_file_with_only_module_level_constants(tmp_path: Path) -> None:
     sandbox = _sandbox(tmp_path)
     constants_file = sandbox / "constants.py"
@@ -204,6 +215,147 @@ def test_should_allow_python_file_with_only_module_level_constants(tmp_path: Pat
 
     completed = _run_hook_with_payload(
         _make_write_payload(constants_file, constants_only_content)
+    )
+
+    assert _decision_from(completed) == "allow"
+
+
+def test_should_allow_edit_to_change_constant_value_in_constants_only_file(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    constants_file = sandbox / "constants.py"
+    constants_file.write_text(
+        '"""Module-level constants."""\n'
+        "MAXIMUM_RETRIES: int = 3\n"
+        "DEFAULT_TIMEOUT_SECONDS: float = 30.0\n"
+    )
+
+    completed = _run_hook_with_payload(
+        _make_edit_payload(
+            constants_file,
+            old_string="MAXIMUM_RETRIES: int = 3",
+            new_string="MAXIMUM_RETRIES: int = 5",
+        )
+    )
+
+    assert _decision_from(completed) == "allow"
+
+
+def _make_multiedit_payload(file_path: Path, edits: list[dict]) -> dict:
+    return {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": str(file_path),
+            "edits": edits,
+        },
+    }
+
+
+def test_should_allow_multiedit_to_change_constant_value_in_constants_only_file(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    constants_file = sandbox / "constants.py"
+    constants_file.write_text(
+        '"""Module-level constants."""\n'
+        "MAXIMUM_RETRIES: int = 3\n"
+        "DEFAULT_TIMEOUT_SECONDS: float = 30.0\n"
+    )
+
+    completed = _run_hook_with_payload(
+        _make_multiedit_payload(
+            constants_file,
+            edits=[
+                {
+                    "old_string": "MAXIMUM_RETRIES: int = 3",
+                    "new_string": "MAXIMUM_RETRIES: int = 5",
+                },
+            ],
+        )
+    )
+
+    assert _decision_from(completed) == "allow"
+
+
+def test_should_deny_multiedit_that_adds_function_to_constants_only_file(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    constants_file = sandbox / "constants.py"
+    constants_file.write_text(
+        '"""Module-level constants."""\n'
+        "MAXIMUM_RETRIES: int = 3\n"
+    )
+
+    completed = _run_hook_with_payload(
+        _make_multiedit_payload(
+            constants_file,
+            edits=[
+                {
+                    "old_string": "MAXIMUM_RETRIES: int = 3",
+                    "new_string": "MAXIMUM_RETRIES: int = 3\n\ndef reset() -> None:\n    return None",
+                },
+            ],
+        )
+    )
+
+    assert _decision_from(completed) == "deny"
+
+
+def test_should_deny_edit_that_adds_function_to_constants_only_file(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    constants_file = sandbox / "constants.py"
+    constants_file.write_text(
+        '"""Module-level constants."""\n'
+        "MAXIMUM_RETRIES: int = 3\n"
+    )
+
+    completed = _run_hook_with_payload(
+        _make_edit_payload(
+            constants_file,
+            old_string="MAXIMUM_RETRIES: int = 3",
+            new_string="MAXIMUM_RETRIES: int = 3\n\ndef reset() -> None:\n    return None",
+        )
+    )
+
+    assert _decision_from(completed) == "deny"
+
+
+def test_should_deny_python_file_with_assignment_calling_undefined_function(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    unsafe_file = sandbox / "unsafe.py"
+    unsafe_content = (
+        '"""Config with unsafe call."""\n'
+        "VALUE: str = compute()\n"
+    )
+    unsafe_file.write_text(unsafe_content)
+
+    completed = _run_hook_with_payload(
+        _make_write_payload(unsafe_file, unsafe_content)
+    )
+
+    assert _decision_from(completed) == "deny"
+
+
+def test_should_allow_python_file_with_assignment_calling_imported_function(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    safe_file = sandbox / "safe.py"
+    safe_content = (
+        '"""Config with imported call."""\n'
+        "from pathlib import Path\n"
+        "BASE_PATH = Path(r'C:\\\\data')\n"
+    )
+    safe_file.write_text(safe_content)
+
+    completed = _run_hook_with_payload(
+        _make_write_payload(safe_file, safe_content)
     )
 
     assert _decision_from(completed) == "allow"

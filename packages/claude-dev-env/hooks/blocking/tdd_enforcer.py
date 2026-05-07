@@ -13,6 +13,7 @@ import sys
 import time
 from pathlib import Path
 
+
 _hooks_root_path_string = str(Path(__file__).resolve().parent.parent)
 if _hooks_root_path_string not in sys.path:
     sys.path.insert(0, _hooks_root_path_string)
@@ -58,6 +59,48 @@ def _is_module_docstring_expression(module_level_node: ast.stmt) -> bool:
     return isinstance(expression_value.value, str)
 
 
+def _safe_constant_functions() -> frozenset[str]:
+    """Unqualified function names treated as safe value constructors."""
+    return frozenset({"Path", "frozenset"})
+
+
+def _safe_constant_attribute_calls() -> frozenset[tuple[str, str]]:
+    """(module, attr) pairs treated as safe value constructors."""
+    return frozenset({("re", "compile")})
+
+
+def _rhs_has_unsafe_call(rhs_node: ast.AST) -> bool:
+    """Return True when rhs_node contains a function call outside the safe allowlist.
+
+    Safe calls are value constructors (``Path(...)``, ``re.compile(...)``)
+    that create objects without side effects. Any other call pattern is
+    treated as unsafe import-time behavior.
+    """
+    safe_functions = _safe_constant_functions()
+    safe_attribute_calls = _safe_constant_attribute_calls()
+    for each_subnode in ast.walk(rhs_node):
+        if isinstance(each_subnode, ast.Call):
+            function_node = each_subnode.func
+            if isinstance(function_node, ast.Name):
+                if function_node.id not in safe_functions:
+                    return True
+            elif isinstance(function_node, ast.Attribute):
+                if isinstance(function_node.value, ast.Name):
+                    pair = (function_node.value.id, function_node.attr)
+                    if pair not in safe_attribute_calls:
+                        return True
+                else:
+                    return True
+            else:
+                return True
+        elif isinstance(
+            each_subnode,
+            (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp, ast.Lambda),
+        ):
+            return True
+    return False
+
+
 def _is_constants_only_python_content(content: str) -> bool:
     if not content.strip():
         return False
@@ -70,11 +113,53 @@ def _is_constants_only_python_content(content: str) -> bool:
     allowed_node_types = _constants_only_allowed_node_types()
     for each_top_level_node in parsed_tree.body:
         if isinstance(each_top_level_node, allowed_node_types):
+            if isinstance(each_top_level_node, (ast.Assign, ast.AnnAssign)):
+                rhs = each_top_level_node.value
+                if rhs is not None and _rhs_has_unsafe_call(rhs):
+                    return False
             continue
         if _is_module_docstring_expression(each_top_level_node):
             continue
         return False
     return True
+
+
+def _apply_edit_to_content(existing_content: str, old_str: str, new_str: str) -> str:
+    """Replace the first occurrence of old_str with new_str in the content."""
+    return existing_content.replace(old_str, new_str, 1)
+
+
+def _is_post_edit_constants_only(existing_content: str, tool_name: str, tool_input: dict) -> bool:
+    """Check if post-edit content remains constants-only after Edit or MultiEdit.
+
+    Both the existing content and the post-edit result must be constants-only
+    to prevent edits on files with behavior from bypassing the TDD gate.
+    """
+    if not _is_constants_only_python_content(existing_content):
+        return False
+
+    if tool_name == "Edit":
+        old_str = tool_input.get("old_string", "")
+        new_str = tool_input.get("new_string", "") or ""
+        if not old_str:
+            return False
+        post_edit_content = _apply_edit_to_content(existing_content, old_str, new_str)
+        return _is_constants_only_python_content(post_edit_content)
+
+    if tool_name == "MultiEdit":
+        all_edits = tool_input.get("edits", []) or []
+        post_edit_content = existing_content
+        for each_edit in all_edits:
+            if not isinstance(each_edit, dict):
+                return False
+            each_old = each_edit.get("old_string", "")
+            each_new = each_edit.get("new_string", "") or ""
+            if not each_old:
+                return False
+            post_edit_content = _apply_edit_to_content(post_edit_content, each_old, each_new)
+        return _is_constants_only_python_content(post_edit_content)
+
+    return False
 
 
 def _tests_directory_name() -> str:
@@ -297,10 +382,19 @@ def main() -> None:
         sys.exit(0)
 
     # Block production code - require confirmation
+    # Exempt constants-only content for Write (full content provided)
     written_content = _extract_written_content(tool_name, tool_input)
     if tool_name == "Write" and ext == ".py" and _is_constants_only_python_content(written_content):
         emit_allow()
         sys.exit(0)
+
+    # Exempt Edit/MultiEdit on constants-only files when post-edit content remains constants-only
+    if tool_name in ("Edit", "MultiEdit") and ext == ".py" and path.exists():
+        existing_content = _read_candidate_text(path)
+        if existing_content is not None:
+            if _is_post_edit_constants_only(existing_content, tool_name, tool_input):
+                emit_allow()
+                sys.exit(0)
 
     all_candidates = candidate_test_paths_for(path)
     if has_fresh_test(all_candidates, _freshness_seconds()):
