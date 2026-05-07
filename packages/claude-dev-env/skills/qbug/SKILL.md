@@ -66,24 +66,19 @@ Pre-flight checks (in order):
 
 ## Step 1: Resolve PR scope (lead)
 
-1. `gh pr view --json number,baseRefName,headRefName,url`
+1. Call `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` via the lead's available MCP tools (`N` comes from the parent skill's PR context, or fall back to `search_issues` MCP with the current branch name to recover the PR number). Extract `number`, `baseRefName`, `headRefName`, `url` from the response.
 2. Else `git merge-base HEAD origin/<default>` then `git diff <merge-base>...HEAD`
 3. Else refuse per § When this skill applies.
 
 Capture: `owner/repo`, `baseRefName`, `headRefName`, PR `number`, `url`, `starting_sha = git rev-parse HEAD`.
 
-Resolve the scoped temp directory once, lead-side, before spawning the subagent. Use Python's `tempfile.gettempdir()` so the path is correct on macOS, Linux, Windows cmd.exe, and PowerShell — do not hardcode `/tmp/` because Windows runners do not honor it. Capture the resolved absolute path as `<qbug_temp_dir>` and pass that literal path to the subagent:
+Resolve the scoped temp directory once, lead-side, before spawning the subagent. Use Python's `tempfile.gettempdir()` so the path is correct on macOS, Linux, Windows cmd.exe, and PowerShell — do not hardcode `/tmp/` because Windows runners do not honor it. Pass the resolved absolute path along with the PR metadata to the subagent:
 
 ```python
-import json
-import subprocess
 import tempfile
 from pathlib import Path
 
-pr_view: dict = json.loads(subprocess.check_output(
-    ["gh", "pr", "view", "--json", "number,baseRefName,headRefName,url"]
-))
-pr_number: int = pr_view["number"]
+pr_number: int = ...  # from pull_request_read MCP response above
 qbug_temp_dir: Path = Path(tempfile.gettempdir()) / f"qbug-pr-{pr_number}"
 qbug_temp_dir.mkdir(parents=True, exist_ok=True)
 ```
@@ -183,7 +178,7 @@ The subagent receives this prompt and loops internally — the lead does not re-
        On exit 0: increment loop_count, proceed to AUDIT.
 
     3. AUDIT:
-       Run: `gh pr diff <pr_number> -R <owner>/<repo> > <qbug_temp_dir>/loop-<loop_count>.patch`
+       Call `pull_request_read(method="get_diff", pullNumber=<pr_number>, owner=<owner>, repo=<repo>)` via MCP and save the diff to `<qbug_temp_dir>/loop-<loop_count>.patch`
 
        - Read the patch file.
        - Audit only added/modified lines. Read <categories_file> for the
@@ -204,13 +199,12 @@ The subagent receives this prompt and loops internally — the lead does not re-
        persistence schema.
 
        Post ONE review per loop. Use the payload shape from
-       <categories_file>'s sibling SKILL.md § "PR comments" — build
-       the JSON with jq `--rawfile` / `-Rs` reading per-finding body
-       files, pipe to
-       `gh api repos/<owner>/<repo>/pulls/<pr_number>/reviews -X POST --input -`.
+       <categories_file>'s sibling SKILL.md § "PR comments" — pass
+       the review body as a direct string parameter (not jq/piped files) to
+       `pull_request_review_write(method="create", event="COMMENT", body=<body>, owner=<owner>, repo=<repo>, pullNumber=<pr_number>, commitID=<head_sha>)`.
        Review body first line: `## /qbug loop <N> audit: <P0>P0 / <P1>P1 / <P2>P2`.
        If the review POST fails, fall back to one issue comment on
-       `/issues/<pr_number>/comments` carrying the full body; mark every
+       `add_issue_comment(owner=<owner>, repo=<repo>, issueNumber=<pr_number>, body=<body>)` carrying the full body; mark every
        finding `used_fallback=true`.
 
        Harvest `html_url` for the parent review and each child comment
@@ -252,7 +246,7 @@ The subagent receives this prompt and loops internally — the lead does not re-
        contract's diagnostics schema (all eight keys required).
 
        Reply to each finding at loop_comment_index[finding_id].finding_comment_id
-       using the reply CLI shape (jq `-Rs` → `gh api .../comments/<id>/replies --input -`).
+       using `add_reply_to_pull_request_comment(commentId=<id>, body=<body>, owner=<owner>, repo=<repo>, pullNumber=<pr_number>)`.
        Reply body is one of:
          - `Fixed in <short_sha>`
          - `Could not address this loop: <one-line reason>`
@@ -301,7 +295,7 @@ _From /qbug audit loop 2._
 
 ## Step 3: PR description refresh (lead)
 
-Delegate body composition to the `pr-description-writer` agent (the mandatory-pr-description hook requires it for `gh pr edit` to succeed). Feed it the final PR diff and the original body. Apply via `gh pr edit <number> -R <owner>/<repo> --body-file .qbug-final-body.md`.
+Delegate body composition to the `pr-description-writer` agent (the mandatory-pr-description hook requires it). Feed the agent the final PR diff and the original body. Apply via `update_pull_request(pullNumber=<number>, owner=<owner>, repo=<repo>, body=<new_body>)`.
 
 On error exit paths: best-effort; log the failure in the final report and continue.
 

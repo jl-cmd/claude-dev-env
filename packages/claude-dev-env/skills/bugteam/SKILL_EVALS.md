@@ -68,7 +68,7 @@ The harness does not yet exist; this document defines its contract.
 **Scenario.** Current branch is `main` with no PR and no upstream difference.
 
 **Layer B predicted trace.**
-1. `Bash("gh pr view --json ...")` → non-zero exit.
+1. `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` → fails / no matching PR.
 2. `Bash("git merge-base HEAD origin/main")` → empty.
 3. No grant script.
 
@@ -103,10 +103,10 @@ The harness does not yet exist; this document defines its contract.
 | # | Tool call | Source |
 |---|---|---|
 | 1 | `Bash("python .../scripts/grant_project_claude_permissions.py")` | `SKILL.md` § Step 0 |
-| 2 | `Bash("gh pr view --json number,baseRefName,headRefName,url")` | `SKILL.md` § Step 1 |
+| 2 | `pull_request_read(method="get", pullNumber=42, owner=..., repo=...)` | `SKILL.md` § Step 1 |
 | 3 | `Bash("git -C \"<run_temp_dir>/pr-42/worktree\" rev-parse HEAD")` → captures `starting_sha` | `SKILL.md` § Step 2 — **Loop state** block |
 | 4 | `Bash("mkdir -p <run_temp_dir>/pr-42")` | `SKILL.md` § AUDIT action |
-| 5 | `Bash("gh pr diff 42 -R ... > <run_temp_dir>/pr-42/loop-1.patch")` | `SKILL.md` § AUDIT action |
+| 5 | `pull_request_read(method="get_diff", pullNumber=42, owner=..., repo=...)` → write to `<run_temp_dir>/pr-42/loop-1.patch` | `SKILL.md` § AUDIT action |
 | 6 | `Agent(subagent_type="code-quality-agent", name="bugfind-pr42-loop1", run_in_background=true, model="opus", description=..., prompt=<audit XML loop 1>)` | `SKILL.md` § AUDIT action |
 | 7 | Lead awaits background-completion notification | `SKILL.md` § AUDIT action |
 | 8 | `Read(".bugteam-pr42-loop1.outcomes.xml")` | `SKILL.md` § AUDIT action |
@@ -116,17 +116,17 @@ The harness does not yet exist; this document defines its contract.
 | 12 | `Bash("git -C \"<run_temp_dir>/pr-42/worktree\" rev-parse HEAD")` → verify HEAD advanced | `SKILL.md` § FIX action (**Verify**) |
 | 13 | `Bash("git -C \"<run_temp_dir>/pr-42/worktree\" fetch origin <branch>")` → fetch remote state | `SKILL.md` § FIX action (**Verify**) |
 | 14 | `Bash("git -C \"<run_temp_dir>/pr-42/worktree\" rev-parse origin/<branch>")` → confirm matches HEAD | `SKILL.md` § FIX action (**Verify**) |
-| 15 | `Bash("gh pr diff 42 -R ... > <run_temp_dir>/pr-42/loop-2.patch")` | `SKILL.md` § AUDIT action |
+| 15 | `pull_request_read(method="get_diff", pullNumber=42, owner=..., repo=...)` → write to `<run_temp_dir>/pr-42/loop-2.patch` | `SKILL.md` § AUDIT action |
 | 16 | `Agent(subagent_type="code-quality-agent", name="bugfind-pr42-loop2", run_in_background=true, ...)` (loop 2) | `SKILL.md` § AUDIT action |
 | 17 | Lead awaits background-completion notification | `SKILL.md` § AUDIT action |
 | 18 | `Read(".bugteam-pr42-loop2.outcomes.xml")` — zero findings | `SKILL.md` § AUDIT action |
 | 19 | `Bash("git worktree remove \"<run_temp_dir>/pr-42/worktree\"")` | `SKILL.md` § Step 4 step 1 |
 | 20 | `Bash("python -c \"...shutil.rmtree(r'<run_temp_dir>', ...)\"")` | `SKILL.md` § Step 4 step 2 (Windows-safe teardown) |
-| 21 | `Bash("gh pr diff 42 -R ... > .bugteam-final.diff")` | `SKILL.md` § Step 4.5 step 1 |
-| 22 | `Bash("gh pr view 42 -R ... --json body --jq .body > .bugteam-original-body.md")` | `SKILL.md` § Step 4.5 step 2 |
+| 21 | `pull_request_read(method="get_diff", pullNumber=42, owner=..., repo=...)` → write to `.bugteam-final.diff` | `SKILL.md` § Step 4.5 step 1 |
+| 22 | `pull_request_read(method="get", pullNumber=42, owner=..., repo=...)` → extract `.body`, write to `.bugteam-original-body.md` | `SKILL.md` § Step 4.5 step 2 |
 | 23 | `Agent(subagent_type="pr-description-writer", description=..., prompt=<brief>)` | `SKILL.md` § Step 4.5 |
 | 24 | `Write(".bugteam-final-body.md", <returned body>)` | `SKILL.md` § Step 4.5 step 4 |
-| 25 | `Bash("gh pr edit 42 -R ... --body-file .bugteam-final-body.md")` | `SKILL.md` § Step 4.5 step 4 |
+| 25 | `update_pull_request(pullNumber=42, owner=..., repo=..., body=...)` | `SKILL.md` § Step 4.5 step 4 |
 | 26 | `Bash("rm .bugteam-final.diff .bugteam-original-body.md .bugteam-final-body.md")` | `SKILL.md` § Step 4.5 step 5 |
 | 27 | `Bash("python .../scripts/revoke_project_claude_permissions.py")` | `SKILL.md` § Step 5 |
 
@@ -224,7 +224,7 @@ Patch this table to match observation and annotate each correction.
 - Every finding's outcome XML carries `used_fallback="true"` and the issue-comment URL as `finding_comment_url`.
 - Cycle continues to the FIX action without aborting.
 
-**Open item for the real run.** The issue-comments fallback shape is `jq -Rs | gh api .../issues/<number>/comments --input -` (`SKILL.md` § Step 2.5 **Review POST fails**; full narrative in `reference/github-pr-reviews.md` § **Review POST failure fallback**). Before running Eval 10 for real, confirm the teammate obeys this shape — the fixture must assert the endpoint path and the `--input -` pattern.
+**Open item for the real run.** The issue-comments fallback uses `add_issue_comment(owner=..., repo=..., issueNumber=42, body=...)` (`SKILL.md` § Step 2.5 **Review POST fails**; full narrative in `reference/github-pr-reviews.md` § **Review POST failure fallback**). Before running Eval 10 for real, confirm the teammate obeys this shape — the fixture must assert the `add_issue_comment` tool call.
 
 ---
 

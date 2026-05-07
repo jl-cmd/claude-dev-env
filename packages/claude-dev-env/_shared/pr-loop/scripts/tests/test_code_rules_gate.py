@@ -537,8 +537,8 @@ def test_check_wrapper_plumb_through_accepts_positional_or_keyword_forwarder() -
 
     When a wrapper exposes the delegate's optional kwarg as a positional-or-keyword
     parameter with a default value and forwards it correctly, the check must produce
-    zero findings. This mirrors the live gh_util.fetch_inline_review_comments →
-    run_gh signature pairing on this PR.
+    zero findings. This mirrors a wrapper/delegate signature pairing
+    where the wrapper exposes the delegate's optional kwarg.
     """
     source = (
         "def run_gh(all_command, *, timeout_seconds=30):\n"

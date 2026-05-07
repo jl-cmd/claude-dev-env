@@ -8,8 +8,8 @@ per [ground-rules.md](ground-rules.md).
 **Multi-PR (`state.json`) teammate obligations** (plus TDD, commit, push):
 
 - Replies inline on each addressed finding via
-  `reply_to_inline_comment.py` (what changed + commit identifier),
-  matching §Audit result → fix worker step 4 — **before** writing
+  `add_reply_to_pull_request_comment(owner, repo, pullNumber, commentId, body)`
+  (what changed + commit identifier), matching §Audit result → fix worker step 4 — **before** writing
   `state.json` and going idle.
 - Writes `last_action: "fix_pushed"`, `current_head: <new SHA>`,
   `bugbot_clean_at: null`, `phase: "BUGBOT"`, `status: "awaiting_bugbot"`,
@@ -40,12 +40,10 @@ git push origin <BRANCH>
   ```
 **Pre-push gate:** honor hooks; full-stop on bypass. Capture new HEAD
 only after both gates pass; set `current_head`, `bugbot_clean_at = null`.
-- Reply inline on each addressed comment thread using `--body-file` (per
-  gh-body-file rule):
-  ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/reply_to_inline_comment.py" \
---owner <OWNER> --repo <REPO> --number <NUMBER> \
---comment-id <COMMENT_ID> --body-file <path/to/reply.md>
+- Reply inline on each addressed comment thread using the `add_reply_to_pull_request_comment` MCP tool:
+
+  ```
+  add_reply_to_pull_request_comment(owner=OWNER, repo=REPO, pullNumber=NUMBER, commentId=COMMENT_ID, body="Fixed in <SHA> — <what changed>")
   ```
 - **After pushing a fix, always run Step 3 (`bugbot run`) in the same
   tick** regardless of phase. New commit **resets full convergence cycle**:

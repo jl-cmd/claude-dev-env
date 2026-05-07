@@ -41,10 +41,12 @@ post a fresh PR in a fresh branch based on origin main to the user.
 - **Duplicate `bugbot run` while review queued** — skip Step 3 when the
   latest `bugbot run` PR comment has an `:eyes:` or `:+1:` reaction;
   wait for review or HEAD change before re-triggering.
-- **Bot logins differ between review-level and inline-comment endpoints** —
-  Copilot reviews come from `copilot-pull-request-reviewer[bot]`, but its
-  inline comments are authored by `Copilot`. Always use case-insensitive
-  substring matching on `user.login`, never strict equality.
+- **Bot login fields differ by endpoint** — `get_reviews` returns
+  `.user.login` (object), but `get_review_comments` returns `.author`
+  (string, not an object). Threads use `is_outdated` (not `commit_id`) to
+  indicate staleness. Always check the correct fields and use
+  case-insensitive substring matching on login values, never strict
+  equality.
 
 ## First tick of a session
 
@@ -62,7 +64,7 @@ Read [`reference/state-schema.md`](reference/state-schema.md),
 | Multi-PR session — `state.json` exists at `<TMPDIR>/pr-converge-<session_id>/` | [`reference/multi-pr-orchestration.md`](reference/multi-pr-orchestration.md) |
 | Scheduling the next wakeup | [`workflows/schedule-wakeup-loop.md`](workflows/schedule-wakeup-loop.md) |
 | Hard blocker, convergence reached, or user stops loop | [`reference/stop-conditions.md`](reference/stop-conditions.md) |
-| Need to invoke a Python script (bugbot trigger, copilot fetch, mergeability check, …) | [`scripts/README.md`](scripts/README.md) |
+| All GitHub interactions use `plugin:github:github` MCP tools | [`reference/per-tick.md`](reference/per-tick.md) |
 | Tick is ambiguous against the spokes above | [`reference/examples.md`](reference/examples.md) |
 
 ## Folder map
@@ -70,4 +72,3 @@ Read [`reference/state-schema.md`](reference/state-schema.md),
 - `SKILL.md` — this hub.
 - `reference/` — workflow detail per situation.
 - `workflows/` — pacing implementations.
-- `scripts/` — Python wrappers for `gh` API calls plus their tests.

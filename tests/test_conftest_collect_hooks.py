@@ -192,11 +192,11 @@ class TestCollectHookSymmetry:
         shared_scripts_test_file_path = (
             conftest._SHARED_PR_LOOP_SCRIPTS_DIRECTORY_PATH
             / "tests"
-            / "test_gh_util.py"
+            / "test_code_rules_gate.py"
         )
         fake_shared_scripts_collector = MagicMock(spec=pytest.Module)
         fake_shared_scripts_collector.nodeid = (
-            "packages/claude-dev-env/_shared/pr-loop/scripts/tests/test_gh_util.py"
+            "packages/claude-dev-env/_shared/pr-loop/scripts/tests/test_code_rules_gate.py"
         )
         fake_shared_scripts_collector.path = shared_scripts_test_file_path
 

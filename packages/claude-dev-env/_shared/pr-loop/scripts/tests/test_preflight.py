@@ -651,6 +651,28 @@ def test_main_does_not_print_no_related_tests_when_get_changed_files_returns_non
     assert "no related tests found" not in captured.err
 
 
+def test_main_should_not_print_no_pytest_config_when_pytest_configured_but_no_tests(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When pytest is configured but no tests are found, main must not print
+    the misleading 'no pytest configuration found' message."""
+    with (
+        patch.object(preflight, "verify_git_hooks_path", return_value=0),
+        patch.object(preflight, "has_pytest_configuration", return_value=True),
+        patch.object(preflight, "has_discoverable_tests", return_value=False),
+    ):
+        exit_code = preflight.main([])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "bugteam_preflight: pytest configured but no tests found" in captured.err, (
+        "Must print the correct message about configured pytest with no tests"
+    )
+    assert "bugteam_preflight: no pytest configuration found" not in captured.err, (
+        "Must not print the misleading 'no pytest configuration found' message "
+        "when pytest IS configured"
+    )
+
+
 def test_main_prints_no_related_tests_when_get_changed_files_returns_empty(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

@@ -26,10 +26,10 @@ The user is on a PR branch, wants Copilot (the GitHub Copilot reviewer bot) to k
 From the current repo:
 
 ```bash
-gh pr view --json number,url,headRefOid,baseRefName,headRefName,isDraft
+# MCP: pull_request_read(method="get") returns {number, url, head.sha, base.ref, head.ref, isDraft}
 ```
 
-Capture `number`, `headRefOid`, owner/repo (from `url`), and branch name. Pass these to the subagent so it does not rediscover them.
+Capture `number`, `head.sha`, owner/repo (from `url`), and branch name. Pass these to the subagent so it does not rediscover them.
 
 ### Step 2: Spawn the background subagent
 
@@ -57,23 +57,16 @@ Pass this verbatim to the subagent (substituting the bracketed values):
 >
 > **Per-tick work** (do this now, then on each wakeup):
 >
-> 1. Resolve current HEAD: `gh api repos/[OWNER]/[REPO]/pulls/[NUMBER] --jq '.head.sha'`.
-> 2. Fetch latest Copilot review:
->    ```bash
->    gh api repos/[OWNER]/[REPO]/pulls/[NUMBER]/reviews \
->      --jq '[.[] | select(.user.login=="copilot-pull-request-reviewer[bot]")] | sort_by(.submitted_at) | last'
->    ```
+> 1. Resolve current HEAD: `pull_request_read(method="get", pullNumber=[NUMBER], owner="[OWNER]", repo="[REPO]")` and extract `.head.sha`.
+> 2. Fetch latest Copilot review via `pull_request_read(method="get_reviews", pullNumber=[NUMBER], owner="[OWNER]", repo="[REPO]")`.
 >    Capture `commit_id`, `state`, `submitted_at`, `id`.
 > 3. Decide the branch:
 >    - **No review exists:** re-request (step 4), schedule next wakeup, return.
 >    - **Latest review's `commit_id` != current HEAD:** re-request (step 4), schedule next wakeup, return.
 >    - **Latest review's `commit_id` == current HEAD with unresolved inline findings:** TDD-fix them, push, reply inline on each thread, re-request (step 4), schedule next wakeup, return.
 >    - **Latest review's `commit_id` == current HEAD and clean:** report convergence to the parent with a one-sentence summary and terminate. The loop is done; skip the ScheduleWakeup call.
-> 4. Re-request Copilot. The reviewer ID **must** be `copilot-pull-request-reviewer[bot]` with the `[bot]` suffix — empirically verified: `Copilot`, `copilot`, and `github-copilot` all return `requested_reviewers: []` with no error, silently no-op.
->    ```bash
->    gh api -X POST repos/[OWNER]/[REPO]/pulls/[NUMBER]/requested_reviewers \
->      -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
->    ```
+> 4. Re-request Copilot via `request_copilot_review(owner="[OWNER]", repo="[REPO]", pullNumber=[NUMBER])`.
+>    The reviewer ID **must** be `copilot-pull-request-reviewer[bot]` with the `[bot]` suffix — empirically verified: `Copilot`, `copilot`, and `github-copilot` all return `requested_reviewers: []` with no error, silently no-op.
 > 5. Schedule the next wakeup with `ScheduleWakeup`:
 >    - `delaySeconds: 300`
 >    - `reason`: one short sentence on what you are waiting for.
@@ -86,7 +79,7 @@ Pass this verbatim to the subagent (substituting the bracketed values):
 > - Implement the fix.
 > - Stage the fix and create one new commit on the existing branch: `git add <files> && git commit -m "fix(review): ..."`.
 > - Push the new commit: `git push origin [BRANCH]`.
-> - Reply inline on each comment thread with `gh api -X POST repos/[OWNER]/[REPO]/pulls/[NUMBER]/comments` using `in_reply_to` set to the comment id, referencing the new commit SHA.
+> - Reply inline on each comment thread with `add_reply_to_pull_request_comment(owner="[OWNER]", repo="[REPO]", pullNumber=[NUMBER], body="...", commentId=<comment_id>)`, referencing the new commit SHA.
 >
 > When a pre-push, pre-commit, or other hook rejects the change, solve it. Read the hook's error message, diagnose the root cause in the code or test, and fix that. Then rerun the commit or push. Hooks exist to catch real problems; treat each rejection as new evidence to act on.
 >

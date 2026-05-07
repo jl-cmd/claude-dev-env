@@ -7,7 +7,7 @@ State each PR-loop workflow tracks across iterations. Workflows differ on persis
 | Field | Type | Purpose |
 |---|---|---|
 | `loop_count` | int | Iterations completed; bumps on each AUDIT or tick |
-| `last_action` | enum | `fresh` \| `audited` \| `fixed` — drives next-step dispatch |
+| `last_action` | enum | `fresh`, `audited`, `fixed` — drives next-step dispatch |
 | `last_findings` | object | `{p0, p1, p2, total}` count of findings from most recent AUDIT |
 | `audit_log` | list[str] | Per-iteration one-line summaries for the final report |
 | `starting_sha` | str | `git rev-parse HEAD` at workflow start |
@@ -35,11 +35,11 @@ Adds the same **traffic** fields whether they live in **`state.json`** or in the
 
 | Field | Type | Purpose |
 |---|---|---|
-| `phase` | enum | `BUGBOT` \| `BUGTEAM` — which reviewer the current tick drives |
-| `current_head` | str | PR `headRefOid` / `git rev-parse` for the PR under work (each tick; from `view_pr_context.py` when no file store) |
+| `phase` | enum | `BUGBOT`, `BUGTEAM` — which reviewer the current tick drives |
+| `current_head` | str | PR `.head.sha` / `git rev-parse` for the PR under work (each tick; from `pull_request_read(method="get")` when no file store) |
 | `bugbot_clean_at` | str \| null | HEAD SHA at which Cursor Bugbot last reported clean, or `null` (reset on every push) |
 | `copilot_clean_at` | str \| null | HEAD SHA at which the GitHub Copilot reviewer (`copilot-pull-request-reviewer[bot]`) last reported clean (review `state == "APPROVED"`), or `null`. Reset on every push. Convergence gates require this equals `current_head` after bugbot+bugteam are clean (see `skills/pr-converge/SKILL.md` § Convergence gates). |
-| `merge_state_status` | str \| null | Last-observed `mergeStateStatus` from `gh pr view --json mergeable,mergeStateStatus,headRefOid` (e.g., `CLEAN`, `DIRTY`, `BLOCKED`, `BEHIND`, `UNKNOWN`), or `null` before the first check. Reset on every push. `DIRTY` triggers the rebase invocation; non-`CLEAN` non-`DIRTY` is a hard blocker per pr-converge `Stop conditions`. |
+| `merge_state_status` | str \| null | Last-observed `mergeable_state` from `pull_request_read(method="get")` (e.g., `clean`, `dirty`, `blocked`, `behind`, `unknown`), or `null` before the first check. Reset on every push. `dirty` triggers the rebase invocation; non-`clean` non-`dirty` is a hard blocker per pr-converge `Stop conditions`. |
 | `inline_lag_streak` | int | Consecutive ticks where bugbot's review body claims findings but inline-comments API returns zero rows for `current_head` |
 | `tick_count` | int | Observability only — **no ceiling**; loop ends on convergence or **Stop conditions** in `pr-converge` |
 
@@ -48,9 +48,9 @@ Adds the same **traffic** fields whether they live in **`state.json`** or in the
 | Mode | When it applies | Source of truth | `tick_count` bump |
 |---|---|---|---|
 | **`state.json`** | File exists at `<TMPDIR>/pr-converge-<session_id>/state.json` (multi-PR orchestration or other file-backed session) | JSON: top-level `session_id`; per-PR objects under `prs[<number>]` with `owner`, `repo`, `branch`, `phase`, `current_head`, `bugbot_clean_at`, `inline_lag_streak`, `tick_count`, `last_action`, `status`, `last_updated`. Optional sibling `converged.log` (append-only; multi-PR only). Writes use lock + atomic replace per skill **Concurrency** | **Orchestrator only** at tick start (locked merge for every non-terminal PR); **never** bump `tick_count` in Step 1 when this file is in use |
-| **Conversation state line** | **No** `state.json` (typical single-PR `/pr-converge` in Cursor) | Persist **`phase`**, **`bugbot_clean_at`**, **`inline_lag_streak`**, **`tick_count`** as **plain text** in each assistant turn; next tick reads them from the **most recent assistant message**. **`current_head` is not serialized in that line** — re-resolve each tick via `view_pr_context.py` (same contract as `skills/pr-converge/SKILL.md` § State across ticks). | **Step 1** increments `tick_count` in that line **only** when no `state.json` — must not double-count with any file-backed path |
+| **Conversation state line** | **No** `state.json` (typical single-PR `/pr-converge` in Cursor) | Persist **`phase`**, **`bugbot_clean_at`**, **`inline_lag_streak`**, **`tick_count`** as **plain text** in each assistant turn; next tick reads them from the **most recent assistant message**. **`current_head` is not serialized in that line** — re-resolve each tick via `pull_request_read(method="get")` (same contract as `skills/pr-converge/SKILL.md` § State across ticks). | **Step 1** increments `tick_count` in that line **only** when no `state.json` — must not double-count with any file-backed path |
 
-**`status` (file-backed `prs[...]` only):** `fresh` \| `in_progress` \| `awaiting_bugbot` \| `awaiting_bugteam` \| `converged` \| `blocked`
+**`status` (file-backed `prs[...]` only):** `fresh | in_progress | awaiting_bugbot | awaiting_bugteam | converged | blocked`
 
 ### monitor-many
 
@@ -60,9 +60,9 @@ Adds per-PR JSON state file at `~/.claude/skills/monitor-many/state/<owner>-<rep
 |---|---|---|
 | `repo_name` | str | Full `owner/repo` |
 | `pr_number` | int | PR number |
-| `status` | enum | `open` \| `blocked_escalation` \| `fixing` \| `ready_candidate` \| `closed` |
-| `copilot_review` | enum | `none` \| `requested` \| `pending` \| `commented` \| `approved` |
-| `bugbot_review` | enum | Same vocabulary as `copilot_review` |
+| `status` | enum | `open`, `blocked_escalation`, `fixing`, `ready_candidate`, `closed` |
+| `copilot_review` | enum | `none`, `requested`, `pending`, `commented`, `approved` |
+| `bugbot_review` | enum | Same vocabulary as `copilot_review`; one of `none`, `requested`, `pending`, `commented`, `approved` |
 | `last_seen_comment_id` | int \| null | Highest processed review-comment id (incremental polling watermark) |
 | `review_comments` | list[object] | Optional cache; `{id, author, path, line}` per entry |
 | `escalation_queue` | list[object] | Pending human-judgment items: `{comment_id, summary, created_at}` |
@@ -77,5 +77,5 @@ Adds per-PR JSON state file at `~/.claude/skills/monitor-many/state/<owner>-<rep
 ## Convergence checks
 
 - bugteam, qbug: `last_action == "audited"` AND `last_findings.total == 0` → `converged`
-- pr-converge: `bugbot_clean_at == current_head` AND most-recent bugteam exit is `converged` AND no push during the bugteam tick AND no outstanding Copilot findings on `current_head` AND `merge_state_status == "CLEAN"` (per `skills/pr-converge/SKILL.md` § Convergence gates) → back-to-back clean → `gh pr ready` (read `current_head` / `bugbot_clean_at` / `copilot_clean_at` / `merge_state_status` from `state.json` when file-backed, else from the conversation state line and Step 1 `view_pr_context.py` output)
+- pr-converge: `bugbot_clean_at == current_head` AND most-recent bugteam exit is `converged` AND no push during the bugteam tick AND no outstanding Copilot findings on `current_head` AND `merge_state_status == "clean"` (per `skills/pr-converge/SKILL.md` § Convergence gates) → back-to-back clean → `update_pull_request(draft=false)` (read `current_head` / `bugbot_clean_at` / `copilot_clean_at` / `merge_state_status` from `state.json` when file-backed, else from the conversation state line and Step 1 `pull_request_read(method="get")` output)
 - monitor-many: no unresolved comments requiring code changes AND required checks green AND review policy satisfied → `gh pr ready`
