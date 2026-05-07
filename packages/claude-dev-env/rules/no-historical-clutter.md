@@ -1,25 +1,46 @@
 ---
-paths: **/*.md
+paths: **/*
 ---
 
-# No Historical Clutter in Documentation
+# No Historical Clutter in Documentation or Comments
 
-**When this applies:** Any Write or Edit to `.md` files.
+**When this applies:** Any Write or Edit to files containing comments or documentation.
+
+**Hook enforcement:** `state-description-blocker` (PreToolUse on Write|Edit) blocks historical/comparative language automatically. See `hooks.json` for registration.
 
 ## Rule
 
-Never reference removed implementations, old defaults, prior behaviors, or how something "used to be" when updating documentation. The current state is all that matters.
+Never reference removed implementations, old defaults, prior behaviors, or how something `"used to be"` when updating documentation. The current state is all that matters.
 
 ## Examples of prohibited patterns
 
+### In documentation (.md files)
+
 | Pattern | Why it's clutter |
 |---------|-----------------|
-| "instead of 30" in a pagination rule | The old default no longer exists in code; the rule reader doesn't need to know what it was |
-| "previously this used X" | If X is gone, it's noise |
-| "before this rule, we did Y" | The rule exists now; the before-state is irrelevant |
-| "migrated from Z to W" | If Z is fully removed, the migration story is git history, not documentation |
-| "the old implementation did A" | If A is gone, the reader gains nothing from knowing it existed |
-| "originally" / "used to be" | Same — dead context |
+| `` `"instead of 30"` `` in a pagination rule | The old default `no longer` exists in code; the rule reader doesn't need to know what it was |
+| `` `"previously this used X"` `` | If X is gone, it's noise |
+| `` `"before this rule, we did Y"` `` | The rule exists now; the before-state is irrelevant |
+| `` `"migrated from Z to W"` `` | If Z is fully removed, the migration story is git history, not documentation |
+| `` `"the old implementation did A"` `` | If A is gone, the reader gains nothing from knowing it existed |
+| `` `"originally"` `` / `` `"used to be"` `` | Same — dead context |
+
+### In code comments
+
+| Pattern | Good replacement |
+|---------|-----------------|
+| `# Uses X instead of Y` | `# Uses X` |
+| `# Previously configured via Z` | `# Configured via Z` |
+| `# Now uses the new API client` | `# Uses the new API client` |
+| `# No longer supports legacy mode` | `# Supports modern mode only` |
+| `// Switched to async processing` | `// Processes asynchronously` |
+| `# Replaced by the cache layer` | `# Cache layer handles reads` |
+
+### Hook-detected patterns
+
+The `state-description-blocker` hook (PreToolUse on Write\|Edit) enforces these patterns automatically:
+
+`instead of`, `previously`, `now uses/does/handles/supports/names/includes`, `was previously`, `were previously`, `was formerly`, `was added`, `used to`, `no longer`, `has/have been updated/changed`, `replaced by`, `replaces`, `superseded by`, `supersedes`, `changed from`, `changes from`, `switched from/to`, `migrated from/to`, `moved to/into`, `extracted as`, `updated to`, `originally`, `as of`
 
 ## What IS allowed
 

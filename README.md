@@ -228,6 +228,7 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Write\|Edit | `run_all_validators` | Runs the full validation suite (30+ checks) |
 | Write\|Edit | `code_rules_enforcer` | Blocks CODE_RULES.md violations (comments, magic values, imports) |
 | Write\|Edit | `tdd-enforcer` | Prompts TDD confirmation when writing production code |
+| Write\|Edit | `state-description-blocker` | Blocks historical/comparative language in comments and .md files |
 | Edit | `refactor-guard` | Ensures refactoring happens only after green tests |
 | Edit | `migration-safety-advisor` | Warns about risky database migration patterns |
 | Bash | `destructive-command-blocker` | Blocks rm -rf, git reset --hard, and other destructive commands |
