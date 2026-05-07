@@ -120,9 +120,9 @@ Non-zero → stop. Revoke in Step 5 on every exit path.
 
 ### Step 1: Resolve PR scope (once)
 
-Accept one or more PR numbers from the invocation. For each PR, run `gh pr view
---json number,baseRefName,headRefName,url` (falling back to the merge-base diff
-path when no PR exists). Capture `all_prs = [{number, owner, repo, baseRef,
+Accept one or more PR numbers from the invocation. For each PR, call
+`pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` (falling back
+to the merge-base diff path when no PR exists). Capture `all_prs = [{number, owner, repo, baseRef,
 headRef, url}, ...]`. A single-PR invocation produces a one-element list and
 follows the same downstream rules.
 
@@ -186,41 +186,34 @@ Order: audit → buffer → validate anchors vs diff → single review POST.
 Review body states counts; zero findings → still one review, `comments: []`,
 body `## /bugteam loop <L> audit: 0P0 / 0P1 / 0P2 → clean`.
 
-**Payloads:** build JSON with `jq --rawfile` / `-Rs`, pipe to `gh api ...
---input -` (avoids shell-quoting; satisfies `gh-body-backtick-guard`). Write
-each markdown body to a temp file first.
+**Payloads:** Use MCP tool calls (see below). Body text with markdown (backticks,
+newlines, quotes) passes through safely as string parameters — no temp files, no
+jq, no shell pipes.
 
 **Review POST** (one `comments[]` object per anchored finding; single-line
 `{path, line, side: "RIGHT", body}`; multi-line add `start_line`, `start_side:
 "RIGHT"`):
 
 ```
-jq -n \
---rawfile review_body <tmp_review_body.md> \
---arg commit_id "$(git rev-parse HEAD)" \
---rawfile finding_body_1 <tmp_finding_1.md> \
---arg path_1 "<file_1>" \
---argjson line_1 <line_1> \
-[... one finding_body_K / path_K / line_K triple per finding ...] \
-'{
-commit_id: $commit_id,
-event: "COMMENT",
-body: $review_body,
-comments: [
-{path: $path_1, line: $line_1, side: "RIGHT", body: $finding_body_1}
-[, ... ]
-]
-}' \
-| gh api repos/<owner>/<repo>/pulls/<number>/reviews -X POST --input -
+pull_request_review_write(
+  method="create",
+  event="COMMENT",
+  body=<review_body_text>,
+  commitID=<head_sha_at_post_time>,
+  owner=<owner>, repo=<repo>, pullNumber=<number>,
+  comments=[
+    {path: <path_1>, line: <line_1>, side: "RIGHT", body: <finding_body_1>}
+    [, ... ]
+  ]
+)
 ```
 
-**Fix reply:** `jq -Rs '{body: .}' <tmp_reply.md | gh api
-repos/<owner>/<repo>/pulls/<number>/comments/<finding_comment_id>/replies -X
-POST --input -`
+**Fix reply:** `add_reply_to_pull_request_comment(commentId=<finding_comment_id>,
+body=<reply_text>, owner=<owner>, repo=<repo>, pullNumber=<number>)`
 
-**Review POST fails:** issue comment fallback: `jq -Rs '{body: .}'
-<tmp_fallback.md | gh api repos/<owner>/<repo>/issues/<number>/comments -X POST
---input -`
+**Review POST fails:** issue comment fallback:
+`add_issue_comment(owner=<owner>, repo=<repo>, issueNumber=<number>,
+body=<fallback_text>)`
 
 `<head_sha_at_post_time>`: `git rev-parse HEAD` in subagent cwd immediately
 before POST.
@@ -263,10 +256,16 @@ and before iteration begins, when `last_action == "fresh"`). A re-invocation of
 cleaned this HEAD (short-circuit) and otherwise records that prior loops were
 dirty so the AUDIT runs against the latest diff with that signal in mind:
 
-```bash
-dirty_review_count=0
-gh api "repos/<owner>/<repo>/pulls/<number>/reviews?per_page=100" --paginate --slurp \
-  | jq '[.[][] | select((.body // "") | startswith("## /bugteam loop "))] | sort_by(.submitted_at) | reverse'
+```python
+dirty_review_count = 0
+all_reviews = pull_request_read(
+    method="get_reviews", pullNumber=N, owner=O, repo=R
+)
+prior_reviews = [
+    rev for rev in all_reviews
+    if rev.get("body", "").startswith("## /bugteam loop ")
+]
+prior_reviews.sort(key=lambda rev: rev["submitted_at"], reverse=True)
 ```
 
 Iterate from index 0 (most recent) toward older entries:
@@ -335,19 +334,16 @@ before the next AUDIT.
 
 ### AUDIT action
 
-```bash
-mkdir -p "<run_temp_dir>/pr-<N>"
-gh pr diff <N> -R <owner>/<repo> > "<run_temp_dir>/pr-<N>/loop-<L>.patch"
-```
-
-**Spawn:**
+1. Create the directory: `mkdir -p "<run_temp_dir>/pr-<N>"`.
+2. Call `pull_request_read(method="get_diff", pullNumber=N, owner=O, repo=R)`
+   to capture the diff text, then write it to
+   `"<run_temp_dir>/pr-<N>/loop-<L>.patch"` using the `Write` tool.
 
 ```
 Agent(
   subagent_type="code-quality-agent",
   name="bugfind-pr<N>-loop<L>",
   model="opus",
-  mode="bypassPermissions",
   run_in_background=true,
   description="Bugfind audit PR <N> loop <L>",
   prompt="<audit XML; see PROMPTS.md>"
@@ -366,11 +362,11 @@ after three full audit/fix rounds without convergence, issue eleven `Agent`
 calls in one assistant message (`run_in_background=true`):
 
 - **10 haiku auditors (`-b` through `-k`):** `subagent_type="code-quality-agent"`,
-  `model="haiku"`, `mode="bypassPermissions"`, write sibling XML to
+  `model="haiku"`, write sibling XML to
   `<run_temp_dir>/pr-<N>/loop-<L>-<letter>.outcomes.xml`, skip PR posting.
   Prompts must pass literal absolute sibling paths.
 - **1 opus validator (`-a`):** `subagent_type="code-quality-agent"`,
-  `model="opus"`, `mode="bypassPermissions"`:
+  `model="opus"`:
   - Polls for all 10 sibling XMLs before proceeding (60s timeout, 2s interval). On timeout: log diagnostics entry, proceed with validated findings from available XMLs, report count in validator output.
   - Validates each finding: file exists, line in bounds, excerpt contains the exact
     text of the cited line, category is A–J, severity is P0/P1/P2.
@@ -388,21 +384,6 @@ a merged review — treat as a hard blocker and abort the loop.
 The sibling-output paths in [`PROMPTS.md`](PROMPTS.md) must cover the full
 `-b` through `-k` range.
 
-After the validator completes, lead runs `verify_review.py` to confirm exactly
-one review was posted at the correct commit:
-
-```bash
-python <script_dir>/verify_review.py \
-  --owner <owner> --repo <repo> --number <N> \
-  --commit-id "$(git -C <worktree_path> rev-parse HEAD)" --loop <L>
-```
-
-Non-zero exit → lead checks for an existing fallback issue comment from
-the validator. If one exists, use its URL directly. Otherwise, post a new
-fallback issue comment with all findings inline from the outcome XML.
-Populate `loop_comment_index` from the (existing or new) comment URL.
-`<script_dir>` = absolute path to `_shared/pr-loop/scripts/`.
-
 ### FIX action
 
 **Spawn:**
@@ -412,7 +393,6 @@ Agent(
   subagent_type="clean-coder",
   name="bugfix-pr<N>-loop<L>",
   model="opus",
-  mode="bypassPermissions",
   run_in_background=true,
   description="Bugfix PR <N> loop <L>",
   prompt="<fix XML; see PROMPTS.md>"
@@ -451,15 +431,16 @@ else {'onerror': h}))"
 
 Lead only; cumulative product narrative (not process). Delegate body to
 `pr-description-writer` via `Agent` (`mode="bypassPermissions"`) (else `general-purpose`) so the
-mandatory-pr-description hook accepts `gh pr edit`.
+mandatory-pr-description hook accepts `update_pull_request`.
 
-1. `gh pr diff <number> -R <owner>/<repo> > .bugteam-final.diff`
-2. `gh pr view <number> -R <owner>/<repo> --json body --jq .body >
-   .bugteam-original-body.md`
+1. `pull_request_read(method="get_diff", pullNumber=N, owner=O, repo=R)` → write
+   output to `.bugteam-final.diff` with `Write` tool.
+2. `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` → extract
+   `.body` from response, write to `.bugteam-original-body.md` with `Write` tool.
 3. Agent brief: paths + branch names; describe merge-ready change from diff;
    keep curated original sections intact; return markdown body.
-4. Write `.bugteam-final-body.md`; `gh pr edit <number> -R <owner>/<repo>
-   --body-file .bugteam-final-body.md`
+4. Write `.bugteam-final-body.md`; `update_pull_request(pullNumber=N, owner=O,
+   repo=R, body=<body_text>)`.
 5. Delete the three temp files.
 
 On failure: log in final report; continue to Step 5.

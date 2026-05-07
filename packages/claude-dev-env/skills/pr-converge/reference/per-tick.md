@@ -37,12 +37,12 @@ state line when **no** `state.json` (single-PR only). With `state.json`, do
 **not** increment here — orchestrator's per-tick bump is sole increment.
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/view_pr_context.py" --owner <OWNER> --repo <REPO> --number <NUMBER>
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get") → `.head.sha`
 ```
 
-If owner/repo/number are not yet known, extract them from the PR URL or run without flags in a repo checkout.
+If owner/repo/number are not yet known, extract them from the PR URL.
 
-Capture `number`, `headRefOid` (= `current_head`), owner/repo, branch.
+Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 
 ## Step 2: Branch on `phase`
 
@@ -50,15 +50,14 @@ Capture `number`, `headRefOid` (= `current_head`), owner/repo, branch.
 
 a. Fetch Cursor Bugbot reviews newest-first, walk back until first clean:
 
-   ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/fetch_bugbot_reviews.py" \
---owner <OWNER> --repo <REPO> --number <NUMBER>
+   ```
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
+   → filter `.user.login` for cursor/bugbot, sort by `.submitted_at` descending
    ```
 
-Track dirty entries in a temp file; Fix protocol reads it back later
-this tick.
+   Track dirty entries (review body contains `BUGBOT_REVIEW` markers with finding content); Fix protocol reads them back later this tick.
 
-Iterate from index 0 (most recent) toward older:
+   Iterate from index 0 (most recent) toward older:
 
    - Dirty review → append JSON line with `{review_id, commit_id,
      submitted_at, body}`.
@@ -71,14 +70,12 @@ review for decisions below. When branch routes to **Fix protocol**, address
 **every** entry in `$dirty_reviews_path` — not just index 0.
 
 b. Fetch unaddressed inline comments from `cursor[bot]` for newest Bugbot
-review on `current_head`. Script uses same `--paginate --slurp` pattern,
-resolves review via reviews list, returns only inline rows whose
-`pull_request_review_id` matches that review (excludes stale threads from
-older reviews on same SHA).
+review on `current_head`:
 
-   ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/fetch_bugbot_inline_comments.py" \
---owner <OWNER> --repo <REPO> --number <NUMBER> --commit "$current_head"
+   ```
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
+   → filter threads where `is_outdated == false` AND `is_resolved == false`
+     AND any comment has `.author` matching cursor/bugbot (case-insensitive substring)
    ```
 
 c. Decide (four branches; match first whose predicate holds):
@@ -96,7 +93,7 @@ c. Decide (four branches; match first whose predicate holds):
      `state.json`, goes idle; Step 3 on new HEAD runs after via
      orchestrator-spawned follow-up agent (§Fix result → general-purpose).
      No `state.json` (single-PR): spawn Agent (subagent_type: clean-coder) to implement → push → reply inline on each thread
-     via `reply_to_inline_comment.py` → Step 3 in same tick (see
+     via `add_reply_to_pull_request_comment` MCP → Step 3 in same tick (see
      [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow) for
      full contract).
      Schedule next wakeup, return.
@@ -125,8 +122,7 @@ Skill({skill: "bugteam", args:
 b. **Re-resolve current HEAD** — bugteam may have pushed commits during
 its run. `current_head` from Step 1 is potentially stale:
    ```bash
-new_head=$(python "${CLAUDE_SKILL_DIR}/scripts/resolve_pr_head.py" \
---owner <OWNER> --repo <REPO> --number <NUMBER>)
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get") → `.head.sha`
    ```
 If `new_head != current_head`, set `current_head = new_head` AND
 `bugbot_clean_at = null`. New commits invalidate bugbot's prior clean.
@@ -146,25 +142,14 @@ never falsely terminates:
      **omit loop pacing** per **Convergence** of active pacing workflow.
    - **Convergence BUT `bugbot_clean_at != current_head` (no push):**
      `phase = BUGBOT`, schedule next wakeup, return.
-   - **Findings without committed fixes:** spawn Agent (subagent_type: clean-coder) to implement fixes and push, then reply inline via `reply_to_inline_comment.py`, following [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow).
+   - **Findings without committed fixes:** spawn Agent (subagent_type: clean-coder) to implement fixes and push, then reply inline via `add_reply_to_pull_request_comment` MCP, following [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow).
      `phase = BUGBOT`, schedule next wakeup, return.
 
 ## Step 3: Re-trigger bugbot
 
-Prefer portable script (temp body file, `gh pr comment --body-file`):
+Use the `add_issue_comment` MCP tool:
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/trigger_bugbot.py" \
---owner <OWNER> --repo <REPO> --number <NUMBER>
-```
-
-**Bundled PowerShell alternative** (same gh-body-file contract):
-
-```bash
-POST_BUGBOT_RUN="$HOME/.claude/skills/pr-converge/scripts/post-bugbot-run.ps1"
-pwsh -NoProfile -ExecutionPolicy Bypass -File "$POST_BUGBOT_RUN" \
-"https://github.com/<OWNER>/<REPO>/pull/<NUMBER>"
-```
+    add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")
 
 `bugbot run` is empirically the only re-trigger Cursor Bugbot recognizes;
 alternative phrasings (`re-review`, `bugbot please`, etc.) silently no-op.

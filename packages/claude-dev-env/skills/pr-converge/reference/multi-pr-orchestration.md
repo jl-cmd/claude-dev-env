@@ -25,7 +25,7 @@ Create once at session start. Each teammate writes result before going idle.
 
 **Directory lifecycle:** Keep `<TMPDIR>/pr-converge-<session_id>/` until every
 `prs[...]` is `converged` or `blocked`, or user stops. Then delete folder.
-`mark_pr_ready.py` / `gh pr ready` on GitHub is canonical record. See
+`update_pull_request(draft=false)` on GitHub is canonical record. See
 [Memory](#memory) for optional append-only log.
 
 **Barebones schema:**
@@ -107,7 +107,7 @@ Bugfind subagent completes (findings or clean):
   2. Applies TDD fixes (test first, then production).
   3. Commits, pushes one fix commit.
   4. Replies inline on each addressed finding via
-     `reply_to_inline_comment.py`.
+     `add_reply_to_pull_request_comment(owner, repo, pullNumber, commentId, body)`.
   5. Writes `state.json` (per §Concurrency): `last_action: "fix_pushed"`,
      `current_head: <new SHA>`, `bugbot_clean_at: null`, `phase:
      "BUGBOT"`, `status: "awaiting_bugbot"`, `last_updated` ISO-8601 UTC.
@@ -116,7 +116,7 @@ Bugfind subagent completes (findings or clean):
 - **PRs with zero findings:** spawn one `general-purpose` subagent per PR via
   `Agent(subagent_type="general-purpose", run_in_background=true)`. Subagent:
   1. `bugbot_clean_at == current_head` (back-to-back clean): run
-     `mark_pr_ready.py`, append convergence row to
+     `update_pull_request(pullNumber=PR_NUMBER, owner=OWNER, repo=REPO, draft=false)`, append convergence row to
      `<TMPDIR>/pr-converge-<session_id>/converged.log` per §Memory, then
      write `state.json` (per §Concurrency) with `status: "converged"`,
      `last_action: "converged"` (or `marked_ready`), `phase: "BUGBOT"`,
@@ -125,7 +125,7 @@ Bugfind subagent completes (findings or clean):
      duplicate work.
   2. Else: update `state.json` (per §Concurrency) with `last_action:
      "audit_clean"`, `status: "awaiting_bugbot"`, `phase: "BUGBOT"`, then
-     trigger bugbot via `trigger_bugbot.py`.
+     trigger bugbot via `add_issue_comment(owner, repo, issueNumber, body="bugbot run")`.
   3. Goes idle.
 
 ### Fix result → general-purpose per PR
@@ -135,11 +135,11 @@ When bugfix (clean-coder) subagent completes after push:
 - Spawn one `general-purpose` subagent per PR via
   `Agent(subagent_type="general-purpose", run_in_background=true)`. Subagent:
   1. Reads `state.json` for its PR.
-  2. Triggers bugbot via `trigger_bugbot.py`.
-  3. Polls `fetch_bugbot_reviews.py` every 60s (up to 10 polls) until review
-     anchored to `current_head` appears.
+  2. Triggers bugbot via `add_issue_comment(owner, repo, issueNumber, body="bugbot run")`.
+  3. Polls `pull_request_read(method="get_reviews")` every 60s (up to 10 polls) until review
+     anchored to `current_head` appears with `commit_id == current_head`.
   4. **Poll / classify loop** (repeat from 4a whenever 4c retries):
-     - **4a.** Fetch inline comments via `fetch_bugbot_inline_comments.py`.
+     - **4a.** Fetch inline comments via `pull_request_read(method="get_review_comments")` filtered by review ID and `commit_id == current_head`.
      - **4b.** Classify — three outcomes (same as `SKILL.md` Step 2 BUGBOT):
        - **`clean`:** review body clean, zero unaddressed inline findings.
        - **`dirty`:** ≥1 unaddressed inline finding for `current_head`
@@ -186,7 +186,7 @@ When bugfix (clean-coder) subagent completes after push:
 Run directory `<TMPDIR>/pr-converge-<session_id>/` holds `state.json` and
 optional `converged.log`. Keep from first create until every PR under `prs`
 is `converged` or `blocked`, or **Stop conditions** ends loop. Safe to
-delete folder after — `mark_pr_ready.py` / `gh pr ready` on GitHub is
+delete folder after — `update_pull_request(draft=false)` on GitHub is
 canonical record. Folder skill, not a plugin package; do **not** rely
 on `${CLAUDE_PLUGIN_DATA}`. OS/disk cleanup of `<TMPDIR>` (reboot, policy)
 can remove files mid-run — environmental risk.
@@ -196,7 +196,7 @@ can remove files mid-run — environmental risk.
 - **Path:** sibling of `state.json`.
 - **Format:** one tab-separated row per converged PR: ISO8601 UTC,
   owner/repo#number, bugbot SHA, bugteam SHA.
-- **Append site:** agent running `mark_pr_ready.py`. Append **before**
+- **Append site:** agent running `update_pull_request(pullNumber=PR_NUMBER, owner=OWNER, repo=REPO, draft=false)`. Append **before**
   locked `state.json` publish so log row survives failed merge.
 - **Never read inside loop.** User / follow-up tooling only.
 

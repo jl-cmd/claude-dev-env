@@ -24,7 +24,6 @@ Use this skill:
 - **SKILL.md**: Core instructions and step-by-step workflow for Claude
 - **EXAMPLES.md**: 8 real-world examples with different scenarios
 - **PRINCIPLES.md**: Theory and best practices for PR communication
-- **scripts/respond_to_reviews.py**: Standalone automation script
 - **README.md**: This file
 
 ## Quick Start
@@ -44,19 +43,6 @@ git commit -m "fix: address PR feedback"
 git push
 ```
 
-### Using Standalone Script
-
-```bash
-# Auto-detect PR and respond to comments
-python scripts/respond_to_reviews.py
-
-# Specify PR number
-python scripts/respond_to_reviews.py --pr 123
-
-# Auto-approve responses (no confirmation)
-python scripts/respond_to_reviews.py --auto-approve
-```
-
 ## Testing
 
 Test the skill with these queries:
@@ -74,22 +60,12 @@ Test the skill with these queries:
 
 ## Requirements
 
-- `gh` CLI installed and authenticated (`gh auth login`)
+- GitHub MCP server (`plugin:github:github`) authenticated
 - Git repository with GitHub remote
 - Current branch with an open PR
 - Changes committed (not just staged)
-- Python 3.8+ (for standalone script)
 
 ## Integration Options
-
-### As Pre-Push Hook
-
-Add to `.git/hooks/pre-push`:
-```bash
-#!/bin/bash
-echo "Checking for PR review comments..."
-python .claude/skills/pr-review-responder/scripts/respond_to_reviews.py
-```
 
 ### As Slash Command
 
@@ -104,19 +80,6 @@ Add to `.claude/settings.json`:
 
 Usage: `/respond`
 
-### As npm Script
-
-Add to `package.json`:
-```json
-{
-  "scripts": {
-    "respond": "python .claude/skills/pr-review-responder/scripts/respond_to_reviews.py"
-  }
-}
-```
-
-Usage: `npm run respond`
-
 ## Example Response Format
 
 ```
@@ -130,16 +93,16 @@ Usage: `npm run respond`
 ## Troubleshooting
 
 **"No PR found for this branch"**:
-- Create PR first: `gh pr create`
-- Or specify PR: `--pr NUMBER`
+- Create PR first using MCP: `create_pull_request(owner=owner, repo=repo, title=title, body=body, head=head, base=base)`
+- Ensure the branch has an associated open PR
 
 **"No review comments found"**:
 - PR might not have reviews yet
 - Or all comments already responded to
 
 **"Permission denied"**:
-- Run: `gh auth refresh -h github.com -s repo`
-- Ensure write access to repository
+- Ensure the GitHub MCP server has write-scoped authentication
+- Check repository write access
 
 **"Cannot find matching changes"**:
 - Review comments don't match files you modified
@@ -180,9 +143,6 @@ See [PRINCIPLES.md](PRINCIPLES.md) for:
 ```bash
 # Test skill activation
 "Respond to PR review comments"
-
-# Test standalone script
-python scripts/respond_to_reviews.py --help
 ```
 
 ## Version History
@@ -194,15 +154,14 @@ python scripts/respond_to_reviews.py --help
 - Matching changes to comments
 - Drafting responses with standard format
 - Posting via GitHub API
-- Standalone Python script
+- MCP-based GitHub tool integration
 
 ## Contributing
 
 To improve this skill:
 1. Add new examples to EXAMPLES.md
 2. Document anti-patterns in PRINCIPLES.md
-3. Enhance matching logic in scripts/respond_to_reviews.py
-4. Test with various PR scenarios
+3. Test with various PR scenarios
 
 ## License
 

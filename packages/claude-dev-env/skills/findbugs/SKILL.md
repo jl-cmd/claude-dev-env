@@ -24,7 +24,7 @@ If the current branch has no associated PR and no diff against the default branc
 
 Determine the audit target in this order:
 
-1. **Open PR for current branch.** Run `gh pr view --json number,baseRefName,headRefName,url` from the working directory. If a PR exists, capture its number, base ref, head ref, and URL.
+1. **Open PR for current branch.** Call `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` for the current branch (`N` comes from the parent skill's context, or fall back to `search_issues` MCP with the current branch name to recover the PR number). If a PR exists, capture its number, base ref, head ref, and URL.
 2. **No PR but a remote default branch exists.** Diff against the default branch's merge-base: `git merge-base HEAD origin/<default>` then `git diff <merge-base>...HEAD`. Treat this as the audit scope.
 3. **Neither.** Respond exactly: `No PR or upstream diff found. Push the branch or open a PR first.` and stop.
 
@@ -39,7 +39,7 @@ diff_temp_path = Path(tempfile.gettempdir()) / f"findbugs-pr-{os.getpid()}.patch
 
 `os.getpid()` supplies the per-invocation suffix that prevents collisions with parallel `/findbugs` runs (a UUID or timestamp is equally acceptable). Capture the resolved absolute path as `<diff_temp_path>` and pass that **literal** path to every shell command that follows. Shell-side parameter expansion (`${TMPDIR:-/tmp}`, `$$`, `%TEMP%`) is forbidden because cmd.exe and PowerShell do not honor it.
 
-When a PR exists: `gh pr diff <number> -R <owner>/<repo> > "<diff_temp_path>"`.
+When a PR exists: call `pull_request_read(method="get_diff", pullNumber=N, owner=O, repo=R)` and save the returned diff content to `"<diff_temp_path>"`.
 
 When falling back to merge-base diff: `git diff <merge-base>...HEAD > "<diff_temp_path>"`.
 

@@ -12,12 +12,12 @@ description: >-
 
 # Monitor Open PRs
 
-**Core principle:** One sweep covers every open PR across both owner scopes. Claude discovers PRs live via `gh search prs`, dispatches `/bugteam` per PR with `BUGTEAM_FIX_IMPLEMENTER=groq-coder` and `--bugbot-retrigger`, then polls Cursor's bugbot replies until each PR is quiet for a full backoff cycle.
+**Core principle:** One sweep covers every open PR across both owner scopes. Claude discovers PRs live via `scripts/discover_open_prs.py` which shells out to `gh search prs --owner <owner> --state open --json ...`, dispatches `/bugteam` per PR with `BUGTEAM_FIX_IMPLEMENTER=groq-coder` and `--bugbot-retrigger`, then polls Cursor's bugbot replies until each PR is quiet for a full backoff cycle.
 
 ## Contents
 
 - When this skill applies — refusal cases and trigger conditions
-- Discovery — live `gh search prs` across both owner scopes
+- Discovery — `scripts/discover_open_prs.py` queries via `gh search prs` across both owner scopes
 - Wrapping — `bws run` for GROQ_API_KEY injection
 - Dispatch — `/bugteam --bugbot-retrigger <pr_numbers...>` with groq-coder + retrigger
 - Post-convergence polling — bugbot replies and re-invocation
@@ -30,13 +30,13 @@ description: >-
 Refusals — first match wins; respond with the quoted line exactly and stop:
 
 - **bws not on PATH.** `bws not installed. /monitor-open-prs injects GROQ_API_KEY via Bitwarden Secrets Manager.`
-- **gh not authenticated.** `gh auth status failed. /monitor-open-prs relies on existing gh credentials.`
+- **GitHub API not accessible.** `get_me failed. /monitor-open-prs needs active GitHub MCP credentials.`
 - **Dirty tree on the caller's repo.** `Uncommitted changes detected. Stash, commit, or revert before /monitor-open-prs.`
 - **Required subagents missing.** Confirm `code-quality-agent`, `clean-coder`, and `groq-coder` exist. Else: `Required subagent type <name> not installed.`
 
 ## Discovery
 
-Call `scripts/discover_open_prs.discover_open_prs(all_owners=["jl-cmd", "JonEcho"])` to merge the live open-PR list across both scopes. The helper runs `gh search prs --owner <owner> --state open --json number,repository,url,headRefName,baseRefName` once per owner and flattens the result to a uniform dict shape with keys `number`, `owner`, `repo`, `head_ref`, `base_ref`, `url`. Empty scopes contribute empty lists; an entirely empty sweep returns `[]` and exits cleanly.
+Call `scripts/discover_open_prs.discover_open_prs(all_owners=["jl-cmd", "JonEcho"])` to merge the live open-PR list across both scopes. The helper shells out to `gh search prs --owner <owner> --state open --json number,repository,url,headRefName,baseRefName` for each owner scope and flattens the result to a uniform dict shape with keys `number`, `owner`, `repo`, `head_ref`, `base_ref`, `url`. Empty scopes contribute empty lists; an entirely empty sweep returns `[]` and exits cleanly.
 
 ## Secret Wrapping
 
@@ -50,7 +50,7 @@ bws run \
   /bugteam --bugbot-retrigger <pr_numbers...>
 ```
 
-The `bws run` subshell resolves the project's secrets and exports them for the wrapped command. The `GROQ_API_KEY` secret's UUID inside that project is `b7e99a7f-2ecc-42b3-99a5-b434010622f9`. GitHub auth is not sourced through `bws` — existing `gh auth` credentials carry the session.
+The `bws run` subshell resolves the project's secrets and exports them for the wrapped command. The `GROQ_API_KEY` secret's UUID inside that project is `b7e99a7f-2ecc-42b3-99a5-b434010622f9`. GitHub auth is not sourced through `bws` — existing MCP `get_me` credentials carry the session.
 
 ## Dispatch
 
@@ -68,7 +68,7 @@ For each discovered PR:
 After a `/bugteam` invocation returns (converged, cap reached, stuck, or error), the PR may accumulate new Cursor bugbot comments within minutes. Poll for them:
 
 1. Baseline: capture `since_timestamp` as the PR's last commit timestamp.
-2. Every 60 seconds, run `gh pr view <pr_number> --json comments --jq '.comments[] | select(.createdAt > "<since_timestamp>") | select(.author.login | test("bugbot|cursor";"i"))'`.
+2. Every 60 seconds, call `pull_request_read(method="get", pullNumber=<pr_number>, owner=<owner>, repo=<repo>)` and filter the response's `comments` array for entries whose `.author.login` matches `"bugbot"` or `"cursor"` and `.createdAt` is after `<since_timestamp>`.
 3. Back off: 60s → 120s → 240s → 480s → 960s. If five successive polls return empty, exit polling for this PR.
 4. If bugbot posts a new finding in any poll, re-invoke `/bugteam <pr_number>` via the same `bws run` wrapper with the bugbot finding text seeded into the invocation's `bugs_to_fix` preamble. Reset the backoff.
 

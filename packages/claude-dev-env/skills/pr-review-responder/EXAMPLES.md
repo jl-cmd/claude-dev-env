@@ -347,8 +347,8 @@ Found 1 general PR comment (not inline):
 This is a general comment, not tied to specific code lines.
 Cannot auto-respond to general comments.
 
-Suggestion: Reply manually on GitHub or use gh CLI:
-  gh pr comment 91 -b "✅ **Added**: Cache invalidation tests in tests/test_cache.py"
+Suggestion: Reply manually on GitHub or use the MCP tool:
+  `add_issue_comment(owner=owner, repo=repo, issueNumber=91, body="✅ **Added**: Cache invalidation tests in tests/test_cache.py")`
 ```
 
 ---

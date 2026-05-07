@@ -36,8 +36,7 @@ Before doing ANYTHING:
 
 - [ ] FORBIDDEN: Assuming you know what the comments say
 - [ ] FORBIDDEN: Using default pagination (30 results, causes missed comments)
-- [x] REQUIRED: `gh api repos/{owner}/{repo}/pulls/{pr_number}/comments?per_page=100`
-- [x] REQUIRED: Check for additional pages if 100+ comments
+- [x] REQUIRED: `pull_request_read(method="get_review_comments", pullNumber={pr_number}, owner="{owner}", repo="{repo}")`
 
 **WHY:** Missing comments forces extra review rounds. Default pagination (30) silently drops comments.
 
@@ -194,7 +193,7 @@ Cannot add review responses to merged PRs. Report error.
 
 ## Requirements
 
-- `gh` CLI installed and authenticated
+- GitHub MCP server (`plugin:github:github`) authenticated
 - Current branch must have an open PR
 - Git repository with remote on GitHub
 - Write access to repository

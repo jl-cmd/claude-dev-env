@@ -49,7 +49,7 @@ If the filtered set is empty, refuse per the refusal cases above.
 
 Re-establish the same PR target `/findbugs` used:
 
-1. `gh pr view --json number,baseRefName,headRefName,url` from the working directory.
+1. `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` for the current branch (`N` comes from the parent skill's PR context, or fall back to `search_issues` MCP with the current branch name to recover the PR number).
 2. Fall back to `git merge-base HEAD origin/<default>` then `git diff <merge-base>...HEAD`.
 3. Neither → respond `No PR or upstream diff. Cannot scope fixes.` and stop.
 

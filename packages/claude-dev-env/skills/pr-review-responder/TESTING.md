@@ -213,62 +213,12 @@ git commit -m "fix: latest feedback"
 - Doesn't duplicate on already-replied comments
 - Tracks which were skipped
 
-## Standalone Script Tests
-
-### Test 7: Script with Auto-Approve
-
-**Setup**:
-```bash
-# PR with review comments
-# Changes committed
-```
-
-**Test**:
-```bash
-python scripts/respond_to_reviews.py --auto-approve
-```
-
-**Expected behavior**:
-- Finds comments
-- Drafts responses
-- Posts WITHOUT asking for confirmation
-- Shows success report
-
-**Validation**:
-- No interactive prompts
-- Responses posted automatically
-- Exit code 0
-
-### Test 8: Script with Specific PR Number
-
-**Setup**:
-```bash
-# Multiple PRs open
-# Specify which one
-```
-
-**Test**:
-```bash
-python scripts/respond_to_reviews.py --pr 123
-```
-
-**Expected behavior**:
-- Uses PR #123 (not auto-detect)
-- Processes that PR's comments
-- Posts responses
-
-**Validation**:
-- Correct PR processed
-- Doesn't use current branch's PR
-
 ## Edge Cases
 
 ### Test 9: Authentication Failure
 
 **Setup**:
-```bash
-gh auth logout
-```
+- GitHub MCP server authentication is not configured or has expired
 
 **Test**:
 ```
@@ -277,9 +227,9 @@ gh auth logout
 
 **Expected behavior**:
 - Attempts to fetch PR
-- Gets auth error
+- Gets auth error from MCP server
 - Shows clear error message
-- Suggests: `gh auth login`
+- Suggests re-authenticating the GitHub MCP server
 
 ### Test 10: Merged PR
 
@@ -347,7 +297,7 @@ Before considering skill production-ready:
 - [ ] Happy path works end-to-end
 - [ ] Edge cases handled gracefully
 - [ ] Error messages are clear and actionable
-- [ ] Standalone script works independently
+- [ ] GitHub MCP tools respond correctly for all operations
 - [ ] Documentation is comprehensive
 - [ ] Examples cover common scenarios
 
@@ -375,22 +325,15 @@ If skill doesn't activate:
    - Does it include "respond", "reply", "post"?
    - Are trigger words present?
 
-If script fails:
+If MCP calls fail:
 
-1. **Check gh CLI**:
-   ```bash
-   gh --version
-   gh auth status
-   ```
+1. **Check GitHub MCP server**:
+   - Verify `plugin:github:github` is listed in available MCP servers
+   - Check authentication status within the MCP server configuration
 
 2. **Check git repository**:
    ```bash
    git remote -v
-   ```
-
-3. **Run with error output**:
-   ```bash
-   python scripts/respond_to_reviews.py 2>&1 | tee debug.log
    ```
 
 ## Success Metrics

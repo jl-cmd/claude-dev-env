@@ -378,6 +378,7 @@ def main(all_arguments: list[str]) -> int:
     hooks_path_exit_code = verify_git_hooks_path(repository_root)
     if hooks_path_exit_code != 0:
         return hooks_path_exit_code
+    discovery_result: bool | None = True
     if not arguments.no_pytest and has_pytest_configuration(repository_root):
         discovery_result = has_discoverable_tests(repository_root)
         if discovery_result is None:
@@ -433,7 +434,7 @@ def main(all_arguments: list[str]) -> int:
                 exit_code = run_pytest(repository_root, arguments.verbose)
             if exit_code != 0:
                 return exit_code
-    elif not arguments.no_pytest:
+    elif not arguments.no_pytest and discovery_result is not False:
         print(
             "bugteam_preflight: no pytest configuration found; skipping pytest.",
             file=sys.stderr,

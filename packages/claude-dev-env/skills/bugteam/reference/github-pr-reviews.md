@@ -8,55 +8,55 @@ Per-loop pull-request reviews: findings render as a tree under one parent review
 
 **Ordering:** Bugfind audits first, buffers findings, validates anchors against the captured diff, then posts the review **once** at the end. The review body states the finding count authoritatively. Keep all posting in that single end-of-loop review POST.
 
-## CLI shapes (teammate)
+## MCP tool shapes (teammate)
 
-All three POSTs use the same pattern: build JSON with `jq` (`--rawfile` or `-Rs` so markdown with backticks, newlines, and quotes survives intact), then pipe to `gh api ... --input -` on stdin. This avoids shell-quoting edge cases.
+All three POSTs use MCP tool calls. Body text with markdown (backticks, newlines, quotes) passes through safely as string parameters — no temp files, no jq, no shell pipes.
 
 ### Per-loop review (one POST creates parent + children)
 
 Build `comments[]` programmatically from buffered, diff-anchored findings. Single-line shape: `{path, line, side: "RIGHT", body: <finding markdown>}`. Multi-line: `{path, start_line, start_side: "RIGHT", line, side: "RIGHT", body: ...}` (all four anchor fields required).
 
 ```
-jq -n \
-  --rawfile review_body <tmp_review_body.md> \
-  --arg commit_id "$(git rev-parse HEAD)" \
-  --rawfile finding_body_1 <tmp_finding_1.md> \
-  --arg path_1 "<file_1>" \
-  --argjson line_1 <line_1> \
-  [... one finding_body_K / path_K / line_K triple per anchored finding ...] \
-  '{
-     commit_id: $commit_id,
-     event: "COMMENT",
-     body: $review_body,
-     comments: [
-       {path: $path_1, line: $line_1, side: "RIGHT", body: $finding_body_1}
-       [, ... one object per anchored finding ...]
-     ]
-   }' \
-| gh api repos/<owner>/<repo>/pulls/<number>/reviews -X POST --input -
+pull_request_review_write(
+  method="create",
+  event="COMMENT",
+  body=<review_body_markdown>,
+  commitID=<head_sha_at_post_time>,
+  owner=<owner>, repo=<repo>, pullNumber=<pull_number>,
+  comments=[
+    {path: <file_1>, line: <line_1>, side: "RIGHT", body: <finding_1_markdown>}
+    [, ... one object per anchored finding ...]
+  ]
+)
 ```
 
-Response JSON includes the parent review `id` / `html_url` and a `comments` array of child comments (`id`, `html_url`). Harvest children in index order and align with the finding list.
+Response includes the parent review `html_url` and a `comments` array of child comments (`id`, `html_url`). Harvest children in index order and align with the finding list.
 
 ### Fix reply
 
 ```
-jq -Rs '{body: .}' < <tmp_reply.md> \
-| gh api repos/<owner>/<repo>/pulls/<number>/comments/<finding_comment_id>/replies -X POST --input -
+add_reply_to_pull_request_comment(
+  commentId=<finding_comment_id>,
+  body=<reply_markdown>,
+  owner=<owner>, repo=<repo>, pullNumber=<pull_number>
+)
 ```
 
 ### Review POST failure fallback
 
-Top-level PR comment via issue-comments (`{issue_number}` is the PR number):
+Top-level PR comment via issue-comments (`issue_number` is the PR number):
 
 ```
-jq -Rs '{body: .}' < <tmp_fallback.md> \
-| gh api repos/<owner>/<repo>/issues/<number>/comments -X POST --input -
+add_issue_comment(
+  owner=<owner>, repo=<repo>,
+  issueNumber=<pull_number>,
+  body=<full_fallback_markdown>
+)
 ```
 
 `<head_sha_at_post_time>` is the SHA at post time (`git rev-parse HEAD` in the teammate’s working directory immediately before the POST). The review anchors finding comments to the head SHA at audit time (before this loop’s fix lands).
 
-Write each body (review body and every per-finding body) to its own temp file before the `jq` pipeline. Bodies stay inside files the pipeline reads — they reach GitHub inside the JSON payload — which keeps them compatible with the `gh-body-backtick-guard` hook that scans command-line `--body` arguments.
+Body text is passed directly as string parameters to the MCP tool calls — no temp files, no jq, no shell pipes.
 
 ## Review body template (`<tmp_review_body.md>`)
 
@@ -77,10 +77,10 @@ GitHub rejects the entire review POST if any `comments[]` entry targets a line n
 
 ## Review POST failure fallback
 
-If the review POST fails (rate limit, network, malformed payload), fall back to one top-level issue comment containing the review body plus every finding inline (severity, file:line, description). Every finding in that run: `used_fallback="true"`, `finding_comment_url` = issue-comment URL. Use the issue-comment CLI shape above.
+If the review POST fails (rate limit, network, malformed payload), fall back to one top-level issue comment containing the review body plus every finding inline (severity, file:line, description). Every finding in that run: `used_fallback="true"`, `finding_comment_url` = issue-comment URL. Use `add_issue_comment` (see MCP tool reference below).
 
-## GitHub REST endpoints
+## MCP tool reference
 
-- Per-loop batched review: `POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews` (required: `body`, `event=COMMENT`, `commit_id`; optional `comments[]` — each entry needs `path`, `body`, `line`, `side`)
-- Fix reply: `POST /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies` (required: `body`)
-- Review-POST failure fallback: `POST /repos/{owner}/{repo}/issues/{issue_number}/comments` (required: `body`; `{issue_number}` is the PR number)
+- Per-loop batched review: `pull_request_review_write(method="create", event="COMMENT", body=..., commitID=..., owner=..., repo=..., pullNumber=..., comments=[...])` — wraps `POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews`
+- Fix reply: `add_reply_to_pull_request_comment(commentId=..., body=..., owner=..., repo=..., pullNumber=...)` — wraps `POST /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies`
+- Review-POST failure fallback: `add_issue_comment(owner=..., repo=..., issueNumber=..., body=...)` — wraps `POST /repos/{owner}/{repo}/issues/{issue_number}/comments`

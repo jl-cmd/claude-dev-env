@@ -242,11 +242,7 @@ One-to-one mapping, clear context.
 **GitHub location**: File diffs, attached to specific line numbers
 
 **How to respond**:
-```bash
-gh api repos/{owner}/{repo}/pulls/comments/{comment_id}/replies \
-  -X POST \
-  -f body="✅ **Fixed**: [description]"
-```
+`add_reply_to_pull_request_comment(commentId={comment_id}, body="✅ **Fixed**: [description]", owner="{owner}", repo="{repo}", pullNumber={pr_number})`
 
 **Skill behavior**: Automatically detects and responds to these
 
@@ -257,9 +253,7 @@ gh api repos/{owner}/{repo}/pulls/comments/{comment_id}/replies \
 **GitHub location**: PR conversation tab
 
 **How to respond**:
-```bash
-gh pr comment {pr_number} -b "✅ **Fixed**: [description]"
-```
+`add_issue_comment(owner=owner, repo=repo, issueNumber={pr_number}, body="✅ **Fixed**: [description]")`
 
 **Skill behavior**: Detects but cannot auto-respond (lacks line context)
 

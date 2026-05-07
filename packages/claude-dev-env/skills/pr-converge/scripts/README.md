@@ -1,172 +1,120 @@
-# pr-converge scripts
+# pr-converge MCP tool references
 
-Thin Python wrappers around the gh CLI calls the skill makes per tick. Centralizing them lets the skill body reference one script path per action and keeps the gh-paginate and gh-body-file rules enforced in one place.
+The GitHub MCP server exposes pull request operations through the tools listed below. Pagination is handled server-side; callers receive the complete result set in a single response.
 
-Scripts that target a specific repository are invoked as `python "${CLAUDE_SKILL_DIR}/scripts/<name>.py" --owner OWNER --repo REPO --number NUMBER ...`. `view_pr_context.py` relies on `gh`'s default repository context and takes no `--owner` / `--repo` / `--number` flags. Scripts return non-zero on subprocess failure and surface gh's stderr through `subprocess.CalledProcessError`.
+## MCP tools
 
-## Scripts
+### PR context: `pull_request_read(method="get")`
 
-### `view_pr_context.py`
+Read PR metadata:
 
-Returns the per-tick PR context as JSON.
+    pull_request_read(method="get", pullNumber=NUMBER, owner=OWNER, repo=REPO)
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/view_pr_context.py"
-```
+Fields: `.number`, `.url`, `.head.sha`, `.base.ref`, `.head.ref`, `.isDraft`.
 
-Output: `{"number", "url", "headRefOid", "baseRefName", "headRefName", "isDraft"}`. Wraps `gh pr view --json number,url,headRefOid,baseRefName,headRefName,isDraft`.
+### Bugbot reviews: `pull_request_read(method="get_reviews")`
 
-### `fetch_bugbot_reviews.py`
+Fetch all reviews and filter for `cursor[bot]`:
 
-Fetches every Cursor Bugbot review on the PR newest-first, classified per body content.
+    pull_request_read(method="get_reviews", pullNumber=NUMBER, owner=OWNER, repo=REPO)
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/fetch_bugbot_reviews.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER>
-```
+Classification: clean if review body has no findings count; dirty if body matches "found N potential issue".
 
-Output: JSON array of `{review_id, commit_id, submitted_at, state, body, classification}` where `classification` is `"dirty"` (body matches `Cursor Bugbot has reviewed your changes and found <N> potential issue`) or `"clean"`. Uses `--paginate --slurp` and flattens pages in Python — required by `../../../rules/gh-paginate.md` because `gh --paginate --jq` runs the filter per-page (gh CLI issue 10459). Login filter is a case-insensitive substring match on `cursor` (handles login-shape divergence between review-level and inline-comment endpoints).
+### Bugbot inline comments: `pull_request_read(method="get_review_comments")`
 
-### `fetch_bugbot_inline_comments.py`
+Fetch all review comments and filter for `cursor[bot]`, matching `pull_request_review_id` to the newest Bugbot review on the target commit:
 
-Fetches unaddressed Cursor Bugbot inline comments for the **newest submitted Bugbot review** on the requested ``--commit`` SHA (matches ``pull_request_review_id`` to the review returned by ``fetch_bugbot_reviews.py`` so stale inline threads from an older Bugbot review on the same SHA are ignored).
+    pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/fetch_bugbot_inline_comments.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER> --commit <CURRENT_HEAD>
-```
+### PR head SHA: `pull_request_read(method="get")`
 
-Output: JSON array of `{comment_id, commit_id, path, line, body}`. Uses the same `--paginate --slurp` pattern as `fetch_bugbot_reviews.py`.
+Read the current HEAD SHA from the PR:
 
-### `resolve_pr_head.py`
+    pull_request_read(method="get", pullNumber=NUMBER, owner=OWNER, repo=REPO)
 
-Returns the current HEAD SHA of the PR. Wraps the single-object endpoint `repos/<owner>/<repo>/pulls/<number>` which is not paginated, so `gh`'s built-in `--jq .head.sha` is safe here (see "Single-object endpoints" in `../../../rules/gh-paginate.md`).
+Access `.head.sha` from the response.
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/resolve_pr_head.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER>
-```
+### Trigger bugbot: `add_issue_comment`
 
-Output: the SHA on stdout, trailing newline.
+Post the bugbot re-trigger comment:
 
-### `trigger_bugbot.py`
+    add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")
 
-Posts the literal `bugbot run` re-trigger comment via `gh pr comment --body-file` (per `../../../rules/gh-body-file.md` — passing the body inline can corrupt backticks). Writes and removes the temp body file internally.
+`bugbot run` is the only recognized re-trigger phrase; alternative phrasings silently no-op.
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/trigger_bugbot.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER>
-```
+### Mark PR ready: `update_pull_request(draft=false)`
 
-Output: the comment URL from gh on stdout.
+Mark a draft PR as ready for review:
 
-### `mark_pr_ready.py`
+    update_pull_request(pullNumber=NUMBER, owner=OWNER, repo=REPO, draft=false)
 
-Marks a draft PR as ready for review. Convergence action invoked when both bugbot and bugteam are clean against the same HEAD.
+### Reply to inline comment: `add_reply_to_pull_request_comment`
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/mark_pr_ready.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER>
-```
+Reply to an inline review comment thread:
 
-### `reply_to_inline_comment.py`
+    add_reply_to_pull_request_comment(
+      commentId=COMMENT_ID,
+      body=REPLY_BODY,
+      owner=OWNER,
+      repo=REPO,
+      pullNumber=NUMBER
+    )
 
-Posts an inline reply to a PR review comment. Reply body is sourced from a caller-supplied file via `gh api ... -F body=@<path>` (per `../../../rules/gh-body-file.md`).
+### Mergeability: `pull_request_read(method="get")`
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/reply_to_inline_comment.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER> \
-  --comment-id <COMMENT_ID> --body-file <PATH_TO_REPLY_MD>
-```
+Read mergeability fields from the PR:
 
-Output: the new reply id from gh's JSON response, on stdout.
+    pull_request_read(method="get", pullNumber=NUMBER, owner=OWNER, repo=REPO)
 
-### `check_pr_mergeability.py`
+Fields: `.mergeable`, `.mergeable_state`, `.head.sha`.
 
-Returns the mergeability state of the current PR as JSON. Wraps `gh pr view --json mergeable,mergeStateStatus,headRefOid` (single-object endpoint — no pagination needed). Used by the convergence gate to detect base-branch conflicts (`mergeStateStatus == "DIRTY"` / `mergeable == "CONFLICTING"`) before flipping the PR ready.
+### Copilot reviews: `pull_request_read(method="get_reviews")`
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/check_pr_mergeability.py" \
---owner <OWNER> --repo <REPO> --number <NUMBER>
-```
+Fetch all reviews and filter for `copilot-pull-request-reviewer[bot]`:
 
-Output: `{"mergeable", "mergeStateStatus", "headRefOid"}`.
+    pull_request_read(method="get_reviews", pullNumber=NUMBER, owner=OWNER, repo=REPO)
 
-### `fetch_copilot_reviews.py`
+Classification: `APPROVED` → clean, `CHANGES_REQUESTED` → dirty, `COMMENTED` with non-empty body → dirty.
 
-Fetches every Copilot reviewer (`copilot-pull-request-reviewer[bot]`) review on the PR newest-first, classified per the review's `state` field.
+### Copilot inline comments: `pull_request_read(method="get_review_comments")`
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/fetch_copilot_reviews.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER>
-```
+Fetch all review comments and filter for `copilot-pull-request-reviewer[bot]`, matching `pull_request_review_id` to the newest Copilot review on the target commit:
 
-Output: JSON array of `{review_id, commit_id, submitted_at, state, body, classification}` where `classification` is `"clean"` for `state == "APPROVED"`, `"dirty"` for `state == "CHANGES_REQUESTED"`, and `"dirty"` for `state == "COMMENTED"` with a non-empty body. Uses `--paginate --slurp` and flattens pages in Python — required by `../../../rules/gh-paginate.md`. Login filter is a case-insensitive substring match on `copilot` (handles the divergence where Copilot reviews come from `copilot-pull-request-reviewer[bot]` but its inline comments are authored by `Copilot`).
+    pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
 
-### `fetch_copilot_inline_comments.py`
+### Request Copilot review: `add_issue_comment` or `request_copilot_review`
 
-Fetches unaddressed Copilot inline comments for the **newest submitted Copilot review** on the requested ``--commit`` SHA (matches ``pull_request_review_id`` to the review returned by ``fetch_copilot_reviews.py`` so stale inline threads from an older Copilot review on the same SHA are ignored).
+Two options:
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/fetch_copilot_inline_comments.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER> --commit <CURRENT_HEAD>
-```
+1. Comment-based trigger:
+   ```
+   add_issue_comment(owner=OWNER, repo=REPO, issueNumber=NUMBER, body="@copilot review")
+   ```
+2. Dedicated MCP tool (when available):
+   ```
+   request_copilot_review(owner=OWNER, repo=REPO, pullNumber=NUMBER)
+   ```
 
-Output: JSON array of `{comment_id, commit_id, path, line, body}`. Uses the same `--paginate --slurp` pattern as `fetch_copilot_reviews.py`.
+The `[bot]` suffix is load-bearing per `../../copilot-review/SKILL.md`.
 
-### `request_copilot_review.py`
+### Claude reviews: `pull_request_read(method="get_reviews")`
 
-Requests a Copilot review on the current PR via `gh api -X POST repos/{owner}/{repo}/pulls/{number}/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`. The `[bot]` suffix is load-bearing per `../../copilot-review/SKILL.md` — `Copilot`, `copilot`, and `github-copilot` all silently no-op.
+Fetch all reviews and filter for login containing `claude`:
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/request_copilot_review.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER>
-```
+    pull_request_read(method="get_reviews", pullNumber=NUMBER, owner=OWNER, repo=REPO)
 
-Output: none on success (gh's stdout is suppressed); `subprocess.CalledProcessError` on failure.
+Classification: same state-based rules as Copilot reviews.
 
-### `fetch_claude_reviews.py`
+### Claude inline comments: `pull_request_read(method="get_review_comments")`
 
-Fetches every Claude reviewer-bot review on the PR newest-first, classified per the review's `state` field. Mirror of `fetch_copilot_reviews.py` for an Anthropic Claude PR review bot (e.g. `claude[bot]`, `claude-code[bot]`, or any login containing `claude`).
+Fetch all review comments and filter for login containing `claude`, matching `pull_request_review_id` to the newest Claude review on the target commit:
 
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/fetch_claude_reviews.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER>
-```
-
-Output: JSON array of `{review_id, commit_id, submitted_at, state, body, classification}` — same shape and same state-based classification rules as `fetch_copilot_reviews.py`. Login filter is a case-insensitive substring match on `claude`.
-
-### `fetch_claude_inline_comments.py`
-
-Fetches unaddressed Claude inline comments for the **newest submitted Claude review** on the requested `--commit` SHA (matches `pull_request_review_id` to the review returned by `fetch_claude_reviews.py` so stale inline threads from an older Claude review on the same SHA are ignored).
-
-```bash
-python "${CLAUDE_SKILL_DIR}/scripts/fetch_claude_inline_comments.py" \
-  --owner <OWNER> --repo <REPO> --number <NUMBER> --commit <CURRENT_HEAD>
-```
-
-Output: JSON array of `{comment_id, commit_id, path, line, body}`. Same `--paginate --slurp` pattern.
+    pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
 
 ## Shared modules
 
-The reviewer fetch scripts share their fetch and classification logic via two internal modules. Entry-point scripts (`fetch_bugbot_reviews.py`, `fetch_copilot_reviews.py`, `fetch_claude_reviews.py` and their inline-comment counterparts) are thin wrappers — they import a per-reviewer spec, call the shared core, and shape argparse / JSON output.
-
-### `reviewer_specs.py`
-
-Defines the `ReviewerSpec` frozen dataclass (two fields: `login_filter_substring` and `classify_review`) plus three module-level instances: `bugbot_spec`, `copilot_spec`, `claude_spec`. The state-based classifier used by Copilot and Claude is built via the shared `_make_state_based_classifier` factory; Bugbot has its own body-regex classifier because Bugbot uses `state == "COMMENTED"` for both clean and dirty reviews and only the body distinguishes them.
-
-Spec instances use lowercase names because they are frozen dataclass values rather than scalar configuration constants — keeps them out of the `UPPER_SNAKE` constants-location rule that requires module-level constants outside `config/` to be hoisted there.
-
-### `reviewer_fetch_core.py`
-
-Exports `fetch_reviewer_reviews(spec, ...)` and `fetch_reviewer_inline_comments(spec, ..., all_reviews=...)`. The inline-comments function takes pre-fetched reviews as an argument rather than fetching them internally, so each entry-point script keeps its own patchable `fetch_X_reviews` function for tests that mock the reviews fetch on the entry-point module.
-
-The core enforces the gh-paginate contract (`--paginate --slurp` + Python JSON flattening, never `gh --jq` for cross-page operations) and the case-insensitive substring login filter in one place.
+No shared fetch core modules are needed. Each review or comment fetch is a single MCP tool call with client-side filtering by login.
 
 ## Tests
 
-Each script has a sibling `test_<name>.py`. Run them all with:
-
-```bash
-python -m pytest packages/claude-dev-env/skills/pr-converge/scripts/ -v
-```
+Unit tests for gh wrapper scripts are removed. Reviewer interaction is tested through the MCP server contract.
