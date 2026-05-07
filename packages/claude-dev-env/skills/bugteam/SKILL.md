@@ -313,7 +313,7 @@ Iterate from index 0 (most recent) toward older entries:
 Lead only; merge-base / diff semantics:
 [`../../_shared/pr-loop/code-rules-gate.md`][path-code-rules]; shared script
 inventory: [`../../_shared/pr-loop/scripts/README.md`][path-scripts-readme].
-Non-zero → spawn **clean-coder** standards-fix (read stderr, edit, re-run
+Non-zero → spawn **clean-coder** standards-fix (`mode="bypassPermissions"`) (read stderr, edit, re-run
 **this same** command, one commit, `git push`, shutdown) until exit **0** or
 **5**
 failed gate rounds → `error: code rules gate failed pre-audit`. After **0**:
@@ -433,7 +433,7 @@ else {'onerror': h}))"
 ### Step 4.5: PR description
 
 Lead only; cumulative product narrative (not process). Delegate body to
-`pr-description-writer` via `Agent` (else `general-purpose`) so the
+`pr-description-writer` via `Agent` (`mode="bypassPermissions"`) (else `general-purpose`) so the
 mandatory-pr-description hook accepts `gh pr edit`.
 
 1. `gh pr diff <number> -R <owner>/<repo> > .bugteam-final.diff`
