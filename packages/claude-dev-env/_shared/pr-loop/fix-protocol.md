@@ -35,3 +35,5 @@ After step 11, when `git rev-parse HEAD` is unchanged from `pre_fix_sha`, the fi
 - Append commits; the branch stays linear (one commit per fix loop, fast-forward push only).
 - No comment deletion on lines left unchanged.
 - No `--no-verify`. Hook rejections flag real underlying issues worth investigating.
+- **Narrow scope.** Fix only the exact defect at the specified file:line. No structural refactoring, no inlining helpers.
+- **Preserve helpers.** Do not remove or inline existing helper functions unless the finding explicitly names them.

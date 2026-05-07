@@ -20,11 +20,16 @@ cd into `<worktree_path>` before any git, gh, or file operation.
 <scope>
   <diff_path>Absolute path to the per-PR patch file: <run_temp_dir>/pr-<N>/loop-<L>.patch (same path as gh pr diff redirect in AUDIT)</diff_path>
   <scope_rule>Audit only lines added or modified in the diff. Pre-existing code on untouched lines is out of scope.</scope_rule>
+  <changed_files_rule>Build the list of changed file paths from the diff. Open each one with Read and audit cross-file consistency. Read every changed test file and cross-reference test assertions, expected values, and mock setup against the production code's config constants and function signatures. When a test file asserts a value that diverges from config, file a finding under category J.</changed_files_rule>
 </scope>
 
 <bug_categories>
   Investigate each category explicitly. For each, return either at least
-  one finding OR a verified-clean entry with the evidence used to clear it:
+  one finding OR a verified-clean entry with the evidence used to clear it.
+  A category is verified-clean only when one complete execution path through
+  the changed code has been traced from entry to exit. Surface-level scanning
+  is insufficient evidence. The evidence field must name the function and the
+  path traced:
   A. API contract verification (signatures, return types, async/await correctness)
   B. Selector / query / engine compatibility
   C. Resource cleanup and lifecycle (file handles, connections, processes, locks)
@@ -42,6 +47,7 @@ cd into `<worktree_path>` before any git, gh, or file operation.
   - Cite file:line for every finding.
   - When the diff alone does not provide enough context to confirm a bug,
     list it under "Open questions" rather than assert it.
+  - For every finding, search `git grep` for all callers of the targeted function. When the obvious fix would silently change behavior for other call paths, include a fix constraint that preserves them.
 </constraints>
 
 <posting>
@@ -215,5 +221,7 @@ cd into `<worktree_path>` before any git, gh, or file operation.
   - git add by explicit path — name each file being staged.
   - Preserve existing comments on lines you do not modify.
   - Type hints on every signature you touch.
+  - **Narrow scope.** Fix only the exact defect at the specified file:line. No restructuring, no inlining helpers, no renames, no "while I'm here" cleanup.
+  - **Preserve helpers.** Do not remove or inline existing helper functions unless the finding explicitly names the helper as the problem.
 </constraints>
 ```

@@ -428,6 +428,8 @@ advanced; `git -C "<run_temp_dir>/pr-<N>/worktree" fetch origin <branch> && git 
 `HEAD`. Unchanged HEAD →
 `stuck — bugfix subagent could not address findings`.
 
+**Scope verification.** Run `git diff HEAD~1 --name-only` and compare against the set of files referenced in bugs_to_fix. When the commit touches any file NOT in the bugs_to_fix list, downgrade the outcome to `unverified_fixed` with reason "commit touched unexpected files: <list>".
+
 ### Step 4: Teardown
 
 1. For each PR in `all_prs`: `git worktree remove
