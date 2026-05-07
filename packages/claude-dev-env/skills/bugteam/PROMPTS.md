@@ -44,12 +44,14 @@ cd into `<worktree_path>` before any git, gh, or file operation.
     list it under "Open questions" rather than assert it.
 </constraints>
 
-<comment_posting>
+<posting>
   Sibling auditors (-b through -k): run only steps 1–3 (audit, assign IDs,
   capture excerpt, validate anchors), then write outcome XML per <output_format> and return.
   Skip steps 4–8 — sibling auditors do not post PR reviews.
 
-  Validator (-a) and single-opus auditors: run all steps below.
+  Validator (-a) and single-opus auditors: run all steps below. Posting is
+  done via scripts under <script_dir>; raw jq pipelines are permitted only
+  in step 7's issue-comment fallback.
 
   1. Audit the diff against the 10 categories above. Buffer the findings
      in memory; all posting happens at step 6 once anchors are validated.
@@ -59,27 +61,54 @@ cd into `<worktree_path>` before any git, gh, or file operation.
      findings into two buckets: anchored (line is in the diff) and
      unanchored (line is not in the diff — goes into the review body's
      "Findings without a diff anchor" section per Step 2.5).
-  4. Build the review body per Step 2.5's review-body shape, filling in the
-     P0/P1/P2 counts and the unanchored-findings list (if any).
-  5. For each anchored finding, write its body to its own temp file:
+  4. Build the review summary markdown. Write to a temp file:
+
+       ## /bugteam loop <L> Audit — Merged Findings
+       **Total: N (P0=X, P1=Y, P2=Z)**  (append ` → clean` when N=0)
+
+       When the total finding count is zero, append ` → clean` to the Total
+       line so the re-invocation scan recognizes the prior audit as clean.
+
+       ### Findings without a diff anchor
+       (only if unanchored findings exist)
+       - **[severity] title** — <file>:<line> — <one-line description>
+
+     The review body is a summary header. Every anchored finding becomes
+     its own review comment (step 6).
+
+  5. For each anchored finding, write its body to a temp file:
 
        **[severity] one-line title**
        Category: <letter> (<category name>)
        <2-3 sentence description with concrete trace>
+       File: <path>:<line>
 
        _From /bugteam audit loop <L>._
 
-  6. Post ONE review via Step 2.5's per-loop review CLI shape. Harvest the
-     parent review `html_url` from the response JSON and the `comments[]`
-     child entries (each with its own `id` and `html_url`). Match child
-     entries to anchored findings in index order.
-  7. If the review POST itself fails, use Step 2.5's Review POST failure
-     fallback (single issue comment with full body and all findings inline).
-  8. Write every body (review body, each finding body, any fallback body)
-     to its own temp file. Load each file into the JSON payload via jq's
-     `--rawfile` or `-Rs`, then pipe the jq output to `gh api ... --input -`
-     so every body reaches GitHub as file contents inside the JSON payload.
-</comment_posting>
+  6. Post the review + finding comments via the script:
+
+       python <script_dir>/post_audit_review.py \
+         --owner <owner> --repo <repo> --number <number> \
+         --commit-id "$(git rev-parse HEAD)" \
+         --body-file <temp_review_summary.md> \
+         --finding-file <temp_finding_1.md> --path <file> --line <N> \
+         ...
+
+     Capture review_url and comment ids/urls from stdout JSON.
+     API reference: https://docs.github.com/en/rest/pulls/comments
+
+  7. If the script exits non-zero, fall back to a single issue comment:
+       jq -Rs '{body: .}' < <temp_fallback.md> \
+       | gh api repos/<owner>/<repo>/issues/<number>/comments -X POST --input -
+     Include the review summary + all findings inline.
+     Every finding gets used_fallback="true", finding_comment_url set
+     to the issue-comment URL.
+
+  8. Write outcome XML. Populate finding_comment_id and finding_comment_url
+     from script output (or fallback URL).
+
+  <script_dir> = absolute path to _shared/pr-loop/scripts/.
+</posting>
 
 <output_format>
   For the (-a) validator: write the outcome XML below to .bugteam-pr<N>-loop<L>.outcomes.xml inside

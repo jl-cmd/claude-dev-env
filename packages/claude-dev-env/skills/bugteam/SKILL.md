@@ -388,6 +388,21 @@ a merged review — treat as a hard blocker and abort the loop.
 The sibling-output paths in [`PROMPTS.md`](PROMPTS.md) must cover the full
 `-b` through `-k` range.
 
+After the validator completes, lead runs `verify_review.py` to confirm exactly
+one review was posted at the correct commit:
+
+```bash
+python <script_dir>/verify_review.py \
+  --owner <owner> --repo <repo> --number <N> \
+  --commit-id "$(git -C <worktree_path> rev-parse HEAD)" --loop <L>
+```
+
+Non-zero exit → lead checks for an existing fallback issue comment from
+the validator. If one exists, use its URL directly. Otherwise, post a new
+fallback issue comment with all findings inline from the outcome XML.
+Populate `loop_comment_index` from the (existing or new) comment URL.
+`<script_dir>` = absolute path to `_shared/pr-loop/scripts/`.
+
 ### FIX action
 
 **Spawn:**

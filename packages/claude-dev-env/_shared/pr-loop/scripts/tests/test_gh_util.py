@@ -209,6 +209,28 @@ class EnsureTextParameterNameTests(unittest.TestCase):
         assert "value" not in all_parameter_names
 
 
+class RunGhBooleanParameterPrefixTests(unittest.TestCase):
+    """Boolean retry-control parameters on `run_gh` must use the `should_` prefix.
+
+    CODE_RULES.md §5 requires booleans to be prefixed with
+    `is_`/`has_`/`should_`/`can_`. The retry-control flags govern whether the
+    function should retry, so `should_retry_nonzero` and `should_retry_timeout`
+    are the correct names.
+    """
+
+    def test_run_gh_uses_should_retry_nonzero_parameter_name(self) -> None:
+        run_gh_signature = inspect.signature(gh_util.run_gh)
+        all_parameter_names = list(run_gh_signature.parameters)
+        assert "should_retry_nonzero" in all_parameter_names
+        assert "retry_nonzero" not in all_parameter_names
+
+    def test_run_gh_uses_should_retry_timeout_parameter_name(self) -> None:
+        run_gh_signature = inspect.signature(gh_util.run_gh)
+        all_parameter_names = list(run_gh_signature.parameters)
+        assert "should_retry_timeout" in all_parameter_names
+        assert "retry_timeout" not in all_parameter_names
+
+
 class FetchInlineReviewCommentsPaginationTests(unittest.TestCase):
     """Regression: gh --paginate emits one JSON document per page concatenated.
 
