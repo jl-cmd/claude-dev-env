@@ -347,6 +347,7 @@ Agent(
   subagent_type="code-quality-agent",
   name="bugfind-pr<N>-loop<L>",
   model="opus",
+  mode="bypassPermissions",
   run_in_background=true,
   description="Bugfind audit PR <N> loop <L>",
   prompt="<audit XML; see PROMPTS.md>"
@@ -365,11 +366,11 @@ after three full audit/fix rounds without convergence, issue eleven `Agent`
 calls in one assistant message (`run_in_background=true`):
 
 - **10 haiku auditors (`-b` through `-k`):** `subagent_type="code-quality-agent"`,
-  `model="haiku"`, write sibling XML to
+  `model="haiku"`, `mode="bypassPermissions"`, write sibling XML to
   `<run_temp_dir>/pr-<N>/loop-<L>-<letter>.outcomes.xml`, skip PR posting.
   Prompts must pass literal absolute sibling paths.
 - **1 opus validator (`-a`):** `subagent_type="code-quality-agent"`,
-  `model="opus"`:
+  `model="opus"`, `mode="bypassPermissions"`:
   - Polls for all 10 sibling XMLs before proceeding (60s timeout, 2s interval). On timeout: log diagnostics entry, proceed with validated findings from available XMLs, report count in validator output.
   - Validates each finding: file exists, line in bounds, excerpt contains the exact
     text of the cited line, category is A–J, severity is P0/P1/P2.
@@ -396,6 +397,7 @@ Agent(
   subagent_type="clean-coder",
   name="bugfix-pr<N>-loop<L>",
   model="opus",
+  mode="bypassPermissions",
   run_in_background=true,
   description="Bugfix PR <N> loop <L>",
   prompt="<fix XML; see PROMPTS.md>"
