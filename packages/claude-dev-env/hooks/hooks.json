@@ -32,6 +32,11 @@
           },
           {
             "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_rules_enforcer.py",
+            "timeout": 30
+          },
+          {
+            "type": "command",
             "command": "python3 -c \"import sys; sys.path.insert(0, r'${CLAUDE_PLUGIN_ROOT}/hooks'); from validators.run_all_validators import main; sys.exit(main())\"",
             "timeout": 15
           },
