@@ -28,8 +28,13 @@ cd into `<worktree_path>` before any git or file operation.
   one finding OR a verified-clean entry with the evidence used to clear it.
   A category is verified-clean only when one complete execution path through
   the changed code has been traced from entry to exit. Surface-level scanning
-  is insufficient evidence. The evidence field must name the function and the
-  path traced:
+  is insufficient evidence. The evidence field must name (1) the specific
+  function examined, (2) the code path traced from entry to exit, and (3) the
+  specific check performed. Generic phrases such as "verified clean",
+  "no issues found", "pattern appears correct", "looks good", "seems fine",
+  and "no problems detected" do not satisfy the verified-clean requirement.
+  When evidence contains any of these phrases, the category is not
+  verified-clean -- re-audit with a concrete trace:
   A. API contract verification (signatures, return types, async/await correctness)
   B. Selector / query / engine compatibility
   C. Resource cleanup and lifecycle (file handles, connections, processes, locks)
@@ -152,20 +157,22 @@ cd into `<worktree_path>` before any git or file operation.
   1. Read each referenced file before editing.
   2. Apply each fix you can address.
   3. Run `python -m py_compile` (or language-equivalent) on every modified file.
-  4. git add by explicit path, then git commit with a message summarizing the bugs fixed.
+  4. Run the project's test suite and confirm all existing tests pass. If a test fails, diagnose the regression and fix it before committing.
+  5. Read the previous loop's outcome XML (`<worktree_path>/.bugteam-pr<N>-loop<L-1>.outcomes.xml`) and obtain its total finding count. If this is the first loop (L <= 1) or the file does not exist, skip this comparison. Otherwise, re-read each changed file and count any new violations. Compute the post-fix total: previous total minus bugs fixed in this round plus new violations. If the post-fix total exceeds the previous total, flag all new findings as same-loop fix-targets and revise before committing.
+  6. git add by explicit path, then git commit with a message summarizing the bugs fixed.
      - If the commit fails because a git hook (pre-commit, commit-msg, etc.) blocked it,
        capture the hook's stderr, write status=hook_blocked for every finding in this loop
        (the commit was atomic; if it failed, no finding was applied), populate hook_output
        on each outcome, and return WITHOUT retrying. The lead will treat this loop as no-progress.
-  5. git push with a plain fast-forward push (the default, no flag overrides).
-  6. For each bug, post a fix reply to its finding_comment_id via
+  7. git push with a plain fast-forward push (the default, no flag overrides).
+  8. For each bug, post a fix reply to its finding_comment_id via
      `add_reply_to_pull_request_comment(commentId=<id>, body=<reply_text>,
      owner=<O>, repo=<R>, pullNumber=<N>)`:
      - "Fixed in <commit_sha>" if the bug was addressed by your commit
      - "Could not address this loop: <one-line reason>" if you skipped or failed it
      - "Hook blocked the fix commit: <one-line summary>" if the commit was hook-blocked
      Body text is passed directly as string parameters -- no temp files, no jq, no shell pipes.
-  7. Write `.bugteam-pr<N>-loop<L>.outcomes.xml` inside `<worktree_path>` (schema below) and return its path.
+  9. Write `.bugteam-pr<N>-loop<L>.fix-outcomes.xml` inside `<worktree_path>` (schema below) and return its path.
 </execution>
 
 <outcome_xml_schema>
@@ -194,5 +201,6 @@ cd into `<worktree_path>` before any git or file operation.
   - Type hints on every signature you touch.
   - **Narrow scope.** Fix only the exact defect at the specified file:line. No restructuring, no inlining helpers, no renames, no "while I'm here" cleanup.
   - **Preserve helpers.** Do not remove or inline existing helper functions unless the finding explicitly names the helper as the problem.
+  - **No regression.** Before committing, re-read each changed file and count any new violations. Compare the post-fix total (previous total minus bugs fixed plus new violations) against the previous loop's total finding count (from `<worktree_path>/.bugteam-pr<N>-loop<L-1>.outcomes.xml`). On the first loop (L <= 1) or when the file does not exist, skip this guard. The post-fix total must be flat or decreased relative to the previous loop. An increase means the fix introduced new bugs — revise before committing. Do not commit a regression.
 </constraints>
 ```

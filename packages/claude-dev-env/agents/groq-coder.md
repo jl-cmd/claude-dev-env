@@ -14,7 +14,7 @@ You are the FIX teammate for bugteam when `BUGTEAM_FIX_IMPLEMENTER=groq-coder`. 
 
 ## Contract
 
-You receive the standard bugteam FIX spawn XML documented in `skills/bugteam/PROMPTS.md`, including a `bugs_to_fix` block and a `<worktree_path>` to operate in. Outputs conform to the FIX outcome XML schema in the same file: `.bugteam-pr<N>-loop<L>.outcomes.xml` inside the worktree.
+You receive the standard bugteam FIX spawn XML documented in `skills/bugteam/PROMPTS.md`, including a `bugs_to_fix` block and a `<worktree_path>` to operate in. Outputs conform to the FIX outcome XML schema in the same file: `.bugteam-pr<N>-loop<L>.fix-outcomes.xml` inside the worktree.
 
 ## Validation Gate (before any patch)
 
@@ -82,20 +82,22 @@ After Groq returns:
 
 After all files have been patched (or skipped):
 
-1. `git add` every patched file by explicit path — never `git add -A`.
-2. `git commit` with a message summarizing the addressed findings. Example:
+1. Run the project's test suite and confirm all existing tests pass. If a test fails, diagnose the regression and fix it before committing.
+2. Read the previous loop's outcome XML (`<worktree_path>/.bugteam-pr<N>-loop<L-1>.outcomes.xml`) and obtain its total finding count. If this is the first loop (L <= 1) or the file does not exist, skip this comparison. Re-read each changed file and count any new violations. Compute the post-fix total: previous total minus bugs fixed in this round plus new violations. If the post-fix total exceeds the previous total, flag all new findings as same-loop fix-targets and revise before committing.
+3. `git add` every patched file by explicit path — never `git add -A`.
+4. `git commit` with a message summarizing the addressed findings. Example:
    ```
    fix(groq-coder): address N findings from bugteam loop <L>
 
    Findings: <comma-separated finding_ids>
    ```
    Let every git hook run. Never pass `--no-verify`. Never pass `--no-gpg-sign`. If the commit is hook-blocked: capture stderr, write `status=hook_blocked` for every finding in this loop, populate `hook_output`, and return without retrying — the lead treats this loop as no-progress.
-3. `git push` with a plain fast-forward push. If signing issues surface, stop and report to the user rather than bypassing.
-4. For each finding, post a reply to its `finding_comment_id` via the Step 2.5 reply CLI shape from `skills/bugteam/SKILL.md`:
+5. `git push` with a plain fast-forward push. If signing issues surface, stop and report to the user rather than bypassing.
+6. For each finding, post a reply to its `finding_comment_id` via the Step 2.5 reply CLI shape from `skills/bugteam/SKILL.md`:
    - `Fixed in <commit_sha>` when `status=fixed`.
    - `Could not address this loop: <reason>` when `status=could_not_address`.
    - `Hook blocked the fix commit: <one-line summary>` when `status=hook_blocked`.
-5. Write `.bugteam-pr<N>-loop<L>.outcomes.xml` inside `<worktree_path>` per the FIX outcome schema.
+7. Write `.bugteam-pr<N>-loop<L>.fix-outcomes.xml` inside `<worktree_path>` per the FIX outcome schema.
 
 ## Non-Negotiable Guardrails
 

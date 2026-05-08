@@ -35,3 +35,8 @@ project-paths.json
 packages/claude-dev-env/.env
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
+
+# Self-improve eval data artifacts
+packages/claude-dev-env/skills/self-improve-pr-converge/self-improve-eval-data/
+packages/claude-dev-env/skills/self-improve-pr-converge/scripts/self-improve-eval-data/
+**/self-improve-eval-data/*.temp-*
