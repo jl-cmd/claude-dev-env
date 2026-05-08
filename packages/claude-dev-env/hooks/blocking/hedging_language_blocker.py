@@ -123,7 +123,7 @@ def main() -> None:
     else:
         skill_reference = (
             "under research-mode constraints "
-            "(no research-mode skill installed; verify with sources or reply 'I don't know')"
+            "(no research-mode skill installed; verify with sources or prompt the user via AskUserQuestion with potential options + context)"
         )
 
     block_response = {
@@ -134,7 +134,7 @@ def main() -> None:
             f"These words signal unverified claims. You MUST rewrite your response "
             f"{skill_reference}\n\n"
             f"Do NOT simply remove the hedging word and keep the unverified claim. "
-            f"Either VERIFY it with a source or replace it with 'I don't know'.\n\n"
+            f"Do more research to VERIFY it with a source, or prompt the user via AskUserQuestion with some potential options + context if you are unable to find anything online.\n\n"
             f"You MUST re-output the complete, revised response with the corrections applied."
         ),
         "systemMessage": USER_FACING_NOTICE,

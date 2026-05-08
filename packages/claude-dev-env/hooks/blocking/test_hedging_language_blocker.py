@@ -97,7 +97,7 @@ def test_hedging_reason_contains_not_installed_notice_when_skill_absent():
 
     assert parsed_response["decision"] == "block"
     assert "no research-mode skill installed" in parsed_response["reason"]
-    assert "verify with sources or reply" in parsed_response["reason"]
+    assert "verify with sources or prompt the user via AskUserQuestion" in parsed_response["reason"]
     assert "SKILL.md" not in parsed_response["reason"]
     assert RESEARCH_MODE_SKILL_BODY_MARKER not in parsed_response["reason"]
 
