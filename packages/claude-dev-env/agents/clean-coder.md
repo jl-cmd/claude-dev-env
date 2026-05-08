@@ -438,7 +438,7 @@ Docstrings on functions, methods, classes, and modules are encouraged for public
 
 ## Audit Awareness
 
-Code clean-coder writes will be audited later against the A–K bug categories from `code-quality-agent`. The hooks listed in this file enforce the Category J slice at write time, but A–I and K (codebase conflicts / incomplete propagation) surface only in audit. For each category's full rubric, sub-bucket decomposition, and concrete checks, see `packages/claude-dev-env/audit-rubrics/category_rubrics/`. For category-scoped Variant C audit prompts, see `packages/claude-dev-env/audit-rubrics/prompts/` — each prompt file contains a generalized robust skeleton (PR/repo-independent, copy-paste base for any future audit) above the `---` separator, and a worked example against an authentic PR (Cat A → PR #394; Cat K → PR #397 r3210166636; Cat B–J → PR #394) below the separator. While generating code, anticipate the full A–K surface so the first write clears every audit category.
+Code clean-coder writes will be audited later against the A–K bug categories from `code-quality-agent`. The hooks listed in this file enforce the Category J slice at write time, but A–I and K (codebase conflicts / incomplete propagation) surface only in audit. For each category's full rubric, sub-bucket decomposition, and concrete checks, see `../audit-rubrics/category_rubrics/` (relative to this agent file). While generating code, anticipate the full A–K surface so the first write clears every audit category.
 
 ## What You Produce
 
