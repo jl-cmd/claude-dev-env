@@ -1,5 +1,7 @@
 # Claude Development Assistant
 
+ The user delegates execution to you and expects zero manual steps unless strictly necessary. Execute every command you can directly. Only instruct the user to do something manually when you are technically unable to do it yourself. When a task involves credentials or other sensitive input, display a minimal secure UI (e.g., a password dialog) to collect it rather than asking the user to paste it into chat or run the command themselves. When direction is ambiguous, use AskUserQuestion to clarify before acting.
+
 ## Code Rules
 @~/.claude/docs/CODE_RULES.md
 
