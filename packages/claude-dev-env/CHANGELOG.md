@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.38.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.37.1...claude-dev-env-v1.38.0) (2026-05-08)
+
+
+### Features
+
+* **bugteam:** replace inline jq review posting with deterministic Python scripts ([#374](https://github.com/jl-cmd/claude-code-config/issues/374)) ([e88d8ad](https://github.com/jl-cmd/claude-code-config/commit/e88d8adca77cde327b468f395a4e9c47a7645971))
+* **github-mcp:** migrate gh CLI calls to MCP tools across PR and bugteam workflows ([#376](https://github.com/jl-cmd/claude-code-config/issues/376)) ([58b7837](https://github.com/jl-cmd/claude-code-config/commit/58b7837de15a8c8ba80ebba68e7a1a719e58b004))
+* **hooks:** add state-description-blocker for historical/comparative language ([#377](https://github.com/jl-cmd/claude-code-config/issues/377)) ([183fcf7](https://github.com/jl-cmd/claude-code-config/commit/183fcf7c75acd39d8d13c5b01207eba5829ff974))
+
+
+### Bug Fixes
+
+* **bugteam:** add bypass mode to pre-audit clean-coder and pr-description-writer spawns ([#382](https://github.com/jl-cmd/claude-code-config/issues/382)) ([11aba63](https://github.com/jl-cmd/claude-code-config/commit/11aba63cd9ce719dc7e98c77ea6d11228cd8a237))
+* **bugteam:** spawn subagents with bypassPermissions mode ([#380](https://github.com/jl-cmd/claude-code-config/issues/380)) ([5aba811](https://github.com/jl-cmd/claude-code-config/commit/5aba8117e26864c1752807e4dea3f20b4c6ade64))
+* **clean-coder:** add user-global rubric fallback for repos without in-tree audit directory ([#400](https://github.com/jl-cmd/claude-code-config/issues/400)) ([fc05296](https://github.com/jl-cmd/claude-code-config/commit/fc05296594dcc0444aed40bfefabbb38e4f8eaf8))
+* **hook:** add constants-only config file exemption to TDD enforcer ([#378](https://github.com/jl-cmd/claude-code-config/issues/378)) ([5521087](https://github.com/jl-cmd/claude-code-config/commit/55210876e2e4e17190b3a9277b93ba68ccb6f4ef))
+* **hooks:** improve hedging-language guardrail to surface user questions ([#397](https://github.com/jl-cmd/claude-code-config/issues/397)) ([fa2aec1](https://github.com/jl-cmd/claude-code-config/commit/fa2aec129b7eb356d8528916e9ba5f1232cc86f1))
+* **hooks:** register code_rules_enforcer for Write/Edit PreToolUse ([#396](https://github.com/jl-cmd/claude-code-config/issues/396)) ([76f9c1a](https://github.com/jl-cmd/claude-code-config/commit/76f9c1a0048729b87c44626a3380dc840065c2fa))
+* **skills:** add 5 constraint improvements from bugteam gap analysis ([#384](https://github.com/jl-cmd/claude-code-config/issues/384)) ([22c4ca9](https://github.com/jl-cmd/claude-code-config/commit/22c4ca97383a7350d392f0e79a4667a60729290a))
+* **skills:** cross-loop regression check and verified-clean depth constraints ([#393](https://github.com/jl-cmd/claude-code-config/issues/393)) ([33aaf56](https://github.com/jl-cmd/claude-code-config/commit/33aaf56b300d98ad2c9a62508e822b4e182ffd5a))
+
+
+### Documentation
+
+* add Category K and reusable audit templates for 11 categories ([#398](https://github.com/jl-cmd/claude-code-config/issues/398)) ([94742e4](https://github.com/jl-cmd/claude-code-config/commit/94742e4f987775a32dee7b1482d6f0fefa52df71))
+* **claude-md:** add zero-manual-steps execution directive ([#395](https://github.com/jl-cmd/claude-code-config/issues/395)) ([9c259df](https://github.com/jl-cmd/claude-code-config/commit/9c259dfe093cb47ab8bea25290c43964586b2df9))
+
 ## [1.37.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.37.0...claude-dev-env-v1.37.1) (2026-05-06)
 
 
