@@ -24,17 +24,26 @@ cd into `<worktree_path>` before any git or file operation.
 </scope>
 
 <bug_categories>
-  Investigate each category explicitly. For each, return either at least
-  one finding OR a verified-clean entry with the evidence used to clear it.
-  A category is verified-clean only when one complete execution path through
-  the changed code has been traced from entry to exit. Surface-level scanning
-  is insufficient evidence. The evidence field must name (1) the specific
-  function examined, (2) the code path traced from entry to exit, and (3) the
-  specific check performed. Generic phrases such as "verified clean",
-  "no issues found", "pattern appears correct", "looks good", "seems fine",
-  and "no problems detected" do not satisfy the verified-clean requirement.
+  Investigate each of the eleven categories (A–K) explicitly. For each,
+  return either at least one finding OR a verified-clean entry with the
+  evidence used to clear it. A category is verified-clean only when one
+  complete execution path through the changed code has been traced from
+  entry to exit. Surface-level scanning is insufficient evidence. The
+  evidence field must name (1) the specific function examined, (2) the
+  code path traced from entry to exit, and (3) the specific check performed.
+  Generic phrases such as "verified clean", "no issues found",
+  "pattern appears correct", "looks good", "seems fine", and
+  "no problems detected" do not satisfy the verified-clean requirement.
   When evidence contains any of these phrases, the category is not
-  verified-clean -- re-audit with a concrete trace:
+  verified-clean -- re-audit with a concrete trace.
+
+  Categories A–K (one-line summary; full rubric and sub-bucket decomposition
+  for each is in `packages/claude-dev-env/audit-rubrics/category_rubrics/`;
+  ready-to-send Variant C prompts — each with a PR/repo-independent
+  generalized skeleton above a `---` separator and a worked example against
+  an authentic PR below — are in
+  `packages/claude-dev-env/audit-rubrics/prompts/`):
+
   A. API contract verification (signatures, return types, async/await correctness)
   B. Selector / query / engine compatibility
   C. Resource cleanup and lifecycle (file handles, connections, processes, locks)
@@ -45,6 +54,10 @@ cd into `<worktree_path>` before any git or file operation.
   H. Security boundaries (injection, path traversal, auth bypass, secret leakage)
   I. Concurrency hazards (race conditions, missing awaits, shared mutable state)
   J. Magic values and configuration drift
+  K. Codebase conflicts — a change updates one site of a pattern but a parallel
+     site in unchanged code stays stale, producing contradictory behavior;
+     the diff is internally consistent, the bug emerges only against unchanged
+     code (canonical example: jl-cmd/claude-code-config PR #397 r3210166636)
 </bug_categories>
 
 <constraints>
@@ -62,7 +75,7 @@ cd into `<worktree_path>` before any git or file operation.
 
   Validator (-a) and single-opus auditors: run all steps below.
 
-  1. Audit the diff against the 10 categories above. Buffer the findings
+  1. Audit the diff against the 11 categories above. Buffer the findings
      in memory; all posting happens at step 4 once anchors are validated.
   2. Assign each finding a stable finding_id of exactly the form `loop<L>-<K>`
      where <K> is 1-based within this loop.

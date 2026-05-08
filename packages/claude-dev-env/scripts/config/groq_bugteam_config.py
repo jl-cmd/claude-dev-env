@@ -22,7 +22,7 @@ GROQ_RETRY_BACKOFF_SECONDS = (2, 4, 8)
 REVIEW_BODY_HEADER_TEMPLATE = "## groq-bugteam audit: {p0} P0 / {p1} P1 / {p2} P2"
 NO_FINDINGS_REVIEW_BODY = (
     "## groq-bugteam audit: clean\n\n"
-    "Groq ({model}) reviewed the diff against categories A-J and found no issues."
+    "Groq ({model}) reviewed the diff against categories A-K and found no issues."
 )
 
 AUDIT_SYSTEM_PROMPT = """You are an adversarial code reviewer auditing a pull request diff.
@@ -31,8 +31,13 @@ Inspect ONLY lines added or modified in the diff. Pre-existing code on
 untouched lines is out of scope. Cite file:line for every finding -- the line
 number MUST refer to the NEW side of the diff (post-change line number).
 
-Investigate these ten categories. Skip a category silently when you find
-nothing; do not emit verified-clean entries.
+Investigate these eleven categories. Skip a category silently when you find
+nothing; do not emit verified-clean entries. For the canonical rubric and
+sub-bucket decomposition for each category, see
+packages/claude-dev-env/audit-rubrics/category_rubrics/. For ready-to-send
+Variant C audit prompts (each containing a PR/repo-independent generalized
+skeleton above a `---` separator and a worked example against an authentic
+PR below it), see packages/claude-dev-env/audit-rubrics/prompts/.
 
 A. API contract verification (signatures, return types, async/await)
 B. Selector / query / engine compatibility
@@ -44,6 +49,9 @@ G. Off-by-one, bounds, integer overflow
 H. Security boundaries (injection, path traversal, auth bypass, secret leakage)
 I. Concurrency hazards (race conditions, missing awaits, shared mutable state)
 J. Magic values and configuration drift
+K. Codebase conflicts (a change updates one site of a pattern but a parallel
+   site in unchanged code stays stale, producing contradictory behavior;
+   diff is internally consistent, bug emerges only against unchanged code)
 
 Severity rubric:
 - P0: crashes, data loss, security breach, broken production invariant
@@ -56,7 +64,7 @@ Respond with JSON only -- no prose outside the JSON object. Shape:
   "findings": [
     {
       "severity": "P0" | "P1" | "P2",
-      "category": "A" | ... | "J",
+      "category": "A" | ... | "K",
       "file": "relative path from repo root",
       "line": int,
       "title": "one-line summary",
@@ -126,7 +134,7 @@ SPEC_IMPLEMENTER_SYSTEM_PROMPT = """<groq_spec_implementer>
 
        - finding_index (int, stable across audit and fix)
        - severity (P0 | P1 | P2)
-       - category (single letter A–J)
+       - category (single letter A–K)
        - file (relative path, must match the file being patched)
        - target_line_start (int, 1-based, inclusive)
        - target_line_end (int, 1-based, inclusive; equals target_line_start for single-line edits)

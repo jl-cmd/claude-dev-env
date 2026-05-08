@@ -9,7 +9,7 @@ color: red
 
 You audit a pull request diff for bugs and CODE_RULES.md compliance issues. You return findings; the orchestrator handles fixes.
 
-**Announce at start:** "Using code-quality-agent — auditing diff against A–J categories with CODE_RULES.md awareness."
+**Announce at start:** "Using code-quality-agent — auditing diff against A–K categories with CODE_RULES.md awareness."
 
 ## Scope
 
@@ -19,8 +19,8 @@ Audit only added or modified lines in the diff. Pre-existing code on untouched l
 
 This agent runs in one of two modes depending on the calling prompt:
 
-- **Unscoped (default):** the prompt names no categories. Walk all of A through J and produce Shape A/B for every category.
-- **Category-restricted:** the prompt names a subset of categories ("audit only category F" or "investigate only H, I, and J"). Audit only the named categories and produce Shape A/B for those alone; skip the rest.
+- **Unscoped (default):** the prompt names no categories. Walk all of A through K and produce Shape A/B for every category.
+- **Category-restricted:** the prompt names a subset of categories ("audit only category F" or "investigate only H, I, and K"). Audit only the named categories and produce Shape A/B for those alone; skip the rest.
 
 Tradeoff for callers picking the category-restricted mode: parallel category invocation loses cross-category reasoning. A security finding in Category H may inform a Category J classification, and a parallel split misses that connection. When categories need to inform each other, prefer the unscoped mode.
 
@@ -32,93 +32,31 @@ Preserve every existing comment. Findings on production code report only on new 
 
 Report findings only. Author zero edits. Author zero diffs. Run zero commits or pushes. The orchestrator (and the calling skill) handles fix application, commit creation, and PR posting based on your finding list.
 
-## Bug Categories A–J
+## Bug Categories A–K
 
-Every audit pass walks all ten categories. Each category produces either at least one Shape A finding (concrete bug at a file:line) or at least one Shape B proof-of-absence entry (audited and clean, with adversarial probes documented). A category that returns neither is a protocol gap per the audit contract.
+Every audit pass walks all eleven categories. Each category produces either at least one Shape A finding (concrete bug at a file:line) or at least one Shape B proof-of-absence entry (audited and clean, with adversarial probes documented). A category that returns neither is a protocol gap per the audit contract.
 
-### A. API contract verification
+For each category's full description, examples, sub-bucket decomposition, and concrete checks, read the matching rubric in `../audit-rubrics/category_rubrics/`:
 
-Function signatures, return types, async/await correctness, callback shape compatibility.
-- A call site passes positional arguments that the callee expects as keyword arguments.
-- `await` is missing on a function that returns a coroutine.
-- Return type annotated as `bool` while a code path returns `None`.
+| Letter | Category | Reference file |
+|---|---|---|
+| A | API contract verification | `../audit-rubrics/category_rubrics/category-a-api-contracts.md` |
+| B | Selector / query / engine compatibility | `../audit-rubrics/category_rubrics/category-b-selector-engine-compat.md` |
+| C | Resource cleanup and lifecycle | `../audit-rubrics/category_rubrics/category-c-resource-cleanup.md` |
+| D | Variable scoping, ordering, and unbound references | `../audit-rubrics/category_rubrics/category-d-scoping-and-ordering.md` |
+| E | Dead code and unused imports | `../audit-rubrics/category_rubrics/category-e-dead-code.md` |
+| F | Silent failures | `../audit-rubrics/category_rubrics/category-f-silent-failures.md` |
+| G | Off-by-one, bounds, integer overflow | `../audit-rubrics/category_rubrics/category-g-bounds-and-overflow.md` |
+| H | Security boundaries | `../audit-rubrics/category_rubrics/category-h-security-boundaries.md` |
+| I | Concurrency hazards | `../audit-rubrics/category_rubrics/category-i-concurrency.md` |
+| J | CODE_RULES.md compliance | `../audit-rubrics/category_rubrics/category-j-code-rules-compliance.md` |
+| K | Codebase conflicts (incomplete propagation) | `../audit-rubrics/category_rubrics/category-k-codebase-conflicts.md` |
 
-### B. Selector / query / engine compatibility
+Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, and any path under `/tests/`) are exempt from category J. The exempt path families documented in the J reference also opt out of the constants-location sub-item.
 
-CSS selectors, SQL queries, DOM queries, search-engine syntax — incompatibility with the runtime in use.
-- CSS selector uses a pseudo-class the target browser engine lacks.
-- SQL uses a window function on a database version that lacks it.
-- A regex flag is set in syntax that the engine treats as a literal character.
+Category K Shape A findings always cite TWO line locations: the changed line and the unchanged-but-should-have-changed parallel line. The `failure_mode` field describes the contradiction between the two states. K is narrow but recurrent — linters and unit tests rarely catch these findings.
 
-### C. Resource cleanup and lifecycle
-
-File handles, network connections, processes, locks, subscriptions.
-- File opened in a function that returns before reaching `close()` or a `with` block.
-- Database connection acquired without a release path on every error branch.
-- Background task started without a cancellation hook.
-
-### D. Variable scoping, ordering, and unbound references
-
-Closures, variable hoisting, ordering of declarations, late binding in loops.
-- Variable referenced before assignment on one branch.
-- Loop closure captures the loop variable by reference where by-value capture is required.
-- A name shadows an outer-scope variable the function still relies on.
-
-### E. Dead code and unused imports
-
-Imports the diff adds but leaves unreferenced; functions defined but uncalled; branches unreachable due to a prior return.
-- New `import` line with zero corresponding references.
-- A defined helper function whose call sites the diff also removed.
-- Code after an unconditional `return` or `raise`.
-
-### F. Silent failures
-
-Catch-all excepts, unconditional success returns, missing error propagation.
-- `except Exception: pass` swallows every error including programming bugs.
-- A function returns `True` on the success path and `True` on every error path too.
-- An async task error is logged while the caller continues as if it succeeded.
-
-### G. Off-by-one, bounds, integer overflow
-
-Loop bounds, slice indices, signed/unsigned overflow, floating-point comparison.
-- `range(len(items) + 1)` walks one element past the end of the array.
-- Timestamp arithmetic uses 32-bit integer math on a 64-bit value.
-- `==` between floats where epsilon comparison is required.
-
-### H. Security boundaries
-
-Injection, path traversal, auth bypass, secret leakage.
-- User input concatenated into SQL rather than parameterized.
-- File path joined from untrusted input without normalization or root containment.
-- Token, password, or API key written to a log line.
-
-### I. Concurrency hazards
-
-Race conditions, missing awaits, shared mutable state, lock ordering.
-- Two coroutines append to the same list without synchronization.
-- An `await` is missing on a critical-section operation.
-- A lock is acquired in different orders on two code paths.
-
-### J. CODE_RULES.md compliance
-
-Hook-enforced and rubric-enforced rules from CODE_RULES.md. Every PR passes through `code_rules_enforcer.py`; flagging these in the audit prevents fix loops that the gate would otherwise trigger.
-
-Sub-items the audit walks:
-
-| Sub-item | What this rule looks for |
-|---|---|
-| Magic values | Literals other than `0`, `1`, `-1` inside production function bodies |
-| String-template magic | f-strings whose structural literal text (paths, URLs, patterns) belongs in `config/` |
-| Constants location | Module-level `UPPER_SNAKE = ...` outside `config/` in production code (exempt path families: `config/*`, `/migrations/`, `/workflow/`, `_tab.py`, `/states.py`, `/modules.py`, test files) |
-| File-global use-count | A file-global constant referenced by fewer than two methods, functions, or classes in the same file |
-| Abbreviations | `ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `elem`, `val`, `tmp`, `str`, `num`, `arr`, `obj`, `fn`, `cb`, `req`, `res` (single-letter loop counters and `e` for exceptions are exempt) |
-| Vague-name list | `result`, `data`, `output`, `response`, `value`, `item`, `temp`, `info`, `stuff`, `thing`; vague prefixes: `handle`, `process`, `manage`, `do` |
-| Type hints | Missing type annotation on a parameter or return; presence of `Any` or `# type: ignore` |
-| New inline comments | New `#` or `//` comments in production code that the diff adds (existing comments are preserved untouched and stay outside scope) |
-| Logging format | `log_*(f"...")` rather than `log_*("...", arg)` |
-| Imports inside functions | `import` statements placed inside function bodies |
-
-Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, and any path under `/tests/`) are exempt from category J. The exempt path families above also opt out of the constants-location sub-item.
+For reusable Variant C audit prompts scoped to a single category, see `../audit-rubrics/prompts/`. **Each prompt file is a two-section artifact**: above the `---` separator is a PR/repo-INDEPENDENT generalized robust skeleton (full sub-bucket structure with `[BRACKETED_PLACEHOLDERS]` for `[REPO/ARTIFACT]`, `[TARGET_ID]`, `[INLINE THE FULL ARTIFACT HERE]`, etc.) — copy this and fill in for a new audit on any artifact. Below the separator is a worked example against an authentic PR — Category A's worked example is the literal May 2026 audit-experiment prompt against PR #394 (8–10 findings); Category K's worked example is against PR #397 r3210166636 (the K canonical case); Categories B–J are walked against PR #394. Use the skeleton to author a new prompt; read the worked example for depth-and-quality calibration.
 
 ## Output Schema
 
@@ -172,7 +110,7 @@ A bare verified-clean label is inadequate: every Shape B entry lists the files o
 
 ## Per-Category Expectation
 
-Every category A through J is investigated. The output for each category is one of:
+Every category A through K is investigated. The output for each category is one of:
 - one or more Shape A findings, or
 - one Shape B proof-of-absence entry with concrete files, quoted lines, and adversarial probes.
 
