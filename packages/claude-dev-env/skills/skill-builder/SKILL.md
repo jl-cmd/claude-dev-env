@@ -1,32 +1,44 @@
 ---
 name: skill-builder
 description: >-
-  Orchestrates the complete skill-building lifecycle using evaluation-driven
-  development. Routes through gap analysis, eval creation, skill writing (via
-  skill-writer), subagent testing (via skill-creator infrastructure), and
-  iterative refinement. Use when creating new skills, improving existing skills,
-  or optimizing skill descriptions. Triggers: 'build a skill', 'new skill
-  workflow', 'improve this skill', 'optimize skill description', 'skill
-  development lifecycle'.
+  Orchestrates the complete skill-building lifecycle using best-practice-driven
+  development. Routes through type classification, folder scaffolding, skill
+  writing (via skill-writer), self-audit against a 38-point checklist, and
+  iterative refinement from real usage observations. Use when creating new
+  skills, improving existing skills, or optimizing skill descriptions.
+  Triggers: 'build a skill', 'new skill workflow', 'improve this skill',
+  'optimize skill description', 'skill development lifecycle'.
 ---
-
-@${CLAUDE_SKILL_DIR}/references/eval-driven-flow.md
 
 # Skill Builder
 
-**Core principle:** Evaluation-driven development. Build evals BEFORE writing extensive documentation. This ensures skills solve real problems rather than documenting imagined ones.
+**Core principle:** Best-practice-driven craftsman. Knows every proven pattern, applies them intentionally, self-audits after building. The expert that enforces craft standards.
 
-Source: [Anthropic Skill Best Practices - Evaluation and Iteration](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#evaluation-and-iteration)
+Sources: [Anthropic best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices), [Lessons from Building Claude Code](references/thariq-x-post-skills.json), model skills (bugteam, pr-converge).
+
+## Gotchas
+
+Highest-signal content. Append a bullet each time a skill build fails in a new way.
+
+> "The highest-signal content in any skill is the Gotchas section. These sections should be built up from common failure points that Claude runs into when using your skill."
 
 ## When this skill applies
 
-Trigger for requests to **build**, **improve**, or **polish** a skill through the full evaluation-driven lifecycle. This skill orchestrates the process -- it delegates writing to `/skill-writer` and evaluation infrastructure to the `skill-creator` plugin.
+Trigger for requests to **build**, **improve**, or **polish** a skill. This skill orchestrates the process — it classifies, scaffolds, gathers context, delegates writing to `/skill-writer`, and self-audits the result.
 
 For quick skill syntax questions or one-off SKILL.md edits, use `/skill-writer` directly instead.
 
-## Routing
+**Refusal cases — first match wins:**
 
-Assess the user's intent from conversation context and existing artifacts. Route directly:
+- **No clear task or domain.** Respond exactly: `What should this skill do? Give me a one-sentence description of the capability.`
+
+## The Process
+
+Each workflow file provides step-by-step instructions. After routing below, open the corresponding workflow file and follow it.
+
+### Routing
+
+Assess the user’s intent:
 
 **Creating a new skill?**
 Read `${CLAUDE_SKILL_DIR}/workflows/new-skill.md` and follow it.
@@ -34,74 +46,144 @@ Read `${CLAUDE_SKILL_DIR}/workflows/new-skill.md` and follow it.
 **Improving an existing skill?**
 Read `${CLAUDE_SKILL_DIR}/workflows/improve-skill.md` and follow it.
 
-**Final polish only (description optimization, trigger eval)?**
+**Final polish only (description optimization, trigger audit)?**
 Read `${CLAUDE_SKILL_DIR}/workflows/polish-skill.md` and follow it.
 
 **Ambiguous?** Ask: "Are you creating a new skill, improving an existing one, or doing a final polish pass?"
 
-## The Claude A / Claude B Pattern
+### The Claude A / Claude B pattern
 
-You and the user are **Claude A** -- the expert who designs and refines the skill. Subagents running the built skill on eval tasks are **Claude B** -- the agent using the skill to perform real work.
+You and the user are **Claude A** — the expert who designs and refines the skill. Subagents running the built skill on real tasks are **Claude B** — the agent using the skill to perform actual work.
 
-> "Work with one instance of Claude ('Claude A') to create a Skill that is used by other instances ('Claude B'). Claude A helps you design and refine instructions, while Claude B tests them in real tasks."
+> "Work with one instance of Claude (‘Claude A’) to create a Skill that is used by other instances (‘Claude B’). Claude A helps you design and refine instructions, while Claude B tests them in real tasks."
 
-The feedback loop: observe Claude B's behavior, bring insights back, refine the skill, test again.
+The feedback loop: observe Claude B’s behavior, bring insights back, refine the skill, test again.
 
-## Phase Overview
+## Skill type routing
 
-| Phase | Purpose | Delegated To |
-|-------|---------|-------------|
-| 1. Identify gaps | Document what fails without the skill | This skill (guided conversation) |
-| 2. Build evals | Create 3+ scenarios testing the gaps | This skill (templates + user input) |
-| 3. Write skill | Minimal instructions addressing gaps | `/skill-writer` |
-| 4. Test | Subagent runs with/without skill, grade, benchmark | `skill-creator` eval infrastructure |
-| 5. Iterate | Review results, refine, re-test | This skill + `/skill-writer` + Phase 4 |
-| 6. Polish | Description optimization, trigger eval, final check | `skill-creator` description optimizer |
+> "After cataloging all of our skills, we noticed they cluster into a few recurring categories."
 
-## Ground-up skill package (required reference)
+Classify the skill into one of 9 types. The type determines folder structure. See `${CLAUDE_SKILL_DIR}/references/skill-types.md` for full details.
 
-When building a **new** skill as a **full package** (architecture inventory, progressive disclosure files, `evals/`, **human checkpoint after each file**), treat the following as **mandatory** before implementation:
+| # | Type | Key folders |
+|---|---|---|
+| 1 | Library & API Reference | reference/, examples/ |
+| 2 | Product Verification | scripts/, reference/ |
+| 3 | Data Fetching & Analysis | reference/, scripts/ |
+| 4 | Business Process & Team Automation | templates/, scripts/ |
+| 5 | Code Scaffolding & Templates | templates/, scripts/ |
+| 6 | Code Quality & Review | reference/, scripts/ |
+| 7 | CI/CD & Deployment | workflows/, scripts/ |
+| 8 | Runbooks | reference/, templates/ |
+| 9 | Infrastructure Operations | reference/, scripts/ |
 
-- **Read:** the installed `@jl-cmd/prompt-generator` template `prompt-generator/templates/skill-from-ground-up.md` (upstream repository path: `skills/prompt-generator/templates/skill-from-ground-up.md` in [jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
-- **Do:** Run `/prompt-generator` using that installed template with the file’s token table filled so the downstream session follows architecture-first sequencing, per-file review gates, and eval rows tied only to user-pasted or explicitly approved evidence.
+## Principles
 
-Use this **together with** gap-analysis and eval-scenario templates in this package; the ground-up template supplies the **orchestration contract** for the multi-file layout Anthropic recommends.
+These are non-negotiable. Every skill must satisfy them. The self-audit checklist enforces them.
 
-## Refinement skill package (required reference)
+### Concision and defaults
 
-When **improving** an existing skill as a **multi-file** or **checkpointed** package (baseline directory plus planned deltas, observation-grounded evals), treat the following as **mandatory** before Phase 2–6 file work in `improve-skill.md` or package-aware steps in `polish-skill.md`:
+> "Default assumption: Claude is already very smart. Only add context Claude doesn’t already have."
 
-- **Read:** `prompt-generator/templates/skill-refinement-package.md` (repository path: `skills/prompt-generator/templates/skill-refinement-package.md` in [jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
-- **Do:** Run `/prompt-generator` with that file’s token table filled (`[[BASELINE_SKILL_ROOT]]`, `[[WORKSPACE_ROOT]]`, observation gap path, evidence rule) so rollout stays architecture-first, delta-focused, and tied to real observation or approved excerpts.
+> "Don’t State the Obvious — focus on information that pushes Claude out of its normal way of thinking."
 
-Net-new packages without a baseline skill directory use `skill-from-ground-up.md` instead.
+Challenge each sentence: "Does Claude really need this?"
 
-## Principles (apply across all phases)
+### Degree of freedom
 
-1. **Evals before documentation.** Never write extensive skill content without evaluation scenarios to validate it.
+> "Match the level of specificity to the task’s fragility and variability."
 
-2. **Minimal instructions first.** Write just enough to pass evaluations. Resist the urge to over-document.
+High freedom (text guidance) for open fields. Low freedom (exact scripts, no parameters) for narrow bridges with cliffs.
 
-3. **Generalize from feedback.** The skill will be used across many prompts. Do not overfit to test cases.
+> "Avoid Railroading Claude — give Claude the information it needs, but give it the flexibility to adapt."
 
-4. **Explain the why.** Theory of mind beats rigid rules. Help the model understand reasoning, not just constraints.
+### Progressive disclosure
 
-5. **Observe, do not assume.** Iterate based on what Claude B actually does, not what you think it should do.
+> "Keep SKILL.md body under 500 lines."
 
-## Delegation Details
+SKILL.md is a hub. Detail lives in reference/, scripts execute without being read into context. References one level deep. Files over 100 lines get a TOC. Forward slashes only.
 
-See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact invocation patterns and integration points between this orchestrator, `/skill-writer`, and `skill-creator`.
+See `${CLAUDE_SKILL_DIR}/references/progressive-disclosure.md` for the full specification.
 
-## File Index
+### Description field
+
+> "Always write in third person. The description is critical for skill selection: Claude uses it to choose the right Skill from potentially 100+ available Skills."
+
+Include what the skill does AND specific trigger phrases. Max 1024 chars.
+
+> "The description field is not a summary — it’s a description of when to trigger."
+
+### Gotchas
+
+> "Build a Gotchas Section — the highest-signal content in any skill."
+
+Mandatory section. Built from real failure observations. Updated over time as new failure modes surface.
+
+### Templates and examples
+
+> "Provide templates for output format" and "Examples help Claude understand the desired style and level of detail more clearly than descriptions alone."
+
+Use the template pattern for structured outputs. Use the examples pattern (input/output pairs) for style-dependent work.
+
+### Workflows and checklists
+
+> "For particularly complex workflows, provide a checklist that Claude can copy into its response and check off as it progresses."
+
+Multi-step processes get `[ ]` checklists. Quality-critical operations get feedback loops (run validator → fix → repeat).
+
+### Scripts
+
+> "Handle error conditions rather than punting to Claude." "Make clear whether Claude should execute the script or read it as reference."
+
+> "One of the most powerful tools you can give Claude is code — letting Claude spend its turns on composition rather than reconstructing boilerplate."
+
+### Setup and memory
+
+> "Think through the Setup — some skills may need to be set up with context from the user. A good pattern is to store this in a config.json file."
+
+> "Data stored in the skill directory may be deleted when you upgrade the skill, so store persistent data in `${CLAUDE_PLUGIN_DATA}`."
+
+### Constraints and refusal cases
+
+> bugteam pattern — non-negotiables separated from guidance, with design rationale. Explicit "first match wins" refusal conditions.
+
+### Anti-patterns
+
+> No Windows paths. Don’t offer too many options — provide a default with escape hatch. Avoid time-sensitive claims. Use consistent terminology. No deeply nested references.
+
+## Self-audit
+
+After every build, improvement, or polish pass, run the mandatory checklist at `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`. Every item must pass before delivery. Fix failures, then re-audit.
+
+## Delegation to skill-writer
+
+skill-builder orchestrates; skill-writer authors. The handoff packet from Step 4 must include:
+
+- Skill type and folder structure
+- Gap analysis or observation findings
+- Degree of freedom assessment
+- Initial gotchas
+- Any constraints
+
+See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact patterns.
+
+## File index
 
 | File | Purpose |
 |------|---------|
-| `workflows/new-skill.md` | Full lifecycle for new skills (6 phases) |
-| `workflows/improve-skill.md` | Observation-first flow for existing skills |
-| `workflows/polish-skill.md` | Description optimization and final validation |
-| `references/eval-driven-flow.md` | Official Anthropic methodology with citations |
-| `references/delegation-map.md` | Integration map for skill-writer and skill-creator |
-| `templates/gap-analysis.md` | Template for Phase 1 gap documentation |
-| `templates/eval-scenario.json` | Eval template matching skill-creator schema |
-| `../prompt-generator/templates/skill-from-ground-up.md` | Required orchestration template for **net-new** full skill packages (architecture-first, checkpoints, evidence-backed evals) |
-| `../prompt-generator/templates/skill-refinement-package.md` | Required orchestration template for **existing-skill** multi-file refinements and package-aware polish (baseline + delta, checkpoints, evidence-backed evals) |
+| `SKILL.md` | This hub — principles, process, routing, file index |
+| `references/skill-types.md` | 9-type taxonomy with folder structures per type |
+| `references/progressive-disclosure.md` | Folder conventions, hub pattern, hard rules |
+| `references/self-audit-checklist.md` | 38-point mandatory post-build audit |
+| `references/delegation-map.md` | Subagent handoff patterns and transcript guidance |
+| `workflows/new-skill.md` | Full lifecycle for new skills (6 steps) |
+| `workflows/improve-skill.md` | Observation-first flow for existing skills (6 steps) |
+| `workflows/polish-skill.md` | Description audit and final validation (5 steps) |
+| `templates/gap-analysis.md` | Template for documenting skill gaps |
+
+## Folder map
+
+- `SKILL.md` — hub.
+- `references/` — best-practice specifications and the audit checklist.
+- `workflows/` — step-by-step workflows for each lifecycle phase.
+- `templates/` — reusable templates for skill artifacts.

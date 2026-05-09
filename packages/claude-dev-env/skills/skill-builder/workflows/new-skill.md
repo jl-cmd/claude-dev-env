@@ -1,235 +1,147 @@
 # New Skill Workflow
 
-Full evaluation-driven lifecycle for building a new skill from scratch.
+Best-practice-driven lifecycle for building a skill from scratch.
 
 ## Prerequisites
 
 - The user has a task or domain they want to capture as a skill
 - No existing skill for this capability (or intentionally starting fresh)
 
-### Ground-up package layout (required before multi-file implementation)
+---
 
-When the outcome includes **ARCHITECTURE.md**, **REFERENCE / EXAMPLES / WORKFLOWS**, and **`evals/*.json`** under a workspace (Anthropic-style progressive disclosure plus checkpointed rollout):
+## Step 1: Classify
 
-1. Read `prompt-generator/templates/skill-from-ground-up.md` from the installed `~/.claude/skills/` tree (provided by [@jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
-2. Run `/prompt-generator` using that template (substitute tokens per its table) **before** Phase 3 expands the repo; align the XML scope block with this workflow’s workspace and evidence rules.
-3. Keep Phase 1–2 artifacts honest: eval prompts and expectations stay grounded in **real** user scenarios; the template reinforces eval rows that reference pasted or explicitly approved evidence only.
+**Goal:** Determine the skill type. Type dictates folder structure.
 
-Skip this block only when the user explicitly wants a **single-file** SKILL.md with no staged package plan.
+1. Read `${CLAUDE_SKILL_DIR}/references/skill-types.md`.
 
-Refinements to an **existing** skill package use `prompt-generator/templates/skill-refinement-package.md` instead (see `improve-skill.md`).
+2. Ask the user about the skill’s purpose:
+
+   > "What will this skill help Claude do?"
+
+   Match the answer against the 9 types. If ambiguous, present the top 2-3 matches and ask the user to choose.
+
+3. Record the classification: type number, type name, recommended folders.
+
+**Output:** Type classification with folder plan.
 
 ---
 
-## Phase 1: Identify Gaps
+## Step 2: Scaffold
 
-**Goal:** Document what fails or requires repeated context when working without a skill.
+**Goal:** Create the folder structure. Every skill starts with the same skeleton plus type-specific additions.
 
-### Process
+1. Create the skill directory if it doesn’t exist.
 
-1. Have a guided conversation to uncover gaps. Explore these areas:
-   - "What task were you doing when you realized you needed a skill?"
-   - "What context did you repeatedly provide to Claude?"
-   - "Where did Claude fail or produce subpar results without guidance?"
-   - "What domain knowledge was missing?"
-   - "What specific format or structure did you need?"
-   - "Were there tools or scripts that needed to be used in a particular way?"
-   - "What rules or constraints did Claude violate?"
+2. Create the minimum structure:
 
-2. As patterns emerge, probe for eval-worthy scenarios:
-   - "Can you give me a concrete example of a task where this failed?"
-   - "What would success look like for that specific task?"
-   - "Are there edge cases where the right approach changes?"
+   ```
+   skill-name/
+   ├── SKILL.md          # Hub — every skill has this
+   ```
 
-3. Generate `gap-analysis.md` from the conversation using the template at `${CLAUDE_SKILL_DIR}/templates/gap-analysis.md`. Fill in all sections from what was discussed.
+3. Add type-specific directories based on Step 1 classification (see `${CLAUDE_SKILL_DIR}/references/skill-types.md` for the folder recommendations per type).
 
-4. Review the gap analysis with the user. Confirm completeness before moving to Phase 2.
+4. Verify the scaffold matches the type recommendation.
 
-**Output:** `[skill-name]-workspace/gap-analysis.md`
+> "As your Skill grows, you can bundle additional content that Claude loads only when needed."
+
+**Output:** Directory tree with SKILL.md stub.
 
 ---
 
-## Phase 2: Build Evals
+## Step 3: Gather
 
-**Goal:** Create 3+ evaluation scenarios that test the identified gaps. Establish a baseline.
+**Goal:** Collect domain knowledge, failure patterns, and gotchas from the user.
 
-### Process
+> "Build a Gotchas Section — these sections should be built up from common failure points that Claude runs into when using your skill."
 
-1. Transform each gap into at least one eval scenario. Each scenario needs:
-   - A realistic user prompt (detailed and specific, like a real request)
-   - A description of what success looks like
-   - Objectively verifiable expectations (assertions)
+### Interview questions
 
-2. Draft evals using the schema at `${CLAUDE_SKILL_DIR}/templates/eval-scenario.json`. Ensure:
-   - Minimum 3 scenarios (official requirement)
-   - Every identified gap has at least one scenario testing it
-   - Expectations are objectively verifiable, not subjective
-   - Prompts sound like things a real user would say
+Ask the user:
 
-3. Review eval scenarios with the user. Adjust until both sides are satisfied.
+1. "What task were you doing when you realized you needed a skill?"
+2. "What context did you repeatedly provide to Claude?"
+3. "Where did Claude fail or produce subpar results without guidance?"
+4. "What does Claude consistently get wrong about this domain?"
+5. "What specific format or structure do you need in the output?"
+6. "Are there rules or constraints Claude must never violate?"
+7. "What tools, scripts, or libraries does Claude need to use?"
+8. "Does this skill need to run differently for different models (Haiku vs Opus)?"
 
-4. Save to `[skill-name]-workspace/evals/evals.json`.
+### Generate gap analysis
 
-5. **Establish baseline.** For each eval, spawn a subagent WITHOUT any skill:
+Use the template at `${CLAUDE_SKILL_DIR}/templates/gap-analysis.md`. Fill in:
 
-   ```
-   Execute this task with NO skill loaded:
-   - Task: [eval prompt]
-   - Input files: [eval files if any, or "none"]
-   - Save all output files to: [workspace]/iteration-0/eval-[name]/without_skill/outputs/
-   - Save a complete transcript of your work to: [workspace]/iteration-0/eval-[name]/without_skill/transcript.md
-   ```
+- Skill type and degree of freedom
+- Task description
+- Gaps identified (what failed, what was needed)
+- Recurring patterns across gaps
+- Initial gotcha candidates
 
-   Spawn all baseline runs in parallel. Capture timing data when each completes.
+### Assess degree of freedom
 
-6. Grade baseline results using the skill-creator grading agent. See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact grading invocation.
+> "Match the level of specificity to the task’s fragility and variability."
 
-**Output:** `[skill-name]-workspace/evals/evals.json` and baseline results in `iteration-0/`
+| Degree | When | Example |
+|---|---|---|
+| High | Multiple valid approaches, context-dependent | Code review guidelines |
+| Medium | Preferred pattern exists, some variation ok | Report generation with template |
+| Low | Fragile operations, consistency critical | Database migration with exact script |
 
----
+Record the assessment with reasoning.
 
-## Phase 3: Write Minimal Skill
-
-**Goal:** Create just enough skill content to address the documented gaps and pass evaluations.
-
-### Process
-
-1. Invoke `/skill-writer` with this context:
-
-   ```
-   Create a skill based on this gap analysis and eval scenarios.
-
-   Gap analysis: [reference or paste gap-analysis.md]
-   Eval scenarios: [reference or paste evals.json expected_output and expectations]
-   Baseline failures: [summarize what Claude got wrong in iteration-0]
-
-   Constraint: Write the minimum instructions needed to address these specific gaps.
-   Every line must serve a documented gap. Do not over-document.
-   ```
-
-2. `/skill-writer` will run its workflow: classify type, set degree of freedom, ask clarifying questions, produce the SKILL.md artifact.
-
-3. Review the draft with the user:
-   - "Does this address all the gaps we identified?"
-   - "Is anything here unnecessary or over-engineered?"
-   - "Would this pass our eval scenarios?"
-
-4. Save the skill to its target directory.
-
-**Output:** The skill's SKILL.md (and optional reference files)
+**Output:** Completed gap analysis, initial gotchas list, degree-of-freedom assessment.
 
 ---
 
-## Phase 4: Test (Feedback Loop)
+## Step 4: Write
 
-**Goal:** Run the skill on eval scenarios, compare against baseline, identify remaining gaps.
+**Goal:** Produce the skill package — SKILL.md and companion files.
 
-### Process
+Delegate to `/skill-writer` using the structured handoff from `${CLAUDE_SKILL_DIR}/references/delegation-map.md`.
 
-1. **Spawn all runs in parallel.** For each eval scenario, launch a with-skill subagent:
+The handoff must include: skill type, folder structure, gap analysis, initial gotchas, degree of freedom, constraints.
 
-   ```
-   Execute this task:
-   - Read the skill at [path-to-skill]/SKILL.md and follow its instructions
-   - Task: [eval prompt from evals.json]
-   - Input files: [eval files if any, or "none"]
-   - Save all output files to: [workspace]/iteration-N/eval-[name]/with_skill/outputs/
-   - Save a complete transcript of your work to: [workspace]/iteration-N/eval-[name]/with_skill/transcript.md
-   ```
+After skill-writer produces the draft:
 
-   For iteration-1, the without-skill baseline already exists from Phase 2.
+1. Verify it follows the hub layout (principle → gotchas → when-applies → process → file index → folder map).
+2. Verify SKILL.md body is under 500 lines.
+3. Verify all references are one level deep.
+4. Verify files over 100 lines have a TOC.
 
-2. **While runs are in progress**, review and refine assertions if needed based on what was learned from the baseline.
+Fix structural issues before proceeding.
 
-3. **When runs complete**, immediately capture timing data (`total_tokens`, `duration_ms`) to `timing.json` in each run directory. This data is only available in the task completion notification.
-
-4. **Grade each run** using the skill-creator grading agent. See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for the grading process.
-
-5. **Aggregate into benchmark** using skill-creator's aggregation script. See delegation-map.md for the exact command.
-
-6. **Launch the eval viewer** using skill-creator's generate_review.py. See delegation-map.md for the exact command. For iteration 2+, include `--previous-workspace` to show diffs.
-
-7. Tell the user to review in the viewer:
-   - "Outputs" tab: click through each test case, leave feedback
-   - "Benchmark" tab: quantitative comparison (pass rates, timing, tokens)
-
-8. Wait for the user to complete their review.
-
-**Output:** `grading.json`, `benchmark.json`, `feedback.json` in the iteration directory
+**Output:** Complete skill package at the target directory.
 
 ---
 
-## Phase 5: Iterate
+## Step 5: Self-Audit
 
-**Goal:** Refine the skill based on observed Claude B behavior and user feedback.
+**Goal:** Verify every best practice is satisfied before delivery.
 
-### Process
+1. Read `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
+2. Copy the checklist into your response.
+3. Check every item against the built skill. For each: PASS, FAIL with file:line evidence, or N/A with reason.
+4. Every FAIL must be fixed before proceeding. Apply fixes, then re-check that item.
+5. When all items are PASS or N/A, proceed to Step 6.
 
-1. Read `feedback.json` from the viewer. Empty feedback means the user was satisfied with that test case.
+For an independent check, spawn a subagent to run the audit (see delegation-map.md).
 
-2. Read transcripts from Phase 4 runs. Watch for the signals the official docs highlight:
-   - **Unexpected exploration paths** -- Claude B read files in an order you did not anticipate
-   - **Missed connections** -- Claude B did not follow references to important files
-   - **Overreliance on certain sections** -- content that should be promoted to SKILL.md
-   - **Ignored content** -- files Claude B never accessed (may be unnecessary or poorly signaled)
-   - **Repeated work across test cases** -- all subagents wrote similar helper scripts (bundle them into the skill)
-
-3. Synthesize observations into actionable improvements. For each piece of feedback, identify the specific skill change that would fix it.
-
-4. Apply improvements. For significant changes, re-invoke `/skill-writer` with:
-
-   ```
-   Refine this existing skill based on testing observations.
-
-   Current SKILL.md: [reference or paste]
-   User feedback: [from feedback.json -- only non-empty entries]
-   Behavioral observations: [from transcript analysis]
-
-   Specific issues to address:
-   1. [Issue]
-   2. [Issue]
-
-   Constraint: Only change what the feedback demands. Do not reorganize working content.
-   ```
-
-5. Key principles for this phase (from the official docs):
-   - **Generalize from feedback** -- the skill will be used across many different prompts, not just these test cases
-   - **Keep the prompt lean** -- remove instructions that are not pulling their weight
-   - **Explain the why** -- theory of mind beats rigid MUSTs
-   - **Bundle repeated work** -- if subagents all wrote similar scripts, add them to the skill
-
-6. Return to Phase 4 with the refined skill. Continue iterating until:
-   - User feedback is all empty (satisfied with every test case)
-   - Pass rates meet acceptable thresholds
-   - No meaningful progress between iterations
+**Output:** Completed checklist with all items PASS or N/A.
 
 ---
 
-## Phase 6: Polish
+## Step 6: Deliver
 
-**Goal:** Optimize the skill description for triggering accuracy and run final validation.
+**Goal:** Hand off the finished skill with full documentation.
 
-### Process
+Present to the user:
 
-1. **Description optimization.** Follow the process in `${CLAUDE_SKILL_DIR}/workflows/polish-skill.md`.
-
-2. **Final validation.** Run the skill-writer self-check rubric against the finished skill:
-   - [ ] Description is third person with trigger phrases
-   - [ ] Under 500 lines
-   - [ ] States what to do in positive terms (not prohibition-heavy)
-   - [ ] Degree of freedom matches task fragility
-   - [ ] Progressive disclosure used (heavy content in separate files)
-   - [ ] Examples are concrete, not abstract
-   - [ ] Frontmatter fields are valid
-   - [ ] One skill = one capability
-
-3. **Final checklist** from the official Anthropic docs:
-   - [ ] At least 3 evaluation scenarios created and passing
-   - [ ] Tested with real usage scenarios
-   - [ ] Skill solves documented gaps (not imagined requirements)
-   - [ ] Iterative refinement based on observed behavior (not assumptions)
-
-4. Present the finished skill to the user with:
-   - Final benchmark comparison (latest iteration vs baseline)
-   - Summary of gaps addressed
-   - Any remaining limitations or known edge cases
+1. **File map** — every file created, with its purpose.
+2. **Skill type** — classification and why it fits.
+3. **Degree of freedom** — assessment and reasoning.
+4. **Gotchas seeded** — initial gotchas captured.
+5. **Audit summary** — "All 38 items: N passed, M N/A."
+6. **Maintenance notes** — what to watch for in future usage that might warrant iteration.
+7. **Suggested first test** — a concrete task to try with Claude B.

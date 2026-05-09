@@ -1,153 +1,112 @@
 # Delegation Map
 
-How the skill-builder orchestrator integrates with external skills at each phase.
+How skill-builder delegates work to subagents and `/skill-writer`.
 
-## Phase 1: Identify Gaps -- This Orchestrator
+## Delegating to skill-writer (Step 4)
 
-No external delegation. The orchestrator guides a conversation with the user to document what fails without a skill.
+skill-builder orchestrates; skill-writer authors the SKILL.md and companion files. The handoff must be structured so skill-writer has everything it needs.
 
-**Output:** `[skill-name]-workspace/gap-analysis.md` using the template at `templates/gap-analysis.md`.
-
-## Phase 2: Build Evals -- This Orchestrator
-
-No external delegation. The orchestrator helps the user transform gaps into eval scenarios.
-
-**Output:** `[skill-name]-workspace/evals/evals.json` using the template at `templates/eval-scenario.json`.
-
-**Baseline runs:** Spawn subagents WITHOUT any skill for each eval scenario. These run as background Agent tasks.
-
-## Phase 3: Write Skill -- Delegate to `/skill-writer`
-
-**Full package path:** If the user approved a package plan from `prompt-generator/templates/skill-from-ground-up.md` (net-new) or `prompt-generator/templates/skill-refinement-package.md` (existing baseline), paste the approved architecture summary, baseline inventory, planned deltas, and checkpoint list into the skill-writer handoff so file order and scope stay aligned.
-
-Invoke `/skill-writer` with the following context in your prompt:
+### New skill handoff
 
 ```
-Create a skill based on this gap analysis and eval scenarios.
+Create a skill with these parameters:
 
-Gap analysis: [paste or reference gap-analysis.md]
-Eval scenarios: [paste or reference evals.json expected_output fields]
-Baseline failures: [summarize what Claude got wrong without the skill]
+**Skill type:** [one of 9 types from skill-types.md]
+**Folder structure:** [directories to create: reference/, scripts/, etc.]
+**What it does:** [one-sentence capability description]
+**Domain context:** [what Claude needs to know that it doesn't already]
+**Initial gotchas:** [failure patterns to document from the start]
+**Degree of freedom:** [high | medium | low — with reasoning]
+**Constraints:** [non-negotiables]
 
-Constraint: Write the minimum instructions needed to address these specific gaps.
-Do not over-document. Every line must serve a documented gap.
+Produce:
+1. SKILL.md with hub layout (principle, gotchas, when-applies, process, file index, folder map)
+2. Companion files as needed (reference docs, workflow steps, templates)
+3. Every file under 500 lines; TOC on files over 100 lines
+4. File index listing every file and its purpose
 ```
 
-skill-writer handles: type classification, degree of freedom, frontmatter, body structure, progressive disclosure, self-check.
-
-**Output:** The skill's SKILL.md (and optional REFERENCE.md, scripts, etc.)
-
-## Phase 4: Test -- Delegate to skill-creator Infrastructure
-
-The skill-creator plugin provides the eval infrastructure. Reference its components directly:
-
-### Spawning test runs
-
-For each eval, spawn TWO subagents in the SAME turn (parallel):
-
-**With-skill subagent:**
-```
-Execute this task:
-- Read the skill at [path-to-skill]/SKILL.md and follow its instructions
-- Task: [eval prompt from evals.json]
-- Input files: [eval files if any]
-- Save all output files to: [workspace]/iteration-N/eval-[name]/with_skill/outputs/
-- Save a transcript of your complete work to: [workspace]/iteration-N/eval-[name]/with_skill/transcript.md
-- At the end, write a metrics.json with tool call counts and file list
-```
-
-**Without-skill subagent** (baseline):
-For iteration-1, reuse baseline results from Phase 2 (iteration-0). For later iterations, the original baseline persists.
-
-### Grading
-
-Read the grading agent instructions from the skill-creator plugin:
-`[skill-creator-plugin-path]/agents/grader.md`
-
-Spawn a grader subagent for each run with:
-- The expectations from evals.json
-- The transcript path
-- The outputs directory
-
-**Output:** `grading.json` in each run directory.
-
-### Benchmarking
-
-Run the aggregation script from the skill-creator plugin directory:
-```bash
-cd [skill-creator-plugin-path] && python -m scripts.aggregate_benchmark [workspace]/iteration-N --skill-name [name]
-```
-
-**Output:** `benchmark.json` and `benchmark.md` in the iteration directory.
-
-### Eval Viewer
-
-Launch the viewer from the skill-creator plugin:
-```bash
-python [skill-creator-plugin-path]/eval-viewer/generate_review.py \
-  [workspace]/iteration-N \
-  --skill-name "[name]" \
-  --benchmark [workspace]/iteration-N/benchmark.json
-```
-
-For iteration 2+, add: `--previous-workspace [workspace]/iteration-[N-1]`
-
-If no browser/display available, add: `--static [workspace]/iteration-N/review.html`
-
-**Output:** Browser-based reviewer where the user inspects outputs and leaves feedback.
-
-### Finding the skill-creator plugin path
-
-The skill-creator plugin is installed at a path like:
-`~/.claude/plugins/marketplaces/claude-plugins-official/plugins/skill-creator/skills/skill-creator/`
-
-To find it dynamically, search for the skill-creator SKILL.md:
-```bash
-find ~/.claude/plugins -name "SKILL.md" -path "*/skill-creator/*" 2>/dev/null | head -1
-```
-
-Then derive the plugin root from that path.
-
-## Phase 5: Iterate -- This Orchestrator + `/skill-writer`
-
-The orchestrator reads feedback.json and transcripts, synthesizes observations, then delegates refinement to `/skill-writer`:
+### Refine skill handoff
 
 ```
-Refine this existing skill based on these observations from testing.
+Refine this existing skill:
 
-Current SKILL.md: [paste or reference]
-User feedback: [from feedback.json]
-Behavioral observations: [from transcript analysis]
+**Current SKILL.md:** [reference or paste]
+**What was observed:** [specific failures from Claude B usage]
+**What to change:** [specific instructions to add/remove/modify]
+**New gotchas to add:** [failure patterns discovered]
+**What to preserve:** [working content — do not touch]
 
-Specific issues to address:
-1. [Issue from feedback]
-2. [Issue from observation]
-
-Constraint: Only change what the feedback demands. Do not reorganize working content.
+Constraint: Only change what the observations demand. Do not reorganize working content.
 ```
 
-Then return to Phase 4 with the refined skill.
+## Spawning a test subagent
 
-## Phase 6: Polish -- Delegate to skill-creator Description Optimizer
+To observe how Claude B uses a skill on a real task:
 
-The skill-creator plugin includes a description optimization loop:
+```
+Agent(
+  subagent_type="general-purpose",
+  description="Test skill on real task",
+  prompt="Read the skill at [skill-path]/SKILL.md and follow its instructions.
 
-### Trigger eval generation
+Task: [realistic user prompt]
 
-Generate 20 realistic eval queries (10 should-trigger, 10 should-not-trigger). Use the HTML review template from:
-`[skill-creator-plugin-path]/assets/eval_review.html`
-
-### Optimization loop
-
-```bash
-cd [skill-creator-plugin-path] && python -m scripts.run_loop \
-  --eval-set [path-to-trigger-eval.json] \
-  --skill-path [path-to-skill] \
-  --model [current-model-id] \
-  --max-iterations 5 \
-  --verbose
+Save a complete transcript of your work to: [workspace]/transcript.md"
+)
 ```
 
-### Final validation
+Spawn with `run_in_background=true` for longer tasks. Read the transcript when the agent completes.
 
-Run the skill-writer self-check rubric (from skill-writer's Step 9) against the finished skill. All items must pass.
+## Reading a transcript for observations
+
+> "Watch for unexpected exploration paths, missed connections, overreliance on certain sections, and ignored content."
+
+Scan the transcript for:
+
+1. **File access order** — Did Claude read files in the expected order? Unexpected ordering means the structure is not intuitive.
+2. **Missed files** — Were any reference files never accessed? They might be unnecessary or poorly signaled.
+3. **Re-read files** — Did Claude re-read the same file multiple times? That content should be in SKILL.md.
+4. **Gotcha moments** — Where did Claude make a wrong choice? That's a gotcha candidate.
+5. **Script usage** — Did Claude execute scripts as expected, or did it try to read them instead?
+6. **Tool call errors** — Any "tool not found" or path errors? Fix references.
+
+## Delegating self-audit
+
+After building, spawn a subagent to run the checklist independently:
+
+```
+Agent(
+  subagent_type="general-purpose",
+  description="Self-audit skill against checklist",
+  prompt="Read the skill at [skill-path]/SKILL.md and all companion files.
+
+Then read the self-audit checklist at [skill-builder-path]/references/self-audit-checklist.md.
+
+Check every item. For each: PASS, FAIL with specific file:line evidence and what to fix, or N/A with reason.
+
+Report as:
+## Audit Results
+[ ] Item 1: PASS
+[ ] Item 2: FAIL — [file:line] — [what's wrong and how to fix]
+..."
+)
+```
+
+This gives an independent verification. Fix failures, then re-deliver to user.
+
+## Testing across models
+
+> "Test your Skill with all the models you plan to use it with."
+
+If the skill will be used with Haiku, spawn a haiku test subagent:
+
+```
+Agent(
+  subagent_type="general-purpose",
+  model="haiku",
+  ...
+)
+```
+
+Haiku needs more explicit guidance than Opus. Observe whether the skill provides enough.
