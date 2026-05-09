@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.38.0...claude-dev-env-v1.38.1) (2026-05-09)
+
+
+### Bug Fixes
+
+* **hooks:** detect unused imports against full post-edit file content ([#401](https://github.com/jl-cmd/claude-code-config/issues/401)) ([1c313b4](https://github.com/jl-cmd/claude-code-config/commit/1c313b4cd5722118f1d50411121aad73c2a1c97f))
+
 ## [1.38.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.37.1...claude-dev-env-v1.38.0) (2026-05-08)
 
 
