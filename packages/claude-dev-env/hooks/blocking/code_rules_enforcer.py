@@ -2580,25 +2580,9 @@ def _collect_load_names_outside_import_ranges(
     return referenced_names
 
 
-def check_unused_module_level_imports(content: str, file_path: str) -> list[str]:
-    """Flag module-level imports that are never referenced in the rest of the file.
-
-    References are detected from AST ``Name`` / ``Attribute`` loads outside import
-    statements so mentions in comments or string literals do not count. Files
-    declaring ``__all__`` (including annotated assignments) are skipped. Files
-    whose module body includes ``if TYPE_CHECKING:`` (or
-    ``typing[._extensions].TYPE_CHECKING``) are skipped. Suppression honors bare
-    ``# noqa`` or an explicit ``F401`` code in the noqa list only.
-    """
-    if is_test_file(file_path):
-        return []
-    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
-        return []
-    try:
-        tree = ast.parse(content)
-    except SyntaxError:
-        return []
-    file_declares_dunder_all = any(
+def _module_declares_dunder_all(tree: ast.Module) -> bool:
+    """Return True when the module body assigns or annotates ``__all__``."""
+    return any(
         (
             isinstance(each_node, ast.Assign)
             and any(
@@ -2613,18 +2597,54 @@ def check_unused_module_level_imports(content: str, file_path: str) -> list[str]
         )
         for each_node in tree.body
     )
-    if file_declares_dunder_all:
+
+
+def check_unused_module_level_imports(
+    content: str,
+    file_path: str,
+    full_file_content: str | None = None,
+) -> list[str]:
+    """Flag module-level imports that are never referenced in the rest of the file.
+
+    References are detected from AST ``Name`` / ``Attribute`` loads outside import
+    statements so mentions in comments or string literals do not count. Files
+    declaring ``__all__`` (including annotated assignments) are skipped. Files
+    whose module body includes ``if TYPE_CHECKING:`` (or
+    ``typing[._extensions].TYPE_CHECKING``) are skipped. Suppression honors bare
+    ``# noqa`` or an explicit ``F401`` code in the noqa list only.
+
+    When ``full_file_content`` is provided, ``content`` is treated as an Edit
+    fragment containing the imports being added or replaced, while the
+    ``__all__`` / ``TYPE_CHECKING`` gate detection and reference scanning run
+    against ``full_file_content`` (the post-edit file as it will look once the
+    Edit applies). This prevents false-positive flags on imports added in the
+    same Edit as their consumers.
+    """
+    if is_test_file(file_path):
         return []
-    if _module_body_declares_type_checking_gate(tree):
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
         return []
-    content_lines = content.splitlines()
-    import_line_ranges = _import_statement_line_ranges(tree)
+    try:
+        fragment_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    reference_source = full_file_content if full_file_content is not None else content
+    try:
+        reference_tree = ast.parse(reference_source)
+    except SyntaxError:
+        return []
+    if _module_declares_dunder_all(reference_tree):
+        return []
+    if _module_body_declares_type_checking_gate(reference_tree):
+        return []
+    fragment_lines = content.splitlines()
+    reference_import_ranges = _import_statement_line_ranges(reference_tree)
     referenced_names = _collect_load_names_outside_import_ranges(
-        tree,
-        import_line_ranges,
+        reference_tree,
+        reference_import_ranges,
     )
     import_bindings: list[tuple[str, int, int | None]] = []
-    for each_node in tree.body:
+    for each_node in fragment_tree.body:
         if isinstance(each_node, (ast.Import, ast.ImportFrom)):
             if isinstance(each_node, ast.ImportFrom) and each_node.module == "__future__":
                 continue
@@ -2632,14 +2652,14 @@ def check_unused_module_level_imports(content: str, file_path: str) -> list[str]
                 import_bindings.append(each_binding)
     issues: list[str] = []
     for each_name, each_line_number, each_from_keyword_line in import_bindings:
-        if 1 <= each_line_number <= len(content_lines):
-            if line_suppresses_unused_import_via_noqa(content_lines[each_line_number - 1]):
+        if 1 <= each_line_number <= len(fragment_lines):
+            if line_suppresses_unused_import_via_noqa(fragment_lines[each_line_number - 1]):
                 continue
         if each_from_keyword_line is not None and 1 <= each_from_keyword_line <= len(
-            content_lines
+            fragment_lines
         ):
             if line_suppresses_unused_import_via_noqa(
-                content_lines[each_from_keyword_line - 1]
+                fragment_lines[each_from_keyword_line - 1]
             ):
                 continue
         if each_name in referenced_names:
@@ -2904,14 +2924,25 @@ def check_return_annotations(content: str, file_path: str) -> list[str]:
     return issues
 
 
-def validate_content(content: str, file_path: str, old_content: str = "") -> list[str]:
+def validate_content(
+    content: str,
+    file_path: str,
+    old_content: str = "",
+    full_file_content: str | None = None,
+) -> list[str]:
     """Run all applicable validators on content.
 
     Args:
-        content: The new content being written.
+        content: The new content being written. For Edit, this is the
+            ``new_string`` fragment; for Write, the entire new file body.
         file_path: Path to the file.
         old_content: Previous content (old_string for Edit, existing file for Write).
             Used to detect comment additions/removals instead of flagging all comments.
+        full_file_content: For Edit operations, the reconstructed post-edit
+            content of the entire file (existing file with ``old_string`` replaced
+            by ``new_string``). Whole-file checks such as the unused-import
+            scanner use this to evaluate references across the file rather than
+            just within the inserted fragment.
     """
     extension = get_file_extension(file_path)
     all_issues = []
@@ -2938,7 +2969,9 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         all_issues.extend(check_stuttering_collection_prefix(content, file_path))
         all_issues.extend(check_hardcoded_user_paths(content, file_path))
         all_issues.extend(check_sys_path_insert_deduplication_guard(content, file_path))
-        all_issues.extend(check_unused_module_level_imports(content, file_path))
+        all_issues.extend(
+            check_unused_module_level_imports(content, file_path, full_file_content)
+        )
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
         all_issues.extend(check_return_annotations(content, file_path))
@@ -2957,6 +2990,30 @@ def validate_content(content: str, file_path: str, old_content: str = "") -> lis
         advise_file_line_count(content, file_path)
 
     return all_issues
+
+
+def _reconstruct_post_edit_file_content(
+    file_path: str, old_string: str, new_string: str,
+) -> str | None:
+    """Return the file content as it will look after the Edit applies, or None.
+
+    Reads ``file_path`` from disk and replaces the first occurrence of
+    ``old_string`` with ``new_string``, mirroring how the Edit tool itself
+    applies a single replacement. Returns None when the file cannot be read,
+    ``old_string`` is empty, or ``old_string`` is not present in the existing
+    file (which means the Edit will fail or has already been applied — neither
+    case yields a well-defined post-edit view).
+    """
+    if not old_string:
+        return None
+    try:
+        with open(file_path, "r", encoding="utf-8") as existing_file:
+            existing_content = existing_file.read()
+    except (FileNotFoundError, OSError, UnicodeDecodeError):
+        return None
+    if old_string not in existing_content:
+        return None
+    return existing_content.replace(old_string, new_string, 1)
 
 
 def main() -> None:
@@ -2980,9 +3037,13 @@ def main() -> None:
         sys.exit(0)
 
     old_content = ""
+    full_file_content_after_edit: str | None = None
     if tool_name == "Edit":
         content = tool_input.get("new_string", "")
         old_content = tool_input.get("old_string", "")
+        full_file_content_after_edit = _reconstruct_post_edit_file_content(
+            file_path, old_content, content,
+        )
     else:
         content = tool_input.get("content", "") or tool_input.get("new_string", "")
         try:
@@ -2997,7 +3058,7 @@ def main() -> None:
     if not content:
         sys.exit(0)
 
-    issues = validate_content(content, file_path, old_content)
+    issues = validate_content(content, file_path, old_content, full_file_content_after_edit)
 
     if issues:
         issue_list = "; ".join(issues[:10])
