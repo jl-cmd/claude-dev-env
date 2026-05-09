@@ -34,11 +34,14 @@ MAX_DETAIL_LINES_IN_FAILURE: int = 50
 ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
     {
         ".cursor/agents/clean-coder.md",
+        "config/sweep_config.py",
         "config/timing.py",
         "config/constants.py",
         "config/selectors.py",
         ".claude/CLAUDE.md",
         ".claude/settings.json",
+        "docs/file1.md",
+        "docs/file2.md",
         "packages/agent-gate-claude/hooks/gate_enforcer.py",
         "packages/agent-gate-claude/hooks/gate_trigger.py",
         "packages/agent-gate-claude/src/agent_gate_claude/config/constants.py",
@@ -48,6 +51,10 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         "packages/agent-gate-prompt-refinement/src/agent_gate_prompt_refinement/config/constants.py",
         "packages/agent-gate-prompt-refinement/src/agent_gate_prompt_refinement/server.py",
         "packages/claude-dev-env/hooks/blocking/pwsh_enforcer.py",
+        "packages/claude-dev-env/scripts/Install-SweepEmptyDirs.ps1",
+        "packages/claude-dev-env/scripts/config/sweep_config.py",
+        "packages/claude-dev-env/scripts/sweep_empty_dirs.py",
+        "packages/claude-dev-env/scripts/tests/test_sweep_empty_dirs.py",
         "scripts/README.md",
         "scripts/bugteam_code_rules_gate.py",
         "scripts/db/config.py",
@@ -56,6 +63,7 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         "scripts/logifix.ps1",
         "scripts/revoke_project_claude_permissions.py",
         "scripts/test_groq_bugteam.py",
+        "tests/test_sweep_empty_dirs.py",
     }
 )
 

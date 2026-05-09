@@ -9,89 +9,118 @@ Observation-first flow for iterating on an existing skill.
 
 ---
 
-## Phase 1: Observe
+## Step 1: Observe
 
-**Goal:** Document the existing skill's current behavior by running it on real tasks.
+**Goal:** Document what’s wrong with the current skill by watching it in action or gathering user reports.
 
-> "Use the Skill in real workflows: Give Claude B (with the Skill loaded) actual tasks, not test scenarios"
+> "Use the Skill in real workflows: Give Claude B (with the Skill loaded) actual tasks, not test scenarios."
 
-### Process
+### Option A: User has observed issues
 
-1. Identify the skill to improve. Read its current SKILL.md and any reference files.
+Ask:
+- "What specific issue did you observe?"
+- "Can you give me a concrete task where the skill underperformed?"
+- "Is this a triggering issue (skill doesn’t activate), a quality issue (skill activates but produces poor results), or a scope issue (skill does the wrong thing)?"
 
-2. Ask the user what prompted the improvement:
-   - "What specific issue did you observe?"
-   - "Can you give me a concrete task where the skill underperformed?"
-   - "Is this a triggering issue (skill does not activate), a quality issue (skill activates but produces poor results), or a scope issue (skill does the wrong thing)?"
+### Option B: No observations yet — spawn a test
 
-3. Run the existing skill on 2-3 real tasks. For each, spawn a subagent:
+Spawn a subagent with the existing skill on a real task (see delegation-map.md for the spawn pattern). Read the transcript when complete.
 
-   ```
-   Execute this task using the skill at [path-to-existing-skill]:
-   - Read the skill at [path]/SKILL.md and follow its instructions
-   - Task: [realistic task from user]
-   - Save outputs to: [skill-name]-workspace/observation/task-[N]/outputs/
-   - Save transcript to: [skill-name]-workspace/observation/task-[N]/transcript.md
-   ```
+### Transcript analysis
 
-4. Analyze the transcripts. Document observations:
-   - Where did the skill work well?
-   - Where did it fail or produce subpar results?
-   - Did Claude B follow the skill's instructions as written?
-   - Did Claude B ignore any sections or files?
-   - Did Claude B explore in unexpected directions?
+> "Watch for unexpected exploration paths, missed connections, overreliance on certain sections, and ignored content."
 
-5. Generate a gap analysis (same template as new-skill Phase 1) focused on the delta between current behavior and desired behavior.
+Document:
+- Where did the skill work well?
+- Where did it fail or produce subpar results?
+- Did Claude B follow the skill’s instructions as written?
+- Did Claude B ignore any sections or files?
+- Did Claude B explore in unexpected directions?
+- What would a gotcha have prevented?
 
-**Output:** `[skill-name]-workspace/gap-analysis.md` with observation-based gaps
+**Output:** Observation notes with specific failure examples.
 
 ---
 
-## Phase 2-6: Follow the New Skill Workflow
+## Step 2: Diagnose
 
-From here, follow the same phases as `${CLAUDE_SKILL_DIR}/workflows/new-skill.md`, starting at Phase 2 (Build Evals).
+**Goal:** Classify each failure so you know which best practice to apply.
 
-### Collaborative package orchestration (Phases 2–6)
+Failure classification:
 
-Whenever Phases 2–6 will touch **multiple files**, **progressive disclosure layout**, or use **checkpointed file-by-file rollout**, treat this as **required** before expanding or rewriting the tree:
+| Symptom | Diagnosis | Apply |
+|---|---|---|
+| Skill never activates when it should | Description missing trigger phrases or too vague | Principles: Description field |
+| Skill activates when it shouldn’t | Description too broad, no refusal cases | Principles: Constraints and refusal cases |
+| Claude reads wrong files first | Structure not intuitive, hub doesn’t guide well | Progressive disclosure |
+| Claude ignores a companion file | File not signaled in SKILL.md or poorly linked | File index, hub pattern |
+| Claude over-explains basics | Skill states what Claude already knows | Principles: Concision |
+| Claude follows instructions too rigidly | Skill railroads instead of guiding | Principles: Degree of freedom |
+| Claude makes same mistake repeatedly | Missing gotcha | Principles: Gotchas |
+| Claude errors on script execution | Script doesn’t handle errors, missing deps | Principles: Scripts |
+| Output format is wrong | Missing template or examples | Principles: Templates and examples |
 
-1. Read `skill-refinement-package.md` from the installed prompt-generator skill, typically at `~/.claude/skills/prompt-generator/templates/skill-refinement-package.md` (source dependency: [jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
-2. Run `/prompt-generator` with that template’s token table filled: set `[[BASELINE_SKILL_ROOT]]` to the existing skill directory, `[[WORKSPACE_ROOT]]` to your iteration workspace (in-place or snapshot per user preference), and `[[DESIGN_INPUT_GLOB]]` to this workflow’s observation-based `gap-analysis.md` when it exists.
+**Output:** Diagnosis per failure — which best practice was violated.
 
-Use `skill-from-ground-up.md` **only** for **greenfield** packages where no baseline skill directory exists yet; use `skill-refinement-package.md` for every refinement anchored to an existing skill.
+---
 
-Key differences from the new-skill flow:
+## Step 3: Apply Patterns
 
-- **Phase 2 (Build Evals):** Evals should test the specific issues observed in Phase 1, not hypothetical gaps.
+**Goal:** Fix each diagnosed failure by applying the specific best practice that addresses it.
 
-- **Phase 3 (Write Skill):** Instead of writing from scratch, invoke `/skill-writer` with:
+> "Only change what the feedback demands. Do not reorganize working content."
 
-  ```
-  Refine this existing skill based on observation findings.
+For each diagnosis from Step 2:
 
-  Current SKILL.md: [reference or paste current skill]
-  Gap analysis: [reference observation-based gaps]
-  Eval scenarios: [reference evals]
+1. Read the relevant section in `${CLAUDE_SKILL_DIR}/references/progressive-disclosure.md` or the SKILL.md principles.
+2. Make the minimum change that addresses the failure.
+3. Verify the fix doesn’t break anything that was working.
 
-  Constraint: Preserve what works. Only change what the observations demand.
-  ```
+Delegate larger rewrites to `/skill-writer` using the refine-skill handoff from delegation-map.md.
 
-- **Phase 4 (Test):** The baseline is the CURRENT skill (snapshot it before editing). Compare old-skill vs new-skill, not with-skill vs without-skill.
+**Output:** Modified skill files with targeted fixes.
 
-  Before making any changes, snapshot the existing skill:
-  ```bash
-  cp -r [skill-path] [workspace]/skill-snapshot/
-  ```
+---
 
-  Then for baseline runs, point subagents at the snapshot:
-  ```
-  Execute this task using the ORIGINAL skill at [workspace]/skill-snapshot/:
-  - Read the skill and follow its instructions
-  - Task: [eval prompt]
-  - Save outputs to: [workspace]/iteration-N/eval-[name]/old_skill/outputs/
-  - Save transcript to: [workspace]/iteration-N/eval-[name]/old_skill/transcript.md
-  ```
+## Step 4: Capture Gotchas
 
-- **Phase 5 (Iterate):** Same process. The improvement loop compares new version against the snapshot.
+**Goal:** Every observation is a gotcha candidate. Accumulate them.
 
-- **Phase 6 (Polish):** Same process. Run description optimization if triggering was an issue.
+> "Ideally, you will update your skill over time to capture these gotchas."
+
+For each failure observed in Step 1:
+
+1. Distill it to a one-line gotcha: what went wrong and the signal that should have prevented it.
+2. Add it to the skill’s Gotchas section.
+3. If the failure mode is about skill-builder itself (not the skill being improved), add it to skill-builder’s own Gotchas section.
+
+**Output:** Updated gotchas in the skill’s SKILL.md (and potentially skill-builder’s SKILL.md).
+
+---
+
+## Step 5: Self-Audit
+
+**Goal:** Re-verify the modified skill against all best practices.
+
+Same process as new-skill Step 5:
+
+1. Read `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
+2. Check every item. Fix failures. Re-check.
+3. Pay special attention to items that overlap with the diagnosis from Step 2 — those were the failures; confirm they’re now fixed.
+
+**Output:** Completed checklist, all PASS or N/A.
+
+---
+
+## Step 6: Deliver
+
+**Goal:** Hand off the improved skill with delta summary.
+
+Present to the user:
+
+1. **What was observed** — summary of failures from Step 1.
+2. **What was diagnosed** — which best practices were violated.
+3. **What changed** — delta summary (files modified, lines added/removed).
+4. **New gotchas added** — list of gotchas captured.
+5. **Audit summary** — post-fix audit results.
+6. **Suggested re-test** — a concrete task to verify the fix with Claude B.

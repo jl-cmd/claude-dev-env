@@ -4,89 +4,113 @@ Final optimization pass for a skill that is functionally complete.
 
 ## Prerequisites
 
-- The skill passes its evaluation scenarios
+- The skill has been used and observed
 - The user is satisfied with output quality
 - This is the final step before the skill is considered done
 
-### Package-aware polish (recommended)
-
-When the polish pass will touch **more than frontmatter alone** (for example `REFERENCE.md`, `EXAMPLES.md`, `WORKFLOWS.md`, link structure, or eval JSON), or the user wants **checkpointed** multi-file updates alongside description work:
-
-1. Read `prompt-generator/templates/skill-refinement-package.md` (repository path: `skills/prompt-generator/templates/skill-refinement-package.md` in [jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator)).
-2. Run `/prompt-generator` with tokens filled so `ARCHITECTURE.md` records baseline inventory, planned deltas for polish, and evidence rules for any new trigger or behavior evals.
-
-Purely **single-field** `description` edits with no structural package changes can skip this block.
-
 ---
 
-## Step 1: Description Optimization
+## Step 1: Description Audit
 
-Optimize the skill's description for triggering accuracy using the skill-creator's trigger eval system.
+**Goal:** Verify the description field is optimized for model discovery.
 
-### Generate trigger eval queries
+> "The description is critical for skill selection: Claude uses it to choose the right Skill from potentially 100+ available Skills."
 
-Create 20 eval queries: 10 should-trigger and 10 should-not-trigger.
+> "The description field is not a summary — it's a description of when to trigger."
 
-**Should-trigger queries (10):** Different phrasings of the same intent. Include:
-- Formal and casual variations
-- Cases where the user does not explicitly name the skill but clearly needs it
-- Uncommon use cases
+Check each requirement:
+
+- [ ] **Third person.** "Processes Excel files" not "I can help you process Excel files."
+- [ ] **Includes what AND when.** Both the capability and trigger contexts.
+- [ ] **Specific trigger phrases.** Different phrasings of the same intent should all match.
+- [ ] **Under 1024 characters.** Hard limit.
+- [ ] **No XML tags.**
+- [ ] **Distinguishable from similar skills.** If two skills overlap, the descriptions must make the boundary clear.
+
+### Trigger phrase review
+
+Generate 10 variations of the user's intent:
+- Formal and casual phrasings
+- Cases where the user doesn't explicitly name the skill but clearly needs it
 - Cases where this skill competes with another but should win
 
-**Should-not-trigger queries (10):** Near-misses that share keywords but need something different. Include:
-- Adjacent domains with overlapping terminology
-- Ambiguous phrasing where naive keyword matching would falsely trigger
-- Tasks that touch the skill's domain but in a context where another tool is better
+For each, answer: would the current description cause Claude to select this skill?
 
-All queries must be realistic -- detailed, specific, with file paths, personal context, casual speech. Not abstract one-liners.
+Also check 5 near-miss phrasings — adjacent domains where this skill should NOT trigger. Verify the description doesn't cause false activation.
 
-### Review with user
+### Fix issues
 
-Present the eval set using the skill-creator's HTML review template. See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for the exact process.
+If the description fails any check, revise it. Show before/after with the specific change and why it improves discovery.
 
-The user can edit queries, toggle should-trigger, and add/remove entries.
-
-### Run optimization loop
-
-See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for the exact command. The loop:
-1. Splits eval set into 60% train / 40% held-out test
-2. Evaluates current description (3 runs per query for reliability)
-3. Proposes improvements based on failures
-4. Re-evaluates on both train and test
-5. Iterates up to 5 times
-6. Selects best description by test score (avoids overfitting)
-
-### Apply result
-
-Update the skill's SKILL.md frontmatter with the optimized description. Show the user before/after with scores.
+**Output:** Verified description (and revised version if changes were made).
 
 ---
 
-## Step 2: Final Validation
+## Step 2: Progressive Disclosure Audit
 
-Run the skill-writer self-check rubric:
+**Goal:** Verify the file structure follows all progressive disclosure rules.
 
-- [ ] Description is third person with trigger phrases
-- [ ] SKILL.md body under 500 lines
-- [ ] States what to do in positive terms (not prohibition-heavy)
-- [ ] Degree of freedom matches task fragility
-- [ ] Progressive disclosure used (heavy content in separate files)
-- [ ] No time-sensitive claims unless clearly dated
-- [ ] Examples are concrete, not abstract
-- [ ] Frontmatter fields are valid per official docs
-- [ ] One skill = one capability
-- [ ] Consistent terminology throughout
-- [ ] File references are one level deep from SKILL.md
-- [ ] Files over 100 lines have a table of contents
+> "Keep SKILL.md body under 500 lines."
+
+Check:
+
+- [ ] SKILL.md body under 500 lines.
+- [ ] All reference files link directly from SKILL.md (one level deep).
+- [ ] Every file over 100 lines has a table of contents.
+- [ ] File index in SKILL.md lists every companion file with its purpose.
+- [ ] Forward slashes only in all paths.
+- [ ] File names are descriptive (`form_validation_rules.md`, not `doc2.md`).
+- [ ] Scripts clearly marked as execute vs read-as-reference.
+
+### Fix structural issues
+
+If any check fails, restructure. Common fixes:
+- SKILL.md too long → move sections to companion files, leave links.
+- Nested references → surface all links to SKILL.md.
+- Missing TOC → add to files over 100 lines.
+
+**Output:** Verified file structure (and restructured files if changes were made).
 
 ---
 
-## Step 3: Final Summary
+## Step 3: Gotcha Freshness
 
-Present the finished skill to the user:
+**Goal:** Ensure gotchas reflect current observations.
 
-1. **Benchmark summary:** Final pass rate vs baseline, with delta
-2. **Gaps addressed:** Map each original gap to the skill content that addresses it
-3. **Description optimization:** Before/after trigger accuracy scores
-4. **Known limitations:** Anything the skill does not handle (scope boundaries)
-5. **Maintenance notes:** What to watch for in future usage that might warrant re-iteration
+> "Ideally, you will update your skill over time to capture these gotchas."
+
+- Review the skill's Gotchas section.
+- Check against recent usage: are there new failure modes not yet captured?
+- Remove gotchas for issues that no longer occur (the skill fixed them).
+- Verify each gotcha is actionable — a reader should know what to avoid and why.
+
+**Output:** Updated gotchas section (and any new gotchas for skill-builder itself).
+
+---
+
+## Step 4: Full Self-Audit
+
+**Goal:** Complete 38-point checklist pass.
+
+Same as new-skill Step 5 and improve-skill Step 5:
+
+1. Read `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
+2. Check every item. Fix failures. Re-check.
+3. All items must be PASS or N/A.
+
+**Output:** Completed checklist.
+
+---
+
+## Step 5: Deliver
+
+**Goal:** Final summary of the polished skill.
+
+Present to the user:
+
+1. **Description** — final version, confirmed trigger phrases.
+2. **File structure** — folder map with line counts.
+3. **Gotchas** — current gotcha count and most recent additions.
+4. **Audit summary** — "All 38 items: N passed, M N/A."
+5. **Before/after** — description changes if any, structural changes if any.
+6. **Maintenance notes** — what to watch for, when to re-audit.
