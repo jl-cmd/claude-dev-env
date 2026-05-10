@@ -29,7 +29,7 @@ This file is **rules-only**. Repo layout, build commands, and workflow guidance 
 - [Scope of review](#scope-of-review)
 - [Hook enforcement](#hook-enforcement)
 
-Many bullets are implemented in `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` (`validate_content` for Python and a small JavaScript subset). The default `PreToolUse` `Write|Edit` chain in `packages/claude-dev-env/hooks/hooks.json` does **not** register that script today; other hooks there (for example `tdd_enforcer.py`, `windows_rmtree_blocker.py`, and the `run_all_validators` entrypoint) cover overlapping or adjacent concerns on a different trigger model. **Hook enforcement** below maps rules to their **source script** and notes Python-only coverage where it applies. Flag violations from the diff in review even when no local hook runs the same check.
+Many bullets are implemented in `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` (`validate_content` for Python and a small JavaScript subset). The default `PreToolUse` `Write|Edit` chain in `packages/claude-dev-env/hooks/hooks.json` registers that script alongside `tdd_enforcer.py`, `windows_rmtree_blocker.py`, the `run_all_validators` entrypoint, and others; the `Bash` chain registers `destructive_command_blocker.py`, `gh_body_arg_blocker.py`, `block_main_commit.py`, and `pr_description_enforcer.py`. **Hook enforcement** below maps each rule to its **source script** and notes Python-only coverage where it applies. Flag violations from the diff in review even when no local hook runs the same check.
 
 ---
 
@@ -64,7 +64,7 @@ Many bullets are implemented in `packages/claude-dev-env/hooks/blocking/code_rul
 
 - Direction and source parameters carry a preposition prefix: `from_path=`, `to=`, `into=`.
 - Identifiers in production code describe domain meaning: `parsed_invoice`, `pending_orders`, `cached_lookup`. Generic placeholders to replace: `result`, `data`, `output`, `response`, `value`, `item`, `temp`.
-- Function names use specific verbs: `parse_invoice`, `dispatch_event`, `migrate_schema`. Generic prefixes to replace: `handle_`, `process_`, `manage_`, `do_`.
+- Function names use specific verbs: `parse_invoice`, `dispatch_event`, `migrate_schema`. Generic prefixes to replace (hook-enforced via `code_rules_enforcer.py::check_banned_prefixes`): `handle_`, `process_`, `manage_`, `do_`.
 
 ### Magic values & configuration
 
@@ -95,8 +95,10 @@ Full rule including the decision table, examples, and reference-counting details
 
 - Function parameters and return values carry type annotations.
 - Python `# type: ignore` directives carry a second trailing `#` comment with ≥5 characters of justification (e.g. `# type: ignore[misc]  # stubs missing in foo library`). Plain trailing text without a leading `#` does not satisfy the rule. The trailing reason comment is part of the directive and exempt from the comment-preservation rule.
-- `Any` (Python) and `any` (TypeScript/JavaScript) annotations are findings — author should replace with an explicit type.
+- `Any` (Python) and `any` (TypeScript/JavaScript) annotations are findings — author should replace with an explicit type. Hook-enforced for Python: `from typing import Any`, `cast()`, and inline `Any` are blocked outside `__init__.py`, `protocols.py`, `types.py`, and `conftest.py`.
+- `Any` appearing in function signatures (parameters, return types) or class attribute annotations is blocked even when nested inside a generic (`dict[str, Any]`, `list[Any]`, `Callable[..., Any]`). Local variable annotations are exempt.
 - Concrete types match the value's actual shape.
+- Exception handlers name the specific exception class. `except:`, `except Exception:`, and `except BaseException:` are blocked in production — name the failure mode you intend to handle. Tuple form (`except (ValueError, KeyError):`) is fine.
 
 ### Structure
 
@@ -167,4 +169,15 @@ The table lists **where the rule is encoded** (the script or module that impleme
 | `UPPER_SNAKE_CASE` constants live under `config/` | `code_rules_enforcer.py` (Python) |
 | Production `Write|Edit` touches require a recently modified sibling test candidate | `tdd_enforcer.py` (heuristic freshness gate — not a proof that a brand-new test assertion shipped in the same PR) |
 | `shutil.rmtree` `ignore_errors=True` blocked on Windows | `windows_rmtree_blocker.py` |
-| `gh ... --body` markdown bodies must use `--body-file` | Policy in [Platform and tooling](#platform-and-tooling); no `gh_body_arg_blocker.py` entry in the default `hooks.json` chain |
+| `gh ... --body` markdown bodies must use `--body-file` | `gh_body_arg_blocker.py` (PreToolUse Bash chain) |
+| `git --no-verify`, `git --no-gpg-sign`, `git -c commit.gpgsign=false` blocked | `destructive_command_blocker.py` (PreToolUse Bash chain) |
+| Banned identifiers (`ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `tmp`, `elem`, `val`) in production | `code_rules_enforcer.py::check_banned_identifiers` (Python) |
+| Banned function name prefixes (`handle_`, `process_`, `manage_`, `do_`) in production | `code_rules_enforcer.py::check_banned_prefixes` (Python) |
+| Type escape hatches (`from typing import Any`, `cast()`, inline `Any`) in production | `code_rules_enforcer.py::check_type_escape_hatches` (Python; exempts `__init__.py`, `protocols.py`, `types.py`, `conftest.py`) |
+| Bare `except:` / `except Exception:` / `except BaseException:` in production | `code_rules_enforcer.py::check_bare_except` (Python) |
+| `Any` in function signatures or class attribute annotations (boundary types) | `code_rules_enforcer.py::check_boundary_types` (Python; exempts `protocols.py`, `types.py`) |
+| Stub bodies (`pass` / `...` / `raise NotImplementedError`) in non-abstract production functions | `code_rules_enforcer.py::check_stub_implementations` (Python) |
+| `TypedDict` declarations require companion `_encode_*` / `_decode_*` functions in same module | `code_rules_enforcer.py::check_typed_dict_encode_decode` (Python) |
+| Test-mode branching (reading `TESTING`, `PYTEST_CURRENT_TEST`, `IS_TEST`) in production | `code_rules_enforcer.py::check_test_branching_in_production` (Python) |
+| Thin wrapper modules (imports + `__all__` only, outside `__init__.py`) | `code_rules_enforcer.py::check_thin_wrapper_files` (Python) |
+| Public functions missing Google-style `Args:` / `Returns:` / `Raises:` when warranted | `code_rules_enforcer.py::check_docstring_format` (Python) |

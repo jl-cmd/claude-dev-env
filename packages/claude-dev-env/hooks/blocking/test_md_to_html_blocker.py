@@ -31,7 +31,7 @@ def test_exempt_root_filenames_are_module_constant():
     if hook_dir not in sys.path:
         sys.path.insert(0, hook_dir)
 
-    import md_to_html_blocker as blocker_module
+    blocker_module = importlib.import_module("md_to_html_blocker")
     importlib.reload(blocker_module)
 
     assert hasattr(blocker_module, "_exempt_root_filenames")

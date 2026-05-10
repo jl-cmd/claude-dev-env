@@ -34,6 +34,24 @@ def test_all_banned_identifiers_includes_canonical_offenders() -> None:
     assert canonical_offenders <= ALL_BANNED_IDENTIFIERS
 
 
+def test_all_banned_identifiers_includes_code_rules_section_5_abbreviations() -> None:
+    code_rules_section_5_abbreviations = {
+        "ctx",
+        "cfg",
+        "msg",
+        "btn",
+        "idx",
+        "cnt",
+        "elem",
+        "val",
+    }
+    missing_abbreviations = code_rules_section_5_abbreviations - ALL_BANNED_IDENTIFIERS
+    assert not missing_abbreviations, (
+        f"CODE_RULES.md §5 banned abbreviations missing from frozenset: "
+        f"{sorted(missing_abbreviations)}"
+    )
+
+
 def test_max_banned_identifier_issues_is_positive_cap() -> None:
     assert MAX_BANNED_IDENTIFIER_ISSUES > 0
 
