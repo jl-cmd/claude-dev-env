@@ -48,31 +48,6 @@ Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 
 ## Step 2: Branch on `phase`
 
-### `phase == COPILOT_WAIT`
-
-Re-enter convergence-gates.md gate (d) Copilot-response handling:
-
-a. Fetch latest Copilot review at `current_head`:
-
-   ```
-pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
-   → filter `.user.login` for copilot (case-insensitive substring "copilot")
-   → filter `.commit_id == current_head`
-   → sort by `.submitted_at` descending
-   ```
-
-b. Decide:
-   - **Copilot review present at `current_head`:**
-     - `state: APPROVED` → reset `copilot_wait_count = 0`, set `copilot_clean_at = current_head`, `phase = BUGTEAM`.
-       Continue to convergence-gates.md gate (e) in same tick.
-     - `state: CHANGES_REQUESTED` or `COMMENTED` with non-empty body → dirty.
-       Reset `copilot_wait_count = 0`. Apply **Fix protocol**.
-       Reset `bugbot_clean_at = null` AND
-       `copilot_clean_at = null`, `phase = BUGBOT`, schedule next wakeup, return.
-   - **No Copilot review at `current_head` yet:** Increment `copilot_wait_count`.
-     `>= 3` → hard blocker per [stop-conditions.md](stop-conditions.md); report
-     and terminate with no loop pacing. Else schedule next wakeup (270s), return.
-
 ### `phase == BUGBOT`
 
 a. Fetch Cursor Bugbot reviews newest-first, walk back until first clean:
@@ -179,13 +154,62 @@ never falsely terminates:
      Re-trigger bugbot same tick (Step 3) so new HEAD enters queue, `phase
      = BUGBOT`, schedule next wakeup, return.
    - **Convergence AND `bugbot_clean_at == current_head` (no push):**
-     Back-to-back clean — necessary, not sufficient. Run **[convergence-gates.md](convergence-gates.md)** to clear Copilot, Claude, mergeability, post-convergence
-     Copilot-request, and thread-resolution gates. Only when all five gates pass mark PR ready and
+     Back-to-back clean — necessary, not sufficient. Run **[convergence-gates.md](convergence-gates.md)** to clear all six gates: Copilot findings,
+     Claude reviewer, mergeability, post-convergence Copilot request,
+     thread resolution. Only when all six gates pass mark PR ready and
      **omit loop pacing** per **Convergence** of active pacing workflow.
    - **Convergence BUT `bugbot_clean_at != current_head` (no push):**
      `phase = BUGBOT`, schedule next wakeup, return.
    - **Findings without committed fixes:** spawn Agent (subagent_type: clean-coder) to implement fixes and push, then reply inline via `add_reply_to_pull_request_comment` MCP, following [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow).
      `phase = BUGBOT`, schedule next wakeup, return.
+
+### `phase == COPILOT_WAIT`
+
+Post-convergence Copilot re-check. Enters after gate (d) requests Copilot
+review. Do **not** run bugteam here — that only happens after BUGBOT clean
+on this HEAD.
+
+a. Fetch latest Copilot review at `current_head` plus unaddressed inline
+   comments:
+
+   ```
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
+  → filter `.user.login` for copilot (case-insensitive substring "copilot")
+    AND `.commit_id == current_head`
+  → sort by `.submitted_at` descending
+
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
+  → filter threads where `is_outdated == false` AND `is_resolved == false`
+    AND `pull_request_review_id` matches the newest Copilot review
+    AND any comment has `.author` matching Copilot (case-insensitive substring "copilot")
+   ```
+
+b. Decide (three branches; match first whose predicate holds):
+
+   - **Copilot review `state: APPROVED` at `current_head`:** Set
+     `copilot_clean_at = current_head`. Record "Copilot APPROVED". Set
+     `phase = BUGTEAM`. Continue to convergence-gates.md gate (b) in same
+     tick — back-to-back convergence requires all gates on same HEAD.
+   - **Copilot review dirty (CHANGES_REQUESTED or COMMENTED with findings)
+     at `current_head`:** Apply **Fix protocol** — spawn Agent
+     (subagent_type: clean-coder) to implement → push → reply inline on each
+     thread via `add_reply_to_pull_request_comment` MCP. For body-only
+     findings (no inline threads), post top-level review reply citing new
+     HEAD SHA. Reset
+     `bugbot_clean_at = null` AND `copilot_clean_at = null`. **Set
+     `phase = BUGBOT`** (NOT COPILOT_WAIT) — every fix push requires a full
+     back-to-back-clean cycle on the new HEAD. Schedule next wakeup, return.
+   - **No Copilot review at `current_head` yet:** Increment
+     `copilot_wait_count` (init 0 on COPILOT_WAIT entry; reset to 0 on
+     every push and on every successful Copilot review). `>= 3` → hard
+     blocker per [stop-conditions.md](stop-conditions.md). Otherwise
+     schedule next wakeup (270s), return.
+
+**Non-negotiable:** After any Copilot fix push, `phase` MUST route to
+`BUGBOT`. Never cycle COPILOT_WAIT → fix → COPILOT_WAIT. The
+back-to-back-clean guarantee (bugbot ∧ bugteam both clean on same HEAD
+before gates re-open) only holds when every fix commit re-enters through
+BUGBOT.
 
 ## Step 3: Re-trigger bugbot
 

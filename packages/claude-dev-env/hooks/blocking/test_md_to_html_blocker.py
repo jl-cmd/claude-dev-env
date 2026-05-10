@@ -1,5 +1,6 @@
 """Tests for md_to_html_blocker hook."""
 
+import importlib
 import json
 import os
 import subprocess
@@ -26,8 +27,6 @@ _run_hook = _RunHook()
 
 def test_exempt_root_filenames_are_module_constant():
     """Exempt root filenames should be a module-level constant, not inline in the function body."""
-    import importlib
-    import sys
     hook_dir = os.path.dirname(HOOK_SCRIPT_PATH)
     if hook_dir not in sys.path:
         sys.path.insert(0, hook_dir)

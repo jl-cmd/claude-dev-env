@@ -25,9 +25,32 @@ convergence or stop]
 </example>
 
 <example> BUGTEAM phase, bugteam reports convergence and `bugbot_clean_at
-== current_head`. Claude: [runs `update_pull_request(pullNumber=NUMBER, owner=OWNER, repo=REPO, draft=false)`, reports "PR
-converged: bugbot CLEAN at <SHA>, bugteam CLEAN at <SHA>; marked ready for
-review", applies **Convergence** from `workflows/schedule-wakeup-loop.md`]
+== current_head` (no push). Claude: [back-to-back clean — necessary, not
+sufficient. Runs `convergence-gates.md` gates in order:
+  Gate (a): two calls — `pull_request_read(method="get_reviews")` +
+    `pull_request_read(method="get_review_comments")`
+    → filter Copilot → APPROVED at `current_head`
+    → record evidence, set `copilot_clean_at = current_head`.
+  Gate (b): two calls — `pull_request_read(method="get_reviews")` +
+    `pull_request_read(method="get_review_comments")`
+    → filter Claude → absent at `current_head`
+    → record evidence, continue (trivially clean).
+  Gate (c): `pull_request_read(method="get")` → `.mergeable_state == "clean"`
+    AND `.mergeable == true` → record evidence.
+  Gate (d): set `phase = COPILOT_WAIT`;
+    `request_copilot_review(owner=OWNER, repo=REPO, pullNumber=NUMBER)`
+    → schedule next wakeup, return.
+    Next tick: re-run gate (a) fetch → Copilot `APPROVED` at `current_head`
+    → set `copilot_clean_at = current_head`, record evidence: "Copilot
+    APPROVED at <SHA>", set `phase = BUGTEAM`, re-validate gates (b) and (c).
+  Gate (e): `pull_request_read(method="get_review_comments")` → filter
+    unresolved bot threads → zero at `current_head` → record evidence.
+  Gate (f): all six gates pass → `update_pull_request(pullNumber=NUMBER,
+    owner=OWNER, repo=REPO, draft=false)`.
+Reports "PR #N converged: bugbot CLEAN at <SHA>, bugteam CLEAN at <SHA>,
+mergeable_state clean, copilot CLEAN at <SHA>, claude absent at <SHA>,
+0 unresolved threads; marked ready for review",
+applies **Convergence** from `workflows/schedule-wakeup-loop.md`]
 </example>
 
 <example> BUGTEAM phase, bugteam pushed fix commit during run. Claude:
@@ -42,7 +65,7 @@ HEAD but inline API returns zero matching for `current_head`. Claude:
 </example>
 
 <example> Back-to-back clean reached, but `mergeStateStatus: DIRTY` (base
-advanced, merge conflicts). Claude: [runs §Convergence gates (b); does NOT
+advanced, merge conflicts). Claude: [runs §Convergence gate (c); does NOT
 mark ready; invokes `rebase` skill per `../../rebase/SKILL.md` Phase 1–4;
 after force-with-lease push, resets `bugbot_clean_at = null`,
 `copilot_clean_at = null`, `merge_state_status = null`, `phase = BUGBOT`,
@@ -58,19 +81,27 @@ HEAD, schedules next wakeup]
 </example>
 
 <example> Back-to-back clean, mergeability CLEAN, no Copilot review on
-`current_head`. Claude requests Copilot via `add_issue_comment(owner=OWNER, repo=REPO, issueNumber=NUMBER, body="@copilot review")`,
-waits one tick. Next tick: Copilot review `state: APPROVED`. Claude: [sets
-`copilot_clean_at = current_head`; runs `update_pull_request(pullNumber=NUMBER, owner=OWNER, repo=REPO, draft=false)`; reports "PR
-#N converged: bugbot CLEAN at <SHA>, bugteam CLEAN at <SHA>,
-mergeable_state clean, copilot CLEAN; marked ready for review"]
+`current_head`. Claude sets `phase = COPILOT_WAIT`, runs gate (d):
+`request_copilot_review(owner=OWNER, repo=REPO, pullNumber=NUMBER)`,
+schedules next wakeup, returns. Next tick:
+Copilot review `state: APPROVED` at `current_head`. Claude: [re-runs
+gate (a) fetch → APPROVED → sets `copilot_clean_at = current_head`,
+records evidence: "Copilot APPROVED at <SHA>", sets `phase = BUGTEAM`;
+re-validates gates (b) Claude absent and (c) mergeability clean,
+records evidence for both; gate (e) zero unresolved threads passes
+trivially, record evidence: "0 unresolved threads at <SHA>";
+runs `update_pull_request(pullNumber=NUMBER,
+owner=OWNER, repo=REPO, draft=false)`; reports "PR #N converged: bugbot CLEAN
+at <SHA>, bugteam CLEAN at <SHA>, mergeable_state clean, copilot CLEAN at
+<SHA>, claude absent at <SHA>, 0 unresolved threads; marked ready for review"]
 </example>
 
 <example> Back-to-back clean, mergeability CLEAN, post-convergence Copilot
 review returned `state: CHANGES_REQUESTED` with inline findings on
-`current_head`. Claude: [does NOT mark PR ready — gate (4) failed;
+`current_head`. Claude: [does NOT mark PR ready — gate (d) failed;
 applies Fix protocol on every confirmed Copilot finding (TDD test → fix →
 push → reply inline on each thread); resets `bugbot_clean_at = null` and
 `copilot_clean_at = null`; `phase = BUGBOT`; posts `bugbot run` on new
-HEAD; schedules next wakeup. Full back-to-back-clean cycle plus all four
+HEAD; schedules next wakeup. Full back-to-back-clean cycle plus all six
 gates must hold again on new HEAD.]
 </example>
