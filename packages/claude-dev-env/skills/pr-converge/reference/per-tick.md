@@ -46,6 +46,31 @@ Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 
 ## Step 2: Branch on `phase`
 
+### `phase == COPILOT_WAIT`
+
+Re-enter convergence-gates.md gate (d) Copilot-response handling:
+
+a. Fetch latest Copilot review at `current_head`:
+
+   ```
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
+   → filter `.user.login` for copilot (case-insensitive substring "copilot")
+   → filter `.commit_id == current_head`
+   → sort by `.submitted_at` descending
+   ```
+
+b. Decide:
+   - **Copilot review present at `current_head`:**
+     - `state: APPROVED` → reset `copilot_wait_count = 0`, set `copilot_clean_at = current_head`, `phase = BUGTEAM`.
+       Continue to convergence-gates.md gate (e) in same tick.
+     - `state: CHANGES_REQUESTED` or `COMMENTED` with non-empty body → dirty.
+       Reset `copilot_wait_count = 0`. Apply **Fix protocol**.
+       Reset `bugbot_clean_at = null` AND
+       `copilot_clean_at = null`, `phase = BUGBOT`, schedule next wakeup, return.
+   - **No Copilot review at `current_head` yet:** Increment `copilot_wait_count`.
+     `>= 3` → hard blocker per [stop-conditions.md](stop-conditions.md); report
+     and terminate with no loop pacing. Else schedule next wakeup (270s), return.
+
 ### `phase == BUGBOT`
 
 a. Fetch Cursor Bugbot reviews newest-first, walk back until first clean:
@@ -151,10 +176,9 @@ never falsely terminates:
      Re-trigger bugbot same tick (Step 3) so new HEAD enters queue, `phase
      = BUGBOT`, schedule next wakeup, return.
    - **Convergence AND `bugbot_clean_at == current_head` (no push):**
-     Back-to-back clean — necessary, not sufficient. Run **[convergence-gates.md](convergence-gates.md)** to clear Copilot findings, mergeability,
-     and post-convergence Copilot request. Only when all four gates pass
-     mark PR ready. **Omit loop pacing** per **Convergence** of active
-     pacing workflow.
+     Back-to-back clean — necessary, not sufficient. Run **[convergence-gates.md](convergence-gates.md)** to clear Copilot, Claude, mergeability, post-convergence
+     Copilot-request, and thread-resolution gates. Only when all five gates pass mark PR ready and
+     **omit loop pacing** per **Convergence** of active pacing workflow.
    - **Convergence BUT `bugbot_clean_at != current_head` (no push):**
      `phase = BUGBOT`, schedule next wakeup, return.
    - **Findings without committed fixes:** spawn Agent (subagent_type: clean-coder) to implement fixes and push, then reply inline via `add_reply_to_pull_request_comment` MCP, following [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow).
