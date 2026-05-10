@@ -41,6 +41,8 @@ pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get") → `
 ```
 
 If owner/repo/number are not yet known, extract them from the PR URL.
+If `current_head` changed since last tick, reset `bugbot_down` to `false`
+(new HEAD invalidates prior down-detection state).
 
 Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 
@@ -163,8 +165,9 @@ pushed commits during its run. `current_head` from Step 1 is stale:
    proceed with convergence-gates — schedule a 90s wakeup and return.
    Re-resolve HEAD next tick.
 
-   If `new_head != current_head`, set `current_head = new_head` AND
-   `bugbot_clean_at = null`. New commits invalidate bugbot's prior clean.
+   If `new_head != current_head`, set `current_head = new_head`,
+   `bugbot_clean_at = null`, `bugbot_down = false`. New commits invalidate
+   bugbot's prior clean and down-detection state.
 
 c. Inspect bugteam outcome. Reports `convergence (zero findings)` or list
 of unfixed findings with file:line.
@@ -196,6 +199,16 @@ alternative phrasings (`re-review`, `bugbot please`, etc.) silently no-op.
 **Gotcha (duplicate `bugbot run` while review queued):** Skip Step 3 when
 the latest `bugbot run` PR comment has an `:eyes:` or `:+1:` reaction; wait
 for review or HEAD change before re-triggering.
+
+**Bugbot-down detection:** After posting `bugbot run` via `add_issue_comment`,
+capture the returned comment ID. Wait 15 seconds, then fetch comments via
+`issue_read(method="get_comments", owner=OWNER, repo=REPO, issue_number=NUMBER)`,
+select the comment whose `id` matches the captured ID, and check its
+reactions. If the comment has zero reactions, bugbot did not
+acknowledge — it is down. Set `bugbot_down = true`, `phase = BUGTEAM`, and
+continue BUGTEAM in the same tick (no wakeup — bugteam runs now against this
+HEAD). If reactions are present, bugbot acknowledged; proceed with normal
+pacing (Step 4).
 
 ## Step 4: Loop pacing
 
