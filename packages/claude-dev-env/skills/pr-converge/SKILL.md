@@ -47,6 +47,11 @@ post a fresh PR in a fresh branch based on origin main to the user.
   indicate staleness. Always check the correct fields and use
   case-insensitive substring matching on login values, never strict
   equality.
+- **COPILOT_WAIT → fix → COPILOT_WAIT cycle skips back-to-back-clean** —
+  after fixing Copilot findings and pushing, `phase` MUST route to
+  `BUGBOT`, not back to `COPILOT_WAIT`. The model will improvise
+  COPILOT_WAIT behavior if per-tick.md Step 2 has no handler for it.
+  The handler in per-tick.md exists to prevent exactly this path.
 
 ## First tick of a session
 
