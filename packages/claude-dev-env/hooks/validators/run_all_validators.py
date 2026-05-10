@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
@@ -179,10 +179,10 @@ def print_header() -> None:
 
 
 def build_json_output(
-    results: List[Any],
+    results: List["ValidatorResult"],
     metrics: TimingMetrics,
     include_timing: bool,
-) -> Dict[str, Any]:
+) -> Dict[str, object]:
     """Build JSON output dictionary.
 
     Args:

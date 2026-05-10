@@ -1,6 +1,7 @@
 """Mypy integration for static type checking."""
 
 import subprocess
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,6 +26,42 @@ def check_mypy_available() -> bool:
         return False
 
 
+def _pyproject_contains_tool_mypy(pyproject_path: Path) -> bool:
+    try:
+        with pyproject_path.open("rb") as readable_handle:
+            parsed_toml = tomllib.load(readable_handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    tool_table = parsed_toml.get("tool", {})
+    return isinstance(tool_table, dict) and "mypy" in tool_table
+
+
+def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
+    """Walk up from a starting file to locate a pyproject.toml that configures mypy.
+
+    The walk skips pyproject.toml files that do not declare a [tool.mypy]
+    table so that an unrelated package config (for example, a project root
+    pyproject.toml) does not shadow a hook-tree pyproject.toml that
+    actually configures the type checker.
+
+    Args:
+        starting_file: The file (or directory) the walk begins from. The walk
+            climbs through every parent directory in order.
+
+    Returns:
+        The first ``pyproject.toml`` Path that declares a ``[tool.mypy]``
+        table, or ``None`` when no such file exists between ``starting_file``
+        and the filesystem root.
+    """
+    pyproject_filename_for_lookup = "pyproject.toml"
+    current_directory = starting_file.parent if starting_file.is_file() else starting_file
+    for each_candidate_directory in [current_directory, *current_directory.parents]:
+        candidate_pyproject = each_candidate_directory / pyproject_filename_for_lookup
+        if candidate_pyproject.is_file() and _pyproject_contains_tool_mypy(candidate_pyproject):
+            return candidate_pyproject
+    return None
+
+
 def run_mypy_check(files: list[Path]) -> MypyResult:
     """Run mypy on files."""
     if not files:
@@ -37,8 +74,14 @@ def run_mypy_check(files: list[Path]) -> MypyResult:
     if not py_files:
         return MypyResult(passed=True, output="No Python files", error_count=0)
 
+    config_argument: list[str] = []
+    discovered_pyproject = find_pyproject_with_mypy_config(Path(py_files[0]))
+    if discovered_pyproject is not None:
+        config_argument = ["--config-file", str(discovered_pyproject)]
+
     result = subprocess.run(
-        ["mypy", "--ignore-missing-imports", "--no-error-summary"] + py_files,
+        ["mypy", *config_argument, "--ignore-missing-imports", "--no-error-summary"]
+        + py_files,
         capture_output=True,
         text=True,
     )

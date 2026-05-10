@@ -68,6 +68,23 @@ from config.stuttering_import_binding_constants import (  # noqa: E402
     MODULE_PATH_SEPARATOR,
     WILDCARD_IMPORT_SENTINEL,
 )
+from config.any_type_config import ALL_ANY_ALLOWED_PATTERNS  # noqa: E402
+from config.blocking_check_limits import (  # noqa: E402
+    ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES,
+    ALL_BOUNDARY_TYPE_EXEMPT_FILENAMES,
+    ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES,
+    ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES,
+    ALL_TEST_INDICATING_ENVIRONMENT_VARIABLE_NAMES,
+    DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
+    MAX_BANNED_PREFIX_ISSUES,
+    MAX_BARE_EXCEPT_ISSUES,
+    MAX_BOUNDARY_TYPE_ISSUES,
+    MAX_DOCSTRING_FORMAT_ISSUES,
+    MAX_STUB_IMPLEMENTATION_ISSUES,
+    MAX_TEST_BRANCHING_ISSUES,
+    MAX_THIN_WRAPPER_ISSUES,
+    MAX_TYPED_DICT_PAIR_ISSUES,
+)
 
 PYTHON_EXTENSIONS = {".py"}
 JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx"}
@@ -163,6 +180,9 @@ def check_comments_python(content: str) -> list[str]:
         if stripped.startswith("# pragma:"):
             continue
 
+        if stripped.startswith(("# TODO", "# FIXME", "# HACK", "# XXX")):
+            continue
+
         comment_index = line.find("#")
         if comment_index != -1:
             before_comment = line[:comment_index]
@@ -179,7 +199,7 @@ def check_comments_python(content: str) -> list[str]:
 
                 if not in_string:
                     comment_text = line[comment_index + 1 :].strip()
-                    if comment_text and not comment_text.startswith(("type:", "noqa", "pylint:", "pragma:")):
+                    if comment_text and not comment_text.startswith(("type:", "noqa", "pylint:", "pragma:", "TODO", "FIXME", "HACK", "XXX")):
                         issues.append(f"Line {line_number}: Comment found - refactor to self-documenting code")
 
         if len(issues) >= 3:
@@ -243,7 +263,7 @@ def extract_comment_texts(content: str, file_path: str) -> tuple[set[str], set[s
             if not stripped:
                 continue
             if stripped.startswith("#"):
-                if stripped.startswith(("#!", "# type:", "# noqa", "# pylint:", "# pragma:")):
+                if stripped.startswith(("#!", "# type:", "# noqa", "# pylint:", "# pragma:", "# TODO", "# FIXME", "# HACK", "# XXX")):
                     continue
                 standalone_comments.add(stripped)
             elif "#" in line:
@@ -261,7 +281,7 @@ def extract_comment_texts(content: str, file_path: str) -> tuple[set[str], set[s
                                 in_string = False
                     if not in_string:
                         comment_text = line[comment_index + 1 :].strip()
-                        if comment_text and not comment_text.startswith(("type:", "noqa", "pylint:", "pragma:")):
+                        if comment_text and not comment_text.startswith(("type:", "noqa", "pylint:", "pragma:", "TODO", "FIXME", "HACK", "XXX")):
                             inline_comments.add(line[comment_index:].strip())
 
     elif extension in JAVASCRIPT_EXTENSIONS:
@@ -742,15 +762,105 @@ def _find_unjustified_type_ignore_lines(source: str) -> list[int]:
     return offending_line_numbers
 
 
+def _find_typing_any_imports(source: str) -> list[int]:
+    """Return line numbers of `from typing import ... Any ...` statements."""
+    try:
+        parsed_tree = ast.parse(source)
+    except SyntaxError:
+        return []
+
+    offending_line_numbers: list[int] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, ast.ImportFrom):
+            continue
+        if each_node.module != "typing":
+            continue
+        for each_alias in each_node.names:
+            if each_alias.name == "Any":
+                offending_line_numbers.append(each_node.lineno)
+                break
+    return offending_line_numbers
+
+
+def _find_typing_wildcard_imports(source: str) -> list[int]:
+    """Return line numbers of `from typing import *` statements."""
+    try:
+        parsed_tree = ast.parse(source)
+    except SyntaxError:
+        return []
+
+    offending_line_numbers: list[int] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, ast.ImportFrom):
+            continue
+        if each_node.module != "typing":
+            continue
+        for each_alias in each_node.names:
+            if each_alias.name == "*":
+                offending_line_numbers.append(each_node.lineno)
+                break
+    return offending_line_numbers
+
+
+def _is_typing_cast_call(call_node: ast.Call) -> bool:
+    """Return True when a Call node represents a cast() invocation."""
+    function_node = call_node.func
+    if isinstance(function_node, ast.Name) and function_node.id == "cast":
+        return True
+    if isinstance(function_node, ast.Attribute) and function_node.attr == "cast":
+        return True
+    return False
+
+
+def _find_cast_call_lines(source: str) -> list[int]:
+    """Return line numbers of cast(...) calls (typing.cast or bare cast)."""
+    try:
+        parsed_tree = ast.parse(source)
+    except SyntaxError:
+        return []
+
+    offending_line_numbers: list[int] = []
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, ast.Call) and _is_typing_cast_call(each_node):
+            offending_line_numbers.append(each_node.lineno)
+    return offending_line_numbers
+
+
+def _file_path_matches_any_exemption(file_path: str) -> bool:
+    normalized_path = file_path.replace("\\", "/").lower()
+    return any(
+        normalized_path.endswith(each_pattern.lower())
+        or normalized_path.endswith("/" + each_pattern.lower())
+        for each_pattern in ALL_ANY_ALLOWED_PATTERNS
+    )
+
+
 def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
-    """Flag Any annotations and unjustified # type: ignore comments."""
+    """Flag Any annotations, Any imports, cast() calls, and unjustified # type: ignore."""
     if is_test_file(file_path):
+        return []
+    if _file_path_matches_any_exemption(file_path):
         return []
 
     issues: list[str] = []
 
     for each_any_line in _find_any_annotation_lines(content):
         issues.append(f"Line {each_any_line}: Any annotation - replace with explicit type")
+
+    for each_import_line in _find_typing_any_imports(content):
+        issues.append(
+            f"Line {each_import_line}: 'from typing import Any' - remove the Any import and use explicit types"
+        )
+
+    for each_wildcard_line in _find_typing_wildcard_imports(content):
+        issues.append(
+            f"Line {each_wildcard_line}: 'from typing import *' wildcard import - import explicit names instead"
+        )
+
+    for each_cast_line in _find_cast_call_lines(content):
+        issues.append(
+            f"Line {each_cast_line}: cast() call - escape hatch around the type system; use explicit types or runtime validation"
+        )
 
     for each_ignore_line in _find_unjustified_type_ignore_lines(content):
         issues.append(
@@ -973,6 +1083,703 @@ def check_banned_identifiers(content: str, file_path: str) -> list[str]:
             f"Line {each_name.lineno}: Banned identifier '{each_name.id}' - {BANNED_IDENTIFIER_MESSAGE_SUFFIX}"
         )
         if len(issues) >= MAX_BANNED_IDENTIFIER_ISSUES:
+            break
+
+    return issues
+
+
+
+
+def _string_constant_value(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
+
+
+def _is_environ_attribute(node: ast.expr) -> bool:
+    if isinstance(node, ast.Attribute) and node.attr == "environ":
+        return isinstance(node.value, ast.Name) and node.value.id == "os"
+    return False
+
+
+def _environ_get_call_argument_names(call_node: ast.Call) -> list[str]:
+    function_node = call_node.func
+    if not isinstance(function_node, ast.Attribute):
+        return []
+    if function_node.attr != "get":
+        return []
+    if not _is_environ_attribute(function_node.value):
+        return []
+    if not call_node.args:
+        return []
+    first_argument = _string_constant_value(call_node.args[0])
+    return [first_argument] if first_argument is not None else []
+
+
+def _environ_subscript_key_names(subscript_node: ast.Subscript) -> list[str]:
+    if not _is_environ_attribute(subscript_node.value):
+        return []
+    key = _string_constant_value(subscript_node.slice)
+    return [key] if key is not None else []
+
+
+def _environ_membership_key_names(compare_node: ast.Compare) -> list[str]:
+    if not compare_node.ops:
+        return []
+    if not isinstance(compare_node.ops[0], (ast.In, ast.NotIn)):
+        return []
+    if not compare_node.comparators:
+        return []
+    if not _is_environ_attribute(compare_node.comparators[0]):
+        return []
+    key = _string_constant_value(compare_node.left)
+    return [key] if key is not None else []
+
+
+def _collect_test_env_variable_references(parsed_tree: ast.AST) -> list[tuple[int, str]]:
+    references: list[tuple[int, str]] = []
+    for each_node in ast.walk(parsed_tree):
+        candidate_names: list[str] = []
+        if isinstance(each_node, ast.Call):
+            candidate_names = _environ_get_call_argument_names(each_node)
+        elif isinstance(each_node, ast.Subscript):
+            candidate_names = _environ_subscript_key_names(each_node)
+        elif isinstance(each_node, ast.Compare):
+            candidate_names = _environ_membership_key_names(each_node)
+        for each_candidate_name in candidate_names:
+            if each_candidate_name in ALL_TEST_INDICATING_ENVIRONMENT_VARIABLE_NAMES:
+                references.append((each_node.lineno, each_candidate_name))
+    return references
+
+
+def check_test_branching_in_production(content: str, file_path: str) -> list[str]:
+    """Flag production code that branches on TESTING-style env vars.
+
+    Production code reading TESTING / PYTEST_CURRENT_TEST creates two
+    parallel implementations and hides bugs. Use dependency injection
+    (override the dependency in tests) instead.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    references = _collect_test_env_variable_references(parsed_tree)
+    references.sort(key=lambda each_reference: each_reference[0])
+
+    issues: list[str] = []
+    already_reported_lines: set[int] = set()
+    for each_line_number, each_variable_name in references:
+        if each_line_number in already_reported_lines:
+            continue
+        already_reported_lines.add(each_line_number)
+        issues.append(
+            f"Line {each_line_number}: Production code reads test indicator '{each_variable_name}' — "
+            "use dependency injection so production stays single-path"
+        )
+        if len(issues) >= MAX_TEST_BRANCHING_ISSUES:
+            break
+
+    return issues
+
+
+def _bare_except_handler_label(handler_node: ast.ExceptHandler) -> str | None:
+    """Return a label for handlers we flag, or None for safe handlers."""
+    handler_type = handler_node.type
+    if handler_type is None:
+        return "bare except:"
+    if isinstance(handler_type, ast.Name) and handler_type.id in ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES:
+        return f"except {handler_type.id}:"
+    if (
+        isinstance(handler_type, ast.Attribute)
+        and handler_type.attr in ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES
+    ):
+        return f"except {handler_type.attr}:"
+    return None
+
+
+def check_bare_except(content: str, file_path: str) -> list[str]:
+    """Flag bare/over-broad exception handlers in production code.
+
+    `except:` swallows KeyboardInterrupt and SystemExit; `except Exception:`
+    and `except BaseException:` hide bugs by catching every error class.
+    Production code should name the specific exception(s) it intends to catch
+    (a tuple form like `except (ValueError, KeyError):` is fine).
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, ast.ExceptHandler):
+            continue
+        handler_label = _bare_except_handler_label(each_node)
+        if handler_label is None:
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: {handler_label} catches every error including "
+            "KeyboardInterrupt/SystemExit — name the specific exception(s) you intend to handle"
+        )
+        if len(issues) >= MAX_BARE_EXCEPT_ISSUES:
+            break
+    return issues
+
+
+def _is_init_file(file_path: str) -> bool:
+    return file_path.replace("\\", "/").rsplit("/", 1)[-1] == "__init__.py"
+
+
+def _statement_is_module_docstring(statement_node: ast.stmt) -> bool:
+    return (
+        isinstance(statement_node, ast.Expr)
+        and isinstance(statement_node.value, ast.Constant)
+        and isinstance(statement_node.value.value, str)
+    )
+
+
+def _statement_is_dunder_all_assignment(statement_node: ast.stmt) -> bool:
+    if isinstance(statement_node, ast.Assign):
+        for each_target in statement_node.targets:
+            if isinstance(each_target, ast.Name) and each_target.id == "__all__":
+                return True
+        return False
+    if isinstance(statement_node, ast.AnnAssign):
+        target = statement_node.target
+        return isinstance(target, ast.Name) and target.id == "__all__"
+    return False
+
+
+def _statement_is_import_or_reexport(statement_node: ast.stmt) -> bool:
+    if isinstance(statement_node, (ast.Import, ast.ImportFrom)):
+        return True
+    if _statement_is_dunder_all_assignment(statement_node):
+        return True
+    return False
+
+
+def check_thin_wrapper_files(content: str, file_path: str) -> list[str]:
+    """Flag non-`__init__.py` modules that are only imports + `__all__`.
+
+    A re-export-only wrapper outside `__init__.py` forces callers through an
+    indirection layer with no payload of its own. Callers should import from
+    the real module. `__init__.py` is the canonical re-export surface and is
+    exempt; test files, hook infrastructure, and `config/` are also exempt.
+    """
+    if (
+        is_test_file(file_path)
+        or is_hook_infrastructure(file_path)
+        or is_config_file(file_path)
+        or _is_init_file(file_path)
+    ):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    body_statements = list(parsed_tree.body)
+    if not body_statements:
+        return []
+
+    statements_after_docstring = (
+        body_statements[1:]
+        if _statement_is_module_docstring(body_statements[0])
+        else body_statements
+    )
+    if not statements_after_docstring:
+        return []
+
+    for each_statement in statements_after_docstring:
+        if not _statement_is_import_or_reexport(each_statement):
+            return []
+
+    issues = [
+        f"{file_path}: thin wrapper file — module body is only imports/__all__; "
+        "callers should import from the real module instead of going through this indirection"
+    ]
+    return issues[:MAX_THIN_WRAPPER_ISSUES]
+
+
+def _annotation_node_references_any(annotation_node: ast.expr | None) -> bool:
+    if annotation_node is None:
+        return False
+    for each_descendant in ast.walk(annotation_node):
+        if isinstance(each_descendant, ast.Name) and each_descendant.id == "Any":
+            return True
+        if isinstance(each_descendant, ast.Attribute) and each_descendant.attr == "Any":
+            return True
+    return False
+
+
+def _file_has_exempt_boundary_filename(file_path: str) -> bool:
+    filename = file_path.replace("\\", "/").rsplit("/", 1)[-1]
+    return filename in ALL_BOUNDARY_TYPE_EXEMPT_FILENAMES
+
+
+def _signature_annotations(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[
+    tuple[ast.expr, str, int]
+]:
+    collected_annotations: list[tuple[ast.expr, str, int]] = []
+    function_name = function_node.name
+    for each_argument in function_node.args.args:
+        if each_argument.annotation is not None:
+            collected_annotations.append(
+                (each_argument.annotation, f"{function_name}({each_argument.arg})", each_argument.lineno)
+            )
+    for each_argument in function_node.args.kwonlyargs:
+        if each_argument.annotation is not None:
+            collected_annotations.append(
+                (each_argument.annotation, f"{function_name}({each_argument.arg})", each_argument.lineno)
+            )
+    if function_node.returns is not None:
+        collected_annotations.append(
+            (function_node.returns, f"{function_name} -> return", function_node.returns.lineno)
+        )
+    return collected_annotations
+
+
+def _class_attribute_annotations(class_node: ast.ClassDef) -> list[tuple[ast.expr, str, int]]:
+    collected_annotations: list[tuple[ast.expr, str, int]] = []
+    for each_statement in class_node.body:
+        if isinstance(each_statement, ast.AnnAssign) and isinstance(each_statement.target, ast.Name):
+            collected_annotations.append(
+                (
+                    each_statement.annotation,
+                    f"{class_node.name}.{each_statement.target.id}",
+                    each_statement.lineno,
+                )
+            )
+    return collected_annotations
+
+
+def check_boundary_types(content: str, file_path: str) -> list[str]:
+    """Flag `Any` appearing in function signatures or class attribute annotations.
+
+    Module boundaries (function parameters, return types, class attributes)
+    must name the concrete shape they accept and produce. Local variable
+    annotations are private and exempt; `protocols.py` and `types.py` are
+    interface-declaration files and exempt.
+    """
+    if (
+        is_test_file(file_path)
+        or is_hook_infrastructure(file_path)
+        or _file_has_exempt_boundary_filename(file_path)
+    ):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for each_annotation, each_label, each_line_number in _signature_annotations(each_node):
+                if _annotation_node_references_any(each_annotation):
+                    issues.append(
+                        f"Line {each_line_number}: {each_label} uses Any at module boundary — "
+                        "name the concrete shape callers receive/produce"
+                    )
+        elif isinstance(each_node, ast.ClassDef):
+            for each_annotation, each_label, each_line_number in _class_attribute_annotations(each_node):
+                if _annotation_node_references_any(each_annotation):
+                    issues.append(
+                        f"Line {each_line_number}: {each_label} uses Any at class boundary — "
+                        "name the concrete shape this attribute holds"
+                    )
+        if len(issues) >= MAX_BOUNDARY_TYPE_ISSUES:
+            break
+    return issues[:MAX_BOUNDARY_TYPE_ISSUES]
+
+
+def _function_is_private_or_dunder(function_name: str) -> bool:
+    if function_name.startswith("__") and function_name.endswith("__"):
+        return True
+    return function_name.startswith("_")
+
+
+def _decorator_label(decorator_node: ast.expr) -> str:
+    if isinstance(decorator_node, ast.Name):
+        return decorator_node.id
+    if isinstance(decorator_node, ast.Attribute):
+        prefix = (
+            decorator_node.value.id
+            if isinstance(decorator_node.value, ast.Name)
+            else ""
+        )
+        return f"{prefix}.{decorator_node.attr}" if prefix else decorator_node.attr
+    if isinstance(decorator_node, ast.Call):
+        return _decorator_label(decorator_node.func)
+    return ""
+
+
+def _function_has_exempt_decorator(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    for each_decorator in function_node.decorator_list:
+        if _decorator_label(each_decorator) in ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES:
+            return True
+    return False
+
+
+def _function_body_line_count(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> int:
+    if not function_node.body:
+        return 0
+    last_statement = function_node.body[-1]
+    end_line = getattr(last_statement, "end_lineno", last_statement.lineno)
+    first_line = function_node.body[0].lineno
+    return max(0, end_line - first_line + 1)
+
+
+def _function_documentable_parameter_count(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> int:
+    documentable_count = 0
+    for each_argument in function_node.args.args:
+        if each_argument.arg in ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES:
+            continue
+        documentable_count += 1
+    documentable_count += len(function_node.args.kwonlyargs)
+    documentable_count += len(function_node.args.posonlyargs)
+    if function_node.args.vararg is not None:
+        documentable_count += 1
+    if function_node.args.kwarg is not None:
+        documentable_count += 1
+    return documentable_count
+
+
+def _annotation_is_explicit_none_return(annotation_node: ast.expr | None) -> bool:
+    if annotation_node is None:
+        return False
+    if isinstance(annotation_node, ast.Constant) and annotation_node.value is None:
+        return True
+    return isinstance(annotation_node, ast.Name) and annotation_node.id == "None"
+
+
+def _function_body_contains_raise(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    for each_descendant in ast.walk(function_node):
+        if isinstance(each_descendant, ast.Raise):
+            return True
+    return False
+
+
+def _function_body_contains_yield(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    for each_descendant in ast.walk(function_node):
+        if isinstance(each_descendant, (ast.Yield, ast.YieldFrom)):
+            return True
+    return False
+
+
+def _function_docstring_text(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> str:
+    docstring_value = ast.get_docstring(function_node)
+    return docstring_value or ""
+
+
+def _missing_docstring_sections(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[str]:
+    docstring_text = _function_docstring_text(function_node)
+    documentable_parameter_count = _function_documentable_parameter_count(function_node)
+    has_non_none_return = (
+        function_node.returns is not None
+        and not _annotation_is_explicit_none_return(function_node.returns)
+    )
+    has_raise_statement = _function_body_contains_raise(function_node)
+    has_yield_statement = _function_body_contains_yield(function_node)
+    missing_sections: list[str] = []
+    if documentable_parameter_count > 0 and "Args:" not in docstring_text:
+        missing_sections.append("Args:")
+    if has_non_none_return and not (
+        "Returns:" in docstring_text or "Yields:" in docstring_text
+    ):
+        section_label = "Yields:" if has_yield_statement else "Returns:"
+        missing_sections.append(section_label)
+    if has_raise_statement and "Raises:" not in docstring_text:
+        missing_sections.append("Raises:")
+    return missing_sections
+
+
+def check_docstring_format(content: str, file_path: str) -> list[str]:
+    """Flag public functions missing required Google-style docstring sections.
+
+    A public function whose signature has documentable parameters, returns
+    a non-None value, or raises must have the matching `Args:` / `Returns:`
+    (or `Yields:`) / `Raises:` sections so callers can read the contract
+    without scanning the body.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_is_private_or_dunder(each_node.name):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        if _function_body_line_count(each_node) <= DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT:
+            continue
+        missing_sections = _missing_docstring_sections(each_node)
+        if not missing_sections:
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: {each_node.name}() docstring missing required "
+            f"section(s): {', '.join(missing_sections)} — Google style required for public APIs"
+        )
+        if len(issues) >= MAX_DOCSTRING_FORMAT_ISSUES:
+            break
+    return issues[:MAX_DOCSTRING_FORMAT_ISSUES]
+
+
+def _pascal_to_snake_case(pascal_name: str) -> str:
+    pascal_to_snake_word_boundary = re.compile(r"(?<!^)(?=[A-Z])")
+    return pascal_to_snake_word_boundary.sub("_", pascal_name).lower()
+
+
+def _class_inherits_from_typed_dict(class_node: ast.ClassDef) -> bool:
+    for each_base in class_node.bases:
+        if isinstance(each_base, ast.Name) and each_base.id == "TypedDict":
+            return True
+        if isinstance(each_base, ast.Attribute) and each_base.attr == "TypedDict":
+            return True
+    return False
+
+
+def _collect_typed_dict_class_names(parsed_tree: ast.AST) -> list[tuple[str, int]]:
+    typed_dict_entries: list[tuple[str, int]] = []
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, ast.ClassDef) and _class_inherits_from_typed_dict(each_node):
+            typed_dict_entries.append((each_node.name, each_node.lineno))
+    return typed_dict_entries
+
+
+def _collect_module_function_names(parsed_tree: ast.AST) -> set[str]:
+    module_function_names: set[str] = set()
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            module_function_names.add(each_node.name)
+    return module_function_names
+
+
+def check_typed_dict_encode_decode(content: str, file_path: str) -> list[str]:
+    """Flag TypedDict declarations missing companion `_encode_*` / `_decode_*` functions."""
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    typed_dict_entries = _collect_typed_dict_class_names(parsed_tree)
+    if not typed_dict_entries:
+        return []
+
+    module_function_names = _collect_module_function_names(parsed_tree)
+
+    issues: list[str] = []
+    for each_typed_dict_name, each_typed_dict_line in typed_dict_entries:
+        snake_name = _pascal_to_snake_case(each_typed_dict_name)
+        encoder_function_name = f"_encode_{snake_name}"
+        decoder_function_name = f"_decode_{snake_name}"
+        is_encoder_present = encoder_function_name in module_function_names
+        is_decoder_present = decoder_function_name in module_function_names
+        if is_encoder_present and is_decoder_present:
+            continue
+        missing_companions: list[str] = []
+        if not is_encoder_present:
+            missing_companions.append(encoder_function_name)
+        if not is_decoder_present:
+            missing_companions.append(decoder_function_name)
+        issues.append(
+            f"Line {each_typed_dict_line}: TypedDict '{each_typed_dict_name}' missing companion "
+            f"{' and '.join(missing_companions)} — add explicit encode/decode functions"
+        )
+        if len(issues) >= MAX_TYPED_DICT_PAIR_ISSUES:
+            break
+
+    return issues
+
+
+def _function_decorator_is_abstractmethod(decorator_node: ast.expr) -> bool:
+    if isinstance(decorator_node, ast.Name) and decorator_node.id == "abstractmethod":
+        return True
+    if isinstance(decorator_node, ast.Attribute) and decorator_node.attr == "abstractmethod":
+        return True
+    return False
+
+
+def _function_is_abstract(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    return any(
+        _function_decorator_is_abstractmethod(each_decorator)
+        for each_decorator in function_node.decorator_list
+    )
+
+
+def _class_inherits_from_protocol_or_abc(class_node: ast.ClassDef) -> bool:
+    for each_base in class_node.bases:
+        if isinstance(each_base, ast.Name) and each_base.id in {"Protocol", "ABC"}:
+            return True
+        if isinstance(each_base, ast.Attribute) and each_base.attr in {"Protocol", "ABC"}:
+            return True
+    return False
+
+
+def _statement_is_docstring(statement_node: ast.stmt) -> bool:
+    return (
+        isinstance(statement_node, ast.Expr)
+        and isinstance(statement_node.value, ast.Constant)
+        and isinstance(statement_node.value.value, str)
+    )
+
+
+def _statement_is_pass(statement_node: ast.stmt) -> bool:
+    return isinstance(statement_node, ast.Pass)
+
+
+def _statement_is_ellipsis(statement_node: ast.stmt) -> bool:
+    return (
+        isinstance(statement_node, ast.Expr)
+        and isinstance(statement_node.value, ast.Constant)
+        and statement_node.value.value is Ellipsis
+    )
+
+
+def _statement_is_raise_not_implemented(statement_node: ast.stmt) -> bool:
+    if not isinstance(statement_node, ast.Raise):
+        return False
+    raised_expression = statement_node.exc
+    if raised_expression is None:
+        return False
+    if isinstance(raised_expression, ast.Name) and raised_expression.id == "NotImplementedError":
+        return True
+    if (
+        isinstance(raised_expression, ast.Call)
+        and isinstance(raised_expression.func, ast.Name)
+        and raised_expression.func.id == "NotImplementedError"
+    ):
+        return True
+    return False
+
+
+def _function_body_is_stub(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    body_statements = list(function_node.body)
+    if body_statements and _statement_is_docstring(body_statements[0]):
+        body_statements = body_statements[1:]
+    if len(body_statements) != 1:
+        return False
+    sole_statement = body_statements[0]
+    return (
+        _statement_is_pass(sole_statement)
+        or _statement_is_ellipsis(sole_statement)
+        or _statement_is_raise_not_implemented(sole_statement)
+    )
+
+
+def check_stub_implementations(content: str, file_path: str) -> list[str]:
+    """Flag production functions whose body is only pass/.../raise NotImplementedError.
+
+    Stubs ship as placeholders that the rest of the system depends on but the
+    function does not deliver. ABC/Protocol abstract methods are exempt — they
+    are placeholders BY contract, not by oversight.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    abstract_class_function_ids: set[int] = set()
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, ast.ClassDef) and _class_inherits_from_protocol_or_abc(each_node):
+            for each_class_member in each_node.body:
+                if isinstance(each_class_member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    abstract_class_function_ids.add(id(each_class_member))
+
+    stub_function_nodes: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_is_abstract(each_node):
+            continue
+        if id(each_node) in abstract_class_function_ids:
+            continue
+        if _function_body_is_stub(each_node):
+            stub_function_nodes.append(each_node)
+
+    stub_function_nodes.sort(key=lambda each_function: each_function.lineno)
+
+    issues: list[str] = []
+    for each_function in stub_function_nodes:
+        issues.append(
+            f"Line {each_function.lineno}: Function '{each_function.name}' is a stub "
+            "(pass/.../raise NotImplementedError) — implement or remove"
+        )
+        if len(issues) >= MAX_STUB_IMPLEMENTATION_ISSUES:
+            break
+
+    return issues
+
+
+def check_banned_prefixes(content: str, file_path: str) -> list[str]:
+    """Flag function and method names using generic banned prefixes.
+
+    Per CODE_RULES.md / AGENTS.md Naming, function names use specific verbs.
+    Generic prefixes ``handle_``, ``process_``, ``manage_``, ``do_`` are
+    placeholders that hide the actual responsibility and are flagged so the
+    author renames the function to a specific verb.
+    """
+    all_banned_prefixes: tuple[str, ...] = ("handle_", "process_", "manage_", "do_")
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    flagged_function_nodes: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if any(each_node.name.startswith(each_prefix) for each_prefix in all_banned_prefixes):
+            flagged_function_nodes.append(each_node)
+
+    flagged_function_nodes.sort(key=lambda each_function: each_function.lineno)
+
+    issues: list[str] = []
+    for each_function in flagged_function_nodes:
+        issues.append(
+            f"Line {each_function.lineno}: Function '{each_function.name}' uses banned prefix - "
+            "rename to a specific verb (see CODE_RULES Naming section)"
+        )
+        if len(issues) >= MAX_BANNED_PREFIX_ISSUES:
             break
 
     return issues
@@ -2960,6 +3767,14 @@ def validate_content(
         all_issues.extend(check_file_global_constants_use_count(content, file_path))
         all_issues.extend(check_type_escape_hatches(content, file_path))
         all_issues.extend(check_banned_identifiers(content, file_path))
+        all_issues.extend(check_banned_prefixes(content, file_path))
+        all_issues.extend(check_stub_implementations(content, file_path))
+        all_issues.extend(check_typed_dict_encode_decode(content, file_path))
+        all_issues.extend(check_test_branching_in_production(content, file_path))
+        all_issues.extend(check_bare_except(content, file_path))
+        all_issues.extend(check_thin_wrapper_files(content, file_path))
+        all_issues.extend(check_boundary_types(content, file_path))
+        all_issues.extend(check_docstring_format(content, file_path))
         all_issues.extend(check_boolean_naming(content, file_path))
         all_issues.extend(check_skip_decorators_in_tests(content, file_path))
         all_issues.extend(check_existence_check_tests(content, file_path))

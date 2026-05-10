@@ -1,0 +1,69 @@
+# Centralized configuration for hook tooling.
+#
+# Replaces the standalone hooks/mypy.ini and provides a single config surface
+# for mypy, ruff, and pytest invocations rooted under packages/claude-dev-env/hooks/.
+# C3 (mypy_integration walk-up) finds this file by walking parents from each
+# checked .py file and matching on the [tool.mypy] table.
+
+[tool.mypy]
+mypy_path = "."
+python_version = "3.13"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [
+    ".audit-trail",
+    ".claude",
+    "node_modules",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+    "PL",
+]
+ignore = [
+    "E501",
+    "PLR0913",
+    "PLR2004",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"test_*.py" = ["B011", "PLR2004"]
+"*_test.py" = ["B011", "PLR2004"]
+"conftest.py" = ["B011"]
+
+[tool.coverage.run]
+branch = true
+omit = [
+    "test_*.py",
+    "*_test.py",
+    "conftest.py",
+    "__pycache__/*",
+    ".audit-trail/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

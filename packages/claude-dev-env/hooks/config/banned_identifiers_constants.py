@@ -13,6 +13,14 @@ ALL_BANNED_IDENTIFIERS: frozenset[str] = frozenset(
         "args",
         "kwargs",
         "argc",
+        "ctx",
+        "cfg",
+        "msg",
+        "btn",
+        "idx",
+        "cnt",
+        "elem",
+        "val",
     }
 )
 MAX_BANNED_IDENTIFIER_ISSUES: int = 3
