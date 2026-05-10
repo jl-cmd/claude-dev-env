@@ -17,6 +17,10 @@ _npv/
 /docs/references/bdd in action.pdf
 **/bdd in action.pdf
 
+# Bugteam workflow artifacts
+.bugteam-pr*-loop*.outcomes.xml
+post_pr_replies.ps1
+
 # Eval artifacts
 eval*
 eval_*

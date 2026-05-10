@@ -1,0 +1,20 @@
+"""CSS theme constants and URL scheme denylist for md-to-html companion hook."""
+
+CSS_BG_COLOR = "13, 17, 23"
+CSS_FG_COLOR = "201, 209, 217"
+CSS_BORDER_COLOR = "48, 54, 61"
+CSS_ACCENT_COLOR = "88, 166, 255"
+CSS_MUTED_COLOR = "139, 148, 158"
+CSS_SURFACE_COLOR = "22, 27, 34"
+CSS_STRONG_COLOR = "240, 246, 252"
+CSS_LINE_HEIGHT = "1.6"
+CSS_BODY_PADDING = "2rem"
+CSS_MAX_WIDTH = "960px"
+CSS_H1_SIZE = "1.6rem"
+CSS_H2_SIZE = "1.25rem"
+CSS_H3_SIZE = "1.1rem"
+CSS_CODE_SIZE = "0.85rem"
+CSS_TABLE_WIDTH = "100%"
+CSS_TH_WEIGHT = "600"
+
+BLOCKED_URL_SCHEMES = frozenset({"javascript", "data"})
