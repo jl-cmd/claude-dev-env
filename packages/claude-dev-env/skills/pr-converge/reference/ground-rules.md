@@ -3,7 +3,7 @@
 - **Append commits.** Each tick adds at most one fix commit.
 - **Bugbot findings on current SHA mean fix-then-push-then-`bugbot run`,
   not another naked `bugbot run`.**
-- **All `*_clean_at` and `merge_state_status` reset on every push.**
+- **All `*_clean_at`, `merge_state_status`, and `bugbot_down` reset on every push.**
 - **`bugbot run` comment is load-bearing.** Literal phrase exactly —
   empirically the only re-trigger Cursor Bugbot recognizes.
 - **Honor pre-push and pre-commit hooks.** Read output, fix the cause,

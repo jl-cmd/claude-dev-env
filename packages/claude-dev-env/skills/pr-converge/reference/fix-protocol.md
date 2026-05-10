@@ -12,8 +12,9 @@ per [ground-rules.md](ground-rules.md).
   (what changed + commit identifier), matching §Audit result → fix worker step 4 — **before** writing
   `state.json` and going idle.
 - Writes `last_action: "fix_pushed"`, `current_head: <new SHA>`,
-  `bugbot_clean_at: null`, `phase: "BUGBOT"`, `status: "awaiting_bugbot"`,
-  `last_updated` (ISO-8601 UTC) to `state.json` (per §Concurrency).
+  `bugbot_clean_at: null`, `bugbot_down: false`, `phase: "BUGBOT"`,
+  `status: "awaiting_bugbot"`, `last_updated` (ISO-8601 UTC) to
+  `state.json` (per §Concurrency).
 - Goes idle. Orchestrator spawns follow-up `general-purpose` agent for
   bugbot trigger and monitoring.
 

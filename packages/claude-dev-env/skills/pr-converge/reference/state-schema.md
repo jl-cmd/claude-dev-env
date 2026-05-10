@@ -18,6 +18,11 @@ plain text so next tick re-reads from context:
 - `inline_lag_streak`: integer, init `0`. Consecutive ticks where review
   body shows findings against `current_head` but inline API returns zero
   matching. Reset to `0` on any other branch outcome.
+- `bugbot_down`: boolean, init `false`. Set `true` when bugbot fails to
+  acknowledge a trigger comment; forces phase to BUGTEAM. Reset to
+  `false` on every push. Once set, remains `true` until the next push;
+  if bugbot stays down across ticks, the flag persists and BUGTEAM
+  continues.
 - `tick_count`: integer, init `0`. Increment every tick.
 
 Tick begins reading prior state line from most recent assistant message
