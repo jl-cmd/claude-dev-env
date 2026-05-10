@@ -119,13 +119,27 @@ Skill({skill: "bugteam", args:
      bugteam by reading [`../../bugteam/SKILL.md`](../../bugteam/SKILL.md). Same
      loop and gates; only harness steps differ.
 
-b. **Re-resolve current HEAD** — bugteam may have pushed commits during
-its run. `current_head` from Step 1 is potentially stale:
-   ```bash
-pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get") → `.head.sha`
+b. **Re-resolve current HEAD (MANDATORY — never skip).** Bugteam may have
+pushed commits during its run. `current_head` from Step 1 is stale:
+
    ```
-If `new_head != current_head`, set `current_head = new_head` AND
-`bugbot_clean_at = null`. New commits invalidate bugbot's prior clean.
+   pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get") → `.head.sha`
+   ```
+
+   Capture `new_head`. Then check the most recent commit timestamp:
+
+   ```
+   list_commits(owner=OWNER, repo=REPO, sha="<branch>")
+     → sort by `.commit.committer.date` descending → index 0 `.commit.committer.date`
+   ```
+
+   If the most recent commit timestamp is **less than 60 seconds ago**, the
+   GitHub API may not have propagated it to review endpoints yet. Do not
+   proceed with convergence-gates — schedule a 90s wakeup and return.
+   Re-resolve HEAD next tick.
+
+   If `new_head != current_head`, set `current_head = new_head` AND
+   `bugbot_clean_at = null`. New commits invalidate bugbot's prior clean.
 
 c. Inspect bugteam outcome. Reports `convergence (zero findings)` or list
 of unfixed findings with file:line.
@@ -137,9 +151,10 @@ never falsely terminates:
      Re-trigger bugbot same tick (Step 3) so new HEAD enters queue, `phase
      = BUGBOT`, schedule next wakeup, return.
    - **Convergence AND `bugbot_clean_at == current_head` (no push):**
-     Back-to-back clean — necessary, not sufficient. Run **[convergence-gates.md](convergence-gates.md)** to clear Copilot-findings, mergeability, post-convergence
-     Copilot-request. Only when all four gates pass mark PR ready and
-     **omit loop pacing** per **Convergence** of active pacing workflow.
+     Back-to-back clean — necessary, not sufficient. Run **[convergence-gates.md](convergence-gates.md)** to clear Copilot findings, mergeability,
+     and post-convergence Copilot request. Only when all four gates pass
+     mark PR ready. **Omit loop pacing** per **Convergence** of active
+     pacing workflow.
    - **Convergence BUT `bugbot_clean_at != current_head` (no push):**
      `phase = BUGBOT`, schedule next wakeup, return.
    - **Findings without committed fixes:** spawn Agent (subagent_type: clean-coder) to implement fixes and push, then reply inline via `add_reply_to_pull_request_comment` MCP, following [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow).
