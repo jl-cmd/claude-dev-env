@@ -122,7 +122,7 @@ Full words only. No mental translation.
 
 **Exception:** `i`, `j`, `k` in loops; `e` for exception.
 
-**Extended naming rules** (from readability-review rubric):
+**Extended naming rules** :
 - Loop vars: `each_order`, `each_user` (prefix `each_`)
 - Booleans: `is_valid`, `has_permission`, `should_retry` (prefix `is_`/`has_`/`should_`/`can_`)
 - Collections: `all_orders`, `all_users` (prefix `all_`)
@@ -384,5 +384,5 @@ Manual check:
 [ ] OCP/LSP/ISP/DIP only applied where abstractions already earn their keep (see §7.5)?
 [ ] No backwards-compatibility shims (§9.6)?
 [ ] No fallback/best-effort wrappers (§9.7)?
-[ ] Readability: /check or /readability-review
+[ ] Readability: /check
 ```

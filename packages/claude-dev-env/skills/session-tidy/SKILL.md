@@ -68,7 +68,7 @@ List project subdirectories in `sessions/` via `mcp__obsidian__list_directory`. 
 
 1. **Naming convention?** Must match `[N]. [Title].md` where N is the session number and Title is a 2-5 word outcome summary. Flag bracket prefixes, date-only names, parenthetical suffixes, or legacy `Session [N].md` patterns missing a title.
 2. **Frontmatter complete?** All required fields present: `type`, `project`, `session`, `date`, `status`, `blocked`, `tags`.
-3. **Type correct?** Must be `session-report`. Flag other types like `rule-audit`.
+3. **Type correct?** Must be `session-report`. Flag other types.
 4. **Status coherent?** `status: "completed"` with `blocked: true` is contradictory. `status: "in-progress"` or `status: "blocked"` on sessions older than 7 days is likely stale.
 5. **Orphaned next-steps?** Scan content for sections containing "Next", "Queued", "Session N+1", "TODO", or clipboard emoji sections. Cross-reference against subsequent sessions for the same project to determine if the items were addressed.
 6. **Categorized?** Files sitting directly in `sessions/` (not in a project subfolder) are uncategorized. Infer the project name from the filename pattern (e.g., `BudgetBridge Session 3.md` belongs in `sessions/BudgetBridge/`) or from the frontmatter `project` field. Flag for move into the correct subfolder.

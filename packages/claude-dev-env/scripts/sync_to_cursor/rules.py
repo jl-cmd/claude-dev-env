@@ -22,7 +22,7 @@ def _parse_h2_sections(markdown: str) -> dict[str, str]:
 def _filter_core_principles(body: str) -> str:
     lines = []
     for line in body.splitlines():
-        if "readability-review" in line or "readability standard" in line:
+        if "readability standard" in line:
             continue
         lines.append(line)
     return "\n".join(lines).strip()

@@ -19,7 +19,7 @@ npx claude-dev-env
 That's it. The installer will:
 
 1. Detect your Python 3 command (`python3`, `python`, or `py -3`)
-2. Copy 13 rules, 5 docs, 35 agents, 11 commands, and 22 skills to `~/.claude/`
+2. Copy 13 rules, 5 docs, 27 agents, 10 commands, and 12 skills to `~/.claude/`
 3. Copy hook scripts to `~/.claude/hooks/`
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
@@ -32,7 +32,7 @@ Only want specific tools? Use the `--only` flag with one or more groups:
 
 ```bash
 npx claude-dev-env --only prompts           # prompt-generator, agent-prompt + workflow hooks
-npx claude-dev-env --only journal           # dream, session-log, session-tidy
+npx claude-dev-env --only journal           # session-log, session-tidy
 npx claude-dev-env --only research          # deep-research, research-mode
 npx claude-dev-env --only core             # dev standards, hooks, agents, commands
 npx claude-dev-env --only prompts,research  # combine groups
@@ -42,12 +42,12 @@ npx claude-dev-env --only prompts,research  # combine groups
 |-------|----------------|
 | `core` | Rules, docs, commands, agents, all hooks |
 | `prompts` | prompt-generator, agent-prompt, prompt-workflow hooks and rules |
-| `journal` | dream, session-log, session-tidy |
+| `journal` | session-log, session-tidy |
 | `research` | deep-research, research-mode |
 
 ### Verify
 
-Start a new Claude Code session. You should see hook activity on your first prompt (code-rules-reminder, hook-structure-context). Run any slash command like `/commit` or `/readability-review` to confirm commands loaded.
+Start a new Claude Code session. You should see hook activity on your first prompt (code-rules-reminder, hook-structure-context). Run any slash command like `/commit` or `/plan` to confirm commands loaded.
 
 ### Update
 
@@ -128,21 +128,21 @@ Reference documents that rules and agents point to for detailed standards.
 | `DJANGO_PATTERNS.md` | Model patterns, view architecture, ORM best practices |
 | `PR_DESCRIPTION_GUIDE.md` | PR description structure and file-grouped format |
 
-### Agents (35)
+### Agents (27)
 
 Specialized agent prompts for common development tasks. Claude Code automatically discovers these and makes them available for delegation.
 
-**Code Quality:** clean-coder, code-quality-agent, code-standards-agent, readability-review-agent, refactoring-specialist, right-sized-engineer
+**Code Quality:** clean-coder, code-quality-agent, readability-review-agent, refactoring-specialist, right-sized-engineer
 
 **Testing:** tdd-test-writer, test-data-builder, validation-expert
 
-**Planning:** plan-executor, parallel-workflow-coordinator, mandatory-agent-workflow-agent, stub-detector-agent
+**Planning:** parallel-workflow-coordinator, mandatory-agent-workflow-agent, stub-detector-agent
 
-**Documentation:** docs-agent, doc-orchestrator, user-docs-writer, project-docs-analyzer
+**Documentation:** docs-agent, doc-orchestrator
 
-**Configuration:** config-extraction-agent, config-centralizer, magic-value-eliminator-agent, project-structure-organizer-agent
+**Configuration:** config-extraction-agent, config-centralizer, magic-value-eliminator-agent
 
-**Tooling:** agent-writer, skill-writer-agent, skill-to-agent-converter, tooling-builder
+**Tooling:** agent-writer, tooling-builder
 
 **Git:** git-commit-crafter, pr-description-writer, session-continuity-manager
 
@@ -150,9 +150,9 @@ Specialized agent prompts for common development tasks. Claude Code automaticall
 
 **Research:** deep-research
 
-**Other:** clasp-deployment-orchestrator, workflow-visual-documenter, project-context-loader
+**Other:** clasp-deployment-orchestrator, project-context-loader
 
-### Commands (11)
+### Commands (10)
 
 Slash commands for common workflows.
 
@@ -162,7 +162,6 @@ Slash commands for common workflows.
 | `/plan` | Create implementation plans with config search |
 | `/implement` | Execute plans with TDD workflow |
 | `/review-plan` | Review and critique implementation plans |
-| `/readability-review` | 8-dimension readability scoring |
 | `/right-size` | Check for over/under-engineering |
 | `/stubcheck` | Find stubs, TODOs, and NotImplementedError |
 | `/pr-comments` | Process PR review comments systematically |
@@ -170,7 +169,7 @@ Slash commands for common workflows.
 | `/initialize` | Session initialization with protocol review |
 | `/sum` | Summarize current work context |
 
-### Skills (22)
+### Skills (12)
 
 **Prompt Engineering (`--only prompts`):**
 
@@ -183,7 +182,6 @@ Slash commands for common workflows.
 
 | Skill | Purpose |
 |-------|---------|
-| `dream` | Guided reflection and brainstorming sessions |
 | `session-log` | Log session reports to Obsidian vault with decisions and outcomes |
 | `session-tidy` | Clean up and organize session folder structure |
 
@@ -198,15 +196,8 @@ Slash commands for common workflows.
 
 | Skill | Purpose |
 |-------|---------|
-| `tdd-team` | Orchestrate a 4-agent TDD team (planner, tester, implementer, validator) |
 | `pr-review-responder` | Systematic PR review response: fetch comments, checklist, fix, reply, commit |
 | `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |
-| `readability-review` | 8-dimension readability scoring (160 pts) with automatic fixes |
-| `ingest` | Digest codebase into LLM-friendly text files via gitingest |
-| `npm-creator` | Scaffold npm installer packages for Claude Code plugin repos |
-| `rule-audit` | Full enforcement audit of rules, hooks, and docs across user and project layers |
-| `rule-creator` | Create and harden Claude Code rules with positive framing and rationale |
-| `skill-writer` | Write Claude Code skills with prompt-engineering principles and progressive disclosure |
 | `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |

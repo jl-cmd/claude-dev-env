@@ -41,8 +41,6 @@ Plan a feature with full validation workflow.
 | Design | `plan` skill | Collaborative design with config discovery |
 | Write | `write-plan` skill | TDD plan with CODE_RULES.md compliance |
 | Review Plan | `review-plan` skill | Validate plan against standards |
-| Execute | `plan-executor` agent | Implement with standards enforcement |
-| Review Code | `readability-review` skill | Validate code before commit |
 
 ## Standards Reference
 

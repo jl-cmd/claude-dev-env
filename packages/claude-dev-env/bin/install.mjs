@@ -147,17 +147,16 @@ const INSTALL_GROUPS = {
     core: {
         description: 'Development standards, hooks, agents, commands',
         skills: [
-            'anthropic-plan', 'everything-search', 'ingest',
-            'npm-creator', 'pr-review-responder', 'readability-review',
-            'recall', 'remember', 'rule-audit', 'rule-creator',
-            'skill-writer', 'tdd-team'
+            'anthropic-plan', 'everything-search',
+            'pr-review-responder',
+            'recall', 'remember'
         ],
         includeDirectories: ['rules', 'docs', 'commands', 'agents'],
         includeAllHooks: true,
     },
     journal: {
         description: 'Session logging and memory',
-        skills: ['dream', 'session-log', 'session-tidy'],
+        skills: ['session-log', 'session-tidy'],
     },
     research: {
         description: 'Deep research and citation tools',
