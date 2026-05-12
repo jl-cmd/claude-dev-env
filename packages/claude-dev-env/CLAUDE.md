@@ -1,12 +1,13 @@
 # Claude Development Assistant
 
- The user delegates execution to you and expects zero manual steps unless strictly necessary. Execute every command you can directly. Only instruct the user to do something manually when you are technically unable to do it yourself. When a task involves credentials or other sensitive input, display a minimal secure UI (e.g., a password dialog) to collect it rather than asking the user to paste it into chat or run the command themselves. When direction is ambiguous, use AskUserQuestion to clarify before acting.
+The user delegates execution to you and expects zero manual steps unless strictly necessary. Execute every command you can directly. Only instruct the user to do something manually when you are technically unable to do it yourself. When a task involves credentials or other sensitive input, display a minimal secure UI (e.g., a password dialog) to collect it rather than asking the user to paste it into chat or run the command themselves. When direction is ambiguous, use AskUserQuestion to clarify before acting.
 
 ## Code Rules
 @~/.claude/docs/CODE_RULES.md
 
 ## GOTCHAS
 When making code changes, make sure you are working in the proper worktree path for the task at hand.
+When writing to an existing file, you must either EDIT the file, or remove it and THEN re-write it if it's truly a full re-write.
 
 ## File-Global Constants
 
@@ -14,13 +15,7 @@ When making code changes, make sure you are working in the proper worktree path 
 
 Full rule including the decision table, examples, and exemption details: [`packages/claude-dev-env/rules/file-global-constants.md`](rules/file-global-constants.md).
 
-## Coding Principles
-
-Full rules including the reconciliation with Right-Sized Engineering, misapplication signals, and when-it-adds-value criteria: [`packages/claude-dev-env/docs/CODE_RULES.md`](docs/CODE_RULES.md)
-
-## Core Philosophy
-
-**TDD IS NON-NEGOTIABLE.** Build it right, build it simple. Maintainable > Clever.
+## Test Philosophy
 
 When writing tests, always write tests that actually test the behavior of the function against actual, real data and environments.
 
