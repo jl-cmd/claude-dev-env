@@ -7,7 +7,9 @@
 
 ## GOTCHAS
 When making code changes, make sure you are working in the proper worktree path for the task at hand.
+
 When writing tests, always write tests that actually test the behavior of the function against actual, real data and environments.
+
 When writing tests, always ensure you utilize the production code paths instead of duplicating explicitly for the test.
 
 ## File-Global Constants
