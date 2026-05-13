@@ -234,6 +234,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/auto_formatter.py",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/doc_gist_auto_publish.py ${CLAUDE_PLUGIN_ROOT}",
+            "timeout": 60
           }
         ]
       },
