@@ -21,7 +21,7 @@ The audit agent loads the A–K category rubrics from
 ## Pre-flight
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/preflight.py"
+python "${CLAUDE_SKILL_DIR}/scripts/bugteam_preflight.py"
 ```
 
 Auto-remediation runs automatically when `core.hooksPath` is the failing check;

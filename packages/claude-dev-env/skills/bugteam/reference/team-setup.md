@@ -4,13 +4,14 @@
 
 ### Utility scripts
 
-Shell-heavy steps live under
+Bugteam-specific utilities (preflight, fix_hookspath, grant, revoke) live in
+the skill-local [`scripts/`](../scripts/) directory. Shared utilities remain in
 [`_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/) (run, do not paste
 into context). Utility scripts are **executed**, not loaded as primary context
 ([`sources.md`](sources.md) § Progressive disclosure and utility scripts).
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/preflight.py"
+python "${CLAUDE_SKILL_DIR}/scripts/bugteam_preflight.py"
 ```
 
 Non-zero → fix before grant. `BUGTEAM_PREFLIGHT_SKIP=1` emergency only.
@@ -23,12 +24,12 @@ must auto-invoke the fix script — do not fall through to `AskUserQuestion`, do
 not punt to the user, do not ask for confirmation:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/fix_hookspath.py"
+python "${CLAUDE_SKILL_DIR}/scripts/bugteam_fix_hookspath.py"
 ```
 
 The fix script removes any non-canonical local-scope override on the active
 repository, sets the global `core.hooksPath` to `~/.claude/hooks/git-hooks` if
-missing or wrong, and re-runs `preflight.py`. Its exit code becomes the
+missing or wrong, and re-runs `bugteam_preflight.py`. Its exit code becomes the
 preflight outcome. Exit 0 → continue to Step 0. Non-zero only when the
 canonical hooks directory is missing (run `npx claude-dev-env .` first) or
 `git config --global` writes are blocked. Other preflight failures (pytest,
@@ -40,7 +41,7 @@ the auto-remediation only applies to the `core.hooksPath` failure mode.
 Before spawning any subagents, grant the session write access to the project's `.claude/**` tree:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/grant_project_claude_permissions.py"
+python "${CLAUDE_SKILL_DIR}/scripts/grant_project_claude_permissions.py"
 ```
 
 `${CLAUDE_SKILL_DIR}` is a Claude Code host-managed token, pre-substituted by the runtime before any shell sees it. Unlike `${TMPDIR}` and similar shell parameter expansions, it does not depend on the shell’s expansion semantics, so it behaves the same on Unix and Windows shells.

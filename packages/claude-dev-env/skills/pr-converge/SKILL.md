@@ -68,7 +68,7 @@ exist on `current_head`.** After every fix, reply to each finding comment and
 resolve the thread. Count unresolved threads before advancing.
 
 - [ ] **Step 0: Grant project permissions**
-      `python ~/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py`
+      `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
 
 - [ ] **Step 1: Resolve PR scope**
       Capture owner, repo, number, head SHA, branch.
@@ -216,7 +216,7 @@ resolve the thread. Count unresolved threads before advancing.
       See: [`bugteam/reference/teardown-publish-permissions.md` § Step 4.5](../../bugteam/reference/teardown-publish-permissions.md)
 
 - [ ] **Step 9: Revoke project permissions**
-      `python ~/.claude/skills/bugteam/scripts/revoke_project_claude_permissions.py`
+      `python "$HOME/.claude/skills/bugteam/scripts/revoke_project_claude_permissions.py"`
 
 - [ ] **Step 10: Print final report**
       ```
