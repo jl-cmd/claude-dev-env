@@ -17,8 +17,16 @@ until all three are clean on the same `HEAD` and mergeable.
 
 ## Pre-flight
 
-`ScheduleWakeup` not in this turn's tool registry → abort. Report
-`pr-converge requires ScheduleWakeup; aborting` and return.
+Pause and physically scan the tool list at the top of this conversation
+for the literal string `ScheduleWakeup`. If you see it, proceed. If the
+string is absent after scanning, report `pr-converge requires
+ScheduleWakeup; aborting` and stop.
+
+If the current working directory path does not contain `.claude/worktrees/`,
+call `EnterWorktree` with no arguments. This isolates the convergence loop
+from the user's working copy so parallel jobs and manual edits cannot
+interleave. If `EnterWorktree` fails (not a git repo, or already in a
+worktree), continue in place.
 
 ## Gotchas
 
