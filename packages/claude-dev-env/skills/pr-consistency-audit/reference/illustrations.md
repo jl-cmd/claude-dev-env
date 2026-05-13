@@ -7,7 +7,7 @@ Concrete examples of findings with why-they-matter explanations.
 ```
 file_path: SKILL.md
 line_number: 100
-rule_id: rule-9
+rule_id: 9
 severity: P0
 what_is_wrong: check_bugbot_ci.py --check-active --sha <SHA>
 what_it_should_be: check_bugbot_ci.py --owner <O> --repo <R> --check-active --sha <SHA>
@@ -22,7 +22,7 @@ Why this matters: If an agent copies the command from the doc, the script fails 
 ```
 file_path: SKILL.md
 line_number: 162
-rule_id: rule-2
+rule_id: 2
 severity: P0
 what_is_wrong: add_issue_comment(owner="OWNER", repo="REPO", issue_number=NUMBER, body="bugbot run")
 what_it_should_be: add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")
@@ -37,7 +37,7 @@ Why this matters: The tool call fails at runtime. Twenty files had this same bug
 ```
 file_path: scripts/remove_tree.py
 line_number: 15
-rule_id: rule-3
+rule_id: 3
 severity: P0
 what_is_wrong: Docstring says "returns 0 when the path never existed." Implementation calls shutil.rmtree(target_path) which raises FileNotFoundError, caught as OSError, returning EXIT_CODE_REMOVE_TREE_FAILURE.
 what_it_should_be: Check Path(target_path).exists() before rmtree and return 0 when absent, or update the docstring.
@@ -52,7 +52,7 @@ Why this matters: Teardown scripts calling remove_tree() on an already-cleaned t
 ```
 file_path: SKILL.md
 line_number: 34
-rule_id: rule-7
+rule_id: 7
 severity: P1
 what_is_wrong: Gotcha describes "inline_lag" with its own streak counter and 90s wait. The decision branch for inline_lag is still present in per-tick.md lines 102-106 — the feature was supposed to be removed but both the gotcha and the branch remain.
 what_it_should_be: Remove the gotcha and the inline_lag decision branch from per-tick.md.
@@ -67,7 +67,7 @@ Why this matters: An agent reading the gotcha thinks inline_lag is real and may 
 ```
 file_path: bugteam/obstacles/self-population.md
 line_number: 5
-rule_id: rule-5
+rule_id: 5
 severity: P1
 what_is_wrong: "Spawn  — brief it: check  for an open PR  " contains double spaces where an agent invocation, repo, and PR number should be.
 what_it_should_be: Fill in the concrete Agent call or remove the section until populated.
