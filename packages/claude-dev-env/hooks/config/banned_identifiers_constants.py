@@ -9,6 +9,7 @@ ALL_BANNED_IDENTIFIERS: frozenset[str] = frozenset(
         "value",
         "item",
         "temp",
+        "tmp",
         "argv",
         "args",
         "kwargs",

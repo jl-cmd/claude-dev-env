@@ -72,6 +72,24 @@ def test_asks_on_git_commit_with_no_gpg_sign_config() -> None:
     )
 
 
+def test_asks_on_quoted_gpgsign_config() -> None:
+    payload = _make_bash_payload("git -c 'commit.gpgsign=false' commit -m wip")
+    result = _run_hook(payload)
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask", (
+        f"Expected ask for quoted -c commit.gpgsign=false, got: {response!r}"
+    )
+
+
+def test_asks_on_value_quoted_gpgsign_config() -> None:
+    payload = _make_bash_payload("git -c commit.gpgsign='false' commit -m wip")
+    result = _run_hook(payload)
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask", (
+        f"Expected ask for value-quoted -c commit.gpgsign='false', got: {response!r}"
+    )
+
+
 def test_normal_git_commit_passes() -> None:
     payload = _make_bash_payload('git commit -m "real commit"')
     result = _run_hook(payload)

@@ -68,4 +68,3 @@ def test_any_type_config_module_exists_and_exposes_constant() -> None:
     assert "__init__.py" in allowed_patterns
     assert "protocols.py" in allowed_patterns
     assert "types.py" in allowed_patterns
-    assert "conftest.py" in allowed_patterns

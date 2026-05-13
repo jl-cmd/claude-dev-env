@@ -55,12 +55,12 @@ These rules are automatically enforced by `code_rules_enforcer.py`. Violations b
 | Banned identifiers | Single-letter or 2–4 char abbreviations in production code: `ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `tmp`, `elem`, `val`. Test files exempt; loop counters `i`/`j`/`k` and exception `e` exempt. See §5 for the full list and rationale. |
 | Banned function prefixes | Function names starting with `handle_`, `process_`, `manage_`, or `do_` are flagged — these prefixes describe nothing about behavior. Name functions after the noun they produce or the verb they perform (`fetch_user`, `validate_payload`). **Test files exempt.** |
 | Type escape hatches | `from typing import Any`, `cast()`, and inline `Any` in production are flagged outside boundary files (`__init__.py`, `protocols.py`, `types.py`, `conftest.py`). Name the concrete shape instead. |
-| Bare except | `except:`, `except Exception:`, and `except BaseException:` swallow KeyboardInterrupt/SystemExit and hide bugs. Name the specific exception(s) you intend to catch (tuple form `except (ValueError, KeyError):` is fine). **Test files and hook infrastructure exempt.** |
+| Bare except | `except:` and `except BaseException:` swallow KeyboardInterrupt/SystemExit; `except Exception:` hides bugs by catching nearly every error class. Name the specific exception(s) you intend to catch (tuple form `except (ValueError, KeyError):` is fine). **Test files and hook infrastructure exempt.** |
 | Boundary types — Any in signatures | `Any` appearing directly or nested inside a generic in a function signature (parameters, return type) or class attribute annotation is flagged. Local variable annotations are exempt. Files named `protocols.py` or `types.py` are interface-declaration surfaces and exempt. |
 | Stub implementations | Functions whose body is `pass`, `...`, or `raise NotImplementedError` in production code are flagged unless declared abstract (`@abstractmethod`) or part of a `Protocol`. Implement the function or remove it. |
 | TypedDict encode/decode pairs | Every `class FooPayload(TypedDict):` in production code must have companion `_encode_foo_payload(...)` and `_decode_foo_payload(...)` functions in the same module — boundary serialization should not leak to callers. |
 | Test-mode branching in production | Reading `TESTING`, `PYTEST_CURRENT_TEST`, `IS_TEST`, etc. from production code creates two parallel implementations. Use dependency injection so production stays single-path. **Test files and hook infrastructure exempt.** |
-| Thin wrapper files | A non-`__init__.py` module whose body is only imports and an `__all__` assignment is a re-export indirection with no payload. Callers should import from the real module. `__init__.py` is the canonical re-export surface and is exempt. |
+| Thin wrapper files | A non-`__init__.py` module whose body is only imports (optionally with an `__all__` assignment) is a re-export indirection with no payload. Callers should import from the real module. `__init__.py` is the canonical re-export surface and is exempt. |
 | Docstring format (Google-style) | Public functions/methods (no leading underscore, not dunder, body > 3 lines, not `@property`/`@abstractmethod`) require Google-style `Args:` / `Returns:` (or `Yields:`) / `Raises:` sections matching the signature. **Test files exempt.** |
 
 ### Where UPPER_SNAKE is allowed
@@ -239,7 +239,7 @@ Parent knows: nothing about child's internals
 
 ## 9.5 NO THIN WRAPPER MODULES
 
-A non-`__init__.py` module whose body is only imports and an `__all__` assignment is a thin wrapper. Callers should import from the real module. The wrapper adds no payload — only an indirection layer that obscures where things live.
+A non-`__init__.py` module whose body is only imports (optionally with an `__all__` assignment) is a thin wrapper. Callers should import from the real module. The wrapper adds no payload — only an indirection layer that obscures where things live.
 
 `__init__.py` is the canonical re-export surface and is exempt; package surface aggregation is its job.
 
@@ -373,7 +373,7 @@ Hook will enforce:
 [⚡] No stub bodies (pass / ... / raise NotImplementedError) outside abstract methods
 [⚡] TypedDict has companion _encode_*/_decode_* in same module
 [⚡] No test-mode branching in production (TESTING / PYTEST_CURRENT_TEST)
-[⚡] No thin wrapper modules (imports + __all__ only, outside __init__.py)
+[⚡] No thin wrapper modules (imports only, optionally with __all__, outside __init__.py)
 [⚡] Public functions have Google-style Args:/Returns:/Raises: when warranted
 
 Manual check:

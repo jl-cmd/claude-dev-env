@@ -227,6 +227,21 @@ def test_should_handle_syntax_error_gracefully() -> None:
     assert issues == [], f"Syntax error must yield no issues, got: {issues!r}"
 
 
+def test_should_skip_short_function_with_docstring() -> None:
+    source = (
+        "def double(value: int) -> int:\n"
+        '    """Multiply the value by two.\n'
+        "\n"
+        "    The calculation uses left-shift internally.\n"
+        '    """\n'
+        "    return value * 2\n"
+    )
+    issues = check_docstring_format(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"Short function with docstring must be exempt, got: {issues!r}"
+    )
+
+
 def test_should_not_count_self_or_cls_as_documentable_params() -> None:
     source = (
         "class Cache:\n"

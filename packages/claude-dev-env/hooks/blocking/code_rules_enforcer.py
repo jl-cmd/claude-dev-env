@@ -77,6 +77,7 @@ from config.stuttering_import_binding_constants import (  # noqa: E402
 )
 from config.any_type_config import ALL_ANY_ALLOWED_PATTERNS  # noqa: E402
 from config.blocking_check_limits import (  # noqa: E402
+    ALL_BANNED_PREFIX_NAMES,
     ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES,
     ALL_BOUNDARY_TYPE_EXEMPT_FILENAMES,
     ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES,
@@ -89,8 +90,9 @@ from config.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_FORMAT_ISSUES,
     MAX_STUB_IMPLEMENTATION_ISSUES,
     MAX_TEST_BRANCHING_ISSUES,
-    MAX_THIN_WRAPPER_ISSUES,
     MAX_TYPED_DICT_PAIR_ISSUES,
+    MAX_TYPE_ESCAPE_HATCH_ISSUES,
+    MAX_THIN_WRAPPER_ISSUES,
 )
 
 PYTHON_EXTENSIONS = {".py"}
@@ -239,7 +241,7 @@ def check_comments_javascript(content: str) -> list[str]:
             continue
 
         if stripped.startswith("//"):
-            if not stripped.startswith(("// @ts-", "// eslint-", "// prettier-", "/// ")):
+            if not stripped.startswith(("// @ts-", "// eslint-", "// prettier-", "/// ", "// TODO", "// FIXME", "// HACK", "// XXX")):
                 issues.append(f"Line {line_number}: Comment found - refactor to self-documenting code")
 
         if len(issues) >= 3:
@@ -307,12 +309,15 @@ def extract_comment_texts(content: str, file_path: str) -> tuple[set[str], set[s
                     standalone_comments.add(stripped)
                 continue
             if stripped.startswith("//"):
-                if not stripped.startswith(("// @ts-", "// eslint-", "// prettier-", "/// ")):
+                if not stripped.startswith(("// @ts-", "// eslint-", "// prettier-", "/// ", "// TODO", "// FIXME", "// HACK", "// XXX")):
                     standalone_comments.add(stripped)
             elif "//" in line:
                 before_slash = line[:line.index("//")]
                 if before_slash.strip():
-                    inline_comments.add(stripped[stripped.index("//"):])
+                    comment_start = stripped.index("//")
+                    comment_text = stripped[comment_start + 2 :].strip()
+                    if not comment_text.startswith(("TODO", "FIXME", "HACK", "XXX")):
+                        inline_comments.add(stripped[comment_start:])
 
     return inline_comments, standalone_comments
 
@@ -720,7 +725,7 @@ def _find_any_annotation_lines(source: str) -> list[int]:
 
     offending_line_numbers: list[int] = []
     already_reported_lines: set[int] = set()
-    for each_node in ast.walk(parsed_tree):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if isinstance(each_node, ast.AnnAssign) and _annotation_uses_any(each_node.annotation):
             if each_node.lineno not in already_reported_lines:
                 offending_line_numbers.append(each_node.lineno)
@@ -777,7 +782,7 @@ def _find_typing_any_imports(source: str) -> list[int]:
         return []
 
     offending_line_numbers: list[int] = []
-    for each_node in ast.walk(parsed_tree):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if not isinstance(each_node, ast.ImportFrom):
             continue
         if each_node.module != "typing":
@@ -797,7 +802,7 @@ def _find_typing_wildcard_imports(source: str) -> list[int]:
         return []
 
     offending_line_numbers: list[int] = []
-    for each_node in ast.walk(parsed_tree):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if not isinstance(each_node, ast.ImportFrom):
             continue
         if each_node.module != "typing":
@@ -809,12 +814,32 @@ def _find_typing_wildcard_imports(source: str) -> list[int]:
     return offending_line_numbers
 
 
-def _is_typing_cast_call(call_node: ast.Call) -> bool:
-    """Return True when a Call node represents a cast() invocation."""
+def _collect_typing_cast_import_names(source: str) -> frozenset[str]:
+    """Return the set of names bound to typing.cast via `from typing import cast`."""
+    try:
+        parsed_tree = ast.parse(source)
+    except SyntaxError:
+        return frozenset()
+
+    cast_names: set[str] = set()
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, ast.ImportFrom):
+            continue
+        if each_node.module != "typing":
+            continue
+        for each_alias in each_node.names:
+            if each_alias.name == "cast":
+                cast_names.add(each_alias.asname or each_alias.name)
+    return frozenset(cast_names)
+
+
+def _is_typing_cast_call(call_node: ast.Call, all_cast_import_names: frozenset[str]) -> bool:
+    """Return True when a Call node represents a typing.cast() or known bare cast()."""
     function_node = call_node.func
-    if isinstance(function_node, ast.Name) and function_node.id == "cast":
-        return True
     if isinstance(function_node, ast.Attribute) and function_node.attr == "cast":
+        if isinstance(function_node.value, ast.Name) and function_node.value.id == "typing":
+            return True
+    if isinstance(function_node, ast.Name) and function_node.id in all_cast_import_names:
         return True
     return False
 
@@ -826,53 +851,61 @@ def _find_cast_call_lines(source: str) -> list[int]:
     except SyntaxError:
         return []
 
+    all_cast_import_names = _collect_typing_cast_import_names(source)
+
     offending_line_numbers: list[int] = []
-    for each_node in ast.walk(parsed_tree):
-        if isinstance(each_node, ast.Call) and _is_typing_cast_call(each_node):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if isinstance(each_node, ast.Call) and _is_typing_cast_call(each_node, all_cast_import_names):
             offending_line_numbers.append(each_node.lineno)
     return offending_line_numbers
 
 
 def _file_path_matches_any_exemption(file_path: str) -> bool:
-    normalized_path = file_path.replace("\\", "/").lower()
-    return any(
-        normalized_path.endswith(each_pattern.lower())
-        or normalized_path.endswith("/" + each_pattern.lower())
-        for each_pattern in ALL_ANY_ALLOWED_PATTERNS
-    )
+    filename = file_path.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return filename in {each_pattern.lower() for each_pattern in ALL_ANY_ALLOWED_PATTERNS}
 
 
 def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
     """Flag Any annotations, Any imports, cast() calls, and unjustified # type: ignore."""
-    if is_test_file(file_path):
-        return []
-    if _file_path_matches_any_exemption(file_path):
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
         return []
 
     issues: list[str] = []
+    is_any_exempt = _file_path_matches_any_exemption(file_path)
 
-    for each_any_line in _find_any_annotation_lines(content):
-        issues.append(f"Line {each_any_line}: Any annotation - replace with explicit type")
+    if not is_any_exempt:
+        any_annotation_issues: list[str] = []
+        for each_any_line in _find_any_annotation_lines(content):
+            any_annotation_issues.append(f"Line {each_any_line}: Any annotation - replace with explicit type")
+        issues.extend(any_annotation_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
-    for each_import_line in _find_typing_any_imports(content):
-        issues.append(
-            f"Line {each_import_line}: 'from typing import Any' - remove the Any import and use explicit types"
-        )
+        any_import_issues: list[str] = []
+        for each_import_line in _find_typing_any_imports(content):
+            any_import_issues.append(
+                f"Line {each_import_line}: 'from typing import Any' - remove the Any import and use explicit types"
+            )
+        issues.extend(any_import_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
-    for each_wildcard_line in _find_typing_wildcard_imports(content):
-        issues.append(
-            f"Line {each_wildcard_line}: 'from typing import *' wildcard import - import explicit names instead"
-        )
+        wildcard_issues: list[str] = []
+        for each_wildcard_line in _find_typing_wildcard_imports(content):
+            wildcard_issues.append(
+                f"Line {each_wildcard_line}: 'from typing import *' wildcard import - import explicit names instead"
+            )
+        issues.extend(wildcard_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
-    for each_cast_line in _find_cast_call_lines(content):
-        issues.append(
-            f"Line {each_cast_line}: cast() call - escape hatch around the type system; use explicit types or runtime validation"
-        )
+        cast_issues: list[str] = []
+        for each_cast_line in _find_cast_call_lines(content):
+            cast_issues.append(
+                f"Line {each_cast_line}: cast() call - escape hatch around the type system; use explicit types or runtime validation"
+            )
+        issues.extend(cast_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
+    type_ignore_issues: list[str] = []
     for each_ignore_line in _find_unjustified_type_ignore_lines(content):
-        issues.append(
+        type_ignore_issues.append(
             f"Line {each_ignore_line}: Unjustified # type: ignore - add trailing '# reason' explaining why"
         )
+    issues.extend(type_ignore_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
     return issues
 
@@ -1169,7 +1202,7 @@ def _environ_membership_key_names(compare_node: ast.Compare) -> list[str]:
 
 def _collect_test_env_variable_references(parsed_tree: ast.AST) -> list[tuple[int, str]]:
     references: list[tuple[int, str]] = []
-    for each_node in ast.walk(parsed_tree):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         candidate_names: list[str] = []
         if isinstance(each_node, ast.Call):
             candidate_names = _environ_get_call_argument_names(each_node)
@@ -1229,15 +1262,28 @@ def _bare_except_handler_label(handler_node: ast.ExceptHandler) -> str | None:
         and handler_type.attr in ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES
     ):
         return f"except {handler_type.attr}:"
+    if isinstance(handler_type, ast.Tuple):
+        banned_names: list[str] = []
+        for each_element in handler_type.elts:
+            if isinstance(each_element, ast.Name) and each_element.id in ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES:
+                banned_names.append(each_element.id)
+            elif (
+                isinstance(each_element, ast.Attribute)
+                and each_element.attr in ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES
+            ):
+                banned_names.append(each_element.attr)
+        if banned_names:
+            return f"except {', '.join(banned_names)} (in tuple):"
     return None
 
 
 def check_bare_except(content: str, file_path: str) -> list[str]:
     """Flag bare/over-broad exception handlers in production code.
 
-    `except:` swallows KeyboardInterrupt and SystemExit; `except Exception:`
-    and `except BaseException:` hide bugs by catching every error class.
-    Production code should name the specific exception(s) it intends to catch
+    ``except:`` and ``except BaseException:`` swallow KeyboardInterrupt and
+    SystemExit; ``except Exception:`` hides bugs by catching nearly every
+    error class. Production code should name the specific exception(s) it
+    intends to catch
     (a tuple form like `except (ValueError, KeyError):` is fine).
     """
     if is_test_file(file_path) or is_hook_infrastructure(file_path):
@@ -1249,15 +1295,15 @@ def check_bare_except(content: str, file_path: str) -> list[str]:
         return []
 
     issues: list[str] = []
-    for each_node in ast.walk(parsed_tree):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if not isinstance(each_node, ast.ExceptHandler):
             continue
         handler_label = _bare_except_handler_label(each_node)
         if handler_label is None:
             continue
         issues.append(
-            f"Line {each_node.lineno}: {handler_label} catches every error including "
-            "KeyboardInterrupt/SystemExit — name the specific exception(s) you intend to handle"
+            f"Line {each_node.lineno}: {handler_label} is over-broad — name the "
+            "specific exception(s) you intend to handle"
         )
         if len(issues) >= MAX_BARE_EXCEPT_ISSUES:
             break
@@ -1334,7 +1380,7 @@ def check_thin_wrapper_files(content: str, file_path: str) -> list[str]:
             return []
 
     issues = [
-        f"{file_path}: thin wrapper file — module body is only imports/__all__; "
+        f"Line 1: {file_path}: thin wrapper file — module body is only imports (optionally with __all__); "
         "callers should import from the real module instead of going through this indirection"
     ]
     return issues[:MAX_THIN_WRAPPER_ISSUES]
@@ -1352,8 +1398,8 @@ def _annotation_node_references_any(annotation_node: ast.expr | None) -> bool:
 
 
 def _file_has_exempt_boundary_filename(file_path: str) -> bool:
-    filename = file_path.replace("\\", "/").rsplit("/", 1)[-1]
-    return filename in ALL_BOUNDARY_TYPE_EXEMPT_FILENAMES
+    filename = file_path.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return filename in {each_name.lower() for each_name in ALL_BOUNDARY_TYPE_EXEMPT_FILENAMES}
 
 
 def _signature_annotations(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[
@@ -1366,11 +1412,24 @@ def _signature_annotations(function_node: ast.FunctionDef | ast.AsyncFunctionDef
             collected_annotations.append(
                 (each_argument.annotation, f"{function_name}({each_argument.arg})", each_argument.lineno)
             )
+    for each_argument in function_node.args.posonlyargs:
+        if each_argument.annotation is not None:
+            collected_annotations.append(
+                (each_argument.annotation, f"{function_name}({each_argument.arg})", each_argument.lineno)
+            )
     for each_argument in function_node.args.kwonlyargs:
         if each_argument.annotation is not None:
             collected_annotations.append(
                 (each_argument.annotation, f"{function_name}({each_argument.arg})", each_argument.lineno)
             )
+    if function_node.args.vararg is not None and function_node.args.vararg.annotation is not None:
+        collected_annotations.append(
+            (function_node.args.vararg.annotation, f"{function_name}(*{function_node.args.vararg.arg})", function_node.args.vararg.lineno)
+        )
+    if function_node.args.kwarg is not None and function_node.args.kwarg.annotation is not None:
+        collected_annotations.append(
+            (function_node.args.kwarg.annotation, f"{function_name}(**{function_node.args.kwarg.arg})", function_node.args.kwarg.lineno)
+        )
     if function_node.returns is not None:
         collected_annotations.append(
             (function_node.returns, f"{function_name} -> return", function_node.returns.lineno)
@@ -1413,7 +1472,7 @@ def check_boundary_types(content: str, file_path: str) -> list[str]:
         return []
 
     issues: list[str] = []
-    for each_node in ast.walk(parsed_tree):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for each_annotation, each_label, each_line_number in _signature_annotations(each_node):
                 if _annotation_node_references_any(each_annotation):
@@ -1468,9 +1527,18 @@ def _function_body_line_count(
 ) -> int:
     if not function_node.body:
         return 0
+    first_body_index = 0
+    if (
+        isinstance(function_node.body[0], ast.Expr)
+        and isinstance(function_node.body[0].value, ast.Constant)
+        and isinstance(function_node.body[0].value.value, str)
+    ):
+        if len(function_node.body) == 1:
+            return 0
+        first_body_index = 1
     last_statement = function_node.body[-1]
     end_line = getattr(last_statement, "end_lineno", last_statement.lineno)
-    first_line = function_node.body[0].lineno
+    first_line = function_node.body[first_body_index].lineno
     return max(0, end_line - first_line + 1)
 
 
@@ -1483,7 +1551,10 @@ def _function_documentable_parameter_count(
             continue
         documentable_count += 1
     documentable_count += len(function_node.args.kwonlyargs)
-    documentable_count += len(function_node.args.posonlyargs)
+    for each_argument in function_node.args.posonlyargs:
+        if each_argument.arg in ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES:
+            continue
+        documentable_count += 1
     if function_node.args.vararg is not None:
         documentable_count += 1
     if function_node.args.kwarg is not None:
@@ -1499,22 +1570,53 @@ def _annotation_is_explicit_none_return(annotation_node: ast.expr | None) -> boo
     return isinstance(annotation_node, ast.Name) and annotation_node.id == "None"
 
 
+def _annotation_is_noreturn(annotation_node: ast.expr | None) -> bool:
+    if annotation_node is None:
+        return False
+    if isinstance(annotation_node, ast.Name) and annotation_node.id == "NoReturn":
+        return True
+    return isinstance(annotation_node, ast.Attribute) and annotation_node.attr == "NoReturn"
+
+
+def _walk_skipping_nested_functions(node: ast.AST) -> "Iterator[ast.AST]":
+    for each_child in ast.iter_child_nodes(node):
+        if isinstance(each_child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        yield each_child
+        yield from _walk_skipping_nested_functions(each_child)
+
+
+def _is_type_checking_guard(if_node: ast.If) -> bool:
+    test_node = if_node.test
+    if isinstance(test_node, ast.Name) and test_node.id == TYPE_CHECKING_IDENTIFIER:
+        return True
+    return isinstance(test_node, ast.Attribute) and test_node.attr == TYPE_CHECKING_IDENTIFIER
+
+
+def _walk_skipping_type_checking_blocks(node: ast.AST) -> "Iterator[ast.AST]":
+    for each_child in ast.iter_child_nodes(node):
+        if isinstance(each_child, ast.If) and _is_type_checking_guard(each_child):
+            continue
+        yield each_child
+        yield from _walk_skipping_type_checking_blocks(each_child)
+
+
 def _function_body_contains_raise(
     function_node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> bool:
-    for each_descendant in ast.walk(function_node):
-        if isinstance(each_descendant, ast.Raise):
-            return True
-    return False
+    return any(
+        isinstance(each_descendant, ast.Raise)
+        for each_descendant in _walk_skipping_nested_functions(function_node)
+    )
 
 
 def _function_body_contains_yield(
     function_node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> bool:
-    for each_descendant in ast.walk(function_node):
-        if isinstance(each_descendant, (ast.Yield, ast.YieldFrom)):
-            return True
-    return False
+    return any(
+        isinstance(each_descendant, (ast.Yield, ast.YieldFrom))
+        for each_descendant in _walk_skipping_nested_functions(function_node)
+    )
 
 
 def _function_docstring_text(
@@ -1532,6 +1634,7 @@ def _missing_docstring_sections(
     has_non_none_return = (
         function_node.returns is not None
         and not _annotation_is_explicit_none_return(function_node.returns)
+        and not _annotation_is_noreturn(function_node.returns)
     )
     has_raise_statement = _function_body_contains_raise(function_node)
     has_yield_statement = _function_body_contains_yield(function_node)
@@ -1565,7 +1668,7 @@ def check_docstring_format(content: str, file_path: str) -> list[str]:
         return []
 
     issues: list[str] = []
-    for each_node in ast.walk(parsed_tree):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if _function_is_private_or_dunder(each_node.name):
@@ -1586,9 +1689,11 @@ def check_docstring_format(content: str, file_path: str) -> list[str]:
     return issues[:MAX_DOCSTRING_FORMAT_ISSUES]
 
 
+_PASCAL_TO_SNAKE_WORD_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+
+
 def _pascal_to_snake_case(pascal_name: str) -> str:
-    pascal_to_snake_word_boundary = re.compile(r"(?<!^)(?=[A-Z])")
-    return pascal_to_snake_word_boundary.sub("_", pascal_name).lower()
+    return _PASCAL_TO_SNAKE_WORD_BOUNDARY.sub("_", pascal_name).lower()
 
 
 def _class_inherits_from_typed_dict(class_node: ast.ClassDef) -> bool:
@@ -1602,23 +1707,27 @@ def _class_inherits_from_typed_dict(class_node: ast.ClassDef) -> bool:
 
 def _collect_typed_dict_class_names(parsed_tree: ast.AST) -> list[tuple[str, int]]:
     typed_dict_entries: list[tuple[str, int]] = []
-    for each_node in ast.walk(parsed_tree):
-        if isinstance(each_node, ast.ClassDef) and _class_inherits_from_typed_dict(each_node):
-            typed_dict_entries.append((each_node.name, each_node.lineno))
+    for each_statement in parsed_tree.body:
+        if isinstance(each_statement, ast.ClassDef) and _class_inherits_from_typed_dict(each_statement):
+            typed_dict_entries.append((each_statement.name, each_statement.lineno))
     return typed_dict_entries
 
 
 def _collect_module_function_names(parsed_tree: ast.AST) -> set[str]:
     module_function_names: set[str] = set()
-    for each_node in ast.walk(parsed_tree):
-        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            module_function_names.add(each_node.name)
+    for each_statement in parsed_tree.body:
+        if isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            module_function_names.add(each_statement.name)
     return module_function_names
 
 
 def check_typed_dict_encode_decode(content: str, file_path: str) -> list[str]:
     """Flag TypedDict declarations missing companion `_encode_*` / `_decode_*` functions."""
-    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+    if (
+        is_test_file(file_path)
+        or is_hook_infrastructure(file_path)
+        or _is_init_file(file_path)
+    ):
         return []
 
     try:
@@ -1671,6 +1780,24 @@ def _function_is_abstract(function_node: ast.FunctionDef | ast.AsyncFunctionDef)
     )
 
 
+def _function_is_overload(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    for each_decorator in function_node.decorator_list:
+        if isinstance(each_decorator, ast.Name) and each_decorator.id == "overload":
+            return True
+        if isinstance(each_decorator, ast.Attribute) and each_decorator.attr == "overload":
+            return True
+    return False
+
+
+def _class_is_protocol(class_node: ast.ClassDef) -> bool:
+    for each_base in class_node.bases:
+        if isinstance(each_base, ast.Name) and each_base.id == "Protocol":
+            return True
+        if isinstance(each_base, ast.Attribute) and each_base.attr == "Protocol":
+            return True
+    return False
+
+
 def _class_inherits_from_protocol_or_abc(class_node: ast.ClassDef) -> bool:
     for each_base in class_node.bases:
         if isinstance(each_base, ast.Name) and each_base.id in {"Protocol", "ABC"}:
@@ -1680,12 +1807,8 @@ def _class_inherits_from_protocol_or_abc(class_node: ast.ClassDef) -> bool:
     return False
 
 
-def _statement_is_docstring(statement_node: ast.stmt) -> bool:
-    return (
-        isinstance(statement_node, ast.Expr)
-        and isinstance(statement_node.value, ast.Constant)
-        and isinstance(statement_node.value.value, str)
-    )
+
+
 
 
 def _statement_is_pass(statement_node: ast.stmt) -> bool:
@@ -1719,7 +1842,7 @@ def _statement_is_raise_not_implemented(statement_node: ast.stmt) -> bool:
 
 def _function_body_is_stub(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     body_statements = list(function_node.body)
-    if body_statements and _statement_is_docstring(body_statements[0]):
+    if body_statements and _statement_is_module_docstring(body_statements[0]):
         body_statements = body_statements[1:]
     if len(body_statements) != 1:
         return False
@@ -1749,15 +1872,18 @@ def check_stub_implementations(content: str, file_path: str) -> list[str]:
     abstract_class_function_ids: set[int] = set()
     for each_node in ast.walk(parsed_tree):
         if isinstance(each_node, ast.ClassDef) and _class_inherits_from_protocol_or_abc(each_node):
+            is_protocol = _class_is_protocol(each_node)
             for each_class_member in each_node.body:
-                if isinstance(each_class_member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if not isinstance(each_class_member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if is_protocol or _function_is_abstract(each_class_member):
                     abstract_class_function_ids.add(id(each_class_member))
 
     stub_function_nodes: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
-    for each_node in ast.walk(parsed_tree):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        if _function_is_abstract(each_node):
+        if _function_is_abstract(each_node) or _function_is_overload(each_node):
             continue
         if id(each_node) in abstract_class_function_ids:
             continue
@@ -1786,8 +1912,7 @@ def check_banned_prefixes(content: str, file_path: str) -> list[str]:
     placeholders that hide the actual responsibility and are flagged so the
     author renames the function to a specific verb.
     """
-    all_banned_prefixes: tuple[str, ...] = ("handle_", "process_", "manage_", "do_")
-    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+    if is_test_file(file_path) or is_hook_infrastructure(file_path) or is_config_file(file_path):
         return []
 
     try:
@@ -1796,10 +1921,10 @@ def check_banned_prefixes(content: str, file_path: str) -> list[str]:
         return []
 
     flagged_function_nodes: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
-    for each_node in ast.walk(parsed_tree):
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        if any(each_node.name.startswith(each_prefix) for each_prefix in all_banned_prefixes):
+        if any(each_node.name.startswith(each_prefix) for each_prefix in ALL_BANNED_PREFIX_NAMES):
             flagged_function_nodes.append(each_node)
 
     flagged_function_nodes.sort(key=lambda each_function: each_function.lineno)
@@ -3836,6 +3961,7 @@ def validate_content(
     """
     extension = get_file_extension(file_path)
     all_issues = []
+    effective_content = content if full_file_content is None else full_file_content
 
     if extension in PYTHON_EXTENSIONS:
         if not is_test_file(file_path):
@@ -3848,21 +3974,16 @@ def validate_content(
         all_issues.extend(check_constants_outside_config(content, file_path))
         all_issues.extend(check_constants_outside_config_advisory(content, file_path))
         all_issues.extend(check_file_global_constants_use_count(content, file_path))
-        all_issues.extend(check_type_escape_hatches(content, file_path))
+        all_issues.extend(check_type_escape_hatches(effective_content, file_path))
         all_issues.extend(check_banned_identifiers(content, file_path))
-        all_issues.extend(check_banned_prefixes(content, file_path))
-        all_issues.extend(check_stub_implementations(content, file_path))
-        all_issues.extend(check_typed_dict_encode_decode(content, file_path))
-        all_issues.extend(check_test_branching_in_production(content, file_path))
-        all_issues.extend(check_bare_except(content, file_path))
-        all_issues.extend(
-            check_thin_wrapper_files(
-                full_file_content if full_file_content is not None else content,
-                file_path,
-            )
-        )
-        all_issues.extend(check_boundary_types(content, file_path))
-        all_issues.extend(check_docstring_format(content, file_path))
+        all_issues.extend(check_banned_prefixes(effective_content, file_path))
+        all_issues.extend(check_stub_implementations(effective_content, file_path))
+        all_issues.extend(check_typed_dict_encode_decode(effective_content, file_path))
+        all_issues.extend(check_test_branching_in_production(effective_content, file_path))
+        all_issues.extend(check_bare_except(effective_content, file_path))
+        all_issues.extend(check_thin_wrapper_files(effective_content, file_path))
+        all_issues.extend(check_boundary_types(effective_content, file_path))
+        all_issues.extend(check_docstring_format(effective_content, file_path))
         all_issues.extend(check_boolean_naming(content, file_path))
         all_issues.extend(check_skip_decorators_in_tests(content, file_path))
         all_issues.extend(check_existence_check_tests(content, file_path))

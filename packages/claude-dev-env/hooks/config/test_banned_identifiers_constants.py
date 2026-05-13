@@ -42,6 +42,7 @@ def test_all_banned_identifiers_includes_abbreviation_offenders() -> None:
         "cnt",
         "btn",
         "idx",
+        "cnt",
         "tmp",
         "msg",
         "elem",
