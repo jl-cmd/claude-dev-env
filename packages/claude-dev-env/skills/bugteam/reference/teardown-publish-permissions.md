@@ -2,7 +2,7 @@
 
 ## Utility scripts (progressive disclosure)
 
-Fragile or repeatable shell sequences belong in `_shared/pr-loop/scripts/`. Anthropic: [Progressive disclosure patterns](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns) — utility scripts are **executed**, not loaded into context as primary reading. Script inventory and entry points: [`../../../_shared/pr-loop/scripts/README.md`](../../../_shared/pr-loop/scripts/README.md). Gate-only merge-base / diff semantics: [`../../../_shared/pr-loop/code-rules-gate.md`](../../../_shared/pr-loop/code-rules-gate.md).
+Fragile or repeatable shell sequences belong in `_shared/pr-loop/scripts/`. Bugteam-specific scripts (e.g. revoke, see Step 5) live in the skill-local [`scripts/`](../scripts/) directory. Anthropic: [Progressive disclosure patterns](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns) — utility scripts are **executed**, not loaded into context as primary reading. Shared-script inventory: [`../../../_shared/pr-loop/scripts/README.md`](../../../_shared/pr-loop/scripts/README.md). Bugteam-script inventory: [`../scripts/README.md`](../scripts/README.md). Gate-only merge-base / diff semantics: [`../../../_shared/pr-loop/code-rules-gate.md`](../../../_shared/pr-loop/code-rules-gate.md).
 
 ### Pre-flight (recommended before Step 0)
 
@@ -67,7 +67,7 @@ If Step 4.5 fails (agent error, hook block, network), report in the final report
 After team cleanup — including on error, cap-reached, or stuck exits — run:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/revoke_project_claude_permissions.py"
+python "${CLAUDE_SKILL_DIR}/scripts/revoke_project_claude_permissions.py"
 ```
 
 This removes allow rules and `additionalDirectories` added in Step 0. Revoke is non-negotiable: leaving the grant in place would let future sessions inherit elevated `.claude/**` access without an explicit opt-in. Run revoke even if Step 4 partially failed; log cleanup errors separately.
