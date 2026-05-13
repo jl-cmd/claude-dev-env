@@ -17,6 +17,7 @@ assert hook_spec.loader is not None
 hook_module = importlib.util.module_from_spec(hook_spec)
 hook_spec.loader.exec_module(hook_module)
 _uses_body_string_arg = hook_module._uses_body_string_arg
+_has_backtick = hook_module._has_backtick
 
 from _gh_body_arg_utils import iter_significant_tokens
 
@@ -372,4 +373,48 @@ def test_all_body_flag_prefixes_used_for_equals_skip() -> None:
     from _gh_body_arg_utils import _all_equals_prefixes_for_skip, all_body_flag_prefixes
     for each_prefix in all_body_flag_prefixes:
         assert each_prefix in _all_equals_prefixes_for_skip
+
+
+def test_has_backtick_with_plain_text_body() -> None:
+    assert not _has_backtick('gh issue comment 42 --body "bugbot run"')
+
+
+def test_has_backtick_with_markdown_body() -> None:
+    assert _has_backtick('gh pr create --title "T" --body "Fixes `foo`"')
+
+
+def test_has_backtick_with_short_b_plain_text() -> None:
+    assert not _has_backtick('gh pr comment 10 -b "LGTM"')
+
+
+def test_has_backtick_with_equals_form_plain_text() -> None:
+    assert not _has_backtick('gh pr create --title "T" --body="bugbot run"')
+
+
+def test_has_backtick_with_empty_body() -> None:
+    assert not _has_backtick('gh pr create --title "T" --body=""')
+
+
+def test_has_backtick_bash_continuation_stripped() -> None:
+    """Bash backslash line continuations are stripped before checking."""
+    command = 'gh pr create \\\n  --title "T" \\\n  --body "bugbot run"\n'
+    assert not _has_backtick(command)
+
+
+def test_has_backtick_powershell_continuation_stripped() -> None:
+    """PowerShell backtick line continuations are stripped before checking."""
+    command = 'gh pr create `\n  --title "T" `\n  --body "bugbot run"\n'
+    assert not _has_backtick(command)
+
+
+def test_has_backtick_content_backtick_at_line_end() -> None:
+    """A backtick at end of line in body content must be detected (not mistaken for continuation)."""
+    command = 'gh pr create --title "T" --body "Thanks `\n@user"'
+    assert _has_backtick(command)
+
+
+def test_has_backtick_multi_line_body() -> None:
+    """Backtick on a non-first line of a multi-line body must be detected."""
+    command = 'gh pr create --title "T" --body "First line.\nSecond with `code`."'
+    assert _has_backtick(command)
 

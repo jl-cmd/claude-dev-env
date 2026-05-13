@@ -24,6 +24,7 @@ import re
 import sys
 
 from _gh_body_arg_utils import (
+    _is_bash_continuation,
     all_body_flags,
     all_body_flag_prefixes,
     get_logical_first_line,
@@ -69,6 +70,32 @@ def _logical_line_has_bare_body_token(logical_line: str) -> bool:
     return bool(_BARE_BODY_TOKEN_PATTERN.search(logical_line))
 
 
+def _has_backtick(command: str) -> bool:
+    """Return True if command contains a backtick that is not a bash continuation.
+
+    Joins all bash `` \\ `` continuation lines so backticks in multi-line body
+    values on later non-continuation lines are not missed. Only strips bash
+    continuations — this hook runs on the Bash tool, and PowerShell-style
+    backtick continuations are not continuation markers in bash.
+
+    Scans the entire command string for backtick characters, not just --body
+    argument content. This is intentionally conservative — any command
+    containing backticks should use --body-file regardless of where they
+    appear. False positives (backticks in non-body flags) are safe
+    over-blocks.
+    """
+    continuation_separator = " "
+    all_joined_lines: list[str] = []
+    for each_line in command.splitlines():
+        stripped_line = each_line.rstrip()
+        if _is_bash_continuation(stripped_line):
+            all_joined_lines.append(stripped_line[:-1].rstrip() + continuation_separator)
+            continue
+        all_joined_lines.append(each_line)
+    full_logical_command = "".join(all_joined_lines)
+    return "`" in full_logical_command
+
+
 def _uses_body_string_arg(command: str) -> bool:
     """Return True if command calls an affected gh subcommand with --body <string>.
 
@@ -112,6 +139,9 @@ def main() -> None:
         sys.exit(0)
 
     if not _uses_body_string_arg(command):
+        sys.exit(0)
+
+    if not _has_backtick(command):
         sys.exit(0)
 
     deny_payload = {
