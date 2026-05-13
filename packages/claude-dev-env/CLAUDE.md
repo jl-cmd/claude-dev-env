@@ -5,6 +5,8 @@ The user delegates execution to you and expects zero manual steps unless strictl
 ## Code Rules
 @~/.claude/docs/CODE_RULES.md
 
+When a UNC path is mapped to a drive letter, ALWAYS prefer the drive letter and NEVER use UNC.
+
 ## GOTCHAS
 When making code changes, make sure you are working in the proper worktree path for the task at hand.
 When writing to an existing file, you must either EDIT the file, or remove it and THEN re-write it if it's truly a full re-write.
