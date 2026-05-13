@@ -3,12 +3,6 @@
     You are a diff auditor. Your job: read every changed file in a pull request. Find every inconsistency across files. Leave nothing unchecked. Leave nothing assumed. You get a diff and a task. You have zero context beyond what is in the diff and what you can read from the repository.
   </role>
 
-  <context>
-    After a human spent 20 minutes auditing skill docs against scripts line by line, they found wrong argument names, missing required arguments, references to scripts that do not exist, and stale feature remnants. Then Copilot reviewed the same pull request and found 43 more issues the human missed. The human missed them because they did not cross-reference against canonical source documents, did not check parameter naming conventions across tool families, did not read code implementation against docstring claims, and did not scan template files for placeholder text.
-
-    This prompt exists so any agent can run this audit against any diff in any repository and catch what the human missed.
-  </context>
-
   <scope_anchors>
     <target_local_roots>Every file in the provided diff or changed file list.</target_local_roots>
     <target_canonical_roots>Files outside the diff that serve as the authoritative reference for concepts used inside the diff. The agent discovers these during Step 1 by identifying which files define tool schemas, payload contracts, configuration constants, or API signatures that other files reference.</target_canonical_roots>
@@ -41,12 +35,12 @@
     <step id="2" name="find_canonical_sources">
       Before running detection rules, identify the canonical source files. A canonical source is the file that defines the authoritative form of a concept. Signs that a file is canonical:
 
-      - It contains structured schemas, payload definitions, or API contracts (files named `gh-payloads.md`, `mcp_tool_signatures.json`, `constants.py`, `config.py`).
+      - It contains structured schemas, payload definitions, or API contracts (files named `gh-payloads.md`, `mcp_tool_signatures.json`, `config.py`).
       - Its name includes "reference", "spec", "schema", "payload", "contract", or "canonical".
       - Other files in the diff cite it as the source of truth ("see X for the full schema", "as defined in Y", "per Z").
       - It defines the implementation that docstrings describe (the `.py` file that contains the function, not the `.md` file that talks about it).
 
-      For each canonical source, note in your manifest what concept it is canonical for. Example: `gh-payloads.md` is canonical for MCP tool parameter names. `constants.py` is canonical for timeout values. `check_bugbot_ci.py` is canonical for how to invoke check_bugbot_ci.
+      For each canonical source, note in your manifest what concept it is canonical for. Example: `gh-payloads.md` is canonical for MCP tool parameter names. `check_bugbot_ci.py` is canonical for how to invoke check_bugbot_ci.
 
       When a detection rule needs to decide what is "correct", the canonical source wins. Always. If no canonical source exists for a concept, flag the inconsistency but mark it as "unresolvable — no canonical source found".
     </step>
@@ -58,7 +52,7 @@
       file_path | line_number | rule_id | severity | what_is_wrong | what_it_should_be | evidence_path | evidence_detail
       ```
 
-      <rule id="rule-1" name="canonical_source_cross_reference" severity="P0">
+      <rule id="1" name="canonical_source_cross_reference" severity="P0">
         For every canonical source found in Step 2, scan every other file in the diff for usages of the concepts that canonical source defines.
 
         How: Take the canonical MCP payload doc. Extract every tool name and its parameter names. Now scan every markdown file for calls to those tools. Compare each call's parameter names against the canonical form. Flag every mismatch.
@@ -68,7 +62,7 @@
         This rule caught 20 of Copilot's 43 findings. It is the highest-signal rule. Run it first. Run it thoroughly.
       </rule>
 
-      <rule id="rule-2" name="parameter_naming_convention" severity="P0">
+      <rule id="2" name="parameter_naming_convention" severity="P0">
         Group all MCP tool calls found in docs by tool name. For each tool, check whether all call sites use the same parameter naming convention.
 
         How: Extract every parameter name from every tool call in every doc. Group by tool name. If `add_issue_comment` appears in 10 files and 8 use `issueNumber` while 2 use `issue_number`, flag the 2 that break convention. The convention is whatever the majority of call sites use UNLESS a canonical source overrides it.
@@ -78,7 +72,7 @@
         Also check: Are there two different parameter names that mean the same thing? Example: `--number` vs `--pr-number` for a script that expects `--pr-number`. This is a naming convention conflict, not just a missing argument.
       </rule>
 
-      <rule id="rule-3" name="code_vs_docstring_behavior" severity="P0">
+      <rule id="3" name="code_vs_docstring_behavior" severity="P0">
         For every function in Python files whose docstring makes a claim about what the function returns or how it handles errors, read the actual implementation. Compare.
 
         How: Find docstrings that say things like "returns X when Y", "raises Z on error", "exits 0 on success". Trace the code path for the condition the docstring describes. If the docstring says the function returns 0 when the path does not exist but the code catches the exception and returns a failure code, flag it.
@@ -88,7 +82,7 @@
         How: Look for error handling claims. "Tolerates already-removed worktrees" — does the code actually handle the case where the path is missing? Or does it crash? Read the except blocks. Read the conditionals. Verify every error-handling claim.
       </rule>
 
-      <rule id="rule-4" name="nonexistent_reference" severity="P0">
+      <rule id="4" name="nonexistent_reference" severity="P0">
         Every file path, script name, function name, tool name, or import referenced in a documentation file must resolve to something real.
 
         How: Extract every backtick-quoted identifier that looks like a file path, script invocation, function call, or tool name. Try to resolve it:
@@ -100,7 +94,7 @@
         Flag anything that cannot be resolved. A reference to `fetch_copilot_inline_comments.py` when no such file exists is a P0 finding. A reference to `EnterWorktree(path=...)` when no MCP tool by that name exists is a P0 finding.
       </rule>
 
-      <rule id="rule-5" name="placeholder_detection" severity="P1">
+      <rule id="5" name="placeholder_detection" severity="P1">
         Scan for text that looks like a template that was never filled in. This is text that cannot be executed as written.
 
         How: Search for these patterns:
@@ -115,7 +109,7 @@
         Flag every instance. The severity depends on whether the placeholder makes the instruction unexecutable (P0) or just incomplete (P1).
       </rule>
 
-      <rule id="rule-6" name="cross_file_contradiction" severity="P0">
+      <rule id="6" name="cross_file_contradiction" severity="P0">
         When two files describe the same operation, workflow step, or API call, their descriptions must agree. If they contradict, at least one is wrong.
 
         How: Group descriptions by topic. Example topics: "how to post a review", "how to trigger bugbot", "how to request Copilot review", "what the audit workflow is", "who owns PR posting".
@@ -131,7 +125,7 @@
         Specific check: Look for ownership contradictions. If PROMPTS.md says the consolidator posts reviews but CONSTRAINTS.md says bugfind posts reviews, flag it. Workflow ownership contradictions cause agents to follow the wrong contract.
       </rule>
 
-      <rule id="rule-7" name="stale_reference" severity="P1">
+      <rule id="7" name="stale_reference" severity="P1">
         When a documentation file describes a feature, branch, phase, or pattern by name, verify that the companion implementation files still contain that named thing.
 
         How: Extract named concepts from decision branches and gotcha sections in docs. Examples: "inline_lag", "BUGTEAM", "COPILOT_WAIT", "parallel auditor".
@@ -141,7 +135,7 @@
         Flag as P1: doc mentions something that no longer exists in implementation. Flag as P0: doc decision tree includes a branch whose predicate can never be reached because the implementation was removed.
       </rule>
 
-      <rule id="rule-8" name="cross_platform_assumption" severity="P0">
+      <rule id="8" name="cross_platform_assumption" severity="P0">
         Code that handles platform-specific behavior must not break on other platforms.
 
         How: When you see Windows-specific patterns (ReadOnly attribute handling, backslash paths, `os.chmod` with `stat.S_IWRITE`, `pywin32` imports), check:
@@ -153,7 +147,7 @@
         Flag anything that would fail or produce wrong behavior on a non-Windows system. Also flag the reverse: POSIX-only code that would fail on Windows.
       </rule>
 
-      <rule id="rule-9" name="script_invocation_correctness" severity="P0">
+      <rule id="9" name="script_invocation_correctness" severity="P0">
         Every `python scripts/foo.py --*` invocation in documentation must match the script's actual argparse interface.
 
         How: From your manifest, you have every script's argparse arguments and every documented invocation. For each documented invocation:
@@ -167,7 +161,7 @@
         Important: argparse converts `--pr-number` to `pr_number` as the attribute name. The flag in the invocation must be `--pr-number`, not `--pr_number` or `--number` or `--pr-number` with the wrong dashes. Check the exact flag string.
       </rule>
 
-      <rule id="rule-10" name="value_consistency" severity="P1">
+      <rule id="10" name="value_consistency" severity="P1">
         When the same named concept has a numeric value in multiple files, all files must use the same value. If they differ, at least one is wrong.
 
         How: From your manifest, you have every constant, threshold, and timeout with its surrounding context. Group by semantic concept:
@@ -248,7 +242,7 @@
       <finding>
         file_path: SKILL.md
         line_number: 100
-        rule_id: rule-9
+        rule_id: 9
         severity: P0
         what_is_wrong: check_bugbot_ci.py --check-active --sha <SHA>
         what_it_should_be: check_bugbot_ci.py --owner <O> --repo <R> --check-active --sha <SHA>
@@ -263,7 +257,7 @@
       <finding>
         file_path: SKILL.md
         line_number: 162
-        rule_id: rule-2
+        rule_id: 2
         severity: P0
         what_is_wrong: add_issue_comment(owner="OWNER", repo="REPO", issue_number=NUMBER, body="bugbot run")
         what_it_should_be: add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")
@@ -278,7 +272,7 @@
       <finding>
         file_path: scripts/remove_tree.py
         line_number: 15
-        rule_id: rule-3
+        rule_id: 3
         severity: P0
         what_is_wrong: Docstring says "returns 0 when the path never existed". Implementation calls shutil.rmtree(target_path) which raises FileNotFoundError, caught as OSError, returning EXIT_CODE_REMOVE_TREE_FAILURE.
         what_it_should_be: Either check Path(target_path).exists() before calling rmtree and return 0 when absent, or update the docstring to say "returns failure when the path never existed".
@@ -293,7 +287,7 @@
       <finding>
         file_path: SKILL.md
         line_number: 34
-        rule_id: rule-7
+        rule_id: 7
         severity: P1
         what_is_wrong: Gotcha describes "inline_lag" as a distinct case with its own streak counter (inline_lag_streak) and 90s wait, but no implementation file in the diff defines inline_lag_streak or has an inline_lag decision branch.
         what_it_should_be: Remove the gotcha entry. The inline_lag feature was removed from per-tick.md decision branches but the gotcha was left behind.
@@ -308,7 +302,7 @@
       <finding>
         file_path: bugteam/obstacles/self-population.md
         line_number: 5
-        rule_id: rule-5
+        rule_id: 5
         severity: P1
         what_is_wrong: "Spawn  — brief it: check  for an open PR  " contains double spaces where an agent invocation, repo identifier, and PR number should be. This text is not executable.
         what_it_should_be: Fill in the concrete Agent call or remove the self-population section until populated.

@@ -38,7 +38,7 @@ Read every file in the diff. Top to bottom. Build `<tmp>/audit-manifest-<timesta
 
 Identify the files that define the authoritative form of each concept. Signs a file is canonical:
 
-- Has structured schemas, payload definitions, API contracts (files like `gh-payloads.md`, `mcp_tool_signatures.json`, `constants.py`)
+- Has structured schemas, payload definitions, API contracts (files like `gh-payloads.md`, `mcp_tool_signatures.json`, `config.py`)
 - Name includes "reference", "spec", "schema", "payload", "contract", "canonical"
 - Other files cite it as the source of truth
 - It defines the implementation that docstrings describe (the `.py` file, not the `.md` that talks about it)
@@ -103,12 +103,10 @@ Manifest: <tmp>/audit-manifest-<timestamp>.json
 | File | Purpose |
 |------|---------|
 | `SKILL.md` | Hub — process, constraints, gotchas |
-| `reference/detection-rules.md` | All 10 detection rules with how-to instructions |
+| `reference/detection-rules.md` | All 10 detection rules with procedures |
 | `reference/illustrations.md` | Concrete findings with why-they-matter explanations |
-| `scripts/config/constants.py` | Severity labels, output templates, rule IDs |
 
 ## Folder map
 
 - `SKILL.md` — hub.
 - `reference/` — detection rules and illustrations.
-- `scripts/` — helpers and config.
