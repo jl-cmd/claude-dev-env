@@ -19,10 +19,20 @@ plain text so next tick re-reads from context:
   body shows findings against `current_head` but inline API returns zero
   matching. Reset to `0` on any other branch outcome.
 - `bugbot_down`: boolean, init `false`. Set `true` when bugbot fails to
-  acknowledge a trigger comment; forces phase to BUGTEAM. Reset to
-  `false` on every push. Once set, remains `true` until the next push;
-  if bugbot stays down across ticks, the flag persists and BUGTEAM
-  continues.
+  acknowledge a trigger comment; forces phase to BUGTEAM. Also set `true`
+  when an acknowledged trigger has been outstanding more than 30 minutes
+  with no surfaced review at `current_head` (per Step 2 BUGBOT (c)
+  30-minute budget — see `per-tick.md`). Reset to `false` on every push.
+  Once set, remains `true` until the next push; if bugbot stays down
+  across ticks, the flag persists and BUGTEAM continues.
+- `bugbot_acknowledged_at`: ISO 8601 timestamp string or `null`. Records
+  the wall-clock moment Cursor Bugbot acknowledged the most recent
+  `bugbot run` trigger comment (i.e. the trigger comment carries an
+  `:eyes:`/`:+1:` reaction). Init `null`. Set in Step 3 once the
+  reaction-check fires positive. Reset to `null` on every push and on
+  every BUGTEAM jump triggered by the 30-minute budget. Step 2 BUGBOT
+  (c) reads this field to decide between "schedule next wakeup" and
+  "escalate to bugbot-down".
 - `tick_count`: integer, init `0`. Increment every tick.
 
 Tick begins reading prior state line from most recent assistant message

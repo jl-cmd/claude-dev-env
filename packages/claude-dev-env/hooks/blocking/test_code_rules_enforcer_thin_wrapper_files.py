@@ -147,3 +147,23 @@ def test_should_flag_thin_wrapper_with_module_docstring() -> None:
     assert any("thin wrapper" in each.lower() for each in issues), (
         f"Docstring + import + __all__ is still a thin wrapper, got: {issues!r}"
     )
+
+
+def test_validate_content_uses_empty_full_file_content_over_pre_edit_fragment() -> None:
+    """An empty-string `full_file_content` must be honored, not silently replaced with `content`.
+
+    Regression for loop1-8: the `or` short-circuit at line 3775 collapsed
+    empty-string and None, so an Edit that produced an empty post-edit file
+    was scanned against the pre-edit fragment instead of the empty file.
+    The thin-wrapper check uses the same idiom — an empty post-edit file is
+    not a thin wrapper, but a pre-edit fragment with imports + __all__ is.
+    """
+    pre_edit_fragment = "from real_module import do_thing\n__all__ = ['do_thing']\n"
+    issues = code_rules_enforcer.validate_content(
+        pre_edit_fragment,
+        PRODUCTION_FILE_PATH,
+        full_file_content="",
+    )
+    assert not any("thin wrapper" in each.lower() for each in issues), (
+        f"empty post-edit file must not be flagged as a thin wrapper, got: {issues!r}"
+    )

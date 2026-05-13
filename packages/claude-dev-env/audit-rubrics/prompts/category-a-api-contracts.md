@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category A only** (API contract verification). Skip B–K. Sub-bucket forced-exhaustion mode: Category A is decomposed into 7 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category A only** (API contract verification). Skip B–K. Sub-bucket forced-exhaustion mode: Category A is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA: title / change description / head SHA or revision identifier / scope summary]
 ID prefix: `find`.
@@ -58,6 +58,14 @@ ID prefix: `find`.
 - Cross-language default-value drift: a default declared on one side that differs from the default on the other side; verify either both are sourced from a single config or both are intentionally mirrored.
 - Cross-language type drift: integer width, signed/unsigned, floating-point precision, string encoding (UTF-8 vs UTF-16), null/empty-string semantics.
 
+**A8. Documented API/tool calls vs official API documentation**
+- For every API call, MCP tool invocation, CLI command, or SDK method call documented in the source material, identify the provider.
+- Look up the official documentation for that API (Context7 MCP for libraries/SDKs, API reference docs for REST endpoints, tool definitions in session for MCP calls, `--help` for CLI tools).
+- Verify the documented parameter names, types, and required-ness match the official API signature.
+- For read-only API calls, execute one safe invocation to confirm the documented shape succeeds in practice.
+- For write calls, verify the signature against the provider's own published API contract — their REST reference docs, OpenAPI spec, SDK source code, or `--help` output. When a read endpoint exposes the same state, call it to confirm the write contract.
+- Flag every call where documented parameters, types, or behavior diverge from the official API contract.
+
 ## Cross-bucket questions to answer at the end
 
 Q1: Are there any contracts that span two sub-buckets that single-bucket analysis would miss?
@@ -66,13 +74,13 @@ Q3: Where would a future refactor most likely break a cross-bucket or cross-lang
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket A1–A7, produce Shape A or Shape B (with ≥3 adversarial probes). Cross-bucket Q1–Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 bugs across these 7 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket A1–A8, produce Shape A or Shape B (with ≥3 adversarial probes). Cross-bucket Q1–Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 bugs across these 8 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 ---
 
 # Worked example: jl-cmd/claude-code-config PR #394 (May 2026 audit experiment)
 
-Audit jl-cmd/claude-code-config PR #394 for **Category A only** (API contract verification). Skip B–J. Sub-bucket forced-exhaustion mode: Category A is decomposed into 7 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit jl-cmd/claude-code-config PR #394 for **Category A only** (API contract verification). Skip B–J. Sub-bucket forced-exhaustion mode: Category A is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 PR: feat(scripts): add sweep-empty-dirs utility and scheduled-task installer
 Head SHA: 62c9c169ee7a44824e5da25c4cf8b74fdca08a53
@@ -126,7 +134,7 @@ Q3: Where would a future refactor most likely break a cross-language contract? N
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket A1-A7, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 bugs across these 7 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket A1-A7, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 bugs across these 8 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 ## Diff (4 new files, all lines in scope)
 

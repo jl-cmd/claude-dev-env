@@ -28,6 +28,7 @@ The decomposition that worked best for PR #394 (a Python+PowerShell scheduled-ta
 | A5 | subprocess invocation contract | `subprocess.run` kwargs valid for the targeted Python; `args=[list]` shape; exception propagation under `check=True`. |
 | A6 | PowerShell cmdlet parameter sets and binding | `param(...)` with `ParameterSetName=`; `[CmdletBinding(DefaultParameterSetName=…)]` presence; cmdlet parameter combinations valid per Microsoft docs. |
 | A7 | Cross-language argv boundary | The `-Argument` string composition → Windows process loader → C-runtime argv parser → Python `sys.argv` → argparse. Trailing-backslash and embedded-space hazards. |
+| A8 | Documented API/tool calls vs official API documentation | Every API, MCP tool, SDK method, or CLI command documented in the diff. Look up the official documentation for that API. Verify parameter names, types, and required-ness match the documented call. Make a safe, read-only API call to confirm the documented invocation succeeds. Address any mismatch. |
 
 Adapt these axes for your artifact. For a pure Python codebase, drop A6 and A7 and add (e.g.) "type-stub vs runtime divergence" or "C-extension boundary." For a pure PowerShell codebase, drop A1–A5 and split A6 into "param-set declaration" / "cmdlet invocation" / "type coercion at param boundary."
 

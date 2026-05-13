@@ -38,11 +38,11 @@ cd into `<worktree_path>` before any git or file operation.
   verified-clean -- re-audit with a concrete trace.
 
   Categories A–K (one-line summary; full rubric and sub-bucket decomposition
-  for each is in `packages/claude-dev-env/audit-rubrics/category_rubrics/`;
+  for each is in `$HOME/.claude/audit-rubrics/category_rubrics/`;
   ready-to-send Variant C prompts — each with a PR/repo-independent
   generalized skeleton above a `---` separator and a worked example against
   an authentic PR below — are in
-  `packages/claude-dev-env/audit-rubrics/prompts/`):
+  `$HOME/.claude/audit-rubrics/prompts/`):
 
   A. API contract verification (signatures, return types, async/await correctness)
   B. Selector / query / engine compatibility
@@ -69,11 +69,25 @@ cd into `<worktree_path>` before any git or file operation.
 </constraints>
 
 <comment_posting>
-  Sibling auditors (-b through -k): run only steps 1–2 (audit, assign IDs,
-  capture excerpt, validate anchors), then write outcome XML per <output_format> and return.
-  Skip steps 3–5 — sibling auditors do not post PR reviews.
+  Load all A–K rubrics from
+  `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/`. The prompt file
+  is a template for output shape, not a straitjacket — reorganize when the
+  diff demands it. The diff supplies the findings; the rubric supplies the
+  sub-bucket decomposition and decision criteria. Both must be loaded.
 
-  Validator (-a) and single-opus auditors: run all steps below.
+  Before starting, create one task per checklist item via TaskCreate. Use
+  TaskUpdate to mark each in_progress as you begin it and completed when
+  done.
+
+  <self_audit_checklist>
+    [ ] Walk all 11 categories (A–K), each with Shape A or Shape B
+    [ ] Assign finding IDs (loop<L>-<K>)
+    [ ] Capture excerpts, validate anchors, format finding bodies
+    [ ] Publish audit summary via /doc-gist, capture URL
+    [ ] Build review body with summary URL, post review (or fallback)
+    [ ] Handle fallback if review POST failed
+    [ ] Write outcome XML
+  </self_audit_checklist>
 
   1. Audit the diff against the 11 categories above. Buffer the findings
      in memory; all posting happens at step 4 once anchors are validated.
@@ -92,25 +106,71 @@ cd into `<worktree_path>` before any git or file operation.
 
        _From /bugteam audit loop <L>._
 
-  4. Post ONE review via `pull_request_review_write(method="create",
-     event="COMMENT", body=<review_body>, owner=<O>, repo=<R>,
-     pullNumber=<N>, comments=[...])`. See Step 2.5 in SKILL.md for the full
-     parameter shape. Harvest the parent review `html_url` from the response
-     and the `comments[]` child entries (each with its own `id` and `html_url`).
-     Match child entries to anchored findings in index order.
-  5. If the review POST fails, use `add_issue_comment(owner=<O>, repo=<R>,
-     issueNumber=<N>, body=<full_text>)` as fallback.
+  3.5. Publish the audit summary via `/doc-gist`. Pass the full findings
+       list as the gist body. Capture the returned gist URL for inclusion
+       in the review body at step 4.
+
+  4. **Before posting, read the full review once as if you were the PR
+     author.** Ask: would I understand what to fix and why? Do any two
+     findings describe the same problem in different words — merge them. Does
+     any finding miss its mark — rewrite or drop it. Does the review feel
+     coherent as a whole? The review's job is to make the PR author want to
+     fix these bugs, not to demonstrate that the rubric ran. Rearrange,
+     merge, or rephrase anything that would confuse the author. Then
+     proceed with the mechanical three-step flow below.
+
+     Post ONE review per loop using the GitHub MCP three-step pending-review
+     flow (the `pull_request_review_write` tool does NOT accept a `comments[]`
+     array — pending review + per-comment add + submit is the only correct
+     shape). Bodies are passed as plain strings; the MCP tool does the JSON
+     encoding internally:
+
+     a. Create the pending review:
+        `pull_request_review_write(method="create", owner=<O>, repo=<R>,
+        pullNumber=<N>)` — omit `event` so the review stays pending.
+     b. For each anchored finding, in index order, call
+        `add_comment_to_pending_review(owner=<O>, repo=<R>, pullNumber=<N>,
+        path=<file>, line=<line>, side="RIGHT", subjectType="LINE",
+        body=<finding markdown>)`. For multi-line anchors also pass
+        `startLine=<start>` and `startSide="RIGHT"`.
+     c. Submit the pending review with the loop-header body and
+        `event="COMMENT"`:
+        `pull_request_review_write(method="submit_pending", owner=<O>,
+        repo=<R>, pullNumber=<N>, event="COMMENT", body=<review_body>)`.
+
+     Harvest the parent review `html_url` from the submit_pending response
+     and the child comment `id` / `html_url` entries the same response carries.
+     If the response shape does not surface child comments to the caller,
+     follow up with `pull_request_read(method="get_review_comments", owner=<O>,
+     repo=<R>, pullNumber=<N>)` filtered to the just-submitted review id.
+     Match child comments to anchored findings in the order they were added
+     in step 4b.
+  5. Bail out to the issue-comment fallback below when steps 4a–4c fail,
+     when step 4c fails twice in a row, when the pending review is in an
+     unrecoverable state mid-flow (orphaned pending, partial-add failures
+     with no clean recovery, MCP responses that do not parse), or when
+     your judgment says the pending-review path is broken for this loop.
+     Two retries is plenty. Do not mechanically loop on a stuck flow —
+     post the findings as a PR-level comment instead.
+
+     Clean up with
+     `pull_request_review_write(method="delete_pending", owner=<O>, repo=<R>,
+     pullNumber=<N>)` then post one fallback PR-level comment carrying the
+     review body plus every finding inline:
+     `add_issue_comment(owner=<O>, repo=<R>, issue_number=<N>,
+     body=<full_text>)`. Mark every finding `used_fallback="true"` with the
+     issue-comment URL as `finding_comment_url`.
   Body text is passed directly as string parameters to the MCP tool calls —
   no temp files, no jq, no shell pipes.
 </comment_posting>
 
 <output_format>
-  For the (-a) validator: write the outcome XML below to .bugteam-pr<N>-loop<L>.outcomes.xml inside
-  the PR's worktree directory (<worktree_path>). For sibling auditors (-b through -k): write to <run_temp_dir>/pr-<N>/loop-<L>-<letter>.outcomes.xml (absolute path passed in prompt). Sibling auditors do not post PR reviews; set review_url, finding_comment_id, and finding_comment_url to empty strings, and used_fallback to "false". Omit unanchored findings from sibling output — only the validator handles those. Return only that path on stdout. The schema:
+  Run `python scripts/write_audit_outcomes.py` to write the outcome XML.
+  The script owns the canonical path, filename, and format.
 </output_format>
 ```
 
-## AUDIT outcome XML schema (bugfind writes this)
+## AUDIT outcome XML schema
 
 ```xml
 <bugteam_audit loop="<L>" review_url="<url>">
@@ -133,8 +193,6 @@ cd into `<worktree_path>` before any git or file operation.
   </verified_clean>
 </bugteam_audit>
 ```
-
-After the teammate writes the XML and returns, the lead reads `.bugteam-pr<N>-loop<L>.outcomes.xml` from the PR's worktree directory with the `Read` tool, parses it, and populates `loop_comment_index` from `<finding>` elements.
 
 ## FIX spawn-prompt XML (bugfix teammate)
 
@@ -167,6 +225,25 @@ cd into `<worktree_path>` before any git or file operation.
 </bugs_to_fix>
 
 <execution>
+  Before starting, create one task per checklist item via TaskCreate. Use
+  TaskUpdate to mark each in_progress as you begin it and completed when
+  done.
+
+  <self_audit_checklist>
+    [ ] Read each referenced file
+    [ ] Apply all addressable fixes
+    [ ] py_compile on every modified file
+    [ ] Test suite passes
+    [ ] Post-fix violation count ≤ previous loop total (skip on L=1)
+    [ ] git add + commit
+    [ ] git push
+    [ ] Publish fix summary via /doc-gist, capture URL
+    [ ] Post fix reply on each finding thread
+    [ ] Resolve each thread via resolve_thread
+    [ ] Append fix summary URL to parent review via add_reply_to_pull_request_comment
+    [ ] Write fix outcomes XML
+  </self_audit_checklist>
+
   1. Read each referenced file before editing.
   2. Apply each fix you can address.
   3. Run `python -m py_compile` (or language-equivalent) on every modified file.
@@ -185,14 +262,29 @@ cd into `<worktree_path>` before any git or file operation.
      - "Could not address this loop: <one-line reason>" if you skipped or failed it
      - "Hook blocked the fix commit: <one-line summary>" if the commit was hook-blocked
      Body text is passed directly as string parameters -- no temp files, no jq, no shell pipes.
-  9. Write `.bugteam-pr<N>-loop<L>.fix-outcomes.xml` inside `<worktree_path>` (schema below) and return its path.
+  9. Publish the fix summary gist via `/doc-gist`. Pass the fix report
+     (what was fixed, what was skipped, what was left unaddressed) as the
+     gist body. Capture the returned gist URL.
+
+  10. For each resolved finding, call
+      `pull_request_review_write(method="resolve_thread", owner=<O>,
+      repo=<R>, pullNumber=<N>,
+      threadId=<finding_comment_id>)`.
+
+  11. Append the fix summary gist URL (from step 9) to the parent review
+      via `add_reply_to_pull_request_comment(commentId=<id>, body=...,
+      owner=<O>, repo=<R>, pullNumber=<N>)`. The body carries the
+      gist URL plus a one-line summary of fixes applied this loop.
+
+  12. Write `.bugteam-pr<N>-loop<L>.fix-outcomes.xml` inside
+      `<worktree_path>` (schema below) and return its path.
 </execution>
 
 <outcome_xml_schema>
   <bugteam_fix loop="<L>" commit_sha="<sha or empty if no commit>">
     <outcome
       finding_id="loop<L>-<K>"
-      status="fixed|could_not_address|hook_blocked"
+      status="fixed|could_not_address|hook_blocked|unverified_fixed"
       commit_sha="<sha if fixed, empty otherwise>"
       reply_comment_id="<id of the reply posted>"
       reply_comment_url="<url of the reply posted>"

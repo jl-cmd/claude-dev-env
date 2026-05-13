@@ -6,8 +6,10 @@
 - **All `*_clean_at`, `merge_state_status`, and `bugbot_down` reset on every push.**
 - **`bugbot run` comment is load-bearing.** Literal phrase exactly —
   empirically the only re-trigger Cursor Bugbot recognizes.
-- **Honor pre-push and pre-commit hooks.** Read output, fix the cause,
-  retry. Full-stop on bypass.
+- **All production edits go through `clean-coder`.** The lead never edits
+  production files directly. Every fix — bugbot, bugteam, Copilot, or
+  Claude finding — spawns `Agent(subagent_type="clean-coder")` to
+  implement. No exceptions.
 - **Adapt when reality contradicts on-disk state.** If `state.json`,
   `git`, or `gh` disagree with live PR, escalate as hard blocker per
   [stop-conditions.md](stop-conditions.md).

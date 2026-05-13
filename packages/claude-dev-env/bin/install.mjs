@@ -16,7 +16,7 @@ const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
 
-export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared'];
+export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
 
 export function collectPackageSourceConflicts(packageDirectory) {
     const gitConflictStatusCodes = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
@@ -151,7 +151,7 @@ const INSTALL_GROUPS = {
             'pr-review-responder',
             'recall', 'remember'
         ],
-        includeDirectories: ['rules', 'docs', 'commands', 'agents'],
+        includeDirectories: ['rules', 'docs', 'commands', 'agents', 'audit-rubrics'],
         includeAllHooks: true,
     },
     journal: {

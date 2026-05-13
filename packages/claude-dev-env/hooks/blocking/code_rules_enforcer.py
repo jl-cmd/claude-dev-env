@@ -3772,7 +3772,12 @@ def validate_content(
         all_issues.extend(check_typed_dict_encode_decode(content, file_path))
         all_issues.extend(check_test_branching_in_production(content, file_path))
         all_issues.extend(check_bare_except(content, file_path))
-        all_issues.extend(check_thin_wrapper_files(content, file_path))
+        all_issues.extend(
+            check_thin_wrapper_files(
+                full_file_content if full_file_content is not None else content,
+                file_path,
+            )
+        )
         all_issues.extend(check_boundary_types(content, file_path))
         all_issues.extend(check_docstring_format(content, file_path))
         all_issues.extend(check_boolean_naming(content, file_path))

@@ -135,6 +135,14 @@ test('CONTENT_DIRECTORIES includes _shared so installer copies _shared/pr-loop/ 
 });
 
 
+test('CONTENT_DIRECTORIES includes audit-rubrics so installer copies category rubrics and prompts to ~/.claude/audit-rubrics/', () => {
+    assert.ok(
+        CONTENT_DIRECTORIES.includes('audit-rubrics'),
+        'audit-rubrics must be in CONTENT_DIRECTORIES so bugteam can resolve $HOME/.claude/audit-rubrics/{category_rubrics,prompts}/',
+    );
+});
+
+
 test('collectPackageSourceConflicts surfaces both-added and deleted-by-them entries', () => {
     const repositoryRoot = createTemporaryGitRepository();
     try {

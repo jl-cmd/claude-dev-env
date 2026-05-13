@@ -19,12 +19,12 @@ Claude: [resolves PR #42, runs loop]
 
 <example>
 User: `/bugteam`
-Claude: [runs 10 loops without convergence]
+Claude: [runs 20 loops without convergence]
 
-`Loop 10 audit: 0P0 / 1P1 / 2P2`
+`Loop 20 audit: 0P0 / 1P1 / 2P2`
 
 `/bugteam exit: cap reached`
-`Loops: 10`
+`Loops: 20`
 `Remaining: 0P0 / 1P1 / 2P2 — run /findbugs for human triage`
 </example>
 

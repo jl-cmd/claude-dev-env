@@ -38,7 +38,7 @@ Access `.head.sha` from the response.
 
 Post the bugbot re-trigger comment:
 
-    add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")
+    add_issue_comment(owner="OWNER", repo="REPO", issue_number=NUMBER, body="bugbot run")
 
 `bugbot run` is the only recognized re-trigger phrase; alternative phrasings silently no-op.
 
@@ -48,17 +48,16 @@ Mark a draft PR as ready for review:
 
     update_pull_request(pullNumber=NUMBER, owner=OWNER, repo=REPO, draft=false)
 
-### Reply to inline comment: `add_reply_to_pull_request_comment`
+### Reply to inline comment: `python scripts/post_fix_reply.py`
 
 Reply to an inline review comment thread:
 
-    add_reply_to_pull_request_comment(
-      commentId=COMMENT_ID,
-      body=REPLY_BODY,
-      owner=OWNER,
-      repo=REPO,
-      pullNumber=NUMBER
-    )
+```
+python scripts/post_fix_reply.py --owner <O> --repo <R> --pr-number <N> \
+  --in-reply-to <COMMENT_ID> --body "<reply text>"
+```
+
+Omit `--in-reply-to` to post a general PR comment instead.
 
 ### Mergeability: `pull_request_read(method="get")`
 
@@ -68,52 +67,38 @@ Read mergeability fields from the PR:
 
 Fields: `.mergeable`, `.mergeable_state`, `.head.sha`.
 
-### Copilot reviews: `pull_request_read(method="get_reviews")`
+### Copilot reviews: `python scripts/fetch_copilot_reviews.py`
 
-Fetch all reviews and filter for `copilot-pull-request-reviewer[bot]`:
+```
+python scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
+```
 
-    pull_request_read(method="get_reviews", pullNumber=NUMBER, owner=OWNER, repo=REPO)
-
-Classification: `APPROVED` → clean, `CHANGES_REQUESTED` → dirty, `COMMENTED` with non-empty body → dirty.
+Returns JSON array of Copilot reviews newest-first. Classification:
+`APPROVED` → clean, `CHANGES_REQUESTED` → dirty, `COMMENTED` with
+non-empty body → dirty.
 
 ### Copilot inline comments: `pull_request_read(method="get_review_comments")`
 
-Fetch all review comments and filter for `copilot-pull-request-reviewer[bot]`, matching `pull_request_review_id` to the newest Copilot review on the target commit:
+Fetch via MCP and filter for Copilot inline threads:
 
     pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
+      → filter threads where `is_outdated == false` AND `is_resolved == false`
+        AND any comment author matches copilot (case-insensitive)
+        AND `pull_request_review_id` matches latest Copilot review on target commit
 
-### Request Copilot review: `add_issue_comment` or `request_copilot_review`
+### Request Copilot review: `gh api` REST endpoint
 
-Two options:
+```
+gh api --method POST repos/<O>/<R>/pulls/<N>/requested_reviewers \
+  -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
+```
 
-1. Comment-based trigger:
-   ```
-   add_issue_comment(owner=OWNER, repo=REPO, issueNumber=NUMBER, body="@copilot review")
-   ```
-2. Dedicated MCP tool (when available):
-   ```
-   request_copilot_review(owner=OWNER, repo=REPO, pullNumber=NUMBER)
-   ```
-
-The `[bot]` suffix is load-bearing per `../../copilot-review/SKILL.md`.
-
-### Claude reviews: `pull_request_read(method="get_reviews")`
-
-Fetch all reviews and filter for login containing `claude`:
-
-    pull_request_read(method="get_reviews", pullNumber=NUMBER, owner=OWNER, repo=REPO)
-
-Classification: same state-based rules as Copilot reviews.
-
-### Claude inline comments: `pull_request_read(method="get_review_comments")`
-
-Fetch all review comments and filter for login containing `claude`, matching `pull_request_review_id` to the newest Claude review on the target commit:
-
-    pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
+Check for an existing pending review first with
+`python scripts/check_pending_reviews.py --owner <O> --repo <R> --pr-number <N> --user copilot`.
 
 ## Shared modules
 
-No shared fetch core modules are needed. Each review or comment fetch is a single MCP tool call with client-side filtering by login.
+Shared Python utilities live under `_shared/pr-loop/scripts/` — `_xml_utils.py` for XML serialization, `_cli_utils.py` for CLI guards, `_path_resolver.py` for canonical path resolution. These serve `/bugteam`, `/qbug`, `/findbugs`, and `/fixbugs` equally.
 
 ## Tests
 

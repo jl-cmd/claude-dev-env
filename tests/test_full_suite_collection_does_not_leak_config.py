@@ -10,8 +10,7 @@ When ``git-hooks/test_config.py`` runs first during full-suite collection, it
 inserts ``git-hooks/`` at ``sys.path[0]`` and imports the flat ``config.py``.
 If that path entry leaks into collection of any later test that expects
 ``config`` to resolve to a package (for example
-``session/test_untracked_repo_detector.py`` or
-``scripts/test_groq_bugteam.py``), the later test fails with
+``session/test_untracked_repo_detector.py``), the later test fails with
 ``'config' is not a package`` or a ``ModuleNotFoundError``.
 
 These tests reproduce that leak as a subprocess collection check and also
@@ -74,7 +73,6 @@ class TestFullSuiteCollectionCleanliness:
     def should_collect_problem_files_without_errors(self) -> None:
         problem_files = [
             "packages/claude-dev-env/hooks/session/test_untracked_repo_detector.py",
-            "packages/claude-dev-env/scripts/test_groq_bugteam.py",
             "tests/test_conftest_collect_hooks.py",
         ]
         completed = _run_pytest_from_repo_root(["--collect-only", "-q", *problem_files])

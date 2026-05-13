@@ -23,8 +23,7 @@ protocol per [fix-protocol.md](fix-protocol.md). Pacing stays in main session vi
 Read [`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
 (installed copy under `$HOME/.claude/skills/pr-converge/workflows/`) before
 Step 4. The pre-flight gate guarantees `ScheduleWakeup` is invokable; the
-workflow file specifies delays, prompts, convergence cleanup, and
-inline-lag handling.
+workflow file specifies delays, prompts, and convergence cleanup.
 
 - **`/pr-converge`** (default): loops until convergence. After each tick
   (unless converged or stopped), run **Step 4**.
@@ -95,15 +94,10 @@ c. Decide (four branches; match first whose predicate holds):
      `state.json`, goes idle; Step 3 on new HEAD runs after via
      orchestrator-spawned follow-up agent (§Fix result → general-purpose).
      No `state.json` (single-PR): spawn Agent (subagent_type: clean-coder) to implement → push → reply inline on each thread
-     via `add_reply_to_pull_request_comment` MCP → Step 3 in same tick (see
+     via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py` → Step 3 in same tick (see
      [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow) for
      full contract).
      Schedule next wakeup, return.
-   - **`commit_id == current_head` AND review body findings AND inline
-     API zero matching for `current_head`:** Transient API lag. Increment
-     `inline_lag_streak`. `>= 3` → hard blocker; report and terminate with
-     no loop pacing. Else Step 4 uses the BUGBOT inline-lag section of
-     `../workflows/schedule-wakeup-loop.md` (`delaySeconds: 90`).
 
 ### `phase == BUGTEAM`
 
@@ -160,7 +154,7 @@ never falsely terminates:
      **omit loop pacing** per **Convergence** of active pacing workflow.
    - **Convergence BUT `bugbot_clean_at != current_head` (no push):**
      `phase = BUGBOT`, schedule next wakeup, return.
-   - **Findings without committed fixes:** spawn Agent (subagent_type: clean-coder) to implement fixes and push, then reply inline via `add_reply_to_pull_request_comment` MCP, following [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow).
+   - **Findings without committed fixes:** spawn Agent (subagent_type: clean-coder) to implement fixes and push, then reply inline via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py`, following [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow).
      `phase = BUGBOT`, schedule next wakeup, return.
 
 ### `phase == COPILOT_WAIT`
@@ -173,15 +167,11 @@ a. Fetch latest Copilot review at `current_head` plus unaddressed inline
    comments:
 
    ```
-pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
-  → filter `.user.login` for copilot (case-insensitive substring "copilot")
-    AND `.commit_id == current_head`
-  → sort by `.submitted_at` descending
+python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
+  → filter by `.commit_id == current_head`, sort by `.submitted_at` descending
 
-pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
-  → filter threads where `is_outdated == false` AND `is_resolved == false`
-    AND `pull_request_review_id` matches the newest Copilot review
-    AND any comment has `.author` matching Copilot (case-insensitive substring "copilot")
+python ~/.claude/skills/pr-converge/scripts/fetch_copilot_inline_comments.py --owner <O> --repo <R> --pr-number <N> --commit <current_head>
+  → unaddressed inline threads on the latest Copilot review at current_head
    ```
 
 b. Decide (three branches; match first whose predicate holds):
@@ -193,7 +183,7 @@ b. Decide (three branches; match first whose predicate holds):
    - **Copilot review dirty (CHANGES_REQUESTED or COMMENTED with findings)
      at `current_head`:** Apply **Fix protocol** — spawn Agent
      (subagent_type: clean-coder) to implement → push → reply inline on each
-     thread via `add_reply_to_pull_request_comment` MCP. For body-only
+     thread via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py`. For body-only
      findings (no inline threads), post top-level review reply citing new
      HEAD SHA. Reset
      `bugbot_clean_at = null` AND `copilot_clean_at = null`. **Set
@@ -203,7 +193,7 @@ b. Decide (three branches; match first whose predicate holds):
      `copilot_wait_count` (init 0 on COPILOT_WAIT entry; reset to 0 on
      every push and on every successful Copilot review). `>= 3` → hard
      blocker per [stop-conditions.md](stop-conditions.md). Otherwise
-     schedule next wakeup (270s), return.
+     schedule next wakeup (360s), return.
 
 **Non-negotiable:** After any Copilot fix push, `phase` MUST route to
 `BUGBOT`. Never cycle COPILOT_WAIT → fix → COPILOT_WAIT. The
@@ -213,34 +203,23 @@ BUGBOT.
 
 ## Step 3: Re-trigger bugbot
 
-Use the `add_issue_comment` MCP tool:
-
-    add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")
+- [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --check-active --owner <O> --repo <R> --sha <current_head>`
+- [ ] Exit 0 → bugbot already queued on this commit; skip posting, wait for completion
+- [ ] Exit 1 → post trigger via `add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")`
+- [ ] Wait 8s
+- [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --sha <current_head>`
+- [ ] Exit non-zero → bugbot is down; set `bugbot_down = true`, `phase = BUGTEAM`, continue BUGTEAM same tick
+- [ ] Exit 0 (check run present) → record `bugbot_acknowledged_at = <now ISO 8601>`, proceed to Step 4
 
 `bugbot run` is empirically the only re-trigger Cursor Bugbot recognizes;
-alternative phrasings (`re-review`, `bugbot please`, etc.) silently no-op.
-
-**Gotcha (duplicate `bugbot run` while review queued):** Skip Step 3 when
-the latest `bugbot run` PR comment has an `:eyes:` or `:+1:` reaction; wait
-for review or HEAD change before re-triggering.
-
-**Bugbot-down detection:** After posting `bugbot run` via `add_issue_comment`,
-capture the returned comment ID. Wait 15 seconds, then fetch comments via
-`issue_read(method="get_comments", owner=OWNER, repo=REPO, issue_number=NUMBER)`,
-select the comment whose `id` matches the captured ID, and check its
-reactions. If the comment has zero reactions, bugbot did not
-acknowledge — it is down. Set `bugbot_down = true`, `phase = BUGTEAM`, and
-continue BUGTEAM in the same tick (no wakeup — bugteam runs now against this
-HEAD). If reactions are present, bugbot acknowledged; proceed with normal
-pacing (Step 4).
+alternative phrasings silently no-op.
 
 ## Step 4: Loop pacing
 
 **`ScheduleWakeup` field hints** (prefer [Pacing
 workflow](#pacing-workflow)):
 
-- `delaySeconds: 270` after bugbot re-trigger. Bugbot finishes in 1–4
-  min; 270s stays under 5-min prompt-cache TTL with margin. Exception:
+- `delaySeconds: 360` after bugbot re-trigger. Exception:
   BUGBOT inline-lag branch uses `delaySeconds: 90` (no re-trigger;
   awaiting GitHub inline API).
 - `reason`: short sentence on what is awaited, including `phase` and
