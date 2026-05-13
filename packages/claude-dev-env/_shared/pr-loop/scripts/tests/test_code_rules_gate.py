@@ -552,25 +552,6 @@ def test_check_wrapper_plumb_through_accepts_positional_or_keyword_forwarder() -
     assert issues == []
 
 
-def test_check_database_column_string_magic_dedupes_nested_function_tuples() -> None:
-    """Regression: tuples inside nested FunctionDefs must produce one finding, not many.
-
-    The outer ast.walk previously enumerated every FunctionDef including nested
-    ones, then the inner ast.walk(each_node) walked the full subtree, so a tuple
-    inside a nested function was visited via every enclosing function. This must
-    surface exactly one finding per tuple site.
-    """
-    source = (
-        "def outer():\n"
-        "    def inner():\n"
-        '        x = ("some_column_name", 42)\n'
-        "        return x\n"
-        "    return inner\n"
-    )
-    issues = gate_module.check_database_column_string_magic(source, "module.py")
-    assert len(issues) == 1, f"expected 1 finding, got {len(issues)}: {issues!r}"
-
-
 def test_check_wrapper_plumb_through_skips_uppercase_js_extension() -> None:
     """Regression: case-insensitive filesystem (Windows, macOS) can yield
     file paths like 'Foo.JS'. The skip predicate must normalize case so

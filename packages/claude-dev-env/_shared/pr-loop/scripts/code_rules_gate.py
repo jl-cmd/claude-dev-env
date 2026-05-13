@@ -15,18 +15,13 @@ from config.code_rules_gate_constants import (
     ALL_CODE_FILE_EXTENSIONS,
     ALL_GIT_DIFF_CACHED_NAME_ONLY_NULL_TERMINATED_COMMAND,
     ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX,
-    ALL_LITERAL_KEYWORD_EXEMPTIONS,
     ALL_TEST_FILENAME_GLOB_SUFFIXES,
     ALL_TEST_FILENAME_SUFFIXES,
-    COLUMN_KEY_PATTERN_TEMPLATE,
-    CONFIG_PATH_SEGMENT,
     EXPECTED_NON_RENAME_COLUMN_COUNT,
     EXPECTED_RENAME_COLUMN_COUNT,
-    EXPECTED_TUPLE_PAIR_LENGTH,
     GIT_NAME_STATUS_ADDED_PREFIX,
     GIT_NAME_STATUS_RENAMED_PREFIX,
     MAX_VIOLATIONS_PER_CHECK,
-    MINIMUM_COLUMN_NAME_LENGTH_AFTER_FIRST_CHAR,
     PYTHON_FILE_EXTENSION,
     TEST_CONFTEST_FILENAME,
     TEST_FILENAME_PREFIX,
@@ -363,58 +358,6 @@ def is_test_path(file_path: str) -> bool:
     ):
         return True
     return False
-
-
-def check_database_column_string_magic(content: str, file_path: str) -> list[str]:
-    """Flag string literals that look like database/HTTP column or key names inside function bodies.
-
-    Triggers when a snake_case string literal appears as the first element of a
-    two-element tuple inside a function body (the characteristic column-name/value
-    pair pattern). Files under ``config/`` and test files are exempt.
-    """
-    normalized_path = file_path.replace("\\", "/")
-    if CONFIG_PATH_SEGMENT in normalized_path:
-        return []
-    if is_test_path(normalized_path):
-        return []
-    try:
-        tree = ast.parse(content)
-    except SyntaxError:
-        return []
-    issues: list[str] = []
-    column_key_pattern = re.compile(
-        COLUMN_KEY_PATTERN_TEMPLATE.format(
-            minimum_length=MINIMUM_COLUMN_NAME_LENGTH_AFTER_FIRST_CHAR
-        )
-    )
-    seen_tuple_node_ids: set[int] = set()
-    for each_node in ast.walk(tree):
-        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        for each_child in ast.walk(each_node):
-            if not isinstance(each_child, ast.Tuple):
-                continue
-            if id(each_child) in seen_tuple_node_ids:
-                continue
-            seen_tuple_node_ids.add(id(each_child))
-            if len(each_child.elts) != EXPECTED_TUPLE_PAIR_LENGTH:
-                continue
-            first_element = each_child.elts[0]
-            if not isinstance(first_element, ast.Constant):
-                continue
-            if not isinstance(first_element.value, str):
-                continue
-            literal_text = first_element.value
-            if not column_key_pattern.match(literal_text):
-                continue
-            if literal_text in ALL_LITERAL_KEYWORD_EXEMPTIONS:
-                continue
-            issues.append(
-                f"Line {first_element.lineno}: Column-name string magic {literal_text!r} - extract to config"
-            )
-            if len(issues) >= MAX_VIOLATIONS_PER_CHECK:
-                return issues
-    return issues
 
 
 def _iter_calls_excluding_nested_functions(node: ast.AST) -> Iterator[ast.Call]:
@@ -826,9 +769,6 @@ def run_gate(
             repository_root.resolve(), relative_posix
         )
         issues = validate_content(content, relative_posix, prior_content)
-        issues.extend(
-            check_database_column_string_magic(content, relative_posix)
-        )
         issues.extend(check_wrapper_plumb_through(content, relative_posix))
         if not issues:
             continue

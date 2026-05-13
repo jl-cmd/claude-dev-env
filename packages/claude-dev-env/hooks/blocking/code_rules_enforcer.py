@@ -51,6 +51,13 @@ from config.hardcoded_user_path_constants import (  # noqa: E402
     HARDCODED_USER_PATH_PATTERN,
     MAX_HARDCODED_USER_PATH_ISSUES,
 )
+from config.inline_tuple_string_magic_constants import (  # noqa: E402
+    ALL_SNAKE_CASE_KEYWORD_EXEMPTIONS,
+    EXPECTED_TUPLE_PAIR_LENGTH,
+    INLINE_TUPLE_STRING_MAGIC_MESSAGE_SUFFIX,
+    MAX_INLINE_TUPLE_STRING_MAGIC_ISSUES,
+    SNAKE_CASE_LITERAL_PATTERN,
+)
 from config.stuttering_check_config import (  # noqa: E402
     MAX_STUTTERING_PREFIX_ISSUES,
     STUTTERING_ALL_PREFIX_PATTERN,
@@ -1036,6 +1043,28 @@ def _without_parse_args_namespace_exemption(
     return [each_name for each_name in all_banned_names if each_name.id != "args"]
 
 
+def _synthesize_alias_name_node(
+    bound_identifier: str, alias_node: ast.alias
+) -> ast.Name:
+    synthetic_name = ast.Name(id=bound_identifier, ctx=ast.Store())
+    synthetic_name.lineno = alias_node.lineno
+    synthetic_name.col_offset = alias_node.col_offset
+    return synthetic_name
+
+
+def _collect_banned_names_from_import(
+    import_statement: ast.Import | ast.ImportFrom,
+) -> list[ast.Name]:
+    banned_alias_nodes: list[ast.Name] = []
+    for each_alias in import_statement.names:
+        bound_identifier = each_alias.asname or each_alias.name.split(".")[0]
+        if bound_identifier in ALL_BANNED_IDENTIFIERS:
+            banned_alias_nodes.append(
+                _synthesize_alias_name_node(bound_identifier, each_alias)
+            )
+    return banned_alias_nodes
+
+
 def _collect_banned_names_from_node(node: ast.AST) -> list[ast.Name]:
     """Return banned ast.Name nodes introduced by a single binding construct."""
     if isinstance(node, ast.Assign):
@@ -1057,6 +1086,8 @@ def _collect_banned_names_from_node(node: ast.AST) -> list[ast.Name]:
     if isinstance(node, ast.NamedExpr):
         banned_names = _collect_banned_names_from_target(node.target)
         return _without_parse_args_namespace_exemption(banned_names, node.value)
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
+        return _collect_banned_names_from_import(node)
     return []
 
 
@@ -3657,6 +3688,58 @@ def check_inline_literal_collections(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def check_inline_tuple_string_magic(content: str, file_path: str) -> list[str]:
+    """Flag inline two-tuple literals whose first element is a snake_case string.
+
+    Catches the pattern ``("kept", "Unknown status")`` and similar
+    column-name/key-value pairs declared inside function bodies. Files under
+    ``config/`` and test files are exempt because that is where named
+    constants are expected to live.
+    """
+    if is_test_file(file_path):
+        return []
+    if is_config_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    snake_case_pattern = re.compile(SNAKE_CASE_LITERAL_PATTERN)
+    issues: list[str] = []
+    seen_tuple_node_ids: set[int] = set()
+    for each_function_node in ast.walk(tree):
+        if not isinstance(each_function_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for each_body_statement in each_function_node.body:
+            for each_descendant in _walk_skipping_nested_function_defs(each_body_statement):
+                if not isinstance(each_descendant, ast.Tuple):
+                    continue
+                if id(each_descendant) in seen_tuple_node_ids:
+                    continue
+                seen_tuple_node_ids.add(id(each_descendant))
+                if len(each_descendant.elts) != EXPECTED_TUPLE_PAIR_LENGTH:
+                    continue
+                first_element = each_descendant.elts[0]
+                if not isinstance(first_element, ast.Constant):
+                    continue
+                if not isinstance(first_element.value, str):
+                    continue
+                literal_text = first_element.value
+                if not snake_case_pattern.match(literal_text):
+                    continue
+                if literal_text in ALL_SNAKE_CASE_KEYWORD_EXEMPTIONS:
+                    continue
+                issues.append(
+                    f"Line {first_element.lineno}: Column-name string magic "
+                    f"{literal_text!r} - {INLINE_TUPLE_STRING_MAGIC_MESSAGE_SUFFIX}"
+                )
+                if len(issues) >= MAX_INLINE_TUPLE_STRING_MAGIC_ISSUES:
+                    return issues
+    return issues
+
+
 def check_loop_variable_naming(content: str, file_path: str) -> list[str]:
     if is_test_file(file_path):
         return []
@@ -3797,6 +3880,7 @@ def validate_content(
         all_issues.extend(check_return_annotations(content, file_path))
         all_issues.extend(check_loop_variable_naming(content, file_path))
         all_issues.extend(check_inline_literal_collections(content, file_path))
+        all_issues.extend(check_inline_tuple_string_magic(content, file_path))
         all_issues.extend(check_string_literal_magic(content, file_path))
         check_incomplete_mocks(content, file_path)
         check_duplicated_format_patterns(content, file_path)
