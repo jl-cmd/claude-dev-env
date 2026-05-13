@@ -18,15 +18,11 @@ plus inline comments anchored to most recent Copilot review on
 `current_head`:
 
 ```
-pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
-  → filter `.user.login` for copilot (case-insensitive substring "copilot")
-    AND `.commit_id == current_head`
-  → sort by `.submitted_at` descending
+python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
+  → filter by `.commit_id == current_head`, sort by `.submitted_at` descending
 
-pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
-  → filter threads where `is_outdated == false` AND `is_resolved == false`
-    AND `pull_request_review_id` matches the newest Copilot review on `current_head`
-    AND any comment has `.author` matching Copilot (case-insensitive substring "copilot")
+python ~/.claude/skills/pr-converge/scripts/fetch_copilot_inline_comments.py --owner <O> --repo <R> --pr-number <N> --commit <current_head>
+  → unaddressed inline threads on the latest Copilot review at current_head
 ```
 
 Decide (four branches; match first whose predicate holds):
@@ -34,7 +30,7 @@ Decide (four branches; match first whose predicate holds):
 - **`classification == "dirty"` with non-empty inline comments matching
   `pull_request_review_id`:** Fix protocol input (same shape as bugbot
   dirty). Spawn Agent (subagent_type: clean-coder) to implement → push → reply inline on each thread via
-  `add_reply_to_pull_request_comment` MCP → Step 3 in same tick (see
+  `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py` → Step 3 in same tick (see
   [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow) for
   full contract).
   Reset `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase =
@@ -44,7 +40,7 @@ Decide (four branches; match first whose predicate holds):
   `pull_request_review_id`:** Copilot posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
   threads). Parse body for actionable findings. Spawn Agent (subagent_type: clean-coder) to implement → push → post
-  top-level review reply using `pull_request_review_write(method="create", event="COMMENT", body)` citing new HEAD SHA → Step 3 in same tick.
+  top-level review reply via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py` citing new HEAD SHA → Step 3 in same tick.
   Reset
   `bugbot_clean_at = null` AND
   `copilot_clean_at = null`, `phase = BUGBOT`, Step 3 on new HEAD,
@@ -84,7 +80,7 @@ Decide (four branches; match first whose predicate holds):
   `pull_request_review_id`:** Claude posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
   threads). Treat identically to gate (a) dirty+body path — spawn Agent
-  (subagent_type: clean-coder) to implement → push → post top-level review reply. Reset
+  (subagent_type: clean-coder) to implement → push → post top-level review reply via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py`. Reset
   `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = BUGBOT`,
   schedule next wakeup, return.
 - **`classification == "clean"` (state `APPROVED`):** Record evidence:
@@ -128,16 +124,19 @@ Copilot review yet, AND Claude clean or absent at `current_head`, AND
 `mergeable_state == "clean"`), request Copilot review:
 
 ```
-request_copilot_review(owner=OWNER, repo=REPO, pullNumber=NUMBER)
+gh api --method POST repos/<O>/<R>/pulls/<N>/requested_reviewers \
+  -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
 ```
 
-When the `request_copilot_review` MCP tool is unavailable, use `add_issue_comment` as fallback: `add_issue_comment(owner=OWNER, repo=REPO, issueNumber=NUMBER, body="@copilot review")`.
+Check for an existing pending review first with
+`python ~/.claude/skills/pr-converge/scripts/check_pending_reviews.py --owner <O> --repo <R> --pr-number <N> --user copilot`.
 
 After request, set `phase = COPILOT_WAIT`, schedule next wakeup, and return.
 The COPILOT_WAIT phase prevents the agent from re-entering convergence gates
 while Copilot processes. Next tick with `phase == COPILOT_WAIT`:
-re-run `get_reviews` + `get_review_comments` filtered for Copilot
-(identical to gate (a) fetch) against `current_head`. Decide:
+re-run the fetch from gate (a) — `python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py`
+plus MCP `get_review_comments` filtered for Copilot inline threads —
+against `current_head`. Decide:
 
 - **Copilot review present at `current_head`:**
   - `state: APPROVED` → set `copilot_clean_at = current_head`. Record
@@ -155,7 +154,7 @@ re-run `get_reviews` + `get_review_comments` filtered for Copilot
   successful Copilot review). After three consecutive empty waits
   (`copilot_wait_count >= 3`), escalate as hard blocker — report
   "Copilot did not surface a review on current_head after 3 wakeups"
-  and omit loop pacing. Otherwise schedule next wakeup (270s), return.
+  and omit loop pacing. Otherwise schedule next wakeup (360s), return.
 
 ## (e) Thread-resolution gate
 

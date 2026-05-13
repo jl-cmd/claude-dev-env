@@ -1,8 +1,47 @@
 # Run setup and loop state
 
+## Pre-flight (before Step 0)
+
+### Utility scripts
+
+Shell-heavy steps live under
+[`_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/) (run, do not paste
+into context). Utility scripts are **executed**, not loaded as primary context
+([`sources.md`](sources.md) § Progressive disclosure and utility scripts).
+
+```bash
+python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/preflight.py"
+```
+
+Non-zero → fix before grant. `BUGTEAM_PREFLIGHT_SKIP=1` emergency only.
+`--pre-commit` if `.pre-commit-config.yaml` exists.
+
+**Auto-remediation for `core.hooksPath`:** when preflight fails with stderr
+containing `core.hooksPath` (the message starts with `bugteam_preflight:
+core.hooksPath is`, or `Git-side CODE_RULES enforcement is not active`), Claude
+must auto-invoke the fix script — do not fall through to `AskUserQuestion`, do
+not punt to the user, do not ask for confirmation:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/fix_hookspath.py"
+```
+
+The fix script removes any non-canonical local-scope override on the active
+repository, sets the global `core.hooksPath` to `~/.claude/hooks/git-hooks` if
+missing or wrong, and re-runs `preflight.py`. Its exit code becomes the
+preflight outcome. Exit 0 → continue to Step 0. Non-zero only when the
+canonical hooks directory is missing (run `npx claude-dev-env .` first) or
+`git config --global` writes are blocked. Other preflight failures (pytest,
+pre-commit) still require manual fixes —
+the auto-remediation only applies to the `core.hooksPath` failure mode.
+
 ## Step 0 — Grant project permissions (detail)
 
-Before spawning any subagents, grant the session write access to the project’s `.claude/**` tree. Command in `SKILL.md`.
+Before spawning any subagents, grant the session write access to the project's `.claude/**` tree:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/grant_project_claude_permissions.py"
+```
 
 `${CLAUDE_SKILL_DIR}` is a Claude Code host-managed token, pre-substituted by the runtime before any shell sees it. Unlike `${TMPDIR}` and similar shell parameter expansions, it does not depend on the shell’s expansion semantics, so it behaves the same on Unix and Windows shells.
 
@@ -14,21 +53,45 @@ This is the **first** action of every `/bugteam` invocation, before any subagent
 
 Same resolution path as `/findbugs`:
 
-1. `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` — extracts `number`, `baseRefName`, `headRefName`, `url` from response (`N` comes from the parent skill's PR context, or fall back to `pull_request_read` with the default branch lookup to recover the PR number).
+1. Call `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` to fetch PR metadata; capture `number`, `headRefName`, `baseRefName`, and `url` from the response. Falls back to the merge-base diff path when no PR exists.
 2. Fall back to `git merge-base HEAD origin/<default>` then `git diff <merge-base>...HEAD`.
 3. Neither → refuse per refusal cases in `SKILL.md`.
 
 Capture `<owner>/<repo>`, head branch, base branch, PR number, PR URL. This scope persists across every loop — `/bugteam` runs to completion from the single up-front confirmation.
 
+For multi-PR invocations, capture `all_prs = [{number, owner, repo, baseRef, headRef, url}, ...]`. A single-PR invocation produces a one-element list and follows the same downstream rules.
+
+### Per-PR workspace
+
+For each PR in `all_prs`:
+
+Canonical path functions live in
+[`_shared/pr-loop/scripts/_path_resolver.py`](../../_shared/pr-loop/scripts/_path_resolver.py):
+`per_pr_workspace(run_temp_dir, owner, repo, pr_number)` returns dict with keys
+`worktree`, `diff_patch_template`, `outcome_xml_template`, `fix_outcome_xml_template`.
+
+1. Create `<run_temp_dir>/pr-<N>/`.
+2. Run `git worktree add "<run_temp_dir>/pr-<N>/worktree" origin/<headRef>`.
+3. Record the absolute worktree path alongside the PR's other fields.
+
+Background subagents for a PR operate inside that PR's worktree. Step 4 teardown
+runs [`teardown_worktrees.py`](../../_shared/pr-loop/scripts/teardown_worktrees.py)
+for each PR before the shared `rmtree`.
+
 ## Step 2 — Run name and temp directory (detail)
 
-### Run specification
+Canonical path resolution lives in
+[`_shared/pr-loop/scripts/_path_resolver.py`](../../_shared/pr-loop/scripts/_path_resolver.py).
+The functions below are its public API; the implementation is the single source of
+truth.
 
-- **Run name:** `bugteam-pr-<number>-<YYYYMMDDHHMMSS>` for single-PR invocations, `bugteam-<YYYYMMDDHHMMSS>` for multi-PR invocations (or `bugteam-<sanitized-head-branch>-<YYYYMMDDHHMMSS>` if no PR). The timestamp is captured once at invocation start and prevents two concurrent invocations on the same PR from colliding.
-
-- **Branch-name sanitization (no-PR fallback only):** Before substituting `<head-branch>` into the `run_name` template, replace every character outside `[A-Za-z0-9._-]` with `-`. The whitelist keeps safe portable filename characters only; OS-reserved and shell-special characters (`/ \ : * ? < > | "` plus ASCII control characters `0x00`–`0x1F`) fall outside the whitelist and become `-`. Example: `feat/foo*bar` → `feat-foo-bar`; `run_name` becomes `bugteam-feat-foo-bar-<YYYYMMDDHHMMSS>`. Apply sanitization when `run_name` is first assembled so every downstream use (temp dir, cleanup) sees the safe form.
-
-- **Per-run temp directory (resolved once, reused everywhere):** After `run_name` is captured, resolve a portable absolute path: `Path(tempfile.gettempdir()) / run_name` (requires `import tempfile`). `tempfile.gettempdir()` honors `TMPDIR`, `TEMP`, and `TMP` in platform-correct order and falls back to `C:\Users\<user>\AppData\Local\Temp` on Windows or `/tmp` on Unix. Capture the resolved absolute path as `<run_temp_dir>` and pass that literal path to every shell command that follows.
+- **Run name:** `build_run_name(pr_number, head_branch, *, is_multi_pr)` — returns
+  `bugteam-pr-<number>` for single-PR, `bugteam-<sanitized-head-branch>` for multi-PR.
+- **Branch-name sanitization:** `sanitize_branch_name(head_branch)` — maps every
+  character outside `[A-Za-z0-9._-]` to `-`.
+- **Per-run temp directory:** `resolve_run_temp_dir(run_name)` — returns
+  `Path(tempfile.gettempdir()) / run_name`. Capture the resolved absolute path as
+  `<run_temp_dir>` and pass that literal path to every shell command that follows.
 
 - **Subagent roles (spawned per loop, not at invocation start):**
   - `bugfind` — `code-quality-agent`, model opus (Opus 4.7 at default xhigh effort)
@@ -36,8 +99,41 @@ Capture `<owner>/<repo>`, head branch, base branch, PR number, PR URL. This scop
 
 ### Loop state block
 
-The block in `SKILL.md` mixes lead-internal variables and one shell command (`starting_sha`). Read it as instructions, not a single runnable script.
+Loop state (lead; not a single script; per-PR): the variables below are tracked
+independently for each PR in `all_prs`. Each PR has its own cycle, state, and
+exit reason.
+
+Create the initial state file with
+[`init_loop_state.py`](../../_shared/pr-loop/scripts/init_loop_state.py):
+
+```
+python scripts/init_loop_state.py --pr-number <N> --head-ref <ref> --starting-sha <SHA> [--is-multi-pr]
+```
+
+Outputs the path to `<run_temp_dir>/pr-<N>/loop-state.json` with keys
+`loop_count`, `last_action`, `last_findings`, `starting_sha`, `loop_comment_index`.
 
 **`loop_comment_index` scope (per-loop, not cross-loop):** Reset at the start of every AUDIT action, populated as finding comments are posted during AUDIT, consumed by the matching FIX action when it posts fix replies, and discarded after FIX completes. It does not persist across loops; each loop starts with an empty index and its own fresh set of comment URLs.
 
 Each entry: `{loop, finding_id, finding_comment_id, finding_comment_url, used_fallback, fix_status}`. Populated by AUDIT, consumed by FIX.
+
+#### Multi-PR sub-team tracking
+
+When `/bugteam` runs against multiple PRs across repos, each PR operates as a
+logical sub-team within the master `bugteam` team. The PR identity token is
+`{owner}/{repo}#{N}` (e.g. `jl-cmd/claude-code-config#422`). The slugified form
+comes from `slugify_pr_identity(owner, repo, pr_number)` in
+[`_path_resolver.py`](../../_shared/pr-loop/scripts/_path_resolver.py).
+
+- **Teammate name:** `bugfind-{owner}-{repo}-pr{N}-loop{L}-{letter}`
+- **Task subject:** `{owner}/{repo}#{N} audit {letter}`
+- **Outcome XML:** `diff_patch_path(run_temp_dir, owner, repo, pr_number, loop_number)` from `_path_resolver.py`
+
+The lead filters by the slugified prefix to group tasks and teammates by PR.
+Self-claiming by task subject prefix keeps each teammate on its assigned PR.
+
+### --bugbot-retrigger flag
+
+**`--bugbot-retrigger` flag:** when present, the FIX subagent posts a `bugbot
+run` issue comment via the Step 2.5 issue-comments fallback endpoint after
+every successful FIX push, to re-trigger Cursor's bugbot on the new commit.

@@ -1192,3 +1192,24 @@ def test_sys_path_insert_should_skip_hook_infrastructure_files() -> None:
     assert issues == [], (
         f"Hook infrastructure files are exempt from this rule, got: {issues}"
     )
+
+
+def test_validate_content_honors_empty_full_file_content_for_thin_wrapper_check() -> None:
+    """An empty `full_file_content` must not be silently replaced with the pre-edit fragment.
+
+    Regression for loop1-8: the `or` short-circuit at the thin-wrapper call
+    site treated `""` identically to `None`, so an Edit collapsing a file to
+    empty was scanned against the pre-edit fragment instead of the empty
+    post-edit content. Mirror the canonical idiom at line 3438.
+    """
+    pre_edit_fragment_with_imports_only = (
+        "from real_module import do_thing\n__all__ = ['do_thing']\n"
+    )
+    issues = code_rules_enforcer.validate_content(
+        pre_edit_fragment_with_imports_only,
+        "/project/src/aliases.py",
+        full_file_content="",
+    )
+    assert not any("thin wrapper" in each.lower() for each in issues), (
+        f"empty post-edit file must not be flagged as a thin wrapper, got: {issues!r}"
+    )

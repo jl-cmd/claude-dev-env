@@ -155,7 +155,7 @@ Each section names exactly one target file, the literal text or regex to add, an
 **Verification step (one line, no `$(...)`):**
 
 ```
-python C:/Users/jon/.claude/skills/bugteam/scripts/bugteam_code_rules_gate.py /tmp/pr70_writer.py /tmp/pr70_summary.py /tmp/pr73_constants.py /tmp/pr73_writer.py
+python $HOME/.claude/skills/bugteam/scripts/bugteam_code_rules_gate.py /tmp/pr70_writer.py /tmp/pr70_summary.py /tmp/pr73_constants.py /tmp/pr73_writer.py
 ```
 
 Run after the K and L deterministic detectors land in §c/d below; the categories M and N stay rubric-only and are exercised by replaying PR #70 / PR #73 through `/bugteam` with the new PROMPTS.md and observing that the audit posts findings keyed to lines 158 (M), 125 (rubric N — naming clarity), 263 (rubric N — PR-description drift), 361 (initial/final standards review — file length), and 206 (N — wrapper plumb-through).
@@ -348,7 +348,7 @@ Wire into `run_gate` the same way as Detector 1, by appending its output to `iss
 **Verification step:**
 
 ```
-python C:/Users/jon/.claude/skills/bugteam/scripts/bugteam_code_rules_gate.py /tmp/pr70_writer.py /tmp/pr70_summary.py /tmp/pr73_constants.py /tmp/pr73_writer.py /tmp/pr73_tracker.py
+python $HOME/.claude/skills/bugteam/scripts/bugteam_code_rules_gate.py /tmp/pr70_writer.py /tmp/pr70_summary.py /tmp/pr73_constants.py /tmp/pr73_writer.py /tmp/pr73_tracker.py
 ```
 
 Expected output after the patch lands: at minimum one `Column-name string magic 'theme_name' - extract to config` line on `pr70_writer.py` (Copilot id 3153098661) and one `Wrapper 'flush' drops optional kwargs ['loud_banner_stream'] of delegate 'flush'` line on `pr73_tracker.py` (Copilot id 3153475331).
@@ -488,13 +488,16 @@ def check_library_print(content: str, file_path: str) -> list[str]:
         all_issues.extend(check_library_print(content, file_path))
 ```
 
-**Verification step:**
+**Verification step** — invoke the
+[`probe_code_rules_enforcer_check.py`](../scripts/probe_code_rules_enforcer_check.py)
+script (which dynamically loads `code_rules_enforcer` and runs the named
+detector against a fixture):
 
 ```
-python -c "import importlib.util, sys; spec=importlib.util.spec_from_file_location('e','C:/Users/jon/.claude/hooks/blocking/code_rules_enforcer.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); content=open('/tmp/pr73_constants.py').read(); print(m.check_collection_prefix(content,'shared_utils/theme_db/config/constants.py'))"
+python "${CLAUDE_SKILL_DIR}/scripts/probe_code_rules_enforcer_check.py" check_collection_prefix /tmp/pr73_constants.py shared_utils/theme_db/config/constants.py
 ```
 
-Expected output after the patch lands: a list containing `Line 91: Collection constant THEMES_INSERT_REQUIRED_COLUMN_NAMES - prefix with ALL_ (CODE_RULES §5)`. The same command against `/tmp/pr73_writer.py` (Copilot id 3153475297) emits `Line 296: Collection parameter column_value_pairs - prefix with all_ (CODE_RULES §5)`. Replacing the call with `m.check_library_print` against `/tmp/pr70_summary.py` (Copilot id 3153098727) emits at minimum one `Line 256: Library print() - …` line.
+Expected output after the patch lands: a list containing `Line 91: Collection constant THEMES_INSERT_REQUIRED_COLUMN_NAMES - prefix with ALL_ (CODE_RULES §5)`. The same command against `/tmp/pr73_writer.py` (Copilot id 3153475297) emits `Line 296: Collection parameter column_value_pairs - prefix with all_ (CODE_RULES §5)`. Re-running with `check_library_print /tmp/pr70_summary.py shared_utils/theme_db/summary.py` (Copilot id 3153098727) emits at minimum one `Line 256: Library print() - …` line.
 
 **Justification for touching `code_rules_enforcer.py`:** the root-cause statement names write-time enforcement as the right layer for collection-prefix and library-print, because both rules in `CODE_RULES.md §5` are mechanical (no judgment), produce concrete fixes, and were the dominant source of follow-up Copilot findings (3 of 8 inventory rows). The bugteam pre-flight gate alone is insufficient — it only fires before each AUDIT, so a clean-coder fix pass that introduces a new violation lives unblocked until the next gate run; write-time enforcement closes that window.
 

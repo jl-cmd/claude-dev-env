@@ -2,7 +2,7 @@
 
 ## Core principle (expanded)
 
-Background subagents (`Agent(..., run_in_background=true)`) run the audit-and-fix loop until convergence. The bugfind subagent audits clean-room (own context window, no chat history); the bugfix subagent addresses each audit’s findings; both spawn fresh per loop with no shared state. A 10-loop hard cap prevents runaway cost. Project permissions are granted at session start and revoked at session end.
+One audit agent (`code-quality-agent`, opus) walks all A–K categories per loop. One fix agent (`clean-coder`, opus) addresses the audit's findings.
 
 Fresh-spawn clean-room isolation: each `Agent` call creates a new subagent with its own context window and no access to prior conversation. After the subagent writes its outcome XML and self-terminates, the lead reads the file. Results never accumulate in the lead’s context beyond the XML artifact. Verbatim Anthropic quotes and URLs: [`../sources.md`](../sources.md).
 
@@ -12,7 +12,7 @@ The top-of-file list exists so partial reads (for example `head -100`) still sho
 
 ## When `/bugteam` applies (narrative)
 
-The user wants automated convergence on a clean PR without babysitting each step. Typed `/bugteam` once means full authorization for up to ten audit cycles and the corresponding fix commits.
+The user wants automated convergence on a clean PR without babysitting each step. Typed `/bugteam` once means full authorization for up to twenty audit cycles and the corresponding fix commits.
 
 ### Refusal reasons (detail)
 
