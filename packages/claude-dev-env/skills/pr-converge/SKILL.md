@@ -104,7 +104,7 @@ resolve the thread. Count unresolved threads before advancing.
       - [ ] **no review yet / commit_id mismatch** →
             - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --check-active --sha <current_head>`
             - [ ] Exit 0 (already queued) → schedule 360s wakeup → return to Step 4 next tick
-            - [ ] Exit 1 → post `bugbot run` via `add_issue_comment`, wait 8s
+            - [ ] Exit 1 → post exactly `bugbot run` via `add_issue_comment` (no `@cursor[bot]` mention, no other text), wait 8s
             - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --sha <current_head>`
             - [ ] Exit non-zero → `bugbot_down = true` → advance to Step 5 (bypass)
             - [ ] Exit 0 → record `bugbot_acknowledged_at`, schedule 360s wakeup → return to Step 4
