@@ -69,7 +69,7 @@ def test_should_flag_raise_not_implemented_with_message() -> None:
     )
 
 
-def test_should_not_flag_function_with_docstring_then_pass() -> None:
+def test_should_flag_function_with_docstring_then_pass() -> None:
     source = (
         "def parse_invoice(payload: str) -> int:\n"
         '    """Parse the invoice."""\n'

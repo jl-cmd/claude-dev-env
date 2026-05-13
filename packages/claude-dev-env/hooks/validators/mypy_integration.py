@@ -54,7 +54,8 @@ def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
         and the filesystem root.
     """
     pyproject_filename_for_lookup = "pyproject.toml"
-    current_directory = starting_file.parent if starting_file.is_file() else starting_file
+    resolved_starting_file = starting_file.resolve()
+    current_directory = resolved_starting_file.parent if resolved_starting_file.is_file() else resolved_starting_file
     for each_candidate_directory in [current_directory, *current_directory.parents]:
         candidate_pyproject = each_candidate_directory / pyproject_filename_for_lookup
         if candidate_pyproject.is_file() and _pyproject_contains_tool_mypy(candidate_pyproject):
@@ -75,9 +76,11 @@ def run_mypy_check(files: list[Path]) -> MypyResult:
         return MypyResult(passed=True, output="No Python files", error_count=0)
 
     config_argument: list[str] = []
-    discovered_pyproject = find_pyproject_with_mypy_config(Path(py_files[0]))
-    if discovered_pyproject is not None:
-        config_argument = ["--config-file", str(discovered_pyproject)]
+    for each_py_file in py_files:
+        discovered_pyproject = find_pyproject_with_mypy_config(Path(each_py_file))
+        if discovered_pyproject is not None:
+            config_argument = ["--config-file", str(discovered_pyproject)]
+            break
 
     result = subprocess.run(
         ["mypy", *config_argument, "--ignore-missing-imports", "--no-error-summary"]

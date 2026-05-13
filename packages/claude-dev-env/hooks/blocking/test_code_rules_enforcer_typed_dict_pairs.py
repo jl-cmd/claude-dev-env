@@ -119,6 +119,17 @@ def test_should_handle_syntax_error_gracefully() -> None:
     assert issues == [], f"Syntax error must yield no issues, got: {issues!r}"
 
 
+def test_should_not_flag_typed_dict_nested_inside_class() -> None:
+    source = (
+        "from typing import TypedDict\n"
+        "class Service:\n"
+        "    class RequestPayload(TypedDict):\n"
+        "        token: str\n"
+    )
+    issues = check_typed_dict_encode_decode(source, PRODUCTION_FILE_PATH)
+    assert issues == [], f"Nested TypedDict must not be flagged, got: {issues!r}"
+
+
 def test_should_not_flag_non_typed_dict_class() -> None:
     source = (
         "from dataclasses import dataclass\n"

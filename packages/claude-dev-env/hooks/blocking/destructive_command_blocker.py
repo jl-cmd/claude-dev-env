@@ -86,9 +86,9 @@ DESTRUCTIVE_BASH_PATTERNS = [
     (re.compile(r'\bDROP\s+TABLE\b', re.IGNORECASE), "DROP TABLE (destroys database table)"),
     (re.compile(r'\bDROP\s+DATABASE\b', re.IGNORECASE), "DROP DATABASE (destroys entire database)"),
     (re.compile(r'\bTRUNCATE\s+TABLE\b', re.IGNORECASE), "TRUNCATE TABLE (removes all table rows)"),
-    (re.compile(r'\bgit\s+(?:[^\s]+\s+)*--no-verify\b'), "git --no-verify (skips pre-commit / pre-push hooks; NON-NEGOTIABLE per git-workflow.md)"),
-    (re.compile(r'\bgit\s+(?:[^\s]+\s+)*--no-gpg-sign\b'), "git --no-gpg-sign (bypasses commit signing; NON-NEGOTIABLE per git-workflow.md)"),
-    (re.compile(r'\bgit\s+-c\s+commit\.gpgsign\s*=\s*false\b'), "git -c commit.gpgsign=false (bypasses commit signing; NON-NEGOTIABLE per git-workflow.md)"),
+    (re.compile(r'\bgit\s+(?:[^\s]+\s+)*--no-verify\b', re.IGNORECASE), "git --no-verify (skips pre-commit / pre-push hooks; NON-NEGOTIABLE per git-workflow.md)"),
+    (re.compile(r'\bgit\s+(?:[^\s]+\s+)*--no-gpg-sign\b', re.IGNORECASE), "git --no-gpg-sign (bypasses commit signing; NON-NEGOTIABLE per git-workflow.md)"),
+    (re.compile(r"\bgit\s+-c\s+['\"]?commit\.gpgsign=['\"]?false['\"]?(?!\w)", re.IGNORECASE), "git -c commit.gpgsign=false (bypasses commit signing; NON-NEGOTIABLE per git-workflow.md)"),
 ]
 
 def find_destructive_pattern(command: str) -> str | None:

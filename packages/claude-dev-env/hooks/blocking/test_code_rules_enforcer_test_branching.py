@@ -1,7 +1,7 @@
 """Tests for check_test_branching_in_production — flags prod-vs-test branching.
 
 Per Plan 1c.di_pattern_check / Phase B3: production code that branches on
-TESTING / PYTEST_CURRENT_TEST / sys.argv == 'test' creates two parallel
+TESTING / PYTEST_CURRENT_TEST via os.environ creates two parallel
 implementations the wrong way. The correct pattern is dependency injection
 (`_test_hooks.py` sibling) so production code is single-path and tests
 override the dependency.
