@@ -112,6 +112,11 @@
           },
           {
             "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/convergence_gate_blocker.py",
+            "timeout": 15
+          },
+          {
+            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/content_search_to_zoekt_redirector.py",
             "timeout": 10
           },

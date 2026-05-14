@@ -10,7 +10,7 @@ Usage:
 
 Exit codes:
   0 — reply posted successfully
-  1 — gh CLI error
+  2 — gh CLI error
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ if str(_pr_converge_dir) not in sys.path:
 
 from config.constants import (
     EXIT_CODE_GH_ERROR,
-    GH_INLINE_COMMENT_CREATE_PATH_TEMPLATE,
+    GH_INLINE_COMMENT_REPLY_PATH_TEMPLATE,
     GH_ISSUE_COMMENT_CREATE_PATH_TEMPLATE,
 )
 
@@ -49,10 +49,10 @@ def post_inline_reply(
         in_reply_to: The comment ID to reply to.
 
     Returns:
-        0 on success, 1 on failure.
+        0 on success, EXIT_CODE_GH_ERROR on failure.
     """
-    endpoint_path = GH_INLINE_COMMENT_CREATE_PATH_TEMPLATE.format(
-        owner=owner, repo=repo, number=number
+    endpoint_path = GH_INLINE_COMMENT_REPLY_PATH_TEMPLATE.format(
+        owner=owner, repo=repo, number=number, comment_id=in_reply_to
     )
     completed_process = subprocess.run(
         [
@@ -61,8 +61,6 @@ def post_inline_reply(
             endpoint_path,
             "-f",
             f"body={body}",
-            "-f",
-            f"in_reply_to={in_reply_to}",
         ],
         capture_output=True,
         text=True,
@@ -92,7 +90,7 @@ def post_pr_comment(
         body: Comment body text.
 
     Returns:
-        0 on success, 1 on failure.
+        0 on success, EXIT_CODE_GH_ERROR on failure.
     """
     endpoint_path = GH_ISSUE_COMMENT_CREATE_PATH_TEMPLATE.format(
         owner=owner, repo=repo, number=number
@@ -147,7 +145,7 @@ def main(all_arguments: list[str]) -> int:
         all_arguments: Command-line arguments.
 
     Returns:
-        0 on success, 1 on error.
+        0 on success, EXIT_CODE_GH_ERROR on failure.
     """
     arguments = parse_arguments(all_arguments)
     if arguments.in_reply_to is not None:

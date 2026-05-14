@@ -9,6 +9,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from config.convergence_branch_constants import (  # noqa: E402
+    ALL_CONVERGENCE_BRANCH_PREFIXES,
+    CONVERGENCE_BRANCH_SUFFIX_PATTERN,
+    CONVERGENCE_FORCE_PUSH_DETECTION_PATTERN,
+)
+
 CLAUDE_DIRECTORY_PATH = os.path.normpath(os.path.expanduser("~/.claude"))
 GH_REDIRECT_ACTIVE_ENV_VAR = "CLAUDE_GH_REDIRECT_ACTIVE"
 GH_REDIRECT_ACTIVE_TRUTHY_VALUES = frozenset({"1", "true", "yes", "on"})
@@ -486,6 +496,52 @@ def _git_reset_hard_allowed_for_command(command: str, current_working_directory:
     return False
 
 
+def _is_convergence_branch(branch: str) -> bool:
+    all_convergence_branch_prefixes = ALL_CONVERGENCE_BRANCH_PREFIXES
+    for each_prefix in all_convergence_branch_prefixes:
+        if branch.startswith(each_prefix):
+            return True
+    return bool(re.match(CONVERGENCE_BRANCH_SUFFIX_PATTERN, branch))
+
+
+def _all_refspecs_are_convergence_branches(post_remote_text: str) -> bool:
+    if not post_remote_text.strip():
+        return False
+    is_any_refspec_checked = False
+    for each_token in post_remote_text.split():
+        if each_token.startswith("-"):
+            continue
+        is_any_refspec_checked = True
+        destination_branch = each_token.split(":")[-1]
+        if not _is_convergence_branch(destination_branch):
+            return False
+    return is_any_refspec_checked
+
+
+def _force_push_targets_convergence_branch(command: str) -> bool:
+    convergence_force_push_detection_pattern = (
+        CONVERGENCE_FORCE_PUSH_DETECTION_PATTERN
+    )
+    is_force_push_found = False
+    for each_match in re.finditer(
+        convergence_force_push_detection_pattern, command, re.IGNORECASE
+    ):
+        is_force_push_found = True
+        post_push_text = each_match.group(1).strip()
+        all_tokens = post_push_text.split()
+        remote_index = 1 if all_tokens and all_tokens[0] in ("--force", "-f") else 0
+        all_refspec_tokens = [
+            token for token in all_tokens[remote_index + 1 :]
+            if token not in ("--force", "-f")
+        ]
+        post_remote_text = " ".join(all_refspec_tokens)
+        if not post_remote_text:
+            return False
+        if not _all_refspecs_are_convergence_branches(post_remote_text):
+            return False
+    return is_force_push_found
+
+
 def main() -> None:
     try:
         hook_input = json.load(sys.stdin)
@@ -525,6 +581,21 @@ def main() -> None:
 
     if matched_description is not None and "git reset --hard" in matched_description:
         if _git_reset_hard_allowed_for_command(command, os.getcwd()):
+            sys.exit(0)
+
+    if (
+        matched_description is not None
+        and "git push" in matched_description
+        and ("force" in matched_description or "-f" in matched_description)
+        and _force_push_targets_convergence_branch(command)
+    ):
+        for each_pattern, each_description in DESTRUCTIVE_BASH_PATTERNS:
+            if "git push" in each_description and ("force" in each_description or "-f" in each_description):
+                continue
+            if each_pattern.search(command):
+                matched_description = each_description
+                break
+        else:
             sys.exit(0)
 
     if matched_description is not None:
