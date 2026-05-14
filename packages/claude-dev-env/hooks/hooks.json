@@ -123,16 +123,6 @@
         ]
       },
       {
-        "matcher": "AskUserQuestion",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/notification/attention_needed_notify.py",
-            "timeout": 15
-          }
-        ]
-      },
-      {
         "matcher": "mcp__plugin_github_github__add_issue_comment",
         "hooks": [
           {
@@ -169,11 +159,6 @@
       {
         "matcher": "",
         "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/notification/attention_needed_notify.py",
-            "timeout": 15
-          },
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/hedging_language_blocker.py",
@@ -249,18 +234,6 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/investigation_tracker_reset.py",
             "timeout": 10
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/notification/claude_notification_handler.py",
-            "timeout": 15
           }
         ]
       }
