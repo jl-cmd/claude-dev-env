@@ -76,6 +76,56 @@ def test_should_flag_pep604_union_dict_parameter() -> None:
     )
 
 
+def test_should_not_flag_bare_dict_parameter() -> None:
+    source = "def consume(user_record: dict) -> None:\n    return None\n"
+    issues = code_rules_enforcer.check_collection_prefix(source, PRODUCTION_FILE_PATH)
+    assert not any(
+        "Collection parameter user_record -" in each_issue for each_issue in issues
+    ), (
+        f"Bare dict parameter is a structured record, not a collection, got: {issues}"
+    )
+
+
+def test_should_flag_subscripted_dict_parameter() -> None:
+    source = "def consume(price_lookup: dict[str, int]) -> None:\n    return None\n"
+    issues = code_rules_enforcer.check_collection_prefix(source, PRODUCTION_FILE_PATH)
+    assert any(
+        "Collection parameter price_lookup -" in each_issue for each_issue in issues
+    ), (
+        f"Expected dict[K, V] parameter flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_module_level_bare_dict_constant() -> None:
+    source = "MY_USER_RECORD: dict = {}\n"
+    issues = code_rules_enforcer.check_collection_prefix(source, PRODUCTION_FILE_PATH)
+    assert not any(
+        "Collection constant MY_USER_RECORD -" in each_issue for each_issue in issues
+    ), (
+        f"Bare dict module-level constant is a structured record, not a collection, got: {issues}"
+    )
+
+
+def test_should_flag_module_level_subscripted_dict_constant_without_all_prefix() -> None:
+    source = "MY_PRICE_LOOKUP: dict[str, int] = {}\n"
+    issues = code_rules_enforcer.check_collection_prefix(source, PRODUCTION_FILE_PATH)
+    assert any(
+        "Collection constant MY_PRICE_LOOKUP -" in each_issue for each_issue in issues
+    ), (
+        f"Expected dict[K, V] module-level constant flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_pep604_bare_dict_union_parameter() -> None:
+    source = "def consume(user_record: dict | None = None) -> None:\n    return None\n"
+    issues = code_rules_enforcer.check_collection_prefix(source, PRODUCTION_FILE_PATH)
+    assert not any(
+        "Collection parameter user_record -" in each_issue for each_issue in issues
+    ), (
+        f"Bare dict | None parameter is a structured record, not a collection, got: {issues}"
+    )
+
+
 def test_should_not_flag_pep604_union_when_param_has_all_prefix() -> None:
     source = (
         "def consume(all_numbers: set[int] | None = None) -> None:\n    return None\n"

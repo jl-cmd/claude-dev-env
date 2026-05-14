@@ -106,6 +106,7 @@ from config.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CLI_FILE_PATH_MARKERS,
     COLLECTION_BY_NAME_PATTERN,
     ALL_COLLECTION_TYPE_NAMES,
+    ALL_SUBSCRIPT_ONLY_COLLECTION_TYPE_NAMES,
     DOTTED_SEGMENT_PATTERN,
     EACH_PREFIX,
     FILE_GLOBAL_UPPER_SNAKE_PATTERN,
@@ -2947,6 +2948,12 @@ def _annotation_names_collection(annotation_node: ast.expr | None) -> bool:
                     for each_element in slice_node.elts
                 )
             return _annotation_names_collection(slice_node)
+        is_subscript_only_collection_type = (
+            (isinstance(outer_value, ast.Name) and outer_value.id in ALL_SUBSCRIPT_ONLY_COLLECTION_TYPE_NAMES)
+            or (isinstance(outer_value, ast.Attribute) and outer_value.attr in ALL_SUBSCRIPT_ONLY_COLLECTION_TYPE_NAMES)
+        )
+        if is_subscript_only_collection_type:
+            return True
         return _annotation_names_collection(outer_value)
     return False
 

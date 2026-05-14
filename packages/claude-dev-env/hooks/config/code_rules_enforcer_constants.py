@@ -27,9 +27,10 @@ NOT_INSIDE_TYPE_CHECKING_BLOCK = -1
 FILE_GLOBAL_UPPER_SNAKE_PATTERN = re.compile(r"^_?[A-Z][A-Z0-9_]*$")
 
 ALL_COLLECTION_TYPE_NAMES: frozenset[str] = frozenset({
-    "list", "tuple", "set", "frozenset", "dict",
+    "list", "tuple", "set", "frozenset",
     "Iterable", "Sequence", "Mapping", "MutableMapping", "FrozenSet",
 })
+ALL_SUBSCRIPT_ONLY_COLLECTION_TYPE_NAMES: frozenset[str] = frozenset({"dict"})
 COLLECTION_BY_NAME_PATTERN: re.Pattern[str] = re.compile(r"^[a-z][a-z0-9]*_by_[a-z][a-z0-9_]*$")
 ALL_CLI_FILE_PATH_MARKERS: tuple[str, ...] = ("/scripts/", "\\scripts\\", "_cli.py", "/cli.py", "\\cli.py")
 
