@@ -60,10 +60,17 @@ post a fresh PR in a fresh branch based on origin main to the user.
   `~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --help`.
 - **Bot login fields differ by endpoint** — `get_reviews` returns
   `.user.login` (object), but `get_review_comments` returns `.author`
-  (string, not an object). Threads use `is_outdated` (not `commit_id`) to
-  indicate staleness. Always check the correct fields and use
+  (string, not an object). Always check the correct fields and use
   case-insensitive substring matching on login values, never strict
   equality.
+- **`is_outdated` is informational, not a skip flag** — GitHub marks a
+  thread `is_outdated=true` when the line it anchors to has changed since
+  the comment was posted. The original concern can still apply to current
+  code (the fix may have moved, not landed). The convergence gate counts
+  every thread with `is_resolved == false` regardless of `is_outdated`.
+  Outdated threads must be verified against current HEAD and either
+  fix-and-resolved or just resolved (with an inline reply explaining why
+  the concern no longer applies).
 - **Tilde paths fail on Windows Git Bash** — `~/.claude/skills/...`
   resolves to the wrong home directory in Bash-tool contexts. Use
   `$HOME/.claude/skills/...` in shell invocations or `Path.home() /
@@ -85,9 +92,14 @@ Each step references its spoke file for full procedural detail — MCP calls,
 script invocations, decision criteria. Every "return to Step N" means the next
 tick starts fresh from that step.
 
-**Hard gate: do not advance from any step while unresolved bot review threads
-exist on `current_head`.** After every fix, reply to each finding comment and
-resolve the thread. Count unresolved threads before advancing.
+**Hard gate: do not advance from any step while ANY unresolved review
+thread exists on the PR.** The thread-count filter is purely
+`is_resolved == false` — author, commit anchor, and `is_outdated` are
+all irrelevant. After every fix, reply to each finding comment and
+resolve the thread via `pull_request_review_write(method="resolve_thread")`.
+For each unresolved thread, verify the concern against current HEAD;
+either fix-and-resolve, or reply-with-note-and-resolve when the concern
+no longer applies.
 
 - [ ] **Step 0: Grant project permissions**
       `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
@@ -120,7 +132,7 @@ resolve the thread. Count unresolved threads before advancing.
             - [ ] Resolve each addressed thread via `pull_request_review_write(method="resolve_thread")`
             - [ ] Push → return to Step 4
       - [ ] **clean** (no findings on `current_head`) →
-            - [ ] Count unresolved bugbot threads → zero? advance; >0? fix + resolve first
+            - [ ] Count ALL unresolved threads on PR (`is_resolved == false`) → zero? advance; >0? fix + resolve first
             - [ ] `bugbot_clean_at = current_head`
             - [ ] Advance to Step 5
       - [ ] **no review yet / commit_id mismatch** →
@@ -144,7 +156,7 @@ resolve the thread. Count unresolved threads before advancing.
             - [ ] Re-trigger bugbot (Step 4 "no review yet" checklist)
             - [ ] `phase = BUGBOT` → schedule 360s wakeup → return to Step 4
       - [ ] **converged (zero findings) + `bugbot_clean_at == current_head`** →
-            - [ ] Count unresolved threads (all bot reviewers) → zero? advance; >0? fix + resolve first
+            - [ ] Count ALL unresolved threads on PR (`is_resolved == false`) → zero? advance; >0? fix + resolve first
             - [ ] Advance to Step 6
       - [ ] **converged + `bugbot_clean_at ≠ current_head`** →
             `phase = BUGBOT` → schedule 360s wakeup → return to Step 4
@@ -160,22 +172,18 @@ resolve the thread. Count unresolved threads before advancing.
       Pre-condition: Step 5 converged AND `bugbot_clean_at == current_head`.
       Count unresolved threads before each gate.
 
-      **(a) Copilot findings**
-      - [ ] Fetch ALL unresolved Copilot threads across the PR (any commit):
+      **(a) Universal unresolved-thread sweep**
+      - [ ] Fetch ALL unresolved threads on the PR:
             ```
-            pull_request_read(method="get_review_comments") → filter copilot
-              → unresolved (is_outdated=false, is_resolved=false)
+            pull_request_read(method="get_review_comments")
+              → filter threads where is_resolved == false
             ```
-      - [ ] Any unresolved? → Fix (spawn `clean-coder`) → reply → resolve → push → return to Step 4
-      - [ ] Fetch Copilot review on `current_head`:
+      - [ ] Any unresolved? → For each: verify concern against current HEAD;
+            if still applies → Fix (spawn `clean-coder`) → reply → resolve;
+            if no longer applies → reply-with-note → resolve. Push if any code changed → return to Step 4
+      - [ ] Fetch Copilot review on `current_head` (top-level review state — uses get_reviews, identifies by reviewer):
             ```
             python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
-            ```
-            Then fetch inline comments via MCP:
-            ```
-            pull_request_read(method="get_review_comments") → filter copilot
-              → unresolved (is_outdated=false, is_resolved=false)
-              → anchored to latest Copilot review on current_head
             ```
       - [ ] dirty → Fix (spawn `clean-coder`) → reply → resolve threads → push → return to Step 4
       - [ ] clean (no findings) → `copilot_clean_at = current_head` → gate (b)
@@ -202,13 +210,16 @@ resolve the thread. Count unresolved threads before advancing.
             ```
       - [ ] `phase = COPILOT_WAIT` → schedule 360s wakeup → return to Step 6a next tick
 
-      **(d) Thread resolution**
+      **(d) Thread resolution — author-agnostic, outdated-agnostic**
       ```
-      pull_request_read(method="get_review_comments") → filter bot reviewers
-        → count unresolved (is_outdated=false, is_resolved=false)
+      pull_request_read(method="get_review_comments")
+        → count threads where is_resolved == false
       ```
       - [ ] zero unresolved → gate (e)
-      - [ ] unresolved → Fix (spawn `clean-coder`) → reply → resolve → push → return to Step 4
+      - [ ] unresolved → For each: verify against HEAD;
+            still applies → Fix (spawn `clean-coder`) → reply → resolve;
+            no longer applies → reply-with-note → resolve.
+            Push if code changed → return to Step 4
 
       **(e) Mark ready**
       - [ ] Run automated convergence check:

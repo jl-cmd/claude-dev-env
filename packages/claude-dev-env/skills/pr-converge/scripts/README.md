@@ -20,11 +20,11 @@ Fetch all reviews and filter for `cursor[bot]`:
 
 Classification: clean if review body has no findings count; dirty if body matches "found N potential issue".
 
-### Bugbot inline comments: `pull_request_read(method="get_review_comments")`
+### Inline comment threads (used by BUGBOT phase and convergence gate (e))
 
-Fetch all review comments and filter for `cursor[bot]`, matching `pull_request_review_id` to the newest Bugbot review on the target commit:
-
-    pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
+Fetch all unresolved inline threads on the PR. The convergence gate is
+author-agnostic and commit-agnostic — see "Inline comment threads"
+below for the canonical fetch.
 
 ### PR head SHA: `pull_request_read(method="get")`
 
@@ -77,14 +77,17 @@ Returns JSON array of Copilot reviews newest-first. Classification:
 `APPROVED` → clean, `CHANGES_REQUESTED` → dirty, `COMMENTED` with
 non-empty body → dirty.
 
-### Copilot inline comments: `pull_request_read(method="get_review_comments")`
+### Inline comment threads: `pull_request_read(method="get_review_comments")`
 
-Fetch via MCP and filter for Copilot inline threads:
+Fetch via MCP. The convergence gate filters ONLY on resolution state:
 
     pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
-      → filter threads where `is_outdated == false` AND `is_resolved == false`
-        AND any comment author matches copilot (case-insensitive)
-        AND `pull_request_review_id` matches latest Copilot review on target commit
+      → filter threads where `is_resolved == false`
+
+The fields `comment.author`, `comment.commit.oid`, and `is_outdated`
+remain useful for **deciding how to address** each unresolved thread
+(re-fix? reply-with-note?), but they do not exclude a thread from the
+count.
 
 ### Request Copilot review: `gh api` REST endpoint
 

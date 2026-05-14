@@ -64,9 +64,7 @@ pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews
   → sort by `.submitted_at` descending
 
 pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
-  → filter threads where `is_outdated == false` AND `is_resolved == false`
-    AND `pull_request_review_id` matches the newest Claude review on `current_head`
-    AND any comment has `.author` matching Claude (case-insensitive substring "claude")
+  → filter threads where `is_resolved == false`
 ```
 
 Decide (four branches; match first whose predicate holds):
@@ -158,24 +156,30 @@ against `current_head`. Decide:
 
 ## (e) Thread-resolution gate
 
-Before marking ready, count unresolved review threads from all bot
-reviewers (Bugbot, Copilot, Claude) anchored to `current_head`:
+Before marking ready, count ALL unresolved review threads on the PR:
 
 ```
 pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
-  → filter threads where `is_outdated == false` AND `is_resolved == false`
-    AND any comment has `.author` matching a bot reviewer
-    (case-insensitive substring "copilot", "cursor", "bugbot", or "claude")
+  → filter threads where `is_resolved == false`
   → count
 ```
 
+When you address an unresolved thread, you still need its author and
+anchor commit so you can decide how to fix it — but the gate doesn't
+filter on those fields.
+
 Decide:
 
-- **Zero unresolved threads at `current_head`:** Record evidence:
-  "0 unresolved threads at <SHA>". Continue to gate (f).
-- **One or more unresolved threads:** Do **not** mark ready. Apply Fix
-  protocol on each unresolved thread. Reset `bugbot_clean_at = null` AND
-  `copilot_clean_at = null`, `phase = BUGBOT`, schedule next wakeup, return.
+- **Zero unresolved threads:** Record evidence:
+  "0 unresolved threads across PR at <SHA>". Continue to gate (f).
+- **One or more unresolved threads:** Do **not** mark ready. For each
+  unresolved thread, verify the concern against current HEAD. If still
+  applies, apply Fix protocol (test → fix → push → reply → resolve). If
+  no longer applies (e.g. code already changed), reply-with-note
+  explaining why and resolve. Push if any code changed → reset
+  `bugbot_clean_at = null` AND `copilot_clean_at = null`,
+  `phase = BUGBOT`, schedule next wakeup, return. If only resolutions
+  (no code changes), re-check this gate without resetting.
 
 ## (f) Mark ready and report
 
@@ -189,7 +193,7 @@ evidence from gates (a)–(e) above. All seven must be confirmed:
 - [ ] `copilot_clean_at == current_head` (from gate (a) or gate (d))
 - [ ] Claude `APPROVED` or absent at `current_head` (from gate (b))
 - [ ] `mergeable_state == "clean"` AND `mergeable == true` (from gate (c))
-- [ ] Zero unresolved bot review threads at `current_head` (from gate (e))
+- [ ] Zero unresolved review threads anywhere on the PR (from gate (e))
 - [ ] No push since bugteam convergence (from per-tick.md Step 2 BUGTEAM §b)
 
 If ANY checkbox cannot be confirmed with evidence, do NOT mark ready.
@@ -206,5 +210,5 @@ With `state.json`, append convergence row to
 `<TMPDIR>/pr-converge-<session_id>/converged.log` per `multi-pr-orchestration.md` §Memory; else skip.
 Report: `PR #<NUMBER> converged: bugbot CLEAN at <SHA>, bugteam CLEAN at
 <SHA>, mergeable_state clean, copilot CLEAN at <SHA>, claude <APPROVED|absent>
-at <SHA>, 0 unresolved threads; marked ready for review`.
+at <SHA>, 0 unresolved threads across PR; marked ready for review`.
 **Omit loop pacing** per **Convergence** of active pacing workflow.

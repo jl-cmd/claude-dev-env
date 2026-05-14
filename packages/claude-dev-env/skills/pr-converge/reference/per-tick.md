@@ -70,14 +70,18 @@ Capture `commit_id`, `submitted_at`, body, `classification` of index-0
 review for decisions below. When branch routes to **Fix protocol**, address
 **every** entry in `$dirty_reviews_path` — not just index 0.
 
-b. Fetch unaddressed inline comments from `cursor[bot]` for newest Bugbot
-review on `current_head`:
+b. Fetch ALL unresolved inline comment threads on the PR:
 
    ```
 pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
-   → filter threads where `is_outdated == false` AND `is_resolved == false`
-     AND any comment has `.author` matching cursor/bugbot (case-insensitive substring)
+   → filter threads where `is_resolved == false`
    ```
+
+   For each unresolved thread, you still need to know **who** wrote it
+   and **what commit** it anchors to so you can decide how to address it
+   — but the gate itself doesn't filter on those fields. Verify each
+   thread's concern against current HEAD; either fix-and-resolve or
+   reply-with-note-and-resolve.
 
 c. Decide (four branches; match first whose predicate holds):
    - **No bugbot review yet, OR latest review's `commit_id` ≠
