@@ -8,7 +8,7 @@
 - **Fresh subagent per loop.** Both bugfind and bugfix are spawned new each loop. Reusing a subagent across loops accumulates context inside that subagent's window — defeats clean-room.
 - **One up-front confirmation = whole cycle.** The `/bugteam` invocation authorizes the entire cycle; every subsequent decision runs on that single authorization.
 - **20-loop hard cap.** Counted as **AUDIT** completions (increment in Step 3). Standards-fix passes before an audit do not advance `loop_count`. Worst case includes extra clean-coder spawns for the code-rules gate.
-- **Code rules gate before every AUDIT.** Run `_shared/pr-loop/scripts/code_rules_gate.py` (resolved via `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`) until exit **0** before spawning **bugfind**. Same `validate_content` logic as `hooks/blocking/code_rules_enforcer.py`.
+- **Code rules gate before every AUDIT.** Run `${CLAUDE_SKILL_DIR}/scripts/bugteam_code_rules_gate.py` until exit **0** before spawning **bugfind**. Same `validate_content` logic as `hooks/blocking/code_rules_enforcer.py`.
 - **Clean-room audits, every loop.** Each bugfind subagent's spawn prompt contains only the PR scope, audit rubric, and the current loop number. Prior loop history stays in the lead.
 - **Targeted fixes.** Each fix subagent sees ONLY the most recent audit's findings. Prior loops are invisible to the fix subagent.
 - **Fix subagent receives the latest audit as its input contract.** Each loop's fix run operates on the current audit's output and only that.
