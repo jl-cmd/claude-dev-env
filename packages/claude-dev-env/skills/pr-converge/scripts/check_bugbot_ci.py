@@ -160,6 +160,8 @@ def main(all_arguments: list[str]) -> int:
             repo=arguments.repo,
             sha=arguments.sha,
         )
+        if not found:
+            print("bugbot: not found")
         return 0 if found else 1
     return check_bugbot_ci(
         owner=arguments.owner,

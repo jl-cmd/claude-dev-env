@@ -1008,3 +1008,149 @@ def test_git_reset_hard_asks_when_settings_file_is_invalid_json(tmp_path: Path) 
 
     response = json.loads(result.stdout)
     assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+# --- convergence branch exemption unit tests ---
+
+import importlib.util
+
+_HOOK_DIR = Path(__file__).parent
+_hook_spec = importlib.util.spec_from_file_location(
+    "destructive_command_blocker",
+    _HOOK_DIR / "destructive_command_blocker.py",
+)
+assert _hook_spec is not None
+assert _hook_spec.loader is not None
+_hook_module = importlib.util.module_from_spec(_hook_spec)
+_hook_spec.loader.exec_module(_hook_module)
+_force_push_targets_convergence_branch = _hook_module._force_push_targets_convergence_branch
+_is_convergence_branch = _hook_module._is_convergence_branch
+_all_refspecs_are_convergence_branches = _hook_module._all_refspecs_are_convergence_branches
+
+
+def test_convergence_branch_claude_prefix_allowed() -> None:
+    assert _force_push_targets_convergence_branch(
+        "git push --force origin claude/fix-123"
+    )
+
+
+def test_convergence_branch_worktree_prefix_allowed() -> None:
+    assert _force_push_targets_convergence_branch(
+        "git push --force origin worktree-pr-converge-418"
+    )
+
+
+def test_convergence_branch_pr_converge_allowed() -> None:
+    assert _force_push_targets_convergence_branch(
+        "git push --force origin pr-423-converge"
+    )
+
+
+def test_convergence_branch_f_variant_allowed() -> None:
+    assert _force_push_targets_convergence_branch(
+        "git push -f origin claude/fix-123"
+    )
+
+
+def test_convergence_branch_main_blocked() -> None:
+    assert not _force_push_targets_convergence_branch(
+        "git push --force origin main"
+    )
+
+
+def test_convergence_branch_refspec_destination_checked() -> None:
+    assert not _force_push_targets_convergence_branch(
+        "git push --force origin claude/fix:main"
+    )
+
+
+def test_convergence_branch_multi_refspec_main_blocked() -> None:
+    assert not _force_push_targets_convergence_branch(
+        "git push --force origin claude/fix-123 main"
+    )
+
+
+def test_convergence_branch_multi_refspec_all_convergence() -> None:
+    assert _force_push_targets_convergence_branch(
+        "git push --force origin claude/fix-123 worktree-other"
+    )
+
+
+def test_convergence_branch_multi_refspec_mixed_blocked() -> None:
+    assert not _force_push_targets_convergence_branch(
+        "git push --force origin claude/fix-123 main worktree-other"
+    )
+
+
+def test_convergence_branch_compound_main_piggyback_blocked() -> None:
+    assert not _force_push_targets_convergence_branch(
+        "git push --force origin claude/foo && git push --force origin main"
+    )
+
+
+def test_is_convergence_branch_claude_prefix() -> None:
+    assert _is_convergence_branch("claude/fix-123")
+
+
+def test_is_convergence_branch_worktree_prefix() -> None:
+    assert _is_convergence_branch("worktree-pr-418")
+
+
+def test_is_convergence_branch_pr_converge() -> None:
+    assert _is_convergence_branch("pr-423-converge")
+
+
+def test_is_convergence_branch_main_rejected() -> None:
+    assert not _is_convergence_branch("main")
+
+
+def test_is_convergence_branch_pr_converge_no_end_anchor() -> None:
+    assert not _is_convergence_branch("pr-423-converge-extra")
+
+
+def test_all_refspecs_empty_string_returns_false() -> None:
+    assert not _all_refspecs_are_convergence_branches("")
+
+
+def test_all_refspecs_whitespace_only_returns_false() -> None:
+    assert not _all_refspecs_are_convergence_branches("   ")
+
+
+def test_all_refspecs_flag_only_returns_false() -> None:
+    assert not _all_refspecs_are_convergence_branches("--no-verify")
+
+
+def test_all_refspecs_multiple_flags_only_returns_false() -> None:
+    assert not _all_refspecs_are_convergence_branches("--no-verify --force")
+
+
+def test_all_refspecs_flag_then_branch_checks_branch() -> None:
+    assert not _all_refspecs_are_convergence_branches("--force main")
+
+
+def test_all_refspecs_convergence_branch_with_flags() -> None:
+    assert _all_refspecs_are_convergence_branches("--force claude/fix-123")
+
+
+def test_force_push_convergence_with_no_verify_blocked() -> None:
+    payload = _make_bash_payload(
+        "git push --force origin --no-verify claude/fix-123"
+    )
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+    assert "--no-verify" in response["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_force_push_convergence_with_no_gpg_sign_blocked() -> None:
+    payload = _make_bash_payload(
+        "git push --force origin --no-gpg-sign claude/fix-123"
+    )
+
+    result = _run_rm_hook(payload)
+
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+    assert "--no-gpg-sign" in response["hookSpecificOutput"]["permissionDecisionReason"]
