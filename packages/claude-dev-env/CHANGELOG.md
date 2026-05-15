@@ -1,5 +1,67 @@
 # Changelog
 
+## [1.39.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.38.1...claude-dev-env-v1.39.0) (2026-05-15)
+
+
+### Features
+
+* add pr-consistency-audit skill — 10-rule cross-file inconsistency detection ([#428](https://github.com/jl-cmd/claude-code-config/issues/428)) ([ab5505e](https://github.com/jl-cmd/claude-code-config/commit/ab5505e4757cf596962ed9ffb640de072f63d3a0))
+* block @cursor/[@copilot](https://github.com/copilot) mentions in add_issue_comment via PreToolUse hook ([#432](https://github.com/jl-cmd/claude-code-config/issues/432)) ([8197474](https://github.com/jl-cmd/claude-code-config/commit/81974748112580601ff42232842ea9f66ce7e659))
+* **hooks:** add md-to-html blocker PreToolUse hook ([#414](https://github.com/jl-cmd/claude-code-config/issues/414)) ([b5d164d](https://github.com/jl-cmd/claude-code-config/commit/b5d164d14ed26a97f9c76653b07773e4117cc451))
+* **hooks:** add md-to-html companion PostToolUse hook ([#415](https://github.com/jl-cmd/claude-code-config/issues/415)) ([0a5a58f](https://github.com/jl-cmd/claude-code-config/commit/0a5a58fd2884edda76f79d0bdcda06a85db231e2))
+* **hooks:** enforcement hardening — 7 new blocking checks, pyproject consolidation, doc updates ([#417](https://github.com/jl-cmd/claude-code-config/issues/417)) ([048bfd6](https://github.com/jl-cmd/claude-code-config/commit/048bfd68f3d463132e7dbad53b8c6bb44948db78))
+* **pr-converge:** add bugbot-down detection after trigger post ([#413](https://github.com/jl-cmd/claude-code-config/issues/413)) ([46c2555](https://github.com/jl-cmd/claude-code-config/commit/46c255598b9c711c02c37ebfb9179acbb9694a45))
+* **pr-loop:** add post_audit_thread.py for audit reviewers ([#445](https://github.com/jl-cmd/claude-code-config/issues/445)) ([8c8e2ef](https://github.com/jl-cmd/claude-code-config/commit/8c8e2ef1310cdc03f42ea7b29c27fdb4c2f5baa1))
+* **pr-loop:** wire post_audit_thread.py into audit skills ([#453](https://github.com/jl-cmd/claude-code-config/issues/453)) ([f1a25e2](https://github.com/jl-cmd/claude-code-config/commit/f1a25e29dda9987750ca1952d3a67a24f2789913))
+* **scripts:** add sweep-empty-dirs utility and scheduled-task installer ([#394](https://github.com/jl-cmd/claude-code-config/issues/394)) ([4e7e326](https://github.com/jl-cmd/claude-code-config/commit/4e7e326052229a5bb899c22a448691b8946426c2))
+* **skills:** add code standards enforcer skill ([#408](https://github.com/jl-cmd/claude-code-config/issues/408)) ([6e6f84c](https://github.com/jl-cmd/claude-code-config/commit/6e6f84cf2fb785a1b306dd41e9c67912ea26b552))
+* **skills:** add structure-prompt skill ([#399](https://github.com/jl-cmd/claude-code-config/issues/399)) ([c199ce7](https://github.com/jl-cmd/claude-code-config/commit/c199ce792cbba409ebb69efd8ce3b81ef27397fb))
+* **skills:** session-log writes HTML and publishes via /doc-gist ([#423](https://github.com/jl-cmd/claude-code-config/issues/423)) ([72a4e7a](https://github.com/jl-cmd/claude-code-config/commit/72a4e7ac3c997ee73322075c10436030f1bf1365))
+
+
+### Bug Fixes
+
+* **bugteam:** correct script paths from _shared to bugteam/scripts ([#436](https://github.com/jl-cmd/claude-code-config/issues/436)) ([628022e](https://github.com/jl-cmd/claude-code-config/commit/628022e2927d8a429bdc59a18311922b6b7abc0c))
+* **bugteam:** correct stale code_rules_gate path in CONSTRAINTS.md ([#437](https://github.com/jl-cmd/claude-code-config/issues/437)) ([bbcda8c](https://github.com/jl-cmd/claude-code-config/commit/bbcda8c2784d4b498ac6cf199c65257805cd77be))
+* **bugteam:** extract shared scripts + convergence scripts + doc audit + fix paths ([3940066](https://github.com/jl-cmd/claude-code-config/commit/3940066577cae17296158f6ba4bc9523e7d9ad77))
+* clarify bugbot trigger body must be exactly "bugbot run" ([#431](https://github.com/jl-cmd/claude-code-config/issues/431)) ([eb13ecc](https://github.com/jl-cmd/claude-code-config/commit/eb13ecc79e712b6449dd46c293d9c5d66d2bf503))
+* **hooks:** catch inline-tuple and import-alias violations at write-time ([#421](https://github.com/jl-cmd/claude-code-config/issues/421)) ([c89c0c6](https://github.com/jl-cmd/claude-code-config/commit/c89c0c6075347801b03f5cdf92ec06f41ac7f37b))
+* **hooks:** exempt convergence branch force-pushes from destructive blocker ([#434](https://github.com/jl-cmd/claude-code-config/issues/434)) ([0f919cf](https://github.com/jl-cmd/claude-code-config/commit/0f919cf7815bea0fd0bf7ff78fbdb095d1c07829))
+* **hooks:** exempt plain-text bodies from gh-body-file blocker ([#433](https://github.com/jl-cmd/claude-code-config/issues/433)) ([27062b0](https://github.com/jl-cmd/claude-code-config/commit/27062b05f61baa1736a69c4719ed1e0dd7a547ee))
+* **hooks:** pr-converge fix round — TYPE_CHECKING awareness, import-aware cast detection, aggregate cap, deduplication ([#418](https://github.com/jl-cmd/claude-code-config/issues/418)) ([202e10f](https://github.com/jl-cmd/claude-code-config/commit/202e10fa40fd4c8f278a09996031e57aa513ea85))
+* **hooks:** remove dict from COLLECTION_TYPE_NAMES ([#438](https://github.com/jl-cmd/claude-code-config/issues/438)) ([56f9cb8](https://github.com/jl-cmd/claude-code-config/commit/56f9cb82ca23974d227abdb3ca0a20a69f1e29d5))
+* **hooks:** resolve CODE_RULES violations in code_rules_enforcer.py self-audit ([#435](https://github.com/jl-cmd/claude-code-config/issues/435)) ([df301c7](https://github.com/jl-cmd/claude-code-config/commit/df301c7a47fae6e9fd99d6cd83c5910bbf0fe4dd))
+* **launcher:** remove DeepSeek API key env-var fallback when cc is invoked without the deepseek argument ([#403](https://github.com/jl-cmd/claude-code-config/issues/403)) ([a466162](https://github.com/jl-cmd/claude-code-config/commit/a466162e7fee1987b6d52fa8c1e4488e144da9d5))
+* **pr-converge:** add COPILOT_WAIT handler to prevent broken back-to-back-clean cycle ([#416](https://github.com/jl-cmd/claude-code-config/issues/416)) ([842fa29](https://github.com/jl-cmd/claude-code-config/commit/842fa294bffb67ffaabbd5b4e7db099225a70cc0))
+* **pr-converge:** count ALL unresolved review threads regardless of author or staleness ([#439](https://github.com/jl-cmd/claude-code-config/issues/439)) ([6bb37df](https://github.com/jl-cmd/claude-code-config/commit/6bb37df307147537fb0abacbdf166dd14bb05b88))
+* **pr-converge:** expand convergence-gates from 4 to 6 gates, align examples ([#409](https://github.com/jl-cmd/claude-code-config/issues/409)) ([ccfff2c](https://github.com/jl-cmd/claude-code-config/commit/ccfff2c659e1ab5e241df7f17d51fff286bdb517))
+* **pr-converge:** harden convergence gates with Claude review, COPILOT_WAIT, thread resolution, and mandatory evidence ([#411](https://github.com/jl-cmd/claude-code-config/issues/411)) ([d7d3087](https://github.com/jl-cmd/claude-code-config/commit/d7d3087d12c01d387bc05ada48ee815058e7966d))
+* **pr-converge:** harden ScheduleWakeup detection and add EnterWorktree isolation gate ([#430](https://github.com/jl-cmd/claude-code-config/issues/430)) ([fa178bf](https://github.com/jl-cmd/claude-code-config/commit/fa178bfca64e086e79829c8e3b6226cd8c5faff9))
+* **pr-converge:** make HEAD re-resolution mandatory with 60s propagation delay ([#412](https://github.com/jl-cmd/claude-code-config/issues/412)) ([69788da](https://github.com/jl-cmd/claude-code-config/commit/69788dabe315ff8a6fe34fca30273fc9454cddcf))
+* **pr-converge:** route multi-PR convergence through four-gate flow ([#410](https://github.com/jl-cmd/claude-code-config/issues/410)) ([4da4d7a](https://github.com/jl-cmd/claude-code-config/commit/4da4d7a5537f310d68e9680f975d703ecf63d7c1))
+
+
+### Documentation
+
+* **pr-loop:** add audit-reply-template canonical reference ([#440](https://github.com/jl-cmd/claude-code-config/issues/440)) ([0c0519f](https://github.com/jl-cmd/claude-code-config/commit/0c0519f51c4f230fae0bcba6f300c1ae13873127))
+
+
+### Maintenance
+
+* **agents:** remove 9 unused agents, 10 skills, and 1 command ([#425](https://github.com/jl-cmd/claude-code-config/issues/425)) ([36e0bef](https://github.com/jl-cmd/claude-code-config/commit/36e0bef3b0fab929ce9fd9e2a44759c0fcf947b8))
+
+
+### Refactoring
+
+* **doc-gist:** transport + sentinel marker hook + gallery, drop templates ([#419](https://github.com/jl-cmd/claude-code-config/issues/419)) ([6430ded](https://github.com/jl-cmd/claude-code-config/commit/6430ded7d88e8754efa2a658939d2e58ed545dbf))
+* **skill-builder:** rewrite as best-practice-driven expert craftsman ([#406](https://github.com/jl-cmd/claude-code-config/issues/406)) ([42f5dbb](https://github.com/jl-cmd/claude-code-config/commit/42f5dbb40d231f0127e46e0a07543cc4f5533fcd))
+
+
+### Tests
+
+* **pr-loop:** expand post_audit_thread.py coverage to retry paths ([#452](https://github.com/jl-cmd/claude-code-config/issues/452)) ([7544827](https://github.com/jl-cmd/claude-code-config/commit/7544827a73163330dd7c351a21b27ee60d00c597))
+* **pr-loop:** retarget post_audit_thread tests to JonEcho/tests with shared PR ([#451](https://github.com/jl-cmd/claude-code-config/issues/451)) ([6c252ee](https://github.com/jl-cmd/claude-code-config/commit/6c252eebd0df7ff09074e6109ef523c7f5da087a))
+
 ## [1.38.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.38.0...claude-dev-env-v1.38.1) (2026-05-09)
 
 
