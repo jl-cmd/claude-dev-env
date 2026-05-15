@@ -1,10 +1,11 @@
 """Live smoke tests for post_audit_thread.py.
 
-Runs against the real GitHub repo ``jl-cmd/claude-code-config``. Each
-test opens a throwaway draft PR, runs the script, asserts the resulting
-review and inline comments via ``gh api``, then closes the PR with
-``--delete-branch``. Authentication uses ``gh auth token`` — empty token
-fails loudly per spec.
+Runs against the real GitHub repo ``JonEcho/tests``. The class opens a
+single throwaway draft PR in ``setUpClass`` and reuses it across every
+test in the class; ``tearDownClass`` closes the PR with
+``--delete-branch``. Each test posts a real review against the shared
+PR. Authentication uses ``gh auth token`` — empty token fails loudly per
+spec.
 
 Test files are exempt from the no-comment, magic-value, banned-identifier,
 and constants-location enforcer rules.
@@ -59,8 +60,8 @@ from config.post_audit_thread_constants import (  # noqa: E402
     STATE_DIRTY,
 )
 
-LIVE_TEST_OWNER = "jl-cmd"
-LIVE_TEST_REPO = "claude-code-config"
+LIVE_TEST_OWNER = "JonEcho"
+LIVE_TEST_REPO = "tests"
 LIVE_TEST_BRANCH_PREFIX = "pr-loop-test"
 LIVE_TEST_PR_TITLE = "TEST: post_audit_thread smoke test (auto-closed)"
 LIVE_TEST_PR_BODY = (
@@ -115,14 +116,6 @@ def force_remove_directory(target_path: Path) -> None:
         sys.stderr.write(
             f"force_remove_directory: could not remove {target_path}: {removal_error}\n"
         )
-
-
-def find_main_repository_root() -> Path:
-    here = Path(__file__).resolve()
-    for each_candidate in [here, *here.parents]:
-        if (each_candidate / ".git").exists():
-            return each_candidate
-    raise RuntimeError(f"could not find .git anchor above {here}")
 
 
 def resolve_gh_auth_token() -> str:
@@ -228,30 +221,51 @@ def write_pr_body_temporary_file(body_text: str) -> Path:
 
 
 def create_throwaway_pr(
-    main_repository_root: Path,
-    worktree_directory: Path,
+    clone_directory: Path,
     branch_name: str,
 ) -> tuple[int, str]:
     subprocess.run(
         [
-            "git",
-            "-C",
-            str(main_repository_root),
-            "worktree",
-            "add",
-            "-b",
-            branch_name,
-            str(worktree_directory),
-            "origin/main",
+            "gh",
+            "repo",
+            "clone",
+            REPO_FULL_NAME,
+            str(clone_directory),
+            "--",
+            "--branch",
+            LIVE_TEST_BASE_BRANCH,
+            "--single-branch",
+            "--depth",
+            "1",
         ],
         check=True,
         capture_output=True,
         text=True,
     )
-    fixture_path = worktree_directory / LIVE_TEST_FIXTURE_FILENAME
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(clone_directory),
+            "config",
+            "--local",
+            "core.hooksPath",
+            str(clone_directory / ".git" / "hooks"),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(clone_directory), "checkout", "-b", branch_name],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    fixture_path = clone_directory / LIVE_TEST_FIXTURE_FILENAME
     fixture_path.write_text(LIVE_TEST_FIXTURE_CONTENT, encoding="utf-8")
     subprocess.run(
-        ["git", "-C", str(worktree_directory), "add", LIVE_TEST_FIXTURE_FILENAME],
+        ["git", "-C", str(clone_directory), "add", LIVE_TEST_FIXTURE_FILENAME],
         check=True,
         capture_output=True,
         text=True,
@@ -260,7 +274,7 @@ def create_throwaway_pr(
         [
             "git",
             "-C",
-            str(worktree_directory),
+            str(clone_directory),
             "commit",
             "-m",
             "test: post_audit_thread.py live smoke fixture",
@@ -270,7 +284,7 @@ def create_throwaway_pr(
         text=True,
     )
     head_sha_completion = subprocess.run(
-        ["git", "-C", str(worktree_directory), "rev-parse", "HEAD"],
+        ["git", "-C", str(clone_directory), "rev-parse", "HEAD"],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -278,7 +292,7 @@ def create_throwaway_pr(
     )
     head_sha = head_sha_completion.stdout.strip()
     subprocess.run(
-        ["git", "-C", str(worktree_directory), "push", "-u", "origin", branch_name],
+        ["git", "-C", str(clone_directory), "push", "-u", "origin", branch_name],
         check=True,
         capture_output=True,
         text=True,
@@ -306,7 +320,7 @@ def create_throwaway_pr(
             text=True,
             encoding="utf-8",
             check=True,
-            cwd=str(worktree_directory),
+            cwd=str(clone_directory),
         )
     finally:
         try:
@@ -336,40 +350,8 @@ def close_throwaway_pr(pr_number: int) -> None:
     )
 
 
-def remove_local_worktree(
-    main_repository_root: Path,
-    worktree_directory: Path,
-) -> None:
-    subprocess.run(
-        [
-            "git",
-            "-C",
-            str(main_repository_root),
-            "worktree",
-            "remove",
-            "--force",
-            str(worktree_directory),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    force_remove_directory(worktree_directory)
-
-
-def delete_remote_branch(branch_name: str) -> None:
-    subprocess.run(
-        [
-            "git",
-            "push",
-            "origin",
-            "--delete",
-            branch_name,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def remove_local_clone(clone_directory: Path) -> None:
+    force_remove_directory(clone_directory)
 
 
 def write_findings_json(findings_payload: list[dict[str, Any]]) -> Path:
@@ -419,10 +401,19 @@ def invoke_post_audit_thread_script(
 
 
 class LivePostAuditThreadTests(unittest.TestCase):
-    """Live smoke tests for post_audit_thread.py against jl-cmd/claude-code-config."""
+    """Live smoke tests for post_audit_thread.py against JonEcho/tests.
 
-    main_repository_root: Path
+    Every test in this class reuses a single throwaway draft PR created
+    in :meth:`setUpClass` and closed in :meth:`tearDownClass`. Each test
+    posts its own review against the shared PR, so the PR accumulates one
+    review per test method without test isolation issues.
+    """
+
     audit_account_token: str
+    local_clone_directory: Path
+    branch_name: str
+    pr_number: int
+    head_sha: str
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -430,40 +421,29 @@ class LivePostAuditThreadTests(unittest.TestCase):
         cls.audit_account_token = resolve_audit_account_token(
             LIVE_TEST_AUDIT_ACCOUNT_NAME
         )
-        cls.main_repository_root = find_main_repository_root()
-
-    def setUp(self) -> None:
-        self.unique_suffix = uuid.uuid4().hex[:UUID_SUFFIX_LENGTH]
-        self.branch_name = f"{LIVE_TEST_BRANCH_PREFIX}/{self.unique_suffix}"
-        self.local_worktree_directory = Path(
-            tempfile.mkdtemp(prefix=f"post-audit-thread-test-{self.unique_suffix}-")
+        unique_suffix = uuid.uuid4().hex[:UUID_SUFFIX_LENGTH]
+        cls.branch_name = f"{LIVE_TEST_BRANCH_PREFIX}/{unique_suffix}"
+        cls.local_clone_directory = Path(
+            tempfile.mkdtemp(prefix=f"post-audit-thread-test-{unique_suffix}-")
         )
-        self.pr_number: int = 0
-        self.head_sha: str = ""
+        cls.pr_number = 0
+        cls.head_sha = ""
         try:
-            self.pr_number, self.head_sha = create_throwaway_pr(
-                self.main_repository_root,
-                self.local_worktree_directory,
-                self.branch_name,
+            cls.pr_number, cls.head_sha = create_throwaway_pr(
+                cls.local_clone_directory,
+                cls.branch_name,
             )
         except Exception:
-            self._cleanup_remote_branch()
-            self._cleanup_local_state()
+            remove_local_clone(cls.local_clone_directory)
             raise
 
-    def tearDown(self) -> None:
+    @classmethod
+    def tearDownClass(cls) -> None:
         try:
-            if self.pr_number > 0:
-                close_throwaway_pr(self.pr_number)
+            if cls.pr_number > 0:
+                close_throwaway_pr(cls.pr_number)
         finally:
-            self._cleanup_local_state()
-            self._cleanup_remote_branch()
-
-    def _cleanup_local_state(self) -> None:
-        remove_local_worktree(self.main_repository_root, self.local_worktree_directory)
-
-    def _cleanup_remote_branch(self) -> None:
-        delete_remote_branch(self.branch_name)
+            remove_local_clone(cls.local_clone_directory)
 
     def _assert_review_state_for_url(
         self, html_url: str, expected_state: str
