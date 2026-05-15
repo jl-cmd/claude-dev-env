@@ -1,8 +1,10 @@
 # Audit reply template
 
-Canonical reply shape for every orchestrator-to-thread reply posted by the PR-loop suite (`pr-converge`, `bugteam`, `findbugs`, `qbug`, `fixbugs`, and the `clean-coder` agent). Every reply Claude posts to an unresolved review thread on a draft PR uses this template.
+Canonical reply shape for every orchestrator-to-thread reply posted by the PR-loop suite (`pr-converge`, `bugteam`, `qbug`, and the `clean-coder` agent). Every reply Claude posts to an unresolved review thread on a draft PR uses this template.
 
-Read this doc before authoring any code that posts a reply. The template is the contract `clean-coder` will read in a later PR (blocked on open PR #424); this doc defines the shape that wiring must emit.
+Read this doc before authoring any code that posts a reply. The template is the contract emitted by every `clean-coder` reply path; the audit-skill wiring (`bugteam`, `qbug`, `pr-converge`) reads it before authoring a reply.
+
+This doc has two surfaces, called out separately so consumers do not conflate them: the **reply template** (this section and below) shapes the body Claude posts back to a single review thread; the **audit body skeleton** in [Relationship to the audit review body](#relationship-to-the-audit-review-body) shapes the parent review `post_audit_thread.py` posts at audit time. The reply-template consumers are the four skills/agents listed above (read-only `findbugs` is excluded — it posts an audit review via `post_audit_thread.py` but never authors thread replies). The audit-body-skeleton consumers include `findbugs` alongside `bugteam` and `qbug` because all three skills post audit reviews via the same script.
 
 ## Provenance
 
@@ -141,5 +143,5 @@ The audit review body announces a complete audit pass; the reply template addres
 ## Cross-references
 
 - [`audit-contract.md`](audit-contract.md) — finding schema (Shape A / Shape B), adversarial second pass, post-fix self-audit, persistence layout. The fields in a Shape A finding (`file`, `line`, `failure_mode`) feed the placeholders in this template. Replies cite the same `<file>:<line>` anchors that the originating audit recorded.
-- [`fix-protocol.md`](fix-protocol.md) — step 12 of the fix protocol describes the reply step. Step 12 currently shows only a terse `Fixed in <short_sha>` reply shape. A Phase-2 follow-on edit replaces step 12's terse shape with this template's full structure. That edit is out of scope for this PR.
+- [`fix-protocol.md`](fix-protocol.md) — step 12 of the fix protocol describes the reply step and renders this template's full structure.
 - [`gh-payloads.md`](gh-payloads.md) — MCP and REST endpoints used to post replies (`add_reply_to_pull_request_comment` and `post_fix_reply.py`). The transport is independent of the template; both transports accept the body string this template defines.

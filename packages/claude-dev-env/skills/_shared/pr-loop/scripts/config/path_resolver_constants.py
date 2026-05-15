@@ -65,3 +65,14 @@ XML_PRETTY_INDENT = "  "
 XML_SERIALIZE_ENCODING = "unicode"
 XML_OUTPUT_ENCODING = "utf-8"
 ALL_PYTHON_ONEXC_VERSION = (3, 12)
+
+ALL_FINDING_BODY_ELEMENT_KEYS: tuple[str, ...] = (
+    "title",
+    "excerpt",
+    "description",
+)
+
+ALL_FIX_OUTCOME_BODY_ELEMENT_KEYS: tuple[str, ...] = (
+    "reason",
+    "hook_output",
+)

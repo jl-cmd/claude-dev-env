@@ -8,42 +8,29 @@ Build payloads as structured arguments to MCP tools. Body content passes as a st
 
 ## One review per loop
 
-Call `pull_request_review_write` once per audit loop. Payload: `event: "COMMENT"`, the review body, and one `comments[]` object per anchored finding.
+Posting the per-loop audit review is handled by
+[`_shared/pr-loop/scripts/post_audit_thread.py`](scripts/post_audit_thread.py).
+The script owns the review-create/POST/retry flow internally; callers no longer
+build the GitHub reviews-API payload themselves. See
+[`skills/bugteam/SKILL.md` § Audit posting](../../skills/bugteam/SKILL.md#audit-posting)
+for the contract and [`skills/bugteam/PROMPTS.md`](../../skills/bugteam/PROMPTS.md)
+for the AUDIT-step invocation shape.
 
-```
-pull_request_review_write(
-    method="create",
-    event="COMMENT",
-    body=review_body,
-    commitID=head_sha,
-    owner=owner,
-    repo=repo,
-    pullNumber=pull_number,
-    comments=[
-        {path: file_path, line: line_number, side: "RIGHT", body: finding_body}
-    ]
-)
-```
+## Review body skeleton
 
-Single-line anchors: `{path, line, side: "RIGHT", body}`. Multi-line anchors add `start_line` and `start_side: "RIGHT"`.
-
-Zero findings still post one review. Body line: `## /<workflow> loop <N> audit: 0P0 / 0P1 / 0P2 → clean`. `comments: []`.
-
-## Review body template
-
-```
-## /<workflow> loop <N> audit: <P0>P0 / <P1>P1 / <P2>P2
-
-### Findings without a diff anchor
-(only when needed)
-- **[severity] title** — <file>:<line> — <one-line description>
-```
-
-`<workflow>` is the calling skill name (`bugteam`, `qbug`, `pr-converge`).
+The review body skeleton lives in
+[`audit-reply-template.md`](audit-reply-template.md) between the
+`<!-- audit-body-skeleton:start -->` and `<!-- audit-body-skeleton:end -->`
+markers. `post_audit_thread.py` reads that skeleton at runtime and substitutes
+its placeholders (`<Skill>`, `<state_label>`, `<heading>`, severity counts,
+collapsed `<details>` block). Callers pass the skill name, state, commit SHA,
+and findings JSON; the body shape is owned by the template.
 
 ## Reply to a finding
 
-Call `add_reply_to_pull_request_comment` with the finding comment ID and reply body:
+Call `add_reply_to_pull_request_comment` with the finding comment ID and a
+reply body rendered from
+[`audit-reply-template.md`](audit-reply-template.md):
 
 ```
 add_reply_to_pull_request_comment(
@@ -55,30 +42,30 @@ add_reply_to_pull_request_comment(
 )
 ```
 
+The `body` follows the unified reply skeleton documented in
+[`audit-reply-template.md` § Template skeleton](audit-reply-template.md#template-skeleton).
+
 ## Anchor fallback (line not in diff)
 
-Lines not in the PR diff cannot anchor an inline comment. Omit them from `comments[]` and list under the review body's `### Findings without a diff anchor` section. Outcome record per finding: `used_fallback="true"`, empty `finding_comment_id`, `finding_comment_url` = parent review URL.
+Lines not in the PR diff cannot anchor an inline comment. The AUDIT teammate
+keeps such findings out of the findings JSON handed to
+`post_audit_thread.py`, lists them in the audit outcome XML under `<finding>`
+with an empty `finding_comment_id`, and surfaces them in the calling skill's
+user-facing output (chat reply to the user) rather than in the PR review body.
 
-## Review POST failure fallback (issue comment)
+## Review POST failure
 
-When the review POST fails, call `add_issue_comment` with the full review body:
-
-```
-add_issue_comment(
-    owner=owner,
-    repo=repo,
-    issueNumber=pull_number,
-    body=fallback_body
-)
-```
-
-All findings in the loop record `used_fallback="true"`; `finding_comment_url` = issue comment URL.
+There is no fallback path. `post_audit_thread.py` exits `2` on retry
+exhaustion (four non-2xx responses across the built-in `1s / 4s / 16s` backoff)
+and the orchestrator halts with `error: post_audit_thread retry exhausted`.
+A hard blocker on the audit-posting path is a halt condition, not a degraded
+flat-issue-comment fall-through.
 
 ## Endpoints
 
-- Review: `pull_request_review_write(method="create", ...)`
-- Reply: `add_reply_to_pull_request_comment(...)`
-- Fallback issue comment: `add_issue_comment(...)`
+- Review: handled by `post_audit_thread.py` (POSTs to
+  `/repos/{owner}/{repo}/pulls/{N}/reviews` internally).
+- Reply: `add_reply_to_pull_request_comment(...)`.
 
 ## SHA capture timing
 

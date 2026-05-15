@@ -13,17 +13,49 @@ dirty_review_count = 0
 all_reviews = pull_request_read(
     method="get_reviews", pullNumber=N, owner=O, repo=R
 )
+
+NEW_BUGTEAM_HEADER_PREFIX = "**Bugteam audit completed**"
+LEGACY_BUGTEAM_HEADER_PREFIX = "## /bugteam loop "
+NEW_CLEAN_STATE_LABEL = "Clean — no findings"
+LEGACY_CLEAN_TOKEN = "→ clean"
+
+
+def is_bugteam_review(review_body: str) -> bool:
+    return (
+        review_body.startswith(NEW_BUGTEAM_HEADER_PREFIX)
+        or review_body.startswith(LEGACY_BUGTEAM_HEADER_PREFIX)
+    )
+
+
+def is_clean_bugteam_review(review_body: str) -> bool:
+    if review_body.startswith(NEW_BUGTEAM_HEADER_PREFIX):
+        return NEW_CLEAN_STATE_LABEL in review_body.splitlines()[0]
+    return review_body.rstrip().endswith(LEGACY_CLEAN_TOKEN)
+
+
 prior_reviews = [
     rev for rev in all_reviews
-    if rev.get("body", "").startswith("## /bugteam loop ")
+    if is_bugteam_review(rev.get("body", ""))
 ]
 prior_reviews.sort(key=lambda rev: rev["submitted_at"], reverse=True)
 ```
 
+The classifier handles both shapes. The new shape — emitted by
+`_shared/pr-loop/scripts/post_audit_thread.py` reading
+`_shared/pr-loop/audit-reply-template.md` at runtime — opens with
+`**Bugteam audit completed** —— Clean — no findings` on CLEAN and
+`**Bugteam audit completed** —— Findings requested` on DIRTY. The legacy
+shape — emitted before `post_audit_thread.py` became canonical — opens
+with `## /bugteam loop <N> audit:` and ends with `→ clean` on CLEAN. Both
+shapes are recognized so re-invocations on long-lived branches with
+mixed-shape history classify correctly.
+
 Iterate from index 0 (most recent) toward older entries:
 
-- A bugteam review body that ends with `→ clean` is **clean**; any other `##
-  /bugteam loop ...` body is **dirty**.
+- A bugteam review body whose first line carries the
+  `Clean — no findings` state label (new shape) or whose body ends with
+  `→ clean` (legacy shape) is **clean**; any other bugteam review body
+  is **dirty**.
 - For a dirty review, increment `dirty_review_count` by one. The review's
   specific finding bodies are not carried forward —
   bugteam's AUDIT regenerates
@@ -122,7 +154,7 @@ Agent(
 
 The teammate sees only the latest audit’s findings — each `Agent` call starts with a fresh context window; prior-loop findings, fix history, and chat stay in the lead.
 
-Pass finding comment URL and id for each finding (from `loop_comment_index`) in the XML prompt so the teammate owns replies. After commit: one reply per finding (`Fixed in <commit_sha>` or `Could not address this loop: <one-line reason>`). Same identity model as bugfind: teammate posts; lead waits.
+Pass finding comment URL, comment id, and thread node id for each finding (from `loop_comment_index`) in the XML prompt so the teammate owns both the reply and the thread resolution. After commit, the teammate posts one reply per finding using the unified template at [`../../../_shared/pr-loop/audit-reply-template.md`](../../../_shared/pr-loop/audit-reply-template.md) — the full header / horizontal rule / `<action_heading> ✅` / explanation / anchored-bullet / closing-paragraph skeleton, with `<status_line>` set per the path (`Fixed in <short_sha>` for `status=fixed`, `Could not address this loop` for `status=could_not_address`, `Hook blocked the fix commit` for `status=hook_blocked`). Per-thread reply and `resolve_thread` are atomic — see [`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md) step 12 for the exact sequence. Same identity model as bugfind: teammate posts; lead waits.
 
 After replies, the teammate writes outcome XML (schema in [`../PROMPTS.md`](../PROMPTS.md)).
 

@@ -19,6 +19,7 @@ if str(_self_dir) not in sys.path:
 from _cli_utils import require_file
 from _path_resolver import outcome_xml_path
 from _xml_utils import emit_pretty_xml
+from config.path_resolver_constants import ALL_FINDING_BODY_ELEMENT_KEYS
 
 
 def build_audit_xml(
@@ -38,55 +39,59 @@ def build_audit_xml(
 
     Returns:
         Root <bugteam_audit> element.
+
+    Raises:
+        SystemExit: When findings-json is not a JSON array of objects.
     """
     findings_data = json.loads(findings_json_path.read_text(encoding="utf-8"))
+    if not isinstance(findings_data, list):
+        print("findings-json must contain a JSON array", file=sys.stderr)
+        raise SystemExit(1)
+    for each_index, each_finding in enumerate(findings_data):
+        if not isinstance(each_finding, dict):
+            print(
+                f"findings-json[{each_index}]: each entry must be a JSON object",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
     root = Element("bugteam_audit", {
         "pr": str(pr_number),
         "loop": str(loop),
+        "review_url": review_url,
     })
-    review_elem = SubElement(root, "review_url")
-    review_elem.text = review_url
 
     findings_elem = SubElement(root, "findings")
     _populate_findings(findings_elem, findings_data)
     return root
 
 
-def _populate_findings(parent: Element, findings_data: object) -> None:
-    """Recursively populate findings from JSON into XML elements.
+def _populate_findings(parent: Element, findings_data: list[dict[str, object]]) -> None:
+    """Populate <finding> elements from a validated list of finding dicts.
+
+    Scalar finding fields become XML attributes on `<finding>`; the
+    body fields named in `ALL_FINDING_BODY_ELEMENT_KEYS` (defined in
+    `config/path_resolver_constants.py` and currently
+    `("title", "excerpt", "description")`) become child elements.
+    Nested dicts or lists in scalar slots are flattened to string form
+    so attribute serialization stays well-defined.
 
     Args:
-        parent: Parent XML element.
-        findings_data: Findings data (list of dicts or dict).
+        parent: Parent XML element (typically `<findings>`).
+        findings_data: Validated list of finding dicts (caller must have
+            confirmed each entry is a dict via the build_audit_xml gate).
     """
-    if isinstance(findings_data, list):
-        for each_item in findings_data:
-            if isinstance(each_item, dict):
-                finding_elem = SubElement(parent, "finding")
-                for each_key, each_field_detail in each_item.items():
-                    child = SubElement(finding_elem, each_key)
-                    if isinstance(each_field_detail, (list, dict)):
-                        _populate_findings(child, each_field_detail)
-                    else:
-                        child.text = (
-                            str(each_field_detail)
-                            if each_field_detail is not None
-                            else ""
-                        )
+    all_finding_body_element_keys = ALL_FINDING_BODY_ELEMENT_KEYS
+    for each_finding in findings_data:
+        finding_elem = SubElement(parent, "finding")
+        for each_key, each_field_detail in each_finding.items():
+            field_text = (
+                str(each_field_detail) if each_field_detail is not None else ""
+            )
+            if each_key in all_finding_body_element_keys:
+                child = SubElement(finding_elem, each_key)
+                child.text = field_text
             else:
-                item_elem = SubElement(parent, "item")
-                item_elem.text = str(each_item) if each_item is not None else ""
-    elif isinstance(findings_data, dict):
-        for each_key, each_field_detail in findings_data.items():
-            child = SubElement(parent, each_key)
-            if isinstance(each_field_detail, (list, dict)):
-                _populate_findings(child, each_field_detail)
-            else:
-                child.text = (
-                    str(each_field_detail) if each_field_detail is not None else ""
-                )
-    else:
-        parent.text = str(findings_data) if findings_data is not None else ""
+                finding_elem.set(each_key, field_text)
 
 
 def write_audit_xml(
@@ -164,6 +169,8 @@ def main(all_arguments: list[str]) -> int:
             findings_json_path=findings_path,
             worktree_path=getattr(arguments, "worktree_path"),
         )
+    except SystemExit:
+        return 1
     except (json.JSONDecodeError, OSError) as exc:
         print(f"write_audit_xml failed: {exc}", file=sys.stderr)
         return 1
