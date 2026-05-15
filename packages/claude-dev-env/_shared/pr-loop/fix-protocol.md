@@ -16,10 +16,31 @@
 9. **Stage by explicit path:** `git add <path>` for each modified file. Avoid `git add -A` and `git add .`.
 10. **Create one commit** summarizing the fixed findings. Let every git hook run. When a hook blocks the commit, capture stderr, mark every finding in this loop `status=hook_blocked`, and move to the next iteration without retrying this loop.
 11. **Push fast-forward:** `git push origin <branch>`. Verify `git fetch origin <branch> && git rev-parse origin/<branch>` matches `HEAD`.
-12. **Reply inline** on each finding's comment thread using the [`gh-payloads.md`](gh-payloads.md) reply shape. Reply body is one of:
-    - `Fixed in <short_sha>`
-    - `Could not address this loop: <one-line reason>`
-    - `Hook blocked the fix commit: <one-line summary>`
+12. **Reply + resolve, atomic per thread.** For each finding, post the reply and call `resolve_thread` as one logical action — no yield to the orchestrator between them, no batching all replies before any resolves.
+
+    The reply body uses the unified template from [`audit-reply-template.md`](audit-reply-template.md). Skeleton (identical across all paths):
+
+    ```
+    **Claude finished @<reviewer>'s task** —— <status_line>
+
+    ---
+    ### <action_heading> ✅
+
+    <1–2 paragraph plain-language explanation>
+
+    **`<file>:<line>`:**
+    - <bullet describing change or rationale>
+    - <bullet describing change or rationale>
+
+    <closing paragraph>
+    ```
+
+    Per-path `<status_line>` / `<action_heading>`:
+    - `status=fixed`: `Fixed in <short_sha>` (7-char SHA) / finding-specific action verb (e.g., `Replaced Any with concrete type`).
+    - `status=could_not_address`: `Could not address this loop` / one-line reason text.
+    - `status=hook_blocked`: `Hook blocked the fix commit` / one-line hook summary.
+
+    Transport: post the reply via [`gh-payloads.md`](gh-payloads.md), then call `pull_request_review_write(method="resolve_thread", threadId=<thread_node_id>, ...)` for the same thread before moving to the next finding (this is the PR review thread node ID — `PRRT_kwDOxxx` — distinct from the numeric comment ID; harvest it at audit time when calling `get_review_comments`, see [`skills/bugteam/reference/obstacles/fix-resolve-thread.md`](../../skills/bugteam/reference/obstacles/fix-resolve-thread.md)).
 13. **Re-trigger reviewer** when the calling workflow specifies. Workflow-specific:
     - `pr-converge`: post `bugbot run` issue comment after every push (Cursor Bugbot)
     - `monitor-many`: post `bugbot run` issue comment AND call `requested_reviewers` API for Copilot

@@ -83,9 +83,8 @@ cd into `<worktree_path>` before any git or file operation.
     [ ] Walk all 11 categories (A–K), each with Shape A or Shape B
     [ ] Assign finding IDs (loop<L>-<K>)
     [ ] Capture excerpts, validate anchors, format finding bodies
-    [ ] Publish audit summary via /doc-gist, capture URL
-    [ ] Build review body with summary URL, post review (or fallback)
-    [ ] Handle fallback if review POST failed
+    [ ] Build findings JSON, invoke post_audit_thread.py, capture html_url
+    [ ] Harvest child-comment ids/urls AND thread_node_ids; populate loop_comment_index
     [ ] Write outcome XML
   </self_audit_checklist>
 
@@ -97,18 +96,22 @@ cd into `<worktree_path>` before any git or file operation.
      line. Populate the `<excerpt>` element in the outcome XML with it. Validate
      every finding's (file, line) against the captured diff. Split findings into two
      buckets: anchored (line is in the diff) and unanchored (line is not in the diff
-     — goes into the review body's "Findings without a diff anchor" section per
-     Step 2.5). Format each finding body as:
+     — surfaced in the calling skill's user-facing output rather than as inline
+     anchored comments).
 
-       **[severity] one-line title**
-       Category: <letter> (<category name>)
-       <2-3 sentence description with concrete trace>
-
-       _From /bugteam audit loop <L>._
-
-  3.5. Publish the audit summary via `/doc-gist`. Pass the full findings
-       list as the gist body. Capture the returned gist URL for inclusion
-       in the review body at step 4.
+     Each anchored finding contributes one entry to the JSON payload built
+     in step 4. The payload schema is
+     `{path, line, side, severity, description, fix_summary}`; the audit
+     teammate populates `description` (the failure narrative) and
+     `fix_summary` (the `Fix:` / `Validation:` text) from the
+     finding's `failure_mode` per the mapping in step 4. The audit
+     teammate does NOT author the inline-comment body directly:
+     `post_audit_thread.py` renders every body from
+     `INLINE_COMMENT_BODY_TEMPLATE` (defined in
+     [`_shared/pr-loop/scripts/config/post_audit_thread_constants.py`](../../_shared/pr-loop/scripts/config/post_audit_thread_constants.py))
+     — the template prepends `**[<severity>] <Skill> audit finding**`
+     and renders the suggested-fix block, so a teammate who hand-formats
+     a title or footer wastes the work.
 
   4. **Before posting, read the full review once as if you were the PR
      author.** Ask: would I understand what to fix and why? Do any two
@@ -117,51 +120,68 @@ cd into `<worktree_path>` before any git or file operation.
      coherent as a whole? The review's job is to make the PR author want to
      fix these bugs, not to demonstrate that the rubric ran. Rearrange,
      merge, or rephrase anything that would confuse the author. Then
-     proceed with the mechanical three-step flow below.
+     proceed with the mechanical script invocation below.
 
-     Post ONE review per loop using the GitHub MCP three-step pending-review
-     flow (the `pull_request_review_write` tool does NOT accept a `comments[]`
-     array — pending review + per-comment add + submit is the only correct
-     shape). Bodies are passed as plain strings; the MCP tool does the JSON
-     encoding internally:
+     Post ONE review per loop via `post_audit_thread.py` per
+     [SKILL.md § Audit posting](SKILL.md#audit-posting). Serialize the
+     anchored findings to a JSON file shaped as a list of
+     `{path, line, side, severity, description, fix_summary}` entries.
+     Map each finding's `file` → `path`; split each finding's
+     `failure_mode` at the literal `Fix:` heading so the failure
+     narrative becomes `description` and the suffix beginning at `Fix:`
+     (including the trailing `Validation:` clause) becomes
+     `fix_summary`. When the agent omits the `Fix:` heading on a given
+     finding, write the full `failure_mode` text to BOTH `description`
+     and `fix_summary`. Set `side="RIGHT"` for every entry. Zero
+     anchored findings → `--state CLEAN` with the findings file holding
+     an empty array (`[]`); one or more → `--state DIRTY` with the full
+     list.
 
-     a. Create the pending review:
-        `pull_request_review_write(method="create", owner=<O>, repo=<R>,
-        pullNumber=<N>)` — omit `event` so the review stays pending.
-     b. For each anchored finding, in index order, call
-        `add_comment_to_pending_review(owner=<O>, repo=<R>, pullNumber=<N>,
-        path=<file>, line=<line>, side="RIGHT", subjectType="LINE",
-        body=<finding markdown>)`. For multi-line anchors also pass
-        `startLine=<start>` and `startSide="RIGHT"`.
-     c. Submit the pending review with the loop-header body and
-        `event="COMMENT"`:
-        `pull_request_review_write(method="submit_pending", owner=<O>,
-        repo=<R>, pullNumber=<N>, event="COMMENT", body=<review_body>)`.
+     ```
+     python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" \
+       --skill bugteam \
+       --owner <O> \
+       --repo <R> \
+       --pr-number <N> \
+       --commit <head_sha> \
+       --state <CLEAN|DIRTY> \
+       --findings-json <path>
+     ```
 
-     Harvest the parent review `html_url` from the submit_pending response
-     and the child comment `id` / `html_url` entries the same response carries.
-     If the response shape does not surface child comments to the caller,
-     follow up with `pull_request_read(method="get_review_comments", owner=<O>,
-     repo=<R>, pullNumber=<N>)` filtered to the just-submitted review id.
-     Match child comments to anchored findings in the order they were added
-     in step 4b.
-  5. Bail out to the issue-comment fallback below when steps 4a–4c fail,
-     when step 4c fails twice in a row, when the pending review is in an
-     unrecoverable state mid-flow (orphaned pending, partial-add failures
-     with no clean recovery, MCP responses that do not parse), or when
-     your judgment says the pending-review path is broken for this loop.
-     Two retries is plenty. Do not mechanically loop on a stuck flow —
-     post the findings as a PR-level comment instead.
+     The script POSTs a single review with `event=APPROVE` on CLEAN
+     (the request event; GitHub stores it as `state=APPROVED`; empty
+     `comments[]`, body documents "no findings") or
+     `event=REQUEST_CHANGES` on DIRTY (one inline anchored comment per
+     finding; each becomes its own resolvable thread on the PR). It
+     handles retries internally (1s / 4s / 16s backoff across four
+     attempts). Exit codes:
 
-     Clean up with
-     `pull_request_review_write(method="delete_pending", owner=<O>, repo=<R>,
-     pullNumber=<N>)` then post one fallback PR-level comment carrying the
-     review body plus every finding inline:
-     `add_issue_comment(owner=<O>, repo=<R>, issue_number=<N>,
-     body=<full_text>)`. Mark every finding `used_fallback="true"` with the
-     issue-comment URL as `finding_comment_url`.
-  Body text is passed directly as string parameters to the MCP tool calls —
-  no temp files, no jq, no shell pipes.
+     - `0` — review posted; the new review's `html_url` is on stdout.
+       Capture this URL as the parent review URL.
+     - `1` — user input error (bad arguments, malformed findings JSON,
+       missing template).
+     - `2` — retry exhaustion. Hard blocker; halt and exit
+       `error: post_audit_thread retry exhausted` without retrying and
+       without falling back to a flat issue comment. There is no
+       fallback path — a hard blocker on the audit-posting path is a
+       halt condition.
+
+     Exit 0 emits the new review's `html_url` on stdout. Extract the
+     numeric review id from that URL's `#pullrequestreview-<id>` suffix
+     (the trailing URL fragment, the part after `#`). Then harvest child-comment URLs
+     **and PR review thread node ids** via
+     `pull_request_read(method="get_review_comments", owner=<O>,
+     repo=<R>, pullNumber=<N>)` filtered to that review id.
+     Match children to findings in the order they appear in the findings
+     JSON. Each `loop_comment_index[finding_id]` entry must carry both
+     `finding_comment_id` (numeric, used by `add_reply_to_pull_request_comment`)
+     and `thread_node_id` (e.g. `PRRT_kwDOxxx`, used by
+     `resolve_thread`) so the FIX teammate can reply and resolve.
+
+  The findings JSON is serialized to a temp file and passed by path; the
+  review-body content is read from `audit-reply-template.md` at runtime by
+  `post_audit_thread.py`, not passed in by the caller. No body-content
+  temp files, no jq, no shell pipes.
 </comment_posting>
 
 <output_format>
@@ -172,27 +192,36 @@ cd into `<worktree_path>` before any git or file operation.
 
 ## AUDIT outcome XML schema
 
+`write_audit_outcomes.py` reads the findings JSON (list of finding dicts) and
+emits this shape. Scalar finding fields become XML attributes on
+`<finding>`; the body fields `title`, `excerpt`, and `description` become
+child elements. The root carries `pr`, `loop`, and `review_url` as
+attributes.
+
 ```xml
-<bugteam_audit loop="<L>" review_url="<url>">
-  <finding
-    finding_id="loop<L>-<K>"
-    severity="P0|P1|P2"
-    category="<letter>"
-    file="<path>"
-    line="<int>"
-    finding_comment_id="<gh child comment id, or empty if unanchored/review-fallback>"
-    finding_comment_url="<url of child comment, OR review_url if unanchored, OR fallback issue comment URL>"
-    used_fallback="true|false"
-  >
-    <title>one-line title</title>
-    <excerpt>verbatim source line or snippet from the file at the cited line</excerpt>
-    <description>2-3 sentence description with concrete trace</description>
-  </finding>
-  <verified_clean>
-    <category letter="<letter>" name="<name>" evidence="brief evidence + cleared conclusion"/>
-  </verified_clean>
+<bugteam_audit pr="<N>" loop="<L>" review_url="<url>">
+  <findings>
+    <finding
+      finding_id="loop<L>-<K>"
+      severity="P0|P1|P2"
+      category="<letter>"
+      file="<path>"
+      line="<int>"
+      finding_comment_id="<gh child comment id, or empty if unanchored>"
+      finding_comment_url="<url of child comment, OR review_url if unanchored>"
+      thread_node_id="<PR review thread node id (PRRT_kwDOxxx), or empty if unanchored>"
+    >
+      <title>one-line title</title>
+      <excerpt>verbatim source line or snippet from the file at the cited line</excerpt>
+      <description>2-3 sentence description with concrete trace</description>
+    </finding>
+  </findings>
 </bugteam_audit>
 ```
+
+Verified-clean evidence per A–K category is surfaced in the agent's text-mode
+final report, not in this outcome XML (the writer accepts a flat findings list
+only).
 
 ## FIX spawn-prompt XML (bugfix teammate)
 
@@ -217,8 +246,9 @@ cd into `<worktree_path>` before any git or file operation.
     file="<path>"
     line="<int>"
     category="<letter>"
-    finding_comment_id="<id>"
+    finding_comment_id="<numeric comment id>"
     finding_comment_url="<url>"
+    thread_node_id="<PR review thread node id (PRRT_kwDOxxx)>"
   >
     <description>...</description>
   </bug>
@@ -237,9 +267,8 @@ cd into `<worktree_path>` before any git or file operation.
     [ ] Post-fix violation count ≤ previous loop total (skip on L=1)
     [ ] git add + commit
     [ ] git push
+    [ ] Per finding: atomically post the unified-template reply, then call resolve_thread (no yield between them)
     [ ] Publish fix summary via /doc-gist, capture URL
-    [ ] Post fix reply on each finding thread
-    [ ] Resolve each thread via resolve_thread
     [ ] Append fix summary URL to parent review via add_reply_to_pull_request_comment
     [ ] Write fix outcomes XML
   </self_audit_checklist>
@@ -255,43 +284,82 @@ cd into `<worktree_path>` before any git or file operation.
        (the commit was atomic; if it failed, no finding was applied), populate hook_output
        on each outcome, and return WITHOUT retrying. The lead will treat this loop as no-progress.
   7. git push with a plain fast-forward push (the default, no flag overrides).
-  8. For each bug, post a fix reply to its finding_comment_id via
-     `add_reply_to_pull_request_comment(commentId=<id>, body=<reply_text>,
-     owner=<O>, repo=<R>, pullNumber=<N>)`:
-     - "Fixed in <commit_sha>" if the bug was addressed by your commit
-     - "Could not address this loop: <one-line reason>" if you skipped or failed it
-     - "Hook blocked the fix commit: <one-line summary>" if the commit was hook-blocked
-     Body text is passed directly as string parameters -- no temp files, no jq, no shell pipes.
+  8. For each finding, atomically (a) post the fix reply and
+     (b) call `resolve_thread`. The two calls form one logical action
+     per thread — do not yield to the lead between them, and do not
+     batch all replies before any resolves.
+
+     (a) Reply via
+     `add_reply_to_pull_request_comment(commentId=<finding_comment_id>,
+     body=<reply_body>, owner=<O>, repo=<R>, pullNumber=<N>)`. The
+     reply body uses the unified template at
+     [`../../_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md).
+     Skeleton (identical across all paths):
+
+     ```
+     **Claude finished @<reviewer>'s task** —— <status_line>
+
+     ---
+     ### <action_heading> ✅
+
+     <1–2 paragraph plain-language explanation>
+
+     **`<file>:<line>`:**
+     - <bullet describing change or rationale>
+     - <bullet describing change or rationale>
+
+     <closing paragraph>
+     ```
+
+     Per-path `<status_line>` / `<action_heading>`:
+     - `status=fixed`: `Fixed in <short_sha>` (first 7 chars) /
+       finding-specific action verb (e.g.,
+       `Replaced Any with concrete type`).
+     - `status=could_not_address`: `Could not address this loop` /
+       one-line reason text.
+     - `status=hook_blocked`: `Hook blocked the fix commit` /
+       one-line hook summary.
+
+     Body text is passed directly as string parameters — no temp files,
+     no jq, no shell pipes.
+
+     (b) Immediately call
+     `pull_request_review_write(method="resolve_thread",
+     threadId=<thread_node_id>, owner=<O>, repo=<R>, pullNumber=<N>)`
+     for the same thread (this is the PR review thread node ID —
+     `PRRT_kwDOxxx` — distinct from the numeric comment ID; the AUDIT
+     teammate captures it at audit time when calling
+     `get_review_comments` and stores it on each
+     `loop_comment_index` entry alongside `finding_comment_id`, see
+     [reference/obstacles/fix-resolve-thread.md](reference/obstacles/fix-resolve-thread.md)).
+
   9. Publish the fix summary gist via `/doc-gist`. Pass the fix report
      (what was fixed, what was skipped, what was left unaddressed) as the
      gist body. Capture the returned gist URL.
 
-  10. For each resolved finding, call
-      `pull_request_review_write(method="resolve_thread", owner=<O>,
-      repo=<R>, pullNumber=<N>,
-      threadId=<finding_comment_id>)`.
-
-  11. Append the fix summary gist URL (from step 9) to the parent review
+  10. Append the fix summary gist URL (from step 9) to the parent review
       via `add_reply_to_pull_request_comment(commentId=<id>, body=...,
       owner=<O>, repo=<R>, pullNumber=<N>)`. The body carries the
       gist URL plus a one-line summary of fixes applied this loop.
 
-  12. Write `.bugteam-pr<N>-loop<L>.fix-outcomes.xml` inside
+  11. Write `.bugteam-pr<N>-loop<L>.fix-outcomes.xml` inside
       `<worktree_path>` (schema below) and return its path.
 </execution>
 
 <outcome_xml_schema>
-  <bugteam_fix loop="<L>" commit_sha="<sha or empty if no commit>">
-    <outcome
-      finding_id="loop<L>-<K>"
-      status="fixed|could_not_address|hook_blocked|unverified_fixed"
-      commit_sha="<sha if fixed, empty otherwise>"
-      reply_comment_id="<id of the reply posted>"
-      reply_comment_url="<url of the reply posted>"
-    >
-      <reason>only present when status=could_not_address; one-line reason text</reason>
-      <hook_output>only present when status=hook_blocked; verbatim stderr from the blocked hook</hook_output>
-    </outcome>
+  <bugteam_fix pr="<N>" loop="<L>" commit_sha="<sha or empty if no commit>">
+    <outcomes>
+      <outcome
+        finding_id="loop<L>-<K>"
+        status="fixed|could_not_address|hook_blocked|unverified_fixed"
+        commit_sha="<sha if fixed, empty otherwise>"
+        reply_comment_id="<id of the reply posted>"
+        reply_comment_url="<url of the reply posted>"
+      >
+        <reason>only present when status=could_not_address; one-line reason text</reason>
+        <hook_output>only present when status=hook_blocked; verbatim stderr from the blocked hook</hook_output>
+      </outcome>
+    </outcomes>
   </bugteam_fix>
 </outcome_xml_schema>
 

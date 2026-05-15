@@ -32,6 +32,22 @@ def create_loop_state(
 ) -> Path:
     """Create the loop-state.json file and return its path.
 
+    The written state dict carries the subset of the keys documented
+    in `_shared/pr-loop/state-schema.md` common-fields table that are
+    initialized at loop creation. Fields populated only during the loop
+    (e.g. `audit_log`) are added by later steps and are not written
+    here:
+
+      - `loop_count: 0` (int counter, bumps on each AUDIT or tick)
+      - `last_action: "fresh"` (enum: fresh | audited | fixed)
+      - `last_findings: {p0: 0, p1: 0, p2: 0, total: 0}` (count dict
+        populated by AUDIT)
+      - `starting_sha: <str>` (the SHA passed in)
+      - `loop_comment_index: {}` (dict keyed by finding_id; AUDIT
+        populates `finding_comment_id`, `finding_comment_url`, and
+        `thread_node_id` per entry when it posts the per-loop review,
+        and FIX sets `fix_status` when its commit lands)
+
     Args:
         pr_number: Pull request number.
         head_ref: Head branch ref.
@@ -52,10 +68,10 @@ def create_loop_state(
 
     state = {
         "loop_count": 0,
-        "last_action": "init",
-        "last_findings": None,
+        "last_action": "fresh",
+        "last_findings": {"p0": 0, "p1": 0, "p2": 0, "total": 0},
         "starting_sha": starting_sha,
-        "loop_comment_index": 0,
+        "loop_comment_index": {},
     }
 
     state_path.write_text(

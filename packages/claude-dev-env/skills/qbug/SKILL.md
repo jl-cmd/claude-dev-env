@@ -23,7 +23,7 @@ Shared artifacts with /bugteam are referenced below by path, using the `${CLAUDE
 - Code-rules gate script: `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`
 - Bug category rubric A–J: [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md#audit-spawn-prompt-xml-bugfind-teammate)
 - **Audit contract** (finding schema, proof-of-absence, adversarial pass, Haiku secondary, post-fix self-audit, diagnostics JSON): [`bugteam/reference/audit-contract.md`](../bugteam/reference/audit-contract.md)
-- PR comment lifecycle shape: [`bugteam/SKILL.md`](../bugteam/SKILL.md#step-25-pr-comments-one-review-per-loop)
+- PR comment lifecycle shape: [`bugteam/SKILL.md`](../bugteam/SKILL.md#audit-posting)
 
 ## When this skill applies
 
@@ -198,17 +198,78 @@ The subagent receives this prompt and loops internally — the lead does not re-
        <qbug_temp_dir>/loop-<loop_count>-audit.json per the contract's
        persistence schema.
 
-       Post ONE review per loop. Use the payload shape from
-       <categories_file>'s sibling SKILL.md § "PR comments" — pass
-       the review body as a direct string parameter (not jq/piped files) to
-       `pull_request_review_write(method="create", event="COMMENT", body=<body>, owner=<owner>, repo=<repo>, pullNumber=<pr_number>, commitID=<head_sha>)`.
-       Review body first line: `## /qbug loop <N> audit: <P0>P0 / <P1>P1 / <P2>P2`.
-       If the review POST fails, fall back to one issue comment on
-       `add_issue_comment(owner=<owner>, repo=<repo>, issueNumber=<pr_number>, body=<body>)` carrying the full body; mark every
-       finding `used_fallback=true`.
+       Post ONE review per loop via `post_audit_thread.py`. Before
+       serializing, partition the merged findings into anchored (line
+       appears in the captured diff) and unanchored (line is not in the
+       diff) buckets. Only anchored findings are written to
+       `<qbug_temp_dir>/loop-<loop_count>-findings.json` — the GitHub
+       reviews API rejects the entire POST if any inline comment in
+       `comments[]` targets a line not in the diff at `--commit`, so a
+       single unanchored entry breaks the whole review. Unanchored
+       findings surface in the loop's user-facing summary rather than
+       as inline anchored comments. The JSON root is a list of objects
+       shaped `{path, line, side, severity, description, fix_summary}`.
+       For each anchored finding, map `file` → `path`; split the
+       finding's `failure_mode` at the literal `Fix:` heading so the
+       failure narrative becomes `description` and the suffix beginning
+       at `Fix:` (including the trailing `Validation:` clause) becomes
+       `fix_summary` (the `failure_mode` field carries the full
+       audit-to-fix handoff per
+       [`agents/code-quality-agent.md`](../../agents/code-quality-agent.md)).
+       When a finding's `failure_mode` omits the `Fix:` heading, write
+       the full text to BOTH `description` and `fix_summary`. Set
+       `side="RIGHT"` for every entry. Zero anchored findings → write
+       `[]` and pass `--state CLEAN`; one or more anchored findings →
+       pass `--state DIRTY` with the full list.
 
-       Harvest `html_url` for the parent review and each child comment
-       into loop_comment_index[finding_id].
+       **Self-PR precondition.** GitHub rejects both `APPROVE` and
+       `REQUEST_CHANGES` reviews when the authenticated identity matches
+       the PR author with HTTP 422; `post_audit_thread.py` retries and
+       then exits 2. To run qbug on a PR you authored, switch `gh auth`
+       to an alternate reviewer identity (a separate GitHub account)
+       BEFORE invoking the skill. Without this switch, exit 2 is a hard
+       halt — there is no automated fallback path. The script does not
+       auto-downgrade on the self-PR case.
+
+       ```
+       python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" \
+         --skill qbug \
+         --owner <owner> \
+         --repo <repo> \
+         --pr-number <pr_number> \
+         --commit <head_sha> \
+         --state <CLEAN|DIRTY> \
+         --findings-json <qbug_temp_dir>/loop-<loop_count>-findings.json
+       ```
+
+       The script POSTs a single review with `event=APPROVE` on CLEAN
+       (the request event; GitHub stores it as `state=APPROVED`; empty
+       `comments[]`, body documents "no findings") or
+       `event=REQUEST_CHANGES` on DIRTY (one inline anchored comment per
+       finding; each becomes its own resolvable thread on the PR). It
+       handles retries internally (1s / 4s / 16s backoff across four
+       attempts). Exit 0 emits the new review's `html_url` to stdout;
+       extract the numeric review id from the URL's
+       `#pullrequestreview-<id>` suffix (the trailing URL fragment of
+       `html_url`, the part after `#`). Then harvest child-comment URLs **and PR review
+       thread node ids** via
+       `pull_request_read(method="get_review_comments",
+       owner=<owner>, repo=<repo>, pullNumber=<pr_number>)` filtered to
+       that review id. The same response carries each
+       comment's PR review thread node id (e.g. `PRRT_kwDOxxx`) — match
+       children to findings in the order they appear in the findings
+       JSON. Each `loop_comment_index[finding_id]` entry must carry
+       `finding_comment_id` (numeric, used by
+       `add_reply_to_pull_request_comment`), `finding_comment_url`, and
+       `thread_node_id` (`PRRT_kwDOxxx`, used by `resolve_thread`) so
+       the FIX step can reply against the comment and resolve the
+       thread.
+
+       Exit 2 means retry exhaustion — exit
+       `error: post_audit_thread retry exhausted` without retrying and
+       without falling back to a flat issue comment. A hard blocker on
+       the audit-posting path is a halt condition, not a fallback
+       opportunity.
 
        Update state: last_action="audited", last_findings=counts.
        Append `<N> audit: <P0>P0 / <P1>P1 / <P2>P2` to audit_log.
@@ -245,12 +306,54 @@ The subagent receives this prompt and loops internally — the lead does not re-
        Write <qbug_temp_dir>/loop-<loop_count>-diagnostics.json per the
        contract's diagnostics schema (all eight keys required).
 
-       Reply to each finding at loop_comment_index[finding_id].finding_comment_id
-       using `add_reply_to_pull_request_comment(commentId=<id>, body=<body>, owner=<owner>, repo=<repo>, pullNumber=<pr_number>)`.
-       Reply body is one of:
-         - `Fixed in <short_sha>`
-         - `Could not address this loop: <one-line reason>`
-         - `Hook blocked the fix commit: <one-line summary>`
+       For each finding, atomically (a) post the fix reply and
+       (b) call `resolve_thread`. The two calls form one logical action
+       per thread — do not yield to the lead between them, and do not
+       batch all replies before any resolves.
+
+       (a) Reply via
+       `add_reply_to_pull_request_comment(commentId=<loop_comment_index[finding_id].finding_comment_id>,
+       body=<reply_body>, owner=<owner>, repo=<repo>,
+       pullNumber=<pr_number>)`. The reply body uses the unified template
+       at [`../../_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md).
+       Skeleton (identical across all paths):
+
+       ```
+       **Claude finished @<reviewer>'s task** —— <status_line>
+
+       ---
+       ### <action_heading> ✅
+
+       <1–2 paragraph plain-language explanation>
+
+       **`<file>:<line>`:**
+       - <bullet describing change or rationale>
+       - <bullet describing change or rationale>
+
+       <closing paragraph>
+       ```
+
+       Per-path `<status_line>` / `<action_heading>`:
+       - `status=fixed`: `Fixed in <short_sha>` (first 7 chars) /
+         finding-specific action verb (e.g.,
+         `Replaced Any with concrete type`).
+       - `status=could_not_address`: `Could not address this loop` /
+         one-line reason text.
+       - `status=hook_blocked`: `Hook blocked the fix commit` /
+         one-line hook summary.
+
+       Body text is passed directly as string parameters — no temp
+       files, no jq, no shell pipes.
+
+       (b) Immediately call
+       `pull_request_review_write(method="resolve_thread",
+       threadId=<loop_comment_index[finding_id].thread_node_id>,
+       owner=<owner>, repo=<repo>, pullNumber=<pr_number>)` for the
+       same thread (this is the PR review thread node ID —
+       `PRRT_kwDOxxx` — distinct from the numeric comment ID; the
+       AUDIT step captures it at audit time when calling
+       `get_review_comments` and stores it on each
+       `loop_comment_index` entry alongside `finding_comment_id`).
 
        Update state: last_action="fixed". Append
        `<N> fix: <short_sha> — <fixed>/<could_not_address>/<hook_blocked>`
@@ -260,14 +363,16 @@ The subagent receives this prompt and loops internally — the lead does not re-
 </cycle>
 
 <example_finding_body>
-**[P1] race condition on shared cache write**
-Category: I (concurrency hazards)
-Two writers can both pass the existence check at line 88 before either
-commits the write at line 91 — whichever writes second overwrites the
-first under contention. Either hold the cache lock across the check
-and the write, or use a compare-and-swap primitive.
+Populate these two fields on each finding entry of the JSON payload
+consumed by `post_audit_thread.py` (the script renders the inline
+comment body via `INLINE_COMMENT_BODY_TEMPLATE`):
 
-_From /qbug audit loop 2._
+```json
+{
+  "description": "Two writers can both pass the existence check at line 88 before either commits the write at line 91 — whichever writes second overwrites the first under contention.",
+  "fix_summary": "Hold the cache lock across the check and the write, or use a compare-and-swap primitive. Validation: pytest -k cache_concurrent with the threaded-writer fixture."
+}
+```
 </example_finding_body>
 
 <constraints>
@@ -315,7 +420,7 @@ Delete the resolved `<qbug_temp_dir>` tree and any `.qbug-*.md` temp files in th
 - **Code rules gate before every AUDIT.** Same `validate_content` logic as /bugteam.
 - **One commit per FIX action.** Linear branch, fast-forward push only.
 - **Categories A–J.** Same rubric as [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md).
-- **One review per loop.** Anchored findings as `comments[]`; unanchored listed under "Findings without a diff anchor" in the review body.
+- **One review per loop.** Anchored findings as `comments[]`; unanchored findings surface in the calling skill's user-facing output (chat reply to the user) rather than in the PR review body.
 - **PR description rewrite on every exit**, same as /bugteam Step 4.5.
 - **Temp file cleanup on every exit path.**
 - **No per-loop clean-room.** The single subagent's context accumulates across loops — that is the explicit trade vs /bugteam. For convergence-critical audits where bias isolation matters, use /bugteam.

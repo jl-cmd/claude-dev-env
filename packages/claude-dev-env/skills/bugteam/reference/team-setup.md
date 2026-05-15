@@ -116,7 +116,7 @@ Outputs the path to `<run_temp_dir>/pr-<N>/loop-state.json` with keys
 
 **`loop_comment_index` scope (per-loop, not cross-loop):** Reset at the start of every AUDIT action, populated as finding comments are posted during AUDIT, consumed by the matching FIX action when it posts fix replies, and discarded after FIX completes. It does not persist across loops; each loop starts with an empty index and its own fresh set of comment URLs.
 
-Each entry: `{loop, finding_id, finding_comment_id, finding_comment_url, used_fallback, fix_status}`. Populated by AUDIT, consumed by FIX.
+Shape: dict keyed by `finding_id`. Each value: `{finding_comment_id, finding_comment_url, thread_node_id, fix_status}` where `thread_node_id` is the PR review thread node id (`PRRT_kwDOxxx`) captured at audit time when calling `get_review_comments`, used by the FIX step's `resolve_thread` call. The loop number is implicit (the index resets at every AUDIT) so it does not repeat in each value. AUDIT populates `finding_comment_id`, `finding_comment_url`, and `thread_node_id` when it posts the per-loop review; FIX sets `fix_status` when its commit lands.
 
 #### Multi-PR sub-team tracking
 

@@ -11,7 +11,7 @@ State each PR-loop workflow tracks across iterations. Workflows differ on persis
 | `last_findings` | object | `{p0, p1, p2, total}` count of findings from most recent AUDIT |
 | `audit_log` | list[str] | Per-iteration one-line summaries for the final report |
 | `starting_sha` | str | `git rev-parse HEAD` at workflow start |
-| `loop_comment_index` | dict | `{finding_id: {finding_comment_id, finding_comment_url, used_fallback, fix_status, ...}}` |
+| `loop_comment_index` | dict | `{finding_id: {finding_comment_id, finding_comment_url, thread_node_id, fix_status, ...}}` (`thread_node_id` is the PR review thread node id — `PRRT_kwDOxxx` — captured at audit time when calling `get_review_comments`, used by `resolve_thread` at FIX time) |
 
 ## Workflow-specific extensions
 

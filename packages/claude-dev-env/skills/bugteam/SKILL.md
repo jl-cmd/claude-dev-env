@@ -39,6 +39,64 @@ First match wins; respond with the quoted line exactly and stop:
   `clean-coder` exist. Else: `Required subagent type <name> not installed.
   /bugteam needs both code-quality-agent and clean-coder available.`
 
+## Audit posting
+
+Every internal audit pass (CLEAN or DIRTY) ends with one call to
+`post_audit_thread.py`. The script POSTs a single review to
+`/repos/{owner}/{repo}/pulls/{N}/reviews` with `event=APPROVE` on CLEAN
+(the request event; GitHub stores it as `state=APPROVED`; empty
+`comments[]`, body documents "no findings") or
+`event=REQUEST_CHANGES` on DIRTY (one inline anchored comment per
+finding; each becomes its own resolvable thread). The mandate applies
+whether bugteam runs inside `/pr-converge` or standalone.
+
+**Self-PR precondition.** GitHub rejects both `APPROVE` and
+`REQUEST_CHANGES` reviews when the authenticated identity (the `gh auth`
+token in scope) matches the PR author with HTTP 422 ("Cannot
+approve/request changes on your own pull request"). `post_audit_thread.py`
+will retry on transient errors and then exit 2 (retry exhaustion); the
+script does not detect the self-PR case and downgrade to `COMMENT`. To
+run bugteam on a PR you authored, switch `gh auth` to an alternate
+reviewer identity (a separate GitHub account) BEFORE invoking the skill.
+Without this switch, exit 2 is a hard halt — there is no automated
+fallback path. The script does not auto-downgrade on the self-PR case.
+
+```
+python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" \
+  --skill bugteam \
+  --owner <owner> \
+  --repo <repo> \
+  --pr-number <N> \
+  --commit <head_sha> \
+  --state <CLEAN|DIRTY> \
+  --findings-json <path>
+```
+
+`--findings-json` points to a JSON file whose root is a list of objects
+shaped `{path, line, side, severity, description, fix_summary}`. The
+audit agent's persisted finding output maps as follows: finding `file`
+→ `path`, and the agent's `failure_mode` field carries both the failure
+narrative AND the `Fix:` / `Validation:` text per
+[`agents/code-quality-agent.md`](../../agents/code-quality-agent.md)
+("The `failure_mode` field is the audit-to-fix handoff"). Split
+`failure_mode` at the literal `Fix:` heading: the prefix (the failure
+narrative) becomes `description`, and the suffix starting at `Fix:`
+(including the trailing `Validation:` clause) becomes `fix_summary`.
+When the agent omits the `Fix:` heading on a given finding, write the
+full `failure_mode` text to BOTH `description` and `fix_summary` so the
+script's body template (`INLINE_COMMENT_BODY_TEMPLATE` in
+[`_shared/pr-loop/scripts/config/post_audit_thread_constants.py`](../../_shared/pr-loop/scripts/config/post_audit_thread_constants.py))
+still renders coherently. Set `side="RIGHT"` for every entry. On CLEAN,
+pass an empty array (`[]`) so the script posts an APPROVE review
+(GitHub stores it as `state=APPROVED`) with a "no findings" summary and
+zero inline comments.
+
+Exit codes: `0` on success (emits the new review's `html_url` to
+stdout); `1` on user input error; `2` on retry exhaustion (1s / 4s /
+16s backoff across four attempts total). Exit 2 is a hard blocker; the
+lead halts the loop and exits `error: post_audit_thread retry
+exhausted` without retrying.
+
 ## Progress checklist
 
 ```
@@ -67,7 +125,8 @@ end-to-end mental model before starting Step 0.
 | `--bugbot-retrigger` flag behavior | [reference/team-setup.md](reference/team-setup.md) |
 | AUDIT action and code-rules pre-audit gate, pre-cycle walk, cycle decision tree | [reference/audit-and-teammates.md](reference/audit-and-teammates.md) |
 | FIX action and verify-push semantics | [reference/audit-and-teammates.md](reference/audit-and-teammates.md) |
-| Posting per-loop reviews, fix replies, fallback PR comments via GitHub MCP | [reference/github-pr-reviews.md](reference/github-pr-reviews.md) |
+| Posting the end-of-pass audit review via `post_audit_thread.py` (APPROVE on CLEAN — the request event; GitHub stores it as `state=APPROVED` — REQUEST_CHANGES with inline anchored comments on DIRTY) | [§ Audit posting](#audit-posting) |
+| Posting per-finding fix replies via GitHub MCP `add_reply_to_pull_request_comment` (rendered with the unified template at [`_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md)) | [reference/github-pr-reviews.md](reference/github-pr-reviews.md) |
 | Teardown, PR description rewrite via `pr-description-writer`, permission revoke, final report | [reference/teardown-publish-permissions.md](reference/teardown-publish-permissions.md) |
 | Spawn-prompt XML, A–K category bindings, outcome XML schemas | [PROMPTS.md](PROMPTS.md) |
 | Per-category audit content (sub-buckets, decision criteria, ready-to-send Variant C templates) | `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/` |
