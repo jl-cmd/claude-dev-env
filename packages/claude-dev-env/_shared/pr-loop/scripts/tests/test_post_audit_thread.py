@@ -3,9 +3,12 @@
 Runs against the real GitHub repo ``JonEcho/tests``. The class opens a
 single throwaway draft PR in ``setUpClass`` and reuses it across every
 test in the class; ``tearDownClass`` closes the PR with
-``--delete-branch``. Each test posts a real review against the shared
-PR. Authentication uses ``gh auth token`` — empty token fails loudly per
-spec.
+``--delete-branch``. The CLEAN and DIRTY tests post real reviews against
+the shared PR. The retry tests stub the GitHub endpoint with a localhost
+HTTP server so the four-attempt retry loop runs deterministically without
+contacting api.github.com, but still reference the shared PR's number and
+HEAD SHA so the request URL is exercised end-to-end. Authentication uses
+``gh auth token`` — empty token fails loudly per spec.
 
 Test files are exempt from the no-comment, magic-value, banned-identifier,
 and constants-location enforcer rules.
@@ -13,6 +16,7 @@ and constants-location enforcer rules.
 
 from __future__ import annotations
 
+import http.server
 import json
 import os
 import shutil
@@ -20,6 +24,9 @@ import stat
 import subprocess
 import sys
 import tempfile
+import textwrap
+import threading
+import time
 import unittest
 import urllib.parse
 import uuid
@@ -35,6 +42,7 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
 
 from config.post_audit_thread_constants import (  # noqa: E402
     ALL_GH_AUTH_TOKEN_COMMAND_PARTS,
+    ALL_RETRY_BACKOFF_SECONDS,
     GH_TOKEN_ENV_VAR_NAME,
     CLI_FLAG_COMMIT,
     CLI_FLAG_FINDINGS_JSON,
@@ -43,6 +51,7 @@ from config.post_audit_thread_constants import (  # noqa: E402
     CLI_FLAG_REPO,
     CLI_FLAG_SKILL,
     CLI_FLAG_STATE,
+    EXIT_CODE_RETRY_EXHAUSTED,
     INLINE_COMMENT_SIDE_RIGHT,
     JSON_FIELD_DESCRIPTION,
     JSON_FIELD_FIX_SUMMARY,
@@ -50,6 +59,7 @@ from config.post_audit_thread_constants import (  # noqa: E402
     JSON_FIELD_PATH,
     JSON_FIELD_SEVERITY,
     JSON_FIELD_SIDE,
+    MAX_RETRY_ATTEMPTS,
     SEVERITY_TAG_P0,
     SEVERITY_TAG_P1,
     SEVERITY_TAG_P2,
@@ -59,6 +69,7 @@ from config.post_audit_thread_constants import (  # noqa: E402
     STATE_CLEAN,
     STATE_DIRTY,
 )
+from post_audit_thread import build_reviews_endpoint_url  # noqa: E402
 
 LIVE_TEST_OWNER = "JonEcho"
 LIVE_TEST_REPO = "tests"
@@ -66,7 +77,7 @@ LIVE_TEST_BRANCH_PREFIX = "pr-loop-test"
 LIVE_TEST_PR_TITLE = "TEST: post_audit_thread smoke test (auto-closed)"
 LIVE_TEST_PR_BODY = (
     "Throwaway PR for post_audit_thread.py live smoke tests. "
-    "Auto-created by `test_post_audit_thread.py`; closed in `tearDown`."
+    "Auto-created by `test_post_audit_thread.py`; closed in `tearDownClass`."
 )
 LIVE_TEST_BASE_BRANCH = "main"
 LIVE_TEST_FIXTURE_FILENAME = "post-audit-thread-fixture.md"
@@ -354,6 +365,27 @@ def remove_local_clone(clone_directory: Path) -> None:
     force_remove_directory(clone_directory)
 
 
+def best_effort_delete_remote_branch(branch_name: str) -> None:
+    try:
+        subprocess.run(
+            [
+                "gh",
+                "api",
+                "--method",
+                "DELETE",
+                f"repos/{LIVE_TEST_OWNER}/{LIVE_TEST_REPO}/git/refs/heads/{branch_name}",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as deletion_error:
+        sys.stderr.write(
+            f"best_effort_delete_remote_branch: could not delete "
+            f"{branch_name}: {deletion_error}\n"
+        )
+
+
 def write_findings_json(findings_payload: list[dict[str, Any]]) -> Path:
     handle, findings_path_str = tempfile.mkstemp(
         suffix=".json", prefix="post-audit-findings-"
@@ -400,13 +432,220 @@ def invoke_post_audit_thread_script(
     )
 
 
+STUB_SERVER_HOST = "127.0.0.1"
+STUB_SERVER_PORT_DYNAMIC = 0
+STUB_RESPONSE_HEADER_CONTENT_TYPE = "Content-Type"
+STUB_RESPONSE_HEADER_CONTENT_LENGTH = "Content-Length"
+STUB_RESPONSE_CONTENT_TYPE_VALUE = "application/json"
+STUB_HTTP_STATUS_BAD_GATEWAY = 502
+STUB_HTTP_STATUS_OK = 200
+STUB_502_RESPONSE_BODY_BYTES = json.dumps(
+    {"message": "stub server: simulated transient 502 for retry test"}
+).encode("utf-8")
+STUB_200_RESPONSE_BODY_BYTES = json.dumps(
+    {
+        "html_url": (
+            "https://github.com/stub-host/stub-repo/pull/0#pullrequestreview-1"
+        )
+    }
+).encode("utf-8")
+STUB_SERVER_SHUTDOWN_JOIN_TIMEOUT_SECONDS = 5.0
+
+FAILURE_COUNT_FOR_RETRY_SUCCESS = 1
+TOTAL_REQUEST_COUNT_FOR_RETRY_SUCCESS = 2
+FAILURE_COUNT_FOR_RETRY_EXHAUSTION = MAX_RETRY_ATTEMPTS + 1
+TOTAL_REQUEST_COUNT_FOR_RETRY_EXHAUSTION = MAX_RETRY_ATTEMPTS + 1
+
+BACKOFF_TIMING_EPSILON_SECONDS = 0.1
+TOTAL_BACKOFF_SECONDS = sum(ALL_RETRY_BACKOFF_SECONDS)
+
+EXPECTED_RETRY_SUCCESS_ELAPSED_LOWER_BOUND_SECONDS = (
+    ALL_RETRY_BACKOFF_SECONDS[0] - BACKOFF_TIMING_EPSILON_SECONDS
+)
+EXPECTED_RETRY_EXHAUSTION_ELAPSED_LOWER_BOUND_SECONDS = (
+    TOTAL_BACKOFF_SECONDS - BACKOFF_TIMING_EPSILON_SECONDS
+)
+
+EXIT_CODE_SUCCESS = 0
+
+LAUNCHER_SOURCE_CODE = textwrap.dedent(
+    """
+    import sys
+    sys.path.insert(0, sys.argv[1])
+    import post_audit_thread
+    post_audit_thread.GITHUB_API_BASE_URL = sys.argv[2]
+    sys.exit(post_audit_thread.main(sys.argv[3:]))
+    """
+).strip()
+
+
+class _StubReviewsServer(http.server.HTTPServer):
+    """HTTP server that records POST count and serves canned 502/200 responses."""
+
+    request_count: int = 0
+    failure_count: int = 0
+    recorded_request_path: str = ""
+
+
+class _StubReviewsHandler(http.server.BaseHTTPRequestHandler):
+    """Returns 502 for the first ``failure_count`` POSTs, then 200 thereafter.
+
+    State lives on the owning :class:`_StubReviewsServer` instance so the
+    test can inspect the final request count and the path of the last
+    received POST after the script exits.
+    """
+
+    def do_POST(self) -> None:
+        owning_server = self.server
+        owning_server.request_count += 1
+        owning_server.recorded_request_path = self.path
+        if owning_server.request_count <= owning_server.failure_count:
+            response_status = STUB_HTTP_STATUS_BAD_GATEWAY
+            response_body_bytes = STUB_502_RESPONSE_BODY_BYTES
+        else:
+            response_status = STUB_HTTP_STATUS_OK
+            response_body_bytes = STUB_200_RESPONSE_BODY_BYTES
+        self.send_response(response_status)
+        self.send_header(
+            STUB_RESPONSE_HEADER_CONTENT_TYPE, STUB_RESPONSE_CONTENT_TYPE_VALUE
+        )
+        self.send_header(
+            STUB_RESPONSE_HEADER_CONTENT_LENGTH, str(len(response_body_bytes))
+        )
+        self.end_headers()
+        self.wfile.write(response_body_bytes)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+
+def spawn_stub_reviews_server(
+    failure_count: int,
+) -> tuple[_StubReviewsServer, threading.Thread]:
+    """Start a localhost stub server returning leading 502s then 200s.
+
+    Args:
+        failure_count: Number of leading POSTs the stub responds to with
+            502. Subsequent POSTs receive a synthetic 200 carrying a fake
+            ``html_url``. Set above the script's total retry budget to
+            force the retry-exhaustion path end-to-end.
+
+    Returns:
+        Tuple of the stub server (bound to a random port on
+        ``127.0.0.1``) and its serving thread.
+    """
+    stub_server = _StubReviewsServer(
+        (STUB_SERVER_HOST, STUB_SERVER_PORT_DYNAMIC), _StubReviewsHandler
+    )
+    stub_server.request_count = 0
+    stub_server.failure_count = failure_count
+    stub_server.recorded_request_path = ""
+    stub_thread = threading.Thread(target=stub_server.serve_forever, daemon=True)
+    stub_thread.start()
+    return stub_server, stub_thread
+
+
+def shutdown_stub_reviews_server(
+    stub_server: _StubReviewsServer,
+    stub_thread: threading.Thread,
+) -> None:
+    """Stop the stub server and join its serving thread.
+
+    Args:
+        stub_server: Server returned by :func:`spawn_stub_reviews_server`.
+        stub_thread: Serving thread returned by
+            :func:`spawn_stub_reviews_server`.
+    """
+    stub_server.shutdown()
+    stub_server.server_close()
+    stub_thread.join(timeout=STUB_SERVER_SHUTDOWN_JOIN_TIMEOUT_SECONDS)
+
+
+def stub_reviews_server_base_url(stub_server: _StubReviewsServer) -> str:
+    """Return ``http://host:port`` for a bound stub server.
+
+    Args:
+        stub_server: Server returned by :func:`spawn_stub_reviews_server`.
+
+    Returns:
+        Base URL suitable for assigning to
+        ``post_audit_thread.GITHUB_API_BASE_URL`` inside the launcher
+        subprocess so the script targets the stub instead of api.github.com.
+    """
+    host_address, bound_port = stub_server.server_address[:2]
+    return f"http://{host_address}:{bound_port}"
+
+
+def invoke_post_audit_thread_with_url_override(
+    pr_number: int,
+    head_sha: str,
+    state_argument: str,
+    findings_json_path: Path,
+    audit_token: str,
+    overridden_base_url: str,
+) -> subprocess.CompletedProcess[str]:
+    """Subprocess-invoke the script with ``GITHUB_API_BASE_URL`` redirected.
+
+    The subprocess runs a short launcher (``LAUNCHER_SOURCE_CODE``) that
+    imports ``post_audit_thread`` as a module, rebinds its
+    ``GITHUB_API_BASE_URL`` attribute to ``overridden_base_url``, then
+    delegates to ``main()``. Lets the retry tests point the script at the
+    local stub server without modifying production source.
+
+    Args:
+        pr_number: Throwaway PR number created by ``setUpClass``.
+        head_sha: HEAD SHA the script attaches the review to.
+        state_argument: ``CLEAN`` or ``DIRTY``.
+        findings_json_path: Path to the (empty-list) findings JSON.
+        audit_token: Token assigned to ``GH_TOKEN`` in the child env.
+        overridden_base_url: Base URL handed to the launcher (the local
+            stub server URL).
+
+    Returns:
+        Completed subprocess result with ``returncode``, ``stdout``, and
+        ``stderr`` for the test to inspect.
+    """
+    child_environment = dict(os.environ)
+    child_environment[GH_TOKEN_ENV_VAR_NAME] = audit_token
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            LAUNCHER_SOURCE_CODE,
+            str(SCRIPT_DIRECTORY),
+            overridden_base_url,
+            CLI_FLAG_SKILL,
+            SKILL_BUGTEAM,
+            CLI_FLAG_OWNER,
+            LIVE_TEST_OWNER,
+            CLI_FLAG_REPO,
+            LIVE_TEST_REPO,
+            CLI_FLAG_PR_NUMBER,
+            str(pr_number),
+            CLI_FLAG_COMMIT,
+            head_sha,
+            CLI_FLAG_STATE,
+            state_argument,
+            CLI_FLAG_FINDINGS_JSON,
+            str(findings_json_path),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        env=child_environment,
+    )
+
+
 class LivePostAuditThreadTests(unittest.TestCase):
     """Live smoke tests for post_audit_thread.py against JonEcho/tests.
 
     Every test in this class reuses a single throwaway draft PR created
-    in :meth:`setUpClass` and closed in :meth:`tearDownClass`. Each test
-    posts its own review against the shared PR, so the PR accumulates one
-    review per test method without test isolation issues.
+    in :meth:`setUpClass` and closed in :meth:`tearDownClass`. The CLEAN
+    and DIRTY tests post real reviews against that PR; the retry tests
+    redirect the script's HTTP layer to a localhost stub server so the
+    retry loop runs deterministically without touching api.github.com,
+    while still consuming the shared PR's number and HEAD SHA.
     """
 
     audit_account_token: str
@@ -434,7 +673,10 @@ class LivePostAuditThreadTests(unittest.TestCase):
                 cls.branch_name,
             )
         except Exception:
-            remove_local_clone(cls.local_clone_directory)
+            try:
+                remove_local_clone(cls.local_clone_directory)
+            finally:
+                best_effort_delete_remote_branch(cls.branch_name)
             raise
 
     @classmethod
@@ -443,7 +685,10 @@ class LivePostAuditThreadTests(unittest.TestCase):
             if cls.pr_number > 0:
                 close_throwaway_pr(cls.pr_number)
         finally:
-            remove_local_clone(cls.local_clone_directory)
+            try:
+                remove_local_clone(cls.local_clone_directory)
+            finally:
+                best_effort_delete_remote_branch(cls.branch_name)
 
     def _assert_review_state_for_url(
         self, html_url: str, expected_state: str
@@ -560,6 +805,117 @@ class LivePostAuditThreadTests(unittest.TestCase):
             f"DIRTY state should produce one inline comment per finding on "
             f"this review; expected {len(findings_payload)} got "
             f"{len(review_comments)}: {review_comments!r}",
+        )
+
+    def _expected_reviews_request_path(self) -> str:
+        full_endpoint_url = build_reviews_endpoint_url(
+            LIVE_TEST_OWNER, LIVE_TEST_REPO, self.pr_number
+        )
+        parsed_endpoint = urllib.parse.urlparse(full_endpoint_url)
+        return parsed_endpoint.path
+
+    def _run_retry_simulation_and_measure_elapsed(
+        self,
+        failure_count: int,
+    ) -> tuple[subprocess.CompletedProcess[str], _StubReviewsServer, float]:
+        findings_path = write_findings_json([])
+        try:
+            stub_server, stub_thread = spawn_stub_reviews_server(
+                failure_count=failure_count
+            )
+            try:
+                overridden_base_url = stub_reviews_server_base_url(stub_server)
+                start_time = time.perf_counter()
+                completion = invoke_post_audit_thread_with_url_override(
+                    pr_number=self.pr_number,
+                    head_sha=self.head_sha,
+                    state_argument=STATE_CLEAN,
+                    findings_json_path=findings_path,
+                    audit_token=self.audit_account_token,
+                    overridden_base_url=overridden_base_url,
+                )
+                elapsed_seconds = time.perf_counter() - start_time
+            finally:
+                shutdown_stub_reviews_server(stub_server, stub_thread)
+        finally:
+            try:
+                findings_path.unlink()
+            except OSError:
+                pass
+        return completion, stub_server, elapsed_seconds
+
+    def test_retry_succeeds_after_one_transient_502_response(self) -> None:
+        completion, stub_server, elapsed_seconds = (
+            self._run_retry_simulation_and_measure_elapsed(
+                failure_count=FAILURE_COUNT_FOR_RETRY_SUCCESS
+            )
+        )
+        self.assertEqual(
+            completion.returncode,
+            EXIT_CODE_SUCCESS,
+            f"retry-success: expected exit {EXIT_CODE_SUCCESS}; got "
+            f"{completion.returncode}; stdout={completion.stdout!r} "
+            f"stderr={completion.stderr!r}",
+        )
+        self.assertEqual(
+            stub_server.request_count,
+            TOTAL_REQUEST_COUNT_FOR_RETRY_SUCCESS,
+            f"retry-success: stub should have received exactly "
+            f"{TOTAL_REQUEST_COUNT_FOR_RETRY_SUCCESS} POSTs (one 502 + "
+            f"one 200); got {stub_server.request_count}",
+        )
+        expected_request_path = self._expected_reviews_request_path()
+        self.assertEqual(
+            stub_server.recorded_request_path,
+            expected_request_path,
+            f"retry-success: stub received POST at "
+            f"{stub_server.recorded_request_path!r}; expected "
+            f"{expected_request_path!r} per build_reviews_endpoint_url",
+        )
+        self.assertGreaterEqual(
+            elapsed_seconds,
+            EXPECTED_RETRY_SUCCESS_ELAPSED_LOWER_BOUND_SECONDS,
+            f"retry-success should observe at least the first 1s backoff; "
+            f"elapsed={elapsed_seconds:.2f}s",
+        )
+
+    def test_retry_exhausts_and_exits_two_after_four_consecutive_502_responses(
+        self,
+    ) -> None:
+        completion, stub_server, elapsed_seconds = (
+            self._run_retry_simulation_and_measure_elapsed(
+                failure_count=FAILURE_COUNT_FOR_RETRY_EXHAUSTION
+            )
+        )
+        self.assertEqual(
+            completion.returncode,
+            EXIT_CODE_RETRY_EXHAUSTED,
+            f"retry-exhaustion: expected exit "
+            f"{EXIT_CODE_RETRY_EXHAUSTED}; got "
+            f"{completion.returncode}; stdout={completion.stdout!r} "
+            f"stderr={completion.stderr!r}",
+        )
+        self.assertEqual(
+            stub_server.request_count,
+            TOTAL_REQUEST_COUNT_FOR_RETRY_EXHAUSTION,
+            f"retry-exhaustion: stub should have received exactly "
+            f"{TOTAL_REQUEST_COUNT_FOR_RETRY_EXHAUSTION} POSTs (one "
+            f"initial plus three retries); got "
+            f"{stub_server.request_count}",
+        )
+        expected_request_path = self._expected_reviews_request_path()
+        self.assertEqual(
+            stub_server.recorded_request_path,
+            expected_request_path,
+            f"retry-exhaustion: stub received POST at "
+            f"{stub_server.recorded_request_path!r}; expected "
+            f"{expected_request_path!r} per build_reviews_endpoint_url",
+        )
+        self.assertGreaterEqual(
+            elapsed_seconds,
+            EXPECTED_RETRY_EXHAUSTION_ELAPSED_LOWER_BOUND_SECONDS,
+            f"retry-exhaustion should observe ~21s of backoff "
+            f"(1s + 4s + 16s); elapsed={elapsed_seconds:.2f}s",
         )
 
 
