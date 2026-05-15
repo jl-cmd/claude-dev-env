@@ -121,6 +121,7 @@ The thread can be resolved without further action; the reviewer's underlying con
 
 The audit review body posted by `post_audit_thread.py` (consumers: `bugteam`, `findbugs`, `qbug`) shares the same header anchor pattern:
 
+<!-- audit-body-skeleton:start -->
 ```
 **<Skill> audit completed** —— <state_label>
 
@@ -133,6 +134,7 @@ The audit review body posted by `post_audit_thread.py` (consumers: `bugteam`, `f
 
 <optional collapsed details section per finding>
 ```
+<!-- audit-body-skeleton:end -->
 
 The audit review body announces a complete audit pass; the reply template addresses one specific thread. They use the same `**Title** —— <status>` header convention so a reader scanning a PR sees consistent visual anchoring across both surfaces.
 
