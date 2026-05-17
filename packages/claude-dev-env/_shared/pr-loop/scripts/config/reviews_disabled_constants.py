@@ -1,0 +1,8 @@
+"""Configuration constants for the CLAUDE_REVIEWS_DISABLED opt-out gate."""
+
+from __future__ import annotations
+
+CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME: str = "CLAUDE_REVIEWS_DISABLED"
+CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR: str = ","
+CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN: str = "bugteam"
+EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV: int = 7

@@ -12,8 +12,11 @@ for each_cached_module_name in [
     if each_module_key == "config" or each_module_key.startswith("config.")
 ]:
     sys.modules.pop(each_cached_module_name, None)
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+_bugteam_scripts_directory = str(Path(__file__).absolute().parent)
+while _bugteam_scripts_directory in sys.path:
+    sys.path.remove(_bugteam_scripts_directory)
+if _bugteam_scripts_directory not in sys.path:
+    sys.path.insert(0, _bugteam_scripts_directory)
 
 from config.bugteam_preflight_constants import (
     ALL_DISCOVERY_IGNORE_DIRECTORIES,
@@ -30,6 +33,26 @@ from config.bugteam_preflight_constants import (
     PYPROJECT_PYTEST_SECTION_PREFIX,
     PYTEST_EXIT_CODE_NO_TESTS_COLLECTED,
     PYTEST_INI_FILENAME,
+)
+
+for each_cached_module_name in [
+    each_module_key
+    for each_module_key in list(sys.modules)
+    if each_module_key == "config" or each_module_key.startswith("config.")
+]:
+    sys.modules.pop(each_cached_module_name, None)
+_shared_pr_loop_scripts_directory = (
+    Path(__file__).absolute().parent
+    / ".." / ".." / ".." / "_shared" / "pr-loop" / "scripts"
+).absolute()
+if str(_shared_pr_loop_scripts_directory) not in sys.path:
+    sys.path.insert(0, str(_shared_pr_loop_scripts_directory))
+
+from reviews_disabled import (
+    CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
+    CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
+    EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV,
+    is_bugteam_disabled_via_env,
 )
 
 
@@ -259,6 +282,17 @@ def main(all_argv: list[str] | None = None) -> int:
     if os.environ.get(BUGTEAM_PREFLIGHT_SKIP_ENV_VAR_NAME, "").strip() == "1":
         print(f"{BUGTEAM_PREFLIGHT_PREFIX}skipped (BUGTEAM_PREFLIGHT_SKIP=1).", file=sys.stderr)
         return 0
+    reviews_disabled_env_var_name = CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME
+    reviews_disabled_bugteam_token = CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN
+    disabled_via_env_exit_code = EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV
+    if is_bugteam_disabled_via_env():
+        print(
+            f"{BUGTEAM_PREFLIGHT_PREFIX}halted "
+            f"({reviews_disabled_env_var_name} contains "
+            f"'{reviews_disabled_bugteam_token}').",
+            file=sys.stderr,
+        )
+        return disabled_via_env_exit_code
     start = Path.cwd()
     resolved_repository_root: Path = (
         arguments.repo_root.resolve()

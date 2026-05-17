@@ -21,6 +21,22 @@ The user is on a PR branch, wants Copilot (the GitHub Copilot reviewer bot) to k
 
 ## The Process
 
+### Step 0: Opt-out check
+
+Before any other work, inspect the `CLAUDE_REVIEWS_DISABLED` environment
+variable. Treat the value as a comma-separated list of skill tokens
+(case-insensitive, whitespace-tolerant). When the parsed list contains
+`copilot`, respond with the literal line `/copilot-review is disabled via
+CLAUDE_REVIEWS_DISABLED.` and stop — do not spawn the subagent, do not call
+the Copilot reviewer API, do not run any other step of this skill.
+
+PowerShell probe (Windows):
+
+```pwsh
+$disabled = ($env:CLAUDE_REVIEWS_DISABLED -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() })
+if ($disabled -contains 'copilot') { '/copilot-review is disabled via CLAUDE_REVIEWS_DISABLED.' }
+```
+
 ### Step 1: Gather PR context
 
 From the current repo:

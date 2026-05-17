@@ -138,3 +138,8 @@ Self-claiming by task subject prefix keeps each teammate on its assigned PR.
 **`--bugbot-retrigger` flag:** when present, the FIX subagent posts a `bugbot
 run` issue comment via the Step 2.5 issue-comments fallback endpoint after
 every successful FIX push, to re-trigger Cursor's bugbot on the new commit.
+
+**Opt-out gate.** When `CLAUDE_REVIEWS_DISABLED` (comma-separated,
+case-insensitive, whitespace-tolerant) contains the token `bugbot`, the FIX
+subagent skips the re-trigger post even when the flag is present. The rest of
+the bugteam audit/fix cycle continues unchanged.

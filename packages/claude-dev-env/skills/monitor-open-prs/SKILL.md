@@ -27,6 +27,7 @@ description: >-
 
 Refusals — first match wins; respond with the quoted line exactly and stop:
 
+- **Disabled via environment.** When `CLAUDE_REVIEWS_DISABLED` (comma-separated, case-insensitive, whitespace-tolerant) contains the token `bugteam`: `/monitor-open-prs is a /bugteam dispatcher and /bugteam is disabled via CLAUDE_REVIEWS_DISABLED.`
 - **GitHub API not accessible.** `get_me failed. /monitor-open-prs needs active GitHub MCP credentials.`
 - **Dirty tree on the caller's repo.** `Uncommitted changes detected. Stash, commit, or revert before /monitor-open-prs.`
 - **Required subagents missing.** Confirm `code-quality-agent` and `clean-coder` exist. Else: `Required subagent type <name> not installed.`
@@ -40,7 +41,7 @@ Call `scripts/discover_open_prs.discover_open_prs(all_owners=["jl-cmd", "JonEcho
 For each discovered PR:
 
 1. Resolve the PR's repo checkout (existing worktree or fresh `git clone`).
-2. From that checkout, invoke `/bugteam --bugbot-retrigger <pr_number>`.
+2. From that checkout, invoke `/bugteam --bugbot-retrigger <pr_number>`. When `CLAUDE_REVIEWS_DISABLED` (comma-separated, case-insensitive, whitespace-tolerant) contains the token `bugbot`, omit `--bugbot-retrigger` from the dispatched command so the bugbot leg sits out the run.
 3. The `--bugbot-retrigger` flag tells bugteam to post `bugbot run` as an issue comment after every successful FIX push so Cursor's bugbot re-evaluates the new commit.
 4. Bugteam runs its own 20-loop audit/fix cycle per PR; this skill waits for each bugteam invocation to return before dispatching the next (or fanning out — see below).
 

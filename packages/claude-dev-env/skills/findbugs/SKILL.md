@@ -18,6 +18,16 @@ User types `/findbugs` or asks for a bug audit on the current branch's PR. Typic
 
 If the current branch has no associated PR and no diff against the default branch, say so and stop. Do not invent scope.
 
+## Refusals
+
+First match wins; respond with the quoted line exactly and stop:
+
+- **Disabled via environment.** When `CLAUDE_REVIEWS_DISABLED` contains the
+  token `bugteam` (comma-separated, case-insensitive, whitespace-tolerant):
+  `/findbugs is disabled via CLAUDE_REVIEWS_DISABLED.` `/findbugs` is a PR
+  bug-audit skill in the same family as `/bugteam` and `/qbug`, so the
+  shared `bugteam` token disables all three.
+
 ## The Process
 
 ### Step 1: Resolve PR scope

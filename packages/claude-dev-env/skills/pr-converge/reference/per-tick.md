@@ -207,6 +207,11 @@ BUGBOT.
 
 ## Step 3: Re-trigger bugbot
 
+- [ ] **Opt-out gate.** When `CLAUDE_REVIEWS_DISABLED` (comma-separated,
+  case-insensitive, whitespace-tolerant) contains `bugbot`, set
+  `bugbot_down = true`, skip every check below, set `phase = BUGTEAM`,
+  and continue BUGTEAM in the same tick. The downstream loop branches on
+  `bugbot_down` exactly the way it does when bugbot CI is unavailable.
 - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --check-active --owner <O> --repo <R> --sha <current_head>`
 - [ ] Exit 0 → bugbot already queued on this commit; skip posting, wait for completion
 - [ ] Exit 1 → post trigger via `add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")`
