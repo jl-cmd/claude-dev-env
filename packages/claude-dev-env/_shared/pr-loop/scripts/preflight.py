@@ -57,6 +57,12 @@ from config.preflight_constants import (
     PYTHON_FILE_SUFFIX,
     TESTS_DIRECTORY_NAME,
 )
+from reviews_disabled import (
+    CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
+    CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
+    EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV,
+    is_bugteam_disabled_via_env,
+)
 
 
 def verify_git_hooks_path(repository_root: Path | None = None) -> int:
@@ -67,8 +73,13 @@ def verify_git_hooks_path(repository_root: Path | None = None) -> int:
     overrides such as Husky or lefthook. Falls back to the current working
     directory's effective config when *repository_root* is None.
 
-    Returns zero when the configured path ends with the expected hooks suffix.
-    Returns non-zero and prints a correction message when unset or pointing elsewhere.
+    Args:
+        repository_root: Optional repository root to check. When None, uses
+            the current working directory's effective config.
+
+    Returns:
+        Zero when the configured path ends with the expected hooks suffix.
+        Non-zero and prints a correction message when unset or pointing elsewhere.
     """
     expected_hooks_path_suffix = HOOKS_PATH_VERIFICATION_SUFFIX
     enforcement_absent_message = (
@@ -123,6 +134,18 @@ def verify_git_hooks_path(repository_root: Path | None = None) -> int:
 
 
 def find_repository_root(start: Path) -> Path:
+    """Find the repository root by walking up from the starting directory.
+
+    Searches for a ``.git`` directory or file in parent directories. Falls
+    back to the nearest ancestor containing ``pytest.ini`` when no git
+    repository is found.
+
+    Args:
+        start: The directory to start searching from.
+
+    Returns:
+        The repository root path, or *start* when no repository is found.
+    """
     resolved = start.resolve()
     all_candidates = [resolved, *resolved.parents]
     for each_candidate in all_candidates:
@@ -136,6 +159,17 @@ def find_repository_root(start: Path) -> Path:
 
 
 def has_pytest_configuration(root: Path) -> bool:
+    """Check whether a directory has pytest configuration available.
+
+    Checks for ``pytest.ini`` directly, then falls back to searching for
+    ``[tool.pytest]`` in ``pyproject.toml``.
+
+    Args:
+        root: The directory to check for pytest configuration.
+
+    Returns:
+        True when pytest configuration is found in either location.
+    """
     if (root / PYTEST_INI_FILENAME).is_file():
         return True
     pyproject = root / PYPROJECT_TOML_FILENAME
@@ -146,6 +180,20 @@ def has_pytest_configuration(root: Path) -> bool:
 
 
 def has_discoverable_tests(root: Path) -> bool | None:
+    """Check whether the repository contains discoverable test files via git ls-files.
+
+    When the root has no ``.git`` marker, returns True without invoking git.
+    Otherwise asks git for tracked plus untracked test files matching the
+    discovery patterns, respecting ``.gitignore``.
+
+    Args:
+        root: The directory tree root to search.
+
+    Returns:
+        True when at least one matching test file is found. False when git
+        succeeds and returns an empty list. None when git is unavailable or
+        the ls-files invocation fails.
+    """
     git_marker = root / GIT_DIRECTORY_NAME
     if not (git_marker.is_dir() or git_marker.is_file()):
         return True
@@ -192,6 +240,21 @@ def run_pytest(
     verbose: bool,
     all_test_paths: list[Path] | None = None,
 ) -> int:
+    """Run pytest in the repository root and return the exit code.
+
+    Passes ``--ff`` (failed-first) and ``-q`` unless *verbose* is True. When
+    *all_test_paths* is provided, restricts the run to those paths via the
+    ``--`` positional separator so pytest does not misinterpret leading
+    hyphens as options. Treats the "no tests collected" exit code as a pass.
+
+    Args:
+        repository_root: The repository root for running pytest.
+        verbose: When True, omit ``-q`` so individual test names show.
+        all_test_paths: Optional list of test paths to restrict the run.
+
+    Returns:
+        The pytest exit code, or 0 when no tests were collected.
+    """
     command = [sys.executable, "-m", "pytest", PYTEST_FAILED_FIRST_FLAG]
     if not verbose:
         command.append("-q")
@@ -209,6 +272,20 @@ def run_pytest(
 
 
 def get_changed_files(repository_root: Path, base_ref: str) -> list[Path] | None:
+    """Return the list of files changed between *base_ref* and HEAD.
+
+    Refuses base refs beginning with ``-`` to prevent option injection into
+    git diff. Logs a warning and returns None on every failure path so the
+    caller can fall back to running the full suite.
+
+    Args:
+        repository_root: The repository root for running git diff.
+        base_ref: The git base ref to diff against (e.g., ``origin/main``).
+
+    Returns:
+        A list of relative file paths changed vs *base_ref*. None when
+        *base_ref* is invalid or git diff fails.
+    """
     if base_ref.startswith("-"):
         print(
             f"bugteam_preflight: invalid base_ref '{base_ref}' starts "
@@ -295,6 +372,18 @@ def _find_related_test_files(changed_path: Path, repository_root: Path) -> list[
 def discover_related_tests(
     all_changed_files: list[Path], repository_root: Path
 ) -> list[Path]:
+    """Discover all test files related to the given changed files.
+
+    Walks every changed path through :func:`_find_related_test_files` and
+    returns the sorted, de-duplicated union.
+
+    Args:
+        all_changed_files: The list of changed source files to map to tests.
+        repository_root: The repository root for resolving relative paths.
+
+    Returns:
+        Sorted list of unique related test file paths.
+    """
     related: set[Path] = set()
     for each_file in all_changed_files:
         related.update(_find_related_test_files(each_file, repository_root))
@@ -302,6 +391,14 @@ def discover_related_tests(
 
 
 def run_pre_commit(repository_root: Path) -> int:
+    """Run pre-commit on all files and return its exit code.
+
+    Args:
+        repository_root: The repository root for running pre-commit.
+
+    Returns:
+        The pre-commit exit code (0 on success, non-zero on failure).
+    """
     completed = subprocess.run(
         list(ALL_PRE_COMMIT_RUN_ALL_FILES_COMMAND),
         cwd=str(repository_root),
@@ -311,6 +408,15 @@ def run_pre_commit(repository_root: Path) -> int:
 
 
 def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
+    """Parse command-line arguments for the preflight script.
+
+    Args:
+        all_arguments: Command-line argument list.
+
+    Returns:
+        Parsed namespace with repo_root, no_pytest, pre_commit, verbose,
+        base_ref, and scope attributes.
+    """
     parser = argparse.ArgumentParser(
         description="Run local checks before /bugteam (pytest, optional pre-commit).",
     )
@@ -360,6 +466,16 @@ def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
 
 
 def main(all_arguments: list[str]) -> int:
+    """Run the preflight checks (git-hooks path, pytest, optional pre-commit).
+
+    Args:
+        all_arguments: Command-line argument list to forward to argparse.
+
+    Returns:
+        Zero on success. Non-zero exit code on the first failing check.
+        Returns :data:`EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV` when
+        ``CLAUDE_REVIEWS_DISABLED`` lists the ``bugteam`` token.
+    """
     arguments = parse_arguments(all_arguments)
     skip_env_var_name = BUGTEAM_PREFLIGHT_SKIP_ENV_VAR_NAME
     skip_enabled_value = BUGTEAM_PREFLIGHT_SKIP_ENABLED_VALUE
@@ -369,6 +485,17 @@ def main(all_arguments: list[str]) -> int:
             file=sys.stderr,
         )
         return 0
+    reviews_disabled_env_var_name = CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME
+    reviews_disabled_bugteam_token = CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN
+    disabled_via_env_exit_code = EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV
+    if is_bugteam_disabled_via_env():
+        print(
+            f"bugteam_preflight: halted "
+            f"({reviews_disabled_env_var_name} contains "
+            f"'{reviews_disabled_bugteam_token}').",
+            file=sys.stderr,
+        )
+        return disabled_via_env_exit_code
     start = Path.cwd()
     repository_root = (
         arguments.repo_root.resolve()

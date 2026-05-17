@@ -690,3 +690,44 @@ def test_main_prints_no_related_tests_when_get_changed_files_returns_empty(
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "no related tests found" in captured.err
+
+
+def test_main_should_halt_when_env_var_lists_bugteam(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CLAUDE_REVIEWS_DISABLED=bugteam must halt preflight with the dedicated exit code."""
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    monkeypatch.delenv("BUGTEAM_PREFLIGHT_SKIP", raising=False)
+    exit_code = preflight.main(["--no-pytest"])
+    assert exit_code == preflight.EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV
+    captured = capsys.readouterr()
+    assert "CLAUDE_REVIEWS_DISABLED" in captured.err
+    assert "bugteam" in captured.err
+
+
+def test_main_should_continue_when_env_var_omits_bugteam(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """CLAUDE_REVIEWS_DISABLED without the bugteam token must not halt preflight."""
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "copilot,bugbot")
+    monkeypatch.delenv("BUGTEAM_PREFLIGHT_SKIP", raising=False)
+    claude_hooks_path = tmp_path / ".claude" / "hooks" / "git-hooks"
+    claude_hooks_path.mkdir(parents=True)
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed_process(
+            str(claude_hooks_path) + "\n", returncode=0
+        )
+        exit_code = preflight.main(["--no-pytest"])
+    assert exit_code != preflight.EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV
+
+
+def test_main_should_halt_when_env_var_contains_uppercase_or_whitespace_bugteam_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Token matching must be case-insensitive and whitespace-tolerant."""
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", " BugTeam , copilot ")
+    monkeypatch.delenv("BUGTEAM_PREFLIGHT_SKIP", raising=False)
+    exit_code = preflight.main(["--no-pytest"])
+    assert exit_code == preflight.EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV

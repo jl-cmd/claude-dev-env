@@ -31,6 +31,12 @@ Shared artifacts with /bugteam are referenced below by path, using the `${CLAUDE
 
 Refusals — first match wins; respond with the quoted line exactly and stop:
 
+- **Disabled via environment.** When `CLAUDE_REVIEWS_DISABLED` contains the
+  token `bugteam` (comma-separated, case-insensitive, whitespace-tolerant):
+  `/qbug is disabled via CLAUDE_REVIEWS_DISABLED.` `/qbug` is the bugteam
+  baseline review and shares the `bugteam` token with `/bugteam`; the shared
+  pre-flight script also exits 7 in this case so any caller invoking it
+  directly halts on the same signal.
 - **No PR or upstream diff.** `No PR or upstream diff. /qbug needs a target.`
 - **Dirty tree.** `Uncommitted changes detected. Stash, commit, or revert before /qbug.`
 - **Missing subagent.** Before Step 2, confirm `clean-coder` exists. Else: `Required subagent type clean-coder not installed. /qbug needs clean-coder available.`
