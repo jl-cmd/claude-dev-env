@@ -69,6 +69,15 @@ EXIT_CODE_RETRY_EXHAUSTED: int = 2
 SHORT_SHA_LENGTH: int = 7
 
 ALL_GH_AUTH_TOKEN_COMMAND_PARTS: tuple[str, ...] = ("gh", "auth", "token")
+ALL_GH_API_USER_COMMAND_PARTS: tuple[str, ...] = ("gh", "api", "user")
+ALL_GH_AUTH_STATUS_COMMAND_PARTS: tuple[str, ...] = ("gh", "auth", "status")
+ALL_GH_API_COMMAND_PARTS: tuple[str, ...] = ("gh", "api")
+GH_AUTH_TOKEN_USER_FLAG: str = "--user"
+GH_USER_LOGIN_FIELD: str = "login"
+GH_PR_USER_FIELD: str = "user"
+GH_API_PR_PATH_TEMPLATE: str = "repos/{owner}/{repo}/pulls/{pr_number}"
+GH_AUTH_STATUS_ACCOUNT_LINE_MARKER: str = "Logged in to github.com account"
+GH_AUTH_STATUS_ACCOUNT_LINE_TOKEN_SEPARATOR: str = " "
 
 GH_TOKEN_ENV_VAR_NAME: str = "GH_TOKEN"
 GITHUB_TOKEN_ENV_VAR_NAME: str = "GITHUB_TOKEN"
@@ -76,6 +85,7 @@ ALL_GH_TOKEN_ENV_VAR_NAMES: tuple[str, ...] = (
     GH_TOKEN_ENV_VAR_NAME,
     GITHUB_TOKEN_ENV_VAR_NAME,
 )
+BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME: str = "BUGTEAM_REVIEWER_ACCOUNT"
 
 JSON_FIELD_PATH: str = "path"
 JSON_FIELD_LINE: str = "line"

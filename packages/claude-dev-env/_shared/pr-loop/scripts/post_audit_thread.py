@@ -37,6 +37,9 @@ if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config.post_audit_thread_constants import (
+    ALL_GH_API_COMMAND_PARTS,
+    ALL_GH_API_USER_COMMAND_PARTS,
+    ALL_GH_AUTH_STATUS_COMMAND_PARTS,
     ALL_GH_AUTH_TOKEN_COMMAND_PARTS,
     ALL_GH_TOKEN_ENV_VAR_NAMES,
     ALL_REQUIRED_FINDING_FIELDS,
@@ -47,6 +50,7 @@ from config.post_audit_thread_constants import (
     ALL_SUPPORTED_STATES,
     AUDIT_BODY_SKELETON_CLOSE_MARKER,
     AUDIT_BODY_SKELETON_OPEN_MARKER,
+    BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME,
     CLI_FLAG_COMMIT,
     CLI_FLAG_FINDINGS_JSON,
     CLI_FLAG_OWNER,
@@ -60,6 +64,12 @@ from config.post_audit_thread_constants import (
     ERROR_RESPONSE_PREVIEW_CHARS,
     EXIT_CODE_RETRY_EXHAUSTED,
     EXIT_CODE_USER_ERROR,
+    GH_API_PR_PATH_TEMPLATE,
+    GH_AUTH_STATUS_ACCOUNT_LINE_MARKER,
+    GH_AUTH_STATUS_ACCOUNT_LINE_TOKEN_SEPARATOR,
+    GH_AUTH_TOKEN_USER_FLAG,
+    GH_PR_USER_FIELD,
+    GH_USER_LOGIN_FIELD,
     GITHUB_API_ACCEPT_HEADER,
     GITHUB_API_BASE_URL,
     GITHUB_API_USER_AGENT,
@@ -682,6 +692,287 @@ def resolve_github_token() -> str:
     return token_text
 
 
+def query_active_gh_user_login() -> str:
+    """Return the login of the gh account that owns the current ``gh auth token``.
+
+    Calls ``gh api /user`` and reads ``.login`` off the response. The result
+    is the gh CLI's currently active account — the one whose token a default
+    ``gh auth token`` call would emit.
+
+    Returns:
+        Login string of the active github.com account.
+
+    Raises:
+        UserInputError: ``gh`` not on PATH, the ``gh api /user`` call fails,
+            or the response is missing a string ``login`` field.
+    """
+    try:
+        completion = subprocess.run(
+            list(ALL_GH_API_USER_COMMAND_PARTS),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except FileNotFoundError as missing_gh_error:
+        raise UserInputError(
+            "`gh` CLI not installed or not on PATH; cannot query the active "
+            "github.com account login"
+        ) from missing_gh_error
+    if completion.returncode != 0:
+        raise UserInputError(
+            f"`gh api /user` failed (exit {completion.returncode}): "
+            f"{completion.stderr.strip()}"
+        )
+    try:
+        parsed_value: object = json.loads(completion.stdout)
+    except json.JSONDecodeError as decode_error:
+        raise UserInputError(
+            f"`gh api /user` response not parseable as JSON: {decode_error}"
+        ) from decode_error
+    if not isinstance(parsed_value, dict):
+        raise UserInputError(
+            f"`gh api /user` response root must be an object; "
+            f"got {type(parsed_value).__name__}"
+        )
+    typed_response: dict[str, object] = parsed_value
+    login_value = typed_response.get(GH_USER_LOGIN_FIELD)
+    if not isinstance(login_value, str) or not login_value:
+        raise UserInputError(
+            f"`gh api /user` response missing string {GH_USER_LOGIN_FIELD!r}"
+        )
+    return login_value
+
+
+def query_pull_request_author_login(owner: str, repo: str, pr_number: int) -> str:
+    """Return the login of the user who authored a pull request.
+
+    Calls ``gh api /repos/{owner}/{repo}/pulls/{N}`` and reads ``.user.login``
+    off the response.
+
+    Args:
+        owner: Repository owner slug.
+        repo: Repository name slug.
+        pr_number: Pull request number.
+
+    Returns:
+        Login string of the PR author.
+
+    Raises:
+        UserInputError: ``gh api`` call fails, response malformed, or the
+            nested ``user.login`` field is missing.
+    """
+    pull_request_api_path = GH_API_PR_PATH_TEMPLATE.format(
+        owner=owner, repo=repo, pr_number=pr_number,
+    )
+    try:
+        completion = subprocess.run(
+            list(ALL_GH_API_COMMAND_PARTS) + [pull_request_api_path],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except FileNotFoundError as missing_gh_error:
+        raise UserInputError(
+            "`gh` CLI not installed or not on PATH; cannot query the PR "
+            "author login"
+        ) from missing_gh_error
+    if completion.returncode != 0:
+        raise UserInputError(
+            f"`gh api {pull_request_api_path}` failed (exit "
+            f"{completion.returncode}): {completion.stderr.strip()}"
+        )
+    try:
+        parsed_value: object = json.loads(completion.stdout)
+    except json.JSONDecodeError as decode_error:
+        raise UserInputError(
+            f"`gh api {pull_request_api_path}` response not parseable as "
+            f"JSON: {decode_error}"
+        ) from decode_error
+    if not isinstance(parsed_value, dict):
+        raise UserInputError(
+            f"`gh api {pull_request_api_path}` response root must be an "
+            f"object; got {type(parsed_value).__name__}"
+        )
+    typed_response: dict[str, object] = parsed_value
+    user_field = typed_response.get(GH_PR_USER_FIELD)
+    if not isinstance(user_field, dict):
+        raise UserInputError(
+            f"PR response missing object {GH_PR_USER_FIELD!r}"
+        )
+    typed_user: dict[str, object] = user_field
+    login_value = typed_user.get(GH_USER_LOGIN_FIELD)
+    if not isinstance(login_value, str) or not login_value:
+        raise UserInputError(
+            f"PR author missing string {GH_USER_LOGIN_FIELD!r} field"
+        )
+    return login_value
+
+
+def list_authenticated_gh_account_logins() -> list[str]:
+    """Return every github.com account login currently authenticated via gh.
+
+    Parses ``gh auth status`` output line-by-line. The CLI writes its
+    human-readable status to stderr by default; the function reads both
+    stdout and stderr to be resilient to the gh version in use.
+
+    Returns:
+        List of login strings in the order ``gh auth status`` reports them.
+        Empty list when no accounts are logged in.
+
+    Raises:
+        UserInputError: ``gh`` not on PATH.
+    """
+    try:
+        completion = subprocess.run(
+            list(ALL_GH_AUTH_STATUS_COMMAND_PARTS),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except FileNotFoundError as missing_gh_error:
+        raise UserInputError(
+            "`gh` CLI not installed or not on PATH; cannot list "
+            "authenticated github.com accounts"
+        ) from missing_gh_error
+    output_text = (completion.stdout or "") + (completion.stderr or "")
+    parsed_logins: list[str] = []
+    for each_line in output_text.splitlines():
+        marker_index = each_line.find(GH_AUTH_STATUS_ACCOUNT_LINE_MARKER)
+        if marker_index < 0:
+            continue
+        remainder = each_line[marker_index + len(GH_AUTH_STATUS_ACCOUNT_LINE_MARKER):].strip()
+        space_index = remainder.find(GH_AUTH_STATUS_ACCOUNT_LINE_TOKEN_SEPARATOR)
+        login_candidate = remainder[:space_index] if space_index >= 0 else remainder
+        if login_candidate and login_candidate not in parsed_logins:
+            parsed_logins.append(login_candidate)
+    return parsed_logins
+
+
+def fetch_gh_token_for_account(account_login: str) -> str:
+    """Return the cached gh token for a specific authenticated account.
+
+    Calls ``gh auth token --user <login>``. Does not mutate which account
+    is "active" in the gh CLI; only retrieves a stored token.
+
+    Args:
+        account_login: github.com login whose token should be returned.
+
+    Returns:
+        Cached gh token string, stripped of trailing whitespace.
+
+    Raises:
+        UserInputError: ``gh`` not on PATH, the call fails, or it returns
+            empty output.
+    """
+    try:
+        completion = subprocess.run(
+            list(ALL_GH_AUTH_TOKEN_COMMAND_PARTS) + [GH_AUTH_TOKEN_USER_FLAG, account_login],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except FileNotFoundError as missing_gh_error:
+        raise UserInputError(
+            f"`gh` CLI not installed or not on PATH; cannot fetch token "
+            f"for account {account_login!r}"
+        ) from missing_gh_error
+    if completion.returncode != 0:
+        raise UserInputError(
+            f"`gh auth token --user {account_login}` failed (exit "
+            f"{completion.returncode}): {completion.stderr.strip()}"
+        )
+    token_text = completion.stdout.strip()
+    if not token_text:
+        raise UserInputError(
+            f"`gh auth token --user {account_login}` returned empty output"
+        )
+    return token_text
+
+
+def resolve_reviewer_token(owner: str, repo: str, pr_number: int) -> str:
+    """Return the GitHub token to use for the reviews POST, auto-toggling on self-PR.
+
+    Precedence rules, evaluated in order:
+
+    - ``GH_TOKEN`` / ``GITHUB_TOKEN`` env var set → returned unchanged; no
+      toggle attempt.
+    - Active gh account differs ``vs.`` PR author → return the active
+      account's token via :func:`resolve_github_token` (no toggle).
+    - Active gh account matches PR author (self-PR) → if the env var
+      ``BUGTEAM_REVIEWER_ACCOUNT`` names an authenticated alternate, use
+      that account's token; else fall back to the first alternate
+      authenticated account ``gh auth status`` reports. Token is fetched
+      via :func:`fetch_gh_token_for_account`. The active account is not
+      mutated; only the token sent on the reviews request changes.
+
+    Args:
+        owner: Repository owner slug.
+        repo: Repository name slug.
+        pr_number: Pull request number whose author dictates whether a
+            toggle is needed.
+
+    Returns:
+        Bearer-token string suitable for the reviews POST.
+
+    Raises:
+        UserInputError: self-PR detected and no alternate gh account is
+            authenticated, or any underlying gh query fails.
+    """
+    for each_env_var_name in ALL_GH_TOKEN_ENV_VAR_NAMES:
+        env_token_value = os.environ.get(each_env_var_name, "").strip()
+        if env_token_value:
+            return env_token_value
+    active_account_login = query_active_gh_user_login()
+    pr_author_login = query_pull_request_author_login(owner, repo, pr_number)
+    if active_account_login.lower() != pr_author_login.lower():
+        return resolve_github_token()
+    all_authenticated_logins = list_authenticated_gh_account_logins()
+    all_alternate_logins = [
+        each_login for each_login in all_authenticated_logins
+        if each_login.lower() != pr_author_login.lower()
+    ]
+    if not all_alternate_logins:
+        raise UserInputError(
+            f"Self-PR detected: active gh account {active_account_login!r} "
+            f"matches PR author. GitHub rejects APPROVE / REQUEST_CHANGES on "
+            f"self-authored PRs with HTTP 422. No alternate authenticated gh "
+            f"account found — run `gh auth login` as a separate reviewer "
+            f"account before invoking the audit skill."
+        )
+    pinned_reviewer_account = os.environ.get(
+        BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME, ""
+    ).strip()
+    if pinned_reviewer_account:
+        matching_pinned_account = next(
+            (
+                each_login for each_login in all_alternate_logins
+                if each_login.lower() == pinned_reviewer_account.lower()
+            ),
+            None,
+        )
+        if matching_pinned_account is None:
+            raise UserInputError(
+                f"Self-PR detected and "
+                f"{BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME}="
+                f"{pinned_reviewer_account!r} is set, but that account is "
+                f"not in the alternate-reviewer set "
+                f"{all_alternate_logins!r} (PR author "
+                f"{pr_author_login!r} is excluded). Run `gh auth login` "
+                f"for {pinned_reviewer_account!r} or unset the env var to "
+                f"fall back to the first alternate account."
+            )
+        return fetch_gh_token_for_account(matching_pinned_account)
+    return fetch_gh_token_for_account(all_alternate_logins[0])
+
+
 def build_reviews_endpoint_url(owner: str, repo: str, pr_number: int) -> str:
     """Compose the full reviews-endpoint URL for a PR.
 
@@ -915,7 +1206,11 @@ def post_audit_review(parsed_arguments: argparse.Namespace) -> PostedReview:
         repo=parsed_arguments.repo,
         pr_number=parsed_arguments.pr_number,
     )
-    token_text = resolve_github_token()
+    token_text = resolve_reviewer_token(
+        owner=parsed_arguments.owner,
+        repo=parsed_arguments.repo,
+        pr_number=parsed_arguments.pr_number,
+    )
     return post_review_with_retries(endpoint_url, token_text, all_request_fields)
 
 
