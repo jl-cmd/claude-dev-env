@@ -43,7 +43,9 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
 from config.post_audit_thread_constants import (  # noqa: E402
     ALL_GH_AUTH_TOKEN_COMMAND_PARTS,
     ALL_RETRY_BACKOFF_SECONDS,
+    BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME,
     GH_TOKEN_ENV_VAR_NAME,
+    GITHUB_TOKEN_ENV_VAR_NAME,
     CLI_FLAG_COMMIT,
     CLI_FLAG_FINDINGS_JSON,
     CLI_FLAG_OWNER,
@@ -69,7 +71,15 @@ from config.post_audit_thread_constants import (  # noqa: E402
     STATE_CLEAN,
     STATE_DIRTY,
 )
-from post_audit_thread import build_reviews_endpoint_url  # noqa: E402
+from post_audit_thread import (  # noqa: E402
+    UserInputError,
+    build_reviews_endpoint_url,
+    fetch_gh_token_for_account,
+    list_authenticated_gh_account_logins,
+    query_active_gh_user_login,
+    query_pull_request_author_login,
+    resolve_reviewer_token,
+)
 
 LIVE_TEST_OWNER = "JonEcho"
 LIVE_TEST_REPO = "tests"
@@ -917,6 +927,189 @@ class LivePostAuditThreadTests(unittest.TestCase):
             f"retry-exhaustion should observe ~21s of backoff "
             f"(1s + 4s + 16s); elapsed={elapsed_seconds:.2f}s",
         )
+
+    def _isolate_auth_env_vars(self) -> dict[str, str | None]:
+        all_managed_env_var_names = (
+            GH_TOKEN_ENV_VAR_NAME,
+            GITHUB_TOKEN_ENV_VAR_NAME,
+            BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME,
+        )
+        previous_env_state: dict[str, str | None] = {
+            each_name: os.environ.get(each_name)
+            for each_name in all_managed_env_var_names
+        }
+        for each_name in all_managed_env_var_names:
+            os.environ.pop(each_name, None)
+        return previous_env_state
+
+    def _restore_auth_env_vars(
+        self, previous_env_state: dict[str, str | None]
+    ) -> None:
+        for each_name, prior_value in previous_env_state.items():
+            if prior_value is None:
+                os.environ.pop(each_name, None)
+            else:
+                os.environ[each_name] = prior_value
+
+    def test_query_active_gh_user_login_matches_gh_api_user_login_field(self) -> None:
+        active_login = query_active_gh_user_login()
+        self.assertTrue(
+            active_login,
+            "query_active_gh_user_login() returned empty",
+        )
+        gh_api_user_response = gh_api_object_json("user")
+        self.assertEqual(active_login, gh_api_user_response.get("login"))
+
+    def test_query_pull_request_author_login_matches_throwaway_pr_author(self) -> None:
+        author_login = query_pull_request_author_login(
+            owner=LIVE_TEST_OWNER,
+            repo=LIVE_TEST_REPO,
+            pr_number=self.pr_number,
+        )
+        pr_detail_path = f"repos/{LIVE_TEST_OWNER}/{LIVE_TEST_REPO}/pulls/{self.pr_number}"
+        pr_detail_object = gh_api_object_json(pr_detail_path)
+        user_field_object = pr_detail_object.get("user")
+        self.assertIsInstance(user_field_object, dict)
+        if isinstance(user_field_object, dict):
+            self.assertEqual(author_login, user_field_object.get("login"))
+
+    def test_list_authenticated_gh_account_logins_includes_active_and_audit_accounts(
+        self,
+    ) -> None:
+        all_logins = list_authenticated_gh_account_logins()
+        active_login = query_active_gh_user_login()
+        self.assertIn(active_login, all_logins)
+        self.assertIn(LIVE_TEST_AUDIT_ACCOUNT_NAME, all_logins)
+
+    def test_fetch_gh_token_for_account_returns_audit_account_cached_token(self) -> None:
+        fetched_token = fetch_gh_token_for_account(LIVE_TEST_AUDIT_ACCOUNT_NAME)
+        self.assertEqual(fetched_token, self.audit_account_token)
+
+    def test_resolve_reviewer_token_returns_env_var_when_gh_token_is_set(self) -> None:
+        sentinel_env_token = "sentinel-gh-token-from-env-var-precedence-test"
+        previous_env_state = self._isolate_auth_env_vars()
+        try:
+            os.environ[GH_TOKEN_ENV_VAR_NAME] = sentinel_env_token
+            returned_token = resolve_reviewer_token(
+                owner=LIVE_TEST_OWNER,
+                repo=LIVE_TEST_REPO,
+                pr_number=self.pr_number,
+            )
+            self.assertEqual(returned_token, sentinel_env_token)
+        finally:
+            self._restore_auth_env_vars(previous_env_state)
+
+    def test_resolve_reviewer_token_toggles_to_alternate_token_on_self_pr(self) -> None:
+        previous_env_state = self._isolate_auth_env_vars()
+        try:
+            returned_token = resolve_reviewer_token(
+                owner=LIVE_TEST_OWNER,
+                repo=LIVE_TEST_REPO,
+                pr_number=self.pr_number,
+            )
+            active_login = query_active_gh_user_login()
+            pr_author_login = query_pull_request_author_login(
+                owner=LIVE_TEST_OWNER,
+                repo=LIVE_TEST_REPO,
+                pr_number=self.pr_number,
+            )
+            self.assertEqual(
+                active_login.lower(),
+                pr_author_login.lower(),
+                "throwaway PR author must equal active gh account so the "
+                "self-PR toggle branch is exercised",
+            )
+            all_alternates = [
+                each_login
+                for each_login in list_authenticated_gh_account_logins()
+                if each_login.lower() != pr_author_login.lower()
+            ]
+            self.assertTrue(
+                all_alternates,
+                "test setup requires at least one alternate authenticated account",
+            )
+            expected_first_alternate_token = fetch_gh_token_for_account(
+                all_alternates[0]
+            )
+            self.assertEqual(returned_token, expected_first_alternate_token)
+            active_account_token = resolve_gh_auth_token()
+            self.assertNotEqual(
+                returned_token,
+                active_account_token,
+                "self-PR toggle must not return the active (author) token",
+            )
+        finally:
+            self._restore_auth_env_vars(previous_env_state)
+
+    def test_resolve_reviewer_token_honors_bugteam_reviewer_account_pin(self) -> None:
+        previous_env_state = self._isolate_auth_env_vars()
+        try:
+            pr_author_login = query_pull_request_author_login(
+                owner=LIVE_TEST_OWNER,
+                repo=LIVE_TEST_REPO,
+                pr_number=self.pr_number,
+            )
+            all_alternates_excluding_pr_author = [
+                each_login
+                for each_login in list_authenticated_gh_account_logins()
+                if each_login.lower() != pr_author_login.lower()
+            ]
+            self.assertTrue(
+                all_alternates_excluding_pr_author,
+                "test setup requires at least one authenticated account that "
+                "is not the PR author so the pin has a valid target",
+            )
+            chosen_pin_login = all_alternates_excluding_pr_author[0]
+            os.environ[BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME] = chosen_pin_login
+            returned_token = resolve_reviewer_token(
+                owner=LIVE_TEST_OWNER,
+                repo=LIVE_TEST_REPO,
+                pr_number=self.pr_number,
+            )
+            expected_pinned_token = fetch_gh_token_for_account(chosen_pin_login)
+            self.assertEqual(returned_token, expected_pinned_token)
+        finally:
+            self._restore_auth_env_vars(previous_env_state)
+
+    def test_resolve_reviewer_token_error_excludes_pr_author_from_candidate_set(
+        self,
+    ) -> None:
+        unauthenticated_account_name = "intentionally-not-authenticated-account-zzz"
+        previous_env_state = self._isolate_auth_env_vars()
+        try:
+            os.environ[BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME] = (
+                unauthenticated_account_name
+            )
+            with self.assertRaises(UserInputError) as raised_context:
+                resolve_reviewer_token(
+                    owner=LIVE_TEST_OWNER,
+                    repo=LIVE_TEST_REPO,
+                    pr_number=self.pr_number,
+                )
+            error_message_text = str(raised_context.exception)
+            self.assertIn(unauthenticated_account_name, error_message_text)
+            pr_author_login = query_pull_request_author_login(
+                owner=LIVE_TEST_OWNER,
+                repo=LIVE_TEST_REPO,
+                pr_number=self.pr_number,
+            )
+            all_alternates_at_call_time = [
+                each_login
+                for each_login in list_authenticated_gh_account_logins()
+                if each_login.lower() != pr_author_login.lower()
+            ]
+            self.assertIn(
+                repr(all_alternates_at_call_time),
+                error_message_text,
+                "error must show the alternate-reviewer set actually searched",
+            )
+            self.assertNotIn(
+                f"authenticated set [{repr(pr_author_login)}",
+                error_message_text,
+                "error must not show a set whose head is the excluded PR author",
+            )
+        finally:
+            self._restore_auth_env_vars(previous_env_state)
 
 
 if __name__ == "__main__":

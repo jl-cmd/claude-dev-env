@@ -222,14 +222,33 @@ The subagent receives this prompt and loops internally — the lead does not re-
        `[]` and pass `--state CLEAN`; one or more anchored findings →
        pass `--state DIRTY` with the full list.
 
-       **Self-PR precondition.** GitHub rejects both `APPROVE` and
-       `REQUEST_CHANGES` reviews when the authenticated identity matches
-       the PR author with HTTP 422; `post_audit_thread.py` retries and
-       then exits 2. To run qbug on a PR you authored, switch `gh auth`
-       to an alternate reviewer identity (a separate GitHub account)
-       BEFORE invoking the skill. Without this switch, exit 2 is a hard
-       halt — there is no automated fallback path. The script does not
-       auto-downgrade on the self-PR case.
+       **Self-PR auto-toggle.** GitHub rejects both `APPROVE` and
+       `REQUEST_CHANGES` reviews with HTTP 422 when the authenticated
+       identity matches the PR author ("Cannot approve/request changes
+       on your own pull request"). `post_audit_thread.py` detects this
+       case via `gh api user` + `gh api repos/<o>/<r>/pulls/<n>` and
+       auto-resolves an alternate gh account's token for the reviews
+       POST — the active `gh auth` account is not mutated; only the
+       bearer token sent on the request changes. After the POST the
+       active account is still whoever it was before, so no "swap back"
+       step is needed.
+
+       Configuration:
+
+       - `GH_TOKEN` / `GITHUB_TOKEN` env vars take precedence over the
+         toggle. Set them when you need to pin a specific reviewer
+         identity by token rather than by account login.
+       - `BUGTEAM_REVIEWER_ACCOUNT` env var names which authenticated
+         alternate to prefer when a toggle is needed (for example,
+         `BUGTEAM_REVIEWER_ACCOUNT=jl-cmd`). The env var name is shared
+         across every skill that invokes `post_audit_thread.py`. When
+         unset, the script falls back to the first alternate account
+         `gh auth status` reports.
+       - The named alternate must be logged in (`gh auth login -h
+         github.com -u <login>`) before the audit skill runs. The
+         script exits 1 with a pointing-at-`gh auth login` message
+         when self-PR is detected and no usable alternate is
+         authenticated.
 
        ```
        python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" \
