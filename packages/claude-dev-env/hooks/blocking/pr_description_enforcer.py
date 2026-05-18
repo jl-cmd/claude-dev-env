@@ -20,16 +20,30 @@ from _gh_body_arg_utils import (
     iter_significant_tokens,
 )
 
+
+def _insert_hooks_tree_for_imports() -> None:
+    hooks_tree = Path(__file__).resolve().parent.parent
+    hooks_tree_string = str(hooks_tree)
+    if hooks_tree_string not in sys.path:
+        sys.path.insert(0, hooks_tree_string)
+
+
+_insert_hooks_tree_for_imports()
+
+from config.pr_description_enforcer_constants import (
+    BLOCKQUOTE_MARKER_PATTERN,
+    BOLD_PAIR_PATTERN,
+    BULLET_MARKER_PATTERN,
+    FENCED_CODE_BLOCK_PATTERN,
+    HEADING_LINE_PATTERN,
+    INLINE_CODE_PATTERN,
+    LINK_TEXT_PATTERN,
+    MINIMUM_SUBSTANTIVE_PROSE_CHARS,
+    WHITESPACE_RUN_PATTERN,
+)
+
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PR_GUIDE_PATH = os.path.join(PLUGIN_ROOT, "docs", "PR_DESCRIPTION_GUIDE.md")
-
-REQUIRED_PR_SECTION_HEADERS = [
-    "description",
-    "why",
-    "how",
-]
-
-MINIMUM_PR_BODY_LENGTH = 50
 
 VAGUE_LANGUAGE_PATTERN = re.compile(
     r'\b(fix(?:ed)? (?:bug|issue|it)|update(?:d)? code|minor changes|various (?:fixes|updates|improvements))\b',
@@ -269,23 +283,43 @@ def extract_body_from_command(
     return result
 
 
+def _count_substantive_prose_chars(body: str) -> int:
+    """Return the count of prose characters after stripping Markdown ceremony.
+
+    Removes fenced code, inline code, heading lines, blockquote markers,
+    bullet list markers, bold/emphasis markers, and Markdown link targets.
+    Collapses internal whitespace so a body of only headers and bullets --
+    no real WHY paragraph -- registers as effectively empty.
+    """
+    body_without_fences = FENCED_CODE_BLOCK_PATTERN.sub('', body)
+    body_without_inline_code = INLINE_CODE_PATTERN.sub('', body_without_fences)
+    body_without_blockquotes = BLOCKQUOTE_MARKER_PATTERN.sub('', body_without_inline_code)
+    body_without_headings = HEADING_LINE_PATTERN.sub('', body_without_blockquotes)
+    body_without_bullets = BULLET_MARKER_PATTERN.sub('', body_without_headings)
+    body_without_bold = BOLD_PAIR_PATTERN.sub(r'\1', body_without_bullets)
+    body_without_emphasis = body_without_bold.replace('*', '')
+    body_without_links = LINK_TEXT_PATTERN.sub(r'\1', body_without_emphasis)
+    body_collapsed = WHITESPACE_RUN_PATTERN.sub(' ', body_without_links).strip()
+    return len(body_collapsed)
+
+
 def validate_pr_body(body: str) -> list[str]:
+    """Audit a PR body for substantive-prose and vague-language violations.
+
+    Args:
+        body: The PR body markdown text to audit.
+
+    Returns:
+        A list of human-readable violation messages. Empty when the body passes.
+    """
     violations = []
-    body_lower = body.lower()
 
-    missing_required_sections = [
-        header for header in REQUIRED_PR_SECTION_HEADERS
-        if f"## {header}" not in body_lower and f"**{header}" not in body_lower
-    ]
-
-    if missing_required_sections:
-        formatted_sections = ", ".join(f"'{each_section.title()}'" for each_section in missing_required_sections)
-        violations.append(f"Missing required section(s): {formatted_sections}")
-
-    stripped_body = re.sub(r'#.*', '', body).strip()
-    stripped_body = re.sub(r'\*\*.*?\*\*', '', stripped_body).strip()
-    if len(stripped_body) < MINIMUM_PR_BODY_LENGTH:
-        violations.append("PR body too short -- provide meaningful context for reviewers")
+    substantive_chars = _count_substantive_prose_chars(body)
+    if substantive_chars < MINIMUM_SUBSTANTIVE_PROSE_CHARS:
+        violations.append(
+            "PR body lacks substantive prose -- include a Why paragraph or "
+            "substantive explanation, not only headers and bullets"
+        )
 
     vague_matches = VAGUE_LANGUAGE_PATTERN.findall(body)
     if vague_matches:
@@ -329,7 +363,8 @@ def main() -> None:
         pr_guide_reference = f" @{PR_GUIDE_PATH}" if os.path.exists(PR_GUIDE_PATH) else ""
         denial_reason = (
             f"BLOCKED: [PR_DESCRIPTION] {violation_list}. "
-            f"Follow the PR description guide:{pr_guide_reference}"
+            f"Use the pr-description-writer agent to author the body in Anthropic claude-code style. "
+            f"Guide:{pr_guide_reference}"
         )
         result = {
             "hookSpecificOutput": {

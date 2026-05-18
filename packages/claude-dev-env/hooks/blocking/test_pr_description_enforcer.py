@@ -25,8 +25,21 @@ extract_body_from_command = hook_module.extract_body_from_command
 validate_pr_body = hook_module.validate_pr_body
 
 VALID_BODY = (
-    "## Description\n\nThis PR fixes a real bug.\n\n"
-    "## Why\n\nBecause it was broken in production.\n\n"
+    "Allow commas in branch names so PRs whose head branch was generated from "
+    "a title or external identifier no longer fail validation before any git "
+    "operation.\n\n"
+    "Fixes #1300.\n\n"
+    "## Changes\n\n"
+    "- `src/github/operations/branch.ts`: add `,` to the whitelist regex\n"
+    "- `test/branch.test.ts`: 3 new cases covering comma-bearing branch names\n\n"
+    "## Test plan\n\n"
+    "- `bun test test/branch.test.ts`\n"
+    "- `bun run typecheck`\n"
+)
+
+LEGACY_DESCRIPTION_WHY_HOW_BODY = (
+    "## Description\n\nThis PR fixes a real bug in the authentication module.\n\n"
+    "## Why\n\nBecause it was broken in production and customers reported failures.\n\n"
     "## How\n\nRefactored the auth module to handle edge cases correctly.\n"
 )
 
@@ -109,15 +122,63 @@ def test_extract_short_flag_shell_var_returns_empty() -> None:
     assert extract_body_from_command(command) == ""
 
 
-def test_validate_passes_complete_body() -> None:
+def test_validate_passes_anthropic_standard_body() -> None:
     assert validate_pr_body(VALID_BODY) == []
 
 
-def test_validate_blocks_missing_sections() -> None:
-    violations = validate_pr_body("Some body text without required sections.\n" * 5)
-    assert any(
-        "Missing required section" in each_violation for each_violation in violations
+def test_validate_passes_legacy_description_why_how_body() -> None:
+    """Existing Description/Why/How bodies must still pass -- the relaxed rule only widens what's accepted."""
+    assert validate_pr_body(LEGACY_DESCRIPTION_WHY_HOW_BODY) == []
+
+
+def test_validate_passes_sectionless_prose_body() -> None:
+    """Anthropic's trivial-PR shape is one sentence with no headers."""
+    body = (
+        "Pin third-party GitHub Actions references to immutable commit SHAs "
+        "so a tag move cannot redirect CI to attacker-controlled code."
     )
+    assert validate_pr_body(body) == []
+
+
+def test_validate_blocks_skeleton_body_with_only_headers_and_bullets() -> None:
+    """Sections + bullets without any prose Why is rejected -- the substantive-prose check catches this."""
+    body = (
+        "## Summary\n\n"
+        "## Changes\n\n"
+        "- `a`\n"
+        "- `b`\n"
+        "- `c`\n"
+    )
+    violations = validate_pr_body(body)
+    assert any("substantive prose" in each_violation.lower() for each_violation in violations)
+
+
+def test_validate_blocks_blockquoted_headings_with_no_real_prose() -> None:
+    """Regression: blockquote markers must strip BEFORE heading stripping.
+
+    A line like `> ## Summary` starts with `>`, so `^#+[ \\t].*$` cannot match it
+    in heading position. If blockquote markers are stripped after, the bare
+    `## Summary` text survives into the prose stream and inflates the count.
+    Correct order strips `> ` first, then the line becomes a real heading and
+    drops out, leaving an effectively empty body below the 40-character minimum.
+    """
+    body = "> ## Summary\n> ## Why\n> ## How"
+    violations = validate_pr_body(body)
+    assert any("substantive prose" in each_violation.lower() for each_violation in violations)
+
+
+def test_validate_passes_prose_after_bare_hashes_with_no_space() -> None:
+    """Bug regression: `##\\n` followed by prose must not have its prose eaten by the heading regex.
+
+    The previous pattern `^#+\\s.*$` matched `\\s` against the newline, then `.*$` greedily
+    consumed the next line. The fix restricts the whitespace class to `[ \\t]` so only true
+    headings (`## text`) match, leaving prose-after-bare-hashes intact for substantive-prose counting.
+    """
+    body = (
+        "##\nThis is real prose that should not be eaten by the heading regex, "
+        "it should pass the 40-character minimum."
+    )
+    assert validate_pr_body(body) == []
 
 
 def test_validate_blocks_vague_language() -> None:
@@ -128,7 +189,7 @@ def test_validate_blocks_vague_language() -> None:
 
 def test_validate_blocks_short_body() -> None:
     violations = validate_pr_body("Too short.")
-    assert any("too short" in each_violation.lower() for each_violation in violations)
+    assert any("substantive prose" in each_violation.lower() for each_violation in violations)
 
 
 def test_body_file_content_validated(tmp_path: pathlib.Path) -> None:
