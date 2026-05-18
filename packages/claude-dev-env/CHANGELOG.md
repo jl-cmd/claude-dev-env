@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.40.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.39.0...claude-dev-env-v1.40.0) (2026-05-18)
+
+
+### Features
+
+* **skills:** add CLAUDE_REVIEWS_DISABLED opt-out env var for PR-review skills ([#458](https://github.com/jl-cmd/claude-code-config/issues/458)) ([070787b](https://github.com/jl-cmd/claude-code-config/commit/070787bcf945116838546bb5b9856029c85312db))
+
+
+### Bug Fixes
+
+* **bugteam:** auto-toggle reviews-API auth on self-PR ([#456](https://github.com/jl-cmd/claude-code-config/issues/456)) ([1411c8a](https://github.com/jl-cmd/claude-code-config/commit/1411c8a981f851afa531dba967f82a3d316bc924))
+* **pr-converge:** treat bugbot silent pass as clean review ([#461](https://github.com/jl-cmd/claude-code-config/issues/461)) ([a35426c](https://github.com/jl-cmd/claude-code-config/commit/a35426c11ac2bf466edf9896ad403dc7b4fe26e8))
+* **pr-description-writer:** align with Anthropic claude-code PR shapes ([#460](https://github.com/jl-cmd/claude-code-config/issues/460)) ([21020dc](https://github.com/jl-cmd/claude-code-config/commit/21020dc3ddb80bc4f430e11f7ee609a65b73d81b))
+
 ## [1.39.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.38.1...claude-dev-env-v1.39.0) (2026-05-15)
 
 
