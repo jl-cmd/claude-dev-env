@@ -212,6 +212,9 @@ BUGBOT.
   `bugbot_down = true`, skip every check below, set `phase = BUGTEAM`,
   and continue BUGTEAM in the same tick. The downstream loop branches on
   `bugbot_down` exactly the way it does when bugbot CI is unavailable.
+- [ ] **Silent-pass pre-check.** Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --check-clean --owner <O> --repo <R> --sha <current_head>`
+- [ ] Exit 0 → bugbot CI completed clean with no review (silent pass); set `bugbot_clean_at = current_head`, `phase = BUGTEAM`, continue BUGTEAM same tick
+- [ ] Exit 1 (not a silent pass) or Exit 2 (gh CLI error — silent pass not confirmable) → continue with the trigger flow below
 - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --check-active --owner <O> --repo <R> --sha <current_head>`
 - [ ] Exit 0 → bugbot already queued on this commit; skip posting, wait for completion
 - [ ] Exit 1 → post trigger via `add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")`
@@ -219,6 +222,15 @@ BUGBOT.
 - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --sha <current_head>`
 - [ ] Exit non-zero → bugbot is down; set `bugbot_down = true`, `phase = BUGTEAM`, continue BUGTEAM same tick
 - [ ] Exit 0 (check run present) → record `bugbot_acknowledged_at = <now ISO 8601>`, proceed to Step 4
+
+The silent-pass pre-check fires FIRST so we never re-trigger a bot that
+already finished cleanly. Cursor Bugbot communicates "no findings" by
+completing the CI check with `conclusion: success` (or `neutral`) and
+posting no review. The pre-check treats that outcome as
+`bugbot_clean_at = current_head`, equivalent to an explicit clean
+review. Without it, the trigger flow would re-prompt a bot that has
+already evaluated this commit and refuses to re-run, and the bypass
+branch would falsely mark `bugbot_down = true`.
 
 `bugbot run` is empirically the only re-trigger Cursor Bugbot recognizes;
 alternative phrasings silently no-op.

@@ -136,7 +136,9 @@ no longer applies.
             - [ ] `bugbot_clean_at = current_head`
             - [ ] Advance to Step 5
       - [ ] **no review yet / commit_id mismatch** →
-            - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --check-active --sha <current_head>`
+            - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --check-clean --sha <current_head>`
+            - [ ] Exit 0 (bugbot CI completed with success/neutral conclusion and no review = silent pass) → `bugbot_clean_at = current_head` → advance to Step 5
+            - [ ] Exit 1 (not a silent pass) or Exit 2 (gh CLI error — silent pass not confirmable) → Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --check-active --sha <current_head>`
             - [ ] Exit 0 (already queued) → schedule 360s wakeup → return to Step 4 next tick
             - [ ] Exit 1 → post exactly `bugbot run` via `add_issue_comment` (no `@cursor[bot]` mention, no other text), wait 8s
             - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --sha <current_head>`
