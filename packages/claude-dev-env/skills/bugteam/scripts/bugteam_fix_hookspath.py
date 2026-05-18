@@ -5,14 +5,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+parent_directory = str(Path(__file__).resolve().parent)
+try:
+    sys.path.remove(parent_directory)
+except ValueError:
+    pass
+if parent_directory not in sys.path:
+    sys.path.insert(0, parent_directory)
+
 for each_cached_module_name in [
     each_module_key
     for each_module_key in list(sys.modules)
     if each_module_key == "config" or each_module_key.startswith("config.")
 ]:
     sys.modules.pop(each_cached_module_name, None)
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config.bugteam_fix_hookspath_constants import (
     ALL_CANONICAL_HOOKS_DIRECTORY_COMPONENTS,

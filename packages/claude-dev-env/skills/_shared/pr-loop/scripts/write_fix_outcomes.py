@@ -1,8 +1,8 @@
 """Validate status enum values and write <bugteam_fix> XML at the canonical path.
 
 Status enum (canonical source: `ALL_VALID_FIX_STATUSES` in
-`config/path_resolver_constants.py`): fixed | could_not_address |
-hook_blocked | unverified_fixed.
+`packages/claude-dev-env/skills/_shared/pr-loop/scripts/config/path_resolver_constants.py`):
+fixed | could_not_address | hook_blocked | unverified_fixed.
 
 Each outcome's scalar fields become XML attributes on `<outcome>`; the
 body fields named in `ALL_FIX_OUTCOME_BODY_ELEMENT_KEYS` (currently

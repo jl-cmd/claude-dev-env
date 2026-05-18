@@ -10,9 +10,22 @@ autoMode sections so repeated grant/revoke cycles leave no dead structure.
 import sys
 from pathlib import Path
 
-sys.modules.pop("config", None)
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+parent_directory = str(Path(__file__).resolve().parent)
+try:
+    sys.path.remove(parent_directory)
+except ValueError:
+    pass
+if parent_directory not in sys.path:
+    sys.path.insert(0, parent_directory)
+
+for each_cached_module_name in [
+    each_module_key
+    for each_module_key in list(sys.modules)
+    if each_module_key == "config"
+    or each_module_key.startswith("config.")
+    or each_module_key == "_claude_permissions_common"
+]:
+    sys.modules.pop(each_cached_module_name, None)
 
 from _claude_permissions_common import (  # noqa: E402
     build_permission_rules,
@@ -40,6 +53,15 @@ from config.claude_settings_keys_constants import (  # noqa: E402
 def remove_values_from_list(
     all_target_list: list[object], all_values_to_remove: set[str]
 ) -> int:
+    """Remove matching values from a list in place.
+
+    Args:
+        all_target_list: The list to remove values from.
+        all_values_to_remove: Set of string values to remove.
+
+    Returns:
+        Number of values removed.
+    """
     original_length = len(all_target_list)
     all_target_list[:] = [
         each_value
@@ -52,6 +74,15 @@ def remove_values_from_list(
 def remove_rules_from_allow_list(
     all_settings: dict[str, object], all_rules_to_remove: list[str]
 ) -> int:
+    """Remove matching permission rules from the settings allow list.
+
+    Args:
+        all_settings: The parsed settings dictionary.
+        all_rules_to_remove: Permission rule strings to remove.
+
+    Returns:
+        Number of rules removed.
+    """
     permissions_section = all_settings.get(CLAUDE_SETTINGS_PERMISSIONS_KEY)
     if not isinstance(permissions_section, dict):
         return 0
@@ -64,6 +95,15 @@ def remove_rules_from_allow_list(
 def remove_directory_from_additional_directories(
     all_settings: dict[str, object], directory_path: str
 ) -> int:
+    """Remove a project path from the additionalDirectories list.
+
+    Args:
+        all_settings: The parsed settings dictionary.
+        directory_path: The project directory path to remove.
+
+    Returns:
+        1 when the entry was removed, 0 when not found.
+    """
     permissions_section = all_settings.get(CLAUDE_SETTINGS_PERMISSIONS_KEY)
     if not isinstance(permissions_section, dict):
         return 0
@@ -78,6 +118,15 @@ def remove_directory_from_additional_directories(
 def remove_auto_mode_environment_entry(
     all_settings: dict[str, object], entry_text: str
 ) -> int:
+    """Remove an auto-mode environment entry for the project.
+
+    Args:
+        all_settings: The parsed settings dictionary.
+        entry_text: The environment entry text to remove.
+
+    Returns:
+        1 when the entry was removed, 0 when not found.
+    """
     auto_mode_section = all_settings.get(CLAUDE_SETTINGS_AUTO_MODE_KEY)
     if not isinstance(auto_mode_section, dict):
         return 0
@@ -88,6 +137,11 @@ def remove_auto_mode_environment_entry(
 
 
 def prune_settings_after_revoke(all_settings: dict[str, object]) -> None:
+    """Remove empty lists and their parent sections after revoking entries.
+
+    Args:
+        all_settings: The parsed settings dictionary to prune in place.
+    """
     prune_empty_list_then_empty_section(
         all_settings,
         CLAUDE_SETTINGS_PERMISSIONS_KEY,
@@ -106,6 +160,17 @@ def prune_settings_after_revoke(all_settings: dict[str, object]) -> None:
 
 
 def revoke_permissions_for_current_directory() -> None:
+    """Revoke permissions previously granted for the current project directory.
+
+    Reads the current project path, constructs the matching permission rules,
+    removes them from ~/.claude/settings.json, and prunes any newly empty
+    sections.
+
+    Raises:
+        SystemExit: When the current directory is not a valid project root.
+        ValueError: Propagated from get_current_project_path() when the path
+                    contains glob metacharacters.
+    """
     claude_user_settings_path: Path = get_claude_user_settings_path()
     project_root_path = Path.cwd()
     if not is_valid_project_root(project_root_path):

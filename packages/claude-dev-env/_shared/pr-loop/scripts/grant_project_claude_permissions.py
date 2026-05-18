@@ -9,9 +9,22 @@ the changes applied. No-op when the entries already exist.
 import sys
 from pathlib import Path
 
-sys.modules.pop("config", None)
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+parent_directory = str(Path(__file__).resolve().parent)
+try:
+    sys.path.remove(parent_directory)
+except ValueError:
+    pass
+if parent_directory not in sys.path:
+    sys.path.insert(0, parent_directory)
+
+for each_cached_module_name in [
+    each_module_key
+    for each_module_key in list(sys.modules)
+    if each_module_key == "config"
+    or each_module_key.startswith("config.")
+    or each_module_key == "_claude_permissions_common"
+]:
+    sys.modules.pop(each_cached_module_name, None)
 
 from _claude_permissions_common import (  # noqa: E402
     append_if_missing,
@@ -41,6 +54,15 @@ from config.claude_settings_keys_constants import (  # noqa: E402
 def add_rules_to_allow_list(
     all_settings: dict[str, object], all_rules_to_add: list[str]
 ) -> int:
+    """Add permission rules to the settings allow list.
+
+    Args:
+        all_settings: The parsed settings dictionary.
+        all_rules_to_add: Permission rule strings to append.
+
+    Returns:
+        Number of rules actually added (new entries).
+    """
     permissions_section = ensure_dict_section(
         all_settings, CLAUDE_SETTINGS_PERMISSIONS_KEY
     )
@@ -57,6 +79,15 @@ def add_rules_to_allow_list(
 def add_directory_to_additional_directories(
     all_settings: dict[str, object], directory_path: str
 ) -> int:
+    """Add a project path to the additionalDirectories allow list.
+
+    Args:
+        all_settings: The parsed settings dictionary.
+        directory_path: The project directory path to add.
+
+    Returns:
+        1 when the entry was added, 0 when it already existed.
+    """
     permissions_section = ensure_dict_section(
         all_settings, CLAUDE_SETTINGS_PERMISSIONS_KEY
     )
@@ -71,6 +102,15 @@ def add_directory_to_additional_directories(
 def add_auto_mode_environment_entry(
     all_settings: dict[str, object], entry_text: str
 ) -> int:
+    """Add an auto-mode environment entry for the project.
+
+    Args:
+        all_settings: The parsed settings dictionary.
+        entry_text: The environment entry text to add.
+
+    Returns:
+        1 when the entry was added, 0 when it already existed.
+    """
     auto_mode_section = ensure_dict_section(
         all_settings, CLAUDE_SETTINGS_AUTO_MODE_KEY
     )
@@ -83,6 +123,16 @@ def add_auto_mode_environment_entry(
 
 
 def grant_permissions_for_current_directory() -> None:
+    """Grant Edit/Write/Read permissions for the current project directory.
+
+    Reads the current project path, constructs permission rules from config
+    constants, and writes them to ~/.claude/settings.json atomically.
+
+    Raises:
+        SystemExit: When the current directory is not a valid project root.
+        ValueError: Propagated from get_current_project_path() when the path
+                    contains glob metacharacters.
+    """
     claude_user_settings_path: Path = get_claude_user_settings_path()
     project_root_path = Path.cwd()
     if not is_valid_project_root(project_root_path):

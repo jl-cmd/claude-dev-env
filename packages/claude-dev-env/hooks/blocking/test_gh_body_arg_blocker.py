@@ -418,3 +418,20 @@ def test_has_backtick_multi_line_body() -> None:
     command = 'gh pr create --title "T" --body "First line.\nSecond with `code`."'
     assert _has_backtick(command)
 
+
+def test_has_backtick_inside_unclosed_double_quoted_body_value() -> None:
+    """Trailing backtick inside an unclosed --body "..." opening line counts as body content.
+
+    The first line carries an opening double-quote for --body that is not
+    closed on that line (odd quote count = 3). The trailing backtick is body
+    content (an inline-code opening), not a PowerShell continuation marker.
+    The unclosed-quote check preserves the original line including its
+    trailing backtick, so _has_backtick sees the backtick and returns True.
+    """
+    command = (
+        'gh pr create --title "T" --body "Thanks `\n'
+        '  this continues the body\n'
+        '  with more text"\n'
+    )
+    assert _has_backtick(command)
+

@@ -136,6 +136,26 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pr_converge_bugteam_enforcer.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/pr_converge_bugteam_skill_tracker.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SessionStart": [

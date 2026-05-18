@@ -38,7 +38,8 @@ clean-at SHAs. On tick exit, write updated state before calling ScheduleWakeup
 so the next tick resumes with accurate state.
 
 Fields: `phase`, `tick_count`, `bugbot_clean_at`, `bugteam_clean_at`,
-`copilot_clean_at`, `current_head`, `bugbot_acknowledged_at`, `bugbot_down`.
+`copilot_clean_at`, `current_head`, `bugbot_acknowledged_at`, `bugbot_down`,
+`bugteam_skill_invoked_at_head`, `bugteam_skill_invoked_at_tick`.
 
 ## Gotchas
 
@@ -150,7 +151,12 @@ no longer applies.
 
       Pre-condition: `bugbot_clean_at == current_head` (or `bugbot_down == true`).
 
-      Run `Skill({skill: "bugteam", args: "<PR URL>"})`.
+      Step 5 advances ONLY after `Skill({skill: "bugteam", args: "<PR URL>"})`
+      fires this tick. Substituting an `Agent({subagent_type: "clean-coder"})`
+      audit call for the formal Skill invocation is a protocol violation — the
+      `pr_converge_bugteam_enforcer` hook blocks it. `qbug` is NOT an accepted
+      substitute; `bugteam` is the only allowed skill at this step.
+
       After bugteam completes, re-resolve HEAD.
 
       - [ ] **bugteam pushed new commits** →

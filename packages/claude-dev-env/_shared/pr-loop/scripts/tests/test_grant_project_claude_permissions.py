@@ -43,7 +43,7 @@ def test_grant_module_guards_sys_path_insert_against_duplicates() -> None:
     module_source = (
         Path(__file__).parent.parent / "grant_project_claude_permissions.py"
     ).read_text(encoding="utf-8")
-    assert "if str(Path(__file__).resolve().parent) not in sys.path:" in module_source, (
+    assert "if parent_directory not in sys.path:" in module_source, (
         "grant_project_claude_permissions.py must guard sys.path.insert against "
         "duplicate entries on reload (consistent with sibling modules)"
     )

@@ -25,6 +25,7 @@ import sys
 
 from _gh_body_arg_utils import (
     _is_bash_continuation,
+    _is_powershell_continuation,
     all_body_flags,
     all_body_flag_prefixes,
     get_logical_first_line,
@@ -70,13 +71,36 @@ def _logical_line_has_bare_body_token(logical_line: str) -> bool:
     return bool(_BARE_BODY_TOKEN_PATTERN.search(logical_line))
 
 
-def _has_backtick(command: str) -> bool:
-    """Return True if command contains a backtick that is not a bash continuation.
+def _line_before_marker_has_unclosed_double_quote(
+    line_excluding_trailing_marker: str,
+) -> bool:
+    """Return True when the line text has an odd count of `"` characters.
 
-    Joins all bash `` \\ `` continuation lines so backticks in multi-line body
-    values on later non-continuation lines are not missed. Only strips bash
-    continuations — this hook runs on the Bash tool, and PowerShell-style
-    backtick continuations are not continuation markers in bash.
+    Counts every `"` character in the segment via `str.count('"')` and
+    returns True when the total is odd. The target shell for this
+    continuation check is PowerShell, which represents a literal double
+    quote inside a double-quoted string as a doubled `""` rather than a
+    backslash-escaped `\\"`. A raw `"` count is therefore the appropriate
+    signal for whether a quoted segment is still open at the end of the
+    line.
+
+    An odd count means a body argument like `--body "Thanks ` opens a quote
+    that this line never closes — the next line carries the closing quote.
+    A trailing backtick on that line is body content, not a PowerShell
+    continuation marker.
+    """
+    return (line_excluding_trailing_marker.count('"') % 2) == 1
+
+
+def _has_backtick(command: str) -> bool:
+    """Return True if command contains a backtick that is not a line continuation.
+
+    Joins both bash `` \\ `` and PowerShell `` ` `` continuation lines so
+    backticks in multi-line body values on later non-continuation lines are
+    not missed. A PowerShell continuation marker requires whitespace before
+    the trailing backtick AND a balanced quote count on the line excluding
+    the marker — a line ending `--body "Thanks `` carries an unclosed quote,
+    so the trailing backtick is body content rather than a continuation.
 
     Scans the entire command string for backtick characters, not just --body
     argument content. This is intentionally conservative — any command
@@ -91,6 +115,11 @@ def _has_backtick(command: str) -> bool:
         if _is_bash_continuation(stripped_line):
             all_joined_lines.append(stripped_line[:-1].rstrip() + continuation_separator)
             continue
+        if _is_powershell_continuation(stripped_line):
+            line_before_marker = stripped_line[:-1]
+            if not _line_before_marker_has_unclosed_double_quote(line_before_marker):
+                all_joined_lines.append(line_before_marker.rstrip() + continuation_separator)
+                continue
         all_joined_lines.append(each_line)
     full_logical_command = "".join(all_joined_lines)
     return "`" in full_logical_command

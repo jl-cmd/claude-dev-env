@@ -109,6 +109,17 @@ Sequence:
 
 `converged` exit condition: `primary_audit_clean AND post_fix_audit_clean` for the committing loop.
 
+## De-dup and merge
+
+Findings from primary, adversarial, Haiku secondary, and post-fix passes are merged into a single deduped finding list before persistence.
+
+- **De-dup key:** `(file, line, category)`. Two findings sharing the same `(file, line, category)` tuple collapse into a single deduped entry.
+- **Severity conflict resolution:** `max wins`. When merged findings disagree on severity, the deduped entry carries the maximum severity (`P0 > P1 > P2`).
+- **Excerpt and failure_mode:** the deduped entry inherits these fields from the highest-severity contributing finding. Ties keep the first observed contributor.
+- **`evidence_files`:** the deduped entry carries the union of every contributor's `evidence_files`, deduplicated and sorted.
+
+The merged list lands in `loop-<L>-diagnostics.json` under both `merged` (one entry per contributing finding) and `deduped` (one entry per unique `(file, line, category)` tuple).
+
 ## Persistence
 
 Every audit loop writes two JSON files under the skill's scoped temp directory (resolved via `tempfile.gettempdir()`):

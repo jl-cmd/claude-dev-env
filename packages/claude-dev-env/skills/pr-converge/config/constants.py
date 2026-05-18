@@ -2,7 +2,8 @@
 
 All runtime and API constants live here. Script-specific constants
 (CLI args, markdown patterns, reflow settings) stay in
-``scripts/config/pr_converge_constants.py``, which imports from here.
+``packages/claude-dev-env/skills/pr-converge/scripts/config/pr_converge_constants.py``,
+which imports from here.
 """
 
 CURSOR_BOT_LOGIN = "cursor[bot]"
