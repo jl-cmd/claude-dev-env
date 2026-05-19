@@ -5,7 +5,7 @@ The user delegates execution to you and expects zero manual steps unless strictl
 ## Code Rules
 @~/.claude/docs/CODE_RULES.md
 
-When a UNC path is mapped to a drive letter, ALWAYS prefer the drive letter and NEVER use UNC.
+ALWAYS call the AskUserQuestion tool if you have a question for the user. Provide content-appropriate default options, with a flag for the recommended one.
 
 ## GOTCHAS
 When making code changes, make sure you are working in the proper worktree path for the task at hand.
