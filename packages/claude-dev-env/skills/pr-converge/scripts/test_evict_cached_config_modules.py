@@ -6,7 +6,7 @@ import sys
 import types
 from pathlib import Path
 
-_scripts_directory = Path(__file__).resolve().parent
+_scripts_directory = Path(__file__).absolute().parent
 if str(_scripts_directory) not in sys.path:
     sys.path.insert(0, str(_scripts_directory))
 

@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-_pr_converge_dir = Path(__file__).resolve().parent.parent
+_pr_converge_dir = Path(__file__).absolute().parent.parent
 if str(_pr_converge_dir) not in sys.path:
     sys.path.insert(0, str(_pr_converge_dir))
 

@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-_SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+_SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
 
 
 @pytest.fixture(scope="session")
