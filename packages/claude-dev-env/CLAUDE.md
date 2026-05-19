@@ -23,6 +23,14 @@ When writing tests, always write tests that actually test the behavior of the fu
 
 When writing tests, always ensure you utilize the production code paths instead of duplicating explicitly for the test.
 
+## Research via Subagents
+
+Delegate exploration whose raw content you won't directly edit or reuse. If you'd `Read` more than one file or `Grep` more than one pattern just to extract a fact, dispatch an `Explore` subagent.
+
+Ask the subagent for a specific answer: "return the file:line where X is defined." For multiple unrelated questions, fan out parallel subagents — issue several `Agent` calls in a single response.
+
+Reserve `Read`/`Grep`/`Glob` for files you will actually touch this turn. Compose subagent prompts via the protocol in `agent-spawn-protocol`.
+
 ## Additional Non-overlapping Rules
 
 - **task_scope:** Match every action to what was explicitly requested. When intent is ambiguous, research official docs and present options via AskUserQuestion before making any changes. Proceed with edits only on explicit instruction.
