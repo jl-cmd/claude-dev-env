@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.40.0...claude-dev-env-v1.41.0) (2026-05-19)
+
+
+### Features
+
+* **pr-converge:** enforce formal bugteam skill invocation at Step 5 ([#463](https://github.com/jl-cmd/claude-code-config/issues/463)) ([a8dad46](https://github.com/jl-cmd/claude-code-config/commit/a8dad4600775f25170584113201560759fac5282))
+
 ## [1.40.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.39.0...claude-dev-env-v1.40.0) (2026-05-18)
 
 
