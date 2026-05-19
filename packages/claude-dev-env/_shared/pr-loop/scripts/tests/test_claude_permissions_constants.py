@@ -26,6 +26,16 @@ def test_exposes_all_permission_allow_tools_tuple() -> None:
     assert constants_module.ALL_PERMISSION_ALLOW_TOOLS == ("Edit", "Write", "Read")
 
 
+def test_exposes_all_agent_config_deny_tools_tuple_with_glob() -> None:
+    assert constants_module.ALL_AGENT_CONFIG_DENY_TOOLS == (
+        "Edit",
+        "Write",
+        "Read",
+        "Glob",
+    )
+    assert "Glob" not in constants_module.ALL_PERMISSION_ALLOW_TOOLS
+
+
 def test_auto_mode_environment_entry_template_is_format_string() -> None:
     rendered_template_text = (
         constants_module.AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE.format(
@@ -34,6 +44,29 @@ def test_auto_mode_environment_entry_template_is_format_string() -> None:
     )
     assert "/tmp/x" in rendered_template_text
     assert ".claude/**" in rendered_template_text
+
+
+def test_template_derives_human_readable_pattern_list_from_pattern_tuple() -> None:
+    """Every pattern in ALL_AGENT_CONFIG_PATH_PATTERNS must surface in the
+    rendered template through its derived human-readable form, and the
+    template must still expose the {project_path} placeholder for .format()
+    substitution at runtime."""
+    template_text: str = constants_module.AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE
+    assert "{project_path}" in template_text
+    for each_pattern in constants_module.ALL_AGENT_CONFIG_PATH_PATTERNS:
+        if each_pattern.endswith("/**"):
+            directory_name = each_pattern[: -len("/**")]
+            expected_phrase = f"anything under {directory_name}/"
+        elif each_pattern == "mcp.json":
+            expected_phrase = "the mcp.json file"
+        else:
+            expected_phrase = each_pattern
+        assert expected_phrase in template_text, (
+            f"template missing derived phrase for pattern {each_pattern!r}: "
+            f"expected {expected_phrase!r}"
+        )
+    rendered_template_text = template_text.format(project_path="/tmp/x")
+    assert "/tmp/x" in rendered_template_text
 
 
 def test_get_claude_user_settings_path_ends_in_settings_json() -> None:

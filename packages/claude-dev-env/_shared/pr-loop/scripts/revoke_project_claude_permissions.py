@@ -28,23 +28,29 @@ for each_cached_module_name in [
     sys.modules.pop(each_cached_module_name, None)
 
 from _claude_permissions_common import (  # noqa: E402
+    build_agent_config_deny_rules,
     build_permission_rules,
     exit_with_error,
     get_current_project_path,
+    is_trust_entry_for_project,
     is_valid_project_root,
     load_settings,
     prune_empty_list_then_empty_section,
+    remove_matching_entries_from_list,
     save_settings,
 )
 from config.claude_permissions_constants import (  # noqa: E402
+    ALL_AGENT_CONFIG_DENY_TOOLS,
+    ALL_AGENT_CONFIG_PATH_PATTERNS,
     ALL_PERMISSION_ALLOW_TOOLS,
-    AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE,
+    AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX,
     get_claude_user_settings_path,
 )
 from config.claude_settings_keys_constants import (  # noqa: E402
     CLAUDE_SETTINGS_ADDITIONAL_DIRECTORIES_KEY,
     CLAUDE_SETTINGS_ALLOW_KEY,
     CLAUDE_SETTINGS_AUTO_MODE_KEY,
+    CLAUDE_SETTINGS_DENY_KEY,
     CLAUDE_SETTINGS_ENVIRONMENT_KEY,
     CLAUDE_SETTINGS_PERMISSIONS_KEY,
 )
@@ -92,6 +98,27 @@ def remove_rules_from_allow_list(
     return remove_values_from_list(existing_allow_list, set(all_rules_to_remove))
 
 
+def remove_rules_from_deny_list(
+    all_settings: dict[str, object], all_rules_to_remove: list[str]
+) -> int:
+    """Remove matching permission rules from the settings deny list.
+
+    Args:
+        all_settings: The parsed settings dictionary.
+        all_rules_to_remove: Permission rule strings to remove.
+
+    Returns:
+        Number of rules removed.
+    """
+    permissions_section = all_settings.get(CLAUDE_SETTINGS_PERMISSIONS_KEY)
+    if not isinstance(permissions_section, dict):
+        return 0
+    existing_deny_list = permissions_section.get(CLAUDE_SETTINGS_DENY_KEY)
+    if not isinstance(existing_deny_list, list):
+        return 0
+    return remove_values_from_list(existing_deny_list, set(all_rules_to_remove))
+
+
 def remove_directory_from_additional_directories(
     all_settings: dict[str, object], directory_path: str
 ) -> int:
@@ -115,17 +142,23 @@ def remove_directory_from_additional_directories(
     return remove_values_from_list(existing_directories, {directory_path})
 
 
-def remove_auto_mode_environment_entry(
-    all_settings: dict[str, object], entry_text: str
+def remove_trust_entries_for_project(
+    all_settings: dict[str, object], project_path: str, prefix: str
 ) -> int:
-    """Remove an auto-mode environment entry for the project.
+    """Remove every trust entry for the project from autoMode.environment.
+
+    Matches any string in autoMode.environment whose prefix matches the
+    trust-entry marker and that contains the project's .claude/** path.
+    The match is wording-agnostic so prior template revisions are removed
+    cleanly even when the current template differs.
 
     Args:
         all_settings: The parsed settings dictionary.
-        entry_text: The environment entry text to remove.
+        project_path: The POSIX-style project root path.
+        prefix: The literal prefix that marks a trust entry.
 
     Returns:
-        1 when the entry was removed, 0 when not found.
+        Number of entries removed.
     """
     auto_mode_section = all_settings.get(CLAUDE_SETTINGS_AUTO_MODE_KEY)
     if not isinstance(auto_mode_section, dict):
@@ -133,7 +166,12 @@ def remove_auto_mode_environment_entry(
     existing_environment = auto_mode_section.get(CLAUDE_SETTINGS_ENVIRONMENT_KEY)
     if not isinstance(existing_environment, list):
         return 0
-    return remove_values_from_list(existing_environment, {entry_text})
+    return remove_matching_entries_from_list(
+        existing_environment,
+        lambda candidate_entry: is_trust_entry_for_project(
+            candidate_entry, project_path, prefix
+        ),
+    )
 
 
 def prune_settings_after_revoke(all_settings: dict[str, object]) -> None:
@@ -150,6 +188,11 @@ def prune_settings_after_revoke(all_settings: dict[str, object]) -> None:
     prune_empty_list_then_empty_section(
         all_settings,
         CLAUDE_SETTINGS_PERMISSIONS_KEY,
+        CLAUDE_SETTINGS_DENY_KEY,
+    )
+    prune_empty_list_then_empty_section(
+        all_settings,
+        CLAUDE_SETTINGS_PERMISSIONS_KEY,
         CLAUDE_SETTINGS_ADDITIONAL_DIRECTORIES_KEY,
     )
     prune_empty_list_then_empty_section(
@@ -162,9 +205,10 @@ def prune_settings_after_revoke(all_settings: dict[str, object]) -> None:
 def revoke_permissions_for_current_directory() -> None:
     """Revoke permissions previously granted for the current project directory.
 
-    Reads the current project path, constructs the matching permission rules,
-    removes them from ~/.claude/settings.json, and prunes any newly empty
-    sections.
+    Reads the current project path, constructs the matching allow and deny
+    permission rules, removes them from ~/.claude/settings.json, removes
+    every trust entry for the project from autoMode.environment, and prunes
+    any newly empty sections.
 
     Raises:
         SystemExit: When the current directory is not a valid project root.
@@ -182,19 +226,25 @@ def revoke_permissions_for_current_directory() -> None:
         raise SystemExit(1)
     project_path = get_current_project_path()
     permission_rules = build_permission_rules(project_path, ALL_PERMISSION_ALLOW_TOOLS)
-    environment_entry = AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE.format(
-        project_path=project_path
+    all_agent_config_deny_rules = build_agent_config_deny_rules(
+        project_path,
+        ALL_AGENT_CONFIG_DENY_TOOLS,
+        ALL_AGENT_CONFIG_PATH_PATTERNS,
     )
     settings = load_settings(claude_user_settings_path)
-    rules_removed_count = remove_rules_from_allow_list(settings, permission_rules)
+    allow_rules_removed_count = remove_rules_from_allow_list(settings, permission_rules)
+    deny_rules_removed_count = remove_rules_from_deny_list(
+        settings, all_agent_config_deny_rules
+    )
     directories_removed_count = remove_directory_from_additional_directories(
         settings, project_path
     )
-    environment_entries_removed_count = remove_auto_mode_environment_entry(
-        settings, environment_entry
+    environment_entries_removed_count = remove_trust_entries_for_project(
+        settings, project_path, AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX
     )
     total_changes_count = (
-        rules_removed_count
+        allow_rules_removed_count
+        + deny_rules_removed_count
         + directories_removed_count
         + environment_entries_removed_count
     )
@@ -207,7 +257,13 @@ def revoke_permissions_for_current_directory() -> None:
     save_settings(claude_user_settings_path, settings)
     print(f"Project path: {project_path}")
     print(f"Settings file: {claude_user_settings_path}")
-    print(f"Allow rules removed: {rules_removed_count} of {len(permission_rules)}")
+    print(
+        f"Allow rules removed: {allow_rules_removed_count} of {len(permission_rules)}"
+    )
+    print(
+        f"Deny rules removed: {deny_rules_removed_count} of "
+        f"{len(all_agent_config_deny_rules)}"
+    )
     print(f"Additional directories removed: {directories_removed_count}")
     print(
         f"Auto-mode environment entries removed: {environment_entries_removed_count}"

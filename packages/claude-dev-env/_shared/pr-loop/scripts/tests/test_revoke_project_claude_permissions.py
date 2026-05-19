@@ -32,7 +32,9 @@ def _load_revoke_module() -> ModuleType:
 def test_module_imports_constants_from_config_modules() -> None:
     revoke_module = _load_revoke_module()
     assert revoke_module.ALL_PERMISSION_ALLOW_TOOLS == ("Edit", "Write", "Read")
-    assert "{project_path}" in revoke_module.AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE
+    assert revoke_module.AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX == (
+        "Trusted local workspace:"
+    )
     assert revoke_module.CLAUDE_SETTINGS_PERMISSIONS_KEY == "permissions"
 
 
