@@ -19,6 +19,54 @@ if _script_directory not in sys.path:
     sys.path.insert(0, _script_directory)
 
 import _claude_permissions_common as common_module
+import grant_project_claude_permissions as grant_module
+import revoke_project_claude_permissions as revoke_module
+
+
+def test_is_valid_project_root_not_defined_on_common_module() -> None:
+    """The common module must not expose ``is_valid_project_root``.
+
+    Both grant and revoke define their own local copy. A shared copy on
+    the common module would be a third parallel definition with no
+    production caller, so its absence is the asserted contract.
+    """
+    assert not hasattr(common_module, "is_valid_project_root")
+
+
+def test_grant_is_valid_project_root_detects_git_marker(tmp_path: Path) -> None:
+    git_project_root = tmp_path / "git_project"
+    (git_project_root / ".git").mkdir(parents=True)
+    assert grant_module.is_valid_project_root(git_project_root) is True
+
+
+def test_grant_is_valid_project_root_detects_claude_marker(tmp_path: Path) -> None:
+    claude_project_root = tmp_path / "claude_project"
+    (claude_project_root / ".claude").mkdir(parents=True)
+    assert grant_module.is_valid_project_root(claude_project_root) is True
+
+
+def test_grant_is_valid_project_root_rejects_unmarked_directory(tmp_path: Path) -> None:
+    unmarked_directory = tmp_path / "no_marker"
+    unmarked_directory.mkdir()
+    assert grant_module.is_valid_project_root(unmarked_directory) is False
+
+
+def test_revoke_is_valid_project_root_detects_git_marker(tmp_path: Path) -> None:
+    git_project_root = tmp_path / "git_project"
+    (git_project_root / ".git").mkdir(parents=True)
+    assert revoke_module.is_valid_project_root(git_project_root) is True
+
+
+def test_revoke_is_valid_project_root_detects_claude_marker(tmp_path: Path) -> None:
+    claude_project_root = tmp_path / "claude_project"
+    (claude_project_root / ".claude").mkdir(parents=True)
+    assert revoke_module.is_valid_project_root(claude_project_root) is True
+
+
+def test_revoke_is_valid_project_root_rejects_unmarked_directory(tmp_path: Path) -> None:
+    unmarked_directory = tmp_path / "no_marker"
+    unmarked_directory.mkdir()
+    assert revoke_module.is_valid_project_root(unmarked_directory) is False
 
 
 def test_write_atomically_with_mode_releases_fd_when_fdopen_raises(

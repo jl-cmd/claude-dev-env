@@ -33,8 +33,8 @@ from pathlib import Path
 from typing import NoReturn
 
 sys.modules.pop("config", None)
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+if str(Path(__file__).absolute().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).absolute().parent))
 
 from config.post_audit_thread_constants import (
     ALL_GH_API_COMMAND_PARTS,

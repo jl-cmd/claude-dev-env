@@ -124,6 +124,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/windows_rmtree_blocker.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/gh_pr_author_enforcer.py",
+            "timeout": 30
           }
         ]
       },
@@ -176,6 +181,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/untracked_repo_detector.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/gh_pr_author_session_cleanup.py",
+            "timeout": 30
           }
         ]
       }
@@ -259,6 +269,16 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/investigation_tracker_reset.py",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/gh_pr_author_restore.py",
+            "timeout": 20
           }
         ]
       }

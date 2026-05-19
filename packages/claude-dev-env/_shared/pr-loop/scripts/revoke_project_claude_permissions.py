@@ -10,7 +10,7 @@ autoMode sections so repeated grant/revoke cycles leave no dead structure.
 import sys
 from pathlib import Path
 
-parent_directory = str(Path(__file__).resolve().parent)
+parent_directory = str(Path(__file__).absolute().parent)
 try:
     sys.path.remove(parent_directory)
 except ValueError:

@@ -1,6 +1,11 @@
 """Configuration constants for the pr_description_enforcer PreToolUse hook."""
 
+import os
 import re
+
+
+_PLUGIN_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PR_GUIDE_PATH: str = os.path.join(_PLUGIN_ROOT, "docs", "PR_DESCRIPTION_GUIDE.md")
 
 MINIMUM_SUBSTANTIVE_PROSE_CHARS: int = 40
 

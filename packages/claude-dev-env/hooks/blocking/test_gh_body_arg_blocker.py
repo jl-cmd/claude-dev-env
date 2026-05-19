@@ -401,10 +401,15 @@ def test_has_backtick_bash_continuation_stripped() -> None:
     assert not _has_backtick(command)
 
 
-def test_has_backtick_powershell_continuation_stripped() -> None:
-    """PowerShell backtick line continuations are stripped before checking."""
+def test_has_backtick_powershell_continuation_not_stripped_in_bash_context() -> None:
+    """PowerShell backtick continuations are real backticks under the Bash tool.
+
+    The hook runs on Bash tool invocations where PowerShell-style backtick
+    continuations are not continuation markers. Any backtick character in
+    the command is a literal backtick that must be detected.
+    """
     command = 'gh pr create `\n  --title "T" `\n  --body "bugbot run"\n'
-    assert not _has_backtick(command)
+    assert _has_backtick(command)
 
 
 def test_has_backtick_content_backtick_at_line_end() -> None:

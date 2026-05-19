@@ -91,6 +91,17 @@ The audit must either produce new Shape A findings citing new file:line referenc
 
 For `/bugteam`, the single audit agent provides per-category coverage by walking all A–K rubrics in one invocation.
 
+## Merge rules
+
+When the LEAD combines findings from multiple sources (primary auditor, Haiku secondary auditor, adversarial pass), it applies these rules:
+
+- **De-dup key**: `(file, line, category)`. Two findings sharing the same `(file, line, category)` tuple are the same finding and collapse into one entry.
+- **Severity conflict**: max wins (`P0 > P1 > P2`). When sources disagree on severity for the same de-dup key, the merged entry keeps the highest severity.
+- **Unique-to-secondary findings**: added to the merged set with the secondary's severity and source annotation.
+- **Unique-to-primary findings**: kept as-is.
+- **Zero secondary findings**: primary set trusted; proceed.
+- **Malformed or non-parseable secondary output**: lead trusts the primary set and logs the event in `loop-<L>-diagnostics.json` under `haiku_findings` as `[{"parse_error": "<message>"}]`.
+
 ## Post-fix self-audit
 
 Audit-and-fix skills (`/qbug`, `/bugteam`) MUST re-audit modified files between `py_compile` and `git add`. This catches fix-induced regressions in the same loop that introduced them rather than on loop N+1.

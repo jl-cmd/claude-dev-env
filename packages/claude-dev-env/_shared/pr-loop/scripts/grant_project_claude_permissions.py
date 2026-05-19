@@ -9,7 +9,7 @@ the changes applied. No-op when the entries already exist.
 import sys
 from pathlib import Path
 
-parent_directory = str(Path(__file__).resolve().parent)
+parent_directory = str(Path(__file__).absolute().parent)
 try:
     sys.path.remove(parent_directory)
 except ValueError:

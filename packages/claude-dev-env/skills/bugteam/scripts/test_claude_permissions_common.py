@@ -118,18 +118,26 @@ def test_default_settings_file_mode_used_when_settings_file_missing(
     assert returned_mode == DEFAULT_SETTINGS_FILE_MODE
 
 
-def test_is_valid_project_root_helper_is_not_orphaned_in_common_module() -> None:
-    """The orphan helper in the common module must be removed.
+def test_is_valid_project_root_exported_from_consumer_modules(
+    tmp_path: Path,
+) -> None:
+    """is_valid_project_root behaviour matches across both consumers.
 
-    Both grant and revoke keep their own local copies and consume them from
-    module scope; the common-module copy was dead code with zero call sites.
+    Grant and revoke each define their own local copy of the helper, so
+    both copies must agree on the .git / .claude marker contract.
     """
-    assert not hasattr(common_module, "is_valid_project_root"), (
-        "is_valid_project_root must not live in _claude_permissions_common — "
-        "neither grant nor revoke imports it from there"
-    )
-    assert callable(grant_module.is_valid_project_root)
-    assert callable(revoke_module.is_valid_project_root)
+    git_marker_project_root = tmp_path / "git_project"
+    (git_marker_project_root / ".git").mkdir(parents=True)
+    claude_marker_project_root = tmp_path / "claude_project"
+    (claude_marker_project_root / ".claude").mkdir(parents=True)
+    bare_directory = tmp_path / "no_marker"
+    bare_directory.mkdir()
+    assert grant_module.is_valid_project_root(git_marker_project_root) is True
+    assert grant_module.is_valid_project_root(claude_marker_project_root) is True
+    assert grant_module.is_valid_project_root(bare_directory) is False
+    assert revoke_module.is_valid_project_root(git_marker_project_root) is True
+    assert revoke_module.is_valid_project_root(claude_marker_project_root) is True
+    assert revoke_module.is_valid_project_root(bare_directory) is False
 
 
 def _reload_with_stale_config_cache(module_name: str) -> ModuleType:

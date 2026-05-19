@@ -39,11 +39,9 @@ from config.pr_description_enforcer_constants import (
     INLINE_CODE_PATTERN,
     LINK_TEXT_PATTERN,
     MINIMUM_SUBSTANTIVE_PROSE_CHARS,
+    PR_GUIDE_PATH,
     WHITESPACE_RUN_PATTERN,
 )
-
-PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PR_GUIDE_PATH = os.path.join(PLUGIN_ROOT, "docs", "PR_DESCRIPTION_GUIDE.md")
 
 VAGUE_LANGUAGE_PATTERN = re.compile(
     r'\b(fix(?:ed)? (?:bug|issue|it)|update(?:d)? code|minor changes|various (?:fixes|updates|improvements))\b',
