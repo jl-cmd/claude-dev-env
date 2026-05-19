@@ -33,6 +33,11 @@ ALL_BUGBOT_CHECK_RUN_COMPLETE_CONCLUSIONS = ("success", "neutral")
 BUGBOT_RUN_TRIGGER_PHRASE = "bugbot run\n"
 BUGBOT_RUN_TRIGGER_WAIT_SECONDS = 8
 
+BUGTEAM_NEW_HEADER_PREFIX = "**Bugteam audit completed**"
+BUGTEAM_LEGACY_HEADER_PREFIX = "## /bugteam loop "
+BUGTEAM_NEW_CLEAN_LABEL = "Clean — no findings"
+BUGTEAM_LEGACY_CLEAN_TOKEN = "→ clean"
+
 GH_INLINE_COMMENTS_PATH_TEMPLATE = "repos/{owner}/{repo}/pulls/{number}/comments"
 GH_REVIEW_COMMENTS_PATH_TEMPLATE = (
     "repos/{owner}/{repo}/pulls/{number}/reviews/{review_id}/comments"
