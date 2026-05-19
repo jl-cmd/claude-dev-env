@@ -2,9 +2,10 @@
 
 Usage:
   python scripts/check_convergence.py --owner <O> --repo <R> --pr-number <N>
+                                      [--bugbot-down]
 
 Exit codes:
-  0 — all seven pre-conditions met
+  0 — all pre-conditions met
   1 — one or more conditions not met (FAIL lines printed to stdout)
   2 — gh CLI error
 """
@@ -23,13 +24,15 @@ if str(_pr_converge_dir) not in sys.path:
     sys.path.insert(0, str(_pr_converge_dir))
 
 from config.constants import (
-    ALL_CLAUDE_DIRTY_REVIEW_STATES,
     ALL_COPILOT_DIRTY_REVIEW_STATES,
     ALL_BUGBOT_CHECK_RUN_COMPLETE_CONCLUSIONS,
     BUGBOT_CHECK_RUN_NAME_SUBSTRING,
     BUGBOT_DIRTY_BODY_REGEX,
+    BUGTEAM_LEGACY_CLEAN_TOKEN,
+    BUGTEAM_LEGACY_HEADER_PREFIX,
+    BUGTEAM_NEW_CLEAN_LABEL,
+    BUGTEAM_NEW_HEADER_PREFIX,
     CHECK_RUNS_PER_PAGE,
-    ALL_CLAUDE_CLEAN_REVIEW_STATES,
     CLAUDE_LOGIN_FILTER_SUBSTRING,
     ALL_COPILOT_CLEAN_REVIEW_STATES,
     COPILOT_LOGIN_FILTER_SUBSTRING,
@@ -44,6 +47,93 @@ from config.constants import (
     REVIEWS_PER_PAGE,
     UNRESOLVED_THREAD_DETAIL_MAX,
 )
+
+
+def _is_bugteam_review(review_body: str) -> bool:
+    """Return True when a review body opens with a bugteam audit header.
+
+    Args:
+        review_body: Full body text of a PR review.
+
+    Returns:
+        True when the body opens with either the new audit-template header
+        prefix or the legacy bugteam loop header prefix; False otherwise.
+        Used to identify bugteam audit reviews by body content rather than
+        by the posting user's GitHub login (the underlying ``gh`` token is
+        typically the PR-owner or reviewer identity, not ``claude[bot]``).
+    """
+    return (
+        review_body.startswith(BUGTEAM_NEW_HEADER_PREFIX)
+        or review_body.startswith(BUGTEAM_LEGACY_HEADER_PREFIX)
+    )
+
+
+def _is_clean_bugteam_review(review_body: str) -> bool:
+    """Return True when a bugteam audit review body declares a clean pass.
+
+    Args:
+        review_body: Body text of a review that has already satisfied
+            :func:`_is_bugteam_review`.
+
+    Returns:
+        True when the new-shape body's first line carries the clean state
+        label, or the legacy-shape body ends with the legacy clean token.
+        False for any other shape, including dirty audit reviews and
+        bodies that do not match the bugteam header signature.
+    """
+    if review_body.startswith(BUGTEAM_NEW_HEADER_PREFIX):
+        first_line = review_body.splitlines()[0]
+        return BUGTEAM_NEW_CLEAN_LABEL in first_line
+    if review_body.startswith(BUGTEAM_LEGACY_HEADER_PREFIX):
+        return review_body.rstrip().endswith(BUGTEAM_LEGACY_CLEAN_TOKEN)
+    return False
+
+
+def _check_bugteam_clean(
+    *, owner: str, repo: str, number: int, head_sha: str
+) -> tuple[bool, str]:
+    endpoint = GH_REVIEWS_PATH_TEMPLATE.format(owner=owner, repo=repo, number=number)
+    returncode, stdout = _gh_api_paginated(f"{endpoint}?per_page={REVIEWS_PER_PAGE}")
+    if returncode != 0:
+        return False, f"gh api error: {stdout}"
+    try:
+        raw_output = json.loads(stdout)
+    except json.JSONDecodeError:
+        return False, "gh api response not valid JSON"
+    if not isinstance(raw_output, list):
+        return False, "unexpected gh api response shape (expected list)"
+    all_pages = [p for p in raw_output if isinstance(p, list)]
+    all_flat: list[dict[str, object]] = [
+        each_entry
+        for page in all_pages
+        for each_entry in page
+        if isinstance(each_entry, dict)
+    ]
+    all_flat.sort(
+        key=lambda each_review: str(each_review.get("submitted_at", "")),
+        reverse=True,
+    )
+    for each_review in all_flat:
+        body = each_review.get("body", "")
+        if not isinstance(body, str):
+            continue
+        if not _is_bugteam_review(body):
+            continue
+        commit_id = each_review.get("commit_id", "")
+        if not isinstance(commit_id, str) or not commit_id.startswith(head_sha):
+            continue
+        review_id = each_review.get("id", "?")
+        short_commit = commit_id[:7]
+        if _is_clean_bugteam_review(body):
+            return (
+                True,
+                f"review #{review_id}, clean bugteam audit, commit: {short_commit}",
+            )
+        return (
+            False,
+            f"review #{review_id}, dirty bugteam audit, commit: {short_commit}",
+        )
+    return False, f"no bugteam review found on {head_sha[:7]}"
 
 
 def _gh_api(endpoint_path: str) -> tuple[int, str]:
@@ -387,38 +477,60 @@ def _check_no_pending_reviews(
     return True, "no pending reviewers"
 
 
-def check_all(*, owner: str, repo: str, number: int) -> int:
+def check_all(*, owner: str, repo: str, number: int, bugbot_down: bool) -> int:
+    """Run every convergence gate and print one PASS/FAIL line per condition.
+
+    Args:
+        owner: GitHub repository owner login.
+        repo: GitHub repository name.
+        number: Pull request number to inspect.
+        bugbot_down: When True, bypass both the Cursor Bugbot check-run
+            presence gate and the bugbot review-body content gate. The
+            check-run gate appears in the condition list with a
+            ``bypassed (bugbot_down)`` note; the review-body gate is
+            omitted entirely. Callers pass True when the lead has
+            declared Cursor Bugbot unreachable on the current HEAD so the
+            broader convergence gate can still close on the remaining
+            signals.
+
+    Returns:
+        ``0`` when every gate reports PASS, ``1`` when at least one gate
+        reports FAIL. The function never raises for gate-level failures;
+        gh-api transport failures surface as gate FAILs in the printed
+        output and contribute to the ``1`` exit code.
+    """
     head_sha = _get_pr_head_sha(owner=owner, repo=repo, number=number)
     print(f"HEAD: {head_sha[:7]}\n")
 
     conditions: list[tuple[str, tuple[bool, str]]] = []
 
-    conditions.append(
-        (
-            "bugbot_clean_at == current_head",
-            _check_bugbot(owner=owner, repo=repo, sha=head_sha),
-        )
-    )
-    if conditions[-1][1][0]:
+    if bugbot_down:
         conditions.append(
             (
-                "bugbot review body clean",
-                _check_bugbot_not_dirty(owner=owner, repo=repo, number=number, head_sha=head_sha),
+                "bugbot_clean_at == current_head",
+                (True, "bypassed (bugbot_down)"),
             )
         )
+    else:
+        conditions.append(
+            (
+                "bugbot_clean_at == current_head",
+                _check_bugbot(owner=owner, repo=repo, sha=head_sha),
+            )
+        )
+        if conditions[-1][1][0]:
+            conditions.append(
+                (
+                    "bugbot review body clean",
+                    _check_bugbot_not_dirty(owner=owner, repo=repo, number=number, head_sha=head_sha),
+                )
+            )
 
     conditions.append(
         (
             "bugteam_clean_at == current_head",
-            _check_bot_review(
-                owner=owner,
-                repo=repo,
-                number=number,
-                head_sha=head_sha,
-                login_substring=CLAUDE_LOGIN_FILTER_SUBSTRING,
-                clean_states=ALL_CLAUDE_CLEAN_REVIEW_STATES,
-                dirty_states=ALL_CLAUDE_DIRTY_REVIEW_STATES,
-                label="claude[bot]",
+            _check_bugteam_clean(
+                owner=owner, repo=repo, number=number, head_sha=head_sha
             ),
         )
     )
@@ -458,13 +570,11 @@ def check_all(*, owner: str, repo: str, number: int) -> int:
     )
 
     is_all_passed = True
-    index = 1
-    for label, (passed, detail) in conditions:
-        status = "PASS" if passed else "FAIL"
-        print(f"{index}. {label}: {status} — {detail}")
-        if not passed:
+    for each_index, (each_label, (each_passed, each_detail)) in enumerate(conditions, start=1):
+        status = "PASS" if each_passed else "FAIL"
+        print(f"{each_index}. {each_label}: {status} — {each_detail}")
+        if not each_passed:
             is_all_passed = False
-        index += 1
 
     print()
     if is_all_passed:
@@ -475,21 +585,50 @@ def check_all(*, owner: str, repo: str, number: int) -> int:
 
 
 def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
+    """Parse command-line arguments for the convergence checker.
+
+    Args:
+        all_argv: Argument list excluding the program name, typically
+            ``sys.argv[1:]``.
+
+    Returns:
+        Namespace exposing ``owner``, ``repo``, ``pr_number``, and
+        ``bugbot_down`` attributes. ``bugbot_down`` defaults to False so
+        the unmodified hook contract (``--owner X --repo Y --pr-number N``)
+        still picks up the full gate set.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--owner", required=True, help="GitHub repository owner")
     parser.add_argument("--repo", required=True, help="GitHub repository name")
     parser.add_argument(
         "--pr-number", required=True, type=int, help="Pull request number"
     )
+    parser.add_argument(
+        "--bugbot-down",
+        action="store_true",
+        help=(
+            "Bypass the bugbot check-run gate (gate 1) when the lead has "
+            "declared Cursor Bugbot unreachable on the current HEAD."
+        ),
+    )
     return parser.parse_args(all_argv)
 
 
 def main(all_arguments: list[str]) -> int:
+    """Run the script end-to-end against parsed CLI arguments.
+
+    Args:
+        all_arguments: Argument list excluding the program name.
+
+    Returns:
+        ``0`` on full convergence, ``1`` on one or more gate failures.
+    """
     arguments = parse_arguments(all_arguments)
     return check_all(
         owner=arguments.owner,
         repo=arguments.repo,
         number=getattr(arguments, "pr_number"),
+        bugbot_down=arguments.bugbot_down,
     )
 
 
