@@ -138,10 +138,12 @@ def test_save_settings_temp_suffix_includes_pid_and_random_token(
 
 def test_text_file_encoding_sourced_from_config() -> None:
     config_module_path = (
-        Path(__file__).parent.parent / "config" / "claude_permissions_constants.py"
+        Path(__file__).parent.parent
+        / "pr_loop_shared_constants"
+        / "claude_permissions_constants.py"
     )
     specification = importlib.util.spec_from_file_location(
-        "config.claude_permissions_constants", config_module_path
+        "pr_loop_shared_constants.claude_permissions_constants", config_module_path
     )
     assert specification is not None
     assert specification.loader is not None

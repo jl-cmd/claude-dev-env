@@ -3,11 +3,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.modules.pop("config", None)
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+parent_directory = str(Path(__file__).resolve().parent)
+if parent_directory not in sys.path:
+    sys.path.insert(0, parent_directory)
 
-from config.fix_hookspath_constants import (
+from pr_loop_shared_constants.fix_hookspath_constants import (  # noqa: E402
     ALL_CANONICAL_HOOKS_DIRECTORY_COMPONENTS,
     ALL_GIT_GLOBAL_GET_CORE_HOOKS_PATH_COMMAND,
     ALL_HOME_ENV_VAR_NAMES,
@@ -15,12 +15,22 @@ from config.fix_hookspath_constants import (
     PREFLIGHT_NO_PYTEST_FLAG,
     PREFLIGHT_REPO_ROOT_FLAG,
 )
-from config.preflight_constants import GIT_DIRECTORY_NAME
+from pr_loop_shared_constants.preflight_constants import GIT_DIRECTORY_NAME  # noqa: E402
 
 
 def resolve_canonical_hooks_directory(
     all_environment_overrides: dict[str, str] | None,
 ) -> Path:
+    """Return the canonical claude-dev-env git hooks directory path.
+
+    Args:
+        all_environment_overrides: Optional environment variable mapping used
+            to discover the user's home directory (HOME / USERPROFILE).
+
+    Returns:
+        The absolute path to the canonical hooks directory beneath the
+        resolved home location.
+    """
     if all_environment_overrides is not None:
         for each_env_var_name in ALL_HOME_ENV_VAR_NAMES:
             home_value = all_environment_overrides.get(each_env_var_name)
@@ -33,6 +43,17 @@ def list_local_core_hooks_path_values(
     repository_root: Path,
     all_environment_overrides: dict[str, str] | None,
 ) -> list[str]:
+    """Return all repo-local ``core.hooksPath`` values configured on the repo.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        all_environment_overrides: Optional environment variable mapping
+            forwarded to ``subprocess.run``.
+
+    Returns:
+        Non-empty stripped values from ``git config --local --get-all``, or
+        an empty list when no values are configured.
+    """
     git_command = [
         "git",
         "-C",
@@ -71,6 +92,16 @@ def list_local_core_hooks_path_values(
 def read_global_core_hooks_path(
     all_environment_overrides: dict[str, str] | None,
 ) -> str:
+    """Return the global-scope ``core.hooksPath`` value from git config.
+
+    Args:
+        all_environment_overrides: Optional environment variable mapping
+            forwarded to ``subprocess.run``.
+
+    Returns:
+        The stripped global value, or an empty string when unset or when git
+        returns non-zero.
+    """
     git_command = list(ALL_GIT_GLOBAL_GET_CORE_HOOKS_PATH_COMMAND)
     completed_process = subprocess.run(
         git_command,
@@ -97,6 +128,16 @@ def unset_local_core_hooks_path(
     repository_root: Path,
     all_environment_overrides: dict[str, str] | None,
 ) -> int:
+    """Remove every repo-local ``core.hooksPath`` entry from the repo config.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        all_environment_overrides: Optional environment variable mapping
+            forwarded to ``subprocess.run``.
+
+    Returns:
+        The ``git config --unset-all`` exit code (zero on success).
+    """
     git_command = [
         "git",
         "-C",
@@ -120,6 +161,16 @@ def set_global_core_hooks_path(
     target_value: str,
     all_environment_overrides: dict[str, str] | None,
 ) -> int:
+    """Write the global-scope ``core.hooksPath`` value into git config.
+
+    Args:
+        target_value: Path value to install at global scope.
+        all_environment_overrides: Optional environment variable mapping
+            forwarded to ``subprocess.run``.
+
+    Returns:
+        The ``git config --global`` exit code (zero on success).
+    """
     git_command = ["git", "config", "--global", "core.hooksPath", target_value]
     completed_process = subprocess.run(
         git_command,
@@ -142,6 +193,15 @@ def is_canonical_hooks_path(raw_value: str) -> bool:
 
 
 def find_repository_root(start: Path) -> Path:
+    """Walk up from *start* to the nearest directory containing a git marker.
+
+    Args:
+        start: The directory to start the upward search from.
+
+    Returns:
+        The resolved ancestor that contains a ``.git`` directory or file, or
+        the resolved *start* path when no git marker is found.
+    """
     resolved_start = start.resolve()
     candidate_paths = [resolved_start, *resolved_start.parents]
     for each_candidate in candidate_paths:
@@ -155,6 +215,17 @@ def rerun_preflight(
     repository_root: Path,
     all_environment_overrides: dict[str, str] | None,
 ) -> int:
+    """Re-invoke ``preflight.py`` after the hooks path has been repaired.
+
+    Args:
+        repository_root: Repository root passed through to preflight as
+            ``--repo-root``.
+        all_environment_overrides: Optional environment variable mapping
+            forwarded to ``subprocess.run``.
+
+    Returns:
+        The preflight subprocess exit code.
+    """
     preflight_script_path = Path(__file__).resolve().parent / "preflight.py"
     rerun_command = [
         sys.executable,
@@ -172,6 +243,15 @@ def rerun_preflight(
 
 
 def parse_arguments(all_arguments: list[str] | None) -> argparse.Namespace:
+    """Parse the command-line arguments for the fix_hookspath script.
+
+    Args:
+        all_arguments: Command-line argument list, or None to read from
+            ``sys.argv``.
+
+    Returns:
+        The parsed argparse namespace with a ``repo_root`` attribute.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Auto-fix core.hooksPath when bugteam preflight detects a stale override. "
@@ -192,6 +272,17 @@ def main(
     all_arguments: list[str],
     all_environment_overrides: dict[str, str] | None,
 ) -> int:
+    """Run the fix_hookspath repair routine and re-invoke preflight.
+
+    Args:
+        all_arguments: Command-line argument list forwarded to argparse.
+        all_environment_overrides: Optional environment variable mapping
+            forwarded to every git invocation and to the preflight rerun.
+
+    Returns:
+        Zero on success. Non-zero on the first failing git command or on a
+        non-zero preflight rerun exit code.
+    """
     arguments = parse_arguments(all_arguments)
     start_directory = Path.cwd()
     repository_root = (

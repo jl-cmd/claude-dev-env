@@ -22,7 +22,7 @@ _hook_dir = str(Path(__file__).absolute().parent.parent)
 if _hook_dir not in sys.path:
     sys.path.insert(0, _hook_dir)
 
-from config.html_companion_constants import (  # noqa: E402
+from hooks_constants.html_companion_constants import (  # noqa: E402
     BLOCKED_URL_SCHEMES,
     CSS_ACCENT_COLOR,
     CSS_BG_COLOR,

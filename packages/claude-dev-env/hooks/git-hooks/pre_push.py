@@ -24,7 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from config import (
+from git_hooks_constants import (
     ALL_ZEROS_OBJECT_NAME_CHARACTER,
     BASE_REFERENCE_ARGUMENT,
     DEFAULT_REMOTE_BASE_REFERENCE,

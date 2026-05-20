@@ -13,7 +13,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from config.convergence_branch_constants import (  # noqa: E402
+from hooks_constants.convergence_branch_constants import (  # noqa: E402
     ALL_CONVERGENCE_BRANCH_PREFIXES,
     CONVERGENCE_BRANCH_SUFFIX_PATTERN,
     CONVERGENCE_FORCE_PUSH_DETECTION_PATTERN,

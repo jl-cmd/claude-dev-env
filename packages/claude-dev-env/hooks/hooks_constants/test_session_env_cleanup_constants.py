@@ -11,7 +11,7 @@ for each_sys_path_entry in (str(_CONFIG_DIRECTORY), str(_HOOKS_ROOT)):
     if each_sys_path_entry not in sys.path:
         sys.path.insert(0, each_sys_path_entry)
 
-from config.session_env_cleanup_constants import SESSION_ID_PATTERN, SESSION_ID_PAYLOAD_KEY
+from hooks_constants.session_env_cleanup_constants import SESSION_ID_PATTERN, SESSION_ID_PAYLOAD_KEY
 
 
 class TestSessionIdPatternAccepts:

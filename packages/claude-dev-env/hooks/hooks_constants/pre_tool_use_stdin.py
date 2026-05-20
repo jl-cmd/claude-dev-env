@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 
-from config.setup_project_paths_constants import (
+from hooks_constants.setup_project_paths_constants import (
     DECODE_ERRORS_POLICY,
     UTF8_BYTE_ORDER_MARK,
     UTF8_ENCODING,

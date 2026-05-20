@@ -108,7 +108,7 @@ cd into `<worktree_path>` before any git or file operation.
      teammate does NOT author the inline-comment body directly:
      `post_audit_thread.py` renders every body from
      `INLINE_COMMENT_BODY_TEMPLATE` (defined in
-     [`_shared/pr-loop/scripts/config/post_audit_thread_constants.py`](../../_shared/pr-loop/scripts/config/post_audit_thread_constants.py))
+     [`_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py`](../../_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py))
      — the template prepends `**[<severity>] <Skill> audit finding**`
      and renders the suggested-fix block, so a teammate who hand-formats
      a title or footer wastes the work.

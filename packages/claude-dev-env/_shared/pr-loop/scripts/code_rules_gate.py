@@ -7,11 +7,11 @@ import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-sys.modules.pop("config", None)
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+parent_directory = str(Path(__file__).resolve().parent)
+if parent_directory not in sys.path:
+    sys.path.insert(0, parent_directory)
 
-from config.code_rules_gate_constants import (
+from pr_loop_shared_constants.code_rules_gate_constants import (  # noqa: E402
     ALL_CODE_FILE_EXTENSIONS,
     ALL_GIT_DIFF_CACHED_NAME_ONLY_NULL_TERMINATED_COMMAND,
     ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX,
@@ -41,6 +41,18 @@ def violation_line_pattern() -> re.Pattern[str]:
 
 
 def resolve_claude_dev_env_root(starting_path: Path) -> Path:
+    """Walk up from *starting_path* to the claude-dev-env package root.
+
+    Args:
+        starting_path: A path inside the worktree; the function climbs to
+            find the ancestor containing ``hooks/blocking/code_rules_enforcer.py``.
+
+    Returns:
+        The resolved package root that contains the enforcer file.
+
+    Raises:
+        SystemExit: When no ancestor contains the enforcer.
+    """
     starting = Path(starting_path).resolve()
     enforcer_relative = Path("hooks") / "blocking" / "code_rules_enforcer.py"
     for each_candidate in [starting, *starting.parents]:
@@ -66,6 +78,15 @@ def _resolve_package_root_absolute(starting_path: Path) -> Path:
 
 
 def load_validate_content() -> ValidateContentCallable:
+    """Load ``code_rules_enforcer.validate_content`` for in-process use.
+
+    Returns:
+        The ``validate_content`` callable from the enforcer module.
+
+    Raises:
+        SystemExit: When the package root cannot be located or the
+            enforcer module cannot be loaded from disk.
+    """
     package_root = resolve_claude_dev_env_root(Path(__file__).resolve())
     enforcer_path = package_root / "hooks" / "blocking" / "code_rules_enforcer.py"
     if not enforcer_path.is_file():
@@ -85,11 +106,11 @@ def load_validate_content() -> ValidateContentCallable:
     while hooks_root_path in sys.path:
         sys.path.remove(hooks_root_path)
     sys.path.insert(0, hooks_root_path)
-    saved_config_modules = {
+    saved_hooks_constants_modules = {
         each_module_name: sys.modules.pop(each_module_name)
         for each_module_name in [
             each_key for each_key in list(sys.modules)
-            if each_key == "config" or each_key.startswith("config.")
+            if each_key == "hooks_constants" or each_key.startswith("hooks_constants.")
         ]
     }
     try:
@@ -99,14 +120,26 @@ def load_validate_content() -> ValidateContentCallable:
             sys.path.remove(hooks_root_path)
         for each_module_name in [
             each_key for each_key in list(sys.modules)
-            if each_key == "config" or each_key.startswith("config.")
+            if each_key == "hooks_constants" or each_key.startswith("hooks_constants.")
         ]:
             sys.modules.pop(each_module_name, None)
-        sys.modules.update(saved_config_modules)
+        sys.modules.update(saved_hooks_constants_modules)
     return module.validate_content
 
 
 def resolve_merge_base(repository_root: Path, base_reference: str) -> str:
+    """Return the merge-base SHA between HEAD and *base_reference*.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        base_reference: The git reference to merge-base against.
+
+    Returns:
+        The stripped merge-base SHA.
+
+    Raises:
+        SystemExit: When ``git merge-base`` returns non-zero.
+    """
     merge_result = subprocess.run(
         ["git", "merge-base", "HEAD", base_reference],
         cwd=str(repository_root),
@@ -131,6 +164,19 @@ def filter_paths_under_prefixes(
     repository_root: Path,
     all_prefixes: list[str],
 ) -> list[Path]:
+    """Filter *all_file_paths* to entries falling under the supplied prefixes.
+
+    Args:
+        all_file_paths: Resolved file paths to filter.
+        repository_root: Repository root used to compute relative paths.
+        all_prefixes: Repository-relative POSIX prefixes; each path must
+            equal one prefix or be nested beneath it to pass through.
+
+    Returns:
+        The subset of *all_file_paths* whose relative POSIX path matches one
+        of the prefixes. When *all_prefixes* is empty, returns the input
+        list unchanged.
+    """
     if not all_prefixes:
         return all_file_paths
     normalized_prefixes = [
@@ -157,6 +203,19 @@ def filter_paths_under_prefixes(
 
 
 def paths_from_git_staged(repository_root: Path) -> list[Path]:
+    """Return absolute paths for every file in the staged index.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+
+    Returns:
+        List of absolute paths for staged files. Names whose bytes cannot
+        be decoded as Unicode are logged and skipped.
+
+    Raises:
+        SystemExit: When ``git diff --cached --name-only -z`` returns
+            non-zero.
+    """
     name_result = subprocess.run(
         list(ALL_GIT_DIFF_CACHED_NAME_ONLY_NULL_TERMINATED_COMMAND),
         cwd=str(repository_root),
@@ -191,6 +250,19 @@ def staged_file_line_count(
     repository_root: Path,
     relative_path_posix: str,
 ) -> int:
+    """Return the staged-blob line count for *relative_path_posix*.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        relative_path_posix: Repository-relative POSIX path of the staged
+            file.
+
+    Returns:
+        The staged content line count, or zero when the blob is empty.
+
+    Raises:
+        SystemExit: When ``git show :<path>`` returns non-zero.
+    """
     show_result = subprocess.run(
         ["git", "show", f":{relative_path_posix}"],
         cwd=str(repository_root),
@@ -217,6 +289,20 @@ def is_staged_file_newly_added(
     repository_root: Path,
     relative_path_posix: str,
 ) -> bool:
+    """Check whether *relative_path_posix* is newly added in the staged diff.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        relative_path_posix: Repository-relative POSIX path to inspect.
+
+    Returns:
+        True when the first non-empty name-status line begins with the git
+        added-prefix; False otherwise.
+
+    Raises:
+        SystemExit: When ``git diff --cached --name-status`` returns
+            non-zero.
+    """
     status_result = subprocess.run(
         ["git", "diff", "--cached", "--name-status", "--", relative_path_posix],
         cwd=str(repository_root),
@@ -244,6 +330,19 @@ def added_lines_for_staged_file(
     repository_root: Path,
     relative_path_posix: str,
 ) -> set[int]:
+    """Return added line numbers within the staged diff for one file.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        relative_path_posix: Repository-relative POSIX path to inspect.
+
+    Returns:
+        Set of line numbers (1-indexed) added in the staged diff. When the
+        file is newly added, returns every line in the staged blob.
+
+    Raises:
+        SystemExit: When the staged diff command returns non-zero.
+    """
     diff_result = subprocess.run(
         ["git", "diff", "--cached", "--unified=0", "--", relative_path_posix],
         cwd=str(repository_root),
@@ -273,6 +372,16 @@ def added_lines_by_file_staged(
     repository_root: Path,
     all_file_paths: list[Path],
 ) -> dict[Path, set[int]]:
+    """Build a per-file map of staged-added line numbers.
+
+    Args:
+        repository_root: Repository root for diff invocations.
+        all_file_paths: File paths whose added lines should be collected.
+
+    Returns:
+        Mapping from resolved file path to the set of staged-added line
+        numbers.
+    """
     resolved_root = repository_root.resolve()
     added_by_path: dict[Path, set[int]] = {}
     for each_path in all_file_paths:
@@ -291,6 +400,20 @@ def added_lines_by_file_staged(
 
 
 def paths_from_git_diff(repository_root: Path, base_reference: str) -> list[Path]:
+    """Return absolute paths for every file changed since *base_reference*.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        base_reference: The git reference to merge-base against.
+
+    Returns:
+        List of absolute paths changed since the merge-base of HEAD and
+        *base_reference*.
+
+    Raises:
+        SystemExit: When the ``git diff --name-only`` command returns
+            non-zero.
+    """
     merge_base = resolve_merge_base(repository_root, base_reference)
     diff_command = list(ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX) + [
         f"{merge_base}..HEAD"
@@ -336,6 +459,13 @@ def is_test_path(file_path: str) -> bool:
     Mirrors the test-file detection rule documented in CODE_RULES.md:
     filename matches test_*.py OR *_test.py OR *.test.* OR *.spec.* OR
     conftest.py, OR path contains the segment /tests/.
+
+    Args:
+        file_path: Path string to classify; backslashes are normalized to
+            forward slashes before pattern matching.
+
+    Returns:
+        True when the path matches any test-file pattern; False otherwise.
     """
     normalized_posix = file_path.replace("\\", "/")
     filename_only = normalized_posix.rsplit("/", maxsplit=1)[-1]
@@ -395,6 +525,15 @@ def check_wrapper_plumb_through(content: str, file_path: str) -> list[str]:
       separate call sites; only the enclosing Call is inspected. This avoids
       false positives where a callee nested as an argument is confused with a
       top-level delegate invocation (for example `delegate(helper(x))`).
+
+    Args:
+        content: File content as a single string for AST parsing.
+        file_path: Repository-relative POSIX path of the file (used to
+            skip non-Python code extensions early).
+
+    Returns:
+        List of violation strings, one per dropped optional kwarg. Returns
+        an empty list when the file is not Python or has a syntax error.
     """
     non_python_code_extensions = ALL_CODE_FILE_EXTENSIONS - {PYTHON_FILE_EXTENSION}
     lowercase_file_path = file_path.lower()
@@ -464,6 +603,15 @@ def check_wrapper_plumb_through(content: str, file_path: str) -> list[str]:
 
 
 def parse_added_line_numbers(unified_diff_text: str) -> set[int]:
+    """Extract added line numbers from unified-diff text.
+
+    Args:
+        unified_diff_text: Output from ``git diff --unified=0``.
+
+    Returns:
+        Set of newly-added line numbers (1-indexed) extracted from the
+        hunk headers.
+    """
     header_regex = hunk_header_pattern()
     added_line_numbers: set[int] = set()
     for each_line in unified_diff_text.splitlines():
@@ -485,6 +633,17 @@ def is_file_new_at_base(
     merge_base: str,
     relative_path_posix: str,
 ) -> bool:
+    """Check whether *relative_path_posix* did not exist at *merge_base*.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        merge_base: The merge-base SHA against which to check existence.
+        relative_path_posix: Repository-relative POSIX path to inspect.
+
+    Returns:
+        True when ``git cat-file -e`` fails to find the blob at the merge
+        base (i.e. the file was added on the HEAD side); False otherwise.
+    """
     cat_result = subprocess.run(
         ["git", "cat-file", "-e", f"{merge_base}:{relative_path_posix}"],
         cwd=str(repository_root),
@@ -502,6 +661,19 @@ def added_lines_for_file(
     merge_base: str,
     relative_path_posix: str,
 ) -> set[int]:
+    """Return added line numbers for *relative_path_posix* since *merge_base*.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        merge_base: The merge-base SHA against which to diff.
+        relative_path_posix: Repository-relative POSIX path to inspect.
+
+    Returns:
+        Set of line numbers (1-indexed) added on the HEAD side of the diff.
+
+    Raises:
+        SystemExit: When the diff command returns non-zero.
+    """
     diff_result = subprocess.run(
         [
             "git",
@@ -531,6 +703,15 @@ def added_lines_for_file(
 
 
 def whole_file_line_set(file_path: Path) -> set[int]:
+    """Return the set of line numbers covering an entire file.
+
+    Args:
+        file_path: Path to the file whose line span should be summarized.
+
+    Returns:
+        Set of line numbers (1-indexed) covering every line in *file_path*,
+        or an empty set when the file is unreadable or empty.
+    """
     try:
         total_lines = len(file_path.read_text(encoding="utf-8").splitlines())
     except (OSError, UnicodeDecodeError) as read_error:
@@ -558,6 +739,17 @@ def renamed_file_source_map_since(
     splitting; rename records emit three null-terminated tokens in
     sequence (status, source, destination), other status records emit
     two (status, path).
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        merge_base: The merge-base SHA against which to diff.
+
+    Returns:
+        Mapping from rename-destination POSIX path to rename-source POSIX
+        path. Empty when no rename records are present.
+
+    Raises:
+        SystemExit: When ``git diff --name-status`` returns non-zero.
     """
     name_status_result = subprocess.run(
         ["git", "diff", "--name-status", "-M", "-z", f"{merge_base}..HEAD"],
@@ -613,6 +805,16 @@ def added_lines_for_renamed_file(
     in the source file before the rename. Falls back to whole-file coverage
     when the source blob is absent at the merge base (i.e. the source was
     itself a new or renamed file that landed earlier in the branch).
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        merge_base: The merge-base SHA against which to compare blobs.
+        source_posix: Rename-source POSIX path at the merge base.
+        destination_posix: Rename-destination POSIX path at HEAD.
+
+    Returns:
+        Set of line numbers (1-indexed) added on the HEAD side of the
+        comparison; empty on diff failure.
     """
     diff_result = subprocess.run(
         [
@@ -647,6 +849,18 @@ def added_lines_by_file(
     base_reference: str,
     all_file_paths: list[Path],
 ) -> dict[Path, set[int]]:
+    """Build a per-file map of added line numbers across the branch.
+
+    Args:
+        repository_root: Repository root for diff invocations.
+        base_reference: The git reference to merge-base against.
+        all_file_paths: File paths whose added lines should be collected.
+
+    Returns:
+        Mapping from resolved file path to the set of line numbers added
+        on the HEAD side, with renames resolved to compare against the
+        original source path.
+    """
     merge_base = resolve_merge_base(repository_root, base_reference)
     resolved_root = repository_root.resolve()
     rename_source_map = renamed_file_source_map_since(resolved_root, merge_base)
@@ -680,6 +894,15 @@ def added_lines_by_file(
 
 
 def extract_violation_line_number(violation_text: str) -> int | None:
+    """Return the line number captured by the gate's violation-line regex.
+
+    Args:
+        violation_text: A single violation string of the form ``Line N: ...``.
+
+    Returns:
+        The integer line number captured in the prefix, or None when the
+        text does not match the violation-line pattern.
+    """
     match_result = violation_line_pattern().match(violation_text)
     if match_result is None:
         return None
@@ -690,6 +913,19 @@ def split_violations_by_scope(
     all_issues: list[str],
     all_added_line_numbers: set[int] | None,
 ) -> tuple[list[str], list[str]]:
+    """Partition issues into blocking vs advisory based on touched lines.
+
+    Args:
+        all_issues: Violation strings emitted by the enforcer.
+        all_added_line_numbers: Lines added in the current diff, or None
+            to treat every violation as blocking.
+
+    Returns:
+        Tuple ``(blocking, advisory)``. When *all_added_line_numbers* is
+        None, every issue is blocking; otherwise issues whose ``Line N:``
+        prefix matches an added line are blocking and the rest are
+        advisory.
+    """
     if all_added_line_numbers is None:
         return list(all_issues), []
     blocking: list[str] = []
@@ -711,6 +947,14 @@ def print_violation_section(
     violations_by_file: dict[Path, list[str]],
     repository_root: Path,
 ) -> None:
+    """Print a labeled block of violations grouped by relative path.
+
+    Args:
+        header_message: Section header to write to stderr.
+        violations_by_file: Mapping from absolute file path to the list of
+            violation strings to render under that path.
+        repository_root: Repository root used to compute relative paths.
+    """
     print(header_message, file=sys.stderr)
     resolved_root = repository_root.resolve()
     for each_path in sorted(violations_by_file.keys()):
@@ -723,6 +967,16 @@ def print_violation_section(
 def read_prior_committed_content(
     repository_root: Path, relative_path_posix: str
 ) -> str:
+    """Return the HEAD-committed content for *relative_path_posix*.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        relative_path_posix: Repository-relative POSIX path to read.
+
+    Returns:
+        The committed file content at HEAD, or an empty string when the
+        path is not tracked or ``git show`` returns non-zero.
+    """
     show_result = subprocess.run(
         ["git", "show", f"HEAD:{relative_path_posix}"],
         cwd=str(repository_root),
@@ -743,6 +997,19 @@ def run_gate(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None = None,
 ) -> int:
+    """Run the gate over *all_file_paths* and emit a partitioned report.
+
+    Args:
+        validate_content: The enforcer ``validate_content`` callable.
+        all_file_paths: File paths to inspect.
+        repository_root: Repository root used to resolve relative paths.
+        all_added_lines_by_path: Optional per-file added-line maps used to
+            partition issues into blocking vs advisory.
+
+    Returns:
+        ``1`` when at least one blocking violation is reported, ``0``
+        otherwise.
+    """
     blocking_by_file: dict[Path, list[str]] = {}
     advisory_by_file: dict[Path, list[str]] = {}
     for each_path in sorted(set(all_file_paths)):
@@ -814,6 +1081,15 @@ def run_gate(
 
 
 def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
+    """Parse the command-line arguments for the code-rules gate.
+
+    Args:
+        all_arguments: Command-line argument list forwarded to argparse.
+
+    Returns:
+        The parsed argparse namespace with ``repo_root``, ``base``,
+        ``staged``, ``only_under``, and ``paths`` attributes.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Run CODE_RULES validators (validate_content) on files in the working tree. "
@@ -862,6 +1138,15 @@ def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
 
 
 def main(all_arguments: list[str]) -> int:
+    """Run the gate using the parsed CLI arguments.
+
+    Args:
+        all_arguments: Command-line argument list forwarded to argparse.
+
+    Returns:
+        The exit code from ``run_gate`` (``0`` clean, ``1`` blocking
+        violations).
+    """
     arguments = parse_arguments(all_arguments)
     repository_root = (
         arguments.repo_root.resolve()

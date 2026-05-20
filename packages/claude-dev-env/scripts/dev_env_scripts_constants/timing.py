@@ -1,7 +1,7 @@
 """Timing constants for sweep_empty_dirs.
 
 Per the project's configuration conventions, timeouts, delays, and retries
-live in config/timing.py.
+live in dev_env_scripts_constants/timing.py.
 """
 
 DEFAULT_AGE_SECONDS: int = 120

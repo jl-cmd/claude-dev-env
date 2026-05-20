@@ -19,7 +19,7 @@ if str(_self_dir) not in sys.path:
     sys.path.insert(0, str(_self_dir))
 
 from _xml_utils import emit_pretty_xml
-from config.path_resolver_constants import (
+from skills_pr_loop_constants.path_resolver_constants import (
     ALL_AUDIT_CATEGORY_ENTRIES,
     ALL_AUDIT_CONSTRAINT_TEXTS,
 )

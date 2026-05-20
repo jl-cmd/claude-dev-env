@@ -11,7 +11,7 @@ _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOK_DIR))
 
-from _gh_body_arg_utils import get_logical_first_line
+from blocking._gh_body_arg_utils import get_logical_first_line, iter_significant_tokens
 
 hook_spec = importlib.util.spec_from_file_location(
     "pr_description_enforcer",
@@ -423,7 +423,6 @@ def test_iter_significant_tokens_unclosed_quote_raises_value_error() -> None:
     Both paths result in ValueError propagating to callers.
     """
     import pytest
-    from _gh_body_arg_utils import iter_significant_tokens
     with pytest.raises(ValueError):
         list(iter_significant_tokens('gh pr create --title="unclosed --body real_body'))
 

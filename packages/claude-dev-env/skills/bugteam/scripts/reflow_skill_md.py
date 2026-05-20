@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 import textwrap
 
-from config.reflow_skill_md_constants import (
+from bugteam_scripts_constants.reflow_skill_md_constants import (
     BASH_CONTINUATION_MARKER_WIDTH,
     BULLET_LIST_ITEM_PATTERN as BULLET_RE,
     MAXIMUM_LINE_WIDTH as MAX_WIDTH,

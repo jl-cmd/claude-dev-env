@@ -16,7 +16,7 @@ import os
 import sys
 import time
 
-from config.timing import DEFAULT_AGE_SECONDS, DEFAULT_POLL_INTERVAL
+from dev_env_scripts_constants.timing import DEFAULT_AGE_SECONDS, DEFAULT_POLL_INTERVAL
 
 
 def _positive_int(raw_argument: str) -> int:
@@ -42,6 +42,15 @@ def sweep(root: str, min_age_seconds: int) -> list[str]:
     Walks bottom-up so nested empty directories are cleaned from the leaves
     inward.  Relies on os.rmdir to fail harmlessly for non-empty directories
     instead of checking snapshotted subdirectory lists.
+
+    Args:
+        root: Root directory to walk; directories below the root are
+            candidates for removal.
+        min_age_seconds: Minimum age in seconds for a directory to qualify
+            for removal.
+
+    Returns:
+        Sorted list of directory paths that were removed during the sweep.
     """
 
     all_removed: list[str] = []

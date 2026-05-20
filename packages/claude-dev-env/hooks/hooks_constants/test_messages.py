@@ -1,10 +1,6 @@
-"""Smoke tests for config.messages — verify user-facing notice constants exist."""
+"""Smoke tests for hooks_constants.messages — verify user-facing notice constants exist."""
 
-import sys
-
-sys.modules.pop("config", None)
-
-from config import messages
+from hooks_constants import messages
 
 
 def test_user_facing_notice_is_nonempty_string() -> None:

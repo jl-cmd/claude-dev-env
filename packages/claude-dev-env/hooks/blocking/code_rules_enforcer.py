@@ -40,43 +40,43 @@ if _HOOKS_DIR not in sys.path:
     sys.path.insert(0, _HOOKS_DIR)
 
 from code_rules_path_utils import is_config_file  # noqa: E402
-from config.banned_identifiers_constants import (  # noqa: E402
+from hooks_constants.banned_identifiers_constants import (  # noqa: E402
     ALL_BANNED_IDENTIFIERS,
     BANNED_IDENTIFIER_MESSAGE_SUFFIX,
     BANNED_IDENTIFIER_SKIP_ADVISORY,
     MAX_BANNED_IDENTIFIER_ISSUES,
 )
-from config.hardcoded_user_path_constants import (  # noqa: E402
+from hooks_constants.hardcoded_user_path_constants import (  # noqa: E402
     HARDCODED_USER_PATH_GUIDANCE,
     HARDCODED_USER_PATH_PATTERN,
     MAX_HARDCODED_USER_PATH_ISSUES,
 )
-from config.inline_tuple_string_magic_constants import (  # noqa: E402
+from hooks_constants.inline_tuple_string_magic_constants import (  # noqa: E402
     ALL_SNAKE_CASE_KEYWORD_EXEMPTIONS,
     EXPECTED_TUPLE_PAIR_LENGTH,
     INLINE_TUPLE_STRING_MAGIC_MESSAGE_SUFFIX,
     MAX_INLINE_TUPLE_STRING_MAGIC_ISSUES,
     SNAKE_CASE_LITERAL_PATTERN,
 )
-from config.stuttering_check_config import (  # noqa: E402
+from hooks_constants.stuttering_check_config import (  # noqa: E402
     MAX_STUTTERING_PREFIX_ISSUES,
     STUTTERING_ALL_PREFIX_PATTERN,
 )
-from config.sys_path_insert_constants import MAX_SYS_PATH_INSERT_ISSUES, SYS_PATH_INSERT_GUIDANCE  # noqa: E402
-from config.unused_module_import_constants import (  # noqa: E402
+from hooks_constants.sys_path_insert_constants import MAX_SYS_PATH_INSERT_ISSUES, SYS_PATH_INSERT_GUIDANCE  # noqa: E402
+from hooks_constants.unused_module_import_constants import (  # noqa: E402
     ALL_TYPING_MODULE_NAMES,
     MAX_UNUSED_IMPORT_ISSUES,
     TYPE_CHECKING_IDENTIFIER,
     UNUSED_IMPORT_GUIDANCE,
     line_suppresses_unused_import_via_noqa,
 )
-from config.stuttering_import_binding_constants import (  # noqa: E402
+from hooks_constants.stuttering_import_binding_constants import (  # noqa: E402
     AST_LINENO_ATTRIBUTE,
     MODULE_PATH_SEPARATOR,
     WILDCARD_IMPORT_SENTINEL,
 )
-from config.any_type_config import ALL_ANY_ALLOWED_PATTERNS  # noqa: E402
-from config.blocking_check_limits import (  # noqa: E402
+from hooks_constants.any_type_config import ALL_ANY_ALLOWED_PATTERNS  # noqa: E402
+from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_BANNED_PREFIX_NAMES,
     ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES,
     ALL_BOUNDARY_TYPE_EXEMPT_FILENAMES,
@@ -95,7 +95,7 @@ from config.blocking_check_limits import (  # noqa: E402
     MAX_THIN_WRAPPER_ISSUES,
 )
 
-from config.code_rules_enforcer_constants import (  # noqa: E402
+from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ADVISORY_LINE_THRESHOLD_HARD,
     ADVISORY_LINE_THRESHOLD_SOFT,
     ALL_CODE_EXTENSIONS,

@@ -28,6 +28,9 @@ jobs:
       - name: Install pytest
         run: pip install pytest
 
+      - name: Install claude-dev-env (editable)
+        run: pip install -e packages/claude-dev-env/
+
       - name: Configure git identity for test repos
         run: |
           git config --global user.email "ci@github.com"

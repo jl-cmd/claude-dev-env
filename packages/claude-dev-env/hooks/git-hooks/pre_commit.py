@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from config import (
+from git_hooks_constants import (
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
     GATE_SCRIPT_NOT_FOUND_MESSAGE,
     INVOKE_GATE_FAILURE_MESSAGE,

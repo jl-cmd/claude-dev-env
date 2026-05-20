@@ -14,7 +14,7 @@ from unittest import mock
 
 import pytest
 
-from config.gh_pr_author_swap_constants import STATE_FILE_PERMISSION_MODE
+from hooks_constants.gh_pr_author_swap_constants import STATE_FILE_PERMISSION_MODE
 
 _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:

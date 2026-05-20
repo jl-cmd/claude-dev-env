@@ -32,7 +32,7 @@ _hooks_directory = str(Path(__file__).resolve().parent.parent)
 if _hooks_directory not in sys.path:
     sys.path.insert(0, _hooks_directory)
 
-from config.doc_gist_auto_publish_constants import (  # noqa: E402
+from hooks_constants.doc_gist_auto_publish_constants import (  # noqa: E402
     ALL_TARGET_TOOL_NAMES,
     HOOK_SUBPROCESS_TIMEOUT_SECONDS,
     HTML_FILE_EXTENSION,

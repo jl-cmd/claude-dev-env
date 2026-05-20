@@ -31,7 +31,7 @@ hook_module_spec.loader.exec_module(hook_module)
 
 import _gh_pr_author_swap_utils as swap_utils_module  # noqa: E402
 
-from config.gh_pr_author_swap_constants import (  # noqa: E402
+from hooks_constants.gh_pr_author_swap_constants import (  # noqa: E402
     STATE_FILE_PERMISSION_MODE,
     STATE_FILE_STALE_AGE_SECONDS,
 )

@@ -9,8 +9,8 @@ _HOOKS_ROOT = Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-import config.setup_project_paths_constants as constants_module
-from config.setup_project_paths_constants import (
+import hooks_constants.setup_project_paths_constants as constants_module
+from hooks_constants.setup_project_paths_constants import (
     ABORTED_NOTHING_WRITTEN_MESSAGE,
     CONFIRMATION_PROMPT_TEXT,
     ES_EXE_FOLDERS_ONLY_QUERY_ARGUMENTS,

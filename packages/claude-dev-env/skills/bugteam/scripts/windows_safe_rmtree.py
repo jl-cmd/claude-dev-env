@@ -16,7 +16,7 @@ import stat
 import sys
 from collections.abc import Callable
 
-from config.windows_safe_rmtree_constants import (
+from bugteam_scripts_constants.windows_safe_rmtree_constants import (
     EXIT_CODE_REMOVE_TREE_FAILURE,
     EXIT_CODE_USAGE_ERROR,
     EXPECTED_ARGUMENT_COUNT,

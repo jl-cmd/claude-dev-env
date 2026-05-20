@@ -30,7 +30,7 @@ _script_directory = str(Path(__file__).resolve().parent)
 if _script_directory not in sys.path:
     sys.path.insert(0, _script_directory)
 
-from config.gist_upload_constants import (  # noqa: E402
+from doc_gist_scripts_constants.gist_upload_constants import (  # noqa: E402
     GIST_DEFAULT_FILENAME,
     GIST_HOST_PREFIX,
     MINIMUM_GIST_URL_PARTS,

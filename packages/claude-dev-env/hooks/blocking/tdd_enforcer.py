@@ -18,7 +18,7 @@ _hooks_root_path_string = str(Path(__file__).resolve().parent.parent)
 if _hooks_root_path_string not in sys.path:
     sys.path.insert(0, _hooks_root_path_string)
 
-from config.messages import USER_FACING_TDD_NOTICE
+from hooks_constants.messages import USER_FACING_TDD_NOTICE
 
 PRODUCTION_EXTENSIONS = {'.py', '.ts', '.tsx', '.js', '.jsx'}
 SKIP_PATTERNS = {

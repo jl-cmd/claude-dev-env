@@ -15,10 +15,6 @@ _SCRIPTS_DIR = Path(os.path.abspath(__file__)).parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-for _cached in list(sys.modules):
-    if _cached == "config" or _cached.startswith("config."):
-        del sys.modules[_cached]
-
 from sweep_empty_dirs import _build_parser, _positive_int, sweep  # noqa: E402
 
 _OLD_TIMESTAMP = time.time() - 300
@@ -53,7 +49,7 @@ def test_positive_int_rejects_non_integer() -> None:
 
 
 def test_build_parser_sets_age_default_from_timing_config() -> None:
-    """_build_parser uses DEFAULT_AGE_SECONDS from config.timing as --age default."""
+    """_build_parser uses DEFAULT_AGE_SECONDS from dev_env_scripts_constants.timing as --age default."""
     parser = _build_parser()
     default_age = parser.get_default("age")
     assert isinstance(default_age, int)
@@ -61,7 +57,7 @@ def test_build_parser_sets_age_default_from_timing_config() -> None:
 
 
 def test_build_parser_sets_interval_default_from_timing_config() -> None:
-    """_build_parser uses DEFAULT_POLL_INTERVAL from config.timing as --interval default."""
+    """_build_parser uses DEFAULT_POLL_INTERVAL from dev_env_scripts_constants.timing as --interval default."""
     parser = _build_parser()
     default_interval = parser.get_default("interval")
     assert isinstance(default_interval, int)

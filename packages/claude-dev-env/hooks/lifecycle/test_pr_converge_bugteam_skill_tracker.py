@@ -33,7 +33,7 @@ assert hook_spec.loader is not None
 hook_module = importlib.util.module_from_spec(hook_spec)
 hook_spec.loader.exec_module(hook_module)
 
-from config.pr_converge_bugteam_enforcer_constants import (
+from hooks_constants.pr_converge_bugteam_enforcer_constants import (
     CLAUDE_JOB_DIR_ENV_VAR,
     PR_CONVERGE_STATE_FILENAME,
 )

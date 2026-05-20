@@ -17,7 +17,7 @@ import tempfile
 
 import pytest
 
-from config.gh_pr_author_swap_constants import STATE_FILE_PERMISSION_MODE
+from hooks_constants.gh_pr_author_swap_constants import STATE_FILE_PERMISSION_MODE
 
 _HOOKS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(_HOOKS_ROOT) not in sys.path:

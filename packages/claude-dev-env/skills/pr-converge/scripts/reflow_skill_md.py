@@ -9,22 +9,9 @@ Run: python3 packages/claude-dev-env/skills/pr-converge/scripts/reflow_skill_md.
 
 from __future__ import annotations
 
-import sys
 import textwrap
-from pathlib import Path
 
-script_directory = str(Path(__file__).resolve().parent)
-
-while script_directory in sys.path:
-    sys.path.remove(script_directory)
-if script_directory not in sys.path:
-    sys.path.insert(0, script_directory)
-
-from evict_cached_config_modules import evict_cached_config_modules
-
-evict_cached_config_modules()
-
-from config.reflow_skill_md_constants import (
+from pr_converge_scripts_constants.reflow_skill_md_constants import (
     BASH_CONTINUATION_MARKER_WIDTH,
     BULLET_LIST_ITEM_PATTERN as BULLET_RE,
     MARKDOWN_REFERENCE_DEFINITION_PATTERN as REF_DEF_RE,
@@ -36,6 +23,14 @@ from config.reflow_skill_md_constants import (
 
 
 def wrap_paragraph_plain(text: str) -> list[str]:
+    """Wrap a plain paragraph to MAX_WIDTH after collapsing whitespace.
+
+    Args:
+        text: Paragraph text with internal whitespace runs to collapse.
+
+    Returns:
+        Wrapped lines; empty list when the input collapses to nothing.
+    """
     collapsed = " ".join(text.split())
     if not collapsed:
         return []
@@ -48,6 +43,17 @@ def wrap_paragraph_plain(text: str) -> list[str]:
 
 
 def wrap_list_item(lead_ws: str, marker: str, body: str) -> list[str]:
+    """Wrap a list item, preserving the leading marker and indentation.
+
+    Args:
+        lead_ws: Leading whitespace before the list marker.
+        marker: List marker such as a hyphen or numeric prefix.
+        body: Item body text to wrap.
+
+    Returns:
+        Wrapped lines with the marker on the first line and matching
+        indentation on subsequent lines.
+    """
     collapsed = " ".join(body.split())
     if not collapsed:
         return [lead_ws + marker.rstrip()]
@@ -67,6 +73,16 @@ def reflow_yaml_description_block(
     all_lines: list[str],
     body_start: int,
 ) -> tuple[list[str], int]:
+    """Reflow the YAML description block until the closing fence.
+
+    Args:
+        all_lines: Full SKILL.md lines.
+        body_start: Index of the first description body line.
+
+    Returns:
+        Tuple of wrapped description lines and the index just past the
+        closing fence.
+    """
     body_parts: list[str] = []
     index = body_start
     while index < len(all_lines):
@@ -95,6 +111,16 @@ def is_table_line(line: str) -> bool:
 
 
 def is_new_logical_line(stripped: str) -> bool:
+    """Decide whether ``stripped`` starts a new logical line.
+
+    Args:
+        stripped: Candidate line with leading whitespace already removed.
+
+    Returns:
+        True when the line begins a new markdown construct (fence, heading,
+        table row, list item, reference definition, or example tag) and
+        therefore must not be merged into the prior buffer.
+    """
     if not stripped:
         return False
     if stripped.startswith("```"):
@@ -115,7 +141,16 @@ def is_new_logical_line(stripped: str) -> bool:
 
 
 def merge_without_space(buffer: str, continuation: str) -> bool:
-    """Join without space only for split markdown link URL paths."""
+    """Join without space only for split markdown link URL paths.
+
+    Args:
+        buffer: Accumulated line preceding the candidate continuation.
+        continuation: Next line to evaluate for joining.
+
+    Returns:
+        True when continuation is the tail of a split markdown link target
+        and buffer ends inside an unfinished link target.
+    """
     base = buffer.rstrip()
     stripped = continuation.lstrip()
     if not base or not stripped:
@@ -126,6 +161,15 @@ def merge_without_space(buffer: str, continuation: str) -> bool:
 
 
 def merge_soft_breaks(all_lines: list[str]) -> list[str]:
+    """Merge soft line breaks across non-fence markdown paragraphs.
+
+    Args:
+        all_lines: Raw SKILL.md lines.
+
+    Returns:
+        Lines with each paragraph collapsed to a single buffer line; fences
+        and blank lines are preserved verbatim.
+    """
     reflowed_lines: list[str] = []
     index = 0
     is_inside_fence = False
@@ -166,6 +210,15 @@ def merge_soft_breaks(all_lines: list[str]) -> list[str]:
 
 
 def reflow_merged_line(line: str) -> list[str]:
+    """Reflow a single merged buffer line into MAX_WIDTH-bounded lines.
+
+    Args:
+        line: Buffer line produced by merge_soft_breaks.
+
+    Returns:
+        Wrapped lines; structural constructs (fences, tables, separators)
+        are returned unchanged.
+    """
     stripped = line.strip()
     if stripped == "":
         return [""]
@@ -221,6 +274,14 @@ def reflow_merged_line(line: str) -> list[str]:
 
 
 def reflow_markdown_body(all_lines: list[str]) -> list[str]:
+    """Merge soft breaks then reflow every line of the SKILL.md body.
+
+    Args:
+        all_lines: Raw SKILL.md body lines following the YAML front matter.
+
+    Returns:
+        Reflowed body lines bounded by MAX_WIDTH.
+    """
     merged = merge_soft_breaks(all_lines)
     reflowed_lines: list[str] = []
     for each_line in merged:
@@ -232,7 +293,15 @@ def reflow_markdown_body(all_lines: list[str]) -> list[str]:
 
 
 def wrap_long_bash_fence_lines(all_lines: list[str]) -> list[str]:
-    """Hard-wrap only ```bash fence bodies that still exceed MAX_WIDTH."""
+    """Hard-wrap bash fence bodies that still exceed MAX_WIDTH.
+
+    Args:
+        all_lines: SKILL.md body lines after paragraph reflow.
+
+    Returns:
+        Lines with overlong bash-fence bodies split on whitespace with a
+        trailing backslash continuation marker.
+    """
     wrapped_lines: list[str] = []
     is_inside_bash_fence = False
     for each_line in all_lines:
@@ -272,6 +341,11 @@ def wrap_long_bash_fence_lines(all_lines: list[str]) -> list[str]:
 
 
 def main() -> None:
+    """Read SKILL.md, reflow it to MAX_WIDTH, and write the result back.
+
+    Raises:
+        SystemExit: When the file does not start with YAML front matter.
+    """
     raw = SKILL_PATH.read_text(encoding="utf-8")
     lines = raw.splitlines()
     if not lines or lines[0].strip() != "---":

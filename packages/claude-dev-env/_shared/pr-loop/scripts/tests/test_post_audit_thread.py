@@ -36,11 +36,10 @@ from typing import Any
 THIS_FILE_DIRECTORY = Path(__file__).resolve().parent
 SCRIPT_DIRECTORY = THIS_FILE_DIRECTORY.parent
 
-sys.modules.pop("config", None)
 if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
-from config.post_audit_thread_constants import (  # noqa: E402
+from pr_loop_shared_constants.post_audit_thread_constants import (  # noqa: E402
     ALL_GH_AUTH_TOKEN_COMMAND_PARTS,
     ALL_RETRY_BACKOFF_SECONDS,
     BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME,

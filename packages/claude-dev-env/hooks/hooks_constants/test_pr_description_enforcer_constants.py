@@ -10,7 +10,7 @@ _HOOKS_ROOT = Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-from config import pr_description_enforcer_constants as constants_module
+from hooks_constants import pr_description_enforcer_constants as constants_module
 
 
 def test_plugin_root_is_private_module_attribute() -> None:

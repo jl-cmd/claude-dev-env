@@ -49,7 +49,6 @@ def _load_grant_module() -> ModuleType:
     scripts_directory_str = str(scripts_directory.resolve())
     if scripts_directory_str not in sys.path:
         sys.path.insert(0, scripts_directory_str)
-    sys.modules.pop("config", None)
     return _load_module_from_path(
         "grant_project_claude_permissions",
         scripts_directory / "grant_project_claude_permissions.py",
@@ -61,7 +60,6 @@ def _load_revoke_module() -> ModuleType:
     scripts_directory_str = str(scripts_directory.resolve())
     if scripts_directory_str not in sys.path:
         sys.path.insert(0, scripts_directory_str)
-    sys.modules.pop("config", None)
     return _load_module_from_path(
         "revoke_project_claude_permissions",
         scripts_directory / "revoke_project_claude_permissions.py",
@@ -70,8 +68,10 @@ def _load_revoke_module() -> ModuleType:
 
 def _load_constants_module() -> ModuleType:
     return _load_module_from_path(
-        "config.claude_permissions_constants",
-        _scripts_directory() / "config" / "claude_permissions_constants.py",
+        "pr_loop_shared_constants.claude_permissions_constants",
+        _scripts_directory()
+        / "pr_loop_shared_constants"
+        / "claude_permissions_constants.py",
     )
 
 

@@ -94,6 +94,6 @@ Read the matching example for the artifact you're designing. Crib palette, typog
 
 - `SKILL.md` — this file.
 - `skills/doc-gist/scripts/gist_upload.py` — transport: HTML in, gist + preview URLs out.
-- `skills/doc-gist/scripts/config/gist_upload_constants.py` — the URL prefixes and template strings.
+- `skills/doc-gist/scripts/doc_gist_scripts_constants/gist_upload_constants.py` — the URL prefixes and template strings.
 - `references/examples/` — Thariq's 20 html-effectiveness prototypes.
 - (PostToolUse hook lives in `packages/claude-dev-env/hooks/workflow/doc_gist_auto_publish.py` — wired into the plugin's `hooks.json`.)

@@ -14,7 +14,7 @@ if _HOOKS_DIR not in sys.path:
     sys.path.insert(0, _HOOKS_DIR)
 if _HOOKS_ROOT not in sys.path:
     sys.path.insert(0, _HOOKS_ROOT)
-from config.messages import USER_FACING_ASKUSERQUESTION_NOTICE
+from hooks_constants.messages import USER_FACING_ASKUSERQUESTION_NOTICE
 
 CLEAN_DECLARATIVE_MESSAGE = "I applied the rename across both files. The tests pass."
 TRAILING_QUESTION_MESSAGE = (

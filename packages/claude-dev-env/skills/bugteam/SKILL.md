@@ -103,7 +103,7 @@ narrative) becomes `description`, and the suffix starting at `Fix:`
 When the agent omits the `Fix:` heading on a given finding, write the
 full `failure_mode` text to BOTH `description` and `fix_summary` so the
 script's body template (`INLINE_COMMENT_BODY_TEMPLATE` in
-[`_shared/pr-loop/scripts/config/post_audit_thread_constants.py`](../../_shared/pr-loop/scripts/config/post_audit_thread_constants.py))
+[`_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py`](../../_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py))
 still renders coherently. Set `side="RIGHT"` for every entry. On CLEAN,
 pass an empty array (`[]`) so the script posts an APPROVE review
 (GitHub stores it as `state=APPROVED`) with a "no findings" summary and

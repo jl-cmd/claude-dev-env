@@ -210,38 +210,13 @@ def test_should_exit_nonzero_when_subprocess_run_raises_os_error(
     )
 
 
-def test_module_import_evicts_cached_config_submodules() -> None:
-    """Importing bugteam_preflight must evict cached `config.*` submodules.
-
-    Regression for loop1-4: a single `sys.modules.pop("config", None)` only
-    removes the parent key, leaving stale `config.<submodule>` entries that
-    satisfy the next from-import with the wrong bindings.
-    """
-    fake_submodule_name = "config.bugteam_preflight_constants"
-    fake_parent_name = "config"
-    sentinel_module_a = ModuleType(fake_parent_name)
-    sentinel_module_b = ModuleType(fake_submodule_name)
-    sys.modules[fake_parent_name] = sentinel_module_a
-    sys.modules[fake_submodule_name] = sentinel_module_b
-    try:
-        _load_preflight_module()
-    finally:
-        sys.modules.pop(fake_parent_name, None)
-        sys.modules.pop(fake_submodule_name, None)
-    assert sys.modules.get(fake_parent_name) is not sentinel_module_a, (
-        "parent `config` cache entry must be evicted on module import"
-    )
-    assert sys.modules.get(fake_submodule_name) is not sentinel_module_b, (
-        "cached `config.<submodule>` entries must be evicted on module import"
-    )
-
-
 def test_has_pytest_configuration_finds_pytest_ini(tmp_path: Path) -> None:
     """has_pytest_configuration must detect pytest.ini at the repo root.
 
     Regression for loop1-17/loop1-18: the literals "pytest.ini",
     "pyproject.toml", and "[tool.pytest" were inlined in production function
-    bodies; centralizing them in config and importing here pins the contract.
+    bodies; centralizing them in bugteam_scripts_constants and importing here
+    pins the contract.
     """
     repository_root = tmp_path / "repo"
     repository_root.mkdir()

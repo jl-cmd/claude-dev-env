@@ -16,7 +16,7 @@ import html
 import sys
 from pathlib import Path
 
-from config.notes_constants import DEFAULT_NOTES_FILENAME, HEADING_BY_SLUG
+from implement_scripts_constants.notes_constants import DEFAULT_NOTES_FILENAME, HEADING_BY_SLUG
 
 
 def _build_skeleton() -> str:

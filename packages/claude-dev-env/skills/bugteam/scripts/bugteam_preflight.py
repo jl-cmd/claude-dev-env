@@ -6,19 +6,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-for each_cached_module_name in [
-    each_module_key
-    for each_module_key in list(sys.modules)
-    if each_module_key == "config" or each_module_key.startswith("config.")
-]:
-    sys.modules.pop(each_cached_module_name, None)
 _bugteam_scripts_directory = str(Path(__file__).absolute().parent)
 while _bugteam_scripts_directory in sys.path:
     sys.path.remove(_bugteam_scripts_directory)
 if _bugteam_scripts_directory not in sys.path:
     sys.path.insert(0, _bugteam_scripts_directory)
 
-from config.bugteam_preflight_constants import (
+from bugteam_scripts_constants.bugteam_preflight_constants import (
     ALL_DISCOVERY_IGNORE_DIRECTORIES,
     ALL_GIT_CONFIG_HOOKS_PATH_ARGUMENTS,
     ALL_PRE_COMMIT_ARGUMENTS,
@@ -35,12 +29,6 @@ from config.bugteam_preflight_constants import (
     PYTEST_INI_FILENAME,
 )
 
-for each_cached_module_name in [
-    each_module_key
-    for each_module_key in list(sys.modules)
-    if each_module_key == "config" or each_module_key.startswith("config.")
-]:
-    sys.modules.pop(each_cached_module_name, None)
 _shared_pr_loop_scripts_directory = (
     Path(__file__).absolute().parent
     / ".." / ".." / ".." / "_shared" / "pr-loop" / "scripts"

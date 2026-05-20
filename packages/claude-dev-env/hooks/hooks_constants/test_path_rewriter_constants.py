@@ -7,7 +7,7 @@ _HOOKS_ROOT = Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-from config.path_rewriter_constants import (
+from hooks_constants.path_rewriter_constants import (
     BASH_TOOL_NAME,
     HOOK_EVENT_NAME,
     PERMISSION_ALLOW,

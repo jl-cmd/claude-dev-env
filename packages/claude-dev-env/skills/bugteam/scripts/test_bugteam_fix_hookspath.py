@@ -356,29 +356,3 @@ def test_read_global_core_hooks_path_returns_empty_when_key_unset() -> None:
     with patch.object(subprocess, "run", fake_run):
         result = bugteam_fix_hookspath.read_global_core_hooks_path(None)
     assert result == ""
-
-
-def test_module_import_evicts_cached_config_submodules() -> None:
-    """Importing bugteam_fix_hookspath must evict cached `config.*` submodules.
-
-    Regression for loop1-1: without a defensive cache pop above sys.path.insert,
-    a previously-cached `config` package shadows scripts/config/ and the
-    from-import raises ModuleNotFoundError.
-    """
-    fake_submodule_name = "config.bugteam_fix_hookspath_constants"
-    fake_parent_name = "config"
-    sentinel_module_a = ModuleType(fake_parent_name)
-    sentinel_module_b = ModuleType(fake_submodule_name)
-    sys.modules[fake_parent_name] = sentinel_module_a
-    sys.modules[fake_submodule_name] = sentinel_module_b
-    try:
-        _load_fix_module()
-    finally:
-        sys.modules.pop(fake_parent_name, None)
-        sys.modules.pop(fake_submodule_name, None)
-    assert sys.modules.get(fake_parent_name) is not sentinel_module_a, (
-        "parent `config` cache entry must be evicted on module import"
-    )
-    assert sys.modules.get(fake_submodule_name) is not sentinel_module_b, (
-        "cached `config.<submodule>` entries must be evicted on module import"
-    )

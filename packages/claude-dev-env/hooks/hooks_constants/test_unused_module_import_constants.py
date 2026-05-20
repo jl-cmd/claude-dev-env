@@ -9,7 +9,7 @@ _HOOKS_ROOT = Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-from config.unused_module_import_constants import line_suppresses_unused_import_via_noqa
+from hooks_constants.unused_module_import_constants import line_suppresses_unused_import_via_noqa
 
 
 def test_line_suppresses_bare_noqa() -> None:

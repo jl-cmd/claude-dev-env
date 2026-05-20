@@ -40,18 +40,18 @@ if str(_HOOKS_TREE_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOKS_TREE_DIR))
 
 from code_rules_path_utils import is_config_file as path_utils_is_config_file  # noqa: E402
-from config.banned_identifiers_constants import (  # noqa: E402
+from hooks_constants.banned_identifiers_constants import (  # noqa: E402
     ALL_BANNED_IDENTIFIERS as config_all_banned_identifiers,
     BANNED_IDENTIFIER_MESSAGE_SUFFIX as config_banned_identifier_message_suffix,
     BANNED_IDENTIFIER_SKIP_ADVISORY as config_banned_identifier_skip_advisory,
     MAX_BANNED_IDENTIFIER_ISSUES as config_max_banned_identifier_issues,
 )
-from config.hardcoded_user_path_constants import (  # noqa: E402
+from hooks_constants.hardcoded_user_path_constants import (  # noqa: E402
     HARDCODED_USER_PATH_GUIDANCE as config_hardcoded_user_path_guidance,
     HARDCODED_USER_PATH_PATTERN as config_hardcoded_user_path_pattern,
     MAX_HARDCODED_USER_PATH_ISSUES as config_max_hardcoded_user_path_issues,
 )
-from config.stuttering_check_config import (  # noqa: E402
+from hooks_constants.stuttering_check_config import (  # noqa: E402
     MAX_STUTTERING_PREFIX_ISSUES as config_max_stuttering_prefix_issues,
     STUTTERING_ALL_PREFIX_PATTERN as config_stuttering_all_prefix_pattern,
 )

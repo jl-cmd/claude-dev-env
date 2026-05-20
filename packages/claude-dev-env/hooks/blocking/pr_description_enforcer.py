@@ -6,7 +6,11 @@ from pathlib import Path
 
 import shlex
 
-from _gh_body_arg_utils import (
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from blocking._gh_body_arg_utils import (  # noqa: E402
     all_body_flag_prefixes,
     all_body_flags,
     all_value_flag_equals_prefixes,
@@ -21,16 +25,7 @@ from _gh_body_arg_utils import (
 )
 
 
-def _insert_hooks_tree_for_imports() -> None:
-    hooks_tree = Path(__file__).resolve().parent.parent
-    hooks_tree_string = str(hooks_tree)
-    if hooks_tree_string not in sys.path:
-        sys.path.insert(0, hooks_tree_string)
-
-
-_insert_hooks_tree_for_imports()
-
-from config.pr_description_enforcer_constants import (
+from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
     BLOCKQUOTE_MARKER_PATTERN,
     BOLD_PAIR_PATTERN,
     BULLET_MARKER_PATTERN,
@@ -275,10 +270,10 @@ def extract_body_from_command(
     if not body_flag_found_in_significant:
         return None
 
-    result = _scan_raw_tokens_for_body(all_raw_tokens)
-    if result is False:
+    scan_outcome = _scan_raw_tokens_for_body(all_raw_tokens)
+    if isinstance(scan_outcome, bool):
         return None
-    return result
+    return scan_outcome
 
 
 def _count_substantive_prose_chars(body: str) -> int:

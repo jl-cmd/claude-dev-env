@@ -21,7 +21,7 @@ _pr_converge_dir = Path(__file__).absolute().parent.parent
 if str(_pr_converge_dir) not in sys.path:
     sys.path.insert(0, str(_pr_converge_dir))
 
-from config.constants import (
+from pr_converge_skill_constants.constants import (
     EXIT_CODE_GH_ERROR,
     GH_REVIEWS_PATH_TEMPLATE,
     REVIEWS_PER_PAGE,

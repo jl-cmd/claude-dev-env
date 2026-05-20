@@ -9,7 +9,7 @@ _HOOKS_ROOT = Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-from config.banned_identifiers_constants import (
+from hooks_constants.banned_identifiers_constants import (
     ALL_BANNED_IDENTIFIERS,
     BANNED_IDENTIFIER_MESSAGE_SUFFIX,
     BANNED_IDENTIFIER_SKIP_ADVISORY,

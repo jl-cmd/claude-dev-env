@@ -11,13 +11,13 @@ _HOOKS_ROOT = Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-from config import project_paths_reader
-from config.project_paths_reader import (
+from hooks_constants import project_paths_reader
+from hooks_constants.project_paths_reader import (
     load_registry,
     registry_contains_path,
     registry_file_path,
 )
-from config.setup_project_paths_constants import META_KEY
+from hooks_constants.setup_project_paths_constants import META_KEY
 
 
 def test_reader_does_not_redefine_dynamic_stderr_handler_locally() -> None:

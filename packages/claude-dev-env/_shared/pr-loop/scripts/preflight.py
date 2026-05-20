@@ -4,38 +4,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.modules.pop("config", None)
-_script_directory_resolved = Path(__file__).resolve().parent
-_script_directory_absolute = Path(__file__).absolute().parent
+parent_directory = str(Path(__file__).resolve().parent)
+if parent_directory not in sys.path:
+    sys.path.insert(0, parent_directory)
 
-
-def _entry_points_at_preflight_script_directory(each_path_entry: str) -> bool:
-    if each_path_entry in (
-        str(_script_directory_resolved),
-        str(_script_directory_absolute),
-    ):
-        return True
-    try:
-        candidate_path = Path(each_path_entry)
-    except (OSError, ValueError):
-        return False
-    if candidate_path.exists():
-        try:
-            return os.path.samefile(candidate_path, _script_directory_resolved)
-        except OSError:
-            return False
-    return False
-
-
-for each_index in range(len(sys.path) - 1, -1, -1):
-    if _entry_points_at_preflight_script_directory(sys.path[each_index]):
-        sys.path.pop(each_index)
-_preflight_scripts_path_entry = str(_script_directory_absolute)
-if _preflight_scripts_path_entry not in sys.path:
-    sys.path.insert(0, _preflight_scripts_path_entry)
-
-from config.fix_hookspath_constants import HOOKS_PATH_VERIFICATION_SUFFIX
-from config.preflight_constants import (
+from pr_loop_shared_constants.fix_hookspath_constants import HOOKS_PATH_VERIFICATION_SUFFIX  # noqa: E402
+from pr_loop_shared_constants.preflight_constants import (
     ALL_GIT_CONFIG_GET_CORE_HOOKS_PATH_SUBCOMMAND,
     ALL_GIT_DIFF_NAME_ONLY_SUBCOMMAND,
     ALL_GIT_LS_FILES_TEST_DISCOVERY_SUBCOMMAND,

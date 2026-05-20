@@ -14,7 +14,7 @@ import json
 import os
 from pathlib import Path
 
-from config.pr_converge_bugteam_enforcer_constants import (
+from hooks_constants.pr_converge_bugteam_enforcer_constants import (
     CLAUDE_JOB_DIR_ENV_VAR,
     PR_CONVERGE_STATE_FILENAME,
 )

@@ -7,8 +7,8 @@ import logging
 import os
 from pathlib import Path
 
-from config.dynamic_stderr_handler import DynamicStderrHandler
-from config.setup_project_paths_constants import META_KEY, UTF8_ENCODING
+from hooks_constants.dynamic_stderr_handler import DynamicStderrHandler
+from hooks_constants.setup_project_paths_constants import META_KEY, UTF8_ENCODING
 
 
 _logger = logging.getLogger("project_paths_reader")

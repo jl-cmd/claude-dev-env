@@ -25,7 +25,7 @@ if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
 from diagnostic import hook_log_extractor
-from config.hook_log_extractor_constants import (
+from hooks_constants.hook_log_extractor_constants import (
     COMMAND_EXCERPT_MAX_CHARACTERS,
     EXIT_CODE_UNKNOWN_QUERY,
     HOOK_CATEGORY_UNCATEGORIZED,

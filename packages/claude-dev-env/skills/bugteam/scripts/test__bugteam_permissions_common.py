@@ -1,10 +1,10 @@
-"""TDD-pair tests for the underscore-prefixed _claude_permissions_common module.
+"""TDD-pair tests for the underscore-prefixed _bugteam_permissions_common module.
 
 The TDD enforcer matches a production filename ``X.py`` to ``test_X.py``;
-``_claude_permissions_common.py`` carries a leading underscore that the
+``_bugteam_permissions_common.py`` carries a leading underscore that the
 enforcer treats as part of the name. This file's tests are the canonical
 match. The broader behavioral suite continues to live alongside, in
-``test_claude_permissions_common.py``.
+``test_bugteam_permissions_common.py``.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ _script_directory = str(Path(__file__).resolve().parent)
 if _script_directory not in sys.path:
     sys.path.insert(0, _script_directory)
 
-import _claude_permissions_common as common_module
+import _bugteam_permissions_common as common_module
 import grant_project_claude_permissions as grant_module
 import revoke_project_claude_permissions as revoke_module
 
