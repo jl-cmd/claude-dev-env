@@ -495,9 +495,16 @@ def check_all(*, owner: str, repo: str, number: int, bugbot_down: bool) -> int:
 
     Returns:
         ``0`` when every gate reports PASS, ``1`` when at least one gate
-        reports FAIL. The function never raises for gate-level failures;
-        gh-api transport failures surface as gate FAILs in the printed
-        output and contribute to the ``1`` exit code.
+        reports FAIL. Per-gate ``gh api`` transport failures surface as
+        gate FAIL lines in the printed output and contribute to the ``1``
+        exit code.
+
+    Raises:
+        SystemExit: Propagated by the initial ``_get_pr_head_sha`` call
+            with ``EXIT_CODE_GH_ERROR`` when the PR-head-SHA fetch fails
+            before any gate runs. The function does not catch this
+            exception; the caller is responsible for converting it into
+            an exit code.
     """
     head_sha = _get_pr_head_sha(owner=owner, repo=repo, number=number)
     print(f"HEAD: {head_sha[:7]}\n")

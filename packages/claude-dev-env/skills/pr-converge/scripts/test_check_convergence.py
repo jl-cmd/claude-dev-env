@@ -304,3 +304,21 @@ def should_bypass_bugbot_gates_when_bugbot_down_is_true(
     assert "_check_bugbot_not_dirty" not in all_invocation_names
     assert "bypassed (bugbot_down)" in captured_stdout
     assert exit_code == 0
+
+
+def should_propagate_systemexit_from_get_pr_head_sha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def stub_get_pr_head_sha_raising_systemexit(
+        *, owner: str, repo: str, number: int
+    ) -> str:
+        raise SystemExit(check_convergence.EXIT_CODE_GH_ERROR)
+
+    monkeypatch.setattr(
+        check_convergence, "_get_pr_head_sha", stub_get_pr_head_sha_raising_systemexit
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        check_convergence.check_all(owner="o", repo="r", number=1, bugbot_down=False)
+
+    assert exc_info.value.code == check_convergence.EXIT_CODE_GH_ERROR
