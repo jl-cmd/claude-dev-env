@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.42.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.41.0...claude-dev-env-v1.42.0) (2026-05-19)
+
+
+### Features
+
+* **skills:** add /implement skill with append-note CLI ([#466](https://github.com/jl-cmd/claude-code-config/issues/466)) ([61ec3cf](https://github.com/jl-cmd/claude-code-config/commit/61ec3cf82ceb6cbb84e5eefe22e17183657476c1))
+* **skills:** add /refine — interview-driven plan refiner with audit loop ([#468](https://github.com/jl-cmd/claude-code-config/issues/468)) ([e03b303](https://github.com/jl-cmd/claude-code-config/commit/e03b303203237a68aca01450949ca3cfb8614ebe))
+
+
+### Bug Fixes
+
+* **check_convergence:** recognize bugteam reviews by body header ([#465](https://github.com/jl-cmd/claude-code-config/issues/465)) ([86e7ef9](https://github.com/jl-cmd/claude-code-config/commit/86e7ef91a30df07862a031b813cdbd5ecf3c24ab))
+* **permissions:** enforce agent-config carve-out via deny rules ([#467](https://github.com/jl-cmd/claude-code-config/issues/467)) ([68d2d93](https://github.com/jl-cmd/claude-code-config/commit/68d2d939165f2719e54d27762ce06b3c56e98e8c))
+* **pr-converge:** use Path.absolute() for sys.path entries on UNC-mapped drives ([#469](https://github.com/jl-cmd/claude-code-config/issues/469)) ([6226107](https://github.com/jl-cmd/claude-code-config/commit/6226107de6a46bbbb58f282d8d322026d3a922cc))
+
+
+### Documentation
+
+* **claude-dev-env:** prefer subagents for codebase research ([#471](https://github.com/jl-cmd/claude-code-config/issues/471)) ([136b84d](https://github.com/jl-cmd/claude-code-config/commit/136b84d99eedf7ed76c6cf213efadfc2ec2124b0))
+
 ## [1.41.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.40.0...claude-dev-env-v1.41.0) (2026-05-19)
 
 
