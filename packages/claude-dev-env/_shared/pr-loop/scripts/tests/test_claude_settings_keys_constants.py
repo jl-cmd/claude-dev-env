@@ -7,10 +7,12 @@ from types import ModuleType
 
 def _load_constants_module() -> ModuleType:
     module_path = (
-        Path(__file__).parent.parent / "config" / "claude_settings_keys_constants.py"
+        Path(__file__).parent.parent
+        / "pr_loop_shared_constants"
+        / "claude_settings_keys_constants.py"
     )
     specification = importlib.util.spec_from_file_location(
-        "config.claude_settings_keys_constants", module_path
+        "pr_loop_shared_constants.claude_settings_keys_constants", module_path
     )
     assert specification is not None
     assert specification.loader is not None

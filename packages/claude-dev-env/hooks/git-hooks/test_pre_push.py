@@ -19,7 +19,7 @@ for each_module_name in list(sys.modules):
 importlib.invalidate_caches()
 
 import pre_push
-import config
+import git_hooks_constants
 
 
 ALL_ZEROS_OBJECT_NAME: str = "0" * 40
@@ -163,7 +163,7 @@ def test_main_exits_two_when_stdin_raises_ioerror(
 
     exit_code = pre_push.main()
 
-    assert exit_code == config.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
+    assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
 
 
 def test_main_exits_two_when_invoke_gate_raises_oserror(
@@ -182,7 +182,7 @@ def test_main_exits_two_when_invoke_gate_raises_oserror(
 
     exit_code = pre_push.main()
 
-    assert exit_code == config.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
+    assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
 
 
 def test_resolve_base_reference_emits_warning_for_malformed_line(
@@ -226,7 +226,7 @@ def test_resolve_base_reference_returns_sentinel_when_only_malformed_lines_prese
 
     base_reference = pre_push.resolve_base_reference_from_stdin(malformed_only_stdin)
 
-    assert base_reference == config.NO_PARSEABLE_STDIN_LINES_SENTINEL
+    assert base_reference == git_hooks_constants.NO_PARSEABLE_STDIN_LINES_SENTINEL
 
 
 def test_main_prints_stderr_when_gate_script_missing(
@@ -253,7 +253,7 @@ def test_resolve_base_reference_exits_two_when_only_malformed_lines_and_no_valid
 
     result = pre_push.resolve_base_reference_from_stdin(malformed_only_stdin)
 
-    assert result == config.NO_PARSEABLE_STDIN_LINES_SENTINEL
+    assert result == git_hooks_constants.NO_PARSEABLE_STDIN_LINES_SENTINEL
 
 
 def test_main_exits_two_when_all_stdin_lines_are_malformed(
@@ -268,7 +268,7 @@ def test_main_exits_two_when_all_stdin_lines_are_malformed(
 
     exit_code = pre_push.main()
 
-    assert exit_code == config.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
+    assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
     captured = capsys.readouterr()
     assert "no parseable stdin lines" in captured.err
 

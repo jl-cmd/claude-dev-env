@@ -33,11 +33,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-_hooks_tree_path = str(Path(__file__).absolute().parent.parent)
-if _hooks_tree_path not in sys.path:
-    sys.path.insert(0, _hooks_tree_path)
+hooks_parent_directory = str(Path(__file__).resolve().parent.parent)
+if hooks_parent_directory not in sys.path:
+    sys.path.insert(0, hooks_parent_directory)
 
-from _gh_pr_author_swap_utils import (  # noqa: E402  # sys.path shim above must run first
+from _gh_pr_author_swap_utils import (  # noqa: E402
     _all_gh_pr_create_segments,
     _command_invokes_gh_pr_create_in_stripped,
     _delete_state_file,
@@ -47,7 +47,7 @@ from _gh_pr_author_swap_utils import (  # noqa: E402  # sys.path shim above must
     _switch_gh_account,
     _write_line,
 )
-from config.gh_pr_author_swap_constants import (  # noqa: E402  # sys.path shim above must run first
+from hooks_constants.gh_pr_author_swap_constants import (
     ALL_GH_API_USER_COMMAND,
     BASH_TOOL_NAME,
     GH_API_USER_TIMEOUT_SECONDS,

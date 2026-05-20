@@ -10,8 +10,8 @@ _HOOKS_ROOT = Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-from config import hook_log_extractor_constants
-from config.hook_log_extractor_constants import (
+from hooks_constants import hook_log_extractor_constants
+from hooks_constants.hook_log_extractor_constants import (
     EXIT_CODE_ENVIRONMENT_MISSING,
     EXIT_CODE_EXTRACTOR_ENVIRONMENT_MISSING,
     EXIT_CODE_SUCCESS,

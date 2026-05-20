@@ -21,10 +21,10 @@ _script_directory = str(Path(__file__).resolve().parent)
 if _script_directory not in sys.path:
     sys.path.insert(0, _script_directory)
 
-import _claude_permissions_common as common_module
+import _bugteam_permissions_common as common_module
 import grant_project_claude_permissions as grant_module
 import revoke_project_claude_permissions as revoke_module
-from config.claude_permissions_common_constants import (
+from bugteam_scripts_constants.claude_permissions_common_constants import (
     ALL_AGENT_CONFIG_DENY_TOOLS,
     ALL_AGENT_CONFIG_PATH_PATTERNS,
     ALL_PERMISSION_ALLOW_TOOLS,

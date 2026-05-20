@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-from config.probe_code_rules_enforcer_check_constants import (
+from bugteam_scripts_constants.probe_code_rules_enforcer_check_constants import (
     DEFAULT_REPORTED_PATH,
     ENFORCER_MODULE_NAME,
     ENFORCER_RELATIVE_PATH,

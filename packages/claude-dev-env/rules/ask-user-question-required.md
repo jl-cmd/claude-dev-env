@@ -40,5 +40,5 @@ When a question is genuinely for the user, call the tool with:
 
 - Hook: `packages/claude-dev-env/hooks/blocking/question_to_user_enforcer.py`, registered on the `Stop` matcher in `packages/claude-dev-env/hooks/hooks.json`.
 - Loop prevention: the hook honors Claude Code's `stop_hook_active` flag and does not re-block on retry.
-- User-facing notice: `USER_FACING_ASKUSERQUESTION_NOTICE` in `packages/claude-dev-env/hooks/config/messages.py`.
+- User-facing notice: `USER_FACING_ASKUSERQUESTION_NOTICE` in `packages/claude-dev-env/hooks/hooks_constants/messages.py`.
 - Related rule: `packages/claude-dev-env/rules/verify-before-asking.md` gates whether the question belongs to the user in the first place.

@@ -21,7 +21,7 @@ if str(_self_dir) not in sys.path:
 
 from _cli_utils import require_file
 from _xml_utils import emit_pretty_xml
-from config.path_resolver_constants import (
+from skills_pr_loop_constants.path_resolver_constants import (
     ALL_FIX_CONSTRAINT_TEXTS,
     ALL_FIX_EXECUTION_STEPS,
 )

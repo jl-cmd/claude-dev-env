@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-dev-env"
+version = "0.0.0"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+packages = [
+    "hooks_constants",
+    "git_hooks_constants",
+    "pr_loop_shared_constants",
+    "skills_pr_loop_constants",
+    "pr_converge_skill_constants",
+    "pr_converge_scripts_constants",
+    "bugteam_scripts_constants",
+    "doc_gist_scripts_constants",
+    "implement_scripts_constants",
+    "dev_env_scripts_constants",
+]
+
+[tool.setuptools.package-dir]
+hooks_constants = "hooks/hooks_constants"
+git_hooks_constants = "hooks/git-hooks/git_hooks_constants"
+pr_loop_shared_constants = "_shared/pr-loop/scripts/pr_loop_shared_constants"
+skills_pr_loop_constants = "skills/_shared/pr-loop/scripts/skills_pr_loop_constants"
+pr_converge_skill_constants = "skills/pr-converge/pr_converge_skill_constants"
+pr_converge_scripts_constants = "skills/pr-converge/scripts/pr_converge_scripts_constants"
+bugteam_scripts_constants = "skills/bugteam/scripts/bugteam_scripts_constants"
+doc_gist_scripts_constants = "skills/doc-gist/scripts/doc_gist_scripts_constants"
+implement_scripts_constants = "skills/implement/scripts/implement_scripts_constants"
+dev_env_scripts_constants = "scripts/dev_env_scripts_constants"

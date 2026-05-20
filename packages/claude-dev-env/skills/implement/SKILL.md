@@ -63,4 +63,4 @@ Append entries as decisions are made — do not batch them until the end.
 |---|---|
 | `SKILL.md` | This hub |
 | `scripts/append_note.py` | CLI to append one entry to a section |
-| `scripts/config/notes_constants.py` | Section slugs → headings and default filename |
+| `scripts/implement_scripts_constants/notes_constants.py` | Section slugs → headings and default filename |

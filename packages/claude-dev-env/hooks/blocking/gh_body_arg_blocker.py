@@ -22,8 +22,13 @@ pattern this hook must catch); otherwise approves unparseable input.
 import json
 import re
 import sys
+from pathlib import Path
 
-from _gh_body_arg_utils import (
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from blocking._gh_body_arg_utils import (  # noqa: E402
     _is_bash_continuation,
     all_body_flags,
     all_body_flag_prefixes,

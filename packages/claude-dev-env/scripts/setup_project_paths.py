@@ -18,17 +18,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-_hooks_dir_string = str(Path(__file__).resolve().parent.parent / "hooks")
-while _hooks_dir_string in sys.path:
-    sys.path.remove(_hooks_dir_string)
-sys.path.insert(0, _hooks_dir_string)
+_hooks_dir = str(Path(__file__).resolve().parent.parent / "hooks")
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
 
-for _cached_module_name in list(sys.modules):
-    if _cached_module_name == "config" or _cached_module_name.startswith("config."):
-        del sys.modules[_cached_module_name]
-
-from config.project_paths_reader import registry_file_path
-from config.setup_project_paths_constants import (
+from hooks_constants.project_paths_reader import registry_file_path  # noqa: E402
+from hooks_constants.setup_project_paths_constants import (  # noqa: E402
     ABORTED_NOTHING_WRITTEN_MESSAGE,
     CONFIRMATION_PROMPT_TEXT,
     ES_EXE_BINARY_NAME,
@@ -85,6 +80,13 @@ def filter_to_git_roots(all_es_exe_paths: list[str]) -> list[str]:
 
     Rejects siblings like ``.gitignore``, ``.github``, ``.gitattributes`` that
     share the ``.git`` prefix but are not the canonical git metadata directory.
+
+    Args:
+        all_es_exe_paths: Raw folder paths emitted by es.exe.
+
+    Returns:
+        Parent directory paths of every entry whose final segment is exactly
+        ``.git``.
     """
     all_repo_roots: list[str] = []
     for each_es_path in all_es_exe_paths:
@@ -102,6 +104,12 @@ def apply_exclusion_filter(all_candidate_paths: list[str]) -> list[str]:
     Whole-segment matching preserves legitimate names that merely contain an
     excluded substring (for example ``template`` is retained even though
     ``temp`` is excluded).
+
+    Args:
+        all_candidate_paths: Repo-root paths discovered by es.exe.
+
+    Returns:
+        Subset of *all_candidate_paths* with no segment in the exclusion set.
     """
     all_retained_paths: list[str] = []
     for each_candidate_path in all_candidate_paths:
@@ -134,6 +142,13 @@ def merge_registries(
     Pre-existing entries not in the new set are preserved. On name collisions
     the newly discovered entry wins. The ``_meta.last_scan`` timestamp is
     refreshed to the current UTC time.
+
+    Args:
+        existing_registry: Existing on-disk registry contents.
+        new_path_by_name: Newly discovered name-to-path entries.
+
+    Returns:
+        Merged registry with refreshed ``_meta.last_scan`` timestamp.
     """
     merged_registry: dict = {
         each_key: each_value
@@ -191,6 +206,11 @@ def write_registry_atomically(registry_to_write: dict, target_file: Path) -> Non
     Caller is responsible for reading the existing registry, verifying the
     schema version, and merging before calling this function. This function
     performs no file reads and no schema checks.
+
+    Args:
+        registry_to_write: Registry content to serialize.
+        target_file: Final destination path; the temp sibling is created
+            adjacent and renamed over the destination.
     """
     target_file.parent.mkdir(parents=True, exist_ok=True)
     temp_suffix = ".tmp"
@@ -228,7 +248,11 @@ def _run_es_exe_folders_query() -> list[str]:
 
 
 def discover_repo_roots_via_everything() -> list[str]:
-    """Run es.exe, filter to genuine git roots, deduplicate, and sort."""
+    """Run es.exe, filter to genuine git roots, deduplicate, and sort.
+
+    Returns:
+        Deduplicated, sorted list of repo-root paths discovered by es.exe.
+    """
     all_raw_paths = _run_es_exe_folders_query()
     all_git_roots = filter_to_git_roots(all_raw_paths)
     all_included = apply_exclusion_filter(all_git_roots)
@@ -291,6 +315,11 @@ def prompt_and_write(
 
     Reads and validates the existing registry BEFORE prompting so the user
     learns of any schema or read error early. Declining writes nothing.
+
+    Args:
+        path_by_name: Proposed name-to-path mapping to present to the user.
+        save_path: Registry destination path used for the schema check
+            and atomic write target.
     """
     existing_registry = _load_and_validate_registry(save_path)
     _display_proposed_mapping(path_by_name, save_path)
@@ -319,6 +348,15 @@ def _build_path_by_name_from_roots(all_repo_roots: list[str]) -> dict[str, str]:
 
 
 def main() -> int:
+    """Run the discovery, prompt, and atomic-write flow for the registry.
+
+    Returns:
+        ``0`` on success or when no candidate repositories were found.
+
+    Raises:
+        SystemExit: When es.exe scan fails or the existing registry is
+            malformed.
+    """
     if not _everything_binary_is_available():
         print(
             f"ERROR: {ES_EXE_BINARY_NAME} not found on PATH. Install Everything "

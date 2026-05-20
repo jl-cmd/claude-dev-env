@@ -17,11 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import NoReturn
 
-sys.modules.pop("config", None)
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from config.claude_permissions_constants import (
+from pr_loop_shared_constants.claude_permissions_constants import (
     ALL_TRUST_ENTRY_PROJECT_PATH_BOUNDARY_QUOTE_CHARACTERS,
     CLAUDE_SETTINGS_DIRECTORY_NAME,
     GIT_DIRECTORY_NAME,

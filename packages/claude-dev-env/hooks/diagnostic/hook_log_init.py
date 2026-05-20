@@ -22,7 +22,7 @@ try:
 except ImportError:
     psycopg = None
 
-from config.hook_log_extractor_constants import (
+from hooks_constants.hook_log_extractor_constants import (
     CONNECT_TIMEOUT_SECONDS,
     EXIT_CODE_ENVIRONMENT_MISSING,
     EXIT_CODE_SUCCESS,

@@ -24,7 +24,7 @@ if str(_self_dir) not in sys.path:
     sys.path.insert(0, str(_self_dir))
 
 from _path_resolver import per_pr_workspace
-from config.path_resolver_constants import ALL_PYTHON_ONEXC_VERSION
+from skills_pr_loop_constants.path_resolver_constants import ALL_PYTHON_ONEXC_VERSION
 
 
 def _remove_readonly_attribute(

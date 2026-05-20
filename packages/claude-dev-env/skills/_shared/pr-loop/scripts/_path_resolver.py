@@ -9,7 +9,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from config.path_resolver_constants import (
+from skills_pr_loop_constants.path_resolver_constants import (
     DIFF_PATCH_TEMPLATE,
     FIX_OUTCOME_XML_TEMPLATE,
     MULTI_PR_SLUG_TEMPLATE,

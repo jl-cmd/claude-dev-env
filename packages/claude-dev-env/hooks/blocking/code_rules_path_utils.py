@@ -11,7 +11,14 @@ the canonical implementation lives here.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+hooks_root_directory = str(Path(__file__).resolve().parent.parent)
+if hooks_root_directory not in sys.path:
+    sys.path.insert(0, hooks_root_directory)
+
+from hooks_constants.code_rules_path_utils_constants import ALL_CONFIG_DIRECTORY_NAMES  # noqa: E402
 
 
 def is_config_file(file_path: str) -> bool:
@@ -28,4 +35,4 @@ def is_config_file(file_path: str) -> bool:
     if normalized.endswith("/settings.py") or normalized == "settings.py":
         return True
     path_parts = Path(normalized).parts
-    return "config" in path_parts[:-1]
+    return any(directory_segment in ALL_CONFIG_DIRECTORY_NAMES for directory_segment in path_parts[:-1])

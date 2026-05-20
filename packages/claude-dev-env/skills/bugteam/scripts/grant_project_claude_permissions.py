@@ -9,17 +9,11 @@ the changes applied. No-op when the entries already exist.
 import sys
 from pathlib import Path
 
-for each_cached_module_name in [
-    each_module_key
-    for each_module_key in list(sys.modules)
-    if each_module_key == "config" or each_module_key.startswith("config.")
-]:
-    sys.modules.pop(each_cached_module_name, None)
 parent_directory = str(Path(__file__).resolve().parent)
 if parent_directory not in sys.path:
     sys.path.insert(0, parent_directory)
 
-from _claude_permissions_common import (  # noqa: E402
+from _bugteam_permissions_common import (  # noqa: E402
     append_if_missing,
     build_agent_config_deny_rules,
     build_permission_rules,
@@ -32,7 +26,7 @@ from _claude_permissions_common import (  # noqa: E402
     remove_matching_entries_from_list,
     save_settings,
 )
-from config.claude_permissions_common_constants import (  # noqa: E402
+from bugteam_scripts_constants.claude_permissions_common_constants import (  # noqa: E402
     ALL_AGENT_CONFIG_DENY_TOOLS,
     ALL_AGENT_CONFIG_PATH_PATTERNS,
     ALL_PERMISSION_ALLOW_TOOLS,

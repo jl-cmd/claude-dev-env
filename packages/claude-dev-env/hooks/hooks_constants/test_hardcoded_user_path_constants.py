@@ -9,7 +9,7 @@ _HOOKS_ROOT = Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-from config.hardcoded_user_path_constants import HARDCODED_USER_PATH_PATTERN
+from hooks_constants.hardcoded_user_path_constants import HARDCODED_USER_PATH_PATTERN
 
 
 def test_pattern_matches_windows_user_home() -> None:

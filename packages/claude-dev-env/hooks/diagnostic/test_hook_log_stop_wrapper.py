@@ -15,7 +15,7 @@ if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
 from diagnostic import hook_log_stop_wrapper
-from config.hook_log_extractor_constants import (
+from hooks_constants.hook_log_extractor_constants import (
     BWS_ACCESS_TOKEN_ENV_VAR,
     BWS_EXECUTABLE_NAME,
     FLAG_INCREMENTAL,

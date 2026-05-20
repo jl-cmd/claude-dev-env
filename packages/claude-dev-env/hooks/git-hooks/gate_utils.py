@@ -6,7 +6,7 @@ import os
 import stat
 from pathlib import Path
 
-from config import (
+from git_hooks_constants import (
     CLAUDE_HOME_DEFAULT_SUBDIRECTORY,
     CLAUDE_HOME_ENV_VAR,
     GATE_PATH_OVERRIDE_ENV_VAR,

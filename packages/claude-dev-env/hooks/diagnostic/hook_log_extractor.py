@@ -57,7 +57,7 @@ try:
 except ImportError:
     psycopg = None
 
-from config.hook_log_extractor_constants import (
+from hooks_constants.hook_log_extractor_constants import (
     ATTACHMENT_TYPE_HOOK_ADDITIONAL_CONTEXT,
     ATTACHMENT_TYPE_HOOK_BLOCKING_ERROR,
     ATTACHMENT_TYPE_HOOK_SUCCESS,

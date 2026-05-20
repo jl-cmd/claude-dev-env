@@ -11,7 +11,7 @@ settings) live here.
 import re
 from pathlib import Path
 
-from config.constants import (  # noqa: F401
+from pr_converge_skill_constants.constants import (  # noqa: F401
     ALL_BUGBOT_CHECK_RUN_ACTIVE_STATUSES,
     ALL_CLAUDE_DIRTY_REVIEW_STATES,
     ALL_COPILOT_DIRTY_REVIEW_STATES,

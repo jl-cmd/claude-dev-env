@@ -108,27 +108,6 @@ def test_reflow_merged_line_preserves_long_markdown_reference_definition() -> No
     assert reflow_module.reflow_merged_line(line) == [stripped_line]
 
 
-def test_reflow_bootstrap_moves_script_directory_ahead_of_shadow_config(
-    tmp_path: Path,
-) -> None:
-    """sys.path bootstrap must move the script directory ahead of shadow config packages."""
-    shadow_config_directory = tmp_path / "shadow" / "config"
-    shadow_config_directory.mkdir(parents=True)
-    (shadow_config_directory / "__init__.py").write_text("", encoding="utf-8")
-    (shadow_config_directory / "pr_converge_constants.py").write_text(
-        "BROKEN = True\n", encoding="utf-8"
-    )
-    original_sys_path = list(sys.path)
-    try:
-        sys.path.insert(0, str(tmp_path / "shadow"))
-        loaded_module = _load_module()
-        assert loaded_module.MAX_WIDTH == 80
-        assert sys.path[0] == str(_SCRIPTS_DIRECTORY)
-        assert sys.path.count(str(_SCRIPTS_DIRECTORY)) == 1
-    finally:
-        sys.path[:] = original_sys_path
-
-
 def test_wrap_long_bash_fence_lines_uses_continuation_marker_for_long_lines() -> None:
     """Wrapped continuation lines use the bash continuation marker."""
     long_line = "echo " + "word " * 20
@@ -150,13 +129,3 @@ def test_reflow_uses_config_constant_for_continuation_marker_width() -> None:
         "reflow_skill_md.py must import BASH_CONTINUATION_MARKER_WIDTH from config"
     )
 
-def test_reflow_bootstrap_matches_code_rules_sys_path_pattern() -> None:
-    """Bootstrap must guard insert with a membership check."""
-    module_path = _SCRIPTS_DIRECTORY / "reflow_skill_md.py"
-    source = module_path.read_text(encoding="utf-8")
-    assert "while script_directory in sys.path:" in source, (
-        "Bootstrap must dedup script_directory entries before insert"
-    )
-    assert "sys.path.insert(0, script_directory)" in source, (
-        "Bootstrap must insert script_directory at index 0"
-    )

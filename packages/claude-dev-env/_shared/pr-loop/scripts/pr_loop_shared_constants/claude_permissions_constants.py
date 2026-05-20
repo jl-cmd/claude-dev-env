@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from config.preflight_constants import GIT_DIRECTORY_NAME
+from pr_loop_shared_constants.preflight_constants import GIT_DIRECTORY_NAME
 
 __all__ = (
     "ALL_AGENT_CONFIG_DENY_TOOLS",

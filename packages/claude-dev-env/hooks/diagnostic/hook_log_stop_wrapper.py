@@ -37,7 +37,7 @@ from pathlib import Path
 if str(Path(__file__).resolve().parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config.hook_log_extractor_constants import (
+from hooks_constants.hook_log_extractor_constants import (
     BWS_ACCESS_TOKEN_ENV_VAR,
     BWS_EXECUTABLE_NAME,
     BWS_RUN_SEPARATOR,

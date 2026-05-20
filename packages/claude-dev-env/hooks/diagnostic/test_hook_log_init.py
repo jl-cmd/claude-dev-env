@@ -17,8 +17,8 @@ if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
 from diagnostic import hook_log_init
-from config import hook_log_extractor_constants
-from config.hook_log_extractor_constants import (
+from hooks_constants import hook_log_extractor_constants
+from hooks_constants.hook_log_extractor_constants import (
     EXIT_CODE_ENVIRONMENT_MISSING,
     NEON_DATABASE_URL_ENVIRONMENT_VARIABLE,
     OUTCOME_INIT_PROBE,

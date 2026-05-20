@@ -44,3 +44,9 @@ packages/claude-dev-env/.env
 packages/claude-dev-env/skills/self-improve-pr-converge/self-improve-eval-data/
 packages/claude-dev-env/skills/self-improve-pr-converge/scripts/self-improve-eval-data/
 **/self-improve-eval-data/*.temp-*
+
+# Local working documents — never committed per git-workflow rule
+docs/plans/
+
+# setuptools editable-install build artifacts
+*.egg-info/

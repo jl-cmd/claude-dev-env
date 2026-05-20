@@ -10,22 +10,9 @@ autoMode sections so repeated grant/revoke cycles leave no dead structure.
 import sys
 from pathlib import Path
 
-parent_directory = str(Path(__file__).absolute().parent)
-try:
-    sys.path.remove(parent_directory)
-except ValueError:
-    pass
+parent_directory = str(Path(__file__).resolve().parent)
 if parent_directory not in sys.path:
     sys.path.insert(0, parent_directory)
-
-for each_cached_module_name in [
-    each_module_key
-    for each_module_key in list(sys.modules)
-    if each_module_key == "config"
-    or each_module_key.startswith("config.")
-    or each_module_key == "_claude_permissions_common"
-]:
-    sys.modules.pop(each_cached_module_name, None)
 
 from _claude_permissions_common import (  # noqa: E402
     build_agent_config_deny_rules,
@@ -39,14 +26,14 @@ from _claude_permissions_common import (  # noqa: E402
     remove_matching_entries_from_list,
     save_settings,
 )
-from config.claude_permissions_constants import (  # noqa: E402
+from pr_loop_shared_constants.claude_permissions_constants import (
     ALL_AGENT_CONFIG_DENY_TOOLS,
     ALL_AGENT_CONFIG_PATH_PATTERNS,
     ALL_PERMISSION_ALLOW_TOOLS,
     AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX,
     get_claude_user_settings_path,
 )
-from config.claude_settings_keys_constants import (  # noqa: E402
+from pr_loop_shared_constants.claude_settings_keys_constants import (
     CLAUDE_SETTINGS_ADDITIONAL_DIRECTORIES_KEY,
     CLAUDE_SETTINGS_ALLOW_KEY,
     CLAUDE_SETTINGS_AUTO_MODE_KEY,

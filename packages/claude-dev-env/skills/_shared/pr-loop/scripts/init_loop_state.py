@@ -20,7 +20,7 @@ from _path_resolver import (
     per_pr_workspace,
     resolve_run_temp_dir,
 )
-from config.path_resolver_constants import LOOP_STATE_JSON_INDENT
+from skills_pr_loop_constants.path_resolver_constants import LOOP_STATE_JSON_INDENT
 
 
 def create_loop_state(

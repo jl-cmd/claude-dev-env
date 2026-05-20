@@ -8,8 +8,8 @@ import json
 import sys
 from unittest.mock import patch
 
-from config import pre_tool_use_stdin
-from config.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
+from hooks_constants import pre_tool_use_stdin
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
 
 
 def test_pre_tool_use_stdin_uses_shared_encoding_and_decode_constants() -> None:

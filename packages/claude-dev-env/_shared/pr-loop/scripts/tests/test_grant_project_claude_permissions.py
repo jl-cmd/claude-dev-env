@@ -1,7 +1,8 @@
 """Smoke tests for grant_project_claude_permissions wiring.
 
 Confirms the module imports cleanly with the constants now sourced from
-config/claude_permissions_constants.py and config/claude_settings_keys_constants.py.
+pr_loop_shared_constants/claude_permissions_constants.py and
+pr_loop_shared_constants/claude_settings_keys_constants.py.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ def _load_grant_module() -> ModuleType:
     parent_directory = str(scripts_directory.resolve())
     if parent_directory not in sys.path:
         sys.path.insert(0, parent_directory)
-    sys.modules.pop("config", None)
     module_path = scripts_directory / "grant_project_claude_permissions.py"
     specification = importlib.util.spec_from_file_location(
         "grant_project_claude_permissions", module_path

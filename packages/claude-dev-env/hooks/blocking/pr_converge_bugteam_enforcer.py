@@ -25,17 +25,11 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
 
-def _insert_hooks_tree_for_imports() -> None:
-    hooks_tree = Path(__file__).resolve().parent.parent
-    hooks_tree_string = str(hooks_tree)
-    if hooks_tree_string not in sys.path:
-        sys.path.insert(0, hooks_tree_string)
-
-
-_insert_hooks_tree_for_imports()
-
-from config.pr_converge_bugteam_enforcer_constants import (
+from hooks_constants.pr_converge_bugteam_enforcer_constants import (  # noqa: E402
     AGENT_TOOL_NAME,
     ALL_AUDIT_PROMPT_SUBSTRINGS,
     BUGTEAM_PHASE,
@@ -47,7 +41,7 @@ from config.pr_converge_bugteam_enforcer_constants import (
     STATE_FIELD_PHASE,
     STATE_FIELD_TICK_COUNT,
 )
-from config.pr_converge_bugteam_enforcer_state import (
+from hooks_constants.pr_converge_bugteam_enforcer_state import (  # noqa: E402
     load_state_dictionary,
     resolve_state_path,
 )

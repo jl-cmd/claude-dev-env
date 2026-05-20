@@ -11,17 +11,7 @@ from pathlib import Path
 
 ValidateContentCallable = Callable[..., list[str]]
 
-_previously_cached_config = {}
-for each_cached_module_name in [
-    each_module_key
-    for each_module_key in list(sys.modules)
-    if each_module_key == "config" or each_module_key.startswith("config.")
-]:
-    _previously_cached_config[each_cached_module_name] = sys.modules.pop(
-        each_cached_module_name
-    )
-
-from config.bugteam_code_rules_gate_constants import (
+from bugteam_scripts_constants.bugteam_code_rules_gate_constants import (
     ALL_CODE_FILE_EXTENSIONS,
     ALL_COLUMN_MAGIC_FALSE_VALUES,
     ALL_GIT_DIFF_CACHED_ARGS,
@@ -33,8 +23,6 @@ from config.bugteam_code_rules_gate_constants import (
     MAXIMUM_ISSUES_TO_REPORT,
     VIOLATION_LINE_RAW_PATTERN,
 )
-
-sys.modules.update(_previously_cached_config)
 
 
 def hunk_header_pattern() -> re.Pattern[str]:

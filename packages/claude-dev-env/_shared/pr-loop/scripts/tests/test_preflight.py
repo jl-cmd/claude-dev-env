@@ -31,7 +31,7 @@ def _load_preflight_module() -> ModuleType:
 
 preflight = _load_preflight_module()
 
-from config.preflight_constants import (  # noqa: E402
+from pr_loop_shared_constants.preflight_constants import (  # noqa: E402
     PYTEST_INI_FILENAME,
     PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
 )
@@ -204,16 +204,19 @@ def test_should_exit_nonzero_when_subprocess_run_raises_os_error(
 
 
 def test_preflight_uses_shared_hooks_path_suffix_constant() -> None:
-    """Preflight's expected suffix must come from config.fix_hookspath_constants
-    so the canonical hooks directory is defined in exactly one place."""
+    """Preflight's expected suffix must come from
+    pr_loop_shared_constants.fix_hookspath_constants so the canonical hooks
+    directory is defined in exactly one place."""
     scripts_directory = str(Path(__file__).parent.parent.resolve())
     if scripts_directory not in sys.path:
         sys.path.insert(0, scripts_directory)
     constants_module_path = (
-        Path(__file__).parent.parent / "config" / "fix_hookspath_constants.py"
+        Path(__file__).parent.parent
+        / "pr_loop_shared_constants"
+        / "fix_hookspath_constants.py"
     )
     constants_specification = importlib.util.spec_from_file_location(
-        "config.fix_hookspath_constants",
+        "pr_loop_shared_constants.fix_hookspath_constants",
         constants_module_path,
     )
     assert constants_specification is not None
@@ -234,15 +237,18 @@ def test_preflight_skip_uses_shared_env_var_constant(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The preflight skip env-var name must come from config/preflight_constants.py."""
+    """The preflight skip env-var name must come from
+    pr_loop_shared_constants/preflight_constants.py."""
     scripts_directory = str(Path(__file__).parent.parent.resolve())
     if scripts_directory not in sys.path:
         sys.path.insert(0, scripts_directory)
     constants_module_path = (
-        Path(__file__).parent.parent / "config" / "preflight_constants.py"
+        Path(__file__).parent.parent
+        / "pr_loop_shared_constants"
+        / "preflight_constants.py"
     )
     constants_specification = importlib.util.spec_from_file_location(
-        "config.preflight_constants",
+        "pr_loop_shared_constants.preflight_constants",
         constants_module_path,
     )
     assert constants_specification is not None
@@ -306,8 +312,9 @@ def test_preflight_does_not_import_unused_repository_root_marker_constant() -> N
 
 def test_pytest_no_tests_collected_helper_returns_named_constant() -> None:
     """The pytest "no tests collected" exit code must be sourced from the
-    named constant in config/preflight_constants.py rather than the bare
-    literal 5 inside the function body (CODE_RULES magic-values rule)."""
+    named constant in pr_loop_shared_constants/preflight_constants.py rather
+    than the bare literal 5 inside the function body (CODE_RULES magic-values
+    rule)."""
     assert preflight._pytest_exit_code_no_tests_collected() == (
         PYTEST_NO_TESTS_COLLECTED_EXIT_CODE
     )
@@ -315,30 +322,6 @@ def test_pytest_no_tests_collected_helper_returns_named_constant() -> None:
     assert "PYTEST_NO_TESTS_COLLECTED_EXIT_CODE" in helper_source, (
         "Helper body must return the named constant, not the bare literal 5"
     )
-
-
-def test_preflight_bootstrap_moves_script_directory_to_front() -> None:
-    """Import bootstrap keeps exactly one script directory entry at the front."""
-    module_path = Path(__file__).parent.parent / "preflight.py"
-    script_directory_resolved = str(module_path.parent.resolve())
-    script_directory_absolute = str(module_path.parent.absolute())
-    original_sys_path = list(sys.path)
-    try:
-        sys.path.insert(0, script_directory_resolved)
-        sys.path.insert(0, script_directory_resolved)
-        sys.path.insert(0, str(module_path.parents[4]))
-        _load_preflight_module()
-        assert os.path.samefile(sys.path[0], script_directory_resolved)
-        equivalent_count = sum(
-            1
-            for each_entry in sys.path
-            if os.path.exists(each_entry)
-            and os.path.samefile(each_entry, script_directory_resolved)
-        )
-        assert equivalent_count == 1
-        assert sys.path[0] == script_directory_absolute
-    finally:
-        sys.path[:] = original_sys_path
 
 
 def test_main_uses_correct_changed_files_function_name() -> None:
@@ -526,24 +509,6 @@ def test_explicit_scope_all_with_base_ref_should_not_call_get_changed_files(
         exit_code = preflight.main(["--scope", "all", "--base-ref", "origin/main"])
     assert exit_code == 0
     mock_get_changed.assert_not_called()
-
-
-def test_preflight_bootstrap_matches_code_rules_sys_path_pattern() -> None:
-    """Bootstrap must clear duplicate script_directory entries, then guard insert."""
-    module_path = Path(__file__).parent.parent / "preflight.py"
-    source = module_path.read_text(encoding="utf-8")
-    assert "_entry_points_at_preflight_script_directory" in source, (
-        "Bootstrap must remove script_directory entries using path equivalence"
-    )
-    assert "for each_index in range(len(sys.path) - 1, -1, -1):" in source, (
-        "Bootstrap must walk sys.path to drop duplicate script directory entries"
-    )
-    assert "_preflight_scripts_path_entry not in sys.path:" in source, (
-        "Bootstrap insert must be guarded for code_rules_gate compliance"
-    )
-    assert "sys.path.insert(0, _preflight_scripts_path_entry)" in source, (
-        "Bootstrap must insert the absolute script directory at index 0"
-    )
 
 
 def test_has_discoverable_tests_should_include_untracked_test_files(

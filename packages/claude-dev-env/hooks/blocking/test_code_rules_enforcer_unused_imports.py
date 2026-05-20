@@ -39,7 +39,7 @@ TEST_FILE_PATH = "packages/app/tests/test_loader.py"
 
 def test_should_flag_unused_from_import() -> None:
     source = (
-        "from config.preflight_constants import VENV_DIRECTORY_NAME\n"
+        "from hooks_constants.preflight_constants import VENV_DIRECTORY_NAME\n"
         "\n"
         "def run() -> None:\n"
         "    return None\n"
@@ -52,7 +52,7 @@ def test_should_flag_unused_from_import() -> None:
 
 def test_should_not_flag_used_from_import() -> None:
     source = (
-        "from config.preflight_constants import VENV_DIRECTORY_NAME\n"
+        "from hooks_constants.preflight_constants import VENV_DIRECTORY_NAME\n"
         "\n"
         "def run() -> str:\n"
         "    return VENV_DIRECTORY_NAME\n"
@@ -79,7 +79,7 @@ def test_should_not_flag_when_alias_is_used() -> None:
 
 def test_should_skip_file_with_dunder_all() -> None:
     source = (
-        "from config.preflight_constants import VENV_DIRECTORY_NAME\n"
+        "from hooks_constants.preflight_constants import VENV_DIRECTORY_NAME\n"
         "\n"
         "__all__ = ['something']\n"
     )
@@ -91,7 +91,7 @@ def test_should_skip_file_with_dunder_all() -> None:
 
 def test_should_skip_file_with_dunder_all_annotated_assignment() -> None:
     source = (
-        "from config.preflight_constants import VENV_DIRECTORY_NAME\n"
+        "from hooks_constants.preflight_constants import VENV_DIRECTORY_NAME\n"
         "\n"
         '__all__: list[str] = ["VENV_DIRECTORY_NAME"]\n'
     )
@@ -105,7 +105,7 @@ def test_should_skip_file_with_dunder_all_annotated_assignment() -> None:
 def test_should_skip_file_using_type_checking_block() -> None:
     source = (
         "from typing import TYPE_CHECKING\n"
-        "from config.constants import UNUSED_NAME\n"
+        "from hooks_constants.constants import UNUSED_NAME\n"
         "\n"
         "if TYPE_CHECKING:\n"
         "    from somewhere import OtherName\n"
@@ -121,7 +121,7 @@ def test_should_skip_file_using_type_checking_block() -> None:
 
 def test_should_skip_test_files() -> None:
     source = (
-        "from config.constants import UNUSED_NAME\n"
+        "from hooks_constants.constants import UNUSED_NAME\n"
         "\n"
         "def test_thing() -> None:\n"
         "    assert True\n"
@@ -139,7 +139,7 @@ def test_should_handle_syntax_error_gracefully() -> None:
 def test_should_include_line_number_in_issue() -> None:
     source = (
         "\n"
-        "from config.preflight_constants import VENV_DIRECTORY_NAME\n"
+        "from hooks_constants.preflight_constants import VENV_DIRECTORY_NAME\n"
         "\n"
         "def run() -> None:\n"
         "    return None\n"
@@ -152,7 +152,7 @@ def test_should_include_line_number_in_issue() -> None:
 
 def test_should_flag_each_unused_in_multi_import() -> None:
     source = (
-        "from config.constants import USED_ONE, UNUSED_TWO\n"
+        "from hooks_constants.constants import USED_ONE, UNUSED_TWO\n"
         "\n"
         "def run() -> str:\n"
         "    return USED_ONE\n"
@@ -178,7 +178,7 @@ def test_should_not_flag_when_referenced_in_annotation() -> None:
 
 def test_should_skip_noqa_marked_imports() -> None:
     source = (
-        "from config.constants import UNUSED_BUT_DELIBERATE  # noqa: F401\n"
+        "from hooks_constants.constants import UNUSED_BUT_DELIBERATE  # noqa: F401\n"
         "\n"
         "def run() -> None:\n"
         "    return None\n"
@@ -191,7 +191,7 @@ def test_should_skip_noqa_marked_imports() -> None:
 
 def test_should_skip_noqa_on_from_keyword_line_for_multiline_import() -> None:
     source = (
-        "from config.constants import (  # noqa: F401\n"
+        "from hooks_constants.constants import (  # noqa: F401\n"
         "    SOME_CONSTANT,\n"
         "    ANOTHER_CONSTANT,\n"
         ")\n"
@@ -261,7 +261,7 @@ def test_should_flag_when_name_only_appears_in_comment() -> None:
 
 def test_should_not_skip_when_type_checking_only_in_string_constant() -> None:
     source = (
-        'from config.constants import UNUSED_NAME\n'
+        'from hooks_constants.constants import UNUSED_NAME\n'
         '\n'
         'HELP_TEXT = "See TYPE_CHECKING docs"\n'
         '\n'
@@ -276,7 +276,7 @@ def test_should_not_skip_when_type_checking_only_in_string_constant() -> None:
 
 def test_should_flag_when_noqa_lists_only_non_f401_codes() -> None:
     source = (
-        "from config.constants import UNUSED  # noqa: E402\n"
+        "from hooks_constants.constants import UNUSED  # noqa: E402\n"
         "\n"
         "def run() -> None:\n"
         "    return None\n"
@@ -289,7 +289,7 @@ def test_should_flag_when_noqa_lists_only_non_f401_codes() -> None:
 
 def test_should_skip_when_noqa_is_bare() -> None:
     source = (
-        "from config.constants import UNUSED  # noqa\n"
+        "from hooks_constants.constants import UNUSED  # noqa\n"
         "\n"
         "def run() -> None:\n"
         "    return None\n"
@@ -299,9 +299,9 @@ def test_should_skip_when_noqa_is_bare() -> None:
 
 
 def test_should_not_flag_imports_referenced_only_in_full_file_content() -> None:
-    fragment = "from config.constants import NEW_NAME\n"
+    fragment = "from hooks_constants.constants import NEW_NAME\n"
     full_file = (
-        "from config.constants import NEW_NAME\n"
+        "from hooks_constants.constants import NEW_NAME\n"
         "\n"
         "def existing_function() -> str:\n"
         "    return NEW_NAME\n"
@@ -315,9 +315,9 @@ def test_should_not_flag_imports_referenced_only_in_full_file_content() -> None:
 
 
 def test_should_flag_imports_unused_in_full_file_content() -> None:
-    fragment = "from config.constants import TRULY_UNUSED\n"
+    fragment = "from hooks_constants.constants import TRULY_UNUSED\n"
     full_file = (
-        "from config.constants import TRULY_UNUSED\n"
+        "from hooks_constants.constants import TRULY_UNUSED\n"
         "\n"
         "def existing_function() -> None:\n"
         "    return None\n"
@@ -331,10 +331,10 @@ def test_should_flag_imports_unused_in_full_file_content() -> None:
 
 
 def test_should_only_flag_imports_in_fragment_not_full_file() -> None:
-    fragment = "from config.constants import FRAGMENT_IMPORT\n"
+    fragment = "from hooks_constants.constants import FRAGMENT_IMPORT\n"
     full_file = (
-        "from config.other import PRE_EXISTING_UNUSED\n"
-        "from config.constants import FRAGMENT_IMPORT\n"
+        "from hooks_constants.other import PRE_EXISTING_UNUSED\n"
+        "from hooks_constants.constants import FRAGMENT_IMPORT\n"
         "\n"
         "def existing_function() -> str:\n"
         "    return FRAGMENT_IMPORT\n"
@@ -349,9 +349,9 @@ def test_should_only_flag_imports_in_fragment_not_full_file() -> None:
 
 
 def test_should_skip_when_full_file_declares_dunder_all() -> None:
-    fragment = "from config.constants import NEW_NAME\n"
+    fragment = "from hooks_constants.constants import NEW_NAME\n"
     full_file = (
-        "from config.constants import NEW_NAME\n"
+        "from hooks_constants.constants import NEW_NAME\n"
         "\n"
         "__all__ = ['NEW_NAME']\n"
     )
@@ -365,10 +365,10 @@ def test_should_skip_when_full_file_declares_dunder_all() -> None:
 
 
 def test_should_skip_when_full_file_uses_type_checking_gate() -> None:
-    fragment = "from config.constants import NEW_NAME\n"
+    fragment = "from hooks_constants.constants import NEW_NAME\n"
     full_file = (
         "from typing import TYPE_CHECKING\n"
-        "from config.constants import NEW_NAME\n"
+        "from hooks_constants.constants import NEW_NAME\n"
         "\n"
         "if TYPE_CHECKING:\n"
         "    from somewhere import OtherName\n"
@@ -387,7 +387,7 @@ def test_should_skip_when_full_file_uses_type_checking_gate() -> None:
 
 def test_should_fall_back_to_content_when_full_file_content_is_none() -> None:
     source = (
-        "from config.constants import VENV_DIRECTORY_NAME\n"
+        "from hooks_constants.constants import VENV_DIRECTORY_NAME\n"
         "\n"
         "def run() -> None:\n"
         "    return None\n"
@@ -400,7 +400,7 @@ def test_should_fall_back_to_content_when_full_file_content_is_none() -> None:
 
 
 def test_should_fall_back_when_full_file_content_has_syntax_error() -> None:
-    fragment = "from config.constants import NEW_NAME\n"
+    fragment = "from hooks_constants.constants import NEW_NAME\n"
     full_file_with_syntax_error = "from config import (\n  not python\n"
     issues = check_unused_module_level_imports(
         fragment, PRODUCTION_FILE_PATH, full_file_content=full_file_with_syntax_error,
@@ -471,7 +471,7 @@ def test_should_flag_import_when_only_shadowed_local_name_is_loaded() -> None:
 def test_should_skip_when_type_checking_uses_imported_alias() -> None:
     source = (
         "from typing import TYPE_CHECKING as IS_TYPE_CHECKING\n"
-        "from config.constants import UNUSED_NAME\n"
+        "from hooks_constants.constants import UNUSED_NAME\n"
         "\n"
         "if IS_TYPE_CHECKING:\n"
         "    from somewhere import OtherName\n"
@@ -488,7 +488,7 @@ def test_should_skip_when_type_checking_uses_imported_alias() -> None:
 def test_should_skip_when_type_checking_uses_module_alias() -> None:
     source = (
         "import typing as t\n"
-        "from config.constants import UNUSED_NAME\n"
+        "from hooks_constants.constants import UNUSED_NAME\n"
         "\n"
         "if t.TYPE_CHECKING:\n"
         "    from somewhere import OtherName\n"
@@ -517,7 +517,7 @@ def test_should_not_flag_when_referenced_in_quoted_annotation() -> None:
 
 def test_should_flag_when_noqa_only_appears_inside_string_literal() -> None:
     source = (
-        "from config.constants import UNUSED; MARKER = '# noqa: F401'\n"
+        "from hooks_constants.constants import UNUSED; MARKER = '# noqa: F401'\n"
         "\n"
         "def run() -> None:\n"
         "    return None\n"

@@ -33,7 +33,7 @@ _pr_converge_dir = Path(__file__).absolute().parent.parent
 if str(_pr_converge_dir) not in sys.path:
     sys.path.insert(0, str(_pr_converge_dir))
 
-from config.constants import (
+from pr_converge_skill_constants.constants import (
     ALL_BUGBOT_CHECK_RUN_ACTIVE_STATUSES,
     ALL_BUGBOT_CHECK_RUN_COMPLETE_CONCLUSIONS,
     BUGBOT_CHECK_RUN_COMPLETED_STATUS,

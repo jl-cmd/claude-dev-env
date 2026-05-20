@@ -32,7 +32,7 @@ import tempfile
 from pathlib import Path
 from typing import TextIO
 
-from config.gh_pr_author_swap_constants import (
+from hooks_constants.gh_pr_author_swap_constants import (
     ALL_GH_AUTH_SWITCH_COMMAND_HEAD,
     ALL_SHELL_QUOTE_CHARACTERS,
     BASH_COMMENT_INTRODUCER_CHARACTER,

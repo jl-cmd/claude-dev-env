@@ -15,25 +15,19 @@ import re
 import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
 
-def _insert_hooks_tree_for_imports() -> None:
-    hooks_tree = Path(__file__).resolve().parent.parent
-    hooks_tree_string = str(hooks_tree)
-    if hooks_tree_string not in sys.path:
-        sys.path.insert(0, hooks_tree_string)
-
-
-_insert_hooks_tree_for_imports()
-
-from config.dynamic_stderr_handler import DynamicStderrHandler
-from config.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
-from config.path_rewriter_constants import (
+from hooks_constants.dynamic_stderr_handler import DynamicStderrHandler  # noqa: E402
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
+from hooks_constants.path_rewriter_constants import (  # noqa: E402
     BASH_TOOL_NAME,
     HOOK_EVENT_NAME,
     PERMISSION_ALLOW,
     PLACEHOLDER_TOKEN_PATTERN,
 )
-from config.project_paths_reader import load_registry
+from hooks_constants.project_paths_reader import load_registry  # noqa: E402
 
 _ES_EXE_TRIGGER_PATTERN = re.compile(
     r"(?i)(?<![\w.])(?:Everything[/\\])?es\.exe(?![\w.])",

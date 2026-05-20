@@ -22,7 +22,7 @@ hook_spec.loader.exec_module(hook_module)
 _detect_bot_mention = hook_module._detect_bot_mention
 _body_contains_token = hook_module._body_contains_token
 
-from config.bot_mention_comment_blocker_constants import (
+from hooks_constants.bot_mention_comment_blocker_constants import (
     CORRECTIVE_MESSAGE_COPILOT,
     CORRECTIVE_MESSAGE_CURSOR,
     CURSOR_MENTION_TOKEN,

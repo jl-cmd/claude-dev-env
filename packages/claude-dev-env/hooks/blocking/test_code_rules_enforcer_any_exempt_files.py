@@ -56,7 +56,7 @@ def test_should_still_flag_in_regular_module() -> None:
 
 
 def test_any_type_config_module_exists_and_exposes_constant() -> None:
-    config_module_path = Path(__file__).parent.parent / "config" / "any_type_config.py"
+    config_module_path = Path(__file__).parent.parent / "hooks_constants" / "any_type_config.py"
     assert config_module_path.is_file(), f"Missing: {config_module_path}"
     spec = importlib.util.spec_from_file_location("any_type_config_under_test", config_module_path)
     assert spec is not None
