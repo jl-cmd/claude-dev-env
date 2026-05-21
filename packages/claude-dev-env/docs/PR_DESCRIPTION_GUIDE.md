@@ -1,158 +1,157 @@
 # PR Description Guide
 
-This guide describes the PR-body shape that the `pr-description-writer` agent produces and that the `pr_description_enforcer` PreToolUse hook validates against. The style mirrors merged pull requests in `anthropics/claude-code`, `anthropics/claude-code-action`, and `anthropics/claude-cli-internal`.
+Authoritative reference for the `pr-description-writer` agent and the `pr_description_enforcer` PreToolUse hook. PR bodies that match this guide pass the enforcer on first attempt.
 
-## Three shapes, picked from the diff
+## Anthropic style basis
 
-Pick the shape from the size and risk of the change, not from a template.
+The shape rules and header vocabulary derive from a 120-PR sample. Sources: `anthropics/claude-code` (40 PRs), `anthropics/claude-code-action` (40 PRs), and `anthropics/claude-code-sdk-python` (40 PRs). The corpus was sampled from merged PRs.
 
-| Signal | Shape |
-|---|---|
-| 1-3 files, mechanical change (pin bump, link fix, typo, single-line config), no behavior change | **Trivial** -- one declarative sentence, no headers |
-| Behavior change, bug fix, small feature; under ~15 files | **Standard** -- intro paragraph + `## Changes` + `## Test plan` (or `## Validation`) |
-| New subsystem, refactor across many files, schema or contract change, anything with a caveat | **Heavy** -- intro + `## Problem` + `## Fix` (or `## Changes`) + `## Verification` + extra sections as needed |
+Key signals from the corpus:
 
-Prefer the smaller shape when in doubt.
+- **Shape distribution.** Trivial (≤ 10 lines): 32.5% — median body 288 chars. Small (11–100 lines): 41.7% — median 1,105 chars. Medium (101–500 lines): 20.0% — median 940 chars. Large (> 500 lines): 5.8% — median 2,441 chars.
+- **Modal headers.** `## Summary` 43, `## Problem` 20, `## Test plan` 20, `## Fix` 18, `## Changes` 14, `## Tests` 11, `## Testing` 10, `## Root cause` 5, `## Approach` 2.
+- **Opening style.** 46.7% open with a header, 53.3% with an unmarked paragraph. 51% of prose-opening Small/Medium PRs open with an imperative verb. `This PR` appears in 1 of 120 PRs.
+- **Issue references.** 27.5% of PRs use `Fixes #N`, `Closes #N`, or `Resolves #N`.
+- **Sentence length.** First-paragraph mean 15.2 words; median 14.5. Sentences over 28 words are uncommon.
+- **Em-dashes.** Appear in 48% of bodies as parenthetical separators.
+- **Backtick identifiers in intros.** Routine — filenames, function names, env vars, and CLI flags appear in opening paragraphs.
 
-## Shape 1: Trivial
+## The three shapes
 
-One sentence. No Markdown headers. Optional `Fixes #N` line.
+### Trivial
 
+- **Guidance.** Diff ≤ 10 lines changed (the agent picks shape by diff size; the hook cannot see the diff).
+- **Hook enforcement.** Substantive prose under `TRIVIAL_BODY_CHAR_THRESHOLD` (200 chars). The hook blocks any ATX heading at any depth (`#`, `##`, `###`, ...) in a Trivial-sized body — the ceremony-on-Trivial check uses `HEADING_LINE_PATTERN`, not just `##`.
+- **Body.** 1–3 sentences of prose. Zero headings of any level.
+- **Forbidden.** Any heading (`# Anything`, `## Summary`, `### Detail`, ...). Triggers the hook's ceremony-on-Trivial check.
+
+Example:
+
+```markdown
+Bump bun to 1.3.14. Picks up the bugfix for the runtime panic on empty stdin.
 ```
-Pin third-party GitHub Actions references to immutable commit SHAs.
-```
 
-```
-Bump pinned Bun from 1.3.6 to 1.3.14.
+### Standard
 
-Fixes #1311.
-```
+- **Guidance.** Diff 11–500 lines (agent-side; hook infers shape from body length).
+- **Hook enforcement.** Substantive prose between `TRIVIAL_BODY_CHAR_THRESHOLD` (200) and `HEAVY_MIN_BODY_CHARS_FOR_CLASSIFICATION` (500). No required headers.
+- **Body.** Imperative-verb intro paragraph. Optional headers drawn from the Anthropic set.
+- **Optional headers.** `## Summary`, `## Problem`, `## Fix`, `## Changes`, `## Test plan`, `## Tests`, `## Testing`, `## Approach`, `## Root cause`.
 
-## Shape 2: Standard
+Example:
 
-```
-<One short intro paragraph stating the change and why it matters.
- Reference the failure mode or user-visible symptom when there is one.>
-
-Fixes #<n>.
-
-## Changes
-
-- `path/to/file.ext`: short clause describing the change
-- `path/to/other.ext`: short clause
-- `tests/foo.test.ts`: 2 new cases for X
+```markdown
+Adds a syllable-counted Flesch reading score to the PR description enforcer. Bodies above the readability ceiling surface a targeted block message before the strike counter increments.
 
 ## Test plan
 
-- `bun test test/foo.test.ts`
-- `bun run typecheck`
-- Manual: reproduce on a branch named `feature/a,b`; confirm no rejection
+- [ ] `pytest packages/claude-dev-env/hooks/blocking/test_pr_description_enforcer.py`
+- [ ] Open a draft PR with a 45-word sentence and confirm the metric block fires
 ```
 
-The intro paragraph carries the Why -- no `## Why` header needed when one paragraph is enough.
+### Heavy
 
-## Shape 3: Heavy
+- **Criterion.** Diff > 500 lines, or a cross-cutting bug fix that touches multiple subsystems.
+- **Body.** At least one of `## Problem` or `## Summary`. At least one of `## Test plan`, `## Testing`, `## Tests`, `## Verification`, or `## Validation`. Plus any additional Anthropic headers the change earns.
+- **Hook enforcement.** Missing either required category triggers a Heavy-required-headers block message naming the absent category.
 
-```
-<Two- to four-sentence intro: scope, motivation, user-visible effect.
- Link to the prior PR or issue that motivates this one if applicable.>
+Example:
 
-Fixes #<n>.
-
+```markdown
 ## Problem
 
-<Concrete description of the failure mode or gap. Include the actual
- error text, a reproduction, or the symptomatic log line in a fenced
- code block when it helps.>
-
-```
-<example error or reproduction>
-```
+Long-running `gh api` review fetches drop pages silently when the reviewer count crosses 30. Bugbot findings on PRs past the first review cycle stay hidden.
 
 ## Fix
 
-<What the change does at the level a reviewer needs to evaluate it.
- Reference the file or function by path/name. Don't restate the diff
- line-by-line -- the reviewer can read the code.>
+Routes every `gh api .../reviews` and `.../comments` call through `--paginate --slurp | jq` so the cross-page filter sees the full set.
 
-- `src/path/file.ts`: brief description
-- `src/path/other.ts`: brief description
+## Test plan
 
-## Verification
-
-- Command 1
-- Command 2 (with output count when useful: "666 pass, 0 fail")
-- Manual scenarios walked through
-
-## Caveat
-
-<Anything a reviewer or downstream user needs to know that isn't in
- the diff. Omit this section when there is no caveat.>
+- [ ] Mock paginated API and assert `jq` filter operates on the merged stream
+- [ ] Replay PR #467 review history and confirm the late bugbot comment surfaces
 ```
 
-Optional heavy-shape sections, used when they earn their place:
+## Header vocabulary
 
-- `## Runtime behavior` -- when the change preserves behavior but moves it.
-- `## Components` -- a small table when the PR introduces multiple named artifacts.
-- `## Backward compatibility` -- when an older consumer might still hit this code path.
-- `## Context` -- background a reviewer outside the area would need.
+| Header | Corpus count | Typical use |
+|---|---:|---|
+| `## Summary` | 43 | High-level overview, often two or three sentences |
+| `## Problem` | 20 | Bug context — what broke, who hit it |
+| `## Test plan` | 20 | Reviewer checklist of verification steps |
+| `## Fix` | 18 | How the change addresses the problem |
+| `## Changes` | 14 | Bulleted catalog of code-level updates |
+| `## Tests` | 11 | New or expanded test coverage |
+| `## Testing` | 10 | Manual or CI verification notes |
+| `## Root cause` | 5 | Underlying defect analysis |
+| `## Approach` | 2 | Design rationale for non-obvious solutions |
 
-## Section vocabulary
+`## Test plan` and `## Root cause` use sentence-case in the corpus. The enforcer regex matches case-insensitively.
 
-Pick from these. Don't invent new ones, and don't use synonyms within one PR:
+## Readability targets
 
-| Intent | Header (pick one) |
+The enforcer measures three metrics on the intro paragraph and first body section combined.
+
+| Metric | Target |
 |---|---|
-| What this PR is and why | `## Summary` -- or no header (preferred when 1-3 sentences) |
-| The failure being fixed | `## Problem` -- or no header when the intro paragraph carries it |
-| The change itself | `## Changes` or `## Fix` |
-| How it was verified | `## Test plan`, `## Validation`, `## Verification`, or `## Testing` |
-| Things to know | `## Caveat`, `## Runtime behavior`, `## Backward compatibility`, `## Context` |
+| Longest sentence | ≤ 28 words |
+| Average sentence | ≤ 18 words |
+| Flesch Reading Ease | ≥ 50 |
 
-## File reference style
+The Flesch score uses `206.835 - 1.015 × (words/sentences) - 84.6 × (syllables/words)`. The hook implements the formula in pure stdlib with a vowel-group syllable heuristic.
 
-- Always backtick file paths: `` `src/github/operations/branch.ts` ``.
-- Use the full path from repo root, not just the basename, unless the basename is unambiguous within the PR.
-- Bullet lists describing per-file changes lead with the backticked path and a colon:
-  - `` `src/foo.ts`: whitelists `,` in branch names ``
-  - `` `test/foo.test.ts`: 3 new cases for comma-bearing branches ``
-- Prose calling out a single primary file bolds the backticked filename plus a colon: `` **`branch.ts`**: ... ``.
+Hit the targets by writing short sentences in common Anglo-Saxon words. The corpus first-paragraph average of 14.5 words is the target to beat.
 
-## Cross-references
+## Escape hatch
 
-- Issue/PR shorthand: `#1311` (same repo), `anthropics/claude-code#40576` (cross-repo).
-- `Fixes #N` and `Closes #N` close the linked issue on merge -- use them deliberately.
-- `Linear: CC-1723` -- one line, no Markdown, after the intro paragraph or at the bottom.
-- "Same change as <repo>#<n>" / "Follow-up to #<n>" -- one-liners that orient a reviewer.
+The hook tracks a per-user readability strike counter at `~/.claude/state/pr_description_readability_strikes.json`. Counter increments on every triggering violation. The first two failures emit metric-specific block messages. The third triggering failure fires the escape-hatch message with four recovery actions.
 
-## Markers and footers
+### Action 1 — loosen thresholds 10%
 
-- `<!-- NO CHANGELOG -->` on its own line, at the very end, for docs-only or CI-only PRs in repos that auto-generate changelogs from PR titles.
-- Don't add a "Generated with Claude Code" footer -- merged Anthropic PRs don't use one consistently, and the repo's commit trailer covers attribution.
+```bash
+python <enforcer-path> --readability-loosen
+```
 
-## What the hook checks
+Scales the three thresholds. Flesch floor × 0.9 (rounded down). Max-sentence ceiling × 10/9 (rounded up). Avg-sentence ceiling × 10/9 (rounded up). Cascades on repeat — the second loosen applies the same scaling to the already-loosened values.
 
-`pr_description_enforcer.py` runs on `gh pr create` and `gh pr edit` invocations that include a body. It blocks when any of the following are true:
+Caps:
 
-- The body, after stripping Markdown ceremony (headers, code fences, bullet markers, bold/emphasis, link text), contains fewer than 40 characters of prose. A skeleton of `## Summary` + `## Changes` + bullets with no Why paragraph fails here.
-- The body contains vague phrases like `fix bug`, `update code`, `minor changes`, or `various fixes`.
+- Max 3 successive loosens (`READABILITY_LOOSEN_CAP = 3`). A fourth `--readability-loosen` errors with `loosen cap reached; use --readability-disable or --readability-reset`.
+- Flesch floor of 30 (`READABILITY_MIN_FLESCH_FLOOR`). Once `flesch_min` reaches 30 the loosen action errors.
+- Max-sentence ceiling of 60 (`READABILITY_MAX_SENTENCE_WORDS_CEILING`). Once `max_sentence_words` reaches 60 the loosen action errors.
+- Avg-sentence ceiling of 40 (`READABILITY_AVG_SENTENCE_WORDS_CEILING`). Once `avg_sentence_words` reaches 40 the loosen action errors.
 
-The hook does not require any specific section headers -- `## Summary`, `## Problem`, `## Fix`, `## Changes`, `## Test plan` are all optional, including any combination of them. A single substantive sentence ("Pin third-party GitHub Actions references to immutable commit SHAs.") satisfies the check.
+### Action 2 — disable readability entirely
 
-When the hook blocks, it points the caller at the `pr-description-writer` agent and at this guide.
+```bash
+python <enforcer-path> --readability-disable
+```
 
-## Tone
+Writes `{"enabled": false}` to `~/.claude/state/pr_description_readability_enabled.json`. Shape detection, Heavy required-headers, ceremony-on-Trivial, self-closing reference, `This PR` opening, vague-language, and minimum-length checks all stay active. The readability check is the only one silenced.
 
-- Plain language. "The pull engine would blindly overwrite any record marked as 'synced'" -- not "PullEngine.run() exhibited non-idempotent behavior".
-- Active voice. "Add `,` to the whitelist" -- not "`,` was added to the whitelist".
-- No filler. Start with the content, not "This PR..." or "In this change...".
-- No restating the diff. Trust the reviewer to read the code; explain the parts they can't infer.
-- No hedging ("should", "might", "I think") unless the uncertainty is real -- in which case say "not yet verified" and call it out.
+Re-enable with:
+
+```bash
+python <enforcer-path> --readability-enable
+```
+
+### Action 3 — reset the strike counter
+
+```bash
+python <enforcer-path> --readability-reset
+```
+
+Zeroes the strike counter at `~/.claude/state/pr_description_readability_strikes.json`. Clears `loosens_used` and threshold overrides at `~/.claude/state/pr_description_readability_overrides.json`. The readability check returns to default thresholds and a clean strike count.
+
+### Action 4 — report a false positive
+
+Reply with the PR body and your intended commit message. The maintainer tunes the thresholds or refines the regex.
 
 ## What to avoid
 
-- Code snippets that simply repeat the diff. Code blocks are for error reproductions, failing commands, or before/after when the contrast is the point.
-- Technical jargon for non-obvious internals ("Dexie transaction" -> "database transaction").
-- Multi-line preamble. The PR title already says what the change is.
-- Section headers over empty content. If `## Caveat` would be empty, drop the header.
-- Second-person commentary directed at the reviewer ("please review carefully"). The reviewer knows their job.
+- **Vague language.** `fix bug`, `update code`, `minor changes`, `various improvements`. Each trips the `VAGUE_LANGUAGE_PATTERN` check.
+- **`This PR` openings.** Hard block. Open with an imperative verb.
+- **Self-closing references.** `Fixes #<this PR>` in a `gh pr edit` body. Self-reference adds zero context. Triggers a block on `gh pr edit` and `gh pr comment` invocations where the PR number is known.
+- **Code snippets in prose.** The diff shows the code. Bodies describe intent.
+- **Implementation-detail dumping.** Reviewers do not need every parameter name and call site. Describe the behavior change.
+- **Filler.** `In this PR I have made the following changes:` adds zero signal. Start with the action.

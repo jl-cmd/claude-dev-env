@@ -39,6 +39,25 @@ def test_exempt_root_filenames_are_module_constant():
     assert "changelog.md" in blocker_module._exempt_root_filenames
 
 
+def test_block_messages_mention_claude_dev_env_source_exemptions():
+    """The user-facing block context and system message must mention the
+    `packages/claude-dev-env/{agents,docs,skills,rules,system-prompts,commands}/`
+    exemption so contributors aren't misled when a `.md` write is denied elsewhere."""
+    hook_dir = os.path.dirname(HOOK_SCRIPT_PATH)
+    if hook_dir not in sys.path:
+        sys.path.insert(0, hook_dir)
+    blocker_module = importlib.import_module("md_to_html_blocker")
+    importlib.reload(blocker_module)
+
+    context_message = blocker_module._block_context()
+    system_message = blocker_module._block_system_message()
+    combined_messages = context_message + " " + system_message
+    assert "claude-dev-env" in combined_messages, (
+        "Block messages must mention claude-dev-env source-directory exemption; "
+        f"got context={context_message!r} system={system_message!r}"
+    )
+
+
 def test_blocks_write_md_file():
     result = _run_hook(
         "Write",
@@ -67,6 +86,55 @@ def test_blocks_uppercase_md_extension():
     assert result.returncode == 0
     output = json.loads(result.stdout)
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_module_imports_path_segments_from_hooks_constants():
+    """The blocker pulls the two leading path segments (`packages` and
+    `claude-dev-env`) through the centralised hooks_constants module rather
+    than inlining them as raw string literals."""
+    hook_dir = os.path.dirname(HOOK_SCRIPT_PATH)
+    if hook_dir not in sys.path:
+        sys.path.insert(0, hook_dir)
+    blocker_module = importlib.import_module("md_to_html_blocker")
+    importlib.reload(blocker_module)
+    assert blocker_module.PACKAGES_TOP_LEVEL_SEGMENT == "packages"
+    assert blocker_module.CLAUDE_DEV_ENV_REPO_NAME_SEGMENT == "claude-dev-env"
+
+
+def test_module_imports_top_directories_from_hooks_constants():
+    """The exempt-top-directories set must live in `hooks_constants/` rather
+    than as a file-global single-use constant in the blocker module. The
+    blocker imports the centralized constant; a regression that reintroduces
+    a local module-scope copy would fail this assertion."""
+    hook_dir = os.path.dirname(HOOK_SCRIPT_PATH)
+    if hook_dir not in sys.path:
+        sys.path.insert(0, hook_dir)
+    blocker_module = importlib.import_module("md_to_html_blocker")
+    importlib.reload(blocker_module)
+    assert hasattr(blocker_module, "ALL_CLAUDE_CODE_SOURCE_TOP_DIRECTORIES"), (
+        "Blocker module must import ALL_CLAUDE_CODE_SOURCE_TOP_DIRECTORIES from "
+        "hooks_constants/ (file-global single-use rule)."
+    )
+    assert not hasattr(blocker_module, "_claude_code_source_top_directories"), (
+        "Local _claude_code_source_top_directories must not be re-introduced; "
+        "use the imported constant from hooks_constants/ instead."
+    )
+
+
+def test_blocks_nested_packages_claude_dev_env_path():
+    """`packages/claude-dev-env/` exemption is anchored to top-level use only;
+    a nested directory like `notes/packages/claude-dev-env/docs/...` is NOT a
+    Claude Code source path and must still be blocked. Substring matching let
+    this bypass through; segment-anchored matching prevents it."""
+    result = _run_hook(
+        "Write",
+        {"file_path": "notes/packages/claude-dev-env/docs/guide.md", "content": "# Hello"},
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+        f"Nested fake claude-dev-env path must still be blocked; got {output!r}"
+    )
 
 
 def test_passes_html_file():
@@ -311,6 +379,98 @@ def test_blocks_md_with_curly_braces_in_path():
     result = _run_hook(
         "Write",
         {"file_path": "docs/{template}.md", "content": "# Template"},
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_passes_claude_code_source_agents_dir():
+    """Agent SKILLs live at packages/claude-dev-env/agents/ and must be .md to load."""
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "packages/claude-dev-env/agents/pr-description-writer.md",
+            "content": "---\nname: x\n---\n# Agent",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_passes_claude_code_source_docs_dir():
+    """Docs referenced from CLAUDE.md (CODE_RULES.md, guides) live at packages/claude-dev-env/docs/."""
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "packages/claude-dev-env/docs/PR_DESCRIPTION_GUIDE.md",
+            "content": "# Guide",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_passes_claude_code_source_skills_dir():
+    """SKILL.md files live at packages/claude-dev-env/skills/."""
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "packages/claude-dev-env/skills/my-skill/SKILL.md",
+            "content": "# SKILL",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_passes_claude_code_source_rules_dir():
+    """Rule .md files live at packages/claude-dev-env/rules/."""
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "packages/claude-dev-env/rules/my-rule.md",
+            "content": "# Rule",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_passes_claude_code_source_windows_path():
+    """Windows-style backslash paths under packages/claude-dev-env/agents/ must also pass."""
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "packages\\claude-dev-env\\agents\\pr-description-writer.md",
+            "content": "---\nname: x\n---\n# Agent",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_passes_claude_code_source_absolute_path():
+    """Absolute path under packages/claude-dev-env/agents/ must pass on Windows-style drive letter."""
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "Y:\\repo\\packages\\claude-dev-env\\agents\\my-agent.md",
+            "content": "# Agent",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_blocks_md_under_packages_but_not_in_source_subdir():
+    """A .md file under packages/claude-dev-env/hooks/blocking/ is not an exempt source dir."""
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "packages/claude-dev-env/hooks/blocking/notes.md",
+            "content": "# Notes",
+        },
     )
     assert result.returncode == 0
     output = json.loads(result.stdout)
