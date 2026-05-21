@@ -110,3 +110,85 @@ def test_should_track_only_innermost_type_checking_block() -> None:
     assert len(issues) == 1
     assert issues[0].startswith("Line 7:")
     assert "Import inside function" in issues[0]
+
+
+def test_should_skip_docstring_lines_starting_with_import_keyword() -> None:
+    """Docstring sentences that incidentally start with ``from `` or ``import `` after
+    stripping must not trigger the import-inside-function check.
+    """
+    content = (
+        "def helper():\n"
+        '    """Apply the priority queue atomically.\n'
+        "\n"
+        "    from a rename within the trailing-revenue window the duplicate\n"
+        "    import the loaders for the cycle so the writer can advance.\n"
+        '    """\n'
+        "    return 42\n"
+    )
+    issues = check_imports_at_top(content)
+    assert issues == []
+
+
+def test_should_still_flag_real_import_after_docstring_closes() -> None:
+    """An actual import statement after a one-line docstring closes must still flag."""
+    content = (
+        "def helper():\n"
+        '    """One-line docstring."""\n'
+        "    import os\n"
+        "    return os\n"
+    )
+    issues = check_imports_at_top(content)
+    assert len(issues) == 1
+    assert "Import inside function" in issues[0]
+
+
+def test_should_skip_triple_single_quoted_docstring_lines() -> None:
+    """Triple-single-quote (''') docstrings exempt their interior lines too."""
+    content = (
+        "def helper():\n"
+        "    '''Apply the cycle reset.\n"
+        "\n"
+        "    from a rename within the cycle window the writer would advance.\n"
+        "    '''\n"
+        "    return 1\n"
+    )
+    issues = check_imports_at_top(content)
+    assert issues == []
+
+
+def test_should_flag_real_import_after_multi_line_docstring_closes() -> None:
+    """Real imports landing AFTER a multi-line docstring closes must still flag,
+    confirming the triple-quote state correctly transitions back to ``None``.
+    """
+    content = (
+        "def helper():\n"
+        '    """Apply the priority queue atomically.\n'
+        "\n"
+        "    from a rename within the cycle window.\n"
+        '    """\n'
+        "    import os\n"
+        "    return os\n"
+    )
+    issues = check_imports_at_top(content)
+    assert len(issues) == 1
+    assert "Import inside function" in issues[0]
+
+
+def test_should_skip_module_level_docstring_text() -> None:
+    """A module-level docstring containing ``from ``/``import `` text must not flag.
+
+    The check ignores top-level lines regardless of triple-quote state because
+    function-tracking is the only path that produces issues, but this exercises
+    the entry-condition path where the docstring opens on line 1.
+    """
+    content = (
+        '"""Module docstring opener.\n'
+        "\n"
+        "from a rename within the trailing-revenue window.\n"
+        '"""\n'
+        "\n"
+        "def helper():\n"
+        "    return 1\n"
+    )
+    issues = check_imports_at_top(content)
+    assert issues == []

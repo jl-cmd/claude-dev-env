@@ -121,6 +121,9 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_PYTHON_EXTENSIONS,
     ALL_SELF_AND_CLS_PARAMETER_NAMES,
     ALL_TEST_PATH_PATTERNS,
+    TRIPLE_DOUBLE_QUOTE_DELIMITER,
+    TRIPLE_QUOTE_PARITY_DIVISOR,
+    TRIPLE_SINGLE_QUOTE_DELIMITER,
     TYPE_CHECKING_BLOCK_PATTERN,
     ALL_UNION_TYPING_NAMES,
     UPPER_SNAKE_CONSTANT_PATTERN,
@@ -382,14 +385,29 @@ def check_imports_at_top(content: str) -> list[str]:
     simpler single-level tracking is preferred over maintaining a stack of indent
     levels. The pinned behavior is covered by
     ``test_should_track_only_innermost_type_checking_block``.
+
+    Triple-quoted-string interior lines are skipped. Once a line opens a
+    multi-line triple-double-quote or triple-single-quote string (odd count
+    of the delimiter), every subsequent line is treated as docstring content
+    and exempt from the import-prefix scan until the matching delimiter
+    closes the string. Without this tracking, docstring sentences that
+    happen to start with ``from `` or ``import `` after stripping (a common
+    pattern in narrative docstrings) would fire a false positive.
     """
     issues: list[str] = []
     lines = content.split("\n")
     is_inside_function = False
     function_indent = 0
     type_checking_block_indent = NOT_INSIDE_TYPE_CHECKING_BLOCK
+    active_triple_quote_delimiter: str | None = None
 
     for line_number, each_line in enumerate(lines, 1):
+        if active_triple_quote_delimiter is not None:
+            active_triple_quote_delimiter = _update_triple_quote_state_for_line(
+                each_line, active_triple_quote_delimiter
+            )
+            continue
+
         stripped = each_line.strip()
 
         if not stripped:
@@ -404,12 +422,18 @@ def check_imports_at_top(content: str) -> list[str]:
         type_checking_match = TYPE_CHECKING_BLOCK_PATTERN.match(each_line)
         if type_checking_match:
             type_checking_block_indent = len(type_checking_match.group("indent"))
+            active_triple_quote_delimiter = _update_triple_quote_state_for_line(
+                each_line, active_triple_quote_delimiter
+            )
             continue
 
         function_match = re.match(r"^(\s*)(async\s+)?def\s+\w+", each_line)
         if function_match:
             is_inside_function = True
             function_indent = len(function_match.group(1)) if function_match.group(1) else 0
+            active_triple_quote_delimiter = _update_triple_quote_state_for_line(
+                each_line, active_triple_quote_delimiter
+            )
             continue
 
         if is_inside_function:
@@ -421,7 +445,49 @@ def check_imports_at_top(content: str) -> list[str]:
             if stripped.startswith(ALL_IMPORT_STATEMENT_PREFIXES):
                 issues.append(f"Line {line_number}: Import inside function - move to top of file")
 
+        active_triple_quote_delimiter = _update_triple_quote_state_for_line(
+            each_line, active_triple_quote_delimiter
+        )
+
     return issues
+
+
+def _update_triple_quote_state_for_line(
+    line_text: str, current_delimiter: str | None
+) -> str | None:
+    """Return the triple-quote delimiter that remains active after the line.
+
+    Naively counts triple-double-quote and triple-single-quote occurrences.
+    An odd count of either delimiter toggles the active state: ``None``
+    becomes that delimiter, the same delimiter becomes ``None``. Even counts
+    mean the line opens and closes the same delimiter in place (single-line
+    docstring or balanced pair) and the active state is unchanged.
+
+    Known limitation: the counter does not distinguish triple quotes that
+    appear inside other string contexts (for example, a raw f-string
+    containing the literal substring of triple quotes). Such constructs are
+    rare in docstring-bearing code; the false-negative risk is acceptable
+    to keep the line-walker simple and dependency-free.
+
+    Args:
+        line_text: The raw source line whose triple-quote balance is being
+            integrated into the running state.
+        current_delimiter: The active delimiter at the start of this line,
+            or ``None`` when no multi-line string is open.
+
+    Returns:
+        The delimiter that remains active after this line, or ``None`` when
+        no string is open.
+    """
+    if current_delimiter is not None:
+        if line_text.count(current_delimiter) % TRIPLE_QUOTE_PARITY_DIVISOR == 1:
+            return None
+        return current_delimiter
+    if line_text.count(TRIPLE_DOUBLE_QUOTE_DELIMITER) % TRIPLE_QUOTE_PARITY_DIVISOR == 1:
+        return TRIPLE_DOUBLE_QUOTE_DELIMITER
+    if line_text.count(TRIPLE_SINGLE_QUOTE_DELIMITER) % TRIPLE_QUOTE_PARITY_DIVISOR == 1:
+        return TRIPLE_SINGLE_QUOTE_DELIMITER
+    return None
 
 
 def check_logging_fstrings(content: str) -> list[str]:

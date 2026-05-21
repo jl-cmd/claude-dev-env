@@ -24,6 +24,9 @@ UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 TYPE_CHECKING_BLOCK_PATTERN = re.compile(r"^(?P<indent>\s*)if\s+(typing\.)?TYPE_CHECKING\s*:\s*$")
 ALL_IMPORT_STATEMENT_PREFIXES: tuple[str, ...] = ("import ", "from ")
 NOT_INSIDE_TYPE_CHECKING_BLOCK = -1
+TRIPLE_QUOTE_PARITY_DIVISOR = 2
+TRIPLE_DOUBLE_QUOTE_DELIMITER = '"""'
+TRIPLE_SINGLE_QUOTE_DELIMITER = "'''"
 FILE_GLOBAL_UPPER_SNAKE_PATTERN = re.compile(r"^_?[A-Z][A-Z0-9_]*$")
 
 ALL_COLLECTION_TYPE_NAMES: frozenset[str] = frozenset({
