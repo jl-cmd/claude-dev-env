@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.43.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.42.0...claude-dev-env-v1.43.0) (2026-05-21)
+
+
+### Features
+
+* prevent pr-description-writer regressions ([#472](https://github.com/jl-cmd/claude-code-config/issues/472)) ([b72b536](https://github.com/jl-cmd/claude-code-config/commit/b72b536b340a5680f8dea4cc37722ff9f0e890f7))
+
+
+### Bug Fixes
+
+* centralize .md blocker exemptions and fix validator repo-root hang ([#476](https://github.com/jl-cmd/claude-code-config/issues/476)) ([b7b2f3b](https://github.com/jl-cmd/claude-code-config/commit/b7b2f3bdd93cb556210ff0ef4edcf84fce89ed0a))
+* **code-rules:** route python comment detection through tokenize ([#479](https://github.com/jl-cmd/claude-code-config/issues/479)) ([2c9d308](https://github.com/jl-cmd/claude-code-config/commit/2c9d3088e47bb7850b9f4b157f2b1f4a386cc858))
+* **code-rules:** skip docstring lines in check_imports_at_top ([#478](https://github.com/jl-cmd/claude-code-config/issues/478)) ([030ac9b](https://github.com/jl-cmd/claude-code-config/commit/030ac9bcdf067cad1de98d9851a92bb21ed1f68a))
+* **pr-converge:** snapshot+restore sys.path in test conftest, document check_all Raises ([#473](https://github.com/jl-cmd/claude-code-config/issues/473)) ([2017e5c](https://github.com/jl-cmd/claude-code-config/commit/2017e5c1937a74bcc9a38de6578eb19ff27eded7))
+* **rename:** unique per-tree constants packages eliminate bare `config` collision ([#475](https://github.com/jl-cmd/claude-code-config/issues/475)) ([3294c00](https://github.com/jl-cmd/claude-code-config/commit/3294c00893a20400ba9e2a4ed1e2af30c30b1c71))
+
+
+### Refactoring
+
+* **session-log:** delegate HTML design to doc-gist ([#477](https://github.com/jl-cmd/claude-code-config/issues/477)) ([8af4b4c](https://github.com/jl-cmd/claude-code-config/commit/8af4b4c7e0e7b7e43c15d9d86724f2b58a3df596))
+
 ## [1.42.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.41.0...claude-dev-env-v1.42.0) (2026-05-19)
 
 
