@@ -2,7 +2,7 @@
 
 All runtime and API constants live here. Script-specific constants
 (CLI args, markdown patterns, reflow settings) stay in
-``packages/claude-dev-env/skills/pr-converge/scripts/config/pr_converge_constants.py``,
+``packages/claude-dev-env/skills/pr-converge/scripts/pr_converge_scripts_constants/pr_converge_constants.py``,
 which imports from here.
 """
 

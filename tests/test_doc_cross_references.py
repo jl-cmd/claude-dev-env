@@ -56,7 +56,6 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         "packages/claude-dev-env/scripts/sweep_empty_dirs.py",
         "packages/claude-dev-env/scripts/tests/test_sweep_empty_dirs.py",
         "scripts/README.md",
-        "scripts/append_note.py",
         "scripts/bugteam_code_rules_gate.py",
         "scripts/config/notes_constants.py",
         "scripts/db/config.py",

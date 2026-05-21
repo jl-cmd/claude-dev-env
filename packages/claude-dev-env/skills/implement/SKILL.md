@@ -62,5 +62,5 @@ Append entries as decisions are made — do not batch them until the end.
 | File | Purpose |
 |---|---|
 | `SKILL.md` | This hub |
-| `scripts/append_note.py` | CLI to append one entry to a section |
-| `scripts/implement_scripts_constants/notes_constants.py` | Section slugs → headings and default filename |
+| `packages/claude-dev-env/skills/implement/scripts/append_note.py` | CLI to append one entry to a section |
+| `packages/claude-dev-env/skills/implement/scripts/implement_scripts_constants/notes_constants.py` | Section slugs → headings and default filename |

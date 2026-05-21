@@ -5,6 +5,14 @@ import sys
 from pathlib import Path
 
 parent_directory = str(Path(__file__).resolve().parent)
+sys.path[:] = [
+    each_existing_entry
+    for each_existing_entry in sys.path
+    if not (
+        os.path.exists(each_existing_entry)
+        and os.path.samefile(each_existing_entry, parent_directory)
+    )
+]
 if parent_directory not in sys.path:
     sys.path.insert(0, parent_directory)
 

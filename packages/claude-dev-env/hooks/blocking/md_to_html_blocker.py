@@ -6,7 +6,6 @@ that markdown flattens. See https://thariqs.github.io/html-effectiveness/
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import TextIO
@@ -15,55 +14,36 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+_blocking_directory = str(Path(__file__).resolve().parent)
+if _blocking_directory not in sys.path:
+    sys.path.insert(0, _blocking_directory)
+
 from hooks_constants.md_to_html_blocker_constants import (  # noqa: E402
     ALL_CLAUDE_CODE_SOURCE_TOP_DIRECTORIES,
+    ALL_EXEMPT_ANYWHERE_FILENAMES,
+    ALL_EXEMPT_HOME_RELATIVE_DIRECTORIES,
+    ALL_EXEMPT_PLUGIN_DIRECTORY_SEGMENTS,
     CLAUDE_DEV_ENV_REPO_NAME_SEGMENT,
-    MINIMUM_SEGMENT_COUNT_TO_MATCH_INDICATOR,
+    CLAUDE_DIRECTORY_NAME,
     PACKAGES_TOP_LEVEL_SEGMENT,
-    WINDOWS_DRIVE_LETTER_SEGMENT_LENGTH,
+    PLUGIN_ROOT_MARKER_DIRECTORY_NAME,
 )
+from md_path_exemptions import is_exempt_path  # noqa: E402
 
 
 _markdown_extension = ".md"
 _html_effectiveness_url = "https://thariqs.github.io/html-effectiveness/"
-_exempt_root_filenames = ("readme.md", "changelog.md")
-
-
-def _looks_like_absolute_path(file_path: str, first_segment: str) -> bool:
-    if file_path.startswith("/") or file_path.startswith("\\"):
-        return True
-    if (
-        len(first_segment) == WINDOWS_DRIVE_LETTER_SEGMENT_LENGTH
-        and first_segment[1] == ":"
-        and first_segment[0].isalpha()
-    ):
-        return True
-    return False
-
-
-def _is_exempt_path(file_path: str) -> bool:
-    normalized = os.path.normpath(file_path).replace("\\", "/")
-    lower_normalized = normalized.lower()
-    if "/.claude/" in lower_normalized or lower_normalized.startswith(".claude/"):
-        return True
-    all_segments = [each_segment for each_segment in lower_normalized.split("/") if each_segment]
-    starting_segment_index_options: list[int] = [0]
-    if all_segments and _looks_like_absolute_path(file_path, all_segments[0]):
-        starting_segment_index_options = list(range(len(all_segments)))
-    for each_starting_index in starting_segment_index_options:
-        if (
-            len(all_segments) >= each_starting_index + MINIMUM_SEGMENT_COUNT_TO_MATCH_INDICATOR
-            and all_segments[each_starting_index] == PACKAGES_TOP_LEVEL_SEGMENT
-            and all_segments[each_starting_index + 1] == CLAUDE_DEV_ENV_REPO_NAME_SEGMENT
-            and all_segments[each_starting_index + 2] in ALL_CLAUDE_CODE_SOURCE_TOP_DIRECTORIES
-        ):
-            return True
-    basename = os.path.basename(normalized)
-    if basename.lower() in _exempt_root_filenames:
-        directory = os.path.dirname(normalized)
-        if directory in ("", "."):
-            return True
-    return False
+_exempt_anywhere_filenames_summary = ", ".join(ALL_EXEMPT_ANYWHERE_FILENAMES)
+_exempt_plugin_segments_summary = ", ".join(
+    f"{each_segment}/" for each_segment in ALL_EXEMPT_PLUGIN_DIRECTORY_SEGMENTS
+)
+_exempt_home_directories_summary = ", ".join(
+    f"~/{each_directory}/" for each_directory in ALL_EXEMPT_HOME_RELATIVE_DIRECTORIES
+)
+_claude_dev_env_source_directories_summary = (
+    f"{PACKAGES_TOP_LEVEL_SEGMENT}/{CLAUDE_DEV_ENV_REPO_NAME_SEGMENT}/"
+    f"{{{','.join(sorted(ALL_CLAUDE_CODE_SOURCE_TOP_DIRECTORIES))}}}/"
+)
 
 
 def _block_reason(file_path: str) -> str:
@@ -83,9 +63,14 @@ def _block_context() -> str:
         "Reference for HTML effectiveness patterns:\n"
         f"{_html_effectiveness_url}\n"
         "Exceptions (.md still allowed):\n"
-        "- Files inside .claude/ directories\n"
-        "- README.md and CHANGELOG.md at repo root\n"
-        "- packages/claude-dev-env/{agents,docs,skills,rules,system-prompts,commands}/ source files"
+        f"- Files inside {CLAUDE_DIRECTORY_NAME}/ or {PLUGIN_ROOT_MARKER_DIRECTORY_NAME}/ directories\n"
+        f"- {_exempt_anywhere_filenames_summary} anywhere\n"
+        f"- Files under {_exempt_plugin_segments_summary} directories\n"
+        f"- Files under {_claude_dev_env_source_directories_summary} source directories\n"
+        f"- Files under any directory whose ancestor contains {PLUGIN_ROOT_MARKER_DIRECTORY_NAME}/\n"
+        "- README.md and CHANGELOG.md at any repo root\n"
+        f"- Files under {_exempt_home_directories_summary}\n"
+        "- Files under the OS temp directory"
     )
 
 
@@ -93,9 +78,13 @@ def _block_system_message() -> str:
     return (
         ".md files are blocked in this project — generate a self-contained .html "
         f"file instead. See {_html_effectiveness_url} for "
-        "design patterns and examples. Exemptions: .claude/ infrastructure, "
-        "README.md, CHANGELOG.md at repo root, and "
-        "packages/claude-dev-env/{agents,docs,skills,rules,system-prompts,commands}/ source files."
+        f"design patterns and examples. Exemptions: {CLAUDE_DIRECTORY_NAME}/ and "
+        f"{PLUGIN_ROOT_MARKER_DIRECTORY_NAME}/ infrastructure, "
+        f"{_exempt_anywhere_filenames_summary} anywhere, {_exempt_plugin_segments_summary} trees, "
+        f"{_claude_dev_env_source_directories_summary} source trees, "
+        f"files under a {PLUGIN_ROOT_MARKER_DIRECTORY_NAME}/ root, "
+        f"README.md/CHANGELOG.md at any repo root, {_exempt_home_directories_summary}, "
+        "and the OS temp directory."
     )
 
 
@@ -131,7 +120,7 @@ def main() -> None:
     if not file_path.lower().endswith(_markdown_extension):
         sys.exit(0)
 
-    if _is_exempt_path(file_path):
+    if is_exempt_path(file_path):
         sys.exit(0)
 
     block_payload = {
