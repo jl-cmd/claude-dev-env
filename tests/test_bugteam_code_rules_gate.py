@@ -87,6 +87,21 @@ def copy_hooks_config_into(repository_root: Path) -> None:
         )
 
 
+def copy_hooks_constants_into(repository_root: Path) -> None:
+    hooks_constants_source = (
+        REPO_ROOT / "packages" / "claude-dev-env" / "hooks" / "hooks_constants"
+    )
+    hooks_constants_destination = (
+        repository_root / "packages" / "claude-dev-env" / "hooks" / "hooks_constants"
+    )
+    hooks_constants_destination.mkdir(parents=True, exist_ok=True)
+    for each_python_file in hooks_constants_source.glob("*.py"):
+        (hooks_constants_destination / each_python_file.name).write_text(
+            each_python_file.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+
+
 def copy_gate_script_into(repository_root: Path) -> Path:
     destination_scripts = (
         repository_root
@@ -142,6 +157,7 @@ def set_up_fixture_repo(tmp_path: Path) -> Path:
     copy_gate_script_into(repository_root)
     copy_enforcer_into(repository_root)
     copy_hooks_config_into(repository_root)
+    copy_hooks_constants_into(repository_root)
     return repository_root
 
 

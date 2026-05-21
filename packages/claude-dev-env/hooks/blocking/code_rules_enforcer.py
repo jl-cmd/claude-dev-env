@@ -109,9 +109,14 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_SUBSCRIPT_ONLY_COLLECTION_TYPE_NAMES,
     DOTTED_SEGMENT_PATTERN,
     EACH_PREFIX,
+    ALL_EXEMPT_PYTHON_COMMENT_BODIES,
+    ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES,
+    ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES,
+    ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS,
     FILE_GLOBAL_UPPER_SNAKE_PATTERN,
     ALL_HOOK_INFRASTRUCTURE_PATTERNS,
     ALL_IMPORT_STATEMENT_PREFIXES,
+    MAX_COMMENT_ISSUES,
     INLINE_COLLECTION_MIN_LENGTH,
     ALL_JAVASCRIPT_EXTENSIONS,
     LOGGING_FSTRING_PATTERN,
@@ -171,54 +176,29 @@ def is_spec_file(file_path: str) -> bool:
 
 
 def check_comments_python(content: str) -> list[str]:
-    """Check for comments in Python code."""
+    """Check for comments in Python code.
+
+    Uses ``tokenize.generate_tokens`` to find true ``COMMENT`` tokens.
+    Hash characters that appear inside string literals (hex color codes,
+    URL fragments, and the hash inside an f-string interpolation pattern)
+    are correctly skipped because the tokenizer recognizes them as parts
+    of string tokens rather than comment tokens.
+
+    When the tokenizer cannot parse the file (partial content during
+    Edit, invalid syntax), the check returns no findings rather than
+    falling back to a line-walker scan — false negatives on
+    syntactically-invalid drafts are preferable to false positives that
+    mis-classify string-interior hash characters as comments.
+    """
     issues = []
-    lines = content.split("\n")
-
-    for line_number, line in enumerate(lines, 1):
-        stripped = line.strip()
-
-        if not stripped:
+    for each_comment_token in _comment_tokens(content):
+        if _is_exempt_python_comment(each_comment_token):
             continue
-
-        if stripped.startswith("#!"):
-            continue
-
-        if stripped.startswith("# type:"):
-            continue
-
-        if stripped.startswith("# noqa"):
-            continue
-
-        if stripped.startswith("# pylint:"):
-            continue
-
-        if stripped.startswith("# pragma:"):
-            continue
-
-        if stripped.startswith(("# TODO", "# FIXME", "# HACK", "# XXX")):
-            continue
-
-        comment_index = line.find("#")
-        if comment_index != -1:
-            before_comment = line[:comment_index]
-            if not before_comment.strip().startswith(("'", '"')):
-                is_in_string = False
-                quote_char = None
-                for i, each_char in enumerate(before_comment):
-                    if each_char in ("'", '"') and (i == 0 or before_comment[i - 1] != "\\"):
-                        if not is_in_string:
-                            is_in_string = True
-                            quote_char = each_char
-                        elif each_char == quote_char:
-                            is_in_string = False
-
-                if not is_in_string:
-                    comment_text = line[comment_index + 1 :].strip()
-                    if comment_text and not comment_text.startswith(("type:", "noqa", "pylint:", "pragma:", "TODO", "FIXME", "HACK", "XXX")):
-                        issues.append(f"Line {line_number}: Comment found - refactor to self-documenting code")
-
-        if len(issues) >= 3:
+        line_number = each_comment_token.start[0]
+        issues.append(
+            f"Line {line_number}: Comment found - refactor to self-documenting code"
+        )
+        if len(issues) >= MAX_COMMENT_ISSUES:
             break
 
     return issues
@@ -248,10 +228,10 @@ def check_comments_javascript(content: str) -> list[str]:
             continue
 
         if stripped.startswith("//"):
-            if not stripped.startswith(("// @ts-", "// eslint-", "// prettier-", "/// ", "// TODO", "// FIXME", "// HACK", "// XXX")):
+            if not stripped.startswith(ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES):
                 issues.append(f"Line {each_line_number}: Comment found - refactor to self-documenting code")
 
-        if len(issues) >= 3:
+        if len(issues) >= MAX_COMMENT_ISSUES:
             break
 
     return issues
@@ -271,36 +251,13 @@ def extract_comment_texts(content: str, file_path: str) -> tuple[set[str], set[s
     if not content:
         return inline_comments, standalone_comments
 
+    if extension in ALL_PYTHON_EXTENSIONS:
+        inline_comments, standalone_comments, _ = _extract_python_comment_sets(content)
+        return inline_comments, standalone_comments
+
     lines = content.split("\n")
 
-    if extension in ALL_PYTHON_EXTENSIONS:
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith("#"):
-                if stripped.startswith(("#!", "# type:", "# noqa", "# pylint:", "# pragma:", "# TODO", "# FIXME", "# HACK", "# XXX")):
-                    continue
-                standalone_comments.add(stripped)
-            elif "#" in line:
-                comment_index = line.find("#")
-                before_comment = line[:comment_index]
-                if not before_comment.strip().startswith(("'", '"')):
-                    is_in_string = False
-                    quote_char = None
-                    for i, char in enumerate(before_comment):
-                        if char in ("'", '"') and (i == 0 or before_comment[i - 1] != "\\"):
-                            if not is_in_string:
-                                is_in_string = True
-                                quote_char = char
-                            elif char == quote_char:
-                                is_in_string = False
-                    if not is_in_string:
-                        comment_text = line[comment_index + 1 :].strip()
-                        if comment_text and not comment_text.startswith(("type:", "noqa", "pylint:", "pragma:", "TODO", "FIXME", "HACK", "XXX")):
-                            inline_comments.add(line[comment_index:].strip())
-
-    elif extension in ALL_JAVASCRIPT_EXTENSIONS:
+    if extension in ALL_JAVASCRIPT_EXTENSIONS:
         is_in_multiline = False
         for line in lines:
             stripped = line.strip()
@@ -316,14 +273,14 @@ def extract_comment_texts(content: str, file_path: str) -> tuple[set[str], set[s
                     standalone_comments.add(stripped)
                 continue
             if stripped.startswith("//"):
-                if not stripped.startswith(("// @ts-", "// eslint-", "// prettier-", "/// ", "// TODO", "// FIXME", "// HACK", "// XXX")):
+                if not stripped.startswith(ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES):
                     standalone_comments.add(stripped)
             elif "//" in line:
                 before_slash = line[:line.index("//")]
                 if before_slash.strip():
                     comment_start = stripped.index("//")
                     comment_text = stripped[comment_start + 2 :].strip()
-                    if not comment_text.startswith(("TODO", "FIXME", "HACK", "XXX")):
+                    if not comment_text.startswith(ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES):
                         inline_comments.add(stripped[comment_start:])
 
     return inline_comments, standalone_comments
@@ -335,11 +292,26 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
     Inline comments (after code on same line): BLOCK when added.
     Standalone comment lines: NUDGE (print advisory) when added.
     Existing comments being removed: BLOCK (comment preservation principle).
+
+    When the file is Python and either *old_content* or *new_content* cannot
+    be tokenized (common for mid-edit Edit fragments), the comparison is
+    indeterminate: the per-side tokenize failure would empty one set and
+    misrepresent every comment on the other side as either added or
+    removed. The check returns no issues in that case — false negatives on
+    syntactically-invalid drafts are preferable to false positives that
+    flag legitimate comments as deleted.
     """
     issues: list[str] = []
 
-    old_inline, old_standalone = extract_comment_texts(old_content, file_path)
-    new_inline, new_standalone = extract_comment_texts(new_content, file_path)
+    extension = get_file_extension(file_path)
+    if extension in ALL_PYTHON_EXTENSIONS:
+        old_inline, old_standalone, old_tokenize_ok = _extract_python_comment_sets(old_content)
+        new_inline, new_standalone, new_tokenize_ok = _extract_python_comment_sets(new_content)
+        if not (old_tokenize_ok and new_tokenize_ok):
+            return issues
+    else:
+        old_inline, old_standalone = extract_comment_texts(old_content, file_path)
+        new_inline, new_standalone = extract_comment_texts(new_content, file_path)
 
     added_inline = new_inline - old_inline
     if added_inline:
@@ -805,16 +777,96 @@ def _find_any_annotation_lines(source: str) -> list[int]:
     return offending_line_numbers
 
 
-def _comment_tokens(source: str) -> list[tokenize.TokenInfo]:
-    """Return COMMENT tokens from source, or an empty list when tokenization fails."""
+def _python_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
+    """Yield Python tokens from *source* one at a time.
+
+    Centralizes the ``tokenize.generate_tokens`` entry-point so a future
+    change to the API lands in exactly one place. Iteration may raise
+    any of ``ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS`` when the source is
+    not valid Python (mid-edit Edit fragments, unterminated strings,
+    mismatched indentation) — callers handle the exception according to
+    their own contract (silently stop, return an indeterminate flag, etc.).
+    """
+    yield from tokenize.generate_tokens(io.StringIO(source).readline)
+
+
+def _comment_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
+    """Yield COMMENT tokens from *source* one at a time.
+
+    Streams from ``_python_tokens`` so consumers that early-exit (e.g.
+    ``check_comments_python`` caps at ``MAX_COMMENT_ISSUES``) avoid
+    materializing the entire token list. Silently stops on tokenize
+    failure so callers receive only valid comment tokens — no
+    indeterminate signal is exposed at this layer because the consumers
+    that need it (``_extract_python_comment_sets``) bypass this helper.
+    """
     try:
-        return [
-            each_token
-            for each_token in tokenize.generate_tokens(io.StringIO(source).readline)
-            if each_token.type == tokenize.COMMENT
-        ]
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        return []
+        for each_token in _python_tokens(source):
+            if each_token.type == tokenize.COMMENT:
+                yield each_token
+    except ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS:
+        return
+
+
+def _is_exempt_python_comment(comment_token: tokenize.TokenInfo) -> bool:
+    """Return True for shebangs and tooling-directive comments.
+
+    The shebang exemption applies only when the comment token starts
+    at line 1, column 0 — matching the OS-level convention that a
+    shebang line is meaningful only as the first line of an executable
+    file. An inline shebang-lookalike later in the file (an
+    after-code occurrence on any line, or a standalone occurrence on
+    line 2 or later) is NOT a real shebang and remains subject to the
+    no-comments rule.
+
+    Matches any prefix listed in ``ALL_EXEMPT_PYTHON_COMMENT_BODIES``
+    regardless of whether the directive sits flush against the leading
+    hash character or carries one or more whitespace characters (space
+    or tab) between the hash and the directive body. The pre-tokenize
+    implementation accepted both forms via its line-slice-then-strip
+    step; this helper preserves that behavior on top of the
+    tokenize-based scan.
+    """
+    comment_string = comment_token.string
+    if comment_string.startswith("#!") and comment_token.start == (1, 0):
+        return True
+    directive_body = comment_string[1:].lstrip()
+    if not directive_body:
+        return True
+    return directive_body.startswith(ALL_EXEMPT_PYTHON_COMMENT_BODIES)
+
+
+def _extract_python_comment_sets(content: str) -> tuple[set[str], set[str], bool]:
+    """Return (inline_comments, standalone_comments, tokenize_succeeded).
+
+    Streams *content* once via ``_python_tokens``. A tokenize failure
+    (mid-edit fragment, syntax error) returns empty sets and ``False``
+    so callers can treat the situation as indeterminate rather than as
+    "no comments present". Inline vs standalone is decided by inspecting
+    the column offset of each ``COMMENT`` token against its source
+    line: an all-whitespace prefix means standalone.
+    """
+    inline_comments: set[str] = set()
+    standalone_comments: set[str] = set()
+    lines = content.split("\n")
+    try:
+        for each_token in _python_tokens(content):
+            if each_token.type != tokenize.COMMENT:
+                continue
+            if _is_exempt_python_comment(each_token):
+                continue
+            line_number = each_token.start[0]
+            column_offset = each_token.start[1]
+            source_line = lines[line_number - 1] if line_number - 1 < len(lines) else ""
+            text_before_comment = source_line[:column_offset]
+            normalized_comment_text = each_token.string.strip()
+            if not text_before_comment.strip():
+                standalone_comments.add(normalized_comment_text)
+            else:
+                inline_comments.add(normalized_comment_text)
+    except ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS:
+        return set(), set(), False
+    return inline_comments, standalone_comments, True
 
 
 def _find_unjustified_type_ignore_lines(source: str) -> list[int]:

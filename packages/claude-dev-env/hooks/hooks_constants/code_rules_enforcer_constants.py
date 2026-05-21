@@ -4,6 +4,13 @@ Extracted from code_rules_enforcer.py to satisfy the constants-location rule.
 """
 
 import re
+import tokenize
+
+ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    tokenize.TokenError,
+    IndentationError,
+    SyntaxError,
+)
 
 ALL_PYTHON_EXTENSIONS = {".py"}
 ALL_JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx"}
@@ -23,6 +30,33 @@ UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 TYPE_CHECKING_BLOCK_PATTERN = re.compile(r"^(?P<indent>\s*)if\s+(typing\.)?TYPE_CHECKING\s*:\s*$")
 ALL_IMPORT_STATEMENT_PREFIXES: tuple[str, ...] = ("import ", "from ")
+ALL_EXEMPT_PYTHON_COMMENT_BODIES: tuple[str, ...] = (
+    "type:",
+    "noqa",
+    "pylint:",
+    "pragma:",
+    "TODO",
+    "FIXME",
+    "HACK",
+    "XXX",
+)
+ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES: tuple[str, ...] = (
+    "// @ts-",
+    "// eslint-",
+    "// prettier-",
+    "/// ",
+    "// TODO",
+    "// FIXME",
+    "// HACK",
+    "// XXX",
+)
+ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES: tuple[str, ...] = (
+    "TODO",
+    "FIXME",
+    "HACK",
+    "XXX",
+)
+MAX_COMMENT_ISSUES = 3
 NOT_INSIDE_TYPE_CHECKING_BLOCK = -1
 TRIPLE_QUOTE_PARITY_DIVISOR = 2
 TRIPLE_DOUBLE_QUOTE_DELIMITER = '"""'
