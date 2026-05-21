@@ -18,9 +18,13 @@ from urllib.parse import urlparse
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="%(message)s")
 
-_hook_dir = str(Path(__file__).absolute().parent.parent)
+_hook_dir = str(Path(__file__).resolve().parent.parent)
 if _hook_dir not in sys.path:
     sys.path.insert(0, _hook_dir)
+
+_blocking_dir = str(Path(__file__).resolve().parent.parent / "blocking")
+if _blocking_dir not in sys.path:
+    sys.path.insert(0, _blocking_dir)
 
 from hooks_constants.html_companion_constants import (  # noqa: E402
     BLOCKED_URL_SCHEMES,
@@ -41,18 +45,7 @@ from hooks_constants.html_companion_constants import (  # noqa: E402
     CSS_TABLE_WIDTH,
     CSS_TH_WEIGHT,
 )
-
-
-def _is_exempt_path(file_path: str) -> bool:
-    normalized = file_path.replace("\\", "/")
-    if "/.claude/" in normalized or normalized.startswith(".claude/"):
-        return True
-    if normalized.startswith("./"):
-        normalized = normalized[2:]
-    stripped = normalized.lstrip("/")
-    if "/" not in stripped:
-        return stripped.lower() in ("readme.md", "changelog.md")
-    return False
+from md_path_exemptions import is_exempt_path  # noqa: E402
 
 
 def _md_to_html(markdown_text: str) -> str:
@@ -330,7 +323,7 @@ def main() -> None:
     if not file_path or not file_path.lower().endswith(".md"):
         sys.exit(0)
 
-    if _is_exempt_path(file_path):
+    if is_exempt_path(file_path):
         sys.exit(0)
 
     if not os.path.exists(file_path):

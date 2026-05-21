@@ -293,14 +293,25 @@ def run_test_safety_checks(files: List[Path]) -> ValidatorResult:
 
 
 def get_project_root() -> Optional[Path]:
-    """Get project root by finding git root."""
-    result = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
+    """Get project root by finding git root.
+
+    Uses ``git -C <hooks_dir>`` to pin git's working tree to the hooks
+    directory without setting the subprocess cwd. On Windows, ``CreateProcess``
+    rejects some UNC working directories, so setting ``cwd=hooks_dir`` would
+    fail when ``hooks_dir`` resolves to a UNC path. The ``-C`` flag tells git
+    to operate as if started in that directory while the subprocess itself
+    inherits a normal cwd from the caller. Anchoring git to ``hooks_dir`` is
+    required so the lookup resolves to this repo even when the caller's cwd
+    points at an unrelated git checkout (e.g., the user's home), avoiding
+    validators that ``rglob`` over tens of thousands of unrelated files.
+    """
+    completed_git_lookup = subprocess.run(
+        ["git", "-C", str(hooks_dir), "rev-parse", "--show-toplevel"],
         capture_output=True,
         text=True,
     )
-    if result.returncode == 0:
-        return Path(result.stdout.strip())
+    if completed_git_lookup.returncode == 0:
+        return Path(completed_git_lookup.stdout.strip())
     return None
 
 

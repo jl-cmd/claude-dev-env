@@ -353,10 +353,11 @@ def _count_substantive_prose_chars(body: str) -> int:
 def _iter_section_headers(body: str) -> list[str]:
     """Return every ATX heading line in the body, preserving canonical form.
 
-    `HEADING_LINE_PATTERN` matches `^#+`, so the result spans `#`, `##`, `###`, etc.
-    Downstream callers in this module only test specific `## ` strings, so matching
-    every heading level keeps the parser permissive without changing behaviour for
-    the canonical `## Header` shape.
+    HEADING_LINE_PATTERN matches the leading hash run (one or more hash
+    characters at line start), so the result spans every ATX level.
+    Downstream callers in this module only test specific two-hash header
+    strings, so matching every heading level keeps the parser permissive
+    without changing behaviour for the canonical two-hash header shape.
 
     Fenced code blocks are stripped first so example markdown nested inside ``` fences
     (a PR body that demonstrates the Heavy shape, for instance) is not counted as a
