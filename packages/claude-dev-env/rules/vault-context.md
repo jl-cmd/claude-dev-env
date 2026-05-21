@@ -10,7 +10,7 @@ An Obsidian vault stores session reports, decisions, and research documents acro
 
 ## Vault Structure
 
-- `sessions/` -- session reports with frontmatter: `type: session-report`, `project`, `session`, `date`, `status`, `blocked`, `tags`
+- `sessions/` -- session reports with frontmatter: `type: session-report`, `project`, `session`, `date`, `status`, `blocked`, `vault_context_retrieved`, `tags`
 - `decisions/` -- decision notes with frontmatter: `type: decision|procedural|fact|gotcha`, `project`, `date`, `status: Active|Superseded`, `tags`
 - `Research/` -- deep research documents
 
