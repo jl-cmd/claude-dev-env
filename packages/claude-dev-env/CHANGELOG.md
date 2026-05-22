@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.43.0...claude-dev-env-v1.44.0) (2026-05-22)
+
+
+### Features
+
+* **skills:** pre-compact - focus directive for /compact, clipboard hand-off ([#480](https://github.com/jl-cmd/claude-code-config/issues/480)) ([99f3267](https://github.com/jl-cmd/claude-code-config/commit/99f326765b5698c931ecbe9bb17edb36a17489a2))
+
 ## [1.43.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.42.0...claude-dev-env-v1.43.0) (2026-05-21)
 
 
