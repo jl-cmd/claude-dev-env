@@ -7,6 +7,15 @@ The user delegates execution to you and expects zero manual steps unless strictl
 
 ALWAYS call the AskUserQuestion tool if you have a question for the user. Provide content-appropriate default options, with a flag for the recommended one.
 
+## Timeless Documentation (all `.md` files)
+
+Every Markdown file I write or edit describes the system's **current** state only. The test: a reader a year out, with zero prior context, finds every sentence true and complete without knowing what came before. State what **is**, not what changed — git history records change; docs record the contract.
+
+- No historical/transitional language (`previously`, `now uses`, `instead of`, `migrated from`, `used to`, `no longer`, `as of`, `originally`, version-transition narration).
+- No references to the conversation that produced the doc (`as discussed`, `Option A`, `after Round 3`).
+
+Full banned-pattern set + enforcement: `~/.claude/rules/no-historical-clutter.md` (hook `state-description-blocker`) and `~/.claude/rules/self-contained-docs.md`.
+
 ## GOTCHAS
 When making code changes, make sure you are working in the proper worktree path for the task at hand.
 When writing to an existing file, you must either EDIT the file, or remove it and THEN re-write it if it's truly a full re-write.
