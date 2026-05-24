@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.45.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.44.0...claude-dev-env-v1.45.0) (2026-05-24)
+
+
+### Features
+
+* **hooks:** block plan writes with unresolved Open Questions ([#482](https://github.com/jl-cmd/claude-code-config/issues/482)) ([1457f06](https://github.com/jl-cmd/claude-code-config/commit/1457f06179c7335b236ee70177c40d6ac91e8470))
+* **hooks:** close 4 process-leak gaps + extend audit rubric to A-N ([#484](https://github.com/jl-cmd/claude-code-config/issues/484)) ([b9614b5](https://github.com/jl-cmd/claude-code-config/commit/b9614b53fcfda6786f800ef25544134a96591207))
+
 ## [1.44.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.43.0...claude-dev-env-v1.44.0) (2026-05-22)
 
 
