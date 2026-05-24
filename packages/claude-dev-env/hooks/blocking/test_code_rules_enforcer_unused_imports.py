@@ -30,7 +30,7 @@ assert _hook_spec.loader is not None
 _hook_module = importlib.util.module_from_spec(_hook_spec)
 _hook_spec.loader.exec_module(_hook_module)
 check_unused_module_level_imports = _hook_module.check_unused_module_level_imports
-_reconstruct_post_edit_file_content = _hook_module._reconstruct_post_edit_file_content
+prior_and_post_edit_content = _hook_module.prior_and_post_edit_content
 
 
 PRODUCTION_FILE_PATH = "packages/app/services/loader.py"
@@ -414,9 +414,10 @@ def test_should_fall_back_when_full_file_content_has_syntax_error() -> None:
 def test_reconstruct_post_edit_returns_replaced_content(tmp_path: pathlib.Path) -> None:
     target_file = tmp_path / "module.py"
     target_file.write_text("ALPHA = 1\nBETA = 2\n", encoding="utf-8")
-    post_edit = _reconstruct_post_edit_file_content(
+    prior_content, post_edit = prior_and_post_edit_content(
         str(target_file), "BETA = 2", "BETA = 22\nGAMMA = 3",
     )
+    assert prior_content == "ALPHA = 1\nBETA = 2\n"
     assert post_edit == "ALPHA = 1\nBETA = 22\nGAMMA = 3\n", (
         f"Helper must return the file body with the first occurrence replaced, got: {post_edit!r}"
     )
@@ -424,9 +425,10 @@ def test_reconstruct_post_edit_returns_replaced_content(tmp_path: pathlib.Path) 
 
 def test_reconstruct_post_edit_returns_none_when_file_missing(tmp_path: pathlib.Path) -> None:
     missing_file = tmp_path / "does_not_exist.py"
-    post_edit = _reconstruct_post_edit_file_content(
+    prior_content, post_edit = prior_and_post_edit_content(
         str(missing_file), "any_old", "any_new",
     )
+    assert prior_content is None
     assert post_edit is None, (
         f"Missing file must yield None so the caller treats it as 'no full-file context', got: {post_edit!r}"
     )
@@ -435,9 +437,10 @@ def test_reconstruct_post_edit_returns_none_when_file_missing(tmp_path: pathlib.
 def test_reconstruct_post_edit_returns_none_when_old_string_absent(tmp_path: pathlib.Path) -> None:
     target_file = tmp_path / "module.py"
     target_file.write_text("ALPHA = 1\n", encoding="utf-8")
-    post_edit = _reconstruct_post_edit_file_content(
+    prior_content, post_edit = prior_and_post_edit_content(
         str(target_file), "ZETA = 9", "OMEGA = 0",
     )
+    assert prior_content is None
     assert post_edit is None, (
         f"Absent old_string means the Edit will not apply cleanly — return None, got: {post_edit!r}"
     )
@@ -446,9 +449,10 @@ def test_reconstruct_post_edit_returns_none_when_old_string_absent(tmp_path: pat
 def test_reconstruct_post_edit_replaces_only_first_occurrence(tmp_path: pathlib.Path) -> None:
     target_file = tmp_path / "module.py"
     target_file.write_text("X = 1\nX = 1\n", encoding="utf-8")
-    post_edit = _reconstruct_post_edit_file_content(
+    prior_content, post_edit = prior_and_post_edit_content(
         str(target_file), "X = 1", "X = 2",
     )
+    assert prior_content == "X = 1\nX = 1\n"
     assert post_edit == "X = 2\nX = 1\n", (
         "Edit replaces only the first occurrence; helper must mirror that, got: "
         f"{post_edit!r}"

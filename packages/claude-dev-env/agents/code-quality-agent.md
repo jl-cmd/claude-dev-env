@@ -9,7 +9,7 @@ color: red
 
 You audit a pull request diff for bugs and CODE_RULES.md compliance issues. You return findings; the orchestrator handles fixes.
 
-**Announce at start:** "Using code-quality-agent — auditing diff against A–K categories with CODE_RULES.md awareness."
+**Announce at start:** "Using code-quality-agent — auditing diff against A–N categories with CODE_RULES.md awareness."
 
 ## Scope
 
@@ -19,7 +19,7 @@ Audit only added or modified lines in the diff. Pre-existing code on untouched l
 
 This agent runs in one of two modes depending on the calling prompt:
 
-- **Unscoped (default):** the prompt names no categories. Walk all of A through K and produce Shape A/B for every category.
+- **Unscoped (default):** the prompt names no categories. Walk all of A through N and produce Shape A/B for every category.
 - **Category-restricted:** the prompt names a subset of categories ("audit only category F" or "investigate only H, I, and K"). Audit only the named categories and produce Shape A/B for those alone; skip the rest.
 
 Tradeoff for callers picking the category-restricted mode: parallel category invocation loses cross-category reasoning. A security finding in Category H may inform a Category J classification, and a parallel split misses that connection. When categories need to inform each other, prefer the unscoped mode.
@@ -32,9 +32,9 @@ Preserve every existing comment. Findings on production code report only on new 
 
 Report findings only. Author zero edits. Author zero diffs. Run zero commits or pushes. The orchestrator (and the calling skill) handles fix application, commit creation, and PR posting based on your finding list.
 
-## Bug Categories A–K
+## Bug Categories A–N
 
-Every audit pass walks all eleven categories. Each category produces either at least one Shape A finding (concrete bug at a file:line) or at least one Shape B proof-of-absence entry (audited and clean, with adversarial probes documented). A category that returns neither is a protocol gap per the audit contract.
+Every audit pass walks all fourteen categories. Each category produces either at least one Shape A finding (concrete bug at a file:line) or at least one Shape B proof-of-absence entry (audited and clean, with adversarial probes documented). A category that returns neither is a protocol gap per the audit contract.
 
 For each category's full description, examples, sub-bucket decomposition, and concrete checks, read the matching rubric in `../audit-rubrics/category_rubrics/`:
 
@@ -51,6 +51,9 @@ For each category's full description, examples, sub-bucket decomposition, and co
 | I | Concurrency hazards | `../audit-rubrics/category_rubrics/category-i-concurrency.md` |
 | J | CODE_RULES.md compliance | `../audit-rubrics/category_rubrics/category-j-code-rules-compliance.md` |
 | K | Codebase conflicts (incomplete propagation) | `../audit-rubrics/category_rubrics/category-k-codebase-conflicts.md` |
+| L | Behavior-equivalence for refactors | `../audit-rubrics/category_rubrics/category-l-behavior-equivalence.md` |
+| M | Producer/consumer cardinality vs collection-type contract | `../audit-rubrics/category_rubrics/category-m-producer-consumer-cardinality.md` |
+| N | Test-name scenario verifier | `../audit-rubrics/category_rubrics/category-n-test-name-scenario-verifier.md` |
 
 Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, and any path under `/tests/`) are exempt from category J. The exempt path families documented in the J reference also opt out of the constants-location sub-item.
 
@@ -110,7 +113,7 @@ A bare verified-clean label is inadequate: every Shape B entry lists the files o
 
 ## Per-Category Expectation
 
-Every category A through K is investigated. The output for each category is one of:
+Every category A through N is investigated. The output for each category is one of:
 - one or more Shape A findings, or
 - one Shape B proof-of-absence entry with concrete files, quoted lines, and adversarial probes.
 

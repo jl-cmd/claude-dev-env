@@ -6,7 +6,7 @@ import importlib.util
 import re
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 ValidateContentCallable = Callable[..., list[str]]
@@ -15,12 +15,22 @@ from bugteam_scripts_constants.bugteam_code_rules_gate_constants import (
     ALL_CODE_FILE_EXTENSIONS,
     ALL_COLUMN_MAGIC_FALSE_VALUES,
     ALL_GIT_DIFF_CACHED_ARGS,
-    ALL_JS_FILE_EXTENSIONS,
     BUGTEAM_CODE_RULES_GATE_PREFIX,
     EXIT_CODE_ENFORCER_MISSING,
+    FUNCTION_LENGTH_DEFINITION_LINE_GROUP_INDEX,
+    FUNCTION_LENGTH_SPAN_GROUP_INDEX,
+    FUNCTION_LENGTH_VIOLATION_PATTERN,
+    BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX,
+    BANNED_NOUN_SPAN_GROUP_INDEX,
+    BANNED_NOUN_VIOLATION_PATTERN,
     HUNK_HEADER_RAW_PATTERN,
+    ISOLATION_DEFINITION_LINE_GROUP_INDEX,
+    ISOLATION_SPAN_GROUP_INDEX,
+    ISOLATION_VIOLATION_PATTERN,
+    MAX_VIOLATIONS_PER_CHECK,
     MAXIMUM_COLUMN_TUPLE_ELEMENT_COUNT,
     MAXIMUM_ISSUES_TO_REPORT,
+    PYTHON_FILE_EXTENSION,
     VIOLATION_LINE_RAW_PATTERN,
 )
 
@@ -416,6 +426,68 @@ def is_code_path(file_path: Path) -> bool:
     return suffix in ALL_CODE_FILE_EXTENSIONS
 
 
+def _path_is_eligible_for_validation(
+    resolved_path: Path,
+    repository_root: Path,
+    read_staged_content_flag: bool,
+) -> bool:
+    """Decide whether *resolved_path* should be validated by the gate.
+
+    Args:
+        resolved_path: A resolved candidate path already confirmed to live
+            under *repository_root*.
+        repository_root: The repository root used to compute the relative path.
+        read_staged_content_flag: When True, require staged-index presence so
+            files staged for add or modify are validated and staged deletions
+            are skipped; when False, require working-tree presence.
+
+    Returns:
+        True when the path carries a code extension and exists in the source
+        the gate will read; False otherwise.
+    """
+    if not is_code_path(resolved_path):
+        return False
+    if read_staged_content_flag:
+        relative_posix = str(
+            resolved_path.relative_to(repository_root.resolve())
+        ).replace("\\", "/")
+        return staged_blob_exists(repository_root.resolve(), relative_posix)
+    return resolved_path.is_file()
+
+
+def _resolve_eligible_code_path(
+    candidate_path: Path,
+    repository_root: Path,
+    read_staged_content_flag: bool = False,
+) -> Path | None:
+    """Resolve *candidate_path* and return it only when the gate should scan it.
+
+    Args:
+        candidate_path: One file path from the gate's candidate set.
+        repository_root: The repository root the resolved path must fall under.
+        read_staged_content_flag: When True, eligibility requires staged-index
+            presence; when False, it requires working-tree presence.
+
+    Returns:
+        The resolved path when it lives under *repository_root*, carries a code
+        extension, and is present in the source the gate will read; otherwise
+        None.
+    """
+    try:
+        resolved = candidate_path.resolve()
+    except OSError:
+        return None
+    try:
+        resolved.relative_to(repository_root.resolve())
+    except ValueError:
+        return None
+    if not _path_is_eligible_for_validation(
+        resolved, repository_root, read_staged_content_flag
+    ):
+        return None
+    return resolved
+
+
 def check_database_column_string_magic(content: str, file_path: str) -> list[str]:
     """Flag string literals that look like database/HTTP column or key names inside function bodies.
 
@@ -472,64 +544,129 @@ def check_database_column_string_magic(content: str, file_path: str) -> list[str
     return issues
 
 
+def _iter_calls_excluding_nested_functions(node: ast.AST) -> Iterator[ast.Call]:
+    for each_child in ast.iter_child_nodes(node):
+        if isinstance(each_child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if isinstance(each_child, ast.Call):
+            yield each_child
+            continue
+        yield from _iter_calls_excluding_nested_functions(each_child)
+
+
+def _module_level_optional_kwargs_by_name(tree: ast.Module) -> dict[str, set[str]]:
+    function_signatures: dict[str, set[str]] = {}
+    for each_node in ast.iter_child_nodes(tree):
+        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            optional_kwargs: set[str] = set()
+            for each_kwonly, each_default in zip(
+                each_node.args.kwonlyargs, each_node.args.kw_defaults
+            ):
+                if each_default is not None:
+                    optional_kwargs.add(each_kwonly.arg)
+            positional_defaults = each_node.args.defaults
+            positional_args_with_defaults = (
+                each_node.args.args[-len(positional_defaults):]
+                if positional_defaults
+                else []
+            )
+            for each_positional_arg in positional_args_with_defaults:
+                optional_kwargs.add(each_positional_arg.arg)
+            function_signatures[each_node.name] = optional_kwargs
+    return function_signatures
+
+
+def _class_method_node_ids(tree: ast.Module) -> set[int]:
+    class_method_node_ids: set[int] = set()
+    for each_class_def in ast.walk(tree):
+        if not isinstance(each_class_def, ast.ClassDef):
+            continue
+        for each_class_body_node in each_class_def.body:
+            if isinstance(
+                each_class_body_node, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                class_method_node_ids.add(id(each_class_body_node))
+    return class_method_node_ids
+
+
+def _wrapper_dropped_kwarg_findings(
+    wrapper_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    kwargs_by_function_name: dict[str, set[str]],
+) -> Iterator[str]:
+    wrapper_kwargs = kwargs_by_function_name.get(wrapper_node.name, set())
+    for each_call in _iter_calls_excluding_nested_functions(wrapper_node):
+        if isinstance(each_call.func, ast.Name):
+            delegate_name = each_call.func.id
+        elif isinstance(each_call.func, ast.Attribute):
+            delegate_name = each_call.func.attr
+        else:
+            continue
+        delegate_kwargs = kwargs_by_function_name.get(delegate_name)
+        if delegate_kwargs is None:
+            continue
+        missing = delegate_kwargs - wrapper_kwargs
+        if missing:
+            yield (
+                f"Line {wrapper_node.lineno}: Wrapper {wrapper_node.name!r} drops optional kwargs {sorted(missing)!r} of delegate {delegate_name!r}"
+            )
+
+
 def check_wrapper_plumb_through(content: str, file_path: str) -> list[str]:
-    """Flag public wrappers that drop optional kwargs of a same-file delegate.
+    """Flag calls inside public functions that drop a same-file delegate's optional kwargs.
 
     Walks the AST. For every public function (name does not start with '_'),
-    if its body contains exactly one direct call to another same-file
-    function and that delegate's signature accepts optional kwargs that the
-    wrapper does not also accept, emit a finding with both line numbers.
+    inspects every ast.Call inside its body and emits one finding per call
+    whose target name matches a same-file function that exposes optional
+    kwargs the enclosing public function does not also accept. Emission is
+    capped at MAX_VIOLATIONS_PER_CHECK findings per call to run_gate.
+
+    Limitations:
+    - Only module-level FunctionDef nodes contribute signatures, and ClassDef
+      methods are skipped both as signature sources and as wrapper candidates:
+      a class method's signature is unrelated to a free-function delegate's
+      keyword surface, so treating it as a wrapper produces false positives.
+    - ast.Attribute calls match by attribute name only; the receiver type is
+      not checked, so `self.fetch(...)` and `other.fetch(...)` both match a
+      module-level `fetch` definition.
+    - Nested call expressions inside another call's arguments are not treated as
+      separate call sites; only the enclosing Call is inspected. This avoids
+      false positives where a callee nested as an argument is confused with a
+      top-level delegate invocation (for example `delegate(helper(x))`).
 
     Args:
-        content: The source code content to inspect.
-        file_path: The file path for JS/TS extension exemption.
+        content: File content as a single string for AST parsing.
+        file_path: Repository-relative POSIX path of the file (used to
+            skip non-Python code extensions early).
 
     Returns:
-        List of violation messages, or an empty list when no violations are found.
+        List of violation strings, one per dropped optional kwarg. Returns
+        an empty list when the file is not Python or has a syntax error.
     """
-    if file_path.endswith(ALL_JS_FILE_EXTENSIONS):
+    non_python_code_extensions = ALL_CODE_FILE_EXTENSIONS - {PYTHON_FILE_EXTENSION}
+    lowercase_file_path = file_path.lower()
+    if any(
+        lowercase_file_path.endswith(each_extension)
+        for each_extension in non_python_code_extensions
+    ):
         return []
     try:
         tree = ast.parse(content)
     except SyntaxError:
         return []
-    function_signatures: dict[str, set[str]] = {}
-    for each_node in ast.walk(tree):
-        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            optional_kwargs: set[str] = set()
-            for each_kwonly, each_default in zip(each_node.args.kwonlyargs, each_node.args.kw_defaults):
-                if each_default is not None:
-                    optional_kwargs.add(each_kwonly.arg)
-            function_signatures[each_node.name] = optional_kwargs
+    function_signatures = _module_level_optional_kwargs_by_name(tree)
+    class_method_node_ids = _class_method_node_ids(tree)
     issues: list[str] = []
     for each_node in ast.walk(tree):
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
+        if id(each_node) in class_method_node_ids:
+            continue
         if each_node.name.startswith("_"):
             continue
-        wrapper_kwargs = function_signatures.get(each_node.name, set())
-        for each_call in ast.walk(each_node):
-            if not isinstance(each_call, ast.Call):
-                continue
-            if not isinstance(each_call.func, ast.Attribute):
-                continue
-            delegate_name = each_call.func.attr
-            delegate_kwargs = function_signatures.get(delegate_name)
-            if delegate_kwargs is None:
-                continue
-            missing = delegate_kwargs - wrapper_kwargs
-            if missing:
-                issues.append(
-                    f"Line {each_node.lineno}: Wrapper {each_node.name!r} drops optional kwargs {sorted(missing)!r} of delegate {delegate_name!r}"
-                )
-                if len(issues) >= MAXIMUM_ISSUES_TO_REPORT:
-                    print(
-                        f"{BUGTEAM_CODE_RULES_GATE_PREFIX}check_wrapper_plumb_through "
-                        f"cap reached at {MAXIMUM_ISSUES_TO_REPORT} issues for {file_path}; "
-                        "additional matches were dropped.",
-                        file=sys.stderr,
-                    )
-                    return issues
+        for each_finding in _wrapper_dropped_kwarg_findings(each_node, function_signatures):
+            issues.append(each_finding)
+            if len(issues) >= MAX_VIOLATIONS_PER_CHECK:
+                return issues
     return issues
 
 
@@ -639,8 +776,8 @@ def whole_file_line_set(file_path: Path) -> set[int]:
             "no lines changed" and silently downgrades blocking violations.
     """
     try:
-        total_lines = len(file_path.read_text().splitlines())
-    except OSError as read_error:
+        total_lines = len(file_path.read_text(encoding="utf-8").splitlines())
+    except (OSError, UnicodeDecodeError) as read_error:
         print(
             f"{BUGTEAM_CODE_RULES_GATE_PREFIX}whole_file_line_set could not read "
             f"{file_path}: {type(read_error).__name__}: {read_error}",
@@ -703,24 +840,146 @@ def extract_violation_line_number(violation_text: str) -> int | None:
     return int(match_result.group(1))
 
 
+def function_length_span_range(violation_text: str) -> range | None:
+    """Return the declared line range of a function-length violation, or None.
+
+    The enforcer's function-length message carries the definition line and
+    the function's line span: ``Function 'NAME' (defined at line X) is Y
+    lines - ...``. The function occupies lines ``X`` through ``X + Y - 1``
+    inclusive.
+
+    Args:
+        violation_text: A single violation string emitted by the enforcer.
+
+    Returns:
+        A ``range`` covering the function's declared line span, or None when
+        the text is not a function-length violation.
+    """
+    span_match = FUNCTION_LENGTH_VIOLATION_PATTERN.search(violation_text)
+    if span_match is None:
+        return None
+    definition_line = int(span_match.group(FUNCTION_LENGTH_DEFINITION_LINE_GROUP_INDEX))
+    line_span = int(span_match.group(FUNCTION_LENGTH_SPAN_GROUP_INDEX))
+    return range(definition_line, definition_line + line_span)
+
+
+def isolation_span_range(violation_text: str) -> range | None:
+    """Return the enclosing test-function line range of an isolation violation.
+
+    The enforcer's HOME/TMP isolation message carries the enclosing test
+    function's definition line and span: ``Line N: Test 'NAME' (defined at
+    line X, spanning Y lines) probes ...``. The function occupies lines ``X``
+    through ``X + Y - 1`` inclusive, so a signature-line change that
+    un-isolates an unchanged-body probe is scoped by the same span the
+    enforcer uses rather than by the ``Line N:`` probe line alone.
+
+    Args:
+        violation_text: A single violation string emitted by the enforcer.
+
+    Returns:
+        A ``range`` covering the enclosing test function's declared line span,
+        or None when the text is not an isolation violation.
+    """
+    span_match = ISOLATION_VIOLATION_PATTERN.search(violation_text)
+    if span_match is None:
+        return None
+    definition_line = int(span_match.group(ISOLATION_DEFINITION_LINE_GROUP_INDEX))
+    line_span = int(span_match.group(ISOLATION_SPAN_GROUP_INDEX))
+    return range(definition_line, definition_line + line_span)
+
+
+def banned_noun_span_range(violation_text: str) -> range | None:
+    """Return the one-line binding span of a banned-noun violation, or None.
+
+    The enforcer's banned-noun message carries the binding line and a one-line
+    span: ``Line N: Identifier 'NAME' ... (binding span at line X, spanning 1
+    lines)``. A banned-noun binding is a point fact about one identifier, so the
+    span is always the binding line alone (``X`` through ``X``) — never the
+    enclosing function span. Scoping to the binding line keeps a pre-existing
+    parameter or local-name binding out of scope when an unrelated line of its
+    enclosing function is edited.
+
+    Args:
+        violation_text: A single violation string emitted by the enforcer.
+
+    Returns:
+        A ``range`` covering the binding's one-line span, or None when the text
+        is not a banned-noun violation.
+    """
+    span_match = BANNED_NOUN_VIOLATION_PATTERN.search(violation_text)
+    if span_match is None:
+        return None
+    definition_line = int(span_match.group(BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX))
+    line_span = int(span_match.group(BANNED_NOUN_SPAN_GROUP_INDEX))
+    return range(definition_line, definition_line + line_span)
+
+
+def _all_span_range_extractors() -> tuple[Callable[[str], range | None], ...]:
+    return (
+        function_length_span_range,
+        isolation_span_range,
+        banned_noun_span_range,
+    )
+
+
+def enclosing_span_range(violation_text: str) -> range | None:
+    """Return the enclosing-unit line range of a span-tagged violation, or None.
+
+    Every diff-scoped enforcer check tags its message with an enclosing-unit
+    span fragment. This dispatcher tries each span extractor from
+    ``_all_span_range_extractors`` so the gate reconstructs every scoped
+    check's span through one shared mechanism — adding a new scoped check means
+    adding one extractor to that registry rather than threading a new branch
+    through ``split_violations_by_scope``.
+
+    Args:
+        violation_text: A single violation string emitted by the enforcer.
+
+    Returns:
+        The first non-None span range any extractor recovers, or None when the
+        text carries no enclosing-unit span fragment.
+    """
+    for each_extractor in _all_span_range_extractors():
+        span_range = each_extractor(violation_text)
+        if span_range is not None:
+            return span_range
+    return None
+
+
 def split_violations_by_scope(
     all_issues: list[str],
     all_added_line_numbers: set[int] | None,
 ) -> tuple[list[str], list[str]]:
-    """Split violations into blocking and advisory groups by line number.
+    """Partition issues into blocking vs advisory based on touched lines.
 
     Args:
-        all_issues: All violation messages to split.
-        all_added_line_numbers: Set of added line numbers, or None for full-file scope.
+        all_issues: Violation strings emitted by the enforcer.
+        all_added_line_numbers: Lines added in the current diff, or None
+            to treat every violation as blocking.
 
     Returns:
-        Tuple of (blocking_issues, advisory_issues).
+        Tuple ``(blocking, advisory)``. When *all_added_line_numbers* is
+        None, every issue is blocking. Every diff-scoped violation
+        (function-length, HOME/TMP isolation, banned-noun) carries an
+        enclosing-unit span fragment that ``enclosing_span_range`` reconstructs
+        through one shared extractor registry; such a violation is blocking
+        when its declared span intersects the added lines (the unit grew or its
+        signature changed in this diff) and advisory otherwise (a pre-existing
+        untouched unit). Every other issue is blocking when its ``Line N:``
+        prefix names an added line and advisory otherwise.
     """
     if all_added_line_numbers is None:
         return list(all_issues), []
     blocking: list[str] = []
     advisory: list[str] = []
     for each_issue in all_issues:
+        span_range = enclosing_span_range(each_issue)
+        if span_range is not None:
+            if any(each_line in all_added_line_numbers for each_line in span_range):
+                blocking.append(each_issue)
+            else:
+                advisory.append(each_issue)
+            continue
         violation_line = extract_violation_line_number(each_issue)
         if violation_line is None:
             blocking.append(each_issue)
@@ -753,11 +1012,142 @@ def print_violation_section(
             print(f"  {each_issue}", file=sys.stderr)
 
 
+def read_prior_committed_content(
+    repository_root: Path, relative_path_posix: str
+) -> str:
+    """Return the HEAD-committed content for *relative_path_posix*.
+
+    Args:
+        repository_root: The repository root for running git commands.
+        relative_path_posix: POSIX-style relative path to read.
+
+    Returns:
+        The committed file content at HEAD, or an empty string when the
+        path is not tracked or ``git show`` returns non-zero.
+    """
+    git_show_process = subprocess.run(
+        ["git", "show", f"HEAD:{relative_path_posix}"],
+        cwd=str(repository_root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if git_show_process.returncode != 0:
+        return ""
+    return git_show_process.stdout
+
+
+def read_staged_content(
+    repository_root: Path, relative_path_posix: str
+) -> str | None:
+    """Return the staged-blob content for *relative_path_posix*.
+
+    Args:
+        repository_root: The repository root for running git commands.
+        relative_path_posix: POSIX-style relative path to read.
+
+    Returns:
+        The staged blob content, or None when the path is not staged, when
+        ``git show`` returns non-zero, or when the staged bytes are not
+        decodable Unicode (the caller skips and fails closed).
+    """
+    git_show_process = subprocess.run(
+        ["git", "show", f":{relative_path_posix}"],
+        cwd=str(repository_root),
+        capture_output=True,
+        check=False,
+    )
+    if git_show_process.returncode != 0:
+        return None
+    try:
+        return git_show_process.stdout.decode(encoding="utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def staged_blob_exists(
+    repository_root: Path, relative_path_posix: str
+) -> bool:
+    """Report whether *relative_path_posix* is present in the staged index.
+
+    Args:
+        repository_root: The repository root for running git commands.
+        relative_path_posix: POSIX-style relative path to probe.
+
+    Returns:
+        True when the path is staged for add or modify (its blob exists in the
+        index); False when it is absent, such as a staged deletion.
+    """
+    git_cat_file_process = subprocess.run(
+        ["git", "cat-file", "-e", f":{relative_path_posix}"],
+        cwd=str(repository_root),
+        capture_output=True,
+        check=False,
+    )
+    return git_cat_file_process.returncode == 0
+
+
+def _scoped_violations_for_file(
+    validate_content: ValidateContentCallable,
+    resolved_path: Path,
+    repository_root: Path,
+    all_added_lines_for_file: set[int] | None,
+    read_staged_content_flag: bool = False,
+) -> tuple[list[str], list[str]] | None:
+    """Validate one resolved file and partition its violations by diff scope.
+
+    Args:
+        validate_content: The validator function from code_rules_enforcer.
+        resolved_path: The resolved code file to validate.
+        repository_root: The repository root for relative path resolution.
+        all_added_lines_for_file: Lines added in the current diff for this file,
+            or None to treat every violation as blocking.
+        read_staged_content_flag: When True, source the content from the staged
+            blob so it matches the staged diff that scoped the added lines.
+
+    Returns:
+        ``(blocking, advisory)`` for the file, or None when the file could not
+        be read (the caller logs the skip and counts it).
+    """
+    relative_posix = str(
+        resolved_path.relative_to(repository_root.resolve())
+    ).replace("\\", "/")
+    if read_staged_content_flag:
+        staged_content = read_staged_content(repository_root.resolve(), relative_posix)
+        if staged_content is None:
+            print(f"{BUGTEAM_CODE_RULES_GATE_PREFIX}skip unreadable {resolved_path}", file=sys.stderr)
+            return None
+        content = staged_content
+    else:
+        try:
+            content = resolved_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            print(f"{BUGTEAM_CODE_RULES_GATE_PREFIX}skip unreadable {resolved_path}", file=sys.stderr)
+            return None
+    prior_content = read_prior_committed_content(
+        repository_root.resolve(), relative_posix
+    )
+    issues = validate_content(
+        content,
+        relative_posix,
+        old_content=prior_content,
+        defer_scope_to_caller=True,
+    )
+    issues.extend(check_database_column_string_magic(content, relative_posix))
+    issues.extend(check_wrapper_plumb_through(content, relative_posix))
+    if not issues:
+        return [], []
+    return split_violations_by_scope(issues, all_added_lines_for_file)
+
+
 def run_gate(
     validate_content: ValidateContentCallable,
     all_file_paths: list[Path],
     repository_root: Path,
     all_added_lines_map: dict[Path, set[int]] | None,
+    read_staged_content_flag: bool = False,
 ) -> int:
     """Run the CODE_RULES gate on a set of file paths.
 
@@ -770,6 +1160,8 @@ def run_gate(
         repository_root: The repository root for relative path resolution.
         all_added_lines_map: Optional map of resolved path to added line numbers.
             When provided, violations on added lines are blocking; others are advisory.
+        read_staged_content_flag: When True, validate each file's staged blob
+            so the content source matches the staged diff.
 
     Returns:
         Zero when every targeted file was validated and no blocking
@@ -781,51 +1173,69 @@ def run_gate(
     advisory_by_file: dict[Path, list[str]] = {}
     skipped_unreadable_count = 0
     for each_file_path in sorted(set(all_file_paths)):
-        try:
-            resolved = each_file_path.resolve()
-        except OSError:
+        resolved = _resolve_eligible_code_path(
+            each_file_path, repository_root, read_staged_content_flag
+        )
+        if resolved is None:
             continue
-        try:
-            resolved.relative_to(repository_root.resolve())
-        except ValueError:
-            continue
-        if not is_code_path(resolved):
-            continue
-        if not resolved.is_file():
-            continue
-        try:
-            content = resolved.read_text(encoding="utf-8")
-        except OSError:
-            print(f"{BUGTEAM_CODE_RULES_GATE_PREFIX}skip unreadable {resolved}", file=sys.stderr)
+        all_added_lines_for_file = (
+            None if all_added_lines_map is None else all_added_lines_map.get(resolved)
+        )
+        scoped_violations = _scoped_violations_for_file(
+            validate_content, resolved, repository_root,
+            all_added_lines_for_file, read_staged_content_flag,
+        )
+        if scoped_violations is None:
             skipped_unreadable_count += 1
             continue
-        relative = resolved.relative_to(repository_root.resolve())
-        issues = validate_content(content, str(relative).replace("\\", "/"), old_content=content)
-        issues.extend(check_database_column_string_magic(content, str(relative).replace("\\", "/")))
-        issues.extend(check_wrapper_plumb_through(content, str(relative).replace("\\", "/")))
-        if not issues:
-            continue
-        added_for_file = None if all_added_lines_map is None else all_added_lines_map.get(resolved)
-        blocking, advisory = split_violations_by_scope(issues, added_for_file)
+        blocking, advisory = scoped_violations
         if blocking:
             blocking_by_file[resolved] = blocking
         if advisory:
             advisory_by_file[resolved] = advisory
+    return _report_partitioned_violations(
+        blocking_by_file,
+        advisory_by_file,
+        repository_root,
+        all_added_lines_map is None,
+        skipped_unreadable_count,
+    )
+
+
+def _report_partitioned_violations(
+    blocking_by_file: dict[Path, list[str]],
+    advisory_by_file: dict[Path, list[str]],
+    repository_root: Path,
+    is_whole_file_scope: bool,
+    skipped_unreadable_count: int,
+) -> int:
+    """Print the blocking and advisory sections and return the gate exit code.
+
+    Args:
+        blocking_by_file: Blocking violations grouped by resolved file path.
+        advisory_by_file: Advisory violations grouped by resolved file path.
+        repository_root: Repository root used to compute relative paths.
+        is_whole_file_scope: True when no per-file added-line map was supplied,
+            which selects the whole-file header wording.
+        skipped_unreadable_count: Count of files that could not be read; a
+            non-zero count forces a non-zero exit because the gate cannot
+            vouch for those files.
+
+    Returns:
+        Zero when no blocking violations were found and no file was skipped;
+        non-zero otherwise.
+    """
     blocking_count = sum(len(each_list) for each_list in blocking_by_file.values())
     advisory_count = sum(len(each_list) for each_list in advisory_by_file.values())
     if blocking_count:
-        if all_added_lines_map is None:
+        if is_whole_file_scope:
             header = f"{BUGTEAM_CODE_RULES_GATE_PREFIX}{blocking_count} violation(s) reported."
         else:
             header = (
                 f"{BUGTEAM_CODE_RULES_GATE_PREFIX}{blocking_count} violation(s) "
                 "introduced on changed lines:"
             )
-        print_violation_section(
-            header,
-            blocking_by_file,
-            repository_root,
-        )
+        print_violation_section(header, blocking_by_file, repository_root)
     if advisory_count:
         if blocking_count:
             print("", file=sys.stderr)
@@ -942,6 +1352,7 @@ def main(all_arguments: list[str]) -> int:
             staged_file_paths,
             repository_root,
             all_added_lines_map=staged_added_lines,
+            read_staged_content_flag=True,
         )
     all_diff_paths = paths_from_git_diff(repository_root, arguments.base)
     all_diff_paths = filter_paths_under_prefixes(

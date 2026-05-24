@@ -30,16 +30,20 @@ UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 TYPE_CHECKING_BLOCK_PATTERN = re.compile(r"^(?P<indent>\s*)if\s+(typing\.)?TYPE_CHECKING\s*:\s*$")
 ALL_IMPORT_STATEMENT_PREFIXES: tuple[str, ...] = ("import ", "from ")
-ALL_EXEMPT_PYTHON_COMMENT_BODIES: tuple[str, ...] = (
-    "type:",
+ALL_TOKEN_ANCHORED_EXEMPT_COMMENT_BODIES: tuple[str, ...] = (
     "noqa",
     "pylint:",
     "pragma:",
+)
+ALL_TOKEN_ANCHORED_DIRECTIVE_BOUNDARY_CHARACTERS: frozenset[str] = frozenset({":"})
+ALL_FREE_FORM_EXEMPT_COMMENT_BODIES: tuple[str, ...] = (
+    "type:",
     "TODO",
     "FIXME",
     "HACK",
     "XXX",
 )
+CHAINED_INLINE_COMMENT_PATTERN = re.compile(r"#")
 ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES: tuple[str, ...] = (
     "// @ts-",
     "// eslint-",
@@ -88,3 +92,126 @@ BARE_EACH_TOKEN = "each"
 INLINE_COLLECTION_MIN_LENGTH = 3
 ALL_CAPS_WITH_UNDERSCORE_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
 DOTTED_SEGMENT_PATTERN = re.compile(r"^\.[a-z][a-z0-9_]*$")
+
+ALL_DIFF_CHANGED_OPCODE_TAGS: tuple[str, str] = ("replace", "insert")
+
+FUNCTION_LENGTH_BLOCKING_THRESHOLD: int = 60
+FUNCTION_LENGTH_BLOCKING_MESSAGE_SUFFIX: str = (
+    "exceeds blocking threshold - split into helpers (small functions: Robert C. "
+    "Martin, Clean Code Ch. 3 'Functions'; Google Python Style Guide ~40-line "
+    "function review hint)"
+)
+
+BANNED_NOUN_SPAN_FRAGMENT_TEMPLATE: str = (
+    "(binding span at line {definition_line}, spanning {line_span} lines)"
+)
+
+ALL_PYTEST_FILESYSTEM_ISOLATION_FIXTURE_NAMES: frozenset[str] = frozenset({
+    "monkeypatch",
+})
+PYTEST_USEFIXTURES_MARKER_NAME: str = "usefixtures"
+PYTEST_TEST_CLASS_NAME_PREFIX: str = "Test"
+ALL_HOME_DIRECTORY_ENV_VAR_NAMES: frozenset[str] = frozenset({
+    "HOME",
+    "USERPROFILE",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+})
+ALL_FILESYSTEM_HOME_PROBE_DOTTED_NAMES: frozenset[str] = frozenset({
+    "Path.home",
+    "pathlib.Path.home",
+    "tempfile.gettempdir",
+    "tempfile.gettempdirb",
+    "tempfile.gettempprefix",
+    "tempfile.mkstemp",
+    "tempfile.mkdtemp",
+    "tempfile.mktemp",
+    "tempfile.NamedTemporaryFile",
+    "tempfile.TemporaryFile",
+    "tempfile.TemporaryDirectory",
+    "tempfile.SpooledTemporaryFile",
+})
+ALL_DIR_ACCEPTING_TEMPFILE_FACTORY_DOTTED_NAMES: frozenset[str] = frozenset({
+    "tempfile.mkstemp",
+    "tempfile.mkdtemp",
+    "tempfile.mktemp",
+    "tempfile.NamedTemporaryFile",
+    "tempfile.TemporaryFile",
+    "tempfile.TemporaryDirectory",
+    "tempfile.SpooledTemporaryFile",
+})
+TEMPFILE_FACTORY_ISOLATION_DIRECTORY_KEYWORD: str = "dir"
+ALL_SHARED_TEMP_SOURCE_PROBE_DOTTED_NAMES: frozenset[str] = frozenset({
+    "tempfile.gettempdir",
+    "tempfile.gettempdirb",
+    "tempfile.gettempprefix",
+})
+EXPANDVARS_DOTTED_NAME: str = "os.path.expandvars"
+EXPANDUSER_DOTTED_NAME: str = "os.path.expanduser"
+ALL_PATHLIB_STATIC_EXPANDUSER_DOTTED_NAMES: frozenset[str] = frozenset({
+    "Path.expanduser",
+    "pathlib.Path.expanduser",
+})
+PATHLIB_EXPANDUSER_METHOD_NAME: str = "expanduser"
+ALL_PATHLIB_PATH_CONSTRUCTOR_CANONICAL_NAMES: frozenset[str] = frozenset({
+    "Path",
+    "pathlib.Path",
+})
+ALL_PROBE_ALIASABLE_CANONICAL_PREFIXES: frozenset[str] = frozenset({
+    "os",
+    "os.path",
+    "os.environ",
+    "os.getenv",
+    "pathlib",
+    "pathlib.Path",
+    "Path",
+    "tempfile",
+})
+HOME_DIRECTORY_TILDE_PREFIX: str = "~"
+ENVIRONMENT_VARIABLE_REFERENCE_PATTERN: re.Pattern[str] = re.compile(
+    r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?"
+)
+WINDOWS_PERCENT_VARIABLE_REFERENCE_PATTERN: re.Pattern[str] = re.compile(
+    r"%([A-Za-z_][A-Za-z0-9_]*)%"
+)
+OS_GETENV_DOTTED_NAME: str = "os.getenv"
+OS_ENVIRON_GET_DOTTED_NAME: str = "os.environ.get"
+OS_ENVIRON_DOTTED_NAME: str = "os.environ"
+ENVIRON_GET_METHOD_NAME: str = "get"
+ALL_ENVIRONMENT_GETTER_DOTTED_NAMES: frozenset[str] = frozenset({
+    OS_GETENV_DOTTED_NAME,
+    OS_ENVIRON_GET_DOTTED_NAME,
+})
+ALL_PROBE_RELEVANT_MODULE_CANONICAL_NAMES: frozenset[str] = frozenset({
+    "os",
+    "os.path",
+    "pathlib",
+    "tempfile",
+})
+ALL_CANONICAL_DOTTED_NAMES_BY_BARE_IMPORT: dict[tuple[str, str], str] = {
+    ("os.path", "expanduser"): "os.path.expanduser",
+    ("os.path", "expandvars"): "os.path.expandvars",
+    ("os", "path"): "os.path",
+    ("os", "getenv"): "os.getenv",
+    ("os", "environ"): "os.environ",
+    ("tempfile", "gettempdir"): "tempfile.gettempdir",
+    ("tempfile", "gettempdirb"): "tempfile.gettempdirb",
+    ("tempfile", "gettempprefix"): "tempfile.gettempprefix",
+    ("tempfile", "mkstemp"): "tempfile.mkstemp",
+    ("tempfile", "mkdtemp"): "tempfile.mkdtemp",
+    ("tempfile", "mktemp"): "tempfile.mktemp",
+    ("tempfile", "NamedTemporaryFile"): "tempfile.NamedTemporaryFile",
+    ("tempfile", "TemporaryFile"): "tempfile.TemporaryFile",
+    ("tempfile", "TemporaryDirectory"): "tempfile.TemporaryDirectory",
+    ("tempfile", "SpooledTemporaryFile"): "tempfile.SpooledTemporaryFile",
+    ("pathlib", "Path"): "Path",
+}
+TEST_ISOLATION_MESSAGE_SUFFIX: str = (
+    "must take a monkeypatch fixture and route HOME/TMP env reads through "
+    "monkeypatch.setenv; tmp_path / tmpdir allocate a sandbox path but do "
+    "not intercept env reads, so they leak across the suite (CODE_RULES — "
+    "see audits 2026-05-22 Theme M)"
+)

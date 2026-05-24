@@ -7,6 +7,7 @@ file is edited. Pure functions with no side effects.
 from __future__ import annotations
 
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from skills_pr_loop_constants.path_resolver_constants import (
@@ -21,6 +22,27 @@ from skills_pr_loop_constants.path_resolver_constants import (
     SLUGIFY_SAFE_CHARS,
     WORKTREE_DIRNAME,
 )
+
+
+@dataclass(frozen=True)
+class PerPrWorkspace:
+    """Resolved per-PR workspace paths for a pr-loop run.
+
+    Attributes:
+        worktree: Absolute path to the git worktree checkout.
+        diff_patch_template: A ``str.format`` template carrying a ``{loop}``
+            placeholder for the per-loop diff/patch file path.
+        outcome_xml_template: A ``str.format`` template carrying ``{number}``
+            and ``{loop}`` placeholders for the AUDIT outcome XML filename.
+        fix_outcome_xml_template: A ``str.format`` template carrying
+            ``{number}`` and ``{loop}`` placeholders for the FIX outcome XML
+            filename.
+    """
+
+    worktree: Path
+    diff_patch_template: str
+    outcome_xml_template: str
+    fix_outcome_xml_template: str
 
 
 def sanitize_branch_name(head_branch: str) -> str:
@@ -83,8 +105,8 @@ def slugify_pr_identity(owner: str, repo: str, pr_number: int) -> str:
 
 def per_pr_workspace(
     run_temp_dir: Path, owner: str, repo: str, pr_number: int
-) -> dict[str, object]:
-    """Build the per-PR workspace paths dict.
+) -> PerPrWorkspace:
+    """Build the per-PR workspace paths.
 
     Args:
         run_temp_dir: Run temp directory (from resolve_run_temp_dir).
@@ -93,20 +115,19 @@ def per_pr_workspace(
         pr_number: Pull request number.
 
     Returns:
-        Dict with keys:
-          - worktree: Path to the git worktree checkout
-          - diff_patch_template: str template with {loop} placeholder
-          - outcome_xml_template: str template with {number} and {loop} placeholders
-          - fix_outcome_xml_template: str template with {number} and {loop} placeholders
+        A PerPrWorkspace whose ``worktree`` is the git worktree checkout Path
+        and whose ``diff_patch_template`` / ``outcome_xml_template`` /
+        ``fix_outcome_xml_template`` are ``str.format`` templates carrying
+        ``{loop}`` (and, for the XML templates, ``{number}``) placeholders.
     """
     pr_workspace_dir = run_temp_dir / PER_PR_WORKSPACE_TEMPLATE.format(number=pr_number)
     slug = slugify_pr_identity(owner, repo, pr_number)
-    return {
-        "worktree": pr_workspace_dir / WORKTREE_DIRNAME,
-        "diff_patch_template": str(pr_workspace_dir / slug / DIFF_PATCH_TEMPLATE),
-        "outcome_xml_template": OUTCOME_XML_TEMPLATE,
-        "fix_outcome_xml_template": FIX_OUTCOME_XML_TEMPLATE,
-    }
+    return PerPrWorkspace(
+        worktree=pr_workspace_dir / WORKTREE_DIRNAME,
+        diff_patch_template=str(pr_workspace_dir / slug / DIFF_PATCH_TEMPLATE),
+        outcome_xml_template=OUTCOME_XML_TEMPLATE,
+        fix_outcome_xml_template=FIX_OUTCOME_XML_TEMPLATE,
+    )
 
 
 def outcome_xml_path(worktree_path: Path, pr_number: int, loop_number: int) -> Path:

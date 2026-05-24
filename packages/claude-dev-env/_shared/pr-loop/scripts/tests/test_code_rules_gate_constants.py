@@ -102,3 +102,18 @@ def test_git_diff_name_only_null_terminated_command_prefix_includes_dash_z() -> 
     )
     assert command_prefix == ("git", "diff", "--name-only", "-z")
 
+
+def test_banned_noun_span_pattern_extracts_definition_line_and_span() -> None:
+    message = (
+        "Line 5: Identifier 'canned_results' contains banned noun word "
+        "(word: 'results') (binding span at line 1, spanning 3 lines)"
+    )
+    match = constants_module.BANNED_NOUN_VIOLATION_PATTERN.search(message)
+    assert match is not None
+    definition_line = int(
+        match.group(constants_module.BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX)
+    )
+    line_span = int(match.group(constants_module.BANNED_NOUN_SPAN_GROUP_INDEX))
+    assert definition_line == 1
+    assert line_span == 3
+

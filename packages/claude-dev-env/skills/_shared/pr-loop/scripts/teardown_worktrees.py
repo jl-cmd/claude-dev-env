@@ -118,10 +118,7 @@ def teardown_run(
         if not isinstance(pr_number, int):
             continue
         workspace = per_pr_workspace(run_temp_dir, str(owner), str(repo), pr_number)
-        worktree_path = workspace["worktree"]
-        if not isinstance(worktree_path, Path):
-            continue
-        if remove_worktree(worktree_path):
+        if remove_worktree(workspace.worktree):
             removed_count += 1
 
     force_rmtree(str(run_temp_dir))
