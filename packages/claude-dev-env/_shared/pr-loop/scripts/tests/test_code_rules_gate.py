@@ -242,10 +242,10 @@ def test_main_staged_mode_blocks_when_staged_lines_introduce_violations(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    write_file(temporary_git_repository / "module.py", "first_value = 1\n")
+    write_file(temporary_git_repository / "module.py", "first_count = 1\n")
     commit_all_files(temporary_git_repository, "initial")
     staged_content_with_banned_identifier = (
-        "first_value = 1\n"
+        "first_count = 1\n"
         "def compute_total(operand):\n"
         "    result = operand + 1\n"
         "    return result\n"
@@ -266,10 +266,10 @@ def test_main_staged_mode_passes_when_no_staged_violations(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    write_file(temporary_git_repository / "module.py", "first_value = 1\n")
+    write_file(temporary_git_repository / "module.py", "first_count = 1\n")
     commit_all_files(temporary_git_repository, "initial")
     write_file(
-        temporary_git_repository / "module.py", "first_value = 1\nsecond_value = 2\n"
+        temporary_git_repository / "module.py", "first_count = 1\nsecond_count = 2\n"
     )
     stage_file(temporary_git_repository, "module.py")
 
@@ -283,7 +283,7 @@ def test_main_staged_mode_exits_zero_when_nothing_staged(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    write_file(temporary_git_repository / "module.py", "first_value = 1\n")
+    write_file(temporary_git_repository / "module.py", "first_count = 1\n")
     commit_all_files(temporary_git_repository, "initial")
 
     monkeypatch.chdir(temporary_git_repository)
@@ -451,12 +451,12 @@ def test_run_gate_detects_new_inline_comment_in_touched_file(
     """
     write_file(
         temporary_git_repository / "module.py",
-        "first_value = 1\nsecond_value = 2\n",
+        "first_count = 1\nsecond_count = 2\n",
     )
     commit_all_files(temporary_git_repository, "initial")
     write_file(
         temporary_git_repository / "module.py",
-        "first_value = 1\nsecond_value = 2  # added inline comment\n",
+        "first_count = 1\nsecond_count = 2  # added inline comment\n",
     )
     stage_file(temporary_git_repository, "module.py")
 
@@ -474,7 +474,7 @@ def test_run_gate_treats_new_files_prior_content_as_empty(
     commit_all_files(temporary_git_repository, "baseline")
     write_file(
         temporary_git_repository / "brand_new.py",
-        "first_value = 1\nsecond_value = 2  # comment in new file\n",
+        "first_count = 1\nsecond_count = 2  # comment in new file\n",
     )
     stage_file(temporary_git_repository, "brand_new.py")
 
@@ -494,19 +494,65 @@ def test_is_test_path_helper_matches_code_rules_patterns() -> None:
     assert not gate_module.is_test_path("packages/foo/regular_module.py")
 
 
-def test_validate_content_callable_signature_is_explicit() -> None:
-    callable_alias_source = inspect.getsource(gate_module).split("\n")
-    matching_lines = [
-        each_line
-        for each_line in callable_alias_source
-        if "ValidateContentCallable" in each_line and "Callable[" in each_line
-    ]
-    assert any("[str, str, str]" in each_line for each_line in matching_lines)
+def test_gate_defers_scope_to_the_gate() -> None:
+    """The gate owns scope classification, so its per-file validation must call
+    validate_content with ``defer_scope_to_caller=True``. Without that flag the
+    enforcer scopes function-length, isolation, and banned-noun violations
+    itself rather than returning them for the gate to classify by added line."""
+    per_file_source = inspect.getsource(gate_module._scoped_violations_for_file)
+    assert "defer_scope_to_caller=True" in per_file_source
 
 
-def test_run_gate_uses_each_path_loop_variable() -> None:
-    run_gate_source = inspect.getsource(gate_module.run_gate)
-    assert "for each_path in" in run_gate_source
+def test_collect_partitioned_violations_returns_empty_maps_for_two_clean_files(
+    temporary_git_repository: Path,
+) -> None:
+    """Two readable, violation-free files yield empty partitions and no skips."""
+    first_clean = temporary_git_repository / "first_clean.py"
+    second_clean = temporary_git_repository / "second_clean.py"
+    first_clean.write_text("first_count = 1\n", encoding="utf-8")
+    second_clean.write_text("second_count = 2\n", encoding="utf-8")
+
+    def fake_validate(_content: str, _path: str, _prior: str = "", **_kwargs: object) -> list[str]:
+        return []
+
+    blocking_by_file, advisory_by_file, skipped_unreadable_count = (
+        gate_module._collect_partitioned_violations(
+            fake_validate,
+            [first_clean, second_clean],
+            temporary_git_repository,
+            None,
+        )
+    )
+
+    assert blocking_by_file == {}
+    assert advisory_by_file == {}
+    assert skipped_unreadable_count == 0
+
+
+def test_collect_partitioned_violations_counts_unreadable_sibling_as_skip(
+    temporary_git_repository: Path,
+) -> None:
+    """A clean file beside an unreadable file yields one skip and no violations."""
+    clean_file = temporary_git_repository / "clean.py"
+    clean_file.write_text("clean_count = 1\n", encoding="utf-8")
+    unreadable_file = temporary_git_repository / "garbled.py"
+    unreadable_file.write_bytes(b"\xff\xfe\x00bad")
+
+    def fake_validate(_content: str, _path: str, _prior: str = "", **_kwargs: object) -> list[str]:
+        return []
+
+    blocking_by_file, advisory_by_file, skipped_unreadable_count = (
+        gate_module._collect_partitioned_violations(
+            fake_validate,
+            [clean_file, unreadable_file],
+            temporary_git_repository,
+            None,
+        )
+    )
+
+    assert blocking_by_file == {}
+    assert advisory_by_file == {}
+    assert skipped_unreadable_count == 1
 
 
 def test_run_gate_skips_non_utf8_source_without_crashing(
@@ -517,7 +563,9 @@ def test_run_gate_skips_non_utf8_source_without_crashing(
 
     UnicodeDecodeError is a ValueError subclass, not OSError. A non-UTF-8
     source file in the staged set must be skipped (matching whole_file_line_set
-    behavior), not crash the gate mid-audit.
+    behavior) rather than crash the gate mid-audit, and the skip must fail
+    closed: a changed file the gate could not validate must never be silently
+    approved.
     """
     write_file(temporary_git_repository / "anchor.py", "anchor = 1\n")
     commit_all_files(temporary_git_repository, "baseline")
@@ -529,7 +577,90 @@ def test_run_gate_skips_non_utf8_source_without_crashing(
     monkeypatch.chdir(temporary_git_repository)
     exit_code = gate_module.main(["--staged"])
 
-    assert exit_code in {0, 1}
+    assert exit_code == 1
+
+
+def test_run_gate_fails_closed_when_only_changed_file_is_unreadable(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A changed file that cannot be validated must not be silently approved.
+
+    When the only staged code file holds genuine non-UTF-8 bytes and no other
+    blocking violation exists, the gate must fail closed (non-zero) rather than
+    exit 0, because it never validated that file.
+    """
+    write_file(temporary_git_repository / "anchor.py", "anchor = 1\n")
+    commit_all_files(temporary_git_repository, "baseline")
+    non_utf8_path = temporary_git_repository / "non_utf8.py"
+    non_utf8_path.parent.mkdir(parents=True, exist_ok=True)
+    non_utf8_path.write_bytes(b"\xff\xfe\x00bad")
+    stage_file(temporary_git_repository, "non_utf8.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code != 0
+
+
+def test_run_gate_fails_closed_on_skipped_non_utf8_file_directly(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """run_gate must fail closed when a changed file is skipped for non-UTF-8.
+
+    Mirrors the bugteam gate's parity test: a non-UTF-8 code file with no other
+    violation must surface the skip and produce a non-zero exit so an
+    unvalidated file is never silently approved.
+    """
+    non_utf8_file = tmp_path / "garbled.py"
+    non_utf8_file.write_bytes(b"\xff\xfe\x00bad")
+
+    def fake_validate(_content: str, _path: str, **_kwargs: object) -> list[str]:
+        return []
+
+    exit_code = gate_module.run_gate(
+        fake_validate,
+        [non_utf8_file],
+        tmp_path,
+        all_added_lines_by_path=None,
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "skip unreadable" in captured.err
+
+
+def test_run_gate_fails_closed_when_clean_file_accompanies_unreadable_file(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A clean readable file must not mask an unreadable sibling across files.
+
+    run_gate aggregates per-file results: even when one staged file validates
+    cleanly, an accompanying file that cannot be decoded must still surface the
+    skip and force a non-zero exit so the unvalidated file is never approved.
+    """
+    clean_file = tmp_path / "clean.py"
+    clean_file.write_text("first_count = 1\nsecond_count = 2\n", encoding="utf-8")
+    unreadable_file = tmp_path / "garbled.py"
+    unreadable_file.write_bytes(b"\xff\xfe\x00bad")
+
+    def fake_validate(
+        _content: str, _path: str, _prior: str = "", **_kwargs: object
+    ) -> list[str]:
+        return []
+
+    exit_code = gate_module.run_gate(
+        fake_validate,
+        [clean_file, unreadable_file],
+        tmp_path,
+        all_added_lines_by_path=None,
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "skip unreadable" in captured.err
 
 
 def test_check_wrapper_plumb_through_accepts_positional_or_keyword_forwarder() -> None:
@@ -854,6 +985,133 @@ def test_check_wrapper_plumb_through_skips_class_methods_calling_module_delegate
     )
 
 
+def _build_function_module(
+    function_name: str, body_line_count: int, leading_lines: int
+) -> str:
+    preamble = "".join("anchor_name\n" for _ in range(leading_lines))
+    body = "\n".join("    keep_alive_name" for _ in range(body_line_count))
+    return f"{preamble}def {function_name}() -> None:\n{body}\n"
+
+
+def test_main_blocks_when_function_body_grows_past_threshold_with_def_line_untouched(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An existing function grown past the blocking threshold by editing its
+    body must be classified blocking even when the ``def`` line is untouched.
+
+    Anchoring the function-length violation to the ``def`` line let the gate
+    treat it as advisory whenever body growth left the definition line
+    outside the added-line set. The violation must surface as blocking
+    regardless of which body line carries the edit.
+    """
+    short_body_count = 5
+    baseline = _build_function_module(
+        "grow_me", body_line_count=short_body_count, leading_lines=0
+    )
+    write_file(temporary_git_repository / "module.py", baseline)
+    commit_all_files(temporary_git_repository, "baseline short function")
+
+    grown_body_count = 70
+    grown = _build_function_module(
+        "grow_me", body_line_count=grown_body_count, leading_lines=0
+    )
+    write_file(temporary_git_repository / "module.py", grown)
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code == 1
+
+
+def test_split_violations_blocks_function_length_when_span_intersects_added_lines() -> None:
+    """A function-length issue whose declared span overlaps the diff's added
+    lines is blocking — the body grew, which is exactly Finding B's intent."""
+    validate_content = gate_module.load_validate_content()
+    long_function = _build_function_module(
+        "oversized", body_line_count=70, leading_lines=3
+    )
+    issues = validate_content(long_function, "src/long_module.py", "")
+    function_length_issues = [
+        each_issue for each_issue in issues if "blocking threshold" in each_issue
+    ]
+    assert function_length_issues, f"expected a function-length issue, got {issues!r}"
+    span_def_line = 4
+    inside_span_line = span_def_line + 10
+    blocking, advisory = gate_module.split_violations_by_scope(
+        function_length_issues,
+        all_added_line_numbers={inside_span_line},
+    )
+    assert blocking == function_length_issues
+    assert advisory == []
+
+
+def test_split_violations_advises_function_length_when_span_misses_added_lines() -> None:
+    """A function-length issue for an untouched pre-existing function — whose
+    declared span does not overlap any added line — is advisory, not blocking.
+    This prevents the over-block regression where every pre-existing >=60-line
+    function in a touched file was forced into the blocking payload."""
+    validate_content = gate_module.load_validate_content()
+    long_function = _build_function_module(
+        "oversized", body_line_count=70, leading_lines=3
+    )
+    issues = validate_content(long_function, "src/long_module.py", "")
+    function_length_issues = [
+        each_issue for each_issue in issues if "blocking threshold" in each_issue
+    ]
+    assert function_length_issues, f"expected a function-length issue, got {issues!r}"
+    line_far_outside_span = 5000
+    blocking, advisory = gate_module.split_violations_by_scope(
+        function_length_issues,
+        all_added_line_numbers={line_far_outside_span},
+    )
+    assert advisory == function_length_issues
+    assert blocking == []
+
+
+def _isolation_issues_for_home_probe_test() -> list[str]:
+    validate_content = gate_module.load_validate_content()
+    header = "from pathlib import Path\n"
+    test_body = (
+        "def test_reads_home() -> None:\n"
+        "    target_path = Path.home()\n"
+        "    assert target_path\n"
+    )
+    issues = validate_content(header + test_body, "src/test_module.py", "")
+    return [each_issue for each_issue in issues if "probes" in each_issue]
+
+
+def test_split_violations_blocks_isolation_when_function_span_intersects_added_lines() -> None:
+    """An isolation issue whose enclosing test-function span overlaps the diff's
+    added lines is blocking — a signature-line change that un-isolates an
+    unchanged-body probe must block, matching the enforcer's terminal path."""
+    isolation_issues = _isolation_issues_for_home_probe_test()
+    assert isolation_issues, "expected an isolation issue from the HOME probe test"
+    signature_line = 2
+    blocking, advisory = gate_module.split_violations_by_scope(
+        isolation_issues,
+        all_added_line_numbers={signature_line},
+    )
+    assert blocking == isolation_issues
+    assert advisory == []
+
+
+def test_split_violations_advises_isolation_when_function_span_misses_added_lines() -> None:
+    """An isolation issue for an untouched pre-existing probe — whose enclosing
+    test-function span does not overlap any added line — is advisory, not
+    blocking, mirroring the function-length scope contract."""
+    isolation_issues = _isolation_issues_for_home_probe_test()
+    assert isolation_issues, "expected an isolation issue from the HOME probe test"
+    line_far_outside_span = 5000
+    blocking, advisory = gate_module.split_violations_by_scope(
+        isolation_issues,
+        all_added_line_numbers={line_far_outside_span},
+    )
+    assert advisory == isolation_issues
+    assert blocking == []
+
+
 def test_renamed_file_source_map_since_uses_null_byte_separator(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -896,3 +1154,349 @@ def test_renamed_file_source_map_since_uses_null_byte_separator(
     assert rename_map == {
         "destination_with\ttab.py": "source_with\ttab.py",
     }
+
+
+def _oversized_function_text(function_name: str) -> str:
+    body = "\n".join("    keep_alive_name" for _ in range(70))
+    return f"def {function_name}() -> None:\n{body}\n"
+
+
+def _short_function_text(function_name: str) -> str:
+    return f"def {function_name}() -> None:\n    keep_alive_name\n"
+
+
+def test_main_blocks_sixth_long_function_on_added_lines_past_document_order(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """bugbot-2: with five pre-existing untouched long functions ahead of it in
+    document order, growing the sixth function past the threshold on staged
+    lines must still block at the gate. The gate scopes by added lines, so the
+    in-scope sixth violation blocks regardless of how many untouched ones
+    precede it."""
+    leading_long_functions = "".join(
+        _oversized_function_text(f"leading_long_{each_index}")
+        for each_index in range(5)
+    )
+    baseline = leading_long_functions + _short_function_text("target_function")
+    write_file(temporary_git_repository / "module.py", baseline)
+    commit_all_files(temporary_git_repository, "five long functions plus a short sixth")
+
+    grown = leading_long_functions + _oversized_function_text("target_function")
+    write_file(temporary_git_repository / "module.py", grown)
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code == 1, (
+        "the sixth long function — the only one on staged lines — must block "
+        "even though five untouched long functions precede it in document order"
+    )
+
+
+def _home_probe_test_text(test_name: str) -> str:
+    return (
+        f"def {test_name}() -> None:\n"
+        "    target_path = Path.home()\n"
+        "    assert target_path\n"
+    )
+
+
+def _clean_test_text(test_name: str) -> str:
+    return f"def {test_name}() -> None:\n    assert 1 + 1 == 2\n"
+
+
+def test_main_blocks_sixth_isolation_probe_on_added_lines_past_document_order(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """bugbot-2 mirror: with five pre-existing untouched HOME probes ahead of it
+    in document order, adding a HOME probe to the sixth test on staged lines
+    must still block at the gate. The gate scopes by added lines, so the
+    in-scope sixth probe blocks regardless of how many untouched ones
+    precede it."""
+    header = "from pathlib import Path\n"
+    leading_probe_tests = "".join(
+        _home_probe_test_text(f"test_leading_probe_{each_index}")
+        for each_index in range(5)
+    )
+    baseline = header + leading_probe_tests + _clean_test_text("test_target_probe")
+    write_file(temporary_git_repository / "test_module.py", baseline)
+    commit_all_files(temporary_git_repository, "five probe tests plus a clean sixth")
+
+    grown = header + leading_probe_tests + _home_probe_test_text("test_target_probe")
+    write_file(temporary_git_repository / "test_module.py", grown)
+    stage_file(temporary_git_repository, "test_module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code == 1, (
+        "the sixth HOME probe — the only one on staged lines — must block even "
+        "though five untouched probes precede it in document order"
+    )
+
+
+def _banned_noun_function_text(index: int) -> str:
+    return (
+        f"def leading_{index}(canned_results: int) -> int:\n"
+        f"    return canned_results\n"
+    )
+
+
+def test_main_blocks_banned_noun_on_added_lines_past_document_order(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """loop7-P1: with three pre-existing untouched banned-noun identifiers ahead
+    of it in document order, introducing a fourth banned-noun on a staged line
+    must still block at the gate. The gate scopes by added lines, so the
+    in-scope identifier blocks regardless of how many untouched ones precede
+    it."""
+    leading_count = 3
+    leading_functions = "".join(
+        _banned_noun_function_text(each_index) for each_index in range(leading_count)
+    )
+    baseline = leading_functions + "def placeholder() -> int:\n    return 0\n"
+    write_file(temporary_git_repository / "module.py", baseline)
+    commit_all_files(temporary_git_repository, "three banned nouns plus a clean function")
+
+    grown = leading_functions + "def aggregate(holiday_result: int) -> int:\n    return holiday_result\n"
+    write_file(temporary_git_repository / "module.py", grown)
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code == 1, (
+        "the fourth banned-noun identifier — the only one on staged lines — must "
+        "block even though three untouched ones precede it in document order"
+    )
+
+
+def _load_bugteam_gate_module() -> ModuleType:
+    bugteam_scripts_dir = (
+        Path(__file__).resolve().parents[4]
+        / "skills"
+        / "bugteam"
+        / "scripts"
+    )
+    if str(bugteam_scripts_dir) not in sys.path:
+        sys.path.insert(0, str(bugteam_scripts_dir))
+    module_path = bugteam_scripts_dir / "bugteam_code_rules_gate.py"
+    spec = importlib.util.spec_from_file_location("bugteam_code_rules_gate", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_both_gates_classify_wrapper_plumb_through_identically() -> None:
+    """The bugteam and _shared gate copies of check_wrapper_plumb_through must
+    return identical findings. A class method calling a module-level delegate
+    is not a wrapper; both gates must exclude it rather than one emitting a
+    false positive the other does not."""
+    bugteam_gate = _load_bugteam_gate_module()
+    class_method_calling_delegate = (
+        "def fetch(target, *, retries=3):\n"
+        "    return target\n"
+        "\n"
+        "class MyService:\n"
+        "    def public_method(self, target):\n"
+        "        return fetch(target)\n"
+    )
+    nested_call_inside_delegate_argument = (
+        "def delegate(value, *, retries=3):\n"
+        "    return value\n"
+        "\n"
+        "def helper(value):\n"
+        "    return value\n"
+        "\n"
+        "def public_caller(value):\n"
+        "    return delegate(helper(value))\n"
+    )
+    name_call_dropping_kwarg = (
+        "def delegate(value, *, retries=3):\n"
+        "    return value\n"
+        "\n"
+        "def public_wrapper(value):\n"
+        "    return delegate(value)\n"
+    )
+    for each_source in (
+        class_method_calling_delegate,
+        nested_call_inside_delegate_argument,
+        name_call_dropping_kwarg,
+    ):
+        shared_issues = gate_module.check_wrapper_plumb_through(each_source, "module.py")
+        bugteam_issues = bugteam_gate.check_wrapper_plumb_through(each_source, "module.py")
+        assert shared_issues == bugteam_issues, (
+            "both gate copies of check_wrapper_plumb_through must classify "
+            f"identically; shared={shared_issues!r} bugteam={bugteam_issues!r}"
+        )
+
+
+def test_check_wrapper_plumb_through_stays_under_function_length_threshold() -> None:
+    """check_wrapper_plumb_through must stay under the enforcer's function-length
+    blocking threshold so editing it (e.g. aligning the two gate copies) does
+    not itself trip the gate; its signature-index and class-method-id collection
+    are extracted into helpers."""
+    enforcer_span = inspect.getsource(gate_module.check_wrapper_plumb_through)
+    declared_line_count = len(enforcer_span.splitlines())
+    blocking_threshold = 60
+    assert declared_line_count < blocking_threshold, (
+        f"check_wrapper_plumb_through is {declared_line_count} lines; extract "
+        "helpers to keep it under the function-length blocking threshold"
+    )
+
+
+def _banned_noun_parameter_issues() -> list[str]:
+    validate_content = gate_module.load_validate_content()
+    source = (
+        "def aggregate(canned_results: int) -> int:\n"
+        "    doubled = canned_results * 2\n"
+        "    return doubled\n"
+    )
+    issues = validate_content(source, "src/module.py", "")
+    return [each_issue for each_issue in issues if "banned noun" in each_issue]
+
+
+def test_split_violations_blocks_banned_noun_when_binding_line_is_added() -> None:
+    """A banned-noun binding is blocking when its own binding line is among the
+    added lines. The gate reconstructs the one-line binding span through the
+    same shared extractor registry it uses for function-length and isolation,
+    rather than relying on the bare ``Line N:`` prefix branch."""
+    banned_noun_issues = _banned_noun_parameter_issues()
+    assert banned_noun_issues, "expected a banned-noun parameter issue"
+    parameter_binding_line = 1
+    blocking, advisory = gate_module.split_violations_by_scope(
+        banned_noun_issues,
+        all_added_line_numbers={parameter_binding_line},
+    )
+    assert blocking == banned_noun_issues
+    assert advisory == []
+
+
+def test_split_violations_advises_banned_noun_when_binding_line_untouched() -> None:
+    """A banned-noun binding whose own line is not among the added lines is
+    advisory — editing an unrelated body line does not pull a pre-existing
+    binding into scope, mirroring the companion exact-match identifier check."""
+    banned_noun_issues = _banned_noun_parameter_issues()
+    assert banned_noun_issues, "expected a banned-noun parameter issue"
+    unrelated_body_line = 2
+    blocking, advisory = gate_module.split_violations_by_scope(
+        banned_noun_issues,
+        all_added_line_numbers={unrelated_body_line},
+    )
+    assert advisory == banned_noun_issues
+    assert blocking == []
+
+
+def test_banned_noun_span_range_covers_only_the_binding_line() -> None:
+    """The reconstructed span is the binding line alone — one line, never the
+    enclosing function span. A parameter declared on a ``def`` line yields a
+    range covering only that line, so an unrelated body edit cannot pull the
+    pre-existing binding into scope."""
+    banned_noun_issues = _banned_noun_parameter_issues()
+    assert banned_noun_issues, "expected a banned-noun parameter issue"
+    parameter_binding_line = 1
+    span = gate_module.banned_noun_span_range(banned_noun_issues[0])
+    assert span == range(parameter_binding_line, parameter_binding_line + 1)
+    assert len(span) == 1
+
+
+def test_main_staged_mode_validates_staged_blob_not_working_tree(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Staged mode validates the staged blob, not the working tree.
+
+    A blocking violation lives in the staged blob, but the working tree has
+    been edited afterward to remove it. The gate must still block because it
+    scopes added lines from the staged index and must read its content from
+    the same staged source rather than the diverged working tree.
+    """
+    write_file(temporary_git_repository / "module.py", "first_count = 1\n")
+    commit_all_files(temporary_git_repository, "initial")
+    staged_content_with_banned_identifier = (
+        "first_count = 1\n"
+        "def compute_total(operand):\n"
+        "    result = operand + 1\n"
+        "    return result\n"
+    )
+    write_file(
+        temporary_git_repository / "module.py",
+        staged_content_with_banned_identifier,
+    )
+    stage_file(temporary_git_repository, "module.py")
+    clean_working_tree_content = (
+        "first_count = 1\n"
+        "def compute_total(operand: int) -> int:\n"
+        "    return operand + 1\n"
+    )
+    write_file(
+        temporary_git_repository / "module.py",
+        clean_working_tree_content,
+    )
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code == 1, (
+        "the staged blob carries a blocking violation; the gate must block "
+        "even though the working tree was edited clean afterward"
+    )
+
+
+def test_main_staged_mode_blocks_when_staged_file_absent_from_working_tree(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A staged blocking violation must block even when the working tree file
+    is gone. Staging a violating file and then deleting it from the working
+    tree leaves the violation only in the staged blob; the gate must validate
+    that blob rather than skip the path for failing a working-tree existence
+    check."""
+    write_file(temporary_git_repository / "baseline.py", "first_count = 1\n")
+    commit_all_files(temporary_git_repository, "initial")
+    staged_content_with_banned_identifier = (
+        "def compute_total(operand):\n"
+        "    result = operand + 1\n"
+        "    return result\n"
+    )
+    write_file(
+        temporary_git_repository / "module.py",
+        staged_content_with_banned_identifier,
+    )
+    stage_file(temporary_git_repository, "module.py")
+    (temporary_git_repository / "module.py").unlink()
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code == 1, (
+        "the staged blob carries a blocking violation; the gate must block "
+        "even though the file was deleted from the working tree after staging"
+    )
+
+
+def test_main_staged_mode_passes_on_staged_deletion_of_clean_file(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A staged deletion is not in the index, so its staged blob cannot be read.
+    The gate must skip such a path cleanly rather than counting it as an
+    unreadable file and failing closed. With no other staged violation, the
+    gate must exit zero."""
+    write_file(temporary_git_repository / "removable.py", "first_count = 1\n")
+    commit_all_files(temporary_git_repository, "initial")
+    run_git_in_repository(temporary_git_repository, "rm", "--", "removable.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code == 0, (
+        "a staged deletion has no staged blob; the gate must skip it cleanly "
+        "rather than fail closed as if the file were unreadable"
+    )

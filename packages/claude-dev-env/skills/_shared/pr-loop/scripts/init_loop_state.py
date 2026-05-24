@@ -60,8 +60,7 @@ def create_loop_state(
     run_name = build_run_name(pr_number, head_ref, is_multi_pr=is_multi_pr)
     run_temp_dir = resolve_run_temp_dir(run_name)
     workspace = per_pr_workspace(run_temp_dir, "", "", pr_number)
-    worktree_path = workspace["worktree"]
-    assert isinstance(worktree_path, Path)
+    worktree_path = workspace.worktree
 
     worktree_path.mkdir(parents=True, exist_ok=True)
     state_path = worktree_path / "loop-state.json"

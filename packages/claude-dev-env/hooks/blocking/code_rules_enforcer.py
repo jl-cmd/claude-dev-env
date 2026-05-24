@@ -23,6 +23,7 @@ the suffix variants, so edits to this file include the bypass sentinel
 ``# pragma: no-tdd-gate`` until the TDD hook learns the suffix convention.
 """
 import ast
+import difflib
 import io
 import json
 import re
@@ -42,8 +43,11 @@ if _HOOKS_DIR not in sys.path:
 from code_rules_path_utils import is_config_file  # noqa: E402
 from hooks_constants.banned_identifiers_constants import (  # noqa: E402
     ALL_BANNED_IDENTIFIERS,
+    ALL_BANNED_NOUN_WORDS,
     BANNED_IDENTIFIER_MESSAGE_SUFFIX,
     BANNED_IDENTIFIER_SKIP_ADVISORY,
+    BANNED_NOUN_WORD_MESSAGE_SUFFIX,
+    CAMEL_CASE_WORD_PATTERN,
     MAX_BANNED_IDENTIFIER_ISSUES,
 )
 from hooks_constants.hardcoded_user_path_constants import (  # noqa: E402
@@ -100,16 +104,45 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ADVISORY_LINE_THRESHOLD_SOFT,
     ALL_CODE_EXTENSIONS,
     ALL_CAPS_WITH_UNDERSCORE_PATTERN,
+    ALL_FILESYSTEM_HOME_PROBE_DOTTED_NAMES,
+    ALL_DIR_ACCEPTING_TEMPFILE_FACTORY_DOTTED_NAMES,
+    ALL_SHARED_TEMP_SOURCE_PROBE_DOTTED_NAMES,
+    TEMPFILE_FACTORY_ISOLATION_DIRECTORY_KEYWORD,
+    ALL_HOME_DIRECTORY_ENV_VAR_NAMES,
+    ALL_ENVIRONMENT_GETTER_DOTTED_NAMES,
+    ALL_PROBE_RELEVANT_MODULE_CANONICAL_NAMES,
+    ALL_CANONICAL_DOTTED_NAMES_BY_BARE_IMPORT,
+    OS_ENVIRON_DOTTED_NAME,
+    ENVIRON_GET_METHOD_NAME,
+    ENVIRONMENT_VARIABLE_REFERENCE_PATTERN,
+    WINDOWS_PERCENT_VARIABLE_REFERENCE_PATTERN,
+    EXPANDVARS_DOTTED_NAME,
+    EXPANDUSER_DOTTED_NAME,
+    ALL_PATHLIB_STATIC_EXPANDUSER_DOTTED_NAMES,
+    PATHLIB_EXPANDUSER_METHOD_NAME,
+    ALL_PATHLIB_PATH_CONSTRUCTOR_CANONICAL_NAMES,
+    ALL_PROBE_ALIASABLE_CANONICAL_PREFIXES,
+    HOME_DIRECTORY_TILDE_PREFIX,
+    ALL_PYTEST_FILESYSTEM_ISOLATION_FIXTURE_NAMES,
+    PYTEST_USEFIXTURES_MARKER_NAME,
+    PYTEST_TEST_CLASS_NAME_PREFIX,
+    ALL_DIFF_CHANGED_OPCODE_TAGS,
+    FUNCTION_LENGTH_BLOCKING_MESSAGE_SUFFIX,
+    FUNCTION_LENGTH_BLOCKING_THRESHOLD,
+    BANNED_NOUN_SPAN_FRAGMENT_TEMPLATE,
     BARE_EACH_TOKEN,
     ALL_BOOLEAN_NAME_PREFIXES,
     ALL_BUILTIN_DICT_METHOD_NAMES,
     ALL_CLI_FILE_PATH_MARKERS,
+    CHAINED_INLINE_COMMENT_PATTERN,
     COLLECTION_BY_NAME_PATTERN,
     ALL_COLLECTION_TYPE_NAMES,
     ALL_SUBSCRIPT_ONLY_COLLECTION_TYPE_NAMES,
     DOTTED_SEGMENT_PATTERN,
     EACH_PREFIX,
-    ALL_EXEMPT_PYTHON_COMMENT_BODIES,
+    ALL_FREE_FORM_EXEMPT_COMMENT_BODIES,
+    ALL_TOKEN_ANCHORED_EXEMPT_COMMENT_BODIES,
+    ALL_TOKEN_ANCHORED_DIRECTIVE_BOUNDARY_CHARACTERS,
     ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES,
     ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES,
     ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS,
@@ -117,6 +150,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_HOOK_INFRASTRUCTURE_PATTERNS,
     ALL_IMPORT_STATEMENT_PREFIXES,
     MAX_COMMENT_ISSUES,
+    TEST_ISOLATION_MESSAGE_SUFFIX,
     INLINE_COLLECTION_MIN_LENGTH,
     ALL_JAVASCRIPT_EXTENSIONS,
     LOGGING_FSTRING_PATTERN,
@@ -146,7 +180,7 @@ def get_file_extension(file_path: str) -> str:
 
 def is_hook_infrastructure(file_path: str) -> bool:
     """Check if file is a Claude Code hook (standalone infrastructure, not project code)."""
-    path_lower = file_path.lower().replace("\\", "/")
+    path_lower = "/" + file_path.lower().replace("\\", "/").lstrip("/")
     return any(pattern.replace("\\", "/") in path_lower for pattern in ALL_HOOK_INFRASTRUCTURE_PATTERNS)
 
 
@@ -819,13 +853,28 @@ def _is_exempt_python_comment(comment_token: tokenize.TokenInfo) -> bool:
     line 2 or later) is NOT a real shebang and remains subject to the
     no-comments rule.
 
-    Matches any prefix listed in ``ALL_EXEMPT_PYTHON_COMMENT_BODIES``
-    regardless of whether the directive sits flush against the leading
-    hash character or carries one or more whitespace characters (space
-    or tab) between the hash and the directive body. The pre-tokenize
-    implementation accepted both forms via its line-slice-then-strip
-    step; this helper preserves that behavior on top of the
-    tokenize-based scan.
+    Matches any prefix listed in the token-anchored or free-form exempt-
+    comment-body sets regardless of whether the directive sits flush
+    against the leading hash character or carries one or more whitespace
+    characters (space or tab) between the hash and the directive body.
+
+    Token-anchored markers (``noqa``, ``pylint:``, ``pragma:``) are
+    exempt only when the comment carries no chained second comment. Any
+    second ``#`` after the directive body — regardless of whitespace
+    around the inner hash, so ``# noqa: F401#note``,
+    ``# noqa: F401 #prose``, and ``# noqa: F401  # imported for re-export``
+    all qualify — indicates a second free-form inline comment
+    piggybacking on the exempt marker; the trailing prose is not itself
+    an exempt directive and therefore must not inherit exemption. A
+    token-anchored directive body never legitimately carries a ``#``
+    (noqa codes, pylint symbols, and pragma directives contain none), so
+    any inner ``#`` reliably marks chained prose. Free-form markers
+    (``type:``, ``TODO``, ``FIXME``, ``HACK``, ``XXX``) accept any
+    trailing prose:
+    ``# type:`` participates in the documented justification
+    convention enforced by ``check_type_escape_hatches`` (which
+    requires a trailing reason), and the TODO-family markers carry
+    annotation text by convention.
     """
     comment_string = comment_token.string
     if comment_string.startswith("#!") and comment_token.start == (1, 0):
@@ -833,7 +882,44 @@ def _is_exempt_python_comment(comment_token: tokenize.TokenInfo) -> bool:
     directive_body = comment_string[1:].lstrip()
     if not directive_body:
         return True
-    return directive_body.startswith(ALL_EXEMPT_PYTHON_COMMENT_BODIES)
+    if directive_body.startswith(ALL_FREE_FORM_EXEMPT_COMMENT_BODIES):
+        return True
+    if not _starts_with_bounded_token_anchored_directive(directive_body):
+        return False
+    return CHAINED_INLINE_COMMENT_PATTERN.search(directive_body) is None
+
+
+def _starts_with_bounded_token_anchored_directive(directive_body: str) -> bool:
+    """Return True when *directive_body* opens with a real exempt directive.
+
+    A token-anchored marker (``noqa``, ``pylint:``, ``pragma:``) counts only
+    when the matched token is immediately followed by a directive boundary —
+    end of string, a colon, or whitespace — so prose like
+    ``noqa-but-not-really: explanation`` that merely shares the prefix does
+    not inherit the exemption.
+
+    Args:
+        directive_body: The comment text with the leading hash and surrounding
+            whitespace already stripped.
+
+    Returns:
+        True when a token-anchored exempt directive is present at a real token
+        boundary, False otherwise.
+    """
+    for each_token in ALL_TOKEN_ANCHORED_EXEMPT_COMMENT_BODIES:
+        if not directive_body.startswith(each_token):
+            continue
+        if each_token[-1] in ALL_TOKEN_ANCHORED_DIRECTIVE_BOUNDARY_CHARACTERS:
+            return True
+        following_text = directive_body[len(each_token):]
+        if not following_text:
+            return True
+        next_character = following_text[0]
+        if next_character.isspace():
+            return True
+        if next_character in ALL_TOKEN_ANCHORED_DIRECTIVE_BOUNDARY_CHARACTERS:
+            return True
+    return False
 
 
 def _extract_python_comment_sets(content: str) -> tuple[set[str], set[str], bool]:
@@ -1265,6 +1351,208 @@ def check_banned_identifiers(content: str, file_path: str) -> list[str]:
             break
 
     return issues
+
+
+def _identifier_word_parts(identifier: str) -> list[str]:
+    """Split an identifier into lowercase word parts.
+
+    Handles snake_case (split on ``_``), SCREAMING_SNAKE_CASE, and camelCase /
+    PascalCase (split on capital-letter boundaries). Returns a list of
+    lowercased word tokens for membership comparison against banned-noun
+    vocabularies.
+
+    Args:
+        identifier: A Python identifier (variable, parameter, class, or
+            function name).
+
+    Returns:
+        Word tokens in their original order, lowercased. Empty list when the
+        identifier carries no letter characters.
+    """
+    all_words: list[str] = []
+    for each_snake_segment in identifier.split("_"):
+        if not each_snake_segment:
+            continue
+        camel_pieces = CAMEL_CASE_WORD_PATTERN.findall(each_snake_segment)
+        if camel_pieces:
+            for each_piece in camel_pieces:
+                all_words.append(each_piece.lower())
+        else:
+            all_words.append(each_snake_segment.lower())
+    return all_words
+
+
+def _find_banned_noun_word(identifier: str) -> str | None:
+    """Return the first banned-noun word embedded in *identifier*, or None.
+
+    Args:
+        identifier: A Python identifier.
+
+    Returns:
+        The lowercased banned noun word that appears as a word part inside the
+        identifier (e.g., ``'result'`` for ``'HolidayPeakResult'``). Returns
+        ``None`` when no banned noun word is present.
+    """
+    for each_word in _identifier_word_parts(identifier):
+        if each_word in ALL_BANNED_NOUN_WORDS:
+            return each_word
+    return None
+
+
+def _is_dunder_name(identifier: str) -> bool:
+    return identifier.startswith("__") and identifier.endswith("__")
+
+
+def _collect_banned_noun_word_bindings(
+    parsed_tree: ast.AST,
+) -> list[tuple[str, int, int, str]]:
+    """Yield ``(identifier, lineno, col_offset, banned_word)`` for each binding.
+
+    Walks assignment targets, annotated assignments, function/method
+    parameters, function/method definitions, and class definitions. Skips
+    identifiers that already match ``ALL_BANNED_IDENTIFIERS`` exactly (those
+    are reported by ``check_banned_identifiers``) and dunder names.
+    """
+    flagged_bindings: list[tuple[str, int, int, str]] = []
+    seen_keys: set[tuple[str, int, int]] = set()
+
+    def record(name: str, lineno: int, col_offset: int) -> None:
+        if name in ALL_BANNED_IDENTIFIERS:
+            return
+        if _is_dunder_name(name):
+            return
+        banned_word = _find_banned_noun_word(name)
+        if banned_word is None:
+            return
+        key = (name, lineno, col_offset)
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+        flagged_bindings.append((name, lineno, col_offset, banned_word))
+
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, ast.Assign):
+            for each_target in each_node.targets:
+                for each_name_node in _collect_target_names(each_target):
+                    record(each_name_node.id, each_name_node.lineno, each_name_node.col_offset)
+        elif isinstance(each_node, ast.AnnAssign):
+            for each_name_node in _collect_target_names(each_node.target):
+                record(each_name_node.id, each_name_node.lineno, each_name_node.col_offset)
+        elif isinstance(each_node, (ast.For, ast.AsyncFor)):
+            for each_name_node in _collect_target_names(each_node.target):
+                record(each_name_node.id, each_name_node.lineno, each_name_node.col_offset)
+        elif isinstance(each_node, ast.NamedExpr) and isinstance(each_node.target, ast.Name):
+            record(each_node.target.id, each_node.target.lineno, each_node.target.col_offset)
+        elif isinstance(each_node, ast.comprehension):
+            for each_name_node in _collect_target_names(each_node.target):
+                record(each_name_node.id, each_name_node.lineno, each_name_node.col_offset)
+        elif isinstance(each_node, ast.withitem) and each_node.optional_vars is not None:
+            for each_name_node in _collect_target_names(each_node.optional_vars):
+                record(each_name_node.id, each_name_node.lineno, each_name_node.col_offset)
+        elif isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            record(each_node.name, each_node.lineno, each_node.col_offset)
+            for each_arg in _collect_annotated_arguments(each_node):
+                if each_arg.arg in ALL_SELF_AND_CLS_PARAMETER_NAMES:
+                    continue
+                record(each_arg.arg, each_arg.lineno, each_arg.col_offset)
+        elif isinstance(each_node, ast.ClassDef):
+            record(each_node.name, each_node.lineno, each_node.col_offset)
+        elif isinstance(each_node, (ast.Import, ast.ImportFrom)):
+            for each_alias in each_node.names:
+                if each_alias.asname is None:
+                    continue
+                record(each_alias.asname, each_node.lineno, each_node.col_offset)
+
+    flagged_bindings.sort(key=lambda binding: (binding[1], binding[2]))
+    return flagged_bindings
+
+
+def check_banned_noun_word_boundary(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    """Flag identifiers containing CODE_RULES §5 banned noun words.
+
+    Companion to ``check_banned_identifiers`` (exact-match cases only). This
+    check catches the wider pattern: a banned noun word from
+    ``ALL_BANNED_NOUN_WORDS`` — the singular nouns ``result``, ``data``,
+    ``output``, ``response``, ``value``, ``item``, ``temp`` plus the plural
+    forms ``results``, ``outputs``, ``responses``, ``values``, ``items`` —
+    appearing as a snake_case word part or camelCase word part inside a longer
+    identifier (``canned_results``, ``HolidayPeakResult``, ``OUTPUT_DIR``,
+    ``cached_response``).
+
+    Skips test files, config files, hook infrastructure, workflow registries,
+    and migrations. Identifiers that exactly match ``ALL_BANNED_IDENTIFIERS``
+    are skipped because they are already reported by
+    ``check_banned_identifiers``.
+
+    Scoping mirrors ``check_function_length`` and
+    ``check_tests_use_isolated_filesystem_paths`` through the shared
+    ``_scope_violations_to_changed_lines`` helper. A banned-noun binding is a
+    point fact about one identifier, so its enclosing unit is its own binding
+    line: each violation carries the binding line as a one-line ``range`` for
+    terminal diff scoping and a ``(binding span at line X, spanning 1 lines)``
+    message fragment the commit gate reconstructs through the same shared span
+    extractor registry the other two scoped checks use. Anchoring to the
+    binding line (rather than the whole enclosing function) matches the
+    companion exact-match ``check_banned_identifiers`` and keeps a pre-existing
+    binding out of scope when an unrelated line of its enclosing function is
+    edited. On a terminal Edit only violations whose binding line is among
+    ``all_changed_lines`` are returned; on a new-file or full-file write every
+    violation is in scope; ``defer_scope_to_caller`` returns every violation so
+    the gate scopes by added line.
+
+    Args:
+        content: The reconstructed effective file content to analyze (the
+            whole post-edit file on an Edit, the whole file at the gate).
+        file_path: The path of the file being checked (used for exemption
+            routing).
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a violation
+            blocks only when its binding line is among the changed lines.
+        defer_scope_to_caller: When True, return every violation so the
+            commit/push gate's ``split_violations_by_scope`` can scope by added
+            line and report the in-scope set.
+
+    Returns:
+        Issue strings, each describing one offending binding. When
+        *defer_scope_to_caller* is True every binding is returned for the gate
+        to scope; otherwise every binding in scope is returned.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    if is_config_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path):
+        return []
+    if is_migration_file(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    single_line_span = 1
+    all_violations_in_walk_order: list[tuple[range, str]] = []
+    for each_name, each_lineno, _, each_word in _collect_banned_noun_word_bindings(parsed_tree):
+        span_range = range(each_lineno, each_lineno + single_line_span)
+        span_fragment = BANNED_NOUN_SPAN_FRAGMENT_TEMPLATE.format(
+            definition_line=each_lineno, line_span=single_line_span
+        )
+        message = (
+            f"Line {each_lineno}: Identifier {each_name!r} {BANNED_NOUN_WORD_MESSAGE_SUFFIX} "
+            f"(word: {each_word!r}) {span_fragment}"
+        )
+        all_violations_in_walk_order.append((span_range, message))
+    return _scope_violations_to_changed_lines(
+        all_violations_in_walk_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
 
 
 
@@ -2226,6 +2514,999 @@ def check_skip_decorators_in_tests(content: str, file_path: str) -> list[str]:
                 )
 
     return issues
+
+
+def _dotted_call_attribute_chain(call_node: ast.Call) -> str | None:
+    """Return the dotted name path of *call_node*'s callee, or None.
+
+    For ``pathlib.Path.home()`` returns ``"pathlib.Path.home"``; for
+    ``Path.home()`` returns ``"Path.home"``; for ``tempfile.gettempdir()``
+    returns ``"tempfile.gettempdir"``. Returns ``None`` when the call target
+    is not a pure attribute chain rooted at an ``ast.Name`` (for example,
+    ``obj.method()`` where ``obj`` is the result of another expression).
+    """
+    chain_parts: list[str] = []
+    walker: ast.expr = call_node.func
+    while isinstance(walker, ast.Attribute):
+        chain_parts.append(walker.attr)
+        walker = walker.value
+    if not isinstance(walker, ast.Name):
+        return None
+    chain_parts.append(walker.id)
+    chain_parts.reverse()
+    return ".".join(chain_parts)
+
+
+def _record_probe_import_aliases(
+    import_node: ast.Import | ast.ImportFrom,
+    all_canonical_names_by_alias: dict[str, str],
+) -> None:
+    """Record the probe-relevant alias entries from a single import statement.
+
+    Module aliases are recorded only for the probe-relevant modules in
+    ``ALL_PROBE_RELEVANT_MODULE_CANONICAL_NAMES``. Bare-imported names are
+    recorded only for the ``(module, name)`` pairs in
+    ``ALL_CANONICAL_DOTTED_NAMES_BY_BARE_IMPORT``. Imports outside those sets are
+    ignored so unrelated bindings never rewrite a chain.
+
+    Args:
+        import_node: A single ``ast.Import`` or ``ast.ImportFrom`` statement.
+        all_canonical_names_by_alias: The alias map to mutate in place with any
+            probe-relevant local-name to canonical-dotted-prefix entries.
+    """
+    if isinstance(import_node, ast.Import):
+        for each_alias in import_node.names:
+            if each_alias.name not in ALL_PROBE_RELEVANT_MODULE_CANONICAL_NAMES:
+                continue
+            local_name = each_alias.asname or each_alias.name
+            all_canonical_names_by_alias[local_name] = each_alias.name
+        return
+    for each_alias in import_node.names:
+        canonical_dotted = ALL_CANONICAL_DOTTED_NAMES_BY_BARE_IMPORT.get(
+            (import_node.module or "", each_alias.name)
+        )
+        if canonical_dotted is None:
+            continue
+        local_name = each_alias.asname or each_alias.name
+        all_canonical_names_by_alias[local_name] = canonical_dotted
+
+
+def _build_alias_canonicalization_map(syntax_tree: ast.Module) -> dict[str, str]:
+    """Map each module-level probe import local name to its canonical prefix.
+
+    Resolves both module aliases and bare-imported names so a dotted-call
+    chain rooted at any module-level binding rewrites to the canonical form the
+    probe set already matches:
+
+    - ``import os as o`` -> ``o`` resolves to ``os`` (so ``o.getenv`` ->
+      ``os.getenv`` and ``o.path.expanduser`` -> ``os.path.expanduser``).
+    - ``import os.path as op`` -> ``op`` resolves to ``os.path`` (so
+      ``op.expanduser`` -> ``os.path.expanduser``).
+    - ``import pathlib as pl`` -> ``pl`` resolves to ``pathlib``.
+    - ``from pathlib import Path as P`` -> ``P`` resolves to ``Path``.
+    - ``from os import path`` -> ``path`` resolves to ``os.path`` (so
+      ``path.expanduser`` -> ``os.path.expanduser``).
+    - ``from os.path import expanduser as e`` -> ``e`` resolves to
+      ``os.path.expanduser``; ``from os import getenv`` -> ``getenv``
+      resolves to ``os.getenv``; ``from os import environ`` -> ``environ``
+      resolves to ``os.environ``.
+
+    An import is module-scoped — and enters this shared map — when it is not
+    lexically inside any ``FunctionDef``/``AsyncFunctionDef``/``ClassDef`` body.
+    That admits top-level imports nested in module-level ``try``/``except``,
+    ``if``, or ``with`` blocks (the ``try: import os as o except ImportError:``
+    optional-import idiom binds ``o`` module-wide) while excluding both
+    function-local and class-body imports. A function-local import binds its
+    name only inside the function it appears in, and a class-body import binds
+    its alias only within the class namespace; neither may enter this shared,
+    module-wide map — otherwise a probe import inside one test would
+    canonicalize a same-named reference in a sibling test that never imported
+    it. Function-local imports are scoped to their own function by
+    ``_collect_local_probe_alias_bindings``.
+
+    Args:
+        syntax_tree: The parsed module to scan for module-scoped import
+            statements.
+
+    Returns:
+        Mapping from module-level local binding name to its canonical dotted
+        prefix.
+    """
+    parent_by_child_id = _build_parent_map(syntax_tree)
+    all_canonical_names_by_alias: dict[str, str] = {}
+    for each_node in ast.walk(syntax_tree):
+        if not isinstance(each_node, (ast.Import, ast.ImportFrom)):
+            continue
+        if _node_is_lexically_inside_function_or_class(each_node, parent_by_child_id):
+            continue
+        _record_probe_import_aliases(each_node, all_canonical_names_by_alias)
+    return all_canonical_names_by_alias
+
+
+def _node_is_lexically_inside_function_or_class(
+    node: ast.AST, parent_by_child_id: dict[int, ast.AST],
+) -> bool:
+    """Return True when *node* is nested inside a function or class body.
+
+    Walks ancestors via *parent_by_child_id*. A node nested only inside
+    module-level ``try``/``if``/``with`` blocks has no enclosing function or
+    class and is module-scoped; a node inside a
+    ``FunctionDef``/``AsyncFunctionDef``/``ClassDef`` body is scoped to that
+    enclosing definition and is not module-scoped. A class-body import binds
+    its alias only within the class namespace, so it must not enter the
+    module-wide alias map any more than a function-local import does.
+
+    Args:
+        node: The node whose lexical scope is being classified.
+        parent_by_child_id: Child-``id()``-to-parent map from
+            ``_build_parent_map``.
+
+    Returns:
+        True when an enclosing
+        ``FunctionDef``/``AsyncFunctionDef``/``ClassDef`` exists.
+    """
+    current_ancestor = parent_by_child_id.get(id(node))
+    while current_ancestor is not None:
+        if isinstance(
+            current_ancestor,
+            (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef),
+        ):
+            return True
+        current_ancestor = parent_by_child_id.get(id(current_ancestor))
+    return False
+
+
+def _collect_os_environ_local_binding_names(
+    scope_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    all_canonical_names_by_alias: dict[str, str],
+) -> set[str]:
+    """Return local names bound to ``os.environ`` within *scope_node*.
+
+    Scoped to the single test function passed as *scope_node* so a binding in
+    one test never attributes a same-named access in a sibling test. Tracks
+    ``e = os.environ`` style assignments (resolving the right-hand side through
+    *all_canonical_names_by_alias* so ``e = o.environ`` with ``import os as o``
+    is recognized) and ``from os import environ`` bindings (rare inside a
+    function but supported for completeness). Subscript and ``.get(...)`` reads
+    on these local names are treated as ``os.environ`` accesses.
+
+    Args:
+        scope_node: The single test function node to scan for bindings.
+        all_canonical_names_by_alias: Import-alias map from
+            ``_build_alias_canonicalization_map``.
+
+    Returns:
+        Set of local variable names that reference ``os.environ``.
+    """
+    environ_bindings: set[str] = set()
+    for each_node in _descend_within_test_scope(scope_node):
+        if isinstance(each_node, ast.ImportFrom):
+            for each_alias in each_node.names:
+                canonical_dotted = ALL_CANONICAL_DOTTED_NAMES_BY_BARE_IMPORT.get(
+                    (each_node.module or "", each_alias.name)
+                )
+                if canonical_dotted == OS_ENVIRON_DOTTED_NAME:
+                    environ_bindings.add(each_alias.asname or each_alias.name)
+            continue
+        if not isinstance(each_node, ast.Assign):
+            continue
+        if not _attribute_chain_resolves_to_os_environ(each_node.value, all_canonical_names_by_alias):
+            continue
+        for each_target in each_node.targets:
+            if isinstance(each_target, ast.Name):
+                environ_bindings.add(each_target.id)
+    return environ_bindings
+
+
+def _collect_pathlib_path_local_binding_names(
+    scope_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    all_canonical_names_by_alias: dict[str, str],
+) -> set[str]:
+    """Return local names bound to a home-tilde ``pathlib.Path(...)`` construction.
+
+    Scoped to the single test function passed as *scope_node* so a binding in
+    one test never attributes a same-named ``.expanduser()`` call in a sibling
+    test. Tracks ``candidate = Path('~/x')`` style assignments whose first
+    constructor argument is a literal string beginning with ``~`` (resolving
+    the constructor through *all_canonical_names_by_alias* so an aliased
+    ``candidate = P('~/x')`` with ``from pathlib import Path as P`` and a
+    fully qualified ``candidate = pathlib.Path('~/x')`` are both recognized).
+    A later ``candidate.expanduser()`` call on such a name is attributed to a
+    home-directory probe. A tilde-free or dynamic constructor argument
+    (``Path('/tmp/x')`` / ``Path(some_path)``) expands no home directory and
+    is not collected, keeping the instance ``.expanduser()`` form symmetric
+    with ``os.path.expanduser`` argument inspection.
+
+    Args:
+        scope_node: The single test function node to scan for bindings.
+        all_canonical_names_by_alias: Import-alias map from
+            ``_build_alias_canonicalization_map``.
+
+    Returns:
+        Set of local variable names bound to a home-tilde ``pathlib.Path``
+        construction.
+    """
+    path_bindings: set[str] = set()
+    for each_node in _descend_within_test_scope(scope_node):
+        if not isinstance(each_node, ast.Assign):
+            continue
+        if not _pathlib_path_construction_uses_home_tilde(
+            each_node.value, all_canonical_names_by_alias
+        ):
+            continue
+        for each_target in each_node.targets:
+            if isinstance(each_target, ast.Name):
+                path_bindings.add(each_target.id)
+    return path_bindings
+
+
+def _collect_local_probe_alias_bindings(
+    scope_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    all_canonical_names_by_alias: dict[str, str],
+) -> dict[str, str]:
+    """Return a per-test overlay mapping local names to canonical probe prefixes.
+
+    Scoped to the single test function passed as *scope_node* so an alias bound
+    in one test never resolves a same-named access in a sibling test. Two
+    binding forms are tracked, both scoped to this function only:
+
+    - Function-local imports — ``import os as o``, ``from os import environ``,
+      ``from pathlib import Path`` — resolved through the same probe-relevant
+      filtering ``_build_alias_canonicalization_map`` applies to module-level
+      imports. Because the shared module map omits function-local imports, this
+      overlay is the only place a probe import inside one test takes effect, and
+      it stays confined to that test's body.
+    - Rebindings of a probe module, class, or callable to a local name —
+      ``path_class = Path``, ``read_env = os.getenv``, ``temp_module = tempfile``,
+      ``path_module = os.path``, ``e = os.environ`` — by resolving each
+      right-hand side through *all_canonical_names_by_alias* and keeping only
+      those whose canonical prefix is probe-aliasable
+      (``ALL_PROBE_ALIASABLE_CANONICAL_PREFIXES``).
+
+    Merged over the module-level alias map, the overlay lets a later
+    ``path_class.home()`` / ``read_env('HOME')`` / ``temp_module.mkdtemp()``
+    resolve to its canonical probe chain.
+
+    Args:
+        scope_node: The single test function node to scan for alias bindings.
+        all_canonical_names_by_alias: Module-level import-alias map from
+            ``_build_alias_canonicalization_map``.
+
+    Returns:
+        Mapping from local binding name to its canonical probe prefix.
+    """
+    local_alias_canonical_names: dict[str, str] = {}
+    for each_node in _descend_within_test_scope(scope_node):
+        if isinstance(each_node, (ast.Import, ast.ImportFrom)):
+            _record_probe_import_aliases(each_node, local_alias_canonical_names)
+            continue
+        if not isinstance(each_node, ast.Assign):
+            continue
+        canonical_prefix = _canonical_probe_prefix_for_value(
+            each_node.value, all_canonical_names_by_alias
+        )
+        if canonical_prefix is None:
+            continue
+        for each_target in each_node.targets:
+            if isinstance(each_target, ast.Name):
+                local_alias_canonical_names[each_target.id] = canonical_prefix
+    return local_alias_canonical_names
+
+
+def _canonical_probe_prefix_for_value(
+    node: ast.expr, all_canonical_names_by_alias: dict[str, str],
+) -> str | None:
+    if isinstance(node, ast.Name):
+        candidate_prefix = all_canonical_names_by_alias.get(node.id, node.id)
+    elif isinstance(node, ast.Attribute):
+        attribute_chain = _dotted_attribute_chain(node)
+        if attribute_chain is None:
+            return None
+        candidate_prefix = _resolve_chain_through_aliases(
+            attribute_chain, all_canonical_names_by_alias
+        )
+    else:
+        return None
+    if candidate_prefix in ALL_PROBE_ALIASABLE_CANONICAL_PREFIXES:
+        return candidate_prefix
+    return None
+
+
+def _pathlib_path_construction_uses_home_tilde(
+    node: ast.expr, all_canonical_names_by_alias: dict[str, str],
+) -> bool:
+    """Return True for a ``pathlib.Path('~...')`` construction with a home tilde.
+
+    The node is a Path construction when its callee chain resolves (directly,
+    aliased, or fully qualified) to a member of
+    ``ALL_PATHLIB_PATH_CONSTRUCTOR_CANONICAL_NAMES``. It uses the home tilde
+    when its first argument is a literal string beginning with ``~``. A
+    tilde-free or dynamic first argument expands no home directory and returns
+    False, mirroring ``_expanduser_argument_references_home``.
+
+    Args:
+        node: The candidate ``Path(...)`` construction expression.
+        all_canonical_names_by_alias: Import-alias map from
+            ``_build_alias_canonicalization_map``.
+
+    Returns:
+        True when *node* constructs a ``pathlib.Path`` from a leading-tilde
+        literal string.
+    """
+    if not isinstance(node, ast.Call):
+        return False
+    constructor_chain = _dotted_call_attribute_chain(node)
+    if constructor_chain is None:
+        return False
+    canonical_chain = _resolve_chain_through_aliases(
+        constructor_chain, all_canonical_names_by_alias
+    )
+    if canonical_chain not in ALL_PATHLIB_PATH_CONSTRUCTOR_CANONICAL_NAMES:
+        return False
+    return _expanduser_argument_references_home(node)
+
+
+def _expanduser_method_call_targets_pathlib_path(
+    call_node: ast.Call,
+    all_canonical_names_by_alias: dict[str, str],
+    all_path_local_bindings: set[str],
+) -> bool:
+    """Return True for a ``.expanduser()`` call on a home-tilde ``pathlib.Path``.
+
+    ``Path.expanduser`` expands the ``~`` bound into the receiver Path, so the
+    call resolves the home directory only when that receiver carries a leading
+    tilde. The receiver carries a tilde when it is a ``pathlib.Path('~...')``
+    construction (directly, aliased, or fully qualified) or a local variable
+    previously bound to such a construction. A tilde-free or dynamic receiver
+    (``Path('/tmp/x').expanduser()`` / ``Path(some_path).expanduser()``)
+    expands no home directory and is not flagged, keeping the form symmetric
+    with ``os.path.expanduser`` argument inspection.
+
+    Args:
+        call_node: The call whose callee attribute is ``expanduser``.
+        all_canonical_names_by_alias: Import-alias map from
+            ``_build_alias_canonicalization_map``.
+        all_path_local_bindings: Local names bound to a home-tilde
+            ``pathlib.Path`` construction from
+            ``_collect_pathlib_path_local_binding_names``.
+
+    Returns:
+        True when the ``expanduser`` receiver resolves to a home-tilde
+        ``pathlib.Path``.
+    """
+    callee = call_node.func
+    if not isinstance(callee, ast.Attribute):
+        return False
+    if callee.attr != PATHLIB_EXPANDUSER_METHOD_NAME:
+        return False
+    receiver = callee.value
+    if isinstance(receiver, ast.Name):
+        return receiver.id in all_path_local_bindings
+    return _pathlib_path_construction_uses_home_tilde(receiver, all_canonical_names_by_alias)
+
+
+def _attribute_chain_resolves_to_os_environ(
+    node: ast.expr, all_canonical_names_by_alias: dict[str, str],
+) -> bool:
+    if not isinstance(node, ast.Attribute):
+        return False
+    chain = _dotted_attribute_chain(node)
+    if chain is None:
+        return False
+    canonical_chain = _resolve_chain_through_aliases(
+        chain, all_canonical_names_by_alias
+    )
+    return canonical_chain == OS_ENVIRON_DOTTED_NAME
+
+
+def _dotted_attribute_chain(attribute_node: ast.Attribute) -> str | None:
+    chain_parts: list[str] = []
+    walker: ast.expr = attribute_node
+    while isinstance(walker, ast.Attribute):
+        chain_parts.append(walker.attr)
+        walker = walker.value
+    if not isinstance(walker, ast.Name):
+        return None
+    chain_parts.append(walker.id)
+    chain_parts.reverse()
+    return ".".join(chain_parts)
+
+
+def _resolve_chain_through_aliases(
+    chain: str, all_canonical_names_by_alias: dict[str, str],
+) -> str:
+    """Rewrite the leading segment of *chain* through the alias map.
+
+    Args:
+        chain: A dotted callee chain such as ``"P.home"``,
+            ``"op.expanduser"``, or ``"o.path.expanduser"``.
+        all_canonical_names_by_alias: Local-binding-to-canonical-prefix
+            mapping from ``_build_alias_canonicalization_map``.
+
+    Returns:
+        The chain with its leading segment replaced by the canonical
+        (possibly multi-segment) prefix when a binding matches; otherwise
+        the chain unchanged.
+    """
+    first_segment, separator, remainder = chain.partition(".")
+    canonical_prefix = all_canonical_names_by_alias.get(first_segment)
+    if canonical_prefix is None:
+        return chain
+    if not separator:
+        return canonical_prefix
+    return f"{canonical_prefix}{separator}{remainder}"
+
+
+def _expandvars_argument_references_home_or_temp(call_node: ast.Call) -> bool:
+    """Return True when an ``expandvars`` call expands a home/temp env var.
+
+    Inspects the first string argument for dollar-style ``$NAME`` / ``${NAME}``
+    references and Windows percent-style ``%NAME%`` references, then reports
+    whether any referenced name is a home/temp env var. ``os.path.expandvars``
+    expands percent syntax on Windows, so both forms reach the same home/temp
+    env-var name set. A non-constant or absent argument is treated as not
+    referencing a home/temp variable, mirroring the conservative env-name
+    filtering applied to ``os.getenv``.
+
+    Args:
+        call_node: The ``os.path.expandvars(...)`` call node.
+
+    Returns:
+        True when at least one expanded variable name is in
+        ``ALL_HOME_DIRECTORY_ENV_VAR_NAMES``.
+    """
+    if not call_node.args:
+        return False
+    first_argument = call_node.args[0]
+    if not (
+        isinstance(first_argument, ast.Constant)
+        and isinstance(first_argument.value, str)
+    ):
+        return False
+    dollar_style_names = ENVIRONMENT_VARIABLE_REFERENCE_PATTERN.findall(
+        first_argument.value
+    )
+    percent_style_names = WINDOWS_PERCENT_VARIABLE_REFERENCE_PATTERN.findall(
+        first_argument.value
+    )
+    all_referenced_names = dollar_style_names + percent_style_names
+    return any(
+        each_name in ALL_HOME_DIRECTORY_ENV_VAR_NAMES
+        for each_name in all_referenced_names
+    )
+
+
+def _expanduser_argument_references_home(call_node: ast.Call) -> bool:
+    """Return True when an ``expanduser`` call expands the home directory.
+
+    ``os.path.expanduser`` only substitutes a leading ``~`` (``~`` alone or
+    ``~user``); a string without a leading tilde is returned unchanged and
+    never touches HOME. A non-constant or absent argument is treated as not
+    referencing home, mirroring the conservative argument inspection applied
+    to ``expandvars``.
+
+    Args:
+        call_node: The ``os.path.expanduser(...)`` call node.
+
+    Returns:
+        True when the first string argument begins with the home-directory
+        tilde prefix.
+    """
+    if not call_node.args:
+        return False
+    first_argument = call_node.args[0]
+    if not (
+        isinstance(first_argument, ast.Constant)
+        and isinstance(first_argument.value, str)
+    ):
+        return False
+    return first_argument.value.startswith(HOME_DIRECTORY_TILDE_PREFIX)
+
+
+def _tempfile_factory_call_is_isolated_by_dir(
+    call_node: ast.Call,
+    all_canonical_names_by_alias: dict[str, str],
+    all_environ_local_bindings: set[str],
+) -> bool:
+    """Return True when a tempfile factory's ``dir=`` sandboxes the allocation.
+
+    A ``dir=`` keyword sandboxes the allocation only when its value is a
+    plausibly isolated path (typically the pytest ``tmp_path`` fixture). A
+    ``dir=`` value that resolves to the shared temp directory does not isolate
+    the call and is treated as absent:
+
+    - a constant ``None`` selects the default shared temp directory; and
+    - a shared-temp source — ``os.getenv('TMPDIR'|'TEMP'|'TMP')`` /
+      ``os.environ['TMPDIR'|...]`` / ``os.environ.get('TMPDIR'|...)``, or
+      ``tempfile.gettempdir()`` / ``tempfile.gettempprefix()`` — returns the
+      shared temp directory.
+
+    Only an explicit ``dir=`` keyword counts; a ``**kwargs`` ``dir`` cannot be
+    resolved statically and is treated as absent, mirroring the conservative
+    argument inspection applied to ``expandvars`` and ``expanduser``.
+
+    Args:
+        call_node: The tempfile factory call node.
+        all_canonical_names_by_alias: Import-alias map used to resolve aliased
+            shared-temp sources passed as the ``dir=`` value.
+        all_environ_local_bindings: Local names bound to ``os.environ`` within
+            the test function, used to recognize aliased ``os.environ`` reads.
+
+    Returns:
+        True when an explicit ``dir=`` keyword is present and its value is not
+        a recognized shared-temp source.
+    """
+    for each_keyword in call_node.keywords:
+        if each_keyword.arg != TEMPFILE_FACTORY_ISOLATION_DIRECTORY_KEYWORD:
+            continue
+        return not _dir_value_resolves_to_shared_temp(
+            each_keyword.value,
+            all_canonical_names_by_alias,
+            all_environ_local_bindings,
+        )
+    return False
+
+
+def _dir_value_resolves_to_shared_temp(
+    dir_value: ast.expr,
+    all_canonical_names_by_alias: dict[str, str],
+    all_environ_local_bindings: set[str],
+) -> bool:
+    """Return True when a tempfile ``dir=`` value points at the shared temp dir.
+
+    Args:
+        dir_value: The expression supplied as the factory's ``dir=`` value.
+        all_canonical_names_by_alias: Import-alias map used to resolve aliased
+            ``os.getenv`` / ``os.environ`` / ``tempfile`` references.
+        all_environ_local_bindings: Local names bound to ``os.environ`` within
+            the test function.
+
+    Returns:
+        True when the value is a constant ``None`` or a recognized shared-temp
+        source that yields the default shared temp directory.
+    """
+    if isinstance(dir_value, ast.Constant) and dir_value.value is None:
+        return True
+    if isinstance(dir_value, ast.Call):
+        environ_key = _environ_key_string_from_call(
+            dir_value, all_canonical_names_by_alias, all_environ_local_bindings
+        )
+        if environ_key in ALL_HOME_DIRECTORY_ENV_VAR_NAMES:
+            return True
+        raw_chain = _dotted_call_attribute_chain(dir_value)
+        if raw_chain is None:
+            return False
+        canonical_chain = _resolve_chain_through_aliases(
+            raw_chain, all_canonical_names_by_alias
+        )
+        return canonical_chain in ALL_SHARED_TEMP_SOURCE_PROBE_DOTTED_NAMES
+    if isinstance(dir_value, ast.Subscript):
+        environ_key = _environ_key_string_from_subscript(
+            dir_value, all_canonical_names_by_alias, all_environ_local_bindings
+        )
+        return environ_key in ALL_HOME_DIRECTORY_ENV_VAR_NAMES
+    return False
+
+
+def _environ_key_string_from_call(
+    call_node: ast.Call,
+    all_canonical_names_by_alias: dict[str, str],
+    all_environ_local_bindings: set[str],
+) -> str | None:
+    if not _call_is_environment_getter(call_node, all_canonical_names_by_alias, all_environ_local_bindings):
+        return None
+    if not call_node.args:
+        return None
+    first_argument = call_node.args[0]
+    if isinstance(first_argument, ast.Constant) and isinstance(first_argument.value, str):
+        return first_argument.value
+    return None
+
+
+def _call_is_environment_getter(
+    call_node: ast.Call,
+    all_canonical_names_by_alias: dict[str, str],
+    all_environ_local_bindings: set[str],
+) -> bool:
+    """Return True when *call_node* reads an env var via a recognized getter.
+
+    Recognizes the canonical ``os.getenv(...)`` / ``os.environ.get(...)``
+    chains and the local-alias ``e.get(...)`` form where ``e`` is a name in
+    *all_environ_local_bindings* (a binding to ``os.environ`` collected from
+    the same test function).
+
+    Args:
+        call_node: The call to inspect.
+        all_canonical_names_by_alias: Import-alias map from
+            ``_build_alias_canonicalization_map``.
+        all_environ_local_bindings: Local names bound to ``os.environ`` within
+            the test function being analyzed.
+
+    Returns:
+        True when the call is an environment getter whose key argument is
+        worth inspecting.
+    """
+    if _call_targets_local_environ_get(call_node, all_environ_local_bindings):
+        return True
+    raw_chain = _dotted_call_attribute_chain(call_node)
+    if raw_chain is None:
+        return False
+    canonical_chain = _resolve_chain_through_aliases(raw_chain, all_canonical_names_by_alias)
+    return canonical_chain in ALL_ENVIRONMENT_GETTER_DOTTED_NAMES
+
+
+def _call_targets_local_environ_get(
+    call_node: ast.Call, all_environ_local_bindings: set[str],
+) -> bool:
+    callee = call_node.func
+    if not isinstance(callee, ast.Attribute):
+        return False
+    if callee.attr != ENVIRON_GET_METHOD_NAME:
+        return False
+    receiver = callee.value
+    return isinstance(receiver, ast.Name) and receiver.id in all_environ_local_bindings
+
+
+def _environ_key_string_from_subscript(
+    subscript_node: ast.Subscript,
+    all_canonical_names_by_alias: dict[str, str],
+    all_environ_local_bindings: set[str],
+) -> str | None:
+    if not _subscript_target_is_os_environ(
+        subscript_node.value, all_canonical_names_by_alias, all_environ_local_bindings
+    ):
+        return None
+    key_node = subscript_node.slice
+    if isinstance(key_node, ast.Constant) and isinstance(key_node.value, str):
+        return key_node.value
+    return None
+
+
+def _subscript_target_is_os_environ(
+    target_node: ast.expr,
+    all_canonical_names_by_alias: dict[str, str],
+    all_environ_local_bindings: set[str],
+) -> bool:
+    if isinstance(target_node, ast.Name):
+        if target_node.id in all_environ_local_bindings:
+            return True
+        return all_canonical_names_by_alias.get(target_node.id) == OS_ENVIRON_DOTTED_NAME
+    if isinstance(target_node, ast.Attribute):
+        return _attribute_chain_resolves_to_os_environ(target_node, all_canonical_names_by_alias)
+    return False
+
+
+def _collect_pytest_collectable_test_functions(
+    syntax_tree: ast.Module,
+) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Enumerate the function nodes pytest would actually collect as tests.
+
+    Walks module-level statements and the top-level methods of module-level
+    classes only. Functions nested inside other functions or lambdas are
+    excluded because pytest does not collect nested callables. Module-level
+    classes whose name does not start with the
+    ``PYTEST_TEST_CLASS_NAME_PREFIX`` (``Test``) are skipped because the
+    repo's ``pytest.ini`` declares ``python_classes = Test*``; methods on
+    non-``Test*`` helper classes are never collected by pytest.
+    """
+    collectable: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for each_module_statement in syntax_tree.body:
+        if isinstance(each_module_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if (
+                each_module_statement.name.startswith("test_")
+                or each_module_statement.name.startswith("should_")
+            ):
+                collectable.append(each_module_statement)
+        elif isinstance(each_module_statement, ast.ClassDef):
+            if not each_module_statement.name.startswith(PYTEST_TEST_CLASS_NAME_PREFIX):
+                continue
+            for each_class_member in each_module_statement.body:
+                if isinstance(each_class_member, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
+                    each_class_member.name.startswith("test_")
+                    or each_class_member.name.startswith("should_")
+                ):
+                    collectable.append(each_class_member)
+    return collectable
+
+
+def _detect_home_or_temp_probes_in_body(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    all_canonical_names_by_alias: dict[str, str],
+    all_environ_local_bindings: set[str],
+    all_path_local_bindings: set[str],
+) -> list[tuple[int, str]]:
+    """Yield ``(line, probe_label)`` pairs for HOME/TMP probes in *function_node*.
+
+    The walk descends into ``ClassDef`` nodes nested inside the test body and
+    into their class-level statements. Class-level statements (class attribute
+    initializers) run at class-creation time as the ``class`` statement
+    executes during the test, so a probe in an initializer such as ``root =
+    Path.home()`` is on the test's runtime path and is reported. A method of a
+    nested class is a callable-scope boundary: Python does not run a method
+    just because its class is defined, so the walk does not descend into method
+    bodies. Standalone nested helper functions and lambdas defined anywhere are
+    likewise scope boundaries — each runs in its own callable scope and carries
+    its own isolation contract. Probes that genuinely execute on the test path
+    (top-level statements and class-level initializers) are still detected.
+
+    Args:
+        function_node: The test function whose body is being scanned.
+        all_canonical_names_by_alias: Local-binding-to-canonical-prefix mapping used to resolve
+            aliased imports before probe membership checks.
+        all_environ_local_bindings: Local names bound to ``os.environ`` (scoped
+            to *function_node*) used to attribute subscript and ``.get(...)``
+            reads to a HOME/TMP env probe.
+        all_path_local_bindings: Local names bound to a ``pathlib.Path``
+            construction (scoped to *function_node*) used to attribute a
+            ``.expanduser()`` method call to a home-directory probe.
+
+    Returns:
+        A list of ``(line_number, probe_label)`` tuples for each HOME/TMP
+        probe attributed to the test, in stack-pop order.
+    """
+    probes: list[tuple[int, str]] = []
+    for each_descendant in _descend_within_test_scope(function_node):
+        _record_home_or_temp_probe(
+            each_descendant,
+            probes,
+            all_canonical_names_by_alias,
+            all_environ_local_bindings,
+            all_path_local_bindings,
+        )
+    probes.sort(key=lambda each_probe: each_probe[0])
+    return probes
+
+
+def _record_home_or_temp_probe(
+    node: ast.AST,
+    all_probes: list[tuple[int, str]],
+    all_canonical_names_by_alias: dict[str, str],
+    all_environ_local_bindings: set[str],
+    all_path_local_bindings: set[str],
+) -> None:
+    if isinstance(node, ast.Call):
+        if _expanduser_method_call_targets_pathlib_path(
+            node, all_canonical_names_by_alias, all_path_local_bindings
+        ):
+            all_probes.append((node.lineno, f"Path.{PATHLIB_EXPANDUSER_METHOD_NAME}()"))
+            return
+        raw_chain = _dotted_call_attribute_chain(node)
+        if raw_chain is None:
+            return
+        canonical_chain = _resolve_chain_through_aliases(raw_chain, all_canonical_names_by_alias)
+        if canonical_chain == EXPANDVARS_DOTTED_NAME:
+            if _expandvars_argument_references_home_or_temp(node):
+                all_probes.append((node.lineno, f"{canonical_chain}()"))
+            return
+        if canonical_chain == EXPANDUSER_DOTTED_NAME:
+            if _expanduser_argument_references_home(node):
+                all_probes.append((node.lineno, f"{canonical_chain}()"))
+            return
+        if canonical_chain in ALL_PATHLIB_STATIC_EXPANDUSER_DOTTED_NAMES:
+            if _expanduser_argument_references_home(node):
+                all_probes.append((node.lineno, f"{canonical_chain}()"))
+            return
+        if canonical_chain in ALL_FILESYSTEM_HOME_PROBE_DOTTED_NAMES:
+            if (
+                canonical_chain in ALL_DIR_ACCEPTING_TEMPFILE_FACTORY_DOTTED_NAMES
+                and _tempfile_factory_call_is_isolated_by_dir(
+                    node, all_canonical_names_by_alias, all_environ_local_bindings
+                )
+            ):
+                return
+            all_probes.append((node.lineno, f"{canonical_chain}()"))
+            return
+        environ_key = _environ_key_string_from_call(
+            node, all_canonical_names_by_alias, all_environ_local_bindings
+        )
+        if environ_key in ALL_HOME_DIRECTORY_ENV_VAR_NAMES:
+            all_probes.append((node.lineno, f"os env probe '{environ_key}'"))
+        return
+    if isinstance(node, ast.Subscript):
+        environ_key = _environ_key_string_from_subscript(
+            node, all_canonical_names_by_alias, all_environ_local_bindings
+        )
+        if environ_key in ALL_HOME_DIRECTORY_ENV_VAR_NAMES:
+            all_probes.append((node.lineno, f"os.environ['{environ_key}']"))
+
+
+def _children_to_descend_into(node: ast.AST) -> list[ast.AST]:
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        return []
+    if isinstance(node, ast.ClassDef):
+        return list(node.body)
+    return list(ast.iter_child_nodes(node))
+
+
+def _descend_within_test_scope(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> Iterator[ast.AST]:
+    """Yield every descendant of *function_node* on the test's own runtime path.
+
+    Bounded traversal that shares ``_children_to_descend_into`` so every caller
+    treats the same nodes as in scope. Nested function definitions, methods, and
+    lambdas are scope boundaries — Python does not run a callable's body just
+    because the callable (or its enclosing class) is defined, so a binding or
+    probe inside one does not leak onto the test's runtime path. Nested
+    ``ClassDef`` bodies stay in scope because their class-creation statements
+    (class attribute initializers) run as the ``class`` statement executes
+    during the test; descent stops at the methods declared in that class body.
+
+    Args:
+        function_node: The test function whose in-scope descendants to yield.
+
+    Yields:
+        Each descendant node within the test's bounded scope, in stack-pop
+        order.
+    """
+    nodes_to_visit: list[ast.AST] = list(ast.iter_child_nodes(function_node))
+    while nodes_to_visit:
+        each_descendant = nodes_to_visit.pop()
+        yield each_descendant
+        nodes_to_visit.extend(_children_to_descend_into(each_descendant))
+
+
+def _usefixtures_decorator_requests_isolation_fixture(decorator_node: ast.expr) -> bool:
+    """Report whether a decorator is ``usefixtures`` requesting an isolation fixture.
+
+    Recognizes ``@pytest.mark.usefixtures("monkeypatch")`` and the
+    ``@mark.usefixtures("monkeypatch")`` short form: an ``ast.Call`` whose callee
+    attribute chain ends in ``usefixtures`` and whose string-constant arguments
+    include any name in ``ALL_PYTEST_FILESYSTEM_ISOLATION_FIXTURE_NAMES``.
+
+    Args:
+        decorator_node: A single decorator expression from a test's decorator list.
+
+    Returns:
+        True when the decorator injects an isolation fixture by name.
+    """
+    if not isinstance(decorator_node, ast.Call):
+        return False
+    if not isinstance(decorator_node.func, ast.Attribute):
+        return False
+    callee_chain = _dotted_attribute_chain(decorator_node.func)
+    if callee_chain is None:
+        return False
+    if not callee_chain.endswith(PYTEST_USEFIXTURES_MARKER_NAME):
+        return False
+    for each_argument in decorator_node.args:
+        if (
+            isinstance(each_argument, ast.Constant)
+            and isinstance(each_argument.value, str)
+            and each_argument.value in ALL_PYTEST_FILESYSTEM_ISOLATION_FIXTURE_NAMES
+        ):
+            return True
+    return False
+
+
+def _function_uses_pytest_isolation_fixture(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    for each_argument in function_node.args.posonlyargs:
+        if each_argument.arg in ALL_PYTEST_FILESYSTEM_ISOLATION_FIXTURE_NAMES:
+            return True
+    for each_argument in function_node.args.args:
+        if each_argument.arg in ALL_PYTEST_FILESYSTEM_ISOLATION_FIXTURE_NAMES:
+            return True
+    for each_argument in function_node.args.kwonlyargs:
+        if each_argument.arg in ALL_PYTEST_FILESYSTEM_ISOLATION_FIXTURE_NAMES:
+            return True
+    for each_decorator in function_node.decorator_list:
+        if _usefixtures_decorator_requests_isolation_fixture(each_decorator):
+            return True
+    return False
+
+
+def check_tests_use_isolated_filesystem_paths(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    """Flag test functions that probe HOME or TMP without pytest isolation.
+
+    Pattern class: tests that call ``Path.home()``, ``os.path.expanduser('~')``,
+    ``os.getenv('HOME'|'USERPROFILE'|'TMPDIR'|…)``, ``os.environ['HOME'|…]``, or
+    ``tempfile.gettempdir()`` against the real environment leak state across
+    the suite and surface as environment-coupled bugs (audit Theme M).
+
+    Test functions whose signatures take ``monkeypatch`` are treated as
+    intentionally isolated and pass — ``monkeypatch.setenv('HOME', ...)``
+    can intercept every env-derived probe, and this suppression applies
+    uniformly to every probe type below. ``tmp_path`` / ``tmp_path_factory``
+    / ``tmpdir`` / ``tmpdir_factory`` allocate alternative sandbox paths but
+    do not intercept env reads, so their presence alone does not suppress
+    the check. Module-level helpers and fixtures (any function whose name
+    does not start with ``test_`` or ``should_``) are out of scope — only
+    pytest-collectable ``def test_*`` / ``async def test_*`` / ``def
+    should_*`` module-level or class-method functions are scanned.
+
+    Covered forms (API surface × access form):
+        Probe API surfaces — ``pathlib.Path.home()``,
+        ``pathlib.Path('~...').expanduser()``, ``os.path.expanduser(arg)``,
+        ``os.path.expandvars(arg)``, ``os.getenv(name)``,
+        ``os.environ[name]``, ``os.environ.get(name)``, and the ``tempfile``
+        allocators (``gettempdir``, ``gettempdirb``, ``gettempprefix``,
+        ``mkstemp``, ``mkdtemp``, ``mktemp``, ``NamedTemporaryFile``,
+        ``TemporaryFile``, ``TemporaryDirectory``, ``SpooledTemporaryFile``).
+        Each surface is recognized through four access forms: (1) canonical
+        dotted (``os.path.expanduser``), (2) module-level ``from X import
+        name`` bare use (``from os import environ; environ['HOME']``),
+        (3) module-level aliased import (``import tempfile as tf;
+        tf.mkdtemp()``), and (4) a function-local binding tracked per test —
+        either a function-local import (``def t(): from os import environ;
+        environ['HOME']``) or a local rebinding (``path_class = Path;
+        path_class.home()``; ``read_env = os.getenv; read_env('HOME')``). A
+        function-local binding never leaks into a sibling test, so a same-named
+        bare reference in another test that lacks its own binding does not fire.
+        Gating is symmetric across the two ``expanduser`` forms (flag only on a
+        leading-``~`` literal) and across the env getters / subscript (flag only
+        on a home/temp env-var name). Probes are reported in source-line order
+        for every probe type.
+
+    Out of scope by design (dynamically constructed call targets that no
+    AST-level pattern can resolve statically): attribute access through
+    ``getattr(os, 'environ')``, callable names assembled at runtime by
+    string concatenation, and calls built through ``exec``/``eval``. These
+    bound the detector to a fixed, documented surface rather than an
+    open-ended chase.
+
+    Args:
+        content: The Python source to analyze.
+        file_path: The path of the file being checked. The check only fires
+            on test files.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a probe
+            blocks when any line of its enclosing test function's declared span
+            (signature line through last body line) is among the changed lines,
+            so editing the signature to remove an isolation fixture brings an
+            unchanged-body probe into scope.
+        defer_scope_to_caller: When True, return every probe so the commit/push
+            gate's ``split_violations_by_scope`` can scope by added line and
+            report the in-scope set.
+
+    Returns:
+        A list of issue strings naming each offending probe call. When
+        *defer_scope_to_caller* is True every probe is returned for the gate to
+        scope; otherwise every probe in scope is returned.
+    """
+    if not is_test_file(file_path):
+        return []
+
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    all_module_canonical_names_by_alias = _build_alias_canonicalization_map(syntax_tree)
+    all_violations_in_source_line_order: list[tuple[range, str]] = []
+    for each_node in _collect_pytest_collectable_test_functions(syntax_tree):
+        if _function_uses_pytest_isolation_fixture(each_node):
+            continue
+        all_canonical_names_by_alias = {
+            **all_module_canonical_names_by_alias,
+            **_collect_local_probe_alias_bindings(each_node, all_module_canonical_names_by_alias),
+        }
+        all_environ_local_bindings = _collect_os_environ_local_binding_names(each_node, all_canonical_names_by_alias)
+        all_path_local_bindings = _collect_pathlib_path_local_binding_names(each_node, all_canonical_names_by_alias)
+        line_span = _function_definition_line_span(each_node)
+        enclosing_function_span = range(each_node.lineno, each_node.lineno + line_span)
+        for each_line, each_probe_label in _detect_home_or_temp_probes_in_body(
+            each_node, all_canonical_names_by_alias, all_environ_local_bindings, all_path_local_bindings
+        ):
+            message = (
+                f"Line {each_line}: Test {each_node.name!r} "
+                f"(defined at line {each_node.lineno}, spanning {line_span} lines) "
+                f"probes {each_probe_label} - {TEST_ISOLATION_MESSAGE_SUFFIX}"
+            )
+            all_violations_in_source_line_order.append(
+                (enclosing_function_span, message)
+            )
+    return _scope_violations_to_changed_lines(
+        all_violations_in_source_line_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
 
 
 def _collect_assert_nodes_bounded(node: ast.AST) -> list[ast.Assert]:
@@ -3982,10 +5263,10 @@ def check_loop_variable_naming(content: str, file_path: str) -> list[str]:
     except SyntaxError:
         return []
     issues: list[str] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.For, ast.AsyncFor)):
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, (ast.For, ast.AsyncFor)):
             continue
-        for each_name_node in _collect_target_names(node.target):
+        for each_name_node in _collect_target_names(each_node.target):
             target_name = each_name_node.id
             if target_name in ALL_LOOP_INDEX_LETTER_EXEMPTIONS:
                 continue
@@ -4046,11 +5327,180 @@ def check_return_annotations(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _function_definition_line_span(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> int:
+    end_lineno = getattr(function_node, "end_lineno", None) or function_node.lineno
+    return end_lineno - function_node.lineno + 1
+
+
+def changed_line_numbers(prior_content: str, post_edit_content: str) -> set[int]:
+    """Return the post-edit line numbers an edit added or replaced.
+
+    Runs a line-level diff of *prior_content* against *post_edit_content* and
+    collects the 1-indexed line numbers in *post_edit_content* that fall inside
+    a ``replace`` or ``insert`` opcode. This mirrors the "added lines" notion
+    that ``code_rules_gate.parse_added_line_numbers`` derives from
+    ``git diff --unified=0``, so the PreToolUse layer and the gate agree on
+    which lines the change touched.
+
+    Args:
+        prior_content: The file content before the edit.
+        post_edit_content: The reconstructed file content after the edit.
+
+    Returns:
+        The set of 1-indexed line numbers in *post_edit_content* that the edit
+        added or replaced.
+    """
+    matcher = difflib.SequenceMatcher(
+        a=prior_content.splitlines(),
+        b=post_edit_content.splitlines(),
+        autojunk=False,
+    )
+    all_changed_lines: set[int] = set()
+    for each_tag, _, _, each_post_start, each_post_end in matcher.get_opcodes():
+        if each_tag in ALL_DIFF_CHANGED_OPCODE_TAGS:
+            for each_post_index in range(each_post_start, each_post_end):
+                all_changed_lines.add(each_post_index + 1)
+    return all_changed_lines
+
+
+def _scope_violations_to_changed_lines(
+    all_violations_in_walk_order: list[tuple[range, str]],
+    all_changed_lines: set[int] | None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    """Scope span-tagged violations by diff intersection.
+
+    In-scope violations are always reported; the untouched out-of-scope set is
+    surfaced or dropped according to which caller path is active:
+
+    - ``defer_scope_to_caller`` True (the commit/push gate): every violation is
+      returned in walk order so the gate's ``split_violations_by_scope`` can
+      classify blocking vs advisory by added line. The gate does this scoping,
+      so no scoping happens here.
+    - ``all_changed_lines`` None (a terminal new-file or full-file write): every
+      line was just authored, so every violation is in scope and returned.
+    - ``all_changed_lines`` provided (a terminal diff-scoped Edit): only the
+      in-scope violations whose span intersects the changed lines are returned;
+      the untouched out-of-scope set is dropped, because untouched code must not
+      block a single-file edit.
+
+    Args:
+        all_violations_in_walk_order: ``(span_range, issue_message)`` pairs in
+            ``ast.walk`` traversal order, where ``span_range`` covers the
+            violation's source lines.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat every violation as in-scope.
+        defer_scope_to_caller: When True, return every violation message in walk
+            order so the gate scopes by added line. When False, this enforcer is
+            terminal and scopes directly.
+
+    Returns:
+        Every violation message when *defer_scope_to_caller* is True or
+        *all_changed_lines* is None; otherwise only the in-scope messages whose
+        span intersects the changed lines — so an edit that grows a function
+        past the threshold always blocks even when many earlier untouched
+        functions already exceed it.
+    """
+    if defer_scope_to_caller:
+        return [each_message for _, each_message in all_violations_in_walk_order]
+    if all_changed_lines is None:
+        return [each_message for _, each_message in all_violations_in_walk_order]
+    return [
+        each_message
+        for each_span, each_message in all_violations_in_walk_order
+        if any(each_line in all_changed_lines for each_line in each_span)
+    ]
+
+
+def check_function_length(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    """Flag functions whose definition span exceeds cognitive-load thresholds.
+
+    Function definition spans (signature line through last body statement,
+    inclusive) at or above ``FUNCTION_LENGTH_BLOCKING_THRESHOLD`` (60
+    lines) appear in the returned issues list and block the write at the
+    gate. The threshold rests on the small-function guidance in Robert C.
+    Martin, *Clean Code* Ch. 3 ("Functions") and the Google Python Style
+    Guide's ~40-line function review hint
+    (https://google.github.io/styleguide/pyguide.html); this gate blocks on
+    body growth that pushes a function past that span. It does not derive
+    from CODE_RULES §6.5, which governs advisory file-length signals and
+    argues against hard numeric blocks.
+
+    The issue message carries ``Function NAME (defined at line X) is Y lines``
+    precisely so the gate's ``function_length_span_range`` can recover the
+    function's full declared span (lines ``X`` through ``X + Y - 1``). The
+    gate classifies the violation blocking when that span intersects the
+    diff's added lines — the body grew this diff — and advisory otherwise — a
+    pre-existing, untouched long function in a file the diff happened to
+    touch. Anchoring to the span rather than a single ``Line N:`` definition
+    line lets body growth on any interior line block correctly even when the
+    ``def`` line itself is untouched.
+
+    Exempt: test files (test bodies are sometimes long by necessity), Django
+    migrations (auto-generated), workflow registries (registry entries), and
+    hook infrastructure.
+
+    Args:
+        content: The Python source to analyze.
+        file_path: The path of the file being checked.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a violation
+            blocks only when the function's declared span intersects the changed
+            lines.
+        defer_scope_to_caller: When True, return every violation so the
+            commit/push gate's ``split_violations_by_scope`` can scope by added
+            line and report the in-scope set.
+
+    Returns:
+        Blocking issues. When *defer_scope_to_caller* is True every violation is
+        returned for the gate to scope; otherwise every violation in scope is
+        returned.
+    """
+    if is_test_file(file_path):
+        return []
+    if is_hook_infrastructure(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    all_violations_in_walk_order: list[tuple[range, str]] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        line_span = _function_definition_line_span(each_node)
+        if line_span >= FUNCTION_LENGTH_BLOCKING_THRESHOLD:
+            span_range = range(each_node.lineno, each_node.lineno + line_span)
+            message = (
+                f"Function {each_node.name!r} (defined at line {each_node.lineno}) "
+                f"is {line_span} lines - {FUNCTION_LENGTH_BLOCKING_MESSAGE_SUFFIX}"
+            )
+            all_violations_in_walk_order.append((span_range, message))
+    return _scope_violations_to_changed_lines(
+        all_violations_in_walk_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
+
+
 def validate_content(
     content: str,
     file_path: str,
     old_content: str = "",
     full_file_content: str | None = None,
+    prior_full_file_content: str = "",
+    defer_scope_to_caller: bool = False,
 ) -> list[str]:
     """Run all applicable validators on content.
 
@@ -4065,10 +5515,31 @@ def validate_content(
             by ``new_string``). Whole-file checks such as the unused-import
             scanner use this to evaluate references across the file rather than
             just within the inserted fragment.
+        prior_full_file_content: For Edit operations, the entire file content as
+            it existed before the edit applied. Whole-file span checks
+            (function length, test isolation) diff this against
+            ``full_file_content`` to recover the lines the edit touched, then
+            block only on violations whose source span intersects those lines —
+            mirroring the gate's span-intersection scoping. Defaults to the
+            empty string for Write and for gate invocations, which leaves those
+            checks scanning the whole file with no diff scoping.
+        defer_scope_to_caller: The explicit signal that a downstream scoper will
+            run, used to disambiguate the two callers that supply no changed-line
+            set. The commit/push gate passes True: it owns
+            ``split_violations_by_scope`` and classifies blocking vs advisory by
+            added line, so the function-length, test-isolation, and banned-noun
+            checks return their violations unscoped for the gate to classify.
+            PreToolUse new-file or full-file writes leave this False: this
+            enforcer is terminal, so it marks every violation in scope.
     """
     extension = get_file_extension(file_path)
     all_issues = []
     effective_content = content if full_file_content is None else full_file_content
+    all_changed_lines = (
+        changed_line_numbers(prior_full_file_content, full_file_content)
+        if full_file_content is not None
+        else None
+    )
 
     if extension in ALL_PYTHON_EXTENSIONS:
         if not is_test_file(file_path):
@@ -4083,6 +5554,14 @@ def validate_content(
         all_issues.extend(check_file_global_constants_use_count(content, file_path))
         all_issues.extend(check_type_escape_hatches(effective_content, file_path))
         all_issues.extend(check_banned_identifiers(content, file_path))
+        all_issues.extend(
+            check_banned_noun_word_boundary(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
         all_issues.extend(check_banned_prefixes(effective_content, file_path))
         all_issues.extend(check_stub_implementations(effective_content, file_path))
         all_issues.extend(check_typed_dict_encode_decode(effective_content, file_path))
@@ -4093,6 +5572,14 @@ def validate_content(
         all_issues.extend(check_docstring_format(effective_content, file_path))
         all_issues.extend(check_boolean_naming(content, file_path))
         all_issues.extend(check_skip_decorators_in_tests(content, file_path))
+        all_issues.extend(
+            check_tests_use_isolated_filesystem_paths(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
         all_issues.extend(check_existence_check_tests(content, file_path))
         all_issues.extend(check_constant_equality_tests(content, file_path))
         all_issues.extend(check_unused_optional_parameters(content, file_path))
@@ -4106,6 +5593,14 @@ def validate_content(
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
         all_issues.extend(check_return_annotations(content, file_path))
+        all_issues.extend(
+            check_function_length(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
         all_issues.extend(check_loop_variable_naming(content, file_path))
         all_issues.extend(check_inline_literal_collections(content, file_path))
         all_issues.extend(check_inline_tuple_string_magic(content, file_path))
@@ -4124,28 +5619,50 @@ def validate_content(
     return all_issues
 
 
-def _reconstruct_post_edit_file_content(
-    file_path: str, old_string: str, new_string: str,
-) -> str | None:
-    """Return the file content as it will look after the Edit applies, or None.
-
-    Reads ``file_path`` from disk and replaces the first occurrence of
-    ``old_string`` with ``new_string``, mirroring how the Edit tool itself
-    applies a single replacement. Returns None when the file cannot be read,
-    ``old_string`` is empty, or ``old_string`` is not present in the existing
-    file (which means the Edit will fail or has already been applied — neither
-    case yields a well-defined post-edit view).
-    """
-    if not old_string:
-        return None
+def _read_existing_file_content(file_path: str) -> str | None:
+    """Return the on-disk content of *file_path*, or None when it cannot be read."""
     try:
         with open(file_path, "r", encoding="utf-8") as existing_file:
-            existing_content = existing_file.read()
+            return existing_file.read()
     except (FileNotFoundError, OSError, UnicodeDecodeError):
         return None
+
+
+def prior_and_post_edit_content(
+    file_path: str, old_string: str, new_string: str,
+) -> tuple[str | None, str | None]:
+    """Return the pre-edit and post-edit file content from a single disk read.
+
+    Reads ``file_path`` once and derives both views from that single read so the
+    prior and the reconstruction never diverge across two independent reads.
+    The post-edit view replaces the first occurrence of ``old_string`` with
+    ``new_string``, mirroring how the Edit tool itself applies a single
+    replacement.
+
+    Returns ``(None, None)`` when the file cannot be read, ``old_string`` is
+    empty, or ``old_string`` is not present in the existing file (the Edit will
+    fail or has already been applied — neither case yields a well-defined
+    post-edit view). A failed prior read is never coerced to an empty string,
+    because an empty prior diffs every line of the reconstruction as changed and
+    defeats the diff scoping the scoped checks rely on.
+
+    Args:
+        file_path: The path of the file the Edit targets.
+        old_string: The Edit's ``old_string`` fragment.
+        new_string: The Edit's ``new_string`` fragment.
+
+    Returns:
+        A ``(prior_content, post_edit_content)`` pair, or ``(None, None)`` when
+        no well-defined post-edit view exists.
+    """
+    if not old_string:
+        return None, None
+    existing_content = _read_existing_file_content(file_path)
+    if existing_content is None:
+        return None, None
     if old_string not in existing_content:
-        return None
-    return existing_content.replace(old_string, new_string, 1)
+        return None, None
+    return existing_content, existing_content.replace(old_string, new_string, 1)
 
 
 def main() -> None:
@@ -4169,20 +5686,22 @@ def main() -> None:
         sys.exit(0)
 
     old_content = ""
+    prior_full_file_content = ""
     full_file_content_after_edit: str | None = None
     if tool_name == "Edit":
         content = tool_input.get("new_string", "")
         old_content = tool_input.get("old_string", "")
-        full_file_content_after_edit = _reconstruct_post_edit_file_content(
+        prior_content, full_file_content_after_edit = prior_and_post_edit_content(
             file_path, old_content, content,
         )
+        prior_full_file_content = prior_content or ""
+        if full_file_content_after_edit is None:
+            full_file_content_after_edit = _read_existing_file_content(file_path)
+            if full_file_content_after_edit is None:
+                sys.exit(0)
     else:
         content = tool_input.get("content", "") or tool_input.get("new_string", "")
-        try:
-            with open(file_path, "r", encoding="utf-8") as existing_file:
-                old_content = existing_file.read()
-        except (FileNotFoundError, OSError, UnicodeDecodeError):
-            old_content = ""
+        old_content = _read_existing_file_content(file_path) or ""
 
         if old_content:
             sys.exit(0)
@@ -4190,7 +5709,13 @@ def main() -> None:
     if not content:
         sys.exit(0)
 
-    issues = validate_content(content, file_path, old_content, full_file_content_after_edit)
+    issues = validate_content(
+        content,
+        file_path,
+        old_content,
+        full_file_content_after_edit,
+        prior_full_file_content,
+    )
 
     if issues:
         issue_list = "; ".join(issues[:10])

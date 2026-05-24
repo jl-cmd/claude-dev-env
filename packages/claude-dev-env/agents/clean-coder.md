@@ -438,7 +438,13 @@ Docstrings on functions, methods, classes, and modules are encouraged for public
 
 ## Audit Awareness
 
-Code clean-coder writes will be audited later against the A–K bug categories from `code-quality-agent`. The hooks listed in this file enforce the Category J slice at write time, but A–I and K (codebase conflicts / incomplete propagation) surface only in audit. For each category's full rubric, sub-bucket decomposition, and concrete checks, see `../audit-rubrics/category_rubrics/` (relative to this agent file). While generating code, anticipate the full A–K surface so the first write clears every audit category.
+Code clean-coder writes will be audited later against the A–N bug categories from `code-quality-agent`. The hooks listed in this file enforce the Category J slice at write time, but A–I and K–N surface only in audit. For each category's full rubric, sub-bucket decomposition, and concrete checks, see `../audit-rubrics/category_rubrics/` (relative to this agent file). While generating code, anticipate the full A–N surface so the first write clears every audit category.
+
+Three audit lanes deserve particular attention while generating new code:
+
+- **Category L — Behavior-equivalence for refactors.** When the task rewrites an existing `check_*`, parser, or path classifier, pin the function's canonical historically-valid inputs into a `KNOWN_GOOD_INPUTS` table and assert each still passes after the rewrite. Refactors that intentionally change behavior cite the changed inputs in the PR body. New checks without prior behavior require no equivalence table.
+- **Category M — Producer/consumer cardinality vs collection-type contract.** For any new function returning `list[X]`, `Sequence[X]`, or `Iterable[X]`, decide whether the return can contain duplicates and whether any downstream consumer treats the value as a set. Subprocess-stdout parsers must return `frozenset[Path]` or `dict.fromkeys`-deduplicated `list[Path]`. Functions whose only consumer is `extend(...)` into a list pass; functions with explicit "duplicates preserved" docstring text pass.
+- **Category N — Test-name scenario verifier.** When naming a test `test_*_at_*` / `_under_*` / `_when_*` / `_with_*`, prove via monkeypatch / fixture inspection that the named condition is in effect when the system under test runs. For path-decision functions (anything registered in `*_path_exemptions.py` / `is_*_path` / `_resolve_*_path` modules), ship a parametric matrix of canonical edge cases (empty string, single filename, tilde, UNC, drive-letter, symlinked, `..`-containing, trailing-slash). Tests with neutral names (`test_returns_empty_list_on_x`) are unaffected.
 
 ## What You Produce
 

@@ -8,11 +8,18 @@ payload when a single file has many violations of the same kind.
 The convention is: every check_* function should either apply an
 explicit cap (the meta-test treats a function as capped when its source
 contains a ``MAX_`` constant name or uses ``itertools.islice`` for bounded
-iteration), or be explicitly listed below as a known-uncapped check
-along with the reason, or appear in VOID_ADVISORY_CHECK_FUNCTION_NAMES
-when the function is annotated ``-> None`` and never contributes issues to the
-blocking payload (stderr-only advisories). New check_* functions added to the
-module without consideration will trip this test.
+iteration), or appear in DIFF_SCOPED_CHECK_FUNCTION_NAMES when its blocking
+payload is scoped by the diff: on a terminal Edit (``all_changed_lines`` is a
+set) only violations whose span intersects the edit's changed lines block, so
+untouched code cannot spam the payload; on a new-file or full-file write
+(``all_changed_lines is None``) every violation is reported because the author
+wrote the whole file. The scoping bounds the Edit payload to the change the
+author is making rather than imposing a fixed ceiling. A function may instead
+be explicitly listed in KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW along with the
+reason, or appear in VOID_ADVISORY_CHECK_FUNCTION_NAMES when the function is
+annotated ``-> None`` and never contributes issues to the blocking payload
+(stderr-only advisories). New check_* functions added to the module without
+consideration will trip this test.
 """
 
 from __future__ import annotations
@@ -40,6 +47,14 @@ VOID_ADVISORY_CHECK_FUNCTION_NAMES: frozenset[str] = frozenset(
     {
         "check_duplicated_format_patterns",
         "check_incomplete_mocks",
+    }
+)
+
+DIFF_SCOPED_CHECK_FUNCTION_NAMES: frozenset[str] = frozenset(
+    {
+        "check_banned_noun_word_boundary",
+        "check_function_length",
+        "check_tests_use_isolated_filesystem_paths",
     }
 )
 
@@ -102,13 +117,16 @@ def test_every_check_function_either_caps_or_is_explicitly_pending() -> None:
         uncapped_check_names
         - KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW
         - VOID_ADVISORY_CHECK_FUNCTION_NAMES
+        - DIFF_SCOPED_CHECK_FUNCTION_NAMES
     )
     assert unexpected_uncapped == set(), (
         f"New check_* functions added without a cap and not on the pending-review list: "
         f"{sorted(unexpected_uncapped)}. Either add a MAX_* cap or islice-bounded loop in "
-        f"source, or explicitly add the function to KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW with "
-        f"a reason in the test header docstring, or list it in VOID_ADVISORY_CHECK_FUNCTION_NAMES "
-        f"when it is annotated -> None and emits only stderr guidance."
+        f"source, or add the function to DIFF_SCOPED_CHECK_FUNCTION_NAMES when its blocking "
+        f"payload is bounded by diff scoping, or explicitly add it to "
+        f"KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW with a reason in the test header docstring, or "
+        f"list it in VOID_ADVISORY_CHECK_FUNCTION_NAMES when it is annotated -> None and emits "
+        f"only stderr guidance."
     )
 
 
@@ -154,6 +172,26 @@ def test_void_advisory_checks_are_registered_and_disjoint() -> None:
     assert overlap == set(), (
         f"Void-advisory checks must not also appear on the uncapped pending list: "
         f"{sorted(overlap)}"
+    )
+
+
+def test_diff_scoped_checks_are_registered_and_disjoint() -> None:
+    all_check_names = set(_all_check_function_names())
+    assert DIFF_SCOPED_CHECK_FUNCTION_NAMES <= all_check_names, (
+        f"DIFF_SCOPED_CHECK_FUNCTION_NAMES references missing names: "
+        f"{sorted(DIFF_SCOPED_CHECK_FUNCTION_NAMES - all_check_names)}"
+    )
+    for each_name in DIFF_SCOPED_CHECK_FUNCTION_NAMES:
+        function_source = inspect.getsource(getattr(_hook_module, each_name))
+        assert "all_changed_lines" in function_source or "defer_scope_to_caller" in function_source, (
+            f"DIFF_SCOPED_CHECK_FUNCTION_NAMES must list only checks bounded by diff scoping. "
+            f"{each_name!r} references neither all_changed_lines nor defer_scope_to_caller."
+        )
+    pending_overlap = DIFF_SCOPED_CHECK_FUNCTION_NAMES & KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW
+    void_overlap = DIFF_SCOPED_CHECK_FUNCTION_NAMES & VOID_ADVISORY_CHECK_FUNCTION_NAMES
+    assert pending_overlap == set() and void_overlap == set(), (
+        f"Diff-scoped checks must not also appear on the pending or void-advisory lists: "
+        f"pending {sorted(pending_overlap)}, void {sorted(void_overlap)}"
     )
 
 

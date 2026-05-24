@@ -68,8 +68,10 @@ For each PR in `all_prs`:
 
 Canonical path functions live in
 [`_shared/pr-loop/scripts/_path_resolver.py`](../../_shared/pr-loop/scripts/_path_resolver.py):
-`per_pr_workspace(run_temp_dir, owner, repo, pr_number)` returns dict with keys
-`worktree`, `diff_patch_template`, `outcome_xml_template`, `fix_outcome_xml_template`.
+`per_pr_workspace(run_temp_dir, owner, repo, pr_number)` returns a frozen
+`PerPrWorkspace` with fields `worktree` (a `Path`), `diff_patch_template`,
+`outcome_xml_template`, and `fix_outcome_xml_template` (each a `str.format`
+template).
 
 1. Create `<run_temp_dir>/pr-<N>/`.
 2. Run `git worktree add "<run_temp_dir>/pr-<N>/worktree" origin/<headRef>`.

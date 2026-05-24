@@ -122,6 +122,14 @@ def copy_gate_script_into(repository_root: Path) -> Path:
             each_config_file.read_text(encoding="utf-8"),
             encoding="utf-8",
         )
+    destination_constants = destination_scripts / "pr_loop_shared_constants"
+    destination_constants.mkdir(parents=True, exist_ok=True)
+    source_constants = SHARED_PR_LOOP_SCRIPTS / "pr_loop_shared_constants"
+    for each_constants_file in source_constants.glob("*.py"):
+        (destination_constants / each_constants_file.name).write_text(
+            each_constants_file.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
     return destination_gate
 
 
