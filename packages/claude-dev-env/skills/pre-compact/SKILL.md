@@ -5,8 +5,8 @@ description: >-
   `/compact <directive>` string to the operator's clipboard so the next prompt
   is a single paste. The directive pins the session's load-bearing identifiers
   (branch, PR, HEAD, worktree, in-flight work, decisions, blockers, files in
-  play, follow-ups) and lists the redundant tool outputs the summarizer should
-  drop. Use when the user says `/pre-compact`, asks to prep for compaction, or
+  play, follow-ups) the next steps depend on, so the summarizer keeps them with
+  high fidelity. Use when the user says `/pre-compact`, asks to prep for compaction, or
   asks to compose a focus directive for `/compact`.
 disable-model-invocation: true
 ---
@@ -41,6 +41,14 @@ not already in context.
 A field whose value cannot be stated as a concrete identifier is omitted
 from the directive.
 
+Scope every field to what the next steps depend on. Compaction carries
+forward the slice of session history the remaining work needs: capture a
+`decision`, `blocker`, or `in_flight` detail when a next step relies on
+it, and leave a detail the next steps do not touch (a settled question, a
+resolved blocker, a path not taken) out by simply not listing it. When a
+settled decision still constrains the next step, list its outcome as one
+line, not the deliberation behind it.
+
 ## Step 2 — Render the directive
 
 Render this exact shape, populating only the fields with concrete values:
@@ -56,18 +64,14 @@ Preserve:
 - Blockers: <bullet per blocker>
 - Files: <path>, <path>, <path>
 - Follow-ups: <bullet per follow-up>
-
-Drop:
-- Tool outputs already applied to files
-- Per-tick progress narration
-- Resolved findings and superseded SHAs
-- Listing/grep output whose conclusion appears above
 ```
 
-The `Preserve:` block leads so the summarizer maximizes recall first. The
-`Drop:` block lists the lightest-touch removals — raw tool outputs are the
-safest content to drop because the work they produced lives in the files
-and commits.
+The directive lists only what the next steps consume, so the summarizer
+preserves that with high fidelity and compresses the rest of the trace on
+its own — naming what to keep is a clearer instruction than enumerating
+what to cut. Keep the list tight: a `Preserve:` block padded with finished
+or out-of-scope context dilutes the summarizer's focus on what happens
+next.
 
 Source: [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
 — "start by maximizing recall to ensure your compaction prompt captures
@@ -99,8 +103,8 @@ Print this confirmation line to the operator:
 > compact this conversation with focus.
 
 Then list up to the first three `Preserve:` bullets (or fewer when the
-directive omits fields) and the first `Drop:` bullet inline so the
-operator can spot-check before pasting.
+directive omits fields) inline so the operator can spot-check before
+pasting.
 
 ---
 
