@@ -288,6 +288,31 @@ Fallback values mask programming errors (KeyError vs RuntimeError vs AttributeEr
 
 ---
 
+## 9.8 REMOVE CODE YOU ORPHAN (Dead Code Elimination)
+
+When an edit deletes or rewrites code, it must also remove everything that edit makes dead. The change is not complete while orphans remain.
+
+After deleting or rewriting code, trace what it referenced and remove whatever is unreachable as a result:
+
+- **Variables** with no remaining readers after the change
+- **Functions / methods** with no remaining call sites
+- **Parameters** that no caller passes
+- **Branches** made unreachable (dead `if`/`else`, conditions that are always true or always false)
+- **Imports** left unused (also caught by the unused-import hook)
+- **Helper files** whose only consumer you just deleted
+
+**Confirm the orphan is truly unreferenced first.** "No remaining call sites" means none *anywhere in the codebase*, not just in the file you edited. Before removing a function, method, class, or module-level name, run Serena's `find_referencing_symbols` on it: the language server resolves call sites, `import` statements, and re-exports across files far more reliably and cheaply than a text sweep. Back it with a plain text search for string-based dynamic lookups (`getattr`, entry-point names) that the language server cannot see. A reference is not proof of life — the referrer can be dead too. The symbol is live only when some chain of references reaches a live entry point: a CLI command, route, public API, test, or any caller outside the code you are removing. Trace the referrers upward. If every chain dead-ends in code that is itself unreferenced, the whole cluster is dead — remove it together in the same commit (§9.6). If any chain reaches a live entry point, the symbol is in use; leave it. Deleting something still reachable breaks its importers; treating a self-referential dead cluster as alive leaves litter.
+
+**When liveness is uncertain, ask — never guess.** A tool cannot always tell what is live: a chain may leave the repository (a public API, plugin hook, or module other projects import), or run through dynamic or reflective dispatch that no search resolves. If you cannot conclusively prove a symbol is unreachable, do not delete it. Surface the specific ambiguity to the user through AskUserQuestion and let them decide. Removing live production code is never an acceptable risk — when in doubt, keep it and ask.
+
+This is the inverse of comment preservation: existing **comments** are sacred and never removed, but dead **code** is removed in the same edit that orphans it. A function left with no callers is not "preserved" — it is litter.
+
+> **See also:** §9.6 (a renamed alias is dead code by another name), the `file_global_constants_use_count` rule (zero references → delete), and the unused-import hook check — each enforces a specific slice of this principle automatically.
+
+> **Standard terms (shorthand for this section):** the mechanical part is *dead code elimination* (compilers; Aho et al., *Compilers: Principles, Techniques, and Tools*) and *tree-shaking* (bundlers like Rollup/Webpack) — retain only what is reachable from a live entry point. The ask-when-uncertain overlay guards against the *Lava Flow* anti-pattern — dead code kept because removing it feels risky (Brown et al., *AntiPatterns*, 1998). Compare Fowler's "Remove Dead Code" refactoring (*Refactoring*, 2nd ed., 2018). Direct source links: [`references/dead-code-elimination.md`](references/dead-code-elimination.md).
+
+---
+
 ## 10. NO REDUNDANT DATA FETCHES
 
 If you already have data, don't fetch again.
@@ -384,5 +409,6 @@ Manual check:
 [ ] OCP/LSP/ISP/DIP only applied where abstractions already earn their keep (see §7.5)?
 [ ] No backwards-compatibility shims (§9.6)?
 [ ] No fallback/best-effort wrappers (§9.7)?
+[ ] No code orphaned by an edit (§9.8 — dead vars, uncalled functions, unused imports, dead branches)?
 [ ] Readability: /check
 ```
