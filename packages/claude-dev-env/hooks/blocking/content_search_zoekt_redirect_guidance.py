@@ -7,12 +7,31 @@ def get_zoekt_redirect_reason_brief() -> str:
     )
 
 
+def worktree_path_filter_fragment() -> str:
+    return "\\.claude/worktrees/"
+
+
+def worktree_path_display_fragment() -> str:
+    return ".claude/worktrees/"
+
+
 def get_zoekt_redirect_guidance() -> str:
+    worktree_filter_fragment = worktree_path_filter_fragment()
+    worktree_display_fragment = worktree_path_display_fragment()
     return (
         "Use Zoekt MCP instead: mcp__zoekt__search(query=\"your pattern\"). "
         "Supports regex, 'file:pattern' for file filtering, 'lang:py' for language. "
         "Also available: mcp__zoekt__search_symbols, mcp__zoekt__find_references, mcp__zoekt__file_content. "
         "Example: mcp__zoekt__search(query=\"verify_theme_assets file:\\.py$\")\n\n"
+        "WORKTREE NOISE: indexed trees include git worktrees under "
+        + worktree_display_fragment
+        + " that duplicate the same code across branches. By default append '-file:"
+        + worktree_filter_fragment
+        + "' to each query so results stay on the primary checkout. When the user explicitly "
+        "asks about a worktree, branch, or PR checkout, drop that exclusion or filter to it "
+        "positively, e.g. mcp__zoekt__search(query=\"your pattern file:"
+        + worktree_filter_fragment
+        + "<branch>/\").\n\n"
         "INDEX ROOTS (when Grep/Search in a tree is redirected): set ZOEKT_REDIRECT_INDEXED_ROOTS to a JSON array "
         "of absolute paths, or ~/.claude/zoekt-indexed-roots.json as {\"roots\": [\"/abs/path/to/repo/\", ...]}. "
         "Optional ZOEKT_REDIRECT_INDEXED_ROOTS_FILE points to a different JSON file. "
