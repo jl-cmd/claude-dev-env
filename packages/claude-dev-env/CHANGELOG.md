@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.47.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.46.0...claude-dev-env-v1.47.0) (2026-05-25)
+
+
+### Features
+
+* **zoekt-redirect:** document index-freshness escape hatch ([#495](https://github.com/jl-cmd/claude-code-config/issues/495)) ([fafdb1c](https://github.com/jl-cmd/claude-code-config/commit/fafdb1c1cd79f2efc14b18b4d0d966d8ab373025))
+
+
+### Documentation
+
+* **claude-md:** default to Edit over Write for existing files ([148a0f6](https://github.com/jl-cmd/claude-code-config/commit/148a0f6a0eca2f7f9cb19cf8666f53efde1735cb))
+* **pre-compact:** confirm next-session intent, validate identifiers, resolve unknowns with the operator ([#500](https://github.com/jl-cmd/claude-code-config/issues/500)) ([ebfe6eb](https://github.com/jl-cmd/claude-code-config/commit/ebfe6eb4b3f3480395607fdd7bb47bd7c4d97a9d))
+* **pre-compact:** scope the focus directive to next-step-relevant history ([#499](https://github.com/jl-cmd/claude-code-config/issues/499)) ([352cfcb](https://github.com/jl-cmd/claude-code-config/commit/352cfcb7cb8b268fa2c3a1b5b78365fc34f3a0f7))
+
 ## [1.46.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.45.0...claude-dev-env-v1.46.0) (2026-05-25)
 
 
