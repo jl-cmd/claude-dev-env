@@ -49,6 +49,11 @@ def initialize_git_repository(repository_root: Path) -> None:
     run_git_in_repository(repository_root, "config", "user.email", "test@example.com")
     run_git_in_repository(repository_root, "config", "user.name", "Test")
     run_git_in_repository(repository_root, "config", "commit.gpgsign", "false")
+    disabled_hooks_directory = repository_root / "disabled-git-hooks"
+    disabled_hooks_directory.mkdir()
+    run_git_in_repository(
+        repository_root, "config", "core.hooksPath", str(disabled_hooks_directory)
+    )
 
 
 def commit_all_files(repository_root: Path, commit_message: str) -> None:
