@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.46.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.45.0...claude-dev-env-v1.46.0) (2026-05-25)
+
+
+### Features
+
+* **zoekt-redirect:** default-exclude git worktrees from redirected searches ([#490](https://github.com/jl-cmd/claude-code-config/issues/490)) ([e8332e1](https://github.com/jl-cmd/claude-code-config/commit/e8332e13205be5ba62776d77592062e50f3b2901))
+
+
+### Bug Fixes
+
+* **pr-converge:** code-enforce CLAUDE_REVIEWS_DISABLED=bugbot opt-out ([#493](https://github.com/jl-cmd/claude-code-config/issues/493)) ([cf1d24e](https://github.com/jl-cmd/claude-code-config/commit/cf1d24e30d15fbb0cffe782f139a35457018ffb2))
+
+
+### Tests
+
+* **code-rules-gate:** isolate temp-repo hooks from global core.hooksPath ([#491](https://github.com/jl-cmd/claude-code-config/issues/491)) ([5c03078](https://github.com/jl-cmd/claude-code-config/commit/5c0307878de4acdbdc066b48514527f02876d1da))
+
 ## [1.45.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.44.0...claude-dev-env-v1.45.0) (2026-05-24)
 
 
