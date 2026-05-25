@@ -22,7 +22,10 @@ Full banned-pattern set + enforcement: `~/.claude/rules/no-historical-clutter.md
 
 ## GOTCHAS
 When making code changes, make sure you are working in the proper worktree path for the task at hand.
-When writing to an existing file, you must either EDIT the file, or remove it and THEN re-write it if it's truly a full re-write.
+
+## Choosing Edit vs Write
+
+`Edit` changes existing files; `Write` creates new ones. Default to `Edit` — reach for `Write` only for a genuinely new path. For a true full rewrite, delete the file first, then `Write`.
 
 ## File-Global Constants
 
