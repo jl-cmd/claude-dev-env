@@ -32,6 +32,14 @@ def get_zoekt_redirect_guidance() -> str:
         "positively, e.g. mcp__zoekt__search(query=\"your pattern file:"
         + worktree_filter_fragment
         + "<branch>/\").\n\n"
+        "INDEX FRESHNESS: the index trails just-written code — recent or unpushed commits sync and reindex "
+        "on a short delay, so a symbol you just added can be missing from Zoekt for a few minutes even though "
+        "it is on disk. Worktrees are fully indexed and retrievable with the positive 'file:"
+        + worktree_filter_fragment
+        + "<branch>/' filter above, but that same lag applies to anything freshly edited. When a Zoekt search "
+        "returns nothing for code you know exists on disk, do not treat it as absent: Grep a specific file "
+        "(a path ending in a file extension is exempt from this redirect) or read the file directly to confirm "
+        "current contents.\n\n"
         "INDEX ROOTS (when Grep/Search in a tree is redirected): set ZOEKT_REDIRECT_INDEXED_ROOTS to a JSON array "
         "of absolute paths, or ~/.claude/zoekt-indexed-roots.json as {\"roots\": [\"/abs/path/to/repo/\", ...]}. "
         "Optional ZOEKT_REDIRECT_INDEXED_ROOTS_FILE points to a different JSON file. "
