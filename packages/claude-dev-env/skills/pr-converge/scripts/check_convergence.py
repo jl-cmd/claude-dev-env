@@ -4,6 +4,10 @@ Usage:
   python scripts/check_convergence.py --owner <O> --repo <R> --pr-number <N>
                                       [--bugbot-down]
 
+The bugbot check-run gate is bypassed when either ``--bugbot-down`` is
+passed OR the ``CLAUDE_REVIEWS_DISABLED`` environment variable lists the
+``bugbot`` token, so a Bugbot opt-out closes the gate without the flag.
+
 Exit codes:
   0 — all pre-conditions met
   1 — one or more conditions not met (FAIL lines printed to stdout)
@@ -47,6 +51,14 @@ from pr_converge_skill_constants.constants import (
     REVIEWS_PER_PAGE,
     UNRESOLVED_THREAD_DETAIL_MAX,
 )
+
+_shared_pr_loop_scripts_dir = (
+    Path(__file__).absolute().parents[3] / "_shared" / "pr-loop" / "scripts"
+)
+if str(_shared_pr_loop_scripts_dir) not in sys.path:
+    sys.path.insert(0, str(_shared_pr_loop_scripts_dir))
+
+from reviews_disabled import is_bugbot_disabled_via_env
 
 
 def _is_bugteam_review(review_body: str) -> bool:
@@ -621,6 +633,20 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(all_argv)
 
 
+def _resolve_bugbot_down(bugbot_down_flag: bool) -> bool:
+    """Combine the explicit flag with the CLAUDE_REVIEWS_DISABLED env opt-out.
+
+    Args:
+        bugbot_down_flag: Value of the ``--bugbot-down`` CLI flag.
+
+    Returns:
+        True when the flag is set OR ``CLAUDE_REVIEWS_DISABLED`` lists the
+        ``bugbot`` token, so the env opt-out bypasses the bugbot gates even
+        when the caller omits the flag.
+    """
+    return bugbot_down_flag or is_bugbot_disabled_via_env()
+
+
 def main(all_arguments: list[str]) -> int:
     """Run the script end-to-end against parsed CLI arguments.
 
@@ -635,7 +661,7 @@ def main(all_arguments: list[str]) -> int:
         owner=arguments.owner,
         repo=arguments.repo,
         number=getattr(arguments, "pr_number"),
-        bugbot_down=arguments.bugbot_down,
+        bugbot_down=_resolve_bugbot_down(arguments.bugbot_down),
     )
 
 

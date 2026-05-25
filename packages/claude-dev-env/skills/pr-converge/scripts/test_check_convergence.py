@@ -217,6 +217,34 @@ def test_private_helpers_recognize_dirty_legacy_header_body() -> None:
     assert check_convergence._is_clean_bugteam_review(DIRTY_LEGACY_BUGTEAM_BODY) is False
 
 
+def should_resolve_bugbot_down_true_when_flag_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert check_convergence._resolve_bugbot_down(True) is True
+
+
+def should_resolve_bugbot_down_true_when_env_disables_bugbot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    assert check_convergence._resolve_bugbot_down(False) is True
+
+
+def should_resolve_bugbot_down_false_when_flag_unset_and_env_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert check_convergence._resolve_bugbot_down(False) is False
+
+
+def should_resolve_bugbot_down_false_when_env_disables_only_bugteam(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    assert check_convergence._resolve_bugbot_down(False) is False
+
+
 def should_bypass_bugbot_gates_when_bugbot_down_is_true(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

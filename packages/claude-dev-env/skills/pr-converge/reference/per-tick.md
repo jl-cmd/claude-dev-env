@@ -49,6 +49,16 @@ Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 
 ### `phase == BUGBOT`
 
+**Opt-out gate (runs first, before any fetch or trigger).**
+`python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
+
+- Exit 0 (`CLAUDE_REVIEWS_DISABLED` lists `bugbot`) → set `bugbot_down = true`,
+  `phase = BUGTEAM`, continue BUGTEAM in the same tick; skip steps a–c below.
+- Exit 1 → proceed to step a.
+
+Because `bugbot_down` resets on every push, this gate re-runs on every
+BUGBOT entry and keeps Cursor Bugbot skipped for the entire run.
+
 a. Fetch Cursor Bugbot reviews newest-first, walk back until first clean:
 
    ```
@@ -207,11 +217,10 @@ BUGBOT.
 
 ## Step 3: Re-trigger bugbot
 
-- [ ] **Opt-out gate.** When `CLAUDE_REVIEWS_DISABLED` (comma-separated,
-  case-insensitive, whitespace-tolerant) contains `bugbot`, set
-  `bugbot_down = true`, skip every check below, set `phase = BUGTEAM`,
-  and continue BUGTEAM in the same tick. The downstream loop branches on
-  `bugbot_down` exactly the way it does when bugbot CI is unavailable.
+- [ ] **Opt-out gate.** Enforced at BUGBOT entry (see `### phase == BUGBOT`).
+  When `CLAUDE_REVIEWS_DISABLED` lists `bugbot`, the entry gate sets
+  `bugbot_down = true` and routes to BUGTEAM before any trigger flow runs,
+  so the checks below are skipped.
 - [ ] **Silent-pass pre-check.** Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --check-clean --owner <O> --repo <R> --sha <current_head>`
 - [ ] Exit 0 → bugbot CI completed clean with no review (silent pass); set `bugbot_clean_at = current_head`, `phase = BUGTEAM`, continue BUGTEAM same tick
 - [ ] Exit 1 (not a silent pass) or Exit 2 (gh CLI error — silent pass not confirmable) → continue with the trigger flow below

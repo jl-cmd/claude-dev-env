@@ -23,9 +23,13 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
   matching. Reset to `0` on any other branch outcome.
 - `bugbot_down`: boolean, init `false`. Set `true` when bugbot fails to
   acknowledge a trigger comment; forces phase to BUGTEAM. Also set `true`
-  when an acknowledged trigger has been outstanding more than 30 minutes
-  with no surfaced review at `current_head` (per Step 2 BUGBOT (c)
-  30-minute budget — see `per-tick.md`). Reset to `false` on every push.
+  at every BUGBOT-phase entry when `CLAUDE_REVIEWS_DISABLED` lists the
+  `bugbot` token (env opt-out via the BUGBOT entry gate in `per-tick.md`),
+  which routes straight to BUGTEAM before any bugbot fetch or trigger. Also
+  set `true` when an acknowledged trigger has been outstanding more than 30
+  minutes with no surfaced review at `current_head` (per Step 2 BUGBOT (c)
+  30-minute budget — see `per-tick.md`). Reset to `false` on every push;
+  the entry gate re-applies the env opt-out on the next BUGBOT entry.
   Once set, remains `true` until the next push; if bugbot stays down
   across ticks, the flag persists and BUGTEAM continues.
 - `bugbot_acknowledged_at`: ISO 8601 timestamp string or `null`. Records

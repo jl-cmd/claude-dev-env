@@ -125,6 +125,11 @@ no longer applies.
 - [ ] **Step 4: BUGBOT — fetch, decide, fix, reply, resolve**
       See: [`reference/per-tick.md` § Step 2 BUGBOT + Step 3](reference/per-tick.md)
 
+      - [ ] **Opt-out gate (runs first, every BUGBOT entry).**
+            `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
+            - [ ] Exit 0 (`CLAUDE_REVIEWS_DISABLED` lists `bugbot`) → set `bugbot_down = true`, `phase = BUGTEAM`, advance to Step 5 (bypass). Cursor Bugbot is skipped for the entire run.
+            - [ ] Exit 1 → continue below.
+
       Fetch bugbot reviews + inline comments on `current_head`.
 
       - [ ] **dirty** (findings on `current_head`) →

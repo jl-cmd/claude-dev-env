@@ -34,3 +34,60 @@ def test_is_bugteam_disabled_via_env_returns_false_when_env_is_empty(
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
     assert reviews_disabled.is_bugteam_disabled_via_env() is False
+
+
+def test_is_bugbot_disabled_via_env_returns_true_when_env_lists_bugbot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    assert reviews_disabled.is_bugbot_disabled_via_env() is True
+
+
+def test_is_bugbot_disabled_via_env_returns_false_when_env_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert reviews_disabled.is_bugbot_disabled_via_env() is False
+
+
+def test_is_bugbot_disabled_via_env_returns_false_when_only_bugteam_listed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    assert reviews_disabled.is_bugbot_disabled_via_env() is False
+
+
+def test_is_bugbot_disabled_via_env_true_when_both_tokens_listed_mixed_case(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", " BugTeam , BUGBOT ")
+    assert reviews_disabled.is_bugbot_disabled_via_env() is True
+    assert reviews_disabled.is_bugteam_disabled_via_env() is True
+
+
+def test_cli_main_returns_zero_when_named_reviewer_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    assert reviews_disabled.main(["--reviewer", "bugbot"]) == 0
+
+
+def test_cli_main_returns_one_when_named_reviewer_not_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert reviews_disabled.main(["--reviewer", "bugbot"]) == 1
+
+
+def test_cli_main_returns_one_when_other_reviewer_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    assert reviews_disabled.main(["--reviewer", "bugbot"]) == 1
+
+
+def test_cli_main_supports_bugteam_reviewer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    assert reviews_disabled.main(["--reviewer", "bugteam"]) == 0
