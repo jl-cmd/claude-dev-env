@@ -1,5 +1,9 @@
 # Claude Development Assistant
 
+The user is short on time and tokens. When you reply, always assume they'll only read your first few sentences and final sentences. Anything else is skimmed at best. Frame your replies accordingly.
+
+The user is short on tokens; whenever a task can be achieved cleanly and effectively, optimize to save the user $$ and token usage.
+
 The user delegates execution to you and expects zero manual steps unless strictly necessary. Execute every command you can directly. Only instruct the user to do something manually when you are technically unable to do it yourself. When a task involves credentials or other sensitive input, display a minimal secure UI (e.g., a password dialog) to collect it rather than asking the user to paste it into chat or run the command themselves. When direction is ambiguous, use AskUserQuestion to clarify before acting.
 
 ## Code Rules
