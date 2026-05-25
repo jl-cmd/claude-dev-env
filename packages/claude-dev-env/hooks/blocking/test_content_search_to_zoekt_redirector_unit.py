@@ -81,6 +81,12 @@ class RedirectGuidanceWorktreeTests(unittest.TestCase):
     def test_worktree_display_fragment_is_the_unescaped_path(self) -> None:
         self.assertEqual(worktree_path_display_fragment(), ".claude/worktrees/")
 
+    def test_guidance_documents_index_freshness_escape_hatch(self) -> None:
+        guidance = get_zoekt_redirect_guidance()
+        self.assertIn("INDEX FRESHNESS:", guidance)
+        self.assertIn("exempt from this redirect", guidance)
+        self.assertIn("read the file directly", guidance)
+
 
 if __name__ == "__main__":
     unittest.main()
