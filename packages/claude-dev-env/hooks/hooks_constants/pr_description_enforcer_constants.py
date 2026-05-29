@@ -19,6 +19,8 @@ HEADING_LINE_PATTERN: re.Pattern[str] = re.compile(r"^#+[ \t].*$", re.MULTILINE)
 BOLD_PAIR_PATTERN: re.Pattern[str] = re.compile(r"\*\*([^*]+?)\*\*")
 BULLET_MARKER_PATTERN: re.Pattern[str] = re.compile(r"^\s*[-*+]\s+", re.MULTILINE)
 BLOCKQUOTE_MARKER_PATTERN: re.Pattern[str] = re.compile(r"^\s*>\s+", re.MULTILINE)
+BLOCKQUOTE_LINE_PATTERN: re.Pattern[str] = re.compile(r"^\s*>.*$", re.MULTILINE)
+TABLE_ROW_LINE_PATTERN: re.Pattern[str] = re.compile(r"^\s*\|.*\|.*$", re.MULTILINE)
 LINK_TEXT_PATTERN: re.Pattern[str] = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 WHITESPACE_RUN_PATTERN: re.Pattern[str] = re.compile(r"\s+")
 
@@ -115,6 +117,7 @@ __all__ = [
     "ALL_HEAVY_TESTING_HEADERS",
     "ALL_READABILITY_CLI_FLAG_TOKENS",
     "ATOMIC_WRITE_TEMP_SUFFIX",
+    "BLOCKQUOTE_LINE_PATTERN",
     "BLOCKQUOTE_MARKER_PATTERN",
     "BOLD_PAIR_PATTERN",
     "BULLET_MARKER_PATTERN",
@@ -147,6 +150,7 @@ __all__ = [
     "SELF_CLOSING_REFERENCE_MESSAGE_SUFFIX",
     "SELF_REFERENCE_PATTERN_TEMPLATE",
     "STANDARD_SHAPE",
+    "TABLE_ROW_LINE_PATTERN",
     "THIS_PR_OPENING_PATTERN",
     "TRIVIAL_BODY_CHAR_THRESHOLD",
     "TRIVIAL_SHAPE",

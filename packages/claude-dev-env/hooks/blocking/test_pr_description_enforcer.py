@@ -225,6 +225,74 @@ def test_validate_blocks_vague_language() -> None:
     assert any("Vague language" in each_violation for each_violation in violations)
 
 
+def _has_vague_language_violation(all_violations: list[str]) -> bool:
+    return any("Vague language" in each_violation for each_violation in all_violations)
+
+
+def test_vague_language_inside_fenced_code_block_is_exempt() -> None:
+    body = (
+        "The allocator now bounds retries so a runaway request cannot exhaust the "
+        "connection pool under sustained load.\n\n"
+        "```bash\ngit commit -m \"fixed bug in parser\"\n```\n"
+    )
+    assert not _has_vague_language_violation(validate_pr_body(body))
+
+
+def test_vague_language_inside_inline_code_span_is_exempt() -> None:
+    body = (
+        "This change documents the historical commit message `fixed bug` referenced "
+        "in the changelog and rewrites the surrounding allocator narrative for clarity.\n"
+    )
+    assert not _has_vague_language_violation(validate_pr_body(body))
+
+
+def test_vague_language_inside_blockquote_line_is_exempt() -> None:
+    body = (
+        "> The reviewer wrote: minor changes were requested here.\n\n"
+        "The allocator rewrite removes the unbounded retry loop and adds a hard ceiling "
+        "so a single client cannot starve the pool.\n"
+    )
+    assert not _has_vague_language_violation(validate_pr_body(body))
+
+
+def test_vague_language_inside_markdown_table_is_exempt() -> None:
+    body = (
+        "The commit-message guide contrasts weak and strong messages so contributors "
+        "learn the difference before opening a pull request.\n\n"
+        "| Bad message | Good message |\n"
+        "| --- | --- |\n"
+        "| fixed bug | bound retry loop in allocator |\n"
+        "| update code | rename pool field to active_count |\n"
+    )
+    assert not _has_vague_language_violation(validate_pr_body(body))
+
+
+def test_vague_language_in_bare_prose_still_blocks() -> None:
+    body = (
+        "The allocator rewrite removes the unbounded retry loop and adds a hard "
+        "ceiling so a single client cannot starve the pool. Fixed bug in the parser.\n"
+    )
+    assert _has_vague_language_violation(validate_pr_body(body))
+
+
+def test_vague_language_inside_heading_is_exempt() -> None:
+    body = (
+        "## Fixed bug in the allocator\n\n"
+        "The allocator rewrite removes the unbounded retry loop and adds a hard "
+        "ceiling so a single client cannot starve the connection pool.\n"
+    )
+    assert not _has_vague_language_violation(validate_pr_body(body))
+
+
+def test_vague_language_in_single_pipe_prose_line_still_blocks() -> None:
+    body = (
+        "The allocator rewrite removes the unbounded retry loop and adds a hard "
+        "ceiling so a single client cannot starve the connection pool.\n\n"
+        "| fixed bug\n"
+    )
+    assert _has_vague_language_violation(validate_pr_body(body))
+
+
 def test_validate_blocks_short_body() -> None:
     violations = validate_pr_body("Too short.")
     assert any("substantive prose" in each_violation.lower() for each_violation in violations)
