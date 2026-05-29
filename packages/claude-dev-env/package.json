@@ -20,6 +20,7 @@
         "system-prompts/",
         "scripts/",
         "_shared/",
+        "audit-rubrics/",
         "CLAUDE.md"
     ],
     "keywords": [

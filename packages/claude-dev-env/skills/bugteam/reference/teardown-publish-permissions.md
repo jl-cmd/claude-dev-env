@@ -2,7 +2,12 @@
 
 ## Utility scripts (progressive disclosure)
 
-Fragile or repeatable shell sequences belong in `_shared/pr-loop/scripts/`. Bugteam-specific scripts (e.g. revoke, see Step 5) live in the skill-local [`scripts/`](../scripts/) directory. Anthropic: [Progressive disclosure patterns](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns) — utility scripts are **executed**, not loaded into context as primary reading. Shared-script inventory: [`../../../_shared/pr-loop/scripts/README.md`](../../../_shared/pr-loop/scripts/README.md). Bugteam-script inventory: [`../scripts/README.md`](../scripts/README.md). Gate-only merge-base / diff semantics: [`../../../_shared/pr-loop/code-rules-gate.md`](../../../_shared/pr-loop/code-rules-gate.md).
+Fragile or repeatable shell sequences live in one of two shared script directories. Match the reference depth to the directory:
+
+- **Package-root** [`_shared/pr-loop/scripts/`](../../../_shared/pr-loop/scripts/) holds `code_rules_gate.py`, `preflight.py`, `post_audit_thread.py`, and the permission helpers. Reference it as `../../../_shared/…` in markdown and `${CLAUDE_SKILL_DIR}/../../_shared/…` at runtime (resolves to `~/.claude/_shared/`). Inventory: [`../../../_shared/pr-loop/scripts/README.md`](../../../_shared/pr-loop/scripts/README.md).
+- **Skill-tree** [`skills/_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/) holds `teardown_worktrees.py`, `build_audit_prompt.py`, `build_fix_prompt.py`, `init_loop_state.py`, `write_audit_outcomes.py`, `write_fix_outcomes.py`, and `_path_resolver.py`. Reference it as `../../_shared/…` in markdown and `${CLAUDE_SKILL_DIR}/../_shared/…` at runtime (resolves to `~/.claude/skills/_shared/`).
+
+Bugteam-specific scripts (e.g. revoke, see Step 5) live in the skill-local [`scripts/`](../scripts/) directory. Anthropic: [Progressive disclosure patterns](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns) — utility scripts are **executed**, not loaded into context as primary reading. Bugteam-script inventory: [`../scripts/README.md`](../scripts/README.md). Gate-only merge-base / diff semantics: [`../../../_shared/pr-loop/code-rules-gate.md`](../../../_shared/pr-loop/code-rules-gate.md).
 
 ### Pre-flight (recommended before Step 0)
 
@@ -19,7 +24,7 @@ When the cycle exits (any reason), run these steps in order from **this** sessio
    directory (Windows-safe `shutil.rmtree`):
 
    ```bash
-   python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/teardown_worktrees.py" \
+   python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/teardown_worktrees.py" \
      --run-temp-dir "<run_temp_dir>" \
      --all-pr-jsons '<json array of {number, owner, repo}>'
    ```
