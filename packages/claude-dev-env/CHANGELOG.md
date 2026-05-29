@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.49.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.48.0...claude-dev-env-v1.49.0) (2026-05-29)
+
+
+### Features
+
+* **hooks:** block complex words from the plainlanguage.gov list ([#508](https://github.com/jl-cmd/claude-code-config/issues/508)) ([b12f6a6](https://github.com/jl-cmd/claude-code-config/commit/b12f6a6085b2aaf0661980b1bb6cb53cce032ff5))
+
+
+### Bug Fixes
+
+* **hooks:** exempt code, quotes, and tables from the vague-language scan ([#509](https://github.com/jl-cmd/claude-code-config/issues/509)) ([6a609c0](https://github.com/jl-cmd/claude-code-config/commit/6a609c0a536133ed9f0991ed2b7f99e66a56820a))
+
 ## [1.48.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.47.0...claude-dev-env-v1.48.0) (2026-05-29)
 
 
