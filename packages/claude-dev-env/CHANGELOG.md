@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.48.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.47.0...claude-dev-env-v1.48.0) (2026-05-29)
+
+
+### Features
+
+* **pr-converge:** insert code-review layer between bugbot and bugteam ([#505](https://github.com/jl-cmd/claude-code-config/issues/505)) ([e06d2bf](https://github.com/jl-cmd/claude-code-config/commit/e06d2bfda8651744eb4d467000a58df5c35e476e))
+
+
+### Bug Fixes
+
+* **pr-converge:** code-review runs at session effort and applies fixes via --fix ([#507](https://github.com/jl-cmd/claude-code-config/issues/507)) ([e6ec504](https://github.com/jl-cmd/claude-code-config/commit/e6ec504c47e17705fa944598776c9aa18a752273))
+
+
+### Documentation
+
+* add CODE_RULES §9.8 — remove orphaned code in the same edit ([#498](https://github.com/jl-cmd/claude-code-config/issues/498)) ([c35d1c5](https://github.com/jl-cmd/claude-code-config/commit/c35d1c585db4901d01741110502214dd7185f877))
+* **rules:** confirm implementation forks via AskUserQuestion ([#503](https://github.com/jl-cmd/claude-code-config/issues/503)) ([4aff1bf](https://github.com/jl-cmd/claude-code-config/commit/4aff1bf4088ab1bc2658fa71032666a332d8464b))
+* **rules:** write all output in plain language ([#506](https://github.com/jl-cmd/claude-code-config/issues/506)) ([2948f7f](https://github.com/jl-cmd/claude-code-config/commit/2948f7f5446343e49146fc0a5befa20cb887d7c5))
+* **session-log:** record authoring agent's session ID in report frontmatter ([#504](https://github.com/jl-cmd/claude-code-config/issues/504)) ([66c7528](https://github.com/jl-cmd/claude-code-config/commit/66c752860aa218cbd8822e5e7dea3f0e9f9383de))
+
 ## [1.47.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.46.0...claude-dev-env-v1.47.0) (2026-05-25)
 
 
