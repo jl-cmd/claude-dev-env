@@ -65,6 +65,7 @@ Resolve the metadata used by the frontmatter and the vault path:
 
 - **Project name:** infer from conversation context
 - **Session number:** from backend detection above
+- **Session ID:** the session ID of the agent authoring this log, read from the `CLAUDE_CODE_SESSION_ID` environment variable (PowerShell: `$env:CLAUDE_CODE_SESSION_ID`). This UUID names the authoring agent's own transcript file (`<session-id>.jsonl`), so the saved report points back to the exact session that produced it. When the variable is unset, use the literal `unknown`.
 - **Date:** today's date
 - **Title:** a 2–5 word summary of the session's primary outcome. Examples: "Amazon Auth Migration", "Source Loading Fix", "PR 475 Convergence". Avoid generic titles like "Bug Fixes".
 
@@ -75,6 +76,7 @@ The frontmatter contract every session report carries (inside an HTML comment, a
 type: session-report
 project: [name]
 session: [N]
+session_id: [uuid]
 date: [YYYY-MM-DD]
 status: completed|in-progress|blocked
 blocked: true|false
@@ -83,7 +85,7 @@ tags: [session, [project-tag], [topic-tags]]
 -->
 ```
 
-Every session report carries this metadata block verbatim so vault search and the tidy step in step 5 work. **Initial values for Step 2's Write:** substitute concrete values for every placeholder — for `vault_context_retrieved`, write the literal value `false` (the safe default before Step 3's vault-MCP-tool scan completes). Step 3 then Edits this to `true` if any of the three vault MCP tools fired this session.
+Every session report carries this metadata block verbatim so vault search and the tidy step in step 5 work. **Initial values for Step 2's Write:** substitute concrete values for every placeholder — for `session_id`, write the value read from `CLAUDE_CODE_SESSION_ID` in step 1 (or `unknown` when the variable is unset); for `vault_context_retrieved`, write the literal value `false` (the safe default before Step 3's vault-MCP-tool scan completes). Step 3 then Edits `vault_context_retrieved` to `true` if any of the three vault MCP tools fired this session.
 
 ## Step 2: Compose the HTML via doc-gist's shape principles
 
@@ -191,6 +193,7 @@ The primary outcome comes from the session title resolved in step 1.
 - [ ] HTML composed via doc-gist's shape principles (gallery-anchored)
 - [ ] `<!-- @publish-as-gist -->` marker present somewhere in the HTML
 - [ ] Frontmatter HTML comment present at top of `<body>`
+- [ ] `session_id` frontmatter field set from `CLAUDE_CODE_SESSION_ID` (the authoring agent's own session), or `unknown` when the variable is unset
 - [ ] Opening section answers "what shipped / why / impact" for a cold reader
 - [ ] Self-contained HTML (no relative-path asset refs; avoid external dependencies)
 - [ ] Auto-publish URLs captured from step 2 and step 3 (or HTML emitted to chat when step 2 Write failed)

@@ -10,7 +10,7 @@ An Obsidian vault stores session reports, decisions, and research documents acro
 
 ## Vault Structure
 
-- `sessions/` -- session reports with frontmatter: `type: session-report`, `project`, `session`, `date`, `status`, `blocked`, `vault_context_retrieved`, `tags`
+- `sessions/` -- session reports with frontmatter: `type: session-report`, `project`, `session`, `session_id`, `date`, `status`, `blocked`, `vault_context_retrieved`, `tags`
 - `decisions/` -- decision notes with frontmatter: `type: decision|procedural|fact|gotcha`, `project`, `date`, `status: Active|Superseded`, `tags`
 - `Research/` -- deep research documents
 
@@ -30,5 +30,7 @@ When the user invokes `/session-log`, treat **short and long sessions the same**
 At the end of substantive sessions, offer to run `/session-log` if not already invoked.
 
 When running `/session-log`, include `vault_context_retrieved: true|false` in frontmatter based on whether vault MCP tools were used this session.
+
+Also include `session_id` in frontmatter — the session ID of the agent authoring the log, read from the `CLAUDE_CODE_SESSION_ID` environment variable. This UUID names the authoring agent's own transcript file (`<session-id>.jsonl`), so the report points back to the session that produced it; use the literal `unknown` when the variable is unset.
 
 After writing a session log, ALWAYS output a `/rename` command with a descriptive session name based on the session's primary outcome. Format: `/rename [Project] - [Primary Outcome]`. This is a mandatory output requirement, not optional.
