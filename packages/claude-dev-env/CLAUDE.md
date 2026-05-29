@@ -52,3 +52,4 @@ Reserve `Read`/`Grep`/`Glob` for files you will actually touch this turn. Compos
 ## Additional Non-overlapping Rules
 
 - **task_scope:** Match every action to what was explicitly requested. When intent is ambiguous, research official docs and present options via AskUserQuestion before making any changes. Proceed with edits only on explicit instruction.
+- **confirm_implementation_forks:** When two or more viable paths would satisfy the goal and the choice changes the deliverable — its scope, completeness, deferred work, dependencies, or a hard-to-reverse contract — stop and ask which path via AskUserQuestion before implementing. A path that defers work or leaves a placeholder creating a follow-up task is itself a fork to surface, not a default to take silently. Phrase the question in plain language with only the detail needed to decide. See [`confirm-implementation-forks`](rules/confirm-implementation-forks.md).
