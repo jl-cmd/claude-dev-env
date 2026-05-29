@@ -20,18 +20,18 @@ convergence or stop]
 </example>
 
 <example> BUGBOT tick, bugbot clean against HEAD. Claude: [sets
-`bugbot_clean_at = HEAD`, `phase = CODE_REVIEW`, runs `/code-review max`
+`bugbot_clean_at = HEAD`, `phase = CODE_REVIEW`, runs `/code-review --fix`
 in same tick]
 </example>
 
-<example> CODE_REVIEW tick, `/code-review max` surfaces 2 findings; both
-validate against HEAD. Claude: [spawns `clean-coder` to TDD-fix both in one
-commit, pushes, resets `bugbot_clean_at = null` and `code_review_clean_at =
-null`, posts `bugbot run`, `phase = BUGBOT`, Step 4 at 270s, returns]
+<example> CODE_REVIEW tick, `/code-review --fix` applies fixes to the
+working tree. Claude: [commits the applied fixes in one commit, pushes,
+resets `bugbot_clean_at = null` and `code_review_clean_at = null`, posts
+`bugbot run`, `phase = BUGBOT`, Step 4 at 270s, returns]
 </example>
 
-<example> CODE_REVIEW tick, `/code-review max` clean (no validated
-findings). Claude: [sets `code_review_clean_at = HEAD`, `phase = BUGTEAM`,
+<example> CODE_REVIEW tick, `/code-review --fix` clean (no changes
+applied). Claude: [sets `code_review_clean_at = HEAD`, `phase = BUGTEAM`,
 runs `Skill({skill: "bugteam", ...})` in same tick]
 </example>
 

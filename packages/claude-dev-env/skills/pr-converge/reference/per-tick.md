@@ -117,32 +117,25 @@ c. Decide (four branches; match first whose predicate holds):
 
 Local correctness/quality pass between BUGBOT clean and BUGTEAM. Enters
 after BUGBOT reports clean on `current_head` (or `bugbot_down == true`).
-Runs Claude Code's built-in `/code-review` command on the current diff; it
+Runs Claude Code's built-in `/code-review --fix` on the current diff; it
 produces no GitHub review artifact, so there are no code-review threads to
 resolve.
 
-a. Run Claude Code's built-in `/code-review max` on the current diff — the
-   [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
-   The effort level is a positional argument (`low`/`medium`/`high`/`max`);
-   `max` gives the broadest local coverage. Review only — never pass
-   `--fix`; every production edit goes through `clean-coder` per
-   [ground-rules.md](ground-rules.md).
+a. Run Claude Code's built-in `/code-review --fix` on the current diff —
+   the [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
+   It reviews the diff and applies its findings to the working tree. Pass
+   no effort argument, so the review uses the session's current effort.
 
-b. Validate every surfaced finding against `current_head`. A finding is
-   actionable only when it reproduces against current code; discard false
-   positives, recording a one-line reason for each.
+b. Decide (two branches; match first whose predicate holds):
 
-c. Decide (two branches; match first whose predicate holds):
-
-   - **One or more validated findings:** Apply **Fix protocol** to
-     **every** validated finding — spawn Agent (subagent_type: clean-coder)
-     to implement fixes in one commit → push, following [Single-PR fix
+   - **`/code-review` applied fixes (working tree changed):** Commit the
+     applied fixes in one commit → push, following [Single-PR fix
      workflow](fix-protocol.md#single-pr-fix-workflow). Reset
      `bugbot_clean_at = null` AND `code_review_clean_at = null`. Re-trigger
      bugbot (Step 3) so the new HEAD enters the queue. Set `phase = BUGBOT`,
      schedule next wakeup, return. A code-review fix push requires a full
      back-to-back-clean cycle on the new HEAD.
-   - **Zero validated findings (clean):** Set
+   - **Clean (no changes applied):** Set
      `code_review_clean_at = current_head`, `phase = BUGTEAM`. Continue
      BUGTEAM in same tick — back-to-back convergence requires bugbot,
      code-review, and bugteam all clean on the same HEAD.

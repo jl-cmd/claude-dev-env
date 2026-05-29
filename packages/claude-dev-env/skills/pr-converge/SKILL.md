@@ -154,26 +154,23 @@ no longer applies.
             - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --sha <current_head>`
             - [ ] Exit non-zero → `bugbot_down = true` → `phase = CODE_REVIEW` → advance to Step 5 (bypass)
             - [ ] Exit 0 → record `bugbot_acknowledged_at`, schedule 360s wakeup → return to Step 4
-- [ ] **Step 5: CODE-REVIEW — run, validate, fix, reset, advance**
+- [ ] **Step 5: CODE-REVIEW — run, fix, reset, advance**
       See: [`reference/per-tick.md` § Step 2 CODE_REVIEW](reference/per-tick.md)
 
       Pre-condition: `bugbot_clean_at == current_head` (or `bugbot_down == true`).
 
-      Run Claude Code's built-in `/code-review max` on the current diff —
-      the [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
-      The effort level is a positional argument (`low`/`medium`/`high`/`max`);
-      `max` gives the broadest local coverage. Review only — never pass
-      `--fix`; every production edit goes through `clean-coder`. Validate
-      each surfaced finding against current HEAD; treat only findings that
-      reproduce against current code as actionable, discarding false
-      positives with a one-line reason.
+      Run Claude Code's built-in `/code-review --fix` on the current diff —
+      the [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally)
+      — so it reviews the diff and applies its findings to the working
+      tree. Pass no effort argument, so the review uses the session's
+      current effort.
 
-      - [ ] **validated findings present** →
-            - [ ] Fix EVERY validated finding (spawn `clean-coder`, one commit)
-            - [ ] Push → reset `bugbot_clean_at = null`, `code_review_clean_at = null`
+      - [ ] **fixes applied** (working tree changed) →
+            - [ ] Commit the applied fixes (one commit) → push
+            - [ ] reset `bugbot_clean_at = null`, `code_review_clean_at = null`
             - [ ] Re-trigger bugbot (Step 4 "no review yet" checklist)
             - [ ] `phase = BUGBOT` → schedule 360s wakeup → return to Step 4
-      - [ ] **clean** (no validated findings) →
+      - [ ] **clean** (no changes applied) →
             - [ ] Count ALL unresolved threads on PR (`is_resolved == false`) → zero? advance; >0? fix + resolve first
             - [ ] `code_review_clean_at = current_head`
             - [ ] `phase = BUGTEAM` → advance to Step 6
