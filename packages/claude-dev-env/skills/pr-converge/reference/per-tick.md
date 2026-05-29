@@ -53,7 +53,7 @@ Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
 
 - Exit 0 (`CLAUDE_REVIEWS_DISABLED` lists `bugbot`) → set `bugbot_down = true`,
-  `phase = BUGTEAM`, continue BUGTEAM in the same tick; skip steps a–c below.
+  `phase = CODE_REVIEW`, continue CODE_REVIEW in the same tick; skip steps a–c below.
 - Exit 1 → proceed to step a.
 
 Because `bugbot_down` resets on every push, this gate re-runs on every
@@ -99,9 +99,9 @@ c. Decide (four branches; match first whose predicate holds):
      null`, reset `inline_lag_streak = 0`, schedule next wakeup, return.
    - **`commit_id == current_head` AND zero unaddressed inline AND review
      body clean:** Set `bugbot_clean_at = current_head`, reset
-     `inline_lag_streak = 0`, `phase = BUGTEAM`. Continue BUGTEAM in same
-     tick — back-to-back convergence requires bugteam on same HEAD
-     before next wakeup.
+     `inline_lag_streak = 0`, `phase = CODE_REVIEW`. Continue CODE_REVIEW
+     in same tick — back-to-back convergence requires code-review then
+     bugteam on same HEAD before next wakeup.
    - **`commit_id == current_head` with unaddressed inline findings:**
      Apply **Fix protocol**. Reset `inline_lag_streak = 0`. With
      `state.json`: clean-coder teammate pushes, replies inline, writes
@@ -112,6 +112,40 @@ c. Decide (four branches; match first whose predicate holds):
      [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow) for
      full contract).
      Schedule next wakeup, return.
+
+### `phase == CODE_REVIEW`
+
+Local correctness/quality pass between BUGBOT clean and BUGTEAM. Enters
+after BUGBOT reports clean on `current_head` (or `bugbot_down == true`).
+Runs Claude Code's built-in `/code-review` command on the current diff; it
+produces no GitHub review artifact, so there are no code-review threads to
+resolve.
+
+a. Run Claude Code's built-in `/code-review max` on the current diff — the
+   [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
+   The effort level is a positional argument (`low`/`medium`/`high`/`max`);
+   `max` gives the broadest local coverage. Review only — never pass
+   `--fix`; every production edit goes through `clean-coder` per
+   [ground-rules.md](ground-rules.md).
+
+b. Validate every surfaced finding against `current_head`. A finding is
+   actionable only when it reproduces against current code; discard false
+   positives, recording a one-line reason for each.
+
+c. Decide (two branches; match first whose predicate holds):
+
+   - **One or more validated findings:** Apply **Fix protocol** to
+     **every** validated finding — spawn Agent (subagent_type: clean-coder)
+     to implement fixes in one commit → push, following [Single-PR fix
+     workflow](fix-protocol.md#single-pr-fix-workflow). Reset
+     `bugbot_clean_at = null` AND `code_review_clean_at = null`. Re-trigger
+     bugbot (Step 3) so the new HEAD enters the queue. Set `phase = BUGBOT`,
+     schedule next wakeup, return. A code-review fix push requires a full
+     back-to-back-clean cycle on the new HEAD.
+   - **Zero validated findings (clean):** Set
+     `code_review_clean_at = current_head`, `phase = BUGTEAM`. Continue
+     BUGTEAM in same tick — back-to-back convergence requires bugbot,
+     code-review, and bugteam all clean on the same HEAD.
 
 ### `phase == BUGTEAM`
 
@@ -222,14 +256,14 @@ BUGBOT.
   `bugbot_down = true` and routes to BUGTEAM before any trigger flow runs,
   so the checks below are skipped.
 - [ ] **Silent-pass pre-check.** Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --check-clean --owner <O> --repo <R> --sha <current_head>`
-- [ ] Exit 0 → bugbot CI completed clean with no review (silent pass); set `bugbot_clean_at = current_head`, `phase = BUGTEAM`, continue BUGTEAM same tick
+- [ ] Exit 0 → bugbot CI completed clean with no review (silent pass); set `bugbot_clean_at = current_head`, `phase = CODE_REVIEW`, continue CODE_REVIEW same tick
 - [ ] Exit 1 (not a silent pass) or Exit 2 (gh CLI error — silent pass not confirmable) → continue with the trigger flow below
 - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --check-active --owner <O> --repo <R> --sha <current_head>`
 - [ ] Exit 0 → bugbot already queued on this commit; skip posting, wait for completion
 - [ ] Exit 1 → post trigger via `add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")`
 - [ ] Wait 8s
 - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --sha <current_head>`
-- [ ] Exit non-zero → bugbot is down; set `bugbot_down = true`, `phase = BUGTEAM`, continue BUGTEAM same tick
+- [ ] Exit non-zero → bugbot is down; set `bugbot_down = true`, `phase = CODE_REVIEW`, continue CODE_REVIEW same tick
 - [ ] Exit 0 (check run present) → record `bugbot_acknowledged_at = <now ISO 8601>`, proceed to Step 4
 
 The silent-pass pre-check fires FIRST so we never re-trigger a bot that

@@ -7,8 +7,8 @@
 - **`bugbot run` comment is load-bearing.** Literal phrase exactly —
   empirically the only re-trigger Cursor Bugbot recognizes.
 - **All production edits go through `clean-coder`.** The lead never edits
-  production files directly. Every fix — bugbot, bugteam, Copilot, or
-  Claude finding — spawns `Agent(subagent_type="clean-coder")` to
+  production files directly. Every fix — bugbot, bugteam, code-review,
+  Copilot, or Claude finding — spawns `Agent(subagent_type="clean-coder")` to
   implement. No exceptions.
 - **Adapt when reality contradicts on-disk state.** If `state.json`,
   `git`, or `gh` disagree with live PR, escalate as hard blocker per

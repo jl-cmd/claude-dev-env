@@ -6,8 +6,9 @@ guarantees `ScheduleWakeup` is available before any tick runs. Shared bugbot
 
 ## Calling ScheduleWakeup
 
-At end of every tick — across all phases (BUGBOT, BUGTEAM, COPILOT_WAIT)
-without distinction — call `ScheduleWakeup` unless convergence or another
+At end of every tick — across all phases (BUGBOT, CODE_REVIEW, BUGTEAM,
+COPILOT_WAIT) without distinction — call `ScheduleWakeup` unless convergence
+or another
 stop condition already omitted pacing:
 
 - `delaySeconds: 360` — default wakeup interval. Keeps the loop advancing

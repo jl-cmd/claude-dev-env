@@ -9,9 +9,13 @@ across PRs. Both files share most of the fields below; the
 live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
 (see those field entries below for details).
 
-- `phase`: `BUGBOT`, `BUGTEAM`, or `COPILOT_WAIT`. Start `BUGBOT` on first tick.
+- `phase`: `BUGBOT`, `CODE_REVIEW`, `BUGTEAM`, or `COPILOT_WAIT`. Start
+  `BUGBOT` on first tick.
 - `bugbot_clean_at`: HEAD SHA where bugbot last reported clean, or `null`.
   Reset to `null` on every push.
+- `code_review_clean_at`: HEAD SHA where the `/code-review` pass last
+  reported clean (no validated findings), or `null`. Reset to `null` on
+  every push.
 - `copilot_clean_at`: HEAD SHA where Copilot last reported clean, or `null`.
   Reset to `null` on every push.
 - `copilot_wait_count`: integer, init `0`. Consecutive COPILOT_WAIT ticks
