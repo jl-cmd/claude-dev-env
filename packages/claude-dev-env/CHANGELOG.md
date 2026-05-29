@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.49.0...claude-dev-env-v1.49.1) (2026-05-29)
+
+
+### Bug Fixes
+
+* **claude-dev-env:** bugteam teardown path + docs, and ship audit-rubrics in npm package ([#512](https://github.com/jl-cmd/claude-code-config/issues/512)) ([c256c04](https://github.com/jl-cmd/claude-code-config/commit/c256c048c37727d6c48d32f4fd31491ec91b7994))
+
 ## [1.49.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.48.0...claude-dev-env-v1.49.0) (2026-05-29)
 
 
