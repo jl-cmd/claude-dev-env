@@ -24,8 +24,22 @@ ALL_MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
 ADVISORY_LINE_THRESHOLD_SOFT = 400
 ADVISORY_LINE_THRESHOLD_HARD = 1000
 
-ALL_BOOLEAN_NAME_PREFIXES: tuple[str, ...] = ("is_", "has_", "should_", "can_")
+ALL_BOOLEAN_NAME_PREFIXES: tuple[str, ...] = ("is_", "has_", "should_", "can_", "was_", "did_")
 UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+ALL_MUST_CHECK_RETURN_FUNCTION_NAMES: frozenset[str] = frozenset({"find_and_click", "write_outcome"})
+
+DOCSTRING_ARG_ENTRY_PATTERN: re.Pattern[str] = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*[:(]")
+ALL_DOCSTRING_ARGS_SECTION_HEADERS: tuple[str, ...] = ("Args:", "Arguments:")
+ALL_DOCSTRING_TERMINATING_SECTION_HEADERS: frozenset[str] = frozenset({
+    "Returns:",
+    "Yields:",
+    "Raises:",
+    "Examples:",
+    "Example:",
+    "Note:",
+    "Notes:",
+})
 
 
 TYPE_CHECKING_BLOCK_PATTERN = re.compile(r"^(?P<indent>\s*)if\s+(typing\.)?TYPE_CHECKING\s*:\s*$")

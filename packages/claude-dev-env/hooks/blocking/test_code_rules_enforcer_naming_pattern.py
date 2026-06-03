@@ -26,7 +26,7 @@ TEST_FILE_PATH = "src/app/test_feature.py"
 CONFIG_FILE_PATH = "src/config/settings.py"
 WORKFLOW_FILE_PATH = "src/workflow/orders_tab.py"
 HOOK_FILE_PATH = "/home/user/.claude/hooks/blocking/my_hook.py"
-EXPECTED_PREFIX_GUIDANCE = "prefix with is_/has_/should_/can_"
+EXPECTED_PREFIX_GUIDANCE = "prefix with is_/has_/should_/can_/was_/did_"
 
 
 def _assert_flags_name(issues: list[str], name: str, line_number: int) -> None:
@@ -209,4 +209,140 @@ def test_should_allow_is_prefix_at_start_when_compound_word_follows() -> None:
     issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
     assert issues == [], (
         f"is_left_upper_snake has prefix at position 0, must pass, got: {issues}"
+    )
+
+
+PARAMETER_PREFIX_GUIDANCE = "prefix with is_/has_/should_/can_/was_/did_"
+
+
+def _assert_flags_parameter(issues: list[str], name: str, line_number: int) -> None:
+    expected = f"Line {line_number}: Boolean parameter {name} - {PARAMETER_PREFIX_GUIDANCE}"
+    assert expected in issues, f"expected {expected!r} in {issues!r}"
+
+
+def test_should_flag_bool_annotated_parameter_without_prefix() -> None:
+    source = "def run(dry_run: bool) -> None:\n    print(dry_run)\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_parameter(issues, "dry_run", 1)
+    assert len(issues) == 1
+
+
+def test_should_flag_bool_default_parameter_without_annotation() -> None:
+    source = "def run(apply_historical_weight=False) -> None:\n    print(apply_historical_weight)\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_parameter(issues, "apply_historical_weight", 1)
+    assert len(issues) == 1
+
+
+def test_should_flag_keyword_only_bool_parameter_without_prefix() -> None:
+    source = "def run(*, click_succeeded: bool = True) -> None:\n    print(click_succeeded)\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_parameter(issues, "click_succeeded", 1)
+    assert len(issues) == 1
+
+
+def test_should_allow_is_prefixed_bool_parameter() -> None:
+    source = "def run(is_dry_run: bool) -> None:\n    print(is_dry_run)\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_was_prefixed_bool_parameter() -> None:
+    source = "def run(was_clicked: bool = False) -> None:\n    print(was_clicked)\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_did_prefixed_bool_parameter() -> None:
+    source = "def run(did_succeed: bool) -> None:\n    print(did_succeed)\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_was_prefixed_bool_assignment() -> None:
+    source = "def f() -> None:\n    was_clicked = True\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_did_prefixed_bool_assignment() -> None:
+    source = "def f() -> None:\n    did_run = False\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_skip_single_letter_bool_parameter() -> None:
+    source = "def run(x: bool) -> None:\n    print(x)\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_skip_self_parameter_in_method() -> None:
+    source = (
+        "class Runner:\n"
+        "    def run(self, enabled: bool) -> None:\n"
+        "        print(self, enabled)\n"
+    )
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_parameter(issues, "enabled", 2)
+    assert len(issues) == 1
+
+
+def test_should_not_flag_non_bool_parameter() -> None:
+    source = "def run(retries: int) -> None:\n    print(retries)\n"
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_skip_bool_parameter_in_test_file() -> None:
+    source = "def run(dry_run: bool) -> None:\n    print(dry_run)\n"
+    issues = check_boolean_naming(source, TEST_FILE_PATH)
+    assert issues == []
+
+
+def test_should_pair_positional_defaults_right_aligned() -> None:
+    source = (
+        "def run(name: str, verbose: bool = False) -> None:\n"
+        "    print(name, verbose)\n"
+    )
+    issues = check_boolean_naming(source, PRODUCTION_FILE_PATH)
+    _assert_flags_parameter(issues, "verbose", 1)
+    assert len(issues) == 1
+
+
+FULL_MODULE_WITH_TWO_UNPREFIXED_BOOL_PARAMETERS = (
+    "def pre_existing(verbose: bool) -> None:\n"
+    "    print(verbose)\n"
+    "\n\n"
+    "def edited(detailed: bool) -> None:\n"
+    "    print(detailed)\n"
+)
+PRE_EXISTING_BOOL_PARAMETER_LINE_NUMBER = 1
+EDITED_BOOL_PARAMETER_LINE_NUMBER = 5
+
+
+def test_should_flag_bool_parameter_on_changed_line() -> None:
+    issues = check_boolean_naming(
+        FULL_MODULE_WITH_TWO_UNPREFIXED_BOOL_PARAMETERS,
+        PRODUCTION_FILE_PATH,
+        {EDITED_BOOL_PARAMETER_LINE_NUMBER},
+        False,
+    )
+    _assert_flags_parameter(issues, "detailed", EDITED_BOOL_PARAMETER_LINE_NUMBER)
+    assert len(issues) == 1, (
+        "Only the bool parameter on the changed line must be flagged, got: "
+        f"{issues!r}"
+    )
+
+
+def test_should_not_flag_pre_existing_bool_parameter_on_unchanged_line() -> None:
+    issues = check_boolean_naming(
+        FULL_MODULE_WITH_TWO_UNPREFIXED_BOOL_PARAMETERS,
+        PRODUCTION_FILE_PATH,
+        {EDITED_BOOL_PARAMETER_LINE_NUMBER},
+        False,
+    )
+    assert not any("verbose" in each_issue for each_issue in issues), (
+        "A pre-existing unprefixed bool parameter on an unedited line must not block "
+        f"the edit, got: {issues!r}"
     )
