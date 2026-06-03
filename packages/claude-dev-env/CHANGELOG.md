@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.50.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.49.1...claude-dev-env-v1.50.0) (2026-06-03)
+
+
+### Features
+
+* **code-rules:** enforce bool-param naming, must-check returns, and docstring Args drift at write time ([#517](https://github.com/jl-cmd/claude-code-config/issues/517)) ([93d5604](https://github.com/jl-cmd/claude-code-config/commit/93d5604115938626c64110015c9a5b309c1761ba))
+
+
+### Bug Fixes
+
+* **md-to-html-blocker:** exempt root CLAUDE.md and AGENTS.md ([#516](https://github.com/jl-cmd/claude-code-config/issues/516)) ([a410de6](https://github.com/jl-cmd/claude-code-config/commit/a410de6f744887075c008e2d354bcf7a2c192a4c))
+
+
+### Documentation
+
+* **audit-rubrics:** extend Category A to full-contract and doc-claim verification ([#519](https://github.com/jl-cmd/claude-code-config/issues/519)) ([ab132bf](https://github.com/jl-cmd/claude-code-config/commit/ab132bf4c72fa6124ed8cd4b88f252b621787b97))
+
 ## [1.49.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.49.0...claude-dev-env-v1.49.1) (2026-05-29)
 
 
