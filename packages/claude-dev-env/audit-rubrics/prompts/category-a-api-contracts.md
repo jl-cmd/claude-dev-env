@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category A only** (API contract verification). Skip B–K. Sub-bucket forced-exhaustion mode: Category A is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category A only** (API contract verification). Skip B–N. Sub-bucket forced-exhaustion mode: Category A is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA: title / change description / head SHA or revision identifier / scope summary]
 ID prefix: `find`.
@@ -15,6 +15,7 @@ ID prefix: `find`.
 - Flag positional arguments passed to keyword-only parameters and vice versa.
 - Flag calls that omit a required parameter relying on a default that does not exist on the current branch.
 - Verify decorators (`@staticmethod`, `@classmethod`, `@property`) do not silently shift the parameter binding (e.g., `self` / `cls` insertion).
+- Confirm sync-vs-async (is the symbol `async def`?), the exact access path a caller uses (free function vs instance method via an object attribute vs import path), and that a keyword-only parameter with no default is required — omitting it raises `TypeError`.
 
 **A2. Return-type annotation vs every code path**
 - For each annotated function, walk every code path: explicit `return X`, fall-through to implicit `None`, exception-handler exit, generator `yield` paths, async coroutine return value.
@@ -22,6 +23,7 @@ ID prefix: `find`.
 - For functions that raise instead of returning on some path, confirm the annotation does not promise a value the caller will dereference.
 - Inspect `try/except/finally` chains for paths that return from `finally` and override `try`/`except` returns.
 - For async functions, confirm the annotation refers to the awaited type, not the coroutine wrapper.
+- The full failure contract is the return value AND every exception raised — list each `raise` in the body and the docstring `Raises:`; a `-> bool` that can also raise is not fully described as "returns bool".
 
 **A3. CLI/argument-parser declaration → downstream Namespace contract**
 - For every `add_argument(...)` (or equivalent CLI declaration), verify the auto-derived or explicit `dest=` matches the attribute name accessed downstream on the parsed namespace.
@@ -34,6 +36,7 @@ ID prefix: `find`.
 - Identify every callback handed to a library function (e.g., `os.walk(onerror=...)`, sort `key=`, `filter`, `map`, `re.sub(repl=callable)`, signal handlers, threading callbacks). Verify each callback's signature matches what the library calls it with — arity, positional-vs-keyword, return type the library consumes.
 - For every stdlib function the artifact calls, verify argument types and exception contracts: which exceptions can each call raise, and is each caller prepared (or deliberately not prepared) for them.
 - Verify kwargs to stdlib functions are spelled correctly for the targeted runtime version (deprecated/renamed kwargs, version-introduced kwargs).
+- Catch-site precision — for any "catches X" claim confirm the exact catch site and scope (an `except` around only a rollback inside `finally` does not catch the same error from the `with` body).
 - Flag callbacks whose return value the library consumes but the implementation returns `None` (or vice versa).
 - Confirm callback exception behavior: which exceptions in the callback bubble out, which are swallowed by the library, which terminate iteration.
 
@@ -66,6 +69,18 @@ ID prefix: `find`.
 - For write calls, verify the signature against the provider's own published API contract — their REST reference docs, OpenAPI spec, SDK source code, or `--help` output. When a read endpoint exposes the same state, call it to confirm the write contract.
 - Flag every call where documented parameters, types, or behavior diverge from the official API contract.
 
+**A9. Documentation claims about the codebase (when the artifact asserts facts about the code)**
+
+When the artifact is documentation that asserts facts about the codebase (symbol names, signatures, return types, exceptions, file paths), run all seven documentation-as-contract checks below; each yields a confirmation or a finding. For a pure-code artifact, A9 is one line of proof-of-absence (the artifact asserts no code facts).
+
+- Full failure contract — the failure signals of a function are its return value AND every exception it raises; trace the body and the docstring `Raises:` for every `raise`. _Example:_ a docs PR says a UI helper "returns `bool`", but it also raises a custom not-found error, so "returns bool" understates the contract.
+- Call shape — required versus optional parameters (a keyword-only parameter with NO default is required; omitting it raises `TypeError`), sync versus async, and the exact access path (free function versus instance method reached through an object attribute versus import path). _Example:_ a doc presents a helper as a free function, but it is an `async` instance method reached through an object attribute, so the doc's call example would raise `TypeError`.
+- Reuse-first — before a doc endorses a hand-written snippet, search for a dedicated helper that already does it. _Example:_ a doc endorses hand-composing `normalize(name).lower()` inline while a dedicated `normalize_for_matching()` helper already does exactly that.
+- Path resolution — every file or directory path a doc cites resolves from the repository root. _Example:_ a doc cites a bare `snapshots/` directory as if it sat at the repo root, but the tree lives under `subsystem/snapshots/`.
+- Cross-entry consistency — scan parallel rows, sections, and table entries for claims that contradict each other. _Example:_ two adjacent table rows map the same subsystem to two different exception base classes.
+- Catch-site precision — when a doc claims code "catches X", confirm the exact site and scope of the catch. _Example:_ a doc says a context manager catches a driver error, but the `except` wraps only the rollback inside `finally`, so an error raised in the `with` body propagates uncaught.
+- Citation freshness — re-derive every `file:line` claim against the current code; never trust a prior "verified" assertion or wording borrowed from a comment. _Example:_ an attribute name carried over from a review comment names a member the class does not define; the current code exposes it under a different name.
+
 ## Cross-bucket questions to answer at the end
 
 Q1: Are there any contracts that span two sub-buckets that single-bucket analysis would miss?
@@ -74,7 +89,7 @@ Q3: Where would a future refactor most likely break a cross-bucket or cross-lang
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket A1–A8, produce Shape A or Shape B (with ≥3 adversarial probes). Cross-bucket Q1–Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 bugs across these 8 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket A1–A9, produce Shape A or Shape B (with ≥3 adversarial probes). Cross-bucket Q1–Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 bugs across these 9 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 ---
 

@@ -21,16 +21,30 @@ The decomposition that worked best for PR #394 (a Python+PowerShell scheduled-ta
 
 | ID | Axis name | Concrete checks |
 |---|---|---|
-| A1 | Python function signatures vs internal call sites | Parameter count, names, defaults, kw-only barriers; every internal call binds correctly. |
-| A2 | Python return-type annotation vs every code path | Each function's return annotation is satisfied by every path: explicit `return X`, fall-through, exception-handler exit. |
+| A1 | Python function signatures vs internal call sites | Parameter count, names, defaults, kw-only barriers; every internal call binds correctly. Is the symbol `async def`? Confirm the exact access path a caller uses: free function vs instance method reached through an object attribute vs import path. A keyword-only parameter with no default is required; omitting it raises `TypeError`. |
+| A2 | Python return-type annotation vs every code path | Each function's return annotation is satisfied by every path: explicit `return X`, fall-through, exception-handler exit. The full failure contract is the return value AND every exception raised — trace the body and the docstring `Raises:` for each `raise`, including custom errors. A `-> bool` function that also raises is not fully described by "returns bool". |
 | A3 | argparse parser → Namespace contract | Every `add_argument(...)` produces the exact dest name accessed downstream; `type=` matches downstream usage; switches produce bools. |
-| A4 | Stdlib callback contracts | `os.walk(onerror=...)` callback shape; `os.path.getctime` / `os.rmdir` argument and exception contracts; `time.sleep` argument types. |
+| A4 | Stdlib callback contracts | `os.walk(onerror=...)` callback shape; `os.path.getctime` / `os.rmdir` argument and exception contracts; `time.sleep` argument types. Catch-site precision: for any claim that code "catches X", confirm the exact catch site and scope — an `except` around only a rollback inside `finally` does not catch the same error raised in the `with` body. |
 | A5 | subprocess invocation contract | `subprocess.run` kwargs valid for the targeted Python; `args=[list]` shape; exception propagation under `check=True`. |
 | A6 | PowerShell cmdlet parameter sets and binding | `param(...)` with `ParameterSetName=`; `[CmdletBinding(DefaultParameterSetName=…)]` presence; cmdlet parameter combinations valid per Microsoft docs. |
 | A7 | Cross-language argv boundary | The `-Argument` string composition → Windows process loader → C-runtime argv parser → Python `sys.argv` → argparse. Trailing-backslash and embedded-space hazards. |
 | A8 | Documented API/tool calls vs official API documentation | Every API, MCP tool, SDK method, or CLI command documented in the diff. Look up the official documentation for that API. Verify parameter names, types, and required-ness match the documented call. Make a safe, read-only API call to confirm the documented invocation succeeds. Address any mismatch. |
 
 Adapt these axes for your artifact. For a pure Python codebase, drop A6 and A7 and add (e.g.) "type-stub vs runtime divergence" or "C-extension boundary." For a pure PowerShell codebase, drop A1–A5 and split A6 into "param-set declaration" / "cmdlet invocation" / "type coercion at param boundary."
+
+---
+
+### Documentation as contract: verifying a doc claim about code
+
+When the audited artifact is documentation — a CLAUDE.md, a rule file, a README, a table mapping symbols to behavior — that asserts facts about the codebase, API-contract verification means checking every assertion against the current code, not just confirming the symbol exists and its return type matches. A doc that passes the happy-path contract can still be wrong on any of the seven checks below. Run all seven up front. Checks 1, 2, and 6 are the full-contract sharpening of sub-buckets A1, A2, and A4 applied to a doc claim; checks 3, 4, 5, and 7 are specific to documentation artifacts.
+
+1. **Full failure contract** — the failure signals of a function are its return value AND every exception it raises; trace the body and the docstring `Raises:` for every `raise`. _Example:_ a docs PR says a UI helper "returns `bool`", but it also raises a custom not-found error, and a database writer documented by its return type also raises `ValueError` / `RuntimeError` / a driver error, so "returns bool" understates the contract.
+2. **Call shape** — required versus optional parameters (a keyword-only parameter with NO default is required; omitting it raises `TypeError`), sync versus async, and the exact access path (free function versus instance method reached through an object attribute versus import path). _Example:_ a doc presents a helper as a free function, but it is an `async` instance method reached through an object attribute and one keyword-only parameter has no default, so the call example in the doc would raise `TypeError`.
+3. **Reuse-first** — before a doc endorses a hand-written snippet, search for a dedicated helper that already does it. _Example:_ a doc endorses hand-composing `normalize(name).lower()` inline while a dedicated `normalize_for_matching()` helper already does exactly that, contradicting the reuse-before-building rule the doc itself states.
+4. **Path resolution** — every file or directory path a doc cites resolves from the repository root. _Example:_ a doc cites a bare `snapshots/` directory as if it sat at the repo root, but the tree lives under `subsystem/snapshots/`.
+5. **Cross-entry consistency** — scan parallel rows, sections, and table entries for claims that contradict each other. _Example:_ two adjacent table rows map the same subsystem to two different exception base classes.
+6. **Catch-site precision** — when a doc claims code "catches X", confirm the exact site and scope of the catch. _Example:_ a doc says a context manager catches a driver error, but the `except` wraps only the rollback inside `finally`, so an error raised in the `with` body propagates uncaught.
+7. **Citation freshness** — re-derive every `file:line` claim against the current code; never trust a prior "verified" assertion or wording borrowed from a comment. _Example:_ an attribute name carried over from a review comment names a member the class does not define; the current code exposes it under a different name.
 
 ---
 
