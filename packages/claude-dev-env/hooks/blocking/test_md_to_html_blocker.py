@@ -252,6 +252,44 @@ def test_blocks_changelog_not_at_root():
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
+def test_passes_claude_md_at_root():
+    result = _run_hook(
+        "Write",
+        {"file_path": "CLAUDE.md", "content": "# CLAUDE"},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_passes_agents_md_at_root():
+    result = _run_hook(
+        "Write",
+        {"file_path": "AGENTS.md", "content": "# AGENTS"},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_blocks_claude_md_not_at_root():
+    result = _run_hook(
+        "Write",
+        {"file_path": "docs/CLAUDE.md", "content": "# CLAUDE"},
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_blocks_agents_md_not_at_root():
+    result = _run_hook(
+        "Write",
+        {"file_path": "sub/AGENTS.md", "content": "# AGENTS"},
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
 def test_blocks_relative_readme_when_cwd_is_not_repo_root():
     sandbox_parent = _get_sandbox_parent_directory()
     non_repo_cwd = os.path.join(sandbox_parent, "not-a-repo")

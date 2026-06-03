@@ -68,7 +68,7 @@ def _block_context() -> str:
         f"- Files under {_exempt_plugin_segments_summary} directories\n"
         f"- Files under {_claude_dev_env_source_directories_summary} source directories\n"
         f"- Files under any directory whose ancestor contains {PLUGIN_ROOT_MARKER_DIRECTORY_NAME}/\n"
-        "- README.md and CHANGELOG.md at any repo root\n"
+        "- README.md, CHANGELOG.md, CLAUDE.md, and AGENTS.md at any repo root\n"
         f"- Files under {_exempt_home_directories_summary}\n"
         "- Files under the OS temp directory"
     )
@@ -83,7 +83,7 @@ def _block_system_message() -> str:
         f"{_exempt_anywhere_filenames_summary} anywhere, {_exempt_plugin_segments_summary} trees, "
         f"{_claude_dev_env_source_directories_summary} source trees, "
         f"files under a {PLUGIN_ROOT_MARKER_DIRECTORY_NAME}/ root, "
-        f"README.md/CHANGELOG.md at any repo root, {_exempt_home_directories_summary}, "
+        f"README.md/CHANGELOG.md/CLAUDE.md/AGENTS.md at any repo root, {_exempt_home_directories_summary}, "
         "and the OS temp directory."
     )
 

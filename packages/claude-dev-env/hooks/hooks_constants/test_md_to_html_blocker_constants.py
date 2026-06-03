@@ -82,10 +82,17 @@ def test_exempt_home_relative_directories_include_session_log() -> None:
     assert "ALL_EXEMPT_HOME_RELATIVE_DIRECTORIES" in constants_module.__all__
 
 
-def test_exempt_root_filenames_cover_readme_and_changelog() -> None:
-    """README.md and CHANGELOG.md at a repo root are universally exempt;
-    every repo with a `.git` marker satisfies the root check."""
-    assert constants_module.ALL_EXEMPT_ROOT_FILENAMES == ("readme.md", "changelog.md")
+def test_exempt_root_filenames_cover_readme_changelog_claude_and_agents() -> None:
+    """README.md, CHANGELOG.md, CLAUDE.md, and AGENTS.md at a repo root are
+    universally exempt; every repo with a `.git` marker satisfies the root
+    check. CLAUDE.md and AGENTS.md are functional agent-instruction files that
+    Claude Code loads by name and must stay Markdown."""
+    assert constants_module.ALL_EXEMPT_ROOT_FILENAMES == (
+        "readme.md",
+        "changelog.md",
+        "claude.md",
+        "agents.md",
+    )
     assert "ALL_EXEMPT_ROOT_FILENAMES" in constants_module.__all__
 
 
