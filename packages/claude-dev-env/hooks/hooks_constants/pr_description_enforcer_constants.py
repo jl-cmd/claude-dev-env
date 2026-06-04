@@ -23,6 +23,10 @@ BLOCKQUOTE_LINE_PATTERN: re.Pattern[str] = re.compile(r"^\s*>.*$", re.MULTILINE)
 TABLE_ROW_LINE_PATTERN: re.Pattern[str] = re.compile(r"^\s*\|.*\|.*$", re.MULTILINE)
 LINK_TEXT_PATTERN: re.Pattern[str] = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 WHITESPACE_RUN_PATTERN: re.Pattern[str] = re.compile(r"\s+")
+VAGUE_LANGUAGE_PATTERN: re.Pattern[str] = re.compile(
+    r"\b(fix(?:ed)? (?:bug|issue|it)|update(?:d)? code|minor changes|various (?:fixes|updates|improvements))\b",
+    re.IGNORECASE,
+)
 
 SUMMARY_HEADER: str = "## Summary"
 PROBLEM_HEADER: str = "## Problem"
@@ -37,6 +41,7 @@ ALL_HEAVY_TESTING_HEADERS: frozenset[str] = frozenset(
     {TEST_PLAN_HEADER, TESTING_HEADER, TESTS_HEADER, VERIFICATION_HEADER, VALIDATION_HEADER}
 )
 GH_PR_COMMAND_MIN_TOKEN_COUNT: int = 3
+BODY_FILE_STDIN_SENTINEL: str = "-"
 ATOMIC_WRITE_TEMP_SUFFIX: str = ".tmp"
 SELF_CLOSING_REFERENCE_MESSAGE_PREFIX: str = "PR body references its own PR number #"
 SELF_CLOSING_REFERENCE_MESSAGE_SUFFIX: str = (
@@ -119,6 +124,7 @@ __all__ = [
     "ATOMIC_WRITE_TEMP_SUFFIX",
     "BLOCKQUOTE_LINE_PATTERN",
     "BLOCKQUOTE_MARKER_PATTERN",
+    "BODY_FILE_STDIN_SENTINEL",
     "BOLD_PAIR_PATTERN",
     "BULLET_MARKER_PATTERN",
     "DEFAULT_READABILITY_THRESHOLDS",
@@ -154,5 +160,6 @@ __all__ = [
     "THIS_PR_OPENING_PATTERN",
     "TRIVIAL_BODY_CHAR_THRESHOLD",
     "TRIVIAL_SHAPE",
+    "VAGUE_LANGUAGE_PATTERN",
     "WHITESPACE_RUN_PATTERN",
 ]
