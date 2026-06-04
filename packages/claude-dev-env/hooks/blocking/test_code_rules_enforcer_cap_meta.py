@@ -66,22 +66,17 @@ KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW: frozenset[str] = frozenset(
         "check_constant_equality_tests",
         "check_constants_outside_config",
         "check_constants_outside_config_advisory",
-        "check_e2e_test_naming",
         "check_existence_check_tests",
         "check_file_global_constants_use_count",
-        "check_fstring_structural_literals",
         "check_imports_at_top",
         "check_inline_literal_collections",
         "check_library_print",
-        "check_logging_fstrings",
         "check_loop_variable_naming",
-        "check_magic_values",
         "check_parameter_annotations",
         "check_return_annotations",
         "check_skip_decorators_in_tests",
         "check_string_literal_magic",
         "check_unused_optional_parameters",
-        "check_windows_api_none",
     }
 )
 

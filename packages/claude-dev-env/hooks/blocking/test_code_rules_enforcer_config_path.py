@@ -8,24 +8,28 @@ Covers:
 
 from __future__ import annotations
 
-import importlib.util
-import io
 import sys
 from pathlib import Path
-from types import ModuleType
+from types import SimpleNamespace
 
+_BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
+_HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+if _BLOCKING_DIRECTORY not in sys.path:
+    sys.path.insert(0, _BLOCKING_DIRECTORY)
+if _HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _HOOKS_DIRECTORY)
 
-def _load_enforcer_module() -> ModuleType:
-    module_path = Path(__file__).parent / "code_rules_enforcer.py"
-    spec = importlib.util.spec_from_file_location("code_rules_enforcer", module_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from code_rules_constants_config import (  # noqa: E402
+    check_constants_outside_config,
+    check_constants_outside_config_advisory,
+)
+from code_rules_path_utils import is_config_file  # noqa: E402
 
-
-code_rules_enforcer = _load_enforcer_module()
+code_rules_enforcer = SimpleNamespace(
+    check_constants_outside_config=check_constants_outside_config,
+    check_constants_outside_config_advisory=check_constants_outside_config_advisory,
+    is_config_file=is_config_file,
+)
 
 PRODUCTION_FILE_PATH = "packages/claude-dev-env/src/example.py"
 

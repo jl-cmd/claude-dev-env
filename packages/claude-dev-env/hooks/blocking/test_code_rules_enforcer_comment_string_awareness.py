@@ -13,22 +13,28 @@ a string still flag.
 
 from __future__ import annotations
 
-import importlib.util
+import sys
 from pathlib import Path
-from types import ModuleType
+from types import SimpleNamespace
 
+_BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
+_HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+if _BLOCKING_DIRECTORY not in sys.path:
+    sys.path.insert(0, _BLOCKING_DIRECTORY)
+if _HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _HOOKS_DIRECTORY)
 
-def _load_enforcer_module() -> ModuleType:
-    module_path = Path(__file__).parent / "code_rules_enforcer.py"
-    spec = importlib.util.spec_from_file_location("code_rules_enforcer", module_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from code_rules_comments import (  # noqa: E402
+    check_comment_changes,
+    check_comments_python,
+    extract_comment_texts,
+)
 
-
-code_rules_enforcer = _load_enforcer_module()
+code_rules_enforcer = SimpleNamespace(
+    check_comment_changes=check_comment_changes,
+    check_comments_python=check_comments_python,
+    extract_comment_texts=extract_comment_texts,
+)
 
 
 def test_python_check_should_not_flag_hex_color_literal() -> None:

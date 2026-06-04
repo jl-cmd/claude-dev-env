@@ -12,7 +12,6 @@ import importlib.util
 import pathlib
 import sys
 
-
 _HOOK_DIRECTORY = pathlib.Path(__file__).parent
 if str(_HOOK_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_HOOK_DIRECTORY))
@@ -26,8 +25,8 @@ assert _hook_spec.loader is not None
 _hook_module = importlib.util.module_from_spec(_hook_spec)
 _hook_spec.loader.exec_module(_hook_module)
 check_hardcoded_user_paths = _hook_module.check_hardcoded_user_paths
-HARDCODED_USER_PATH_PATTERN = _hook_module.HARDCODED_USER_PATH_PATTERN
 
+from code_rules_paths_syspath import HARDCODED_USER_PATH_PATTERN  # noqa: E402
 
 PRODUCTION_FILE_PATH = "packages/app/services/loader.py"
 TEST_FILE_PATH = "packages/app/tests/test_loader.py"

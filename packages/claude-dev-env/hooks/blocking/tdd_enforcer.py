@@ -208,7 +208,37 @@ def find_nearest_tests_directory(start_directory: Path) -> Path | None:
     return None
 
 
+def _split_module_stem_prefix() -> str:
+    return "code_rules_"
+
+
+def _split_test_family_glob() -> str:
+    return "test_code_rules_enforcer_*.py"
+
+
+def _split_family_candidates(directory: Path, stem: str) -> list[Path]:
+    if not stem.startswith(_split_module_stem_prefix()):
+        return []
+    return sorted(directory.glob(_split_test_family_glob()))
+
+
 def candidate_test_paths_for(production_path: Path) -> list[Path]:
+    """Return the test files whose freshness can satisfy the gate for a production file.
+
+    For ``code_rules_*`` Python modules the candidate list is extended with the
+    sibling split test family (``test_code_rules_enforcer_*.py``), because that
+    family collectively covers the split check modules; a fresh edit to any
+    family file satisfies the RED step for editing one of those modules. The
+    glob is directory-local, so ``code_rules_*`` files elsewhere gain no extra
+    candidates. Plain stem-derived candidates always come first.
+
+    Args:
+        production_path: The production source file being written or edited.
+
+    Returns:
+        Ordered candidate test paths; stem-derived siblings precede any
+        split-family additions.
+    """
     directory = production_path.parent
     stem = production_path.stem
     extension = production_path.suffix.lower()
@@ -220,6 +250,7 @@ def candidate_test_paths_for(production_path: Path) -> list[Path]:
         nearest_tests_directory = find_nearest_tests_directory(directory)
         if nearest_tests_directory is not None:
             all_candidates.append(nearest_tests_directory / f"test_{stem}.py")
+        all_candidates.extend(_split_family_candidates(directory, stem))
         return all_candidates
 
     if extension in {".tsx", ".ts", ".jsx", ".js"}:

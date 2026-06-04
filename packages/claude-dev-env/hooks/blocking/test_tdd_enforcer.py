@@ -574,3 +574,119 @@ def test_is_inside_dotclaude_segment_helper_matches_only_exact_segments() -> Non
     assert _PRODUCTION_MODULE._is_inside_dotclaude_segment("C:\\Users\\dev\\.claude\\agent.py") is True
     assert _PRODUCTION_MODULE._is_inside_dotclaude_segment("/src/my.claude.helpers.py") is False
     assert _PRODUCTION_MODULE._is_inside_dotclaude_segment("/src/app/service.py") is False
+
+
+def test_should_offer_split_family_test_files_as_candidates_for_code_rules_module(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    production_module = sandbox / "code_rules_magic_values.py"
+    string_magic_family_test = sandbox / "test_code_rules_enforcer_split_string_magic.py"
+    string_magic_family_test.write_text("def test_string_magic(): pass\n")
+    banned_family_test = sandbox / "test_code_rules_enforcer_split_banned.py"
+    banned_family_test.write_text("def test_banned(): pass\n")
+
+    all_candidates = _PRODUCTION_MODULE.candidate_test_paths_for(production_module)
+
+    assert string_magic_family_test in all_candidates
+    assert banned_family_test in all_candidates
+
+
+def test_should_keep_plain_stem_candidates_first_for_code_rules_module(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    production_module = sandbox / "code_rules_magic_values.py"
+    family_test = sandbox / "test_code_rules_enforcer_split_string_magic.py"
+    family_test.write_text("def test_string_magic(): pass\n")
+
+    all_candidates = _PRODUCTION_MODULE.candidate_test_paths_for(production_module)
+
+    assert all_candidates[0] == sandbox / "test_code_rules_magic_values.py"
+    assert all_candidates[1] == sandbox / "code_rules_magic_values_test.py"
+
+
+def test_should_not_offer_split_family_candidates_for_non_code_rules_module(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    production_module = sandbox / "orders.py"
+    family_test = sandbox / "test_code_rules_enforcer_split_string_magic.py"
+    family_test.write_text("def test_string_magic(): pass\n")
+
+    all_candidates = _PRODUCTION_MODULE.candidate_test_paths_for(production_module)
+
+    assert family_test not in all_candidates
+
+
+def test_should_add_no_split_family_candidates_when_directory_has_none(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    production_module = sandbox / "code_rules_magic_values.py"
+
+    all_candidates = _PRODUCTION_MODULE.candidate_test_paths_for(production_module)
+
+    expected_stem_candidates = [
+        sandbox / "test_code_rules_magic_values.py",
+        sandbox / "code_rules_magic_values_test.py",
+    ]
+    assert all_candidates == expected_stem_candidates
+
+
+def test_should_not_offer_family_candidates_for_code_ruleset_stem(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    production_module = sandbox / "code_ruleset.py"
+    family_test = sandbox / "test_code_rules_enforcer_split_example.py"
+    family_test.write_text("def test_detects_example(): pass\n")
+
+    all_candidates = _PRODUCTION_MODULE.candidate_test_paths_for(production_module)
+
+    expected_stem_candidates = [
+        sandbox / "test_code_ruleset.py",
+        sandbox / "code_ruleset_test.py",
+    ]
+    assert all_candidates == expected_stem_candidates
+    assert family_test not in all_candidates
+
+
+def test_should_allow_code_rules_edit_when_fresh_split_family_sibling_exists(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    production_module = sandbox / "code_rules_example.py"
+    production_module.write_text("def detect() -> None:\n    return None\n")
+    family_test = sandbox / "test_code_rules_enforcer_split_example_concern.py"
+    family_test.write_text("def test_detects_example(): pass\n")
+
+    payload = _make_edit_payload(
+        production_module,
+        old_string="return None",
+        new_string="return None  # adjusted",
+    )
+    completed = _run_hook_with_payload(payload)
+
+    assert _decision_from(completed) == "allow"
+
+
+def test_should_deny_code_rules_edit_when_split_family_sibling_is_stale(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    production_module = sandbox / "code_rules_example.py"
+    production_module.write_text("def detect() -> None:\n    return None\n")
+    family_test = sandbox / "test_code_rules_enforcer_split_example_concern.py"
+    family_test.write_text("def test_detects_example(): pass\n")
+    stale_timestamp = time.time() - STALE_MTIME_OFFSET_SECONDS
+    os.utime(family_test, (stale_timestamp, stale_timestamp))
+
+    payload = _make_edit_payload(
+        production_module,
+        old_string="return None",
+        new_string="return None  # adjusted",
+    )
+    completed = _run_hook_with_payload(payload)
+
+    assert _decision_from(completed) == "deny"

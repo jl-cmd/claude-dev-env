@@ -68,10 +68,12 @@ def copy_enforcer_into(repository_root: Path) -> None:
         repository_root / "packages" / "claude-dev-env" / "hooks" / "blocking"
     )
     blocking_destination.mkdir(parents=True, exist_ok=True)
-    for filename in ("code_rules_enforcer.py", "code_rules_path_utils.py"):
-        source_path = blocking_source / filename
-        destination_path = blocking_destination / filename
-        destination_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+    for each_enforcer_module in sorted(blocking_source.glob("code_rules_*.py")):
+        destination_path = blocking_destination / each_enforcer_module.name
+        destination_path.write_text(
+            each_enforcer_module.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
 
 
 def copy_hooks_config_into(repository_root: Path) -> None:

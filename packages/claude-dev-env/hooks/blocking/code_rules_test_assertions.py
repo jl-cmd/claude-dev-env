@@ -1,0 +1,226 @@
+"""Skip-decorator, existence-only, and constant-equality test-quality checks."""
+
+import ast
+import sys
+from pathlib import Path
+
+_BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
+_HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+if _BLOCKING_DIRECTORY not in sys.path:
+    sys.path.insert(0, _BLOCKING_DIRECTORY)
+if _HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _HOOKS_DIRECTORY)
+
+from code_rules_shared import (  # noqa: E402
+    is_test_file,
+)
+
+from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
+    UPPER_SNAKE_CONSTANT_PATTERN,
+)
+
+
+def _decorator_name_contains_skip(decorator_node: ast.expr) -> bool:
+    """Return True when a decorator AST node references an identifier containing 'skip'."""
+    if isinstance(decorator_node, ast.Name):
+        return "skip" in decorator_node.id.lower()
+    if isinstance(decorator_node, ast.Attribute):
+        return "skip" in decorator_node.attr.lower()
+    if isinstance(decorator_node, ast.Call):
+        return _decorator_name_contains_skip(decorator_node.func)
+    return False
+
+
+def check_skip_decorators_in_tests(content: str, file_path: str) -> list[str]:
+    """Flag @skip decorators on test functions in test files.
+
+    Tests must fail on missing dependencies rather than skip silently.
+    Only applies to test files; production files are exempt.
+    Only flags decorators applied to functions whose names start with 'test'.
+    """
+    if not is_test_file(file_path):
+        return []
+
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(syntax_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not each_node.name.startswith("test"):
+            continue
+        for each_decorator in each_node.decorator_list:
+            if _decorator_name_contains_skip(each_decorator):
+                issues.append(
+                    f"Line {each_decorator.lineno}: @skip decorator on test"
+                    f" — tests must fail on missing deps"
+                )
+
+    return issues
+
+
+def _collect_assert_nodes_bounded(node: ast.AST) -> list[ast.Assert]:
+    """Collect Assert nodes under node without crossing scope boundaries.
+
+    Terminates descent at FunctionDef, AsyncFunctionDef, ClassDef, and Lambda
+    nodes so that assertions belonging to nested scopes are not attributed to
+    the enclosing function body.
+    """
+    scope_boundary_types = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+    assertions: list[ast.Assert] = []
+    nodes_to_visit: list[ast.AST] = list(ast.iter_child_nodes(node))
+    while nodes_to_visit:
+        current = nodes_to_visit.pop()
+        if isinstance(current, ast.Assert):
+            assertions.append(current)
+        if isinstance(current, scope_boundary_types):
+            continue
+        nodes_to_visit.extend(ast.iter_child_nodes(current))
+    return assertions
+
+
+def _collect_body_assertions(statement_nodes: list[ast.stmt]) -> list[ast.Assert]:
+    """Collect Assert nodes from a function body without descending into nested scopes."""
+    assertions: list[ast.Assert] = []
+    for each_stmt in statement_nodes:
+        if isinstance(each_stmt, ast.Assert):
+            assertions.append(each_stmt)
+            continue
+        if isinstance(each_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        assertions.extend(_collect_assert_nodes_bounded(each_stmt))
+    return assertions
+
+
+def _is_existence_only_assertion(call_node: ast.Call) -> bool:
+    """Return True when a Call node is callable() or hasattr()."""
+    function_reference = call_node.func
+    if isinstance(function_reference, ast.Name):
+        return function_reference.id in ("callable", "hasattr")
+    if isinstance(function_reference, ast.Attribute):
+        return function_reference.attr in ("callable", "hasattr")
+    return False
+
+
+def _test_body_has_only_existence_assertions(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    """Return True when a test function body contains only existence-check assertions."""
+    assertion_nodes = _collect_body_assertions(function_node.body)
+    if not assertion_nodes:
+        return False
+
+    non_existence_assertions = 0
+    for each_assert in assertion_nodes:
+        test_expr = each_assert.test
+        if isinstance(test_expr, ast.Call) and _is_existence_only_assertion(test_expr):
+            continue
+        if isinstance(test_expr, ast.Compare):
+            comparators = test_expr.comparators
+            ops = test_expr.ops
+            if (
+                len(ops) == 1
+                and isinstance(ops[0], ast.IsNot)
+                and len(comparators) == 1
+                and isinstance(comparators[0], ast.Constant)
+                and comparators[0].value is None
+            ):
+                continue
+        non_existence_assertions += 1
+
+    return non_existence_assertions == 0
+
+
+def check_existence_check_tests(content: str, file_path: str) -> list[str]:
+    """Flag test functions containing only existence-check assertions.
+
+    Tests asserting only callable(x), hasattr(m, 'name'), or x is not None
+    verify nothing about behavior. They should be deleted or replaced with
+    assertions that exercise actual functionality.
+    Only applies to test files.
+    """
+    if not is_test_file(file_path):
+        return []
+
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(syntax_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not each_node.name.startswith("test"):
+            continue
+        if _test_body_has_only_existence_assertions(each_node):
+            issues.append(
+                f"Line {each_node.lineno}: existence-check test"
+                f" — delete or replace with a behavior test"
+            )
+
+    return issues
+
+
+def _is_upper_snake_name(name: str) -> bool:
+    """Return True when an identifier is written in UPPER_SNAKE_CASE."""
+    return bool(UPPER_SNAKE_CONSTANT_PATTERN.match(name))
+
+
+def _assert_is_constant_equality_only(assert_node: ast.Assert) -> bool:
+    """Return True when the assertion compares an UPPER_SNAKE name to a literal."""
+    test_expr = assert_node.test
+    if not isinstance(test_expr, ast.Compare):
+        return False
+    if len(test_expr.ops) != 1 or not isinstance(test_expr.ops[0], ast.Eq):
+        return False
+    left = test_expr.left
+    right = test_expr.comparators[0]
+    is_left_upper_snake = isinstance(left, ast.Name) and _is_upper_snake_name(left.id)
+    is_right_upper_snake = isinstance(right, ast.Name) and _is_upper_snake_name(right.id)
+    if is_left_upper_snake and is_right_upper_snake:
+        return False
+    is_left_a_literal = isinstance(left, ast.Constant)
+    is_right_a_literal = isinstance(right, ast.Constant)
+    return (
+        (is_left_upper_snake and is_right_a_literal)
+        or (is_right_upper_snake and is_left_a_literal)
+    )
+
+
+def check_constant_equality_tests(content: str, file_path: str) -> list[str]:
+    """Flag test functions whose sole assertion compares a constant to a literal.
+
+    Tests like 'assert CACHE_DIR == "cache"' cover no behavior — they just
+    verify the constant has not changed. Such tests should be deleted.
+    Only applies to test files; production files are exempt.
+    """
+    if not is_test_file(file_path):
+        return []
+
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(syntax_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not each_node.name.startswith("test"):
+            continue
+        all_assertions = _collect_body_assertions(each_node.body)
+        if not all_assertions:
+            continue
+        if len(all_assertions) > 1:
+            continue
+        if _assert_is_constant_equality_only(all_assertions[0]):
+            issues.append(
+                f"Line {each_node.lineno}: constant-value test"
+                f" — delete; tests must cover behavior"
+            )
+
+    return issues
