@@ -31,9 +31,11 @@ assert hook_spec is not None
 assert hook_spec.loader is not None
 hook_module = importlib.util.module_from_spec(hook_spec)
 hook_spec.loader.exec_module(hook_module)
-_is_exempt_python_comment = hook_module._is_exempt_python_comment
-check_comments_python = hook_module.check_comments_python
 
+from code_rules_comments import (  # noqa: E402
+    _is_exempt_python_comment,
+    check_comments_python,
+)
 
 FIXTURE_INLINE_COMMENT_LINE = 5
 FIXTURE_INLINE_COMMENT_COLUMN = 4

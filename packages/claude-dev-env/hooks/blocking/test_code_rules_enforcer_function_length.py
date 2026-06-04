@@ -17,23 +17,28 @@ pa#136 F20.
 
 from __future__ import annotations
 
-import importlib.util
 import pathlib
 import sys
+from types import SimpleNamespace
 
-_HOOK_DIR = pathlib.Path(__file__).parent
-if str(_HOOK_DIR) not in sys.path:
-    sys.path.insert(0, str(_HOOK_DIR))
+_BLOCKING_DIRECTORY = str(pathlib.Path(__file__).resolve().parent)
+_HOOKS_DIRECTORY = str(pathlib.Path(__file__).resolve().parent.parent)
+if _BLOCKING_DIRECTORY not in sys.path:
+    sys.path.insert(0, _BLOCKING_DIRECTORY)
+if _HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _HOOKS_DIRECTORY)
 
-hook_spec = importlib.util.spec_from_file_location(
-    "code_rules_enforcer",
-    _HOOK_DIR / "code_rules_enforcer.py",
+from code_rules_annotations_length import (  # noqa: E402
+    FUNCTION_LENGTH_BLOCKING_MESSAGE_SUFFIX,
+    FUNCTION_LENGTH_BLOCKING_THRESHOLD,
+    check_function_length,
 )
-assert hook_spec is not None
-assert hook_spec.loader is not None
-hook_module = importlib.util.module_from_spec(hook_spec)
-hook_spec.loader.exec_module(hook_module)
-check_function_length = hook_module.check_function_length
+
+hook_module = SimpleNamespace(
+    FUNCTION_LENGTH_BLOCKING_MESSAGE_SUFFIX=FUNCTION_LENGTH_BLOCKING_MESSAGE_SUFFIX,
+    FUNCTION_LENGTH_BLOCKING_THRESHOLD=FUNCTION_LENGTH_BLOCKING_THRESHOLD,
+    check_function_length=check_function_length,
+)
 
 PRODUCTION_FILE_PATH = "/project/src/long_module.py"
 TEST_FILE_PATH = "/project/src/test_long_module.py"

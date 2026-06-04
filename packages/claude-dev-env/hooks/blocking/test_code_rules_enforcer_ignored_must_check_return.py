@@ -7,22 +7,32 @@ call is exempt; only bare ``ast.Expr`` calls are flagged.
 
 from __future__ import annotations
 
-import importlib.util
+import sys
 from pathlib import Path
-from types import ModuleType
+from types import SimpleNamespace
 
+_BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
+_HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+if _BLOCKING_DIRECTORY not in sys.path:
+    sys.path.insert(0, _BLOCKING_DIRECTORY)
+if _HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _HOOKS_DIRECTORY)
 
-def _load_enforcer_module() -> ModuleType:
-    module_path = Path(__file__).parent / "code_rules_enforcer.py"
-    spec = importlib.util.spec_from_file_location("code_rules_enforcer", module_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from code_rules_boolean_mustcheck import (  # noqa: E402
+    MAX_IGNORED_MUST_CHECK_RETURN_ISSUES,
+)
+from code_rules_boolean_mustcheck import (  # noqa: E402
+    check_ignored_must_check_return as _check_ignored_must_check_return,
+)
+from code_rules_enforcer import (  # noqa: E402
+    validate_content as _validate_content,
+)
 
-
-code_rules_enforcer = _load_enforcer_module()
+code_rules_enforcer = SimpleNamespace(
+    MAX_IGNORED_MUST_CHECK_RETURN_ISSUES=MAX_IGNORED_MUST_CHECK_RETURN_ISSUES,
+    check_ignored_must_check_return=_check_ignored_must_check_return,
+    validate_content=_validate_content,
+)
 
 
 def check_ignored_must_check_return(content: str, file_path: str) -> list[str]:
