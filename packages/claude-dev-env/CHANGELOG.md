@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.50.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.0...claude-dev-env-v1.50.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* **hooks:** function-length gate measures executable lines, excluding docstrings ([#520](https://github.com/jl-cmd/claude-code-config/issues/520)) ([4c9a42e](https://github.com/jl-cmd/claude-code-config/commit/4c9a42e0bafd035425499ea8bc4babe447ad4e86))
+
+
+### Refactoring
+
+* **hooks:** split pr_description_enforcer into focused modules ([#522](https://github.com/jl-cmd/claude-code-config/issues/522)) ([65269c3](https://github.com/jl-cmd/claude-code-config/commit/65269c32f3631928a478ad7fe23226e8604334b9))
+* **hooks:** split test_md_to_html_blocker into focused suites ([#523](https://github.com/jl-cmd/claude-code-config/issues/523)) ([70adb94](https://github.com/jl-cmd/claude-code-config/commit/70adb9452ed88462200674900e73e969fa3f2cf3))
+
 ## [1.50.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.49.1...claude-dev-env-v1.50.0) (2026-06-03)
 
 
