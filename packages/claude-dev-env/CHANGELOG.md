@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.1...claude-dev-env-v1.50.2) (2026-06-04)
+
+
+### Refactoring
+
+* **hooks:** split code_rules_enforcer into focused check modules ([#521](https://github.com/jl-cmd/claude-code-config/issues/521)) ([72798f5](https://github.com/jl-cmd/claude-code-config/commit/72798f5098633a9b0d77338f89e92df4b11053b2))
+
 ## [1.50.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.0...claude-dev-env-v1.50.1) (2026-06-04)
 
 
