@@ -3,7 +3,7 @@ name: qbug
 description: >-
   Required baseline review for every new PR. Runs the /bugteam audit → fix →
   commit → push cycle via one clean-coder subagent (not a full team), looping
-  until convergence or stuck. Uses the same CODE_RULES gate, A–J category
+  until convergence or stuck. Uses the same CODE_RULES gate, A–N category
   rubric, and per-loop PR review shape as /bugteam — without TeamCreate,
   teammates, per-loop clean-room, or a loop cap. Invoke /bugteam instead for
   larger PRs that need per-loop bias isolation or a hard loop cap. Triggers:
@@ -21,7 +21,7 @@ Shared artifacts with /bugteam are referenced below by path, using the `${CLAUDE
 
 - Pre-flight script: `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/preflight.py`
 - Code-rules gate script: `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`
-- Bug category rubric A–J: [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md#audit-spawn-prompt-xml-bugfind-teammate)
+- Bug category rubric A–N: [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md#audit-spawn-prompt-xml-bugfind-teammate)
 - **Audit contract** (finding schema, proof-of-absence, adversarial pass, Haiku secondary, post-fix self-audit, diagnostics JSON): [`bugteam/reference/audit-contract.md`](../bugteam/reference/audit-contract.md)
 - PR comment lifecycle shape: [`bugteam/SKILL.md`](../bugteam/SKILL.md#audit-posting)
 
@@ -117,7 +117,7 @@ Agent(
   subagent_type="code-quality-agent",
   model="haiku",
   description="qbug Haiku secondary audit for PR <number>",
-  prompt="<audit-only prompt: read the PR diff, apply A-J categories from <categories_file>, return structured findings. No FIX, no git add, no git commit, no git push.>",
+  prompt="<audit-only prompt: read the PR diff, apply A-N categories from <categories_file>, return structured findings. No FIX, no git add, no git commit, no git push.>",
   run_in_background=False
 )
 ```
@@ -188,7 +188,7 @@ The subagent receives this prompt and loops internally — the lead does not re-
 
        - Read the patch file.
        - Audit only added/modified lines. Read <categories_file> for the
-         A–J category definitions; investigate each category explicitly.
+         A–N category definitions; investigate each category explicitly.
        - Follow the shared audit contract at
          bugteam/reference/audit-contract.md. Per category: produce
          either a Shape A structured finding or a Shape B structured
@@ -444,7 +444,7 @@ Delete the resolved `<qbug_temp_dir>` tree and any `.qbug-*.md` temp files in th
 - **No loop cap.** Cycle runs until `converged`, `stuck`, or `error`. User can interrupt.
 - **Code rules gate before every AUDIT.** Same `validate_content` logic as /bugteam.
 - **One commit per FIX action.** Linear branch, fast-forward push only.
-- **Categories A–J.** Same rubric as [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md).
+- **Categories A–N.** Same rubric as [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md).
 - **One review per loop.** Anchored findings as `comments[]`; unanchored findings surface in the calling skill's user-facing output (chat reply to the user) rather than in the PR review body.
 - **PR description rewrite on every exit**, same as /bugteam Step 4.5.
 - **Temp file cleanup on every exit path.**

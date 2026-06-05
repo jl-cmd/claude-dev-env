@@ -1,6 +1,6 @@
 # Category E — Dead code and unused imports
 
-**What this category audits:** imports the diff adds but leaves unreferenced, functions defined but never called, branches unreachable due to a prior return, conditions that are always true or always false, parameters that are accepted but never used, removed-but-not-deleted symbols.
+**What this category audits:** imports the diff adds but leaves unreferenced (dead imports), functions defined but never called, code made unreachable by a prior return or raise (dead returns), conditions that are always true or always false (dead branches), parameters that are accepted but never used (dead parameters), local variables assigned but never read (dead locals), removed-but-not-deleted symbols.
 
 **Examples of Category E findings:**
 - A new `import` line with zero corresponding references in the file.
@@ -8,6 +8,7 @@
 - Code after an unconditional `return` or `raise`.
 - A condition like `if False:` or `while True: ... return` where the loop body always returns immediately.
 - An accepted parameter that the function body never uses.
+- A local variable assigned and never read afterward in the same function.
 
 **Companion reference:** see `../source-material-section-types.md`.
 
@@ -21,7 +22,7 @@
 | E2 | Functions / methods defined but never called | Internal helpers defined in this PR with no call sites in this PR or elsewhere. |
 | E3 | Code after unconditional return / raise / exit | Statements following a top-level `return`, `raise`, `sys.exit`, `os._exit` that cannot execute. |
 | E4 | Always-true / always-false conditions | `if True:` / `if False:` / conditions provably constant given context. |
-| E5 | Unused parameters | Parameters declared but never read inside the function body. |
+| E5 | Unused parameters and locals | Parameters declared but never read inside the function body; local variables assigned but never read afterward in the same scope. |
 | E6 | Removed-but-not-deleted symbol references | Symbols renamed/removed elsewhere with stale import or call sites left behind. |
 | E7 | Test fixtures / helpers defined but never used | Pytest fixtures, test data builders, mock factories with no callers. |
 | E8 | Stub / placeholder code without TODO | `pass`, `...`, `raise NotImplementedError` left without explanation or tracking. |

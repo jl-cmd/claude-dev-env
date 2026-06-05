@@ -44,57 +44,29 @@ cd into `<worktree_path>` before any git or file operation.
   a `---` separator and a worked example against an authentic PR below —
   are in `$HOME/.claude/audit-rubrics/prompts/`):
 
-  A. API contract verification (signatures, return types, async/await correctness)
+  A. API contract verification
   B. Selector / query / engine compatibility
-  C. Resource cleanup and lifecycle (file handles, connections, processes, locks)
+  C. Resource cleanup and lifecycle
   D. Variable scoping, ordering, and unbound references
-  E. Dead code: dead parameters, dead locals, dead imports, dead branches, dead returns, and unused imports
-  F. Silent failures (catch-all excepts, unconditional success returns, missing error propagation)
-  G. Off-by-one, bounds, and integer overflow
-  H. Security boundaries (injection, path traversal, auth bypass, secret leakage)
-  I. Concurrency hazards (race conditions, missing awaits, shared mutable state)
-  J. Magic values and configuration drift
-  K. Codebase conflicts — a change updates one site of a pattern but a parallel
-     site in unchanged code stays stale, producing contradictory behavior;
-     the diff is internally consistent, the bug emerges only against unchanged
-     code (canonical example: jl-cmd/claude-code-config PR #397 r3210166636)
-  L. Behavior-equivalence for refactors. When the PR rewrites an existing
-     function (especially an enforcement check, parser, or path classifier),
-     compare the rewrite's edge-case handling against the sibling implementation
-     at the same git commit base. Pin the historically-valid inputs in a
-     `KNOWN_GOOD_INPUTS` table and assert each still passes. Cited in audits:
-     ccc#479 F1 (`#noqa` no-space variant dropped after a tokenize-based
-     refactor); ccc#479 F4 (bare `#` lookalike misclassified after refactor);
-     ccc#479 F5 (inline `#!` lookalike misclassified); ccc#479 F6 (early-exit
-     invariant dropped); ccc#472 F44 (`startswith('## Problem')` too loose vs
-     the sibling regex shape).
-  M. Producer/consumer cardinality vs collection-type contract. For each new
-     function returning `list[X]`, `Sequence[X]`, or `Iterable[X]`, ask
-     whether the return can contain duplicates and whether any downstream
-     consumer treats the value as a set. Subprocess-stdout parsers must return
-     `frozenset[Path]` or `dict.fromkeys`-deduplicated `list[Path]`.
-     Functions whose consumer is itself an `extend(...)` into a list pass;
-     functions with explicit "duplicates preserved" docstring text pass.
-     Cited in audits: pa#143 F10 (`_extract_paths_from_everything_cli_stdout`
-     duplicates → `RuntimeError` — the only High-severity crash bug in the
-     audit set); pa#136 F30 / F32 (duplicate content_id rows submit twice;
-     writeback ignores content_id key).
-  N. Test-name claims a scenario the body does not enter. Tests named
-     `test_*_at_*`, `test_*_under_*`, `test_*_when_*`, and `test_*_with_*`
-     must, via monkeypatch / fixture inspection, demonstrate the named
-     condition is in effect when the system under test runs. Path-decision
-     functions (registered in `*_path_exemptions.py` / `is_*_path` /
-     `_resolve_*_path` modules) must ship with a parametric matrix of
-     canonical edge cases (empty string, single filename, tilde, UNC,
-     drive-letter, symlinked, `..`-containing, trailing-slash). Tests with
-     neutral names (`test_returns_empty_list_on_x`) are unaffected. Cited
-     in audits: ccc#476 F5 / F21 / F23 / F26 / F27 (cross-platform
-     scenarios never exercised under the claimed conditions); pa#135 F11 /
-     F15 (string-shape and integration tests that exercise only the no-op
-     branch); pa#136 F50 (`<substring> not in executed_sql` assertion that
-     cannot fail because the substring shape never matches the real
-     fragment).
+  E. Dead code and unused imports
+  F. Silent failures
+  G. Off-by-one, bounds, integer overflow
+  H. Security boundaries
+  I. Concurrency hazards
+  J. CODE_RULES.md compliance
+  K. Codebase conflicts (incomplete propagation)
+  L. Behavior-equivalence for refactors
+  M. Producer/consumer cardinality vs collection-type contract
+  N. Test-name scenario verifier
 </bug_categories>
+
+<rubric_reference>
+  The category list above is a summary. The binding definition of each
+  category is its rubric file under
+  `$HOME/.claude/audit-rubrics/category_rubrics/` (ready-to-send prompt
+  variants under `$HOME/.claude/audit-rubrics/prompts/`). Read the rubric
+  files before auditing.
+</rubric_reference>
 
 <constraints>
   - Read-only on source code: the audit does not modify any source file.

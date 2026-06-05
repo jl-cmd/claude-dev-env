@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category F only** (silent failures). Skip A–E, G–K. Sub-bucket forced-exhaustion mode: Category F is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category F only** (silent failures). Skip A–E, G–N. Sub-bucket forced-exhaustion mode: Category F is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA]
 - Title / short description: [TITLE]
@@ -98,7 +98,7 @@ Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket F1-F8, produce Shape A 
 
 # Worked example: jl-cmd/claude-code-config PR #394
 
-Audit jl-cmd/claude-code-config PR #394 for **Category F only** (silent failures). Skip A–E, G–K. Sub-bucket forced-exhaustion mode: Category F is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit jl-cmd/claude-code-config PR #394 for **Category F only** (silent failures). Skip A–E, G–N. Sub-bucket forced-exhaustion mode: Category F is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 PR: feat(scripts): add sweep-empty-dirs utility and scheduled-task installer
 Head SHA: 62c9c169ee7a44824e5da25c4cf8b74fdca08a53

@@ -29,18 +29,28 @@ ALL_AUDIT_CONSTRAINT_TEXTS = [
 ]
 
 ALL_AUDIT_CATEGORY_ENTRIES = [
-    ("A", "Documentation / API call accuracy"),
-    ("B", "Type safety / boundary types"),
-    ("C", "Magic values / hardcoded constants"),
-    ("D", "Naming / banned identifiers"),
-    ("E", "Orphans / dead code"),
-    ("F", "Error handling / bare except"),
-    ("G", "Bounds / silent cap exits"),
-    ("H", "Testing / test quality"),
-    ("I", "Control flow / logic errors"),
-    ("J", "Architecture / SOLID violations"),
-    ("K", "Codebase conflicts / DRY"),
+    ("A", "API contract verification"),
+    ("B", "Selector / query / engine compatibility"),
+    ("C", "Resource cleanup and lifecycle"),
+    ("D", "Variable scoping, ordering, and unbound references"),
+    ("E", "Dead code and unused imports"),
+    ("F", "Silent failures"),
+    ("G", "Off-by-one, bounds, integer overflow"),
+    ("H", "Security boundaries"),
+    ("I", "Concurrency hazards"),
+    ("J", "CODE_RULES.md compliance"),
+    ("K", "Codebase conflicts (incomplete propagation)"),
+    ("L", "Behavior-equivalence for refactors"),
+    ("M", "Producer/consumer cardinality vs collection-type contract"),
+    ("N", "Test-name scenario verifier"),
 ]
+
+AUDIT_RUBRIC_REFERENCE_TEXT = (
+    "The category list above is a summary. The binding definition of each "
+    "category is its rubric file under $HOME/.claude/audit-rubrics/category_rubrics/ "
+    "(ready-to-send prompt variants under $HOME/.claude/audit-rubrics/prompts/). "
+    "Read the rubric files before auditing."
+)
 
 ALL_FIX_EXECUTION_STEPS = [
     "Read the finding and verify it against the current file at file:line.",

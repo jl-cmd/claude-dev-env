@@ -1,7 +1,9 @@
 """Emit the complete AUDIT spawn prompt XML to stdout.
 
-Substitutes <context>, <scope>, <bug_categories>, <constraints>,
-<comment_posting>, and <output_format> blocks from CLI args.
+Builds <context> and <scope> from CLI args; <bug_categories>,
+<rubric_reference>, and <constraints> come from the shared constants in
+skills_pr_loop_constants; <comment_posting> and <output_format> are built
+inline.
 
 Usage:
   python scripts/build_audit_prompt.py --owner jl-cmd --repo claude-code-config --pr-number 422 --loop 1 --head-ref feat/branch --base-ref main --worktree-path <PATH> --run-temp-dir <PATH>
@@ -22,6 +24,7 @@ from _xml_utils import emit_pretty_xml
 from skills_pr_loop_constants.path_resolver_constants import (
     ALL_AUDIT_CATEGORY_ENTRIES,
     ALL_AUDIT_CONSTRAINT_TEXTS,
+    AUDIT_RUBRIC_REFERENCE_TEXT,
 )
 
 
@@ -73,6 +76,9 @@ def build_audit_prompt_xml(
     for each_category_id, each_category_label in ALL_AUDIT_CATEGORY_ENTRIES:
         cat_elem = SubElement(bug_categories, "category", {"id": each_category_id})
         cat_elem.text = each_category_label
+
+    rubric_reference = SubElement(root, "rubric_reference")
+    rubric_reference.text = AUDIT_RUBRIC_REFERENCE_TEXT
 
     constraints = SubElement(root, "constraints")
     for each_constraint in ALL_AUDIT_CONSTRAINT_TEXTS:
@@ -167,12 +173,12 @@ def main(all_arguments: list[str]) -> int:
     xml_output = emit_audit_prompt(
         owner=arguments.owner,
         repo=arguments.repo,
-        pr_number=getattr(arguments, "pr_number"),
+        pr_number=arguments.pr_number,
         loop=arguments.loop,
-        head_ref=getattr(arguments, "head_ref"),
-        base_ref=getattr(arguments, "base_ref"),
-        worktree_path=getattr(arguments, "worktree_path"),
-        run_temp_dir=getattr(arguments, "run_temp_dir"),
+        head_ref=arguments.head_ref,
+        base_ref=arguments.base_ref,
+        worktree_path=arguments.worktree_path,
+        run_temp_dir=arguments.run_temp_dir,
     )
     sys.stdout.write(xml_output)
     return 0

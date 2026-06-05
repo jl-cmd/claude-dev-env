@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category D only** (variable scoping, ordering, and unbound references). Skip A–C, E–K. Sub-bucket forced-exhaustion mode: Category D is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category D only** (variable scoping, ordering, and unbound references). Skip A–C, E–N. Sub-bucket forced-exhaustion mode: Category D is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA]
 - Repo / artifact: [REPO_OR_ARTIFACT]
@@ -89,7 +89,7 @@ Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket D1–D8, produce Shape 
 
 # Worked example: jl-cmd/claude-code-config PR #394
 
-Audit jl-cmd/claude-code-config PR #394 for **Category D only** (variable scoping, ordering, and unbound references). Skip A–C, E–K. Sub-bucket forced-exhaustion mode: Category D is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit jl-cmd/claude-code-config PR #394 for **Category D only** (variable scoping, ordering, and unbound references). Skip A–C, E–N. Sub-bucket forced-exhaustion mode: Category D is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 PR: feat(scripts): add sweep-empty-dirs utility and scheduled-task installer
 Head SHA: 62c9c169ee7a44824e5da25c4cf8b74fdca08a53

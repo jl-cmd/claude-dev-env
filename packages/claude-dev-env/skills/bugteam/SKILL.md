@@ -11,10 +11,10 @@ description: >-
 # Bugteam
 
 Audit–fix until convergence. Bugfind: `code-quality-agent`, fresh context each
-loop, auditing all A–K categories. Bugfix: `clean-coder`. Hard cap: 20 audit
+loop, auditing all A–N categories. Bugfix: `clean-coder`. Hard cap: 20 audit
 loops. Grant `.claude/**` at start, revoke always at end.
 
-The audit agent loads the A–K category rubrics from
+The audit agent loads the A–N category rubrics from
 `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/` alongside
 [`PROMPTS.md`](PROMPTS.md) and produces a single outcome XML per loop.
 
@@ -146,7 +146,7 @@ end-to-end mental model before starting Step 0.
 | Posting the end-of-pass audit review via `post_audit_thread.py` (APPROVE on CLEAN — the request event; GitHub stores it as `state=APPROVED` — REQUEST_CHANGES with inline anchored comments on DIRTY) | [§ Audit posting](#audit-posting) |
 | Posting per-finding fix replies via GitHub MCP `add_reply_to_pull_request_comment` (rendered with the unified template at [`_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md)) | [reference/github-pr-reviews.md](reference/github-pr-reviews.md) |
 | Teardown, PR description rewrite via `pr-description-writer`, permission revoke, final report | [reference/teardown-publish-permissions.md](reference/teardown-publish-permissions.md) |
-| Spawn-prompt XML, A–K category bindings, outcome XML schemas | [PROMPTS.md](PROMPTS.md) |
+| Spawn-prompt XML, A–N category bindings, outcome XML schemas | [PROMPTS.md](PROMPTS.md) |
 | Per-category audit content (sub-buckets, decision criteria, ready-to-send Variant C templates) | `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/` |
 | Invariants and design rationale | [CONSTRAINTS.md](CONSTRAINTS.md), [reference/design-rationale.md](reference/design-rationale.md) |
 | Audit-contract finding shape (Shape A / B), Haiku secondary, post-fix self-audit | [reference/audit-contract.md](reference/audit-contract.md) |
@@ -159,11 +159,11 @@ end-to-end mental model before starting Step 0.
 - `SKILL.md` — this hub.
 - `reference/` — workflow detail per situation.
 - `scripts/` — utility scripts executed, not loaded as primary context.
-- `PROMPTS.md` — spawn XML, A–K category bindings, outcome schemas.
+- `PROMPTS.md` — spawn XML, A–N category bindings, outcome schemas.
 - `CONSTRAINTS.md` — invariants.
 - `EXAMPLES.md` — exit scenarios.
 - `sources.md` — doc URLs and verbatim quotes.
 - `~/.claude/audit-rubrics/` — installed by `npx claude-dev-env` from
-  `packages/claude-dev-env/audit-rubrics/`; the audit agent reads all A–K
+  `packages/claude-dev-env/audit-rubrics/`; the audit agent reads all A–N
   rubrics under `category_rubrics/` and prompts under `prompts/`. Required
   at audit time alongside `PROMPTS.md`.

@@ -88,16 +88,25 @@ The XML prompt skeleton:
 
 <bug_categories>
   Investigate each explicitly:
-  A. API contract verification (signatures, return types, async/await correctness)
+  A. API contract verification
   B. Selector / query / engine compatibility
-  C. Resource cleanup and lifecycle (file handles, connections, processes, locks)
+  C. Resource cleanup and lifecycle
   D. Variable scoping, ordering, and unbound references
   E. Dead code and unused imports
-  F. Silent failures (catch-all excepts, unconditional success returns, missing error propagation)
-  G. Off-by-one, bounds, and integer overflow
-  H. Security boundaries (injection, path traversal, auth bypass, secret leakage)
-  I. Concurrency hazards (race conditions, missing awaits, shared mutable state)
-  J. Magic values and configuration drift
+  F. Silent failures
+  G. Off-by-one, bounds, integer overflow
+  H. Security boundaries
+  I. Concurrency hazards
+  J. CODE_RULES.md compliance
+  K. Codebase conflicts (incomplete propagation)
+  L. Behavior-equivalence for refactors
+  M. Producer/consumer cardinality vs collection-type contract
+  N. Test-name scenario verifier
+
+  The category list above is a summary. The binding definition of each
+  category is its rubric file under $HOME/.claude/audit-rubrics/category_rubrics/
+  (ready-to-send prompt variants under $HOME/.claude/audit-rubrics/prompts/).
+  Read the rubric files before auditing.
 </bug_categories>
 
 <constraints>
@@ -256,18 +265,18 @@ Want me to run /fixbugs for the P0/P1 findings?
 User: `/findbugs`
 Claude: [resolves PR #42 from current branch, fetches full diff, spawns code-quality-agent foreground with self-contained prompt, returns]
 
-`1 P0 / 2 P1 / 0 P2 — 7 categories cleared`
+`1 P0 / 2 P1 / 0 P2 — 11 categories cleared`
 
 `P0 — race condition on shared cache write`
-`  src/cache.py:88 — concurrent writers can both pass the existence check before either writes (category: concurrency)`
+`  src/cache.py:88 — concurrent writers can both pass the existence check before either writes (category: I — Concurrency hazards)`
 
 `P1 — silent paste failure`
-`  utils/clipboard.py:33 — validated_paste returns success without verifying the post-paste state (category: silent failure)`
+`  utils/clipboard.py:33 — validated_paste returns success without verifying the post-paste state (category: F — Silent failures)`
 
 `P1 — unbound variable on early-exception path`
-`  src/processor.py:283 — scheduling_log referenced after try/finally where it may be unbound (category: scoping)`
+`  src/processor.py:283 — scheduling_log referenced after try/finally where it may be unbound (category: D — Variable scoping, ordering, and unbound references)`
 
-`Verified clean: API contract, selector compatibility, resource cleanup, dead code, off-by-one, security boundaries, magic values`
+`Verified clean: API contract, selector compatibility, resource cleanup, dead code, off-by-one, security boundaries, CODE_RULES.md compliance, codebase conflicts, behavior-equivalence, producer/consumer cardinality, Test-name scenario verifier`
 
 `Open questions: none`
 

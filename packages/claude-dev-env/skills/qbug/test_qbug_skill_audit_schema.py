@@ -11,18 +11,19 @@ from pathlib import Path
 
 
 SKILL_FILE_PATH = Path(__file__).parent / "SKILL.md"
-PROMPTS_FILE_PATH = Path(__file__).parent.parent / "bugteam" / "PROMPTS.md"
 CONTRACT_FILE_PATH = (
     Path(__file__).parent.parent / "bugteam" / "reference" / "audit-contract.md"
+)
+CATEGORY_E_RUBRIC_FILE_PATH = (
+    Path(__file__).parent.parent.parent
+    / "audit-rubrics"
+    / "category_rubrics"
+    / "category-e-dead-code.md"
 )
 
 
 def _load_skill_text() -> str:
     return SKILL_FILE_PATH.read_text(encoding="utf-8")
-
-
-def _load_prompts_text() -> str:
-    return PROMPTS_FILE_PATH.read_text(encoding="utf-8")
 
 
 def _load_contract_text() -> str:
@@ -136,21 +137,10 @@ def test_step2_spawn_should_reference_clean_coder_and_haiku_secondary() -> None:
     )
 
 
-def test_prompts_md_should_contain_expanded_category_e_dead_code_variants() -> None:
-    prompts_text = _load_prompts_text()
-    assert (
-        "dead parameter" in prompts_text.lower()
-        or "dead parameters" in prompts_text.lower()
-    ), "Category E must cover dead parameters"
-    assert (
-        "dead local" in prompts_text.lower() or "dead locals" in prompts_text.lower()
-    ), "Category E must cover dead locals"
-    assert (
-        "dead import" in prompts_text.lower() or "dead imports" in prompts_text.lower()
-    ), "Category E must cover dead imports"
-    assert (
-        "dead branch" in prompts_text.lower() or "dead branches" in prompts_text.lower()
-    ), "Category E must cover dead branches"
-    assert (
-        "dead return" in prompts_text.lower() or "dead returns" in prompts_text.lower()
-    ), "Category E must cover dead returns"
+def test_category_e_rubric_should_cover_expanded_dead_code_variants() -> None:
+    rubric_text = CATEGORY_E_RUBRIC_FILE_PATH.read_text(encoding="utf-8").lower()
+    assert "dead parameter" in rubric_text, "Category E must cover dead parameters"
+    assert "dead local" in rubric_text, "Category E must cover dead locals"
+    assert "dead import" in rubric_text, "Category E must cover dead imports"
+    assert "dead branch" in rubric_text, "Category E must cover dead branches"
+    assert "dead return" in rubric_text, "Category E must cover dead returns"
