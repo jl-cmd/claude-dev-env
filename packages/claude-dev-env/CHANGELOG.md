@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.4](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.3...claude-dev-env-v1.50.4) (2026-06-05)
+
+
+### Documentation
+
+* **pr-converge:** require full origin/main...HEAD diff for code-review and bugteam rounds ([#528](https://github.com/jl-cmd/claude-code-config/issues/528)) ([7737927](https://github.com/jl-cmd/claude-code-config/commit/77379279197f0edfed7d962f0a9bb6b388fea8ed))
+
 ## [1.50.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.2...claude-dev-env-v1.50.3) (2026-06-05)
 
 
