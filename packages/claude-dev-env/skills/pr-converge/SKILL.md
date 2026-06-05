@@ -105,6 +105,15 @@ For each unresolved thread, verify the concern against current HEAD;
 either fix-and-resolve, or reply-with-note-and-resolve when the concern
 no longer applies.
 
+**Full-PR-diff rule: every CODE-REVIEW round (Step 5) and every BUGTEAM
+round (Step 6) covers the FULL `origin/main...HEAD` diff — every file
+the PR touches.** A round that scopes to a subset — only the last commit,
+only files touched since the prior clean SHA, only bugbot-flagged paths,
+or any other delta cut — does not satisfy the gate, and a "clean" verdict
+against a partial diff is not a valid clean. Re-run the round against the
+full diff before recording `code_review_clean_at` or treating the bugteam
+round as converged. This rule holds every tick, every loop, every PR.
+
 - [ ] **Step 0: Grant project permissions**
       `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
 
@@ -159,11 +168,21 @@ no longer applies.
 
       Pre-condition: `bugbot_clean_at == current_head` (or `bugbot_down == true`).
 
-      Run Claude Code's built-in `/code-review --fix` on the current diff —
+      Run Claude Code's built-in `/code-review --fix` on the full
+      `origin/main...HEAD` diff —
       the [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally)
       — so it reviews the diff and applies its findings to the working
       tree. Pass no effort argument, so the review uses the session's
       current effort.
+
+      **Scope: the FULL `origin/main...HEAD` diff every tick** — every file
+      the PR touches. Do not delta-scope to commits added since the prior
+      clean SHA, do not scope to a single file, do not scope to bugbot's
+      flagged paths. Before running, confirm the working tree is on the
+      PR's HEAD with no uncommitted edits, then invoke `/code-review --fix`
+      with no path arguments so it audits the whole branch diff against
+      `origin/main`. A partial-scope round does not count and cannot set
+      `code_review_clean_at`.
 
       - [ ] **fixes applied** (working tree changed) →
             - [ ] Commit the applied fixes (one commit) → push
@@ -186,6 +205,14 @@ no longer applies.
       audit call for the formal Skill invocation is a protocol violation — the
       `pr_converge_bugteam_enforcer` hook blocks it. `qbug` is NOT an accepted
       substitute; `bugteam` is the only allowed skill at this step.
+
+      **Scope: the FULL `origin/main...HEAD` diff every tick** — every file
+      the PR touches. Pass the PR URL as the sole argument so bugteam audits
+      the whole branch diff against `origin/main`. Do not pass a file list,
+      a path filter, a commit range, or any "just the new commits since
+      last clean" cut — bugteam owns its own discovery on the full PR diff.
+      A partial-scope round does not count and cannot satisfy the
+      converged-on-current-HEAD condition below.
 
       After bugteam completes, re-resolve HEAD.
 

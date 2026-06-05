@@ -117,14 +117,23 @@ c. Decide (four branches; match first whose predicate holds):
 
 Local correctness/quality pass between BUGBOT clean and BUGTEAM. Enters
 after BUGBOT reports clean on `current_head` (or `bugbot_down == true`).
-Runs Claude Code's built-in `/code-review --fix` on the current diff; it
-produces no GitHub review artifact, so there are no code-review threads to
-resolve.
+Runs Claude Code's built-in `/code-review --fix` on the full
+`origin/main...HEAD` diff; it produces no GitHub review artifact, so there
+are no code-review threads to resolve.
 
-a. Run Claude Code's built-in `/code-review --fix` on the current diff —
-   the [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
-   It reviews the diff and applies its findings to the working tree. Pass
-   no effort argument, so the review uses the session's current effort.
+a. Run Claude Code's built-in `/code-review --fix` on the FULL
+   `origin/main...HEAD` diff — every file the PR touches — via the
+   [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
+   It reviews the diff and applies its findings to the working tree.
+
+   Before running, confirm the working tree sits on the PR's HEAD with no
+   uncommitted edits, then invoke `/code-review --fix` with no path
+   arguments so it audits the whole branch diff against `origin/main`. Do
+   not delta-scope to commits added since the prior clean SHA, do not
+   scope to a single file, do not scope to bugbot's flagged paths. A
+   partial-scope round does not count and cannot set
+   `code_review_clean_at`. Pass no effort argument, so the review uses
+   the session's current effort.
 
 b. Decide (two branches; match first whose predicate holds):
 
@@ -143,6 +152,13 @@ b. Decide (two branches; match first whose predicate holds):
 ### `phase == BUGTEAM`
 
 a. Run **bugteam** on current PR.
+
+   Pass the PR URL as the sole argument so bugteam audits the FULL
+   `origin/main...HEAD` diff — every file the PR touches. Bugteam owns
+   its own discovery on the full PR diff. Do not pass a file list, a
+   path filter, a commit range, or any "just the new commits since last
+   clean" cut. A partial-scope round does not count and cannot satisfy
+   the converged-on-current-HEAD condition in step (d).
 
    - **`Skill` invokable**: invoke bugteam
      with `Skill`.
