@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.2...claude-dev-env-v1.50.3) (2026-06-05)
+
+
+### Bug Fixes
+
+* **pr-loop:** restore A-N audit categories in build_audit_prompt and pin with test ([#526](https://github.com/jl-cmd/claude-code-config/issues/526)) ([2b3f86c](https://github.com/jl-cmd/claude-code-config/commit/2b3f86c84e93852fbf4b30e03aaee24c47df69e7))
+
 ## [1.50.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.1...claude-dev-env-v1.50.2) (2026-06-04)
 
 
