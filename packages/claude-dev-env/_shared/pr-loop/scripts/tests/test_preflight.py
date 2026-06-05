@@ -233,6 +233,44 @@ def test_preflight_uses_shared_hooks_path_suffix_constant() -> None:
     assert exit_code == 0
 
 
+def test_verify_git_hooks_path_invokes_self_heal_before_effective_query(
+    tmp_path: Path,
+) -> None:
+    """Shared verify_git_hooks_path must delegate to self-heal before --get.
+
+    Mirrors the bugteam-side guard so a future refactor that drops the
+    silently_clear_stale_local_hooks_path_override call in the shared
+    preflight would be caught.
+    """
+    canonical_hooks_path = tmp_path / ".claude" / "hooks" / "git-hooks"
+    canonical_hooks_path.mkdir(parents=True)
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed_process(
+            str(canonical_hooks_path) + "\n", returncode=0
+        )
+        preflight.verify_git_hooks_path(tmp_path)
+    all_called_commands = [
+        each_call_args[0][0] for each_call_args in mock_run.call_args_list
+    ]
+    has_self_heal_local_read = any(
+        "--get-all" in each_command for each_command in all_called_commands
+    )
+    has_effective_query = any(
+        "--get" in each_command and "--get-all" not in each_command
+        for each_command in all_called_commands
+    )
+    assert has_self_heal_local_read, (
+        "verify_git_hooks_path must run the --local --get-all read for self-heal"
+    )
+    assert has_effective_query, (
+        "verify_git_hooks_path must still run the effective --get verification"
+    )
+    first_called_command = all_called_commands[0]
+    assert "--get-all" in first_called_command, (
+        "Self-heal must run BEFORE the effective config query, not after"
+    )
+
+
 def test_preflight_skip_uses_shared_env_var_constant(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -428,6 +466,7 @@ def test_main_should_not_double_print_when_git_ls_fails(
         patch.object(preflight, "run_pytest", return_value=0) as mock_pytest,
     ):
         mock_run.side_effect = [
+            mock_hooks_result,
             mock_hooks_result,
             subprocess.CalledProcessError(128, ["git", "ls-files"]),
         ]

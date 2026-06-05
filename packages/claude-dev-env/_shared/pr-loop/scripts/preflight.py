@@ -39,6 +39,7 @@ from pr_loop_shared_constants.preflight_constants import (
     PYTHON_FILE_SUFFIX,
     TESTS_DIRECTORY_NAME,
 )
+from preflight_self_heal import silently_clear_stale_local_hooks_path_override  # noqa: E402
 from reviews_disabled import (
     CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
     CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
@@ -50,9 +51,17 @@ from reviews_disabled import (
 def verify_git_hooks_path(repository_root: Path | None = None) -> int:
     """Check that core.hooksPath resolves to the claude-dev-env git-hooks directory.
 
-    When *repository_root* is provided, queries the effective config for that
-    repository (``git -C <root> config --get``), which detects repo-level
-    overrides such as Husky or lefthook. Falls back to the current working
+    Silently clears any stale, non-canonical local-scope core.hooksPath
+    override before querying the effective config, so a worktree-seeded local
+    entry cannot shadow a correctly configured global setting. When
+    *repository_root* is provided, queries the effective config for that
+    repository (``git -C <root> config --get``). When a canonical global
+    ``core.hooksPath`` is already configured, the preceding self-heal step
+    clears non-canonical local-scope entries, so repo-level overrides such
+    as Husky or lefthook at local scope are silently removed in favor of
+    the canonical global; when the global is unset or non-canonical, the
+    self-heal stands down and the ``--get`` query still surfaces those
+    overrides through the failure path. Falls back to the current working
     directory's effective config when *repository_root* is None.
 
     Args:
@@ -64,6 +73,9 @@ def verify_git_hooks_path(repository_root: Path | None = None) -> int:
         Non-zero and prints a correction message when unset or pointing elsewhere.
     """
     expected_hooks_path_suffix = HOOKS_PATH_VERIFICATION_SUFFIX
+    silently_clear_stale_local_hooks_path_override(
+        repository_root, expected_hooks_path_suffix
+    )
     enforcement_absent_message = (
         "Git-side CODE_RULES enforcement is not active on this host.\n"
         "Run: npx claude-dev-env .\n"
@@ -75,7 +87,7 @@ def verify_git_hooks_path(repository_root: Path | None = None) -> int:
         git_command.extend(["-C", str(repository_root)])
     git_command.extend(list(ALL_GIT_CONFIG_GET_CORE_HOOKS_PATH_SUBCOMMAND))
     try:
-        query_result = subprocess.run(
+        query_completed_process = subprocess.run(
             git_command,
             capture_output=True,
             text=True,
@@ -97,13 +109,13 @@ def verify_git_hooks_path(repository_root: Path | None = None) -> int:
             file=sys.stderr,
         )
         return 1
-    if query_result.returncode != 0:
+    if query_completed_process.returncode != 0:
         print(
             f"bugteam_preflight: {enforcement_absent_message}",
             file=sys.stderr,
         )
         return 1
-    configured_path = query_result.stdout.strip().replace("\\", "/").rstrip("/")
+    configured_path = query_completed_process.stdout.strip().replace("\\", "/").rstrip("/")
     if not configured_path.endswith(expected_hooks_path_suffix):
         print(
             f"bugteam_preflight: core.hooksPath is '{configured_path}' — "

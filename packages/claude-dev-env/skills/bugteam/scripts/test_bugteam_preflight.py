@@ -282,3 +282,35 @@ def test_main_should_halt_when_env_var_contains_uppercase_or_whitespace_bugteam_
     monkeypatch.delenv("BUGTEAM_PREFLIGHT_SKIP", raising=False)
     exit_code = bugteam_preflight.main(["--no-pytest"])
     assert exit_code == bugteam_preflight.EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV
+
+
+def _was_called_with_argument(
+    mock_subprocess_run: MagicMock, argument_token: str
+) -> bool:
+    return any(
+        argument_token in each_call_args[0][0]
+        for each_call_args in mock_subprocess_run.call_args_list
+    )
+
+
+def test_verify_git_hooks_path_invokes_self_heal_before_effective_query(
+    tmp_path: Path,
+) -> None:
+    """verify_git_hooks_path must delegate to the shared self-heal helper before --get."""
+    canonical_hooks_path = tmp_path / ".claude" / "hooks" / "git-hooks"
+    canonical_hooks_path.mkdir(parents=True)
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed_process(
+            str(canonical_hooks_path) + "\n", returncode=0
+        )
+        bugteam_preflight.verify_git_hooks_path(tmp_path)
+    assert _was_called_with_argument(mock_run, "--get-all"), (
+        "verify_git_hooks_path must run the --local --get-all read for self-heal"
+    )
+    assert _was_called_with_argument(mock_run, "--get"), (
+        "verify_git_hooks_path must still run the effective --get verification"
+    )
+    first_called_command = mock_run.call_args_list[0][0][0]
+    assert "--get-all" in first_called_command, (
+        "Self-heal must run BEFORE the effective config query, not after"
+    )
