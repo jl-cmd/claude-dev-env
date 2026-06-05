@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category K only** (codebase conflicts — incomplete propagation). Skip A–J. Sub-bucket forced-exhaustion mode: Category K is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category K only** (codebase conflicts — incomplete propagation). Skip A–J, L–N. Sub-bucket forced-exhaustion mode: Category K is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA — including the BEFORE state of changed surfaces, so the agent can compare before vs after]
 
@@ -79,7 +79,7 @@ Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket K1-K9, produce Shape A 
 
 Note: PR #397 is the K canonical case, NOT #394.
 
-Audit jl-cmd/claude-code-config PR #397 for **Category K only** (codebase conflicts — incomplete propagation). Skip A–J. Sub-bucket forced-exhaustion mode: Category K is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit jl-cmd/claude-code-config PR #397 for **Category K only** (codebase conflicts — incomplete propagation). Skip A–J, L–N. Sub-bucket forced-exhaustion mode: Category K is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 PR: fix(hooks): improve hedging-language guardrail to surface user questions
 Base SHA: 76f9c1a0048729b87c44626a3380dc840065c2fa (origin/main at PR open time)

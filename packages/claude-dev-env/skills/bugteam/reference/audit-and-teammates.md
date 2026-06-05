@@ -116,7 +116,7 @@ Repeat until an exit condition fires.
 
 ## AUDIT action
 
-Spawn one audit agent that walks all A–K categories:
+Spawn one audit agent that walks all A–N categories:
 
 ```
 Agent(

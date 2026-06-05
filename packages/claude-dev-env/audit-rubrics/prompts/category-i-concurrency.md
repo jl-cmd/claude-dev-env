@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category I only** (concurrency hazards). Skip A–H, J–K. Sub-bucket forced-exhaustion mode: Category I is decomposed into [N] sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category I only** (concurrency hazards). Skip A–H, J–N. Sub-bucket forced-exhaustion mode: Category I is decomposed into [N] sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA — including: is this code single-threaded, threaded, asyncio, multiprocessing, or mixed? Name the runtime (CPython 3.x, Node, Go, JVM, .NET, PowerShell runspace, browser JS), the concurrency primitives actually present (`threading`, `asyncio`, `multiprocessing`, `concurrent.futures`, `Thread`, `goroutine`, `Promise`, `Task`, `Start-ThreadJob`, `ForEach-Object -Parallel`, etc.), and the inter-process surface (shared filesystem, shared DB, shared cache, shared queue, signals). State explicitly which primitives are absent so each sub-bucket has a Shape B basis.]
 
@@ -88,7 +88,7 @@ Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket I1–I8, produce Shape 
 
 # Worked example: jl-cmd/claude-code-config PR #394
 
-Audit jl-cmd/claude-code-config PR #394 for **Category I only** (concurrency hazards). Skip A–H, J–K. Sub-bucket forced-exhaustion mode: Category I is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit jl-cmd/claude-code-config PR #394 for **Category I only** (concurrency hazards). Skip A–H, J–N. Sub-bucket forced-exhaustion mode: Category I is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 PR: feat(scripts): add sweep-empty-dirs utility and scheduled-task installer
 Head SHA: 62c9c169ee7a44824e5da25c4cf8b74fdca08a53

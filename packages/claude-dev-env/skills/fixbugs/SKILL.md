@@ -33,7 +33,7 @@ Locate the most recent `/findbugs` output in the current conversation. For each 
 
 - Severity (`P0` / `P1` / `P2`)
 - `file:line`
-- Category (the A–J letter or category name `/findbugs` reported)
+- Category (the A–N letter or category name `/findbugs` reported)
 - One-sentence description as `/findbugs` wrote it
 
 Apply the severity filter from `$ARGUMENTS` if present:

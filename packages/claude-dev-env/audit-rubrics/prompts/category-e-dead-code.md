@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category E only** (dead code and unused imports). Skip A–D, F–K. Sub-bucket forced-exhaustion mode: Category E is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category E only** (dead code and unused imports). Skip A–D, F–N. Sub-bucket forced-exhaustion mode: Category E is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA]
 - Repo / artifact: [REPO_OR_ARTIFACT_NAME]
@@ -43,8 +43,9 @@ Inline the artifact under this section using the section types defined in the ch
 - Runtime-bound conditions (parameter values, `os.path.isdir`, `Test-Path`, environment lookups) are not constant; state the runtime source.
 - Adversarial probes for proof-of-absence: (a) any `if 1:` / `if 0:` / `if True:` / `if False:` literals in the diff? (b) any condition of the form `if x:` where `x` was just assigned a literal in the line above? (c) any `assert True` / `assert False` in test bodies? (d) any short-circuit like `x or DEFAULT` where `x` was just constructed and is statically truthy?
 
-**E5. Unused parameters**
+**E5. Unused parameters and locals**
 - For every function or method introduced or modified by the artifact, verify each declared parameter is read at least once in the body (including in default-argument expressions for inner functions, in closures, or in type guards).
+- For every function or method introduced or modified by the artifact, verify each local variable assigned in the body is read at least once afterward in the same scope; an assignment whose value is never read is a dead local.
 - Tuple-unpack discards (`for path, _, _ in os.walk(...)`) are out of scope — E5 specifically scopes "function parameters never read"; state this exclusion explicitly.
 - `*args` / `**kwargs` / TypeScript rest spreads: confirm at least one consumer (forwarded to another call, iterated, indexed) or mark the parameter unused.
 - Cross-language parameter declarations (PowerShell `param(...)`, shell positional `$1..$N`, Bash `getopts`): confirm each named parameter has at least one body reference.
@@ -86,7 +87,7 @@ Note: most Category E findings are P2 (style / cleanup) unless the dead code mas
 
 # Worked example: jl-cmd/claude-code-config PR #394
 
-Audit jl-cmd/claude-code-config PR #394 for **Category E only** (dead code and unused imports). Skip A–D, F–K. Sub-bucket forced-exhaustion mode: Category E is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit jl-cmd/claude-code-config PR #394 for **Category E only** (dead code and unused imports). Skip A–D, F–N. Sub-bucket forced-exhaustion mode: Category E is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 PR: feat(scripts): add sweep-empty-dirs utility and scheduled-task installer
 Head SHA: 62c9c169ee7a44824e5da25c4cf8b74fdca08a53
@@ -128,7 +129,7 @@ ID prefix: `find`.
 - `test_sweep_empty_dirs.py` line 13: `if str(_SCRIPTS_DIR) not in sys.path:` — runtime membership test; not constant.
 - Adversarial probes for proof-of-absence: (a) does the diff introduce any `if 1:` / `if 0:` / `if True:` / `if False:` literals? grep the diff text. (b) any condition of the form `if x:` where `x` was just assigned a literal in the line above? (c) any `assert True` or `assert False` in test bodies? (none — verify).
 
-**E5. Unused parameters**
+**E5. Unused parameters and locals**
 - `_log_walk_error(os_error: OSError) -> None` (line 14) — parameter `os_error` is read twice in the body (`os_error.filename`, `os_error.strerror`). Used.
 - `sweep(root: str, min_age_seconds: int) -> list[str]` (line 18) — `root` is passed to `os.walk` (line 21); `min_age_seconds` is read at line 26. Both used.
 - `_build_parser() -> argparse.ArgumentParser` (line 39) — zero parameters; nothing to verify.
