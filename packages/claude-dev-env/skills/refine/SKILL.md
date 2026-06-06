@@ -164,7 +164,7 @@ Spawn `general-purpose` (`subagent_type: general-purpose`, foreground) with:
   - **Ambiguity** — no parked open questions where a decision is required for implementation to begin
   - **Implementer-readiness** — a downstream implementer can act on each step without back-and-forth (file paths named, agents named, change concrete)
 - A required return shape: structured findings as `severity (P0/P1/P2) | location | violation`, plus an explicit `CLEAN` verdict when no findings remain
-- An explicit instruction NOT to apply code-review rubrics (CODE_RULES categories A–N, API contracts, resource cleanup, etc.) — the audit target is a markdown plan, not source code
+- An explicit instruction NOT to apply code-review rubrics (CODE_RULES categories A–P, API contracts, resource cleanup, etc.) — the audit target is a markdown plan, not source code
 
 If the verdict is `CLEAN`: skip step 8 and proceed to step 10.
 

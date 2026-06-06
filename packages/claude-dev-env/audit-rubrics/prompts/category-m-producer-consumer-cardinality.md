@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category M only** (producer/consumer cardinality vs collection-type contract). Skip A–L, N. Sub-bucket forced-exhaustion mode: Category M is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category M only** (producer/consumer cardinality vs collection-type contract). Skip A–L, N–P. Sub-bucket forced-exhaustion mode: Category M is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA — include both producer signature and every consumer call site so cardinality contracts can be compared end-to-end]
 

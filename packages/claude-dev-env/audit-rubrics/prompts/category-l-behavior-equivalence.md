@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category L only** (behavior-equivalence for refactors). Skip A–K, M, N. Sub-bucket forced-exhaustion mode: Category L is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category L only** (behavior-equivalence for refactors). Skip A–K, M–P. Sub-bucket forced-exhaustion mode: Category L is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA — include the BEFORE state of the rewritten function so the agent can compare BEFORE vs AFTER behavior on the same input corpus]
 

@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category J only** (CODE_RULES.md compliance). Skip A–I, K–N. Sub-bucket forced-exhaustion mode: Category J is decomposed into 12 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category J only** (CODE_RULES.md compliance). Skip A–I, K–P. Sub-bucket forced-exhaustion mode: Category J is decomposed into 12 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA]
 - Artifact: [PR title / commit subject / file set / patch series]

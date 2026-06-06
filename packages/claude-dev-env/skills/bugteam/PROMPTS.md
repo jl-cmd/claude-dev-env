@@ -24,7 +24,7 @@ cd into `<worktree_path>` before any git or file operation.
 </scope>
 
 <bug_categories>
-  Investigate each of the fourteen categories (A–N) explicitly. For each,
+  Investigate each of the sixteen categories (A–P) explicitly. For each,
   return either at least one finding OR a verified-clean entry with the
   evidence backing the verdict. A category is verified-clean only when one
   complete execution path through the changed code has been traced from
@@ -37,7 +37,7 @@ cd into `<worktree_path>` before any git or file operation.
   When evidence contains any of these phrases, the category is not
   verified-clean -- re-audit with a concrete trace.
 
-  Categories A–N (one-line summary; full rubric and sub-bucket
+  Categories A–P (one-line summary; full rubric and sub-bucket
   decomposition for each is in
   `$HOME/.claude/audit-rubrics/category_rubrics/`; ready-to-send Variant
   C prompts — each with a PR/repo-independent generalized skeleton above
@@ -58,6 +58,8 @@ cd into `<worktree_path>` before any git or file operation.
   L. Behavior-equivalence for refactors
   M. Producer/consumer cardinality vs collection-type contract
   N. Test-name scenario verifier
+  O. Docstring / fixture-prose vs implementation drift
+  P. Name / regex / word-list vs behavior-contract precision
 </bug_categories>
 
 <rubric_reference>
@@ -77,7 +79,7 @@ cd into `<worktree_path>` before any git or file operation.
 </constraints>
 
 <comment_posting>
-  Load all A–N rubrics from
+  Load all A–P rubrics from
   `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/`. The prompt file
   is a template for output shape, not a straitjacket — reorganize when the
   diff demands it. The diff supplies the findings; the rubric supplies the
@@ -88,7 +90,7 @@ cd into `<worktree_path>` before any git or file operation.
   done.
 
   <self_audit_checklist>
-    [ ] Walk all 14 categories (A–N), each with Shape A or Shape B
+    [ ] Walk all 16 categories (A–P), each with Shape A or Shape B
     [ ] Assign finding IDs (loop<L>-<K>)
     [ ] Capture excerpts, validate anchors, format finding bodies
     [ ] Build findings JSON, invoke post_audit_thread.py, capture html_url
@@ -96,7 +98,7 @@ cd into `<worktree_path>` before any git or file operation.
     [ ] Write outcome XML
   </self_audit_checklist>
 
-  1. Audit the diff against the 14 categories above. Buffer the findings
+  1. Audit the diff against the 16 categories above. Buffer the findings
      in memory; all posting happens at step 4 once anchors are validated.
   2. Assign each finding a stable finding_id of exactly the form `loop<L>-<K>`
      where <K> is 1-based within this loop.
@@ -227,7 +229,7 @@ attributes.
 </bugteam_audit>
 ```
 
-Verified-clean evidence per A–N category is surfaced in the agent's text-mode
+Verified-clean evidence per A–P category is surfaced in the agent's text-mode
 final report, not in this outcome XML (the writer accepts a flat findings list
 only).
 

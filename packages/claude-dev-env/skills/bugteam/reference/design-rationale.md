@@ -2,7 +2,7 @@
 
 ## Core principle (expanded)
 
-One audit agent (`code-quality-agent`, opus) walks all A–N categories per loop. One fix agent (`clean-coder`, opus) addresses the audit's findings.
+One audit agent (`code-quality-agent`, opus) walks all A–P categories per loop. One fix agent (`clean-coder`, opus) addresses the audit's findings.
 
 Fresh-spawn clean-room isolation: each `Agent` call creates a new subagent with its own context window and no access to prior conversation. After the subagent writes its outcome XML and self-terminates, the lead reads the file. Results never accumulate in the lead’s context beyond the XML artifact. Verbatim Anthropic quotes and URLs: [`../sources.md`](../sources.md).
 

@@ -1,6 +1,6 @@
 # Walk categories
 
-Audit every category A through K. Each returns Shape A finding or Shape B verified-clean. No skipped categories.
+Audit every category A through P. Each returns Shape A finding or Shape B verified-clean. No skipped categories.
 
 ## Self-population
 

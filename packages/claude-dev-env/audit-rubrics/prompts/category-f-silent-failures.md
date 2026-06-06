@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category F only** (silent failures). Skip A–E, G–N. Sub-bucket forced-exhaustion mode: Category F is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category F only** (silent failures). Skip A–E, G–P. Sub-bucket forced-exhaustion mode: Category F is decomposed into 10 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA]
 - Title / short description: [TITLE]
@@ -84,6 +84,17 @@ Repeat for every section in scope.
 - Coverage gaps for known F1 / F2 / F6 swallowing branches: if the audited code has `except OSError: pass`, is there a test that exercises that branch and verifies the post-conditions (e.g. directory still present, no log line emitted)?
 - Test fixtures using `subprocess.run(..., check=True)` are compliant — the exception path is the contract.
 
+**F9. Gate-validator self-defeat via parse-failure swallow**
+- Locate every `ast.parse` / `tokenize` / `json.loads` / `yaml.safe_load` call inside gate / validator / hook code that parses the audited input as code or structured data.
+- For each, classify the catch branch: does it return `[]` / `None` / `True` (a clean signal) on parse failure? A clean-signal default masks the gate being broken — the check fires zero findings whenever the parse fails.
+- Trace what the dispatcher actually feeds the check: when the dispatcher passes a partial fragment (e.g., the Edit tool's `new_string` rather than the full file content), the parse fails on every Edit and the check is dead in production while its tests pass against full-file fixtures.
+- Adversarial probes: (a) feed the check a syntactically incomplete fragment and confirm whether the catch branch returns a clean signal; (b) compare the content surface the test fixtures use against the content surface the dispatcher supplies at runtime; (c) verify the catch branch distinguishes "input is genuinely clean" from "input could not be parsed" — a single clean-signal return for both is an F9 finding.
+
+**F10. Guard helper returns success-default on unverifiable input**
+- Locate every guard helper / predicate / classifier that decides whether to allow or block, and inspect the path taken when it cannot validate the input shape (missing positional args, wrong arity, unexpected `None`, malformed payload).
+- Flag any guard that short-circuits to `True` / `Ok` / the success sentinel on unverifiable input. Guards must default-deny when they cannot verify; default-allow on unverifiable input lets real violations through downstream.
+- Adversarial probes: (a) construct an input that fails the guard's shape check and confirm whether the guard returns allow or deny; (b) supply `None` / missing args / wrong arity and trace the return; (c) verify the guard's "cannot verify" branch is distinct from its "verified clean" branch — collapsing both into a success return is an F10 finding.
+
 ## Cross-bucket questions to answer at the end
 
 Q1: Are there error paths that span two sub-buckets (e.g., an F1 catch-all whose result feeds into an F5 status-equivalence — same return value regardless of how many silent failures occurred)?
@@ -92,7 +103,7 @@ Q3: Where would a future error-handling refactor most likely *introduce* a silen
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket F1-F8, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 silent failures across these 8 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket F1-F10, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 silent failures across these 10 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 ---
 

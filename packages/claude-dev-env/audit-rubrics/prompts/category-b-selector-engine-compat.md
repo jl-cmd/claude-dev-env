@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category B only** (selector / query / engine compatibility). Skip A, C–N. Sub-bucket forced-exhaustion mode: Category B is decomposed into 7 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category B only** (selector / query / engine compatibility). Skip A, C–P. Sub-bucket forced-exhaustion mode: Category B is decomposed into 7 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA: repo, ref/SHA, PR or commit range, file count, language matrix, declared engine/runtime/browser/DB targets — fill before running.]
 ID prefix: `find`.
@@ -7,7 +7,7 @@ ID prefix: `find`.
 
 [INLINE THE FULL ARTIFACT HERE — see ../source-material-section-types.md for chunking guidance.]
 
-## Sub-buckets
+## Sub-buckets (each requires Shape A finding OR Shape B with ≥3 adversarial probes)
 
 **B1. CSS / DOM selector vs target browser engine**
 - Every CSS selector in the diff — verify pseudo-class support (`:has()`, `:is()`, `:where()`, `:focus-visible`, `:focus-within`) against every browser engine in the declared support matrix; flag any selector that requires an engine version newer than the declared minimum.

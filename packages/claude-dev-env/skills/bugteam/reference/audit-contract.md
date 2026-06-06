@@ -21,7 +21,7 @@ Each finding an audit produces MUST be one of exactly two shapes.
   "id": "loop<L>-<K>",
   "file": "path/relative/to/repo/root.py",
   "line": 123,
-  "category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N",
+  "category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P",
   "severity": "P0 | P1 | P2",
   "excerpt": "verbatim code snippet from the offending line(s)",
   "failure_mode": "one sentence describing what goes wrong and when",
@@ -37,7 +37,7 @@ Used when an audit investigates a category and does NOT find a bug. Bare "verifi
 
 ```json
 {
-  "category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N",
+  "category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P",
   "files_opened": ["file1.py", "file2.py"],
   "lines_quoted": [
     {"file": "file1.py", "line": 88, "text": "verbatim line content"}
@@ -89,7 +89,7 @@ After the primary finding list is complete, every audit runs a second pass again
 
 The audit must either produce new Shape A findings citing new file:line references not present in the first pass, or cite explicit Shape B adversarial-probe entries for each category it re-examined. An adversarial pass that returns "nothing new, confident first pass was complete" is REJECTED — produce evidence or findings, not confidence.
 
-For `/bugteam`, the single audit agent provides per-category coverage by walking all A–N rubrics in one invocation.
+For `/bugteam`, the single audit agent provides per-category coverage by walking all A–P rubrics in one invocation.
 
 ## Merge rules
 
@@ -113,7 +113,7 @@ Sequence:
 3. Run `py_compile` (or language-equivalent) on each modified file.
 4. Compute `fix_diff` against pre-fix contents for the modified set.
 5. Run `bugteam_code_rules_gate.py` with explicit paths for every modified file.
-6. Spawn a scoped audit of `fix_diff` with full A–N rigor, Shape A/B contract, adversarial pass, AND Haiku secondary in parallel (paranoid mode on post-fix).
+6. Spawn a scoped audit of `fix_diff` with full A–P rigor, Shape A/B contract, adversarial pass, AND Haiku secondary in parallel (paranoid mode on post-fix).
 7. Any new findings become same-loop fix-targets. Internal iteration count increments by one.
 8. After 3 internal iterations with fresh findings each time, exit `stuck: post-fix audit not converging`.
 9. Only when `gate_findings` empty AND `post_fix_findings` empty: `git add`, commit, push.

@@ -9,6 +9,8 @@
 - String-shape tests that exercise only the no-op branch (`assert result == ""` after constructing an input that hits the early-return path, not the named scenario). (pa#135 F11, F15)
 - Integration tests with assertions like `<substring> not in executed_sql` where the substring shape never matches the SQL fragment shape — the assertion cannot fail by construction. (pa#136 F50)
 - Path-decision tests for `is_test_file` / `is_hook_infrastructure` / `_resolve_*_path` without a parametric matrix of canonical edge cases (empty string, tilde-prefix, UNC, drive-letter, symlinked, `..`-containing, trailing slash).
+- A test resolves `Path(__file__).parents[3]` expecting the `claude-dev-env/` package root, but the parents chain actually stops at `skills/` — the test cannot fail for the right reason and the asserted directory wiring is broken by construction.
+- A test imports the same function twice under two names (`from path_utils import is_config_file` plus `from path_utils import is_config_file as path_utils_is_config_file`) and asserts the two bound names produce the same result — the assertion cannot fail because both names are the same function object; the appearance of two parallel implementations is fake.
 
 **Companion reference:** see `../source-material-section-types.md`.
 
@@ -29,6 +31,7 @@ Decomposition is by the **kind of scenario claim** the test name makes vs the ev
 | N7 | Time / clock scenario gating | Tests named `_after_<duration>` / `_at_midnight` / `_during_business_hours` MUST inject a frozen clock (`freezegun.freeze_time`, `monkeypatch.setattr(time, "time", ...)`) — wall-clock tests are non-deterministic and may pass against the wrong scenario |
 | N8 | Concurrent / load scenario gating | Tests named `_under_load` / `_with_concurrent_writers` MUST spawn the concurrent workers and `wait()` on them — single-threaded tests cannot claim concurrent-scenario coverage |
 | N9 | Neutral-named tests (out of scope) | Tests named `test_returns_empty_list_for_unknown_key` / `test_handles_y` (no scenario claim in the name) are NOT subject to N1–N8; flag them only for assertion-shape mismatches under N5 |
+| N10 | Test fixture wiring correctness | The test's fixture / path / import wiring resolves to the artifact the test name claims. Path arithmetic (`Path(__file__).parents[k]`) reaches the directory the assertion expects — verify by walking the parents chain symbolically. Same-symbol dual imports (`from m import f` plus `from m import f as f_alias`) bind two names to the same function object, so any parity assertion between them is true by construction. Fixture file lookups (`open(Path(__file__).parent / 'fixture.txt')`) reach a file that actually exists. |
 
 Customize per-artifact: a pure-function test corpus with no scenario claims reduces N1–N4 to "verified clean — no scenario-named tests in scope"; a path-classifier PR may need N2 exhausted across 8+ canonical inputs.
 

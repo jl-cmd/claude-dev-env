@@ -438,7 +438,7 @@ Docstrings on functions, methods, classes, and modules are encouraged for public
 
 ## Audit Awareness
 
-Code clean-coder writes will be audited later against the A–N bug categories from `code-quality-agent`. The hooks listed in this file enforce the Category J slice at write time, but A–I and K–N surface only in audit. For each category's full rubric, sub-bucket decomposition, and concrete checks, see `../audit-rubrics/category_rubrics/` (relative to this agent file). While generating code, anticipate the full A–N surface so the first write clears every audit category.
+Code clean-coder writes will be audited later against the A–P bug categories from `code-quality-agent`. The hooks listed in this file enforce the Category J slice at write time, but A–I and K–P surface only in audit. For each category's full rubric, sub-bucket decomposition, and concrete checks, see `../audit-rubrics/category_rubrics/` (relative to this agent file). While generating code, anticipate the full A–P surface so the first write clears every audit category.
 
 Three audit lanes deserve particular attention while generating new code:
 

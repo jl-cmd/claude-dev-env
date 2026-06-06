@@ -8,6 +8,8 @@
 - Return type annotated as `bool` while a code path returns `None`.
 - A callback handed to `os.walk(onerror=…)` has the wrong arity.
 - A PowerShell cmdlet is invoked with a parameter that belongs to a different parameter set.
+- A new gate-time validator omits the `all_changed_lines` parameter that peer span-based validators accept, so the dispatcher cannot plumb diff scope through and the check silently over- or under-blocks.
+- A new span-based check applies its result cap before honoring `defer_scope_to_caller=True`, while peer checks return all violations in that mode and let the caller cap; this leaves the new sibling stale against the established pattern.
 
 **Companion reference:** see `../source-material-section-types.md` for guidance on how to chunk the artifact under audit.
 
@@ -29,6 +31,7 @@ The decomposition that worked best for PR #394 (a Python+PowerShell scheduled-ta
 | A6 | PowerShell cmdlet parameter sets and binding | `param(...)` with `ParameterSetName=`; `[CmdletBinding(DefaultParameterSetName=…)]` presence; cmdlet parameter combinations valid per Microsoft docs. |
 | A7 | Cross-language argv boundary | The `-Argument` string composition → Windows process loader → C-runtime argv parser → Python `sys.argv` → argparse. Trailing-backslash and embedded-space hazards. |
 | A8 | Documented API/tool calls vs official API documentation | Every API, MCP tool, SDK method, or CLI command documented in the diff. Look up the official documentation for that API. Verify parameter names, types, and required-ness match the documented call. Make a safe, read-only API call to confirm the documented invocation succeeds. Address any mismatch. |
+| A9 | Intra-module sibling-helper API parity | When the diff adds a new check / validator / parser / handler alongside existing sibling checks in the same module, the new one matches the sibling cohort's signature (every parameter peer checks accept), scoping semantics (whole-file vs fragment, diff-line filtering via `all_changed_lines`), and result-shape contract (caps pre-scope vs post-scope, `defer_scope_to_caller` honored, return type). When the new helper omits a sibling-established parameter, runs on a different content surface, or applies the result cap at a different point in the pipeline than its siblings, the audit teammate names this as an A9 finding. |
 
 Adapt these axes for your artifact. For a pure Python codebase, drop A6 and A7 and add (e.g.) "type-stub vs runtime divergence" or "C-extension boundary." For a pure PowerShell codebase, drop A1–A5 and split A6 into "param-set declaration" / "cmdlet invocation" / "type coercion at param boundary."
 

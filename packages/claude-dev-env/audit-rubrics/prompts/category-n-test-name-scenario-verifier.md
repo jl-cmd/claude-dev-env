@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category N only** (test-name scenario verifier). Skip A–M. Sub-bucket forced-exhaustion mode: Category N is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category N only** (test-name scenario verifier). Skip A–M, O, P. Sub-bucket forced-exhaustion mode: Category N is decomposed into 10 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA — include every changed test alongside the production code path it claims to cover]
 
@@ -58,9 +58,16 @@ ID prefix: `find`.
 - Tests named `test_returns_empty_list_for_unknown_key` / `test_handles_y` / `test_raises_value_error` (no scenario claim in the name) are NOT subject to N1–N8.
 - For neutral-named tests, only N5 (assertion shape mismatch) applies.
 
+**N10. Test fixture wiring correctness**
+- For every test, verify the fixture / path / import wiring resolves to the artifact the test name claims.
+- Path arithmetic: walk every `Path(__file__).parents[k]` chain symbolically and confirm it reaches the directory the assertion expects — a `parents[3]` that stops at `skills/` while the test expects the package root cannot fail for the right reason.
+- Same-symbol dual imports: `from module import helper` plus `from module import helper as helper_alias` bind two names to the same function object, so any parity assertion between the two bound names is true by construction and proves nothing.
+- Fixture file lookups: confirm every `open(Path(__file__).parent / "fixture.txt")` (or equivalent) reaches a file that actually exists in the repo.
+- Adversarial probes: (a) re-derive each `parents[k]` index against the real directory depth and flag any off-by-k; (b) check whether two imports in the test resolve to the same object before trusting a cross-name comparison; (c) confirm each referenced fixture path exists on disk at the depth the arithmetic produces.
+
 ## Cross-bucket questions to answer at the end
 
-Q1: Across all 9 sub-buckets, is there a scenario-named test that does not exercise the named scenario? Cite the test's file:line and the production function's scenario-named branch that should have been exercised.
+Q1: Across all 10 sub-buckets, is there a scenario-named test that does not exercise the named scenario? Cite the test's file:line and the production function's scenario-named branch that should have been exercised.
 
 Q2: What's the worst false-coverage signal introduced by the diff? Evaluate by (a) whether the test's name is load-bearing in the suite's coverage report, (b) whether the named scenario has any other coverage; (c) whether removing the test would change the coverage percentage.
 
@@ -68,7 +75,7 @@ Q3: Which scenario-named test most likely will start passing for the wrong reaso
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket N1-N9, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite the test's file:line AND the production function's branch the test's name claims to cover. Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 scenario-named tests that exercise the no-op branch — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket N1-N10, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite the test's file:line AND the production function's branch the test's name claims to cover. Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 scenario-named tests that exercise the no-op branch — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 ---
 

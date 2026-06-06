@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category A only** (API contract verification). Skip B–N. Sub-bucket forced-exhaustion mode: Category A is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category A only** (API contract verification). Skip B–P. Sub-bucket forced-exhaustion mode: Category A is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA: title / change description / head SHA or revision identifier / scope summary]
 ID prefix: `find`.
@@ -69,9 +69,16 @@ ID prefix: `find`.
 - For write calls, verify the signature against the provider's own published API contract — their REST reference docs, OpenAPI spec, SDK source code, or `--help` output. When a read endpoint exposes the same state, call it to confirm the write contract.
 - Flag every call where documented parameters, types, or behavior diverge from the official API contract.
 
-**A9. Documentation claims about the codebase (when the artifact asserts facts about the code)**
+**A9. Intra-module sibling-helper API parity**
+- Did the diff add a new check / validator / parser / handler alongside existing sibling helpers in the same module? Verify the new one matches the sibling cohort's signature — every parameter the peer checks accept (e.g., `all_changed_lines` for diff-line filtering).
+- Verify the new helper's scoping semantics match the cohort: whole-file vs fragment content surface, diff-line filtering, and `defer_scope_to_caller` handling.
+- Verify the new helper's result-shape contract matches: where the result cap is applied (pre-scope vs post-scope), whether `defer_scope_to_caller=True` is honored, and the return type.
+- When the new helper omits a sibling-accepted parameter, runs on a different content surface than its siblings, or applies the result cap at a different point in the pipeline, name it as an A9 finding. Cite the new helper and the sibling it diverges from as the pair.
+- For a pure-code artifact with no new sibling helper, A9 is one line of proof-of-absence (the diff adds no helper alongside an existing cohort).
 
-When the artifact is documentation that asserts facts about the codebase (symbol names, signatures, return types, exceptions, file paths), run all seven documentation-as-contract checks below; each yields a confirmation or a finding. For a pure-code artifact, A9 is one line of proof-of-absence (the artifact asserts no code facts).
+### Documentation as contract (when the artifact asserts facts about the code)
+
+When the artifact is documentation that asserts facts about the codebase (symbol names, signatures, return types, exceptions, file paths), run all seven documentation-as-contract checks below; each yields a confirmation or a finding. For a pure-code artifact, this section is one line of proof-of-absence (the artifact asserts no code facts).
 
 - Full failure contract — the failure signals of a function are its return value AND every exception it raises; trace the body and the docstring `Raises:` for every `raise`. _Example:_ a docs PR says a UI helper "returns `bool`", but it also raises a custom not-found error, so "returns bool" understates the contract.
 - Call shape — required versus optional parameters (a keyword-only parameter with NO default is required; omitting it raises `TypeError`), sync versus async, and the exact access path (free function versus instance method reached through an object attribute versus import path). _Example:_ a doc presents a helper as a free function, but it is an `async` instance method reached through an object attribute, so the doc's call example would raise `TypeError`.
@@ -89,7 +96,7 @@ Q3: Where would a future refactor most likely break a cross-bucket or cross-lang
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket A1–A9, produce Shape A or Shape B (with ≥3 adversarial probes). Cross-bucket Q1–Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 bugs across these 9 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket A1–A9, produce Shape A or Shape B (with ≥3 adversarial probes). Documentation-as-contract: when the artifact asserts code facts, walk all seven checks and report each as a finding or a confirmation; for a pure-code artifact, one line of proof-of-absence. Cross-bucket Q1–Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P1 bugs across these 9 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 ---
 

@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category K only** (codebase conflicts — incomplete propagation). Skip A–J, L–N. Sub-bucket forced-exhaustion mode: Category K is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category K only** (codebase conflicts — incomplete propagation). Skip A–J, L–P. Sub-bucket forced-exhaustion mode: Category K is decomposed into 11 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA — including the BEFORE state of changed surfaces, so the agent can compare before vs after]
 
@@ -45,9 +45,9 @@ ID prefix: `find`.
 - Did the diff widen / narrow / reshape a producer's output (return type, response shape, dict keys, tuple arity, list element type, optional vs required field)? Enumerate every consumer — do their type annotations / destructuring / parsing still match?
 - Adversarial probes when types look stable: (a) check for `Any` / `unknown` / `dict[str, Any]` consumers that hide drift; (b) check for serializers (JSON, MessagePack, protobuf) whose schema lags the producer; (c) check for runtime validators (pydantic, zod, joi) whose rules now allow what should be rejected (or vice versa).
 
-**K6. Code vs documentation sync**
-- Did the diff change observable behavior? Enumerate every doc surface that describes that behavior (module/class/function docstring, README, ADR, design doc, CHANGELOG, API docs, error messages shown to the user, comments adjacent to the changed code).
-- Adversarial probes when docs look fine: (a) check for "see also" cross-references that now point to outdated explanations; (b) check for examples in the docstring that exercise the *old* behavior; (c) check for diagrams / state machines / sequence flows that depict the pre-diff path.
+**K6. Code vs documentation sync (cross-surface)**
+- Did the diff change observable behavior? Enumerate every doc surface that describes that behavior (README, ADR, design doc, CHANGELOG, API docs, error messages shown to the user, comments adjacent to the changed code; docstring-prose drift belongs to Category O).
+- Adversarial probes when docs look fine: (a) check for "see also" cross-references that now point to outdated explanations; (b) check for examples in those doc surfaces that exercise the *old* behavior; (c) check for diagrams / state machines / sequence flows in those doc surfaces that depict the pre-diff path.
 
 **K7. Code vs test sync**
 - Did the diff change observable behavior? Enumerate every test that exercises that behavior — do positive, negative, edge, and regression tests all still express the post-diff contract?
@@ -61,6 +61,16 @@ ID prefix: `find`.
 - Did the diff add / remove / rename a field, column, key, header, query parameter, message field, event payload field? Enumerate every site that constructs or consumes that shape — migrations, ORM models, serializers, fixtures, API docs, client SDKs, replay tooling, analytics emitters.
 - Adversarial probes when no schema changed: (a) check for schemaless dicts that effectively define a shape; (b) check for ad-hoc `**kwargs` flows that propagate undeclared fields; (c) check for downstream stores (caches, queues, search indexes) whose schema now disagrees with the producer.
 
+**K10. Intra-file sibling-helper pattern propagation**
+- Did the diff add a new helper alongside an existing helper in the same module? List the defensive idioms the sibling helpers already use — None-guards, `getattr(..., default) or fallback`, scope-exit semantics, span construction — and verify the new helper inherits each one.
+- When sibling helper A uses pattern P and the new helper B in the same file omits P, that omission is a K10 finding even when B is internally correct. Cite both helpers as the conflict pair.
+- Adversarial probes: (a) diff the new helper's guard clauses against each sibling's guard clauses line-for-line; (b) check whether the new helper handles the same edge inputs (None, missing key, empty collection) the siblings handle; (c) check whether the new helper's return-shape and scope-exit behavior match the sibling cohort's contract.
+
+**K11. Intra-document internal contradiction**
+- Do two sections of the same document make contradictory claims about the same subject? For example: one paragraph says X is hook-enforced while another lists X as non-blocking; one table row labels the subject `Foo` while another row labels the same subject `Bar`; one example shows shape A while another shows shape B for the same input.
+- The contradiction is a K11 finding even when each statement is locally coherent. Cite both sections as the conflict pair and describe the contradiction a reader sees.
+- Adversarial probes: (a) build a claim-by-subject index across the whole document and flag any subject with two divergent claims; (b) cross-check every invariant stated in prose against every table row that classifies the same subject; (c) cross-check every worked example's input/output shape against the canonical shape the document states elsewhere.
+
 ## Cross-bucket questions to answer at the end
 
 Q1: Is there a pattern in this diff where the primary site is updated but a parallel site (any sub-bucket) stays stale? Cite both the diff line that was changed AND the unchanged-but-should-have-changed line.
@@ -71,7 +81,7 @@ Q3: Which existing test, doc, or downstream consumer is the strongest witness to
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket K1-K9, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite BOTH the diff line that was changed AND the parallel line that was missed — the conflict is between the two, not in either alone. Category K Shape A findings always cite TWO line locations: the changed line and the unchanged-but-should-have-changed line. The `failure_mode` should describe the contradiction between the two states. Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 parallel sites that should have been updated alongside the diff — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket K1-K11, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite BOTH the diff line that was changed AND the parallel line that was missed — the conflict is between the two, not in either alone. Category K Shape A findings always cite TWO line locations: the changed line and the unchanged-but-should-have-changed line. The `failure_mode` should describe the contradiction between the two states. Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 parallel sites that should have been updated alongside the diff — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 ---
 

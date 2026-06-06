@@ -8,6 +8,7 @@
 - An async task error is logged while the caller continues as if it succeeded.
 - `subprocess.run(...)` without `check=True` and the return code is never inspected.
 - `Get-Command X -ErrorAction SilentlyContinue` followed by `.Source` access — the null is silently absorbed.
+- A new write-time gate parses `tool_input` content with `ast.parse`; the dispatcher passes the Edit tool's `new_string` fragment; the partial fragment never parses; `except SyntaxError: return []` silently fires zero findings. The gate appears to ship working tests against full-file fixtures but is dead on every Edit in production.
 
 **Companion reference:** see `../source-material-section-types.md`.
 
@@ -25,6 +26,8 @@
 | F6 | Ignored return values from fallible calls | `subprocess.run` without `check=True` and unchecked `returncode`; `os.write` return value discarded. |
 | F7 | PowerShell error-suppression patterns | `-ErrorAction SilentlyContinue` followed by `.Property` access; `2>$null` or `*>$null`; `$?` not consulted. |
 | F8 | Test-level swallowing | Tests that catch and log instead of asserting; `pytest.warns` used instead of `pytest.raises`. |
+| F9 | Gate-validator self-defeat via parse-failure swallow | A new gate / validator / hook check parses input as code (`ast.parse`) and catches the parse error with `return []` / `return None` / `return True` (clean signal). When the dispatcher feeds the check a partial fragment (e.g., the Edit tool's `new_string` rather than the full file content), the parse always fails and the check silently fires zero findings. The audit teammate lists every new `ast.parse` / `tokenize` / `json.loads` / `yaml.safe_load` call in gate code and asks: does the catch branch produce a clean signal that would mask the gate being broken? |
+| F10 | Guard helper returns success-default on unverifiable input | A guard helper / predicate / classifier short-circuits to `True` / `Ok` / the success sentinel when it cannot validate the input shape (missing positional args, wrong arity, unexpected None). Guards must default-deny when they cannot verify; default-allow on unverifiable input masks real violations downstream. |
 
 ---
 

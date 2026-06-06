@@ -354,7 +354,7 @@ These principles cannot be reduced to a regex or AST visitor. They live in user-
 
 ### Audit-rubric reference
 
-For multi-file architectural reviews see [`packages/claude-dev-env/audit-rubrics/`](../audit-rubrics/). Categories A–N are maintained as agent rubrics. Category J (CODE_RULES.md compliance) mirrors the ⚡ hook-enforced rules as an audit-side rubric; the other categories stay agent rubrics because they rest on multi-file reasoning beyond a single-file hook's reach.
+For multi-file architectural reviews see [`packages/claude-dev-env/audit-rubrics/`](../audit-rubrics/). Categories A–P are maintained as agent rubrics. Category J (CODE_RULES.md compliance) mirrors the ⚡ hook-enforced rules as an audit-side rubric; the other categories stay agent rubrics because they rest on multi-file reasoning beyond a single-file hook's reach.
 
 ---
 

@@ -43,6 +43,8 @@ ALL_AUDIT_CATEGORY_ENTRIES = [
     ("L", "Behavior-equivalence for refactors"),
     ("M", "Producer/consumer cardinality vs collection-type contract"),
     ("N", "Test-name scenario verifier"),
+    ("O", "Docstring / fixture-prose vs implementation drift"),
+    ("P", "Name / regex / word-list vs behavior-contract precision"),
 ]
 
 AUDIT_RUBRIC_REFERENCE_TEXT = (
