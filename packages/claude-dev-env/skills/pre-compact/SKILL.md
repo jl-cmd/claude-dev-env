@@ -1,15 +1,10 @@
 ---
 name: pre-compact
 description: >-
-  Composes a focus directive for `/compact [instructions]` and copies the full
-  `/compact <directive>` string to the operator's clipboard so the next prompt
-  is a single paste. The directive pins the session's load-bearing identifiers
-  (branch, PR, HEAD, worktree, in-flight work, decisions, blockers, files in
-  play, follow-ups) the next steps depend on, so the summarizer keeps them with
-  high fidelity. It confirms the operator's intent for the next chat through a
-  structured question first, then validates each identifier against its live
-  source before stating it. Use when the user says `/pre-compact`, asks to prep for compaction, or
-  asks to compose a focus directive for `/compact`.
+  Composes a focus directive for /compact and copies the full "/compact <directive>"
+  string to the clipboard, pinning the session's load-bearing identifiers (branch, PR,
+  HEAD, worktree, in-flight work, decisions, blockers, files in play) after validating
+  each against its live source. Use on /pre-compact or any ask to prep for compaction.
 disable-model-invocation: true
 ---
 

@@ -1,6 +1,11 @@
 ---
 name: auditing-claude-config
-description: Audits a Claude Code setup (user CLAUDE.md, ~/.claude/rules/, project .claude/) for context-budget waste — duplicate @-imports, eagerly-loaded rules that should be path-scoped or converted to skills, oversized always-on files, and rules duplicating existing skills. Produces a migration table with line-count savings. Use when reviewing the always-on instruction load, when sessions feel sluggish, when /memory shows surprising loads, when adding new rules, or for periodic config hygiene. Optionally verifies findings empirically via an InstructionsLoaded probe hook that logs every load event with its load_reason and parent_file_path.
+description: >-
+  Audits a Claude Code setup (user CLAUDE.md, ~/.claude/rules/, project .claude/) for
+  context-budget waste — duplicate @-imports, always-on rules to path-scope or convert
+  to skills, oversized files — and produces a migration table with savings. Use when
+  reviewing the startup/instruction load, when /memory shows surprising loads, when
+  adding new rules, or for periodic config hygiene.
 ---
 
 # Auditing Claude Config

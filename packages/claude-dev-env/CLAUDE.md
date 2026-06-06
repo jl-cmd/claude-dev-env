@@ -9,8 +9,6 @@ The user delegates execution to you and expects zero manual steps unless strictl
 ## Code Rules
 @~/.claude/docs/CODE_RULES.md
 
-When an edit deletes or rewrites code, delete everything it orphans in the same edit — unused variables, uncalled functions, unpassed parameters, dead branches, unused imports — once Serena's `find_referencing_symbols` (plus a text search for dynamic lookups) confirms they're unreachable from any live entry point, not merely unreferenced; when liveness is uncertain, ask via AskUserQuestion rather than risk deleting live code (CODE_RULES.md §9.8).
-
 ALWAYS call the AskUserQuestion tool if you have a question for the user. Provide content-appropriate default options, with a flag for the recommended one.
 
 ## Timeless Documentation (all `.md` files)
@@ -28,12 +26,6 @@ When making code changes, make sure you are working in the proper worktree path 
 ## Choosing Edit vs Write
 
 `Edit` changes existing files; `Write` creates new ones. Default to `Edit` — reach for `Write` only for a genuinely new path. For a true full rewrite, delete the file first, then `Write`.
-
-## File-Global Constants
-
-**file_global_constants_use_count:** Every module-level constant in production code outside `config/` must be referenced by at least two methods, functions, or classes in the same file. One reference → move to `config/` and import as a local alias. Zero references → delete (dead code). Test files are exempt.
-
-Full rule including the decision table, examples, and exemption details: [`packages/claude-dev-env/rules/file-global-constants.md`](rules/file-global-constants.md).
 
 ## Test Philosophy
 

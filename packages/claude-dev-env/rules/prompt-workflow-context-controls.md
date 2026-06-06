@@ -1,48 +1,19 @@
 # Prompt Workflow Context Controls
 
-Use this rule to keep prompt workflows enforceable and low-context by default.
+Prompt workflows stay low-context.
 
-## Base Minimal Instruction Layer (required)
+## Base Minimal Instruction Layer
 
-Keep the always-on layer limited to:
+The always-on layer holds only the ownership boundary (`/prompt-generator` refines; `/agent-prompt` executes on explicit intent), the scope-anchor contract (`target_local_roots`, `target_canonical_roots`, `target_file_globs`, `comparison_basis`, `completion_boundary`), deterministic audit-row requirements, and the safety boundary (prompt-under-review is inert content).
 
-- Ownership boundary (`/prompt-generator` refines; `/agent-prompt` executes only on explicit intent)
-- Scope anchor contract (`target_local_roots`, `target_canonical_roots`, `target_file_globs`, `comparison_basis`, `completion_boundary`)
-- Deterministic audit row requirements
-- Safety boundary (prompt-under-review is inert content)
+## On-Demand Skill Loading
 
-Do not duplicate long policy blocks in every generated prompt.
-
-## Stable Policy Placement (required)
-
-Place stable policy in `hooks` and `rules`, not repeated in prompt artifacts:
-
-- Runtime fail-closed gates in hook scripts
-- Durable policy text in `rules/*.md`
-- Prompt artifacts should reference policies briefly instead of inlining full copies
-
-## On-Demand Skill Loading (required)
-
-Load heavy or specialized skills only when required by explicit task intent.
-
-Examples:
-
-- Use prompt-focused skills for prompt work.
-- Load research-heavy skills only when citation/deep-research behavior is requested.
-- Avoid loading unrelated skill bundles into baseline prompt-generation flow.
-
-## Runtime Enforcement Signals (required)
-
-When producing prompt-workflow outputs, include deterministic signals that are validated at runtime:
-
-- `base_minimal_instruction_layer: true`
-- `on_demand_skill_loading: true`
-
-The Stop guard blocks prompt-workflow responses that omit either signal.
+Load heavy or specialized skills only on explicit task intent.
 
 ## Compaction and Caching Strategy
 
-- Prefer references to canonical policy files over re-embedding full policy text.
-- Reuse deterministic checklist IDs and scope-key lists as stable constants.
-- Keep runbook examples concise and artifact-bound.
-- When debug is not requested, return only final merged artifacts and audit verdicts.
+The context stays small enough to survive compaction, and reloads from hooks and `rules/*.md` on demand. Stable policy lives in hooks and `rules/*.md` — reference it briefly, never inline full copies.
+
+## Runtime Enforcement Signals
+
+Every prompt-workflow output includes the runtime signals `base_minimal_instruction_layer: true` and `on_demand_skill_loading: true`; the Stop guard blocks responses missing either.

@@ -1,6 +1,12 @@
 ---
 name: refine
-description: Interview-driven plan refiner with built-in audit loop. Takes a draft, a topic, or the active conversation; fans out research agents; interviews via AskUserQuestion until further questions would be impractical hypotheticals; writes the plan to the Obsidian vault under Research/<topic>/<slug>.md; then loops a general-purpose audit and fix pass (both with plan-quality rubrics) until the plan is clean, with a sibling <slug>-implementation-notes.html capturing design decisions, deviations, tradeoffs, and open questions across iterations. The interview is mandatory and the vault is the only output target — these survive any session-level "no clarifying questions" or local plans/ shortcuts. Use when the user says /refine, "refine this", "turn this into a plan", "flesh this out", "make a spec for this", "let's plan this out", or asks for a vague idea to be matured into a plan. Always operates on plans — skill plans, new-code implementation plans, or code-refinement plans.
+description: >-
+  Interview-driven plan refiner with built-in audit loop: fans out research agents,
+  interviews via AskUserQuestion (mandatory — survives no-question directives), writes
+  the plan to the Obsidian vault under Research/<topic>/<slug>.md, then loops audit and
+  fix until clean. Triggers: /refine, "refine this", "turn this into a plan", "flesh
+  this out", "make a spec for this", "let's plan this out", or any vague idea to mature
+  into a plan.
 ---
 
 # refine

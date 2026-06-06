@@ -1,36 +1,7 @@
 # Obsidian Vault Context
 
-An Obsidian vault stores session reports, decisions, and research documents across all projects. Its filesystem location is configured per user via the `OBSIDIAN_VAULT_PATH` environment variable (or the equivalent path exposed by the user's Obsidian MCP server). Do not assume a specific OS path; resolve the vault location from the configured MCP tools before reading files directly.
+An Obsidian vault stores session reports (`sessions/`), decisions (`decisions/`), and research (`Research/`) across projects. Resolve its location via the obsidian MCP tools — `mcp__obsidian__search_notes` (supports `searchFrontmatter: true`), `mcp__obsidian__read_note`, `mcp__obsidian__read_multiple_notes` — never assume an OS path.
 
-## Available MCP Tools
+IMPORTANT: Before substantive project work, search the vault for prior sessions and decisions for the current project — by `project` frontmatter first, then keywords ("blocked", "superseded", "decision", "gotcha"). Also search when touching a component with known history or when a task might repeat or reverse a prior decision.
 
-- `mcp__obsidian__search_notes` -- search by content or frontmatter (`searchFrontmatter: true`)
-- `mcp__obsidian__read_note` -- read a single note by path
-- `mcp__obsidian__read_multiple_notes` -- read several notes at once
-
-## Vault Structure
-
-- `sessions/` -- session reports with frontmatter: `type: session-report`, `project`, `session`, `session_id`, `date`, `status`, `blocked`, `vault_context_retrieved`, `tags`
-- `decisions/` -- decision notes with frontmatter: `type: decision|procedural|fact|gotcha`, `project`, `date`, `status: Active|Superseded`, `tags`
-- `Research/` -- deep research documents
-
-## When to Search
-
-IMPORTANT: Before starting substantive project work, search the vault for prior sessions and decisions for the current project. Also search when:
-- Encountering a component or system with known history
-- A task might repeat or reverse a prior decision
-- You need context on why something was built a certain way
-
-Search by `project` frontmatter field first, then by content keywords like "blocked", "superseded", "decision", "gotcha".
-
-## Session Logging
-
-When the user invokes `/session-log`, treat **short and long sessions the same**: run the full logging flow. Session length does not change the requirements below.
-
-At the end of substantive sessions, offer to run `/session-log` if not already invoked.
-
-When running `/session-log`, include `vault_context_retrieved: true|false` in frontmatter based on whether vault MCP tools were used this session.
-
-Also include `session_id` in frontmatter — the session ID of the agent authoring the log, read from the `CLAUDE_CODE_SESSION_ID` environment variable. This UUID names the authoring agent's own transcript file (`<session-id>.jsonl`), so the report points back to the session that produced it; use the literal `unknown` when the variable is unset.
-
-After writing a session log, ALWAYS output a `/rename` command with a descriptive session name based on the session's primary outcome. Format: `/rename [Project] - [Primary Outcome]`. This is a mandatory output requirement, not optional.
+Session logging runs through `/session-log` (same full flow for short and long sessions); offer it at the end of substantive sessions. Reports include `vault_context_retrieved: true|false` and `session_id` (from `CLAUDE_CODE_SESSION_ID`; literal `unknown` when unset) in frontmatter, and every session log ends with a `/rename [Project] - [Primary Outcome]` command — mandatory output, never optional.
