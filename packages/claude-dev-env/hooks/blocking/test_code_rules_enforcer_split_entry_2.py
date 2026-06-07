@@ -72,7 +72,7 @@ def _run_main_with_edit_payload(
     )
     getattr(monkeypatch, "setattr")(code_rules_enforcer.sys, "stdin", io.StringIO(edit_payload))
     try:
-        code_rules_enforcer.main()
+        code_rules_enforcer.main([])
     except SystemExit:
         pass
     captured = getattr(capsys, "readouterr")()
