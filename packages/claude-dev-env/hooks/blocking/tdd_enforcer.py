@@ -11,6 +11,7 @@ import json
 import re
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 
@@ -124,42 +125,213 @@ def _is_constants_only_python_content(content: str) -> bool:
     return True
 
 
-def _apply_edit_to_content(existing_content: str, old_str: str, new_str: str) -> str:
-    """Replace the first occurrence of old_str with new_str in the content."""
+def _apply_edit_to_content(
+    existing_content: str, old_str: str, new_str: str, should_replace_all: bool
+) -> str:
+    """Apply an edit's replacement to content the way the Edit tool would.
+
+    Args:
+        existing_content: The text being edited.
+        old_str: The substring the edit replaces.
+        new_str: The replacement substring.
+        should_replace_all: Replace every occurrence when True (matching the
+            Edit tool's ``replace_all`` flag), otherwise only the first.
+
+    Returns:
+        The post-edit content.
+    """
+    if should_replace_all:
+        return existing_content.replace(old_str, new_str)
     return existing_content.replace(old_str, new_str, 1)
+
+
+def _future_module_name() -> str:
+    return "__future__"
+
+
+def _is_future_import(node: ast.stmt) -> bool:
+    """Return whether a statement is a ``from __future__`` import.
+
+    Args:
+        node: A top-level module statement.
+
+    Returns:
+        True when the statement imports from ``__future__``, whose presence
+        affects module-wide compilation semantics.
+    """
+    return isinstance(node, ast.ImportFrom) and node.module == _future_module_name()
+
+
+def _is_removable_import(node: ast.stmt) -> bool:
+    """Return whether a statement is an import that removes or reorders cleanly.
+
+    Args:
+        node: A top-level module statement.
+
+    Returns:
+        True for plain ``import`` and ``from`` imports. ``from __future__``
+        imports return False because their presence affects module-wide
+        compilation semantics, so the gate treats them as behavior-bearing
+        statements rather than removable imports; every non-import statement
+        also returns False.
+    """
+    if isinstance(node, ast.Import):
+        return True
+    if isinstance(node, ast.ImportFrom):
+        return not _is_future_import(node)
+    return False
+
+
+def _future_import_signatures(content: str) -> list[str] | None:
+    """Return the ``ast.dump`` signatures of a module's ``from __future__`` imports.
+
+    Args:
+        content: Python source text to parse.
+
+    Returns:
+        The future-import signatures in source order, or ``None`` when the
+        content does not parse.
+    """
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return None
+    return [ast.dump(each_node) for each_node in parsed_tree.body if _is_future_import(each_node)]
 
 
 def _is_post_edit_constants_only(existing_content: str, tool_name: str, tool_input: dict) -> bool:
     """Check if post-edit content remains constants-only after Edit or MultiEdit.
 
     Both the existing content and the post-edit result must be constants-only
-    to prevent edits on files with behavior from bypassing the TDD gate.
+    to prevent edits on files with behavior from bypassing the TDD gate. Editing
+    a ``from __future__`` import also fails this check, so a future-import edit
+    on a constants-only file faces the gate rather than slipping through the
+    constants exemption.
     """
     if not _is_constants_only_python_content(existing_content):
         return False
 
     if tool_name == "Edit":
-        old_str = tool_input.get("old_string", "")
+        old_str = tool_input.get("old_string", "") or ""
         new_str = tool_input.get("new_string", "") or ""
         if not old_str:
             return False
-        post_edit_content = _apply_edit_to_content(existing_content, old_str, new_str)
-        return _is_constants_only_python_content(post_edit_content)
-
-    if tool_name == "MultiEdit":
+        should_replace_all = bool(tool_input.get("replace_all", False))
+        post_edit_content = _apply_edit_to_content(existing_content, old_str, new_str, should_replace_all)
+    elif tool_name == "MultiEdit":
         all_edits = tool_input.get("edits", []) or []
         post_edit_content = existing_content
         for each_edit in all_edits:
             if not isinstance(each_edit, dict):
                 return False
-            each_old = each_edit.get("old_string", "")
+            each_old = each_edit.get("old_string", "") or ""
             each_new = each_edit.get("new_string", "") or ""
             if not each_old:
                 return False
-            post_edit_content = _apply_edit_to_content(post_edit_content, each_old, each_new)
-        return _is_constants_only_python_content(post_edit_content)
+            should_replace_all = bool(each_edit.get("replace_all", False))
+            post_edit_content = _apply_edit_to_content(
+                post_edit_content, each_old, each_new, should_replace_all
+            )
+    else:
+        return False
 
-    return False
+    if _future_import_signatures(existing_content) != _future_import_signatures(post_edit_content):
+        return False
+    return _is_constants_only_python_content(post_edit_content)
+
+
+def _top_level_signatures(content: str) -> tuple[list[str], list[str]] | None:
+    """Split a module's top-level statements into removable-import and other signatures.
+
+    Args:
+        content: Python source text to parse.
+
+    Returns:
+        A pair ``(import_signatures, non_import_signatures)`` of ``ast.dump``
+        strings in source order, or ``None`` when the content does not parse.
+        Plain imports populate the first list; ``from __future__`` imports and
+        every non-import statement populate the second, so editing a future
+        import reads as a behavior edit rather than a removable-import edit.
+        Signatures omit line and column attributes, so statements that only
+        shift position compare equal.
+    """
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return None
+    import_signatures: list[str] = []
+    non_import_signatures: list[str] = []
+    for each_node in parsed_tree.body:
+        if _is_removable_import(each_node):
+            import_signatures.append(ast.dump(each_node))
+        else:
+            non_import_signatures.append(ast.dump(each_node))
+    return import_signatures, non_import_signatures
+
+
+def _is_post_edit_import_only(existing_content: str, tool_name: str, tool_input: dict) -> bool:
+    """Check whether an Edit or MultiEdit only removes or reorders imports.
+
+    The top-level statements are split into imports and the rest, before and
+    after applying the edit. The edit is exempt only when the non-import
+    statements are unchanged and every post-edit import statement already
+    appears among the pre-edit imports, so removing or reordering imports is
+    exempt while adding, swapping, or retargeting an import stays gated: those
+    can change behavior through a new symbol in scope, a different
+    implementation bound to the same name, or `from __future__` semantics. An
+    edit that leaves the parsed module identical (a comment- or whitespace-only
+    change) also stays gated. Reading the resulting file rather than the edit
+    fragments keeps the exemption from firing on import text inside a string
+    literal, and lets it fire on edits whose old string carries surrounding
+    context for uniqueness.
+
+    Args:
+        existing_content: Current text of the file under edit.
+        tool_name: The intercepted tool (Edit or MultiEdit).
+        tool_input: The intercepted tool's input payload.
+
+    Returns:
+        True when the edit leaves the non-import statements unchanged and the
+        post-edit imports are a reordering or removal of the pre-edit imports.
+    """
+    existing_signatures = _top_level_signatures(existing_content)
+    if existing_signatures is None:
+        return False
+
+    if tool_name == "Edit":
+        old_str = tool_input.get("old_string", "") or ""
+        new_str = tool_input.get("new_string", "") or ""
+        if not old_str:
+            return False
+        should_replace_all = bool(tool_input.get("replace_all", False))
+        post_edit_content = _apply_edit_to_content(existing_content, old_str, new_str, should_replace_all)
+    elif tool_name == "MultiEdit":
+        all_edits = tool_input.get("edits", []) or []
+        if not all_edits:
+            return False
+        post_edit_content = existing_content
+        for each_edit in all_edits:
+            if not isinstance(each_edit, dict):
+                return False
+            each_old = each_edit.get("old_string", "") or ""
+            each_new = each_edit.get("new_string", "") or ""
+            if not each_old:
+                return False
+            should_replace_all = bool(each_edit.get("replace_all", False))
+            post_edit_content = _apply_edit_to_content(
+                post_edit_content, each_old, each_new, should_replace_all
+            )
+    else:
+        return False
+
+    post_edit_signatures = _top_level_signatures(post_edit_content)
+    if post_edit_signatures is None:
+        return False
+    existing_imports, existing_rest = existing_signatures
+    post_imports, post_rest = post_edit_signatures
+    if post_rest != existing_rest or post_imports == existing_imports:
+        return False
+    return Counter(post_imports) <= Counter(existing_imports)
 
 
 def _tests_directory_name() -> str:
@@ -194,18 +366,27 @@ def _is_repo_boundary(candidate_directory: Path) -> bool:
     return False
 
 
-def find_nearest_tests_directory(start_directory: Path) -> Path | None:
+def _ancestor_tests_directories(start_directory: Path) -> list[tuple[Path, Path]]:
+    """Collect each ancestor's sibling tests directory up to the repo boundary.
+
+    Args:
+        start_directory: Directory of the production file under edit.
+
+    Returns:
+        Ordered (ancestor, tests_directory) pairs; nearer ancestors first.
+    """
+    all_pairs: list[tuple[Path, Path]] = []
     current_directory = start_directory
     for _ in range(_parent_walk_limit()):
         sibling_tests = current_directory / _tests_directory_name()
         if sibling_tests.is_dir():
-            return sibling_tests
+            all_pairs.append((current_directory, sibling_tests))
         if _is_repo_boundary(current_directory):
-            return None
+            break
         if current_directory.parent == current_directory:
-            return None
+            break
         current_directory = current_directory.parent
-    return None
+    return all_pairs
 
 
 def _split_module_stem_prefix() -> str:
@@ -224,6 +405,11 @@ def _split_family_candidates(directory: Path, stem: str) -> list[Path]:
 
 def candidate_test_paths_for(production_path: Path) -> list[Path]:
     """Return the test files whose freshness can satisfy the gate for a production file.
+
+    Every ancestor ``tests`` directory contributes a flat candidate
+    (``tests/test_<stem>.py``) and package-mirroring nested candidates
+    (``tests/<subpackage path>/test_<stem>.py``), so repos that keep tests
+    either beside the package or in a category tree both resolve.
 
     For ``code_rules_*`` Python modules the candidate list is extended with the
     sibling split test family (``test_code_rules_enforcer_*.py``), because that
@@ -247,9 +433,12 @@ def candidate_test_paths_for(production_path: Path) -> list[Path]:
     if extension == ".py":
         all_candidates.append(directory / f"test_{stem}.py")
         all_candidates.append(directory / f"{stem}_test.py")
-        nearest_tests_directory = find_nearest_tests_directory(directory)
-        if nearest_tests_directory is not None:
-            all_candidates.append(nearest_tests_directory / f"test_{stem}.py")
+        for each_ancestor, each_tests_directory in _ancestor_tests_directories(directory):
+            all_candidates.append(each_tests_directory / f"test_{stem}.py")
+            nested_directory = each_tests_directory
+            for each_relative_part in directory.relative_to(each_ancestor).parts:
+                nested_directory = nested_directory / each_relative_part
+                all_candidates.append(nested_directory / f"test_{stem}.py")
         all_candidates.extend(_split_family_candidates(directory, stem))
         return all_candidates
 
@@ -423,6 +612,9 @@ def main() -> None:
     if tool_name in ("Edit", "MultiEdit") and ext == ".py" and path.exists():
         existing_content = _read_candidate_text(path)
         if existing_content is not None:
+            if _is_post_edit_import_only(existing_content, tool_name, tool_input):
+                emit_allow()
+                sys.exit(0)
             if _is_post_edit_constants_only(existing_content, tool_name, tool_input):
                 emit_allow()
                 sys.exit(0)
