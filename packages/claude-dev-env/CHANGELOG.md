@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.51.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.4...claude-dev-env-v1.51.0) (2026-06-07)
+
+
+### Features
+
+* **bugteam:** add audit categories O and P to close Copilot review gaps ([#533](https://github.com/jl-cmd/claude-code-config/issues/533)) ([2444ee1](https://github.com/jl-cmd/claude-code-config/commit/2444ee1530a0bdfa6ad567a66e32c93425dd6f32))
+
+
+### Bug Fixes
+
+* **bugteam:** self-heal stale local core.hooksPath in preflight ([#529](https://github.com/jl-cmd/claude-code-config/issues/529)) ([b570670](https://github.com/jl-cmd/claude-code-config/commit/b5706702201027c2161f53c8cd9ce2867b528502))
+
+
+### Refactoring
+
+* **context:** port startup-context instruction trims to canonical repo ([#535](https://github.com/jl-cmd/claude-code-config/issues/535)) ([6f00b67](https://github.com/jl-cmd/claude-code-config/commit/6f00b67edc12f8546eef05409d7aaa43cfe8126e))
+
 ## [1.50.4](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.3...claude-dev-env-v1.50.4) (2026-06-05)
 
 
