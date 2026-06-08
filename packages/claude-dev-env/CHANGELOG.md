@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.52.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.51.0...claude-dev-env-v1.52.0) (2026-06-08)
+
+
+### Features
+
+* **code-rules-enforcer:** add --check CLI pre-check mode and full-file forecast ([#536](https://github.com/jl-cmd/claude-code-config/issues/536)) ([150cfe6](https://github.com/jl-cmd/claude-code-config/commit/150cfe6b0ea0ff796853ef9663e952e062272e5b))
+* **tdd-enforcer:** nested test-layout resolution and import-only edit exemption ([#537](https://github.com/jl-cmd/claude-code-config/issues/537)) ([4154b8f](https://github.com/jl-cmd/claude-code-config/commit/4154b8f70e029016d7f268a9d441cb40a17999ad))
+* **update:** add /update skill to fast-forward a repo's main from a confirmed remote ([#539](https://github.com/jl-cmd/claude-code-config/issues/539)) ([f8bf49e](https://github.com/jl-cmd/claude-code-config/commit/f8bf49e47f494a5999ce777b5f7c1ed98ca54bfd))
+
+
+### Bug Fixes
+
+* **hooks:** disable zoekt content-search redirect ([#540](https://github.com/jl-cmd/claude-code-config/issues/540)) ([db2c0f2](https://github.com/jl-cmd/claude-code-config/commit/db2c0f2e2a792fe0898d6d7e396ce0c63944249f))
+
 ## [1.51.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.50.4...claude-dev-env-v1.51.0) (2026-06-07)
 
 
