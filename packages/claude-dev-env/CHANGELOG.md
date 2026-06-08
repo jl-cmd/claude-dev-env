@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.52.0...claude-dev-env-v1.52.1) (2026-06-08)
+
+
+### Bug Fixes
+
+* **pr-converge:** auto-route cwd into the PR worktree for cross-repo PRs ([#541](https://github.com/jl-cmd/claude-code-config/issues/541)) ([15a5b20](https://github.com/jl-cmd/claude-code-config/commit/15a5b20fd98d624ca17a0ecc23664d67249fc226))
+
 ## [1.52.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.51.0...claude-dev-env-v1.52.0) (2026-06-08)
 
 
