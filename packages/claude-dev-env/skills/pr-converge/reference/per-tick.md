@@ -45,6 +45,89 @@ If `current_head` changed since last tick, reset `bugbot_down` to `false`
 
 Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 
+## Step 1.5: Resolve the PR worktree (cwd routing)
+
+The **PR worktree** is the local working tree of the PR's repo on its head
+branch. Every local operation this tick runs there: the CODE_REVIEW
+`/code-review --fix`, every `clean-coder` fix spawn, and every commit and
+push. `/code-review` and `git` both act on the repo of the current working
+directory, so the working directory must be the PR worktree before any local
+work begins. Re-resolve it every tick — a rebase or a fresh HEAD can move the
+branch tip.
+
+Read the current working tree's origin and parse its `<owner>/<repo>`,
+accepting the `https://github.com/<owner>/<repo>`,
+`git@github.com:<owner>/<repo>`, and `ssh://git@github.com/<owner>/<repo>`
+forms and dropping any trailing `.git`:
+
+```bash
+git remote get-url origin
+```
+
+- **Parsed owner/repo matches the PR** (case-insensitive): the `EnterWorktree`
+  pre-flight checkout is the PR worktree, and the working directory already
+  points here, so no `cd` is needed. Bring the branch to the PR head with the
+  same deterministic `checkout -B` the cross-repo case uses, after confirming
+  the tree carries no uncommitted edits — a non-empty `git status --porcelain`
+  means a prior tick left a fix mid-flight, so escalate as a hard blocker:
+  ```bash
+  git fetch origin
+  git checkout -B <branch> origin/<branch>
+  ```
+
+- **Parsed owner/repo differs** (the session is rooted in another repo — for
+  example, the PR lives in `llm-settings` while the session runs from
+  `claude-code-config`): route the working directory into a checkout of the
+  PR's repo. This is routine and automatic — never pause, and never raise it as
+  a fork (see [ground-rules.md](ground-rules.md)). `EnterWorktree` is scoped to
+  the session's own repo and cannot re-root into the PR's repo.
+
+  `<run_temp_dir>` is pr-converge's own `pr-converge-pr-<N>` directory under the
+  system temp directory — named apart from bugteam's `bugteam-pr-<N>` run dir so
+  the two never share a checkout when Step 6 runs bugteam on the same PR.
+  pr-converge fills this path by hand; it does not route through the shared
+  `_path_resolver` that bugteam uses. Reuse its `checkout` across ticks; create
+  it once when it is absent. A fresh clone honors the global `core.hooksPath`, so git-side
+  CODE_RULES enforcement covers the fix commit.
+
+  1. Clone the PR branch when the checkout is absent:
+     ```bash
+     gh repo clone <owner>/<repo> "<run_temp_dir>/checkout" -- --branch <branch>
+     ```
+  2. Bring it to the PR head. On a reused checkout, confirm it carries no
+     uncommitted edits first — a non-empty `git -C "<run_temp_dir>/checkout"
+     status --porcelain` means a prior tick left a fix mid-flight, so escalate
+     as a hard blocker rather than discard it. On a clean tree:
+     ```bash
+     git -C "<run_temp_dir>/checkout" fetch origin
+     git -C "<run_temp_dir>/checkout" checkout -B <branch> origin/<branch>
+     ```
+  3. Change into it in a standalone Bash call so the working directory persists
+     into the `/code-review` invocation that follows:
+     ```bash
+     cd "<run_temp_dir>/checkout"
+     ```
+  4. Confirm the route took before any local work:
+     ```bash
+     git rev-parse --show-toplevel
+     git rev-parse HEAD
+     ```
+     The top level reads `<run_temp_dir>/checkout` and HEAD equals
+     `current_head`.
+
+  Spawn every `clean-coder` fix worker with the PR worktree path in its prompt
+  so its edits land in the PR's repo — the same worktree-path handoff bugteam
+  gives its fix worker. The
+  GitHub API steps (BUGBOT fetch, convergence gates) and the bugteam Skill
+  invocation are URL-driven and need no local checkout.
+
+  Capture the session worktree path (the `EnterWorktree` checkout) before
+  routing away. Step 0 grant, Step 8 working-tree cleanup, and Step 10 revoke
+  read the current working directory and target the session repo, so `cd` back
+  to the session worktree before Step 8 and remove `<run_temp_dir>` there with
+  a Windows-safe recursive remove (per
+  `$HOME/.claude/rules/windows-filesystem-safe.md`).
+
 ## Step 2: Branch on `phase`
 
 ### `phase == BUGBOT`
@@ -126,12 +209,16 @@ a. Run Claude Code's built-in `/code-review --fix` on the FULL
    [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
    It reviews the diff and applies its findings to the working tree.
 
-   Before running, confirm the working tree sits on the PR's HEAD with no
-   uncommitted edits, then invoke `/code-review --fix` with no path
-   arguments so it audits the whole branch diff against `origin/main`. Do
-   not delta-scope to commits added since the prior clean SHA, do not
-   scope to a single file, do not scope to bugbot's flagged paths. A
-   partial-scope round does not count and cannot set
+   Before running, confirm the working directory is the PR worktree resolved
+   in [Step 1.5](#step-15-resolve-the-pr-worktree-cwd-routing) — `git rev-parse
+   --show-toplevel` is that checkout and `git rev-parse HEAD` equals
+   `current_head` — with no uncommitted edits. When the session is rooted in a
+   different repo than the PR, the `cd` from Step 1.5 supplies this; the
+   persisted working directory is what `/code-review` audits. Then invoke
+   `/code-review --fix` with no path arguments so it audits the whole branch
+   diff against `origin/main`. Do not delta-scope to commits added since the
+   prior clean SHA, do not scope to a single file, do not scope to bugbot's
+   flagged paths. A partial-scope round does not count and cannot set
    `code_review_clean_at`. Pass no effort argument, so the review uses
    the session's current effort.
 

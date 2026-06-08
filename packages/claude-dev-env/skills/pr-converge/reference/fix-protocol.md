@@ -25,6 +25,15 @@ files during fix phase in multi-PR mode.
 
 **Single-PR (no `state.json`) — same gates, main session executor:**
 
+Run every command below in the PR worktree (the working directory routed in
+[per-tick.md § Step 1.5](per-tick.md)). The `git add`, `git commit`, and
+`git push` act on the repo of the current working directory, so a cross-repo
+PR's fix lands in the PR's repo only when the cwd is its worktree. A spawned
+`clean-coder` does not inherit the lead's working directory — name the PR
+worktree path in its prompt and direct it to edit, stage, and commit there,
+matching the worktree-path handoff bugteam embeds in its fix worker's spawn
+prompt.
+
 - Read each referenced file:line.
 - Write failing test first when finding has behavior to test. Pure doc /
   comment / naming nits with no behavior → straight to fix.

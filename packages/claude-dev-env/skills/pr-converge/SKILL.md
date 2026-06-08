@@ -31,6 +31,18 @@ proceed to any state-modifying operation until the working directory
 contains `.claude/worktrees/`. If `EnterWorktree` fails, report the failure
 and stop; do not continue in place.
 
+`EnterWorktree` isolates the session's **own** repo. When the PR under
+convergence shares that repo, its worktree is where the CODE_REVIEW phase
+runs. When the PR lives in a different repo, `EnterWorktree` cannot
+re-root into it; Step 1.5 resolves a **PR worktree** — a checkout of the
+PR's repo on its head branch — and routes the working directory into it.
+Routing the working directory into the PR's repo is routine and
+automatic, never a fork to pause on. The Pre-flight `.claude/worktrees/`
+gate covers the session repo's own isolation; for a cross-repo PR the
+working directory routes into the PR's repo for local work and returns to
+the session worktree before teardown. See
+[`reference/per-tick.md` § Step 1.5](reference/per-tick.md).
+
 ## State persistence
 
 Single-PR mode persists loop state to `$CLAUDE_JOB_DIR/pr-converge-state.json`.
@@ -84,6 +96,14 @@ post a fresh PR in a fresh branch based on origin main to the user.
   `pwsh` calls run through the PowerShell tool, not Bash. Bash on
   Windows is Git Bash which cannot execute PowerShell cmdlets. Route all
   PowerShell work through the PowerShell tool or `pwsh -NoProfile -File`.
+- **Cross-repo PR: route cwd into the PR worktree before `/code-review`** —
+  `/code-review --fix` (Step 5) audits the repo of the current working
+  directory. When the session is rooted in a different repo than the PR,
+  `EnterWorktree` cannot re-root (it is scoped to the session's repo);
+  resolve the PR worktree and `cd` into it per
+  [Step 1.5](reference/per-tick.md). Skipping this reviews and edits the
+  wrong repo. The route is routine and automatic — never a material fork
+  to pause on.
 
 ## Progress checklist
 
@@ -117,9 +137,14 @@ round as converged. This rule holds every tick, every loop, every PR.
 - [ ] **Step 0: Grant project permissions**
       `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
 
-- [ ] **Step 1: Resolve PR scope**
-      Capture owner, repo, number, head SHA, branch.
+- [ ] **Step 1: Resolve PR scope + PR worktree**
+      Capture owner, repo, number, head SHA, branch. Resolve the **PR
+      worktree** — the local checkout every local step this tick targets:
+      the `EnterWorktree` checkout when the PR shares the session's repo,
+      else a checkout of the PR's repo that the working directory routes
+      into via `cd`. Cross-repo routing is automatic, not a fork.
       See: [`reference/per-tick.md` § Step 1](reference/per-tick.md)
+      and [§ Step 1.5](reference/per-tick.md)
 
 - [ ] **Step 2: Initialize loop state**
       `phase = BUGBOT`; all counters at zero; `run_name` resolved.
@@ -167,6 +192,13 @@ round as converged. This rule holds every tick, every loop, every PR.
       See: [`reference/per-tick.md` § Step 2 CODE_REVIEW](reference/per-tick.md)
 
       Pre-condition: `bugbot_clean_at == current_head` (or `bugbot_down == true`).
+
+      Pre-condition: the working directory is the Step 1.5 PR worktree on
+      `current_head` (`git rev-parse --show-toplevel` is that checkout).
+      When the session is rooted in a different repo than the PR, `cd`
+      into the PR worktree first — `/code-review` audits the repo of the
+      current working directory, so this routing targets the real PR
+      diff. This `cd` is routine and automatic.
 
       Run Claude Code's built-in `/code-review --fix` on the full
       `origin/main...HEAD` diff —

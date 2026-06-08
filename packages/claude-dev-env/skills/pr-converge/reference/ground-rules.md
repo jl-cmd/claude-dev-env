@@ -15,3 +15,10 @@
 - **Adapt when reality contradicts on-disk state.** If `state.json`,
   `git`, or `gh` disagree with live PR, escalate as hard blocker per
   [stop-conditions.md](stop-conditions.md).
+- **Cross-repo cwd routing is routine, not a fork.** When the PR under
+  convergence lives in a different repo than the session is rooted in, route
+  the working directory into a checkout of the PR's repo automatically —
+  `/code-review --fix`, `git`, and every `clean-coder` fix spawn act on the
+  repo of the current working directory. The resolution is fixed
+  ([per-tick.md § Step 1.5](per-tick.md)): resolve the PR worktree, `cd` into
+  it, run local work there. Do not pause, ask, or raise it as a material fork.
