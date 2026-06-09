@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.52.1...claude-dev-env-v1.53.0) (2026-06-09)
+
+
+### Features
+
+* **autoconverge:** single-pass PR convergence workflow ([#543](https://github.com/jl-cmd/claude-code-config/issues/543)) ([4afd80a](https://github.com/jl-cmd/claude-code-config/commit/4afd80aacc70b327c6103d446be91aef2a3a2a45))
+
 ## [1.52.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.52.0...claude-dev-env-v1.52.1) (2026-06-08)
 
 
