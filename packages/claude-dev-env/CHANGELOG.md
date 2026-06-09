@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.54.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.53.0...claude-dev-env-v1.54.0) (2026-06-09)
+
+
+### Features
+
+* **clean-coder:** pin agent and fix spawns to fable model ([#548](https://github.com/jl-cmd/claude-code-config/issues/548)) ([8cd806c](https://github.com/jl-cmd/claude-code-config/commit/8cd806cfdcc855350eb544dc3bbaa1b04aea6386))
+
 ## [1.53.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.52.1...claude-dev-env-v1.53.0) (2026-06-09)
 
 
