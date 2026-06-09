@@ -2,7 +2,7 @@
 name: clean-coder
 description: "Use PROACTIVELY for ALL code generation — feature development, bug fixes, refactoring, hook creation, automation scripts, and any task that produces code. Internalizes CODE_RULES.md and the 8-dimension readability standard so thoroughly that /check finds zero issues. The definitive code-writing agent."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task, Skill
-model: opus
+model: fable
 color: green
 ---
 

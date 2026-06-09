@@ -144,7 +144,7 @@ Spawn:
 Agent(
   subagent_type="clean-coder",
   name="bugfix-pr<N>-loop<L>",
-  model="opus",
+  model="fable",
   mode="bypassPermissions",
   run_in_background=true,
   description="Bugfix PR <N> loop <L>",

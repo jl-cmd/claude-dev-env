@@ -113,10 +113,10 @@ def test_contract_should_require_files_opened_in_proof_of_absence() -> None:
     )
 
 
-def test_step2_spawn_should_include_model_opus_parameter() -> None:
+def test_step2_spawn_should_include_model_fable_parameter() -> None:
     skill_text = _load_skill_text()
-    assert 'model="opus"' in skill_text, (
-        "Step 2 Agent() spawn template must include model=\"opus\" for the primary subagent"
+    assert 'model="fable"' in skill_text, (
+        "Step 2 Agent() spawn template must include model=\"fable\" for the primary subagent"
     )
 
 
