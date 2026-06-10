@@ -111,6 +111,16 @@ git -C "<path>" log --oneline -1 main
 
 Report the move as `main <old> → <new>`, or "already up to date" when nothing changed.
 
+Then report what the checkout runs — a move of the `main` ref says nothing about the files on disk:
+
+```
+git -C "<path>" branch --show-current
+git -C "<path>" status --short
+```
+
+- **Checked-out branch.** When a branch other than `main` is checked out, say so plainly: the fast-forward moves a ref only and no file on disk changes. Code that runs from this checkout comes from the checked-out branch, not from `main`.
+- **Dirty tracked files.** List every modified tracked file from `status --short`. Uncommitted edits sit on top of the checked-out branch and are what runs — flag them, because a ref update can neither see nor repair them. When the tree is clean, report "working tree clean".
+
 ## Constraints (non-negotiable)
 
 - **Fast-forward only.** If the remote's `main` is not a descendant of local `main`, stop. Never `--force`, never `branch -f`, never a merge commit. Divergence is a job for `/rebase`.
@@ -125,6 +135,7 @@ Report the move as `main <old> → <new>`, or "already up to date" when nothing 
 - `<remote>/main` only moves after an explicit `git fetch`. Fetch inside every run; never compare against a remote-tracking ref left over from an earlier fetch.
 - `origin` is not always the source of truth. When a fork is `origin` and the canonical repo is another remote (often `upstream`), the confirmed remote should be the canonical one, not whichever is named `origin`.
 - Quote the path on every command — `git -C "<path>"` — so paths with spaces or a NAS drive letter survive.
+- "Up to date" describes the `main` ref, not the running code. A checkout deployed on a feature branch, or carrying uncommitted edits, runs that branch plus those edits regardless of where `main` points. Phase 4's checkout-state report exists so the operator sees that gap on every run.
 
 ## What this skill does NOT do
 
