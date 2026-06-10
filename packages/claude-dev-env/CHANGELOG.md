@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.54.0...claude-dev-env-v1.55.0) (2026-06-10)
+
+
+### Features
+
+* **clean-coder:** unpin model from agent and fix spawns ([#550](https://github.com/jl-cmd/claude-code-config/issues/550)) ([b6198d3](https://github.com/jl-cmd/claude-code-config/commit/b6198d3d53f28e76d7dc47ab8771eb2aa206df60))
+
 ## [1.54.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.53.0...claude-dev-env-v1.54.0) (2026-06-09)
 
 
