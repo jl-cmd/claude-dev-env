@@ -110,7 +110,7 @@ truth.
 
 - **Subagent roles (spawned per loop, not at invocation start):**
   - `bugfind` — `code-quality-agent`, model opus (Opus 4.7 at default xhigh effort)
-  - `bugfix` — `clean-coder`, model fable
+  - `bugfix` — `clean-coder`, no model pin (the lead picks the model per task)
 
 ### Loop state block
 

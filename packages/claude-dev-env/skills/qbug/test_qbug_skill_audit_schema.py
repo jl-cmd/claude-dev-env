@@ -113,10 +113,16 @@ def test_contract_should_require_files_opened_in_proof_of_absence() -> None:
     )
 
 
-def test_step2_spawn_should_include_model_fable_parameter() -> None:
+def test_step2_primary_spawn_should_not_pin_a_model() -> None:
     skill_text = _load_skill_text()
-    assert 'model="fable"' in skill_text, (
-        "Step 2 Agent() spawn template must include model=\"fable\" for the primary subagent"
+    primary_spawn_start = skill_text.find('subagent_type="clean-coder"')
+    assert primary_spawn_start != -1, (
+        "Step 2 Agent() spawn template must spawn the clean-coder primary subagent"
+    )
+    primary_spawn_end = skill_text.find(")", primary_spawn_start)
+    primary_spawn_block = skill_text[primary_spawn_start:primary_spawn_end]
+    assert "model=" not in primary_spawn_block, (
+        "Primary clean-coder spawn must omit model= so the lead picks the spawn effort"
     )
 
 
