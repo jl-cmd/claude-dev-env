@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.55.0...claude-dev-env-v1.55.1) (2026-06-10)
+
+
+### Documentation
+
+* **update-skill:** report checked-out branch and dirty tracked files after the ref move ([#554](https://github.com/jl-cmd/claude-code-config/issues/554)) ([87f5069](https://github.com/jl-cmd/claude-code-config/commit/87f5069da428c366875b2cfcd621b4a38e7f24e5))
+
 ## [1.55.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.54.0...claude-dev-env-v1.55.0) (2026-06-10)
 
 
