@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.55.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.55.1...claude-dev-env-v1.55.2) (2026-06-11)
+
+
+### Bug Fixes
+
+* **hooks:** exempt .claude-* profile directories from the md-to-html blocker ([#557](https://github.com/jl-cmd/claude-code-config/issues/557)) ([e765d3d](https://github.com/jl-cmd/claude-code-config/commit/e765d3dcfb2eb1b95730ea1c052c8443fe84505c))
+
+
+### Documentation
+
+* **claude-dev-env:** codify the coders + Fable-verifier workflow for code tasks ([#552](https://github.com/jl-cmd/claude-code-config/issues/552)) ([b075fb1](https://github.com/jl-cmd/claude-code-config/commit/b075fb1409e1c7fec9039f57c0ce601454c39303))
+
 ## [1.55.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.55.0...claude-dev-env-v1.55.1) (2026-06-10)
 
 
