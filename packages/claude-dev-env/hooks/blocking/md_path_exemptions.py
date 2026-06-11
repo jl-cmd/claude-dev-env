@@ -21,12 +21,10 @@ from hooks_constants.md_to_html_blocker_constants import (  # noqa: E402
     ALL_EXEMPT_PLUGIN_DIRECTORY_SEGMENTS,
     ALL_EXEMPT_ROOT_FILENAMES_LOWER,
     CLAUDE_DEV_ENV_REPO_NAME_SEGMENT,
-    CLAUDE_DIRECTORY_PATH_PREFIX,
-    CLAUDE_DIRECTORY_SEGMENT_MARKER,
+    CLAUDE_DIRECTORY_NAME,
+    CLAUDE_PROFILE_DIRECTORY_NAME_PREFIX,
     MINIMUM_SEGMENT_COUNT_TO_MATCH_INDICATOR,
     PACKAGES_TOP_LEVEL_SEGMENT,
-    PLUGIN_DIRECTORY_PATH_PREFIX,
-    PLUGIN_DIRECTORY_SEGMENT_MARKER,
     PLUGIN_ROOT_MARKER_DIRECTORY_NAME,
     REPO_ROOT_MARKER_NAME,
     RESOLVED_HOME_DIRECTORY_LOWER,
@@ -38,7 +36,9 @@ def is_exempt_path(file_path: str) -> bool:
     """Return True when the .md file path is exempt from the blocker policy.
 
     Exemption sources, in order of evaluation:
-    - Any segment under `.claude/` or `.claude-plugin/` (case-insensitive)
+    - Any directory segment named `.claude` or prefixed `.claude-`
+      (case-insensitive): project infrastructure, profile directories like
+      `.claude-mel/`, and `.claude-plugin/`
     - Basename in `ALL_EXEMPT_ANYWHERE_FILENAMES` (e.g. SKILL.md)
     - Anchored under `packages/claude-dev-env/<one of
       ALL_CLAUDE_CODE_SOURCE_TOP_DIRECTORIES>/...` (docs, rules,
@@ -60,15 +60,7 @@ def is_exempt_path(file_path: str) -> bool:
     expanded_path = os.path.expanduser(file_path)
     normalized = os.path.normpath(expanded_path).replace("\\", "/")
     lower_normalized = normalized.lower()
-    if (
-        CLAUDE_DIRECTORY_SEGMENT_MARKER in lower_normalized
-        or lower_normalized.startswith(CLAUDE_DIRECTORY_PATH_PREFIX)
-    ):
-        return True
-    if (
-        PLUGIN_DIRECTORY_SEGMENT_MARKER in lower_normalized
-        or lower_normalized.startswith(PLUGIN_DIRECTORY_PATH_PREFIX)
-    ):
+    if _has_claude_infrastructure_segment(lower_normalized):
         return True
     basename_lower = os.path.basename(normalized).lower()
     if basename_lower in ALL_EXEMPT_ANYWHERE_FILENAMES_LOWER:
@@ -99,6 +91,33 @@ def _resolve_absolute_directory(normalized_path: str) -> str:
     if os.path.isabs(directory):
         return directory
     return os.path.abspath(directory)
+
+
+def _has_claude_infrastructure_segment(lower_normalized_path: str) -> bool:
+    """A directory named `.claude` or prefixed `.claude-` (profile and
+    plugin directories) holds Claude infrastructure; any path inside one
+    is exempt.
+
+    Only directory segments are matched. The final segment is always the
+    file's basename (``normpath`` strips any trailing slash), so a file
+    merely named with the ``.claude-`` prefix in an ordinary directory
+    stays subject to the policy.
+
+    Args:
+        lower_normalized_path: Lowercased path with separators normalized
+            to forward slashes.
+
+    Returns:
+        True when any directory segment names a Claude infrastructure
+        directory.
+    """
+    all_directory_segments = lower_normalized_path.split("/")[:-1]
+    for each_segment in all_directory_segments:
+        if each_segment == CLAUDE_DIRECTORY_NAME:
+            return True
+        if each_segment.startswith(CLAUDE_PROFILE_DIRECTORY_NAME_PREFIX):
+            return True
+    return False
 
 
 def _has_plugin_directory_segment(lower_normalized_path: str) -> bool:

@@ -1,7 +1,8 @@
 """Tests for md_to_html_blocker directory and filename exemptions.
 
-Covers which directory trees (`.claude/`, `.claude-plugin/`, source subtrees
-under `packages/claude-dev-env/`, `agents/`, `skills/`, `commands/`) and which
+Covers which directory trees (`.claude/`, `.claude-*/` profile and plugin
+directories, source subtrees under `packages/claude-dev-env/`, `agents/`,
+`skills/`, `commands/`) and which
 root-level filenames (`README.md`, `CHANGELOG.md`, `CLAUDE.md`, `AGENTS.md`,
 `SKILL.md`) are exempt from the `.md` block, and the segment-anchored matching
 that prevents nested look-alike paths from bypassing the block.
@@ -362,6 +363,71 @@ def test_blocks_ordinary_docs_md_file():
     result = _run_hook(
         "Write",
         {"file_path": "docs/intro.md", "content": "# Intro"},
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_passes_claude_profile_memory_directory():
+    """A Claude profile directory (`.claude-<name>/`, e.g. `.claude-mel/`)
+    carries the same infrastructure as `.claude/`; per-project memory files
+    under it accept .md writes."""
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": (
+                "C:/Users/sample/.claude-mel/projects"
+                "/sample-project/memory/fact.md"
+            ),
+            "content": "# Fact",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_passes_relative_claude_profile_directory():
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": ".claude-mel/projects/sample/memory/fact.md",
+            "content": "# Fact",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_passes_claude_profile_directory_case_insensitive():
+    result = _run_hook(
+        "Write",
+        {"file_path": "C:/Users/sample/.Claude-Mel/MEMORY.md", "content": "# Index"},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_blocks_dot_directory_that_starts_with_claude_but_lacks_hyphen():
+    """`.claudette/` is not Claude infrastructure: only a directory named
+    exactly `.claude` or carrying the `.claude-` prefix is exempt."""
+    result = _run_hook(
+        "Write",
+        {"file_path": "notes/.claudette/intro.md", "content": "# Intro"},
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_blocks_claude_prefixed_filename_in_plain_directory():
+    """A file merely named with the `.claude-` prefix (e.g.
+    `docs/.claude-notes.md`) is not Claude infrastructure: the exemption
+    matches directory segments only, so a `.claude-*.md` basename inside
+    an ordinary directory is blocked."""
+    result = _run_hook(
+        "Write",
+        {"file_path": "docs/.claude-notes.md", "content": "# Notes"},
     )
     assert result.returncode == 0
     output = json.loads(result.stdout)

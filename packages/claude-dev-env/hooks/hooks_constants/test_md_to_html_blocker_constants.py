@@ -115,3 +115,11 @@ def test_plugin_root_marker_directory_name_is_dot_claude_plugin() -> None:
     a plugin repo root and exempted."""
     assert constants_module.PLUGIN_ROOT_MARKER_DIRECTORY_NAME == ".claude-plugin"
     assert "PLUGIN_ROOT_MARKER_DIRECTORY_NAME" in constants_module.__all__
+
+
+def test_claude_profile_directory_name_prefix_is_dot_claude_hyphen() -> None:
+    """A directory whose name carries the `.claude-` prefix (profile
+    directories like `.claude-mel/`, plus `.claude-plugin/`) is Claude
+    infrastructure; any path inside one bypasses the .md block."""
+    assert constants_module.CLAUDE_PROFILE_DIRECTORY_NAME_PREFIX == ".claude-"
+    assert "CLAUDE_PROFILE_DIRECTORY_NAME_PREFIX" in constants_module.__all__

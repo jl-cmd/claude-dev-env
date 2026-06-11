@@ -25,6 +25,7 @@ from hooks_constants.md_to_html_blocker_constants import (  # noqa: E402
     ALL_EXEMPT_PLUGIN_DIRECTORY_SEGMENTS,
     CLAUDE_DEV_ENV_REPO_NAME_SEGMENT,
     CLAUDE_DIRECTORY_NAME,
+    CLAUDE_PROFILE_DIRECTORY_NAME_PREFIX,
     PACKAGES_TOP_LEVEL_SEGMENT,
     PLUGIN_ROOT_MARKER_DIRECTORY_NAME,
 )
@@ -63,7 +64,7 @@ def _block_context() -> str:
         "Reference for HTML effectiveness patterns:\n"
         f"{_html_effectiveness_url}\n"
         "Exceptions (.md still allowed):\n"
-        f"- Files inside {CLAUDE_DIRECTORY_NAME}/ or {PLUGIN_ROOT_MARKER_DIRECTORY_NAME}/ directories\n"
+        f"- Files inside {CLAUDE_DIRECTORY_NAME}/ or {CLAUDE_PROFILE_DIRECTORY_NAME_PREFIX}*/ directories\n"
         f"- {_exempt_anywhere_filenames_summary} anywhere\n"
         f"- Files under {_exempt_plugin_segments_summary} directories\n"
         f"- Files under {_claude_dev_env_source_directories_summary} source directories\n"
@@ -79,7 +80,7 @@ def _block_system_message() -> str:
         ".md files are blocked in this project — generate a self-contained .html "
         f"file instead. See {_html_effectiveness_url} for "
         f"design patterns and examples. Exemptions: {CLAUDE_DIRECTORY_NAME}/ and "
-        f"{PLUGIN_ROOT_MARKER_DIRECTORY_NAME}/ infrastructure, "
+        f"{CLAUDE_PROFILE_DIRECTORY_NAME_PREFIX}*/ infrastructure, "
         f"{_exempt_anywhere_filenames_summary} anywhere, {_exempt_plugin_segments_summary} trees, "
         f"{_claude_dev_env_source_directories_summary} source trees, "
         f"files under a {PLUGIN_ROOT_MARKER_DIRECTORY_NAME}/ root, "
