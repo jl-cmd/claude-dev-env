@@ -44,11 +44,12 @@ const LENS_SCHEMA = {
           file: { type: 'string' },
           line: { type: 'integer' },
           severity: { type: 'string', enum: ['P0', 'P1', 'P2'] },
+          category: { type: 'string', enum: ['bug', 'code-standard'], description: 'code-standard for pure CODE_RULES/style violations with no behavioral impact; bug otherwise' },
           title: { type: 'string' },
           detail: { type: 'string' },
           replyToCommentId: { type: ['integer', 'null'], description: 'GitHub review comment id to reply to and resolve, or null when the finding has no thread' },
         },
-        required: ['file', 'line', 'severity', 'title', 'detail', 'replyToCommentId'],
+        required: ['file', 'line', 'severity', 'category', 'title', 'detail', 'replyToCommentId'],
       },
     },
   },
@@ -415,7 +416,7 @@ async function resolveHead() {
     `Print the current HEAD SHA of ${prCoordinates}. Run exactly:\n` +
       `gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
       `Return the full 40-character SHA in the sha field. Do not modify any files.`,
-    { label: 'resolve-head', phase: 'Converge', schema: HEAD_SCHEMA, agentType: 'Explore' },
+    { model: 'fable', label: 'resolve-head', phase: 'Converge', schema: HEAD_SCHEMA, agentType: 'Explore' },
   )
   return head?.sha
 }
@@ -433,7 +434,7 @@ function prefetchMainForRound() {
     `Refresh the base ref for ${prCoordinates} so the parallel review lenses can diff against an up-to-date origin/main without each running its own fetch. Run exactly:\n` +
       `git fetch origin main\n` +
       `Do not edit, commit, push, rebase, or modify any files — fetch only.`,
-    { label: 'prefetch-main', phase: 'Converge', agentType: 'Explore' },
+    { model: 'fable', label: 'prefetch-main', phase: 'Converge', agentType: 'Explore' },
   )
 }
 
@@ -461,8 +462,8 @@ function runBugbotLens(head) {
       `   - If a clean review exists on HEAD -> return clean.\n` +
       `4. No review yet on HEAD: check_bugbot_ci.py --check-active. If active (exit 0), poll: repeat check_bugbot_ci.py --check-clean / --check-active every 60 seconds (delay each iteration with "sleep 60", or the PowerShell alternative "Start-Sleep -Seconds 60") for up to 25 iterations, then re-fetch the review. If not active (exit 1), post the literal comment "bugbot run" (no @mention, no other text) via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --body "bugbot run", delay 8 seconds with "sleep 8" (PowerShell alternative "Start-Sleep -Seconds 8"), then poll as above.\n` +
       `5. If after the full poll budget Bugbot has neither a check run nor a review on HEAD -> return {sha:${'`'}${head}${'`'}, clean:true, down:true, findings:[]} (treat as down).\n\n` +
-      `Scope is the whole PR; you are only reading Bugbot's own output here. Return strictly the schema.`,
-    { label: 'lens:bugbot', phase: 'Converge', schema: LENS_SCHEMA },
+      `Scope is the whole PR; you are only reading Bugbot's own output here. For each finding set category: 'code-standard' when it is a pure CODE_RULES/style violation (naming, comments, type hints, magic values, structure) with no behavioral impact; 'bug' otherwise. Return strictly the schema.`,
+    { model: 'fable', label: 'lens:bugbot', phase: 'Converge', schema: LENS_SCHEMA },
   )
 }
 
@@ -477,8 +478,8 @@ function runCodeReviewLens(head) {
     `You are the code-review lens for ${prCoordinates}, HEAD ${head}.\n\n` +
       `Review the FULL origin/main...HEAD diff — every file the PR touches. Do NOT delta-scope to recent commits or to a single file. The workflow already fetched origin/main this round, so do NOT run git fetch; run git diff --name-only origin/main...HEAD to enumerate the changed files, then review the complete diff of each.\n\n` +
       `Apply correctness-focused review: real bugs, broken logic, incorrect error handling, data-loss or security risks, contract mismatches, and reuse/simplification problems. Report only defensible findings with concrete file:line evidence.\n\n` +
-      `Do NOT edit, commit, or push — reporting only. Return strictly the schema: clean=true with empty findings when the diff is sound, otherwise one entry per finding (severity P0/P1/P2, replyToCommentId=null since these are not yet GitHub threads). Set sha=${'`'}${head}${'`'}, down=false.`,
-    { label: 'lens:code-review', phase: 'Converge', schema: LENS_SCHEMA, agentType: 'code-quality-agent' },
+      `Do NOT edit, commit, or push — reporting only. Return strictly the schema: clean=true with empty findings when the diff is sound, otherwise one entry per finding (severity P0/P1/P2; category 'code-standard' for pure CODE_RULES/style violations with no behavioral impact, 'bug' otherwise; replyToCommentId=null since these are not yet GitHub threads). Set sha=${'`'}${head}${'`'}, down=false.`,
+    { model: 'fable', label: 'lens:code-review', phase: 'Converge', schema: LENS_SCHEMA, agentType: 'code-quality-agent' },
   )
 }
 
@@ -493,8 +494,8 @@ function runAuditLens(head) {
     `You are the second-opinion bug-audit lens for ${prCoordinates}, HEAD ${head}.\n\n` +
       `Read the audit rubric at ${CONFIG.bugteamRubric} and apply its categories (A through P) against the FULL origin/main...HEAD diff — every file the PR touches, never a delta cut. The workflow already fetched origin/main this round, so do NOT run git fetch; run git diff --name-only origin/main...HEAD first to enumerate scope.\n\n` +
       `This is a clean-room audit: assume nothing from other lenses. Report only findings backed by concrete file:line evidence. Do NOT edit, commit, or push.\n\n` +
-      `Return strictly the schema: clean=true with empty findings when the diff passes every category, otherwise one entry per finding (severity P0/P1/P2, replyToCommentId=null). Set sha=${'`'}${head}${'`'}, down=false.`,
-    { label: 'lens:bug-audit', phase: 'Converge', schema: LENS_SCHEMA, agentType: 'code-quality-agent' },
+      `Return strictly the schema: clean=true with empty findings when the diff passes every category, otherwise one entry per finding (severity P0/P1/P2; category 'code-standard' for pure CODE_RULES/style violations with no behavioral impact, 'bug' otherwise; replyToCommentId=null). Set sha=${'`'}${head}${'`'}, down=false.`,
+    { model: 'fable', label: 'lens:bug-audit', phase: 'Converge', schema: LENS_SCHEMA, agentType: 'code-quality-agent' },
   )
 }
 
@@ -532,7 +533,7 @@ function applyFixes(head, findings, sourceLabel) {
       `- When you commit and push a fix: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false.\n` +
       `- When every finding was already addressed so no code change is needed — yet you still resolved each GitHub review thread above: newSha=${head} (the unchanged HEAD), pushed=false, resolvedWithoutCommit=true. Only set this when every thread that carries a comment id is resolved; otherwise the round is treated as stalled.\n` +
       `Always include a one-line summary.`,
-    { label: `fix:${sourceLabel}`, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder' },
+    { model: 'fable', label: `fix:${sourceLabel}`, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder' },
   )
 }
 
@@ -548,7 +549,7 @@ function postCleanAudit(head) {
       `Write an empty findings file: create a temp file containing exactly [] (an empty JSON array). Then run:\n` +
       `python "${CONFIG.prLoopScripts}/post_audit_thread.py" --skill bugteam --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --commit ${head} --state CLEAN --findings-json <temp-file>\n` +
       `Run the script with --help first if any flag name differs. This posts the APPROVE review body that check_convergence.py reads for the bugteam gate. Do not edit code, commit, or push.`,
-    { label: 'post-clean-audit', phase: 'Converge', agentType: 'general-purpose' },
+    { model: 'fable', label: 'post-clean-audit', phase: 'Converge', agentType: 'general-purpose' },
   )
 }
 
@@ -565,10 +566,10 @@ function runCopilotGate(head) {
       `   gh api --method POST repos/${input.owner}/${input.repo}/pulls/${input.prNumber}/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'\n` +
       `2. Poll for Copilot's review on HEAD ${head}: up to ${CONFIG.copilotMaxPolls} attempts, 360 seconds apart (delay each attempt with "sleep 360", or the PowerShell alternative "Start-Sleep -Seconds 360"). Each attempt: python "${CONFIG.sharedScripts}/fetch_copilot_reviews.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} for the top-level review state, plus gh api "repos/${input.owner}/${input.repo}/pulls/${input.prNumber}/comments" --paginate --slurp for inline comment ids (Copilot's login contains "copilot", case-insensitive). Only count entries whose commit_id starts with ${head}.\n` +
       `   - Copilot review present and clean/approved on HEAD -> return {sha:${'`'}${head}${'`'}, clean:true, findings:[], blocker:null}.\n` +
-      `   - Copilot findings on HEAD -> return them (each with its inline comment id in replyToCommentId), clean:false, blocker:null.\n` +
+      `   - Copilot findings on HEAD -> return them (each with its inline comment id in replyToCommentId; category 'code-standard' for pure CODE_RULES/style violations with no behavioral impact, 'bug' otherwise), clean:false, blocker:null.\n` +
       `   - No review after ${CONFIG.copilotMaxPolls} attempts -> return {sha:${'`'}${head}${'`'}, clean:false, findings:[], blocker:"Copilot did not surface a review on HEAD after ${CONFIG.copilotMaxPolls} polls"}.\n\n` +
       `Return strictly the schema.`,
-    { label: 'copilot-gate', phase: 'Copilot gate', schema: COPILOT_SCHEMA },
+    { model: 'fable', label: 'copilot-gate', phase: 'Copilot gate', schema: COPILOT_SCHEMA },
   )
 }
 
@@ -585,7 +586,7 @@ function checkConvergence(bugbotDown) {
       `Exit 0 -> every gate passed: return {pass:true, failures:[]}.\n` +
       `Exit 1 -> return {pass:false, failures:[<each printed FAIL line verbatim>]}.\n` +
       `Exit 2 -> retry once; if it still errors, return {pass:false, failures:["check_convergence gh error"]}.`,
-    { label: 'check-convergence', phase: 'Finalize', schema: CONVERGENCE_SCHEMA, agentType: 'Explore' },
+    { model: 'fable', label: 'check-convergence', phase: 'Finalize', schema: CONVERGENCE_SCHEMA, agentType: 'Explore' },
   )
 }
 
@@ -600,7 +601,7 @@ function markReady(head) {
       `1. Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
       `2. Re-query the draft state: gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .draft\n` +
       `Return {ready:true} only when step 2 prints false (the PR is no longer a draft). If step 1 errors or step 2 still prints true, return {ready:false}.`,
-    { label: 'mark-ready', phase: 'Finalize', schema: READY_SCHEMA, agentType: 'general-purpose' },
+    { model: 'fable', label: 'mark-ready', phase: 'Finalize', schema: READY_SCHEMA, agentType: 'general-purpose' },
   )
 }
 
@@ -623,7 +624,51 @@ function repairConvergence(head, failures) {
       `- PR not mergeable: rebase onto origin/main and force-push (git fetch origin main; git rebase origin/main; resolve conflicts; git push --force-with-lease).\n` +
       `- A dirty bot review or a still-pending requested reviewer: leave it; the next round re-runs that reviewer.\n` +
       `Make at most one commit for any code fix. Return the HEAD SHA after any push in newSha (the unchanged ${head} when nothing was pushed), pushed true/false, resolvedWithoutCommit=false (this gate already accepts an unchanged HEAD), and a one-line summary.`,
-    { label: 'repair-convergence', phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder' },
+    { model: 'fable', label: 'repair-convergence', phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder' },
+  )
+}
+
+/**
+ * Decide whether a review round surfaced ONLY code-standard violations — pure
+ * CODE_RULES/style findings with no behavioral impact. Such a round passes for
+ * convergence purposes: the violations are deferred to a follow-up fix issue
+ * (plus an environment-hardening PR) rather than blocking this PR.
+ * @param {Array<object>} findings deduped findings for the round
+ * @returns {boolean} true when every finding is category code-standard
+ */
+function isStandardsOnlyRound(findings) {
+  return findings.length > 0 && findings.every((each) => each.category === 'code-standard')
+}
+
+/**
+ * Defer a standards-only round: one agent files a GitHub issue listing every
+ * code-standard finding, opens a draft PR hardening the Claude environment
+ * (hooks/rules) so those violation classes are blocked before code is written,
+ * and replies to / resolves any GitHub threads the findings carry, noting the
+ * deferral. This PR's branch is never touched.
+ * @param {string} head PR HEAD SHA the findings were raised against
+ * @param {Array<object>} findings deduped code-standard-only findings
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<string>} agent transcript (unused)
+ */
+function spawnStandardsFollowUp(head, findings, sourceLabel) {
+  const findingsBlock = findings
+    .map((each, position) => {
+      const eachThreadIds = collectFindingThreadIds(each)
+      const threadNote = eachThreadIds.length
+        ? `\n   (GitHub review comment ids: ${eachThreadIds.join(', ')})`
+        : ''
+      return `${position + 1}. [${each.severity}] ${each.file}:${each.line} — ${each.title}\n   ${each.detail}${threadNote}`
+    })
+    .join('\n')
+  return agent(
+    `A review round on ${prCoordinates}, HEAD ${head}, surfaced ONLY code-standard violations (CODE_RULES/style, no behavioral impact). The convergence run treats the round as passed and defers these to follow-up work, which you now create. Do NOT commit or push to the PR's own branch.\n\n` +
+      `Findings:\n${findingsBlock}\n\n` +
+      `1. Follow-up fix issue: file a GitHub issue on ${input.owner}/${input.repo} (gh issue create --body-file with a temp file) titled "Deferred code-standard fixes from PR #${input.prNumber}". The body references the PR and lists each finding with its file:line, severity, and detail. The issue carries the fix work; do not open a fix PR.\n` +
+      `2. Environment-hardening PR: in the Claude environment config repo (the repo owning ~/.claude hooks and rules — JonEcho/llm-settings for hooks, jl-cmd/claude-code-config for rules/skills; pick whichever owns the needed surface), create a branch and open a DRAFT PR that hardens hooks/rules so each violation class found here is blocked at Write/Edit time, before code is written or reviewed. Reference the issue from step 1 in the PR body.\n` +
+      `3. For each finding that carries a GitHub review comment id: post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue <url>." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread).\n\n` +
+      `Return a one-line summary naming the follow-up issue URL and the hardening PR URL.`,
+    { model: 'fable', label: `standards-followup:${sourceLabel}`, phase: 'Converge', agentType: 'clean-coder' },
   )
 }
 
@@ -633,6 +678,7 @@ let rounds = 0
 let iterations = 0
 let blocker = null
 let bugbotDown = input.bugbotDisabled || false
+let standardsNote = null
 
 while (iterations < CONFIG.maxIterations) {
   iterations += 1
@@ -657,6 +703,14 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     const findings = roundOutcome.findings
+    if (isStandardsOnlyRound(findings)) {
+      log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
+      await spawnStandardsFollowUp(head, findings, 'converge-round')
+      standardsNote = `${findings.length} code-standard finding(s) deferred to a follow-up fix issue plus an environment-hardening PR — verify both land`
+      await postCleanAudit(head)
+      phase = 'COPILOT'
+      continue
+    }
     if (findings.length > 0) {
       log(`Round ${rounds}: ${findings.length} finding(s) — applying fixes`)
       const fixResult = await applyFixes(head, findings, 'converge-round')
@@ -693,6 +747,13 @@ while (iterations < CONFIG.maxIterations) {
       break
     }
     if (copilotOutcome.kind === 'fix') {
+      if (isStandardsOnlyRound(copilotOutcome.findings)) {
+        log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
+        await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot')
+        standardsNote = `${copilotOutcome.findings.length} code-standard finding(s) deferred to a follow-up fix issue plus an environment-hardening PR — verify both land`
+        phase = 'FINALIZE'
+        continue
+      }
       log(`Copilot raised ${copilotOutcome.findings.length} finding(s) — fixing and re-converging`)
       const fixResult = await applyFixes(head, copilotOutcome.findings, 'copilot')
       const hadThreadBearingFinding = copilotOutcome.findings.some((each) => collectFindingThreadIds(each).length > 0)
@@ -722,7 +783,7 @@ while (iterations < CONFIG.maxIterations) {
       const readyResult = await markReady(head)
       const readyOutcome = classifyReadyOutcome(readyResult)
       if (readyOutcome.converged) {
-        return { converged: true, rounds, finalSha: head, blocker: null }
+        return { converged: true, rounds, finalSha: head, blocker: null, standardsNote }
       }
       blocker = readyOutcome.blocker
       break
@@ -739,4 +800,5 @@ return {
   rounds,
   finalSha: head,
   blocker: blocker || `iteration cap reached (${CONFIG.maxIterations})`,
+  standardsNote,
 }

@@ -66,7 +66,8 @@ own. The workflow runs in the background and notifies this session on
 completion. Watch live progress with `/workflows`.
 
 The workflow returns
-`{ converged, rounds, finalSha, blocker }`.
+`{ converged, rounds, finalSha, blocker, standardsNote }`. Every agent the
+workflow spawns runs on Fable 5 (`model: 'fable'`).
 
 ## Budget-aware round boundaries
 
@@ -96,6 +97,7 @@ round records nothing resumable and replays dirty.
    Rounds: <N>
    Final commit: <finalSha>
    Blocker: <blocker>        # only when blocked
+   Standards: <standardsNote> # only when a round deferred code-standard findings
    ```
 
 ## What the workflow does each round
@@ -111,6 +113,12 @@ run ends short of ready. Hard-won failure lessons live in
   `clean-coder` applies all fixes in a single commit, pushes, replies to and
   resolves any bot threads; re-verify next round on the new HEAD. When all
   three are clean on a stable HEAD, post the CLEAN bugteam audit artifact.
+  A round whose findings are ALL code-standard violations (pure CODE_RULES/style,
+  no behavioral impact) passes for convergence purposes: the workflow files a
+  follow-up issue listing the findings, opens a draft environment-hardening PR
+  (hooks/rules that block those violation classes at Write/Edit time), resolves
+  any bot threads with a deferral note, and reports the deferral in
+  `standardsNote`.
 - **Copilot gate:** request a Copilot review, poll up to three times; findings
   route back into Converge, a no-show after the cap is a blocker.
 - **Convergence check:** `check_convergence.py` is the authoritative gate; on a
