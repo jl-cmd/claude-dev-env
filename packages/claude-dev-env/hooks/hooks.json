@@ -107,6 +107,11 @@
           },
           {
             "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/precommit_code_rules_gate.py",
+            "timeout": 30
+          },
+          {
+            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pr_description_enforcer.py",
             "timeout": 10
           },
