@@ -50,3 +50,11 @@ docs/plans/
 
 # setuptools editable-install build artifacts
 *.egg-info/
+
+# Debug and test-run logs dropped in the repo root by local tooling
+debug-*.log
+pytestdebug.log
+
+# Mangled Windows temp paths created as literal filenames when an unquoted
+# backslash path passes through Git Bash (separators eaten, colon encoded)
+*AppDataLocalTemp*
