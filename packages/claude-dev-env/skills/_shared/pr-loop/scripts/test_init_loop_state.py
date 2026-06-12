@@ -46,3 +46,26 @@ def test_create_loop_state_writes_state_under_typed_worktree(
     written_state = json.loads(state_path.read_text(encoding="utf-8"))
     assert written_state["starting_sha"] == "abc1234"
     assert written_state["loop_count"] == 0
+
+
+def test_main_prints_state_path_with_forward_slashes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path_resolver_module = init_loop_state.resolve_run_temp_dir.__globals__["tempfile"]
+    monkeypatch.setattr(path_resolver_module, "gettempdir", lambda: str(tmp_path))
+    exit_code = init_loop_state.main(
+        [
+            "--pr-number",
+            "422",
+            "--head-ref",
+            "feat/branch",
+            "--starting-sha",
+            "abc1234",
+        ]
+    )
+    assert exit_code == 0
+    printed_path = capsys.readouterr().out.strip()
+    assert "\\" not in printed_path
+    assert printed_path.endswith("worktree/loop-state.json")

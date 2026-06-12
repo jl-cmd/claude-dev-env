@@ -124,7 +124,7 @@ def per_pr_workspace(
     slug = slugify_pr_identity(owner, repo, pr_number)
     return PerPrWorkspace(
         worktree=pr_workspace_dir / WORKTREE_DIRNAME,
-        diff_patch_template=str(pr_workspace_dir / slug / DIFF_PATCH_TEMPLATE),
+        diff_patch_template=(pr_workspace_dir / slug / DIFF_PATCH_TEMPLATE).as_posix(),
         outcome_xml_template=OUTCOME_XML_TEMPLATE,
         fix_outcome_xml_template=FIX_OUTCOME_XML_TEMPLATE,
     )

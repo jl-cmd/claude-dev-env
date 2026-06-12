@@ -63,7 +63,7 @@ def build_fix_prompt_xml(
     SubElement(context, "pr_number").text = str(pr_number)
     SubElement(context, "head_ref").text = head_ref
     SubElement(context, "base_ref").text = base_ref
-    SubElement(context, "worktree_path").text = str(worktree_path)
+    SubElement(context, "worktree_path").text = worktree_path.as_posix()
 
     bugs_elem = SubElement(root, "bugs")
     if isinstance(findings_data, list):

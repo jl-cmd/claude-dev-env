@@ -62,14 +62,14 @@ def build_audit_prompt_xml(
     SubElement(context, "pr_number").text = str(pr_number)
     SubElement(context, "head_ref").text = head_ref
     SubElement(context, "base_ref").text = base_ref
-    SubElement(context, "worktree_path").text = str(worktree_path)
-    SubElement(context, "run_temp_dir").text = str(run_temp_dir)
+    SubElement(context, "worktree_path").text = worktree_path.as_posix()
+    SubElement(context, "run_temp_dir").text = run_temp_dir.as_posix()
 
     scope = SubElement(root, "scope")
     scope.text = (
         f"Audit the full diff of {owner}/{repo}#{pr_number} "
         f"({head_ref} against {base_ref}) for CODE_RULES violations, "
-        f"bugs, and anti-patterns. Work in {worktree_path}."
+        f"bugs, and anti-patterns. Work in {worktree_path.as_posix()}."
     )
 
     bug_categories = SubElement(root, "bug_categories")

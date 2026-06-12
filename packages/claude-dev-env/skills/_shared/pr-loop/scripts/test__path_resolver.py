@@ -47,7 +47,17 @@ def test_per_pr_workspace_diff_patch_template_carries_loop_placeholder() -> None
     workspace = path_resolver.per_pr_workspace(run_temp_dir, "owner", "repo", 7)
     rendered = workspace.diff_patch_template.format(loop=3)
     assert rendered.endswith("loop-3.patch")
-    assert "owner-repo-pr-7" in rendered.replace("\\", "/")
+    assert "owner-repo-pr-7" in rendered
+
+
+def test_per_pr_workspace_diff_patch_template_uses_forward_slashes() -> None:
+    run_temp_dir = Path("C:/Users/jon/AppData/Local/Temp/bugteam-pr-376")
+    workspace = path_resolver.per_pr_workspace(run_temp_dir, "owner", "repo", 376)
+    assert "\\" not in workspace.diff_patch_template
+    assert workspace.diff_patch_template == (
+        "C:/Users/jon/AppData/Local/Temp/bugteam-pr-376/"
+        "pr-376/owner-repo-pr-376/loop-{loop}.patch"
+    )
 
 
 def test_per_pr_workspace_is_frozen() -> None:

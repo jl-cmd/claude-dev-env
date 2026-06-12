@@ -196,6 +196,7 @@
   <constraints>
     <constraint>Read every file completely. Do not skim. Do not skip any file or any line.</constraint>
     <constraint>Write findings to the temp file immediately. Do not accumulate them in memory and batch-write at the end. You will forget things.</constraint>
+    <constraint>Double-quote every path in shell commands and write paths with forward slashes (e.g. C:/Users/...), even on Windows.</constraint>
     <constraint>Every finding must cite the file and line of the problem AND the file and line of the evidence that proves it is a problem. No floating claims.</constraint>
     <constraint>When two files contradict each other, flag BOTH files. Do not guess which is correct unless a canonical source resolves it.</constraint>
     <constraint>If you cannot determine the correct value or form, flag the inconsistency and mark it "unresolvable — no canonical source found". Do not guess.</constraint>

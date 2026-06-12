@@ -164,7 +164,7 @@ def main(all_arguments: list[str]) -> int:
         run_temp_dir=run_temp_dir,
         all_pr_entries=all_pr_entries,
     )
-    print(f"Removed {removed_count} worktree(s), cleaned {run_temp_dir}")
+    print(f"Removed {removed_count} worktree(s), cleaned {run_temp_dir.as_posix()}")
     return 0
 
 

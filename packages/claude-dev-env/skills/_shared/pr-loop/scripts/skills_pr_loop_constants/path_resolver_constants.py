@@ -26,6 +26,8 @@ ALL_AUDIT_CONSTRAINT_TEXTS = [
     "Every finding must cite file:line.",
     "Document each finding with severity, file, line, and suggested fix.",
     "Read each file in the diff before reporting on it.",
+    "Double-quote every path in shell commands and write paths with "
+    "forward slashes (e.g. C:/Users/...), even on Windows.",
 ]
 
 ALL_AUDIT_CATEGORY_ENTRIES = [
@@ -71,6 +73,8 @@ ALL_FIX_CONSTRAINT_TEXTS = [
     "Every fix must have a corresponding test.",
     "Remove deprecated code directly and update all call sites.",
     "Handle each error case with a named exception type.",
+    "Double-quote every path in shell commands and write paths with "
+    "forward slashes (e.g. C:/Users/...), even on Windows.",
 ]
 
 XML_PRETTY_INDENT = "  "

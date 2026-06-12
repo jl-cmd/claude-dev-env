@@ -124,7 +124,7 @@ def main(
             arguments.is_multi_pr if is_multi_pr is None else is_multi_pr
         ),
     )
-    print(state_path)
+    print(state_path.as_posix())
     return 0
 
 
