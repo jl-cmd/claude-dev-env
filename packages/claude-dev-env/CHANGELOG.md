@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.56.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.55.2...claude-dev-env-v1.56.0) (2026-06-12)
+
+
+### Features
+
+* **hooks:** gate git commit on staged CODE_RULES violations via PreToolUse hook ([#560](https://github.com/jl-cmd/claude-code-config/issues/560)) ([1f53083](https://github.com/jl-cmd/claude-code-config/commit/1f530834c3b1bc112fedfee4fa21d45b19afcfda))
+
+
+### Bug Fixes
+
+* **pr-loop:** render agent-facing paths in POSIX form to stop Git Bash mangling ([#563](https://github.com/jl-cmd/claude-code-config/issues/563)) ([dc63327](https://github.com/jl-cmd/claude-code-config/commit/dc63327fa0e94372f24ddac8c96bb86086644383))
+
+
+### Documentation
+
+* **claude-dev-env:** codify converge-loop discipline, budget-aware pausing, and sub-agent output validation ([#558](https://github.com/jl-cmd/claude-code-config/issues/558)) ([e8abcd2](https://github.com/jl-cmd/claude-code-config/commit/e8abcd2358a08587596f2159f41af0ae78cce881))
+
 ## [1.55.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.55.1...claude-dev-env-v1.55.2) (2026-06-11)
 
 
