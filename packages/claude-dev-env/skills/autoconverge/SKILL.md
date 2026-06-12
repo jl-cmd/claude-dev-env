@@ -68,6 +68,17 @@ completion. Watch live progress with `/workflows`.
 The workflow returns
 `{ converged, rounds, finalSha, blocker }`.
 
+## Budget-aware round boundaries
+
+The workflow's `budget` API is the pacing signal: when a usage target is
+set, `converge.mjs` checks `budget.remaining()` before each round and
+stops at the round boundary when one full round (three parallel lenses +
+one fix commit + re-verify) does not fit. On a budget stop the workflow
+returns `blocker: "budget"` with the run id; resume with
+`Workflow({scriptPath, resumeFromRunId})` — completed rounds replay from
+the journal. Never start a round the budget cannot finish: a half-run
+round records nothing resumable and replays dirty.
+
 ## Teardown (on workflow completion)
 
 1. **When `converged` is true:** rewrite the PR description and clean the

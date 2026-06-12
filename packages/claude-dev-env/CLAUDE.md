@@ -50,6 +50,25 @@ Run every multi-step code task in two phases:
 
 Repair agents run only on reported findings; the verifier re-checks after each repair. Work lands (commit, push, draft PR) only on a clean verdict — enforced by the `verified_commit_gate` hook, which blocks `git commit`/`git push` unless a hook-minted verdict covers the current branch diff. The one exemption is mechanical, not discretionary: a diff whose every changed file is non-code or has an unchanged Python AST once docstrings are stripped (docs, docstrings, comments).
 
+## Converge & Review Loop Discipline
+
+- **Worktree isolation:** Run every PR convergence and review loop in an isolated worktree, never a shared checkout that concurrent processes may advance. Verify isolation (the working directory path includes `.claude/worktrees/`) before the first tick or round.
+- **No hedging in findings:** Findings and PR reports state verified facts only — never `likely`, `probably`, `should`, `appears to`. Verify each claim against the code before stating it; the anti-hallucination Stop hook rejects hedged responses.
+- **Tight edit scope:** Edit exactly what the task names — no whole-file rewrites, no renaming public method parameters, no changes beyond the stated task. When the user asks for a "lasting" or "reusable" fix, prefer the durable systemic fix over a one-off edit.
+- **GitHub MCP first:** The GitHub MCP (`mcp__plugin_github_github__*`) is the primary path for PR and review-thread inspection; raw `gh api` is the fallback, not the default — MCP calls work the same from any worktree.
+
+## Sub-agent Output Validation
+
+After any sub-agent returns a PR description, file list, or counts, verify each claim against the actual diff and repo state before using it. Flag and correct any invented paths, fabricated counts, or out-of-scope changes before they land in commits or PR bodies.
+
+## Git Sync Intent
+
+When asked to sync git ("get X onto origin main", "update main"), fast-forward local main to origin — do NOT commit untracked working-tree files unless explicitly told to.
+
+## Scheduled Task Cadence
+
+For scheduled/cron tasks, default to sub-hour intervals (30-minute); do not propose hourly cadences.
+
 ## Additional Non-overlapping Rules
 
 - **task_scope:** Match every action to what was explicitly requested. When intent is ambiguous, research official docs and present options via AskUserQuestion before making any changes. Proceed with edits only on explicit instruction.

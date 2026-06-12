@@ -43,6 +43,27 @@ working directory routes into the PR's repo for local work and returns to
 the session worktree before teardown. See
 [`reference/per-tick.md` § Step 1.5](reference/per-tick.md).
 
+## Budget-aware tick boundaries
+
+Before starting any tick, estimate whether the remaining session/usage
+budget covers one full clean tick (worst case: a BUGBOT fetch + a
+full-diff CODE_REVIEW + a fix commit + replies). If it does not, do not
+start the tick. Stop at the current tick boundary: write updated state to
+`$CLAUDE_JOB_DIR/pr-converge-state.json`, then report the exact resume
+command (`/pr-converge <PR URL>`) and the persisted `phase`/`tick_count`.
+A tick cut off mid-flight poisons the resume state — clean SHAs recorded
+against work that never landed — so an unstarted tick is always cheaper
+than a half-finished one.
+
+## Findings discipline
+
+Every finding, reply, and report states verified facts only — no hedging
+language (`likely`, `probably`, `should`, `appears to`). Verify each
+claim against the code on `current_head` before stating it; the
+anti-hallucination Stop hook rejects hedged output, forcing a rework
+pass. A claim that cannot be verified is reported as unverified, not
+softened.
+
 ## State persistence
 
 Single-PR mode persists loop state to `$CLAUDE_JOB_DIR/pr-converge-state.json`.
@@ -354,6 +375,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       `python "$HOME/.claude/skills/bugteam/scripts/revoke_project_claude_permissions.py"`
 
 - [ ] **Step 11: Print final report**
+      Print this block verbatim — no paraphrase, no extra commentary:
       ```
       /pr-converge exit: converged
       Loops: <N>
