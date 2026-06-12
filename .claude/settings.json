@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python C:/Users/jon/.claude/_shared/**)",
+      "Bash(git fetch *)",
+      "mcp__plugin_github_github__pull_request_read",
+      "mcp__serena__read_file"
+    ]
+  },
+  "worktree": {
+    "bgIsolation": "none"
+  }
+}
