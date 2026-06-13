@@ -134,7 +134,9 @@ function finalizeRepairBranch() {
   assert.notEqual(repairCallIndex, -1, 'expected the FINALIZE repair call to exist');
   const transitionIndex = convergeSource.indexOf("phase = 'CONVERGE'", repairCallIndex);
   assert.notEqual(transitionIndex, -1, 'expected a CONVERGE transition after the repair call');
-  const branchEnd = convergeSource.indexOf('continue', transitionIndex) + 'continue'.length;
+  const continueIndex = convergeSource.indexOf('continue', transitionIndex);
+  assert.notEqual(continueIndex, -1, 'expected a continue statement to close the FINALIZE repair branch');
+  const branchEnd = continueIndex + 'continue'.length;
   return convergeSource.slice(repairCallIndex, branchEnd);
 }
 
@@ -143,6 +145,33 @@ test('the FINALIZE repair branch does not re-assign head from the repair before 
     finalizeRepairBranch(),
     /head\s*=\s*repair/,
     'the next CONVERGE pass re-resolves HEAD from GitHub, so assigning the repair SHA here is dead',
+  );
+});
+
+function fixBranchAfter(branchLabel) {
+  const labelIndex = convergeSource.indexOf(branchLabel);
+  assert.notEqual(labelIndex, -1, `expected the ${branchLabel} marker to exist`);
+  const applyFixesIndex = convergeSource.indexOf('await applyFixes(', labelIndex);
+  assert.notEqual(applyFixesIndex, -1, `expected an applyFixes call after ${branchLabel}`);
+  const continueIndex = convergeSource.indexOf('continue', applyFixesIndex);
+  assert.notEqual(continueIndex, -1, `expected a continue statement to close the ${branchLabel} branch`);
+  const branchEnd = continueIndex + 'continue'.length;
+  return convergeSource.slice(applyFixesIndex, branchEnd);
+}
+
+test('the CONVERGE fix branch does not re-assign head from the fix before re-converging', () => {
+  assert.doesNotMatch(
+    fixBranchAfter('${findings.length} finding(s) — applying fixes'),
+    /head\s*=\s*fixProgress/,
+    'the next CONVERGE pass re-resolves HEAD from GitHub, so assigning the fix SHA here is dead',
+  );
+});
+
+test('the COPILOT fix branch does not re-assign head from the fix before re-converging', () => {
+  assert.doesNotMatch(
+    fixBranchAfter('${copilotOutcome.findings.length} finding(s) — fixing and re-converging'),
+    /head\s*=\s*fixProgress/,
+    'the CONVERGE pass it transitions to re-resolves HEAD from GitHub, so assigning the fix SHA here is dead',
   );
 });
 

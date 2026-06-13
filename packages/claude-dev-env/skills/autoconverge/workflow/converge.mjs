@@ -722,7 +722,6 @@ while (iterations < CONFIG.maxIterations) {
           : `fix lens landed no push for ${findings.length} finding(s) on HEAD ${head}`
         break
       }
-      head = fixProgress.newSha
       continue
     }
     if (!roundOutcome.roundClean) {
@@ -764,7 +763,6 @@ while (iterations < CONFIG.maxIterations) {
           : `copilot fix lens landed no push for ${copilotOutcome.findings.length} finding(s) on HEAD ${head}`
         break
       }
-      head = fixProgress.newSha
       phase = 'CONVERGE'
       continue
     }
