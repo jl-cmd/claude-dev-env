@@ -58,6 +58,9 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_args_match_signature,
     check_docstring_format,
 )
+from code_rules_duplicate_body import (  # noqa: E402
+    check_duplicate_function_body_across_files,
+)
 from code_rules_imports_logging import (  # noqa: E402
     advise_file_line_count,
     check_e2e_test_naming,
@@ -126,6 +129,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CODE_EXTENSIONS,
     ALL_JAVASCRIPT_EXTENSIONS,
     ALL_PYTHON_EXTENSIONS,
+    DENY_REASON_ISSUE_PREVIEW_COUNT,
     PRECHECK_USAGE_EXIT_CODE,
     PRECHECK_USAGE_MESSAGE,
 )
@@ -141,6 +145,7 @@ def validate_content(
     full_file_content: str | None = None,
     prior_full_file_content: str = "",
     defer_scope_to_caller: bool = False,
+    sibling_directory: Path | None = None,
 ) -> list[str]:
     """Run all applicable validators on content.
 
@@ -171,6 +176,12 @@ def validate_content(
             checks return their violations unscoped for the gate to classify.
             PreToolUse new-file or full-file writes leave this False: this
             enforcer is terminal, so it marks every violation in scope.
+        sibling_directory: The absolute directory the cross-file duplicate-body
+            check scans for sibling modules. The commit/push gate passes the
+            resolved file's parent so the on-disk sibling scan stays anchored to
+            the repository regardless of the gate process's working directory.
+            None (the PreToolUse default) derives the directory from
+            ``file_path``'s parent, which is already absolute on that path.
     """
     extension = get_file_extension(file_path)
     all_issues = []
@@ -192,6 +203,15 @@ def validate_content(
         all_issues.extend(check_constants_outside_config(content, file_path))
         all_issues.extend(check_constants_outside_config_advisory(content, file_path))
         all_issues.extend(check_file_global_constants_use_count(content, file_path))
+        all_issues.extend(
+            check_duplicate_function_body_across_files(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+                sibling_directory,
+            )
+        )
         all_issues.extend(check_type_escape_hatches(effective_content, file_path))
         all_issues.extend(check_banned_identifiers(content, file_path))
         all_issues.extend(
@@ -342,6 +362,64 @@ def _is_validated_target(file_path: str) -> bool:
     return get_file_extension(file_path) in ALL_CODE_EXTENSIONS
 
 
+def _is_hook_infrastructure_python_target(file_path: str) -> bool:
+    """Return whether the path is a hook-infrastructure Python file.
+
+    The full code-rules suite exempts hook-infrastructure files, but the
+    cross-file duplicate-body check must still guard them: a helper copied
+    across sibling hook modules is the exact violation it targets. This
+    predicate selects the hook ``.py`` files that route to that single check.
+
+    Args:
+        file_path: The destination path of the write, edit, or pre-check target.
+
+    Returns:
+        True when the path names a Python file inside hook infrastructure.
+    """
+    if not file_path:
+        return False
+    if not is_hook_infrastructure(file_path):
+        return False
+    return get_file_extension(file_path) in ALL_PYTHON_EXTENSIONS
+
+
+def _hook_infrastructure_duplicate_body_issues(
+    content: str,
+    file_path: str,
+    full_file_content: str | None = None,
+    prior_full_file_content: str = "",
+) -> list[str]:
+    """Run only the cross-file duplicate-body check for a hook Python target.
+
+    The whole code-rules verdict stays off hook-infrastructure files, so this
+    runs the single check that must still guard them, span-scoped to the lines
+    an edit touched exactly as ``validate_content`` scopes it for production
+    code.
+
+    Args:
+        content: The fragment or whole-file body under validation.
+        file_path: The hook-infrastructure destination path.
+        full_file_content: The reconstructed post-edit file body on an Edit, or
+            None for a whole-file Write.
+        prior_full_file_content: The file content before the edit applied, used to
+            recover the changed lines on an Edit.
+
+    Returns:
+        The in-scope duplicate-body violations for the target.
+    """
+    effective_content = content if full_file_content is None else full_file_content
+    all_changed_lines = (
+        changed_line_numbers(prior_full_file_content, full_file_content)
+        if full_file_content is not None
+        else None
+    )
+    return check_duplicate_function_body_across_files(
+        effective_content,
+        file_path,
+        all_changed_lines,
+    )
+
+
 def _without_line_prefix(violation_text: str) -> str:
     """Return the violation message body with its ``Line <n>: `` locator removed.
 
@@ -449,15 +527,22 @@ def _run_precheck(
         Exit code 1 when any violation exists or the candidate cannot be read,
         and 0 when the candidate is clean or the target is exempt.
     """
-    if not _is_validated_target(target_path):
+    runs_full_verdict = _is_validated_target(target_path)
+    runs_hook_duplicate_body = _is_hook_infrastructure_python_target(target_path)
+    if not runs_full_verdict and not runs_hook_duplicate_body:
         return 0
     candidate_content = _read_existing_file_content(candidate_path)
     if candidate_content is None:
         error_stream.write(f"error: cannot read candidate file: {candidate_path}\n")
         return 1
     candidate_content = candidate_content.lstrip(UTF8_BYTE_ORDER_MARK)
-    old_content = _read_existing_file_content(target_path) or ""
-    all_issues = validate_content(candidate_content, target_path, old_content)
+    if runs_full_verdict:
+        old_content = _read_existing_file_content(target_path) or ""
+        all_issues = validate_content(candidate_content, target_path, old_content)
+    else:
+        all_issues = _hook_infrastructure_duplicate_body_issues(
+            candidate_content, target_path
+        )
     for each_issue in all_issues:
         violation_stream.write(f"{each_issue}\n")
     return 1 if all_issues else 0
@@ -584,7 +669,7 @@ def _deny_reason_for_issues(
     Returns:
         The complete ``permissionDecisionReason`` text.
     """
-    issue_list = "; ".join(all_blocking_issues[:10])
+    issue_list = "; ".join(all_blocking_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT])
     deny_reason = (
         f"BLOCKED: [CODE_RULES] {len(all_blocking_issues)} violation(s): {issue_list}"
     )
@@ -601,13 +686,31 @@ def _deny_reason_for_issues(
             all_blocking_issues=all_blocking_issues,
         )
         if forecast_issues:
-            forecast_list = "; ".join(forecast_issues[:10])
+            forecast_list = "; ".join(forecast_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT])
             deny_reason += (
                 f"; FULL-FILE FORECAST — {len(forecast_issues)} additional "
                 "violation(s) elsewhere in this file will block future edits "
                 f"(full-file line numbers): {forecast_list}"
             )
     return deny_reason + _precheck_hint()
+
+
+def _write_deny_payload(deny_reason: str, deny_stream: TextIO) -> None:
+    """Write a PreToolUse deny payload carrying the given reason.
+
+    Args:
+        deny_reason: The composed ``permissionDecisionReason`` text.
+        deny_stream: The stream the JSON deny payload is written to.
+    """
+    deny_payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": deny_reason,
+        }
+    }
+    deny_stream.write(json.dumps(deny_payload) + "\n")
+    deny_stream.flush()
 
 
 def _report_blocking_violations(
@@ -640,21 +743,53 @@ def _report_blocking_violations(
     )
     if not all_blocking_issues:
         return
-    deny_payload = {
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": _deny_reason_for_issues(
-                all_blocking_issues,
-                tool_name,
-                file_path,
-                full_file_content_after_edit,
-                prior_full_file_content,
-            ),
-        }
-    }
-    deny_stream.write(json.dumps(deny_payload) + "\n")
-    deny_stream.flush()
+    _write_deny_payload(
+        _deny_reason_for_issues(
+            all_blocking_issues,
+            tool_name,
+            file_path,
+            full_file_content_after_edit,
+            prior_full_file_content,
+        ),
+        deny_stream,
+    )
+
+
+def _report_hook_duplicate_body(
+    content: str,
+    file_path: str,
+    full_file_content_after_edit: str | None,
+    prior_full_file_content: str,
+    deny_stream: TextIO,
+) -> None:
+    """Write a deny payload when a hook target copies a sibling function body.
+
+    The full code-rules verdict stays off hook-infrastructure files; this runs
+    the single duplicate-body check that must still guard them and emits the deny
+    payload when it fires.
+
+    Args:
+        content: The fragment or whole-file body under validation.
+        file_path: The hook-infrastructure destination path.
+        full_file_content_after_edit: The reconstructed post-edit file body,
+            or None when the payload is not an Edit.
+        prior_full_file_content: The on-disk content before the edit.
+        deny_stream: The stream the JSON deny payload is written to.
+    """
+    all_blocking_issues = _hook_infrastructure_duplicate_body_issues(
+        content,
+        file_path,
+        full_file_content_after_edit,
+        prior_full_file_content,
+    )
+    if not all_blocking_issues:
+        return
+    issue_list = "; ".join(all_blocking_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT])
+    deny_reason = (
+        f"BLOCKED: [CODE_RULES] {len(all_blocking_issues)} violation(s): {issue_list}"
+        + _precheck_hint()
+    )
+    _write_deny_payload(deny_reason, deny_stream)
 
 
 def main(all_arguments: list[str]) -> None:
@@ -679,7 +814,8 @@ def main(all_arguments: list[str]) -> None:
     tool_input = pretooluse_payload.get("tool_input", {})
     file_path = tool_input.get("file_path", "")
 
-    if not _is_validated_target(file_path):
+    runs_full_verdict = _is_validated_target(file_path)
+    if not runs_full_verdict and not _is_hook_infrastructure_python_target(file_path):
         sys.exit(0)
 
     validation_contents = _contents_for_validation(
@@ -696,6 +832,16 @@ def main(all_arguments: list[str]) -> None:
     )
 
     if not content:
+        sys.exit(0)
+
+    if not runs_full_verdict:
+        _report_hook_duplicate_body(
+            content,
+            file_path,
+            full_file_content_after_edit,
+            prior_full_file_content,
+            sys.stdout,
+        )
         sys.exit(0)
 
     _report_blocking_violations(

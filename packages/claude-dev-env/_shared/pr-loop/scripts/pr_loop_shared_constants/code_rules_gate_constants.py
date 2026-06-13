@@ -23,6 +23,12 @@ BANNED_NOUN_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
 BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX: int = 1
 BANNED_NOUN_SPAN_GROUP_INDEX: int = 2
 
+DUPLICATE_BODY_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
+    r"\(duplicate body span at line (\d+), spanning (\d+) lines\)"
+)
+DUPLICATE_BODY_DEFINITION_LINE_GROUP_INDEX: int = 1
+DUPLICATE_BODY_SPAN_GROUP_INDEX: int = 2
+
 ALL_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset(
     {".py", ".js", ".ts", ".tsx", ".jsx"}
 )

@@ -22,6 +22,9 @@ from pr_loop_shared_constants.code_rules_gate_constants import (  # noqa: E402
     BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX,
     BANNED_NOUN_SPAN_GROUP_INDEX,
     BANNED_NOUN_VIOLATION_PATTERN,
+    DUPLICATE_BODY_DEFINITION_LINE_GROUP_INDEX,
+    DUPLICATE_BODY_SPAN_GROUP_INDEX,
+    DUPLICATE_BODY_VIOLATION_PATTERN,
     FUNCTION_LENGTH_DEFINITION_LINE_GROUP_INDEX,
     FUNCTION_LENGTH_SPAN_GROUP_INDEX,
     FUNCTION_LENGTH_VIOLATION_PATTERN,
@@ -1006,11 +1009,39 @@ def banned_noun_span_range(violation_text: str) -> range | None:
     return range(definition_line, definition_line + line_span)
 
 
+def duplicate_body_span_range(violation_text: str) -> range | None:
+    """Return the copied function's source line range of a duplicate-body issue.
+
+    The duplicate-body message carries the copied function's definition line and
+    its full body span: ``Function 'NAME' duplicates location.py::name — ...
+    (duplicate body span at line X, spanning Y lines)``. The function occupies
+    lines ``X`` through ``X + Y - 1`` inclusive, so a duplicate of a sibling helper
+    is blocking only when the diff touches the copied function and advisory when an
+    unrelated edit leaves a pre-existing copy untouched — matching the span-scoped
+    PreToolUse Write/Edit behavior rather than blocking every duplicate-body
+    message unconditionally.
+
+    Args:
+        violation_text: A single violation string emitted by the enforcer.
+
+    Returns:
+        A ``range`` covering the copied function's declared line span, or None
+        when the text is not a duplicate-body violation.
+    """
+    span_match = DUPLICATE_BODY_VIOLATION_PATTERN.search(violation_text)
+    if span_match is None:
+        return None
+    definition_line = int(span_match.group(DUPLICATE_BODY_DEFINITION_LINE_GROUP_INDEX))
+    line_span = int(span_match.group(DUPLICATE_BODY_SPAN_GROUP_INDEX))
+    return range(definition_line, definition_line + line_span)
+
+
 def _all_span_range_extractors() -> tuple[Callable[[str], range | None], ...]:
     return (
         function_length_span_range,
         isolation_span_range,
         banned_noun_span_range,
+        duplicate_body_span_range,
     )
 
 
@@ -1052,9 +1083,10 @@ def split_violations_by_scope(
     Returns:
         Tuple ``(blocking, advisory)``. When *all_added_line_numbers* is
         None, every issue is blocking. Every diff-scoped violation
-        (function-length, HOME/TMP isolation, banned-noun) carries an
-        enclosing-unit span fragment that ``enclosing_span_range`` reconstructs
-        through one shared extractor registry; such a violation is blocking
+        (function-length, HOME/TMP isolation, banned-noun, duplicate-body)
+        carries an enclosing-unit span fragment that ``enclosing_span_range``
+        reconstructs through one shared extractor registry; such a violation is
+        blocking
         when its declared span intersects the added lines (the unit grew or its
         signature changed in this diff) and advisory otherwise (a pre-existing
         untouched unit). Every other issue is blocking when its ``Line N:``
@@ -1256,6 +1288,7 @@ def _scoped_violations_for_file(
         relative_posix,
         prior_content,
         defer_scope_to_caller=True,
+        sibling_directory=resolved_path.parent,
     )
     issues.extend(check_wrapper_plumb_through(content, relative_posix))
     if not issues:

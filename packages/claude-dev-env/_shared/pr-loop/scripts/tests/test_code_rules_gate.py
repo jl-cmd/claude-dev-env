@@ -12,6 +12,7 @@ import inspect
 import subprocess
 import sys
 import unittest.mock
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
@@ -29,6 +30,22 @@ def _load_gate_module() -> ModuleType:
 
 
 gate_module = _load_gate_module()
+
+
+def _load_duplicate_body_check() -> Callable[..., list[str]]:
+    package_root = gate_module.resolve_claude_dev_env_root(
+        Path(gate_module.__file__).resolve()
+    )
+    module_path = package_root / "hooks" / "blocking" / "code_rules_duplicate_body.py"
+    spec = importlib.util.spec_from_file_location("code_rules_duplicate_body", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.check_duplicate_function_body_across_files
+
+
+check_duplicate_function_body_across_files = _load_duplicate_body_check()
 
 
 def run_git_in_repository(repository_root: Path, *arguments: str) -> str:
@@ -558,6 +575,254 @@ def test_collect_partitioned_violations_counts_unreadable_sibling_as_skip(
     assert blocking_by_file == {}
     assert advisory_by_file == {}
     assert skipped_unreadable_count == 1
+
+
+_DUPLICATE_HELPER_SOURCE = (
+    "import re\n"
+    "\n"
+    "def strip_code_and_quotes(text: str) -> str:\n"
+    '    """Strip fences, inline code, and quoted lines from text.\n'
+    "\n"
+    "    Args:\n"
+    "        text: The raw text to clean.\n"
+    "\n"
+    "    Returns:\n"
+    "        The cleaned text.\n"
+    '    """\n'
+    "    without_fences = re.sub(r'```.*?```', '', text, flags=re.DOTALL)\n"
+    "    without_inline = re.sub(r'`[^`]*`', '', without_fences)\n"
+    "    without_quotes = re.sub(r'(?m)^>.*$', '', without_inline)\n"
+    "    return without_quotes.strip()\n"
+)
+
+
+def test_run_gate_flags_copied_sibling_when_cwd_is_outside_repo_root(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The duplicate-body sibling scan must anchor to the repo, not process CWD.
+
+    The duplicate-body check reads sibling modules from disk to flag a copied
+    helper. When the gate runs with a working directory above the repository
+    root, resolving the sibling directory against the process CWD points at the
+    wrong place and the copied helper slips through. Driving the gate's per-file
+    validation from a parent directory with a nested byte-identical sibling
+    proves sibling resolution is anchored to the absolute file location rather
+    than the inherited CWD — the duplicate message must appear in the blocking
+    set.
+    """
+    package_directory = temporary_git_repository / "package"
+    package_directory.mkdir()
+    existing_file = package_directory / "existing_helper.py"
+    copied_file = package_directory / "copied_helper.py"
+    existing_file.write_text(_DUPLICATE_HELPER_SOURCE, encoding="utf-8")
+    copied_file.write_text(_DUPLICATE_HELPER_SOURCE, encoding="utf-8")
+    validate_content = gate_module.load_validate_content()
+
+    monkeypatch.chdir(temporary_git_repository.parent)
+    blocking_by_file, _advisory_by_file, _skipped = (
+        gate_module._collect_partitioned_violations(
+            validate_content,
+            [copied_file],
+            temporary_git_repository,
+            None,
+        )
+    )
+
+    all_blocking_messages = [
+        each_message
+        for each_file_messages in blocking_by_file.values()
+        for each_message in each_file_messages
+    ]
+    assert any(
+        "duplicates existing_helper.py" in each_message
+        for each_message in all_blocking_messages
+    ), (
+        "A copied sibling helper must be flagged even when the gate runs from a "
+        f"CWD above the repository root, got: {all_blocking_messages}"
+    )
+
+
+def _duplicate_body_issue_for_copied_sibling(base_directory: Path) -> str:
+    """Return the enforcer's duplicate-body message for a copied sibling helper.
+
+    Writes the shared helper into a ``blocking`` subdirectory of *base_directory*
+    as an existing module, then validates a second module carrying the
+    byte-identical body with scope deferred to the caller, so the returned message
+    is exactly the one the commit/push gate re-scopes. The destination is passed as
+    a neutral relative path with the sibling directory supplied explicitly, because
+    any test marker anywhere in the path exempts the file from the duplicate scan
+    and a pytest temporary directory carries one. The single duplicate-body
+    violation is returned for span assertions.
+
+    Args:
+        base_directory: A directory under which the sibling module directory is
+            created.
+
+    Returns:
+        The duplicate-body violation string the enforcer emits for the copy.
+    """
+    sibling_directory = base_directory / "blocking"
+    sibling_directory.mkdir()
+    (sibling_directory / "existing_helper.py").write_text(
+        _DUPLICATE_HELPER_SOURCE, encoding="utf-8"
+    )
+    duplicate_body_issues = check_duplicate_function_body_across_files(
+        _DUPLICATE_HELPER_SOURCE,
+        "blocking/copied_helper.py",
+        defer_scope_to_caller=True,
+        sibling_directory=sibling_directory,
+    )
+    matching_issues = [
+        each_issue
+        for each_issue in duplicate_body_issues
+        if "duplicates existing_helper.py" in each_issue
+    ]
+    assert matching_issues, f"expected a duplicate-body issue, got {duplicate_body_issues!r}"
+    return matching_issues[0]
+
+
+def test_duplicate_body_span_range_covers_the_definition_through_last_body_line(
+    tmp_path: Path,
+) -> None:
+    """The reconstructed span starts at the copied function's definition line and
+    covers its full body, so a changed-line set intersects the span only when the
+    edit touches the duplicated function — mirroring the enforcer's own span."""
+    duplicate_body_issue = _duplicate_body_issue_for_copied_sibling(tmp_path)
+    definition_line = 3
+    last_body_line = 15
+    span = gate_module.duplicate_body_span_range(duplicate_body_issue)
+    assert span == range(definition_line, last_body_line + 1)
+
+
+def test_split_violations_blocks_duplicate_body_when_span_intersects_added_lines(
+    tmp_path: Path,
+) -> None:
+    """A duplicate-body issue whose copied-function span overlaps the diff's added
+    lines is blocking — this commit introduced or touched the copy, exactly the
+    case the live Write/Edit hook flags."""
+    duplicate_body_issue = _duplicate_body_issue_for_copied_sibling(tmp_path)
+    inside_span_line = 4
+    blocking, advisory = gate_module.split_violations_by_scope(
+        [duplicate_body_issue],
+        all_added_line_numbers={inside_span_line},
+    )
+    assert blocking == [duplicate_body_issue]
+    assert advisory == []
+
+
+def test_split_violations_advises_duplicate_body_when_span_misses_added_lines(
+    tmp_path: Path,
+) -> None:
+    """A duplicate-body issue for an untouched pre-existing copy — whose span does
+    not overlap any added line — is advisory, not blocking. Editing an unrelated
+    region of a file that already carries a sibling-duplicate helper must not
+    block the commit gate, matching the span-scoped Write/Edit behavior."""
+    duplicate_body_issue = _duplicate_body_issue_for_copied_sibling(tmp_path)
+    line_far_outside_span = 5000
+    blocking, advisory = gate_module.split_violations_by_scope(
+        [duplicate_body_issue],
+        all_added_line_numbers={line_far_outside_span},
+    )
+    assert advisory == [duplicate_body_issue]
+    assert blocking == []
+
+
+def test_collect_partitioned_violations_advises_pre_existing_sibling_duplicate(
+    temporary_git_repository: Path,
+) -> None:
+    """A committed file already carrying a sibling-duplicate helper, edited only in
+    an unrelated region, yields the duplicate-body violation as advisory — never
+    blocking. Without a parseable span the gate forces every duplicate-body message
+    into the blocking payload, which would wedge a convergence loop the author
+    cannot clear by editing the touched lines.
+    """
+    package_directory = temporary_git_repository / "package"
+    package_directory.mkdir()
+    existing_file = package_directory / "existing_helper.py"
+    existing_file.write_text(_DUPLICATE_HELPER_SOURCE, encoding="utf-8")
+    copied_file = package_directory / "copied_helper.py"
+    copied_file.write_text(
+        _DUPLICATE_HELPER_SOURCE + "unrelated_constant = 1\n", encoding="utf-8"
+    )
+    unrelated_added_line = _DUPLICATE_HELPER_SOURCE.count("\n") + 1
+    validate_content = gate_module.load_validate_content()
+
+    resolved_copied = copied_file.resolve()
+    blocking_by_file, advisory_by_file, _skipped = (
+        gate_module._collect_partitioned_violations(
+            validate_content,
+            [copied_file],
+            temporary_git_repository,
+            {resolved_copied: {unrelated_added_line}},
+        )
+    )
+
+    all_blocking_messages = [
+        each_message
+        for each_file_messages in blocking_by_file.values()
+        for each_message in each_file_messages
+    ]
+    all_advisory_messages = [
+        each_message
+        for each_file_messages in advisory_by_file.values()
+        for each_message in each_file_messages
+    ]
+    assert not any(
+        "duplicates existing_helper.py" in each_message
+        for each_message in all_blocking_messages
+    ), (
+        "An unrelated edit to a file carrying a pre-existing sibling-duplicate "
+        f"helper must not block, got blocking: {all_blocking_messages}"
+    )
+    assert any(
+        "duplicates existing_helper.py" in each_message
+        for each_message in all_advisory_messages
+    ), (
+        "The untouched pre-existing duplicate must surface as advisory, got "
+        f"advisory: {all_advisory_messages}"
+    )
+
+
+def test_collect_partitioned_violations_blocks_sibling_duplicate_in_added_region(
+    temporary_git_repository: Path,
+) -> None:
+    """When the diff's added lines fall inside the copied function, the duplicate
+    body is blocking — staging an edit that touches the copied helper still denies
+    the commit, matching the live Write/Edit hook."""
+    package_directory = temporary_git_repository / "package"
+    package_directory.mkdir()
+    existing_file = package_directory / "existing_helper.py"
+    existing_file.write_text(_DUPLICATE_HELPER_SOURCE, encoding="utf-8")
+    copied_file = package_directory / "copied_helper.py"
+    copied_file.write_text(_DUPLICATE_HELPER_SOURCE, encoding="utf-8")
+    definition_line = 3
+    last_body_line = 15
+    all_copied_function_lines = set(range(definition_line, last_body_line + 1))
+    validate_content = gate_module.load_validate_content()
+
+    resolved_copied = copied_file.resolve()
+    blocking_by_file, _advisory_by_file, _skipped = (
+        gate_module._collect_partitioned_violations(
+            validate_content,
+            [copied_file],
+            temporary_git_repository,
+            {resolved_copied: all_copied_function_lines},
+        )
+    )
+
+    all_blocking_messages = [
+        each_message
+        for each_file_messages in blocking_by_file.values()
+        for each_message in each_file_messages
+    ]
+    assert any(
+        "duplicates existing_helper.py" in each_message
+        for each_message in all_blocking_messages
+    ), (
+        "An edit whose added lines touch the copied helper must still block, got "
+        f"blocking: {all_blocking_messages}"
+    )
 
 
 def test_run_gate_skips_non_utf8_source_without_crashing(

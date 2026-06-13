@@ -24,6 +24,8 @@ ALL_MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
 ADVISORY_LINE_THRESHOLD_SOFT = 400
 ADVISORY_LINE_THRESHOLD_HARD = 1000
 
+DENY_REASON_ISSUE_PREVIEW_COUNT = 10
+
 ALL_BOOLEAN_NAME_PREFIXES: tuple[str, ...] = ("is_", "has_", "should_", "can_", "was_", "did_")
 UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
