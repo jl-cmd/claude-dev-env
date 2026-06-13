@@ -46,7 +46,7 @@ JS_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs"}
 JSON_EXTENSIONS = {".json"}
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HOOKS_DIR = os.path.join(PLUGIN_ROOT, "hooks") + os.sep
-PYTHON_FORMAT_TIMEOUT_SECONDS = 15
+PYTHON_FORMAT_TIMEOUT_SECONDS = 12
 JS_FORMAT_TIMEOUT_SECONDS = 30
 PRETTIER_CONFIG_NAMES = {
     ".prettierrc",
@@ -74,6 +74,20 @@ def has_prettier_config(file_path: str) -> bool:
             break
         each_ancestor = parent
     return False
+
+
+def budgeted_python_format_seconds() -> int:
+    """Return the wall-clock budget for the two-subprocess happy path.
+
+    The Python branch breaks out of each loop the moment a command runs, so
+    the common case spends one fix subprocess plus one format subprocess. This
+    is a budget for that assumed path, not a guaranteed upper bound: when a
+    command is missing or times out the loops fall through to the next entry,
+    so a degraded run can spend more than this budget.
+    """
+    fix_phase_seconds = PYTHON_FORMAT_TIMEOUT_SECONDS
+    format_phase_seconds = PYTHON_FORMAT_TIMEOUT_SECONDS
+    return fix_phase_seconds + format_phase_seconds
 
 
 def is_untracked_in_git(file_path: str) -> bool:
@@ -115,6 +129,17 @@ def main() -> None:
     suffix = Path(file_path).suffix.lower()
 
     if suffix in PYTHON_EXTENSIONS:
+        for each_fix_command in [
+            ["ruff", "check", "--fix", file_path],
+            [sys.executable, "-m", "ruff", "check", "--fix", file_path],
+        ]:
+            try:
+                subprocess.run(each_fix_command, capture_output=True, text=True, timeout=PYTHON_FORMAT_TIMEOUT_SECONDS, check=False)
+                break
+            except FileNotFoundError:
+                continue
+            except subprocess.TimeoutExpired:
+                break
         for each_formatter_command in [
             ["ruff", "format", file_path],
             [sys.executable, "-m", "ruff", "format", file_path],
