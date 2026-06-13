@@ -108,6 +108,20 @@ ALL_BUILTIN_DICT_METHOD_NAMES: frozenset[str] = frozenset({
 })
 ALL_UNION_TYPING_NAMES: frozenset[str] = frozenset({"Optional", "Union"})
 ALL_SELF_AND_CLS_PARAMETER_NAMES: frozenset[str] = frozenset({"self", "cls"})
+ANNOTATION_BY_PYTEST_FIXTURE: dict[str, str] = {
+    "tmp_path": "Path",
+    "tmp_path_factory": "pytest.TempPathFactory",
+    "monkeypatch": "pytest.MonkeyPatch",
+    "capsys": "pytest.CaptureFixture[str]",
+    "capfd": "pytest.CaptureFixture[str]",
+    "caplog": "pytest.LogCaptureFixture",
+    "request": "pytest.FixtureRequest",
+}
+KNOWN_PYTEST_FIXTURE_ANNOTATION_MESSAGE_SUFFIX: str = (
+    "known pytest fixture parameter must carry its single documented type "
+    "(CODE_RULES §6; pytest builtin fixture reference "
+    "https://docs.pytest.org/en/stable/reference/fixtures.html)"
+)
 ALL_LOOP_INDEX_LETTER_EXEMPTIONS: frozenset[str] = frozenset({"i", "j", "k", "_"})
 EACH_PREFIX = "each_"
 BARE_EACH_TOKEN = "each"

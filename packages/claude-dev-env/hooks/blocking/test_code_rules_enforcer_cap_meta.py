@@ -70,6 +70,7 @@ KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW: frozenset[str] = frozenset(
         "check_file_global_constants_use_count",
         "check_imports_at_top",
         "check_inline_literal_collections",
+        "check_known_pytest_fixture_annotations",
         "check_library_print",
         "check_loop_variable_naming",
         "check_parameter_annotations",

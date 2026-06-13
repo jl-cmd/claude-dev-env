@@ -30,6 +30,7 @@ if _HOOKS_DIRECTORY not in sys.path:
 
 from code_rules_annotations_length import (  # noqa: E402
     check_function_length,
+    check_known_pytest_fixture_annotations,
     check_parameter_annotations,
     check_return_annotations,
 )
@@ -244,6 +245,7 @@ def validate_content(
         )
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
+        all_issues.extend(check_known_pytest_fixture_annotations(content, file_path))
         all_issues.extend(check_return_annotations(content, file_path))
         all_issues.extend(
             check_function_length(

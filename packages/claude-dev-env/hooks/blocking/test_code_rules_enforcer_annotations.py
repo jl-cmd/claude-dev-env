@@ -95,3 +95,228 @@ def test_should_skip_return_check_in_test_files() -> None:
     assert issues == [], f"Test files must be exempt, got: {issues}"
 
 
+def test_should_flag_unannotated_known_fixture_in_test_file() -> None:
+    source = "def test_board(tmp_path):\n    assert tmp_path.exists()\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue and "Path" in each_issue for each_issue in issues
+    ), f"Expected unannotated tmp_path fixture flagged, got: {issues}"
+
+
+def test_should_not_flag_annotated_known_fixture_in_test_file() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_board(tmp_path: Path) -> None:\n"
+        "    assert tmp_path.exists()\n"
+    )
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], f"Annotated tmp_path must not be flagged, got: {issues}"
+
+
+def test_should_not_flag_ordinary_test_parameter() -> None:
+    source = "def test_thing(some_value):\n    assert some_value\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"Ordinary test params stay exempt; only known fixtures are checked, "
+        f"got: {issues}"
+    )
+
+
+def test_should_not_flag_known_fixture_name_outside_test_files() -> None:
+    source = "def build(monkeypatch):\n    return monkeypatch\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"Non-test files are covered by the broad parameter check, not this one, "
+        f"got: {issues}"
+    )
+
+
+def test_should_flag_unannotated_monkeypatch_fixture() -> None:
+    source = "def test_env(monkeypatch):\n    monkeypatch.setenv('A', 'B')\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "monkeypatch" in each_issue and "MonkeyPatch" in each_issue
+        for each_issue in issues
+    ), f"Expected unannotated monkeypatch fixture flagged, got: {issues}"
+
+
+def test_should_not_flag_known_fixture_in_non_test_helper() -> None:
+    source = "def render_view(request):\n    return request.path\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"Ordinary helper (non-test, non-fixture) must not be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_unannotated_fixture_in_decorated_fixture() -> None:
+    source = (
+        "import pytest\n"
+        "@pytest.fixture\n"
+        "def board(tmp_path):\n"
+        "    return tmp_path\n"
+    )
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue and "Path" in each_issue for each_issue in issues
+    ), f"Expected unannotated tmp_path in @pytest.fixture-decorated function flagged, got: {issues}"
+
+
+def test_should_flag_known_fixture_with_wrong_annotation() -> None:
+    source = "def test_board(tmp_path: str):\n    assert tmp_path\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue and "Path" in each_issue for each_issue in issues
+    ), f"Expected wrongly annotated tmp_path: str flagged, got: {issues}"
+
+
+def test_should_flag_known_fixture_with_unrelated_annotation() -> None:
+    source = "def test_board(tmp_path: int):\n    assert tmp_path\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue and "Path" in each_issue for each_issue in issues
+    ), f"Expected wrongly annotated tmp_path: int flagged, got: {issues}"
+
+
+def test_should_not_flag_correctly_annotated_qualified_fixture() -> None:
+    source = (
+        "import pytest\n"
+        "def test_env(monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        "    monkeypatch.setenv('A', 'B')\n"
+    )
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"Correctly annotated monkeypatch must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_dotted_pathlib_path_fixture_annotation() -> None:
+    source = (
+        "import pathlib\n"
+        "def test_board(tmp_path: pathlib.Path) -> None:\n"
+        "    assert tmp_path.exists()\n"
+    )
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"tmp_path: pathlib.Path is an equally-correct spelling, got: {issues}"
+    )
+
+
+def test_should_not_flag_bare_tail_of_qualified_fixture_annotation() -> None:
+    source = (
+        "from pytest import MonkeyPatch\n"
+        "def test_env(monkeypatch: MonkeyPatch) -> None:\n"
+        "    monkeypatch.setenv('A', 'B')\n"
+    )
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"monkeypatch: MonkeyPatch matches the qualified expected tail, got: {issues}"
+    )
+
+
+def test_should_not_flag_forward_reference_fixture_annotation() -> None:
+    source = 'def test_board(tmp_path: "Path") -> None:\n    assert tmp_path\n'
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f'A forward-ref "Path" annotation must not be flagged, got: {issues}'
+    )
+
+
+def test_should_not_flag_star_arg_fixture_name() -> None:
+    source = "def test_board(*tmp_path):\n    assert tmp_path\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A *vararg sharing a fixture name is not an injection site, got: {issues}"
+    )
+
+
+def test_should_not_flag_double_star_arg_fixture_name() -> None:
+    source = "def test_env(**monkeypatch):\n    assert monkeypatch\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A **kwarg sharing a fixture name is not an injection site, got: {issues}"
+    )
+
+
+def test_should_not_flag_positional_only_fixture_name() -> None:
+    source = "def test_board(tmp_path, /):\n    pass\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A positional-only param cannot receive a keyword-injected fixture, got: {issues}"
+    )
+
+
+def test_should_flag_keyword_only_fixture_name() -> None:
+    source = "def test_board(*, tmp_path):\n    pass\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue and "Path" in each_issue for each_issue in issues
+    ), f"A keyword-only fixture is still an injection site, got: {issues}"
+
+
+def test_should_not_flag_defaulted_fixture_name() -> None:
+    source = "def test_board(tmp_path=None):\n    pass\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A defaulted param is not fixture-injected and must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_defaulted_keyword_only_fixture_name() -> None:
+    source = "def test_board(*, tmp_path=None):\n    pass\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A defaulted keyword-only param is not fixture-injected, got: {issues}"
+    )
+
+
+def test_should_flag_undefaulted_fixture_before_defaulted_one() -> None:
+    source = "def test_board(tmp_path, capsys=None):\n    pass\n"
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue and "Path" in each_issue for each_issue in issues
+    ), f"An undefaulted leading fixture stays an injection site, got: {issues}"
+    assert not any("capsys" in each_issue for each_issue in issues), (
+        f"The trailing defaulted param must not be flagged, got: {issues}"
+    )
+
+
