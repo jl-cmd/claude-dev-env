@@ -54,6 +54,101 @@ def _mask_string_literals_preserving_length(source_line: str) -> str:
     return string_literal_pattern.sub(_replace_string_literal, source_line)
 
 
+def _carries_top_level_slice_colon(bracket_body: str) -> bool:
+    """Return True when ``bracket_body`` holds a slice colon at its own level.
+
+    The body is the text between one ``[...]`` pair. A slice colon is a ``:``
+    that sits at the body's top level — not nested inside any ``(``, ``[``,
+    or ``{`` opened within the body — and is not the ``:=`` walrus operator.
+    A slice writes ``[:N]`` or ``[1:N]``; a plain subscript (``[K]``), a
+    walrus subscript (``[(n := M)]``), and a lambda subscript
+    (``[(lambda: V)()]``) carry no such colon.
+    """
+    nesting_depth = 0
+    for each_position, each_character in enumerate(bracket_body):
+        if each_character in "([{":
+            nesting_depth += 1
+            continue
+        if each_character in ")]}":
+            nesting_depth -= 1
+            continue
+        if each_character == ":" and nesting_depth == 0:
+            next_position = each_position + 1
+            character_after_colon = bracket_body[next_position : next_position + 1]
+            follows_walrus = character_after_colon == "="
+            if not follows_walrus:
+                return True
+    return False
+
+
+def _innermost_bracket_body_around(masked_line: str, occurrence_position: int) -> str | None:
+    """Return the body of the innermost ``[...]`` pair enclosing a position.
+
+    Walks the line tracking open-bracket positions on a stack. The bracket
+    pair directly enclosing ``occurrence_position`` is the one whose ``[``
+    is on top of the stack when that position is reached; its body runs from
+    just after that ``[`` to its matching ``]``. Returns ``None`` when the
+    position lies outside every ``[...]`` pair.
+    """
+    open_bracket_positions: list[int] = []
+    enclosing_open_position = -1
+    for each_position, each_character in enumerate(masked_line):
+        if each_position == occurrence_position:
+            enclosing_open_position = open_bracket_positions[-1] if open_bracket_positions else -1
+        if each_character == "[":
+            open_bracket_positions.append(each_position)
+            continue
+        if each_character == "]" and open_bracket_positions:
+            open_bracket_positions.pop()
+
+    if enclosing_open_position == -1:
+        return None
+
+    closing_position = _matching_close_bracket_position(masked_line, enclosing_open_position)
+    if closing_position == -1:
+        return None
+    return masked_line[enclosing_open_position + 1 : closing_position]
+
+
+def _matching_close_bracket_position(masked_line: str, open_position: int) -> int:
+    """Return the index of the ``]`` that closes the ``[`` at ``open_position``.
+
+    Returns ``-1`` when the opening bracket has no matching close on the line.
+    """
+    depth = 0
+    for each_position in range(open_position, len(masked_line)):
+        each_character = masked_line[each_position]
+        if each_character == "[":
+            depth += 1
+            continue
+        if each_character == "]":
+            depth -= 1
+            if depth == 0:
+                return each_position
+    return -1
+
+
+def _is_magic_number_inside_slice_bound(masked_line: str, number_text: str) -> bool:
+    """Return True when ``number_text`` appears as a slice bound on the line.
+
+    For each standalone-token occurrence of ``number_text``, the innermost
+    ``[...]`` pair directly enclosing it is located. The number is a slice
+    bound only when that innermost pair carries a top-level slice colon
+    (``sha[:N]``, ``ts[1:N]``). A plain subscript index (``items[K]``), the
+    inner index of a nested subscript (``a[b[I]:N]`` — the inner index sits
+    inside the plain inner pair), a walrus subscript (``arr[(n := M)]``), and
+    a lambda subscript (``seq[(lambda: V)()]``) are not slice bounds.
+    """
+    token_boundary_pattern = r"(?<![.\w])" + re.escape(number_text) + r"(?![.\w])"
+    for each_match in re.finditer(token_boundary_pattern, masked_line):
+        bracket_body = _innermost_bracket_body_around(masked_line, each_match.start())
+        if bracket_body is None:
+            continue
+        if _carries_top_level_slice_colon(bracket_body):
+            return True
+    return False
+
+
 def check_magic_values(content: str, file_path: str) -> list[str]:
     """Check for magic values in function bodies."""
     if is_config_file(file_path) or is_test_file(file_path):
@@ -93,6 +188,9 @@ def check_magic_values(content: str, file_path: str) -> list[str]:
                 if each_number not in allowed_numbers:
                     if "range(" in stripped_without_string_literals or "enumerate(" in stripped_without_string_literals:
                         continue
+                    if _is_magic_number_inside_slice_bound(stripped_without_string_literals, each_number):
+                        issues.append(f"Line {each_line_number}: Magic value {each_number} - extract to named constant")
+                        break
                     if "[" in stripped_without_string_literals and "]" in stripped_without_string_literals:
                         continue
                     issues.append(f"Line {each_line_number}: Magic value {each_number} - extract to named constant")
