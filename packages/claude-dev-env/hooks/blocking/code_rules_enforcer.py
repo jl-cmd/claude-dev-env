@@ -51,6 +51,9 @@ from code_rules_constants_config import (  # noqa: E402
     check_constants_outside_config_advisory,
     check_file_global_constants_use_count,
 )
+from code_rules_dead_dataclass_field import (  # noqa: E402
+    check_dead_dataclass_fields,
+)
 from code_rules_docstrings import (  # noqa: E402
     check_docstring_args_match_signature,
     check_docstring_format,
@@ -242,6 +245,9 @@ def validate_content(
         all_issues.extend(check_sys_path_insert_deduplication_guard(content, file_path))
         all_issues.extend(
             check_unused_module_level_imports(content, file_path, full_file_content)
+        )
+        all_issues.extend(
+            check_dead_dataclass_fields(content, file_path, full_file_content)
         )
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
