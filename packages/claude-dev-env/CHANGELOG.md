@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.57.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.56.0...claude-dev-env-v1.57.0) (2026-06-13)
+
+
+### Features
+
+* **autoconverge:** pin workflow agents to Fable 5 and defer standards-only rounds ([#564](https://github.com/jl-cmd/claude-code-config/issues/564)) ([fd6df2f](https://github.com/jl-cmd/claude-code-config/commit/fd6df2f46a6ca24d8efc6515d2eb9778342fdeff))
+
 ## [1.56.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.55.2...claude-dev-env-v1.56.0) (2026-06-12)
 
 
