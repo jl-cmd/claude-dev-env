@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.57.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.57.0...claude-dev-env-v1.57.1) (2026-06-13)
+
+
+### Documentation
+
+* **claude-dev-env:** pipeline-systemic edit scope + term disambiguation ([#566](https://github.com/jl-cmd/claude-code-config/issues/566)) ([f2c2ebc](https://github.com/jl-cmd/claude-code-config/commit/f2c2ebc8f397d3f0818f788cf157721cb535f508))
+
+
+### Maintenance
+
+* **hooks:** disable the md-to-html experiment hooks ([#570](https://github.com/jl-cmd/claude-code-config/issues/570)) ([01040d9](https://github.com/jl-cmd/claude-code-config/commit/01040d933ffa76d99d0ec1473f7e9f99f0a4c378))
+
 ## [1.57.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.56.0...claude-dev-env-v1.57.0) (2026-06-13)
 
 
