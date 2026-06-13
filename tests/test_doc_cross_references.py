@@ -40,6 +40,7 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         "config/selectors.py",
         ".claude/CLAUDE.md",
         ".claude/settings.json",
+        "docs/.claude-notes.md",
         "docs/file1.md",
         "docs/file2.md",
         "packages/agent-gate-claude/hooks/gate_enforcer.py",
