@@ -120,6 +120,7 @@ from code_rules_typeddict_stub import (  # noqa: E402
     check_stub_implementations,
     check_thin_wrapper_files,
     check_typed_dict_encode_decode,
+    check_zero_payload_function_alias,
 )
 from code_rules_unused_imports import (  # noqa: E402
     check_unused_module_level_imports,
@@ -228,6 +229,7 @@ def validate_content(
         all_issues.extend(check_test_branching_in_production(effective_content, file_path))
         all_issues.extend(check_bare_except(effective_content, file_path))
         all_issues.extend(check_thin_wrapper_files(effective_content, file_path))
+        all_issues.extend(check_zero_payload_function_alias(effective_content, file_path))
         all_issues.extend(check_boundary_types(effective_content, file_path))
         all_issues.extend(check_docstring_format(effective_content, file_path))
         all_issues.extend(check_docstring_args_match_signature(effective_content, file_path))
