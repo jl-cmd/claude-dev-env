@@ -81,15 +81,64 @@ round records nothing resumable and replays dirty.
 
 ## Teardown (on workflow completion)
 
-1. **When `converged` is true:** rewrite the PR description and clean the
+1. **When `converged` is true — build and publish the closing report.**
+   Skip this entire step (report, gist, comment, Chrome open) when the workflow
+   returned a non-null `blocker`. Per-round live-dashboard refresh is out of scope
+   here; this step builds the one-shot closing report and the seam (marker comment +
+   gist URL) a future live-dashboard reuses.
+
+   a. **Resolve the journal path.** Glob
+      `~/.claude/projects/**/workflows/wf_<runId>.json` (where `runId` is the run id
+      the `Workflow` result returned) and take the match.
+
+   b. **Build the report.**
+      ```
+      python "<skill>/workflow/render_report.py" \
+        --journal "<journal>" \
+        --out "$CLAUDE_JOB_DIR/tmp/autoconverge-report-<prNumber>.html" \
+        --pr <owner>/<repo>#<n> \
+        --final-sha <finalSha> \
+        --rounds <rounds> \
+        --repo <worktree>
+      ```
+      Capture the output path from stdout.
+
+   c. **Publish as a secret gist** by reusing `doc-gist` (do not reimplement gist
+      creation):
+      ```
+      python "$HOME/.claude/skills/doc-gist/scripts/gist_upload.py" \
+        --input "<html path>" \
+        --no-open \
+        --description "autoconverge report PR #<n>"
+      ```
+      Capture the htmlpreview URL from stdout. The gist is secret by default; pass
+      no public flag.
+
+   d. **Post one idempotent PR comment.** List the PR's issue comments; if one
+      carries the marker `<!-- autoconverge-report -->`, edit it in place, otherwise
+      create a new one. The body begins with `<!-- autoconverge-report -->`, then
+      the htmlpreview link, headline counts (findings by severity, rounds, tests
+      added), and the full finding list as `file:line — P# — title` grouped by
+      severity. Honor the gh-body-file rule: write a BOM-free temp file and pass
+      `--body-file` to `gh issue comment`/`gh issue comment edit`, or use the
+      GitHub MCP `add_issue_comment` tool (body as a structured parameter, no
+      `--body` flag).
+
+   e. **Open the report in Chrome.**
+      ```
+      Start-Process chrome -ArgumentList '--new-window', '<report path>'
+      ```
+      Tolerate a missing Chrome without aborting the rest of teardown.
+
+2. **When `converged` is true:** rewrite the PR description and clean the
    working tree — see
    [`bugteam/reference/teardown-publish-permissions.md` § Step 4 and § Step 4.5](../bugteam/reference/teardown-publish-permissions.md).
    The workflow already marked the PR ready.
 
-2. **Always revoke project permissions** (including on a blocker exit):
+3. **Always revoke project permissions** (including on a blocker exit):
    `python "$HOME/.claude/skills/bugteam/scripts/revoke_project_claude_permissions.py"`
 
-3. **Print the final report:**
+4. **Print the final report:**
 
    ```
    /autoconverge exit: <converged | blocked>
@@ -127,4 +176,6 @@ run ends short of ready. Hard-won failure lessons live in
 
 - `SKILL.md` — this hub.
 - `workflow/converge.mjs` — the convergence workflow script.
-- `reference/` — convergence definition, stop conditions, gotchas.
+- `workflow/render_report.py` — builds the closing convergence insights HTML report.
+- `workflow/autoconverge_report_constants/` — named constants for the report builder.
+- `reference/` — convergence definition, stop conditions, gotchas, closing report.

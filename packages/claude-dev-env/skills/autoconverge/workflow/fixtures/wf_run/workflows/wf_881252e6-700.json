@@ -1,0 +1,259 @@
+{
+  "runId": "wf_881252e6-700",
+  "timestamp": "2026-06-13T12:21:55.114Z",
+  "workflowName": "autoconverge",
+  "args": "{\"owner\": \"example-owner\", \"repo\": \"example-repo\", \"prNumber\": 211, \"bugbotDisabled\": false}",
+  "result": {
+    "converged": true,
+    "rounds": 4,
+    "finalSha": "7c2f420c4d5b7c83aa47f93d99a0f1420e3373c4",
+    "blocker": null
+  },
+  "agentCount": 33,
+  "logs": [
+    "Round 1: parallel Bugbot + code-review + bug-audit on 6a5169e",
+    "Round 1: all lenses clean on 6a5169e \u2014 posting clean audit artifact",
+    "Copilot raised 11 finding(s) \u2014 fixing and re-converging",
+    "Round 2: parallel Bugbot + code-review + bug-audit on 620382f",
+    "Round 2: all lenses clean on 620382f \u2014 posting clean audit artifact",
+    "Copilot raised 2 finding(s) \u2014 fixing and re-converging",
+    "Round 3: parallel Bugbot + code-review + bug-audit on 7c2f420",
+    "Round 3: all lenses clean on 7c2f420 \u2014 posting clean audit artifact",
+    "Copilot raised 2 finding(s) \u2014 fixing and re-converging",
+    "Round 4: parallel Bugbot + code-review + bug-audit on 7c2f420",
+    "Round 4: all lenses clean on 7c2f420 \u2014 posting clean audit artifact"
+  ],
+  "workflowProgress": [
+    {
+      "index": 1,
+      "label": "resolve-head",
+      "phaseTitle": "Converge",
+      "agentId": "a5fe69b589d8d7fbb",
+      "state": "done"
+    },
+    {
+      "index": 2,
+      "label": "prefetch-main",
+      "phaseTitle": "Converge",
+      "agentId": "ac31351235aa865f1",
+      "state": "done"
+    },
+    {
+      "index": 3,
+      "label": "lens:bugbot",
+      "phaseTitle": "Converge",
+      "agentId": "a62ab69718928660b",
+      "state": "done"
+    },
+    {
+      "index": 4,
+      "label": "lens:code-review",
+      "phaseTitle": "Converge",
+      "agentId": "abd463d744a1437bc",
+      "state": "done"
+    },
+    {
+      "index": 5,
+      "label": "lens:bug-audit",
+      "phaseTitle": "Converge",
+      "agentId": "ab84b5cb3e6362e6b",
+      "state": "done"
+    },
+    {
+      "index": 6,
+      "label": "post-clean-audit",
+      "phaseTitle": "Converge",
+      "agentId": "aee38021859a3de55",
+      "state": "done"
+    },
+    {
+      "index": 7,
+      "label": "copilot-gate",
+      "phaseTitle": "Copilot gate",
+      "agentId": "a3def0d15ed9d9110",
+      "state": "done"
+    },
+    {
+      "index": 8,
+      "label": "fix:copilot",
+      "phaseTitle": "Converge",
+      "agentId": "a26213978adeef6fb",
+      "state": "done"
+    },
+    {
+      "index": 9,
+      "label": "resolve-head",
+      "phaseTitle": "Converge",
+      "agentId": "a88f58b25c2721e0a",
+      "state": "done"
+    },
+    {
+      "index": 10,
+      "label": "prefetch-main",
+      "phaseTitle": "Converge",
+      "agentId": "aabb9c42f62fefa4e",
+      "state": "done"
+    },
+    {
+      "index": 11,
+      "label": "lens:bugbot",
+      "phaseTitle": "Converge",
+      "agentId": "aaba3804f6e7ecdb9",
+      "state": "done"
+    },
+    {
+      "index": 12,
+      "label": "lens:code-review",
+      "phaseTitle": "Converge",
+      "agentId": "a7e434e6ea14aa176",
+      "state": "done"
+    },
+    {
+      "index": 13,
+      "label": "lens:bug-audit",
+      "phaseTitle": "Converge",
+      "agentId": "a46f6274a36a1db05",
+      "state": "done"
+    },
+    {
+      "index": 14,
+      "label": "post-clean-audit",
+      "phaseTitle": "Converge",
+      "agentId": "a3da3394c6ff72250",
+      "state": "done"
+    },
+    {
+      "index": 15,
+      "label": "copilot-gate",
+      "phaseTitle": "Copilot gate",
+      "agentId": "ad19d027ae8ee1816",
+      "state": "done"
+    },
+    {
+      "index": 16,
+      "label": "fix:copilot",
+      "phaseTitle": "Converge",
+      "agentId": "a8897b89656b1bd16",
+      "state": "done"
+    },
+    {
+      "index": 17,
+      "label": "resolve-head",
+      "phaseTitle": "Converge",
+      "agentId": "a196c9a85c88db8a7",
+      "state": "done"
+    },
+    {
+      "index": 18,
+      "label": "prefetch-main",
+      "phaseTitle": "Converge",
+      "agentId": "a3154efa58640a34e",
+      "state": "done"
+    },
+    {
+      "index": 19,
+      "label": "lens:bugbot",
+      "phaseTitle": "Converge",
+      "agentId": "a1f2a12f1470d7c7b",
+      "state": "done"
+    },
+    {
+      "index": 20,
+      "label": "lens:code-review",
+      "phaseTitle": "Converge",
+      "agentId": "a6754f2df6e70aa7c",
+      "state": "done"
+    },
+    {
+      "index": 21,
+      "label": "lens:bug-audit",
+      "phaseTitle": "Converge",
+      "agentId": "aabdfb7eba8ff036e",
+      "state": "done"
+    },
+    {
+      "index": 22,
+      "label": "post-clean-audit",
+      "phaseTitle": "Converge",
+      "agentId": "aa3438f61bdd9129e",
+      "state": "done"
+    },
+    {
+      "index": 23,
+      "label": "copilot-gate",
+      "phaseTitle": "Copilot gate",
+      "agentId": "a11d903476b803493",
+      "state": "done"
+    },
+    {
+      "index": 24,
+      "label": "fix:copilot",
+      "phaseTitle": "Converge",
+      "agentId": "a758b880abecc3ff7",
+      "state": "done"
+    },
+    {
+      "index": 25,
+      "label": "resolve-head",
+      "phaseTitle": "Converge",
+      "agentId": "a536d1ed4bb9ad0de",
+      "state": "done"
+    },
+    {
+      "index": 26,
+      "label": "prefetch-main",
+      "phaseTitle": "Converge",
+      "agentId": "a89686ea20e9224e2",
+      "state": "done"
+    },
+    {
+      "index": 27,
+      "label": "lens:bugbot",
+      "phaseTitle": "Converge",
+      "agentId": "a82b70fdc78fe7c3a",
+      "state": "done"
+    },
+    {
+      "index": 28,
+      "label": "lens:code-review",
+      "phaseTitle": "Converge",
+      "agentId": "a00c5df83283e9cf6",
+      "state": "done"
+    },
+    {
+      "index": 29,
+      "label": "lens:bug-audit",
+      "phaseTitle": "Converge",
+      "agentId": "a89412c46f53a3218",
+      "state": "done"
+    },
+    {
+      "index": 30,
+      "label": "post-clean-audit",
+      "phaseTitle": "Converge",
+      "agentId": "add6f0d13e1911d87",
+      "state": "done"
+    },
+    {
+      "index": 31,
+      "label": "copilot-gate",
+      "phaseTitle": "Copilot gate",
+      "agentId": "a41f41b1b708ee3b7",
+      "state": "done"
+    },
+    {
+      "index": 32,
+      "label": "check-convergence",
+      "phaseTitle": "Finalize",
+      "agentId": "a3338954faed1eb55",
+      "state": "done"
+    },
+    {
+      "index": 33,
+      "label": "mark-ready",
+      "phaseTitle": "Finalize",
+      "agentId": "add93d458ce4da043",
+      "state": "done"
+    }
+  ]
+}

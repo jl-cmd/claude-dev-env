@@ -1,0 +1,2 @@
+{"type": "user", "uuid": "a41f41b1b708ee3b7-u", "message": {"role": "user", "content": "Return the structured result."}}
+{"type": "assistant", "uuid": "a41f41b1b708ee3b7-a", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_a41f41b1b708ee3b7", "name": "StructuredOutput", "input": {"sha": "7c2f420c4d5b7c83aa47f93d99a0f1420e3373c4", "clean": true, "findings": [], "blocker": null}}]}}
