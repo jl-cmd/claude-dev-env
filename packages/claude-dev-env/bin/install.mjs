@@ -165,12 +165,31 @@ const INSTALL_GROUPS = {
     ...discoverDependencyGroups(),
 };
 
-function detectPython() {
-    const candidates = [
+/**
+ * Returns the ordered python interpreter candidates to probe for the given
+ * platform. On win32 the `py -3` launcher is probed first because it resolves
+ * through the Windows registry and is immune to the Microsoft Store
+ * `python.exe` App Execution Alias that otherwise gets baked into settings.json.
+ *
+ * @param {string} platform A value from `process.platform` (e.g. 'win32', 'linux').
+ * @returns {{command: string, versionFlag: string}[]} Candidates in probe order.
+ */
+export function pythonCandidatesForPlatform(platform) {
+    const windowsOrder = [
+        { command: 'py -3', versionFlag: '--version' },
+        { command: 'python3', versionFlag: '--version' },
+        { command: 'python', versionFlag: '--version' },
+    ];
+    const defaultOrder = [
         { command: 'python3', versionFlag: '--version' },
         { command: 'python', versionFlag: '--version' },
         { command: 'py -3', versionFlag: '--version' },
     ];
+    return platform === 'win32' ? windowsOrder : defaultOrder;
+}
+
+function detectPython() {
+    const candidates = pythonCandidatesForPlatform(process.platform);
     for (const { command, versionFlag } of candidates) {
         try {
             const version = execSync(`${command} ${versionFlag}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
@@ -235,22 +254,155 @@ function backupClaudeHubBeforeOverwrite(destPath, incomingPath) {
     return backupPath;
 }
 
-function mergeHooks(hooksSourceRoot, pythonCommand) {
-    const hooksJsonPath = join(hooksSourceRoot, 'hooks', 'hooks.json');
-    if (!existsSync(hooksJsonPath)) return 0;
-    const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
-    const settingsPath = join(CLAUDE_HOME, 'settings.json');
-    let settings = {};
-    if (existsSync(settingsPath)) {
-        const raw = readFileSync(settingsPath, 'utf8').trim();
-        if (raw) {
-            try { settings = JSON.parse(raw); }
-            catch { console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.'); process.exit(1); }
+/**
+ * Builds the set of hook script paths this installer manages, each relative to
+ * the hooks directory (e.g. 'blocking/code_rules_enforcer.py'), parsed from the
+ * `${CLAUDE_PLUGIN_ROOT}/hooks/<path>` references in hooks.json. Inline
+ * `python3 -c` commands reference the hooks directory without a script tail and
+ * contribute nothing.
+ *
+ * @param {{hooks: object}} hooksConfig Parsed hooks.json.
+ * @returns {Set<string>} Forward-slash relative script paths under hooks/.
+ */
+export function managedHookScriptRelativePaths(hooksConfig) {
+    const relativePaths = new Set();
+    const scriptReferencePattern = /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/(\S+?\.py)/g;
+    for (const matcherGroups of Object.values(hooksConfig.hooks)) {
+        for (const sourceGroup of matcherGroups) {
+            for (const hook of sourceGroup.hooks) {
+                for (const scriptMatch of hook.command.matchAll(scriptReferencePattern)) {
+                    relativePaths.add(scriptMatch[1]);
+                }
+            }
         }
     }
+    return relativePaths;
+}
+
+/**
+ * Builds the union of managed hook script paths across the given package source
+ * roots by parsing each root's hooks/hooks.json. The installer copies hook
+ * scripts into ~/.claude/hooks/ but never copies hooks.json itself, so the
+ * uninstall and update-refresh purge must read the managed-hook set from the
+ * package source the same way the merge does, never from ~/.claude/hooks/.
+ * Roots without a hooks.json contribute nothing.
+ *
+ * @param {string[]} sourceRoots Package roots that hold a hooks/hooks.json.
+ * @returns {Set<string>} Forward-slash relative script paths under hooks/.
+ */
+export function managedHookScriptRelativePathsFromSourceRoots(sourceRoots) {
+    const relativePaths = new Set();
+    for (const sourceRoot of sourceRoots) {
+        const hooksJsonPath = join(sourceRoot, 'hooks', 'hooks.json');
+        if (!existsSync(hooksJsonPath)) continue;
+        const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
+        for (const relativePath of managedHookScriptRelativePaths(hooksConfig)) {
+            relativePaths.add(relativePath);
+        }
+    }
+    return relativePaths;
+}
+
+/**
+ * Resolves every package source root the installer can copy hooks from: this
+ * package plus each resolvable dependency package that ships hooks. The purge
+ * reads hooks.json from these roots so it prunes managed entries no matter which
+ * package contributed them.
+ *
+ * @returns {string[]} Distinct package roots, this package first.
+ */
+function managedPackageSourceRoots() {
+    const dependencyRoots = Object.values(INSTALL_GROUPS)
+        .filter(group => group.packageRoot)
+        .map(group => group.packageRoot);
+    return [...new Set([PACKAGE_ROOT, ...dependencyRoots])];
+}
+
+/**
+ * Reports whether a settings.json hook command points at one of this installer's
+ * managed scripts, no matter how the home directory was written ($HOME, ~,
+ * ${HOME}, or an absolute path) or which path separator was used. Matching on
+ * the `/.claude/hooks/<relative>` tail lets a reinstall prune stale entries from
+ * earlier installs that used a different interpreter prefix, while leaving
+ * user-authored hooks outside the managed set untouched.
+ *
+ * @param {string} commandString The hook command from settings.json.
+ * @param {Set<string>} managedHookRelativePaths Managed script paths under hooks/.
+ * @returns {boolean} True when the command references a managed script.
+ */
+export function commandReferencesManagedHook(commandString, managedHookRelativePaths) {
+    const normalizedCommand = commandString.replace(/\\/g, '/');
+    if (commandIsInlineManagedValidatorRunner(normalizedCommand)) {
+        return true;
+    }
+    for (const relativePath of managedHookRelativePaths) {
+        if (commandTailEndsAtManagedHook(normalizedCommand, relativePath)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Reports whether a command contains the `/.claude/hooks/<relative>` tail ending
+ * at a path boundary: end of string, or an argument separator (whitespace, quote,
+ * or semicolon). Anchoring the tail keeps a user hook whose path is the managed
+ * tail plus a suffix (`code_rules_enforcer.py.bak`, `a.py/extra/thing.py`) outside
+ * the managed set, so it is never pruned.
+ *
+ * @param {string} normalizedCommand Forward-slash-normalized hook command.
+ * @param {string} relativePath Managed script path under hooks/.
+ * @returns {boolean} True when the managed tail ends at a path boundary.
+ */
+function commandTailEndsAtManagedHook(normalizedCommand, relativePath) {
+    const commandArgumentBoundary = /[\s'";]/;
+    const managedTail = `/.claude/hooks/${relativePath}`;
+    let searchStart = normalizedCommand.indexOf(managedTail);
+    while (searchStart !== -1) {
+        const characterAfterTail = normalizedCommand[searchStart + managedTail.length];
+        if (characterAfterTail === undefined || commandArgumentBoundary.test(characterAfterTail)) {
+            return true;
+        }
+        searchStart = normalizedCommand.indexOf(managedTail, searchStart + 1);
+    }
+    return false;
+}
+
+/**
+ * Reports whether a settings.json hook command is the inline validators-runner
+ * the installer writes in place of a standalone script. That hook inserts the
+ * managed hooks directory onto sys.path and imports run_all_validators, so it
+ * carries no `<script>.py` tail for managedHookScriptRelativePaths to record.
+ * Matching its shape lets a reinstall prune the prior copy before appending the
+ * freshly rewritten one, keeping the merge idempotent.
+ *
+ * @param {string} normalizedCommand Forward-slash-normalized hook command.
+ * @returns {boolean} True when the command is the inline validators runner.
+ */
+export function commandIsInlineManagedValidatorRunner(normalizedCommand) {
+    const inlineValidatorRunnerMarker = /sys\.path\.insert\([^)]*\.claude\/hooks[^)]*\)[\s\S]*run_all_validators/;
+    return (
+        normalizedCommand.includes('/.claude/hooks') &&
+        inlineValidatorRunnerMarker.test(normalizedCommand)
+    );
+}
+
+/**
+ * Merges the installer's managed hook groups into a settings object in memory,
+ * pruning every prior managed hook (standalone script or inline validators
+ * runner) from each matcher group before appending the freshly rewritten copies
+ * so repeated merges stay idempotent. User-authored hooks in the same group are
+ * preserved untouched.
+ *
+ * @param {object} settings The parsed settings.json object (mutated in place).
+ * @param {{hooks: object}} hooksConfig Parsed hooks.json.
+ * @param {string} pluginRootDir Directory ${CLAUDE_PLUGIN_ROOT} resolves to.
+ * @param {string} pythonCommand Interpreter command that replaces python3.
+ * @returns {number} Count of matcher groups merged.
+ */
+export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pythonCommand) {
+    const managedHookRelativePaths = managedHookScriptRelativePaths(hooksConfig);
     if (!settings.hooks) settings.hooks = {};
-    const installedHooksDir = join(CLAUDE_HOME, 'hooks');
-    const pluginRootDir = CLAUDE_HOME;
     let groupCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(hooksConfig.hooks)) {
         if (!settings.hooks[eventType]) settings.hooks[eventType] = [];
@@ -267,7 +419,7 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
             if (existingIndex >= 0) {
                 const existing = settings.hooks[eventType][existingIndex];
                 const userHooks = existing.hooks.filter(
-                    hook => !hook.command.includes(installedHooksDir.replace(/\\/g, '/'))
+                    hook => !commandReferencesManagedHook(hook.command, managedHookRelativePaths)
                 );
                 settings.hooks[eventType][existingIndex] = {
                     ...existing,
@@ -279,6 +431,51 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
             groupCount++;
         }
     }
+    return groupCount;
+}
+
+/**
+ * Removes every managed hook (standalone script or inline validators runner)
+ * from a settings object in memory, matching each command through
+ * commandReferencesManagedHook so entries written with any home-path style
+ * ($HOME, ~, ${HOME}, or absolute) and any path separator are pruned. Matcher
+ * groups left empty are dropped, and an empty hooks map is removed entirely.
+ * User-authored hooks outside the managed set are preserved untouched.
+ *
+ * @param {object} settings The parsed settings.json object (mutated in place).
+ * @param {Set<string>} managedHookRelativePaths Managed script paths under hooks/.
+ * @returns {void}
+ */
+export function pruneManagedHooksFromSettings(settings, managedHookRelativePaths) {
+    if (!settings.hooks) return;
+    for (const [eventType, matcherGroups] of Object.entries(settings.hooks)) {
+        settings.hooks[eventType] = matcherGroups
+            .map(group => ({
+                ...group,
+                hooks: group.hooks.filter(
+                    hook => !commandReferencesManagedHook(hook.command, managedHookRelativePaths)
+                ),
+            }))
+            .filter(group => group.hooks.length > 0);
+        if (settings.hooks[eventType].length === 0) delete settings.hooks[eventType];
+    }
+    if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
+}
+
+function mergeHooks(hooksSourceRoot, pythonCommand) {
+    const hooksJsonPath = join(hooksSourceRoot, 'hooks', 'hooks.json');
+    if (!existsSync(hooksJsonPath)) return 0;
+    const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
+    const settingsPath = join(CLAUDE_HOME, 'settings.json');
+    let settings = {};
+    if (existsSync(settingsPath)) {
+        const raw = readFileSync(settingsPath, 'utf8').trim();
+        if (raw) {
+            try { settings = JSON.parse(raw); }
+            catch { console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.'); process.exit(1); }
+        }
+    }
+    const groupCount = mergeHooksIntoSettings(settings, hooksConfig, CLAUDE_HOME, pythonCommand);
     writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
     return groupCount;
 }
@@ -564,17 +761,10 @@ function purgeManagedInstallation({ requireManifest }) {
     if (existsSync(settingsPath)) {
         const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
         if (settings.hooks) {
-            const installedHooksDir = join(CLAUDE_HOME, 'hooks').replace(/\\/g, '/');
-            for (const [eventType, matcherGroups] of Object.entries(settings.hooks)) {
-                settings.hooks[eventType] = matcherGroups
-                    .map(group => ({
-                        ...group,
-                        hooks: group.hooks.filter(hook => !hook.command.includes(installedHooksDir)),
-                    }))
-                    .filter(group => group.hooks.length > 0);
-                if (settings.hooks[eventType].length === 0) delete settings.hooks[eventType];
-            }
-            if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
+            const managedHookRelativePaths = managedHookScriptRelativePathsFromSourceRoots(
+                managedPackageSourceRoots()
+            );
+            pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
             writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
             console.log('  Hook entries removed from settings.json');
         }
