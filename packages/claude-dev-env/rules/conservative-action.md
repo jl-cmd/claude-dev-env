@@ -13,6 +13,7 @@ Proceed with edits, file modifications, or implementations only when the user ex
 - If the user asks a question, answer the question. Do not also fix the thing they asked about.
 - If the user describes a problem, investigate and recommend. Do not jump to implementation.
 - If the user says "do it", "go ahead", "make the change", or similarly explicit language, proceed with action.
+- Once the user has explicitly asked and you have what you need, act — do not re-open settled facts or decisions, and do not re-survey options you will not pursue. This rule governs the ambiguous case; the clear case belongs to `long-horizon-autonomy`.
 - When in doubt, ask: "Would you like me to make this change, or just show you the approach?"
 
 ## Why

@@ -216,6 +216,16 @@
           },
           {
             "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/intent_only_ending_blocker.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/session_handoff_blocker.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/diagnostic/hook_log_stop_wrapper.py",
             "timeout": 30
           }
