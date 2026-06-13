@@ -66,8 +66,7 @@ own. The workflow runs in the background and notifies this session on
 completion. Watch live progress with `/workflows`.
 
 The workflow returns
-`{ converged, rounds, finalSha, blocker, standardsNote }`. Every agent the
-workflow spawns runs on Fable 5 (`model: 'fable'`).
+`{ converged, rounds, finalSha, blocker, standardsNote }`.
 
 ## Budget-aware round boundaries
 
