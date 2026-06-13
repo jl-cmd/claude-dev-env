@@ -7,11 +7,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/md_to_html_blocker.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/write_existing_file_blocker.py",
             "timeout": 10
           },
@@ -255,11 +250,6 @@
       {
         "matcher": "Write|Edit",
         "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/md_to_html_companion.py",
-            "timeout": 10
-          },
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validation/mypy_validator.py",
