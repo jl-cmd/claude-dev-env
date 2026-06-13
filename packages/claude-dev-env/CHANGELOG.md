@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.58.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.57.2...claude-dev-env-v1.58.0) (2026-06-13)
+
+
+### Features
+
+* **auto-formatter:** ruff check --fix on new Python files; drop dead autoconverge HEAD reassignments ([#568](https://github.com/jl-cmd/claude-code-config/issues/568)) ([8192017](https://github.com/jl-cmd/claude-code-config/commit/8192017f48a9bc6cb4d9a57daf0a5acbe93f867a))
+* **autoconverge:** add closing convergence-insights report to skill teardown ([#571](https://github.com/jl-cmd/claude-code-config/issues/571)) ([fb1a2d5](https://github.com/jl-cmd/claude-code-config/commit/fb1a2d53043f0aadfb93b286b74fb379d4a94b4c))
+* **claude-dev-env:** long-horizon autonomy rule + two Stop hooks ([#567](https://github.com/jl-cmd/claude-code-config/issues/567)) ([37e1c74](https://github.com/jl-cmd/claude-code-config/commit/37e1c74c3d477136a514675ad8ee7e4e346ca7cf))
+
 ## [1.57.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.57.1...claude-dev-env-v1.57.2) (2026-06-13)
 
 
