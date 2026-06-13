@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.57.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.57.1...claude-dev-env-v1.57.2) (2026-06-13)
+
+
+### Bug Fixes
+
+* **autoconverge:** stop pinning workflow agents to a model ([#573](https://github.com/jl-cmd/claude-code-config/issues/573)) ([b81dd6b](https://github.com/jl-cmd/claude-code-config/commit/b81dd6b12c0a0f52f9ffb64cffc3858bf330a047))
+
 ## [1.57.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.57.0...claude-dev-env-v1.57.1) (2026-06-13)
 
 
