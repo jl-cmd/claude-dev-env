@@ -168,7 +168,9 @@ run ends short of ready. Hard-won failure lessons live in
   any bot threads with a deferral note, and reports the deferral in
   `standardsNote`.
 - **Copilot gate:** request a Copilot review, poll up to three times; findings
-  route back into Converge, a no-show after the cap is a blocker.
+  route back into Converge, a no-show after the cap is a blocker. When Copilot is
+  out of usage — it posts an out-of-usage notice (the requester hit their quota)
+  on the HEAD rather than a review — the gate passes and the run moves on.
 - **Convergence check:** `check_convergence.py` is the authoritative gate; on a
   full pass the workflow marks `draft=false`.
 

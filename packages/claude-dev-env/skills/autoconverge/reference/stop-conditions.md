@@ -6,8 +6,10 @@ skill still runs teardown (revoke permissions, final report).
 
 ## Blockers (end the run short of ready)
 
-- **Copilot no-show** — Copilot surfaces no review on the current HEAD after
-  three polls (360 seconds apart). `blocker` names the Copilot timeout.
+- **Copilot no-show** — Copilot surfaces no review of any kind on the current
+  HEAD after three polls (360 seconds apart). `blocker` names the Copilot
+  timeout. An out-of-usage notice counts as a review, not a no-show — see
+  **Copilot out of usage** below.
 - **Iteration cap** — 20 loop iterations pass without a full convergence-check
   pass. The iteration counter increments on every pass through any phase, so a
   convergence-check gate that no round can clear (for example a `mergeable_state`
@@ -40,6 +42,11 @@ skill still runs teardown (revoke permissions, final report).
   run or review after the lens poll budget, the Bugbot lens returns `down: true`.
   The run continues, and the convergence check runs with `--bugbot-down` so its
   Bugbot gate is bypassed.
+- **Copilot out of usage** — when Copilot is out of usage and posts an
+  out-of-usage notice on the current HEAD (the user who requested the review
+  reached their quota limit) rather than a code review, the Copilot gate returns
+  `down: true`. The run treats the gate as passed and moves to the convergence
+  check, which reads the notice's review state as a clean Copilot signal.
 - **A lens agent dies** — when one parallel lens returns null (a terminal agent
   failure), the round proceeds on the surviving lenses. A real defect it would
   have caught surfaces in a later round or at the convergence check. A dead
