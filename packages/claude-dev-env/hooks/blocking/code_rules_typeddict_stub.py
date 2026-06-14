@@ -59,6 +59,16 @@ def _collect_module_function_names(parsed_tree: ast.AST) -> set[str]:
     return module_function_names
 
 
+def _collect_module_function_nodes_by_name(
+    parsed_tree: ast.AST,
+) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
+    function_node_by_name: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+    for each_statement in parsed_tree.body:
+        if isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            function_node_by_name[each_statement.name] = each_statement
+    return function_node_by_name
+
+
 def _is_init_file(file_path: str) -> bool:
     return file_path.replace("\\", "/").rsplit("/", 1)[-1] == "__init__.py"
 
@@ -127,22 +137,30 @@ def check_thin_wrapper_files(content: str, file_path: str) -> list[str]:
     return issues[:MAX_THIN_WRAPPER_ISSUES]
 
 
-def _function_parameter_names_in_order(function_node: ast.FunctionDef) -> list[str]:
+def _function_parameter_names_in_order(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[str]:
     arguments = function_node.args
     positional_arguments = [*arguments.posonlyargs, *arguments.args]
     return [each_argument.arg for each_argument in positional_arguments]
 
 
-def _has_only_positional_parameters(function_node: ast.FunctionDef) -> bool:
+def _has_only_positional_parameters(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
     arguments = function_node.args
+    has_no_parameter_defaults = not arguments.defaults and not arguments.kw_defaults
     return (
         not arguments.kwonlyargs
         and arguments.vararg is None
         and arguments.kwarg is None
+        and has_no_parameter_defaults
     )
 
 
-def _single_return_call(function_node: ast.FunctionDef) -> ast.Call | None:
+def _single_return_call(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> ast.Call | None:
     body_statements = function_node.body
     statements_after_docstring = (
         body_statements[1:]
@@ -168,6 +186,10 @@ def _forwards_parameters_unchanged(call_node: ast.Call, all_parameter_names: lis
     return True
 
 
+def _function_is_async(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    return isinstance(function_node, ast.AsyncFunctionDef)
+
+
 def _alias_target_name(call_node: ast.Call, all_sibling_function_names: set[str]) -> str:
     callee = call_node.func
     if not isinstance(callee, ast.Name):
@@ -182,7 +204,14 @@ def check_zero_payload_function_alias(content: str, file_path: str) -> list[str]
     `return sibling_function(first_param, second_param, ...)` that forwards its
     own parameters unchanged to another function defined in the same module is a
     second name for one behavior — indirection without payload, which CODE_RULES
-    discourages. Callers should invoke the sibling directly.
+    discourages. Callers should invoke the sibling directly. Both `def` and
+    `async def` forwarders are inspected.
+
+    A forwarder is left unflagged when any of these adds payload the sibling
+    lacks, so the two are not interchangeable: a decorator (caching, `@property`,
+    route registration); a parameter carrying a default value the target rejects;
+    a keyword-only / `*args` / `**kwargs` parameter; or an awaitability mismatch
+    where one of the alias and target is `async def` and the other is not.
 
     Hook infrastructure is intentionally NOT exempt — pass-through aliases inside
     hook modules are the motivating case. Test files and config files are exempt
@@ -204,10 +233,13 @@ def check_zero_payload_function_alias(content: str, file_path: str) -> list[str]
     except SyntaxError:
         return []
 
-    all_sibling_function_names = _collect_module_function_names(parsed_tree)
+    function_node_by_name = _collect_module_function_nodes_by_name(parsed_tree)
+    all_sibling_function_names = set(function_node_by_name)
     issues: list[str] = []
     for each_statement in parsed_tree.body:
-        if not isinstance(each_statement, ast.FunctionDef):
+        if not isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if each_statement.decorator_list:
             continue
         if not _has_only_positional_parameters(each_statement):
             continue
@@ -216,6 +248,9 @@ def check_zero_payload_function_alias(content: str, file_path: str) -> list[str]
             continue
         target_name = _alias_target_name(call_node, all_sibling_function_names)
         if not target_name or target_name == each_statement.name:
+            continue
+        target_node = function_node_by_name[target_name]
+        if _function_is_async(each_statement) != _function_is_async(target_node):
             continue
         if not _forwards_parameters_unchanged(call_node, _function_parameter_names_in_order(each_statement)):
             continue

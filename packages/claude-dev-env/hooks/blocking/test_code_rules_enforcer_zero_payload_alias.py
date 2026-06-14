@@ -252,3 +252,92 @@ def test_should_flag_through_validate_content_for_hook_file() -> None:
     assert any("find_bare_index_segments" in each for each in issues), (
         f"validate_content must surface the alias for hook files, got: {issues!r}"
     )
+
+
+def test_should_not_flag_property_decorated_forwarder() -> None:
+    source = (
+        "def compute_total(amount: int) -> int:\n"
+        "    return amount * 2\n"
+        "\n"
+        "class Cart:\n"
+        "    @property\n"
+        "    def total(self, amount: int) -> int:\n"
+        "        return compute_total(amount)\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A @property forwarder gains attribute semantics, not a zero-payload alias, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_lru_cache_decorated_forwarder() -> None:
+    source = (
+        "import functools\n"
+        "\n"
+        "def lookup(key: int) -> int:\n"
+        "    return key\n"
+        "\n"
+        "@functools.lru_cache\n"
+        "def cached_lookup(key: int) -> int:\n"
+        "    return lookup(key)\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"An @lru_cache forwarder adds memoization the target lacks, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_forwarder_that_adds_a_default_value() -> None:
+    source = (
+        "def target(first: int, second: int) -> int:\n"
+        "    return first + second\n"
+        "\n"
+        "def alias(first: int, second: int = 5) -> int:\n"
+        "    return target(first, second)\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A default value makes a call shape valid that the target rejects, got: {issues!r}"
+    )
+
+
+def test_should_flag_async_pass_through_alias() -> None:
+    source = (
+        "async def real(value: int) -> int:\n"
+        "    return value\n"
+        "\n"
+        "async def alias(value: int) -> int:\n"
+        "    return real(value)\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert any("alias" in each for each in issues), (
+        f"An async pass-through alias must be flagged like its sync twin, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_sync_alias_to_async_target() -> None:
+    source = (
+        "async def target(first: int) -> int:\n"
+        "    return first\n"
+        "\n"
+        "def alias(first: int) -> int:\n"
+        "    return target(first)\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A sync alias to an async target returns a coroutine, changing the contract, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_async_alias_to_sync_target() -> None:
+    source = (
+        "def target(first: int) -> int:\n"
+        "    return first\n"
+        "\n"
+        "async def alias(first: int) -> int:\n"
+        "    return target(first)\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"An async alias to a sync target changes the awaitability contract, got: {issues!r}"
+    )
