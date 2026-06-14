@@ -60,11 +60,10 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
    | Tool | Use when | Example |
    |---|---|---|
    | `mcp__serena__find_symbol` / `find_referencing_symbols` | Symbol-aware language server is available — definition vs. reference distinction matters, and you want call-site context | `find_referencing_symbols(symbol_name)` returns every caller with file/line and surrounding code |
-   | `mcp__zoekt__search_symbols` / `search` | Cross-repo or large codebase indexed in zoekt; faster than grep on big trees | `search(query)` returns ranked matches with snippets |
    | `Grep` tool (ripgrep) | Local single-repo plain-text scan; no symbol awareness needed | `Grep(pattern, type="py")` — much faster than shell `grep` and respects `.gitignore` |
    | `grep -rn` | Last resort; only when the above are unavailable | — |
 
-   The Grep tool is the default for plain-text scans (faster than shell grep, respects gitignore). Reach for serena when you need to distinguish "this name is defined here" from "this name is referenced here," which catches false positives from comments, docstrings, and string literals. Reach for zoekt for cross-repo scans.
+   The Grep tool is the default for plain-text scans (faster than shell grep, respects gitignore). Reach for serena when you need to distinguish "this name is defined here" from "this name is referenced here," which catches false positives from comments, docstrings, and string literals.
 
    This is the bug that hides best. Don't skip it.
 
@@ -107,7 +106,6 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
 11. **Reference scan for removals/renames.** For every symbol the rebase deleted or renamed (per the commit messages from step 4), scan the post-rebase tree using the same tool-preference order as step 4:
 
     - **Preferred:** `mcp__serena__find_referencing_symbols` (symbol-aware; ignores false matches in comments and string literals).
-    - **Fallback:** `mcp__zoekt__search` for cross-repo or large trees.
     - **Then:** the `Grep` tool (e.g., `Grep(pattern="<symbol>", type="py")`) for fast in-repo scans.
     - **Last resort:** `grep -rn "<symbol>" .` (let ripgrep defaults and `.gitignore` handle scoping)
 
@@ -156,7 +154,7 @@ After rebase, BEFORE push:
   python -c "import …"      ──► must succeed
   pytest --collect-only     ──► must succeed
   targeted pytest run       ──► must pass
-  symbol scan (serena → zoekt → Grep) ──► no stale references
+  symbol scan (serena → Grep) ──► no stale references
 
 Push:
   not main/master/release   ──► force-with-lease, ask first
