@@ -98,6 +98,28 @@ def test_aggregate_two_runs_sums_rounds(tmp_path: Path) -> None:
     assert result.final_sha.startswith("7c2f420c")
 
 
+def test_force_remove_clears_existing_directory(tmp_path: Path) -> None:
+    """Should remove an existing directory tree without raising on any supported Python."""
+    target = tmp_path / "to-remove"
+    target.mkdir()
+    (target / "nested").mkdir()
+    (target / "nested" / "file.txt").write_text("content", encoding="utf-8")
+
+    aggregate_runs._force_remove(target)
+
+    assert not target.exists()
+
+
+def test_force_remove_handler_keyword_is_version_guarded() -> None:
+    """Should pick onexc on Python 3.12+ and onerror otherwise, never bare onexc."""
+    handler_keyword = aggregate_runs._select_rmtree_handler_keyword()
+
+    if sys.version_info >= (3, 12):
+        assert set(handler_keyword) == {"onexc"}
+    else:
+        assert set(handler_keyword) == {"onerror"}
+
+
 def test_discover_filters_by_owner_repo_and_pr_number(tmp_path: Path) -> None:
     """Should return only journals whose args match the requested owner, repo, and PR."""
     projects_root = tmp_path / "projects"

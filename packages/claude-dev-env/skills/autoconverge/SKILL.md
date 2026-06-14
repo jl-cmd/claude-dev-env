@@ -129,8 +129,7 @@ round records nothing resumable and replays dirty.
         --out "$CLAUDE_JOB_DIR/tmp/autoconverge-report-<prNumber>.html" \
         --pr <owner>/<repo>#<n> \
         --final-sha <finalSha> \
-        --rounds <roundCount> \
-        --repo <worktree>
+        --rounds <roundCount>
       ```
       Use the `combinedJournal`, `finalSha`, and `roundCount` from step b. Capture the
       output path from stdout.

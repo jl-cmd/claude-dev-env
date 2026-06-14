@@ -7,6 +7,7 @@ import re
 import shutil
 import stat
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
@@ -27,6 +28,8 @@ from autoconverge_report_constants.render_report_constants import (
     JOURNAL_SIBLING_SUBAGENTS,
     JOURNAL_SIBLING_WORKFLOWS,
     LABEL_RESOLVE_HEAD,
+    ONEXC_PYTHON_MAJOR_VERSION,
+    ONEXC_PYTHON_MINOR_VERSION,
     PROGRESS_FIELD_AGENT_ID,
     PROGRESS_FIELD_LABEL,
     PROJECTS_DIR_NAME,
@@ -136,19 +139,46 @@ def discover_pr_journals(
     ]
 
 
+def _retry_after_chmod(
+    remove_func: Callable[[str], None], failing_path: str, *_exc_info: object
+) -> None:
+    """Clear the Windows read-only bit on a path, then retry the removal that failed.
+
+    Args:
+        remove_func: The os removal call rmtree was attempting when it failed.
+        failing_path: The path the failed removal call could not delete.
+        _exc_info: The exception or exc_info tuple the rmtree handler passes.
+    """
+    os.chmod(failing_path, stat.S_IWRITE)
+    remove_func(failing_path)
+
+
+def _select_rmtree_handler_keyword() -> dict[str, Callable[..., None]]:
+    """Return the rmtree retry-handler keyword argument for the running Python.
+
+    Returns:
+        A single-entry dict using the 'onexc' keyword on the Python versions that
+        accept it and 'onerror' on the earlier versions that do not.
+    """
+    onexc_required_version = (ONEXC_PYTHON_MAJOR_VERSION, ONEXC_PYTHON_MINOR_VERSION)
+    if sys.version_info >= onexc_required_version:
+        return {"onexc": _retry_after_chmod}
+    return {"onerror": _retry_after_chmod}
+
+
 def _force_remove(target_path: Path) -> None:
     """Remove a directory tree, clearing the Windows read-only bit on failure.
 
     Args:
         target_path: The directory tree to remove when it exists.
     """
-
-    def _retry_after_chmod(remove_func, failing_path, _exc):
-        os.chmod(failing_path, stat.S_IWRITE)
-        remove_func(failing_path)
-
-    if target_path.exists():
+    if not target_path.exists():
+        return
+    handler_keyword = _select_rmtree_handler_keyword()
+    if "onexc" in handler_keyword:
         shutil.rmtree(target_path, onexc=_retry_after_chmod)
+        return
+    shutil.rmtree(target_path, onerror=_retry_after_chmod)
 
 
 def aggregate_pr_journals(

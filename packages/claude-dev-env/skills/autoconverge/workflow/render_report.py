@@ -372,20 +372,44 @@ def load_run_data(journal_path: Path) -> RunData:
     )
 
 
-def _is_summary_structurally_valid(convergence_summary: dict | None) -> bool:
+def _is_summary_structurally_valid(convergence_summary: object) -> bool:
     """Return whether the summary carries a verdict string and an issue-class list.
 
     Args:
-        convergence_summary: The parsed convergence summary, or None.
+        convergence_summary: The parsed convergence summary, which may be None or
+            any non-dict JSON value an agent emits in place of the expected object.
 
     Returns:
-        True when verdictLine is a str and issueClasses is a list, else False.
+        True when the summary is a dict whose verdictLine is a str and whose
+        issueClasses is a list, else False.
     """
-    if convergence_summary is None:
+    if not isinstance(convergence_summary, dict):
         return False
     verdict_line = convergence_summary.get(SUMMARY_FIELD_VERDICT_LINE)
     issue_classes = convergence_summary.get(SUMMARY_FIELD_ISSUE_CLASSES)
     return isinstance(verdict_line, str) and isinstance(issue_classes, list)
+
+
+def _coerce_count(raw_count: object) -> int:
+    """Return a non-negative integer count from an LLM-authored field, else zero.
+
+    Args:
+        raw_count: The count value as read from the convergence summary, which an
+            agent may emit as null, a non-numeric string, or a valid number.
+
+    Returns:
+        The value parsed to an int, or 0 when it is null, non-numeric, or absent.
+    """
+    if isinstance(raw_count, bool):
+        return int(raw_count)
+    if isinstance(raw_count, int):
+        return raw_count
+    if isinstance(raw_count, (float, str)):
+        try:
+            return int(float(raw_count))
+        except (TypeError, ValueError):
+            return 0
+    return 0
 
 
 def _pluralize(count: int, singular: str, plural: str) -> str:
@@ -584,7 +608,7 @@ def _render_cause_line(issue_class: dict) -> str:
     cause = html.escape(str(issue_class.get(ISSUE_CLASS_FIELD_CAUSE, "")))
     severity = str(issue_class.get(ISSUE_CLASS_FIELD_SEVERITY, DEFAULT_FINDING_SEVERITY))
     category = str(issue_class.get(ISSUE_CLASS_FIELD_CATEGORY, CATEGORY_BUG))
-    count = int(issue_class.get(ISSUE_CLASS_FIELD_COUNT, 0))
+    count = _coerce_count(issue_class.get(ISSUE_CLASS_FIELD_COUNT, 0))
     status = str(issue_class.get(ISSUE_CLASS_FIELD_STATUS, ""))
 
     category_label = CATEGORY_LABEL_BY_VALUE.get(category, category)
@@ -627,7 +651,7 @@ def _render_issue_class_heading(issue_class: dict) -> str:
         An HTML .bug-head block with the plain bug name and a finding-count chip.
     """
     plain_name = html.escape(str(issue_class.get(ISSUE_CLASS_FIELD_PLAINNAME, "")))
-    count = int(issue_class.get(ISSUE_CLASS_FIELD_COUNT, 0))
+    count = _coerce_count(issue_class.get(ISSUE_CLASS_FIELD_COUNT, 0))
     count_phrase = html.escape(_pluralize(count, "finding", "findings"))
     return (
         '<div class="bug-head">'
@@ -925,9 +949,6 @@ def main(out_stream: TextIO = sys.stdout, err_stream: TextIO = sys.stderr) -> in
     argument_parser.add_argument("--final-sha", required=True, help="Final commit SHA")
     argument_parser.add_argument(
         "--rounds", required=True, type=int, help="Total round count"
-    )
-    argument_parser.add_argument(
-        "--repo", default=".", help="Path to the git repository root"
     )
     argument_parser.add_argument(
         "--summary-file",

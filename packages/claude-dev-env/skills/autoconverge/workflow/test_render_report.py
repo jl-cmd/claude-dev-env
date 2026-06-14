@@ -37,8 +37,6 @@ def _render_cli(journal_path: Path, out_path: Path) -> subprocess.CompletedProce
             "7c2f420c4d5b7c83aa47f93d99a0f1420e3373c4",
             "--rounds",
             "4",
-            "--repo",
-            ".",
         ],
         capture_output=True,
         text=True,
@@ -338,8 +336,6 @@ def test_cli_injects_summary_from_file_bypassing_transcripts(tmp_path: Path) -> 
             "7c2f420c4d5b7c83aa47f93d99a0f1420e3373c4",
             "--rounds",
             "4",
-            "--repo",
-            ".",
             "--summary-file",
             str(summary_path),
         ],
@@ -505,6 +501,192 @@ def test_base_sha_resets_each_round_when_prior_fix_transcript_missing(
         "Round 2 fix recorded a stale base sha leaked from round 1; "
         f"expected {round_two_head}, got {fix_by_round[2].base_sha}"
     )
+
+
+def _render_cli_with_summary_file(
+    journal_path: Path, out_path: Path, summary_path: Path
+) -> subprocess.CompletedProcess[str]:
+    """Run the render CLI with an injected --summary-file and return the process."""
+    render_script = Path(__file__).resolve().parent / "render_report.py"
+    return subprocess.run(
+        [
+            sys.executable,
+            str(render_script),
+            "--journal",
+            str(journal_path),
+            "--out",
+            str(out_path),
+            "--pr",
+            "example-owner/example-repo#211",
+            "--final-sha",
+            "7c2f420c4d5b7c83aa47f93d99a0f1420e3373c4",
+            "--rounds",
+            "4",
+            "--summary-file",
+            str(summary_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_cli_renders_when_issue_class_count_is_null(tmp_path: Path) -> None:
+    """Should exit 0 and show a zero count when an issue class carries count: null."""
+    run_root = tmp_path / "wf_run_null_count"
+    journal_destination = _copy_run_tree_without_summary_entry(run_root)
+
+    summary = {
+        "prProblem": "A problem.",
+        "prFix": "A fix.",
+        "problemScenes": [],
+        "fixScenes": [],
+        "verdictLine": "Converged.",
+        "issueClasses": [
+            {
+                "plainName": "A class with a null count",
+                "count": None,
+                "severity": "P2",
+                "category": "bug",
+                "status": "fixed",
+                "cause": "A grounded cause.",
+                "medium": "text",
+                "beforeLines": [],
+                "afterLines": [],
+            }
+        ],
+    }
+    summary_path = tmp_path / "summary-null-count.json"
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+    out_path = tmp_path / "report-null-count.html"
+    completed = _render_cli_with_summary_file(
+        journal_destination, out_path, summary_path
+    )
+
+    assert completed.returncode == 0, f"CLI crashed on null count:\n{completed.stderr}"
+    html_content = out_path.read_text(encoding="utf-8")
+    assert "A class with a null count" in html_content
+    assert "0 findings" in html_content
+    assert "&times;0" in html_content
+
+
+def test_cli_renders_when_issue_class_count_is_non_numeric(tmp_path: Path) -> None:
+    """Should exit 0 and show a zero count when an issue class count is a bad string."""
+    run_root = tmp_path / "wf_run_bad_count"
+    journal_destination = _copy_run_tree_without_summary_entry(run_root)
+
+    summary = {
+        "prProblem": "A problem.",
+        "prFix": "A fix.",
+        "problemScenes": [],
+        "fixScenes": [],
+        "verdictLine": "Converged.",
+        "issueClasses": [
+            {
+                "plainName": "A class with a non-numeric count",
+                "count": "x",
+                "severity": "P2",
+                "category": "bug",
+                "status": "fixed",
+                "cause": "A grounded cause.",
+                "medium": "text",
+                "beforeLines": [],
+                "afterLines": [],
+            }
+        ],
+    }
+    summary_path = tmp_path / "summary-bad-count.json"
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+    out_path = tmp_path / "report-bad-count.html"
+    completed = _render_cli_with_summary_file(
+        journal_destination, out_path, summary_path
+    )
+
+    assert completed.returncode == 0, (
+        f"CLI crashed on non-numeric count:\n{completed.stderr}"
+    )
+    html_content = out_path.read_text(encoding="utf-8")
+    assert "A class with a non-numeric count" in html_content
+    assert "0 findings" in html_content
+
+
+def test_cli_renders_degraded_body_when_summary_is_a_list(tmp_path: Path) -> None:
+    """Should render the degraded layout and exit 0 when --summary-file holds a list."""
+    run_root = tmp_path / "wf_run_list_summary"
+    journal_destination = _copy_run_tree_without_summary_entry(run_root)
+
+    summary_path = tmp_path / "summary-list.json"
+    summary_path.write_text(json.dumps([]), encoding="utf-8")
+
+    out_path = tmp_path / "report-list-summary.html"
+    completed = _render_cli_with_summary_file(
+        journal_destination, out_path, summary_path
+    )
+
+    assert completed.returncode == 0, (
+        f"CLI crashed on a list summary:\n{completed.stderr}"
+    )
+    html_content = out_path.read_text(encoding="utf-8")
+    assert "distinct findings across 4 rounds" in html_content
+    assert 'class="pf-grid"' not in html_content
+
+
+def test_cli_renders_degraded_body_when_summary_is_a_scalar(tmp_path: Path) -> None:
+    """Should render the degraded layout and exit 0 when --summary-file holds a scalar."""
+    run_root = tmp_path / "wf_run_scalar_summary"
+    journal_destination = _copy_run_tree_without_summary_entry(run_root)
+
+    summary_path = tmp_path / "summary-scalar.json"
+    summary_path.write_text(json.dumps(5), encoding="utf-8")
+
+    out_path = tmp_path / "report-scalar-summary.html"
+    completed = _render_cli_with_summary_file(
+        journal_destination, out_path, summary_path
+    )
+
+    assert completed.returncode == 0, (
+        f"CLI crashed on a scalar summary:\n{completed.stderr}"
+    )
+    html_content = out_path.read_text(encoding="utf-8")
+    assert "distinct findings across 4 rounds" in html_content
+    assert 'class="pf-grid"' not in html_content
+
+
+def test_is_summary_structurally_valid_false_for_non_dict_summary() -> None:
+    """Should return False for a list, string, or scalar summary, never raising."""
+    assert render_report._is_summary_structurally_valid([]) is False
+    assert render_report._is_summary_structurally_valid("str") is False
+    assert render_report._is_summary_structurally_valid(5) is False
+
+
+def test_cli_rejects_orphaned_repo_argument(tmp_path: Path) -> None:
+    """Should reject --repo with a usage error, proving the flag is no longer declared."""
+    render_script = Path(__file__).resolve().parent / "render_report.py"
+    out_path = tmp_path / "report-repo-rejected.html"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(render_script),
+            "--journal",
+            str(FIXTURE_JOURNAL),
+            "--out",
+            str(out_path),
+            "--pr",
+            "example-owner/example-repo#211",
+            "--final-sha",
+            "7c2f420c4d5b7c83aa47f93d99a0f1420e3373c4",
+            "--rounds",
+            "4",
+            "--repo",
+            ".",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "unrecognized arguments: --repo" in completed.stderr
 
 
 def test_robustness_with_missing_transcripts(tmp_path: Path) -> None:

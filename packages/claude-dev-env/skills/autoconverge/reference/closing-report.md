@@ -63,8 +63,7 @@ Three steps run at teardown, each a separate process:
      --out "<output path>.html" \
      --pr <owner>/<repo>#<n> \
      --final-sha <finalSha> \
-     --rounds <roundCount> \
-     --repo <worktree path>
+     --rounds <roundCount>
    ```
    The script reads the merged journal and transcripts, counts findings by severity and fix commits, takes the summary from `--summary-file`, draws the visual report, and writes a self-contained HTML file. It prints the output path to stdout and exits 0 on success.
 
