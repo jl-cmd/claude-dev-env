@@ -817,7 +817,7 @@ function spawnConvergenceSummary(distinctFindings, fixSummaries, roundCount, sta
     : 'none'
   const standardsBlock = standardsNote ? `\nDeferred code-standard note: ${standardsNote}\n` : ''
   const copilotBlock = copilotNote ? `\nCopilot gate note: ${copilotNote}\n` : ''
-  return agent(
+  return convergeAgent(
     `You write the plain-language convergence summary for ${prCoordinates}. The autoconverge run reached convergence in ${roundCount} round(s). Use ONLY the findings and fix summaries below; invent nothing not present.\n\n` +
       `Distinct findings caught across the run (already deduped):\n${findingsBlock}\n\n` +
       `Per-round fix summaries:\n${fixSummariesBlock}\n${standardsBlock}${copilotBlock}\n` +

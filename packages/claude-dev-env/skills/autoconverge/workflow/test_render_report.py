@@ -17,7 +17,7 @@ FIXTURE_JOURNAL = FIXTURE_DIR / "workflows" / "wf_881252e6-700.json"
 EXPECTED_TOTAL_FINDINGS = 15
 EXPECTED_FIX_COMMIT_COUNT = 2
 EXPECTED_GENERATED_DATE = "2026-06-13"
-RETURN_TYPE_ISSUE_COUNT = 7
+EXPECTED_ROUND_COUNT = 4
 
 
 def _render_cli(journal_path: Path, out_path: Path) -> subprocess.CompletedProcess[str]:
@@ -93,8 +93,8 @@ def test_load_run_data_carries_category_on_findings() -> None:
     )
 
 
-def test_cli_renders_verdict_banner_and_grouped_table(tmp_path: Path) -> None:
-    """Should render a verdict banner and a grouped issue-class table from the summary."""
+def test_cli_renders_verdict_banner_with_python_computed_vsub(tmp_path: Path) -> None:
+    """Should render the verdict banner with verdictLine and a Python-computed vsub."""
     out_path = tmp_path / "report.html"
 
     completed = _render_cli(FIXTURE_JOURNAL, out_path)
@@ -105,49 +105,159 @@ def test_cli_renders_verdict_banner_and_grouped_table(tmp_path: Path) -> None:
 
     html_content = out_path.read_text(encoding="utf-8")
     assert "PR #211 Convergence Summary" in html_content
-    assert 'class="verdict-banner' in html_content
-    assert 'class="verdict-pill' in html_content
-    assert 'class="issue-table"' in html_content
-    assert "Tests did not declare their return type" in html_content
-    assert "7c2f420c" in html_content
+    assert 'class="verdict"' in html_content
+    assert 'class="vtext"' in html_content
+    assert "Converged in 4 rounds; 3 distinct issue classes were caught and fixed." in (
+        html_content
+    )
+    assert 'class="vsub"' in html_content
+    assert "2 fix commits" in html_content
+    assert "final commit 7c2f420c" in html_content
 
 
-def test_cli_collapses_seven_return_type_findings_into_one_row(tmp_path: Path) -> None:
-    """Should render the seven return-type findings as one table row carrying a count of 7."""
-    out_path = tmp_path / "report-row.html"
+def test_cli_renders_problem_and_fix_scene_cards(tmp_path: Path) -> None:
+    """Should draw problem and fix scene cards with trigger, result, and caption."""
+    out_path = tmp_path / "report-scenes.html"
 
     completed = _render_cli(FIXTURE_JOURNAL, out_path)
     assert completed.returncode == 0, f"CLI failed:\n{completed.stderr}"
 
     html_content = out_path.read_text(encoding="utf-8")
-    return_type_row_count = html_content.count(
-        "Tests did not declare their return type"
-    )
-    assert return_type_row_count == 1, (
-        f"Expected the return-type class to appear in exactly one row, "
-        f"found it {return_type_row_count} times"
-    )
-    assert f"&times;{RETURN_TYPE_ISSUE_COUNT}" in html_content
+    assert 'class="pf-grid"' in html_content
+    assert 'class="pf problem"' in html_content
+    assert 'class="pf fix"' in html_content
+    assert "export stops at batch 90 of 100" in html_content
+    assert "starts again at batch 1" in html_content
+    assert "continues at batch 91" in html_content
+    assert 'class="res-bad"' in html_content
+    assert 'class="res-good"' in html_content
+    assert "began again" in html_content
 
 
-def test_cli_default_view_has_no_charts_or_raw_jargon(tmp_path: Path) -> None:
-    """Should render no chart markup and keep raw guideline jargon out of the default view."""
-    out_path = tmp_path / "report-clean.html"
+def test_render_issue_class_panels_for_each_medium() -> None:
+    """Should draw before/after panels: a code panel and a terminal panel per medium."""
+    convergence_summary = {
+        "verdictLine": "Converged.",
+        "problemScenes": [],
+        "fixScenes": [],
+        "issueClasses": [
+            {
+                "plainName": "A missing return type",
+                "count": 3,
+                "severity": "P2",
+                "category": "code-standard",
+                "status": "fixed",
+                "cause": "Tests did not declare their return type.",
+                "medium": "code",
+                "beforeLines": ["def test_x():"],
+                "afterLines": ["def test_x() -> None:"],
+            },
+            {
+                "plainName": "An install that did nothing",
+                "count": 1,
+                "severity": "P1",
+                "category": "bug",
+                "status": "fixed",
+                "cause": "The command skipped the install.",
+                "medium": "terminal",
+                "beforeLines": ["~ $ install", "(no output)"],
+                "afterLines": ["~ $ install", "Installed."],
+            },
+        ],
+    }
+
+    panels_html = render_report._render_issue_class_panels(convergence_summary)
+
+    assert 'class="code-panel"' in panels_html
+    assert "def test_x() -&gt; None:" in panels_html
+    assert 'class="terminal"' in panels_html
+    assert 'class="term-bar"' in panels_html
+    assert "Installed." in panels_html
+    assert 'class="term-grid"' in panels_html
+    assert 'class="bug-head"' in panels_html
+    assert "A missing return type" in panels_html
+    assert "An install that did nothing" in panels_html
+    assert "3 findings" in panels_html
+    assert "1 finding" in panels_html
+
+
+def test_cli_renders_cause_line_with_severity_parenthetical(tmp_path: Path) -> None:
+    """Should render a cause line carrying the plain cause and a muted parenthetical."""
+    out_path = tmp_path / "report-cause.html"
 
     completed = _render_cli(FIXTURE_JOURNAL, out_path)
     assert completed.returncode == 0, f"CLI failed:\n{completed.stderr}"
 
     html_content = out_path.read_text(encoding="utf-8")
-    for chart_marker in ("bar-row", "bar-fill", "chart-card", "chart-title"):
-        assert chart_marker not in html_content, (
-            f"Chart markup {chart_marker!r} leaked into the rendered report"
-        )
+    assert 'class="cause"' in html_content
+    assert "which the project&#x27;s type checker wants" in html_content
+    assert "P2" in html_content
+    assert "code standard" in html_content
+    assert "&times;7" in html_content
+    assert "fixed" in html_content
 
-    appendix_start = html_content.index('<details class="appendix"')
-    default_view = html_content[:appendix_start]
-    assert "CodingGuidelineID" not in default_view, (
-        "Raw guideline jargon leaked into the default (non-appendix) view"
-    )
+
+def test_render_issue_class_panels_omitted_when_lines_empty() -> None:
+    """Should draw only the cause line when both before and after lines are empty."""
+    convergence_summary = {
+        "verdictLine": "Converged.",
+        "problemScenes": [],
+        "fixScenes": [],
+        "issueClasses": [
+            {
+                "plainName": "A cause-only class",
+                "count": 1,
+                "severity": "P2",
+                "category": "code-standard",
+                "status": "fixed",
+                "cause": "Nothing visual to show.",
+                "medium": "text",
+                "beforeLines": [],
+                "afterLines": [],
+            }
+        ],
+    }
+
+    panels_html = render_report._render_issue_class_panels(convergence_summary)
+
+    assert 'class="term-grid"' not in panels_html
+    assert 'class="bug-head"' in panels_html
+    assert "A cause-only class" in panels_html
+    assert 'class="cause"' in panels_html
+    assert "Nothing visual to show." in panels_html
+
+
+def test_render_issue_class_panels_clean_state_when_no_classes() -> None:
+    """Should render a clean-state line, not an empty section, when no classes exist."""
+    convergence_summary = {
+        "verdictLine": "Converged with no issues caught.",
+        "problemScenes": [],
+        "fixScenes": [],
+        "issueClasses": [],
+    }
+
+    panels_html = render_report._render_issue_class_panels(convergence_summary)
+
+    assert 'class="term-grid"' not in panels_html
+    assert "No issues were caught" in panels_html
+
+
+def test_cli_merges_run_stats_lead_into_caught_section(tmp_path: Path) -> None:
+    """Should lead the caught section with run stats and omit any timeline section."""
+    out_path = tmp_path / "report-caught-lead.html"
+
+    completed = _render_cli(FIXTURE_JOURNAL, out_path)
+    assert completed.returncode == 0, f"CLI failed:\n{completed.stderr}"
+
+    html_content = out_path.read_text(encoding="utf-8")
+    assert "What was caught" in html_content
+    assert "3 bug classes" in html_content
+    assert "15 findings in all" in html_content
+    assert "caught and fixed across 4 rounds" in html_content
+    assert "2 fix commits" in html_content
+    assert "How it converged" not in html_content
+    assert 'class="timeline"' not in html_content
+    assert 'class="tstep' not in html_content
 
 
 def test_cli_includes_collapsed_appendix(tmp_path: Path) -> None:
@@ -164,7 +274,7 @@ def test_cli_includes_collapsed_appendix(tmp_path: Path) -> None:
 
 
 def test_cli_degraded_layout_when_summary_entry_absent(tmp_path: Path) -> None:
-    """Should render a valid, chart-free degraded layout when no summarizer entry exists."""
+    """Should render the timeline and appendix but no scene, table, or rollup markup."""
     run_root = tmp_path / "wf_run_no_summary"
     journal_destination = _copy_run_tree_without_summary_entry(run_root)
 
@@ -175,13 +285,75 @@ def test_cli_degraded_layout_when_summary_entry_absent(tmp_path: Path) -> None:
     html_content = out_path.read_text(encoding="utf-8")
 
     assert "PR #211 Convergence Summary" in html_content
-    assert 'class="verdict-banner' not in html_content
-    assert 'class="issue-table"' not in html_content
-    assert 'class="group-list"' in html_content
-    assert 'class="rollup"' in html_content
+    assert 'class="timeline"' not in html_content
+    assert "distinct findings across 4 rounds" in html_content
     assert '<details class="appendix"' in html_content
-    for chart_marker in ("bar-row", "bar-fill", "chart-card"):
-        assert chart_marker not in html_content
+    assert 'class="pf-grid"' not in html_content
+    assert 'class="issue-table"' not in html_content
+    assert 'class="rollup"' not in html_content
+    assert 'class="pr-summary"' not in html_content
+
+
+def test_cli_injects_summary_from_file_bypassing_transcripts(tmp_path: Path) -> None:
+    """Should render the full summary body from --summary-file when no summary transcript exists."""
+    run_root = tmp_path / "wf_run_inject"
+    journal_destination = _copy_run_tree_without_summary_entry(run_root)
+
+    summary = {
+        "prProblem": "PhotoSync stopped backing up photos after an account switch.",
+        "prFix": "It re-checks the account on each backup, so a switch never halts backups.",
+        "problemScenes": [],
+        "fixScenes": [],
+        "verdictLine": "Converged in 4 rounds; every class is fixed.",
+        "issueClasses": [
+            {
+                "plainName": "An injected class the transcript never carried",
+                "count": 2,
+                "severity": "P1",
+                "category": "bug",
+                "status": "fixed",
+                "cause": "A concrete grounded cause sentence.",
+                "medium": "text",
+                "beforeLines": [],
+                "afterLines": [],
+            }
+        ],
+    }
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+    out_path = tmp_path / "report-injected.html"
+    render_script = Path(__file__).resolve().parent / "render_report.py"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(render_script),
+            "--journal",
+            str(journal_destination),
+            "--out",
+            str(out_path),
+            "--pr",
+            "example-owner/example-repo#211",
+            "--final-sha",
+            "7c2f420c4d5b7c83aa47f93d99a0f1420e3373c4",
+            "--rounds",
+            "4",
+            "--repo",
+            ".",
+            "--summary-file",
+            str(summary_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, f"CLI failed:\n{completed.stderr}"
+    html_content = out_path.read_text(encoding="utf-8")
+    assert 'class="verdict"' in html_content
+    assert "Converged in 4 rounds; every class is fixed." in html_content
+    assert "An injected class the transcript never carried" in html_content
+    assert 'class="pf-grid"' in html_content
+    assert f"Raw findings ({EXPECTED_TOTAL_FINDINGS})" in html_content
 
 
 def test_html_contains_no_hedging_words(tmp_path: Path) -> None:
@@ -260,62 +432,10 @@ def test_fix_record_carries_summary_text() -> None:
     """Should read the fix agent's summary field into the FixRecord."""
     fix_record = render_report._parse_fix_record(
         {"newSha": "abcd1234", "pushed": True, "summary": "renamed and annotated"},
-        round_number=1,
         base_sha="base",
     )
 
     assert fix_record.summary == "renamed and annotated"
-
-
-def test_render_verdict_banner_uses_deferred_pill_when_class_deferred() -> None:
-    """Should mark the banner deferred when any issue class carries a deferred status."""
-    convergence_summary = {
-        "verdictLine": "Converged with one deferred class.",
-        "issueClasses": [
-            {
-                "plainName": "A deferred standard",
-                "count": 1,
-                "severity": "P2",
-                "category": "code-standard",
-                "status": "deferred",
-                "whatItWas": "A standard left for a follow-up.",
-            }
-        ],
-    }
-
-    banner_html = render_report._render_verdict_banner(convergence_summary)
-
-    assert "verdict-banner deferred" in banner_html
-    assert render_report.VERDICT_PILL_LABEL_DEFERRED in banner_html
-
-
-def test_render_issue_class_table_orders_bug_rows_before_code_standard() -> None:
-    """Should place bug rows ahead of code-standard rows in the rendered table."""
-    convergence_summary = {
-        "verdictLine": "Converged.",
-        "issueClasses": [
-            {
-                "plainName": "A standard slip",
-                "count": 3,
-                "severity": "P2",
-                "category": "code-standard",
-                "status": "fixed",
-                "whatItWas": "A style rule.",
-            },
-            {
-                "plainName": "A real defect",
-                "count": 1,
-                "severity": "P0",
-                "category": "bug",
-                "status": "fixed",
-                "whatItWas": "A crash.",
-            },
-        ],
-    }
-
-    table_html = render_report._render_issue_class_table(convergence_summary)
-
-    assert table_html.index("A real defect") < table_html.index("A standard slip")
 
 
 def _write_structured_output_transcript(
@@ -388,7 +508,7 @@ def test_base_sha_resets_each_round_when_prior_fix_transcript_missing(
 
 
 def test_robustness_with_missing_transcripts(tmp_path: Path) -> None:
-    """Should exit 0 and render a chart-free report when no agent transcripts exist."""
+    """Should exit 0 and render the timeline and appendix when no transcripts exist."""
     run_root = tmp_path / "wf_run"
     journal_destination = run_root / "workflows" / FIXTURE_JOURNAL.name
     journal_destination.parent.mkdir(parents=True)
@@ -407,6 +527,5 @@ def test_robustness_with_missing_transcripts(tmp_path: Path) -> None:
 
     html_content = out_path.read_text(encoding="utf-8")
     assert "PR #211 Convergence Summary" in html_content
-    assert "No findings were caught during the run." in html_content
-    for chart_marker in ("bar-row", "bar-fill", "chart-card"):
-        assert chart_marker not in html_content
+    assert 'class="timeline"' not in html_content
+    assert 'class="pf-grid"' not in html_content

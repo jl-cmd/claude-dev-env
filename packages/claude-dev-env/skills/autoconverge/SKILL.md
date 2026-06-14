@@ -97,23 +97,45 @@ round records nothing resumable and replays dirty.
    here; this step builds the one-shot closing report and the seam (marker comment +
    gist URL) a future live-dashboard reuses.
 
-   a. **Resolve the journal path.** Glob
+   a. **Resolve a seed journal path.** Glob
       `~/.claude/projects/**/workflows/wf_<runId>.json` (where `runId` is the run id
-      the `Workflow` result returned) and take the match.
+      the `Workflow` result returned) and take the match. It seeds the merge, which
+      finds every other autoconverge journal for the same PR.
 
-   b. **Build the report.**
+   b. **Merge the PR's runs and build the summary prompt.**
+      ```
+      python "<skill>/workflow/aggregate_runs.py" \
+        --journal "<seed journal>" \
+        --pr <owner>/<repo>#<n> \
+        --work-dir "$CLAUDE_JOB_DIR/tmp/autoconverge-agg-<prNumber>" \
+        --out-prompt "$CLAUDE_JOB_DIR/tmp/autoconverge-summary-prompt-<prNumber>.txt" \
+        [--standards-note "<standardsNote>"] [--copilot-note "<copilotNote>"]
+      ```
+      It prints a JSON line with `combinedJournal`, `roundCount`, `finalSha`, and
+      `findingCount`. Pass `--standards-note`/`--copilot-note` only when the workflow
+      returned those notes.
+
+   c. **Write the summary.** Spawn a `convergence-summary` agent (a `general-purpose`
+      subagent) on the text of the prompt file from step b. The agent answers with the
+      `prProblem`/`prFix`/`problemScenes`/`fixScenes`/`verdictLine`/`issueClasses` JSON
+      object; write that object to
+      `$CLAUDE_JOB_DIR/tmp/autoconverge-summary-<prNumber>.json`.
+
+   d. **Build the report.**
       ```
       python "<skill>/workflow/render_report.py" \
-        --journal "<journal>" \
+        --journal "<combinedJournal>" \
+        --summary-file "<summary json>" \
         --out "$CLAUDE_JOB_DIR/tmp/autoconverge-report-<prNumber>.html" \
         --pr <owner>/<repo>#<n> \
         --final-sha <finalSha> \
-        --rounds <rounds> \
+        --rounds <roundCount> \
         --repo <worktree>
       ```
-      Capture the output path from stdout.
+      Use the `combinedJournal`, `finalSha`, and `roundCount` from step b. Capture the
+      output path from stdout.
 
-   c. **Publish as a secret gist** by reusing `doc-gist` (do not reimplement gist
+   e. **Publish as a secret gist** by reusing `doc-gist` (do not reimplement gist
       creation):
       ```
       python "$HOME/.claude/skills/doc-gist/scripts/gist_upload.py" \
@@ -124,21 +146,21 @@ round records nothing resumable and replays dirty.
       Capture the htmlpreview URL from stdout. The gist is secret by default; pass
       no public flag.
 
-   d. **Post one idempotent PR comment.** List the PR's issue comments; if one
+   f. **Post one idempotent PR comment.** List the PR's issue comments; if one
       carries the marker `<!-- autoconverge-report -->`, edit it in place, otherwise
       create a new one. The body begins with `<!-- autoconverge-report -->`, then
-      the htmlpreview link, then the plain-language summary that mirrors the report:
-      the one-sentence `verdictLine`, a one-line rollup of the run numbers (distinct
-      findings by severity, rounds, fix commits), and the issue-class list grouped by
-      severity — one bullet per class as `plainName (×count, status)`. Place the raw
-      finding list as `file:line — P# — title` inside a collapsed
+      the htmlpreview link, then a plain-language summary that mirrors the report:
+      lead with the one-sentence `verdictLine`; then the plain Problem and Fix
+      sentences (`prProblem`, `prFix`); then the issue-class list — one bullet per
+      class as `plainName (×count, status)`. Place the raw finding list as
+      `file:line — P# — title` inside a collapsed
       `<details><summary>Raw findings</summary>…</details>` block so the comment leads
       with the human summary. Honor the gh-body-file rule: write a BOM-free temp file
       and pass `--body-file` to `gh issue comment`/`gh issue comment edit`, or use the
       GitHub MCP `add_issue_comment` tool (body as a structured parameter, no
       `--body` flag).
 
-   e. **Open the report in Chrome.**
+   g. **Open the report in Chrome.**
       ```
       Start-Process chrome -ArgumentList '--new-window', '<report path>'
       ```
@@ -201,6 +223,8 @@ suite (`python -m pytest`) and keep scratch work in ephemeral temp dirs.
 
 - `SKILL.md` — this hub.
 - `workflow/converge.mjs` — the convergence workflow script.
-- `workflow/render_report.py` — builds the closing convergence insights HTML report.
-- `workflow/autoconverge_report_constants/` — named constants for the report builder.
+- `workflow/aggregate_runs.py` — merges every autoconverge journal for a PR into one journal and returns its deduped findings, fix summaries, round count, and final SHA.
+- `workflow/convergence_summary.py` — builds the convergence-summary agent prompt over a PR's merged findings.
+- `workflow/render_report.py` — builds the closing convergence insights HTML report, taking the summary from `--summary-file`.
+- `workflow/autoconverge_report_constants/` — named constants for the report builder and the summary prompt.
 - `reference/` — convergence definition, stop conditions, gotchas, closing report.
