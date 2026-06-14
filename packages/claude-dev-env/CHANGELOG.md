@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.59.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.58.0...claude-dev-env-v1.59.0) (2026-06-14)
+
+
+### Features
+
+* **autoconverge:** handle Copilot out-of-usage quota exhaustion as a gate bypass ([#587](https://github.com/jl-cmd/claude-code-config/issues/587)) ([fd0fe0f](https://github.com/jl-cmd/claude-code-config/commit/fd0fe0f4d1a33582ef00b2c277a951fa3f71c3a2))
+* **autoconverge:** proceed to ready when Copilot is down or out of quota ([#599](https://github.com/jl-cmd/claude-code-config/issues/599)) ([464954a](https://github.com/jl-cmd/claude-code-config/commit/464954ac327dce20774aaaa7648ec7ed02c151aa))
+* **code-rules:** block cross-file duplicate function bodies at Write time ([#586](https://github.com/jl-cmd/claude-code-config/issues/586)) ([56b52cd](https://github.com/jl-cmd/claude-code-config/commit/56b52cd5064abe3892660725cc41e22163755674))
+* **code-rules:** block unannotated pytest builtin fixtures in test files ([#588](https://github.com/jl-cmd/claude-code-config/issues/588)) ([dfda584](https://github.com/jl-cmd/claude-code-config/commit/dfda5849baa799c85c433f23c8784b9d579d1840))
+* **destructive-blocker:** auto-allow ephemeral rm chains and quoted rm mentions ([#581](https://github.com/jl-cmd/claude-code-config/issues/581)) ([fbe883c](https://github.com/jl-cmd/claude-code-config/commit/fbe883ced6034dd4075798cbf4535427a78bf7fc))
+* **hooks:** block bare per-iteration index tokens in .workflow.js templates ([#595](https://github.com/jl-cmd/claude-code-config/issues/595)) ([ca66231](https://github.com/jl-cmd/claude-code-config/commit/ca66231ed248912c8a0735672c6a8b9b05f7d6d3))
+* **hooks:** block dead dataclass fields at Write/Edit time ([#578](https://github.com/jl-cmd/claude-code-config/issues/578)) ([e3b05f2](https://github.com/jl-cmd/claude-code-config/commit/e3b05f2d7eaa3eeb38ec0ffe66565bc16c11fcac))
+* **hooks:** gate named subprocess-budget helpers that omit a reachable timeout ([#576](https://github.com/jl-cmd/claude-code-config/issues/576)) ([eb3ddf3](https://github.com/jl-cmd/claude-code-config/commit/eb3ddf342b011e1eef4d2994baf18fa211579b4b))
+* keep destructive-command literals out of Bash commands in headless runs ([#603](https://github.com/jl-cmd/claude-code-config/issues/603)) ([500b66e](https://github.com/jl-cmd/claude-code-config/commit/500b66eda027524abea7cda2f3f0916841caccdc))
+* **update:** offer a confirmed checkout switch so the fast-forward lands on disk ([#605](https://github.com/jl-cmd/claude-code-config/issues/605)) ([ad51725](https://github.com/jl-cmd/claude-code-config/commit/ad5172587746575c579673a1bc3d92383fe1d191))
+
+
+### Bug Fixes
+
+* **hooks:** block hook prose that overstates its path-shape detector ([#602](https://github.com/jl-cmd/claude-code-config/issues/602)) ([7df3c74](https://github.com/jl-cmd/claude-code-config/commit/7df3c74cd9d3e4cdc8f9266182db8d063e55d610))
+* **hooks:** block magic-number slice bounds in code_rules_magic_values ([#584](https://github.com/jl-cmd/claude-code-config/issues/584)) ([e5533e9](https://github.com/jl-cmd/claude-code-config/commit/e5533e9f2414f14b1fd629d25fc1c5e408796ec0))
+* **install:** bake resolved interpreter abspath on Windows ([#600](https://github.com/jl-cmd/claude-code-config/issues/600)) ([a505f54](https://github.com/jl-cmd/claude-code-config/commit/a505f543fca3f3ac40ffb40202a52f9098148502))
+
+
+### Documentation
+
+* **claude-dev-env:** rename verifier/advisor agents to code-verifier/code-advisor ([#592](https://github.com/jl-cmd/claude-code-config/issues/592)) ([5e7ad5a](https://github.com/jl-cmd/claude-code-config/commit/5e7ad5a05c3349716e88ca3a06d3a2bfeb041fd3))
+* **claude-dev-env:** unpin coder model in two-phase workflow ([#596](https://github.com/jl-cmd/claude-code-config/issues/596)) ([7797b1d](https://github.com/jl-cmd/claude-code-config/commit/7797b1d3a2a5c803b273b6ad4e2b94e979ce2925))
+* **rules:** harden docstring-prose-vs-implementation drift ([#594](https://github.com/jl-cmd/claude-code-config/issues/594)) ([6b97271](https://github.com/jl-cmd/claude-code-config/commit/6b97271dac48ec7f383e75fed2b073efd4f7e0ff))
+
 ## [1.58.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.57.2...claude-dev-env-v1.58.0) (2026-06-13)
 
 
