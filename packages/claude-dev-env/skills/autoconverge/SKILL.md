@@ -157,6 +157,13 @@ shape and the exact convergence definition, and
 run ends short of ready. Hard-won failure lessons live in
 [`reference/gotchas.md`](reference/gotchas.md).
 
+Every agent prompt carries a headless-safety preamble: the run is unattended, so
+agents never inline a destructive-command literal (`rm -rf`, `git reset --hard`,
+`dd`) into a Bash command — the `destructive_command_blocker` hook matches those
+patterns as raw text, and a confirmation prompt no human can answer would stall
+the run. Agents verify destructive-blocker behavior through the committed test
+suite (`python -m pytest`) and keep scratch work in ephemeral temp dirs.
+
 - **Converge:** `parallel([Bugbot lens, code-review lens, bug-audit lens])` on
   the current HEAD, full `origin/main...HEAD` diff. Dedup findings; one
   `clean-coder` applies all fixes in a single commit, pushes, replies to and

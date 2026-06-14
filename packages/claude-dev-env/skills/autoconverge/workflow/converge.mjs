@@ -28,6 +28,24 @@ const CONFIG = {
   bugteamRubric: '$HOME/.claude/skills/bugteam/reference/audit-contract.md',
 }
 
+const HEADLESS_SAFETY_PREAMBLE =
+  'HEADLESS RUN — you run unattended: no human can answer a permission or confirmation prompt, and any such prompt stalls the entire convergence run. The destructive_command_blocker hook matches dangerous patterns (rm -rf, git reset --hard, dd, mkfs, chmod -R, fork bombs) as raw text anywhere in a Bash command, with no quote-awareness — so a destructive string stalls you even when it is only data you never execute. Therefore:\n' +
+  '- Never place a destructive-command literal inside a Bash command — not in echo, not in a heredoc, and not as an argument to python -c, node -e, or awk. To exercise or verify destructive_command_blocker (or any hook) behavior, run the committed test suite, e.g. python -m pytest <test_file>, which passes the command strings as in-language data rather than as a shell command.\n' +
+  '- When a commit message, or a PR / issue / review-comment body, must describe destructive-command behavior, write that text to a file and pass it by path (git commit -F <file>, gh ... --body-file <file>); never inline it with git commit -m or gh ... -b, where the literal lands in the Bash command and stalls you.\n' +
+  '- Keep scratch files and cleanup inside the OS temp dir or $CLAUDE_JOB_DIR/tmp (auto-allowed as ephemeral); never target a repository or worktree path with rm -rf.\n' +
+  '- If a step appears to require a real destructive command, use a non-destructive equivalent or report it as a blocker instead of running it.\n\n'
+
+/**
+ * Spawn a workflow agent with the headless-safety preamble prepended to its
+ * prompt. Every agent in this convergence loop runs unattended, so each one is
+ * routed through here to inherit the same no-confirmation-prompt guidance.
+ * @param {string} prompt the agent's role-specific instruction body
+ * @param {object} options the agent() options (label, phase, schema, agentType, model)
+ * @returns {Promise<*>} the agent() result
+ */
+const convergeAgent = (prompt, options) =>
+  agent(`${HEADLESS_SAFETY_PREAMBLE}${prompt}`, options)
+
 const LENS_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -434,7 +452,7 @@ const prCoordinates = `owner=${input.owner} repo=${input.repo} PR #${input.prNum
  * @returns {Promise<string>} the 40-char HEAD SHA
  */
 async function resolveHead() {
-  const head = await agent(
+  const head = await convergeAgent(
     `Print the current HEAD SHA of ${prCoordinates}. Run exactly:\n` +
       `gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
       `Return the full 40-character SHA in the sha field. Do not modify any files.`,
@@ -452,7 +470,7 @@ async function resolveHead() {
  * @returns {Promise<string>} agent transcript (unused)
  */
 function prefetchMainForRound() {
-  return agent(
+  return convergeAgent(
     `Refresh the base ref for ${prCoordinates} so the parallel review lenses can diff against an up-to-date origin/main without each running its own fetch. Run exactly:\n` +
       `git fetch origin main\n` +
       `Do not edit, commit, push, rebase, or modify any files — fetch only.`,
@@ -470,7 +488,7 @@ function runBugbotLens(head) {
   if (input.bugbotDisabled) {
     return Promise.resolve({ sha: head, clean: true, down: true, findings: [] })
   }
-  return agent(
+  return convergeAgent(
     `You are the Cursor Bugbot lens for ${prCoordinates}, HEAD ${head}. Cursor Bugbot participates this run.\n\n` +
       `Goal: return Bugbot's verdict on HEAD ${head}. Do not edit code, commit, or push. You may post the literal trigger comment described below.\n\n` +
       `Procedure (use the existing scripts; each step below shows the exact flags that script accepts):\n` +
@@ -496,7 +514,7 @@ function runBugbotLens(head) {
  * @returns {Promise<object>} LENS_SCHEMA result
  */
 function runCodeReviewLens(head) {
-  return agent(
+  return convergeAgent(
     `You are the code-review lens for ${prCoordinates}, HEAD ${head}.\n\n` +
       `Review the FULL origin/main...HEAD diff — every file the PR touches. Do NOT delta-scope to recent commits or to a single file. The workflow already fetched origin/main this round, so do NOT run git fetch; run git diff --name-only origin/main...HEAD to enumerate the changed files, then review the complete diff of each.\n\n` +
       `Apply correctness-focused review: real bugs, broken logic, incorrect error handling, data-loss or security risks, contract mismatches, and reuse/simplification problems. Report only defensible findings with concrete file:line evidence.\n\n` +
@@ -512,7 +530,7 @@ function runCodeReviewLens(head) {
  * @returns {Promise<object>} LENS_SCHEMA result
  */
 function runAuditLens(head) {
-  return agent(
+  return convergeAgent(
     `You are the second-opinion bug-audit lens for ${prCoordinates}, HEAD ${head}.\n\n` +
       `Read the audit rubric at ${CONFIG.bugteamRubric} and apply its categories (A through P) against the FULL origin/main...HEAD diff — every file the PR touches, never a delta cut. The workflow already fetched origin/main this round, so do NOT run git fetch; run git diff --name-only origin/main...HEAD first to enumerate scope.\n\n` +
       `This is a clean-room audit: assume nothing from other lenses. Report only findings backed by concrete file:line evidence. Do NOT edit, commit, or push.\n\n` +
@@ -542,7 +560,7 @@ function applyFixes(head, findings, sourceLabel) {
   const threadIds = findings
     .flatMap((each) => collectFindingThreadIds(each))
     .filter((each) => typeof each === 'number')
-  return agent(
+  return convergeAgent(
     `You are fixing ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}.\n\n` +
       `Findings:\n${findingsBlock}\n\n` +
       `Rules:\n` +
@@ -566,7 +584,7 @@ function applyFixes(head, findings, sourceLabel) {
  * @returns {Promise<string>} agent transcript (unused)
  */
 function postCleanAudit(head) {
-  return agent(
+  return convergeAgent(
     `Post a CLEAN bugteam audit review on ${prCoordinates} at commit ${head}. All review lenses are clean on this HEAD.\n\n` +
       `Write an empty findings file: create a temp file containing exactly [] (an empty JSON array). Then run:\n` +
       `python "${CONFIG.prLoopScripts}/post_audit_thread.py" --skill bugteam --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --commit ${head} --state CLEAN --findings-json <temp-file>\n` +
@@ -586,7 +604,7 @@ function postCleanAudit(head) {
  * @returns {Promise<object>} COPILOT_SCHEMA result
  */
 function runCopilotGate(head) {
-  return agent(
+  return convergeAgent(
     `You are the Copilot gate for ${prCoordinates}, HEAD ${head}. Do not edit code, commit, or push.\n\n` +
       `Copilot can run out of usage. When the newest Copilot review on HEAD carries an out-of-usage notice — a body stating Copilot was unable to review because the user who requested the review has reached their quota limit, or any equivalent quota / premium-request / usage-limit exhaustion message rather than an actual code review — Copilot is down for this run: return {sha:${'`'}${head}${'`'}, clean:true, down:true, findings:[]} and stop. Do NOT re-request a review, do NOT keep polling, and do NOT treat the notice as a finding.\n\n` +
       `1. Read any existing Copilot review on HEAD first: python "${CONFIG.sharedScripts}/fetch_copilot_reviews.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}. This lists every Copilot review across all commits newest-first; only count entries whose commit_id starts with ${head}. If the newest such HEAD-scoped Copilot review is the out-of-usage notice above -> return the down result and stop. A notice on any earlier commit is NOT down: ignore it and continue. With no Copilot review on HEAD, skip a duplicate request: python "${CONFIG.sharedScripts}/check_pending_reviews.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --user copilot. Exit 0 means a request is already pending; otherwise request one:\n` +
@@ -610,7 +628,7 @@ function runCopilotGate(head) {
 function checkConvergence(bugbotDown, copilotDown) {
   const bugbotDownFlag = bugbotDown ? ' --bugbot-down' : ''
   const copilotDownFlag = copilotDown ? ' --copilot-down' : ''
-  return agent(
+  return convergeAgent(
     `Run the convergence gate for ${prCoordinates} and report the result. Do not edit code.\n\n` +
       `Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}\n\n` +
       `Exit 0 -> every gate passed: return {pass:true, failures:[]}.\n` +
@@ -635,7 +653,7 @@ function markReady(head, copilotDown) {
   const copilotOptOut = copilotDown
     ? `0. Copilot is down this run, so opt the independent mark-ready blocker hook out of the Copilot gate before step 1. Export the token in the same shell session as step 1 so the hook's convergence re-check inherits it:\n   bash: export CLAUDE_REVIEWS_DISABLED="copilot"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "copilot")\n`
     : ''
-  return agent(
+  return convergeAgent(
     `All convergence gates pass for ${prCoordinates} on HEAD ${head}. Mark the PR ready, then confirm it left draft state. Do not edit code.\n\n` +
       copilotOptOut +
       `1. Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
@@ -657,7 +675,7 @@ function repairConvergence(head, failures) {
   const failureBlock = failures.length
     ? failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
     : 'none reported'
-  return agent(
+  return convergeAgent(
     `The convergence check for ${prCoordinates} failed these gates on HEAD ${head}:\n${failureBlock}\n\n` +
       `Address only the failing gates:\n` +
       `- Unresolved bot review threads: fetch the threads where isResolved is false (gh api graphql, or the github MCP pull_request_read get_review_comments), then keep only the bot-authored ones — a thread whose root comment author login contains "cursor", "claude", or "copilot" (case-insensitive substring). Explicitly skip every human reviewer thread; the convergence gate counts only unresolved bot threads, so touching a human thread is out of scope. For each bot thread, verify the concern against current code; if it still applies, fix it test-first; either way post an inline reply and resolve the thread.\n` +
@@ -701,7 +719,7 @@ function spawnStandardsFollowUp(head, findings, sourceLabel) {
       return `${position + 1}. [${each.severity}] ${each.file}:${each.line} — ${each.title}\n   ${each.detail}${threadNote}`
     })
     .join('\n')
-  return agent(
+  return convergeAgent(
     `A review round on ${prCoordinates}, HEAD ${head}, surfaced ONLY code-standard violations (CODE_RULES/style, no behavioral impact). The convergence run treats the round as passed and defers these to follow-up work, which you now create. Do NOT commit or push to the PR's own branch.\n\n` +
       `Findings:\n${findingsBlock}\n\n` +
       `1. Follow-up fix issue: file a GitHub issue on ${input.owner}/${input.repo} (gh issue create --body-file with a temp file) titled "Deferred code-standard fixes from PR #${input.prNumber}". The body references the PR and lists each finding with its file:line, severity, and detail. The issue carries the fix work; do not open a fix PR.\n` +
