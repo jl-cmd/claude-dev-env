@@ -55,16 +55,23 @@ directory, so the working directory must be the PR worktree before any local
 work begins. Re-resolve it every tick — a rebase or a fresh HEAD can move the
 branch tip.
 
-Read the current working tree's origin and parse its `<owner>/<repo>`,
-accepting the `https://github.com/<owner>/<repo>`,
-`git@github.com:<owner>/<repo>`, and `ssh://git@github.com/<owner>/<repo>`
-forms and dropping any trailing `.git`:
+Classify the working directory against the PR's repo. The preflight script
+reads the current working tree's origin, parses its `<owner>/<repo>` (accepting
+the `https://github.com/<owner>/<repo>`, `git@github.com:<owner>/<repo>`, and
+`ssh://git@github.com/<owner>/<repo>` forms and dropping any trailing `.git`),
+and prints a `PREFLIGHT_OUTCOME=<same_repo|different_repo|re_rooted>` line plus a
+human-readable summary:
 
 ```bash
-git remote get-url origin
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <owner> --repo <repo> --mode classify
 ```
 
-- **Parsed owner/repo matches the PR** (case-insensitive): the `EnterWorktree`
+A `same_repo` or `different_repo` outcome exits 0; a `re_rooted` outcome (no git
+work tree, or no readable origin) exits non-zero. Route on the
+`PREFLIGHT_OUTCOME` value:
+
+- **`PREFLIGHT_OUTCOME=same_repo`** (the working directory is a checkout of the
+  PR's repo): the `EnterWorktree`
   pre-flight checkout is the PR worktree, and the working directory already
   points here, so no `cd` is needed. Bring the branch to the PR head with the
   same deterministic `checkout -B` the cross-repo case uses, after confirming
@@ -75,8 +82,8 @@ git remote get-url origin
   git checkout -B <branch> origin/<branch>
   ```
 
-- **Parsed owner/repo differs** (the session is rooted in another repo — for
-  example, the PR lives in `llm-settings` while the session runs from
+- **`PREFLIGHT_OUTCOME=different_repo`** (the session is rooted in another repo
+  — for example, the PR lives in `llm-settings` while the session runs from
   `claude-code-config`): route the working directory into a checkout of the
   PR's repo. This is routine and automatic — never pause, and never raise it as
   a fork (see [ground-rules.md](ground-rules.md)). `EnterWorktree` is scoped to
@@ -127,6 +134,13 @@ git remote get-url origin
   to the session worktree before Step 8 and remove `<run_temp_dir>` there with
   a Windows-safe recursive remove (per
   `$HOME/.claude/rules/windows-filesystem-safe.md`).
+
+- **`PREFLIGHT_OUTCOME=re_rooted`** (the working directory is not a git work
+  tree, or its origin remote is unreadable — a resumed or background session can
+  re-root to the home directory): the tick cannot locate the PR's repo from
+  here, so neither cwd reuse nor a temp-clone route is safe. Report the printed
+  `ABORT` line as a hard blocker and stop the tick. Recover by starting the
+  session from a checkout of the PR's repo and re-running.
 
 ## Step 2: Branch on `phase`
 
