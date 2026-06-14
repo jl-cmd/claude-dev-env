@@ -215,7 +215,7 @@
   Before spawning any Agent or Task tool invocation, verify context sufficiency. Confirm the
   specific files, directories, or codebase areas involved; the constraints that apply; what
   success looks like; and that the task is unambiguous enough to delegate. When any of those
-  is unknown, investigate first using Read, Glob, or Zoekt MCP for code search — or ask the user.
+  is unknown, investigate first using Read, Glob, or Grep for code search — or ask the user.
 
   After confirming context, use the /prompt-generator skill to produce a structured prompt.
   Feed it the task description and goal, target files and directories, constraints and
@@ -224,7 +224,7 @@
 
   When multiple tool calls are mutually independent, make all calls in a single response.
   Sequence calls only when a later call requires an earlier call's result. Reading three files:
-  call all three Read operations at once. Running independent searches: launch all Zoekt MCP
+  call all three Read operations at once. Running independent searches: launch all Grep
   and Glob calls simultaneously. Use real parameter values only. When uncertain whether calls are
   independent, run them sequentially.
 </agent_workflow>
@@ -355,10 +355,6 @@
 <tool_usage>
   Use dedicated tools for file operations: Read for reading files, Edit for modifying existing
   files, Write for creating new files, and Glob for finding files by pattern.
-
-  For code-content search in Zoekt-indexed trees, use Zoekt MCP tools:
-  mcp__zoekt__search, mcp__zoekt__search_symbols, mcp__zoekt__find_references,
-  mcp__zoekt__file_content.
 
   For file discovery on Windows, use Everything via es.exe.
 
