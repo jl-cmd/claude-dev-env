@@ -105,6 +105,31 @@ const FIX_SCHEMA = {
   required: ['newSha', 'pushed', 'resolvedWithoutCommit', 'summary'],
 }
 
+const CONVERGENCE_SUMMARY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    verdictLine: { type: 'string', description: 'one factual BLUF sentence: converged?, distinct issue-class count, all fixed or deferred. No hedging words.' },
+    issueClasses: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          plainName: { type: 'string', description: 'everyday-language name of the issue class — no tool tokens, rule ids, file paths, line numbers, severity codes (P0/P1/P2), or bot names' },
+          count: { type: 'integer', description: 'number of raw findings grouped into this class' },
+          severity: { type: 'string', enum: ['P0', 'P1', 'P2'], description: 'most severe among the class' },
+          category: { type: 'string', enum: ['bug', 'code-standard'] },
+          status: { type: 'string', enum: ['fixed', 'deferred'] },
+          whatItWas: { type: 'string', description: 'at most 2 sentences, plain language, what the problem was' },
+        },
+        required: ['plainName', 'count', 'severity', 'category', 'status', 'whatItWas'],
+      },
+    },
+  },
+  required: ['verdictLine', 'issueClasses'],
+}
+
 const CONVERGENCE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -765,6 +790,51 @@ function spawnStandardsFollowUp(head, findings, sourceLabel) {
   )
 }
 
+/**
+ * Spawn the convergence-summary agent at finalize so its StructuredOutput is
+ * recorded into the run journal for the closing report to read. The agent groups
+ * the deduped findings into plain-language issue classes, translates reviewer
+ * jargon to everyday English, and writes one BLUF verdict line. The side effect
+ * is the journal record; the return value is discarded by the caller.
+ * @param {Array<object>} distinctFindings deduped findings across every round
+ * @param {Array<string>} fixSummaries per-round fix-lens one-line summaries
+ * @param {number} roundCount the number of converge rounds the run took
+ * @param {string|null} standardsNote deferral note when a round was code-standard-only
+ * @param {string|null} copilotNote outage note when the Copilot gate was bypassed
+ * @returns {Promise<object>} CONVERGENCE_SUMMARY_SCHEMA result (journal side effect)
+ */
+function spawnConvergenceSummary(distinctFindings, fixSummaries, roundCount, standardsNote, copilotNote) {
+  const findingsBlock = distinctFindings.length
+    ? distinctFindings
+        .map((each, position) => {
+          const truncatedDetail = (each.detail || '').slice(0, 400)
+          return `${position + 1}. [${each.severity}/${each.category}] ${each.file}:${each.line} — ${each.title} :: ${truncatedDetail}`
+        })
+        .join('\n')
+    : 'none — every lens was clean on a stable HEAD'
+  const fixSummariesBlock = fixSummaries.length
+    ? fixSummaries.map((each, position) => `${position + 1}. ${each}`).join('\n')
+    : 'none'
+  const standardsBlock = standardsNote ? `\nDeferred code-standard note: ${standardsNote}\n` : ''
+  const copilotBlock = copilotNote ? `\nCopilot gate note: ${copilotNote}\n` : ''
+  return convergeAgent(
+    `You write the plain-language convergence summary for ${prCoordinates}. The autoconverge run reached convergence in ${roundCount} round(s). Use ONLY the findings and fix summaries below; invent nothing not present.\n\n` +
+      `Distinct findings caught across the run (already deduped):\n${findingsBlock}\n\n` +
+      `Per-round fix summaries:\n${fixSummariesBlock}\n${standardsBlock}${copilotBlock}\n` +
+      `Produce a summary an everyday reader understands:\n` +
+      `- GROUP near-duplicate findings into issue CLASSES: the same KIND of problem across different files or lines becomes ONE class with a count. Example: seven "Missing return type annotation on test function" findings become one class with count 7.\n` +
+      `- TRANSLATE reviewer jargon into plain everyday English. Examples: "CodingGuidelineID 1000000 / Repository guideline (Types)" -> "a typing rule the project enforces"; "missing return type annotation / Add -> None" -> "a test did not declare what it returns"; "Banned identifier result" -> "a vague variable name the project bans"; a magic-value finding -> "a raw number or string that should be a named value".\n` +
+      `- plainName must carry NO tool token, rule id, file path, line number, severity code (P0/P1/P2), or bot name.\n` +
+      `- Lead with category 'bug' classes, then 'code-standard'. Cap to about 5 classes. whatItWas is at most 2 sentences. No paragraphs.\n` +
+      `- status is 'fixed' unless the fix summaries or the deferred code-standard note mark the class deferred, in which case status is 'deferred'.\n` +
+      `- Use NO hedging words anywhere (likely, probably, should, appears, seems, may, might, could, possibly). State facts ("caught and fixed").\n` +
+      `- When there are zero findings, return issueClasses: [] and a verdictLine stating the run converged with no issues caught.\n` +
+      `- verdictLine is one factual sentence naming the round count and that all classes are fixed or deferred.\n\n` +
+      `Return strictly the schema.`,
+    { label: 'convergence-summary', phase: 'Finalize', schema: CONVERGENCE_SUMMARY_SCHEMA, agentType: 'general-purpose' },
+  )
+}
+
 let phase = 'CONVERGE'
 let head = null
 let rounds = 0
@@ -774,6 +844,8 @@ let bugbotDown = input.bugbotDisabled || false
 let copilotDown = false
 let copilotNote = null
 let standardsNote = null
+const allRoundFindings = []
+const fixSummaries = []
 
 while (iterations < CONFIG.maxIterations) {
   iterations += 1
@@ -800,6 +872,7 @@ while (iterations < CONFIG.maxIterations) {
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
+      allRoundFindings.push(...findings)
       await spawnStandardsFollowUp(head, findings, 'converge-round')
       standardsNote = `${findings.length} code-standard finding(s) deferred to a follow-up fix issue plus an environment-hardening PR — verify both land`
       const auditResult = await postCleanAudit(head)
@@ -812,7 +885,9 @@ while (iterations < CONFIG.maxIterations) {
     }
     if (findings.length > 0) {
       log(`Round ${rounds}: ${findings.length} finding(s) — applying fixes`)
+      allRoundFindings.push(...findings)
       const fixResult = await applyFixes(head, findings, 'converge-round')
+      if (fixResult?.summary) fixSummaries.push(fixResult.summary)
       const hadThreadBearingFinding = findings.some((each) => collectFindingThreadIds(each).length > 0)
       const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
       if (!fixProgress.progressed) {
@@ -856,6 +931,7 @@ while (iterations < CONFIG.maxIterations) {
     if (copilotOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
+        allRoundFindings.push(...copilotOutcome.findings)
         await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot')
         standardsNote = `${copilotOutcome.findings.length} code-standard finding(s) deferred to a follow-up fix issue plus an environment-hardening PR — verify both land`
         copilotDown = false
@@ -864,7 +940,9 @@ while (iterations < CONFIG.maxIterations) {
         continue
       }
       log(`Copilot raised ${copilotOutcome.findings.length} finding(s) — fixing and re-converging`)
+      allRoundFindings.push(...copilotOutcome.findings)
       const fixResult = await applyFixes(head, copilotOutcome.findings, 'copilot')
+      if (fixResult?.summary) fixSummaries.push(fixResult.summary)
       const hadThreadBearingFinding = copilotOutcome.findings.some((each) => collectFindingThreadIds(each).length > 0)
       const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
       if (!fixProgress.progressed) {
@@ -893,6 +971,7 @@ while (iterations < CONFIG.maxIterations) {
       const readyResult = await markReady(head, copilotDown)
       const readyOutcome = classifyReadyOutcome(readyResult)
       if (readyOutcome.converged) {
+        await spawnConvergenceSummary(dedupeFindings(allRoundFindings), fixSummaries, rounds, standardsNote, copilotNote)
         return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote }
       }
       blocker = readyOutcome.blocker
