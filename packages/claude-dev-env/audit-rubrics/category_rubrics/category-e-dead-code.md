@@ -26,6 +26,7 @@
 | E6 | Removed-but-not-deleted symbol references | Symbols renamed/removed elsewhere with stale import or call sites left behind. |
 | E7 | Test fixtures / helpers defined but never used | Pytest fixtures, test data builders, mock factories with no callers. |
 | E8 | Stub / placeholder code without TODO | `pass`, `...`, `raise NotImplementedError` left without explanation or tracking. |
+| E9 | Constants-module exports with no importer | A module-level `UPPER_SNAKE` constant added to a `*_constants.py` / `config/` module that no module in the repo imports and that the constants file itself never references. The file-global use-count gate exempts a constants module because every name it exports legitimately carries zero in-file references, so a genuinely dead export slips past the write-time gate. Distinguish dead from live by grepping the whole repo for each constant name: a sibling such as `MEDIUM_TERMINAL` imported by a consumer module is live; a `MEDIUM_TEXT` that no `from ... import` line and no in-file reference names is dead (CODE_RULES 9.8). Remove the dead export. |
 
 ---
 
