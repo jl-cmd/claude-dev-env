@@ -66,8 +66,10 @@ human-readable summary:
 python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <owner> --repo <repo> --mode classify
 ```
 
-A `same_repo` or `different_repo` outcome exits 0; a `re_rooted` outcome (no git
-work tree, or no readable origin) exits non-zero. Route on the
+A `same_repo` outcome exits 0 only when the worktree machinery is healthy; a
+`same_repo` outcome whose `git worktree list` probe failed exits non-zero in
+every mode. A `different_repo` outcome exits 0 in classify mode. A `re_rooted`
+outcome (no git work tree, or no readable origin) exits non-zero. Route on the
 `PREFLIGHT_OUTCOME` value:
 
 - **`PREFLIGHT_OUTCOME=same_repo`** (the working directory is a checkout of the
@@ -81,6 +83,10 @@ work tree, or no readable origin) exits non-zero. Route on the
   git fetch origin
   git checkout -B <branch> origin/<branch>
   ```
+  When the script prints an `ABORT:` line whose recovery names `git worktree
+  prune`, the working tree's worktree machinery is broken and the preflight
+  exits non-zero: stop the tick, run that `git worktree prune` in the named
+  directory, and re-run rather than continuing the checkout.
 
 - **`PREFLIGHT_OUTCOME=different_repo`** (the session is rooted in another repo
   — for example, the PR lives in `llm-settings` while the session runs from
