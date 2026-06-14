@@ -28,6 +28,15 @@ leave the exact violation class unguarded. The enforcer entry points route a
 hook ``.py`` target to this single check even though the full code-rules verdict
 stays off hook infrastructure, so a Write or pre-check against a file under the
 ``blocking/`` directory still blocks a copied sibling helper.
+
+``advise_cross_skill_duplicate_helper`` is the non-blocking companion for a
+different layout: a helper copied between two skills' ``scripts`` directories.
+Two skill folders install on their own, so a shared module would break
+independent install and a same-directory block would be a false positive on a
+sanctioned skill-isolation copy. The advisory prints a ``[CODE_RULES advisory]``
+line to stderr naming the source skill and function so a reviewer confirms the
+copy is intentional, and never enters the deny path. It fires only across skill
+folders; within one skill the blocking check above already covers the copy.
 """
 
 import ast
@@ -47,11 +56,16 @@ from code_rules_shared import (  # noqa: E402
 )
 
 from hooks_constants.duplicate_function_body_constants import (  # noqa: E402
+    CROSS_SKILL_ADVISORY_PREFIX,
+    CROSS_SKILL_DUPLICATE_GUIDANCE,
     DUNDER_INIT_FILENAME,
     DUPLICATE_BODY_GUIDANCE,
+    MAX_CROSS_SKILL_ADVISORY_ISSUES,
     MAX_DUPLICATE_BODY_ISSUES,
     MINIMUM_DUPLICATE_BODY_STATEMENTS,
     PYTHON_SOURCE_SUFFIX,
+    SKILL_SCRIPTS_DIRECTORY_NAME,
+    SKILLS_DIRECTORY_NAME,
 )
 
 
@@ -285,3 +299,141 @@ def check_duplicate_function_body_across_files(
         all_changed_lines,
         defer_scope_to_caller,
     )
+
+
+def _skill_scripts_root(file_path: str) -> Path | None:
+    """Return the ``skills/<name>/scripts`` root the written file sits under.
+
+    A skill's helper scripts live at ``<...>/skills/<skill-name>/scripts/<file>``.
+    This walks the written file's parents for a ``scripts`` directory whose own
+    parent's parent is named ``skills``, and returns that ``scripts`` directory.
+
+    Args:
+        file_path: The destination path of the write.
+
+    Returns:
+        The ``skills/<name>/scripts`` directory containing the file, or None when
+        the file is not under a skill's ``scripts`` directory.
+    """
+    written_path = Path(file_path).resolve()
+    for each_ancestor in written_path.parents:
+        if each_ancestor.name != SKILL_SCRIPTS_DIRECTORY_NAME:
+            continue
+        skill_directory = each_ancestor.parent
+        if skill_directory.parent.name == SKILLS_DIRECTORY_NAME:
+            return each_ancestor
+    return None
+
+
+def _other_skill_scripts_directories(scripts_root: Path) -> list[Path]:
+    """List the ``scripts`` directories of every sibling skill folder.
+
+    Args:
+        scripts_root: The ``skills/<name>/scripts`` directory of the written file.
+
+    Returns:
+        The ``scripts`` directory of each sibling skill that has one, excluding
+        the written file's own skill.
+    """
+    own_skill_directory = scripts_root.parent
+    skills_directory = own_skill_directory.parent
+    all_other_scripts_directories: list[Path] = []
+    try:
+        all_skill_entries = sorted(skills_directory.iterdir())
+    except OSError:
+        return []
+    for each_skill_directory in all_skill_entries:
+        if not each_skill_directory.is_dir():
+            continue
+        if each_skill_directory == own_skill_directory:
+            continue
+        candidate_scripts = each_skill_directory / SKILL_SCRIPTS_DIRECTORY_NAME
+        if candidate_scripts.is_dir():
+            all_other_scripts_directories.append(candidate_scripts)
+    return all_other_scripts_directories
+
+
+def _cross_skill_source_signatures(
+    all_other_scripts_directories: list[Path],
+) -> dict[str, list[str]]:
+    """Map each function body signature to the ``skill/module::function`` copies.
+
+    Args:
+        all_other_scripts_directories: The ``scripts`` directory of each sibling skill.
+
+    Returns:
+        A signature-to-source-names mapping naming the skill, module, and function
+        that carry each comparable top-level body.
+    """
+    source_names_by_signature: dict[str, list[str]] = {}
+    for each_scripts_directory in all_other_scripts_directories:
+        skill_name = each_scripts_directory.parent.name
+        try:
+            all_entries = sorted(each_scripts_directory.iterdir())
+        except OSError:
+            continue
+        for each_entry in all_entries:
+            if not _is_comparable_sibling(each_entry, ""):
+                continue
+            try:
+                sibling_source = each_entry.read_text(encoding="utf-8")
+                sibling_tree = ast.parse(sibling_source)
+            except (OSError, UnicodeDecodeError, SyntaxError):
+                continue
+            for each_name, each_signature in _top_level_function_signatures(sibling_tree).items():
+                location = f"{skill_name}/{each_entry.name}::{each_name}"
+                source_names_by_signature.setdefault(each_signature, []).append(location)
+    return source_names_by_signature
+
+
+def advise_cross_skill_duplicate_helper(content: str, file_path: str) -> None:
+    """Emit non-blocking stderr advisories for helpers copied across skill folders.
+
+    A top-level function in the file being written whose normalized body matches a
+    top-level function in another skill's ``scripts`` directory is surfaced as a
+    ``[CODE_RULES advisory]`` line on stderr — never a block. Two skill folders
+    install on their own, so a shared module would break independent install; the
+    copy is a defensible skill-isolation tradeoff the writer confirms rather than
+    a violation the gate denies. Within one skill the blocking duplicate-body gate
+    already covers the copy, so this advisory fires only across skill folders.
+
+    Test files and ``__init__.py`` are skipped on both the writing side and the
+    sibling side, mirroring the blocking gate.
+
+    Args:
+        content: The full post-edit file content being written.
+        file_path: The destination path of the write.
+    """
+    written_name = Path(file_path).name
+    if written_name == DUNDER_INIT_FILENAME:
+        return
+    if is_test_file(file_path):
+        return
+    scripts_root = _skill_scripts_root(file_path)
+    if scripts_root is None:
+        return
+    try:
+        written_tree = ast.parse(content)
+    except SyntaxError:
+        return
+    written_signatures = _top_level_function_signatures(written_tree)
+    if not written_signatures:
+        return
+    all_other_scripts_directories = _other_skill_scripts_directories(scripts_root)
+    if not all_other_scripts_directories:
+        return
+    source_names_by_signature = _cross_skill_source_signatures(all_other_scripts_directories)
+    advisory_count = 0
+    for each_name, each_signature in written_signatures.items():
+        matching_locations = source_names_by_signature.get(each_signature)
+        if not matching_locations:
+            continue
+        print(
+            f"{CROSS_SKILL_ADVISORY_PREFIX} {file_path}: function {each_name!r} "
+            f"duplicates {matching_locations[0]} in another skill — "
+            f"{CROSS_SKILL_DUPLICATE_GUIDANCE}",
+            file=sys.stderr,
+        )
+        advisory_count += 1
+        if advisory_count >= MAX_CROSS_SKILL_ADVISORY_ISSUES:
+            break
