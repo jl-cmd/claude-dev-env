@@ -7,9 +7,13 @@ When an autoconverge run converges (the workflow returns `converged: true`), the
 The report reads two file types written by the workflow during the run:
 
 - **Run journal** — `~/.claude/projects/**/workflows/wf_<runId>.json` — the PR args, round log lines, `workflowProgress` array (one entry per agent step), and the final result.
-- **Agent transcripts** — `~/.claude/projects/**/subagents/workflows/<runId>/agent-<agentId>.jsonl` — one file per agent; each line is a JSON object; the renderer extracts the last `StructuredOutput` tool_use from each file.
+- **Agent transcripts** — `~/.claude/projects/**/subagents/workflows/<runId>/agent-<agentId>.jsonl` — one file per agent; each line is a JSON object; the report reader extracts the last `StructuredOutput` tool_use from each file.
 
-`converge.mjs` is not modified. The report is a pure reader of files the workflow already writes.
+## Convergence summary
+
+In the `Finalize` phase, `converge.mjs` spawns a `convergence-summary` agent whose `StructuredOutput` is a plain-language account of the issue classes the run caught and how each was resolved. The report reader locates the journal `workflowProgress` entry whose `label === 'convergence-summary'`, takes its `agentId`, reads `subagents/workflows/<runId>/agent-<agentId>.jsonl`, and extracts the last `StructuredOutput` tool_use input — that object is the summary.
+
+The convergence summary is an LLM-authored input captured once into the run journal during convergence and read unchanged each time the report is built. The report is deterministic over its recorded inputs: building the report again from the same journal yields the same HTML.
 
 ## Building the report
 

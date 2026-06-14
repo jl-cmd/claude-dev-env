@@ -127,10 +127,14 @@ round records nothing resumable and replays dirty.
    d. **Post one idempotent PR comment.** List the PR's issue comments; if one
       carries the marker `<!-- autoconverge-report -->`, edit it in place, otherwise
       create a new one. The body begins with `<!-- autoconverge-report -->`, then
-      the htmlpreview link, headline counts (findings by severity, rounds, tests
-      added), and the full finding list as `file:line — P# — title` grouped by
-      severity. Honor the gh-body-file rule: write a BOM-free temp file and pass
-      `--body-file` to `gh issue comment`/`gh issue comment edit`, or use the
+      the htmlpreview link, then the plain-language summary that mirrors the report:
+      the one-sentence `verdictLine`, a one-line rollup of the run numbers (distinct
+      findings by severity, rounds, fix commits), and the issue-class list grouped by
+      severity — one bullet per class as `plainName (×count, status)`. Place the raw
+      finding list as `file:line — P# — title` inside a collapsed
+      `<details><summary>Raw findings</summary>…</details>` block so the comment leads
+      with the human summary. Honor the gh-body-file rule: write a BOM-free temp file
+      and pass `--body-file` to `gh issue comment`/`gh issue comment edit`, or use the
       GitHub MCP `add_issue_comment` tool (body as a structured parameter, no
       `--body` flag).
 

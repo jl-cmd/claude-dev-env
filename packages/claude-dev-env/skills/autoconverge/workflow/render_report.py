@@ -1,41 +1,51 @@
-"""Render a convergence insights HTML report from an autoconverge workflow journal."""
+"""Render a plain-language convergence summary HTML report from an autoconverge journal."""
 
 import argparse
 import html
 import json
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
 from autoconverge_report_constants.render_report_constants import (
-    BAR_COLOR_ROUND,
-    BAR_COLOR_SEVERITY_CRITICAL,
-    BAR_COLOR_SEVERITY_MINOR,
-    BAR_COLOR_TESTS,
-    BAR_COLOR_THEME,
-    BAR_FILL_MAX_PERCENT,
+    CATEGORY_BUG,
+    CATEGORY_LABEL_BY_VALUE,
+    CATEGORY_SORT_ORDER,
+    CATEGORY_TAG_CLASS_BY_VALUE,
+    DEFAULT_FINDING_CATEGORY,
+    DEFAULT_FINDING_SEVERITY,
     GITHUB_PR_URL_TEMPLATE,
     HTML_DOCTYPE,
     HTML_HEAD_TEMPLATE,
     HTML_STYLE_BLOCK,
+    ISO_DATE_LENGTH,
+    ISSUE_CLASS_FIELD_CATEGORY,
+    ISSUE_CLASS_FIELD_COUNT,
+    ISSUE_CLASS_FIELD_PLAIN_NAME,
+    ISSUE_CLASS_FIELD_SEVERITY,
+    ISSUE_CLASS_FIELD_STATUS,
+    ISSUE_CLASS_FIELD_WHAT_IT_WAS,
     JOURNAL_SIBLING_SUBAGENTS,
     JOURNAL_SIBLING_WORKFLOWS,
+    LABEL_CONVERGENCE_SUMMARY,
     LABEL_COPILOT_GATE,
     LABEL_PREFIX_FIX,
     LABEL_PREFIX_LENS,
     LABEL_RESOLVE_HEAD,
-    SEVERITY_BADGE_CLASS_BY_LEVEL,
-    SEVERITY_CRITICAL_BUCKET,
-    SEVERITY_CRITICAL_LEVELS,
-    SEVERITY_MINOR_BUCKET,
+    SEVERITY_DOT_CLASS_BY_LEVEL,
+    SEVERITY_ORDER,
+    SEVERITY_SORT_RANK,
+    SHORT_SHA_LENGTH,
+    STATUS_DEFERRED,
+    STATUS_LABEL_BY_VALUE,
+    STATUS_PILL_CLASS_BY_VALUE,
     STRUCTURED_OUTPUT_TOOL_NAME,
-    TEST_DEFINITION_PATTERN,
-    TEST_PATH_GLOBS,
-    THEME_FALLBACK,
-    THEME_PATH_SEGMENT_COUNT,
+    SUMMARY_FIELD_ISSUE_CLASSES,
+    SUMMARY_FIELD_VERDICT_LINE,
+    VERDICT_PILL_LABEL_CONVERGED,
+    VERDICT_PILL_LABEL_DEFERRED,
 )
 
 
@@ -48,6 +58,7 @@ class RawFinding:
     severity: str
     title: str
     detail: str
+    category: str
     round_number: int
     sha: str
 
@@ -59,6 +70,7 @@ class FixRecord:
     new_sha: str
     pushed: bool
     resolved_without_commit: bool
+    summary: str
     round_number: int
     base_sha: str
 
@@ -81,15 +93,10 @@ class RunData:
 
     generated_date: str
     total_finding_count: int
-    critical_finding_count: int
-    minor_finding_count: int
     fix_commit_count: int
-    tests_added_by_round: dict[int, int]
-    finding_count_by_round: dict[int, int]
-    finding_count_by_theme: dict[str, int]
-    all_critical_findings: list[RawFinding]
-    all_minor_findings: list[RawFinding]
+    all_distinct_findings: list[RawFinding]
     fix_by_round: dict[int, FixRecord]
+    convergence_summary: dict | None
 
 
 def _resolve_agents_dir(journal_path: Path) -> Path:
@@ -167,58 +174,6 @@ def _last_structured_input_in_line(
     return latest_input
 
 
-def _derive_theme(file_path: str) -> str:
-    """Return the first two slash-separated segments of a file path.
-
-    Args:
-        file_path: A relative file path string from a finding.
-
-    Returns:
-        A theme string like 'src/exports', the whole path when fewer than two
-        segments exist, or THEME_FALLBACK when the path is empty.
-    """
-    if not file_path:
-        return THEME_FALLBACK
-    segments = file_path.split("/")
-    return "/".join(segments[:THEME_PATH_SEGMENT_COUNT])
-
-
-def _count_tests_added(base_sha: str, new_sha: str, repo_path: Path) -> int:
-    """Count new test definitions introduced between two commits.
-
-    Args:
-        base_sha: The commit sha the round reviewed.
-        new_sha: The sha produced by the fix commit.
-        repo_path: Path to the git repository root.
-
-    Returns:
-        Number of newly added test-function definitions; 0 on any git error.
-    """
-    diff_command = [
-        "git",
-        "-C",
-        str(repo_path),
-        "diff",
-        f"{base_sha}..{new_sha}",
-        "--",
-        *TEST_PATH_GLOBS,
-    ]
-    try:
-        completed = subprocess.run(
-            diff_command,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.SubprocessError, OSError):
-        return 0
-
-    diff_text = completed.stdout
-    test_def_pattern = re.compile(TEST_DEFINITION_PATTERN, re.MULTILINE)
-
-    return len(test_def_pattern.findall(diff_text))
-
-
 def _build_dedup_key(file_path: str, line: int, title: str) -> tuple[str, int, str]:
     """Return a deduplication key for a finding.
 
@@ -247,9 +202,10 @@ def _parse_finding_from_dict(raw: dict, round_number: int, sha: str) -> RawFindi
     return RawFinding(
         file=raw.get("file", ""),
         line=raw.get("line", 0),
-        severity=raw.get("severity", "P2"),
+        severity=raw.get("severity", DEFAULT_FINDING_SEVERITY),
         title=raw.get("title", ""),
         detail=raw.get("detail", ""),
+        category=raw.get("category", DEFAULT_FINDING_CATEGORY),
         round_number=round_number,
         sha=sha,
     )
@@ -272,6 +228,7 @@ def _parse_fix_record(
         new_sha=agent_result.get("newSha", ""),
         pushed=bool(agent_result.get("pushed", False)),
         resolved_without_commit=bool(agent_result.get("resolvedWithoutCommit", False)),
+        summary=agent_result.get("summary", ""),
         round_number=round_number,
         base_sha=base_sha,
     )
@@ -355,19 +312,45 @@ def _dedup_findings(all_findings: list[RawFinding]) -> list[RawFinding]:
     return distinct
 
 
-def load_run_data(journal_path: Path, repo_path: Path) -> RunData:
+def _extract_convergence_summary(
+    progress_entries: list[dict], agents_dir: Path
+) -> dict | None:
+    """Return the convergence-summary StructuredOutput, or None when absent.
+
+    Args:
+        progress_entries: The workflowProgress list from the journal.
+        agents_dir: Directory containing per-agent .jsonl transcript files.
+
+    Returns:
+        The summarizer agent's last StructuredOutput input dict, or None when
+        no convergence-summary entry exists or its transcript is unreadable.
+    """
+    for each_entry in progress_entries:
+        if each_entry.get("label") != LABEL_CONVERGENCE_SUMMARY:
+            continue
+        agent_id = each_entry.get("agentId")
+        if not agent_id:
+            return None
+        transcript_path = agents_dir / f"agent-{agent_id}.jsonl"
+        return _extract_structured_output(transcript_path)
+    return None
+
+
+def load_run_data(journal_path: Path) -> RunData:
     """Parse a workflow journal and its agent transcripts into aggregated metrics.
 
     Args:
         journal_path: Path to the wf_<runId>.json journal file.
-        repo_path: Path to the git repository for counting tests added.
 
     Returns:
-        A RunData instance with all counts and finding lists populated.
+        A RunData instance with finding lists, fix records, and the summary populated.
     """
+    iso_date_length = ISO_DATE_LENGTH
     journal = json.loads(journal_path.read_text(encoding="utf-8"))
     timestamp: str = journal.get("timestamp", "")
-    generated_date = timestamp[:10] if len(timestamp) >= 10 else ""
+    generated_date = (
+        timestamp[:iso_date_length] if len(timestamp) >= iso_date_length else ""
+    )
 
     progress_entries: list[dict] = journal.get("workflowProgress", [])
     agents_dir = _resolve_agents_dir(journal_path)
@@ -376,305 +359,454 @@ def load_run_data(journal_path: Path, repo_path: Path) -> RunData:
         progress_entries, agents_dir
     )
     distinct_findings = _dedup_findings(all_raw_findings)
-
-    all_critical_findings: list[RawFinding] = []
-    all_minor_findings: list[RawFinding] = []
-    finding_count_by_round: dict[int, int] = {}
-    finding_count_by_theme: dict[str, int] = {}
-
-    for each_finding in distinct_findings:
-        severity = each_finding.severity
-        round_number = each_finding.round_number
-        theme = _derive_theme(each_finding.file)
-
-        if severity in SEVERITY_CRITICAL_LEVELS:
-            all_critical_findings.append(each_finding)
-        else:
-            all_minor_findings.append(each_finding)
-
-        finding_count_by_round[round_number] = (
-            finding_count_by_round.get(round_number, 0) + 1
-        )
-        finding_count_by_theme[theme] = finding_count_by_theme.get(theme, 0) + 1
+    convergence_summary = _extract_convergence_summary(progress_entries, agents_dir)
 
     fix_commit_count = sum(1 for each_fix in fix_by_round.values() if each_fix.pushed)
-
-    tests_added_by_round: dict[int, int] = {}
-    for each_round_number, each_fix in fix_by_round.items():
-        if not each_fix.pushed:
-            tests_added_by_round[each_round_number] = 0
-            continue
-        tests_added_by_round[each_round_number] = _count_tests_added(
-            each_fix.base_sha,
-            each_fix.new_sha,
-            repo_path,
-        )
 
     return RunData(
         generated_date=generated_date,
         total_finding_count=len(distinct_findings),
-        critical_finding_count=len(all_critical_findings),
-        minor_finding_count=len(all_minor_findings),
         fix_commit_count=fix_commit_count,
-        tests_added_by_round=tests_added_by_round,
-        finding_count_by_round=finding_count_by_round,
-        finding_count_by_theme=finding_count_by_theme,
-        all_critical_findings=all_critical_findings,
-        all_minor_findings=all_minor_findings,
+        all_distinct_findings=distinct_findings,
         fix_by_round=fix_by_round,
+        convergence_summary=convergence_summary,
     )
 
 
-def _render_bar_row(label: str, bar_value: int, max_value: int, color: str) -> str:
-    """Return an HTML .bar-row element for a single chart bar.
+def _count_findings_by_severity(findings: list[RawFinding]) -> dict[str, int]:
+    """Return a count of findings per severity level.
 
     Args:
-        label: The text label displayed on the left.
-        bar_value: The numeric value for this bar.
-        max_value: The maximum value across all bars in this chart.
-        color: The CSS hex color for the bar fill.
+        findings: The distinct findings to tally.
 
     Returns:
-        An HTML string for one .bar-row.
+        A mapping of severity level to count, including only present levels.
     """
-    fill_width = round(bar_value / max(max_value, 1) * BAR_FILL_MAX_PERCENT, 1)
-    escaped_label = html.escape(label)
-    return (
-        f'<div class="bar-row">'
-        f'<span class="bar-label">{escaped_label}</span>'
-        f'<div class="bar-track">'
-        f'<div class="bar-fill" style="width:{fill_width}%;background:{color};"></div>'
-        f"</div>"
-        f'<span class="bar-value">{bar_value}</span>'
-        f"</div>"
-    )
-
-
-def _render_chart_card(title: str, bar_rows_html: str) -> str:
-    """Return an HTML .chart-card wrapping the given bar rows.
-
-    Args:
-        title: The chart title displayed in uppercase.
-        bar_rows_html: Pre-rendered HTML for all bar rows.
-
-    Returns:
-        An HTML string for one .chart-card.
-    """
-    escaped_title = html.escape(title)
-    return (
-        f'<div class="chart-card">'
-        f'<div class="chart-title">{escaped_title}</div>'
-        f"{bar_rows_html}"
-        f"</div>"
-    )
-
-
-def _render_severity_chart(critical_count: int, minor_count: int) -> str:
-    """Return a severity breakdown chart card.
-
-    Args:
-        critical_count: Total critical (P0/P1) findings.
-        minor_count: Total minor (P2) findings.
-
-    Returns:
-        An HTML .chart-card string.
-    """
-    max_count = max(critical_count, minor_count, 1)
-    rows = _render_bar_row(
-        SEVERITY_CRITICAL_BUCKET, critical_count, max_count, BAR_COLOR_SEVERITY_CRITICAL
-    ) + _render_bar_row(
-        SEVERITY_MINOR_BUCKET, minor_count, max_count, BAR_COLOR_SEVERITY_MINOR
-    )
-    return _render_chart_card("Findings by severity", rows)
-
-
-def _render_round_findings_chart(
-    round_count: int, finding_count_by_round: dict[int, int]
-) -> str:
-    """Return a per-round finding count chart card.
-
-    Args:
-        round_count: Total number of rounds in the run.
-        finding_count_by_round: Mapping of round number to distinct finding count.
-
-    Returns:
-        An HTML .chart-card string.
-    """
-    all_counts = [finding_count_by_round.get(r, 0) for r in range(1, round_count + 1)]
-    max_count = max(all_counts + [1])
-    rows = "".join(
-        _render_bar_row(
-            f"Round {r}", finding_count_by_round.get(r, 0), max_count, BAR_COLOR_ROUND
+    count_by_severity: dict[str, int] = {}
+    for each_finding in findings:
+        count_by_severity[each_finding.severity] = (
+            count_by_severity.get(each_finding.severity, 0) + 1
         )
-        for r in range(1, round_count + 1)
-    )
-    return _render_chart_card("Findings by round", rows)
+    return count_by_severity
 
 
-def _render_tests_chart(round_count: int, tests_added_by_round: dict[int, int]) -> str:
-    """Return a per-round tests-added chart card.
+def _is_summary_structurally_valid(convergence_summary: dict | None) -> bool:
+    """Return whether the summary carries a verdict string and an issue-class list.
 
     Args:
-        round_count: Total number of rounds in the run.
-        tests_added_by_round: Mapping of round number to tests added count.
+        convergence_summary: The parsed convergence summary, or None.
 
     Returns:
-        An HTML .chart-card string.
+        True when verdictLine is a str and issueClasses is a list, else False.
     """
-    all_counts = [tests_added_by_round.get(r, 0) for r in range(1, round_count + 1)]
-    max_count = max(all_counts + [1])
-    rows = "".join(
-        _render_bar_row(
-            f"Round {r}", tests_added_by_round.get(r, 0), max_count, BAR_COLOR_TESTS
-        )
-        for r in range(1, round_count + 1)
-    )
-    return _render_chart_card("Tests added per round", rows)
+    if convergence_summary is None:
+        return False
+    verdict_line = convergence_summary.get(SUMMARY_FIELD_VERDICT_LINE)
+    issue_classes = convergence_summary.get(SUMMARY_FIELD_ISSUE_CLASSES)
+    return isinstance(verdict_line, str) and isinstance(issue_classes, list)
 
 
-def _render_theme_chart(finding_count_by_theme: dict[str, int]) -> str:
-    """Return a findings-by-theme chart card.
+def _render_severity_breakdown(count_by_severity: dict[str, int]) -> str:
+    """Return a comma-joined per-severity breakdown like 'P0 1, P2 14'.
 
     Args:
-        finding_count_by_theme: Mapping of theme string to distinct finding count.
+        count_by_severity: Mapping of severity level to count.
 
     Returns:
-        An HTML .chart-card string.
+        A human-readable breakdown string, or 'none' when no findings exist.
     """
-    sorted_themes = sorted(
-        finding_count_by_theme.items(), key=lambda pair: pair[1], reverse=True
-    )
-    max_count = max((each_count for _, each_count in sorted_themes), default=1)
-    rows = "".join(
-        _render_bar_row(each_theme, each_count, max_count, BAR_COLOR_THEME)
-        for each_theme, each_count in sorted_themes
-    )
-    return _render_chart_card("Findings by theme", rows)
+    parts = [
+        f"{each_level} {count_by_severity[each_level]}"
+        for each_level in SEVERITY_ORDER
+        if count_by_severity.get(each_level, 0)
+    ]
+    return ", ".join(parts) if parts else "none"
 
 
-def _render_fix_block(finding: RawFinding, fix_by_round: dict[int, FixRecord]) -> str:
-    """Return the green fix resolution sub-block for a finding card.
-
-    Args:
-        finding: The raw finding being described.
-        fix_by_round: Mapping of round number to fix record.
-
-    Returns:
-        An HTML .bug-fix string describing how the finding was resolved.
-    """
-    round_number = finding.round_number
-    fix_record = fix_by_round.get(round_number)
-
-    if fix_record is None:
-        return '<div class="bug-fix"><b>Fix:</b> resolved during convergence.</div>'
-
-    if fix_record.resolved_without_commit:
-        return (
-            f'<div class="bug-fix"><b>Fix:</b> already resolved at HEAD in round {round_number}; '
-            f"threads closed.</div>"
-        )
-
-    if not fix_record.new_sha:
-        return '<div class="bug-fix"><b>Fix:</b> resolved during convergence.</div>'
-
-    new_sha_short = fix_record.new_sha[:8]
-    return (
-        f'<div class="bug-fix"><b>Fix:</b> resolved in the round {round_number} fix commit '
-        f"<code>{html.escape(new_sha_short)}</code>.</div>"
-    )
-
-
-def _render_bug_card(
-    index: int,
-    finding: RawFinding,
-    fix_by_round: dict[int, FixRecord],
-    card_class: str,
+def _render_rollup_line(
+    run_data: RunData, round_count: int, final_sha_short: str
 ) -> str:
-    """Return an HTML .bug-card element for one finding.
+    """Return the deterministic Python-owned rollup line of run numbers.
 
     Args:
-        index: 1-based display index for the card.
-        finding: The raw finding to render.
-        fix_by_round: Mapping of round number to fix record for the fix sub-block.
-        card_class: Either 'crit' or 'minor'.
+        run_data: Aggregated metrics from the journal.
+        round_count: Total number of convergence rounds.
+        final_sha_short: First eight characters of the final commit sha.
 
     Returns:
-        An HTML string for one .bug-card.
+        An HTML .rollup string with totals computed entirely in Python.
     """
-    severity = finding.severity
-    badge_class = SEVERITY_BADGE_CLASS_BY_LEVEL.get(severity, "b-p2")
-    escaped_title = html.escape(finding.title)
-    escaped_detail = html.escape(finding.detail)
-    escaped_file = html.escape(finding.file)
-    line_number = finding.line
-    round_number = finding.round_number
-
-    fix_block = _render_fix_block(finding, fix_by_round)
-
+    count_by_severity = _count_findings_by_severity(run_data.all_distinct_findings)
+    breakdown = _render_severity_breakdown(count_by_severity)
     return (
-        f'<div class="bug-card {card_class}">'
-        f'<div class="bug-head">'
-        f'<span class="bug-num">#{index}</span>'
-        f'<span class="bug-title">{escaped_title}</span>'
-        f'<div class="badges">'
-        f'<span class="badge {badge_class}">{html.escape(severity)}</span>'
-        f'<span class="badge b-fixed">Fixed</span>'
-        f"</div>"
-        f"</div>"
-        f'<div class="bug-impact">{escaped_detail}</div>'
-        f"{fix_block}"
-        f'<div class="bug-meta"><code>{escaped_file}</code>:{line_number} · round {round_number}</div>'
+        f'<div class="rollup">'
+        f"<b>{run_data.total_finding_count}</b> distinct findings "
+        f"({html.escape(breakdown)}) across <b>{round_count}</b> rounds, "
+        f"resolved in <b>{run_data.fix_commit_count}</b> fix commits. "
+        f"Final commit <code>{html.escape(final_sha_short)}</code>."
         f"</div>"
     )
 
 
-def _render_stat(label: str, stat_value: int) -> str:
-    """Return an HTML .stat block for the summary stats row.
+def _verdict_has_deferral(convergence_summary: dict) -> bool:
+    """Return whether any issue class is marked deferred.
 
     Args:
-        label: The label displayed below the number.
-        stat_value: The numeric value to display.
+        convergence_summary: A structurally valid convergence summary.
 
     Returns:
-        An HTML string for one .stat element.
+        True when at least one issue class has status 'deferred'.
     """
-    escaped_label = html.escape(label)
+    issue_classes = convergence_summary.get(SUMMARY_FIELD_ISSUE_CLASSES, [])
+    for each_class in issue_classes:
+        if isinstance(each_class, dict) and (
+            each_class.get(ISSUE_CLASS_FIELD_STATUS) == STATUS_DEFERRED
+        ):
+            return True
+    return False
+
+
+def _render_verdict_banner(convergence_summary: dict) -> str:
+    """Return the BLUF verdict banner with a green or amber status pill.
+
+    Args:
+        convergence_summary: A structurally valid convergence summary.
+
+    Returns:
+        An HTML .verdict-banner string.
+    """
+    verdict_line = convergence_summary.get(SUMMARY_FIELD_VERDICT_LINE, "")
+    has_deferral = _verdict_has_deferral(convergence_summary)
+    banner_state = "deferred" if has_deferral else "converged"
+    pill_label = (
+        VERDICT_PILL_LABEL_DEFERRED if has_deferral else VERDICT_PILL_LABEL_CONVERGED
+    )
     return (
-        f'<div class="stat">'
-        f'<div class="stat-value">{stat_value}</div>'
-        f'<div class="stat-label">{escaped_label}</div>'
+        f'<div class="verdict-banner {banner_state}">'
+        f'<div class="verdict-line">{html.escape(verdict_line)}</div>'
+        f'<span class="verdict-pill {banner_state}">{html.escape(pill_label)}</span>'
         f"</div>"
     )
 
 
-def _render_finding_cards(
-    findings: list[RawFinding],
-    fix_by_round: dict[int, FixRecord],
-    card_class: str,
-) -> str:
-    """Return an HTML .bugs container with one .bug-card per finding.
+def _issue_class_sort_key(issue_class: dict) -> tuple[int, int]:
+    """Return a sort key ordering bug classes first, then by severity.
 
     Args:
-        findings: The list of raw findings to render.
-        fix_by_round: Mapping of round number to fix record.
-        card_class: Either 'crit' or 'minor'.
+        issue_class: One issue-class dict from the summary.
 
     Returns:
-        An HTML string for the .bugs container, or empty string when findings is empty.
+        A tuple of (category rank, severity rank); lower sorts first.
+    """
+    category = issue_class.get(ISSUE_CLASS_FIELD_CATEGORY, CATEGORY_BUG)
+    severity = issue_class.get(ISSUE_CLASS_FIELD_SEVERITY, DEFAULT_FINDING_SEVERITY)
+    category_rank = CATEGORY_SORT_ORDER.get(category, len(CATEGORY_SORT_ORDER))
+    severity_rank = SEVERITY_SORT_RANK.get(severity, len(SEVERITY_SORT_RANK))
+    return (category_rank, severity_rank)
+
+
+def _render_issue_class_row(issue_class: dict) -> str:
+    """Return one HTML table row for a single issue class.
+
+    Args:
+        issue_class: One issue-class dict from the summary.
+
+    Returns:
+        An HTML <tr> string with name, count, severity, category, status, detail.
+    """
+    plain_name = str(issue_class.get(ISSUE_CLASS_FIELD_PLAIN_NAME, ""))
+    count = int(issue_class.get(ISSUE_CLASS_FIELD_COUNT, 0))
+    severity = str(issue_class.get(ISSUE_CLASS_FIELD_SEVERITY, DEFAULT_FINDING_SEVERITY))
+    category = str(issue_class.get(ISSUE_CLASS_FIELD_CATEGORY, CATEGORY_BUG))
+    status = str(issue_class.get(ISSUE_CLASS_FIELD_STATUS, ""))
+    what_it_was = str(issue_class.get(ISSUE_CLASS_FIELD_WHAT_IT_WAS, ""))
+
+    dot_class = SEVERITY_DOT_CLASS_BY_LEVEL.get(severity, "dot-p2")
+    category_class = CATEGORY_TAG_CLASS_BY_VALUE.get(category, "cat-bug")
+    category_label = CATEGORY_LABEL_BY_VALUE.get(category, category)
+    status_class = STATUS_PILL_CLASS_BY_VALUE.get(status, "pill-fixed")
+    status_label = STATUS_LABEL_BY_VALUE.get(status, status)
+
+    return (
+        f"<tr>"
+        f'<td class="issue-name">{html.escape(plain_name)}</td>'
+        f'<td><span class="count-badge">&times;{count}</span></td>'
+        f'<td><span class="sev-dot {dot_class}">{html.escape(severity)}</span></td>'
+        f'<td><span class="cat-tag {category_class}">{html.escape(category_label)}</span></td>'
+        f'<td><span class="status-pill {status_class}">{html.escape(status_label)}</span></td>'
+        f'<td class="issue-what">{html.escape(what_it_was)}</td>'
+        f"</tr>"
+    )
+
+
+def _render_issue_class_table(convergence_summary: dict) -> str:
+    """Return the grouped issue-class table, bug rows first then code-standard.
+
+    Args:
+        convergence_summary: A structurally valid convergence summary.
+
+    Returns:
+        An HTML .issue-table string, or an empty-state paragraph when no classes.
+    """
+    issue_classes = [
+        each_class
+        for each_class in convergence_summary.get(SUMMARY_FIELD_ISSUE_CLASSES, [])
+        if isinstance(each_class, dict)
+    ]
+    if not issue_classes:
+        return '<p class="subtitle">No issue classes were caught during the run.</p>'
+
+    sorted_classes = sorted(issue_classes, key=_issue_class_sort_key)
+    rows = "".join(_render_issue_class_row(each_class) for each_class in sorted_classes)
+    return (
+        '<table class="issue-table">'
+        "<thead><tr>"
+        "<th>Issue class</th><th>Count</th><th>Severity</th>"
+        "<th>Category</th><th>Status</th><th>What it was</th>"
+        "</tr></thead>"
+        f"<tbody>{rows}</tbody>"
+        "</table>"
+    )
+
+
+def _pluralize(count: int, singular: str, plural: str) -> str:
+    """Return a 'count word' phrase choosing the singular or plural noun.
+
+    Args:
+        count: The quantity that decides the noun form.
+        singular: The noun to use when count is exactly one.
+        plural: The noun to use for every other count.
+
+    Returns:
+        A phrase like '1 fix commit' or '2 fix commits'.
+    """
+    noun = singular if count == 1 else plural
+    return f"{count} {noun}"
+
+
+def _render_fix_resolution_line(run_data: RunData) -> str:
+    """Return the single fix-resolution line stated once for the whole run.
+
+    Args:
+        run_data: Aggregated metrics from the journal.
+
+    Returns:
+        An HTML .fix-line string describing how findings were resolved.
+    """
+    pushed_phrase = _pluralize(run_data.fix_commit_count, "fix commit", "fix commits")
+    resolved_at_head_count = sum(
+        1
+        for each_fix in run_data.fix_by_round.values()
+        if each_fix.resolved_without_commit
+    )
+    rounds_phrase = _pluralize(resolved_at_head_count, "round was", "rounds were")
+    return (
+        f'<div class="fix-line"><b>Resolution:</b> every finding was addressed before '
+        f"the PR was marked ready &mdash; {pushed_phrase} landed and "
+        f"{rounds_phrase} already clean at HEAD.</div>"
+    )
+
+
+def _appendix_finding_sort_key(finding: RawFinding) -> tuple[int, int, str, int]:
+    """Return a sort key grouping appendix findings by category then severity.
+
+    Args:
+        finding: One distinct finding.
+
+    Returns:
+        A tuple of (category rank, severity rank, file, line).
+    """
+    category_rank = CATEGORY_SORT_ORDER.get(finding.category, len(CATEGORY_SORT_ORDER))
+    severity_rank = SEVERITY_SORT_RANK.get(finding.severity, len(SEVERITY_SORT_RANK))
+    return (category_rank, severity_rank, finding.file, finding.line)
+
+
+def _render_appendix(findings: list[RawFinding]) -> str:
+    """Return a collapsed <details> appendix of raw distinct findings.
+
+    Args:
+        findings: The distinct findings to list, grouped by category then severity.
+
+    Returns:
+        An HTML <details> string listing each finding as 'file:line — P# — title'.
     """
     if not findings:
         return ""
-    cards = "".join(
-        _render_bug_card(each_index + 1, each_finding, fix_by_round, card_class)
-        for each_index, each_finding in enumerate(findings)
+    sorted_findings = sorted(findings, key=_appendix_finding_sort_key)
+    items = "".join(
+        f'<div class="appendix-item">'
+        f"{html.escape(each_finding.file)}:{each_finding.line} &mdash; "
+        f"{html.escape(each_finding.severity)} &mdash; "
+        f"{html.escape(each_finding.title)}"
+        f"</div>"
+        for each_finding in sorted_findings
     )
-    return f'<div class="bugs">{cards}</div>'
+    return (
+        '<details class="appendix">'
+        f"<summary>Raw findings ({len(findings)})</summary>"
+        f'<div class="appendix-body">{items}</div>'
+        "</details>"
+    )
+
+
+def _group_distinct_findings(
+    findings: list[RawFinding],
+) -> dict[tuple[str, str], list[RawFinding]]:
+    """Group distinct findings by (category, severity).
+
+    Args:
+        findings: The distinct findings to group.
+
+    Returns:
+        A mapping of (category, severity) to the findings in that group.
+    """
+    findings_by_group: dict[tuple[str, str], list[RawFinding]] = {}
+    for each_finding in findings:
+        group_key = (each_finding.category, each_finding.severity)
+        findings_by_group.setdefault(group_key, []).append(each_finding)
+    return findings_by_group
+
+
+def _degraded_group_sort_key(group_key: tuple[str, str]) -> tuple[int, int]:
+    """Return a sort key ordering degraded groups by category then severity.
+
+    Args:
+        group_key: A (category, severity) tuple identifying a group.
+
+    Returns:
+        A tuple of (category rank, severity rank); lower sorts first.
+    """
+    category, severity = group_key
+    category_rank = CATEGORY_SORT_ORDER.get(category, len(CATEGORY_SORT_ORDER))
+    severity_rank = SEVERITY_SORT_RANK.get(severity, len(SEVERITY_SORT_RANK))
+    return (category_rank, severity_rank)
+
+
+def _render_degraded_groups(findings: list[RawFinding]) -> str:
+    """Return a grouped distinct-finding list with near-duplicate titles counted.
+
+    Args:
+        findings: The distinct findings to render without an LLM summary.
+
+    Returns:
+        An HTML .group-list string grouped by category then severity.
+    """
+    if not findings:
+        return '<p class="subtitle">No findings were caught during the run.</p>'
+
+    findings_by_group = _group_distinct_findings(findings)
+    sorted_groups = sorted(
+        findings_by_group.items(), key=lambda pair: _degraded_group_sort_key(pair[0])
+    )
+
+    blocks = "".join(
+        _render_degraded_group(each_category, each_severity, each_findings)
+        for (each_category, each_severity), each_findings in sorted_groups
+    )
+    return f'<div class="group-list">{blocks}</div>'
+
+
+def _render_degraded_group(
+    category: str, severity: str, findings: list[RawFinding]
+) -> str:
+    """Return one .group block for a (category, severity) bucket of findings.
+
+    Args:
+        category: The category shared by every finding in this group.
+        severity: The severity shared by every finding in this group.
+        findings: The findings in this group.
+
+    Returns:
+        An HTML .group string with one row per near-duplicate title and a count.
+    """
+    category_label = CATEGORY_LABEL_BY_VALUE.get(category, category)
+    head = f"{html.escape(category_label)} &middot; {html.escape(severity)}"
+    count_by_title = _count_findings_by_title(findings)
+    items = "".join(
+        f'<div class="group-item">{html.escape(each_title)} '
+        f'<span class="count-badge">&times;{each_count}</span></div>'
+        for each_title, each_count in count_by_title.items()
+    )
+    return f'<div class="group"><div class="group-head">{head}</div>{items}</div>'
+
+
+def _count_findings_by_title(findings: list[RawFinding]) -> dict[str, int]:
+    """Return a count of findings per title, preserving first-seen order.
+
+    Args:
+        findings: The findings whose titles to tally.
+
+    Returns:
+        A mapping of title to occurrence count.
+    """
+    count_by_title: dict[str, int] = {}
+    for each_finding in findings:
+        count_by_title[each_finding.title] = (
+            count_by_title.get(each_finding.title, 0) + 1
+        )
+    return count_by_title
+
+
+def _render_summary_body(
+    run_data: RunData, round_count: int, final_sha_short: str
+) -> str:
+    """Return the body for a run that carries a valid convergence summary.
+
+    Args:
+        run_data: Aggregated metrics from the journal.
+        round_count: Total number of convergence rounds.
+        final_sha_short: First eight characters of the final commit sha.
+
+    Returns:
+        An HTML body fragment: verdict banner, rollup, table, fix line, appendix.
+    """
+    convergence_summary = run_data.convergence_summary
+    if convergence_summary is None:
+        return _render_degraded_body(run_data, round_count, final_sha_short)
+
+    verdict_banner = _render_verdict_banner(convergence_summary)
+    rollup_line = _render_rollup_line(run_data, round_count, final_sha_short)
+    issue_table = _render_issue_class_table(convergence_summary)
+    fix_line = _render_fix_resolution_line(run_data)
+    appendix = _render_appendix(run_data.all_distinct_findings)
+    return (
+        f"{verdict_banner}"
+        f"{rollup_line}"
+        f"<h2>What was caught</h2>{issue_table}"
+        f"{fix_line}"
+        f"{appendix}"
+    )
+
+
+def _render_degraded_body(
+    run_data: RunData, round_count: int, final_sha_short: str
+) -> str:
+    """Return the chart-free degraded body for a run with no valid summary.
+
+    Args:
+        run_data: Aggregated metrics from the journal.
+        round_count: Total number of convergence rounds.
+        final_sha_short: First eight characters of the final commit sha.
+
+    Returns:
+        An HTML body fragment: rollup, grouped distinct findings, fix line, appendix.
+    """
+    rollup_line = _render_rollup_line(run_data, round_count, final_sha_short)
+    grouped = _render_degraded_groups(run_data.all_distinct_findings)
+    fix_line = _render_fix_resolution_line(run_data)
+    appendix = _render_appendix(run_data.all_distinct_findings)
+    return (
+        f"{rollup_line}"
+        f"<h2>What was caught</h2>{grouped}"
+        f"{fix_line}"
+        f"{appendix}"
+    )
 
 
 def render_report_html(
     run_data: RunData, pr_metadata: PrMetadata, generated_date: str
 ) -> str:
-    """Render the convergence insights report as an HTML string.
+    """Render the convergence summary report as an HTML string.
 
     Args:
         run_data: Aggregated metrics from the workflow journal and transcripts.
@@ -684,17 +816,12 @@ def render_report_html(
     Returns:
         A complete HTML document string.
     """
+    short_sha_length = SHORT_SHA_LENGTH
     pr_number = pr_metadata.number
     owner = html.escape(pr_metadata.owner)
     repo = html.escape(pr_metadata.repo)
-    final_sha_short = pr_metadata.final_sha[:8]
+    final_sha_short = pr_metadata.final_sha[:short_sha_length]
     round_count = pr_metadata.round_count
-
-    total_findings = run_data.total_finding_count
-    critical_count = run_data.critical_finding_count
-    minor_count = run_data.minor_finding_count
-    fix_commit_count = run_data.fix_commit_count
-    tests_added_total = sum(run_data.tests_added_by_round.values())
 
     head_html = HTML_HEAD_TEMPLATE.format(
         pr_number=pr_number,
@@ -702,111 +829,27 @@ def render_report_html(
     )
 
     subtitle = (
-        f'<p class="subtitle">{owner}/{repo} · {total_findings} findings '
-        f"across {round_count} rounds · {html.escape(generated_date)}</p>"
+        f'<p class="subtitle">{owner}/{repo} &middot; '
+        f"{run_data.total_finding_count} findings across {round_count} rounds "
+        f"&middot; {html.escape(generated_date)}</p>"
     )
 
-    glance_caught = (
-        f'<div class="glance-section"><strong>What was caught:</strong> autoconverge ran '
-        f"{round_count} rounds and surfaced {total_findings} distinct findings — "
-        f"{critical_count} critical, {minor_count} minor.</div>"
-    )
-    glance_resolution = (
-        f'<div class="glance-section"><strong>Resolution:</strong> every finding was fixed '
-        f"before the PR was marked ready; {fix_commit_count} fix commits landed.</div>"
-    )
-    glance_status = (
-        f'<div class="glance-section"><strong>Status:</strong> the run converged on commit '
-        f"{html.escape(final_sha_short)}.</div>"
-    )
-    at_a_glance = (
-        f'<div class="at-a-glance">'
-        f'<div class="glance-title">At a Glance</div>'
-        f'<div class="glance-sections">'
-        f"{glance_caught}{glance_resolution}{glance_status}"
-        f"</div></div>"
-    )
-
-    nav_toc = (
-        '<nav class="nav-toc">'
-        '<a href="#numbers">The numbers</a>'
-        '<a href="#critical">Critical findings</a>'
-        '<a href="#minor">Minor findings</a>'
-        '<a href="#status">Status</a>'
-        "</nav>"
-    )
-
-    stats_row = (
-        '<div class="stats-row">'
-        + _render_stat("Findings", total_findings)
-        + _render_stat("Critical", critical_count)
-        + _render_stat("Minor", minor_count)
-        + _render_stat("Rounds", round_count)
-        + _render_stat("Fix commits", fix_commit_count)
-        + _render_stat("Tests added", tests_added_total)
-        + "</div>"
-    )
-
-    severity_chart = _render_severity_chart(critical_count, minor_count)
-    round_chart = _render_round_findings_chart(
-        round_count, run_data.finding_count_by_round
-    )
-    tests_chart = _render_tests_chart(round_count, run_data.tests_added_by_round)
-    theme_chart = _render_theme_chart(run_data.finding_count_by_theme)
-
-    charts_row_one = f'<div class="charts-row">{severity_chart}{round_chart}</div>'
-    charts_row_two = f'<div class="charts-row">{tests_chart}{theme_chart}</div>'
-
-    numbers_section = (
-        f'<h2 id="numbers">The numbers</h2>{charts_row_one}{charts_row_two}'
-    )
-
-    critical_cards = _render_finding_cards(
-        run_data.all_critical_findings, run_data.fix_by_round, "crit"
-    )
-    critical_intro = '<p class="section-intro">P0 and P1 findings caught and fixed during the run.</p>'
-    critical_section = f'<h2 id="critical">Critical findings</h2>' + (
-        f"{critical_intro}{critical_cards}"
-        if run_data.all_critical_findings
-        else '<p class="section-intro">No critical findings.</p>'
-    )
-
-    minor_intro = (
-        '<p class="section-intro">P2 findings caught and fixed during the run.</p>'
-    )
-    minor_cards = _render_finding_cards(
-        run_data.all_minor_findings, run_data.fix_by_round, "minor"
-    )
-    minor_section = f'<h2 id="minor">Minor findings</h2>{minor_intro}{minor_cards}'
-
-    horizon_tip = (
-        f'<div class="horizon-tip">Final commit <code>{html.escape(final_sha_short)}</code> '
-        f"· {round_count} rounds · {fix_commit_count} fix commits.</div>"
-    )
-    status_section = (
-        f'<h2 id="status">Status</h2>'
-        f'<div class="horizon-card">'
-        f'<div class="horizon-title">Converged</div>'
-        f'<div class="horizon-possible">The run converged and the PR was marked ready.</div>'
-        f"{horizon_tip}"
-        f"</div>"
-    )
+    if _is_summary_structurally_valid(run_data.convergence_summary):
+        body_main = _render_summary_body(run_data, round_count, final_sha_short)
+    else:
+        body_main = _render_degraded_body(run_data, round_count, final_sha_short)
 
     footer = (
-        f"<footer>{owner}/{repo} · PR #{pr_number} · "
+        f"<footer>{owner}/{repo} &middot; PR #{pr_number} &middot; "
+        f"{run_data.total_finding_count} findings &middot; {round_count} rounds "
+        f"&middot; {run_data.fix_commit_count} fix commits &middot; "
         f"generated {html.escape(generated_date)} from the autoconverge run journal.</footer>"
     )
 
     body_content = (
-        f"<h1>PR #{pr_number} Convergence Insights</h1>"
+        f"<h1>PR #{pr_number} Convergence Summary</h1>"
         f"{subtitle}"
-        f"{at_a_glance}"
-        f"{nav_toc}"
-        f"{stats_row}"
-        f"{numbers_section}"
-        f"{critical_section}"
-        f"{minor_section}"
-        f"{status_section}"
+        f"{body_main}"
         f"{footer}"
     )
 
@@ -843,7 +886,7 @@ def _parse_pr_arg(pr_arg: str, err_stream: TextIO) -> tuple[str, str, int] | Non
 
 
 def main(out_stream: TextIO = sys.stdout, err_stream: TextIO = sys.stderr) -> int:
-    """Parse CLI arguments, load run data, render HTML, write the output file, and emit the path.
+    """Parse CLI arguments, load run data, render HTML, write the file, emit the path.
 
     Args:
         out_stream: Stream to write the output file path to on success.
@@ -853,7 +896,7 @@ def main(out_stream: TextIO = sys.stdout, err_stream: TextIO = sys.stderr) -> in
         Exit code (0 on success, 1 on argument error).
     """
     argument_parser = argparse.ArgumentParser(
-        description="Render autoconverge convergence insights HTML."
+        description="Render autoconverge convergence summary HTML."
     )
     argument_parser.add_argument(
         "--journal", required=True, help="Path to wf_<runId>.json"
@@ -872,7 +915,6 @@ def main(out_stream: TextIO = sys.stdout, err_stream: TextIO = sys.stderr) -> in
 
     journal_path = Path(parsed_args.journal).resolve()
     out_path = Path(parsed_args.out)
-    repo_path = Path(parsed_args.repo).resolve()
 
     parsed_pr = _parse_pr_arg(parsed_args.pr, err_stream)
     if parsed_pr is None:
@@ -890,7 +932,7 @@ def main(out_stream: TextIO = sys.stdout, err_stream: TextIO = sys.stderr) -> in
         round_count=parsed_args.rounds,
     )
 
-    run_data = load_run_data(journal_path, repo_path)
+    run_data = load_run_data(journal_path)
     html_content = render_report_html(run_data, pr_metadata, run_data.generated_date)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
