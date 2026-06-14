@@ -14,6 +14,7 @@ import sys
 from pr_loop_shared_constants.reviews_disabled_constants import (
     CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
+    CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
     CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR,
     EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV,
@@ -23,11 +24,13 @@ from pr_loop_shared_constants.reviews_disabled_constants import (
 __all__ = [
     "CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN",
     "CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN",
+    "CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN",
     "CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME",
     "CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR",
     "EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV",
     "is_bugbot_disabled_via_env",
     "is_bugteam_disabled_via_env",
+    "is_copilot_disabled_via_env",
     "main",
 ]
 
@@ -71,6 +74,15 @@ def is_bugbot_disabled_via_env() -> bool:
         True when the env var lists the ``bugbot`` token.
     """
     return _is_reviewer_disabled_via_env(CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN)
+
+
+def is_copilot_disabled_via_env() -> bool:
+    """Check whether CLAUDE_REVIEWS_DISABLED opts GitHub Copilot out.
+
+    Returns:
+        True when the env var lists the ``copilot`` token.
+    """
+    return _is_reviewer_disabled_via_env(CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN)
 
 
 def parse_arguments(all_argv: list[str]) -> argparse.Namespace:

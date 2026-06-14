@@ -245,6 +245,34 @@ def should_resolve_bugbot_down_false_when_env_disables_only_bugteam(
     assert check_convergence._resolve_bugbot_down(False) is False
 
 
+def should_resolve_copilot_down_true_when_flag_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert check_convergence._resolve_copilot_down(True) is True
+
+
+def should_resolve_copilot_down_true_when_env_disables_copilot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "copilot")
+    assert check_convergence._resolve_copilot_down(False) is True
+
+
+def should_resolve_copilot_down_false_when_flag_unset_and_env_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert check_convergence._resolve_copilot_down(False) is False
+
+
+def should_resolve_copilot_down_false_when_env_disables_only_bugbot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    assert check_convergence._resolve_copilot_down(False) is False
+
+
 def should_bypass_bugbot_gates_when_bugbot_down_is_true(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -324,7 +352,7 @@ def should_bypass_bugbot_gates_when_bugbot_down_is_true(
     )
 
     exit_code = check_convergence.check_all(
-        owner="o", repo="r", number=1, bugbot_down=True
+        owner="o", repo="r", number=1, is_bugbot_down=True, is_copilot_down=False
     )
     captured_stdout = capsys.readouterr().out
 
@@ -332,6 +360,122 @@ def should_bypass_bugbot_gates_when_bugbot_down_is_true(
     assert "_check_bugbot_not_dirty" not in all_invocation_names
     assert "bypassed (bugbot_down)" in captured_stdout
     assert exit_code == 0
+
+
+def should_bypass_copilot_gates_when_copilot_down_is_true(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    all_invocation_names: list[str] = []
+
+    def stub_get_pr_head_sha(*, owner: str, repo: str, number: int) -> str:
+        return CURRENT_HEAD_SHA
+
+    def stub_check_bugbot(*, owner: str, repo: str, sha: str) -> tuple[bool, str]:
+        return True, "stub passing"
+
+    def stub_check_bugbot_not_dirty(
+        *, owner: str, repo: str, number: int, head_sha: str
+    ) -> tuple[bool, str]:
+        return True, "stub passing"
+
+    def stub_check_bugteam_clean(
+        *, owner: str, repo: str, number: int, head_sha: str
+    ) -> tuple[bool, str]:
+        return True, "stub passing"
+
+    def stub_check_bot_review_should_not_be_called(
+        *,
+        owner: str,
+        repo: str,
+        number: int,
+        head_sha: str,
+        login_substring: str,
+        clean_states: tuple[str, ...],
+        dirty_states: tuple[str, ...],
+        label: str,
+    ) -> tuple[bool, str]:
+        all_invocation_names.append("_check_bot_review")
+        raise AssertionError(
+            "_check_bot_review must not be invoked when copilot_down=True"
+        )
+
+    def stub_count_unresolved_bot_threads(
+        *, owner: str, repo: str, number: int
+    ) -> tuple[bool, str]:
+        return True, "stub passing"
+
+    def stub_get_mergeable(
+        *, owner: str, repo: str, number: int
+    ) -> tuple[bool, str]:
+        return True, "stub passing"
+
+    def stub_check_no_pending_reviews_should_not_be_called(
+        *, owner: str, repo: str, number: int
+    ) -> tuple[bool, str]:
+        all_invocation_names.append("_check_no_pending_reviews")
+        raise AssertionError(
+            "_check_no_pending_reviews must not be invoked when copilot_down=True"
+        )
+
+    monkeypatch.setattr(check_convergence, "_get_pr_head_sha", stub_get_pr_head_sha)
+    monkeypatch.setattr(check_convergence, "_check_bugbot", stub_check_bugbot)
+    monkeypatch.setattr(
+        check_convergence, "_check_bugbot_not_dirty", stub_check_bugbot_not_dirty
+    )
+    monkeypatch.setattr(check_convergence, "_check_bugteam_clean", stub_check_bugteam_clean)
+    monkeypatch.setattr(
+        check_convergence,
+        "_check_bot_review",
+        stub_check_bot_review_should_not_be_called,
+    )
+    monkeypatch.setattr(
+        check_convergence, "_count_unresolved_bot_threads", stub_count_unresolved_bot_threads
+    )
+    monkeypatch.setattr(check_convergence, "_get_mergeable", stub_get_mergeable)
+    monkeypatch.setattr(
+        check_convergence,
+        "_check_no_pending_reviews",
+        stub_check_no_pending_reviews_should_not_be_called,
+    )
+
+    exit_code = check_convergence.check_all(
+        owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=True
+    )
+    captured_stdout = capsys.readouterr().out
+
+    assert "_check_bot_review" not in all_invocation_names
+    assert "_check_no_pending_reviews" not in all_invocation_names
+    assert "bypassed (copilot_down)" in captured_stdout
+    assert exit_code == 0
+
+
+def should_accept_copilot_down_flag_in_parsed_arguments() -> None:
+    arguments = check_convergence.parse_arguments(
+        ["--owner", "o", "--repo", "r", "--pr-number", "1", "--copilot-down"]
+    )
+    assert arguments.copilot_down is True
+
+
+def should_return_zero_from_print_conditions_when_every_condition_passes(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = check_convergence._print_conditions(
+        [("gate one", (True, "ok")), ("gate two", (True, "ok"))]
+    )
+    captured_stdout = capsys.readouterr().out
+    assert exit_code == 0
+    assert "All pre-conditions met" in captured_stdout
+
+
+def should_return_one_from_print_conditions_when_any_condition_fails(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = check_convergence._print_conditions(
+        [("gate one", (True, "ok")), ("gate two", (False, "nope"))]
+    )
+    captured_stdout = capsys.readouterr().out
+    assert exit_code == 1
+    assert "One or more pre-conditions not met" in captured_stdout
 
 
 def should_propagate_systemexit_from_get_pr_head_sha(
@@ -347,6 +491,33 @@ def should_propagate_systemexit_from_get_pr_head_sha(
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        check_convergence.check_all(owner="o", repo="r", number=1, bugbot_down=False)
+        check_convergence.check_all(
+            owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
+        )
 
     assert exc_info.value.code == check_convergence.EXIT_CODE_GH_ERROR
+
+
+def should_derive_copilot_down_from_env_when_main_omits_the_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "copilot")
+    captured_copilot_down: list[bool] = []
+
+    def stub_check_all(
+        *,
+        owner: str,
+        repo: str,
+        number: int,
+        is_bugbot_down: bool,
+        is_copilot_down: bool,
+    ) -> int:
+        captured_copilot_down.append(is_copilot_down)
+        return 0
+
+    monkeypatch.setattr(check_convergence, "check_all", stub_check_all)
+    exit_code = check_convergence.main(
+        ["--owner", "o", "--repo", "r", "--pr-number", "1"]
+    )
+    assert exit_code == 0
+    assert captured_copilot_down == [True]

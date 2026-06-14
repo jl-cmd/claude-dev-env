@@ -66,7 +66,7 @@ own. The workflow runs in the background and notifies this session on
 completion. Watch live progress with `/workflows`.
 
 The workflow returns
-`{ converged, rounds, finalSha, blocker, standardsNote }`.
+`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote }`.
 
 ## Budget-aware round boundaries
 
@@ -146,6 +146,7 @@ round records nothing resumable and replays dirty.
    Final commit: <finalSha>
    Blocker: <blocker>        # only when blocked
    Standards: <standardsNote> # only when a round deferred code-standard findings
+   Copilot: <copilotNote>     # only when Copilot was down or out of quota
    ```
 
 ## What the workflow does each round
@@ -168,9 +169,10 @@ run ends short of ready. Hard-won failure lessons live in
   any bot threads with a deferral note, and reports the deferral in
   `standardsNote`.
 - **Copilot gate:** request a Copilot review, poll up to three times; findings
-  route back into Converge, a no-show after the cap is a blocker. When Copilot is
-  out of usage — it posts an out-of-usage notice (the requester hit their quota)
-  on the HEAD rather than a review — the gate passes and the run moves on.
+  route back into Converge. When Copilot is down or out of quota — it posts an
+  out-of-usage notice (the requester hit their quota) on the HEAD, or surfaces no
+  review at all after the cap — the gate logs a notice and the run marks the PR
+  ready with the Copilot gate bypassed. `copilotNote` records the bypass.
 - **Convergence check:** `check_convergence.py` is the authoritative gate; on a
   full pass the workflow marks `draft=false`.
 

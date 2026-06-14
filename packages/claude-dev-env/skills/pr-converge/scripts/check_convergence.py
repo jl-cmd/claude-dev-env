@@ -2,11 +2,17 @@
 
 Usage:
   python scripts/check_convergence.py --owner <O> --repo <R> --pr-number <N>
-                                      [--bugbot-down]
+                                      [--bugbot-down] [--copilot-down]
 
 The bugbot check-run gate is bypassed when either ``--bugbot-down`` is
 passed OR the ``CLAUDE_REVIEWS_DISABLED`` environment variable lists the
 ``bugbot`` token, so a Bugbot opt-out closes the gate without the flag.
+
+The Copilot review gate and the pending-requested-reviews gate are bypassed
+when either ``--copilot-down`` is passed OR the ``CLAUDE_REVIEWS_DISABLED``
+environment variable lists the ``copilot`` token, so a Copilot outage or
+quota exhaustion closes the broader convergence gate on the remaining
+signals without the flag.
 
 Exit codes:
   0 — all pre-conditions met
@@ -58,7 +64,10 @@ _shared_pr_loop_scripts_dir = (
 if str(_shared_pr_loop_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_shared_pr_loop_scripts_dir))
 
-from reviews_disabled import is_bugbot_disabled_via_env
+from reviews_disabled import (
+    is_bugbot_disabled_via_env,
+    is_copilot_disabled_via_env,
+)
 
 
 def _is_bugteam_review(review_body: str) -> bool:
@@ -489,14 +498,141 @@ def _check_no_pending_reviews(
     return True, "no pending reviewers"
 
 
-def check_all(*, owner: str, repo: str, number: int, bugbot_down: bool) -> int:
+def _bugbot_conditions(
+    *, owner: str, repo: str, number: int, head_sha: str, is_bugbot_down: bool
+) -> list[tuple[str, tuple[bool, str]]]:
+    """Build the Bugbot gate conditions, bypassed when Bugbot is down.
+
+    Args:
+        owner: GitHub repository owner login.
+        repo: GitHub repository name.
+        number: Pull request number to inspect.
+        head_sha: Current PR HEAD SHA the gates evaluate against.
+        is_bugbot_down: When True, emit a single bypassed check-run
+            condition and skip the review-body content gate entirely.
+
+    Returns:
+        The bugbot check-run condition, plus the review-body content
+        condition when the check-run gate is present and passing.
+    """
+    if is_bugbot_down:
+        return [("bugbot_clean_at == current_head", (True, "bypassed (bugbot_down)"))]
+    conditions: list[tuple[str, tuple[bool, str]]] = [
+        (
+            "bugbot_clean_at == current_head",
+            _check_bugbot(owner=owner, repo=repo, sha=head_sha),
+        )
+    ]
+    if conditions[-1][1][0]:
+        conditions.append(
+            (
+                "bugbot review body clean",
+                _check_bugbot_not_dirty(
+                    owner=owner, repo=repo, number=number, head_sha=head_sha
+                ),
+            )
+        )
+    return conditions
+
+
+def _copilot_review_condition(
+    *, owner: str, repo: str, number: int, head_sha: str, is_copilot_down: bool
+) -> tuple[str, tuple[bool, str]]:
+    """Build the Copilot review gate condition, bypassed when Copilot is down.
+
+    Args:
+        owner: GitHub repository owner login.
+        repo: GitHub repository name.
+        number: Pull request number to inspect.
+        head_sha: Current PR HEAD SHA the gate evaluates against.
+        is_copilot_down: When True, return a bypassed condition rather than
+            demanding a Copilot review that an outage or quota exhaustion
+            keeps from landing.
+
+    Returns:
+        The Copilot review gate condition for the current HEAD.
+    """
+    if is_copilot_down:
+        return ("copilot_clean_at == current_head", (True, "bypassed (copilot_down)"))
+    return (
+        "copilot_clean_at == current_head",
+        _check_bot_review(
+            owner=owner,
+            repo=repo,
+            number=number,
+            head_sha=head_sha,
+            login_substring=COPILOT_LOGIN_FILTER_SUBSTRING,
+            clean_states=ALL_COPILOT_CLEAN_REVIEW_STATES,
+            dirty_states=ALL_COPILOT_DIRTY_REVIEW_STATES,
+            label="copilot",
+        ),
+    )
+
+
+def _pending_reviews_condition(
+    *, owner: str, repo: str, number: int, is_copilot_down: bool
+) -> tuple[str, tuple[bool, str]]:
+    """Build the pending-requested-reviews condition, bypassed when Copilot is down.
+
+    Args:
+        owner: GitHub repository owner login.
+        repo: GitHub repository name.
+        number: Pull request number to inspect.
+        is_copilot_down: When True, return a bypassed condition so a Copilot
+            review request that will never land does not strand the gate.
+
+    Returns:
+        The pending-requested-reviews condition, which the gate checks for a
+        still-pending Copilot reviewer.
+    """
+    if is_copilot_down:
+        return ("no pending requested reviews", (True, "bypassed (copilot_down)"))
+    return (
+        "no pending requested reviews",
+        _check_no_pending_reviews(owner=owner, repo=repo, number=number),
+    )
+
+
+def _print_conditions(all_conditions: list[tuple[str, tuple[bool, str]]]) -> int:
+    """Print one PASS/FAIL line per condition and return the aggregate exit code.
+
+    Args:
+        all_conditions: Ordered (label, (passed, detail)) gate results.
+
+    Returns:
+        ``0`` when every condition passed, ``1`` when at least one failed.
+    """
+    is_all_passed = True
+    for each_index, (each_label, (each_passed, each_detail)) in enumerate(
+        all_conditions, start=1
+    ):
+        status = "PASS" if each_passed else "FAIL"
+        print(f"{each_index}. {each_label}: {status} — {each_detail}")
+        if not each_passed:
+            is_all_passed = False
+    print()
+    if is_all_passed:
+        print("All pre-conditions met — PR is ready to mark ready.")
+    else:
+        print("One or more pre-conditions not met — do not mark ready.")
+    return 0 if is_all_passed else 1
+
+
+def check_all(
+    *,
+    owner: str,
+    repo: str,
+    number: int,
+    is_bugbot_down: bool,
+    is_copilot_down: bool,
+) -> int:
     """Run every convergence gate and print one PASS/FAIL line per condition.
 
     Args:
         owner: GitHub repository owner login.
         repo: GitHub repository name.
         number: Pull request number to inspect.
-        bugbot_down: When True, bypass both the Cursor Bugbot check-run
+        is_bugbot_down: When True, bypass both the Cursor Bugbot check-run
             presence gate and the bugbot review-body content gate. The
             check-run gate appears in the condition list with a
             ``bypassed (bugbot_down)`` note; the review-body gate is
@@ -504,6 +640,13 @@ def check_all(*, owner: str, repo: str, number: int, bugbot_down: bool) -> int:
             declared Cursor Bugbot unreachable on the current HEAD so the
             broader convergence gate can still close on the remaining
             signals.
+        is_copilot_down: When True, bypass both the Copilot review gate and
+            the pending-requested-reviews gate, each shown with a
+            ``bypassed (copilot_down)`` note. Callers pass True when Copilot
+            is down or out of quota on the current HEAD so the broader
+            convergence gate can still close on the remaining signals; the
+            bypassed pending gate keeps a Copilot review request that will
+            never land from stranding the gate.
 
     Returns:
         ``0`` when every gate reports PASS, ``1`` when at least one gate
@@ -522,29 +665,15 @@ def check_all(*, owner: str, repo: str, number: int, bugbot_down: bool) -> int:
     print(f"HEAD: {head_sha[:7]}\n")
 
     conditions: list[tuple[str, tuple[bool, str]]] = []
-
-    if bugbot_down:
-        conditions.append(
-            (
-                "bugbot_clean_at == current_head",
-                (True, "bypassed (bugbot_down)"),
-            )
+    conditions.extend(
+        _bugbot_conditions(
+            owner=owner,
+            repo=repo,
+            number=number,
+            head_sha=head_sha,
+            is_bugbot_down=is_bugbot_down,
         )
-    else:
-        conditions.append(
-            (
-                "bugbot_clean_at == current_head",
-                _check_bugbot(owner=owner, repo=repo, sha=head_sha),
-            )
-        )
-        if conditions[-1][1][0]:
-            conditions.append(
-                (
-                    "bugbot review body clean",
-                    _check_bugbot_not_dirty(owner=owner, repo=repo, number=number, head_sha=head_sha),
-                )
-            )
-
+    )
     conditions.append(
         (
             "bugteam_clean_at == current_head",
@@ -553,54 +682,30 @@ def check_all(*, owner: str, repo: str, number: int, bugbot_down: bool) -> int:
             ),
         )
     )
-
     conditions.append(
-        (
-            "copilot_clean_at == current_head",
-            _check_bot_review(
-                owner=owner,
-                repo=repo,
-                number=number,
-                head_sha=head_sha,
-                login_substring=COPILOT_LOGIN_FILTER_SUBSTRING,
-                clean_states=ALL_COPILOT_CLEAN_REVIEW_STATES,
-                dirty_states=ALL_COPILOT_DIRTY_REVIEW_STATES,
-                label="copilot",
-            ),
+        _copilot_review_condition(
+            owner=owner,
+            repo=repo,
+            number=number,
+            head_sha=head_sha,
+            is_copilot_down=is_copilot_down,
         )
     )
-
     conditions.append(
         (
             "zero unresolved bot threads",
             _count_unresolved_bot_threads(owner=owner, repo=repo, number=number),
         )
     )
-
     conditions.append(
         ("PR is mergeable", _get_mergeable(owner=owner, repo=repo, number=number))
     )
-
     conditions.append(
-        (
-            "no pending requested reviews",
-            _check_no_pending_reviews(owner=owner, repo=repo, number=number),
+        _pending_reviews_condition(
+            owner=owner, repo=repo, number=number, is_copilot_down=is_copilot_down
         )
     )
-
-    is_all_passed = True
-    for each_index, (each_label, (each_passed, each_detail)) in enumerate(conditions, start=1):
-        status = "PASS" if each_passed else "FAIL"
-        print(f"{each_index}. {each_label}: {status} — {each_detail}")
-        if not each_passed:
-            is_all_passed = False
-
-    print()
-    if is_all_passed:
-        print("All pre-conditions met — PR is ready to mark ready.")
-    else:
-        print("One or more pre-conditions not met — do not mark ready.")
-    return 0 if is_all_passed else 1
+    return _print_conditions(conditions)
 
 
 def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
@@ -611,10 +716,10 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
             ``sys.argv[1:]``.
 
     Returns:
-        Namespace exposing ``owner``, ``repo``, ``pr_number``, and
-        ``bugbot_down`` attributes. ``bugbot_down`` defaults to False so
-        the unmodified hook contract (``--owner X --repo Y --pr-number N``)
-        still picks up the full gate set.
+        Namespace exposing ``owner``, ``repo``, ``pr_number``,
+        ``bugbot_down``, and ``copilot_down`` attributes. ``bugbot_down``
+        and ``copilot_down`` default to False so the base hook contract
+        (``--owner X --repo Y --pr-number N``) picks up the full gate set.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--owner", required=True, help="GitHub repository owner")
@@ -628,6 +733,14 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
         help=(
             "Bypass the bugbot check-run gate (gate 1) when the lead has "
             "declared Cursor Bugbot unreachable on the current HEAD."
+        ),
+    )
+    parser.add_argument(
+        "--copilot-down",
+        action="store_true",
+        help=(
+            "Bypass the Copilot review gate and the pending-requested-reviews "
+            "gate when Copilot is down or out of quota on the current HEAD."
         ),
     )
     return parser.parse_args(all_argv)
@@ -647,6 +760,23 @@ def _resolve_bugbot_down(bugbot_down_flag: bool) -> bool:
     return bugbot_down_flag or is_bugbot_disabled_via_env()
 
 
+def _resolve_copilot_down(is_copilot_down_flag: bool) -> bool:
+    """Combine the explicit flag with the CLAUDE_REVIEWS_DISABLED env opt-out.
+
+    Args:
+        is_copilot_down_flag: Value of the ``--copilot-down`` CLI flag.
+
+    Returns:
+        True when the flag is set OR ``CLAUDE_REVIEWS_DISABLED`` lists the
+        ``copilot`` token, so a Copilot outage signalled through the env var
+        bypasses the Copilot gates even when the caller omits the flag. The
+        mark-ready blocker hook re-runs this script without the flag, so the
+        env token is the only channel a genuine Copilot outage has to pass
+        that independent gate.
+    """
+    return is_copilot_down_flag or is_copilot_disabled_via_env()
+
+
 def main(all_arguments: list[str]) -> int:
     """Run the script end-to-end against parsed CLI arguments.
 
@@ -661,7 +791,8 @@ def main(all_arguments: list[str]) -> int:
         owner=arguments.owner,
         repo=arguments.repo,
         number=getattr(arguments, "pr_number"),
-        bugbot_down=_resolve_bugbot_down(arguments.bugbot_down),
+        is_bugbot_down=_resolve_bugbot_down(arguments.bugbot_down),
+        is_copilot_down=_resolve_copilot_down(arguments.copilot_down),
     )
 
 

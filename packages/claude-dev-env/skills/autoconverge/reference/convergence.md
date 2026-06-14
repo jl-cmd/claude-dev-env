@@ -42,7 +42,9 @@ tracks CONVERGE passes only and is never the cap.
   to three times, 360 seconds apart.
 - Copilot findings → fix them and return to CONVERGE on the new HEAD.
 - Copilot clean or approved → move to the convergence check.
-- No review after three polls → blocker.
+- Copilot down or out of quota (an out-of-usage notice, or no review after three
+  polls) → log a notice and move to the convergence check with the Copilot gate
+  bypassed.
 
 **Convergence check**:
 
@@ -67,13 +69,15 @@ the current HEAD:
 2. The Bugbot review body on HEAD reports no findings (checked when a Bugbot
    review is present).
 3. A CLEAN bugteam audit review sits on HEAD.
-4. The Copilot review on HEAD is clean or approved.
+4. The Copilot review on HEAD is clean or approved (bypassed when Copilot is down
+   or out of quota this run).
 5. Zero unresolved bot review threads anywhere on the PR — counting Cursor,
    Claude, and Copilot authored threads where `isResolved` is false (`isOutdated`
    threads are excluded by the gate, but the fix lens still verifies and resolves
    them during the round).
 6. The PR is mergeable (`mergeable` true and `mergeable_state` clean).
-7. No requested reviewers are still pending.
+7. No requested reviewers are still pending (bypassed when Copilot is down or out
+   of quota this run).
 
 ## Audit-trail design
 

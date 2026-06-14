@@ -65,6 +65,35 @@ def test_is_bugbot_disabled_via_env_true_when_both_tokens_listed_mixed_case(
     assert reviews_disabled.is_bugteam_disabled_via_env() is True
 
 
+def test_is_copilot_disabled_via_env_returns_true_when_env_lists_copilot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "copilot")
+    assert reviews_disabled.is_copilot_disabled_via_env() is True
+
+
+def test_is_copilot_disabled_via_env_returns_false_when_env_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert reviews_disabled.is_copilot_disabled_via_env() is False
+
+
+def test_is_copilot_disabled_via_env_returns_false_when_only_bugbot_listed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    assert reviews_disabled.is_copilot_disabled_via_env() is False
+
+
+def test_is_copilot_disabled_via_env_true_when_listed_among_other_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", " BugBot , CoPilot ")
+    assert reviews_disabled.is_copilot_disabled_via_env() is True
+    assert reviews_disabled.is_bugbot_disabled_via_env() is True
+
+
 def test_cli_main_returns_zero_when_named_reviewer_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
