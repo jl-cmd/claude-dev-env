@@ -62,6 +62,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_format,
 )
 from code_rules_duplicate_body import (  # noqa: E402
+    advise_cross_skill_duplicate_helper,
     check_duplicate_function_body_across_files,
 )
 from code_rules_imports_logging import (  # noqa: E402
@@ -293,6 +294,7 @@ def validate_content(
         all_issues.extend(check_string_literal_magic(content, file_path))
         check_incomplete_mocks(content, file_path)
         check_duplicated_format_patterns(content, file_path)
+        advise_cross_skill_duplicate_helper(effective_content, file_path)
 
     elif extension in ALL_JAVASCRIPT_EXTENSIONS:
         if not is_test_file(file_path):
