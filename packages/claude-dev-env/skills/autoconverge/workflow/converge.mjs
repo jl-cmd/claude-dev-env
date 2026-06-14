@@ -124,6 +124,17 @@ const READY_SCHEMA = {
   required: ['ready'],
 }
 
+const CLEAN_AUDIT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    posted: { type: 'boolean', description: 'true only when post_audit_thread.py printed the review URL confirming the CLEAN bugteam review landed on HEAD' },
+    reviewUrl: { type: 'string', description: 'the posted review URL when posted is true, otherwise an empty string' },
+    reason: { type: 'string', description: 'when posted is false, the one-line reason the post did not land (a permission denial, a classifier block, or a script error)' },
+  },
+  required: ['posted', 'reviewUrl', 'reason'],
+}
+
 const SEVERITY_RANK = { P0: 0, P1: 1, P2: 2 }
 const SHA_COMPARISON_PREFIX_LENGTH = 7
 
@@ -579,17 +590,41 @@ function applyFixes(head, findings, sourceLabel) {
 
 /**
  * Post the terminal CLEAN bugteam audit artifact so check_convergence.py sees
- * a clean bugteam review on the converged HEAD.
+ * a clean bugteam review on the converged HEAD. The post is load-bearing: the
+ * convergence gate's bugteam-review check can never pass until this review
+ * lands, so the result reports whether the post succeeded rather than
+ * discarding it. A blocked post (a permission or auto-mode-classifier denial)
+ * or a script error returns posted:false with the reason so the caller can
+ * surface a blocker instead of re-converging into the iteration cap.
  * @param {string} head converged PR HEAD SHA
- * @returns {Promise<string>} agent transcript (unused)
+ * @returns {Promise<object>} CLEAN_AUDIT_SCHEMA result
  */
 function postCleanAudit(head) {
   return convergeAgent(
     `Post a CLEAN bugteam audit review on ${prCoordinates} at commit ${head}. All review lenses are clean on this HEAD.\n\n` +
       `Write an empty findings file: create a temp file containing exactly [] (an empty JSON array). Then run:\n` +
       `python "${CONFIG.prLoopScripts}/post_audit_thread.py" --skill bugteam --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --commit ${head} --state CLEAN --findings-json <temp-file>\n` +
-      `Run the script with --help first if any flag name differs. This posts the APPROVE review body that check_convergence.py reads for the bugteam gate. Do not edit code, commit, or push.`,
-    { label: 'post-clean-audit', phase: 'Converge', agentType: 'general-purpose' },
+      `Run the script with --help first if any flag name differs. This posts the APPROVE review body that check_convergence.py reads for the bugteam gate. Do not edit code, commit, or push.\n\n` +
+      `Report whether the review landed. When the script prints a review URL, return {posted:true, reviewUrl:<that URL>, reason:""}. When the script is denied (a permission prompt or auto-mode-classifier block), errors, or prints anything other than a review URL, return {posted:false, reviewUrl:"", reason:<the denial message or error as one line>}. Do not retry a denied post.`,
+    { label: 'post-clean-audit', phase: 'Converge', schema: CLEAN_AUDIT_SCHEMA, agentType: 'general-purpose' },
+  )
+}
+
+/**
+ * Blocker message for a CLEAN bugteam audit that did not land. The convergence
+ * gate's bugteam-review check can never pass without this review, so a blocked
+ * post stops the run with an actionable message rather than re-converging until
+ * the iteration cap. Handles a dead post agent (a null result) as not posted.
+ * @param {string} head converged PR HEAD SHA
+ * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from postCleanAudit, or null when the agent died
+ * @returns {string} the blocker message naming the post failure and the unblock path
+ */
+function cleanAuditBlocker(head, auditResult) {
+  const reason = auditResult?.reason || 'the post agent returned no result'
+  return (
+    `clean-audit post blocked: the CLEAN bugteam review could not be posted on HEAD ${head} (${reason}) — ` +
+    `the convergence gate's bugteam-review check can never pass without it, so the run stops rather than re-converge to the iteration cap. ` +
+    `Allow post_audit_thread.py for this run with a Bash permission rule, or post the CLEAN review by hand, then re-run.`
   )
 }
 
@@ -767,7 +802,11 @@ while (iterations < CONFIG.maxIterations) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
       await spawnStandardsFollowUp(head, findings, 'converge-round')
       standardsNote = `${findings.length} code-standard finding(s) deferred to a follow-up fix issue plus an environment-hardening PR — verify both land`
-      await postCleanAudit(head)
+      const auditResult = await postCleanAudit(head)
+      if (!auditResult?.posted) {
+        blocker = cleanAuditBlocker(head, auditResult)
+        break
+      }
       phase = 'COPILOT'
       continue
     }
@@ -789,7 +828,11 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     log(`Round ${rounds}: all lenses clean on ${head?.slice(0, 7)} — posting clean audit artifact`)
-    await postCleanAudit(head)
+    const auditResult = await postCleanAudit(head)
+    if (!auditResult?.posted) {
+      blocker = cleanAuditBlocker(head, auditResult)
+      break
+    }
     phase = 'COPILOT'
     continue
   }
