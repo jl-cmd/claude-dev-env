@@ -43,7 +43,17 @@ PR's owner.
    ready, mark it draft first (`gh pr ready <n> --repo <o>/<r> --undo`) so the
    loop owns the ready transition.
 
-3. **Grant project permissions.**
+3. **Verify the worktree is the PR's repo (strict pre-flight).** Run
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <owner> --repo <repo> --mode strict`.
+   It confirms the working directory is a checkout of the PR's own repo and
+   that `git worktree` machinery is healthy, so `EnterWorktree` can create and
+   enter the branch worktree. A non-zero exit prints a `PREFLIGHT_OUTCOME` line
+   and an `ABORT` line: report that line and stop. Autoconverge runs inside the
+   PR's own repo, so a working directory rooted in a different repo (for
+   example, `claude-code-config` while the PR lives in `llm-settings`) or in no
+   git checkout at all cannot continue.
+
+4. **Grant project permissions.**
    `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
 
 ## Run the workflow
