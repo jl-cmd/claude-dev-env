@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname, resolve, relative } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync, execFileSync } from 'node:child_process';
@@ -188,14 +188,53 @@ export function pythonCandidatesForPlatform(platform) {
     return platform === 'win32' ? windowsOrder : defaultOrder;
 }
 
+/**
+ * Reports whether a resolved interpreter path belongs to the Microsoft Store
+ * Python, whose `python.exe` App Execution Alias reparse stub cannot be spawned
+ * as a hook subprocess. Both the alias under `Microsoft\WindowsApps` and the
+ * package executable under `Program Files\WindowsApps` sit beneath a
+ * `WindowsApps` directory, so the installer skips any candidate resolving there.
+ *
+ * @param {string} executablePath Absolute interpreter path from sys.executable.
+ * @returns {boolean} True when the path lives under a WindowsApps directory.
+ */
+export function isWindowsStorePythonStub(executablePath) {
+    return /[\\/]windowsapps[\\/]/i.test(executablePath);
+}
+
+/**
+ * Formats an absolute interpreter path as a settings.json hook command prefix:
+ * forward-slash separators, double-quoted when the path contains a space so the
+ * harness parses the interpreter as a single argument.
+ *
+ * @param {string} executablePath Absolute interpreter path from sys.executable.
+ * @returns {string} The command-prefix form of the interpreter path.
+ */
+export function interpreterCommandFromPath(executablePath) {
+    const forwardSlashedPath = executablePath.replace(/\\/g, '/');
+    return forwardSlashedPath.includes(' ') ? `"${forwardSlashedPath}"` : forwardSlashedPath;
+}
+
+/**
+ * Picks the interpreter command baked into every managed hook in settings.json.
+ * On win32 the first working candidate is resolved to its absolute
+ * sys.executable and that path is baked in, so a later PATH change or Microsoft
+ * Store update that re-points the `py`/`python` launcher cannot silently break
+ * the hooks; candidates resolving to the non-spawnable WindowsApps stub are
+ * skipped. Other platforms keep the bare command (e.g. `python3`).
+ *
+ * @returns {string|null} The interpreter command, or null when none is usable.
+ */
 function detectPython() {
     const candidates = pythonCandidatesForPlatform(process.platform);
     for (const { command, versionFlag } of candidates) {
         try {
             const version = execSync(`${command} ${versionFlag}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-            if (version.includes('Python 3.')) {
-                return command;
-            }
+            if (!version.includes('Python 3.')) continue;
+            if (process.platform !== 'win32') return command;
+            const executablePath = execSync(`${command} -c "import sys; print(sys.executable)"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            if (!executablePath || isWindowsStorePythonStub(executablePath)) continue;
+            return interpreterCommandFromPath(executablePath);
         } catch { /* try next */ }
     }
     return null;
@@ -501,7 +540,7 @@ function install(selectedGroups, options = {}) {
     abortWhenPackageSourceHasConflicts(PACKAGE_ROOT);
     const pythonCommand = detectPython();
     if (!pythonCommand) {
-        console.error('ERROR: Python 3 not found. Install Python 3.8+ and ensure python3, python, or py is on PATH.');
+        console.error('ERROR: No usable Python 3 found. Install Python 3.8+ from python.org and ensure py, python3, or python is on PATH. On Windows the Microsoft Store python.exe alias is rejected because it cannot run hooks.');
         process.exit(1);
     }
     console.log(`  Python: ${pythonCommand}`);
@@ -815,28 +854,62 @@ writes the previous contents to ~/.claude/backups/CLAUDE.md.<timestamp>.bak firs
 `);
 }
 
-const rawArgs = process.argv.slice(2);
-const args = rawArgs.filter((flag) => flag !== '--update');
-const isUpdateRefresh = rawArgs.includes('--update');
-if (args.includes('--help') || args.includes('-h')) {
-    printHelp();
-} else if (args.includes('--uninstall')) {
-    uninstall();
-} else {
-    const onlyIndex = args.indexOf('--only');
-    let selectedGroups = null;
-    if (onlyIndex !== -1) {
-        const onlyValue = args[onlyIndex + 1];
-        if (!onlyValue || onlyValue.startsWith('--')) {
-            console.error(`ERROR: --only requires a comma-separated list of groups.\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
-            process.exit(1);
-        }
-        selectedGroups = onlyValue.split(',').map(name => name.trim());
-        const invalidGroups = selectedGroups.filter(name => !INSTALL_GROUPS[name]);
-        if (invalidGroups.length > 0) {
-            console.error(`ERROR: Unknown group(s): ${invalidGroups.join(', ')}\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
-            process.exit(1);
-        }
+/**
+ * Reports whether this module is the process entry point (run as
+ * `node install.mjs`, or through a bin symlink such as the npm-installed
+ * `claude-dev-env` launcher) rather than imported by another module such as the
+ * test suite. The install/uninstall dispatch runs only when true, so importing
+ * the module carries no side effects.
+ *
+ * Both sides resolve to their real on-disk paths before comparison, so a
+ * symlinked launcher whose target is this module still counts as the entry
+ * point even though `process.argv[1]` keeps the symlink path while
+ * `import.meta.url` reports the resolved target. When either path cannot be
+ * resolved on disk (for example a synthetic path in a unit test), the raw
+ * paths are compared instead.
+ *
+ * @param {string} moduleUrl The module's import.meta.url.
+ * @param {string|undefined} entryScriptPath The invoked script path (process.argv[1]).
+ * @returns {boolean} True when the module is the process entry point.
+ */
+export function invokedAsEntryPoint(moduleUrl, entryScriptPath) {
+    if (!entryScriptPath) return false;
+    const modulePath = fileURLToPath(moduleUrl);
+    return realPathOrSelf(modulePath) === realPathOrSelf(entryScriptPath);
+}
+
+function realPathOrSelf(filesystemPath) {
+    try {
+        return realpathSync(filesystemPath);
+    } catch {
+        return filesystemPath;
     }
-    install(selectedGroups, { isUpdateRefresh });
+}
+
+if (invokedAsEntryPoint(import.meta.url, process.argv[1])) {
+    const rawArgs = process.argv.slice(2);
+    const args = rawArgs.filter((flag) => flag !== '--update');
+    const isUpdateRefresh = rawArgs.includes('--update');
+    if (args.includes('--help') || args.includes('-h')) {
+        printHelp();
+    } else if (args.includes('--uninstall')) {
+        uninstall();
+    } else {
+        const onlyIndex = args.indexOf('--only');
+        let selectedGroups = null;
+        if (onlyIndex !== -1) {
+            const onlyValue = args[onlyIndex + 1];
+            if (!onlyValue || onlyValue.startsWith('--')) {
+                console.error(`ERROR: --only requires a comma-separated list of groups.\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
+                process.exit(1);
+            }
+            selectedGroups = onlyValue.split(',').map(name => name.trim());
+            const invalidGroups = selectedGroups.filter(name => !INSTALL_GROUPS[name]);
+            if (invalidGroups.length > 0) {
+                console.error(`ERROR: Unknown group(s): ${invalidGroups.join(', ')}\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
+                process.exit(1);
+            }
+        }
+        install(selectedGroups, { isUpdateRefresh });
+    }
 }

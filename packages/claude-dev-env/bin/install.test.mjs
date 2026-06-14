@@ -1,14 +1,18 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
     collectPackageSourceConflicts,
     CONTENT_DIRECTORIES,
     pythonCandidatesForPlatform,
+    isWindowsStorePythonStub,
+    interpreterCommandFromPath,
+    invokedAsEntryPoint,
     managedHookScriptRelativePaths,
     managedHookScriptRelativePathsFromSourceRoots,
     commandReferencesManagedHook,
@@ -199,6 +203,134 @@ test('pythonCandidatesForPlatform keeps python3 first on non-Windows platforms',
 test('pythonCandidatesForPlatform still offers python as a win32 fallback when py -3 and python3 are absent', () => {
     const commands = pythonCandidatesForPlatform('win32').map(candidate => candidate.command);
     assert.ok(commands.includes('python'));
+});
+
+
+test('isWindowsStorePythonStub flags the Microsoft Store WindowsApps alias paths', () => {
+    assert.equal(
+        isWindowsStorePythonStub('C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.3824.0_x64__qbz5n2kfra8p0\\python3.13.exe'),
+        true,
+    );
+    assert.equal(
+        isWindowsStorePythonStub('C:/Users/jon/AppData/Local/Microsoft/WindowsApps/python.exe'),
+        true,
+    );
+});
+
+
+test('isWindowsStorePythonStub does not flag a real interpreter install path', () => {
+    assert.equal(isWindowsStorePythonStub('C:\\Python313\\python.exe'), false);
+    assert.equal(isWindowsStorePythonStub('/usr/bin/python3'), false);
+});
+
+
+test('interpreterCommandFromPath forward-slashes a Windows interpreter path and leaves a space-free path unquoted', () => {
+    assert.equal(interpreterCommandFromPath('C:\\Python313\\python.exe'), 'C:/Python313/python.exe');
+});
+
+
+test('interpreterCommandFromPath quotes an interpreter path that contains a space', () => {
+    assert.equal(
+        interpreterCommandFromPath('C:\\Program Files\\Python313\\python.exe'),
+        '"C:/Program Files/Python313/python.exe"',
+    );
+});
+
+
+test('mergeHooksIntoSettings substitutes a quoted absolute interpreter path for the python3 prefix', () => {
+    const hooksConfig = {
+        hooks: {
+            PostToolUse: [
+                {
+                    matcher: 'Edit',
+                    hooks: [{ type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/auto_formatter.py' }],
+                },
+            ],
+        },
+    };
+    const settings = {};
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/x/.claude', '"C:/Program Files/Python313/python.exe"');
+    assert.equal(
+        settings.hooks.PostToolUse[0].hooks[0].command,
+        '"C:/Program Files/Python313/python.exe" C:/Users/x/.claude/hooks/workflow/auto_formatter.py',
+    );
+});
+
+
+test('mergeHooksIntoSettings prunes a prior py -3 managed hook when reinstalling with an absolute interpreter path', () => {
+    const hooksConfig = {
+        hooks: {
+            PostToolUse: [
+                {
+                    matcher: 'Edit',
+                    hooks: [{ type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/auto_formatter.py' }],
+                },
+            ],
+        },
+    };
+    const settings = {
+        hooks: {
+            PostToolUse: [
+                {
+                    matcher: 'Edit',
+                    hooks: [{ type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/workflow/auto_formatter.py' }],
+                },
+            ],
+        },
+    };
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/x/.claude', 'C:/Python313/python.exe');
+    assert.deepEqual(
+        settings.hooks.PostToolUse[0].hooks.map(hook => hook.command),
+        ['C:/Python313/python.exe C:/Users/x/.claude/hooks/workflow/auto_formatter.py'],
+    );
+});
+
+
+test('invokedAsEntryPoint is true when the module url matches the invoked script path', () => {
+    const scriptPath = process.platform === 'win32' ? 'C:\\pkg\\bin\\install.mjs' : '/pkg/bin/install.mjs';
+    assert.equal(invokedAsEntryPoint(pathToFileURL(scriptPath).href, scriptPath), true);
+});
+
+
+test('invokedAsEntryPoint is false when the module is imported by another script', () => {
+    const modulePath = process.platform === 'win32' ? 'C:\\pkg\\bin\\install.mjs' : '/pkg/bin/install.mjs';
+    const entryScriptPath = process.platform === 'win32' ? 'C:\\pkg\\bin\\install.test.mjs' : '/pkg/bin/install.test.mjs';
+    assert.equal(invokedAsEntryPoint(pathToFileURL(modulePath).href, entryScriptPath), false);
+});
+
+
+test('invokedAsEntryPoint is false when there is no invoked script path', () => {
+    assert.equal(invokedAsEntryPoint('file:///pkg/bin/install.mjs', undefined), false);
+});
+
+
+test('invokedAsEntryPoint is true when the module is reached through a bin symlink', () => {
+    const linkRoot = mkdtempSync(join(tmpdir(), 'cdev-bin-symlink-'));
+    try {
+        const realModulePath = join(linkRoot, 'install.mjs');
+        const symlinkLauncherPath = join(linkRoot, 'claude-dev-env');
+        writeFileSync(realModulePath, 'export const sentinel = true;\n');
+        symlinkSync(realModulePath, symlinkLauncherPath);
+        const realModuleUrl = pathToFileURL(realModulePath).href;
+        assert.equal(invokedAsEntryPoint(realModuleUrl, symlinkLauncherPath), true);
+    } finally {
+        rmSync(linkRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('invokedAsEntryPoint is false when a sibling script imports the real module', () => {
+    const importerRoot = mkdtempSync(join(tmpdir(), 'cdev-bin-importer-'));
+    try {
+        const realModulePath = join(importerRoot, 'install.mjs');
+        const importerScriptPath = join(importerRoot, 'install.test.mjs');
+        writeFileSync(realModulePath, 'export const sentinel = true;\n');
+        writeFileSync(importerScriptPath, 'import "./install.mjs";\n');
+        const realModuleUrl = pathToFileURL(realModulePath).href;
+        assert.equal(invokedAsEntryPoint(realModuleUrl, importerScriptPath), false);
+    } finally {
+        rmSync(importerRoot, { recursive: true, force: true });
+    }
 });
 
 
