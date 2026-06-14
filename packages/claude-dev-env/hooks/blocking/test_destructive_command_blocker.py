@@ -256,13 +256,13 @@ def test_rm_rf_asks_when_double_dash_includes_hyphen_prefixed_non_ephemeral_targ
     assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
 
 
-def test_rm_rf_asks_when_command_is_compound_with_ampersand() -> None:
+def test_rm_rf_allowed_when_compound_with_ampersand_and_absolute_ephemeral_target() -> None:
     payload = _make_bash_payload("rm -rf /tmp/reply && gh pr checks 19")
 
     result = _run_rm_hook(payload)
 
-    response = json.loads(result.stdout)
-    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+    assert result.stdout.strip() == ""
+    assert result.returncode == 0
 
 
 def test_rm_rf_allowed_when_leading_cd_into_ephemeral_subdirectory_double_quoted() -> None:
@@ -1010,6 +1010,513 @@ def test_git_reset_hard_asks_when_settings_file_is_invalid_json(tmp_path: Path) 
     assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
 
 
+# --- compound ephemeral rm and quoted-mention guard tests ---
+
+
+def _assert_hook_allows(command: str) -> None:
+    result = _run_rm_hook(_make_bash_payload(command))
+    assert result.stdout.strip() == "", (
+        f"Expected allow (no output) for {command!r}, got: {result.stdout!r}"
+    )
+    assert result.returncode == 0
+
+
+def _assert_hook_asks(command: str, expected_reason_fragment: str | None = None) -> None:
+    result = _run_rm_hook(_make_bash_payload(command))
+    response = json.loads(result.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "ask", (
+        f"Expected ask for {command!r}, got: {response!r}"
+    )
+    if expected_reason_fragment is not None:
+        assert (
+            expected_reason_fragment
+            in response["hookSpecificOutput"]["permissionDecisionReason"]
+        ), f"Reason must mention {expected_reason_fragment!r}, got: {response!r}"
+
+
+def test_compound_rm_allowed_when_two_absolute_ephemeral_targets_then_echo() -> None:
+    _assert_hook_allows("rm -rf /tmp/pr136 /tmp/difftest && echo 'cleaned'")
+
+
+def test_compound_rm_allowed_when_followed_by_gh_pipeline_and_echo() -> None:
+    _assert_hook_allows('rm -rf /tmp/reply && gh pr checks 19 2>&1 | head -5 && echo "x"')
+
+
+def test_compound_rm_allowed_when_followed_by_gh_command() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && gh pr checks 19")
+
+
+def test_compound_rm_asks_when_shred_targets_non_ephemeral_path() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && shred -u /etc/passwd")
+
+
+def test_compound_rm_asks_when_truncate_targets_non_ephemeral_path() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && truncate -s0 /etc/passwd")
+
+
+def test_compound_rm_asks_when_find_delete_walks_root() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && find / -name secret -delete")
+
+
+def test_compound_rm_asks_when_chmod_recursive_targets_non_ephemeral_path() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && chmod -R 000 /etc")
+
+
+def test_compound_rm_asks_when_mv_moves_non_ephemeral_path() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && mv /home/user/important /tmp/x2")
+
+
+def test_compound_rm_asks_when_gh_repo_delete_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh repo delete jl-cmd/foo --yes")
+
+
+def test_compound_rm_asks_when_git_checkout_discards_worktree_after_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git checkout -- .")
+
+
+def test_compound_rm_asks_when_git_stash_drop_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git stash drop")
+
+
+def test_compound_rm_asks_when_git_branch_force_delete_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git branch -D main")
+
+
+def test_compound_rm_asks_when_git_clean_force_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git clean -fd")
+
+
+def test_compound_rm_asks_when_git_rm_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git rm -rf src")
+
+
+def test_compound_rm_asks_when_benign_segment_redirects_into_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && cat /dev/null > /etc/important.conf")
+
+
+def test_compound_rm_asks_when_benign_segment_appends_redirect_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo hi >> /etc/important.conf")
+
+
+def test_compound_rm_allowed_when_gh_read_only_subcommand_follows_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && gh pr view 19")
+
+
+def test_compound_rm_allowed_when_git_read_only_subcommand_follows_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && git status")
+
+
+def test_compound_rm_asks_when_benign_segment_glues_redirect_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo pwned>/etc/passwd")
+
+
+def test_compound_rm_asks_when_benign_segment_glues_append_redirect_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo hi>>/etc/important.conf")
+
+
+def test_compound_rm_asks_when_benign_segment_uses_fd_prefixed_redirect_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo hi 1>/etc/important.conf")
+
+
+def test_compound_rm_asks_when_benign_segment_uses_glued_combined_redirect_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo hi &>/etc/important.conf")
+
+
+def test_compound_rm_asks_when_benign_segment_glues_redirect_directly_to_program() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && cat secret>/etc/important.conf")
+
+
+def test_compound_rm_asks_when_sort_writes_output_file_to_non_ephemeral_path() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && sort -o /etc/important.conf /etc/passwd")
+
+
+def test_compound_rm_asks_when_rm_target_glues_redirect_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x>/etc/passwd")
+
+
+def test_compound_rm_asks_when_rm_target_glues_append_redirect_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x>>/etc/passwd")
+
+
+def test_compound_rm_asks_when_second_rm_target_glues_redirect_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/a /tmp/b>/etc/hosts")
+
+
+def test_compound_rm_asks_when_git_config_sets_value_after_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git config --global user.name evil")
+
+
+def test_compound_rm_asks_when_git_config_sets_value_equal_to_long_read_only_flag() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git config core.editor --get")
+
+
+def test_compound_rm_asks_when_git_config_sets_value_equal_to_list_read_only_flag() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git config alias.x --list")
+
+
+def test_compound_rm_asks_when_git_config_sets_value_equal_to_short_read_only_flag() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git config core.pager -l")
+
+
+def test_compound_rm_allowed_when_git_config_get_urlmatch_reads_after_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && git config --get-urlmatch a b")
+
+
+def test_compound_rm_asks_when_git_remote_add_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git remote add evil http://e")
+
+
+def test_compound_rm_asks_when_git_remote_remove_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git remote remove origin")
+
+
+def test_compound_rm_asks_when_gh_api_http_delete_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh api repos/foo -X DELETE")
+
+
+def test_compound_rm_asks_when_gh_api_raw_field_implicit_post_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh api repos/o/r/issues -f title=x")
+
+
+def test_compound_rm_asks_when_gh_api_field_file_implicit_post_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh api -F a=@b repos/o/r/comments")
+
+
+def test_compound_rm_asks_when_gh_api_input_implicit_post_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh api repos/o/r/x --input body.json")
+
+
+def test_compound_rm_allowed_when_gh_api_field_with_explicit_get_follows_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && gh api repos/foo -X GET -f a=b")
+
+
+def test_compound_rm_asks_when_gh_api_glued_short_delete_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh api repos/foo -XDELETE")
+
+
+def test_compound_rm_asks_when_gh_api_glued_long_delete_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh api repos/foo --method=DELETE")
+
+
+def test_compound_rm_asks_when_gh_api_glued_short_put_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh api repos/foo -XPUT")
+
+
+def test_compound_rm_asks_when_gh_api_glued_long_patch_lowercase_rides_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh api repos/foo --method=patch")
+
+
+def test_compound_rm_allowed_when_gh_api_glued_short_get_follows_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && gh api repos/foo -XGET")
+
+
+def test_compound_rm_allowed_when_gh_api_glued_long_get_follows_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && gh api repos/foo --method=GET")
+
+
+def test_compound_rm_asks_when_gh_repo_delete_targets_read_only_verb_named_repo() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && gh repo delete status --yes")
+
+
+def test_compound_rm_asks_when_git_stash_drop_targets_read_only_verb_named_ref() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git stash drop status")
+
+
+def test_compound_rm_asks_when_git_branch_force_delete_targets_read_only_verb_named_branch() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git branch -D log")
+
+
+def test_compound_rm_asks_when_git_checkout_discards_read_only_verb_named_path() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git checkout -- log")
+
+
+def test_compound_rm_asks_when_git_push_targets_read_only_verb_named_ref() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git push origin log")
+
+
+def test_compound_rm_allowed_when_gh_pr_view_takes_read_only_verb_named_argument() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && gh pr view status")
+
+
+def test_compound_rm_asks_when_git_remote_add_after_verbose_flag_rides_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git remote -v add evil http://attacker")
+
+
+def test_compound_rm_asks_when_git_remote_set_url_after_verbose_flag_rides_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git remote -v set-url origin http://evil")
+
+
+def test_compound_rm_asks_when_stdbuf_separate_output_value_wraps_bash_dash_c() -> None:
+    _assert_hook_asks('stdbuf -o L bash -c "rm -rf /etc"')
+
+
+def test_compound_rm_asks_when_stdbuf_long_output_value_wraps_bash_dash_c() -> None:
+    _assert_hook_asks('stdbuf --output L bash -c "rm -rf /etc"')
+
+
+def test_compound_rm_asks_when_stdbuf_separate_error_value_wraps_bash_dash_c() -> None:
+    _assert_hook_asks('stdbuf -e 0 bash -c "rm -rf /etc"')
+
+
+def test_compound_rm_asks_when_ionice_classdata_name_wraps_bash_dash_c() -> None:
+    _assert_hook_asks('ionice --classdata foo bash -c "rm -rf /etc"')
+
+
+def test_compound_rm_allowed_when_git_config_lists_after_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && git config --list")
+
+
+def test_compound_rm_allowed_when_git_remote_lists_after_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && git remote -v")
+
+
+def test_compound_rm_allowed_when_gh_api_get_follows_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && gh api repos/foo")
+
+
+def test_quoted_mention_allowed_when_rm_appears_inside_grep_pattern() -> None:
+    _assert_hook_allows("grep 'rm -rf foo' history.jsonl | tail -5")
+
+
+def test_quoted_mention_allowed_when_rm_appears_inside_echo_argument() -> None:
+    _assert_hook_allows('echo "rm -rf x"')
+
+
+def test_quoted_mention_allowed_when_rm_appears_inside_git_commit_message() -> None:
+    _assert_hook_allows('git commit -m "rm -rf cleanup"')
+
+
+def test_compound_rm_asks_when_single_target_is_non_ephemeral() -> None:
+    _assert_hook_asks("rm -rf /var/log/myapp")
+
+
+def test_compound_rm_asks_when_second_rm_segment_targets_non_ephemeral() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && rm -rf /etc")
+
+
+def test_compound_rm_asks_when_force_push_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git push --force origin main")
+
+
+def test_compound_rm_asks_when_git_reset_hard_rides_alongside_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && git reset --hard")
+
+
+def test_compound_rm_asks_when_command_substitution_present() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo $(whoami)")
+
+
+def test_compound_rm_asks_when_backtick_substitution_present() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo `whoami`")
+
+
+def test_compound_rm_asks_when_relative_target_without_declared_cwd() -> None:
+    _assert_hook_asks("rm -rf scratch && echo done")
+
+
+def test_compound_rm_asks_when_rm_token_is_a_variable_expansion() -> None:
+    _assert_hook_asks("$RM -rf /etc")
+
+
+def test_quoted_mention_asks_when_absolute_path_rm_runs_on_non_ephemeral() -> None:
+    _assert_hook_asks("/bin/rm -rf /etc")
+
+
+def test_quoted_mention_asks_when_sudo_rm_runs_on_non_ephemeral() -> None:
+    _assert_hook_asks("sudo rm -rf /etc")
+
+
+def test_quoted_mention_asks_when_backslash_rm_runs_on_non_ephemeral() -> None:
+    _assert_hook_asks(r"\rm -rf /etc")
+
+
+def test_quoted_mention_asks_when_real_force_push_rides_alongside_quoted_rm() -> None:
+    _assert_hook_asks(
+        "grep 'rm -rf' f && git push --force origin main",
+        expected_reason_fragment="git push --force",
+    )
+
+
+def test_interpreter_execution_asks_when_bash_dash_c_runs_quoted_rm() -> None:
+    _assert_hook_asks("bash -c 'rm -rf /etc'")
+
+
+def test_interpreter_execution_asks_when_sh_dash_c_runs_quoted_rm() -> None:
+    _assert_hook_asks("sh -c 'rm -rf /home/user/x'")
+
+
+def test_interpreter_execution_asks_when_eval_runs_quoted_rm() -> None:
+    _assert_hook_asks("eval 'rm -rf /etc'")
+
+
+def test_interpreter_execution_asks_when_ssh_runs_remote_quoted_rm() -> None:
+    _assert_hook_asks("ssh host 'rm -rf /etc'")
+
+
+def test_interpreter_execution_asks_when_python_dash_c_runs_quoted_rm() -> None:
+    _assert_hook_asks("""python -c "import os; os.system('rm -rf /etc')\"""")
+
+
+def test_interpreter_execution_asks_when_awk_system_runs_quoted_rm() -> None:
+    _assert_hook_asks("""awk 'BEGIN{system("rm -rf /etc")}'""")
+
+
+def test_interpreter_execution_asks_when_gawk_system_runs_quoted_rm() -> None:
+    _assert_hook_asks("""gawk 'BEGIN{system("rm -rf /etc")}'""")
+
+
+def test_interpreter_execution_asks_when_make_runs_quoted_rm() -> None:
+    _assert_hook_asks("""make -f - 'rm -rf /etc'""")
+
+
+def test_compound_rm_asks_when_awk_segment_runs_quoted_rm_after_ephemeral_rm() -> None:
+    _assert_hook_asks("""rm -rf /tmp/x && awk 'BEGIN{system("rm -rf /etc")}'""")
+
+
+def test_interpreter_execution_asks_when_benign_command_precedes_bash_dash_c() -> None:
+    _assert_hook_asks("echo hi && bash -c 'rm -rf /etc'")
+
+
+def test_interpreter_execution_asks_when_benign_command_precedes_ssh() -> None:
+    _assert_hook_asks("ls && ssh host 'rm -rf /etc'")
+
+
+def test_interpreter_execution_asks_when_benign_command_precedes_eval() -> None:
+    _assert_hook_asks("true; eval 'rm -rf /etc'")
+
+
+def test_interpreter_execution_asks_when_benign_command_precedes_python_dash_c() -> None:
+    _assert_hook_asks(
+        """echo start && python -c "import os; os.system('rm -rf /etc')\""""
+    )
+
+
+def test_launcher_execution_asks_when_timeout_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("timeout 5 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_nohup_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("nohup bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_nice_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("nice -n 10 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_stdbuf_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("stdbuf -oL bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_time_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("time bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_setsid_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("setsid bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_ionice_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("ionice bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_chrt_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("chrt 1 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_taskset_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("taskset -c 0 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_stacked_wrappers_precede_bash_dash_c() -> None:
+    _assert_hook_asks("nice -n 5 timeout 5 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_timeout_wraps_python_dash_c() -> None:
+    _assert_hook_asks(
+        """timeout 5 python -c "import os; os.system('rm -rf /etc')\""""
+    )
+
+
+def test_launcher_execution_asks_when_timeout_wraps_bash_after_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && timeout 5 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_allows_when_timeout_wraps_ephemeral_rm() -> None:
+    _assert_hook_allows("timeout 5 rm -rf /tmp/scratch")
+
+
+def test_launcher_execution_asks_when_taskset_hex_mask_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("taskset 0x1 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_taskset_hex_mask_absolute_path_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("/usr/bin/taskset 0xff bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_taskset_cpu_range_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("taskset -c 0-3 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_timeout_duration_suffix_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("timeout 5s bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_taskset_hex_mask_wraps_bash_after_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && timeout 5s bash -c 'rm -rf /etc'")
+
+
+def test_newline_separated_interpreter_asks_when_bash_dash_c_runs_quoted_rm() -> None:
+    _assert_hook_asks("echo safe\nbash -c 'rm -rf /etc'")
+
+
+def test_carriage_return_separated_interpreter_asks_when_bash_dash_c_runs_quoted_rm() -> None:
+    _assert_hook_asks("echo hi\rbash -c 'rm -rf /etc'")
+
+
+def test_brace_group_newline_interpreter_asks_when_bash_dash_c_runs_quoted_rm() -> None:
+    _assert_hook_asks("{ echo hi\nbash -c 'rm -rf /etc'; }")
+
+
+def test_launcher_execution_asks_when_timeout_separate_signal_value_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("timeout -s KILL 5 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_timeout_separate_sigkill_signal_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("timeout -s SIGKILL 5 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_timeout_long_signal_value_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("timeout --signal KILL 5 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_timeout_kill_after_value_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("timeout -k 1 5 bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_timeout_separate_signal_wraps_bash_after_ephemeral_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && timeout -s KILL 5 bash -c 'rm -rf /etc'")
+
+
+def test_subshell_grouped_rm_asks_when_parenthesis_glued_to_rm() -> None:
+    _assert_hook_asks("(rm -rf /etc)")
+
+
+def test_brace_grouped_rm_asks_when_brace_glued_to_rm() -> None:
+    _assert_hook_asks("{ rm -rf /etc; }")
+
+
+def test_glued_semicolon_rm_asks_when_semicolon_prefixes_rm() -> None:
+    _assert_hook_asks(";rm -rf /etc")
+
+
+def test_glued_pipe_rm_asks_when_pipe_joins_echo_to_rm() -> None:
+    _assert_hook_asks("echo|rm -rf /etc")
+
+
+def test_subshell_grouped_rm_asks_when_benign_command_precedes_grouped_rm() -> None:
+    _assert_hook_asks("echo hi; (rm -rf /etc)")
+
+
 # --- convergence branch exemption unit tests ---
 
 import importlib.util
@@ -1026,6 +1533,7 @@ _hook_spec.loader.exec_module(_hook_module)
 _force_push_targets_convergence_branch = _hook_module._force_push_targets_convergence_branch
 _is_convergence_branch = _hook_module._is_convergence_branch
 _all_refspecs_are_convergence_branches = _hook_module._all_refspecs_are_convergence_branches
+_find_non_force_push_destructive_hazard = _hook_module._find_non_force_push_destructive_hazard
 
 
 def test_convergence_branch_claude_prefix_allowed() -> None:
@@ -1154,3 +1662,114 @@ def test_force_push_convergence_with_no_gpg_sign_blocked() -> None:
     response = json.loads(result.stdout)
     assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
     assert "--no-gpg-sign" in response["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_force_push_convergence_allowed_when_quoted_rm_mention_precedes_push() -> None:
+    _assert_hook_allows('echo "rm -rf foo" && git push --force origin claude/fix-123')
+
+
+def test_force_push_main_asks_when_quoted_rm_mention_precedes_push() -> None:
+    _assert_hook_asks(
+        'echo "rm -rf foo" && git push --force origin main',
+        expected_reason_fragment="git push --force",
+    )
+
+
+def test_compound_rm_asks_when_pipe_both_joins_tee_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && cat foo |& tee /etc/passwd")
+
+
+def test_compound_rm_asks_when_glued_pipe_both_joins_tee_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && cat foo|&tee /etc/passwd")
+
+
+def test_compound_rm_asks_when_pipe_both_joins_tee_append_to_non_ephemeral_file() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && cat foo |& tee -a /etc/passwd")
+
+
+def test_find_non_force_push_hazard_detects_tee_after_pipe_both_operator() -> None:
+    hazard_description = _find_non_force_push_destructive_hazard(
+        "git push --force origin claude/x && cat foo |& tee /etc/passwd"
+    )
+    assert hazard_description is None or "rm" not in hazard_description
+    assert not _hook_module.rm_compound_targets_only_absolute_ephemeral_paths(
+        "rm -rf /tmp/x && cat foo |& tee /etc/passwd"
+    )
+
+
+def test_compound_rm_asks_when_glued_semicolon_hides_shred_segment() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo hi;shred -u /etc/passwd")
+
+
+def test_compound_rm_asks_when_glued_and_operator_hides_rm_on_non_ephemeral() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo a&&rm -rf /etc")
+
+
+def test_compound_rm_asks_when_glued_semicolon_hides_interpreter_running_rm() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo a;bash -c 'rm -rf /etc'")
+
+
+def test_compound_rm_asks_when_glued_semicolon_hides_gh_repo_delete() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo a;gh repo delete jl-cmd/foo --yes")
+
+
+def test_compound_rm_asks_when_glued_semicolon_hides_rm_after_gh_view() -> None:
+    _assert_hook_asks("rm -rf /tmp/reply && gh pr view 1;rm -rf /etc")
+
+
+def test_compound_rm_asks_when_glued_background_operator_hides_shred_segment() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo a&shred -u /etc/passwd")
+
+
+def test_compound_rm_asks_when_glued_or_operator_hides_rm_on_non_ephemeral() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo a||rm -rf /etc")
+
+
+def test_compound_rm_asks_when_newline_terminator_hides_shred_segment() -> None:
+    _assert_hook_asks("rm -rf /tmp/x && echo a\nshred -u /etc/passwd")
+
+
+def test_compound_rm_asks_when_git_fetch_force_refspec_rewrites_local_branch() -> None:
+    _assert_hook_asks(
+        "rm -rf /tmp/x && git fetch origin +refs/heads/main:refs/heads/main"
+    )
+
+
+def test_compound_rm_asks_when_git_fetch_long_force_flag_rewrites_local_branch() -> None:
+    _assert_hook_asks(
+        "rm -rf /tmp/x && git fetch --force origin refs/heads/main:refs/heads/main"
+    )
+
+
+def test_compound_rm_asks_when_git_fetch_short_force_flag_rewrites_local_branch() -> None:
+    _assert_hook_asks(
+        "rm -rf /tmp/x && git fetch -f origin refs/heads/main:refs/heads/main"
+    )
+
+
+def test_compound_rm_allowed_when_plain_git_fetch_follows_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && git fetch")
+
+
+def test_compound_rm_allowed_when_git_fetch_origin_branch_follows_ephemeral_rm() -> None:
+    _assert_hook_allows("rm -rf /tmp/reply && git fetch origin main")
+
+
+def test_launcher_execution_asks_when_timeout_infinity_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("timeout inf bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_timeout_millisecond_duration_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("timeout 100ms bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_asks_when_nice_then_timeout_infinity_wraps_bash_dash_c() -> None:
+    _assert_hook_asks("nice -n 5 timeout inf bash -c 'rm -rf /etc'")
+
+
+def test_launcher_execution_allows_when_timeout_infinity_wraps_ephemeral_rm() -> None:
+    _assert_hook_allows("timeout inf rm -rf /tmp/scratch")
+
+
+def test_launcher_execution_allows_when_timeout_seconds_wraps_ephemeral_rm() -> None:
+    _assert_hook_allows("timeout 5 rm -rf /tmp/scratch")

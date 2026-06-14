@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import datetime
+import enum
 import json
 import os
 import re
@@ -17,6 +18,32 @@ from hooks_constants.convergence_branch_constants import (  # noqa: E402
     ALL_CONVERGENCE_BRANCH_PREFIXES,
     CONVERGENCE_BRANCH_SUFFIX_PATTERN,
     CONVERGENCE_FORCE_PUSH_DETECTION_PATTERN,
+)
+from hooks_constants.destructive_command_segment_constants import (  # noqa: E402
+    ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS,
+    ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS,
+    ALL_FILE_WRITING_OUTPUT_FLAGS_BY_BENIGN_PROGRAM,
+    ALL_GH_API_GLUED_REQUEST_BODY_FIELD_FLAG_PREFIXES,
+    ALL_GH_API_REQUEST_BODY_FIELD_FLAGS,
+    ALL_GH_HTTP_WRITE_METHOD_FLAGS,
+    ALL_GH_HTTP_WRITE_METHODS,
+    ALL_GIT_CONFIG_READ_ONLY_FLAGS,
+    ALL_GIT_FETCH_FORCE_FLAGS,
+    ALL_GIT_REMOTE_READ_ONLY_VERBS,
+    ALL_INTERPRETER_AND_WRAPPER_COMMANDS,
+    ALL_LAUNCHER_OPTIONS_TAKING_SEPARATE_VALUE,
+    ALL_LAUNCHERS_REQUIRING_A_POSITIONAL_VALUE,
+    ALL_READ_ONLY_SUBCOMMANDS_BY_DISPATCHING_PROGRAM,
+    ALL_REMOTE_AND_PROGRAM_STRING_EXECUTORS,
+    ALL_SHELL_CONTROL_OPERATOR_TOKENS,
+    ALL_STRING_ARGUMENT_EXECUTION_FLAGS,
+    ALL_SUBSHELL_GROUPING_CHARACTERS,
+    GH_HTTP_READ_ONLY_METHOD,
+    GH_LONG_METHOD_FLAG_EQUALS_PREFIX,
+    GH_SHORT_METHOD_FLAG_PREFIX,
+    ALL_READ_ONLY_SUBCOMMAND_POSITION_DEPTHS_BY_DISPATCHING_PROGRAM,
+    LAUNCHER_POSITIONAL_VALUE_SHAPE_PATTERN,
+    OUTPUT_REDIRECTION_OPERATOR_PATTERN,
 )
 
 CLAUDE_DIRECTORY_PATH = os.path.normpath(os.path.expanduser("~/.claude"))
@@ -245,11 +272,14 @@ def rm_targets_only_ephemeral_paths(command: str) -> bool:
     """Return True when command is a single rm invocation whose every target is inside an ephemeral directory.
 
     Refuses compound commands so operators like && / || / ; / | / backticks /
-    $(...) cannot piggy-back non-rm work on the ephemeral auto-allow. Rejects
-    bare ephemeral roots (/tmp, system temp dir) and bare directories named
-    worktrees/worktree so we never auto-approve wiping those roots. Only
-    allows common short flags and a small set of long options before ``--``;
-    tokens with ``=`` or unknown long options disable auto-allow.
+    $(...) cannot piggy-back non-rm work on the ephemeral auto-allow. Refuses an
+    output redirection (``rm -rf /tmp/x>/etc/passwd`` truncates ``/etc/passwd``
+    even though the deletion targets an ephemeral path; shlex keeps the ``>`` glued
+    to the target token when no whitespace separates them). Rejects bare ephemeral
+    roots (/tmp, system temp dir) and bare directories named worktrees/worktree so
+    we never auto-approve wiping those roots. Only allows common short flags and a
+    small set of long options before ``--``; tokens with ``=`` or unknown long
+    options disable auto-allow.
     """
     compound_shell_operator_pattern = re.compile(r'(?:&&|\|\||;|\||`|\$\()')
     if compound_shell_operator_pattern.search(command):
@@ -257,6 +287,8 @@ def rm_targets_only_ephemeral_paths(command: str) -> bool:
     try:
         all_command_tokens = _split_command_preserving_windows_backslashes(command)
     except ValueError:
+        return False
+    if _segment_redirects_output_to_a_file(all_command_tokens):
         return False
     if len(all_command_tokens) < 2 or all_command_tokens[0] != "rm":
         return False
@@ -277,6 +309,979 @@ def rm_targets_only_ephemeral_paths(command: str) -> bool:
         if not directory_is_ephemeral(each_resolved_path):
             return False
     return True
+
+
+def _destructive_match_is_rm_family(matched_description: str) -> bool:
+    """Return True when the matched destructive pattern is one of the rm-family deletes.
+
+    The rm-family descriptions all begin with the same prefix; the compound
+    ephemeral auto-allow and the quoted-mention guard act only on these, never on
+    git, database, or device patterns.
+
+    Args:
+        matched_description: A description from DESTRUCTIVE_BASH_PATTERNS.
+
+    Returns:
+        True when the description names an rm deletion.
+    """
+    rm_family_description_prefix = "rm "
+    return matched_description.startswith(rm_family_description_prefix)
+
+
+def _command_contains_shell_expansion(command: str) -> bool:
+    """Return True when the command contains shell parameter or command expansion.
+
+    Any ``$`` (variable reference or ``$(...)`` command substitution) or backtick
+    subshell means a token could expand at runtime to ``rm`` or to an arbitrary
+    destructive command that the hook cannot resolve statically. The quoted-mention
+    guard and the compound ephemeral auto-allow both fail closed on this so they
+    never grant on a command whose effective program list is unknown until the
+    shell runs.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        True when the command contains a ``$`` or backtick expansion character.
+    """
+    return "$" in command or "`" in command
+
+
+def _split_tokens_into_shell_segments(all_command_tokens: list[str]) -> list[list[str]]:
+    """Split a shlex token list into simple-command segments on control operators.
+
+    Segments are delimited by ``&&``, ``||``, ``;``, ``|&``, ``|`` and ``&`` tokens,
+    so each returned segment is one simple command. Operators that are not whitespace
+    separated stay inside one shlex token and therefore inside one segment; that
+    segment fails the absolute-ephemeral target check and the command falls through
+    to the prompt.
+
+    Args:
+        all_command_tokens: Tokens produced by shlex tokenization.
+
+    Returns:
+        A list of segments, each a list of tokens with operators removed.
+    """
+    all_segments: list[list[str]] = []
+    current_segment: list[str] = []
+    for each_token in all_command_tokens:
+        if each_token in ALL_SHELL_CONTROL_OPERATOR_TOKENS:
+            all_segments.append(current_segment)
+            current_segment = []
+            continue
+        current_segment.append(each_token)
+    all_segments.append(current_segment)
+    return all_segments
+
+
+def _leading_command_token(all_command_tokens: list[str]) -> str | None:
+    """Return the program token that leads the command, skipping VAR=value prefixes.
+
+    A shell command may begin with one or more ``NAME=value`` environment
+    assignments (``FOO=bar rm -rf x``); the first token that is not such an
+    assignment is the program the shell executes. Returns None when every token is
+    an assignment or the list is empty.
+
+    Args:
+        all_command_tokens: Tokens produced by shlex tokenization.
+
+    Returns:
+        The leading program token, or None when there is no program token.
+    """
+    leading_assignment_pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+    for each_token in all_command_tokens:
+        if leading_assignment_pattern.match(each_token):
+            continue
+        return each_token
+    return None
+
+
+def _strip_leading_launcher_wrapper(all_command_tokens: list[str]) -> list[str] | None:
+    """Return the tokens after a leading command-launcher wrapper, or None when absent.
+
+    A pure launcher wrapper (``timeout``, ``nohup``, ``nice``, ``ionice``,
+    ``stdbuf``, ``time``, ``setsid``, ``chrt``, ``taskset``) forwards a trailing
+    command line to another program without itself executing a quoted string. To
+    find that real program, the launcher token and its own option tokens are
+    dropped: leading ``VAR=value`` assignments are skipped, the launcher token is
+    consumed, then option tokens are consumed until the first token that names a
+    program. A launcher option that takes a SEPARATE argument value
+    (``timeout -s SIGNAL`` / ``--signal SIGNAL``, ``timeout -k DURATION`` /
+    ``--kill-after DURATION``, ``nice -n PRIORITY``) consumes both the flag and the
+    following value token, so a signal name such as ``KILL`` is never mistaken for
+    the wrapped program. Every dash-prefixed flag is consumed as well.
+
+    The first positional token after the launcher and its flags is its required
+    value for the launchers that take one (``timeout`` duration, ``chrt`` priority,
+    ``taskset`` CPU mask or CPU range) and is consumed before the wrapped program. A
+    value matching the known shapes (decimal with optional unit suffix, hexadecimal
+    mask, CPU range/list) is consumed for any launcher. A launcher in
+    ALL_LAUNCHERS_REQUIRING_A_POSITIONAL_VALUE consumes its first positional even when
+    that value's shape is unrecognized (``timeout inf``, ``timeout 100ms``), so an
+    unrecognized duration never masks the wrapped program by being returned as the
+    program itself. A launcher that takes no positional value (``nohup``, ``time``,
+    ``setsid``, ``ionice``, ``nice``, ``stdbuf``) returns its first positional as the
+    wrapped program. Returns None when the leading program is not a launcher wrapper.
+
+    Args:
+        all_command_tokens: Tokens of one shell segment.
+
+    Returns:
+        The tokens beginning at the wrapped program, an empty list when no program
+        follows the launcher value, or None when no launcher leads.
+    """
+    leading_assignment_pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+    launcher_positional_value_pattern = re.compile(LAUNCHER_POSITIONAL_VALUE_SHAPE_PATTERN)
+    first_program_index = next(
+        (
+            index
+            for index, token in enumerate(all_command_tokens)
+            if not leading_assignment_pattern.match(token)
+        ),
+        None,
+    )
+    if first_program_index is None:
+        return None
+    leading_command_basename = Path(all_command_tokens[first_program_index]).name.lower()
+    if leading_command_basename not in ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS:
+        return None
+    launcher_requires_a_positional_value = (
+        leading_command_basename in ALL_LAUNCHERS_REQUIRING_A_POSITIONAL_VALUE
+    )
+    each_index = first_program_index + 1
+    has_consumed_required_positional_value = False
+    skip_next_token_as_option_value = False
+    while each_index < len(all_command_tokens):
+        each_token = all_command_tokens[each_index]
+        if skip_next_token_as_option_value:
+            skip_next_token_as_option_value = False
+            each_index += 1
+            continue
+        if each_token in ALL_LAUNCHER_OPTIONS_TAKING_SEPARATE_VALUE:
+            skip_next_token_as_option_value = True
+            each_index += 1
+            continue
+        if each_token.startswith("-"):
+            each_index += 1
+            continue
+        each_basename = Path(each_token).name.lower()
+        if launcher_positional_value_pattern.match(each_basename):
+            has_consumed_required_positional_value = True
+            each_index += 1
+            continue
+        if launcher_requires_a_positional_value and not has_consumed_required_positional_value:
+            has_consumed_required_positional_value = True
+            each_index += 1
+            continue
+        return all_command_tokens[each_index:]
+    return []
+
+
+def _command_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
+    """Return True when the command's leading program runs a string argument as code.
+
+    Shell interpreters and wrappers (``bash``, ``sh``, ``eval``, ``sudo``,
+    ``xargs`` and the rest of ALL_INTERPRETER_AND_WRAPPER_COMMANDS) and remote
+    runners such as ``ssh`` execute a following quoted token as a command line, so
+    ``bash -c 'rm -rf /etc'`` and ``ssh host 'rm -rf /etc'`` run ``rm`` even though
+    no token's basename is ``rm``. Language interpreters (``python``, ``perl``,
+    ``ruby``, ``node`` and the rest of ALL_REMOTE_AND_PROGRAM_STRING_EXECUTORS) run
+    a string only with a ``-c`` or ``-e`` flag, so those qualify only when such a
+    flag is present.
+
+    A pure command-launcher wrapper (``timeout``, ``nohup``, ``nice`` and the rest
+    of ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS) does not run a quoted string itself but
+    forwards argv to a following program, so a ``timeout`` in front of
+    ``bash -c 'rm -rf /etc'`` runs ``rm`` through the wrapped ``bash``. The wrapper
+    and its own flags are stripped and the wrapped program is re-evaluated,
+    recursively through stacked wrappers, so a launcher in front of an interpreter is
+    caught while a launcher in front of a plain program (a ``timeout`` in front of
+    ``rm -rf /tmp/scratch``) still reports False and reaches the legitimate-mention
+    path.
+
+    Args:
+        all_command_tokens: Tokens produced by shlex tokenization.
+
+    Returns:
+        True when the leading program executes a quoted string argument as code.
+    """
+    leading_command_token = _leading_command_token(all_command_tokens)
+    if leading_command_token is None:
+        return False
+    leading_command_basename = Path(leading_command_token).name.lower()
+    if leading_command_basename in ALL_INTERPRETER_AND_WRAPPER_COMMANDS:
+        return True
+    if leading_command_basename in ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS:
+        wrapped_program_tokens = _strip_leading_launcher_wrapper(all_command_tokens)
+        if not wrapped_program_tokens:
+            return False
+        return _command_executes_a_string_argument(wrapped_program_tokens)
+    if leading_command_basename not in ALL_REMOTE_AND_PROGRAM_STRING_EXECUTORS:
+        return False
+    if leading_command_basename == "ssh":
+        return True
+    return any(
+        each_token in ALL_STRING_ARGUMENT_EXECUTION_FLAGS for each_token in all_command_tokens
+    )
+
+
+def _explode_glued_shell_control_operators(all_command_tokens: list[str]) -> list[str]:
+    """Split control operators off shlex tokens that glue them to a program name.
+
+    shlex keeps a control operator joined to an adjacent program when no whitespace
+    separates them, so ``true; eval 'x'`` tokenizes to ``['true;', 'eval', 'x']``
+    with the ``;`` hidden inside ``true;``. This re-splits each token on the
+    unquoted control operators ``&&`` / ``||`` / ``;`` / ``|&`` / ``|`` / ``&`` and
+    on the POSIX command terminators newline and carriage return, so the operator
+    becomes its own token and segment boundaries are visible. The ``|&`` pipe (stdout
+    and stderr both into the next command) is matched before the single ``|`` so a
+    glued ``cat foo|&tee x`` splits on ``|&`` rather than leaving ``&tee`` joined. The
+    lone background ``&`` is split only when it neighbors no ``>`` redirection
+    character, so a file-descriptor duplication such as a stderr-to-stdout redirect
+    stays one token and is left for the redirection guard rather than torn into a
+    dangling redirect fragment that would misread as a hidden segment boundary. shlex
+    has already removed quoting, so any operator character still present in a token
+    came from unquoted shell source and is a real boundary.
+
+    Args:
+        all_command_tokens: Tokens produced by shlex tokenization.
+
+    Returns:
+        Tokens with glued control operators separated into standalone tokens.
+    """
+    control_operator_split_pattern = re.compile(r"(&&|\|\||;|\|&|\||(?<!>)&(?!>)|\n|\r)")
+    all_exploded_tokens: list[str] = []
+    for each_token in all_command_tokens:
+        for each_fragment in control_operator_split_pattern.split(each_token):
+            if each_fragment:
+                all_exploded_tokens.append(each_fragment)
+    return all_exploded_tokens
+
+
+def _strip_leading_subshell_grouping_characters(token: str) -> str:
+    """Return a token with leading subshell-grouping characters removed.
+
+    shlex keeps a subshell ``(`` or brace-group ``{`` joined to an adjacent program
+    when no whitespace separates them, so ``(rm -rf /etc)`` tokenizes to
+    ``['(rm', '-rf', '/etc)']`` with the ``(`` hidden inside ``(rm``. Stripping the
+    leading grouping characters exposes the real program name (``rm``) so the
+    rm-detection check sees it. shlex has already removed quoting, so any grouping
+    character still present came from unquoted shell source.
+
+    Args:
+        token: One token produced by shlex tokenization.
+
+    Returns:
+        The token with leading ``(`` and ``{`` characters removed.
+    """
+    return token.lstrip(ALL_SUBSHELL_GROUPING_CHARACTERS)
+
+
+def _any_shell_segment_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
+    """Return True when any shell segment's leading program runs a string as code.
+
+    Splits the command into simple-command segments on ``&&`` / ``||`` / ``;`` /
+    ``|`` / ``&`` and applies the leading-program string-execution check to each.
+    A benign program leading the whole command (``echo hi && bash -c 'rm -rf /etc'``,
+    ``true; eval 'rm -rf /etc'``) must not mask an interpreter that runs the
+    destructive ``rm`` inside a later segment, so every segment is inspected rather
+    than only the command's first program. Control operators glued to a program by
+    missing whitespace are separated first so those segment boundaries are seen.
+
+    Args:
+        all_command_tokens: Tokens produced by shlex tokenization.
+
+    Returns:
+        True when at least one segment's leading program executes a quoted string
+        argument as code.
+    """
+    all_exploded_tokens = _explode_glued_shell_control_operators(all_command_tokens)
+    for each_segment in _split_tokens_into_shell_segments(all_exploded_tokens):
+        if each_segment and _command_executes_a_string_argument(each_segment):
+            return True
+    return False
+
+
+def command_has_no_real_rm_invocation(command: str) -> bool:
+    """Return True when no shell token in the command actually invokes ``rm``.
+
+    Distinguishes a destructive-pattern match that lands inside a quoted string
+    argument (``grep 'rm -rf foo' log``, ``echo "rm -rf x"``,
+    ``git commit -m "rm -rf cleanup"``) from a command that runs ``rm``. A quoted
+    mention tokenizes to a single token whose path basename is not ``rm``, so it is
+    reported as having no real invocation and the spurious ``rm`` prompt is
+    suppressed.
+
+    Fails closed (returns False, meaning "treat as a real invocation, keep
+    prompting") when the command contains shell expansion (``$`` or backtick),
+    where a token such as ``$RM`` could expand to ``rm``; when tokenization fails on
+    unbalanced quotes; or when any shell segment's leading program executes a quoted
+    string argument as code (``bash -c 'rm -rf /etc'``, ``eval 'rm -rf /etc'``,
+    ``ssh host 'rm -rf /etc'``, ``awk 'BEGIN{system("rm -rf /etc")}'``,
+    ``echo hi && bash -c 'rm -rf /etc'``, ``timeout bash -c 'rm -rf /etc'``), where
+    the destructive ``rm`` rides inside an executed string rather than a passive
+    mention. The command is split on the POSIX newline and carriage-return command
+    terminators before tokenizing, because shlex treats those as whitespace and would
+    otherwise merge a later-line interpreter (``echo safe`` newline
+    ``bash -c 'rm -rf /etc'``) into the benign leading segment. The per-segment check
+    means a benign leader on a line does not mask an interpreter later on that line.
+    ``/bin/rm``, ``sudo rm`` and ``\\rm`` each tokenize to a token whose basename is
+    ``rm`` and are correctly reported as real. Before the rm-detection scan, each
+    token is split on glued control operators and stripped of leading subshell- and
+    brace-grouping characters, so ``(rm -rf /etc)``, ``;rm -rf /etc`` and
+    ``echo|rm -rf /etc`` expose ``rm`` as a real invocation rather than a passive
+    mention.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        True when the command contains no real ``rm`` invocation.
+    """
+    if _command_contains_shell_expansion(command):
+        return False
+    all_physical_command_lines = re.split(r"[\n\r]+", command)
+    for each_command_line in all_physical_command_lines:
+        try:
+            all_command_tokens = _split_command_preserving_windows_backslashes(each_command_line)
+        except ValueError:
+            return False
+        if _any_shell_segment_executes_a_string_argument(all_command_tokens):
+            return False
+        all_operator_split_tokens = _explode_glued_shell_control_operators(all_command_tokens)
+        for each_token in all_operator_split_tokens:
+            each_program_token = _strip_leading_subshell_grouping_characters(each_token)
+            if Path(each_program_token).name == "rm":
+                return False
+    return True
+
+
+def _find_non_rm_destructive_pattern(command: str) -> str | None:
+    """Return the first non-rm-family destructive pattern description, or None.
+
+    Applied after the quoted-mention guard finds a matched rm-family pattern to be
+    a false positive: the command is rescanned for any other destructive pattern
+    (force push, git clean, mkfs, dd, DROP/TRUNCATE, signing bypass) so a real
+    non-rm hazard riding alongside the quoted mention
+    (``grep 'rm -rf' f && git push --force origin main``) still prompts.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        The description of the first matching non-rm-family pattern, or None.
+    """
+    for each_pattern_regex, each_pattern_description in DESTRUCTIVE_BASH_PATTERNS:
+        if _destructive_match_is_rm_family(each_pattern_description):
+            continue
+        if each_pattern_regex.search(command):
+            return each_pattern_description
+    return None
+
+
+def _find_non_force_push_destructive_hazard(command: str) -> str | None:
+    """Return a destructive hazard riding alongside a convergence force-push, or None.
+
+    Applied when a force-push to a convergence branch is being auto-allowed: the
+    command is rescanned for any destructive pattern other than the force-push itself
+    so a real co-resident hazard (``git push --force origin claude/x && git reset
+    --hard``) still prompts. The force-push patterns are skipped because they are the
+    very thing the convergence exemption grants. An rm-family pattern is skipped when
+    it is only a quoted mention (``echo "rm -rf foo" && git push --force origin
+    claude/x``), so a passive ``rm`` string does not re-block a legitimate push.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        The description of the first co-resident destructive hazard, or None.
+    """
+    for each_pattern_regex, each_pattern_description in DESTRUCTIVE_BASH_PATTERNS:
+        if "git push" in each_pattern_description and (
+            "force" in each_pattern_description or "-f" in each_pattern_description
+        ):
+            continue
+        if not each_pattern_regex.search(command):
+            continue
+        if _destructive_match_is_rm_family(
+            each_pattern_description
+        ) and command_has_no_real_rm_invocation(command):
+            continue
+        return each_pattern_description
+    return None
+
+
+def _command_contains_non_rm_family_destructive_pattern(command: str) -> bool:
+    """Return True when any destructive pattern in the command is not rm-family.
+
+    The compound ephemeral auto-allow grants only when every destructive pattern
+    present is an rm deletion. A git reset --hard, force push, git clean, mkfs, dd,
+    or DROP/TRUNCATE riding inside the chain is not bounded by the ephemeral rm
+    targets, so its presence declines the whole auto-allow.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        True when at least one matching destructive pattern is not rm-family.
+    """
+    for each_pattern_regex, each_pattern_description in DESTRUCTIVE_BASH_PATTERNS:
+        if each_pattern_regex.search(command) and not _destructive_match_is_rm_family(
+            each_pattern_description
+        ):
+            return True
+    return False
+
+
+def _rm_segment_targets_only_absolute_ephemeral_paths(all_rm_segment_tokens: list[str]) -> bool:
+    """Return True when an ``rm`` segment's every target is an absolute ephemeral path.
+
+    ``all_rm_segment_tokens`` is one shell segment beginning at its ``rm`` command
+    token. Rejects the segment (returns False) when the segment carries an output
+    redirection (``rm -rf /tmp/x>/etc/passwd`` truncates ``/etc/passwd`` even though
+    the deletion targets an ephemeral path; shlex keeps the ``>`` glued to the target
+    token when no whitespace separates them), when an unsafe flag precedes ``--``,
+    when there are no targets, when a target is relative (the compound auto-allow
+    refuses to resolve relative targets without a trusted working directory), when
+    a target basename is a glob wildcard, when a target is a bare ephemeral root or
+    a bare worktrees container, or when a target is not inside an ephemeral
+    directory.
+
+    Args:
+        all_rm_segment_tokens: Shlex tokens of a single ``rm`` segment, the first
+            token being the ``rm`` command.
+
+    Returns:
+        True when every target is an absolute ephemeral path safe to auto-allow.
+    """
+    if _segment_redirects_output_to_a_file(all_rm_segment_tokens):
+        return False
+    tokens_after_rm = all_rm_segment_tokens[1:]
+    if _rm_flags_before_double_dash_are_unsafe(tokens_after_rm):
+        return False
+    all_target_tokens = _collect_rm_target_tokens(tokens_after_rm)
+    if not all_target_tokens:
+        return False
+    for each_target_token in all_target_tokens:
+        each_expanded_target = os.path.expanduser(each_target_token)
+        each_is_absolute = (
+            os.path.isabs(each_expanded_target)
+            or each_expanded_target.replace("\\", "/").startswith("/")
+        )
+        if not each_is_absolute:
+            return False
+        each_resolved_target = os.path.normpath(each_expanded_target)
+        if _path_basename_is_shell_glob_wildcard(each_resolved_target):
+            return False
+        if _path_is_bare_ephemeral_root(each_resolved_target):
+            return False
+        if _path_is_bare_named_worktrees_container(each_resolved_target):
+            return False
+        if not directory_is_ephemeral(each_resolved_target):
+            return False
+    return True
+
+
+def _segment_redirects_output_to_a_file(all_segment_tokens: list[str]) -> bool:
+    """Return True when a segment writes its output to a file via shell redirection.
+
+    An output redirection (a plain, appending, clobbering, or combined operator, with
+    or without a leading file-descriptor number) truncates or rewrites the redirect
+    target, so ``cat /dev/null > /etc/important.conf`` destroys the target file even
+    though ``cat`` itself is read-only. A file-descriptor duplication that names another
+    descriptor as its target writes no file and stays read-only. shlex keeps a
+    redirect operator glued to an adjacent program or target token when no whitespace
+    separates them (``echo pwned>/etc/passwd``, ``cat secret>/etc/x``), so each token is
+    scanned for a redirect operator anywhere within it rather than tested for exact
+    equality. The benign-segment check declines any segment carrying a redirect operator
+    so a benign program that overwrites a non-ephemeral file does not ride the ephemeral
+    ``rm`` auto-allow.
+
+    Args:
+        all_segment_tokens: Shlex tokens of one shell segment.
+
+    Returns:
+        True when any token contains an output-redirection operator.
+    """
+    output_redirection_pattern = re.compile(OUTPUT_REDIRECTION_OPERATOR_PATTERN)
+    return any(
+        output_redirection_pattern.search(each_token) for each_token in all_segment_tokens
+    )
+
+
+def _all_positional_tokens_after_leader(all_segment_tokens: list[str]) -> list[str]:
+    """Return the non-flag tokens that follow a segment's leading program.
+
+    Skips leading ``VAR=value`` assignments, the program token itself, every
+    dash-prefixed flag, and any ``key=value`` flag value, leaving the positional
+    words that name a subcommand chain (``repo``, ``delete`` in ``gh repo delete``;
+    ``stash``, ``drop`` in ``git stash drop``).
+
+    Args:
+        all_segment_tokens: Shlex tokens of one shell segment.
+
+    Returns:
+        The positional tokens after the leading program, in order.
+    """
+    leading_assignment_pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+    first_program_index = next(
+        (
+            index
+            for index, token in enumerate(all_segment_tokens)
+            if not leading_assignment_pattern.match(token)
+        ),
+        None,
+    )
+    if first_program_index is None:
+        return []
+    return [
+        each_token
+        for each_token in all_segment_tokens[first_program_index + 1:]
+        if not each_token.startswith("-") and "=" not in each_token
+    ]
+
+
+def _gh_segment_names_an_explicit_method(
+    all_segment_tokens: list[str], target_method: str
+) -> bool:
+    """Return True when a ``gh`` segment explicitly names ``target_method``.
+
+    Recognizes both ``gh`` flag spellings: the space-separated form where the flag
+    (``-X``/``--method``) is its own token and the next token names the method
+    (``-X GET``), and the glued forms where the method is inside the flag token
+    (``-XGET``, ``--method=GET``). The match is case-insensitive against the
+    already-uppercased ``target_method``.
+
+    Args:
+        all_segment_tokens: Shlex tokens of one shell segment.
+        target_method: The HTTP method name to match, uppercased.
+
+    Returns:
+        True when an ``-X``/``--method`` flag names ``target_method``.
+    """
+    for each_index, each_token in enumerate(all_segment_tokens):
+        if each_token.startswith(GH_SHORT_METHOD_FLAG_PREFIX):
+            inline_method = each_token[len(GH_SHORT_METHOD_FLAG_PREFIX) :]
+        elif each_token.startswith(GH_LONG_METHOD_FLAG_EQUALS_PREFIX):
+            inline_method = each_token[len(GH_LONG_METHOD_FLAG_EQUALS_PREFIX) :]
+        else:
+            inline_method = ""
+        if inline_method.upper() == target_method:
+            return True
+        if each_token not in ALL_GH_HTTP_WRITE_METHOD_FLAGS:
+            continue
+        each_next_index = each_index + 1
+        if each_next_index < len(all_segment_tokens) and (
+            all_segment_tokens[each_next_index].upper() == target_method
+        ):
+            return True
+    return False
+
+
+def _gh_segment_carries_a_request_body_field(all_segment_tokens: list[str]) -> bool:
+    """Return True when a ``gh api`` segment adds a request-body field.
+
+    ``gh api`` adds a parameter to the request body through ``-f``/``--raw-field``,
+    ``-F``/``--field``, or ``--input``, each accepted as its own token (``-f title=x``,
+    ``--field a=b``) or glued to its value (``-ftitle=x``, ``--field=a=b``,
+    ``--input=body.json``).
+
+    Args:
+        all_segment_tokens: Shlex tokens of one shell segment.
+
+    Returns:
+        True when any token is a request-body field flag.
+    """
+    for each_token in all_segment_tokens:
+        if each_token in ALL_GH_API_REQUEST_BODY_FIELD_FLAGS:
+            return True
+        if each_token.startswith(ALL_GH_API_GLUED_REQUEST_BODY_FIELD_FLAG_PREFIXES):
+            return True
+    return False
+
+
+def _gh_segment_runs_an_http_write_method(all_segment_tokens: list[str]) -> bool:
+    """Return True when a ``gh`` segment performs an HTTP write through ``gh api``.
+
+    ``gh api`` reaches the GitHub API with whatever HTTP method an ``-X``/``--method``
+    flag names. A GET is read-only, but POST, PUT, PATCH and DELETE mutate server
+    state (``gh api repos/foo -X DELETE``). Both flag spellings are recognized: the
+    space-separated form where the method is its own token (``-X DELETE``) and the
+    glued forms where the method is inside the flag token (``-XDELETE``,
+    ``--method=DELETE``). The method flag is dash-prefixed and so is dropped from the
+    positional-token list the read-only check inspects, so the raw segment tokens are
+    scanned here: when a write-method flag names a write method, the segment is
+    reported as a write rather than a read.
+
+    ``gh api`` also defaults the method to POST when any request-body field flag
+    (``-f``/``--raw-field``, ``-F``/``--field``, ``--input``) is present and no explicit
+    method is given, so a field-carrying segment that does not explicitly name GET
+    (``gh api repos/foo -f title=x``) is an implicit-POST write. An explicit ``-X
+    GET``/``--method GET`` keeps such a segment read-only.
+
+    Args:
+        all_segment_tokens: Shlex tokens of one shell segment.
+
+    Returns:
+        True when the segment names an HTTP write method via ``gh api``.
+    """
+    if any(
+        _gh_segment_names_an_explicit_method(all_segment_tokens, each_write_method)
+        for each_write_method in ALL_GH_HTTP_WRITE_METHODS
+    ):
+        return True
+    if _gh_segment_carries_a_request_body_field(all_segment_tokens):
+        return not _gh_segment_names_an_explicit_method(
+            all_segment_tokens, GH_HTTP_READ_ONLY_METHOD
+        )
+    return False
+
+
+def _git_fetch_segment_forces_a_local_ref_update(
+    all_positional_tokens: list[str], all_segment_tokens: list[str]
+) -> bool:
+    """Return True when a ``git fetch`` segment force-updates a local ref.
+
+    ``git fetch`` is read-only in normal use, but two spellings force-update the local
+    destination ref even when the update is not a fast-forward, overwriting a local
+    branch and discarding local commits. A ``+``-prefixed refspec forces only the refs
+    it names: ``git fetch origin +refs/heads/main:refs/heads/main`` is detected from a
+    positional refspec that begins with ``+`` or names a ``+refs/`` source. The ``-f``/
+    ``--force`` flag forces every named refspec at once: ``git fetch --force origin
+    refs/heads/main:refs/heads/main`` discards local ``main`` commits with no ``+`` in
+    sight. The force flag is dash-prefixed and so is dropped from the positional-token
+    list, so the raw segment tokens are scanned for it, mirroring how the ``gh api``
+    write-method check scans raw tokens for ``-X``.
+
+    Args:
+        all_positional_tokens: The non-flag tokens after the leading ``git`` program.
+        all_segment_tokens: Shlex tokens of the whole ``git`` segment.
+
+    Returns:
+        True when any positional refspec or a force flag force-updates a local ref.
+    """
+    if any(each_token in ALL_GIT_FETCH_FORCE_FLAGS for each_token in all_segment_tokens):
+        return True
+    return any(
+        each_token.startswith("+") or "+refs/" in each_token
+        for each_token in all_positional_tokens
+    )
+
+
+def _git_config_segment_runs_a_read_only_mode(all_segment_tokens: list[str]) -> bool:
+    """Return True only when a ``git config`` segment carries a read-only mode flag.
+
+    ``git config`` parses a read-only mode flag (``--get``/``--list``/``-l`` and the
+    rest of ALL_GIT_CONFIG_READ_ONLY_FLAGS) only while it sits before the first
+    positional key. Once a key positional appears (``git config core.editor ...``),
+    every following dash-prefixed token is the value being set, so ``git config
+    core.editor --get`` stores the literal string ``--get`` rather than querying.
+    Reading the mode from the flags that precede the first key positional, rather
+    than scanning the whole segment, keeps a value that happens to equal a read-only
+    flag string from masking the write.
+
+    Args:
+        all_segment_tokens: Shlex tokens of the whole ``git config`` segment.
+
+    Returns:
+        True when a read-only flag precedes the first ``config`` key positional.
+    """
+    config_token_index = next(
+        (
+            each_index
+            for each_index, each_token in enumerate(all_segment_tokens)
+            if each_token.lower() == "config"
+        ),
+        None,
+    )
+    if config_token_index is None:
+        return False
+    for each_token in all_segment_tokens[config_token_index + 1:]:
+        if not each_token.startswith("-"):
+            return False
+        if each_token in ALL_GIT_CONFIG_READ_ONLY_FLAGS:
+            return True
+    return False
+
+
+def _git_segment_runs_a_mutating_mode(all_positional_tokens: list[str], all_segment_tokens: list[str]) -> bool:
+    """Return True when a ``git config``, ``git remote`` or ``git fetch`` segment mutates state.
+
+    ``config``, ``remote`` and ``fetch`` appear in the git read-only allowlist for their
+    query modes (``git config --list``, ``git remote -v``, plain ``git fetch``) but each
+    carries a write mode: ``git config key value`` and ``git config --global key value``
+    set a value, ``git remote add|remove|rm|set-url`` change the remote table, and
+    ``git fetch origin +refs/heads/main:refs/heads/main`` force-updates a local ref. A
+    ``config`` segment mutates unless a read-only flag (``--get``/``--list`` and the rest
+    of ALL_GIT_CONFIG_READ_ONLY_FLAGS) precedes the first positional key; a ``remote``
+    segment mutates unless the first positional verb after ``remote`` is a read-only one
+    (``show``, ``get-url``); a ``fetch`` segment mutates when it carries a ``+``-prefixed
+    force refspec or a ``-f``/``--force`` flag. Both the config mode and the remote verb
+    are read positionally rather
+    than by scanning the whole segment for any read-only token, because a value that
+    follows the key positional (``git config core.editor --get`` stores ``--get``) and a
+    global ``-v``/``--verbose`` before a write verb (``git remote -v add evil url``) would
+    otherwise let a read-only token anywhere mask the write.
+
+    Args:
+        all_positional_tokens: The non-flag tokens after the leading ``git`` program.
+        all_segment_tokens: Shlex tokens of the whole ``git`` segment.
+
+    Returns:
+        True when the segment runs a mutating ``config``, ``remote`` or ``fetch`` mode.
+    """
+    all_lowercased_positional_tokens = [each_token.lower() for each_token in all_positional_tokens]
+    if "config" in all_lowercased_positional_tokens:
+        return not _git_config_segment_runs_a_read_only_mode(all_segment_tokens)
+    if "remote" in all_lowercased_positional_tokens:
+        remote_verb_index = all_lowercased_positional_tokens.index("remote") + 1
+        all_remote_verbs = all_lowercased_positional_tokens[remote_verb_index:]
+        if not all_remote_verbs:
+            return False
+        return all_remote_verbs[0] not in ALL_GIT_REMOTE_READ_ONLY_VERBS
+    if "fetch" in all_lowercased_positional_tokens:
+        return _git_fetch_segment_forces_a_local_ref_update(
+            all_positional_tokens, all_segment_tokens
+        )
+    return False
+
+
+def _subcommand_dispatching_segment_is_read_only(
+    leading_program_basename: str,
+    all_read_only_subcommands: frozenset[str],
+    all_segment_tokens: list[str],
+) -> bool:
+    """Return True only when a subcommand-dispatching segment runs a read-only verb.
+
+    ``git`` and ``gh`` dispatch destructive operations through subcommands the
+    DESTRUCTIVE_BASH_PATTERNS table does not separately enumerate (``gh repo delete``,
+    ``git checkout -- .``, ``git stash drop``, ``git branch -D``), so a chained
+    destructive subcommand would otherwise ride the ephemeral ``rm`` auto-allow. The
+    check fails closed: a segment is benign only when a read-only subcommand verb sits
+    in the program's leading subcommand window and the segment runs no known mutating
+    mode. The window spans the first positional for ``git`` (``git status``) and the
+    first two positionals for ``gh`` (``gh api``, ``gh pr view``), matching how each
+    program names its subcommand. Bounding the search to that window keeps a read-only
+    verb used as a deeper argument to a destructive subcommand (``gh repo delete
+    status``, ``git push origin log``, ``git branch -D log``) from satisfying the check.
+    ``git config`` and ``git remote`` sit in the read-only allowlist for their query
+    modes yet carry write modes (``git config --global key value``, ``git remote add
+    evil url``), and ``gh api`` performs an HTTP write when an ``-X``/``--method`` flag
+    names POST, PUT, PATCH or DELETE; each such mutating mode declines the segment.
+
+    Args:
+        leading_program_basename: The dispatching program (``git`` or ``gh``).
+        all_read_only_subcommands: The read-only subcommand verbs for the dispatching
+            program.
+        all_segment_tokens: Shlex tokens of one shell segment.
+
+    Returns:
+        True when the segment's subcommand is on the read-only allowlist and the
+        segment runs no mutating mode.
+    """
+    all_positional_tokens = _all_positional_tokens_after_leader(all_segment_tokens)
+    subcommand_window_depth = (
+        ALL_READ_ONLY_SUBCOMMAND_POSITION_DEPTHS_BY_DISPATCHING_PROGRAM[
+            leading_program_basename
+        ]
+    )
+    all_leading_subcommand_tokens = all_positional_tokens[:subcommand_window_depth]
+    runs_a_read_only_subcommand = any(
+        each_token.lower() in all_read_only_subcommands
+        for each_token in all_leading_subcommand_tokens
+    )
+    if not runs_a_read_only_subcommand:
+        return False
+    if leading_program_basename == "git" and _git_segment_runs_a_mutating_mode(
+        all_positional_tokens, all_segment_tokens
+    ):
+        return False
+    if leading_program_basename == "gh" and _gh_segment_runs_an_http_write_method(
+        all_segment_tokens
+    ):
+        return False
+    return True
+
+
+def _benign_program_writes_a_file_via_output_flag(
+    leading_program_basename: str, all_segment_tokens: list[str]
+) -> bool:
+    """Return True when a benign program writes a file through its own output flag.
+
+    Some allowlisted reporting commands overwrite an arbitrary file without a shell
+    redirection: ``sort -o FILE`` truncates and rewrites ``FILE`` the same way
+    ``cat ... > FILE`` does, so ``sort -o /etc/important.conf /etc/passwd`` destroys a
+    non-ephemeral file even though ``sort`` is read-only by default. A segment whose
+    leading program is in ALL_FILE_WRITING_OUTPUT_FLAGS_BY_BENIGN_PROGRAM and carries
+    one of that program's file-writing output flags is reported as a write so it
+    declines the ephemeral ``rm`` auto-allow.
+
+    Args:
+        leading_program_basename: The segment's leading program basename, lowercased.
+        all_segment_tokens: Shlex tokens of one shell segment.
+
+    Returns:
+        True when the segment writes a file through the program's output flag.
+    """
+    all_file_writing_output_flags = ALL_FILE_WRITING_OUTPUT_FLAGS_BY_BENIGN_PROGRAM.get(
+        leading_program_basename
+    )
+    if all_file_writing_output_flags is None:
+        return False
+    return any(
+        each_token in all_file_writing_output_flags
+        or each_token.split("=", 1)[0] in all_file_writing_output_flags
+        for each_token in all_segment_tokens
+    )
+
+
+def _segment_leading_program_is_benign(all_segment_tokens: list[str]) -> bool:
+    """Return True when a non-rm segment's leading program is a benign reporting command.
+
+    A compound chain auto-allow requires every segment that is not an ``rm`` deletion
+    to be a recognized read-only or reporting command (``echo``, ``gh``, ``head``,
+    ``cat``, ``grep`` and the rest of ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS). A segment
+    leading with any other program — ``shred``, ``truncate``, ``find ... -delete``,
+    ``chmod -R``, ``mv`` and every other destructive command absent from the
+    DESTRUCTIVE_BASH_PATTERNS table — is treated as non-benign so the chain falls
+    through to the prompt rather than riding the ephemeral ``rm`` auto-allow.
+
+    Three further constraints fail the segment closed even when its leading program is
+    allowlisted: an output redirection (``cat /dev/null > /etc/important.conf``)
+    truncates the redirect target; a benign program that writes a file through its own
+    output flag (``sort -o /etc/important.conf``) overwrites the named file without a
+    shell redirection; and a ``git`` or ``gh`` segment must run a read-only subcommand
+    in a read-only mode (``git status``, ``gh pr view``, ``git config --list``) rather
+    than a destructive subcommand (``gh repo delete``, ``git checkout -- .``,
+    ``git stash drop``) or a mutating mode of an otherwise-read-only subcommand
+    (``git config --global key value``, ``git remote add evil url``, ``gh api -X
+    DELETE``).
+
+    Args:
+        all_segment_tokens: Shlex tokens of one shell segment, possibly led by
+            ``VAR=value`` assignments before the program token.
+
+    Returns:
+        True when the segment's leading program is in the benign allowlist.
+    """
+    leading_command_token = _leading_command_token(all_segment_tokens)
+    if leading_command_token is None:
+        return False
+    leading_program_basename = Path(leading_command_token).name.lower()
+    if leading_program_basename not in ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS:
+        return False
+    if _segment_redirects_output_to_a_file(all_segment_tokens):
+        return False
+    if _benign_program_writes_a_file_via_output_flag(leading_program_basename, all_segment_tokens):
+        return False
+    all_read_only_subcommands = ALL_READ_ONLY_SUBCOMMANDS_BY_DISPATCHING_PROGRAM.get(
+        leading_program_basename
+    )
+    if all_read_only_subcommands is not None:
+        return _subcommand_dispatching_segment_is_read_only(
+            leading_program_basename, all_read_only_subcommands, all_segment_tokens
+        )
+    return True
+
+
+class CompoundSegmentVerdict(enum.Enum):
+    """Auto-allow classification of one segment in a compound ``rm`` chain."""
+
+    DECLINES_AUTO_ALLOW = enum.auto()
+    IS_EPHEMERAL_RM = enum.auto()
+    IS_BENIGN = enum.auto()
+
+
+def _compound_segment_auto_allow_verdict(
+    all_segment_tokens: list[str],
+) -> CompoundSegmentVerdict:
+    """Classify one compound-chain segment for the ephemeral ``rm`` auto-allow.
+
+    Returns DECLINES_AUTO_ALLOW when the segment's leading program executes a quoted
+    string argument as code, when an ``rm`` segment targets a non-ephemeral path, or
+    when a non-``rm`` segment is not a benign reporting command. Returns
+    IS_EPHEMERAL_RM when the segment is an ``rm`` deletion whose every target is an
+    absolute ephemeral path. Returns IS_BENIGN for an empty segment or a benign
+    non-``rm`` segment.
+
+    Args:
+        all_segment_tokens: Shlex tokens of one shell segment with control operators
+            removed.
+
+    Returns:
+        The CompoundSegmentVerdict for the segment.
+    """
+    if not all_segment_tokens:
+        return CompoundSegmentVerdict.IS_BENIGN
+    if _command_executes_a_string_argument(all_segment_tokens):
+        return CompoundSegmentVerdict.DECLINES_AUTO_ALLOW
+    each_rm_token_index = next(
+        (
+            index
+            for index, token in enumerate(all_segment_tokens)
+            if Path(token).name == "rm"
+        ),
+        None,
+    )
+    if each_rm_token_index is None:
+        if _segment_leading_program_is_benign(all_segment_tokens):
+            return CompoundSegmentVerdict.IS_BENIGN
+        return CompoundSegmentVerdict.DECLINES_AUTO_ALLOW
+    if _rm_segment_targets_only_absolute_ephemeral_paths(
+        all_segment_tokens[each_rm_token_index:]
+    ):
+        return CompoundSegmentVerdict.IS_EPHEMERAL_RM
+    return CompoundSegmentVerdict.DECLINES_AUTO_ALLOW
+
+
+def rm_compound_targets_only_absolute_ephemeral_paths(command: str) -> bool:
+    """Return True when a compound command's every ``rm`` segment is safe to auto-allow.
+
+    Handles destructive cleanup chains that declare no ephemeral working directory,
+    such as ``rm -rf /tmp/pr136 /tmp/difftest && echo 'cleaned'``. Splits the
+    command into shell segments and requires all of: at least one segment runs
+    ``rm``; every ``rm`` segment targets only absolute ephemeral paths; every
+    non-``rm`` segment leads with a benign reporting command from
+    ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS, so a ``shred``, ``truncate``,
+    ``find ... -delete``, ``chmod -R`` or ``mv`` segment that destroys
+    non-ephemeral data declines the auto-allow; no segment's leading program
+    executes a quoted string argument as code — a shell interpreter, ``eval``,
+    ``exec``, ``source``, a privilege or argument wrapper (``sudo``, ``su``,
+    ``env``, ``xargs``), or a command-launcher wrapper that forwards argv to such a
+    program (``timeout bash -c '...'``); no segment matches a destructive pattern
+    that is not rm-family (force push, git clean, git reset --hard, mkfs, dd,
+    DROP/TRUNCATE, signing bypass); and the command contains no shell expansion.
+
+    Fails closed (returns False) on shell expansion (``$`` or backtick), on a
+    tokenization error, and whenever any ``rm`` segment fails the absolute-ephemeral
+    target check, so the compound auto-allow grants only on chains it can fully
+    bound.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        True when every ``rm`` segment targets only absolute ephemeral paths and no
+        other hazard is present.
+    """
+    if _command_contains_shell_expansion(command):
+        return False
+    if _command_contains_non_rm_family_destructive_pattern(command):
+        return False
+    has_seen_rm_segment = False
+    for each_command_line in re.split(r"[\n\r]+", command):
+        try:
+            all_command_tokens = _split_command_preserving_windows_backslashes(each_command_line)
+        except ValueError:
+            return False
+        all_operator_split_tokens = _explode_glued_shell_control_operators(all_command_tokens)
+        for each_segment in _split_tokens_into_shell_segments(all_operator_split_tokens):
+            each_verdict = _compound_segment_auto_allow_verdict(each_segment)
+            if each_verdict == CompoundSegmentVerdict.DECLINES_AUTO_ALLOW:
+                return False
+            if each_verdict == CompoundSegmentVerdict.IS_EPHEMERAL_RM:
+                has_seen_rm_segment = True
+    return has_seen_rm_segment
 
 
 def targets_only_claude_directory(command: str) -> bool:
@@ -564,6 +1569,13 @@ def main() -> None:
 
     matched_description = find_destructive_pattern(command)
 
+    if (
+        matched_description is not None
+        and _destructive_match_is_rm_family(matched_description)
+        and command_has_no_real_rm_invocation(command)
+    ):
+        matched_description = _find_non_rm_destructive_pattern(command)
+
     if matched_description is not None and targets_only_claude_directory(command):
         sys.exit(0)
 
@@ -579,6 +1591,13 @@ def main() -> None:
     if matched_description is not None and _ephemeral_recursive_rm_auto_allow_granted(command, matched_description):
         sys.exit(0)
 
+    if (
+        matched_description is not None
+        and _destructive_match_is_rm_family(matched_description)
+        and rm_compound_targets_only_absolute_ephemeral_paths(command)
+    ):
+        sys.exit(0)
+
     if matched_description is not None and "git reset --hard" in matched_description:
         if _git_reset_hard_allowed_for_command(command, os.getcwd()):
             sys.exit(0)
@@ -589,14 +1608,10 @@ def main() -> None:
         and ("force" in matched_description or "-f" in matched_description)
         and _force_push_targets_convergence_branch(command)
     ):
-        for each_pattern, each_description in DESTRUCTIVE_BASH_PATTERNS:
-            if "git push" in each_description and ("force" in each_description or "-f" in each_description):
-                continue
-            if each_pattern.search(command):
-                matched_description = each_description
-                break
-        else:
+        co_resident_hazard_description = _find_non_force_push_destructive_hazard(command)
+        if co_resident_hazard_description is None:
             sys.exit(0)
+        matched_description = co_resident_hazard_description
 
     if matched_description is not None:
         ask_response = {
