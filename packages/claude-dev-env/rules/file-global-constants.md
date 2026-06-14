@@ -20,7 +20,13 @@ Test-file detection uses the following anchored patterns against the full relati
 
 ## `config/` files are exempt
 
-Constants placed in `config/` satisfy the constants-location rule; the use-count requirement applies only to production code outside `config/`.
+Constants placed in `config/` satisfy the constants-location rule; the use-count rule applies only to production code outside `config/`.
+
+## Dead constant in a dedicated constants module (cross-module)
+
+The use-count rule above governs a file-global constant in production code outside `config/` by counting same-file references. A dedicated constants module — a file whose name ends in `_constants.py`, or any module under a `config/` directory — exports its constants to importer modules elsewhere, so a same-file count proves nothing. A separate hook, `check_dead_module_constants` (dispatched from `code_rules_enforcer`), governs these modules: it flags an `UPPER_SNAKE` constant defined in the written module whose name appears in no `.py` module anywhere under the enclosing package tree — not imported, not read, not listed in an `__all__` literal, not named in a string annotation. That is the dead exported constant CODE_RULES §9.8 targets, caught at Write/Edit time.
+
+The scan resolves the enclosing package tree from the written file: for a constants module inside a package subdirectory, the tree is the package's parent (so an importer one directory up is in scope); for a `config/` module, the tree is the parent of the `config` directory. A module that declares its own `__all__` is skipped — the author's explicit export surface is taken as the liveness contract. A reference from a test module under the tree keeps a constant live. Test modules and migration modules are themselves exempt from the check.
 
 ## Examples
 

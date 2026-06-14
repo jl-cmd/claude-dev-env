@@ -54,6 +54,9 @@ from code_rules_constants_config import (  # noqa: E402
 from code_rules_dead_dataclass_field import (  # noqa: E402
     check_dead_dataclass_fields,
 )
+from code_rules_dead_module_constant import (  # noqa: E402
+    check_dead_module_constants,
+)
 from code_rules_docstrings import (  # noqa: E402
     check_docstring_args_match_signature,
     check_docstring_format,
@@ -268,6 +271,9 @@ def validate_content(
         )
         all_issues.extend(
             check_dead_dataclass_fields(content, file_path, full_file_content)
+        )
+        all_issues.extend(
+            check_dead_module_constants(content, file_path, full_file_content)
         )
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
