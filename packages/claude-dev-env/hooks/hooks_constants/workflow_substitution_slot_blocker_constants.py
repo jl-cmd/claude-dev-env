@@ -8,7 +8,7 @@ WORKFLOW_FILE_SUFFIX: str = ".workflow.js"
 
 CORRECTIVE_MESSAGE: str = (
     "BLOCKED [workflow-substitution-slot]: A bare per-iteration index token "
-    "(for example `cand_i`) appears as a path or output-key segment inside a "
+    "(for example `cand_i`) appears as a per-iteration path segment inside a "
     ".workflow.js agent-prompt block that loops over an index. A bare `_i` "
     "token reads as a fixed literal, so an agent can create one literal "
     "directory and overwrite it across every iteration -- collapsing an "
