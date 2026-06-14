@@ -82,7 +82,7 @@ def _make_blocking_line(
     hook_event: str = "PreToolUse",
     tool_use_id: str = "toolu_002",
     blocking_message: str = "blocked for reason",
-    command: str = "python C:/Users/jon/.claude/hooks/blocking/content_search_to_zoekt_redirector.py",
+    command: str = "python C:/Users/jon/.claude/hooks/blocking/block_main_commit.py",
     timestamp: str = "2026-04-24T13:32:54.293Z",
     cwd: str = "Y:\\Projects\\repo",
     git_branch: str = "main",
@@ -640,7 +640,7 @@ def test_run_summary_prints_table_when_rows_returned(
 ) -> None:
     fake_cursor = MagicMock()
     fake_cursor.fetchall.return_value = [
-        ("content_search_to_zoekt_redirector.py", "blocking", 7, "Bash(grep foo)"),
+        ("block_main_commit.py", "blocking", 7, "Bash(git commit)"),
     ]
     fake_connection = MagicMock()
     fake_connection.cursor.return_value.__enter__.return_value = fake_cursor
@@ -652,7 +652,7 @@ def test_run_summary_prints_table_when_rows_returned(
 
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "content_search_to_zoekt_redirector.py" in captured.out
+    assert "block_main_commit.py" in captured.out
     assert "blocking" in captured.out
     assert "7" in captured.out
 

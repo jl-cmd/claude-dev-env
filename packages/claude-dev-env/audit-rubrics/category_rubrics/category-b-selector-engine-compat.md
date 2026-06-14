@@ -22,7 +22,7 @@
 | B3 | Regex syntax vs engine flavor | Lookbehind / lookahead support; named groups (`(?P<…>)` vs `(?<…>)`); backreferences; Unicode character classes. |
 | B4 | Shell / CLI / cmdlet syntax vs runtime version | PowerShell 5.1 vs 7+; bash 3 vs 5; cmdlet parameters added in later versions; CLI flag deprecations. |
 | B5 | JSON path / XPath / structural query vs library | jq vs Python jsonpath-ng vs JavaScript jsonpath syntax; XPath 1.0 vs 2.0/3.0 functions. |
-| B6 | Search query DSL vs engine | Lucene / Elasticsearch / Zoekt / OpenSearch syntax; differences in escaping, fuzzy matching, multi-field queries. |
+| B6 | Search query DSL vs engine | Lucene / Elasticsearch / OpenSearch syntax; differences in escaping, fuzzy matching, multi-field queries. |
 | B7 | ORM vs raw SQL semantic differences | SQLAlchemy `.filter()` vs `.filter_by()`; Django Q expressions vs raw SQL; lazy vs eager evaluation. |
 
 Use 5–10 sub-buckets for any single audit. For an audit that doesn't touch SQL or web frontends, drop B1 / B2 entirely and split B4 across the relevant runtimes.

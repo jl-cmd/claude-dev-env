@@ -52,7 +52,7 @@ ID prefix: `find`.
 **B6. Search query DSL vs engine**
 - Every Lucene/Elasticsearch query string — verify field syntax (`field:value`), required/excluded operators (`+`, `-`), fuzzy (`term~2`), proximity (`"a b"~5`), and wildcard rules (`*`, `?`) match the engine version's parser.
 - Every Elasticsearch query DSL object (`match`, `bool`, `should`, `must`, `filter`, `term`, `terms`) — verify removed/renamed clauses across major versions (e.g. `query_string` defaults, `term` vs `match` for `text` fields, mapping-type removal in ES 7+).
-- Every Zoekt / Sourcegraph / OpenSearch / Solr query — verify dialect-specific operators and that the deployment has the relevant features enabled (e.g. ES `query_string` may be disabled for security).
+- Every Sourcegraph / OpenSearch / Solr query — verify dialect-specific operators and that the deployment has the relevant features enabled (e.g. ES `query_string` may be disabled for security).
 - Every escaping rule for special characters in the DSL (`+ - && || ! ( ) { } [ ] ^ " ~ * ? : \ /`) — verify the producer escapes them before handing to the engine; flag any user-supplied input concatenated raw.
 - Every analyzer assumption (whitespace, standard, keyword, ngram) — verify the index mapping matches what the query string assumes.
 
@@ -375,7 +375,7 @@ Write-Host "$TaskName registered — runs every ${IntervalMinutes}min against '$
   - Probe B5.c: confirm no JSON-pointer (`/foo/bar`) string literals, no JsonPath-style `$.foo[?(@.bar)]` patterns, no XPath `/html/body//div[@class='x']` patterns in any string in the four files. Walk every f-string and string literal.
 
 **B6. Search query DSL vs engine**
-- The four PR #394 files contain no search-engine queries, no Lucene/Elasticsearch/Zoekt/OpenSearch DSL.
+- The four PR #394 files contain no search-engine queries, no Lucene/Elasticsearch/OpenSearch DSL.
 - Shape B proof-of-absence expected. Adversarial probes must each verify a distinct search-DSL dimension:
   - Probe B6.a: confirm no HTTP calls to `/_search`, `/_msearch`, `/_count`, `/_analyze` endpoints — `sweep_empty_dirs.py` does not import `requests`, `urllib`, `httpx`, `aiohttp`. Pure stdlib + local config.
   - Probe B6.b: confirm no Lucene-syntax fragments — no `field:value`, no `+required -excluded`, no fuzzy `term~2`, no proximity `"a b"~5`. The only colon-bearing literals in the diff are PowerShell hash separators (`$($action.Execute) $($action.Arguments)` at `Install-SweepEmptyDirs.ps1:31`) and the time literal `"00:00"` at line 71 — neither is a search-DSL fragment.
