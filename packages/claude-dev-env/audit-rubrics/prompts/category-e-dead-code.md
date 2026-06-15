@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category E only** (dead code and unused imports). Skip A–D, F–P. Sub-bucket forced-exhaustion mode: Category E is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category E only** (dead code and unused imports). Skip A–D, F–P. Sub-bucket forced-exhaustion mode: Category E is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA]
 - Repo / artifact: [REPO_OR_ARTIFACT_NAME]
@@ -69,6 +69,13 @@ Inline the artifact under this section using the section types defined in the ch
 - Scaffolding bodies (`pass`, `...`, `raise NotImplementedError`, empty `else { }`, single-statement `return None` placeholders) without a `# TODO` comment ARE Category E findings under the project's "Document Temporary Code" rule.
 - Adversarial probes for proof-of-absence: (a) any empty brace block in PowerShell / TypeScript / Go (`{ }` with no statements)? (b) any function whose entire body is `pass` / `return` / `return None`? (c) any branch that exits cleanly only because the surrounding loop is no-op for an empty input — is the no-op intentional or a placeholder?
 
+**E9. Constants-module exports with no importer**
+- For every module-level `UPPER_SNAKE` constant the artifact adds to a `*_constants.py` or `config/` module, grep the whole repo for the constant name and locate at least one importer (`from <module> import <NAME>`) or in-file reference.
+- The file-global use-count gate exempts a constants module because every name it exports carries zero in-file references by design, so a genuinely dead export slips past the write-time gate; this sub-bucket is the audit-time backstop for that exemption.
+- A sibling that a consumer module imports is live; a constant that no `from ... import` line and no in-file reference names anywhere in the repo is dead and must be removed (CODE_RULES 9.8).
+- Constants reached only by string-form lookup (`getattr(config, name)`, settings registries) are live; name the dynamic consumer when you mark such a constant referenced.
+- Adversarial probes for proof-of-absence: (a) does the artifact add any constant to a `*_constants.py` / `config/` module whose name returns zero hits outside its own definition line? (b) is any newly added constant shadowed by a same-named constant in a sibling module so the importer resolves the other one? (c) does any constant exist only as an `__all__` re-export with no downstream importer of that re-export?
+
 ## Cross-bucket questions to answer at the end
 
 Q1: Are there imports unused locally but consumed by a re-export pattern in another file? Cite the cross-file pair if found, or state the hypothesis "none — neither file declares `__all__`" with the supporting evidence.
@@ -79,7 +86,7 @@ Q3: Which symbol most likely will *become* dead code after a near-future refacto
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket E1-E8, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P2 dead-code instances across these 8 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket E1-E9, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P2 dead-code instances across these 9 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 Note: most Category E findings are P2 (style / cleanup) unless the dead code masks an actual bug; the adversarial-pass quota uses P2 here.
 
@@ -87,7 +94,7 @@ Note: most Category E findings are P2 (style / cleanup) unless the dead code mas
 
 # Worked example: jl-cmd/claude-code-config PR #394
 
-Audit jl-cmd/claude-code-config PR #394 for **Category E only** (dead code and unused imports). Skip A–D, F–N. Sub-bucket forced-exhaustion mode: Category E is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit jl-cmd/claude-code-config PR #394 for **Category E only** (dead code and unused imports). Skip A–D, F–N. Sub-bucket forced-exhaustion mode: Category E is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 PR: feat(scripts): add sweep-empty-dirs utility and scheduled-task installer
 Head SHA: 62c9c169ee7a44824e5da25c4cf8b74fdca08a53
@@ -161,6 +168,12 @@ ID prefix: `find`.
 - No `# TODO` markers in the diff — the project's own rule (`code-standards.md` → "Document Temporary Code") requires TODOs only for scaffolding/placeholder code. The two `pass`/`continue` bodies above are production behavior, not scaffolding.
 - Adversarial probes for proof-of-absence: (a) does the PowerShell script have an empty `else { }` or empty branch body? — scan lines 14-71 for any `{ }` with no statements between the braces. (b) does any function body consist of a single `pass` or `return` with no work done? — every function body in this PR performs at least one statement. (c) does the `Status` branch (lines 14-31) exit cleanly even when `$task.Triggers` is empty? — the `foreach` loop at line 26 is a no-op for an empty collection, which is correct behavior, not a stub.
 
+**E9. Constants-module exports with no importer**
+- `config/sweep_config.py` is the only constants module this PR adds; it declares `DEFAULT_AGE_SECONDS` and `DEFAULT_POLL_INTERVAL` and imports nothing.
+- `DEFAULT_AGE_SECONDS` — imported by `sweep_empty_dirs.py` line 10 (`from config.sweep_config import DEFAULT_AGE_SECONDS`) and read in `_build_parser`'s `--age` default. Live.
+- `DEFAULT_POLL_INTERVAL` — imported by `sweep_empty_dirs.py` line 11 and read in `_build_parser`'s `--interval` default. Live.
+- Adversarial probes for proof-of-absence: (a) does either constant return zero importers when grepped across the repo? — each has exactly one importer (`sweep_empty_dirs.py`), so neither is dead. (b) is either name shadowed by a same-named constant in a sibling module? — `sweep_config.py` is the only module that declares them. (c) does either constant exist only as an `__all__` re-export with no downstream consumer? — `sweep_config.py` declares no `__all__`; both are imported directly.
+
 ## Cross-bucket questions to answer at the end
 
 Q1: Are there imports unused locally but consumed by a re-export pattern in another file? Cite the cross-file pair if found. (Hypothesis: none — neither `sweep_empty_dirs.py` nor `test_sweep_empty_dirs.py` defines `__all__`, so re-export is not in play. `config/sweep_config.py` declares two constants that ARE consumed by `sweep_empty_dirs.py` lines 10-11; this is normal cross-file consumption, not a re-export.)
@@ -169,7 +182,7 @@ Q3: Which symbol most likely will *become* dead code after a near-future refacto
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket E1-E8, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P2 dead-code instances across these 8 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket E1-E9, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P2 dead-code instances across these 9 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 Note: most Category E findings are P2 (style / cleanup) unless the dead code masks an actual bug; the adversarial-pass quota uses P2 here.
 
