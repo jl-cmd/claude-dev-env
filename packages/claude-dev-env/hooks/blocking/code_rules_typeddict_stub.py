@@ -197,6 +197,29 @@ def _alias_target_name(call_node: ast.Call, all_sibling_function_names: set[str]
     return callee.id if callee.id in all_sibling_function_names else ""
 
 
+def _module_string_literal_values(parsed_tree: ast.AST) -> set[str]:
+    string_literal_values: set[str] = set()
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, ast.Constant) and isinstance(each_node.value, str):
+            string_literal_values.add(each_node.value)
+    return string_literal_values
+
+
+def _target_accepts_forwarded_positional_call(
+    target_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    forwarded_argument_count: int,
+) -> bool:
+    arguments = target_node.args
+    if any(default is None for default in arguments.kw_defaults):
+        return False
+    positional_parameters = [*arguments.posonlyargs, *arguments.args]
+    total_positional_count = len(positional_parameters)
+    required_positional_count = total_positional_count - len(arguments.defaults)
+    if arguments.vararg is not None:
+        return forwarded_argument_count >= required_positional_count
+    return required_positional_count <= forwarded_argument_count <= total_positional_count
+
+
 def check_zero_payload_function_alias(content: str, file_path: str) -> list[str]:
     """Flag a module-level function that only forwards its parameters to a sibling.
 
@@ -207,11 +230,16 @@ def check_zero_payload_function_alias(content: str, file_path: str) -> list[str]
     discourages. Callers should invoke the sibling directly. Both `def` and
     `async def` forwarders are inspected.
 
-    A forwarder is left unflagged when any of these adds payload the sibling
-    lacks, so the two are not interchangeable: a decorator (caching, `@property`,
-    route registration); a parameter carrying a default value the target rejects;
-    a keyword-only / `*args` / `**kwargs` parameter; or an awaitability mismatch
-    where one of the alias and target is `async def` and the other is not.
+    A forwarder is left unflagged when any of these makes a direct call to the
+    target not equivalent to the alias: a decorator (caching, `@property`, route
+    registration); a parameter carrying a default value the target rejects; a
+    keyword-only / `*args` / `**kwargs` parameter on the alias; an awaitability
+    mismatch where one of the alias and target is `async def` and the other is
+    not; a forwarded positional call the live target's signature rejects (the
+    target has a keyword-only parameter without a default, or its positional
+    arity does not admit the forwarded argument count); or a name dispatched by a
+    string literal elsewhere in the module, where the named handler must exist for
+    a registry to resolve it.
 
     Hook infrastructure is intentionally NOT exempt — pass-through aliases inside
     hook modules are the motivating case. Test files and config files are exempt
@@ -235,11 +263,14 @@ def check_zero_payload_function_alias(content: str, file_path: str) -> list[str]
 
     function_node_by_name = _collect_module_function_nodes_by_name(parsed_tree)
     all_sibling_function_names = set(function_node_by_name)
+    all_string_literal_values = _module_string_literal_values(parsed_tree)
     issues: list[str] = []
     for each_statement in parsed_tree.body:
         if not isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if each_statement.decorator_list:
+            continue
+        if each_statement.name in all_string_literal_values:
             continue
         if not _has_only_positional_parameters(each_statement):
             continue
@@ -252,7 +283,12 @@ def check_zero_payload_function_alias(content: str, file_path: str) -> list[str]
         target_node = function_node_by_name[target_name]
         if _function_is_async(each_statement) != _function_is_async(target_node):
             continue
-        if not _forwards_parameters_unchanged(call_node, _function_parameter_names_in_order(each_statement)):
+        forwarded_parameter_names = _function_parameter_names_in_order(each_statement)
+        if not _forwards_parameters_unchanged(call_node, forwarded_parameter_names):
+            continue
+        if not _target_accepts_forwarded_positional_call(
+            target_node, len(forwarded_parameter_names)
+        ):
             continue
         issues.append(
             f"Line {each_statement.lineno}: {file_path}: zero-payload alias — "

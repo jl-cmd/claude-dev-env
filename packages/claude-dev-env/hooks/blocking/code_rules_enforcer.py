@@ -385,18 +385,20 @@ def _is_hook_infrastructure_python_target(file_path: str) -> bool:
     return get_file_extension(file_path) in ALL_PYTHON_EXTENSIONS
 
 
-def _hook_infrastructure_duplicate_body_issues(
+def _hook_infrastructure_blocking_issues(
     content: str,
     file_path: str,
     full_file_content: str | None = None,
     prior_full_file_content: str = "",
 ) -> list[str]:
-    """Run only the cross-file duplicate-body check for a hook Python target.
+    """Run the checks that still guard a hook Python target.
 
     The whole code-rules verdict stays off hook-infrastructure files, so this
-    runs the single check that must still guard them, span-scoped to the lines
-    an edit touched exactly as ``validate_content`` scopes it for production
-    code.
+    runs the two checks that must still guard them: the cross-file duplicate-body
+    check, span-scoped to the lines an edit touched exactly as ``validate_content``
+    scopes it for production code; and the zero-payload alias check, whose
+    docstring names hook modules as its motivating case, run over the whole
+    post-edit file.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -407,7 +409,8 @@ def _hook_infrastructure_duplicate_body_issues(
             recover the changed lines on an Edit.
 
     Returns:
-        The in-scope duplicate-body violations for the target.
+        The in-scope duplicate-body violations and the zero-payload alias
+        violations for the target.
     """
     effective_content = content if full_file_content is None else full_file_content
     all_changed_lines = (
@@ -415,11 +418,13 @@ def _hook_infrastructure_duplicate_body_issues(
         if full_file_content is not None
         else None
     )
-    return check_duplicate_function_body_across_files(
+    all_issues = check_duplicate_function_body_across_files(
         effective_content,
         file_path,
         all_changed_lines,
     )
+    all_issues.extend(check_zero_payload_function_alias(effective_content, file_path))
+    return all_issues
 
 
 def _without_line_prefix(violation_text: str) -> str:
@@ -542,7 +547,7 @@ def _run_precheck(
         old_content = _read_existing_file_content(target_path) or ""
         all_issues = validate_content(candidate_content, target_path, old_content)
     else:
-        all_issues = _hook_infrastructure_duplicate_body_issues(
+        all_issues = _hook_infrastructure_blocking_issues(
             candidate_content, target_path
         )
     for each_issue in all_issues:
@@ -757,18 +762,18 @@ def _report_blocking_violations(
     )
 
 
-def _report_hook_duplicate_body(
+def _report_hook_blocking_issues(
     content: str,
     file_path: str,
     full_file_content_after_edit: str | None,
     prior_full_file_content: str,
     deny_stream: TextIO,
 ) -> None:
-    """Write a deny payload when a hook target copies a sibling function body.
+    """Write a deny payload when a hook target trips a check that still guards it.
 
-    The full code-rules verdict stays off hook-infrastructure files; this runs
-    the single duplicate-body check that must still guard them and emits the deny
-    payload when it fires.
+    The full code-rules verdict stays off hook-infrastructure files; this runs the
+    two checks that must still guard them — the cross-file duplicate-body check and
+    the zero-payload alias check — and emits the deny payload when either fires.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -778,7 +783,7 @@ def _report_hook_duplicate_body(
         prior_full_file_content: The on-disk content before the edit.
         deny_stream: The stream the JSON deny payload is written to.
     """
-    all_blocking_issues = _hook_infrastructure_duplicate_body_issues(
+    all_blocking_issues = _hook_infrastructure_blocking_issues(
         content,
         file_path,
         full_file_content_after_edit,
@@ -837,7 +842,7 @@ def main(all_arguments: list[str]) -> None:
         sys.exit(0)
 
     if not runs_full_verdict:
-        _report_hook_duplicate_body(
+        _report_hook_blocking_issues(
             content,
             file_path,
             full_file_content_after_edit,
