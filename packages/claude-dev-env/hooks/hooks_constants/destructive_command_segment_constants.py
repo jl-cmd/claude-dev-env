@@ -176,3 +176,11 @@ ALL_LAUNCHER_OPTIONS_TAKING_SEPARATE_VALUE: frozenset[str] = frozenset(
     }
 )
 ALL_SUBSHELL_GROUPING_CHARACTERS: str = "({"
+ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES: frozenset[str] = frozenset(
+    {
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "CLAUDE_JOB_DIR",
+    }
+)
