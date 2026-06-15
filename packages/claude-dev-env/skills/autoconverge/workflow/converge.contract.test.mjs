@@ -14,8 +14,9 @@ const gotchasSource = readFileSync(
 function lensPromptBody(builderName) {
   const builderStart = convergeSource.indexOf(`function ${builderName}(`);
   assert.notEqual(builderStart, -1, `expected ${builderName} to exist`);
-  const nextBuilderStart = convergeSource.indexOf('\nfunction ', builderStart + 1);
-  const builderEnd = nextBuilderStart === -1 ? convergeSource.length : nextBuilderStart;
+  const nextBuilderMatch = /\n(?:async )?function /.exec(convergeSource.slice(builderStart + 1));
+  const builderEnd =
+    nextBuilderMatch === null ? convergeSource.length : builderStart + 1 + nextBuilderMatch.index;
   return convergeSource.slice(builderStart, builderEnd);
 }
 
@@ -67,8 +68,8 @@ test('gotchas doc states parallel lenses must avoid concurrent git operations', 
   assert.match(gotchasSource, /fetch.*once.*before/i);
 });
 
-test('repair-convergence filters unresolved threads to bot authors and skips human threads', () => {
-  const repairPrompt = lensPromptBody('repairConvergence');
+test('repair-convergence edit step filters unresolved threads to bot authors and skips human threads', () => {
+  const repairPrompt = lensPromptBody('repairConvergenceEdit');
   assert.match(
     repairPrompt,
     /cursor.*claude.*copilot|copilot.*cursor.*claude|claude.*cursor.*copilot/is,
@@ -81,8 +82,8 @@ test('repair-convergence filters unresolved threads to bot authors and skips hum
   );
 });
 
-test('repair-convergence no longer instructs resolving every unresolved thread without an author filter', () => {
-  const repairPrompt = lensPromptBody('repairConvergence');
+test('repair-convergence edit step no longer instructs resolving every unresolved thread without an author filter', () => {
+  const repairPrompt = lensPromptBody('repairConvergenceEdit');
   assert.doesNotMatch(
     repairPrompt,
     /fetch every thread where isResolved is false/,
@@ -219,43 +220,54 @@ test('the fix flow spawns a code-verifier step between the edit step and the com
   );
 });
 
-test('the verify step spawns a code-verifier agent with no structured schema', () => {
-  const verifyBody = lensPromptBody('verifyFixesInWorkingTree');
-  assert.match(
-    verifyBody,
-    /agentType:\s*'code-verifier'/,
-    'expected the verify step to spawn the code-verifier agent type',
-  );
-  assert.doesNotMatch(
-    verifyBody,
-    /schema:/,
-    'the verify step must pass no schema so its verdict fence stays as assistant text',
-  );
-});
+function constantBody(constantName) {
+  const constantStart = convergeSource.indexOf(`const ${constantName} =`);
+  assert.notEqual(constantStart, -1, `expected ${constantName} to exist`);
+  const nextConstantStart = convergeSource.indexOf('\nconst ', constantStart + 1);
+  const constantEnd = nextConstantStart === -1 ? convergeSource.length : nextConstantStart;
+  return convergeSource.slice(constantStart, constantEnd);
+}
 
-test('the verify step prompt instructs emitting manifest_sha256 in a verdict fence', () => {
-  const verifyBody = lensPromptBody('verifyFixesInWorkingTree');
-  assert.match(verifyBody, /--manifest-hash/, 'expected the binding-hash command to be named');
+test('the shared verdict-fence steps name the binding-hash command and the verdict fence', () => {
+  const fenceSteps = constantBody('VERDICT_FENCE_STEPS');
+  assert.match(fenceSteps, /--manifest-hash/, 'expected the binding-hash command to be named');
   assert.match(
-    verifyBody,
+    fenceSteps,
     /verification_verdict_store\.py/,
     'expected the verdict-store script that computes the binding hash to be named',
   );
-  assert.match(
-    verifyBody,
-    /```verdict/,
-    'expected the verdict fence to be specified',
-  );
-  assert.match(
-    verifyBody,
-    /manifest_sha256/,
-    'expected the verdict fence to carry manifest_sha256',
-  );
-  assert.match(
-    verifyBody,
-    /do no edits|make no edits|not edit|no file edits/i,
-    'expected the verify step to be told to make no edits',
-  );
+  assert.match(fenceSteps, /```verdict/, 'expected the verdict fence to be specified');
+  assert.match(fenceSteps, /manifest_sha256/, 'expected the verdict fence to carry manifest_sha256');
+});
+
+test('every verify step reuses the shared verdict-fence steps, uses code-verifier, and forbids edits', () => {
+  for (const verifyFunctionName of [
+    'verifyFixesInWorkingTree',
+    'verifyRepairChanges',
+    'verifyHardeningChanges',
+  ]) {
+    const verifyBody = lensPromptBody(verifyFunctionName);
+    assert.match(
+      verifyBody,
+      /VERDICT_FENCE_STEPS/,
+      `expected ${verifyFunctionName} to reuse the shared VERDICT_FENCE_STEPS`,
+    );
+    assert.match(
+      verifyBody,
+      /agentType:\s*'code-verifier'/,
+      `expected ${verifyFunctionName} to spawn the code-verifier agent type`,
+    );
+    assert.doesNotMatch(
+      verifyBody,
+      /schema:/,
+      `expected ${verifyFunctionName} to pass no schema so its verdict fence stays as assistant text`,
+    );
+    assert.match(
+      verifyBody,
+      /do no edits|make no edits|not edit|no file edits/i,
+      `expected ${verifyFunctionName} to be told to make no edits`,
+    );
+  }
 });
 
 test('the commit step is instructed to make no further file edits', () => {
@@ -269,5 +281,73 @@ test('the commit step is instructed to make no further file edits', () => {
     commitBody,
     /agentType:\s*'clean-coder'/,
     'expected the commit step to use clean-coder',
+  );
+});
+
+test('the repair flow spawns a code-verifier step between the edit step and the commit step', () => {
+  const repairBody = lensPromptBody('repairConvergence');
+  const editIndex = repairBody.indexOf('repairConvergenceEdit(');
+  const verifyIndex = repairBody.indexOf('verifyRepairChanges(');
+  const commitIndex = repairBody.indexOf('commitRepairFixes(');
+  assert.notEqual(editIndex, -1, 'expected repairConvergence to call the edit step');
+  assert.notEqual(verifyIndex, -1, 'expected repairConvergence to call the verify step');
+  assert.notEqual(commitIndex, -1, 'expected repairConvergence to call the commit step');
+  assert.ok(
+    editIndex < verifyIndex && verifyIndex < commitIndex,
+    'expected edit -> verify -> commit so the verifier verdict binds the repaired working tree',
+  );
+  assert.match(
+    repairBody,
+    /verdictPassed\(/,
+    'expected the verify verdict to gate the repair commit step',
+  );
+});
+
+test('the standards-deferral flow spawns a code-verifier step between the edit step and the commit step', () => {
+  const standardsBody = lensPromptBody('spawnStandardsFollowUp');
+  const editIndex = standardsBody.indexOf('standardsFollowUpEdit(');
+  const verifyIndex = standardsBody.indexOf('verifyHardeningChanges(');
+  const commitIndex = standardsBody.indexOf('commitHardeningPr(');
+  assert.notEqual(editIndex, -1, 'expected spawnStandardsFollowUp to call the edit step');
+  assert.notEqual(verifyIndex, -1, 'expected spawnStandardsFollowUp to call the verify step');
+  assert.notEqual(commitIndex, -1, 'expected spawnStandardsFollowUp to call the commit step');
+  assert.ok(
+    editIndex < verifyIndex && verifyIndex < commitIndex,
+    'expected edit -> verify -> commit so the verifier verdict binds the hardening working tree',
+  );
+  assert.match(
+    standardsBody,
+    /verdictPassed\(/,
+    'expected the verify verdict to gate the hardening commit step',
+  );
+});
+
+test('the repair and hardening commit steps forbid further edits and use clean-coder', () => {
+  for (const commitFunctionName of ['commitRepairFixes', 'commitHardeningPr']) {
+    const commitBody = lensPromptBody(commitFunctionName);
+    assert.match(
+      commitBody,
+      /no (?:further |additional )?(?:file )?edits|do not edit|make no edits/i,
+      `expected ${commitFunctionName} to forbid further edits so the verified surface stays bound`,
+    );
+    assert.match(
+      commitBody,
+      /agentType:\s*'clean-coder'/,
+      `expected ${commitFunctionName} to use clean-coder`,
+    );
+  }
+});
+
+test('the standards-deferral edit step stages the hardening change without committing', () => {
+  const editBody = lensPromptBody('standardsFollowUpEdit');
+  assert.match(
+    editBody,
+    /do not commit and do not push|NO commit and NO push|Do NOT commit/i,
+    'expected the standards edit step to leave the hardening change uncommitted',
+  );
+  assert.match(
+    editBody,
+    /agentType:\s*'clean-coder'/,
+    'expected the standards edit step to use clean-coder',
   );
 });
