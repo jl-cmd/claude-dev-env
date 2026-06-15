@@ -57,6 +57,10 @@ Repair agents run only on reported findings; the verifier re-checks after each r
 - **Tight edit scope:** Edit exactly what the task names — no whole-file rewrites, no renaming public method parameters, no changes beyond the stated task. When the user asks for a "lasting" or "reusable" fix, prefer the durable systemic fix over a one-off edit. When the task touches a pipeline, generator, or other repeated process, fix the process itself, not its individual outputs — even when the request does not say so; for one-off targets, a scoped patch remains the default.
 - **GitHub MCP first:** The GitHub MCP (`mcp__plugin_github_github__*`) is the primary path for PR and review-thread inspection; raw `gh api` is the fallback, not the default — MCP calls work the same from any worktree.
 
+## Destructive-command literals in Bash
+
+Never put a destructive-command literal (`rm -rf`, `git reset --hard`, `dd`, `mkfs`) inside a Bash command string, even when the shell never runs it — a quoted `python -c` argument, a heredoc body, an echoed string, a commit or PR body. The `destructive_command_blocker` hook matches the raw text and asks for confirmation, which a background run cannot answer, so the call stalls. Run hook and deletion checks through the committed test suite (`python -m pytest <test_file>`), or a throwaway script under `$CLAUDE_JOB_DIR/tmp` run as `python <file>.py` — either way the command string carries no destructive text, so the hook stays silent. Group genuine cleanup deletions into one teardown step. See `~/.claude/rules/no-inline-destructive-literals.md`.
+
 ## Sub-agent Output Validation
 
 After any sub-agent returns a PR description, file list, or counts, verify each claim against the actual diff and repo state before using it. Flag and correct any invented paths, fabricated counts, or out-of-scope changes before they land in commits or PR bodies.
