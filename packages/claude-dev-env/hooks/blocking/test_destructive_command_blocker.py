@@ -247,6 +247,10 @@ def test_rm_rf_asks_when_any_target_is_non_ephemeral() -> None:
     assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
 
 
+def test_rm_rf_asks_when_target_has_nested_temp_segment_not_at_root() -> None:
+    _assert_hook_asks("rm -rf /home/victim/temp/secret")
+
+
 def test_rm_rf_asks_when_double_dash_includes_hyphen_prefixed_non_ephemeral_target() -> None:
     payload = _make_bash_payload("rm -rf -- /tmp/scratch -non_ephemeral")
 
@@ -402,6 +406,26 @@ def test_rm_rf_asks_when_tool_input_cwd_is_ephemeral_but_rm_target_is_absolute_n
 
     response = json.loads(result.stdout)
     assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_rm_rf_asks_when_subshell_cd_changes_dir_before_relative_rm() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && (cd /; rm -rf etc)')
+
+
+def test_rm_rf_asks_when_second_top_level_cd_changes_dir_before_relative_rm() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && cd / && rm -rf etc')
+
+
+def test_rm_rf_asks_when_pushd_changes_dir_before_relative_rm() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && pushd / && rm -rf etc')
+
+
+def test_rm_rf_allowed_when_subshell_cd_present_but_rm_target_is_absolute_ephemeral() -> None:
+    _assert_hook_allows('cd "/tmp/scratch" && (cd /; rm -rf /tmp/scratch/keep)')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_target_has_nested_tmp_segment_not_at_root() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && rm -rf /home/victim/tmp/secret')
 
 
 def test_git_push_force_asks_when_leading_cd_into_ephemeral_subdirectory() -> None:
@@ -1142,6 +1166,14 @@ def test_compound_rm_asks_when_second_rm_target_glues_redirect_to_non_ephemeral_
     _assert_hook_asks("rm -rf /tmp/a /tmp/b>/etc/hosts")
 
 
+def test_rm_rf_asks_when_cd_ephemeral_but_rm_segment_redirects_to_non_ephemeral_file() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && rm -rf /tmp/x>/etc/passwd')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_relative_rm_target_redirects_to_non_ephemeral_file() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && rm -rf build>/etc/passwd')
+
+
 def test_compound_rm_asks_when_git_config_sets_value_after_ephemeral_rm() -> None:
     _assert_hook_asks("rm -rf /tmp/x && git config --global user.name evil")
 
@@ -1517,6 +1549,26 @@ def test_subshell_grouped_rm_asks_when_benign_command_precedes_grouped_rm() -> N
     _assert_hook_asks("echo hi; (rm -rf /etc)")
 
 
+def test_string_execution_asks_when_subshell_paren_glued_to_bash_dash_c() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && (bash -c \'rm -rf /etc\')')
+
+
+def test_string_execution_asks_when_subshell_paren_glued_to_timeout_wrapping_bash() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && (timeout 5 bash -c \'rm -rf /etc\')')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_subshell_paren_glued_to_rm_targets_etc() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && (rm -rf /etc)')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_brace_glued_to_rm_targets_etc() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && {rm -rf /etc;}')
+
+
+def test_rm_rf_allowed_when_cd_ephemeral_and_subshell_paren_wraps_relative_ephemeral_target() -> None:
+    _assert_hook_allows('cd "/tmp/scratch" && (rm -rf build)')
+
+
 # --- convergence branch exemption unit tests ---
 
 import importlib.util
@@ -1817,3 +1869,41 @@ def test_rm_rf_asks_when_cd_ephemeral_and_second_rm_segment_targets_non_ephemera
 
 def test_rm_rf_asks_when_cd_ephemeral_but_bin_rm_targets_non_ephemeral() -> None:
     _assert_hook_asks('cd "/tmp/scratch" && /bin/rm -rf /etc')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_target_is_command_substitution() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && rm -rf $(somecmd)')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_target_is_brace_expansion_escaping_namespace() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && rm -rf {build,/etc}')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_temp_var_splices_after_absolute_literal_prefix() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && rm -rf /data$TMP/x')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_find_exec_rm_search_root_escapes_namespace() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && find /etc -name x -exec rm -rf {} +')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_subshell_find_exec_rm_search_root_escapes() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && (find /etc -exec rm -rf {} +)')
+
+
+def test_rm_rf_asks_when_find_exec_rm_safe_but_sibling_standalone_rm_targets_non_ephemeral() -> None:
+    _assert_hook_asks(
+        'cd "/tmp/scratch" && find . -name x -exec rm -rf {} + ; rm -rf /etc/passwd'
+    )
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_find_exec_rm_redirects_to_non_ephemeral_file() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && find /tmp/scratch -exec rm -rf {} + >/etc/passwd')
+
+
+def test_rm_rf_allowed_when_cd_ephemeral_and_relative_build_target() -> None:
+    _assert_hook_allows('cd "/tmp/scratch" && rm -rf build')
+
+
+def test_rm_rf_allowed_when_cd_ephemeral_and_find_exec_rm_search_root_is_dot() -> None:
+    _assert_hook_allows('cd "/tmp/scratch" && find . -name x -exec rm -rf {} +')
