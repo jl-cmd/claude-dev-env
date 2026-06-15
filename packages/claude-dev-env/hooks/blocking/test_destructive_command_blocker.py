@@ -1062,6 +1062,14 @@ def test_compound_rm_allowed_when_two_absolute_ephemeral_targets_then_echo() -> 
     _assert_hook_allows("rm -rf /tmp/pr136 /tmp/difftest && echo 'cleaned'")
 
 
+def test_compound_rm_allowed_when_subshell_paren_glued_rm_targets_absolute_ephemeral() -> None:
+    _assert_hook_allows("rm -rf /tmp/a && (rm -rf /tmp/b)")
+
+
+def test_compound_rm_asks_when_subshell_paren_glued_rm_targets_non_ephemeral() -> None:
+    _assert_hook_asks("rm -rf /tmp/a && (rm -rf /etc)")
+
+
 def test_compound_rm_allowed_when_followed_by_gh_pipeline_and_echo() -> None:
     _assert_hook_allows('rm -rf /tmp/reply && gh pr checks 19 2>&1 | head -5 && echo "x"')
 

@@ -1304,7 +1304,7 @@ def _compound_segment_auto_allow_verdict(
         (
             index
             for index, token in enumerate(all_segment_tokens)
-            if Path(token).name == "rm"
+            if Path(_strip_leading_subshell_grouping_characters(token)).name == "rm"
         ),
         None,
     )
