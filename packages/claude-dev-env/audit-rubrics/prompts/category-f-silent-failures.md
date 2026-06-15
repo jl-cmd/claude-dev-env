@@ -37,6 +37,7 @@ Repeat for every section in scope.
 
 **F3. Default fallback values masking failure**
 - `dict.get(key, default)` where the absence of the key is itself a bug.
+- Stale-payload-key shape: for each external-input dict (`*_payload`, event, request, parsed-JSON body), list every string-literal key read from it. Check each key against the contract the module's docstring and its other reads set up — a payload whose other reads bind to same-named variables and whose docstring names a key set is an established contract. Flag a lone read of a key outside that contract: it resolves to the `.get` default on every real payload and silently records an empty value into the field it feeds. A key consumed inline with a meaningful default (`resolve(payload.get("cwd", "."))`) is legitimate; the flag is the dropped key whose value the consuming field needs but never receives.
 - `or default` short-circuits hiding `None` returns from fallible calls.
 - `getattr(obj, attr, default)` masking `AttributeError` from the wrong object type.
 - argparse `default=...` for values that should fail-loud when absent.
