@@ -54,6 +54,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/hook_prose_detector_consistency.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/verified_commit_message_accuracy_blocker.py",
+            "timeout": 10
           }
         ]
       },
@@ -118,7 +123,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/precommit_code_rules_gate.py",
-            "timeout": 30
+            "timeout": 150
           },
           {
             "type": "command",
@@ -144,6 +149,31 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/gh_pr_author_enforcer.py",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/verified_commit_gate.py",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/verdict_directory_write_blocker.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/verified_commit_gate.py",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/verdict_directory_write_blocker.py",
+            "timeout": 10
           }
         ]
       },
@@ -242,6 +272,18 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/diagnostic/hook_log_stop_wrapper.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/verifier_verdict_minter.py",
             "timeout": 30
           }
         ]
