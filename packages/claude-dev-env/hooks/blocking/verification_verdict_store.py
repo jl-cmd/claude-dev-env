@@ -15,6 +15,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import time
@@ -25,20 +26,35 @@ if blocking_directory not in sys.path:
     sys.path.insert(0, blocking_directory)
 
 from config.verified_commit_constants import (
+    AGENT_META_SIDECAR_SUFFIX,
+    AGENT_META_TYPE_KEY,
+    AGENT_TRANSCRIPT_GLOB,
     CLAUDE_HOME_DIRECTORY_NAME,
     CONFTEST_FILE_NAME,
     DOCS_ONLY_EXTENSIONS,
     ALL_FALLBACK_BASE_REFERENCES,
     GIT_TIMEOUT_SECONDS,
+    MANIFEST_HASH_CLI_FLAG,
     MINIMUM_STATUS_FIELD_COUNT,
+    MINTING_AGENT_TYPE,
     PYTHON_EXTENSION,
     ROOT_KEY_HEX_LENGTH,
+    SUBAGENTS_DIRECTORY_NAME,
     TEST_FILE_PREFIX,
     TEST_FILE_SUFFIX,
     ALL_TOOLING_STATE_PREFIXES,
+    TRANSCRIPT_ASSISTANT_ENTRY_TYPE,
+    TRANSCRIPT_CONTENT_KEY,
+    TRANSCRIPT_CONTENT_TYPE_KEY,
+    TRANSCRIPT_ENTRY_TYPE_KEY,
+    TRANSCRIPT_MESSAGE_KEY,
+    TRANSCRIPT_TEXT_CONTENT_TYPE,
+    TRANSCRIPT_TEXT_KEY,
     VERDICT_DIRECTORY_NAME,
+    VERDICT_FENCE_PATTERN,
     VERDICT_JSON_INDENT,
     VERDICT_KEY_ALL_PASS,
+    VERDICT_KEY_FINDINGS,
     VERDICT_KEY_MANIFEST_SHA256,
 )
 
@@ -273,6 +289,187 @@ def load_valid_verdict(repo_root: str, expected_manifest_sha256: str) -> dict | 
     return verdict_record
 
 
+def _subagents_directory_for_transcript(transcript_path: str) -> Path | None:
+    """Locate the live session's subagents directory from a transcript path.
+
+    Handles both transcript shapes the runtime produces: a transcript already
+    inside a ``.../subagents/...`` tree resolves to its nearest ancestor named
+    ``subagents``; a session transcript ``<dir>/<session-id>.jsonl`` resolves
+    to ``<dir>/<session-id>/subagents``.
+
+    Args:
+        transcript_path: The live session's transcript path from the payload.
+
+    Returns:
+        The existing subagents directory, or None when neither shape yields
+        an existing directory.
+    """
+    if not transcript_path:
+        return None
+    transcript_file = Path(transcript_path)
+    for each_ancestor in transcript_file.parents:
+        if each_ancestor.name == SUBAGENTS_DIRECTORY_NAME and each_ancestor.is_dir():
+            return each_ancestor
+    session_subagents_directory = (
+        transcript_file.with_suffix("") / SUBAGENTS_DIRECTORY_NAME
+    )
+    if session_subagents_directory.is_dir():
+        return session_subagents_directory
+    return None
+
+
+def _agent_type_for_transcript(transcript_file: Path) -> str | None:
+    """Read an agent transcript's sidecar to learn the agent type it ran as.
+
+    Args:
+        transcript_file: An ``agent-*.jsonl`` transcript path.
+
+    Returns:
+        The ``agentType`` recorded in the ``<stem>.meta.json`` sidecar, or
+        None when the sidecar is missing, unreadable, or carries no type.
+    """
+    sidecar_file = transcript_file.with_suffix(AGENT_META_SIDECAR_SUFFIX)
+    try:
+        sidecar_record = json.loads(sidecar_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(sidecar_record, dict):
+        return None
+    recorded_agent_type = sidecar_record.get(AGENT_META_TYPE_KEY)
+    return recorded_agent_type if isinstance(recorded_agent_type, str) else None
+
+
+def _assistant_text_blocks(transcript_file: Path) -> list[str]:
+    """Collect every assistant text block from an agent transcript.
+
+    Args:
+        transcript_file: An ``agent-*.jsonl`` transcript path.
+
+    Returns:
+        The text of each assistant message content block, in order; empty
+        when the file is missing, unreadable, or holds no assistant text.
+    """
+    try:
+        transcript_lines = transcript_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    all_text_blocks: list[str] = []
+    for each_line in transcript_lines:
+        if not each_line.strip():
+            continue
+        try:
+            transcript_entry = json.loads(each_line)
+        except json.JSONDecodeError:
+            continue
+        all_text_blocks.extend(_entry_text_blocks(transcript_entry))
+    return all_text_blocks
+
+
+def _entry_text_blocks(transcript_entry: object) -> list[str]:
+    """Extract assistant text from one parsed transcript entry.
+
+    Args:
+        transcript_entry: One parsed JSONL transcript entry.
+
+    Returns:
+        The text of each text content block on an assistant entry, in order;
+        empty for any other entry shape.
+    """
+    if not isinstance(transcript_entry, dict):
+        return []
+    if transcript_entry.get(TRANSCRIPT_ENTRY_TYPE_KEY) != TRANSCRIPT_ASSISTANT_ENTRY_TYPE:
+        return []
+    message_record = transcript_entry.get(TRANSCRIPT_MESSAGE_KEY)
+    if not isinstance(message_record, dict):
+        return []
+    content_blocks = message_record.get(TRANSCRIPT_CONTENT_KEY)
+    if not isinstance(content_blocks, list):
+        return []
+    all_text_blocks: list[str] = []
+    for each_block in content_blocks:
+        if not isinstance(each_block, dict):
+            continue
+        if each_block.get(TRANSCRIPT_CONTENT_TYPE_KEY) != TRANSCRIPT_TEXT_CONTENT_TYPE:
+            continue
+        block_text = each_block.get(TRANSCRIPT_TEXT_KEY)
+        if isinstance(block_text, str):
+            all_text_blocks.append(block_text)
+    return all_text_blocks
+
+
+def _last_verdict_record(all_text_blocks: list[str]) -> dict | None:
+    """Parse the last verdict fence across an agent's assistant text blocks.
+
+    Args:
+        all_text_blocks: The assistant text blocks from one transcript.
+
+    Returns:
+        The parsed verdict mapping when the last verdict fence carries a bool
+        ``all_pass``, a list ``findings``, and a string ``manifest_sha256``;
+        otherwise None.
+    """
+    verdict_fence_pattern = re.compile(VERDICT_FENCE_PATTERN, re.DOTALL)
+    all_fence_bodies = [
+        each_match.group(1)
+        for each_block in all_text_blocks
+        for each_match in verdict_fence_pattern.finditer(each_block)
+    ]
+    if not all_fence_bodies:
+        return None
+    try:
+        verdict_record = json.loads(all_fence_bodies[-1])
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(verdict_record, dict):
+        return None
+    if not isinstance(verdict_record.get(VERDICT_KEY_ALL_PASS), bool):
+        return None
+    if not isinstance(verdict_record.get(VERDICT_KEY_FINDINGS), list):
+        return None
+    if not isinstance(verdict_record.get(VERDICT_KEY_MANIFEST_SHA256), str):
+        return None
+    return verdict_record
+
+
+def workflow_verdict_covers_surface(
+    transcript_path: str, expected_manifest_sha256: str
+) -> bool:
+    """Decide whether a workflow code-verifier verdict covers the live surface.
+
+    A workflow-spawned ``code-verifier`` emits its verdict as assistant text in
+    its own transcript rather than through the SubagentStop minter, so this
+    walks the live session's subagent transcripts for a ``code-verifier`` whose
+    final verdict reports ``all_pass`` true and binds to the expected manifest
+    hash.
+
+    Args:
+        transcript_path: The live session's transcript path from the payload.
+        expected_manifest_sha256: Hash of the live surface manifest the verdict
+            must match exactly.
+
+    Returns:
+        True as soon as one ``code-verifier`` transcript carries a passing
+        verdict bound to the expected hash; False when none match or the
+        subagents directory cannot be located.
+    """
+    subagents_directory = _subagents_directory_for_transcript(transcript_path)
+    if subagents_directory is None:
+        return False
+    for each_transcript_file in subagents_directory.rglob(AGENT_TRANSCRIPT_GLOB):
+        if _agent_type_for_transcript(each_transcript_file) != MINTING_AGENT_TYPE:
+            continue
+        verdict_record = _last_verdict_record(
+            _assistant_text_blocks(each_transcript_file)
+        )
+        if verdict_record is None:
+            continue
+        if verdict_record[VERDICT_KEY_ALL_PASS] is not True:
+            continue
+        if verdict_record[VERDICT_KEY_MANIFEST_SHA256] == expected_manifest_sha256:
+            return True
+    return False
+
+
 def write_verdict(
     repo_root: str,
     bound_manifest_sha256: str,
@@ -444,3 +641,46 @@ def is_verification_exempt_diff(repo_root: str, merge_base_sha: str) -> bool:
         if not _is_python_change_docstring_only(repo_root, merge_base_sha, changed_path):
             return False
     return True
+
+
+def _print_live_manifest_hash(repo_directory: str) -> int:
+    """Print the live surface manifest hash for a repo, for a workflow verifier.
+
+    A workflow code-verifier runs this to learn the exact hash to bind its
+    verdict to, so stdout carries only the hash and nothing else.
+
+    Args:
+        repo_directory: A directory inside the work tree to bind the verdict to.
+
+    Returns:
+        0 after printing the hash; nonzero with no stdout when the repo root or
+        merge base cannot be resolved.
+    """
+    repo_root = resolve_repo_root(repo_directory)
+    if repo_root is None:
+        return 1
+    merge_base_sha = resolve_merge_base(repo_root)
+    if merge_base_sha is None:
+        return 1
+    surface_manifest_text = branch_surface_manifest(repo_root, merge_base_sha)
+    if surface_manifest_text is None:
+        return 1
+    print(manifest_sha256(surface_manifest_text))
+    return 0
+
+
+def main() -> None:
+    """Run the verdict-store CLI: compute the live surface-manifest hash.
+
+    Reads ``--manifest-hash <repo_root>`` from argv and prints the live
+    ``manifest_sha256`` so a workflow code-verifier can bind its verdict to the
+    exact surface the gate checks. Exits nonzero with no stdout on any other
+    argument shape or when the surface cannot be resolved.
+    """
+    if len(sys.argv) == 3 and sys.argv[1] == MANIFEST_HASH_CLI_FLAG:
+        sys.exit(_print_live_manifest_hash(sys.argv[2]))
+    sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

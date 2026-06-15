@@ -47,6 +47,20 @@ WRITE_CALL_REGION_PATTERN = (
 )
 VERDICT_KEY_ALL_PASS = "all_pass"
 VERDICT_KEY_MANIFEST_SHA256 = "manifest_sha256"
+VERDICT_KEY_FINDINGS = "findings"
+SUBAGENTS_DIRECTORY_NAME = "subagents"
+AGENT_TRANSCRIPT_GLOB = "agent-*.jsonl"
+AGENT_META_SIDECAR_SUFFIX = ".meta.json"
+AGENT_META_TYPE_KEY = "agentType"
+TRANSCRIPT_ENTRY_TYPE_KEY = "type"
+TRANSCRIPT_ASSISTANT_ENTRY_TYPE = "assistant"
+TRANSCRIPT_MESSAGE_KEY = "message"
+TRANSCRIPT_CONTENT_KEY = "content"
+TRANSCRIPT_CONTENT_TYPE_KEY = "type"
+TRANSCRIPT_TEXT_CONTENT_TYPE = "text"
+TRANSCRIPT_TEXT_KEY = "text"
+VERDICT_FENCE_PATTERN = r"```verdict\s*\n(.*?)```"
+MANIFEST_HASH_CLI_FLAG = "--manifest-hash"
 DOCS_ONLY_EXTENSIONS = frozenset(
     {".md", ".txt", ".rst", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico"}
 )

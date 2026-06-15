@@ -179,6 +179,36 @@ def test_render_issue_class_panels_for_each_medium() -> None:
     assert "1 finding" in panels_html
 
 
+def test_render_issue_class_panels_draws_text_panel_for_text_medium() -> None:
+    """Should draw a text panel holding the supplied lines when the medium is text."""
+    convergence_summary = {
+        "verdictLine": "Converged.",
+        "problemScenes": [],
+        "fixScenes": [],
+        "issueClasses": [
+            {
+                "plainName": "A plain-text symptom",
+                "count": 1,
+                "severity": "P2",
+                "category": "bug",
+                "status": "fixed",
+                "cause": "A grounded cause sentence.",
+                "medium": "text",
+                "beforeLines": ["pages reloaded every visit"],
+                "afterLines": ["pages reuse the saved copy"],
+            }
+        ],
+    }
+
+    panels_html = render_report._render_issue_class_panels(convergence_summary)
+
+    assert 'class="text-panel"' in panels_html
+    assert "pages reloaded every visit" in panels_html
+    assert "pages reuse the saved copy" in panels_html
+    assert 'class="terminal"' not in panels_html
+    assert 'class="code-panel"' not in panels_html
+
+
 def test_cli_renders_cause_line_with_severity_parenthetical(tmp_path: Path) -> None:
     """Should render a cause line carrying the plain cause and a muted parenthetical."""
     out_path = tmp_path / "report-cause.html"

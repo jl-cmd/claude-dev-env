@@ -6,6 +6,7 @@ path the verified_commit_gate hook runs.
 """
 
 import importlib.util
+import json
 import pathlib
 import subprocess
 import sys
@@ -25,6 +26,8 @@ store_spec.loader.exec_module(store_module)
 is_verification_exempt_diff = store_module.is_verification_exempt_diff
 resolve_merge_base = store_module.resolve_merge_base
 branch_surface_manifest = store_module.branch_surface_manifest
+manifest_sha256 = store_module.manifest_sha256
+workflow_verdict_covers_surface = store_module.workflow_verdict_covers_surface
 
 constants_spec = importlib.util.spec_from_file_location(
     "verified_commit_constants",
@@ -276,3 +279,212 @@ def test_production_change_is_gated_on_nonstandard_default_branch(
         encoding="utf-8",
     )
     assert _exemption_for(work_dir) is False
+
+
+MATCHING_MANIFEST_SHA256 = "a" * 64
+OTHER_MANIFEST_SHA256 = "b" * 64
+VERIFIER_AGENT_TYPE = "code-verifier"
+
+
+def _verdict_transcript_text(is_all_pass: bool, bound_manifest_sha256: str) -> str:
+    verdict_record = {
+        "all_pass": is_all_pass,
+        "findings": [],
+        "manifest_sha256": bound_manifest_sha256,
+    }
+    assistant_text = (
+        "Verification complete.\n\n```verdict\n"
+        + json.dumps(verdict_record)
+        + "\n```\n"
+    )
+    assistant_entry = {
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": assistant_text}]},
+    }
+    return json.dumps(assistant_entry) + "\n"
+
+
+def _write_agent_transcript(
+    subagents_dir: pathlib.Path,
+    agent_id: str,
+    agent_type: str,
+    transcript_text: str,
+    should_write_sidecar: bool,
+) -> None:
+    workflow_dir = subagents_dir / "workflows" / "wf_x"
+    workflow_dir.mkdir(parents=True, exist_ok=True)
+    (workflow_dir / f"agent-{agent_id}.jsonl").write_text(
+        transcript_text, encoding="utf-8"
+    )
+    if should_write_sidecar:
+        (workflow_dir / f"agent-{agent_id}.meta.json").write_text(
+            json.dumps({"agentType": agent_type}), encoding="utf-8"
+        )
+
+
+def _session_transcript_path(tmp_path: pathlib.Path, session_id: str) -> pathlib.Path:
+    session_root = tmp_path / "projects" / "demo"
+    session_root.mkdir(parents=True)
+    transcript_path = session_root / f"{session_id}.jsonl"
+    transcript_path.write_text("", encoding="utf-8")
+    return transcript_path
+
+
+def test_workflow_verdict_covers_surface_true_for_matching_passing_verifier(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        VERIFIER_AGENT_TYPE,
+        _verdict_transcript_text(True, MATCHING_MANIFEST_SHA256),
+        should_write_sidecar=True,
+    )
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is True
+    )
+
+
+def test_workflow_verdict_covers_surface_false_for_nonmatching_hash(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        VERIFIER_AGENT_TYPE,
+        _verdict_transcript_text(True, OTHER_MANIFEST_SHA256),
+        should_write_sidecar=True,
+    )
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is False
+    )
+
+
+def test_workflow_verdict_covers_surface_false_for_all_pass_false(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        VERIFIER_AGENT_TYPE,
+        _verdict_transcript_text(False, MATCHING_MANIFEST_SHA256),
+        should_write_sidecar=True,
+    )
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is False
+    )
+
+
+def test_workflow_verdict_covers_surface_false_for_non_verifier_sidecar(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        "clean-coder",
+        _verdict_transcript_text(True, MATCHING_MANIFEST_SHA256),
+        should_write_sidecar=True,
+    )
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is False
+    )
+
+
+def test_workflow_verdict_covers_surface_false_for_missing_sidecar(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        VERIFIER_AGENT_TYPE,
+        _verdict_transcript_text(True, MATCHING_MANIFEST_SHA256),
+        should_write_sidecar=False,
+    )
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is False
+    )
+
+
+def test_workflow_verdict_covers_surface_false_for_missing_subagents_dir(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is False
+    )
+
+
+def test_workflow_verdict_covers_surface_true_when_transcript_is_under_subagents(
+    tmp_path: pathlib.Path,
+) -> None:
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        VERIFIER_AGENT_TYPE,
+        _verdict_transcript_text(True, MATCHING_MANIFEST_SHA256),
+        should_write_sidecar=True,
+    )
+    caller_transcript_path = (
+        subagents_dir / "workflows" / "wf_x" / "agent-00.jsonl"
+    )
+    caller_transcript_path.write_text("", encoding="utf-8")
+    assert (
+        workflow_verdict_covers_surface(
+            str(caller_transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is True
+    )
+
+
+def test_manifest_hash_cli_prints_live_surface_hash(tmp_path: pathlib.Path) -> None:
+    work_dir = _make_repo_with_origin(tmp_path)
+    (work_dir / "src" / "app.py").write_text(
+        "def add(left: int, right: int) -> int:\n    return left - right\n",
+        encoding="utf-8",
+    )
+    merge_base_sha = resolve_merge_base(str(work_dir))
+    assert merge_base_sha is not None
+    surface_manifest_text = branch_surface_manifest(str(work_dir), merge_base_sha)
+    assert surface_manifest_text is not None
+    expected_hash = manifest_sha256(surface_manifest_text)
+    completed_process = subprocess.run(
+        [
+            sys.executable,
+            str(_HOOK_DIR / "verification_verdict_store.py"),
+            "--manifest-hash",
+            str(work_dir),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed_process.stdout.strip() == expected_hash
