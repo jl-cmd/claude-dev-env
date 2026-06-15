@@ -103,6 +103,15 @@ def test_invalid_utf8_sidecar_resolves_nothing(tmp_path: pathlib.Path) -> None:
     assert resolved_subagent_type(payload) is None
 
 
+def test_non_object_json_sidecar_resolves_nothing(tmp_path: pathlib.Path) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    sidecar_file = agent_transcript.with_name("agent-7.meta.json")
+    sidecar_file.write_text(json.dumps(["agentType", "code-verifier"]), encoding="utf-8")
+    payload = {"agent_transcript_path": str(agent_transcript)}
+    assert resolved_subagent_type(payload) is None
+
+
 def test_non_verifier_agent_type_mints_nothing(tmp_path: pathlib.Path) -> None:
     agent_transcript = tmp_path / "agent-7.jsonl"
     agent_transcript.write_text("", encoding="utf-8")
@@ -158,12 +167,14 @@ def test_clean_verifier_verdict_mints_a_verdict_file(tmp_path: pathlib.Path) -> 
     payload = {
         "agent_transcript_path": str(agent_transcript),
         "cwd": str(repo_root),
+        "agent_id": "a02b9583eedc74093",
     }
     verdict_path = mint_for_payload(payload)
     try:
         assert verdict_path is not None
         verdict_record = json.loads(verdict_path.read_text(encoding="utf-8"))
         assert verdict_record["all_pass"] is True
+        assert verdict_record["minted_from_agent_id"] == "a02b9583eedc74093"
     finally:
         if verdict_path is not None and verdict_path.exists():
             verdict_path.unlink()
