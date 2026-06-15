@@ -1,5 +1,62 @@
 # Changelog
 
+## [1.61.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.60.0...claude-dev-env-v1.61.0) (2026-06-15)
+
+
+### Features
+
+* **autoconverge:** let the fix lens self-commit verified production fixes ([96af359](https://github.com/jl-cmd/claude-code-config/commit/96af35960ce495f17d37186cf0e0d6d8599f3192))
+* **autoconverge:** let the fix lens self-commit verified production fixes ([0080d2e](https://github.com/jl-cmd/claude-code-config/commit/0080d2e085adf426ae72f81d118494719573d05c))
+* **code-rules:** block orphan CSS classes at Write/Edit time ([fc0319b](https://github.com/jl-cmd/claude-code-config/commit/fc0319b781301868f7ed4d2dddb76583d518cb54))
+* **code-rules:** block orphan CSS classes at Write/Edit time ([d5a1aa6](https://github.com/jl-cmd/claude-code-config/commit/d5a1aa6a830f0e969e27fb625dba77dfd904cbcd))
+* **code-rules:** block unused known pytest fixture parameters at write time ([f2e762a](https://github.com/jl-cmd/claude-code-config/commit/f2e762abe60ead730939910ab412a64ea607ba50))
+* **code-rules:** block unused known pytest fixture parameters at write time ([a1ceaf6](https://github.com/jl-cmd/claude-code-config/commit/a1ceaf69ba45661c6f654697170466a6b819f73e))
+
+
+### Bug Fixes
+
+* **audit-rubrics:** align Category E prompt skeleton with 9 rubric rows ([b2ff6c4](https://github.com/jl-cmd/claude-code-config/commit/b2ff6c4019b3ed827c6aea1861299180baa96c76))
+* **audit-rubrics:** align Category E prompt skeleton with 9 rubric rows ([0564c59](https://github.com/jl-cmd/claude-code-config/commit/0564c59004e9dacbe990d8923ff876788096ad57))
+* **autoconverge:** drop unused constant and cover render_report behavior ([ea2e467](https://github.com/jl-cmd/claude-code-config/commit/ea2e467e93bfafcd467cffe7fb0c2d49fcdad03e))
+* **autoconverge:** make standards-deferral note conditional on hardening PR ([571470c](https://github.com/jl-cmd/claude-code-config/commit/571470c9b4fa3aedd4bf7c01726578d446146827))
+* **autoconverge:** make standards-deferral note conditional on hardening PR ([8e1f65b](https://github.com/jl-cmd/claude-code-config/commit/8e1f65b49a3cdba799ff7bce0445bab11563cd60))
+* **autoconverge:** route repair and standards-deferral through edit -&gt; verify -&gt; commit ([2f2e8d6](https://github.com/jl-cmd/claude-code-config/commit/2f2e8d649ab38f68f3d5659dad9ac1092e2c6340))
+* **autoconverge:** route repair and standards-deferral through edit -&gt; verify -&gt; commit ([70eee29](https://github.com/jl-cmd/claude-code-config/commit/70eee298fe09ae7f2269860780ba30952a65090a))
+* **code-rules:** eliminate false positives in unused-fixture check ([2641eac](https://github.com/jl-cmd/claude-code-config/commit/2641eac3542cb91d0e143d8e8c9b8ec5a5d699e9))
+* **hooks:** close false-allow holes in the destructive ephemeral-cwd auto-allow gate ([755fb6d](https://github.com/jl-cmd/claude-code-config/commit/755fb6d2d883ab4ba55c1258757f14dbb8ade159))
+* **hooks:** close find global-option, multi-exec, and parallel auto-allow escapes ([4d4bf22](https://github.com/jl-cmd/claude-code-config/commit/4d4bf22bd57905ad7deb6742412472b94aba8f00))
+* **hooks:** collect the search root after a standalone find -O optimization flag ([c247074](https://github.com/jl-cmd/claude-code-config/commit/c2470749f1b678845578079142b6d6ae1ad9a7c4))
+* **hooks:** decline ephemeral auto-allow for find -exec interpreter strings ([8a6962e](https://github.com/jl-cmd/claude-code-config/commit/8a6962e9ee0d54c8e25525ae68ec896859e8e940))
+* **hooks:** harden destructive-blocker ephemeral-cwd auto-allow across command shapes ([8dfbac0](https://github.com/jl-cmd/claude-code-config/commit/8dfbac03509bd3fcc522083f4c5ac9113da45e26))
+* **hooks:** scope destructive-blocker target check to the rm's own segment ([da83d1b](https://github.com/jl-cmd/claude-code-config/commit/da83d1bbee5a55cc8d05d04c56f41132d2b0b0b7))
+* **hooks:** strip grouping chars at the compound-verdict rm-identification site ([4e00999](https://github.com/jl-cmd/claude-code-config/commit/4e00999ba1f755b71a6027195fb9326362ccdfd5))
+* **mypy-validator:** honor project [tool.mypy] config when checking files ([1b6f81c](https://github.com/jl-cmd/claude-code-config/commit/1b6f81c8d084a4b1850c4c8398cb14bf7bb7d50d))
+* **mypy-validator:** honor project [tool.mypy] config when checking files ([45e1314](https://github.com/jl-cmd/claude-code-config/commit/45e1314fc8c27fc9fa933a8859875f759b74320e))
+* **verified-commit:** catch UnicodeDecodeError reading the agent-type sidecar ([d71f2e1](https://github.com/jl-cmd/claude-code-config/commit/d71f2e16a88427a0ca2f3abfff1ff627608a4290))
+* **verified-commit:** resolve verifier agent type from its sidecar meta ([7411876](https://github.com/jl-cmd/claude-code-config/commit/7411876c7b494ca76d9e9a6815ff5c77a5b22a27))
+* **verified-commit:** resolve verifier agent type from its sidecar meta ([2e95521](https://github.com/jl-cmd/claude-code-config/commit/2e95521a6e5ea66aba584ab83f3970a000f42881))
+
+
+### Documentation
+
+* **audit-rubrics:** add stale-payload-key probe to Category F sub-bucket F3 ([88ffb00](https://github.com/jl-cmd/claude-code-config/commit/88ffb001e2cea5d7c7f2677a6a22db76f629c009))
+* **audit-rubrics:** harden Category F against stale-payload-key reads ([#629](https://github.com/jl-cmd/claude-code-config/issues/629)) ([409346a](https://github.com/jl-cmd/claude-code-config/commit/409346a8e78d6969245704378ce1797ff1c69ca2))
+* **claude-md:** note destructive-command literals stall the Bash blocker ([7a38deb](https://github.com/jl-cmd/claude-code-config/commit/7a38deb8420b912347af599529c0c0f57db594e8))
+* **claude-md:** note destructive-command literals stall the Bash blocker ([78c612b](https://github.com/jl-cmd/claude-code-config/commit/78c612bd4550a4d6c86a39da1ed588d01120bf18))
+* **verified-commit:** enumerate every None path in minter sidecar docstrings ([d18a9cf](https://github.com/jl-cmd/claude-code-config/commit/d18a9cf306fa2e73f24b1ba7829629d3d646642e))
+
+
+### Refactoring
+
+* **code-rules:** unify fixture collectability and tidy the check ([dc8b3eb](https://github.com/jl-cmd/claude-code-config/commit/dc8b3eb6e5b21a6e655c91e2452dd48a0564d709))
+
+
+### Tests
+
+* **hooks:** guard code_rules check dispatch so deferred PR [#619](https://github.com/jl-cmd/claude-code-config/issues/619) classes stay blocked ([8efd45b](https://github.com/jl-cmd/claude-code-config/commit/8efd45b714ed5166ab08671513cadc8ff45cb911))
+* **hooks:** guard that every code_rules check_* stays dispatched ([6e8d878](https://github.com/jl-cmd/claude-code-config/commit/6e8d878f6149fe96ae560aa1e7d0ec5d4177dc5b))
+* **verified-commit:** cover non-object sidecar JSON and assert minted agent id ([a9d6801](https://github.com/jl-cmd/claude-code-config/commit/a9d68016c0fc2cae2e722483b9e1000dbf06199a))
+
 ## [1.60.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.59.0...claude-dev-env-v1.60.0) (2026-06-15)
 
 
