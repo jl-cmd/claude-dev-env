@@ -26,6 +26,9 @@ from hooks_constants.destructive_command_segment_constants import (  # noqa: E40
     ALL_FILE_WRITING_OUTPUT_FLAGS_BY_BENIGN_PROGRAM,
     ALL_FIND_EXEC_ACTION_FLAGS,
     ALL_FIND_EXEC_ACTION_TERMINATORS,
+    ALL_FIND_GLOBAL_OPTION_FLAGS_TAKING_A_VALUE,
+    ALL_FIND_GLOBAL_OPTION_FLAGS_WITHOUT_VALUE,
+    FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX,
     ALL_GH_API_GLUED_REQUEST_BODY_FIELD_FLAG_PREFIXES,
     ALL_GH_API_REQUEST_BODY_FIELD_FLAGS,
     ALL_GH_HTTP_WRITE_METHOD_FLAGS,
@@ -247,10 +250,26 @@ def _command_contains_windows_style_path(command: str) -> bool:
 
 
 def _split_command_preserving_windows_backslashes(command: str) -> list[str]:
+    """Tokenize a command, normalizing Windows backslashes while preserving the find terminator.
+
+    Plain POSIX ``shlex.split`` unescapes a ``\\;`` find action terminator to a
+    standalone ``;`` token. When the command carries Windows backslashes, the global
+    backslash-to-forward-slash normalization would otherwise rewrite that ``\\;`` to
+    ``/;`` and bury the terminator inside a data token. The find action terminator is
+    restored to a standalone ``;`` token before the normalization so action slicing and
+    target collection see the same terminator on both platforms.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        The shlex tokens of the command.
+    """
     if "\\" in command and (
         os.name == "nt" or _command_contains_windows_style_path(command)
     ):
-        forward_slash_normalized_command = command.replace("\\", "/")
+        find_terminator_preserved_command = re.sub(r"\\;", " ; ", command)
+        forward_slash_normalized_command = find_terminator_preserved_command.replace("\\", "/")
         return shlex.split(forward_slash_normalized_command)
     return shlex.split(command)
 
@@ -662,6 +681,15 @@ def _strip_leading_subshell_grouping_characters(token: str) -> str:
 def _any_shell_segment_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
     """Return True when any shell segment's leading program runs a string as code.
 
+    A ``find`` ``\\;`` action terminator tokenizes to a bare ``;``, which the
+    segment splitter treats as a command separator, so a second
+    ``-exec <interpreter> -c '...'`` action becomes its own segment whose leader is
+    ``-exec`` — a leader no detector recognizes. Each ``find`` ``-exec``/``-execdir``
+    action's program tokens are therefore scanned first on the full pre-split token
+    list (where the ``;``/``+`` terminators are still standalone), so a buried
+    ``find . -exec touch {} ; -exec bash -c 'rm -rf /etc' ;`` action is caught before
+    the per-segment loop runs.
+
     Splits the command into simple-command segments on ``&&`` / ``||`` / ``;`` /
     ``|`` / ``&`` and applies the leading-program string-execution check to each.
     A benign program leading the whole command (``echo hi && bash -c 'rm -rf /etc'``,
@@ -677,6 +705,11 @@ def _any_shell_segment_executes_a_string_argument(all_command_tokens: list[str])
         True when at least one segment's leading program executes a quoted string
         argument as code.
     """
+    if any(
+        _command_executes_a_string_argument(each_action_program_tokens)
+        for each_action_program_tokens in _find_exec_action_program_token_lists(all_command_tokens)
+    ):
+        return True
     all_exploded_tokens = _explode_glued_shell_control_operators(all_command_tokens)
     for each_segment in _split_tokens_into_shell_segments(all_exploded_tokens):
         if each_segment and _command_executes_a_string_argument(each_segment):
@@ -1671,6 +1704,53 @@ def _rm_segment_targets_escape_ephemeral_cwd(all_rm_segment_tokens: list[str], d
     )
 
 
+def _collect_find_search_root_tokens(all_tokens_after_find: list[str]) -> list[str]:
+    """Return the path-operand search roots that follow ``find``, skipping global options.
+
+    GNU ``find`` accepts global options before the path operands: the flag-only
+    options ``-H``/``-L``/``-P`` (each its own token, possibly in sequence), the
+    value-taking option ``-D`` (which consumes the following debug-options token), and
+    an optimization-level option that begins with ``-O`` (which consumes a following
+    bare level token when ``-O`` stands alone). The leading run of such global options
+    is skipped first, then the path operands are collected: every non-dash token up to
+    the first ``-``-prefixed expression primary (``-name``, ``-type``, ``-exec``). A
+    ``find`` whose first post-option token is already an expression primary declares no
+    path operand and returns an empty list, so it defaults to the ephemeral cwd.
+
+    Args:
+        all_tokens_after_find: The segment tokens that follow the ``find`` program token.
+
+    Returns:
+        The path-operand search-root tokens, in order; empty when ``find`` declares none.
+    """
+    each_token_index = 0
+    while each_token_index < len(all_tokens_after_find):
+        each_token = all_tokens_after_find[each_token_index]
+        if each_token in ALL_FIND_GLOBAL_OPTION_FLAGS_WITHOUT_VALUE:
+            each_token_index += 1
+            continue
+        if each_token in ALL_FIND_GLOBAL_OPTION_FLAGS_TAKING_A_VALUE:
+            each_token_index += 1
+            if each_token_index < len(all_tokens_after_find):
+                each_token_index += 1
+            continue
+        if each_token.startswith(FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX):
+            each_token_index += 1
+            if each_token == FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX and (
+                each_token_index < len(all_tokens_after_find)
+                and not all_tokens_after_find[each_token_index].startswith("-")
+            ):
+                each_token_index += 1
+            continue
+        break
+    all_search_root_tokens: list[str] = []
+    for each_token in all_tokens_after_find[each_token_index:]:
+        if each_token.startswith("-"):
+            break
+        all_search_root_tokens.append(each_token)
+    return all_search_root_tokens
+
+
 def _find_exec_rm_search_root_escapes_ephemeral_cwd(
     all_segment_tokens: list[str], declared_effective_cwd: str | None
 ) -> bool:
@@ -1678,12 +1758,13 @@ def _find_exec_rm_search_root_escapes_ephemeral_cwd(
 
     A ``find <roots...> ... -exec rm ...`` (or ``-execdir``) segment deletes whatever
     ``find`` matches under its leading search-root arguments; the ``rm``'s own ``{}``
-    and ``+`` placeholders name no deletion target, ``find``'s roots do. The segment
-    is unsafe when any leading search-root argument (every token after ``find`` up to
-    the first ``-``-prefixed option) resolves outside the ephemeral namespace. Returns
-    False when the segment contains no ``find`` token, when it has no ``-exec`` or
-    ``-execdir`` action after ``find``, or when ``find`` declares no search root
-    (``find`` then defaults to the ephemeral cwd).
+    and ``+`` placeholders name no deletion target, ``find``'s roots do. The leading run
+    of ``find`` global options (``-H``/``-L``/``-P``, ``-D debugopts``, ``-Olevel``) is
+    skipped before the path operands are read, so a global option before the roots does
+    not hide them. The segment is unsafe when any path-operand search root resolves
+    outside the ephemeral namespace. Returns False when the segment contains no ``find``
+    token, when it has no ``-exec`` or ``-execdir`` action after ``find``, or when
+    ``find`` declares no path operand (``find`` then defaults to the ephemeral cwd).
 
     Args:
         all_segment_tokens: The tokens of a single shell segment.
@@ -1705,11 +1786,7 @@ def _find_exec_rm_search_root_escapes_ephemeral_cwd(
         return False
     if not any(each_token in ALL_FIND_EXEC_ACTION_FLAGS for each_token in all_segment_tokens[find_token_index:]):
         return False
-    all_search_root_tokens: list[str] = []
-    for each_token in all_segment_tokens[find_token_index + 1 :]:
-        if each_token.startswith("-"):
-            break
-        all_search_root_tokens.append(each_token)
+    all_search_root_tokens = _collect_find_search_root_tokens(all_segment_tokens[find_token_index + 1 :])
     return any(
         _rm_target_resolves_outside_ephemeral_namespace(each_search_root_token, declared_effective_cwd)
         for each_search_root_token in all_search_root_tokens
