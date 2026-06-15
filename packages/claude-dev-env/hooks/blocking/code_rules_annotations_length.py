@@ -56,6 +56,36 @@ def check_parameter_annotations(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _has_pytest_fixture_decorator(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    """Return True when a function carries an ``@pytest.fixture`` decorator.
+
+    The decorator is recognized whether it is written as a dotted
+    ``@pytest.fixture`` attribute or a bare ``@fixture`` name, and whether or not
+    it is called with arguments (``@pytest.fixture(scope="module")``). The call
+    form is unwrapped to its callee before the name is matched.
+
+    Args:
+        node: The function definition AST node to inspect.
+
+    Returns:
+        True when any decorator on the node is a call or bare reference whose
+        final name is ``fixture``; False otherwise.
+    """
+    for each_decorator in node.decorator_list:
+        unwrapped = (
+            each_decorator.func
+            if isinstance(each_decorator, ast.Call)
+            else each_decorator
+        )
+        if isinstance(unwrapped, ast.Name) and unwrapped.id == "fixture":
+            return True
+        if isinstance(unwrapped, ast.Attribute) and unwrapped.attr == "fixture":
+            return True
+    return False
+
+
 def _is_pytest_fixture_injection_site(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> bool:
@@ -78,13 +108,7 @@ def _is_pytest_fixture_injection_site(
     """
     if node.name.startswith("test"):
         return True
-    for each_decorator in node.decorator_list:
-        unwrapped = each_decorator.func if isinstance(each_decorator, ast.Call) else each_decorator
-        if isinstance(unwrapped, ast.Name) and unwrapped.id == "fixture":
-            return True
-        if isinstance(unwrapped, ast.Attribute) and unwrapped.attr == "fixture":
-            return True
-    return False
+    return _has_pytest_fixture_decorator(node)
 
 
 def _normalize_fixture_annotation_text(annotation_text: str) -> str:
@@ -206,27 +230,36 @@ def check_known_pytest_fixture_annotations(content: str, file_path: str) -> list
     return issues
 
 
-def _names_loaded_in_subtree(node: ast.AST) -> set[str]:
-    """Return every identifier read anywhere within an AST subtree.
+def _names_referenced_in_subtree(node: ast.AST) -> set[str]:
+    """Return every identifier referenced anywhere within an AST subtree.
 
-    The walk collects each ``ast.Name`` evaluated in a load context, reaching
-    into nested function and comprehension bodies, so a parameter referenced
-    only inside an inner function still counts as used. A name appearing solely
-    as an assignment or deletion target is not a load and is therefore absent.
+    A name counts as referenced when it is read (an ``ast.Name`` in load
+    context), deleted (an ``ast.Name`` in delete context), or augmented-assigned
+    (the ``ast.Name`` target of an ``ast.AugAssign``, which reads the prior value
+    before storing). The walk reaches into nested function and comprehension
+    bodies, so a parameter referenced only inside an inner function still counts.
+    A name appearing solely as a plain assignment target — ``ast.Store`` context
+    without augmentation — is absent, because rebinding the name without reading
+    it leaves the fixture's setup genuinely unused.
 
     Args:
-        node: The AST node whose subtree is scanned for loaded identifiers.
+        node: The AST node whose subtree is scanned for referenced identifiers.
 
     Returns:
-        The set of identifier strings read at least once within the subtree.
+        The set of identifier strings read, deleted, or augmented-assigned at
+        least once within the subtree.
     """
-    loaded_names: set[str] = set()
+    referenced_names: set[str] = set()
     for each_descendant in ast.walk(node):
         if isinstance(each_descendant, ast.Name) and isinstance(
-            each_descendant.ctx, ast.Load
+            each_descendant.ctx, (ast.Load, ast.Del)
         ):
-            loaded_names.add(each_descendant.id)
-    return loaded_names
+            referenced_names.add(each_descendant.id)
+        if isinstance(each_descendant, ast.AugAssign) and isinstance(
+            each_descendant.target, ast.Name
+        ):
+            referenced_names.add(each_descendant.target.id)
+    return referenced_names
 
 
 def _is_pytest_test_function(
@@ -249,17 +282,42 @@ def _is_pytest_test_function(
         True when the node's name begins with ``test`` and the node carries no
         ``@pytest.fixture`` decorator; False otherwise.
     """
-    for each_decorator in node.decorator_list:
-        unwrapped = (
-            each_decorator.func
-            if isinstance(each_decorator, ast.Call)
-            else each_decorator
-        )
-        if isinstance(unwrapped, ast.Name) and unwrapped.id == "fixture":
-            return False
-        if isinstance(unwrapped, ast.Attribute) and unwrapped.attr == "fixture":
-            return False
+    if _has_pytest_fixture_decorator(node):
+        return False
     return node.name.startswith("test")
+
+
+def _iter_pytest_collectable_functions(
+    tree: ast.AST,
+) -> "list[ast.FunctionDef | ast.AsyncFunctionDef]":
+    """Yield the function nodes pytest can collect as tests, in source order.
+
+    pytest collects a test function only at module top level or as a method
+    defined directly in a class body; a function nested inside another
+    function's body is never collected, so its parameters are ordinary local
+    arguments rather than injected fixtures. The walk descends through the
+    module body and through class bodies (including nested classes, so methods
+    of a nested class are reached), yields each ``FunctionDef`` /
+    ``AsyncFunctionDef`` it encounters, and never descends into a function's own
+    body — function-nested definitions are excluded.
+
+    Args:
+        tree: The parsed module (or any node whose body holds the candidates).
+
+    Returns:
+        Module-level and class-method function definitions in source order;
+        never a function-nested definition.
+    """
+    collectable_functions: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for each_statement in getattr(tree, "body", []):
+        if isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            collectable_functions.append(each_statement)
+            continue
+        if isinstance(each_statement, ast.ClassDef):
+            collectable_functions.extend(
+                _iter_pytest_collectable_functions(each_statement)
+            )
+    return collectable_functions
 
 
 def check_unused_known_pytest_fixture_parameters(
@@ -276,12 +334,16 @@ def check_unused_known_pytest_fixture_parameters(
     copy-paste remnant from a sibling test that did use it. This check flags
     each such parameter so the author drops it.
 
-    Only pytest-collected test functions are inspected; a
+    Only pytest-collected test functions are inspected: functions at module top
+    level and methods defined directly in a class body. A function nested inside
+    another function's body is excluded — pytest never collects it, so its
+    fixture-named parameter is an ordinary local argument. A
     ``@pytest.fixture``-decorated function is exempt because injecting a fixture
     into another fixture purely to order its setup is an intentional pattern. A
-    parameter counts as used when its name is read anywhere in the function body,
-    including inside a nested function or comprehension; an attribute access such
-    as ``monkeypatch.setenv(...)`` reads the name and so counts. Only the named
+    parameter counts as used when its name is referenced anywhere in the function
+    body — read, augmented-assigned, or deleted — including inside a nested
+    function or comprehension; an attribute access such as
+    ``monkeypatch.setenv(...)`` reads the name and so counts. Only the named
     injection slots pytest fills — undefaulted positional-or-keyword and
     keyword-only parameters — are considered, matching
     ``check_known_pytest_fixture_annotations``.
@@ -292,7 +354,7 @@ def check_unused_known_pytest_fixture_parameters(
 
     Returns:
         One blocking issue per known fixture parameter declared on a test
-        function whose body never reads it, naming the parameter.
+        function whose body never references it, naming the parameter.
     """
     if not is_test_file(file_path):
         return []
@@ -303,18 +365,19 @@ def check_unused_known_pytest_fixture_parameters(
     except SyntaxError:
         return []
     issues: list[str] = []
-    for each_node in ast.walk(tree):
-        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
+    for each_node in _iter_pytest_collectable_functions(tree):
         if not _is_pytest_test_function(each_node):
             continue
-        loaded_names = set().union(
-            *(_names_loaded_in_subtree(each_statement) for each_statement in each_node.body)
+        referenced_names = set().union(
+            *(
+                _names_referenced_in_subtree(each_statement)
+                for each_statement in each_node.body
+            )
         ) if each_node.body else set()
         for each_arg in _collect_fixture_injection_arguments(each_node):
             if each_arg.arg not in ANNOTATION_BY_PYTEST_FIXTURE:
                 continue
-            if each_arg.arg in loaded_names:
+            if each_arg.arg in referenced_names:
                 continue
             issues.append(
                 f"Line {each_arg.lineno}: parameter {each_arg.arg!r} on "

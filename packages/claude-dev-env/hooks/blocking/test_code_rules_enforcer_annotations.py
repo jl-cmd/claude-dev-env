@@ -463,3 +463,41 @@ def test_should_not_flag_unused_fixture_in_decorated_test_named_function() -> No
     )
 
 
+def test_should_not_flag_fixture_param_on_nested_test_named_helper() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_outer(tmp_path: Path) -> None:\n"
+        "    assert tmp_path\n"
+        "    def test_inner(tmp_path) -> None:\n"
+        "        return None\n"
+        "    test_inner(tmp_path)\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A fixture-named parameter on a function nested inside a test body is a "
+        f"local helper argument pytest never injects, got: {issues}"
+    )
+
+
+def test_should_count_augmented_assignment_as_fixture_reference() -> None:
+    source = "def test_aug(request) -> None:\n    request += 1\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"An augmented assignment to the fixture references it, got: {issues}"
+    )
+
+
+def test_should_count_del_as_fixture_reference() -> None:
+    source = "def test_d(tmp_path: Path) -> None:\n    del tmp_path\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A del of the fixture references it, got: {issues}"
+    )
+
+
