@@ -69,13 +69,55 @@ def is_file_within_project(target_file: str, project_root: Path) -> bool:
         return False
 
 
-def build_mypy_command(relative_file_path: str) -> list[str]:
-    if IS_WINDOWS:
-        base_command = [sys.executable, "-m", "mypy"]
-    else:
-        base_command = ["mypy"]
+def discover_mypy_config(target_file: Path) -> Path | None:
+    """Return the nearest ancestor ``pyproject.toml`` that configures mypy.
 
-    return base_command + [
+    Mypy applies a project's ``[tool.mypy]`` settings only when the config file
+    is on its invocation path; handing the discovered config to mypy lets a
+    check run from the repository root still honor the project's own import
+    resolution settings (such as ``ignore_missing_imports``) for a module that
+    imports its siblings by name. Reuses the validators-package walk-up so the
+    discovery logic lives in one place.
+
+    Args:
+        target_file: The Python file mypy will check.
+
+    Returns:
+        The nearest ancestor ``pyproject.toml`` declaring a ``[tool.mypy]``
+        table, or None when none exists above the file or the walk-up helper
+        cannot be imported.
+    """
+    validators_directory = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "validators"
+    )
+    if validators_directory not in sys.path:
+        sys.path.insert(0, validators_directory)
+    try:
+        integration_module = importlib.import_module("mypy_integration")
+    except ImportError:
+        return None
+    discovered_config = integration_module.find_pyproject_with_mypy_config(target_file)
+    return discovered_config if isinstance(discovered_config, Path) else None
+
+
+def build_mypy_command(relative_file_path: str, mypy_config_file: Path | None) -> list[str]:
+    """Build the mypy command line for one file.
+
+    Args:
+        relative_file_path: The target file path relative to the project root.
+        mypy_config_file: The ``pyproject.toml`` to pass via ``--config-file``,
+            or None to let mypy fall back to its own config discovery.
+
+    Returns:
+        The full mypy argument vector, including the interpreter prefix on
+        Windows and the config file when one was discovered.
+    """
+    base_command = [sys.executable, "-m", "mypy"] if IS_WINDOWS else ["mypy"]
+
+    config_arguments = (
+        ["--config-file", str(mypy_config_file)] if mypy_config_file is not None else []
+    )
+    return base_command + config_arguments + [
         "--no-error-summary",
         "--show-error-codes",
         "--no-color",
@@ -84,8 +126,18 @@ def build_mypy_command(relative_file_path: str) -> list[str]:
 
 
 def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
+    """Run mypy on one file from the project root and return its result.
+
+    Args:
+        target_file: The absolute path of the file to type-check.
+        project_root: The directory mypy runs from.
+
+    Returns:
+        The mypy exit code paired with its combined stdout and stderr text.
+    """
     relative_file_path = os.path.relpath(target_file, project_root)
-    mypy_command = build_mypy_command(relative_file_path)
+    mypy_config_file = discover_mypy_config(Path(target_file))
+    mypy_command = build_mypy_command(relative_file_path, mypy_config_file)
 
     completed_process = subprocess.run(
         mypy_command,
