@@ -341,3 +341,75 @@ def test_should_not_flag_async_alias_to_sync_target() -> None:
     assert issues == [], (
         f"An async alias to a sync target changes the awaitability contract, got: {issues!r}"
     )
+
+
+def test_should_not_flag_forwarder_whose_name_is_a_string_dispatch_target() -> None:
+    source = (
+        "from typing import Literal\n"
+        "\n"
+        "TransformName = Literal[\"verbatim\", \"near_verbatim\"]\n"
+        "\n"
+        "def strip_anthropic_refs(text: str) -> str:\n"
+        "    return text.replace(\"Anthropic\", \"\")\n"
+        "\n"
+        "def near_verbatim(text: str) -> str:\n"
+        "    return strip_anthropic_refs(text)\n"
+        "\n"
+        "def apply_transform(name: TransformName, text: str) -> str:\n"
+        "    if name == \"near_verbatim\":\n"
+        "        return near_verbatim(text)\n"
+        "    return text\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "A forwarder dispatched by its own name through a string literal must stay, "
+        f"got: {issues!r}"
+    )
+
+
+def test_should_not_flag_forwarder_calling_keyword_only_target_positionally() -> None:
+    source = (
+        "def target(first: int, *, second: int) -> int:\n"
+        "    return first + second\n"
+        "\n"
+        "def alias(first: int, second: int) -> int:\n"
+        "    return target(first, second)\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "The target rejects the forwarded positional call (second is keyword-only), "
+        f"so the alias is not interchangeable with a direct call, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_forwarder_whose_arity_mismatches_redefined_target() -> None:
+    source = (
+        "def target(first: int) -> int:\n"
+        "    return first\n"
+        "\n"
+        "def alias(first: int) -> int:\n"
+        "    return target(first)\n"
+        "\n"
+        "def target(first: int, second: int) -> int:\n"
+        "    return first + second\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "The live target needs two positional arguments but the forwarder passes one, "
+        f"so the forwarded call is invalid against the live target, got: {issues!r}"
+    )
+
+
+def test_should_flag_forwarder_calling_default_bearing_target_positionally() -> None:
+    source = (
+        "def target(first: int, second: int = 5) -> int:\n"
+        "    return first + second\n"
+        "\n"
+        "def alias(first: int, second: int) -> int:\n"
+        "    return target(first, second)\n"
+    )
+    issues = check_zero_payload_function_alias(source, PRODUCTION_FILE_PATH)
+    assert any("alias" in each for each in issues), (
+        "The target accepts the forwarded positional call, so the alias is a true "
+        f"pass-through and must be flagged, got: {issues!r}"
+    )
