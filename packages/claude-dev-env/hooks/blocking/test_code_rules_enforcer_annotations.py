@@ -501,3 +501,62 @@ def test_should_count_del_as_fixture_reference() -> None:
     )
 
 
+def test_should_flag_unused_fixture_parameter_on_class_method() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "class TestThing:\n"
+        "    def test_method(self, tmp_path: Path) -> None:\n"
+        "        assert 1 == 1\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue for each_issue in issues
+    ), f"An unused fixture on a class-body test method must be flagged, got: {issues}"
+
+
+def test_should_flag_unused_fixture_parameter_on_nested_class_method() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "class TestOuter:\n"
+        "    class TestInner:\n"
+        "        def test_method(self, tmp_path: Path) -> None:\n"
+        "            assert 1 == 1\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue for each_issue in issues
+    ), f"An unused fixture on a nested-class test method must be flagged, got: {issues}"
+
+
+def test_should_flag_fixture_when_body_only_plain_assigns_it() -> None:
+    source = "def test_x(tmp_path: Path) -> None:\n    tmp_path = 1\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue for each_issue in issues
+    ), f"A plain Store target is not a reference, so tmp_path is unused, got: {issues}"
+
+
+def test_annotation_check_skips_fixture_param_on_function_nested_in_test() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_outer(tmp_path: Path) -> None:\n"
+        "    def inner(tmp_path) -> None:\n"
+        "        return None\n"
+        "    inner(tmp_path)\n"
+    )
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A fixture-named param on a function nested in a test body is not an "
+        f"injection site, and the correctly annotated outer param is fine, "
+        f"got: {issues}"
+    )
+
+

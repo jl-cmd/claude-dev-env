@@ -184,6 +184,11 @@ def check_known_pytest_fixture_annotations(content: str, file_path: str) -> list
     fixture; and a ``*args`` or ``**kwargs`` parameter that happens to share a
     fixture name is never a fixture injection.
 
+    Only pytest-collectable functions are inspected: functions at module top
+    level and methods defined directly in a class body. A fixture-named
+    parameter on a function nested inside another function's body is exempt,
+    because pytest never injects a fixture into a function-nested definition.
+
     Args:
         content: The Python source to analyze.
         file_path: The path of the file being checked.
@@ -202,9 +207,7 @@ def check_known_pytest_fixture_annotations(content: str, file_path: str) -> list
     except SyntaxError:
         return []
     issues: list[str] = []
-    for each_node in ast.walk(tree):
-        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
+    for each_node in _collect_pytest_collectable_functions(tree):
         if not _is_pytest_fixture_injection_site(each_node):
             continue
         for each_arg in _collect_fixture_injection_arguments(each_node):
@@ -287,17 +290,17 @@ def _is_pytest_test_function(
     return node.name.startswith("test")
 
 
-def _iter_pytest_collectable_functions(
+def _collect_pytest_collectable_functions(
     tree: ast.AST,
 ) -> "list[ast.FunctionDef | ast.AsyncFunctionDef]":
-    """Yield the function nodes pytest can collect as tests, in source order.
+    """Return the function nodes pytest can collect as tests, in source order.
 
     pytest collects a test function only at module top level or as a method
     defined directly in a class body; a function nested inside another
     function's body is never collected, so its parameters are ordinary local
     arguments rather than injected fixtures. The walk descends through the
     module body and through class bodies (including nested classes, so methods
-    of a nested class are reached), yields each ``FunctionDef`` /
+    of a nested class are reached), collects each ``FunctionDef`` /
     ``AsyncFunctionDef`` it encounters, and never descends into a function's own
     body — function-nested definitions are excluded.
 
@@ -315,7 +318,7 @@ def _iter_pytest_collectable_functions(
             continue
         if isinstance(each_statement, ast.ClassDef):
             collectable_functions.extend(
-                _iter_pytest_collectable_functions(each_statement)
+                _collect_pytest_collectable_functions(each_statement)
             )
     return collectable_functions
 
@@ -365,15 +368,10 @@ def check_unused_known_pytest_fixture_parameters(
     except SyntaxError:
         return []
     issues: list[str] = []
-    for each_node in _iter_pytest_collectable_functions(tree):
+    for each_node in _collect_pytest_collectable_functions(tree):
         if not _is_pytest_test_function(each_node):
             continue
-        referenced_names = set().union(
-            *(
-                _names_referenced_in_subtree(each_statement)
-                for each_statement in each_node.body
-            )
-        ) if each_node.body else set()
+        referenced_names = _names_referenced_in_subtree(each_node)
         for each_arg in _collect_fixture_injection_arguments(each_node):
             if each_arg.arg not in ANNOTATION_BY_PYTEST_FIXTURE:
                 continue
