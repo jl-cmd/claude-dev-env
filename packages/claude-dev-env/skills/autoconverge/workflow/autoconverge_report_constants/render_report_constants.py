@@ -62,7 +62,6 @@ SCENE_FIELD_CAPTION = "caption"
 
 MEDIUM_TERMINAL = "terminal"
 MEDIUM_CODE = "code"
-MEDIUM_TEXT = "text"
 
 CATEGORY_BUG = "bug"
 CATEGORY_LABEL_BY_VALUE = {
