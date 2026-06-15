@@ -124,6 +124,12 @@ KNOWN_PYTEST_FIXTURE_ANNOTATION_MESSAGE_SUFFIX: str = (
     "(CODE_RULES §6; pytest builtin fixture reference "
     "https://docs.pytest.org/en/stable/reference/fixtures.html)"
 )
+UNUSED_PYTEST_FIXTURE_PARAMETER_MESSAGE_SUFFIX: str = (
+    "known pytest fixture parameter is declared but never referenced in the "
+    "function body; pytest still materializes its setup, so drop the unused "
+    "parameter (pytest builtin fixture reference "
+    "https://docs.pytest.org/en/stable/reference/fixtures.html)"
+)
 ALL_LOOP_INDEX_LETTER_EXEMPTIONS: frozenset[str] = frozenset({"i", "j", "k", "_"})
 EACH_PREFIX = "each_"
 BARE_EACH_TOKEN = "each"

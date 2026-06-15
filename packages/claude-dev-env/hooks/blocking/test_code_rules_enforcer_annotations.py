@@ -320,3 +320,243 @@ def test_should_flag_undefaulted_fixture_before_defaulted_one() -> None:
     )
 
 
+def test_should_flag_unused_known_fixture_parameter_in_test_file() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_omits_config(tmp_path: Path) -> None:\n"
+        "    command = build_command('module.py', None)\n"
+        "    assert command[-1] == 'module.py'\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue for each_issue in issues
+    ), f"Expected unused tmp_path fixture parameter flagged, got: {issues}"
+
+
+def test_should_not_flag_used_known_fixture_parameter() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_includes_config(tmp_path: Path) -> None:\n"
+        "    config_file = tmp_path / 'pyproject.toml'\n"
+        "    assert config_file.name == 'pyproject.toml'\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A referenced fixture parameter must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_unused_ordinary_test_parameter() -> None:
+    source = "def test_thing(some_value):\n    return 1\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"Only known pytest fixtures are checked, not arbitrary params, got: {issues}"
+    )
+
+
+def test_should_not_flag_unused_fixture_outside_test_files() -> None:
+    source = "def build(tmp_path):\n    return 1\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"This check applies to test files only, got: {issues}"
+    )
+
+
+def test_should_flag_unused_monkeypatch_fixture_parameter() -> None:
+    source = (
+        "import pytest\n"
+        "def test_env(monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        "    assert build_command('m.py', None)[-1] == 'm.py'\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "monkeypatch" in each_issue for each_issue in issues
+    ), f"Expected unused monkeypatch fixture parameter flagged, got: {issues}"
+
+
+def test_should_count_attribute_access_as_fixture_use() -> None:
+    source = (
+        "import pytest\n"
+        "def test_env(monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        "    monkeypatch.setenv('A', 'B')\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"Attribute access on the fixture counts as a use, got: {issues}"
+    )
+
+
+def test_should_count_nested_function_reference_as_fixture_use() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_board(tmp_path: Path) -> None:\n"
+        "    def inner() -> Path:\n"
+        "        return tmp_path\n"
+        "    assert inner().name\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A reference inside a nested function counts as a use, got: {issues}"
+    )
+
+
+def test_should_not_flag_unused_fixture_in_decorated_fixture_function() -> None:
+    source = (
+        "import pytest\n"
+        "from pathlib import Path\n"
+        "@pytest.fixture\n"
+        "def board(tmp_path: Path) -> int:\n"
+        "    return 1\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A fixture composing another fixture by injection alone is intentional "
+        f"and must not be flagged, got: {issues}"
+    )
+
+
+def test_should_count_comprehension_reference_as_fixture_use() -> None:
+    source = (
+        "import pytest\n"
+        "def test_log_lines(caplog: pytest.LogCaptureFixture) -> None:\n"
+        "    messages = [each_record.message for each_record in caplog.records]\n"
+        "    assert messages == []\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A reference inside a comprehension counts as a use, got: {issues}"
+    )
+
+
+def test_should_not_flag_unused_fixture_in_decorated_test_named_function() -> None:
+    source = (
+        "import pytest\n"
+        "from pathlib import Path\n"
+        "@pytest.fixture\n"
+        "def test_board(tmp_path: Path) -> int:\n"
+        "    return 1\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A @pytest.fixture-decorated function named test_* is a fixture, not a "
+        f"test, and must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_fixture_param_on_nested_test_named_helper() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_outer(tmp_path: Path) -> None:\n"
+        "    assert tmp_path\n"
+        "    def test_inner(tmp_path) -> None:\n"
+        "        return None\n"
+        "    test_inner(tmp_path)\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A fixture-named parameter on a function nested inside a test body is a "
+        f"local helper argument pytest never injects, got: {issues}"
+    )
+
+
+def test_should_count_augmented_assignment_as_fixture_reference() -> None:
+    source = "def test_aug(request) -> None:\n    request += 1\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"An augmented assignment to the fixture references it, got: {issues}"
+    )
+
+
+def test_should_count_del_as_fixture_reference() -> None:
+    source = "def test_d(tmp_path: Path) -> None:\n    del tmp_path\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A del of the fixture references it, got: {issues}"
+    )
+
+
+def test_should_flag_unused_fixture_parameter_on_class_method() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "class TestThing:\n"
+        "    def test_method(self, tmp_path: Path) -> None:\n"
+        "        assert 1 == 1\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue for each_issue in issues
+    ), f"An unused fixture on a class-body test method must be flagged, got: {issues}"
+
+
+def test_should_flag_unused_fixture_parameter_on_nested_class_method() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "class TestOuter:\n"
+        "    class TestInner:\n"
+        "        def test_method(self, tmp_path: Path) -> None:\n"
+        "            assert 1 == 1\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue for each_issue in issues
+    ), f"An unused fixture on a nested-class test method must be flagged, got: {issues}"
+
+
+def test_should_flag_fixture_when_body_only_plain_assigns_it() -> None:
+    source = "def test_x(tmp_path: Path) -> None:\n    tmp_path = 1\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue for each_issue in issues
+    ), f"A plain Store target is not a reference, so tmp_path is unused, got: {issues}"
+
+
+def test_annotation_check_skips_fixture_param_on_function_nested_in_test() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_outer(tmp_path: Path) -> None:\n"
+        "    def inner(tmp_path) -> None:\n"
+        "        return None\n"
+        "    inner(tmp_path)\n"
+    )
+    issues = code_rules_enforcer.check_known_pytest_fixture_annotations(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A fixture-named param on a function nested in a test body is not an "
+        f"injection site, and the correctly annotated outer param is fine, "
+        f"got: {issues}"
+    )
+
+
