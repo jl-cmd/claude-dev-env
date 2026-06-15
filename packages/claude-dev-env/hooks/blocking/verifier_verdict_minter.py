@@ -137,7 +137,7 @@ def _agent_type_from_meta_sidecar(agent_transcript_path: str) -> str | None:
     sidecar_file = transcript_file.with_name(f"{transcript_file.stem}.meta.json")
     try:
         sidecar_record = json.loads(sidecar_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     if not isinstance(sidecar_record, dict):
         return None

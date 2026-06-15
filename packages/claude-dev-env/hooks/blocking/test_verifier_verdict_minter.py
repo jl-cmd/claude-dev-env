@@ -94,6 +94,15 @@ def test_unparseable_sidecar_resolves_nothing(tmp_path: pathlib.Path) -> None:
     assert resolved_subagent_type(payload) is None
 
 
+def test_invalid_utf8_sidecar_resolves_nothing(tmp_path: pathlib.Path) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    sidecar_file = agent_transcript.with_name("agent-7.meta.json")
+    sidecar_file.write_bytes(b'{"agentType": "\xff\xfe bad"}')
+    payload = {"agent_transcript_path": str(agent_transcript)}
+    assert resolved_subagent_type(payload) is None
+
+
 def test_non_verifier_agent_type_mints_nothing(tmp_path: pathlib.Path) -> None:
     agent_transcript = tmp_path / "agent-7.jsonl"
     agent_transcript.write_text("", encoding="utf-8")
