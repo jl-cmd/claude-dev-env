@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.60.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.59.0...claude-dev-env-v1.60.0) (2026-06-15)
+
+
+### Features
+
+* **autoconverge:** aggregate run journals and write the closing summary at teardown ([857d2e8](https://github.com/jl-cmd/claude-code-config/commit/857d2e8d826140473f57ece2d8bb7515071eb82e))
+* **autoconverge:** LLM-written plain-language summary in the closing report ([1513941](https://github.com/jl-cmd/claude-code-config/commit/15139419394433edff383f3997ba87931f687f08))
+* **autoconverge:** LLM-written plain-language summary in the closing report ([2ac6fc8](https://github.com/jl-cmd/claude-code-config/commit/2ac6fc875e5e39961c6d58ec6e1725091caf29d2))
+* **code-rules:** block zero-payload function aliases at Write/Edit time ([9696b07](https://github.com/jl-cmd/claude-code-config/commit/9696b07e09082386d0005920e3aa1970f2c2e9ff))
+* **code-rules:** surface cross-skill duplicate helpers at Write time ([1db2fe3](https://github.com/jl-cmd/claude-code-config/commit/1db2fe321c3498acf3020f78bedbf268df39cc9a))
+* **code-rules:** surface cross-skill duplicate helpers at Write time ([655544f](https://github.com/jl-cmd/claude-code-config/commit/655544f0d1fde4ba1fb54b6ae1c851ae321e9d3e))
+* **hooks:** block dead module-level constants in constants modules ([617ac8e](https://github.com/jl-cmd/claude-code-config/commit/617ac8efa45de8e8a595c947f34ffd80017ddc32))
+* **hooks:** block dead module-level constants in constants modules at Write/Edit ([b8cde0e](https://github.com/jl-cmd/claude-code-config/commit/b8cde0e400857755401a196097c616d6a9795c9f))
+* **hooks:** land verified-commit gate family with spawn-record minter ([acc7c61](https://github.com/jl-cmd/claude-code-config/commit/acc7c61988983f6dd7337794c3d527a6961a5f1c))
+* **hooks:** land verified-commit gate family with spawn-record minter ([40db808](https://github.com/jl-cmd/claude-code-config/commit/40db80892406c004e1948de4acb3f45235d196d6))
+* **hooks:** remove zoekt content-search redirector and references ([033da68](https://github.com/jl-cmd/claude-code-config/commit/033da687e5d7142c273ee22099b38317657fad9b))
+* **hooks:** remove zoekt content-search redirector and references ([b1a1c7c](https://github.com/jl-cmd/claude-code-config/commit/b1a1c7c9825698bdf222be7fde3a8b7ab9bb4e30))
+* **pr-loop:** add cwd/worktree preflight guard for convergence skills ([c025739](https://github.com/jl-cmd/claude-code-config/commit/c02573915d980b422ac7a70160d89babd572d037))
+
+
+### Bug Fixes
+
+* **autoconverge:** harden closing-report render against malformed LLM summaries ([91764ea](https://github.com/jl-cmd/claude-code-config/commit/91764ea40f8431a7569ed5083f02dc6be9d4d111))
+* **autoconverge:** surface a blocker when the CLEAN-audit post is denied ([7bf854d](https://github.com/jl-cmd/claude-code-config/commit/7bf854d63ae7f55cd20a749b177020531de32dab))
+* **autoconverge:** surface a blocker when the CLEAN-audit post is denied ([53a0669](https://github.com/jl-cmd/claude-code-config/commit/53a0669dead8cb62c36005da5558cd6c5fc9ff3d))
+* **code-rules:** exclude decorated and default-adding forwarders from the zero-payload alias check ([b07edcf](https://github.com/jl-cmd/claude-code-config/commit/b07edcf9db70e7b126bdec6dea7a3dea48070db6))
+* **code-rules:** exempt string-dispatched and target-incompatible zero-payload aliases, run the check at the hook Write/Edit boundary ([1f34253](https://github.com/jl-cmd/claude-code-config/commit/1f34253ec71430411cdc68f61dd60adaa5b6a580))
+
+
+### Documentation
+
+* **audit-rubrics:** catch dead constants-exports and Returns tool-claim drift ([#612](https://github.com/jl-cmd/claude-code-config/issues/612)) ([c53ebc8](https://github.com/jl-cmd/claude-code-config/commit/c53ebc82507bb40ffe6fd22f01567c7d6ae5467a))
+* **audit-rubrics:** harden against deferred [#604](https://github.com/jl-cmd/claude-code-config/issues/604) code-standard classes ([fa857f9](https://github.com/jl-cmd/claude-code-config/commit/fa857f9dbe1b953891830354a82b1f50a236541f))
+* **pr-converge:** qualify same_repo exit-code claim in per-tick ([405a760](https://github.com/jl-cmd/claude-code-config/commit/405a7601162e5a303eca97adad2640f64d345c91))
+
 ## [1.59.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.58.0...claude-dev-env-v1.59.0) (2026-06-14)
 
 
