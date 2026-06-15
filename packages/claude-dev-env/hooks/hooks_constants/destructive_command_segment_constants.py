@@ -66,6 +66,9 @@ ALL_REMOTE_AND_PROGRAM_STRING_EXECUTORS: frozenset[str] = frozenset(
     }
 )
 ALL_STRING_ARGUMENT_EXECUTION_FLAGS: frozenset[str] = frozenset({"-c", "-e"})
+FIND_PROGRAM_NAME: str = "find"
+ALL_FIND_EXEC_ACTION_FLAGS: frozenset[str] = frozenset({"-exec", "-execdir"})
+ALL_FIND_EXEC_ACTION_TERMINATORS: frozenset[str] = frozenset({";", "+"})
 ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS: frozenset[str] = frozenset(
     {
         "echo",

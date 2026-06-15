@@ -1915,3 +1915,21 @@ def test_rm_rf_allowed_when_cd_ephemeral_and_relative_build_target() -> None:
 
 def test_rm_rf_allowed_when_cd_ephemeral_and_find_exec_rm_search_root_is_dot() -> None:
     _assert_hook_allows('cd "/tmp/scratch" && find . -name x -exec rm -rf {} +')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_find_exec_bash_dash_c_deletes_non_ephemeral() -> None:
+    _assert_hook_asks("cd \"/tmp/scratch\" && find . -exec bash -c 'rm -rf /etc' \\;")
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_find_exec_sh_dash_c_deletes_non_ephemeral() -> None:
+    _assert_hook_asks("cd \"/tmp/scratch\" && find . -exec sh -c 'rm -rf /etc' \\;")
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_find_execdir_bash_dash_c_deletes_non_ephemeral() -> None:
+    _assert_hook_asks("cd \"/tmp/scratch\" && find . -execdir bash -c 'rm -rf /etc' \\;")
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_find_exec_python_dash_c_deletes_non_ephemeral() -> None:
+    _assert_hook_asks(
+        "cd \"/tmp/scratch\" && find . -exec python -c 'import os; os.system(\"rm -rf /etc\")' \\;"
+    )

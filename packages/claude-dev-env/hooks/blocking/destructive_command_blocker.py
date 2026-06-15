@@ -24,6 +24,8 @@ from hooks_constants.destructive_command_segment_constants import (  # noqa: E40
     ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS,
     ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES,
     ALL_FILE_WRITING_OUTPUT_FLAGS_BY_BENIGN_PROGRAM,
+    ALL_FIND_EXEC_ACTION_FLAGS,
+    ALL_FIND_EXEC_ACTION_TERMINATORS,
     ALL_GH_API_GLUED_REQUEST_BODY_FIELD_FLAG_PREFIXES,
     ALL_GH_API_REQUEST_BODY_FIELD_FLAGS,
     ALL_GH_HTTP_WRITE_METHOD_FLAGS,
@@ -39,6 +41,7 @@ from hooks_constants.destructive_command_segment_constants import (  # noqa: E40
     ALL_SHELL_CONTROL_OPERATOR_TOKENS,
     ALL_STRING_ARGUMENT_EXECUTION_FLAGS,
     ALL_SUBSHELL_GROUPING_CHARACTERS,
+    FIND_PROGRAM_NAME,
     GH_HTTP_READ_ONLY_METHOD,
     GH_LONG_METHOD_FLAG_EQUALS_PREFIX,
     GH_SHORT_METHOD_FLAG_PREFIX,
@@ -503,6 +506,43 @@ def _strip_leading_launcher_wrapper(all_command_tokens: list[str]) -> list[str] 
     return []
 
 
+def _find_exec_action_program_token_lists(all_segment_tokens: list[str]) -> list[list[str]]:
+    """Return the program-token list of each ``find`` ``-exec``/``-execdir`` action.
+
+    A ``find ... -exec <program> <args...> ;`` (or ``-execdir``, or a ``+``
+    terminator) action runs ``<program> <args...>`` against the matched files, so the
+    program tokens are every token after the action flag up to the next ``;`` or ``+``
+    terminator. One ``find`` may carry several such actions, so every action's program
+    tokens are collected. An action flag with no following program tokens before its
+    terminator (or before the token list ends) contributes nothing.
+
+    Args:
+        all_segment_tokens: The tokens of a single shell segment.
+
+    Returns:
+        One program-token list per ``-exec``/``-execdir`` action that has program
+        tokens, in the order the actions appear.
+    """
+    all_action_program_token_lists: list[list[str]] = []
+    each_token_index = 0
+    while each_token_index < len(all_segment_tokens):
+        if all_segment_tokens[each_token_index] not in ALL_FIND_EXEC_ACTION_FLAGS:
+            each_token_index += 1
+            continue
+        each_program_token_index = each_token_index + 1
+        current_action_program_tokens: list[str] = []
+        while (
+            each_program_token_index < len(all_segment_tokens)
+            and all_segment_tokens[each_program_token_index] not in ALL_FIND_EXEC_ACTION_TERMINATORS
+        ):
+            current_action_program_tokens.append(all_segment_tokens[each_program_token_index])
+            each_program_token_index += 1
+        if current_action_program_tokens:
+            all_action_program_token_lists.append(current_action_program_tokens)
+        each_token_index = each_program_token_index + 1
+    return all_action_program_token_lists
+
+
 def _command_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
     """Return True when the command's leading program runs a string argument as code.
 
@@ -529,6 +569,13 @@ def _command_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
     token is stripped before the program is identified, so ``(bash -c 'rm -rf /etc')``
     and ``(timeout N bash -c 'rm -rf /etc')`` are caught.
 
+    A leading ``find`` runs each ``-exec``/``-execdir`` action's program against the
+    matched files, so each action's program tokens are re-evaluated through this same
+    detection: ``find . -exec bash -c 'rm -rf /etc' ;`` and
+    ``find . -exec python -c '...' ;`` are caught because the action runs an
+    interpreter on a quoted string, while ``find . -exec rm -rf {} +`` reports False
+    because the action's program ``rm`` executes no quoted string.
+
     Args:
         all_command_tokens: Tokens produced by shlex tokenization.
 
@@ -546,6 +593,11 @@ def _command_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
         if not wrapped_program_tokens:
             return False
         return _command_executes_a_string_argument(wrapped_program_tokens)
+    if leading_command_basename == FIND_PROGRAM_NAME:
+        return any(
+            _command_executes_a_string_argument(each_action_program_tokens)
+            for each_action_program_tokens in _find_exec_action_program_token_lists(all_command_tokens)
+        )
     if leading_command_basename not in ALL_REMOTE_AND_PROGRAM_STRING_EXECUTORS:
         return False
     if leading_command_basename == "ssh":
@@ -1645,13 +1697,13 @@ def _find_exec_rm_search_root_escapes_ephemeral_cwd(
         (
             index
             for index, token in enumerate(all_segment_tokens)
-            if Path(_strip_leading_subshell_grouping_characters(token)).name == "find"
+            if Path(_strip_leading_subshell_grouping_characters(token)).name == FIND_PROGRAM_NAME
         ),
         None,
     )
     if find_token_index is None:
         return False
-    if not any(each_token in ("-exec", "-execdir") for each_token in all_segment_tokens[find_token_index:]):
+    if not any(each_token in ALL_FIND_EXEC_ACTION_FLAGS for each_token in all_segment_tokens[find_token_index:]):
         return False
     all_search_root_tokens: list[str] = []
     for each_token in all_segment_tokens[find_token_index + 1 :]:
