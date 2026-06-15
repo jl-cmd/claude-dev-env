@@ -58,7 +58,7 @@ Reads HTML from `--input <path>` or stdin (`--input -`), runs `gh gist create`, 
 
 ## Designing fresh — the example gallery
 
-The skill ships [`references/examples/`](references/examples/) with all 20 of Thariq's html-effectiveness prototypes verbatim from [thariqs.github.io/html-effectiveness](https://thariqs.github.io/html-effectiveness/). They are *examples to learn from, not templates to fill.*
+The skill ships [`references/examples/`](references/examples/) with 21 html-effectiveness examples: Thariq's 20 prototypes verbatim from [thariqs.github.io/html-effectiveness](https://thariqs.github.io/html-effectiveness/) (`01`–`20`), plus one original addition (`21-decision-signoff.html`). They are *examples to learn from, not templates to fill.*
 
 When the user requests an artifact, decide the shape that fits. Use the gallery for grounding:
 
@@ -84,6 +84,7 @@ When the user requests an artifact, decide the shape that fits. Use the gallery 
 | Triage / kanban board (drag-drop) | `18-editor-triage-board.html` |
 | Feature flag toggles with deps | `19-editor-feature-flags.html` |
 | Live-updating template editor | `20-editor-prompt-tuner.html` |
+| Decision / sign-off doc (accept-or-change each call, export digest) | `21-decision-signoff.html` |
 
 Read the matching example for the artifact you're designing. Crib palette, typography, spatial idioms, component patterns. **Adapt — do not copy.** A PR writeup for a hooks PR shouldn't look identical to one for a notification-queue PR. The gallery teaches what shapes work; the request decides which shape fits.
 
@@ -92,5 +93,5 @@ Read the matching example for the artifact you're designing. Crib palette, typog
 - `SKILL.md` — this file.
 - `skills/doc-gist/scripts/gist_upload.py` — transport: HTML in, gist + preview URLs out.
 - `skills/doc-gist/scripts/doc_gist_scripts_constants/gist_upload_constants.py` — the URL prefixes and template strings.
-- `references/examples/` — Thariq's 20 html-effectiveness prototypes.
+- `references/examples/` — Thariq's 20 html-effectiveness prototypes (`01`–`20`) plus one original addition (`21-decision-signoff.html`).
 - (PostToolUse hook lives in `packages/claude-dev-env/hooks/workflow/doc_gist_auto_publish.py` — wired into the plugin's `hooks.json`.)

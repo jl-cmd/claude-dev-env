@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tideglass — payments-api v3.2 cutover sign-off</title>
+<style>
+  :root {
+    --ivory: #FAF9F5;
+    --slate: #141413;
+    --clay: #D97757;
+    --clay-d: #B85C3E;
+    --oat: #E3DACC;
+    --olive: #788C5D;
+    --olive-d: #5E7047;
+    --olive-bg: #EEF2E7;
+    --amber: #9A6700;
+    --amber-bg: #FBF3DF;
+    --gray-50: #F0EEE6;
+    --gray-200: #D1CFC5;
+    --gray-400: #ABA99F;
+    --gray-500: #87867F;
+    --gray-800: #3D3D3A;
+    --white: #ffffff;
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--ivory);
+    color: var(--slate);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .wrap {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: 48px 32px 132px;
+  }
+
+  /* ---------- header ---------- */
+  header { margin-bottom: 22px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gray-500);
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 30px;
+    letter-spacing: -0.01em;
+    margin: 6px 0 6px;
+  }
+  .sub { color: var(--gray-500); max-width: 660px; }
+  .how {
+    margin: 16px 0 0;
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    border-left: 4px solid var(--clay);
+    border-radius: 10px;
+    padding: 13px 17px;
+    font-size: 13px;
+    max-width: 720px;
+  }
+  .how b { color: var(--clay-d); }
+
+  /* ---------- zones ---------- */
+  .zone { margin-top: 26px; }
+  .zone-head {
+    display: flex;
+    align-items: baseline;
+    gap: 11px;
+    padding-bottom: 9px;
+    margin-bottom: 14px;
+    border-bottom: 1.5px solid var(--gray-200);
+  }
+  .zone-head .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ivory);
+    background: var(--slate);
+    border-radius: 6px;
+    padding: 3px 8px;
+  }
+  .zone-head h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0;
+  }
+  .zone-head .zcount {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--gray-500);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- card ---------- */
+  .card {
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    border-left: 4px solid var(--gray-400);
+    border-radius: 11px;
+    padding: 14px 16px;
+    margin: 0 0 12px;
+    transition: border-color 140ms ease, background 140ms ease;
+  }
+  .card.is-accept { border-left-color: var(--olive); background: var(--olive-bg); }
+  .card.is-change { border-left-color: var(--amber); background: var(--amber-bg); }
+  .card-top { display: flex; align-items: baseline; gap: 9px; }
+  .card-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--gray-500);
+    font-variant-numeric: tabular-nums;
+  }
+  .card .q { font-weight: 600; font-size: 14.5px; }
+  .rec {
+    margin: 9px 0 0;
+    font-size: 13px;
+    background: var(--olive-bg);
+    border: 1.5px solid #CFDDBD;
+    border-radius: 8px;
+    padding: 8px 11px;
+  }
+  .rec b { color: var(--olive-d); }
+  .card.is-change .rec { background: var(--white); }
+  .alt { margin: 7px 0 0; font-size: 12.5px; color: var(--gray-500); }
+  code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+
+  /* ---------- toggle + note ---------- */
+  .fb { display: flex; align-items: center; gap: 8px; margin: 11px 0 0; flex-wrap: wrap; }
+  .fb-btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    border: 1.5px solid var(--gray-200);
+    background: var(--white);
+    color: var(--gray-800);
+    border-radius: 999px;
+    padding: 5px 13px;
+    user-select: none;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  .fb-btn:hover { border-color: var(--gray-500); }
+  .fb-btn.on[data-v="accept"] { background: var(--olive); border-color: var(--olive); color: var(--ivory); }
+  .fb-btn.on[data-v="change"] { background: var(--amber); border-color: var(--amber); color: var(--ivory); }
+  .fb-note {
+    flex: 1;
+    min-width: 240px;
+    font-family: var(--sans);
+    font-size: 13px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 6px 10px;
+    background: var(--white);
+    color: var(--slate);
+  }
+  .fb-note:focus { outline: 2px solid var(--clay); border-color: var(--clay); }
+  .fb-note::placeholder { color: var(--gray-400); }
+
+  /* ---------- sticky bar ---------- */
+  .bar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--slate);
+    color: var(--ivory);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 24px;
+    z-index: 50;
+    box-shadow: 0 -2px 14px rgba(20, 20, 19, 0.22);
+  }
+  .bar .prog {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .bar .prog b { color: var(--clay); }
+  .bar .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .bar button {
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 999px;
+    padding: 9px 17px;
+    border: 1.5px solid transparent;
+    transition: background 120ms ease, transform 80ms ease;
+  }
+  .bar .exp { background: var(--clay); color: var(--ivory); border-color: var(--clay); font-weight: 600; }
+  .bar .exp:hover { background: var(--clay-d); }
+  .bar .exp:active { transform: translateY(1px); }
+  .bar .rst { background: transparent; color: var(--gray-400); border-color: #44443F; }
+  .bar .rst:hover { color: var(--ivory); border-color: var(--gray-500); }
+
+  /* ---------- modal ---------- */
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 20, 19, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+    padding: 24px;
+  }
+  .modal.show { display: flex; }
+  .modal-card {
+    background: var(--ivory);
+    border: 1.5px solid var(--gray-200);
+    border-radius: 14px;
+    max-width: 720px;
+    width: 100%;
+    padding: 24px;
+  }
+  .modal-card h3 { font-family: var(--serif); font-weight: 500; font-size: 20px; margin: 0 0 4px; }
+  .modal-card p { color: var(--gray-500); font-size: 13px; margin: 0 0 13px; }
+  .modal-card textarea {
+    width: 100%;
+    height: 330px;
+    font: 12.5px/1.6 var(--mono);
+    color: var(--slate);
+    border: 1.5px solid var(--gray-200);
+    border-radius: 10px;
+    padding: 13px;
+    background: var(--white);
+    resize: vertical;
+  }
+  .modal-actions { display: flex; gap: 10px; margin-top: 13px; align-items: center; }
+  .modal-actions button {
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 999px;
+    padding: 9px 18px;
+    border: 1.5px solid transparent;
+  }
+  .modal-actions .copy { background: var(--slate); color: var(--ivory); font-weight: 600; }
+  .modal-actions .copy.copied { background: var(--olive); }
+  .modal-actions .close { background: var(--white); color: var(--gray-800); border-color: var(--gray-200); }
+  .modal-actions .close:hover { border-color: var(--gray-500); }
+
+  footer {
+    margin-top: 34px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--gray-500);
+    letter-spacing: 0.02em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Tideglass / release / sign-off</div>
+    <h1>payments-api v3.2 cutover — go / no-go</h1>
+    <p class="sub">Eleven calls the launch crew raised before flipping the new payments service live. Each is pre-set to the recommended answer. Flip the ones you disagree with, then export.</p>
+    <div class="how">
+      <b>How this works:</b> every card starts on <b>Accept</b> (the recommended call, in green). Flip a card to <b>Change</b> and type your override in the note. Hit <b>Export sign-off</b> for a plain-text digest of every decision you can paste into the release ticket. Choices save in this browser, so a reload keeps your edits.
+    </div>
+  </header>
+
+  <section class="zone" data-zone="A — Rollout shape">
+    <div class="zone-head"><span class="tag">A</span><h2>Rollout shape</h2><span class="zcount"></span></div>
+    <div class="card" data-id="a1" data-label="Traffic ramp">
+      <div class="card-top"><span class="card-id">a1</span><span class="q">How do we ramp traffic onto v3.2?</span></div>
+      <div class="rec"><b>Recommend:</b> Canary at 5% for 30 minutes, then 25 / 50 / 100 with a 15-minute hold at each step. A held step lets a regression surface before it reaches everyone.</div>
+      <div class="alt">Alternative: cut 100% over at once during the low-traffic window.</div>
+      <div class="fb"></div>
+    </div>
+    <div class="card" data-id="a2" data-label="Rollback trigger">
+      <div class="card-top"><span class="card-id">a2</span><span class="q">What auto-rolls-back the cutover?</span></div>
+      <div class="rec"><b>Recommend:</b> Error rate above <code>0.5%</code> or p99 latency above <code>800ms</code> sustained for 3 minutes, evaluated per ramp step. Either trip reverts the canary weight to zero with no human in the loop.</div>
+      <div class="fb"></div>
+    </div>
+    <div class="card" data-id="a3" data-label="Old service retention">
+      <div class="card-top"><span class="card-id">a3</span><span class="q">How long does v3.1 stay warm after 100%?</span></div>
+      <div class="rec"><b>Recommend:</b> Keep v3.1 deployed and drainable for 72 hours so a revert is a weight change, not a redeploy.</div>
+      <div class="fb"></div>
+    </div>
+  </section>
+
+  <section class="zone" data-zone="B — Data &amp; migrations">
+    <div class="zone-head"><span class="tag">B</span><h2>Data &amp; migrations</h2><span class="zcount"></span></div>
+    <div class="card" data-id="b1" data-label="Schema migration timing">
+      <div class="card-top"><span class="card-id">b1</span><span class="q">When does the <code>ledger_entries</code> column migration run?</span></div>
+      <div class="rec"><b>Recommend:</b> Run the additive migration the day before, with both old and new columns populated by a dual-write. The cutover reads the new column; nothing blocks on a live <code>ALTER TABLE</code>.</div>
+      <div class="alt">Alternative: migrate inline during the maintenance window.</div>
+      <div class="fb"></div>
+    </div>
+    <div class="card" data-id="b2" data-label="Backfill verification">
+      <div class="card-top"><span class="card-id">b2</span><span class="q">How is the dual-write backfill verified before go?</span></div>
+      <div class="rec"><b>Recommend:</b> A reconciliation job compares old-column and new-column checksums per account; go is blocked until the mismatch count is zero across two consecutive runs.</div>
+      <div class="fb"></div>
+    </div>
+    <div class="card" data-id="b3" data-label="Idempotency keys">
+      <div class="card-top"><span class="card-id">b3</span><span class="q">Do in-flight payment requests carry their idempotency key across the cutover?</span></div>
+      <div class="rec"><b>Recommend:</b> Yes — both versions read the same idempotency store, so a retry that lands on v3.2 after starting on v3.1 is de-duplicated rather than double-charged.</div>
+      <div class="fb"></div>
+    </div>
+  </section>
+
+  <section class="zone" data-zone="C — Window &amp; comms">
+    <div class="zone-head"><span class="tag">C</span><h2>Window &amp; comms</h2><span class="zcount"></span></div>
+    <div class="card" data-id="c1" data-label="Cutover window">
+      <div class="card-top"><span class="card-id">c1</span><span class="q">When do we run the cutover?</span></div>
+      <div class="rec"><b>Recommend:</b> Tuesday 02:00–04:00 UTC — the weekly traffic trough, far from the Friday settlement run and with the on-call team rested.</div>
+      <div class="fb"></div>
+    </div>
+    <div class="card" data-id="c2" data-label="Customer notice">
+      <div class="card-top"><span class="card-id">c2</span><span class="q">Do customers get a maintenance notice?</span></div>
+      <div class="rec"><b>Recommend:</b> No banner — the ramp is zero-downtime, so a notice would imply an outage that is not expected. Status page stays green unless a rollback fires.</div>
+      <div class="alt">Alternative: post a low-key "scheduled maintenance" window anyway.</div>
+      <div class="fb"></div>
+    </div>
+    <div class="card" data-id="c3" data-label="Stakeholder channel">
+      <div class="card-top"><span class="card-id">c3</span><span class="q">Where does the launch crew report progress?</span></div>
+      <div class="rec"><b>Recommend:</b> One dedicated incident channel with a step-by-step checklist pinned; the release lead posts at each ramp gate so a watching exec sees progress without asking.</div>
+      <div class="fb"></div>
+    </div>
+  </section>
+
+  <section class="zone" data-zone="D — Ownership">
+    <div class="zone-head"><span class="tag">D</span><h2>Ownership</h2><span class="zcount"></span></div>
+    <div class="card" data-id="d1" data-label="Go decision owner">
+      <div class="card-top"><span class="card-id">d1</span><span class="q">Who holds the final go / no-go call at each gate?</span></div>
+      <div class="rec"><b>Recommend:</b> The release lead, with payments-eng and finance each holding a hard veto. Any one veto stops the ramp.</div>
+      <div class="fb"></div>
+    </div>
+    <div class="card is-change" data-id="d2" data-label="On-call escalation path">
+      <div class="card-top"><span class="card-id">d2</span><span class="q">Who is paged if a rollback fires mid-ramp, and what is the secondary path?</span></div>
+      <div class="rec"><b>Needs your input</b> — no safe default. Name the primary on-call and the secondary escalation for the cutover window. Pre-set to Change.</div>
+      <div class="fb"></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="bar">
+  <span class="prog"><b id="prog-n">0</b> changed / <span id="prog-t">0</span> decisions</span>
+  <div class="right">
+    <button class="rst" id="btn-reset">Reset</button>
+    <button class="exp" id="btn-export">Export sign-off ▸</button>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-card">
+    <h3>Sign-off digest — copy into the release ticket</h3>
+    <p>Every decision, in order, with your overrides. One line each.</p>
+    <textarea id="export-out" readonly></textarea>
+    <div class="modal-actions">
+      <button class="copy" id="btn-copy">Copy to clipboard</button>
+      <button class="close" id="btn-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<footer>Domain-neutral demo. The Accept / Change toggle, free-text override, and exported plain-text digest are the reusable pattern; the payments cutover is invented sample content.</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "tideglass_signoff_v1";
+  var PREMARK_CHANGE = ["d2"];
+  var DIGEST_TITLE = "PAYMENTS-API v3.2 CUTOVER — SIGN-OFF";
+
+  var state = { items: {} };
+  try {
+    var saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) state = JSON.parse(saved);
+  } catch (e) { /* corrupt or unavailable storage: start clean */ }
+  if (!state.items) state.items = {};
+
+  function persist() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch (e) { /* storage unavailable: in-memory only */ }
+  }
+
+  var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+
+  function applyCardClass(card, choice) {
+    card.classList.remove("is-accept", "is-change");
+    if (choice) card.classList.add("is-" + choice);
+  }
+
+  cards.forEach(function (card) {
+    var id = card.dataset.id;
+    var fb = card.querySelector(".fb");
+    if (!fb) return;
+
+    fb.innerHTML =
+      '<span class="fb-btn" data-v="accept">Accept</span>' +
+      '<span class="fb-btn" data-v="change">Change</span>' +
+      '<input class="fb-note" placeholder="your override note (optional)">';
+    var note = fb.querySelector(".fb-note");
+
+    var entry = state.items[id];
+    if (!entry) {
+      entry = { v: PREMARK_CHANGE.indexOf(id) !== -1 ? "change" : "accept", note: "" };
+      state.items[id] = entry;
+    }
+    applyCardClass(card, entry.v);
+    fb.querySelectorAll(".fb-btn").forEach(function (b) {
+      if (b.dataset.v === entry.v) b.classList.add("on");
+    });
+    if (entry.note) note.value = entry.note;
+
+    fb.querySelectorAll(".fb-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var choice = btn.dataset.v;
+        var cur = state.items[id] || {};
+        cur.v = choice;
+        state.items[id] = cur;
+        fb.querySelectorAll(".fb-btn").forEach(function (b) {
+          b.classList.toggle("on", b.dataset.v === choice);
+        });
+        applyCardClass(card, choice);
+        persist();
+        updateProgress();
+      });
+    });
+
+    note.addEventListener("input", function () {
+      var cur = state.items[id] || {};
+      cur.note = note.value;
+      state.items[id] = cur;
+      persist();
+    });
+  });
+  persist();
+
+  function updateProgress() {
+    var total = cards.length;
+    var changed = 0;
+    Object.keys(state.items).forEach(function (k) {
+      if (state.items[k] && state.items[k].v === "change") changed++;
+    });
+    document.getElementById("prog-n").textContent = changed;
+    document.getElementById("prog-t").textContent = total;
+    document.querySelectorAll(".zone").forEach(function (zone) {
+      var zc = zone.querySelector(".zcount");
+      var n = zone.querySelectorAll(".card").length;
+      var c = 0;
+      zone.querySelectorAll(".card").forEach(function (card) {
+        var it = state.items[card.dataset.id];
+        if (it && it.v === "change") c++;
+      });
+      zc.textContent = c ? c + " of " + n + " changed" : n + " decisions";
+    });
+  }
+  updateProgress();
+
+  function buildDigest() {
+    var lines = ["### " + DIGEST_TITLE + " ###"];
+    document.querySelectorAll(".zone").forEach(function (zone) {
+      var zoneLabel = zone.getAttribute("data-zone");
+      var zoneLines = [];
+      zone.querySelectorAll(".card").forEach(function (card) {
+        var id = card.dataset.id;
+        var label = card.dataset.label || id;
+        var it = state.items[id] || {};
+        var verdict = it.v === "change" ? "CHANGE" : "ACCEPT";
+        var note = (it.note && it.note.trim()) ? '  —  "' + it.note.trim() + '"' : "";
+        zoneLines.push("- [" + id + "] " + label + ": " + verdict + note);
+      });
+      if (zoneLines.length) {
+        lines.push("");
+        lines.push("## " + zoneLabel);
+        lines.push.apply(lines, zoneLines);
+      }
+    });
+    lines.push("");
+    lines.push("### END ###");
+    return lines.join("\n");
+  }
+
+  var modal = document.getElementById("modal");
+  var output = document.getElementById("export-out");
+
+  document.getElementById("btn-export").addEventListener("click", function () {
+    output.value = buildDigest();
+    modal.classList.add("show");
+  });
+  document.getElementById("btn-close").addEventListener("click", function () {
+    modal.classList.remove("show");
+  });
+  modal.addEventListener("click", function (e) {
+    if (e.target === modal) modal.classList.remove("show");
+  });
+
+  var copyBtn = document.getElementById("btn-copy");
+  var copyTimer = null;
+  function flashCopied() {
+    copyBtn.textContent = "Copied ✓";
+    copyBtn.classList.add("copied");
+    if (copyTimer) clearTimeout(copyTimer);
+    copyTimer = setTimeout(function () {
+      copyBtn.textContent = "Copy to clipboard";
+      copyBtn.classList.remove("copied");
+    }, 1400);
+  }
+  copyBtn.addEventListener("click", function () {
+    output.select();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(output.value).then(flashCopied, function () {
+        try { document.execCommand("copy"); } catch (e) { /* ignore */ }
+        flashCopied();
+      });
+    } else {
+      try { document.execCommand("copy"); } catch (e) { /* ignore */ }
+      flashCopied();
+    }
+  });
+
+  document.getElementById("btn-reset").addEventListener("click", function () {
+    if (confirm("Reset every decision to the recommended answer?")) {
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+      location.reload();
+    }
+  });
+})();
+</script>
+</body>
+</html>
