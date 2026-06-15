@@ -320,3 +320,146 @@ def test_should_flag_undefaulted_fixture_before_defaulted_one() -> None:
     )
 
 
+def test_should_flag_unused_known_fixture_parameter_in_test_file() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_omits_config(tmp_path: Path) -> None:\n"
+        "    command = build_command('module.py', None)\n"
+        "    assert command[-1] == 'module.py'\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "tmp_path" in each_issue for each_issue in issues
+    ), f"Expected unused tmp_path fixture parameter flagged, got: {issues}"
+
+
+def test_should_not_flag_used_known_fixture_parameter() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_includes_config(tmp_path: Path) -> None:\n"
+        "    config_file = tmp_path / 'pyproject.toml'\n"
+        "    assert config_file.name == 'pyproject.toml'\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A referenced fixture parameter must not be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_unused_ordinary_test_parameter() -> None:
+    source = "def test_thing(some_value):\n    return 1\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"Only known pytest fixtures are checked, not arbitrary params, got: {issues}"
+    )
+
+
+def test_should_not_flag_unused_fixture_outside_test_files() -> None:
+    source = "def build(tmp_path):\n    return 1\n"
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"This check applies to test files only, got: {issues}"
+    )
+
+
+def test_should_flag_unused_monkeypatch_fixture_parameter() -> None:
+    source = (
+        "import pytest\n"
+        "def test_env(monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        "    assert build_command('m.py', None)[-1] == 'm.py'\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert any(
+        "monkeypatch" in each_issue for each_issue in issues
+    ), f"Expected unused monkeypatch fixture parameter flagged, got: {issues}"
+
+
+def test_should_count_attribute_access_as_fixture_use() -> None:
+    source = (
+        "import pytest\n"
+        "def test_env(monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        "    monkeypatch.setenv('A', 'B')\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"Attribute access on the fixture counts as a use, got: {issues}"
+    )
+
+
+def test_should_count_nested_function_reference_as_fixture_use() -> None:
+    source = (
+        "from pathlib import Path\n"
+        "def test_board(tmp_path: Path) -> None:\n"
+        "    def inner() -> Path:\n"
+        "        return tmp_path\n"
+        "    assert inner().name\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A reference inside a nested function counts as a use, got: {issues}"
+    )
+
+
+def test_should_not_flag_unused_fixture_in_decorated_fixture_function() -> None:
+    source = (
+        "import pytest\n"
+        "from pathlib import Path\n"
+        "@pytest.fixture\n"
+        "def board(tmp_path: Path) -> int:\n"
+        "    return 1\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A fixture composing another fixture by injection alone is intentional "
+        f"and must not be flagged, got: {issues}"
+    )
+
+
+def test_should_count_comprehension_reference_as_fixture_use() -> None:
+    source = (
+        "import pytest\n"
+        "def test_log_lines(caplog: pytest.LogCaptureFixture) -> None:\n"
+        "    messages = [each_record.message for each_record in caplog.records]\n"
+        "    assert messages == []\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A reference inside a comprehension counts as a use, got: {issues}"
+    )
+
+
+def test_should_not_flag_unused_fixture_in_decorated_test_named_function() -> None:
+    source = (
+        "import pytest\n"
+        "from pathlib import Path\n"
+        "@pytest.fixture\n"
+        "def test_board(tmp_path: Path) -> int:\n"
+        "    return 1\n"
+    )
+    issues = code_rules_enforcer.check_unused_known_pytest_fixture_parameters(
+        source, TEST_FILE_PATH
+    )
+    assert issues == [], (
+        f"A @pytest.fixture-decorated function named test_* is a fixture, not a "
+        f"test, and must not be flagged, got: {issues}"
+    )
+
+
