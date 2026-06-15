@@ -180,4 +180,5 @@ The table lists **where the rule is encoded** (the script or module that impleme
 | `TypedDict` declarations require companion `_encode_*` / `_decode_*` functions in same module | `code_rules_enforcer.py::check_typed_dict_encode_decode` (Python) |
 | Test-mode branching (reading `TESTING`, `PYTEST_CURRENT_TEST`, `IS_TEST`) in production | `code_rules_enforcer.py::check_test_branching_in_production` (Python) |
 | Thin wrapper modules (imports only, optionally with `__all__`, outside `__init__.py`) | `code_rules_enforcer.py::check_thin_wrapper_files` (Python) |
+| Zero-payload function aliases (body is only `return sibling(params...)` forwarding its own params unchanged, same module, no decorator/default/async mismatch, outside test/config) | `code_rules_enforcer.py::check_zero_payload_function_alias` (Python) |
 | Public functions missing Google-style `Args:` / `Returns:` / `Raises:` when warranted | `code_rules_enforcer.py::check_docstring_format` (Python) |

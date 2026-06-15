@@ -26,6 +26,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_STUB_IMPLEMENTATION_ISSUES,
     MAX_THIN_WRAPPER_ISSUES,
     MAX_TYPED_DICT_PAIR_ISSUES,
+    MAX_ZERO_PAYLOAD_ALIAS_ISSUES,
 )
 
 def _pascal_to_snake_case(pascal_name: str) -> str:
@@ -56,6 +57,16 @@ def _collect_module_function_names(parsed_tree: ast.AST) -> set[str]:
         if isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
             module_function_names.add(each_statement.name)
     return module_function_names
+
+
+def _collect_module_function_nodes_by_name(
+    parsed_tree: ast.AST,
+) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
+    function_node_by_name: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+    for each_statement in parsed_tree.body:
+        if isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            function_node_by_name[each_statement.name] = each_statement
+    return function_node_by_name
 
 
 def _is_init_file(file_path: str) -> bool:
@@ -124,6 +135,167 @@ def check_thin_wrapper_files(content: str, file_path: str) -> list[str]:
         "callers should import from the real module instead of going through this indirection"
     ]
     return issues[:MAX_THIN_WRAPPER_ISSUES]
+
+
+def _function_parameter_names_in_order(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[str]:
+    arguments = function_node.args
+    positional_arguments = [*arguments.posonlyargs, *arguments.args]
+    return [each_argument.arg for each_argument in positional_arguments]
+
+
+def _has_only_positional_parameters(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    arguments = function_node.args
+    has_no_parameter_defaults = not arguments.defaults and not arguments.kw_defaults
+    return (
+        not arguments.kwonlyargs
+        and arguments.vararg is None
+        and arguments.kwarg is None
+        and has_no_parameter_defaults
+    )
+
+
+def _single_return_call(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> ast.Call | None:
+    body_statements = function_node.body
+    statements_after_docstring = (
+        body_statements[1:]
+        if body_statements and _statement_is_docstring(body_statements[0])
+        else body_statements
+    )
+    if len(statements_after_docstring) != 1:
+        return None
+    only_statement = statements_after_docstring[0]
+    if not isinstance(only_statement, ast.Return):
+        return None
+    return only_statement.value if isinstance(only_statement.value, ast.Call) else None
+
+
+def _forwards_parameters_unchanged(call_node: ast.Call, all_parameter_names: list[str]) -> bool:
+    if call_node.keywords:
+        return False
+    if len(call_node.args) != len(all_parameter_names):
+        return False
+    for each_argument, each_parameter_name in zip(call_node.args, all_parameter_names):
+        if not isinstance(each_argument, ast.Name) or each_argument.id != each_parameter_name:
+            return False
+    return True
+
+
+def _function_is_async(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    return isinstance(function_node, ast.AsyncFunctionDef)
+
+
+def _alias_target_name(call_node: ast.Call, all_sibling_function_names: set[str]) -> str:
+    callee = call_node.func
+    if not isinstance(callee, ast.Name):
+        return ""
+    return callee.id if callee.id in all_sibling_function_names else ""
+
+
+def _module_string_literal_values(parsed_tree: ast.AST) -> set[str]:
+    string_literal_values: set[str] = set()
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, ast.Constant) and isinstance(each_node.value, str):
+            string_literal_values.add(each_node.value)
+    return string_literal_values
+
+
+def _target_accepts_forwarded_positional_call(
+    target_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    forwarded_argument_count: int,
+) -> bool:
+    arguments = target_node.args
+    if any(default is None for default in arguments.kw_defaults):
+        return False
+    positional_parameters = [*arguments.posonlyargs, *arguments.args]
+    total_positional_count = len(positional_parameters)
+    required_positional_count = total_positional_count - len(arguments.defaults)
+    if arguments.vararg is not None:
+        return forwarded_argument_count >= required_positional_count
+    return required_positional_count <= forwarded_argument_count <= total_positional_count
+
+
+def check_zero_payload_function_alias(content: str, file_path: str) -> list[str]:
+    """Flag a module-level function that only forwards its parameters to a sibling.
+
+    A function whose entire body (after an optional docstring) is a single
+    `return sibling_function(first_param, second_param, ...)` that forwards its
+    own parameters unchanged to another function defined in the same module is a
+    second name for one behavior — indirection without payload, which CODE_RULES
+    discourages. Callers should invoke the sibling directly. Both `def` and
+    `async def` forwarders are inspected.
+
+    A forwarder is left unflagged when any of these makes a direct call to the
+    target not equivalent to the alias: a decorator (caching, `@property`, route
+    registration); a parameter carrying a default value the target rejects; a
+    keyword-only / `*args` / `**kwargs` parameter on the alias; an awaitability
+    mismatch where one of the alias and target is `async def` and the other is
+    not; a forwarded positional call the live target's signature rejects (the
+    target has a keyword-only parameter without a default, or its positional
+    arity does not admit the forwarded argument count); or a name dispatched by a
+    string literal elsewhere in the module, where the named handler must exist for
+    a registry to resolve it.
+
+    Hook infrastructure is intentionally NOT exempt — pass-through aliases inside
+    hook modules are the motivating case. Test files and config files are exempt
+    because re-binding aliases are legitimate scaffolding there.
+
+    Args:
+        content: The source under inspection.
+        file_path: Path to the file, used for the test and config exemptions.
+
+    Returns:
+        One issue string per pass-through alias, capped at
+        MAX_ZERO_PAYLOAD_ALIAS_ISSUES.
+    """
+    if is_test_file(file_path) or is_config_file(file_path):
+        return []
+
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    function_node_by_name = _collect_module_function_nodes_by_name(parsed_tree)
+    all_sibling_function_names = set(function_node_by_name)
+    all_string_literal_values = _module_string_literal_values(parsed_tree)
+    issues: list[str] = []
+    for each_statement in parsed_tree.body:
+        if not isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if each_statement.decorator_list:
+            continue
+        if each_statement.name in all_string_literal_values:
+            continue
+        if not _has_only_positional_parameters(each_statement):
+            continue
+        call_node = _single_return_call(each_statement)
+        if call_node is None:
+            continue
+        target_name = _alias_target_name(call_node, all_sibling_function_names)
+        if not target_name or target_name == each_statement.name:
+            continue
+        target_node = function_node_by_name[target_name]
+        if _function_is_async(each_statement) != _function_is_async(target_node):
+            continue
+        forwarded_parameter_names = _function_parameter_names_in_order(each_statement)
+        if not _forwards_parameters_unchanged(call_node, forwarded_parameter_names):
+            continue
+        if not _target_accepts_forwarded_positional_call(
+            target_node, len(forwarded_parameter_names)
+        ):
+            continue
+        issues.append(
+            f"Line {each_statement.lineno}: {file_path}: zero-payload alias — "
+            f"{each_statement.name} only forwards its parameters to {target_name}; "
+            f"callers should call {target_name} directly (indirection without payload)"
+        )
+    return issues[:MAX_ZERO_PAYLOAD_ALIAS_ISSUES]
 
 
 def check_typed_dict_encode_decode(content: str, file_path: str) -> list[str]:
