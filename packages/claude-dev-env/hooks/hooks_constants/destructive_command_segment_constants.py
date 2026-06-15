@@ -41,6 +41,7 @@ ALL_INTERPRETER_AND_WRAPPER_COMMANDS: frozenset[str] = frozenset(
         "su",
         "env",
         "xargs",
+        "parallel",
         "awk",
         "gawk",
         "mawk",
@@ -66,6 +67,12 @@ ALL_REMOTE_AND_PROGRAM_STRING_EXECUTORS: frozenset[str] = frozenset(
     }
 )
 ALL_STRING_ARGUMENT_EXECUTION_FLAGS: frozenset[str] = frozenset({"-c", "-e"})
+FIND_PROGRAM_NAME: str = "find"
+ALL_FIND_EXEC_ACTION_FLAGS: frozenset[str] = frozenset({"-exec", "-execdir"})
+ALL_FIND_EXEC_ACTION_TERMINATORS: frozenset[str] = frozenset({";", "+"})
+ALL_FIND_GLOBAL_OPTION_FLAGS_WITHOUT_VALUE: frozenset[str] = frozenset({"-H", "-L", "-P"})
+ALL_FIND_GLOBAL_OPTION_FLAGS_TAKING_A_VALUE: frozenset[str] = frozenset({"-D"})
+FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX: str = "-O"
 ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS: frozenset[str] = frozenset(
     {
         "echo",
@@ -176,3 +183,11 @@ ALL_LAUNCHER_OPTIONS_TAKING_SEPARATE_VALUE: frozenset[str] = frozenset(
     }
 )
 ALL_SUBSHELL_GROUPING_CHARACTERS: str = "({"
+ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES: frozenset[str] = frozenset(
+    {
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "CLAUDE_JOB_DIR",
+    }
+)

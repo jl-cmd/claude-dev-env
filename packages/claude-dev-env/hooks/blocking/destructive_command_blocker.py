@@ -22,7 +22,13 @@ from hooks_constants.convergence_branch_constants import (  # noqa: E402
 from hooks_constants.destructive_command_segment_constants import (  # noqa: E402
     ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS,
     ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS,
+    ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES,
     ALL_FILE_WRITING_OUTPUT_FLAGS_BY_BENIGN_PROGRAM,
+    ALL_FIND_EXEC_ACTION_FLAGS,
+    ALL_FIND_EXEC_ACTION_TERMINATORS,
+    ALL_FIND_GLOBAL_OPTION_FLAGS_TAKING_A_VALUE,
+    ALL_FIND_GLOBAL_OPTION_FLAGS_WITHOUT_VALUE,
+    FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX,
     ALL_GH_API_GLUED_REQUEST_BODY_FIELD_FLAG_PREFIXES,
     ALL_GH_API_REQUEST_BODY_FIELD_FLAGS,
     ALL_GH_HTTP_WRITE_METHOD_FLAGS,
@@ -38,6 +44,7 @@ from hooks_constants.destructive_command_segment_constants import (  # noqa: E40
     ALL_SHELL_CONTROL_OPERATOR_TOKENS,
     ALL_STRING_ARGUMENT_EXECUTION_FLAGS,
     ALL_SUBSHELL_GROUPING_CHARACTERS,
+    FIND_PROGRAM_NAME,
     GH_HTTP_READ_ONLY_METHOD,
     GH_LONG_METHOD_FLAG_EQUALS_PREFIX,
     GH_SHORT_METHOD_FLAG_PREFIX,
@@ -56,14 +63,35 @@ def gh_redirect_is_active() -> bool:
     return env_var_value in GH_REDIRECT_ACTIVE_TRUTHY_VALUES
 
 def directory_is_ephemeral(directory_path: str) -> bool:
+    """Return True when a directory belongs to the ephemeral auto-allow namespace.
+
+    A directory is ephemeral when the environment override has not disabled the
+    auto-allow and the path matches one of these sources, in order: a path
+    containing a ``/worktrees/`` or ``/worktree/`` segment; a path rooted at ``/tmp``
+    or ``/temp`` (drive-letter tolerant); a path under the OS temporary root; a path
+    git reports inside a worktree admin directory. Returns False when the
+    ``CLAUDE_DESTRUCTIVE_DISABLE_EPHEMERAL_AUTO_ALLOW`` override is truthy and when no
+    source matches.
+
+    Args:
+        directory_path: The filesystem path to classify.
+
+    Returns:
+        True when the directory belongs to the ephemeral auto-allow namespace.
+    """
     ephemeral_auto_allow_disabled_env_var = "CLAUDE_DESTRUCTIVE_DISABLE_EPHEMERAL_AUTO_ALLOW"
     truthy_string_values = frozenset({"1", "true", "yes", "on"})
     if os.environ.get(ephemeral_auto_allow_disabled_env_var, "").strip().lower() in truthy_string_values:
         return False
     forward_slash_normalized_directory_path = os.path.normpath(directory_path).replace("\\", "/").lower()
-    all_ephemeral_path_segments = ("/worktrees/", "/worktree/", "/tmp/", "/temp/")
-    for each_segment in all_ephemeral_path_segments:
-        if each_segment in forward_slash_normalized_directory_path + "/":
+    all_worktree_path_segments = ("/worktrees/", "/worktree/")
+    for each_worktree_segment in all_worktree_path_segments:
+        if each_worktree_segment in forward_slash_normalized_directory_path + "/":
+            return True
+    drive_letter_stripped_path = re.sub(r"^[a-z]:", "", forward_slash_normalized_directory_path)
+    all_root_anchored_temporary_directories = ("/tmp", "/temp")
+    for each_temporary_root in all_root_anchored_temporary_directories:
+        if drive_letter_stripped_path == each_temporary_root or drive_letter_stripped_path.startswith(each_temporary_root + "/"):
             return True
     system_temporary_root = os.path.normpath(tempfile.gettempdir()).replace("\\", "/").lower()
     if forward_slash_normalized_directory_path.startswith(system_temporary_root + "/") or forward_slash_normalized_directory_path == system_temporary_root:
@@ -222,10 +250,26 @@ def _command_contains_windows_style_path(command: str) -> bool:
 
 
 def _split_command_preserving_windows_backslashes(command: str) -> list[str]:
+    """Tokenize a command, normalizing Windows backslashes while preserving the find terminator.
+
+    Plain POSIX ``shlex.split`` unescapes a ``\\;`` find action terminator to a
+    standalone ``;`` token. When the command carries Windows backslashes, the global
+    backslash-to-forward-slash normalization would otherwise rewrite that ``\\;`` to
+    ``/;`` and bury the terminator inside a data token. The find action terminator is
+    restored to a standalone ``;`` token before the normalization so action slicing and
+    target collection see the same terminator on both platforms.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        The shlex tokens of the command.
+    """
     if "\\" in command and (
         os.name == "nt" or _command_contains_windows_style_path(command)
     ):
-        forward_slash_normalized_command = command.replace("\\", "/")
+        find_terminator_preserved_command = re.sub(r"\\;", " ; ", command)
+        forward_slash_normalized_command = find_terminator_preserved_command.replace("\\", "/")
         return shlex.split(forward_slash_normalized_command)
     return shlex.split(command)
 
@@ -423,6 +467,10 @@ def _strip_leading_launcher_wrapper(all_command_tokens: list[str]) -> list[str] 
     ``setsid``, ``ionice``, ``nice``, ``stdbuf``) returns its first positional as the
     wrapped program. Returns None when the leading program is not a launcher wrapper.
 
+    A leading subshell or brace grouping character glued to the launcher token is
+    stripped before the launcher is identified, so ``(timeout N bash -c '...')``
+    resolves to its wrapped program.
+
     Args:
         all_command_tokens: Tokens of one shell segment.
 
@@ -442,7 +490,7 @@ def _strip_leading_launcher_wrapper(all_command_tokens: list[str]) -> list[str] 
     )
     if first_program_index is None:
         return None
-    leading_command_basename = Path(all_command_tokens[first_program_index]).name.lower()
+    leading_command_basename = Path(_strip_leading_subshell_grouping_characters(all_command_tokens[first_program_index])).name.lower()
     if leading_command_basename not in ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS:
         return None
     launcher_requires_a_positional_value = (
@@ -477,6 +525,43 @@ def _strip_leading_launcher_wrapper(all_command_tokens: list[str]) -> list[str] 
     return []
 
 
+def _find_exec_action_program_token_lists(all_segment_tokens: list[str]) -> list[list[str]]:
+    """Return the program-token list of each ``find`` ``-exec``/``-execdir`` action.
+
+    A ``find ... -exec <program> <args...> ;`` (or ``-execdir``, or a ``+``
+    terminator) action runs ``<program> <args...>`` against the matched files, so the
+    program tokens are every token after the action flag up to the next ``;`` or ``+``
+    terminator. One ``find`` may carry several such actions, so every action's program
+    tokens are collected. An action flag with no following program tokens before its
+    terminator (or before the token list ends) contributes nothing.
+
+    Args:
+        all_segment_tokens: The tokens of a single shell segment.
+
+    Returns:
+        One program-token list per ``-exec``/``-execdir`` action that has program
+        tokens, in the order the actions appear.
+    """
+    all_action_program_token_lists: list[list[str]] = []
+    each_token_index = 0
+    while each_token_index < len(all_segment_tokens):
+        if all_segment_tokens[each_token_index] not in ALL_FIND_EXEC_ACTION_FLAGS:
+            each_token_index += 1
+            continue
+        each_program_token_index = each_token_index + 1
+        current_action_program_tokens: list[str] = []
+        while (
+            each_program_token_index < len(all_segment_tokens)
+            and all_segment_tokens[each_program_token_index] not in ALL_FIND_EXEC_ACTION_TERMINATORS
+        ):
+            current_action_program_tokens.append(all_segment_tokens[each_program_token_index])
+            each_program_token_index += 1
+        if current_action_program_tokens:
+            all_action_program_token_lists.append(current_action_program_tokens)
+        each_token_index = each_program_token_index + 1
+    return all_action_program_token_lists
+
+
 def _command_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
     """Return True when the command's leading program runs a string argument as code.
 
@@ -499,6 +584,17 @@ def _command_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
     ``rm -rf /tmp/scratch``) still reports False and reaches the legitimate-mention
     path.
 
+    A leading subshell ``(`` or brace ``{`` grouping character glued to the program
+    token is stripped before the program is identified, so ``(bash -c 'rm -rf /etc')``
+    and ``(timeout N bash -c 'rm -rf /etc')`` are caught.
+
+    A leading ``find`` runs each ``-exec``/``-execdir`` action's program against the
+    matched files, so each action's program tokens are re-evaluated through this same
+    detection: ``find . -exec bash -c 'rm -rf /etc' ;`` and
+    ``find . -exec python -c '...' ;`` are caught because the action runs an
+    interpreter on a quoted string, while ``find . -exec rm -rf {} +`` reports False
+    because the action's program ``rm`` executes no quoted string.
+
     Args:
         all_command_tokens: Tokens produced by shlex tokenization.
 
@@ -508,7 +604,7 @@ def _command_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
     leading_command_token = _leading_command_token(all_command_tokens)
     if leading_command_token is None:
         return False
-    leading_command_basename = Path(leading_command_token).name.lower()
+    leading_command_basename = Path(_strip_leading_subshell_grouping_characters(leading_command_token)).name.lower()
     if leading_command_basename in ALL_INTERPRETER_AND_WRAPPER_COMMANDS:
         return True
     if leading_command_basename in ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS:
@@ -516,6 +612,11 @@ def _command_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
         if not wrapped_program_tokens:
             return False
         return _command_executes_a_string_argument(wrapped_program_tokens)
+    if leading_command_basename == FIND_PROGRAM_NAME:
+        return any(
+            _command_executes_a_string_argument(each_action_program_tokens)
+            for each_action_program_tokens in _find_exec_action_program_token_lists(all_command_tokens)
+        )
     if leading_command_basename not in ALL_REMOTE_AND_PROGRAM_STRING_EXECUTORS:
         return False
     if leading_command_basename == "ssh":
@@ -580,6 +681,15 @@ def _strip_leading_subshell_grouping_characters(token: str) -> str:
 def _any_shell_segment_executes_a_string_argument(all_command_tokens: list[str]) -> bool:
     """Return True when any shell segment's leading program runs a string as code.
 
+    A ``find`` ``\\;`` action terminator tokenizes to a bare ``;``, which the
+    segment splitter treats as a command separator, so a second
+    ``-exec <interpreter> -c '...'`` action becomes its own segment whose leader is
+    ``-exec`` — a leader no detector recognizes. Each ``find`` ``-exec``/``-execdir``
+    action's program tokens are therefore scanned first on the full pre-split token
+    list (where the ``;``/``+`` terminators are still standalone), so a buried
+    ``find . -exec touch {} ; -exec bash -c 'rm -rf /etc' ;`` action is caught before
+    the per-segment loop runs.
+
     Splits the command into simple-command segments on ``&&`` / ``||`` / ``;`` /
     ``|`` / ``&`` and applies the leading-program string-execution check to each.
     A benign program leading the whole command (``echo hi && bash -c 'rm -rf /etc'``,
@@ -595,9 +705,42 @@ def _any_shell_segment_executes_a_string_argument(all_command_tokens: list[str])
         True when at least one segment's leading program executes a quoted string
         argument as code.
     """
+    if any(
+        _command_executes_a_string_argument(each_action_program_tokens)
+        for each_action_program_tokens in _find_exec_action_program_token_lists(all_command_tokens)
+    ):
+        return True
     all_exploded_tokens = _explode_glued_shell_control_operators(all_command_tokens)
     for each_segment in _split_tokens_into_shell_segments(all_exploded_tokens):
         if each_segment and _command_executes_a_string_argument(each_segment):
+            return True
+    return False
+
+
+def _command_executes_a_string_in_any_segment(command: str) -> bool:
+    """Return True when any segment of any physical line runs a quoted string as code.
+
+    Splits the command on the POSIX newline and carriage-return terminators,
+    tokenizes each line preserving Windows paths, and reports whether any shell
+    segment's leading program executes a quoted string argument as code
+    (``bash -c '...'``, ``eval '...'``, ``ssh host '...'``, ``python -c '...'``, or a
+    launcher wrapping any of these). The broad ephemeral-cwd auto-allow declines such
+    a command because the executed string can delete a path outside the ephemeral
+    working directory that no plain token names. Fails closed (returns True) when a
+    line cannot be tokenized.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        True when at least one segment executes a quoted string argument as code.
+    """
+    for each_command_line in re.split(r"[\n\r]+", command):
+        try:
+            all_command_tokens = _split_command_preserving_windows_backslashes(each_command_line)
+        except ValueError:
+            return True
+        if _any_shell_segment_executes_a_string_argument(all_command_tokens):
             return True
     return False
 
@@ -782,31 +925,58 @@ def _rm_segment_targets_only_absolute_ephemeral_paths(all_rm_segment_tokens: lis
     return True
 
 
+def _path_is_the_null_device(path_token: str) -> bool:
+    """Return True when a path token names the null device (``/dev/null`` or ``nul``).
+
+    Args:
+        path_token: A redirect-target path token.
+
+    Returns:
+        True when the token names the null device.
+    """
+    return path_token.replace("\\", "/").rstrip("/").lower() in ("/dev/null", "nul")
+
+
 def _segment_redirects_output_to_a_file(all_segment_tokens: list[str]) -> bool:
     """Return True when a segment writes its output to a file via shell redirection.
 
     An output redirection (a plain, appending, clobbering, or combined operator, with
     or without a leading file-descriptor number) truncates or rewrites the redirect
     target, so ``cat /dev/null > /etc/important.conf`` destroys the target file even
-    though ``cat`` itself is read-only. A file-descriptor duplication that names another
+    though ``cat`` itself is read-only. A redirect whose target is the null device
+    (``/dev/null`` or ``nul``) writes nothing and stays read-only, so it does not count;
+    a redirect to any other file counts. A file-descriptor duplication that names another
     descriptor as its target writes no file and stays read-only. shlex keeps a
     redirect operator glued to an adjacent program or target token when no whitespace
     separates them (``echo pwned>/etc/passwd``, ``cat secret>/etc/x``), so each token is
     scanned for a redirect operator anywhere within it rather than tested for exact
-    equality. The benign-segment check declines any segment carrying a redirect operator
-    so a benign program that overwrites a non-ephemeral file does not ride the ephemeral
-    ``rm`` auto-allow.
+    equality; the target is read from the same token after the operator, or from the next
+    token when the operator ends its own token. The benign-segment check declines any
+    segment carrying a redirect to a non-null file so a benign program that overwrites a
+    non-ephemeral file does not ride the ephemeral ``rm`` auto-allow.
 
     Args:
         all_segment_tokens: Shlex tokens of one shell segment.
 
     Returns:
-        True when any token contains an output-redirection operator.
+        True when any token contains a redirect to a file other than the null device.
     """
     output_redirection_pattern = re.compile(OUTPUT_REDIRECTION_OPERATOR_PATTERN)
-    return any(
-        output_redirection_pattern.search(each_token) for each_token in all_segment_tokens
-    )
+    for each_index, each_token in enumerate(all_segment_tokens):
+        operator_match = output_redirection_pattern.search(each_token)
+        if operator_match is None:
+            continue
+        glued_redirect_target = each_token[operator_match.end():]
+        if glued_redirect_target:
+            redirect_target = glued_redirect_target
+        elif each_index + 1 < len(all_segment_tokens):
+            redirect_target = all_segment_tokens[each_index + 1]
+        else:
+            return True
+        if _path_is_the_null_device(redirect_target):
+            continue
+        return True
+    return False
 
 
 def _all_positional_tokens_after_leader(all_segment_tokens: list[str]) -> list[str]:
@@ -1219,7 +1389,7 @@ def _compound_segment_auto_allow_verdict(
         (
             index
             for index, token in enumerate(all_segment_tokens)
-            if Path(token).name == "rm"
+            if Path(_strip_leading_subshell_grouping_characters(token)).name == "rm"
         ),
         None,
     )
@@ -1432,57 +1602,308 @@ def _command_contains_any_non_cwd_scoped_destructive_pattern(command: str) -> bo
     return False
 
 
-def _command_rm_targets_include_unsafe_path(command: str, tool_input: dict) -> bool:
-    """Return True when the command contains an ``rm`` whose targets are unsafe.
+def _rm_target_resolves_outside_ephemeral_namespace(target_token: str, declared_effective_cwd: str | None) -> bool:
+    """Return True when an ``rm`` target token resolves outside the ephemeral namespace.
 
-    Unsafe means any of: bare ephemeral root (``/tmp``, ``/temp``, the OS
-    temp root, ``/worktrees``, ``/worktree``), bare named worktrees
-    container, absolute path outside the ephemeral namespace, relative
-    path that resolves (against the declared effective cwd) outside the
-    ephemeral namespace, wildcard glob metacharacter in the target
-    basename, or unsafe ``rm`` flag before ``--`` (``--files0-from=...``,
-    unknown long option, non-whitelisted short flag) as enforced by
-    ``_rm_flags_before_double_dash_are_unsafe``.
+    A token carrying command substitution (``$(...)``) or a backtick subshell is
+    unsafe because the shell resolves it before ``rm`` runs and the hook cannot
+    statically bound the deletion target. A token carrying a brace group with a
+    comma list or ``..`` range is unsafe because the shell expands it into multiple
+    targets the hook cannot bound; a bare ``{}`` placeholder (no comma, no range)
+    does not match and stays bounded. A token referencing an environment variable
+    other than a known temporary one (``TEMP``, ``TMP``, ``TMPDIR``,
+    ``CLAUDE_JOB_DIR``) is unsafe; a known temporary variable spliced after an
+    absolute (or ``/``-rooted) literal prefix is unsafe because the literal prefix,
+    not the variable, roots the path. A token referencing only known temporary
+    variables with an empty or ``~`` literal prefix resolves with each reference
+    rewritten to the system temporary root. A ``~``-prefixed or absolute token
+    resolves as written; a relative token resolves against ``declared_effective_cwd``
+    (``None`` is unsafe because the target cannot be bounded). The resolved path is
+    unsafe when its basename is a glob wildcard, when it is a bare ephemeral root,
+    when it is a bare named-worktrees container, or when it is not ephemeral.
 
-    Fails closed: returns True on parse failure (``ValueError`` from
-    unbalanced quotes) or when a relative target is encountered without
-    a declared effective cwd to resolve it against. The broad auto-allow
-    must decline rather than grant on input the hook cannot conclusively
-    bound.
+    Args:
+        target_token: A single ``rm`` target token from the segment.
+        declared_effective_cwd: The declared effective working directory, or ``None``
+            when the command declares none.
+
+    Returns:
+        True when the target resolves outside the ephemeral namespace.
     """
-    try:
-        all_command_tokens = _split_command_preserving_windows_backslashes(command)
-    except ValueError:
+    if "$(" in target_token or "`" in target_token:
         return True
-    declared_effective_cwd = _resolve_declared_effective_working_directory(command, tool_input)
-    for each_token_index in range(len(all_command_tokens)):
-        if all_command_tokens[each_token_index] != "rm":
-            continue
-        tokens_after_rm = all_command_tokens[each_token_index + 1:]
-        if _rm_flags_before_double_dash_are_unsafe(tokens_after_rm):
+    if re.search(r"\{[^{}]*(?:,|\.\.)[^{}]*\}", target_token):
+        return True
+    known_temporary_environment_variable_names = ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES
+    environment_variable_reference_pattern = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?|%([A-Za-z_][A-Za-z0-9_]*)%")
+    all_referenced_variable_names = [
+        next(each_group for each_group in each_match.groups() if each_group is not None)
+        for each_match in environment_variable_reference_pattern.finditer(target_token)
+    ]
+    resolved_token = target_token
+    if all_referenced_variable_names:
+        for each_variable_name in all_referenced_variable_names:
+            if each_variable_name not in known_temporary_environment_variable_names:
+                return True
+        first_variable_reference = environment_variable_reference_pattern.search(target_token)
+        assert first_variable_reference is not None
+        literal_prefix_before_first_variable = target_token[: first_variable_reference.start()]
+        if literal_prefix_before_first_variable not in ("", "~") and (
+            os.path.isabs(literal_prefix_before_first_variable)
+            or literal_prefix_before_first_variable.replace("\\", "/").startswith("/")
+        ):
             return True
-        all_target_tokens = _collect_rm_target_tokens(tokens_after_rm)
-        for each_target_token in all_target_tokens:
-            each_expanded_target = os.path.expanduser(each_target_token)
-            each_is_absolute = (
-                os.path.isabs(each_expanded_target)
-                or each_expanded_target.replace("\\", "/").startswith("/")
+        system_temporary_root = os.path.normpath(tempfile.gettempdir()).replace("\\", "/")
+        resolved_token = environment_variable_reference_pattern.sub(lambda each_match: system_temporary_root, target_token)
+    each_expanded_target = os.path.expanduser(resolved_token)
+    each_is_absolute = (
+        os.path.isabs(each_expanded_target)
+        or each_expanded_target.replace("\\", "/").startswith("/")
+    )
+    if each_is_absolute:
+        each_resolved_target = os.path.normpath(each_expanded_target)
+    elif declared_effective_cwd is None:
+        return True
+    else:
+        each_resolved_target = os.path.normpath(os.path.join(declared_effective_cwd, each_expanded_target))
+    if _path_basename_is_shell_glob_wildcard(each_resolved_target):
+        return True
+    if _path_is_bare_ephemeral_root(each_resolved_target):
+        return True
+    if _path_is_bare_named_worktrees_container(each_resolved_target):
+        return True
+    return not directory_is_ephemeral(each_resolved_target)
+
+
+def _rm_segment_targets_escape_ephemeral_cwd(all_rm_segment_tokens: list[str], declared_effective_cwd: str | None) -> bool:
+    """Return True when an ``rm`` segment's redirect, flags, or targets escape the ephemeral cwd.
+
+    The segment tokens begin at the ``rm`` program token. An output redirection
+    escapes (``rm -rf /tmp/x>/etc/passwd`` truncates ``/etc/passwd`` even when the
+    deletion target is ephemeral; shlex keeps the ``>`` glued to the target token when
+    no whitespace separates them). Unsafe ``rm`` flags before ``--`` (as enforced by
+    ``_rm_flags_before_double_dash_are_unsafe``) escape; otherwise any collected target
+    token that resolves outside the ephemeral namespace escapes.
+
+    Args:
+        all_rm_segment_tokens: The segment tokens starting at the ``rm`` token.
+        declared_effective_cwd: The declared effective working directory, or ``None``
+            when the command declares none.
+
+    Returns:
+        True when the segment's redirect, flags, or any target escape the ephemeral cwd.
+    """
+    if _segment_redirects_output_to_a_file(all_rm_segment_tokens):
+        return True
+    tokens_after_rm = all_rm_segment_tokens[1:]
+    if _rm_flags_before_double_dash_are_unsafe(tokens_after_rm):
+        return True
+    return any(
+        _rm_target_resolves_outside_ephemeral_namespace(each_target_token, declared_effective_cwd)
+        for each_target_token in _collect_rm_target_tokens(tokens_after_rm)
+    )
+
+
+def _collect_find_search_root_tokens(all_tokens_after_find: list[str]) -> list[str]:
+    """Return the path-operand search roots that follow ``find``, skipping global options.
+
+    GNU ``find`` accepts global options before the path operands: the flag-only
+    options ``-H``/``-L``/``-P`` (each its own token, possibly in sequence), the
+    value-taking option ``-D`` (which consumes the following debug-options token), and
+    an optimization-level option ``-O<level>`` whose level is glued to the flag
+    (``-O3``), so the ``-O``-prefixed token is skipped as a single token and a
+    following path operand is collected as a search root rather than swallowed as a
+    level. The leading run of such global options
+    is skipped first, then the path operands are collected: every non-dash token up to
+    the first ``-``-prefixed expression primary (``-name``, ``-type``, ``-exec``). A
+    ``find`` whose first post-option token is already an expression primary declares no
+    path operand and returns an empty list, so it defaults to the ephemeral cwd.
+
+    Args:
+        all_tokens_after_find: The segment tokens that follow the ``find`` program token.
+
+    Returns:
+        The path-operand search-root tokens, in order; empty when ``find`` declares none.
+    """
+    each_token_index = 0
+    while each_token_index < len(all_tokens_after_find):
+        each_token = all_tokens_after_find[each_token_index]
+        if each_token in ALL_FIND_GLOBAL_OPTION_FLAGS_WITHOUT_VALUE:
+            each_token_index += 1
+            continue
+        if each_token in ALL_FIND_GLOBAL_OPTION_FLAGS_TAKING_A_VALUE:
+            each_token_index += 1
+            if each_token_index < len(all_tokens_after_find):
+                each_token_index += 1
+            continue
+        if each_token.startswith(FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX):
+            each_token_index += 1
+            continue
+        break
+    all_search_root_tokens: list[str] = []
+    for each_token in all_tokens_after_find[each_token_index:]:
+        if each_token.startswith("-"):
+            break
+        all_search_root_tokens.append(each_token)
+    return all_search_root_tokens
+
+
+def _find_exec_rm_search_root_escapes_ephemeral_cwd(
+    all_segment_tokens: list[str], declared_effective_cwd: str | None
+) -> bool:
+    """Return True when a ``find ... -exec rm`` segment's search root escapes the ephemeral namespace.
+
+    A ``find <roots...> ... -exec rm ...`` (or ``-execdir``) segment deletes whatever
+    ``find`` matches under its leading search-root arguments; the ``rm``'s own ``{}``
+    and ``+`` placeholders name no deletion target, ``find``'s roots do. The leading run
+    of ``find`` global options (``-H``/``-L``/``-P``, ``-D debugopts``, ``-Olevel``) is
+    skipped before the path operands are read, so a global option before the roots does
+    not hide them. The segment is unsafe when any path-operand search root resolves
+    outside the ephemeral namespace. Returns False when the segment contains no ``find``
+    token, when it has no ``-exec`` or ``-execdir`` action after ``find``, or when
+    ``find`` declares no path operand (``find`` then defaults to the ephemeral cwd).
+
+    Args:
+        all_segment_tokens: The tokens of a single shell segment.
+        declared_effective_cwd: The declared effective working directory, or ``None``
+            when the command declares none.
+
+    Returns:
+        True when any of ``find``'s search roots escapes the ephemeral namespace.
+    """
+    find_token_index = next(
+        (
+            index
+            for index, token in enumerate(all_segment_tokens)
+            if Path(_strip_leading_subshell_grouping_characters(token)).name == FIND_PROGRAM_NAME
+        ),
+        None,
+    )
+    if find_token_index is None:
+        return False
+    if not any(each_token in ALL_FIND_EXEC_ACTION_FLAGS for each_token in all_segment_tokens[find_token_index:]):
+        return False
+    all_search_root_tokens = _collect_find_search_root_tokens(all_segment_tokens[find_token_index + 1 :])
+    return any(
+        _rm_target_resolves_outside_ephemeral_namespace(each_search_root_token, declared_effective_cwd)
+        for each_search_root_token in all_search_root_tokens
+    )
+
+
+def _command_changes_directory_beyond_leading_cd(command: str) -> bool:
+    """Return True when a directory change beyond a single leading ``cd`` runs.
+
+    The broad ephemeral auto-allow resolves a relative ``rm`` target against the
+    declared effective working directory, which is established only by the
+    command's single leading ``cd``. Any further directory change moves the base a
+    later relative target resolves against, so the declared cwd no longer bounds
+    the deletion: a second top-level ``cd`` (``cd /tmp/x && cd / && rm -rf etc``),
+    a ``cd`` inside a subshell group (``(cd /; rm -rf etc)``), or a ``pushd`` /
+    ``popd`` anywhere. The caller nulls the declared cwd when this returns True, so
+    every relative target fails closed while absolute targets — which no directory
+    change can redirect — still resolve.
+
+    A leading ``cd`` is the first simple-command segment of the first physical line
+    whose leading program, after leading ``VAR=value`` assignments and
+    subshell-grouping characters are stripped, is ``cd``. Counts every segment whose
+    leading program is ``cd``, ``pushd`` or ``popd`` and returns True when more such
+    segments exist than the single leading ``cd``. Fails closed (returns True) when a
+    physical line cannot be tokenized.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        True when a directory change beyond a single leading ``cd`` is present.
+    """
+    all_directory_changing_program_names = ("cd", "pushd", "popd")
+    leading_cd_segment_count = 0
+    directory_changing_segment_count = 0
+    for each_line_index, each_command_line in enumerate(re.split(r"[\n\r]+", command)):
+        try:
+            all_command_tokens = _split_command_preserving_windows_backslashes(each_command_line)
+        except ValueError:
+            return True
+        all_operator_split_tokens = _explode_glued_shell_control_operators(all_command_tokens)
+        for each_segment_index, each_segment in enumerate(_split_tokens_into_shell_segments(all_operator_split_tokens)):
+            leading_program_token = _leading_command_token(each_segment)
+            if leading_program_token is None:
+                continue
+            is_subshell_wrapped = leading_program_token[:1] in ALL_SUBSHELL_GROUPING_CHARACTERS
+            stripped_program_name = Path(_strip_leading_subshell_grouping_characters(leading_program_token)).name
+            if stripped_program_name not in all_directory_changing_program_names:
+                continue
+            directory_changing_segment_count += 1
+            if (
+                stripped_program_name == "cd"
+                and each_line_index == 0
+                and each_segment_index == 0
+                and not is_subshell_wrapped
+            ):
+                leading_cd_segment_count += 1
+    return directory_changing_segment_count > leading_cd_segment_count
+
+
+def _command_rm_targets_include_unsafe_path(command: str, tool_input: dict) -> bool:
+    """Return True when an ``rm`` in any segment targets a path outside the ephemeral cwd.
+
+    Tokenizes each physical line, explodes glued shell control operators, and splits
+    into shell segments. A ``find ... -exec rm`` segment escapes when any of ``find``'s
+    leading search roots resolves outside the ephemeral namespace, because those roots,
+    not the ``rm``'s ``{}``/``+`` placeholders, name what gets deleted; that segment is
+    then also checked as an ordinary ``rm`` segment, where the placeholder ``{}``/``+``
+    targets resolve under the ephemeral cwd and a trailing redirect to the null device is
+    benign while a redirect to any other file escapes. Within each segment, the first
+    token whose basename is ``rm`` begins an ``rm`` invocation;
+    its flags and targets are checked in isolation, so a sibling segment's flags
+    (``mkdir -p``) or absolute paths (a ``python`` interpreter path) never count as this
+    ``rm``'s targets. A segment escapes when an unsafe flag precedes ``--`` or a target
+    resolves outside the ephemeral namespace: an absolute non-ephemeral path, a relative
+    path that resolves outside (or with no declared cwd to resolve against), a reference
+    to a non-temporary environment variable, a bare ephemeral root, a bare
+    named-worktrees container, or a glob wildcard basename.
+
+    A relative target fails closed when the command changes directory beyond a single
+    leading ``cd`` (a second top-level ``cd``, a ``cd`` inside a subshell group, or a
+    ``pushd`` / ``popd``): the declared cwd is nulled so the leading ``cd`` no longer
+    bounds the deletion, while absolute targets — which no directory change can
+    redirect — still resolve.
+
+    Fails closed: returns True on parse failure (``ValueError`` from unbalanced quotes).
+    The broad auto-allow must decline rather than grant on input the hook cannot
+    conclusively bound.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+        tool_input: The Bash tool input mapping, used to resolve the declared effective
+            working directory.
+
+    Returns:
+        True when any ``rm`` segment's flags or targets escape the ephemeral cwd.
+    """
+    declared_effective_cwd = _resolve_declared_effective_working_directory(command, tool_input)
+    if _command_changes_directory_beyond_leading_cd(command):
+        declared_effective_cwd = None
+    for each_command_line in re.split(r"[\n\r]+", command):
+        try:
+            all_command_tokens = _split_command_preserving_windows_backslashes(each_command_line)
+        except ValueError:
+            return True
+        all_operator_split_tokens = _explode_glued_shell_control_operators(all_command_tokens)
+        for each_segment in _split_tokens_into_shell_segments(all_operator_split_tokens):
+            if _find_exec_rm_search_root_escapes_ephemeral_cwd(each_segment, declared_effective_cwd):
+                return True
+            each_rm_token_index = next(
+                (
+                    index
+                    for index, token in enumerate(each_segment)
+                    if Path(_strip_leading_subshell_grouping_characters(token)).name == "rm"
+                ),
+                None,
             )
-            if each_is_absolute:
-                each_resolved_target = os.path.normpath(each_expanded_target)
-            else:
-                if declared_effective_cwd is None:
-                    return True
-                each_resolved_target = os.path.normpath(
-                    os.path.join(declared_effective_cwd, each_expanded_target)
-                )
-            if _path_basename_is_shell_glob_wildcard(each_resolved_target):
-                return True
-            if _path_is_bare_ephemeral_root(each_resolved_target):
-                return True
-            if _path_is_bare_named_worktrees_container(each_resolved_target):
-                return True
-            if not directory_is_ephemeral(each_resolved_target):
+            if each_rm_token_index is None:
+                continue
+            if _rm_segment_targets_escape_ephemeral_cwd(each_segment[each_rm_token_index:], declared_effective_cwd):
                 return True
     return False
 
@@ -1583,6 +2004,7 @@ def main() -> None:
         matched_description is not None
         and _destructive_match_is_cwd_scoped(matched_description)
         and _effective_working_directory_is_ephemeral(command, tool_input)
+        and not _command_executes_a_string_in_any_segment(command)
         and not _command_rm_targets_include_unsafe_path(command, tool_input)
         and not _command_contains_any_non_cwd_scoped_destructive_pattern(command)
     ):
