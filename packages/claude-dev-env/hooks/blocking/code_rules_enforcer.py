@@ -33,6 +33,7 @@ from code_rules_annotations_length import (  # noqa: E402
     check_known_pytest_fixture_annotations,
     check_parameter_annotations,
     check_return_annotations,
+    check_unused_known_pytest_fixture_parameters,
 )
 from code_rules_banned_identifiers import (  # noqa: E402
     check_banned_identifiers,
@@ -284,6 +285,9 @@ def validate_content(
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
         all_issues.extend(check_known_pytest_fixture_annotations(content, file_path))
+        all_issues.extend(
+            check_unused_known_pytest_fixture_parameters(content, file_path)
+        )
         all_issues.extend(check_return_annotations(content, file_path))
         all_issues.extend(
             check_function_length(

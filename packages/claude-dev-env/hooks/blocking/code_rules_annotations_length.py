@@ -29,6 +29,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     FUNCTION_LENGTH_BLOCKING_MESSAGE_SUFFIX,
     FUNCTION_LENGTH_BLOCKING_THRESHOLD,
     KNOWN_PYTEST_FIXTURE_ANNOTATION_MESSAGE_SUFFIX,
+    UNUSED_PYTEST_FIXTURE_PARAMETER_MESSAGE_SUFFIX,
 )
 
 
@@ -55,6 +56,36 @@ def check_parameter_annotations(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _has_pytest_fixture_decorator(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    """Return True when a function carries an ``@pytest.fixture`` decorator.
+
+    The decorator is recognized whether it is written as a dotted
+    ``@pytest.fixture`` attribute or a bare ``@fixture`` name, and whether or not
+    it is called with arguments (``@pytest.fixture(scope="module")``). The call
+    form is unwrapped to its callee before the name is matched.
+
+    Args:
+        node: The function definition AST node to inspect.
+
+    Returns:
+        True when any decorator on the node is a call or bare reference whose
+        final name is ``fixture``; False otherwise.
+    """
+    for each_decorator in node.decorator_list:
+        unwrapped = (
+            each_decorator.func
+            if isinstance(each_decorator, ast.Call)
+            else each_decorator
+        )
+        if isinstance(unwrapped, ast.Name) and unwrapped.id == "fixture":
+            return True
+        if isinstance(unwrapped, ast.Attribute) and unwrapped.attr == "fixture":
+            return True
+    return False
+
+
 def _is_pytest_fixture_injection_site(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> bool:
@@ -77,13 +108,7 @@ def _is_pytest_fixture_injection_site(
     """
     if node.name.startswith("test"):
         return True
-    for each_decorator in node.decorator_list:
-        unwrapped = each_decorator.func if isinstance(each_decorator, ast.Call) else each_decorator
-        if isinstance(unwrapped, ast.Name) and unwrapped.id == "fixture":
-            return True
-        if isinstance(unwrapped, ast.Attribute) and unwrapped.attr == "fixture":
-            return True
-    return False
+    return _has_pytest_fixture_decorator(node)
 
 
 def _normalize_fixture_annotation_text(annotation_text: str) -> str:
@@ -159,6 +184,11 @@ def check_known_pytest_fixture_annotations(content: str, file_path: str) -> list
     fixture; and a ``*args`` or ``**kwargs`` parameter that happens to share a
     fixture name is never a fixture injection.
 
+    Only pytest-collectable functions are inspected: functions at module top
+    level and methods defined directly in a class body. A fixture-named
+    parameter on a function nested inside another function's body is exempt,
+    because pytest never injects a fixture into a function-nested definition.
+
     Args:
         content: The Python source to analyze.
         file_path: The path of the file being checked.
@@ -177,9 +207,7 @@ def check_known_pytest_fixture_annotations(content: str, file_path: str) -> list
     except SyntaxError:
         return []
     issues: list[str] = []
-    for each_node in ast.walk(tree):
-        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
+    for each_node in _collect_pytest_collectable_functions(tree):
         if not _is_pytest_fixture_injection_site(each_node):
             continue
         for each_arg in _collect_fixture_injection_arguments(each_node):
@@ -201,6 +229,157 @@ def check_known_pytest_fixture_annotations(content: str, file_path: str) -> list
                 f"Line {each_arg.lineno}: parameter {each_arg.arg!r} on "
                 f"{each_node.name!r} - {KNOWN_PYTEST_FIXTURE_ANNOTATION_MESSAGE_SUFFIX} "
                 f"(annotate as {expected_annotation!r})"
+            )
+    return issues
+
+
+def _names_referenced_in_subtree(node: ast.AST) -> set[str]:
+    """Return every identifier referenced anywhere within an AST subtree.
+
+    A name counts as referenced when it is read (an ``ast.Name`` in load
+    context), deleted (an ``ast.Name`` in delete context), or augmented-assigned
+    (the ``ast.Name`` target of an ``ast.AugAssign``, which reads the prior value
+    before storing). The walk reaches into nested function and comprehension
+    bodies, so a parameter referenced only inside an inner function still counts.
+    A name appearing solely as a plain assignment target — ``ast.Store`` context
+    without augmentation — is absent, because rebinding the name without reading
+    it leaves the fixture's setup genuinely unused.
+
+    Args:
+        node: The AST node whose subtree is scanned for referenced identifiers.
+
+    Returns:
+        The set of identifier strings read, deleted, or augmented-assigned at
+        least once within the subtree.
+    """
+    referenced_names: set[str] = set()
+    for each_descendant in ast.walk(node):
+        if isinstance(each_descendant, ast.Name) and isinstance(
+            each_descendant.ctx, (ast.Load, ast.Del)
+        ):
+            referenced_names.add(each_descendant.id)
+        if isinstance(each_descendant, ast.AugAssign) and isinstance(
+            each_descendant.target, ast.Name
+        ):
+            referenced_names.add(each_descendant.target.id)
+    return referenced_names
+
+
+def _is_pytest_test_function(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    """Return True when a function is a pytest-collected test function.
+
+    A test function is one whose name begins with the ``test`` prefix, matching
+    pytest's default ``python_functions = test*`` collection rule. A
+    ``@pytest.fixture``-decorated function is deliberately excluded regardless of
+    its name: a fixture that injects another fixture only to compose its setup,
+    without reading the value, is an intentional pattern this check must not flag.
+    The decorator is recognized written as ``@pytest.fixture`` or a bare
+    ``@fixture``, with or without call arguments.
+
+    Args:
+        node: The function definition AST node to inspect.
+
+    Returns:
+        True when the node's name begins with ``test`` and the node carries no
+        ``@pytest.fixture`` decorator; False otherwise.
+    """
+    if _has_pytest_fixture_decorator(node):
+        return False
+    return node.name.startswith("test")
+
+
+def _collect_pytest_collectable_functions(
+    tree: ast.AST,
+) -> "list[ast.FunctionDef | ast.AsyncFunctionDef]":
+    """Return the function nodes pytest can collect as tests, in source order.
+
+    pytest collects a test function only at module top level or as a method
+    defined directly in a class body; a function nested inside another
+    function's body is never collected, so its parameters are ordinary local
+    arguments rather than injected fixtures. The walk descends through the
+    module body and through class bodies (including nested classes, so methods
+    of a nested class are reached), collects each ``FunctionDef`` /
+    ``AsyncFunctionDef`` it encounters, and never descends into a function's own
+    body — function-nested definitions are excluded.
+
+    Args:
+        tree: The parsed module (or any node whose body holds the candidates).
+
+    Returns:
+        Module-level and class-method function definitions in source order;
+        never a function-nested definition.
+    """
+    collectable_functions: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for each_statement in getattr(tree, "body", []):
+        if isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            collectable_functions.append(each_statement)
+            continue
+        if isinstance(each_statement, ast.ClassDef):
+            collectable_functions.extend(
+                _collect_pytest_collectable_functions(each_statement)
+            )
+    return collectable_functions
+
+
+def check_unused_known_pytest_fixture_parameters(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag well-known pytest fixture parameters a test declares but never reads.
+
+    A pytest test function that names a builtin fixture from
+    ``ANNOTATION_BY_PYTEST_FIXTURE`` — ``tmp_path``, ``monkeypatch``,
+    ``capsys``, and the rest — pays the fixture's setup cost on every run:
+    pytest materializes the temp directory, installs the monkeypatch context,
+    or captures output even when the body never touches the value. A parameter
+    the body never references is therefore dead weight, and most often a
+    copy-paste remnant from a sibling test that did use it. This check flags
+    each such parameter so the author drops it.
+
+    Only pytest-collected test functions are inspected: functions at module top
+    level and methods defined directly in a class body. A function nested inside
+    another function's body is excluded — pytest never collects it, so its
+    fixture-named parameter is an ordinary local argument. A
+    ``@pytest.fixture``-decorated function is exempt because injecting a fixture
+    into another fixture purely to order its setup is an intentional pattern. A
+    parameter counts as used when its name is referenced anywhere in the function
+    body — read, augmented-assigned, or deleted — including inside a nested
+    function or comprehension; an attribute access such as
+    ``monkeypatch.setenv(...)`` reads the name and so counts. Only the named
+    injection slots pytest fills — undefaulted positional-or-keyword and
+    keyword-only parameters — are considered, matching
+    ``check_known_pytest_fixture_annotations``.
+
+    Args:
+        content: The Python source to analyze.
+        file_path: The path of the file being checked.
+
+    Returns:
+        One blocking issue per known fixture parameter declared on a test
+        function whose body never references it, naming the parameter.
+    """
+    if not is_test_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _collect_pytest_collectable_functions(tree):
+        if not _is_pytest_test_function(each_node):
+            continue
+        referenced_names = _names_referenced_in_subtree(each_node)
+        for each_arg in _collect_fixture_injection_arguments(each_node):
+            if each_arg.arg not in ANNOTATION_BY_PYTEST_FIXTURE:
+                continue
+            if each_arg.arg in referenced_names:
+                continue
+            issues.append(
+                f"Line {each_arg.lineno}: parameter {each_arg.arg!r} on "
+                f"{each_node.name!r} - {UNUSED_PYTEST_FIXTURE_PARAMETER_MESSAGE_SUFFIX}"
             )
     return issues
 
