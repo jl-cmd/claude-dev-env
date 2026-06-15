@@ -1710,8 +1710,10 @@ def _collect_find_search_root_tokens(all_tokens_after_find: list[str]) -> list[s
     GNU ``find`` accepts global options before the path operands: the flag-only
     options ``-H``/``-L``/``-P`` (each its own token, possibly in sequence), the
     value-taking option ``-D`` (which consumes the following debug-options token), and
-    an optimization-level option that begins with ``-O`` (which consumes a following
-    bare level token when ``-O`` stands alone). The leading run of such global options
+    an optimization-level option ``-O<level>`` whose level is glued to the flag
+    (``-O3``), so the ``-O``-prefixed token is skipped as a single token and a
+    following path operand is collected as a search root rather than swallowed as a
+    level. The leading run of such global options
     is skipped first, then the path operands are collected: every non-dash token up to
     the first ``-``-prefixed expression primary (``-name``, ``-type``, ``-exec``). A
     ``find`` whose first post-option token is already an expression primary declares no
@@ -1736,11 +1738,6 @@ def _collect_find_search_root_tokens(all_tokens_after_find: list[str]) -> list[s
             continue
         if each_token.startswith(FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX):
             each_token_index += 1
-            if each_token == FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX and (
-                each_token_index < len(all_tokens_after_find)
-                and not all_tokens_after_find[each_token_index].startswith("-")
-            ):
-                each_token_index += 1
             continue
         break
     all_search_root_tokens: list[str] = []

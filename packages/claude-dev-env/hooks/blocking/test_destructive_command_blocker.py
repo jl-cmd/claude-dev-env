@@ -1950,6 +1950,10 @@ def test_rm_rf_asks_when_find_optimization_level_option_precedes_non_ephemeral_s
     _assert_hook_asks('cd "/tmp/scratch" && find -O3 /etc -exec rm -rf {} +')
 
 
+def test_rm_rf_asks_when_standalone_find_optimization_option_precedes_non_ephemeral_search_root() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && find -O /etc -exec rm -rf {} +')
+
+
 def test_rm_rf_asks_when_find_debug_option_value_precedes_non_ephemeral_search_root() -> None:
     _assert_hook_asks('cd "/tmp/scratch" && find -D tree /etc -exec rm -rf {} +')
 
