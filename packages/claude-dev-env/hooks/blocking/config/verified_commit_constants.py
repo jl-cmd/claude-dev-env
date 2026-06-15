@@ -97,8 +97,6 @@ OPTION_WITH_VALUE_STEP = 2
 ALL_GATED_TOOL_NAMES = ("Bash", "PowerShell")
 HASH_PREVIEW_LENGTH = 16
 MINTING_AGENT_TYPE = "code-verifier"
-SPAWN_LOOKUP_ATTEMPT_COUNT = 3
-SPAWN_LOOKUP_RETRY_DELAY_SECONDS = 0.1
 VERDICT_DIRECTORY_GUARD_MESSAGE = (
     "BLOCKED: [VERDICT_DIRECTORY_GUARD] Shell access to the verification "
     "verdict directory (~/.claude/verification/) is denied. Only the "

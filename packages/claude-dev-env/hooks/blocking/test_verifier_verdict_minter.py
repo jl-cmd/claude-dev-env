@@ -1,18 +1,17 @@
 """Tests for the agent-type gate in verifier_verdict_minter.
 
-The minter mints a verdict only for a code-verifier stop event. The live
-SubagentStop payload names the stopping subagent by ``agent_id`` and carries
-no flat agent-type key, so the minter recovers the spawning agent type from
-the parent transcript: it walks the parent transcript for the completion
-record whose ``agentId`` matches the payload and reads that record's sibling
-``agentType``. These tests build a faithful parent transcript and assert the
-minter gates on the resolved type and on the shared MINTING_AGENT_TYPE
-constant, so a rename in config propagates to the minter without a second
-edit. One test proves that only a structured ``agentType`` key resolves: a
-text block that merely quotes the identity keys mints nothing. A further test
-holds the shipped settings.json to the minter docstring's anti-forgery claim:
-the main session is denied writes to the verdict directory, so only this hook
-can mint a passing verdict.
+The minter mints a verdict only for a code-verifier stop event. The
+SubagentStop payload names the stopping subagent's own transcript
+(``agent_transcript_path``), which sits beside a harness-written
+``agent-<id>.meta.json`` sidecar naming the spawning ``agentType``. These
+tests build that sidecar and assert the minter gates on the resolved type and
+on the shared MINTING_AGENT_TYPE constant, so a rename in config propagates to
+the minter without a second edit. A malformed or non-string sidecar resolves
+nothing, and an absent sidecar mints nothing — the main session writes neither
+the transcript nor the sidecar, so it cannot forge a passing verdict. A
+further test holds the shipped settings.json to the minter docstring's
+anti-forgery claim: the main session is denied writes to the verdict
+directory, so only this hook can mint a passing verdict.
 """
 
 import importlib.util
@@ -20,8 +19,6 @@ import json
 import pathlib
 import subprocess
 import sys
-
-import pytest
 
 _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:
@@ -51,100 +48,83 @@ constants_spec.loader.exec_module(constants_module)
 MINTING_AGENT_TYPE = constants_module.MINTING_AGENT_TYPE
 
 
-def _write_parent_transcript(transcript_file: pathlib.Path, agent_id: str, agent_type: str) -> None:
-    spawn_record = {
-        "type": "assistant",
-        "message": {
-            "content": [
-                {
-                    "type": "tool_use",
-                    "name": "Task",
-                    "input": {"subagent_type": agent_type, "description": "Verify"},
-                    "agentId": agent_id,
-                    "agentType": agent_type,
-                    "content": [{"type": "text", "text": "verification complete"}],
-                }
-            ]
-        },
-    }
-    transcript_file.write_text(json.dumps(spawn_record) + "\n", encoding="utf-8")
+def _write_sidecar(agent_transcript_file: pathlib.Path, agent_type: str) -> None:
+    sidecar_file = agent_transcript_file.with_name(f"{agent_transcript_file.stem}.meta.json")
+    sidecar_file.write_text(
+        json.dumps({"agentType": agent_type, "description": "Verify"}) + "\n",
+        encoding="utf-8",
+    )
 
 
-def test_resolves_subagent_type_from_parent_transcript(tmp_path: pathlib.Path) -> None:
-    transcript_file = tmp_path / "parent.jsonl"
-    _write_parent_transcript(transcript_file, "agent-7", MINTING_AGENT_TYPE)
-    payload = {"agent_id": "agent-7", "transcript_path": str(transcript_file)}
+def test_resolves_subagent_type_from_sidecar(tmp_path: pathlib.Path) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
+    payload = {"agent_transcript_path": str(agent_transcript)}
     assert resolved_subagent_type(payload) == MINTING_AGENT_TYPE
 
 
-def test_resolves_none_when_agent_id_absent_from_transcript(
-    tmp_path: pathlib.Path,
-) -> None:
-    transcript_file = tmp_path / "parent.jsonl"
-    _write_parent_transcript(transcript_file, "agent-7", MINTING_AGENT_TYPE)
-    payload = {"agent_id": "different-agent", "transcript_path": str(transcript_file)}
+def test_resolves_none_when_sidecar_absent(tmp_path: pathlib.Path) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    payload = {"agent_transcript_path": str(agent_transcript)}
     assert resolved_subagent_type(payload) is None
 
 
-def test_resolves_type_when_record_arrives_after_first_read(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    transcript_file = tmp_path / "parent.jsonl"
-    transcript_file.write_text("", encoding="utf-8")
-
-    def write_record_on_first_sleep(_seconds: float) -> None:
-        if transcript_file.read_text(encoding="utf-8"):
-            return
-        _write_parent_transcript(transcript_file, "agent-7", MINTING_AGENT_TYPE)
-
-    monkeypatch.setattr(minter_module.time, "sleep", write_record_on_first_sleep)
-    payload = {"agent_id": "agent-7", "transcript_path": str(transcript_file)}
-    assert resolved_subagent_type(payload) == MINTING_AGENT_TYPE
+def test_resolves_none_when_agent_transcript_path_empty() -> None:
+    assert resolved_subagent_type({"agent_transcript_path": ""}) is None
+    assert resolved_subagent_type({}) is None
 
 
-def test_quoted_agent_type_in_text_block_does_not_resolve(
-    tmp_path: pathlib.Path,
-) -> None:
-    transcript_file = tmp_path / "parent.jsonl"
-    forged_entry = {
-        "type": "assistant",
-        "message": {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps({"agentId": "agent-7", "agentType": MINTING_AGENT_TYPE}),
-                }
-            ]
-        },
-    }
-    transcript_file.write_text(json.dumps(forged_entry) + "\n", encoding="utf-8")
-    payload = {"agent_id": "agent-7", "transcript_path": str(transcript_file)}
+def test_resolves_none_when_sidecar_names_no_string_type(tmp_path: pathlib.Path) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    sidecar_file = agent_transcript.with_name("agent-7.meta.json")
+    sidecar_file.write_text(json.dumps({"agentType": 123}), encoding="utf-8")
+    payload = {"agent_transcript_path": str(agent_transcript)}
+    assert resolved_subagent_type(payload) is None
+
+
+def test_unparseable_sidecar_resolves_nothing(tmp_path: pathlib.Path) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    sidecar_file = agent_transcript.with_name("agent-7.meta.json")
+    sidecar_file.write_text("{not valid json", encoding="utf-8")
+    payload = {"agent_transcript_path": str(agent_transcript)}
+    assert resolved_subagent_type(payload) is None
+
+
+def test_invalid_utf8_sidecar_resolves_nothing(tmp_path: pathlib.Path) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    sidecar_file = agent_transcript.with_name("agent-7.meta.json")
+    sidecar_file.write_bytes(b'{"agentType": "\xff\xfe bad"}')
+    payload = {"agent_transcript_path": str(agent_transcript)}
+    assert resolved_subagent_type(payload) is None
+
+
+def test_non_object_json_sidecar_resolves_nothing(tmp_path: pathlib.Path) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    sidecar_file = agent_transcript.with_name("agent-7.meta.json")
+    sidecar_file.write_text(json.dumps(["agentType", "code-verifier"]), encoding="utf-8")
+    payload = {"agent_transcript_path": str(agent_transcript)}
     assert resolved_subagent_type(payload) is None
 
 
 def test_non_verifier_agent_type_mints_nothing(tmp_path: pathlib.Path) -> None:
-    transcript_file = tmp_path / "parent.jsonl"
-    _write_parent_transcript(transcript_file, "agent-7", "general-purpose")
-    payload = {
-        "agent_id": "agent-7",
-        "transcript_path": str(transcript_file),
-        "agent_transcript_path": "",
-        "cwd": ".",
-    }
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    _write_sidecar(agent_transcript, "general-purpose")
+    payload = {"agent_transcript_path": str(agent_transcript)}
     assert mint_for_payload(payload) is None
 
 
-def test_minting_agent_type_passes_the_agent_type_gate(
-    tmp_path: pathlib.Path,
-) -> None:
-    transcript_file = tmp_path / "parent.jsonl"
-    _write_parent_transcript(transcript_file, "agent-7", MINTING_AGENT_TYPE)
-    payload = {
-        "agent_id": "agent-7",
-        "transcript_path": str(transcript_file),
-        "agent_transcript_path": "",
-        "cwd": ".",
-    }
+def test_verifier_type_without_a_verdict_mints_nothing(tmp_path: pathlib.Path) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text("", encoding="utf-8")
+    _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
+    payload = {"agent_transcript_path": str(agent_transcript)}
     assert mint_for_payload(payload) is None
 
 
@@ -165,9 +145,7 @@ def test_clean_verifier_verdict_mints_a_verdict_file(tmp_path: pathlib.Path) -> 
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _init_repo_with_upstream_and_edit(repo_root)
-    transcript_file = tmp_path / "parent.jsonl"
-    _write_parent_transcript(transcript_file, "agent-7", MINTING_AGENT_TYPE)
-    agent_transcript = tmp_path / "agent.jsonl"
+    agent_transcript = tmp_path / "agent-7.jsonl"
     agent_transcript.write_text(
         json.dumps(
             {
@@ -185,17 +163,18 @@ def test_clean_verifier_verdict_mints_a_verdict_file(tmp_path: pathlib.Path) -> 
         + "\n",
         encoding="utf-8",
     )
+    _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
     payload = {
-        "agent_id": "agent-7",
-        "transcript_path": str(transcript_file),
         "agent_transcript_path": str(agent_transcript),
         "cwd": str(repo_root),
+        "agent_id": "a02b9583eedc74093",
     }
     verdict_path = mint_for_payload(payload)
     try:
         assert verdict_path is not None
         verdict_record = json.loads(verdict_path.read_text(encoding="utf-8"))
         assert verdict_record["all_pass"] is True
+        assert verdict_record["minted_from_agent_id"] == "a02b9583eedc74093"
     finally:
         if verdict_path is not None and verdict_path.exists():
             verdict_path.unlink()
