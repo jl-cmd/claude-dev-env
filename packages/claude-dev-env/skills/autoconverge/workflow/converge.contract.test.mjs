@@ -182,25 +182,92 @@ test('the CONVERGE branch re-resolves HEAD from GitHub on every entry', () => {
   assert.notEqual(resolveHeadIndex, -1, 'expected CONVERGE to re-resolve HEAD via resolveHead()');
 });
 
-test('fix prompt resolves threads by PRRT thread node id looked up from the comment databaseId', () => {
-  const fixPrompt = lensPromptBody('applyFixes');
-  assert.match(fixPrompt, /PRRT/, 'expected the thread node id form (PRRT_...) to be named');
+test('fix edit prompt resolves threads by PRRT thread node id looked up from the comment databaseId', () => {
+  const editPrompt = lensPromptBody('applyFixesEdit');
+  assert.match(editPrompt, /PRRT/, 'expected the thread node id form (PRRT_...) to be named');
   assert.match(
-    fixPrompt,
+    editPrompt,
     /databaseId/,
     'expected the GraphQL lookup matching comment databaseId to be named',
   );
   assert.match(
-    fixPrompt,
+    editPrompt,
     /not the numeric comment id/,
     'expected an explicit guard against passing the numeric comment id to resolve_thread',
   );
 });
 
-test('fix prompt does not pass the numeric comment id straight to resolve_thread', () => {
+test('fix edit prompt does not pass the numeric comment id straight to resolve_thread', () => {
   assert.doesNotMatch(
-    lensPromptBody('applyFixes'),
+    lensPromptBody('applyFixesEdit'),
     /then resolve that thread \(use the github MCP pull_request_review_write/,
     'resolve_thread and resolveReviewThread require a PRRT_... thread node id, not the comment id',
+  );
+});
+
+test('the fix flow spawns a code-verifier step between the edit step and the commit step', () => {
+  const applyFixesBody = lensPromptBody('applyFixes');
+  const editIndex = applyFixesBody.indexOf('applyFixesEdit(');
+  const verifyIndex = applyFixesBody.indexOf('verifyFixesInWorkingTree(');
+  const commitIndex = applyFixesBody.indexOf('commitVerifiedFixes(');
+  assert.notEqual(editIndex, -1, 'expected applyFixes to call the edit step');
+  assert.notEqual(verifyIndex, -1, 'expected applyFixes to call the verify step');
+  assert.notEqual(commitIndex, -1, 'expected applyFixes to call the commit step');
+  assert.ok(
+    editIndex < verifyIndex && verifyIndex < commitIndex,
+    'expected the order edit -> verify -> commit so the verifier verdict binds the fixed working tree',
+  );
+});
+
+test('the verify step spawns a code-verifier agent with no structured schema', () => {
+  const verifyBody = lensPromptBody('verifyFixesInWorkingTree');
+  assert.match(
+    verifyBody,
+    /agentType:\s*'code-verifier'/,
+    'expected the verify step to spawn the code-verifier agent type',
+  );
+  assert.doesNotMatch(
+    verifyBody,
+    /schema:/,
+    'the verify step must pass no schema so its verdict fence stays as assistant text',
+  );
+});
+
+test('the verify step prompt instructs emitting manifest_sha256 in a verdict fence', () => {
+  const verifyBody = lensPromptBody('verifyFixesInWorkingTree');
+  assert.match(verifyBody, /--manifest-hash/, 'expected the binding-hash command to be named');
+  assert.match(
+    verifyBody,
+    /verification_verdict_store\.py/,
+    'expected the verdict-store script that computes the binding hash to be named',
+  );
+  assert.match(
+    verifyBody,
+    /```verdict/,
+    'expected the verdict fence to be specified',
+  );
+  assert.match(
+    verifyBody,
+    /manifest_sha256/,
+    'expected the verdict fence to carry manifest_sha256',
+  );
+  assert.match(
+    verifyBody,
+    /do no edits|make no edits|not edit|no file edits/i,
+    'expected the verify step to be told to make no edits',
+  );
+});
+
+test('the commit step is instructed to make no further file edits', () => {
+  const commitBody = lensPromptBody('commitVerifiedFixes');
+  assert.match(
+    commitBody,
+    /no (?:further |additional )?(?:file )?edits|do not edit|make no edits/i,
+    'expected the commit step to forbid further edits so the verified surface stays bound',
+  );
+  assert.match(
+    commitBody,
+    /agentType:\s*'clean-coder'/,
+    'expected the commit step to use clean-coder',
   );
 });

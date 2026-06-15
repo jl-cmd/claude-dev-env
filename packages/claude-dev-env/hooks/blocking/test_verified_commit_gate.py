@@ -6,8 +6,10 @@ decide what to gate.
 """
 
 import importlib.util
+import json
 import os
 import pathlib
+import subprocess
 import sys
 
 import pytest
@@ -25,6 +27,21 @@ assert gate_spec.loader is not None
 gate_module = importlib.util.module_from_spec(gate_spec)
 gate_spec.loader.exec_module(gate_module)
 gated_repo_directories = gate_module.gated_repo_directories
+deny_reason_for_directory = gate_module.deny_reason_for_directory
+
+store_spec = importlib.util.spec_from_file_location(
+    "verification_verdict_store",
+    _HOOK_DIR / "verification_verdict_store.py",
+)
+assert store_spec is not None
+assert store_spec.loader is not None
+store_module = importlib.util.module_from_spec(store_spec)
+store_spec.loader.exec_module(store_module)
+resolve_merge_base = store_module.resolve_merge_base
+branch_surface_manifest = store_module.branch_surface_manifest
+manifest_sha256 = store_module.manifest_sha256
+
+PRODUCTION_SOURCE = "def add(left: int, right: int) -> int:\n    return left + right\n"
 
 
 def test_plain_git_commit_is_gated() -> None:
@@ -366,3 +383,113 @@ def test_git_verb_inside_gh_comment_body_is_not_gated() -> None:
     assert gated_repo_directories(
         'gh pr comment -b "please git commit your work"', "/d"
     ) == []
+
+
+def _run_git(repo_dir: pathlib.Path, *git_arguments: str) -> None:
+    subprocess.run(
+        ["git", "-C", str(repo_dir), *git_arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _make_gated_repo(tmp_path: pathlib.Path) -> pathlib.Path:
+    origin_dir = tmp_path / "origin.git"
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    subprocess.run(
+        ["git", "init", "--bare", "--initial-branch=main", str(origin_dir)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    _run_git(work_dir, "init", "--initial-branch=main")
+    _run_git(work_dir, "config", "user.email", "tests@example.com")
+    _run_git(work_dir, "config", "user.name", "Gate Tests")
+    (work_dir / "app.py").write_text(PRODUCTION_SOURCE, encoding="utf-8")
+    _run_git(work_dir, "add", "-A")
+    _run_git(work_dir, "commit", "-m", "base")
+    _run_git(work_dir, "remote", "add", "origin", str(origin_dir))
+    _run_git(work_dir, "push", "-u", "origin", "main")
+    (work_dir / "app.py").write_text(
+        "def add(left: int, right: int) -> int:\n    return left - right\n",
+        encoding="utf-8",
+    )
+    return work_dir
+
+
+def _live_surface_hash(work_dir: pathlib.Path) -> str:
+    merge_base_sha = resolve_merge_base(str(work_dir))
+    assert merge_base_sha is not None
+    surface_manifest_text = branch_surface_manifest(str(work_dir), merge_base_sha)
+    assert surface_manifest_text is not None
+    return manifest_sha256(surface_manifest_text)
+
+
+def _write_workflow_verdict(
+    transcript_path: pathlib.Path, bound_manifest_sha256: str
+) -> None:
+    subagents_dir = transcript_path.with_suffix("") / "subagents"
+    workflow_dir = subagents_dir / "workflows" / "wf_x"
+    workflow_dir.mkdir(parents=True)
+    verdict_record = {
+        "all_pass": True,
+        "findings": [],
+        "manifest_sha256": bound_manifest_sha256,
+    }
+    assistant_text = (
+        "Verification complete.\n\n```verdict\n"
+        + json.dumps(verdict_record)
+        + "\n```\n"
+    )
+    assistant_entry = {
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": assistant_text}]},
+    }
+    (workflow_dir / "agent-01.jsonl").write_text(
+        json.dumps(assistant_entry) + "\n", encoding="utf-8"
+    )
+    (workflow_dir / "agent-01.meta.json").write_text(
+        json.dumps({"agentType": "code-verifier"}), encoding="utf-8"
+    )
+
+
+def _isolate_home(monkeypatch: pytest.MonkeyPatch, fake_home: pathlib.Path) -> None:
+    home_text = str(fake_home)
+    monkeypatch.setenv("HOME", home_text)
+    monkeypatch.setenv("USERPROFILE", home_text)
+    monkeypatch.delenv("HOMEDRIVE", raising=False)
+    monkeypatch.delenv("HOMEPATH", raising=False)
+
+
+def test_workflow_verdict_allows_commit_without_a_minted_verdict_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    work_dir = _make_gated_repo(tmp_path)
+    live_surface_hash = _live_surface_hash(work_dir)
+    transcript_path = tmp_path / "projects" / "demo" / "sess1.jsonl"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_path.write_text("", encoding="utf-8")
+    _write_workflow_verdict(transcript_path, live_surface_hash)
+    assert (
+        deny_reason_for_directory(str(work_dir), str(transcript_path)) is None
+    )
+
+
+def test_no_verdict_of_either_kind_denies_the_commit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    work_dir = _make_gated_repo(tmp_path)
+    transcript_path = tmp_path / "projects" / "demo" / "sess1.jsonl"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_path.write_text("", encoding="utf-8")
+    deny_reason = deny_reason_for_directory(str(work_dir), str(transcript_path))
+    assert deny_reason is not None
+    assert "VERIFIED_COMMIT_GATE" in deny_reason

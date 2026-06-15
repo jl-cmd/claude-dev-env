@@ -105,6 +105,17 @@ const FIX_SCHEMA = {
   required: ['newSha', 'pushed', 'resolvedWithoutCommit', 'summary'],
 }
 
+const EDIT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    edited: { type: 'boolean', description: 'true when the step edited code to fix at least one finding' },
+    resolvedWithoutCommit: { type: 'boolean', description: 'true when every finding was already addressed so no code change was made, yet each finding thread was still resolved' },
+    summary: { type: 'string' },
+  },
+  required: ['edited', 'resolvedWithoutCommit', 'summary'],
+}
+
 const CONVERGENCE_SUMMARY_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -311,6 +322,33 @@ function resolveRoundOutcome(lensResults) {
 function normalizeShaForComparison(sha) {
   if (typeof sha !== 'string') return ''
   return sha.slice(0, SHA_COMPARISON_PREFIX_LENGTH).toLowerCase()
+}
+
+/**
+ * Decide whether a workflow code-verifier transcript ended in a passing
+ * verdict. The verify step runs with no schema so its verdict lands as plain
+ * assistant text; this reads the LAST ```verdict ...``` fenced JSON block and
+ * returns true only when it parses to an object with all_pass true. A missing
+ * fence, a parse failure, or all_pass false reads as not-passed so the commit
+ * step is skipped and the round reads as not-progressed.
+ * @param {string|null|undefined} verifyTranscript the verifier's transcript text
+ * @returns {boolean} true only when the last verdict fence reports all_pass true
+ */
+function verdictPassed(verifyTranscript) {
+  if (typeof verifyTranscript !== 'string') return false
+  const fencePattern = /```verdict\s*\n([\s\S]*?)```/g
+  let lastFenceBody = null
+  let eachMatch
+  while ((eachMatch = fencePattern.exec(verifyTranscript)) !== null) {
+    lastFenceBody = eachMatch[1]
+  }
+  if (lastFenceBody === null) return false
+  try {
+    const verdictRecord = JSON.parse(lastFenceBody)
+    return verdictRecord != null && verdictRecord.all_pass === true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -576,15 +614,12 @@ function runAuditLens(head) {
 }
 
 /**
- * Fix lens: one clean-coder applies every finding in a single TDD commit,
- * pushes, then replies to and resolves any real GitHub review threads.
- * @param {string} head PR HEAD SHA the findings were raised against
- * @param {Array<object>} findings deduped findings across all lenses
- * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<object>} FIX_SCHEMA result
+ * Render the numbered findings block shared by the fix steps.
+ * @param {Array<object>} findings deduped findings to render
+ * @returns {string} one numbered line per finding, with any thread-id note
  */
-function applyFixes(head, findings, sourceLabel) {
-  const findingsBlock = findings
+function renderFindingsBlock(findings) {
+  return findings
     .map((each, position) => {
       const eachThreadIds = collectFindingThreadIds(each)
       const threadNote = eachThreadIds.length
@@ -593,24 +628,124 @@ function applyFixes(head, findings, sourceLabel) {
       return `${position + 1}. [${each.severity}] ${each.file}:${each.line} — ${each.title}\n   ${each.detail}${threadNote}`
     })
     .join('\n')
+}
+
+/**
+ * Edit step: one clean-coder fixes every finding test-first in the working
+ * tree and resolves the GitHub review threads, making NO commit or push so the
+ * verify step can bind a verdict to the unstaged fixes.
+ * @param {string} head PR HEAD SHA the findings were raised against
+ * @param {Array<object>} findings deduped findings across all lenses
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<object>} EDIT_SCHEMA result
+ */
+function applyFixesEdit(head, findings, sourceLabel) {
+  const findingsBlock = renderFindingsBlock(findings)
   const threadIds = findings
     .flatMap((each) => collectFindingThreadIds(each))
     .filter((each) => typeof each === 'number')
   return convergeAgent(
-    `You are fixing ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}.\n\n` +
+    `You are the EDIT step fixing ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. A separate verify step then a separate commit step run after you.\n\n` +
       `Findings:\n${findingsBlock}\n\n` +
       `Rules:\n` +
       `- Confirm the working tree is on the PR branch at HEAD ${head} with no unrelated edits before you start.\n` +
       `- Fix every finding test-first (failing test, then minimum code to pass) per CODE_RULES. Verify each concern against current code; a finding whose concern no longer applies needs no code change but still needs its thread resolved.\n` +
-      `- Make ONE commit for all fixes, then push to the PR branch.\n` +
+      `- Leave all fixes in the working tree. Do NOT commit and do NOT push — the commit step does that after verification. Committing or pushing here would change the surface the verifier binds to.\n` +
       `- For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply with python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "<what changed>". Then resolve the PR review thread by thread node id (PRRT_...): look up the thread id for that comment via GraphQL (match on comment databaseId == <id> in the pull request's reviewThreads), then call the github MCP pull_request_review_write method=resolve_thread with threadId=<PRRT_...> (not the numeric comment id), or run the resolveReviewThread GraphQL mutation with the same threadId.\n` +
       `- Findings with replyToCommentId null are in-memory audit findings: fix them, no reply needed.\n\n` +
       `Return values:\n` +
-      `- When you commit and push a fix: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false.\n` +
-      `- When every finding was already addressed so no code change is needed — yet you still resolved each GitHub review thread above: newSha=${head} (the unchanged HEAD), pushed=false, resolvedWithoutCommit=true. Only set this when every thread that carries a comment id is resolved; otherwise the round is treated as stalled.\n` +
+      `- When you edited code to fix at least one finding: edited=true, resolvedWithoutCommit=false.\n` +
+      `- When every finding was already addressed so no code change was needed — yet you still resolved each GitHub review thread above: edited=false, resolvedWithoutCommit=true. Only set this when every thread that carries a comment id is resolved; otherwise the round is treated as stalled.\n` +
       `Always include a one-line summary.`,
-    { label: `fix:${sourceLabel}`, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder' },
+    { label: `fix-edit:${sourceLabel}`, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
   )
+}
+
+/**
+ * Verify step: a code-verifier checks the working-tree fixes against the
+ * findings, computes the binding surface hash, and ends with a verdict fence
+ * as plain assistant text (NO schema, so the fence is not consumed as
+ * structured output). The fence's manifest_sha256 is what unlocks the
+ * verified-commit gate for the commit step. The verifier makes no edits.
+ * @param {string} head PR HEAD SHA the findings were raised against
+ * @param {Array<object>} findings deduped findings the fixes must address
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<string>} the verifier transcript carrying the verdict fence
+ */
+function verifyFixesInWorkingTree(head, findings, sourceLabel) {
+  const findingsBlock = renderFindingsBlock(findings)
+  return convergeAgent(
+    `You are the VERIFY step for ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The edit step left fixes in the working tree, uncommitted. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+      `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
+      `Steps:\n` +
+      `1. Resolve the worktree repo root: REPO=$(git rev-parse --show-toplevel).\n` +
+      `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
+      `3. Compute the binding hash for the live surface by running exactly:\n` +
+      `   "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash "<REPO>"\n` +
+      `   (substitute the REPO path from step 1). That prints a single 64-char hex hash on stdout — capture it.\n` +
+      `4. END your message with a fenced verdict block exactly in this shape, on its own, with the hash from step 3:\n` +
+      "   ```verdict\n" +
+      `   {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
+      "   ```\n" +
+      `   When verification fails, set all_pass to false and list the unresolved findings in findings; still include the manifest_sha256 from step 3. The verdict fence must be the last thing in your message.`,
+    { label: `fix-verify:${sourceLabel}`, phase: 'Converge', agentType: 'code-verifier' },
+  )
+}
+
+/**
+ * Commit step: one clean-coder commits the already-verified working-tree fixes
+ * in a single commit and pushes to the PR branch, making NO further file edits
+ * — any edit changes the surface and invalidates the verifier verdict that
+ * unlocks the commit gate.
+ * @param {string} head PR HEAD SHA before the fix commit
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<object>} FIX_SCHEMA result
+ */
+function commitVerifiedFixes(head, sourceLabel) {
+  return convergeAgent(
+    `You are the COMMIT step for fixes (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The edit step left fixes in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree.\n\n` +
+      `Rules:\n` +
+      `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the commit would be blocked. Do not run a formatter, do not touch a test, do not re-fix anything — only commit and push what is already there.\n` +
+      `- Make ONE commit for all the working-tree fixes, then push to the PR branch.\n\n` +
+      `Return values: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, and a one-line summary. If the commit or push is blocked or fails, return newSha=${head}, pushed=false, resolvedWithoutCommit=false, and a summary naming the failure.`,
+    { label: `fix-commit:${sourceLabel}`, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder' },
+  )
+}
+
+/**
+ * Fix lens: edit (clean-coder, no commit) -> verify (code-verifier emits a
+ * verdict fence binding the working tree) -> commit (clean-coder, one commit +
+ * push, no edits). Splitting the single editing-and-committing agent lets a
+ * workflow code-verifier produce the verdict the verified-commit gate requires,
+ * which the SubagentStop minter cannot mint for workflow-spawned agents. When
+ * verification fails (or the edit step stalled with no thread to resolve), the
+ * commit step is skipped and the unchanged HEAD is returned so the round reads
+ * as not-progressed.
+ * @param {string} head PR HEAD SHA the findings were raised against
+ * @param {Array<object>} findings deduped findings across all lenses
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<object>} FIX_SCHEMA result
+ */
+async function applyFixes(head, findings, sourceLabel) {
+  const editResult = await applyFixesEdit(head, findings, sourceLabel)
+  if (editResult?.resolvedWithoutCommit === true && editResult?.edited !== true) {
+    return {
+      newSha: head,
+      pushed: false,
+      resolvedWithoutCommit: true,
+      summary: editResult?.summary || 'fixes resolved without a code change',
+    }
+  }
+  const verifyTranscript = await verifyFixesInWorkingTree(head, findings, sourceLabel)
+  if (!verdictPassed(verifyTranscript)) {
+    return {
+      newSha: head,
+      pushed: false,
+      resolvedWithoutCommit: false,
+      summary: `verify step did not pass the working-tree fixes for ${findings.length} finding(s) — not committing`,
+    }
+  }
+  return commitVerifiedFixes(head, sourceLabel)
 }
 
 /**

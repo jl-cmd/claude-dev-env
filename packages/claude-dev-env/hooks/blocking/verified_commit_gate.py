@@ -56,6 +56,7 @@ from verification_verdict_store import (
     manifest_sha256,
     resolve_merge_base,
     resolve_repo_root,
+    workflow_verdict_covers_surface,
 )
 
 
@@ -464,15 +465,23 @@ def gated_repo_directories(command_text: str, fallback_directory: str) -> list[s
     return target_directories
 
 
-def deny_reason_for_directory(target_directory: str) -> str | None:
+def deny_reason_for_directory(target_directory: str, transcript_path: str) -> str | None:
     """Decide whether a commit/push in a directory must be blocked.
+
+    Accepts the command when a minted verdict binds to the live surface, or
+    when a workflow-spawned code-verifier emitted a passing verdict bound to
+    the same surface in its own transcript — the latter covers workflow runs,
+    where SubagentStop never fires to mint a verdict file.
 
     Args:
         target_directory: The directory the git command targets.
+        transcript_path: The live session's transcript path from the payload,
+            used to find a workflow code-verifier's verdict.
 
     Returns:
-        The deny reason when the branch diff needs a verdict and none binds
-        to it; None when the command may proceed.
+        The deny reason when the branch diff needs a verdict and neither a
+        minted nor a workflow verdict binds to it; None when the command may
+        proceed.
     """
     repo_root = resolve_repo_root(target_directory)
     if repo_root is None:
@@ -486,10 +495,12 @@ def deny_reason_for_directory(target_directory: str) -> str | None:
     if surface_manifest_text is None:
         return f"{CORRECTIVE_MESSAGE} (surface manifest failed in {repo_root})"
     live_manifest_sha256 = manifest_sha256(surface_manifest_text)
-    if load_valid_verdict(repo_root, live_manifest_sha256) is None:
-        hash_preview = live_manifest_sha256[:HASH_PREVIEW_LENGTH]
-        return f"{CORRECTIVE_MESSAGE} (repo: {repo_root}, surface sha256 {hash_preview}...)"
-    return None
+    if load_valid_verdict(repo_root, live_manifest_sha256) is not None:
+        return None
+    if workflow_verdict_covers_surface(transcript_path, live_manifest_sha256):
+        return None
+    hash_preview = live_manifest_sha256[:HASH_PREVIEW_LENGTH]
+    return f"{CORRECTIVE_MESSAGE} (repo: {repo_root}, surface sha256 {hash_preview}...)"
 
 
 def main() -> None:
@@ -504,8 +515,9 @@ def main() -> None:
     if not command_text:
         return
     session_directory = pretooluse_payload.get("cwd", ".")
+    transcript_path = pretooluse_payload.get("transcript_path", "")
     for each_target_directory in gated_repo_directories(command_text, session_directory):
-        deny_reason = deny_reason_for_directory(each_target_directory)
+        deny_reason = deny_reason_for_directory(each_target_directory, transcript_path)
         if deny_reason is None:
             continue
         deny_payload = {
