@@ -51,6 +51,12 @@ def _check(source: str, file_path: str) -> list[str]:
     return code_rules_enforcer.check_dead_module_constants(source, file_path)
 
 
+def _check_edit(fragment: str, full_file_content: str, file_path: str) -> list[str]:
+    return code_rules_enforcer.check_dead_module_constants(
+        fragment, file_path, full_file_content
+    )
+
+
 def _build_constants_package(
     workflow_directory: Path,
     constants_body: str,
@@ -87,6 +93,36 @@ def test_flags_constant_imported_by_no_module_in_the_tree(neutral_root: Path) ->
     assert not any(
         "MEDIUM_TERMINAL" in each_issue or "MEDIUM_CODE" in each_issue for each_issue in issues
     ), f"Imported constants must not be flagged, got: {issues}"
+
+
+def test_flags_a_dead_constant_added_by_an_edit_to_an_existing_module(
+    neutral_root: Path,
+) -> None:
+    consumer_body = (
+        "from report_constants.render_report_constants import (\n"
+        "    MEDIUM_CODE,\n"
+        "    MEDIUM_TERMINAL,\n"
+        ")\n"
+        "\n"
+        "def panel_class(medium: str) -> str:\n"
+        "    if medium == MEDIUM_TERMINAL:\n"
+        "        return 'terminal'\n"
+        "    return 'code-panel' if medium == MEDIUM_CODE else 'text-panel'\n"
+    )
+    prior_body = 'MEDIUM_TERMINAL = "terminal"\nMEDIUM_CODE = "code"\n'
+    constants_path = _build_constants_package(
+        neutral_root / "workflow", prior_body, consumer_body
+    )
+    edit_fragment = 'MEDIUM_CODE = "code"\nMEDIUM_TEXT = "text"\n'
+    post_edit_body = prior_body + 'MEDIUM_TEXT = "text"\n'
+    issues = _check_edit(edit_fragment, post_edit_body, str(constants_path))
+    assert any("MEDIUM_TEXT" in each_issue for each_issue in issues), (
+        f"An Edit that inserts a dead constant must be flagged, got: {issues}"
+    )
+    assert not any(
+        "MEDIUM_TERMINAL" in each_issue or "MEDIUM_CODE" in each_issue
+        for each_issue in issues
+    ), f"Imported constants must not be flagged on an edit, got: {issues}"
 
 
 def test_does_not_flag_constant_imported_one_directory_up(neutral_root: Path) -> None:
