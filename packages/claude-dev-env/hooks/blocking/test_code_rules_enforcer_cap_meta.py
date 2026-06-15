@@ -77,6 +77,7 @@ KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW: frozenset[str] = frozenset(
         "check_return_annotations",
         "check_skip_decorators_in_tests",
         "check_string_literal_magic",
+        "check_unused_known_pytest_fixture_parameters",
         "check_unused_optional_parameters",
     }
 )
