@@ -215,6 +215,11 @@ HTML_STYLE_BLOCK = """\
   .cause { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 18px; margin-top:16px; font-size:14px; color:#475569; }
   .cause b { color:#0f172a; }
 
+  .appendix { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 18px; margin-top:16px; font-size:13px; color:#475569; }
+  .appendix summary { font-weight:600; color:#0f172a; cursor:pointer; }
+  .appendix-body { margin-top:10px; }
+  .appendix-item { font-family:'JetBrains Mono',monospace; font-size:12px; color:#475569; padding:5px 0; border-top:1px solid #f1f5f9; }
+
   footer { margin-top:40px; padding-top:16px; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:12px; }
   footer code { background:#e2e8f0; padding:1px 6px; border-radius:4px; font-family:'JetBrains Mono',monospace; }
   @media (max-width:680px){ .pf-grid,.term-grid{grid-template-columns:1fr;} }
