@@ -1773,3 +1773,47 @@ def test_launcher_execution_allows_when_timeout_infinity_wraps_ephemeral_rm() ->
 
 def test_launcher_execution_allows_when_timeout_seconds_wraps_ephemeral_rm() -> None:
     _assert_hook_allows("timeout 5 rm -rf /tmp/scratch")
+
+
+def test_rm_rf_allowed_when_cd_worktree_then_temp_env_var_rm_then_mkdir_tar_compound() -> None:
+    _assert_hook_allows(
+        'cd "/Users/dev/proj/.git/worktrees/spindle" '
+        '&& rm -rf "$TEMP/pr621_check" '
+        '&& mkdir -p "$TEMP/pr621_check" '
+        "&& git archive HEAD packages | tar -x -C \"$TEMP/pr621_check\" "
+        '&& ls "$TEMP/pr621_check/packages" | head -40'
+    )
+
+
+def test_rm_rf_allowed_when_cd_worktree_then_find_exec_rm_then_pytest_compound() -> None:
+    _assert_hook_allows(
+        'cd "/Users/dev/proj/worktrees/os-update-system" '
+        '&& find shared_utils/samsung_utils -name "__pycache__" -type d '
+        "-exec rm -rf {} + 2>/dev/null"
+        '; PYTHONPATH="/Users/dev/proj/worktrees/os-update-system" '
+        'C:/Python313/python.exe -m pytest "tests/" -p no:cacheprovider -q 2>&1 | tail -15'
+    )
+
+
+def test_rm_rf_allowed_when_cd_ephemeral_and_sibling_mkdir_has_dash_p_flag() -> None:
+    _assert_hook_allows('cd "/tmp/scratch" && rm -rf build && mkdir -p out')
+
+
+def test_rm_rf_allowed_when_cd_ephemeral_and_rm_target_uses_temp_env_var() -> None:
+    _assert_hook_allows('cd "/tmp/scratch" && rm -rf "$TEMP/build"')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_bash_dash_c_executes_rm_on_non_ephemeral() -> None:
+    _assert_hook_asks("cd \"/tmp/scratch\" && rm -rf build && bash -c 'rm -rf /etc'")
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_rm_target_uses_non_temp_env_var() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && rm -rf "$HOME/important"')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_and_second_rm_segment_targets_non_ephemeral() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && rm -rf build && rm -rf /etc/passwd')
+
+
+def test_rm_rf_asks_when_cd_ephemeral_but_bin_rm_targets_non_ephemeral() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && /bin/rm -rf /etc')

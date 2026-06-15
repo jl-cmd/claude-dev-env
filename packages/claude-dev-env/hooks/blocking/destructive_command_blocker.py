@@ -22,6 +22,7 @@ from hooks_constants.convergence_branch_constants import (  # noqa: E402
 from hooks_constants.destructive_command_segment_constants import (  # noqa: E402
     ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS,
     ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS,
+    ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES,
     ALL_FILE_WRITING_OUTPUT_FLAGS_BY_BENIGN_PROGRAM,
     ALL_GH_API_GLUED_REQUEST_BODY_FIELD_FLAG_PREFIXES,
     ALL_GH_API_REQUEST_BODY_FIELD_FLAGS,
@@ -598,6 +599,34 @@ def _any_shell_segment_executes_a_string_argument(all_command_tokens: list[str])
     all_exploded_tokens = _explode_glued_shell_control_operators(all_command_tokens)
     for each_segment in _split_tokens_into_shell_segments(all_exploded_tokens):
         if each_segment and _command_executes_a_string_argument(each_segment):
+            return True
+    return False
+
+
+def _command_executes_a_string_in_any_segment(command: str) -> bool:
+    """Return True when any segment of any physical line runs a quoted string as code.
+
+    Splits the command on the POSIX newline and carriage-return terminators,
+    tokenizes each line preserving Windows paths, and reports whether any shell
+    segment's leading program executes a quoted string argument as code
+    (``bash -c '...'``, ``eval '...'``, ``ssh host '...'``, ``python -c '...'``, or a
+    launcher wrapping any of these). The broad ephemeral-cwd auto-allow declines such
+    a command because the executed string can delete a path outside the ephemeral
+    working directory that no plain token names. Fails closed (returns True) when a
+    line cannot be tokenized.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        True when at least one segment executes a quoted string argument as code.
+    """
+    for each_command_line in re.split(r"[\n\r]+", command):
+        try:
+            all_command_tokens = _split_command_preserving_windows_backslashes(each_command_line)
+        except ValueError:
+            return True
+        if _any_shell_segment_executes_a_string_argument(all_command_tokens):
             return True
     return False
 
@@ -1432,57 +1461,124 @@ def _command_contains_any_non_cwd_scoped_destructive_pattern(command: str) -> bo
     return False
 
 
-def _command_rm_targets_include_unsafe_path(command: str, tool_input: dict) -> bool:
-    """Return True when the command contains an ``rm`` whose targets are unsafe.
+def _rm_target_resolves_outside_ephemeral_namespace(target_token: str, declared_effective_cwd: str | None) -> bool:
+    """Return True when an ``rm`` target token resolves outside the ephemeral namespace.
 
-    Unsafe means any of: bare ephemeral root (``/tmp``, ``/temp``, the OS
-    temp root, ``/worktrees``, ``/worktree``), bare named worktrees
-    container, absolute path outside the ephemeral namespace, relative
-    path that resolves (against the declared effective cwd) outside the
-    ephemeral namespace, wildcard glob metacharacter in the target
-    basename, or unsafe ``rm`` flag before ``--`` (``--files0-from=...``,
-    unknown long option, non-whitelisted short flag) as enforced by
-    ``_rm_flags_before_double_dash_are_unsafe``.
+    A token referencing an environment variable other than a known temporary one
+    (``TEMP``, ``TMP``, ``TMPDIR``, ``CLAUDE_JOB_DIR``) is unsafe; a token referencing
+    only known temporary variables resolves with each reference rewritten to the
+    system temporary root. A ``~``-prefixed or absolute token resolves as written;
+    a relative token resolves against ``declared_effective_cwd`` (``None`` is unsafe
+    because the target cannot be bounded). The resolved path is unsafe when its
+    basename is a glob wildcard, when it is a bare ephemeral root, when it is a bare
+    named-worktrees container, or when it is not ephemeral.
 
-    Fails closed: returns True on parse failure (``ValueError`` from
-    unbalanced quotes) or when a relative target is encountered without
-    a declared effective cwd to resolve it against. The broad auto-allow
-    must decline rather than grant on input the hook cannot conclusively
-    bound.
+    Args:
+        target_token: A single ``rm`` target token from the segment.
+        declared_effective_cwd: The declared effective working directory, or ``None``
+            when the command declares none.
+
+    Returns:
+        True when the target resolves outside the ephemeral namespace.
     """
-    try:
-        all_command_tokens = _split_command_preserving_windows_backslashes(command)
-    except ValueError:
+    known_temporary_environment_variable_names = ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES
+    environment_variable_reference_pattern = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?|%([A-Za-z_][A-Za-z0-9_]*)%")
+    all_referenced_variable_names = [
+        next(each_group for each_group in each_match.groups() if each_group is not None)
+        for each_match in environment_variable_reference_pattern.finditer(target_token)
+    ]
+    resolved_token = target_token
+    if all_referenced_variable_names:
+        for each_variable_name in all_referenced_variable_names:
+            if each_variable_name not in known_temporary_environment_variable_names:
+                return True
+        system_temporary_root = os.path.normpath(tempfile.gettempdir()).replace("\\", "/")
+        resolved_token = environment_variable_reference_pattern.sub(lambda each_match: system_temporary_root, target_token)
+    each_expanded_target = os.path.expanduser(resolved_token)
+    each_is_absolute = (
+        os.path.isabs(each_expanded_target)
+        or each_expanded_target.replace("\\", "/").startswith("/")
+    )
+    if each_is_absolute:
+        each_resolved_target = os.path.normpath(each_expanded_target)
+    elif declared_effective_cwd is None:
         return True
+    else:
+        each_resolved_target = os.path.normpath(os.path.join(declared_effective_cwd, each_expanded_target))
+    if _path_basename_is_shell_glob_wildcard(each_resolved_target):
+        return True
+    if _path_is_bare_ephemeral_root(each_resolved_target):
+        return True
+    if _path_is_bare_named_worktrees_container(each_resolved_target):
+        return True
+    return not directory_is_ephemeral(each_resolved_target)
+
+
+def _rm_segment_targets_escape_ephemeral_cwd(all_rm_segment_tokens: list[str], declared_effective_cwd: str | None) -> bool:
+    """Return True when an ``rm`` segment's flags or targets escape the ephemeral cwd.
+
+    The segment tokens begin at the ``rm`` program token. Unsafe ``rm`` flags before
+    ``--`` (as enforced by ``_rm_flags_before_double_dash_are_unsafe``) escape;
+    otherwise any collected target token that resolves outside the ephemeral
+    namespace escapes.
+
+    Args:
+        all_rm_segment_tokens: The segment tokens starting at the ``rm`` token.
+        declared_effective_cwd: The declared effective working directory, or ``None``
+            when the command declares none.
+
+    Returns:
+        True when the segment's flags or any target escape the ephemeral cwd.
+    """
+    tokens_after_rm = all_rm_segment_tokens[1:]
+    if _rm_flags_before_double_dash_are_unsafe(tokens_after_rm):
+        return True
+    return any(
+        _rm_target_resolves_outside_ephemeral_namespace(each_target_token, declared_effective_cwd)
+        for each_target_token in _collect_rm_target_tokens(tokens_after_rm)
+    )
+
+
+def _command_rm_targets_include_unsafe_path(command: str, tool_input: dict) -> bool:
+    """Return True when an ``rm`` in any segment targets a path outside the ephemeral cwd.
+
+    Tokenizes each physical line, explodes glued shell control operators, and splits
+    into shell segments. Within each segment, the first token whose basename is ``rm``
+    begins an ``rm`` invocation; its flags and targets are checked in isolation, so a
+    sibling segment's flags (``mkdir -p``) or absolute paths (a ``python`` interpreter
+    path) never count as this ``rm``'s targets. A segment escapes when an unsafe flag
+    precedes ``--`` or a target resolves outside the ephemeral namespace: an absolute
+    non-ephemeral path, a relative path that resolves outside (or with no declared cwd
+    to resolve against), a reference to a non-temporary environment variable, a bare
+    ephemeral root, a bare named-worktrees container, or a glob wildcard basename.
+
+    Fails closed: returns True on parse failure (``ValueError`` from unbalanced quotes).
+    The broad auto-allow must decline rather than grant on input the hook cannot
+    conclusively bound.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+        tool_input: The Bash tool input mapping, used to resolve the declared effective
+            working directory.
+
+    Returns:
+        True when any ``rm`` segment's flags or targets escape the ephemeral cwd.
+    """
     declared_effective_cwd = _resolve_declared_effective_working_directory(command, tool_input)
-    for each_token_index in range(len(all_command_tokens)):
-        if all_command_tokens[each_token_index] != "rm":
-            continue
-        tokens_after_rm = all_command_tokens[each_token_index + 1:]
-        if _rm_flags_before_double_dash_are_unsafe(tokens_after_rm):
+    for each_command_line in re.split(r"[\n\r]+", command):
+        try:
+            all_command_tokens = _split_command_preserving_windows_backslashes(each_command_line)
+        except ValueError:
             return True
-        all_target_tokens = _collect_rm_target_tokens(tokens_after_rm)
-        for each_target_token in all_target_tokens:
-            each_expanded_target = os.path.expanduser(each_target_token)
-            each_is_absolute = (
-                os.path.isabs(each_expanded_target)
-                or each_expanded_target.replace("\\", "/").startswith("/")
+        all_operator_split_tokens = _explode_glued_shell_control_operators(all_command_tokens)
+        for each_segment in _split_tokens_into_shell_segments(all_operator_split_tokens):
+            each_rm_token_index = next(
+                (index for index, token in enumerate(each_segment) if Path(token).name == "rm"),
+                None,
             )
-            if each_is_absolute:
-                each_resolved_target = os.path.normpath(each_expanded_target)
-            else:
-                if declared_effective_cwd is None:
-                    return True
-                each_resolved_target = os.path.normpath(
-                    os.path.join(declared_effective_cwd, each_expanded_target)
-                )
-            if _path_basename_is_shell_glob_wildcard(each_resolved_target):
-                return True
-            if _path_is_bare_ephemeral_root(each_resolved_target):
-                return True
-            if _path_is_bare_named_worktrees_container(each_resolved_target):
-                return True
-            if not directory_is_ephemeral(each_resolved_target):
+            if each_rm_token_index is None:
+                continue
+            if _rm_segment_targets_escape_ephemeral_cwd(each_segment[each_rm_token_index:], declared_effective_cwd):
                 return True
     return False
 
@@ -1583,6 +1679,7 @@ def main() -> None:
         matched_description is not None
         and _destructive_match_is_cwd_scoped(matched_description)
         and _effective_working_directory_is_ephemeral(command, tool_input)
+        and not _command_executes_a_string_in_any_segment(command)
         and not _command_rm_targets_include_unsafe_path(command, tool_input)
         and not _command_contains_any_non_cwd_scoped_destructive_pattern(command)
     ):
