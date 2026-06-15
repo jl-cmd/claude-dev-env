@@ -351,3 +351,45 @@ test('the standards-deferral edit step stages the hardening change without commi
     'expected the standards edit step to use clean-coder',
   );
 });
+
+test('spawnStandardsFollowUp reports whether a hardening PR opened on every path', () => {
+  const body = lensPromptBody('spawnStandardsFollowUp');
+  const falseReturns = body.match(/hardeningPrOpened:\s*false/g) || [];
+  assert.ok(
+    falseReturns.length >= 2,
+    'expected both skip paths (no hardening staged, verify failed) to return hardeningPrOpened:false',
+  );
+  assert.match(
+    body,
+    /hardeningPrOpened:\s*true/,
+    'expected the commit path to return hardeningPrOpened:true',
+  );
+});
+
+test('the standards-deferral note names the hardening PR only when one opened', () => {
+  const noteBody = lensPromptBody('standardsDeferralNote');
+  assert.match(
+    noteBody,
+    /environment-hardening PR/,
+    'expected the opened-PR branch to name the hardening PR',
+  );
+  assert.match(
+    noteBody,
+    /no environment-hardening PR/i,
+    'expected the skip branch to state no hardening PR was opened',
+  );
+});
+
+test('both standards-deferral call sites build standardsNote from the spawnStandardsFollowUp outcome', () => {
+  const callSiteUses = convergeSource.match(/standardsNote = standardsDeferralNote\(/g) || [];
+  assert.equal(
+    callSiteUses.length,
+    2,
+    'expected both standards-deferral call sites to build standardsNote via standardsDeferralNote(...)',
+  );
+  assert.doesNotMatch(
+    convergeSource,
+    /standardsNote = `\$\{[^}]+\} code-standard finding\(s\) deferred to a follow-up fix issue plus an environment-hardening PR/,
+    'expected no unconditional hardening-PR claim in standardsNote',
+  );
+});

@@ -1088,6 +1088,21 @@ function commitHardeningPr(hardeningRepoPath, hardeningBranch, issueUrl, sourceL
 }
 
 /**
+ * Build the standards-deferral note for the closing report, naming the
+ * environment-hardening PR only when one was opened this round so the note
+ * never claims a PR the skip paths did not produce.
+ * @param {number} findingsCount count of deferred code-standard findings
+ * @param {boolean} hardeningPrOpened true when the hardening PR was opened this round
+ * @returns {string} the human-facing deferral note
+ */
+function standardsDeferralNote(findingsCount, hardeningPrOpened) {
+  const base = `${findingsCount} code-standard finding(s) deferred to a follow-up fix issue`
+  return hardeningPrOpened
+    ? `${base} plus an environment-hardening PR — verify both land`
+    : `${base} — verify it lands (no environment-hardening PR was opened this round)`
+}
+
+/**
  * Defer a standards-only round: edit (clean-coder files the follow-up fix issue,
  * stages an environment-hardening hooks/rules change in the config repo's
  * working tree without committing, and resolves the PR's code-standard threads)
@@ -1101,18 +1116,19 @@ function commitHardeningPr(hardeningRepoPath, hardeningBranch, issueUrl, sourceL
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<void>}
+ * @returns {Promise<object>} `{ hardeningPrOpened }` — true only when the hardening PR was opened this round
  */
 async function spawnStandardsFollowUp(head, findings, sourceLabel) {
   const editResult = await standardsFollowUpEdit(head, findings, sourceLabel)
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
-    return
+    return { hardeningPrOpened: false }
   }
   const verifyTranscript = await verifyHardeningChanges(editResult.hardeningRepoPath, sourceLabel)
   if (!verdictPassed(verifyTranscript)) {
-    return
+    return { hardeningPrOpened: false }
   }
   await commitHardeningPr(editResult.hardeningRepoPath, editResult.hardeningBranch, editResult.issueUrl, sourceLabel)
+  return { hardeningPrOpened: true }
 }
 
 /**
@@ -1198,8 +1214,8 @@ while (iterations < CONFIG.maxIterations) {
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
       allRoundFindings.push(...findings)
-      await spawnStandardsFollowUp(head, findings, 'converge-round')
-      standardsNote = `${findings.length} code-standard finding(s) deferred to a follow-up fix issue plus an environment-hardening PR — verify both land`
+      const standardsOutcome = await spawnStandardsFollowUp(head, findings, 'converge-round')
+      standardsNote = standardsDeferralNote(findings.length, standardsOutcome?.hardeningPrOpened === true)
       const auditResult = await postCleanAudit(head)
       if (!auditResult?.posted) {
         blocker = cleanAuditBlocker(head, auditResult)
@@ -1257,8 +1273,8 @@ while (iterations < CONFIG.maxIterations) {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
         allRoundFindings.push(...copilotOutcome.findings)
-        await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot')
-        standardsNote = `${copilotOutcome.findings.length} code-standard finding(s) deferred to a follow-up fix issue plus an environment-hardening PR — verify both land`
+        const standardsOutcome = await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot')
+        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, standardsOutcome?.hardeningPrOpened === true)
         copilotDown = false
         copilotNote = null
         phase = 'FINALIZE'
