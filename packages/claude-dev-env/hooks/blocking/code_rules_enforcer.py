@@ -89,6 +89,9 @@ from code_rules_optional_params import (  # noqa: E402
     check_duplicated_format_patterns,
     check_unused_optional_parameters,
 )
+from code_rules_orphan_css_class import (  # noqa: E402
+    check_orphan_css_classes,
+)
 from code_rules_paths_syspath import (  # noqa: E402
     check_hardcoded_user_paths,
     check_sys_path_insert_deduplication_guard,
@@ -294,6 +297,7 @@ def validate_content(
         all_issues.extend(check_inline_literal_collections(content, file_path))
         all_issues.extend(check_inline_tuple_string_magic(content, file_path))
         all_issues.extend(check_string_literal_magic(content, file_path))
+        all_issues.extend(check_orphan_css_classes(effective_content, file_path))
         check_incomplete_mocks(content, file_path)
         check_duplicated_format_patterns(content, file_path)
         advise_cross_skill_duplicate_helper(effective_content, file_path)
