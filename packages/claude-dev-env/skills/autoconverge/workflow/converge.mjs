@@ -116,6 +116,41 @@ const EDIT_SCHEMA = {
   required: ['edited', 'resolvedWithoutCommit', 'summary'],
 }
 
+const REPAIR_EDIT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    edited: { type: 'boolean', description: 'true when a still-applicable bot-thread concern was fixed test-first in the working tree' },
+    rebased: { type: 'boolean', description: 'true when the branch was rebased onto origin/main to restore mergeability' },
+    resolvedWithoutCommit: { type: 'boolean', description: 'true when the failing gates were addressed with neither a code change nor a rebase — bot threads resolved only, so there is nothing for the commit step to push' },
+    summary: { type: 'string' },
+  },
+  required: ['edited', 'rebased', 'resolvedWithoutCommit', 'summary'],
+}
+
+const STANDARDS_EDIT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    issueUrl: { type: 'string', description: 'the follow-up fix issue URL, or an empty string when the issue could not be filed' },
+    hardeningRepoPath: { type: 'string', description: 'absolute path of the environment-config repo checkout the hardening branch was edited in, or an empty string when no hardening edit was made' },
+    hardeningBranch: { type: 'string', description: 'the hardening branch name created in that repo, or an empty string when no hardening edit was made' },
+    hardeningEdited: { type: 'boolean', description: 'true when hooks or rules were edited in the working tree of the hardening repo, uncommitted, so the verify and commit steps have a surface to bind and push' },
+    summary: { type: 'string' },
+  },
+  required: ['issueUrl', 'hardeningRepoPath', 'hardeningBranch', 'hardeningEdited', 'summary'],
+}
+
+const VERDICT_FENCE_STEPS =
+  `Compute the binding hash for the live surface by running exactly:\n` +
+  `   "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash "<REPO>"\n` +
+  `   (substitute the REPO path you resolved). That prints a single 64-char hex hash on stdout — capture it.\n` +
+  `Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
+  "   ```verdict\n" +
+  `   {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
+  "   ```\n" +
+  `   When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`
+
 const CONVERGENCE_SUMMARY_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -680,14 +715,7 @@ function verifyFixesInWorkingTree(head, findings, sourceLabel) {
       `Steps:\n` +
       `1. Resolve the worktree repo root: REPO=$(git rev-parse --show-toplevel).\n` +
       `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
-      `3. Compute the binding hash for the live surface by running exactly:\n` +
-      `   "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash "<REPO>"\n` +
-      `   (substitute the REPO path from step 1). That prints a single 64-char hex hash on stdout — capture it.\n` +
-      `4. END your message with a fenced verdict block exactly in this shape, on its own, with the hash from step 3:\n` +
-      "   ```verdict\n" +
-      `   {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
-      "   ```\n" +
-      `   When verification fails, set all_pass to false and list the unresolved findings in findings; still include the manifest_sha256 from step 3. The verdict fence must be the last thing in your message.`,
+      `3. ${VERDICT_FENCE_STEPS}`,
     { label: `fix-verify:${sourceLabel}`, phase: 'Converge', agentType: 'code-verifier' },
   )
 }
@@ -859,26 +887,119 @@ function markReady(head, copilotDown) {
 }
 
 /**
- * Address the gates a convergence check reported as failing, then hand control
- * back to the converge phase. Resolves lingering bot threads and rebases when
- * the PR is not mergeable.
+ * Repair edit step: one clean-coder resolves the lingering bot review threads
+ * the convergence check flagged, fixes any still-applicable bot-thread concern
+ * test-first in the working tree, and rebases onto origin/main when the PR is
+ * not mergeable — making NO commit and NO push, so the verify step can bind a
+ * verdict to the resulting surface before the commit step pushes it. Human
+ * reviewer threads are never touched.
  * @param {string} head current PR HEAD SHA
  * @param {Array<string>} failures FAIL lines from the convergence check
- * @returns {Promise<object>} FIX_SCHEMA result
+ * @returns {Promise<object>} REPAIR_EDIT_SCHEMA result
  */
-function repairConvergence(head, failures) {
+function repairConvergenceEdit(head, failures) {
   const failureBlock = failures.length
     ? failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
     : 'none reported'
   return convergeAgent(
-    `The convergence check for ${prCoordinates} failed these gates on HEAD ${head}:\n${failureBlock}\n\n` +
-      `Address only the failing gates:\n` +
-      `- Unresolved bot review threads: fetch the threads where isResolved is false (gh api graphql, or the github MCP pull_request_read get_review_comments), then keep only the bot-authored ones — a thread whose root comment author login contains "cursor", "claude", or "copilot" (case-insensitive substring). Explicitly skip every human reviewer thread; the convergence gate counts only unresolved bot threads, so touching a human thread is out of scope. For each bot thread, verify the concern against current code; if it still applies, fix it test-first; either way post an inline reply and resolve the thread.\n` +
-      `- PR not mergeable: rebase onto origin/main and force-push (git fetch origin main; git rebase origin/main; resolve conflicts; git push --force-with-lease).\n` +
-      `- A dirty bot review or a still-pending requested reviewer: leave it; the next round re-runs that reviewer.\n` +
-      `Make at most one commit for any code fix. Return the HEAD SHA after any push in newSha (the unchanged ${head} when nothing was pushed), pushed true/false, resolvedWithoutCommit=false (this gate already accepts an unchanged HEAD), and a one-line summary.`,
-    { label: 'repair-convergence', phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder' },
+    `You are the EDIT step repairing the convergence gates that failed for ${prCoordinates} on HEAD ${head}. A separate verify step then a separate commit step run after you.\n\n` +
+      `Failing gates:\n${failureBlock}\n\n` +
+      `Address only the failing gates, and make NO commit and NO push — leave every code change in the working tree (a rebase necessarily creates local commits, which is fine; just do not push them):\n` +
+      `- Unresolved bot review threads: fetch the threads where isResolved is false (gh api graphql, or the github MCP pull_request_read get_review_comments), then keep only the bot-authored ones — a thread whose root comment author login contains "cursor", "claude", or "copilot" (case-insensitive substring). Explicitly skip every human reviewer thread; the convergence gate counts only unresolved bot threads, so touching a human thread is out of scope. For each bot thread, verify the concern against current code; if it still applies, fix it test-first in the working tree and leave the fix uncommitted; either way post an inline reply and resolve the thread by its PRRT_ node id (GraphQL lookup matching the comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n` +
+      `- PR not mergeable: rebase onto origin/main FIRST, before applying any uncommitted bot-thread fix, so the rebase runs on a clean tree (git fetch origin main; git rebase origin/main; resolve conflicts). Do NOT force-push — the commit step does that after verification.\n` +
+      `- A dirty bot review or a still-pending requested reviewer: leave it; the next round re-runs that reviewer.\n\n` +
+      `Return values:\n` +
+      `- edited=true when you changed code in the working tree to fix a bot-thread concern.\n` +
+      `- rebased=true when you rebased the branch onto origin/main.\n` +
+      `- resolvedWithoutCommit=true only when you addressed the gates with neither a code change nor a rebase (bot threads resolved only), so there is nothing for the commit step to push.\n` +
+      `Always include a one-line summary.`,
+    { label: 'repair-edit', phase: 'Finalize', schema: REPAIR_EDIT_SCHEMA, agentType: 'clean-coder' },
   )
+}
+
+/**
+ * Repair verify step: a code-verifier confirms the working-tree repair (any
+ * bot-thread fix plus any rebase result) is sound, computes the binding surface
+ * hash, and ends with a verdict fence as plain assistant text (NO schema). The
+ * fence's manifest_sha256 unlocks the verified-commit gate for the commit step's
+ * push. The verifier makes no edits.
+ * @param {string} head PR HEAD SHA the repair started from
+ * @param {Array<string>} failures FAIL lines the repair addressed
+ * @returns {Promise<string>} the verifier transcript carrying the verdict fence
+ */
+function verifyRepairChanges(head, failures) {
+  const failureBlock = failures.length
+    ? failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
+    : 'none reported'
+  return convergeAgent(
+    `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+      `Concerns the working-tree repair must resolve (the gates the convergence check flagged):\n${failureBlock}\n\n` +
+      `Steps:\n` +
+      `1. Resolve the worktree repo root: REPO=$(git rev-parse --show-toplevel).\n` +
+      `2. Verify the working tree against origin/main: any bot-thread code fix is correct test-first per CODE_RULES, and a rebase (if any) left a clean, conflict-free tree. Read the diff (git diff origin/main) and run the relevant tests and named gates.\n` +
+      `3. ${VERDICT_FENCE_STEPS}`,
+    { label: 'repair-verify', phase: 'Finalize', agentType: 'code-verifier' },
+  )
+}
+
+/**
+ * Repair commit step: one clean-coder commits any uncommitted bot-thread fix in
+ * a single commit and pushes to the PR branch (force-with-lease when the edit
+ * step rebased), making NO further file edits — any edit changes the surface and
+ * invalidates the verifier verdict that unlocks the commit gate.
+ * @param {string} head PR HEAD SHA before the repair push
+ * @param {boolean} wasRebased true when the edit step rebased the branch, so the push must be force-with-lease
+ * @returns {Promise<object>} FIX_SCHEMA result
+ */
+function commitRepairFixes(head, wasRebased) {
+  const pushInstruction = wasRebased
+    ? 'The edit step rebased the branch, so push with git push --force-with-lease.'
+    : 'Push to the PR branch with a plain git push.'
+  return convergeAgent(
+    `You are the COMMIT step for the convergence repair on ${prCoordinates}, HEAD ${head}. The edit step left its repair in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree.\n\n` +
+      `Rules:\n` +
+      `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Do not run a formatter, do not re-fix anything — only commit and push what is already there.\n` +
+      `- Commit any uncommitted bot-thread fix in ONE commit (skip the commit when the working tree carries only already-committed rebase results). ${pushInstruction}\n\n` +
+      `Return values: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, and a one-line summary. If the commit or push is blocked or fails, return newSha=${head}, pushed=false, resolvedWithoutCommit=false, and a summary naming the failure.`,
+    { label: 'repair-commit', phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder' },
+  )
+}
+
+/**
+ * Address the gates a convergence check reported as failing, then hand control
+ * back to the converge phase: edit (clean-coder resolves bot threads, applies
+ * any fix and rebase in the working tree, no push) -> verify (code-verifier
+ * emits a verdict fence binding the working tree) -> commit (clean-coder, one
+ * commit + push, no edits). Splitting the edit from the push lets a workflow
+ * code-verifier produce the verdict the verified-commit gate requires for the
+ * bot-thread fix commit and the post-rebase force-push. When the edit resolved
+ * the gates with neither a code change nor a rebase, or the verify step fails,
+ * the commit step is skipped and the unchanged HEAD is returned.
+ * @param {string} head current PR HEAD SHA
+ * @param {Array<string>} failures FAIL lines from the convergence check
+ * @returns {Promise<object>} FIX_SCHEMA result
+ */
+async function repairConvergence(head, failures) {
+  const editResult = await repairConvergenceEdit(head, failures)
+  const hasPushWork = editResult?.edited === true || editResult?.rebased === true
+  if (!hasPushWork) {
+    return {
+      newSha: head,
+      pushed: false,
+      resolvedWithoutCommit: true,
+      summary: editResult?.summary || 'convergence gates resolved without a code change or rebase',
+    }
+  }
+  const verifyTranscript = await verifyRepairChanges(head, failures)
+  if (!verdictPassed(verifyTranscript)) {
+    return {
+      newSha: head,
+      pushed: false,
+      resolvedWithoutCommit: false,
+      summary: `repair verify step did not pass the working-tree repair on HEAD ${head} — not pushing`,
+    }
+  }
+  return commitRepairFixes(head, editResult?.rebased === true)
 }
 
 /**
@@ -894,35 +1015,104 @@ function isStandardsOnlyRound(findings) {
 }
 
 /**
- * Defer a standards-only round: one agent files a GitHub issue listing every
- * code-standard finding, opens a draft PR hardening the Claude environment
- * (hooks/rules) so those violation classes are blocked before code is written,
- * and replies to / resolves any GitHub threads the findings carry, noting the
- * deferral. This PR's branch is never touched.
+ * Standards-deferral edit step: one clean-coder files the follow-up fix issue,
+ * stages an environment-hardening hooks/rules change in the config repo's
+ * working tree WITHOUT committing, and resolves the PR's code-standard threads.
+ * Leaving the hardening edit uncommitted lets the verify step bind a verdict to
+ * it before the commit step opens the PR. The PR's own branch is never touched.
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<object>} STANDARDS_EDIT_SCHEMA result
+ */
+function standardsFollowUpEdit(head, findings, sourceLabel) {
+  const findingsBlock = renderFindingsBlock(findings)
+  const threadIds = findings
+    .flatMap((each) => collectFindingThreadIds(each))
+    .filter((each) => typeof each === 'number')
+  return convergeAgent(
+    `You are the EDIT step deferring a code-standard-only round on ${prCoordinates}, HEAD ${head} (${sourceLabel}). The round surfaced ONLY code-standard violations (CODE_RULES/style, no behavioral impact); the run treats it as passed and defers the fixes to follow-up work, which you now stage. A separate verify step then a separate commit step open the hardening PR after you. Do NOT commit or push to the PR's own branch.\n\n` +
+      `Findings:\n${findingsBlock}\n\n` +
+      `1. Follow-up fix issue: file a GitHub issue on ${input.owner}/${input.repo} (gh issue create --body-file with a temp file) titled "Deferred code-standard fixes from PR #${input.prNumber}". The body references the PR and lists each finding with its file:line, severity, and detail. The issue carries the fix work; do not open a fix PR. Capture the issue URL.\n` +
+      `2. Stage the environment-hardening change: in the Claude environment config repo (the repo owning ~/.claude hooks and rules — JonEcho/llm-settings for hooks, jl-cmd/claude-code-config for rules/skills; pick whichever owns the surface that would block these violation classes), find or clone a local checkout, fetch origin, and create a branch off origin/main. Edit the hooks/rules in that checkout's WORKING TREE so each violation class found here is blocked at Write/Edit time, before code is written. Do NOT commit and do NOT push — the commit step does that after the verify step binds a verdict to the working tree. Return the checkout's absolute path in hardeningRepoPath, the branch name in hardeningBranch, and set hardeningEdited=true. When no hardening is feasible for these classes, leave hardeningRepoPath and hardeningBranch empty and hardeningEdited=false; the follow-up issue still stands.\n` +
+      `3. For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue <url>." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
+      `Return the issue URL in issueUrl (empty string when it could not be filed), the hardening checkout path and branch, hardeningEdited, and a one-line summary.`,
+    { label: `standards-edit:${sourceLabel}`, phase: 'Converge', schema: STANDARDS_EDIT_SCHEMA, agentType: 'clean-coder' },
+  )
+}
+
+/**
+ * Standards-hardening verify step: a code-verifier confirms the uncommitted
+ * hooks/rules change staged in the hardening repo blocks the deferred violation
+ * classes, computes the binding surface hash for that repo, and ends with a
+ * verdict fence as plain assistant text (NO schema) — unlocking the
+ * verified-commit gate for the cross-repo hardening commit. The verifier makes
+ * no edits.
+ * @param {string} hardeningRepoPath absolute path of the hardening repo checkout the edit staged
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<string>} the verifier transcript carrying the verdict fence
+ */
+function verifyHardeningChanges(hardeningRepoPath, sourceLabel) {
+  return convergeAgent(
+    `You are the VERIFY step for an environment-hardening change (${sourceLabel}) staged in the working tree of ${hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+      `Concern the working-tree change must resolve: the edited hooks/rules block the code-standard violation classes from the deferred round at Write/Edit time, and a hook change carries a passing test per CODE_RULES.\n\n` +
+      `Steps:\n` +
+      `1. cd into ${hardeningRepoPath}, then resolve its repo root: REPO=$(git rev-parse --show-toplevel).\n` +
+      `2. Verify the uncommitted working-tree change in REPO: read the diff (git diff) and run the hook/rule tests in that repo, confirming each violation class is now blocked.\n` +
+      `3. ${VERDICT_FENCE_STEPS}`,
+    { label: `standards-verify:${sourceLabel}`, phase: 'Converge', agentType: 'code-verifier' },
+  )
+}
+
+/**
+ * Standards-hardening commit step: one clean-coder commits the verified
+ * working-tree hooks/rules change in a single commit, pushes the hardening
+ * branch, and opens the DRAFT hardening PR — making NO further file edits, since
+ * any edit changes the surface and invalidates the verdict that unlocks the
+ * commit gate. The PR's own branch is never touched.
+ * @param {string} hardeningRepoPath absolute path of the hardening repo checkout
+ * @param {string} hardeningBranch the hardening branch the edit step created
+ * @param {string} issueUrl the follow-up fix issue URL the PR body references
+ * @param {string} sourceLabel short description of where the findings came from
  * @returns {Promise<string>} agent transcript (unused)
  */
-function spawnStandardsFollowUp(head, findings, sourceLabel) {
-  const findingsBlock = findings
-    .map((each, position) => {
-      const eachThreadIds = collectFindingThreadIds(each)
-      const threadNote = eachThreadIds.length
-        ? `\n   (GitHub review comment ids: ${eachThreadIds.join(', ')})`
-        : ''
-      return `${position + 1}. [${each.severity}] ${each.file}:${each.line} — ${each.title}\n   ${each.detail}${threadNote}`
-    })
-    .join('\n')
+function commitHardeningPr(hardeningRepoPath, hardeningBranch, issueUrl, sourceLabel) {
   return convergeAgent(
-    `A review round on ${prCoordinates}, HEAD ${head}, surfaced ONLY code-standard violations (CODE_RULES/style, no behavioral impact). The convergence run treats the round as passed and defers these to follow-up work, which you now create. Do NOT commit or push to the PR's own branch.\n\n` +
-      `Findings:\n${findingsBlock}\n\n` +
-      `1. Follow-up fix issue: file a GitHub issue on ${input.owner}/${input.repo} (gh issue create --body-file with a temp file) titled "Deferred code-standard fixes from PR #${input.prNumber}". The body references the PR and lists each finding with its file:line, severity, and detail. The issue carries the fix work; do not open a fix PR.\n` +
-      `2. Environment-hardening PR: in the Claude environment config repo (the repo owning ~/.claude hooks and rules — JonEcho/llm-settings for hooks, jl-cmd/claude-code-config for rules/skills; pick whichever owns the needed surface), create a branch and open a DRAFT PR that hardens hooks/rules so each violation class found here is blocked at Write/Edit time, before code is written or reviewed. Reference the issue from step 1 in the PR body.\n` +
-      `3. For each finding that carries a GitHub review comment id: post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue <url>." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread).\n\n` +
-      `Return a one-line summary naming the follow-up issue URL and the hardening PR URL.`,
-    { label: `standards-followup:${sourceLabel}`, phase: 'Converge', agentType: 'clean-coder' },
+    `You are the COMMIT step opening the environment-hardening PR (${sourceLabel}) for the change staged in ${hardeningRepoPath} on branch ${hardeningBranch}. The edit step left the hooks/rules edits in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree. Do NOT touch the PR's own branch.\n\n` +
+      `Rules:\n` +
+      `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Only commit and push what is already there.\n` +
+      `- In ${hardeningRepoPath}: make ONE commit of the staged hooks/rules change on branch ${hardeningBranch}, push it, then open a DRAFT PR. The PR body references the follow-up issue ${issueUrl || '(none)'} and states the PR hardens the environment so the deferred violation classes are blocked at Write/Edit time. Honor the gh-body-file rule: write a BOM-free temp file and pass --body-file.\n\n` +
+      `Return a one-line summary naming the hardening PR URL.`,
+    { label: `standards-commit:${sourceLabel}`, phase: 'Converge', agentType: 'clean-coder' },
   )
+}
+
+/**
+ * Defer a standards-only round: edit (clean-coder files the follow-up fix issue,
+ * stages an environment-hardening hooks/rules change in the config repo's
+ * working tree without committing, and resolves the PR's code-standard threads)
+ * -> verify (code-verifier binds a verdict to the hardening working tree) ->
+ * commit (clean-coder makes one commit, pushes, and opens the DRAFT hardening
+ * PR). Splitting the edit from the push lets a workflow code-verifier produce the
+ * verdict the verified-commit gate requires for the cross-repo hardening commit.
+ * This PR's own branch is never touched. When the edit staged no hardening, or
+ * the verify step fails, the follow-up issue still stands and the commit step is
+ * skipped.
+ * @param {string} head PR HEAD SHA the findings were raised against
+ * @param {Array<object>} findings deduped code-standard-only findings
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<void>}
+ */
+async function spawnStandardsFollowUp(head, findings, sourceLabel) {
+  const editResult = await standardsFollowUpEdit(head, findings, sourceLabel)
+  if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
+    return
+  }
+  const verifyTranscript = await verifyHardeningChanges(editResult.hardeningRepoPath, sourceLabel)
+  if (!verdictPassed(verifyTranscript)) {
+    return
+  }
+  await commitHardeningPr(editResult.hardeningRepoPath, editResult.hardeningBranch, editResult.issueUrl, sourceLabel)
 }
 
 /**
