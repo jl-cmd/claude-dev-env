@@ -1933,3 +1933,52 @@ def test_rm_rf_asks_when_cd_ephemeral_but_find_exec_python_dash_c_deletes_non_ep
     _assert_hook_asks(
         "cd \"/tmp/scratch\" && find . -exec python -c 'import os; os.system(\"rm -rf /etc\")' \\;"
     )
+
+
+# H1: find global option before the search root must not defeat the escape check
+
+
+def test_rm_rf_asks_when_find_dash_l_global_option_precedes_non_ephemeral_search_root() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && find -L /etc -name x -exec rm -rf {} +')
+
+
+def test_rm_rf_asks_when_find_dash_p_global_option_precedes_non_ephemeral_execdir_root() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && find -P /etc -execdir rm -rf {} +')
+
+
+def test_rm_rf_asks_when_find_optimization_level_option_precedes_non_ephemeral_search_root() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && find -O3 /etc -exec rm -rf {} +')
+
+
+def test_rm_rf_asks_when_find_debug_option_value_precedes_non_ephemeral_search_root() -> None:
+    _assert_hook_asks('cd "/tmp/scratch" && find -D tree /etc -exec rm -rf {} +')
+
+
+def test_rm_rf_allowed_when_find_global_option_precedes_ephemeral_dot_search_root() -> None:
+    _assert_hook_allows('cd "/tmp/scratch" && find -L . -name x -exec rm -rf {} +')
+
+
+# H2: multi -exec with a \\; terminator must not sever the destructive action from detection
+
+
+def test_rm_rf_asks_when_multi_exec_second_action_runs_bash_dash_c_deleting_non_ephemeral() -> None:
+    _assert_hook_asks(
+        "cd \"/tmp/scratch\" && find . -exec touch {} \\; -exec bash -c 'rm -rf /etc' \\;"
+    )
+
+
+def test_rm_rf_asks_when_multi_exec_second_action_runs_sh_dash_c_deleting_non_ephemeral() -> None:
+    _assert_hook_asks(
+        "cd \"/tmp/scratch\" && find . -exec echo {} \\; -exec sh -c 'rm -rf /etc' \\;"
+    )
+
+
+def test_rm_rf_allowed_when_multi_exec_both_actions_target_only_ephemeral_paths() -> None:
+    _assert_hook_allows("cd \"/tmp/scratch\" && find . -exec echo {} \\; -exec rm -rf {} \\;")
+
+
+# H3: parallel forwarding an interpreter that deletes a non-ephemeral path must ask
+
+
+def test_rm_rf_asks_when_parallel_forwards_bash_dash_c_deleting_non_ephemeral() -> None:
+    _assert_hook_asks("cd \"/tmp/scratch\" && parallel bash -c 'rm -rf /etc' ::: x")
