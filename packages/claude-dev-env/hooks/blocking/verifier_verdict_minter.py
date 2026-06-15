@@ -129,7 +129,8 @@ def _agent_type_from_meta_sidecar(agent_transcript_path: str) -> str | None:
 
     Returns:
         The recorded ``agentType``, or None when the path is empty, the sidecar
-        is absent or unreadable, or it names no string type.
+        is absent or cannot be read or parsed, it does not hold a JSON object,
+        or it names no string ``agentType``.
     """
     if not agent_transcript_path:
         return None
@@ -158,8 +159,10 @@ def resolved_subagent_type(subagent_stop_payload: dict) -> str | None:
         subagent_stop_payload: The SubagentStop hook payload.
 
     Returns:
-        The agent type this subagent was spawned with, or None when the sidecar
-        is absent or names no string type.
+        The agent type this subagent was spawned with, or None when the
+        ``agent_transcript_path`` is empty, the sidecar is absent or cannot be
+        read or parsed, it does not hold a JSON object, or it names no string
+        ``agentType``.
     """
     return _agent_type_from_meta_sidecar(
         subagent_stop_payload.get("agent_transcript_path", "")
