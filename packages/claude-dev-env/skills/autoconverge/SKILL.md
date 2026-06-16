@@ -34,7 +34,9 @@ PR's owner.
 
 1. **Enter a worktree.** Call `EnterWorktree` with no arguments before any
    `gh`, `git`, file read, or edit. `gh`/`git` Bash calls do not auto-isolate,
-   so this is mandatory. If it fails, report and stop.
+   so this is mandatory. If it fails, report and stop. A bare `EnterWorktree`
+   branches from `origin/main`; step 2 positions the worktree on the PR's head
+   ref, which the workflow needs.
 
 2. **Resolve PR scope.** When the user passed a PR URL or number, parse owner,
    repo, and number from it. Otherwise read the current branch's PR:
@@ -42,6 +44,18 @@ PR's owner.
    `owner`, `repo`, `prNumber`. Confirm the PR is a draft; if it is already
    ready, mark it draft first (`gh pr ready <n> --repo <o>/<r> --undo`) so the
    loop owns the ready transition.
+
+   **Position the worktree on the PR branch.** The workflow reviews
+   `git diff origin/main...HEAD` against this worktree's local `HEAD` and pushes
+   each fix to the PR branch, so the worktree sits on the PR's head ref at the PR
+   HEAD before the workflow launches. A worktree fresh off `origin/main` has
+   `HEAD == origin/main`, shows an empty diff, and reports a false convergence
+   with zero findings. When a local worktree already tracks the PR branch, enter
+   that one by passing its path to `EnterWorktree`; otherwise put the entered
+   worktree on the branch with `gh pr checkout <number> --repo <owner>/<repo>`
+   (or `git fetch origin <headRefName>` then `git switch <headRefName>`). Confirm
+   before launching: `git rev-parse --abbrev-ref HEAD` equals the PR's head ref
+   and local `HEAD` equals the PR head SHA.
 
 3. **Verify the worktree is the PR's repo (strict pre-flight).** Run
    `python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <owner> --repo <repo> --mode strict`.
@@ -55,6 +69,17 @@ PR's owner.
 
 4. **Grant project permissions.**
    `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
+
+   In auto-mode the classifier blocks this grant as an unrequested change to the
+   permission allowlist: the `/autoconverge` invocation alone does not meet its
+   bar for an explicitly requested permission change. When it is blocked, keep
+   the run alive — surface the grant to the user through `AskUserQuestion` with
+   the exact command and ask them to approve it or run it themselves with the `!`
+   prefix:
+   `! python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`.
+   Continue once the grant lands. A user who wants future runs to skip this
+   prompt can add a standing Bash permission allow-rule for that script in their
+   settings.
 
 ## Run the workflow
 
