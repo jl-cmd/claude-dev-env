@@ -45,3 +45,14 @@ fails in a new way.
 - **`gh` token drift across accounts.** When a run touches more than one GitHub
   account, pin the token with `--user <login>`; `gh auth token` alone can return
   another account's token after a switch.
+
+- **The verified-commit gate can block the fix from landing.** The fix lens
+  commits and pushes through the `verified_commit_gate` hook, which denies a
+  `git commit`/`git push` until a `code-verifier` verdict covers the branch
+  surface. A run can reach a clean fix yet fail to land it — the push stays
+  blocked when no verdict is minted for that surface. A manual override exists:
+  a trailing `# verify-skip` comment on the commit or push command skips the
+  gate for that one command. Autoconverge must never apply that override on its
+  own. When landing a fix needs it, stop and tell the user the verified-commit
+  gate is blocking the push and that going forward needs either a `# verify-skip`
+  bypass or a switch to `/pr-converge`, then let the user decide.
