@@ -13,8 +13,11 @@ and allows the command only when one of these holds:
 - the surface is mechanically exempt (docs/images by extension, pytest
   test files by name convention, Python files whose docstring-stripped
   AST is unchanged), or
-- a verdict minted by ``verifier_verdict_minter.py`` reports ``all_pass``
-  and binds to the exact live manifest hash.
+- a passing verifier verdict binds to the exact live manifest hash —
+  matched by content hash, not by work-tree location, so a verdict
+  ``verifier_verdict_minter.py`` minted while verifying any work tree of
+  the surface clears the commit, as does one a workflow ``code-verifier``
+  emitted in its own transcript.
 
 The surface binds every changed and untracked file's content, so slicing
 work into small commits or staging files cannot move the hash, while any
@@ -57,6 +60,7 @@ from verification_verdict_store import (
     is_verification_exempt_diff,
     load_valid_verdict,
     manifest_sha256,
+    minted_verdict_covers_surface,
     resolve_merge_base,
     resolve_repo_root,
     workflow_verdict_covers_surface,
@@ -499,6 +503,8 @@ def deny_reason_for_directory(target_directory: str, transcript_path: str) -> st
         return f"{CORRECTIVE_MESSAGE} (surface manifest failed in {repo_root})"
     live_manifest_sha256 = manifest_sha256(surface_manifest_text)
     if load_valid_verdict(repo_root, live_manifest_sha256) is not None:
+        return None
+    if minted_verdict_covers_surface(live_manifest_sha256):
         return None
     if workflow_verdict_covers_surface(transcript_path, live_manifest_sha256):
         return None
