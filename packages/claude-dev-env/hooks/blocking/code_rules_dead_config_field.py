@@ -24,20 +24,27 @@ The scan is deliberately conservative to keep false positives near zero:
   ``replace(cfg, debug_port=1)``), and match-pattern keyword attribute names
   (``case Config(field=found)``). Plain ``ast.Name`` references are excluded — a
   local variable named ``debug_port`` is not a read of ``config.debug_port``.
-- A production module that reflectively reads a whole instance — a call to
-  ``asdict``, ``astuple``, ``fields``, ``replace``, or ``vars``, or a read of
-  ``obj.__dict__`` — or relies on an auto-generated dataclass dunder field read
-  — instance comparison (``cfg == other``), set or dict membership,
-  formatted-string conversion (``f"{cfg}"``), or whole-instance stringification
-  (``str(cfg)``/``repr(cfg)``/``format(cfg)``) — consumes every field at once
-  without naming any single field, so the check is suppressed for the whole tree
-  (returns ``[]``). This mirrors the per-file dead-dataclass-field check, which
-  reuses the same augmented-assignment read collection and suppresses on the same
-  consumption patterns.
+- A production module that reflectively reads a whole instance — a bare or
+  ``dataclasses``-qualified call to ``asdict``, ``astuple``, ``fields``,
+  ``replace``, or ``vars``, or a read of ``obj.__dict__`` — consumes every field
+  at once without naming any single field, so the check is suppressed for the
+  whole tree (returns ``[]``).
 - A scan root whose total file count exceeds the configured cap cannot prove any
   field dead, so the check returns ``[]`` on a cap hit.
 - A field read only by a module outside the resolved scan root is treated as dead
   — the same conservative scoping the dead-module-constant check accepts.
+
+Unlike the per-file dead-dataclass-field check, this cross-module check does NOT
+suppress on a dataclass-dunder whole-instance read — instance comparison
+(``cfg == other``), set or dict membership, formatted-string conversion
+(``f"{cfg}"``), or whole-instance stringification
+(``str(cfg)``/``repr(cfg)``/``format(cfg)``). Those syntactic forms are not bound
+to a config instance, and tree-wide one incidental match anywhere would disable
+the check on any realistic package. The consequence is a documented, rare
+limitation: a ``*Config`` field read ONLY via whole-instance dunder comparison or
+stringification, and never read directly anywhere in production, may be flagged.
+The augmented-assignment read mechanism (``cfg.field += 1`` reads ``field``
+before writing it) is precise and remains a counted read.
 """
 
 import ast
@@ -56,7 +63,6 @@ from code_rules_dead_dataclass_field import (  # noqa: E402
     _augmented_assignment_attribute_names,
     _dataclass_field_definitions,
     _is_dataclass,
-    _uses_dataclass_dunder_field_reads,
 )
 from code_rules_dead_module_constant import (  # noqa: E402
     _scan_root_for_constants_module,
@@ -69,6 +75,7 @@ from code_rules_shared import (  # noqa: E402
 from hooks_constants.dead_config_field_constants import (  # noqa: E402
     ALL_REFLECTIVE_FIELD_CONSUMER_NAMES,
     CONFIG_CLASS_NAME_SUFFIX,
+    DATACLASSES_MODULE_NAME,
     DEAD_CONFIG_FIELD_GUIDANCE,
     MAX_DEAD_CONFIG_FIELD_ISSUES,
     MAX_SCAN_ROOT_FILE_COUNT,
@@ -93,18 +100,22 @@ def _is_config_dataclass(class_node: ast.ClassDef) -> bool:
 def _reads_whole_instance_reflectively(tree: ast.Module) -> bool:
     """Return whether a module consumes a whole instance via a reflective read.
 
-    Detects a call to any reflective whole-instance consumer (``asdict``,
-    ``astuple``, ``fields``, ``replace``, ``vars``) and a read of the
-    ``__dict__`` attribute. Each of these reads every field of an instance at
-    once without naming any single field, so a module that uses one cannot prove
-    a config field unread.
+    Detects a bare call to any reflective whole-instance consumer (``asdict``,
+    ``astuple``, ``fields``, ``replace``, ``vars`` imported from ``dataclasses``),
+    a ``dataclasses``-qualified call to the same consumers
+    (``dataclasses.asdict(cfg)``, ``dataclasses.replace(cfg, ...)``), and a read
+    of the ``__dict__`` attribute. The method-call form must be ``dataclasses``-
+    qualified — an unrelated ``"text".replace(...)`` or ``frame.fields(...)`` on
+    another object does not match. Each matched form reads every field of an
+    instance at once without naming any single field, so a module that uses one
+    cannot prove a config field unread.
 
     Args:
         tree: The parsed module to inspect.
 
     Returns:
-        True when the module calls a reflective whole-instance consumer or reads
-        ``obj.__dict__``.
+        True when the module makes a bare or ``dataclasses``-qualified call to a
+        reflective whole-instance consumer, or reads ``obj.__dict__``.
     """
     for each_node in ast.walk(tree):
         if isinstance(each_node, ast.Attribute):
@@ -116,7 +127,12 @@ def _reads_whole_instance_reflectively(tree: ast.Module) -> bool:
         function_node = each_node.func
         if isinstance(function_node, ast.Name) and function_node.id in ALL_REFLECTIVE_FIELD_CONSUMER_NAMES:
             return True
-        if isinstance(function_node, ast.Attribute) and function_node.attr in ALL_REFLECTIVE_FIELD_CONSUMER_NAMES:
+        if (
+            isinstance(function_node, ast.Attribute)
+            and isinstance(function_node.value, ast.Name)
+            and function_node.value.id == DATACLASSES_MODULE_NAME
+            and function_node.attr in ALL_REFLECTIVE_FIELD_CONSUMER_NAMES
+        ):
             return True
     return False
 
@@ -132,13 +148,12 @@ def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
     and ``replace(cfg, debug_port=1)`` each contribute ``"debug_port"``), and
     ``ast.MatchClass.kwd_attrs`` names (so ``case Config(field=x)`` contributes
     ``"field"``). The boolean reports whether the module suppresses the
-    dead-field check, which it does when it reflectively reads a whole instance
-    (``asdict``/``astuple``/``fields``/``replace``/``vars`` call or ``__dict__``
-    read) or relies on an auto-generated dataclass dunder field read (instance
-    comparison, set/dict membership, formatted-string conversion, or whole-
-    instance stringification) — either pattern reads every field at once without
-    naming any single field, so the caller treats it as "cannot prove any field
-    dead". A ``SyntaxError`` contributes no names and no suppression.
+    dead-field check, which it does only when it reflectively reads a whole
+    instance — a bare or ``dataclasses``-qualified ``asdict``/``astuple``/
+    ``fields``/``replace``/``vars`` call, or an ``obj.__dict__`` read — because
+    that pattern reads every field at once without naming any single field, so
+    the caller treats it as "cannot prove any field dead". A ``SyntaxError``
+    contributes no names and no suppression.
 
     Args:
         source: The full text of a ``.py`` module.
@@ -146,8 +161,8 @@ def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
     Returns:
         A (read_names, suppresses_dead_field_check) pair. The name set is every
         attribute name the module reads via any of the five mechanisms above;
-        suppresses_dead_field_check is True when a reflective whole-instance read
-        or a dataclass-dunder field read is present.
+        suppresses_dead_field_check is True only when a reflective whole-instance
+        read is present.
     """
     try:
         tree = ast.parse(source)
@@ -163,9 +178,7 @@ def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
             all_read_names.update(each_node.kwd_attrs)
         elif isinstance(each_node, ast.keyword) and each_node.arg is not None:
             all_read_names.add(each_node.arg)
-    suppresses_dead_field_check = _reads_whole_instance_reflectively(
-        tree
-    ) or _uses_dataclass_dunder_field_reads(tree)
+    suppresses_dead_field_check = _reads_whole_instance_reflectively(tree)
     return all_read_names, suppresses_dead_field_check
 
 
@@ -179,12 +192,10 @@ def _all_production_read_names_under_root(
     Scans every production ``.py`` module under ``scan_root`` (excluding test and
     migration files) for attribute reads. The written module's post-edit content
     replaces its on-disk text so the current edit is included. Scanning stops at
-    the configured file cap. A module that reflectively reads a whole instance
-    (``asdict``/``astuple``/``fields``/``replace``/``vars`` call or ``__dict__``
-    read) or relies on an auto-generated dataclass dunder field read (instance
-    comparison, set/dict membership, formatted-string conversion, or whole-
-    instance stringification) sets the suppression flag, signalling the caller
-    that no field can be proven dead.
+    the configured file cap. A module that reflectively reads a whole instance —
+    a bare or ``dataclasses``-qualified ``asdict``/``astuple``/``fields``/
+    ``replace``/``vars`` call, or an ``obj.__dict__`` read — sets the suppression
+    flag, signalling the caller that no field can be proven dead.
 
     Args:
         scan_root: The directory tree to scan.
@@ -196,8 +207,7 @@ def _all_production_read_names_under_root(
         set is the union of attribute reads across every scanned production
         module; cap_was_hit is True when the scan stopped at the configured file
         cap before finishing the tree; suppresses_dead_field_check is True when
-        any scanned module reflectively reads a whole instance or relies on a
-        dataclass-dunder field read.
+        any scanned module reflectively reads a whole instance.
     """
     all_read_names, suppresses_dead_field_check = _attribute_read_names_in_source(written_content)
     written_path_key = os.path.normcase(str(written_path))
@@ -240,12 +250,11 @@ def check_dead_config_dataclass_fields(
     keyword-argument name (constructor or ``replace`` keyword), or match-pattern
     keyword attribute in any production module under the enclosing scan root is
     flagged as dead. When any production module under the scan root reflectively
-    reads a whole instance — a call to ``asdict``, ``astuple``, ``fields``,
-    ``replace``, or ``vars``, or a read of ``obj.__dict__`` — or relies on an
-    auto-generated dataclass dunder field read — instance comparison, set/dict
-    membership, formatted-string conversion, or whole-instance stringification —
-    the check is suppressed for the whole tree and returns ``[]``, since those
-    patterns read every field at once without naming any single field. Test and
+    reads a whole instance — a bare or ``dataclasses``-qualified call to
+    ``asdict``, ``astuple``, ``fields``, ``replace``, or ``vars``, or a read of
+    ``obj.__dict__`` — the check is suppressed for the whole tree and returns
+    ``[]``, since that pattern reads every field at once without naming any single
+    field. Test and
     migration files are exempt as write destinations; production modules under the
     scan root are scanned while test and migration modules in the tree are excluded
     so fields read only by test code are still flagged as dead-in-production.

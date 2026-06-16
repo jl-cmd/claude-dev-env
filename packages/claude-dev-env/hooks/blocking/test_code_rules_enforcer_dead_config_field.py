@@ -315,7 +315,17 @@ def test_does_not_flag_field_used_only_via_augmented_assignment(neutral_root: Pa
     )
 
 
-def test_does_not_flag_when_consumer_compares_whole_instance(neutral_root: Path) -> None:
+def test_flags_field_read_only_via_whole_instance_comparison(neutral_root: Path) -> None:
+    """A field read ONLY via whole-instance comparison IS flagged (accepted limitation).
+
+    Unlike the per-file dead-dataclass-field check, this cross-module check does
+    not suppress on a dataclass-dunder whole-instance read: instance comparison
+    (``left == right``) is not bound to a config instance, and tree-wide one
+    incidental ``==`` anywhere would disable the check on any realistic package.
+    A ``*Config`` field whose only production read is this whole-instance
+    comparison, and that is never read directly, is therefore flagged — a
+    documented, rare limitation.
+    """
     consumer_body = (
         "from os_update_workflow.config import ThemeUpdateConfig\n"
         "\n"
@@ -326,12 +336,21 @@ def test_does_not_flag_when_consumer_compares_whole_instance(neutral_root: Path)
         neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
     )
     issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
-    assert issues == [], (
-        f"Comparing instances reads every field via __eq__, so none may be flagged, got: {issues}"
+    assert any("'debug_port'" in each_issue for each_issue in issues), (
+        f"Field read only via whole-instance comparison is flagged, got: {issues}"
     )
 
 
-def test_does_not_flag_when_consumer_stringifies_whole_instance(neutral_root: Path) -> None:
+def test_flags_field_read_only_via_whole_instance_stringification(neutral_root: Path) -> None:
+    """A field read ONLY via whole-instance stringification IS flagged (accepted limitation).
+
+    The cross-module check does not suppress on a formatted-string conversion of
+    a whole instance (``f'{configuration}'``): the f-string is not bound to a
+    config instance, and tree-wide one incidental f-string anywhere would disable
+    the check on any realistic package. A ``*Config`` field whose only production
+    read is this whole-instance stringification, and that is never read directly,
+    is therefore flagged — a documented, rare limitation.
+    """
     consumer_body = (
         "from os_update_workflow.config import ThemeUpdateConfig\n"
         "\n"
@@ -342,8 +361,58 @@ def test_does_not_flag_when_consumer_stringifies_whole_instance(neutral_root: Pa
         neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
     )
     issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert any("'debug_port'" in each_issue for each_issue in issues), (
+        f"Field read only via whole-instance stringification is flagged, got: {issues}"
+    )
+
+
+def test_unrelated_string_method_does_not_suppress_so_dead_field_flagged(
+    neutral_root: Path,
+) -> None:
+    """An unrelated ``.replace(...)`` on a string must not suppress the tree.
+
+    ``"some text".replace("a", "b")`` is a string method, not a ``dataclasses``-
+    qualified reflective consumer, so it does not make the check treat the tree
+    as a whole-instance read. A genuinely dead ``debug_port`` is still flagged.
+    """
+    consumer_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def run(configuration: ThemeUpdateConfig) -> str:\n"
+        "    print(configuration.portal_url)\n"
+        "    print(configuration.timeout_seconds)\n"
+        "    return 'some text'.replace('a', 'b')\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert any("'debug_port'" in each_issue for each_issue in issues), (
+        f"Unrelated string .replace must not suppress, so dead debug_port is flagged, got: {issues}"
+    )
+
+
+def test_dataclasses_qualified_replace_call_suppresses_so_no_field_flagged(
+    neutral_root: Path,
+) -> None:
+    """A ``dataclasses.replace(cfg, ...)`` call suppresses the whole tree.
+
+    A genuine ``dataclasses``-qualified reflective consumer reads every field at
+    once, so the check is suppressed for the whole tree and no field is flagged.
+    """
+    consumer_body = (
+        "import dataclasses\n"
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def repoint(configuration: ThemeUpdateConfig) -> ThemeUpdateConfig:\n"
+        "    return dataclasses.replace(configuration, debug_port=9999)\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
     assert issues == [], (
-        f"Formatted-string conversion reads every field via __repr__, so none may be flagged, got: {issues}"
+        f"dataclasses.replace reads every field at once, so none may be flagged, got: {issues}"
     )
 
 
