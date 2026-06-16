@@ -17,6 +17,7 @@ from hooks_constants.dead_module_constant_constants import (
 )
 
 CONFIG_CLASS_NAME_SUFFIX: str = "Config"
+DATACLASSES_MODULE_NAME: str = "dataclasses"
 MAX_DEAD_CONFIG_FIELD_ISSUES: int = 25
 DEAD_CONFIG_FIELD_GUIDANCE: str = (
     "config dataclass field is defined but read by no production module in the"
@@ -28,6 +29,7 @@ __all__ = [
     "ALL_REFLECTIVE_FIELD_CONSUMER_NAMES",
     "CONFIG_CLASS_NAME_SUFFIX",
     "CONFIG_DIRECTORY_SEGMENT",
+    "DATACLASSES_MODULE_NAME",
     "DEAD_CONFIG_FIELD_GUIDANCE",
     "DUNDER_INIT_FILENAME",
     "MAX_DEAD_CONFIG_FIELD_ISSUES",
