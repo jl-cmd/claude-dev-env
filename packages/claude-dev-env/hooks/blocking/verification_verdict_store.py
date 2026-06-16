@@ -52,6 +52,7 @@ from config.verified_commit_constants import (
     TRANSCRIPT_TEXT_KEY,
     VERDICT_DIRECTORY_NAME,
     VERDICT_FENCE_PATTERN,
+    VERDICT_FILE_GLOB,
     VERDICT_JSON_INDENT,
     VERDICT_KEY_ALL_PASS,
     VERDICT_KEY_FINDINGS,
@@ -243,6 +244,19 @@ def manifest_sha256(surface_manifest_text: str) -> str:
     return hashlib.sha256(surface_manifest_text.encode("utf-8")).hexdigest()
 
 
+def verdict_directory() -> Path:
+    """Return the shared directory holding every work tree's verdict file.
+
+    Verdicts live outside any repository (under the user's Claude home) so no
+    repo accumulates untracked verdict files; every work tree's verdict shares
+    this one directory, distinguished by file name.
+
+    Returns:
+        The verdict directory under the user's Claude home.
+    """
+    return Path.home() / CLAUDE_HOME_DIRECTORY_NAME / VERDICT_DIRECTORY_NAME
+
+
 def verdict_path_for_repo(repo_root: str) -> Path:
     """Derive the verdict file path for a repository work tree.
 
@@ -258,9 +272,7 @@ def verdict_path_for_repo(repo_root: str) -> Path:
     """
     normalized_root = str(Path(repo_root).resolve()).replace("\\", "/").lower()
     root_key = hashlib.sha256(normalized_root.encode("utf-8")).hexdigest()[:ROOT_KEY_HEX_LENGTH]
-    return (
-        Path.home() / CLAUDE_HOME_DIRECTORY_NAME / VERDICT_DIRECTORY_NAME / f"{root_key}.json"
-    )
+    return verdict_directory() / f"{root_key}.json"
 
 
 def load_valid_verdict(repo_root: str, expected_manifest_sha256: str) -> dict | None:
@@ -287,6 +299,44 @@ def load_valid_verdict(repo_root: str, expected_manifest_sha256: str) -> dict | 
     if verdict_record.get(VERDICT_KEY_MANIFEST_SHA256) != expected_manifest_sha256:
         return None
     return verdict_record
+
+
+def minted_verdict_covers_surface(expected_manifest_sha256: str) -> bool:
+    """Decide whether any minted verdict covers the live surface, keyed by hash.
+
+    A verdict's bound ``manifest_sha256`` commits to the exact set of surface
+    file paths and their byte contents; the work tree's location never enters
+    the hash. A clean verdict minted while verifying one work tree therefore
+    proves the same change surface in a sibling work tree of the same branch,
+    even though each work tree files its verdict under its own path-keyed name.
+    Scanning every verdict file by bound hash lets that verdict clear the
+    sibling's commit, while a verdict bound to a different hash — different
+    code — never matches. The path-keyed ``load_valid_verdict`` stays the fast
+    same-work-tree lookup; this is the cross-work-tree fallback.
+
+    Args:
+        expected_manifest_sha256: Hash of the live surface manifest the verdict
+            must match exactly.
+
+    Returns:
+        True as soon as one verdict file reports ``all_pass`` true and binds to
+        the expected hash; False when none match or the directory is absent.
+    """
+    verdict_dir = verdict_directory()
+    if not verdict_dir.is_dir():
+        return False
+    for each_verdict_file in sorted(verdict_dir.glob(VERDICT_FILE_GLOB)):
+        try:
+            verdict_record = json.loads(each_verdict_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(verdict_record, dict):
+            continue
+        if verdict_record.get(VERDICT_KEY_ALL_PASS) is not True:
+            continue
+        if verdict_record.get(VERDICT_KEY_MANIFEST_SHA256) == expected_manifest_sha256:
+            return True
+    return False
 
 
 def _subagents_directory_for_transcript(transcript_path: str) -> Path | None:

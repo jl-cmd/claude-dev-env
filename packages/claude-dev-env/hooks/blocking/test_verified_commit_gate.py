@@ -525,3 +525,46 @@ def test_verification_bypass_marker_allows_an_otherwise_gated_commit(
     assert "VERIFIED_COMMIT_GATE" in capsys.readouterr().out
     _run_gate_main(monkeypatch, "git commit -m x # verify-skip", work_dir)
     assert capsys.readouterr().out == ""
+
+
+def test_minted_verdict_from_other_worktree_allows_commit_by_hash(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    work_dir = _make_gated_repo(tmp_path)
+    live_surface_hash = _live_surface_hash(work_dir)
+    store_module.write_verdict(
+        str(tmp_path / "sibling" / "worktree"),
+        live_surface_hash,
+        True,
+        [],
+        "agent-x",
+    )
+    transcript_path = tmp_path / "projects" / "demo" / "sess1.jsonl"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_path.write_text("", encoding="utf-8")
+    assert deny_reason_for_directory(str(work_dir), str(transcript_path)) is None
+
+
+def test_minted_verdict_from_other_worktree_with_wrong_hash_denies(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    work_dir = _make_gated_repo(tmp_path)
+    store_module.write_verdict(
+        str(tmp_path / "sibling" / "worktree"),
+        "d" * 64,
+        True,
+        [],
+        "agent-x",
+    )
+    transcript_path = tmp_path / "projects" / "demo" / "sess1.jsonl"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_path.write_text("", encoding="utf-8")
+    deny_reason = deny_reason_for_directory(str(work_dir), str(transcript_path))
+    assert deny_reason is not None
+    assert "VERIFIED_COMMIT_GATE" in deny_reason

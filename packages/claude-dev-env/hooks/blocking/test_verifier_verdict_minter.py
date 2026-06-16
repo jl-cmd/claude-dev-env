@@ -191,3 +191,45 @@ def test_settings_deny_verdict_directory_write() -> None:
 
 def test_settings_deny_verdict_directory_edit() -> None:
     assert "Edit($HOME/.claude/verification/**)" in _deny_rules()
+
+
+def test_attested_manifest_hash_binds_over_cwd_surface(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo_with_upstream_and_edit(repo_root)
+    attested_hash = "c" * 64
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    verdict_fence = json.dumps(
+        {"all_pass": True, "findings": [], "manifest_sha256": attested_hash}
+    )
+    agent_transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"ok\n```verdict\n{verdict_fence}\n```\n",
+                        }
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
+    payload = {
+        "agent_transcript_path": str(agent_transcript),
+        "cwd": str(repo_root),
+        "agent_id": "attest-1",
+    }
+    verdict_path = mint_for_payload(payload)
+    try:
+        assert verdict_path is not None
+        verdict_record = json.loads(verdict_path.read_text(encoding="utf-8"))
+        assert verdict_record["manifest_sha256"] == attested_hash
+    finally:
+        if verdict_path is not None and verdict_path.exists():
+            verdict_path.unlink()
