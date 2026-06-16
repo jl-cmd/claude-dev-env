@@ -125,6 +125,7 @@ post a fresh PR in a fresh branch based on origin main to the user.
   [Step 1.5](reference/per-tick.md). Skipping this reviews and edits the
   wrong repo. The route is routine and automatic — never a material fork
   to pause on.
+- **A named/teammate `code-verifier` never mints a verdict** — In a background-job session, an `Agent`-tool `code-verifier` spawned with a `name` (or otherwise as a persistent teammate) goes idle/"available" awaiting messages rather than terminating, so its `SubagentStop` never fires. `verifier_verdict_minter.py` mints the verdict only on `SubagentStop`, so no verdict file is written and `verified_commit_gate` blocks the `git commit`/`git push` with "no passing verification verdict" even though the verifier emitted `all_pass`. A `shutdown_request` is ignored and `TaskStop` cannot resolve the teammate's id. Spawn the code-verifier as a one-shot agent with NO `name` (a plain async `Agent` call) so it runs to completion and fires `SubagentStop`, minting the verdict bound to the live surface. Keep the work tree frozen between verification and the commit so the minted surface hash still matches.
 
 ## Progress checklist
 
