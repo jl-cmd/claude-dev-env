@@ -297,6 +297,56 @@ def test_real_world_shape_theme_update_config_with_dead_debug_port(neutral_root:
     ), f"Fields read in orchestrator must not be flagged, got: {issues}"
 
 
+def test_does_not_flag_field_used_only_via_augmented_assignment(neutral_root: Path) -> None:
+    consumer_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def run(configuration: ThemeUpdateConfig) -> None:\n"
+        "    print(configuration.portal_url)\n"
+        "    print(configuration.timeout_seconds)\n"
+        "    configuration.debug_port += 1\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert not any("'debug_port'" in each_issue for each_issue in issues), (
+        f"Augmented assignment reads debug_port before writing, so it is not dead, got: {issues}"
+    )
+
+
+def test_does_not_flag_when_consumer_compares_whole_instance(neutral_root: Path) -> None:
+    consumer_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def is_same(left: ThemeUpdateConfig, right: ThemeUpdateConfig) -> bool:\n"
+        "    return left == right\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert issues == [], (
+        f"Comparing instances reads every field via __eq__, so none may be flagged, got: {issues}"
+    )
+
+
+def test_does_not_flag_when_consumer_stringifies_whole_instance(neutral_root: Path) -> None:
+    consumer_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def describe(configuration: ThemeUpdateConfig) -> str:\n"
+        "    return f'{configuration}'\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert issues == [], (
+        f"Formatted-string conversion reads every field via __repr__, so none may be flagged, got: {issues}"
+    )
+
+
 def test_validate_content_dispatch_runs_dead_config_field_check(neutral_root: Path) -> None:
     workflow_directory = neutral_root / "workflow"
     config_package = workflow_directory / "os_update_workflow"
