@@ -149,7 +149,7 @@ const INSTALL_GROUPS = {
         skills: [
             'anthropic-plan', 'everything-search',
             'pr-review-responder',
-            'recall', 'remember'
+            'recall', 'remember', 'task-build'
         ],
         includeDirectories: ['rules', 'docs', 'commands', 'agents', 'audit-rubrics'],
         includeAllHooks: true,
