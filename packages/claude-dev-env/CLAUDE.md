@@ -73,6 +73,14 @@ When asked to sync git ("get X onto origin main", "update main"), fast-forward l
 
 For scheduled/cron tasks, default to sub-hour intervals (30-minute); do not propose hourly cadences.
 
+## Task Tracking
+
+Track every task with the task tool, always — for all sessions and all tasks. Capture each task with `TaskCreate` as it arrives, mark it `in_progress` with `TaskUpdate` when you start, and `completed` when it is done. Run `/task-build` to gather any open tasks and add them to the list in one pass.
+
+## Working in the claude-code-config Repo
+
+When changing how skills, rules, or hooks install or sync in this repo (for example adding a skill), read `docs/references/skill-install-system.md` — it maps the install pipeline in `packages/claude-dev-env/bin/install.mjs`.
+
 ## Additional Non-overlapping Rules
 
 - **task_scope:** Match every action to what was explicitly requested. When intent is ambiguous, research official docs and present options via AskUserQuestion before making any changes. Proceed with edits only on explicit instruction.
