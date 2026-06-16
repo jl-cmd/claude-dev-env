@@ -5,6 +5,8 @@ Fires on Bash and PowerShell tool calls. When the command carries a
 targets, computes the live change-surface manifest against the merge base,
 and allows the command only when one of these holds:
 
+- the command carries the verification bypass marker (``# verify-skip``),
+  a manual on-the-fly override that skips the gate for that one command,
 - the repository has no resolvable upstream base — no ``origin/HEAD``, no
   configured tracking ref, and neither ``origin/main`` nor ``origin/master``
   (scratch repos with no remote branch are out of scope),
@@ -47,6 +49,7 @@ from config.verified_commit_constants import (
     OPTION_WITH_VALUE_STEP,
     REPO_DIRECTORY_OPTION,
     VALUE_TAKING_GIT_OPTIONS,
+    VERIFICATION_BYPASS_MARKER,
     WORK_TREE_OPTION,
 )
 from verification_verdict_store import (
@@ -504,7 +507,12 @@ def deny_reason_for_directory(target_directory: str, transcript_path: str) -> st
 
 
 def main() -> None:
-    """Read the PreToolUse payload and deny unverified commit/push commands."""
+    """Read the PreToolUse payload and decide whether to allow the command.
+
+    Allows the command without a verdict when it carries the verification
+    bypass marker (``VERIFICATION_BYPASS_MARKER``), a manual on-the-fly
+    override; otherwise denies an unverified commit or push.
+    """
     try:
         pretooluse_payload = json.load(sys.stdin)
     except json.JSONDecodeError:
@@ -513,6 +521,8 @@ def main() -> None:
         return
     command_text = pretooluse_payload.get("tool_input", {}).get("command", "")
     if not command_text:
+        return
+    if VERIFICATION_BYPASS_MARKER in command_text:
         return
     session_directory = pretooluse_payload.get("cwd", ".")
     transcript_path = pretooluse_payload.get("transcript_path", "")
