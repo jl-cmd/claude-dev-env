@@ -11,6 +11,8 @@ import pathlib
 import subprocess
 import sys
 
+import pytest
+
 _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOK_DIR))
@@ -28,6 +30,8 @@ resolve_merge_base = store_module.resolve_merge_base
 branch_surface_manifest = store_module.branch_surface_manifest
 manifest_sha256 = store_module.manifest_sha256
 workflow_verdict_covers_surface = store_module.workflow_verdict_covers_surface
+minted_verdict_covers_surface = store_module.minted_verdict_covers_surface
+write_verdict = store_module.write_verdict
 
 constants_spec = importlib.util.spec_from_file_location(
     "verified_commit_constants",
@@ -488,3 +492,68 @@ def test_manifest_hash_cli_prints_live_surface_hash(tmp_path: pathlib.Path) -> N
         text=True,
     )
     assert completed_process.stdout.strip() == expected_hash
+
+
+def _isolate_home(monkeypatch: pytest.MonkeyPatch, fake_home: pathlib.Path) -> None:
+    home_text = str(fake_home)
+    monkeypatch.setenv("HOME", home_text)
+    monkeypatch.setenv("USERPROFILE", home_text)
+    monkeypatch.delenv("HOMEDRIVE", raising=False)
+    monkeypatch.delenv("HOMEPATH", raising=False)
+
+
+def test_minted_verdict_covers_surface_matches_other_worktree_by_hash(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    write_verdict(
+        str(tmp_path / "other" / "worktree"),
+        MATCHING_MANIFEST_SHA256,
+        True,
+        [],
+        "agent-x",
+    )
+    assert minted_verdict_covers_surface(MATCHING_MANIFEST_SHA256) is True
+
+
+def test_minted_verdict_covers_surface_false_for_other_hash(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    write_verdict(
+        str(tmp_path / "other" / "worktree"),
+        OTHER_MANIFEST_SHA256,
+        True,
+        [],
+        "agent-x",
+    )
+    assert minted_verdict_covers_surface(MATCHING_MANIFEST_SHA256) is False
+
+
+def test_minted_verdict_covers_surface_false_for_failing_verdict(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    write_verdict(
+        str(tmp_path / "other" / "worktree"),
+        MATCHING_MANIFEST_SHA256,
+        False,
+        [{"severity": "P0", "summary": "boom"}],
+        "agent-x",
+    )
+    assert minted_verdict_covers_surface(MATCHING_MANIFEST_SHA256) is False
+
+
+def test_minted_verdict_covers_surface_false_when_directory_absent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    assert minted_verdict_covers_surface(MATCHING_MANIFEST_SHA256) is False

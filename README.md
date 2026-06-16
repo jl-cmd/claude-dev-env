@@ -202,6 +202,7 @@ Slash commands for common workflows.
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
 | `task-build` | Gather every open task in the session and register each on the task list via TaskCreate |
+| `verified-build` | Runs a code task through the two-phase verified workflow — coders write, a fresh-context verifier grades, and git commit/push open only on a clean verdict. |
 | `findbugs` | Single-shot clean-room code-quality audit on the current PR diff (zero conversation context, returns P0/P1/P2 findings with file:line evidence) |
 | `fixbugs` | Recover the most recent `/findbugs` findings, package them as a goal, and hand off to `/agent-prompt` to spawn a background sonnet clean-coder fix agent |
 | `bugteam` | Autonomous audit-and-fix loop using Claude Code's agent teams feature (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and v2.1.32+); fresh teammates per loop, 10-loop cap, scoped permission grant/revoke wrapping the cycle |
