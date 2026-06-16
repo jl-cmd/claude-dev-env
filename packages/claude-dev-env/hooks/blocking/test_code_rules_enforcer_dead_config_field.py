@@ -171,6 +171,74 @@ def test_does_not_flag_field_read_via_string_literal(neutral_root: Path) -> None
     )
 
 
+def test_does_not_flag_when_consumer_serializes_whole_instance_via_asdict(
+    neutral_root: Path,
+) -> None:
+    consumer_body = (
+        "from dataclasses import asdict\n"
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def serialize(configuration: ThemeUpdateConfig) -> dict[str, object]:\n"
+        "    return asdict(configuration)\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert issues == [], (
+        f"asdict reads every field at once, so no field may be flagged, got: {issues}"
+    )
+
+
+def test_does_not_flag_when_consumer_reads_instance_dict(neutral_root: Path) -> None:
+    consumer_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def serialize(configuration: ThemeUpdateConfig) -> dict[str, object]:\n"
+        "    return dict(configuration.__dict__)\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert issues == [], (
+        f"__dict__ read consumes every field at once, so none may be flagged, got: {issues}"
+    )
+
+
+def test_does_not_flag_field_used_only_as_replace_keyword(neutral_root: Path) -> None:
+    consumer_body = (
+        "from dataclasses import replace\n"
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def repoint(configuration: ThemeUpdateConfig) -> ThemeUpdateConfig:\n"
+        "    return replace(configuration, debug_port=9999)\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert not any("'debug_port'" in each_issue for each_issue in issues), (
+        f"replace keyword usage of debug_port must count as a read, got: {issues}"
+    )
+
+
+def test_does_not_flag_field_used_only_as_constructor_keyword(neutral_root: Path) -> None:
+    consumer_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def build() -> ThemeUpdateConfig:\n"
+        "    return ThemeUpdateConfig(portal_url='x', debug_port=1, timeout_seconds=99)\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert issues == [], (
+        f"Constructor keyword arguments name every field, so none may be flagged, got: {issues}"
+    )
+
+
 def test_returns_empty_list_at_file_cap(
     neutral_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

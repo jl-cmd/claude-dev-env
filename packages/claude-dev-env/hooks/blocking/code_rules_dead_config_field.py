@@ -18,10 +18,17 @@ The scan is deliberately conservative to keep false positives near zero:
   and migration modules are deliberately excluded so a field read only by test
   code is still flagged as dead-in-production.
 - Field reads are collected as ``ast.Attribute.attr`` values (``obj.field``),
-  string literals (covers ``getattr(obj, "field")``), and match-pattern keyword
-  attribute names (``case Config(field=found)``). Plain ``ast.Name`` references
-  are excluded — a local variable named ``debug_port`` is not a read of
-  ``config.debug_port``.
+  string literals (covers ``getattr(obj, "field")``), keyword-argument names
+  (covers ``ThemeUpdateConfig(debug_port=1)`` and ``replace(cfg, debug_port=1)``),
+  and match-pattern keyword attribute names (``case Config(field=found)``). Plain
+  ``ast.Name`` references are excluded — a local variable named ``debug_port`` is
+  not a read of ``config.debug_port``.
+- A production module that reflectively reads a whole instance — a call to
+  ``asdict``, ``astuple``, ``fields``, ``replace``, or ``vars``, or a read of
+  ``obj.__dict__`` — consumes every field at once without naming any single
+  field, so the check is suppressed for the whole tree (returns ``[]``). This
+  mirrors the per-file dead-dataclass-field check, which suppresses on the same
+  consumption patterns.
 - A scan root whose total file count exceeds the configured cap cannot prove any
   field dead, so the check returns ``[]`` on a cap hit.
 - A field read only by a module outside the resolved scan root is treated as dead
@@ -53,11 +60,13 @@ from code_rules_shared import (  # noqa: E402
 )
 
 from hooks_constants.dead_config_field_constants import (  # noqa: E402
+    ALL_REFLECTIVE_FIELD_CONSUMER_NAMES,
     CONFIG_CLASS_NAME_SUFFIX,
     DEAD_CONFIG_FIELD_GUIDANCE,
     MAX_DEAD_CONFIG_FIELD_ISSUES,
     MAX_SCAN_ROOT_FILE_COUNT,
     PYTHON_SOURCE_SUFFIX,
+    WHOLE_INSTANCE_DICT_ATTRIBUTE_NAME,
 )
 
 
@@ -74,25 +83,63 @@ def _is_config_dataclass(class_node: ast.ClassDef) -> bool:
     return _is_dataclass(class_node) and class_node.name.endswith(CONFIG_CLASS_NAME_SUFFIX)
 
 
-def _attribute_read_names_in_source(source: str) -> set[str]:
-    """Return the set of attribute names read anywhere in a module's source.
+def _reads_whole_instance_reflectively(tree: ast.Module) -> bool:
+    """Return whether a module consumes a whole instance via a reflective read.
+
+    Detects a call to any reflective whole-instance consumer (``asdict``,
+    ``astuple``, ``fields``, ``replace``, ``vars``) and a read of the
+    ``__dict__`` attribute. Each of these reads every field of an instance at
+    once without naming any single field, so a module that uses one cannot prove
+    a config field unread.
+
+    Args:
+        tree: The parsed module to inspect.
+
+    Returns:
+        True when the module calls a reflective whole-instance consumer or reads
+        ``obj.__dict__``.
+    """
+    for each_node in ast.walk(tree):
+        if isinstance(each_node, ast.Attribute):
+            if each_node.attr == WHOLE_INSTANCE_DICT_ATTRIBUTE_NAME:
+                return True
+            continue
+        if not isinstance(each_node, ast.Call):
+            continue
+        function_node = each_node.func
+        if isinstance(function_node, ast.Name) and function_node.id in ALL_REFLECTIVE_FIELD_CONSUMER_NAMES:
+            return True
+        if isinstance(function_node, ast.Attribute) and function_node.attr in ALL_REFLECTIVE_FIELD_CONSUMER_NAMES:
+            return True
+    return False
+
+
+def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
+    """Return attribute names read in a module's source and a suppression flag.
 
     Collects ``ast.Attribute.attr`` values in Load context, string literals
-    (so ``getattr(obj, "field")`` contributes ``"field"``), and
+    (so ``getattr(obj, "field")`` contributes ``"field"``), keyword-argument
+    names (so ``ThemeUpdateConfig(debug_port=1)`` and ``replace(cfg,
+    debug_port=1)`` each contribute ``"debug_port"``), and
     ``ast.MatchClass.kwd_attrs`` names (so ``case Config(field=x)`` contributes
-    ``"field"``). A ``SyntaxError`` contributes no names.
+    ``"field"``). The boolean reports whether the module reflectively reads a
+    whole instance (``asdict``/``astuple``/``fields``/``replace``/``vars`` call
+    or ``__dict__`` read), which the caller treats as "cannot prove any field
+    dead". A ``SyntaxError`` contributes no names and no suppression.
 
     Args:
         source: The full text of a ``.py`` module.
 
     Returns:
-        Every attribute name the module reads, via any of the three mechanisms
-        above.
+        A (read_names, reads_whole_instance) pair. The name set is every
+        attribute name the module reads via any of the four mechanisms above;
+        reads_whole_instance is True when a reflective whole-instance read is
+        present.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return set()
+        return set(), False
     all_read_names: set[str] = set()
     for each_node in ast.walk(tree):
         if isinstance(each_node, ast.Attribute) and isinstance(each_node.ctx, ast.Load):
@@ -101,21 +148,25 @@ def _attribute_read_names_in_source(source: str) -> set[str]:
             all_read_names.add(each_node.value)
         elif isinstance(each_node, ast.MatchClass):
             all_read_names.update(each_node.kwd_attrs)
-    return all_read_names
+        elif isinstance(each_node, ast.keyword) and each_node.arg is not None:
+            all_read_names.add(each_node.arg)
+    return all_read_names, _reads_whole_instance_reflectively(tree)
 
 
 def _all_production_read_names_under_root(
     scan_root: Path,
     written_path: Path,
     written_content: str,
-) -> tuple[set[str], bool]:
-    """Return attribute names read by production modules under the scan root.
+) -> tuple[set[str], bool, bool]:
+    """Return read names, a cap-hit flag, and a reflective-read flag for the tree.
 
     Scans every production ``.py`` module under ``scan_root`` (excluding test and
     migration files) for attribute reads. The written module's post-edit content
     replaces its on-disk text so the current edit is included. Scanning stops at
-    the configured file cap; the boolean signals the caller to treat a cap hit as
-    "cannot prove dead".
+    the configured file cap. A module that reflectively reads a whole instance
+    (``asdict``/``astuple``/``fields``/``replace``/``vars`` call or ``__dict__``
+    read) sets the reflective-read flag, signalling the caller that no field can
+    be proven dead.
 
     Args:
         scan_root: The directory tree to scan.
@@ -123,11 +174,13 @@ def _all_production_read_names_under_root(
         written_content: The post-edit text of the written module.
 
     Returns:
-        A (read_names, cap_was_hit) pair. The name set is the union of attribute
-        reads across every scanned production module; cap_was_hit is True when
-        the scan stopped at the configured file cap before finishing the tree.
+        A (read_names, cap_was_hit, reads_whole_instance) triple. The name set is
+        the union of attribute reads across every scanned production module;
+        cap_was_hit is True when the scan stopped at the configured file cap
+        before finishing the tree; reads_whole_instance is True when any scanned
+        module reflectively reads a whole instance.
     """
-    all_read_names = _attribute_read_names_in_source(written_content)
+    all_read_names, reads_whole_instance = _attribute_read_names_in_source(written_content)
     written_path_key = os.path.normcase(str(written_path))
     scanned_file_count = 1
     for each_path in scan_root.rglob("*" + PYTHON_SOURCE_SUFFIX):
@@ -141,13 +194,17 @@ def _all_production_read_names_under_root(
             continue
         scanned_file_count += 1
         if scanned_file_count > MAX_SCAN_ROOT_FILE_COUNT:
-            return all_read_names, True
+            return all_read_names, True, reads_whole_instance
         try:
             sibling_source = each_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        all_read_names |= _attribute_read_names_in_source(sibling_source)
-    return all_read_names, False
+        sibling_read_names, sibling_reads_whole_instance = _attribute_read_names_in_source(
+            sibling_source
+        )
+        all_read_names |= sibling_read_names
+        reads_whole_instance = reads_whole_instance or sibling_reads_whole_instance
+    return all_read_names, False, reads_whole_instance
 
 
 def check_dead_config_dataclass_fields(
@@ -158,17 +215,22 @@ def check_dead_config_dataclass_fields(
     Runs a cross-module scan restricted to ``@dataclass`` classes whose name ends
     in ``"Config"``. For each such config dataclass in the written file, every
     instance field whose name does not appear as an attribute read (``obj.field``),
-    string literal, or match-pattern keyword attribute in any production module
-    under the enclosing scan root is flagged as dead. Test and migration files are
-    exempt as write destinations; production modules under the scan root are scanned
-    while test and migration modules in the tree are excluded so fields read only
-    by test code are still flagged as dead-in-production. Whole-file analysis runs
-    against ``full_file_content`` when supplied so an Edit fragment is judged
-    against the reconstructed post-edit file. A scan root exceeding the file cap
-    returns ``[]`` (cannot prove dead). The scan root is resolved the same way as
-    the dead-module-constant check: a ``config/`` module's root is its parent
-    directory, a module in a package directory's root is the package's parent, and
-    a top-level module's root is its enclosing directory.
+    string literal, keyword-argument name (constructor or ``replace`` keyword), or
+    match-pattern keyword attribute in any production module under the enclosing
+    scan root is flagged as dead. When any production module under the scan root
+    reflectively reads a whole instance — a call to ``asdict``, ``astuple``,
+    ``fields``, ``replace``, or ``vars``, or a read of ``obj.__dict__`` — the
+    check is suppressed for the whole tree and returns ``[]``, since those
+    patterns read every field at once without naming any single field. Test and
+    migration files are exempt as write destinations; production modules under the
+    scan root are scanned while test and migration modules in the tree are excluded
+    so fields read only by test code are still flagged as dead-in-production.
+    Whole-file analysis runs against ``full_file_content`` when supplied so an Edit
+    fragment is judged against the reconstructed post-edit file. A scan root
+    exceeding the file cap returns ``[]`` (cannot prove dead). The scan root is
+    resolved the same way as the dead-module-constant check: a ``config/`` module's
+    root is its parent directory, a module in a package directory's root is the
+    package's parent, and a top-level module's root is its enclosing directory.
 
     Args:
         content: The new content under validation (Edit fragment or whole file).
@@ -201,12 +263,14 @@ def check_dead_config_dataclass_fields(
         return []
     scan_root = _scan_root_for_constants_module(file_path)
     written_path = Path(file_path).resolve()
-    all_read_names, cap_was_hit = _all_production_read_names_under_root(
+    all_read_names, cap_was_hit, reads_whole_instance = _all_production_read_names_under_root(
         scan_root,
         written_path,
         effective_content,
     )
     if cap_was_hit:
+        return []
+    if reads_whole_instance:
         return []
     all_issues: list[str] = []
     for each_class in all_config_classes:
