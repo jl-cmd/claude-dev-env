@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.62.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.62.0...claude-dev-env-v1.62.1) (2026-06-16)
+
+
+### Documentation
+
+* **pr-converge:** gotcha — named code-verifier never mints a verdict ([0612f8a](https://github.com/jl-cmd/claude-code-config/commit/0612f8a3be642f1d422f41f22b914ccff31f2ee8))
+* **pr-converge:** gotcha — named code-verifier never mints a verdict ([9be4f34](https://github.com/jl-cmd/claude-code-config/commit/9be4f34877cad2680a6de9bc994cbd31df448ea0))
+
 ## [1.62.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.61.0...claude-dev-env-v1.62.0) (2026-06-16)
 
 
