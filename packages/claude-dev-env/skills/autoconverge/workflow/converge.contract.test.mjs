@@ -220,37 +220,61 @@ test('the fix flow spawns a code-verifier step between the edit step and the com
   );
 });
 
-function constantBody(constantName) {
-  const constantStart = convergeSource.indexOf(`const ${constantName} =`);
-  assert.notEqual(constantStart, -1, `expected ${constantName} to exist`);
-  const nextConstantStart = convergeSource.indexOf('\nconst ', constantStart + 1);
-  const constantEnd = nextConstantStart === -1 ? convergeSource.length : nextConstantStart;
-  return convergeSource.slice(constantStart, constantEnd);
-}
-
-test('the shared verdict-fence steps name the binding-hash command and the verdict fence', () => {
-  const fenceSteps = constantBody('VERDICT_FENCE_STEPS');
-  assert.match(fenceSteps, /--manifest-hash/, 'expected the binding-hash command to be named');
+test('the shared verdict-fence builder names the binding-hash command and the verdict fence', () => {
+  const fenceBuilder = lensPromptBody('buildVerdictFenceSteps');
   assert.match(
-    fenceSteps,
+    fenceBuilder,
+    /--manifest-hash-for-branch/,
+    'expected the binding-hash command to use --manifest-hash-for-branch (cwd-immune)',
+  );
+  assert.doesNotMatch(
+    fenceBuilder,
+    /--manifest-hash(?!-for-branch)/,
+    'expected the old --manifest-hash <REPO> form to be removed in favour of --manifest-hash-for-branch',
+  );
+  assert.match(
+    fenceBuilder,
     /verification_verdict_store\.py/,
     'expected the verdict-store script that computes the binding hash to be named',
   );
-  assert.match(fenceSteps, /```verdict/, 'expected the verdict fence to be specified');
-  assert.match(fenceSteps, /manifest_sha256/, 'expected the verdict fence to carry manifest_sha256');
+  assert.match(fenceBuilder, /```verdict/, 'expected the verdict fence to be specified');
+  assert.match(fenceBuilder, /manifest_sha256/, 'expected the verdict fence to carry manifest_sha256');
+  assert.match(
+    fenceBuilder,
+    /gh pr view/,
+    'expected buildVerdictFenceSteps to resolve the head branch via gh pr view (cwd-immune)',
+  );
+  assert.match(
+    fenceBuilder,
+    /headRefName/,
+    'expected buildVerdictFenceSteps to extract the headRefName from gh pr view output',
+  );
 });
 
-test('every verify step reuses the shared verdict-fence steps, uses code-verifier, and forbids edits', () => {
+test('the verdict-fence binding does not self-resolve a cwd via git rev-parse for the manifest hash', () => {
+  const fenceBuilder = lensPromptBody('buildVerdictFenceSteps');
+  assert.doesNotMatch(
+    fenceBuilder,
+    /git rev-parse --show-toplevel/,
+    'expected the binding hash to be cwd-immune (no git rev-parse in the binding step)',
+  );
+});
+
+test('every verify step calls buildVerdictFenceSteps, uses code-verifier, and forbids edits', () => {
   for (const verifyFunctionName of [
     'verifyFixesInWorkingTree',
     'verifyRepairChanges',
-    'verifyHardeningChanges',
   ]) {
     const verifyBody = lensPromptBody(verifyFunctionName);
     assert.match(
       verifyBody,
-      /VERDICT_FENCE_STEPS/,
-      `expected ${verifyFunctionName} to reuse the shared VERDICT_FENCE_STEPS`,
+      /buildVerdictFenceSteps\(/,
+      `expected ${verifyFunctionName} to call buildVerdictFenceSteps (cwd-immune branch binding)`,
+    );
+    assert.doesNotMatch(
+      verifyBody,
+      /VERDICT_FENCE_STEPS(?!\s*\))/,
+      `expected ${verifyFunctionName} not to reference the removed VERDICT_FENCE_STEPS constant`,
     );
     assert.match(
       verifyBody,
@@ -266,6 +290,46 @@ test('every verify step reuses the shared verdict-fence steps, uses code-verifie
       verifyBody,
       /do no edits|make no edits|not edit|no file edits/i,
       `expected ${verifyFunctionName} to be told to make no edits`,
+    );
+  }
+});
+
+test('verifyHardeningChanges uses --manifest-hash-for-branch with the hardening branch, uses code-verifier, and forbids edits', () => {
+  const verifyBody = lensPromptBody('verifyHardeningChanges');
+  assert.match(
+    verifyBody,
+    /--manifest-hash-for-branch/,
+    'expected verifyHardeningChanges to bind by hardening branch (cwd-immune)',
+  );
+  assert.doesNotMatch(
+    verifyBody,
+    /--manifest-hash(?!-for-branch)/,
+    'expected verifyHardeningChanges not to use the old --manifest-hash <REPO> form',
+  );
+  assert.match(
+    verifyBody,
+    /agentType:\s*'code-verifier'/,
+    'expected verifyHardeningChanges to spawn the code-verifier agent type',
+  );
+  assert.doesNotMatch(
+    verifyBody,
+    /schema:/,
+    'expected verifyHardeningChanges to pass no schema so its verdict fence stays as assistant text',
+  );
+  assert.match(
+    verifyBody,
+    /do no edits|make no edits|not edit|no file edits/i,
+    'expected verifyHardeningChanges to be told to make no edits',
+  );
+});
+
+test('verifyFixesInWorkingTree and verifyRepairChanges pass input.owner, input.repo, input.prNumber to buildVerdictFenceSteps', () => {
+  for (const verifyFunctionName of ['verifyFixesInWorkingTree', 'verifyRepairChanges']) {
+    const verifyBody = lensPromptBody(verifyFunctionName);
+    assert.match(
+      verifyBody,
+      /buildVerdictFenceSteps\(input\.owner,\s*input\.repo,\s*input\.prNumber\)/,
+      `expected ${verifyFunctionName} to pass PR coordinates to buildVerdictFenceSteps`,
     );
   }
 });

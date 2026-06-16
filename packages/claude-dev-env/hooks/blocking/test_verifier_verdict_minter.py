@@ -37,6 +37,16 @@ minter_spec.loader.exec_module(minter_module)
 mint_for_payload = minter_module.mint_for_payload
 resolved_subagent_type = minter_module.resolved_subagent_type
 
+store_spec = importlib.util.spec_from_file_location(
+    "verification_verdict_store",
+    _HOOK_DIR / "verification_verdict_store.py",
+)
+assert store_spec is not None
+assert store_spec.loader is not None
+store_module = importlib.util.module_from_spec(store_spec)
+store_spec.loader.exec_module(store_module)
+empty_surface_hash = store_module.empty_surface_hash
+
 constants_spec = importlib.util.spec_from_file_location(
     "verified_commit_constants",
     _HOOK_DIR / "config" / "verified_commit_constants.py",
@@ -191,6 +201,93 @@ def test_settings_deny_verdict_directory_write() -> None:
 
 def test_settings_deny_verdict_directory_edit() -> None:
     assert "Edit($HOME/.claude/verification/**)" in _deny_rules()
+
+
+def test_minter_refuses_when_attested_hash_equals_empty_surface_hash(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo_with_upstream_and_edit(repo_root)
+    attested_empty = empty_surface_hash()
+    verdict_fence = json.dumps(
+        {"all_pass": True, "findings": [], "manifest_sha256": attested_empty}
+    )
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"ok\n```verdict\n{verdict_fence}\n```\n",
+                        }
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
+    payload = {
+        "agent_transcript_path": str(agent_transcript),
+        "cwd": str(repo_root),
+        "agent_id": "empty-surface-1",
+    }
+    assert mint_for_payload(payload) is None
+
+
+def test_minter_refuses_when_recomputed_surface_is_empty(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    subprocess.run(["git", "-C", str(repo_root), "init", "-q"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "user.email", "verifier@test"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "user.name", "verifier"],
+        check=True,
+    )
+    (repo_root / "module.py").write_text("answer = 1\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "-A"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-qm", "init"], check=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "branch", "-f", "origin/main", "HEAD"],
+        check=True,
+    )
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": 'ok\n```verdict\n{"all_pass": true, "findings": []}\n```\n',
+                        }
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
+    payload = {
+        "agent_transcript_path": str(agent_transcript),
+        "cwd": str(repo_root),
+        "agent_id": "empty-recompute-1",
+    }
+    assert mint_for_payload(payload) is None
 
 
 def test_attested_manifest_hash_binds_over_cwd_surface(tmp_path: pathlib.Path) -> None:

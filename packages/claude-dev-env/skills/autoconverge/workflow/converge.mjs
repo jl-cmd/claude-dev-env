@@ -141,15 +141,33 @@ const STANDARDS_EDIT_SCHEMA = {
   required: ['issueUrl', 'hardeningRepoPath', 'hardeningBranch', 'hardeningEdited', 'summary'],
 }
 
-const VERDICT_FENCE_STEPS =
-  `Compute the binding hash for the live surface by running exactly:\n` +
-  `   "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash "<REPO>"\n` +
-  `   (substitute the REPO path you resolved). That prints a single 64-char hex hash on stdout — capture it.\n` +
-  `Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
-  "   ```verdict\n" +
-  `   {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
-  "   ```\n" +
-  `   When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`
+/**
+ * Build the verdict-fence step instructions for a verify agent, binding the
+ * surface hash by branch name rather than by a self-resolved cwd. Resolving
+ * the branch via `gh pr view` is cwd-immune: it does not matter which worktree
+ * the verify agent runs in, so a launcher session whose cwd is a different
+ * worktree cannot poison the binding hash.
+ * @param {string} prOwner GitHub owner of the repo that holds the branch
+ * @param {string} prRepo GitHub repo name
+ * @param {number|string} prNumber PR number used to resolve the head branch
+ * @returns {string} binding-hash and verdict-fence instructions for a verify prompt
+ */
+function buildVerdictFenceSteps(prOwner, prRepo, prNumber) {
+  return (
+    `Compute the binding hash for the live surface:\n` +
+    `   a. Resolve the PR head branch (cwd-immune): run exactly\n` +
+    `         gh pr view ${prNumber} --repo ${prOwner}/${prRepo} --json headRefName -q .headRefName\n` +
+    `      Capture the branch name printed on stdout.\n` +
+    `   b. Run exactly:\n` +
+    `         "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "<that branch>"\n` +
+    `      (substitute the REPO path you resolved for the script path, and the branch name for <that branch>). That prints a single 64-char hex hash on stdout — capture it.\n` +
+    `Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
+    "   ```verdict\n" +
+    `   {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
+    "   ```\n" +
+    `   When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`
+  )
+}
 
 const CONVERGENCE_SUMMARY_SCHEMA = {
   type: 'object',
@@ -713,9 +731,9 @@ function verifyFixesInWorkingTree(head, findings, sourceLabel) {
     `You are the VERIFY step for ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The edit step left fixes in the working tree, uncommitted. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
       `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
       `Steps:\n` +
-      `1. Resolve the worktree repo root: REPO=$(git rev-parse --show-toplevel).\n` +
+      `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
       `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
-      `3. ${VERDICT_FENCE_STEPS}`,
+      `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
     { label: `fix-verify:${sourceLabel}`, phase: 'Converge', agentType: 'code-verifier' },
   )
 }
@@ -935,9 +953,9 @@ function verifyRepairChanges(head, failures) {
     `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
       `Concerns the working-tree repair must resolve (the gates the convergence check flagged):\n${failureBlock}\n\n` +
       `Steps:\n` +
-      `1. Resolve the worktree repo root: REPO=$(git rev-parse --show-toplevel).\n` +
+      `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
       `2. Verify the working tree against origin/main: any bot-thread code fix is correct test-first per CODE_RULES, and a rebase (if any) left a clean, conflict-free tree. Read the diff (git diff origin/main) and run the relevant tests and named gates.\n` +
-      `3. ${VERDICT_FENCE_STEPS}`,
+      `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
     { label: 'repair-verify', phase: 'Finalize', agentType: 'code-verifier' },
   )
 }
@@ -1044,22 +1062,32 @@ function standardsFollowUpEdit(head, findings, sourceLabel) {
 /**
  * Standards-hardening verify step: a code-verifier confirms the uncommitted
  * hooks/rules change staged in the hardening repo blocks the deferred violation
- * classes, computes the binding surface hash for that repo, and ends with a
- * verdict fence as plain assistant text (NO schema) — unlocking the
+ * classes, computes the binding surface hash for that repo by branch (cwd-immune),
+ * and ends with a verdict fence as plain assistant text (NO schema) — unlocking the
  * verified-commit gate for the cross-repo hardening commit. The verifier makes
  * no edits.
  * @param {string} hardeningRepoPath absolute path of the hardening repo checkout the edit staged
+ * @param {string} hardeningBranch the branch in the hardening repo that the edit staged the change on
  * @param {string} sourceLabel short description of where the findings came from
  * @returns {Promise<string>} the verifier transcript carrying the verdict fence
  */
-function verifyHardeningChanges(hardeningRepoPath, sourceLabel) {
+function verifyHardeningChanges(hardeningRepoPath, hardeningBranch, sourceLabel) {
   return convergeAgent(
     `You are the VERIFY step for an environment-hardening change (${sourceLabel}) staged in the working tree of ${hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
       `Concern the working-tree change must resolve: the edited hooks/rules block the code-standard violation classes from the deferred round at Write/Edit time, and a hook change carries a passing test per CODE_RULES.\n\n` +
       `Steps:\n` +
       `1. cd into ${hardeningRepoPath}, then resolve its repo root: REPO=$(git rev-parse --show-toplevel).\n` +
       `2. Verify the uncommitted working-tree change in REPO: read the diff (git diff) and run the hook/rule tests in that repo, confirming each violation class is now blocked.\n` +
-      `3. ${VERDICT_FENCE_STEPS}`,
+      `3. Compute the binding hash for the live surface:\n` +
+      `   The hardening branch is: ${hardeningBranch}\n` +
+      `   Run exactly:\n` +
+      `      "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "${hardeningBranch}"\n` +
+      `   (substitute the REPO path you resolved for the script path). That prints a single 64-char hex hash on stdout — capture it.\n` +
+      `   Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
+      "      ```verdict\n" +
+      `      {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
+      "      ```\n" +
+      `      When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`,
     { label: `standards-verify:${sourceLabel}`, phase: 'Converge', agentType: 'code-verifier' },
   )
 }
@@ -1123,7 +1151,7 @@ async function spawnStandardsFollowUp(head, findings, sourceLabel) {
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
     return { hardeningPrOpened: false }
   }
-  const verifyTranscript = await verifyHardeningChanges(editResult.hardeningRepoPath, sourceLabel)
+  const verifyTranscript = await verifyHardeningChanges(editResult.hardeningRepoPath, editResult.hardeningBranch, sourceLabel)
   if (!verdictPassed(verifyTranscript)) {
     return { hardeningPrOpened: false }
   }

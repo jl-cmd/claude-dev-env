@@ -41,6 +41,7 @@ from config.verified_commit_constants import (
 )
 from verification_verdict_store import (
     branch_surface_manifest,
+    empty_surface_hash,
     manifest_sha256,
     resolve_merge_base,
     resolve_repo_root,
@@ -185,6 +186,14 @@ def _attested_or_recomputed_hash(verdict_record: dict, repo_root: str) -> str | 
     minter recomputes one from the cwd work tree, which is correct whenever the
     verifier ran in the work tree it verified.
 
+    Returns None (mints nothing) in two empty-surface cases:
+
+    - The attested hash equals ``empty_surface_hash()`` — the verifier called
+      the store CLI on a wrong (empty) work tree and the hash it got back
+      represents nothing.
+    - The recompute branch produces an empty manifest — the cwd work tree also
+      has no changed or untracked files versus the merge base.
+
     Args:
         verdict_record: The parsed verdict fence from the verifier transcript.
         repo_root: The work-tree root resolved from the stop event's cwd, used
@@ -192,17 +201,21 @@ def _attested_or_recomputed_hash(verdict_record: dict, repo_root: str) -> str | 
 
     Returns:
         The attested ``manifest_sha256`` when the fence carries a non-empty
-        string one; otherwise the cwd work tree's recomputed surface hash, or
-        None when no upstream base or surface manifest resolves for it.
+        string one that is not the empty-surface sentinel; the cwd work tree's
+        recomputed surface hash when the fence attests nothing and the surface
+        is non-empty; or None when the attested hash is the empty-surface
+        sentinel, the surface manifest is empty, or no upstream base resolves.
     """
     attested_manifest_sha256 = verdict_record.get(VERDICT_KEY_MANIFEST_SHA256)
     if isinstance(attested_manifest_sha256, str) and attested_manifest_sha256:
+        if attested_manifest_sha256 == empty_surface_hash():
+            return None
         return attested_manifest_sha256
     merge_base_sha = resolve_merge_base(repo_root)
     if merge_base_sha is None:
         return None
     surface_manifest_text = branch_surface_manifest(repo_root, merge_base_sha)
-    if surface_manifest_text is None:
+    if not surface_manifest_text:
         return None
     return manifest_sha256(surface_manifest_text)
 
