@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.63.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.62.1...claude-dev-env-v1.63.0) (2026-06-16)
+
+
+### Features
+
+* **agents:** add code-advisor agent ([60bf451](https://github.com/jl-cmd/claude-code-config/commit/60bf451d1e04e79f9b96aa898b67b8e123cdf163))
+* **agents:** add code-advisor agent to claude-dev-env ([429b954](https://github.com/jl-cmd/claude-code-config/commit/429b954b81e1a63b231c79ef5605006907bcb30d))
+
+
+### Bug Fixes
+
+* **verified-commit:** accept verdicts cross-worktree via surface hash ([c5464da](https://github.com/jl-cmd/claude-code-config/commit/c5464dadd1f9e69abadca1cec1274fd7a9dfb316))
+* **verified-commit:** anchor verdict on surface hash; bring agent + skill into repo ([91bc704](https://github.com/jl-cmd/claude-code-config/commit/91bc7047511774180eeabaf375457eb2f2f65011))
+* **verified-commit:** bind verification to the work tree under review ([411a85b](https://github.com/jl-cmd/claude-code-config/commit/411a85b0e25291c474ab92d60497ace53e01cbf0))
+* **verified-commit:** bind verification to the work tree under review ([4724bea](https://github.com/jl-cmd/claude-code-config/commit/4724beaf46eb29bee605f47346249d9b664883fa))
+
+
+### Documentation
+
+* **autoconverge:** note grant-permissions classifier block and PR-branch positioning in pre-flight ([12d1394](https://github.com/jl-cmd/claude-code-config/commit/12d13943a9923379dca893722b12eda3224a620c))
+* **autoconverge:** note grant-permissions classifier block and PR-branch positioning in pre-flight ([fea218f](https://github.com/jl-cmd/claude-code-config/commit/fea218f52fb0c3ecf67da165dd8b3cd95b1851fd))
+
 ## [1.62.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.62.0...claude-dev-env-v1.62.1) (2026-06-16)
 
 
