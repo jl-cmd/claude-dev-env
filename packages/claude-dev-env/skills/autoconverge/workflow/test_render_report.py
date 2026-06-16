@@ -43,6 +43,31 @@ def _render_cli(journal_path: Path, out_path: Path) -> subprocess.CompletedProce
     )
 
 
+def test_rendered_report_defines_every_referenced_css_class(tmp_path: Path) -> None:
+    """Every class the rendered report markup references resolves to a CSS selector.
+
+    Renders the report from the findings fixture so the raw-findings appendix is
+    present, then asserts no class attribute names a style the stylesheet omits,
+    keeping the report markup and HTML_STYLE_BLOCK from drifting apart.
+    """
+    out_path = tmp_path / "report.html"
+    completed = _render_cli(FIXTURE_JOURNAL, out_path)
+    assert completed.returncode == 0, f"CLI failed:\n{completed.stderr}"
+    html_content = out_path.read_text(encoding="utf-8")
+
+    style_match = re.search(r"<style>(.*?)</style>", html_content, re.DOTALL)
+    assert style_match is not None
+    defined_classes = set(re.findall(r"\.([A-Za-z][\w-]*)", style_match.group(1)))
+    referenced_classes = {
+        each_name
+        for attribute_value in re.findall(r'class="([^"]*)"', html_content)
+        for each_name in attribute_value.split()
+    }
+
+    orphan_classes = referenced_classes - defined_classes
+    assert not orphan_classes, f"classes referenced but undefined: {sorted(orphan_classes)}"
+
+
 def _copy_run_tree_without_summary_entry(destination_root: Path) -> Path:
     """Copy the fixture run tree, dropping the convergence-summary workflowProgress entry.
 
