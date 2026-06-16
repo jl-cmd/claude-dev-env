@@ -128,11 +128,11 @@ Reference documents that rules and agents point to for detailed standards.
 | `DJANGO_PATTERNS.md` | Model patterns, view architecture, ORM best practices |
 | `PR_DESCRIPTION_GUIDE.md` | PR description structure and file-grouped format |
 
-### Agents (27)
+### Agents (28)
 
 Specialized agent prompts for common development tasks. Claude Code automatically discovers these and makes them available for delegation.
 
-**Code Quality:** clean-coder, code-quality-agent, readability-review-agent, refactoring-specialist, right-sized-engineer
+**Code Quality:** clean-coder, code-advisor, code-quality-agent, readability-review-agent, refactoring-specialist, right-sized-engineer
 
 **Testing:** tdd-test-writer, test-data-builder, validation-expert
 
