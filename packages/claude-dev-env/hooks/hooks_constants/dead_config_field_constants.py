@@ -5,6 +5,10 @@ UPPER_SNAKE constants satisfy the CODE_RULES "constants live in config"
 requirement and share a home with the other hook-tree configuration.
 """
 
+from hooks_constants.dead_dataclass_field_constants import (
+    ALL_REFLECTIVE_FIELD_CONSUMER_NAMES,
+    WHOLE_INSTANCE_DICT_ATTRIBUTE_NAME,
+)
 from hooks_constants.dead_module_constant_constants import (
     CONFIG_DIRECTORY_SEGMENT,
     DUNDER_INIT_FILENAME,
@@ -21,6 +25,7 @@ DEAD_CONFIG_FIELD_GUIDANCE: str = (
 )
 
 __all__ = [
+    "ALL_REFLECTIVE_FIELD_CONSUMER_NAMES",
     "CONFIG_CLASS_NAME_SUFFIX",
     "CONFIG_DIRECTORY_SEGMENT",
     "DEAD_CONFIG_FIELD_GUIDANCE",
@@ -28,4 +33,5 @@ __all__ = [
     "MAX_DEAD_CONFIG_FIELD_ISSUES",
     "MAX_SCAN_ROOT_FILE_COUNT",
     "PYTHON_SOURCE_SUFFIX",
+    "WHOLE_INSTANCE_DICT_ATTRIBUTE_NAME",
 ]
