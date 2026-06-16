@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.62.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.61.0...claude-dev-env-v1.62.0) (2026-06-16)
+
+
+### Features
+
+* **hooks:** add cross-module dead config-dataclass field check ([e351abd](https://github.com/jl-cmd/claude-code-config/commit/e351abd4a0f1778b781957c5314c5ebe6e783421))
+* **hooks:** add cross-module dead config-dataclass field check ([7351707](https://github.com/jl-cmd/claude-code-config/commit/7351707efd8932e31284352fdf6c33e196a68e68))
+* **hooks:** add on-the-fly verify-skip bypass marker to the commit gate ([cea7182](https://github.com/jl-cmd/claude-code-config/commit/cea71822e4f869aa8eae8a8144f633938cc3dc60))
+* **hooks:** add on-the-fly verify-skip bypass marker to the commit gate ([4c8504e](https://github.com/jl-cmd/claude-code-config/commit/4c8504ef114cf34854c3621545dc3b7a4cd60f2d))
+* **skills:** add /task-build skill with install wiring and task-tracking directive ([f0dfbf2](https://github.com/jl-cmd/claude-code-config/commit/f0dfbf2a9c40e4418308e0d6d7d06476e6554adb))
+* **skills:** add /task-build skill with install wiring and task-tracking directive ([0bec32a](https://github.com/jl-cmd/claude-code-config/commit/0bec32a608747ac6bcf734865acc3294f69f3c77))
+
+
+### Bug Fixes
+
+* **autoconverge:** define the report appendix CSS selectors ([24e0dc4](https://github.com/jl-cmd/claude-code-config/commit/24e0dc4a235b4100d423e150c7398825f4dd0532))
+* **autoconverge:** define the report appendix CSS selectors ([b2e0608](https://github.com/jl-cmd/claude-code-config/commit/b2e0608cb26c35b197416be6794b44d8c6c3974e))
+* **hooks:** close dead-config-field false positives for augmented-assignment and dunder reads ([1c7b32c](https://github.com/jl-cmd/claude-code-config/commit/1c7b32c92cb7a3628e184f401ff0278cc5bade3c))
+* **hooks:** keep cross-module dead-config check effective by narrowing whole-instance suppression ([c2fe6e7](https://github.com/jl-cmd/claude-code-config/commit/c2fe6e733db40289f6b228a709584ea7c101fc6a))
+* **hooks:** stop dead-config-field check from flagging reflectively-consumed fields ([decfb0f](https://github.com/jl-cmd/claude-code-config/commit/decfb0f8d32c2fbfdda3835a978e03d75aca77a8))
+
+
+### Documentation
+
+* **autoconverge:** flag verified-commit gate stalls; require user sign-off before a verify-skip bypass ([50e7116](https://github.com/jl-cmd/claude-code-config/commit/50e7116c900c83e78a3c98fa1d49c7c133c74f20))
+* **doc-gist:** add interactive decision sign-off example to the gallery ([94cff4d](https://github.com/jl-cmd/claude-code-config/commit/94cff4defc3134596e78c0afec24d3f98c0c22ec))
+* **doc-gist:** add interactive decision sign-off example to the gallery ([b7709ab](https://github.com/jl-cmd/claude-code-config/commit/b7709abc1909ef6c6594c6f7750b2fef78d8851b))
+
 ## [1.61.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.60.0...claude-dev-env-v1.61.0) (2026-06-15)
 
 
