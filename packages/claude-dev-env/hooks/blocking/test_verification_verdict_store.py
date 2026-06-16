@@ -32,6 +32,8 @@ manifest_sha256 = store_module.manifest_sha256
 workflow_verdict_covers_surface = store_module.workflow_verdict_covers_surface
 minted_verdict_covers_surface = store_module.minted_verdict_covers_surface
 write_verdict = store_module.write_verdict
+worktree_path_for_branch = store_module.worktree_path_for_branch
+empty_surface_hash = store_module.empty_surface_hash
 
 constants_spec = importlib.util.spec_from_file_location(
     "verified_commit_constants",
@@ -42,6 +44,8 @@ assert constants_spec.loader is not None
 constants_module = importlib.util.module_from_spec(constants_spec)
 constants_spec.loader.exec_module(constants_module)
 CORRECTIVE_MESSAGE = constants_module.CORRECTIVE_MESSAGE
+EMPTY_SURFACE_GUARD_MESSAGE = constants_module.EMPTY_SURFACE_GUARD_MESSAGE
+BRANCH_WORKTREE_ABSENT_MESSAGE = constants_module.BRANCH_WORKTREE_ABSENT_MESSAGE
 
 PRODUCTION_SOURCE = "def add(left: int, right: int) -> int:\n    return left + right\n"
 TEST_SOURCE = "def test_add() -> None:\n    assert 1 + 1 == 2\n"
@@ -557,3 +561,162 @@ def test_minted_verdict_covers_surface_false_when_directory_absent(
     fake_home.mkdir()
     _isolate_home(monkeypatch, fake_home)
     assert minted_verdict_covers_surface(MATCHING_MANIFEST_SHA256) is False
+
+
+def _make_repo_with_branch_worktree(
+    tmp_path: pathlib.Path, branch_name: str
+) -> tuple[pathlib.Path, pathlib.Path]:
+    """Create a repo with a branch checked out in a separate worktree.
+
+    Returns:
+        A tuple of (main worktree path, branch worktree path).
+    """
+    empty_hooks_dir = tmp_path / "nohooks"
+    empty_hooks_dir.mkdir()
+
+    main_dir = tmp_path / "main"
+    main_dir.mkdir()
+    _run_git(main_dir, "init", "--initial-branch=main")
+    _run_git(main_dir, "config", "user.email", "tests@example.com")
+    _run_git(main_dir, "config", "user.name", "Worktree Tests")
+    _run_git(main_dir, "config", "core.hooksPath", str(empty_hooks_dir))
+    (main_dir / "app.py").write_text(PRODUCTION_SOURCE, encoding="utf-8")
+    _run_git(main_dir, "add", "-A")
+    _run_git(main_dir, "commit", "-m", "base")
+
+    origin_dir = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "init", "--bare", "--initial-branch=main", str(origin_dir)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    _run_git(main_dir, "remote", "add", "origin", str(origin_dir))
+    _run_git(main_dir, "push", "-u", "origin", "main")
+
+    _run_git(main_dir, "branch", branch_name)
+
+    branch_worktree_dir = tmp_path / "branch-worktree"
+    _run_git(main_dir, "worktree", "add", str(branch_worktree_dir), branch_name)
+
+    return main_dir, branch_worktree_dir
+
+
+def test_worktree_path_for_branch_returns_path_when_branch_present(
+    tmp_path: pathlib.Path,
+) -> None:
+    _main_dir, branch_worktree_dir = _make_repo_with_branch_worktree(
+        tmp_path, "feature-x"
+    )
+    resolved_path = worktree_path_for_branch(str(branch_worktree_dir), "feature-x")
+    assert resolved_path is not None
+    assert pathlib.Path(resolved_path).resolve() == branch_worktree_dir.resolve()
+
+
+def test_worktree_path_for_branch_returns_none_when_branch_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    main_dir, _branch_worktree_dir = _make_repo_with_branch_worktree(
+        tmp_path, "feature-x"
+    )
+    resolved_path = worktree_path_for_branch(str(main_dir), "branch-never-checked-out")
+    assert resolved_path is None
+
+
+def test_empty_surface_hash_equals_hash_of_empty_string() -> None:
+    assert empty_surface_hash() == manifest_sha256("")
+
+
+def test_manifest_hash_cli_empty_surface_writes_guard_message_to_stderr(
+    tmp_path: pathlib.Path,
+) -> None:
+    work_dir = _make_repo_with_origin(tmp_path)
+    completed_process = subprocess.run(
+        [
+            sys.executable,
+            str(_HOOK_DIR / "verification_verdict_store.py"),
+            "--manifest-hash",
+            str(work_dir),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert completed_process.returncode != 0
+    assert completed_process.stdout.strip() == ""
+    lowered_stderr = completed_process.stderr.lower()
+    assert "wrong work tree" in lowered_stderr or "empty" in lowered_stderr
+
+
+def test_manifest_hash_cli_empty_surface_prints_nothing_on_stdout(
+    tmp_path: pathlib.Path,
+) -> None:
+    work_dir = _make_repo_with_origin(tmp_path)
+    completed_process = subprocess.run(
+        [
+            sys.executable,
+            str(_HOOK_DIR / "verification_verdict_store.py"),
+            "--manifest-hash",
+            str(work_dir),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert completed_process.stdout.strip() == ""
+
+
+def test_manifest_hash_for_branch_cli_prints_same_hash_as_explicit_dir(
+    tmp_path: pathlib.Path,
+) -> None:
+    _main_dir, branch_worktree_dir = _make_repo_with_branch_worktree(
+        tmp_path, "feature-branch"
+    )
+    (branch_worktree_dir / "app.py").write_text(
+        "def add(left: int, right: int) -> int:\n    return left - right\n",
+        encoding="utf-8",
+    )
+    direct_process = subprocess.run(
+        [
+            sys.executable,
+            str(_HOOK_DIR / "verification_verdict_store.py"),
+            "--manifest-hash",
+            str(branch_worktree_dir),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    branch_process = subprocess.run(
+        [
+            sys.executable,
+            str(_HOOK_DIR / "verification_verdict_store.py"),
+            "--manifest-hash-for-branch",
+            "feature-branch",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=str(branch_worktree_dir),
+    )
+    assert direct_process.stdout.strip() == branch_process.stdout.strip()
+    assert direct_process.stdout.strip() != ""
+
+
+def test_manifest_hash_for_branch_cli_returns_nonzero_when_branch_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    main_dir, _branch_worktree_dir = _make_repo_with_branch_worktree(
+        tmp_path, "feature-branch"
+    )
+    completed_process = subprocess.run(
+        [
+            sys.executable,
+            str(_HOOK_DIR / "verification_verdict_store.py"),
+            "--manifest-hash-for-branch",
+            "branch-never-checked-out",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(main_dir),
+    )
+    assert completed_process.returncode != 0
+    assert completed_process.stdout.strip() == ""

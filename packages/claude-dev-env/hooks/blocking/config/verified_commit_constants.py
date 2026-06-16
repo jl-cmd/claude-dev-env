@@ -62,6 +62,21 @@ TRANSCRIPT_TEXT_CONTENT_TYPE = "text"
 TRANSCRIPT_TEXT_KEY = "text"
 VERDICT_FENCE_PATTERN = r"```verdict\s*\n(.*?)```"
 MANIFEST_HASH_CLI_FLAG = "--manifest-hash"
+MANIFEST_HASH_FOR_BRANCH_CLI_FLAG = "--manifest-hash-for-branch"
+WORKTREE_LIST_PATH_PREFIX = "worktree "
+WORKTREE_LIST_BRANCH_PREFIX = "branch "
+BRANCH_REFERENCE_PREFIX = "refs/heads/"
+EMPTY_SURFACE_GUARD_MESSAGE = (
+    "ERROR: The work tree at {repo_root} has no changed or untracked files "
+    "versus origin/main (empty change surface). This work tree holds nothing "
+    "to verify — you are pointed at the wrong work tree. Run `git worktree list` "
+    "to see all checked-out work trees and target the one on the branch under review."
+)
+BRANCH_WORKTREE_ABSENT_MESSAGE = (
+    "ERROR: No work tree has branch '{branch}' checked out. "
+    "Check it out in a work tree first: "
+    "`git worktree add <path> <branch>` or `git checkout <branch>`."
+)
 DOCS_ONLY_EXTENSIONS = frozenset(
     {".md", ".txt", ".rst", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico"}
 )

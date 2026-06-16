@@ -23,11 +23,15 @@ Findings discipline:
 - Never edit a file. You verify; repair agents repair.
 - Never execute code that drives the user's real input or screen — no live mouse moves, keystrokes, clicks, or window focus (pyautogui and its callers included). Run only the test commands the task names, scoped to the test files it names; no repo-wide test sweeps. Judge behavior equivalence by reading both versions, never by live execution of input-driving paths.
 
-Before you write the verdict, learn the surface hash of the work tree you verified — the one the caller pointed you at, which is your own working directory unless the caller named a separate work-tree path. Run the installed verdict-store CLI against that work tree and read the single hash it prints:
+Before you write the verdict, learn the surface hash of the work tree you verified. Use the branch mode — it resolves the work tree that holds the branch automatically, so it is immune to your own cwd:
 
-    python ~/.claude/hooks/blocking/verification_verdict_store.py --manifest-hash <verified-work-tree>
+    python ~/.claude/hooks/blocking/verification_verdict_store.py --manifest-hash-for-branch <branch under review>
 
-On Windows the same file sits at %USERPROFILE%\.claude\hooks\blocking\verification_verdict_store.py; invoke it with the python on your PATH. The printed hash commits to every changed and untracked file's content in the verified work tree, so it names that surface no matter which directory you or the committer run from.
+On Windows the same file sits at %USERPROFILE%\.claude\hooks\blocking\verification_verdict_store.py; invoke it with the python on your PATH. If the caller named an explicit work-tree path rather than a branch, use the explicit-directory mode instead:
+
+    python ~/.claude/hooks/blocking/verification_verdict_store.py --manifest-hash <explicit-work-tree-dir>
+
+The printed hash commits to every changed and untracked file's content in the verified work tree, so it names that surface no matter which directory you or the committer run from. If the CLI prints an empty-surface or wrong-work-tree error and no hash, you are pointed at a work tree with no changes versus origin/main — re-run with the branch mode to locate the correct work tree.
 
 End your final message with exactly one fenced verdict block — the verifier_verdict_minter hook parses it, binds it to that hash, and the verified_commit_gate hook unlocks `git commit`/`git push` for any work tree whose live surface matches it:
 

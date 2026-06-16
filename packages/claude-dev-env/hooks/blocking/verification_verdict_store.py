@@ -29,12 +29,16 @@ from config.verified_commit_constants import (
     AGENT_META_SIDECAR_SUFFIX,
     AGENT_META_TYPE_KEY,
     AGENT_TRANSCRIPT_GLOB,
+    BRANCH_REFERENCE_PREFIX,
+    BRANCH_WORKTREE_ABSENT_MESSAGE,
     CLAUDE_HOME_DIRECTORY_NAME,
     CONFTEST_FILE_NAME,
     DOCS_ONLY_EXTENSIONS,
     ALL_FALLBACK_BASE_REFERENCES,
+    EMPTY_SURFACE_GUARD_MESSAGE,
     GIT_TIMEOUT_SECONDS,
     MANIFEST_HASH_CLI_FLAG,
+    MANIFEST_HASH_FOR_BRANCH_CLI_FLAG,
     MINIMUM_STATUS_FIELD_COUNT,
     MINTING_AGENT_TYPE,
     PYTHON_EXTENSION,
@@ -57,6 +61,8 @@ from config.verified_commit_constants import (
     VERDICT_KEY_ALL_PASS,
     VERDICT_KEY_FINDINGS,
     VERDICT_KEY_MANIFEST_SHA256,
+    WORKTREE_LIST_BRANCH_PREFIX,
+    WORKTREE_LIST_PATH_PREFIX,
 )
 
 
@@ -242,6 +248,52 @@ def manifest_sha256(surface_manifest_text: str) -> str:
         The hex sha256 digest of the encoded manifest text.
     """
     return hashlib.sha256(surface_manifest_text.encode("utf-8")).hexdigest()
+
+
+def empty_surface_hash() -> str:
+    """Return the manifest hash that represents an empty change surface.
+
+    A work tree whose HEAD equals the merge base has no changed or untracked
+    files, so ``branch_surface_manifest`` returns ``""`` and this hash is what
+    the minter or store CLI would produce for it. Comparing an attested hash
+    against this value lets the minter refuse to mint for a verifier that ran
+    in the wrong work tree.
+
+    Returns:
+        The hex sha256 digest of the empty surface manifest (the empty string).
+    """
+    return manifest_sha256("")
+
+
+def worktree_path_for_branch(repo_directory: str, branch_name: str) -> str | None:
+    """Find the work-tree directory that has a given branch checked out.
+
+    Parses the porcelain output of ``git worktree list --porcelain`` and
+    returns the ``worktree <path>`` line whose block carries a
+    ``branch refs/heads/<branch_name>`` line. Returns None when git fails
+    or no work tree holds the branch.
+
+    Args:
+        repo_directory: Any directory inside the repository.
+        branch_name: The short branch name to locate (without ``refs/heads/``).
+
+    Returns:
+        The absolute path of the work tree that has the branch checked out,
+        or None when no work tree holds the branch or git fails.
+    """
+    porcelain_output = run_git(repo_directory, "worktree", "list", "--porcelain")
+    if porcelain_output is None:
+        return None
+    target_branch_reference = f"{BRANCH_REFERENCE_PREFIX}{branch_name}"
+    current_worktree_path: str | None = None
+    for each_line in porcelain_output.splitlines():
+        if each_line.startswith(WORKTREE_LIST_PATH_PREFIX):
+            current_worktree_path = each_line[len(WORKTREE_LIST_PATH_PREFIX):]
+        elif each_line.startswith(WORKTREE_LIST_BRANCH_PREFIX):
+            branch_reference = each_line[len(WORKTREE_LIST_BRANCH_PREFIX):]
+            if branch_reference == target_branch_reference and current_worktree_path:
+                return current_worktree_path
+    return None
 
 
 def verdict_directory() -> Path:
@@ -697,14 +749,18 @@ def _print_live_manifest_hash(repo_directory: str) -> int:
     """Print the live surface manifest hash for a repo, for a workflow verifier.
 
     A workflow code-verifier runs this to learn the exact hash to bind its
-    verdict to, so stdout carries only the hash and nothing else.
+    verdict to, so stdout carries only the hash and nothing else. When the
+    work tree has no changed or untracked files (empty change surface), this
+    prints the empty-surface guard message to stderr and returns nonzero —
+    an empty surface means the verifier is pointed at the wrong work tree.
 
     Args:
         repo_directory: A directory inside the work tree to bind the verdict to.
 
     Returns:
-        0 after printing the hash; nonzero with no stdout when the repo root or
-        merge base cannot be resolved.
+        0 after printing the hash; nonzero with no stdout when the repo root,
+        merge base, or manifest cannot be resolved, or when the change surface
+        is empty (wrong work tree).
     """
     repo_root = resolve_repo_root(repo_directory)
     if repo_root is None:
@@ -715,20 +771,69 @@ def _print_live_manifest_hash(repo_directory: str) -> int:
     surface_manifest_text = branch_surface_manifest(repo_root, merge_base_sha)
     if surface_manifest_text is None:
         return 1
+    if surface_manifest_text == "":
+        print(EMPTY_SURFACE_GUARD_MESSAGE.format(repo_root=repo_root), file=sys.stderr)
+        return 1
     print(manifest_sha256(surface_manifest_text))
     return 0
+
+
+def _print_branch_manifest_hash(branch_name: str) -> int:
+    """Print the manifest hash for the work tree that holds a given branch.
+
+    Resolves the repository root from the current working directory, then
+    finds the work tree that has ``branch_name`` checked out, and delegates
+    to ``_print_live_manifest_hash`` for that work tree. This mode is immune
+    to the verifier's own cwd: it always hashes the work tree that holds the
+    branch under review, regardless of where the verifier itself is running.
+
+    Args:
+        branch_name: The short branch name to locate (without ``refs/heads/``).
+
+    Returns:
+        0 after printing the hash; nonzero with a stderr message when the
+        repo root cannot be resolved, no work tree holds the branch, or the
+        located work tree has an empty change surface.
+    """
+    repo_root = resolve_repo_root(str(Path.cwd()))
+    if repo_root is None:
+        print("ERROR: Current directory is not inside a git repository.", file=sys.stderr)
+        return 1
+    branch_worktree_path = worktree_path_for_branch(repo_root, branch_name)
+    if branch_worktree_path is None:
+        print(
+            BRANCH_WORKTREE_ABSENT_MESSAGE.format(branch=branch_name),
+            file=sys.stderr,
+        )
+        return 1
+    return _print_live_manifest_hash(branch_worktree_path)
 
 
 def main() -> None:
     """Run the verdict-store CLI: compute the live surface-manifest hash.
 
-    Reads ``--manifest-hash <repo_root>`` from argv and prints the live
-    ``manifest_sha256`` so a workflow code-verifier can bind its verdict to the
-    exact surface the gate checks. Exits nonzero with no stdout on any other
-    argument shape or when the surface cannot be resolved.
+    Two modes:
+
+    ``--manifest-hash <work-tree-dir>``
+        Print the live ``manifest_sha256`` for the given work tree directory
+        so a workflow code-verifier can bind its verdict to the exact surface
+        the gate checks. Fails with a stderr message when the change surface
+        is empty (wrong work tree).
+
+    ``--manifest-hash-for-branch <branch>``
+        Resolve the work tree that has ``<branch>`` checked out (via
+        ``git worktree list --porcelain``) and print its manifest hash.
+        Immune to the verifier's own cwd — always targets the branch's own
+        work tree. Fails when no work tree holds the branch or the surface
+        is empty.
+
+    Exits nonzero with no stdout on any other argument shape or when the
+    surface cannot be resolved.
     """
     if len(sys.argv) == 3 and sys.argv[1] == MANIFEST_HASH_CLI_FLAG:
         sys.exit(_print_live_manifest_hash(sys.argv[2]))
+    if len(sys.argv) == 3 and sys.argv[1] == MANIFEST_HASH_FOR_BRANCH_CLI_FLAG:
+        sys.exit(_print_branch_manifest_hash(sys.argv[2]))
     sys.exit(1)
 
 
