@@ -6,6 +6,7 @@ decide what to gate.
 """
 
 import importlib.util
+import io
 import json
 import os
 import pathlib
@@ -28,6 +29,7 @@ gate_module = importlib.util.module_from_spec(gate_spec)
 gate_spec.loader.exec_module(gate_module)
 gated_repo_directories = gate_module.gated_repo_directories
 deny_reason_for_directory = gate_module.deny_reason_for_directory
+gate_main = gate_module.main
 
 store_spec = importlib.util.spec_from_file_location(
     "verification_verdict_store",
@@ -493,3 +495,33 @@ def test_no_verdict_of_either_kind_denies_the_commit(
     deny_reason = deny_reason_for_directory(str(work_dir), str(transcript_path))
     assert deny_reason is not None
     assert "VERIFIED_COMMIT_GATE" in deny_reason
+
+
+def _run_gate_main(
+    monkeypatch: pytest.MonkeyPatch, command_text: str, work_dir: pathlib.Path
+) -> None:
+    payload_text = json.dumps(
+        {
+            "tool_name": "Bash",
+            "tool_input": {"command": command_text},
+            "cwd": str(work_dir),
+            "transcript_path": "",
+        }
+    )
+    monkeypatch.setattr(sys, "stdin", io.StringIO(payload_text))
+    gate_main()
+
+
+def test_verification_bypass_marker_allows_an_otherwise_gated_commit(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: pathlib.Path,
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    work_dir = _make_gated_repo(tmp_path)
+    _run_gate_main(monkeypatch, "git commit -m x", work_dir)
+    assert "VERIFIED_COMMIT_GATE" in capsys.readouterr().out
+    _run_gate_main(monkeypatch, "git commit -m x # verify-skip", work_dir)
+    assert capsys.readouterr().out == ""
