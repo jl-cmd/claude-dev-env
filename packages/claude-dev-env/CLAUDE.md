@@ -105,9 +105,8 @@ Before any coding task, call the `initial_instructions` tool to load the Serena 
 
 ### Tool hierarchy for code navigation
 1. **Serena** — symbol-level navigation (declarations, references, implementations, rename)
-2. **Zoekt MCP** (`mcp__zoekt__*`) — content/text search within indexed repos
-3. **Everything** (`everything_search`) — file-system search by name/path/extension
-4. **Grep/Glob** — fallback pattern matching
+2. **Everything** (`everything_search`) — file-system search by name/path/extension
+3. **Grep/Glob** — content and pattern matching
 
 ## Everything Search (MCP Tool)
 
@@ -115,13 +114,12 @@ This machine has **Everything (voidtools)** running with an HTTP server on port 
 The `everything_search` MCP tool is available in every session.
 
 ### Use Everything for file-system searches
-Use `everything_search` for finding files by name, path, extension, size, or date. For content searches within Zoekt-indexed repos, prefer `mcp__zoekt__search` — Everything's `content:` search is the fallback when Zoekt is unavailable or returns nothing.
+Use `everything_search` for finding files by name, path, extension, size, or date. For content searches, use Grep — Everything's `content:` search is a fallback when Grep returns nothing.
 
 ### Fallback order
-1. **Zoekt MCP** (`mcp__zoekt__search`) — content search within indexed repos
-2. **Everything** (`everything_search`) — file-system search by name/path/extension/size/date, and content search outside indexed repos
-3. **Grep** — complex regex content searches if Everything's `content:` returns nothing
-4. **Glob** — precise relative-path pattern matching within the current project
+1. **Everything** (`everything_search`) — file-system search by name/path/extension/size/date, and content search
+2. **Grep** — complex regex content searches if Everything's `content:` returns nothing
+3. **Glob** — precise relative-path pattern matching within the current project
 
 ### Search syntax quick reference
 - `ext:py` — find by extension (multiple: `ext:ts;js`)
