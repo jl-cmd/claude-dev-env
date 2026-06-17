@@ -66,18 +66,25 @@ def _dest_from_option_string(option_string: str) -> str:
     return option_string.lstrip(OPTION_PREFIX).replace(DEST_WORD_SEPARATOR, DEST_WORD_JOINER)
 
 
+def _has_keyword_argument(call_node: ast.Call, keyword_name: str) -> bool:
+    """Return whether the call passes a keyword argument with the given name."""
+    return any(each_keyword.arg == keyword_name for each_keyword in call_node.keywords)
+
+
 def _argument_dest_name(call_node: ast.Call) -> str | None:
     """Return the dest name an optional add_argument call declares, or None.
 
-    A ``dest="name"`` keyword wins outright. Otherwise the dest derives from the
-    first long option (``--repo`` -> ``repo``, ``--dry-run`` -> ``dry_run``) and
-    falls back to the first short option when no long option is present. A bare
-    positional argument (no leading dash) is a required positional, never an
-    optional flag, and yields None so the caller skips it.
+    A ``dest=`` keyword determines the dest outright: a string-literal value
+    (``dest="name"``) names it, while a non-literal ``dest=`` (a variable or
+    expression whose value the static scan cannot resolve) makes the real dest
+    unknowable, so the argument is skipped (None). Without a ``dest=`` keyword the
+    dest derives from the first long option (``--repo`` -> ``repo``, ``--dry-run``
+    -> ``dry_run``) and falls back to the first short option when no long option
+    is present. A bare positional argument (no leading dash) is a required
+    positional, never an optional flag, and yields None so the caller skips it.
     """
-    explicit_dest = _keyword_string_literal(call_node, DEST_KEYWORD_NAME)
-    if explicit_dest is not None:
-        return explicit_dest
+    if _has_keyword_argument(call_node, DEST_KEYWORD_NAME):
+        return _keyword_string_literal(call_node, DEST_KEYWORD_NAME)
     option_strings = _option_string_arguments(call_node)
     if not option_strings:
         return None

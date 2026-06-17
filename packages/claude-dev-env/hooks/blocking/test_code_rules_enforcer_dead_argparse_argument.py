@@ -121,6 +121,21 @@ def test_should_respect_explicit_dest_when_read() -> None:
     assert _check(source, PRODUCTION_FILE_PATH) == []
 
 
+def test_should_skip_argument_with_non_literal_dest() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "DEST_NAME = 'repository'\n"
+        "\n"
+        "def build() -> str:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', dest=DEST_NAME)\n"
+        "    parsed_arguments = argument_parser.parse_args()\n"
+        "    return parsed_arguments.repository\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
 def test_should_derive_dest_from_dashed_long_option() -> None:
     source = (
         "import argparse\n"
