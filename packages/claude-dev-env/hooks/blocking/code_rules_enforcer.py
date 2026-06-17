@@ -52,6 +52,9 @@ from code_rules_constants_config import (  # noqa: E402
     check_constants_outside_config_advisory,
     check_file_global_constants_use_count,
 )
+from code_rules_dead_argparse_argument import (  # noqa: E402
+    check_dead_argparse_arguments,
+)
 from code_rules_dead_config_field import (  # noqa: E402
     check_dead_config_dataclass_fields,
 )
@@ -281,6 +284,9 @@ def validate_content(
         )
         all_issues.extend(
             check_dead_dataclass_fields(content, file_path, full_file_content)
+        )
+        all_issues.extend(
+            check_dead_argparse_arguments(content, file_path, full_file_content)
         )
         all_issues.extend(
             check_dead_config_dataclass_fields(content, file_path, full_file_content)
