@@ -9,6 +9,8 @@ MARKDOWN_EXTENSION: str = ".md"
 
 PLANS_PATH_SEGMENT: str = "/.claude/plans/"
 PLANS_PATH_PREFIX: str = ".claude/plans/"
+DOCS_PLANS_PATH_SEGMENT: str = "/docs/plans/"
+DOCS_PLANS_PATH_PREFIX: str = "docs/plans/"
 
 PLAN_FILE_ENCODING: str = "utf-8"
 
@@ -25,6 +27,8 @@ INLINE_CODE_PATTERN: Pattern[str] = compile(r"``[^`\n]+``|`[^`\n]+`")
 
 __all__ = [
     "CODE_FENCE_PATTERN",
+    "DOCS_PLANS_PATH_PREFIX",
+    "DOCS_PLANS_PATH_SEGMENT",
     "INLINE_CODE_PATTERN",
     "MARKDOWN_EXTENSION",
     "OPEN_QUESTIONS_HEADING_PATTERN",

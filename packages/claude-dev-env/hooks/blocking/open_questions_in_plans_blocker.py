@@ -20,6 +20,8 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.open_questions_in_plans_blocker_constants import (  # noqa: E402
     CODE_FENCE_PATTERN,
+    DOCS_PLANS_PATH_PREFIX,
+    DOCS_PLANS_PATH_SEGMENT,
     INLINE_CODE_PATTERN,
     MARKDOWN_EXTENSION,
     OPEN_QUESTIONS_HEADING_PATTERN,
@@ -40,6 +42,10 @@ def _is_inside_plans_directory(file_path: str) -> bool:
     if PLANS_PATH_SEGMENT in normalized:
         return True
     if normalized.startswith(PLANS_PATH_PREFIX):
+        return True
+    if DOCS_PLANS_PATH_SEGMENT in normalized:
+        return True
+    if normalized.startswith(DOCS_PLANS_PATH_PREFIX):
         return True
     return False
 
