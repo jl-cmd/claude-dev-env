@@ -808,7 +808,7 @@ function recoverCommitBlockEdit(head, blockerDetail, sourceLabel, attempt) {
   )
 }
 
-const FIX_RECOVERY_MAX_ATTEMPTS = 2
+const FIX_RECOVERY_MAX_ATTEMPTS = 4
 
 /**
  * Run a commit step and, when it is blocked by a commit-time hook or gate that
