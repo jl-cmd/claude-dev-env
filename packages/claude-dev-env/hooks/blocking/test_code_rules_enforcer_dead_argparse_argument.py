@@ -305,6 +305,56 @@ def test_should_not_flag_when_dest_read_via_literal_getattr() -> None:
     assert _check(source, PRODUCTION_FILE_PATH) == []
 
 
+def test_should_suppress_when_namespace_stored_on_attribute_target() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "class App:\n"
+        "    def build(self) -> None:\n"
+        "        argument_parser = argparse.ArgumentParser()\n"
+        "        argument_parser.add_argument('--repo', default='.')\n"
+        "        argument_parser.add_argument('--verbose', action='store_true')\n"
+        "        self.parsed_arguments = argument_parser.parse_args()\n"
+        "\n"
+        "    def run(self) -> dict:\n"
+        "        return dict(**vars(self.parsed_arguments))\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_suppress_when_parse_method_is_aliased() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def run(parsed_arguments: argparse.Namespace) -> None:\n"
+        "    print('run')\n"
+        "\n"
+        "def build() -> None:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    parse = argument_parser.parse_args\n"
+        "    parsed_arguments = parse()\n"
+        "    run(parsed_arguments)\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_suppress_when_namespace_forwarded_inside_container() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def run(payload: dict) -> None:\n"
+        "    print('run')\n"
+        "\n"
+        "def build() -> None:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    parsed_arguments = argument_parser.parse_args()\n"
+        "    run({'args': parsed_arguments})\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
 def test_validate_content_runs_dead_argparse_check() -> None:
     source = (
         "import argparse\n"

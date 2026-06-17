@@ -263,10 +263,20 @@ def _namespace_variable_names(tree: ast.Module) -> set[str]:
 def _namespace_escapes(tree: ast.Module, all_namespace_names: set[str]) -> bool:
     """Return whether a namespace variable is consumed in a way that hides reads.
 
-    A namespace whose attributes the static scan cannot see — forwarded as a bare
-    argument to a call, double-star unpacked, passed to ``vars``, or read through
-    ``__dict__`` — makes any single dest unprovably dead, so the check suppresses.
+    A namespace whose attributes the static scan cannot see makes any single dest
+    unprovably dead, so the check suppresses. Each of the following is such an
+    escape: a namespace forwarded as a bare argument to a call, double-star
+    unpacked, passed to ``vars``, or read through ``__dict__``; a namespace Name
+    nested anywhere inside a call's argument subtrees (for example inside a
+    container literal), unless it is only the value of an attribute read; a
+    ``parse_args``/``parse_known_args`` result bound to an attribute- or
+    subscript-target the scan cannot track; and a ``parse_args``/``parse_known_args``
+    bound method referenced as an aliased value rather than called inline.
     """
+    if _parse_method_is_aliased(tree):
+        return True
+    if _parse_result_binds_untracked_target(tree):
+        return True
     for each_node in ast.walk(tree):
         if (
             isinstance(each_node, ast.Attribute)
@@ -288,18 +298,98 @@ def _references_namespace(node: ast.expr, all_namespace_names: set[str]) -> bool
     return isinstance(node, ast.Name) and node.id in all_namespace_names
 
 
+def _argument_subtree_forwards_namespace(
+    argument_node: ast.expr, all_namespace_names: set[str]
+) -> bool:
+    """Return whether a namespace Name appears anywhere inside an argument subtree.
+
+    A namespace nested inside a container literal (``run({'args': namespace})``)
+    forwards the whole namespace object, so its attributes escape static view. A
+    Name that is only the ``.value`` of an ``ast.Attribute`` (``namespace.repo``)
+    is a per-attribute read, not a forward of the namespace object, and is skipped
+    so true-positive detection of a single dead dest survives.
+    """
+    all_attribute_value_name_ids = {
+        id(each_descendant.value)
+        for each_descendant in ast.walk(argument_node)
+        if isinstance(each_descendant, ast.Attribute)
+    }
+    for each_descendant in ast.walk(argument_node):
+        if not isinstance(each_descendant, ast.Name):
+            continue
+        if each_descendant.id not in all_namespace_names:
+            continue
+        if id(each_descendant) in all_attribute_value_name_ids:
+            continue
+        return True
+    return False
+
+
 def _call_forwards_namespace(call_node: ast.Call, all_namespace_names: set[str]) -> bool:
-    """Return whether a call forwards a namespace as a bare argument or into ``vars``."""
+    """Return whether a call forwards a namespace as a bare argument or into ``vars``.
+
+    A namespace passed as a direct bare positional argument, or nested anywhere
+    inside a positional argument subtree (for example inside a container literal),
+    forwards the namespace object. A ``vars`` call forwards through its positional
+    argument only, so its keyword arguments are not inspected; for every other call
+    a namespace nested in a keyword-argument subtree forwards it as well.
+    """
     function_node = call_node.func
     is_vars_call = isinstance(function_node, ast.Name) and function_node.id == VARS_FUNCTION_NAME
     for each_argument in call_node.args:
-        if _references_namespace(each_argument, all_namespace_names):
+        if _argument_subtree_forwards_namespace(each_argument, all_namespace_names):
             return True
     if is_vars_call:
         return False
     for each_keyword in call_node.keywords:
-        if _references_namespace(each_keyword.value, all_namespace_names):
+        if _argument_subtree_forwards_namespace(each_keyword.value, all_namespace_names):
             return True
+    return False
+
+
+def _parse_method_is_aliased(tree: ast.Module) -> bool:
+    """Return whether a ``parse_args``/``parse_known_args`` method is referenced uncalled.
+
+    The bound method is aliased when its attribute (``parser.parse_args``) appears
+    as a value rather than as the ``func`` of an enclosing call — assigned to a
+    name or passed around — so the resulting namespace is produced by a call the
+    scan cannot follow back to ``parse_args``.
+    """
+    all_called_function_ids = {
+        id(each_node.func) for each_node in ast.walk(tree) if isinstance(each_node, ast.Call)
+    }
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.Attribute):
+            continue
+        if each_node.attr not in ALL_PARSE_METHOD_NAMES:
+            continue
+        if id(each_node) not in all_called_function_ids:
+            return True
+    return False
+
+
+def _parse_result_binds_untracked_target(tree: ast.Module) -> bool:
+    """Return whether a parse-method result binds to a target the scan cannot track.
+
+    A ``parse_args``/``parse_known_args`` result assigned to a plain ``ast.Name``
+    target, or to a tuple/list whose first element is a plain ``ast.Name``, is
+    tracked as a namespace variable. A result assigned to an attribute target
+    (``self.args``) or a subscript target binds the namespace where the scan
+    cannot follow its attribute reads, so it escapes.
+    """
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.Assign):
+            continue
+        if not isinstance(each_node.value, ast.Call):
+            continue
+        function_node = each_node.value.func
+        if not isinstance(function_node, ast.Attribute):
+            continue
+        if function_node.attr not in ALL_PARSE_METHOD_NAMES:
+            continue
+        for each_target in each_node.targets:
+            if not _target_namespace_names(each_target):
+                return True
     return False
 
 
@@ -311,9 +401,13 @@ def check_dead_argparse_arguments(
     An optional ``add_argument("--flag", ...)`` is dead when its dest name never
     appears as an attribute read, an augmented-assignment target, or a literal
     ``getattr``/``attrgetter`` access anywhere in the file, the name is not listed
-    in a module-level ``__all__``, and no parsed namespace escapes static view by
-    being forwarded as a bare call argument, double-star unpacked, passed to
-    ``vars``, or read through ``__dict__``. Positional arguments and the argparse
+    in a module-level ``__all__``, and no parsed namespace escapes static view.
+    A namespace escapes by being forwarded as a bare call argument, double-star
+    unpacked, passed to ``vars``, read through ``__dict__``, nested anywhere inside
+    a call's argument subtrees (for example inside a container literal), bound to
+    an attribute- or subscript-target the scan cannot track, or produced by a
+    ``parse_args``/``parse_known_args`` bound method referenced as an aliased value
+    rather than called inline. Positional arguments and the argparse
     ``help``/``version`` auto-actions are never flagged. Whole-file analysis runs
     against ``full_file_content`` when supplied so an Edit fragment is judged
     against the reconstructed post-edit file.
