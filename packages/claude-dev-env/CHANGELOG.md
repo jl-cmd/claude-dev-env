@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.65.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.64.3...claude-dev-env-v1.65.0) (2026-06-17)
+
+
+### Features
+
+* **autoconverge:** recover from commit-time hook blocks instead of ending the run ([2af5f55](https://github.com/jl-cmd/claude-code-config/commit/2af5f55ff5ada64adef089c0414a07bbaf03d984))
+* **autoconverge:** recover from commit-time hook blocks instead of ending the run ([5828ba9](https://github.com/jl-cmd/claude-code-config/commit/5828ba946a1c6c523e166c88b1839c72b2cf4f06))
+
 ## [1.64.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.64.2...claude-dev-env-v1.64.3) (2026-06-17)
 
 
