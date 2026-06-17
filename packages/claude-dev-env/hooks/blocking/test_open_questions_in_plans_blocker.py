@@ -75,6 +75,33 @@ def test_blocks_project_local_plans_directory():
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
+def test_blocks_repo_docs_plan_packet_directory():
+    """Repo-local `docs/plans/<slug>/` packet docs are plan files too."""
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "docs/plans/add-login/spec/scope.md",
+            "content": _plan_with_open_questions,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_blocks_windows_style_repo_docs_plan_packet_directory():
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "docs\\plans\\add-login\\spec\\scope.md",
+            "content": _plan_with_open_questions,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
 def test_blocks_case_insensitive_heading():
     result = _run_hook(
         "Write",

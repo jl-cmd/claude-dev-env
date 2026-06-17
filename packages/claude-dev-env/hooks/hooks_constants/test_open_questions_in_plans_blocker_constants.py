@@ -27,6 +27,16 @@ def test_plans_path_prefix_matches_project_local_plans_directory() -> None:
     assert "PLANS_PATH_PREFIX" in constants_module.__all__
 
 
+def test_docs_plans_path_segment_matches_repo_packet_directory() -> None:
+    assert constants_module.DOCS_PLANS_PATH_SEGMENT == "/docs/plans/"
+    assert "DOCS_PLANS_PATH_SEGMENT" in constants_module.__all__
+
+
+def test_docs_plans_path_prefix_matches_repo_packet_directory() -> None:
+    assert constants_module.DOCS_PLANS_PATH_PREFIX == "docs/plans/"
+    assert "DOCS_PLANS_PATH_PREFIX" in constants_module.__all__
+
+
 def test_open_questions_heading_pattern_matches_atx_heading() -> None:
     assert constants_module.OPEN_QUESTIONS_HEADING_PATTERN.search("## Open Questions\n")
 
@@ -114,6 +124,8 @@ def test_unreadable_file_synthetic_content_triggers_heading_pattern() -> None:
 def test_all_exports_enumerates_eight_public_constants_in_sorted_order() -> None:
     expected_exports = [
         "CODE_FENCE_PATTERN",
+        "DOCS_PLANS_PATH_PREFIX",
+        "DOCS_PLANS_PATH_SEGMENT",
         "INLINE_CODE_PATTERN",
         "MARKDOWN_EXTENSION",
         "OPEN_QUESTIONS_HEADING_PATTERN",
