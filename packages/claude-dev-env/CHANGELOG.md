@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.64.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.64.0...claude-dev-env-v1.64.1) (2026-06-17)
+
+
+### Bug Fixes
+
+* **hooks:** skip dead-field check on module-level singleton dataclasses ([8a5e3b0](https://github.com/jl-cmd/claude-code-config/commit/8a5e3b02636d3f5c0a274284668c56bf19b284ea))
+* **hooks:** skip dead-field check on module-level singleton dataclasses ([a047dee](https://github.com/jl-cmd/claude-code-config/commit/a047deec8a0c1f9e947dc57ed323d4df9f86fe00))
+
 ## [1.64.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.63.0...claude-dev-env-v1.64.0) (2026-06-17)
 
 
