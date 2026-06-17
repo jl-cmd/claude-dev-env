@@ -101,8 +101,10 @@ const FIX_SCHEMA = {
     pushed: { type: 'boolean' },
     resolvedWithoutCommit: { type: 'boolean', description: 'true when every finding was already addressed so no code change was made, yet each finding thread was still resolved — the round advances rather than stalling' },
     summary: { type: 'string' },
+    blockedNeedingEdit: { type: 'boolean', description: 'true only when the commit or push was rejected by a commit-time hook or gate whose message requires a code change (for example a CODE_RULES violation the fix introduced), not a transient or auth failure' },
+    blockerDetail: { type: 'string', description: 'verbatim hook or gate rejection text naming the file and rule that must change, or an empty string when no edit-requiring block occurred' },
   },
-  required: ['newSha', 'pushed', 'resolvedWithoutCommit', 'summary'],
+  required: ['newSha', 'pushed', 'resolvedWithoutCommit', 'summary', 'blockedNeedingEdit', 'blockerDetail'],
 }
 
 const EDIT_SCHEMA = {
@@ -435,6 +437,25 @@ function detectFixProgress(fixResult, priorHead, hadThreadBearingFinding) {
 }
 
 /**
+ * Decide whether a commit step was blocked by a commit-time hook or gate that
+ * requires a code change, so the recovery loop should route back to a fixer. A
+ * null result, a successful push, a transient failure (blockedNeedingEdit
+ * false), or a flagged block carrying no detail all read as not-needing-recovery,
+ * so only a flagged block with a concrete message routes to the fixer.
+ * @param {object|null} commitResult the FIX_SCHEMA result, or null on agent failure
+ * @returns {boolean} true only when the commit needs a code-edit recovery pass
+ */
+function commitNeedsCodeRecovery(commitResult) {
+  if (commitResult == null) return false
+  if (commitResult.pushed === true) return false
+  return (
+    commitResult.blockedNeedingEdit === true &&
+    typeof commitResult.blockerDetail === 'string' &&
+    commitResult.blockerDetail.length > 0
+  )
+}
+
+/**
  * Decide whether a resolved HEAD SHA is safe to spawn lenses against. A dead
  * resolve-head agent or a malformed result yields a falsy SHA; spawning lenses
  * against it interpolates the literal string 'HEAD undefined' into their prompts
@@ -753,9 +774,66 @@ function commitVerifiedFixes(head, sourceLabel) {
       `Rules:\n` +
       `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the commit would be blocked. Do not run a formatter, do not touch a test, do not re-fix anything — only commit and push what is already there.\n` +
       `- Make ONE commit for all the working-tree fixes, then push to the PR branch.\n\n` +
-      `Return values: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, and a one-line summary. If the commit or push is blocked or fails, return newSha=${head}, pushed=false, resolvedWithoutCommit=false, and a summary naming the failure.`,
+      `Return values:\n` +
+      `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
+      `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
+      `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
     { label: `fix-commit:${sourceLabel}`, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder' },
   )
+}
+
+/**
+ * Commit-recovery fixer: when a commit step is blocked by a commit-time hook or
+ * gate that requires a code change, one clean-coder fixes only that blocking
+ * violation test-first in the working tree and leaves it uncommitted, so the
+ * re-verify step can bind a fresh verdict and the retry commit can push. It does
+ * not re-open the original findings or touch GitHub threads — the edit step
+ * already handled those.
+ * @param {string} head PR HEAD SHA the fixes were raised against
+ * @param {string} blockerDetail verbatim hook/gate message naming the file and rule to change
+ * @param {string} sourceLabel short description of where the findings came from
+ * @param {number} attempt the 1-based recovery attempt number
+ * @returns {Promise<object>} EDIT_SCHEMA result
+ */
+function recoverCommitBlockEdit(head, blockerDetail, sourceLabel, attempt) {
+  return convergeAgent(
+    `You are the COMMIT-RECOVERY fixer (attempt ${attempt}) for fixes (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. A prior commit step was blocked by a commit-time hook or gate that requires a code change. A separate verify step then a separate commit step run after you.\n\n` +
+      `The blocking hook or gate said:\n${blockerDetail}\n\n` +
+      `Rules:\n` +
+      `- Confirm the working tree is on the PR branch at HEAD ${head} with the prior fixes still present.\n` +
+      `- Fix ONLY the violation named above, test-first (failing test, then minimum code to pass) per CODE_RULES. Do not re-open the original findings, and do not touch GitHub review threads — the edit step already handled those.\n` +
+      `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
+      `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.`,
+    { label: `fix-recover:${sourceLabel}`, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
+  )
+}
+
+const FIX_RECOVERY_MAX_ATTEMPTS = 2
+
+/**
+ * Run a commit step and, when it is blocked by a commit-time hook or gate that
+ * requires a code change, route back to a fixer: fix the blocking violation,
+ * re-verify so a fresh verdict binds the corrected surface, then retry the
+ * commit — bounded by FIX_RECOVERY_MAX_ATTEMPTS. The loop breaks early when the
+ * fixer makes no edit or the re-verify does not pass, returning the last commit
+ * result so the caller's existing no-push handling still applies. A transient
+ * failure never enters the loop (commitNeedsCodeRecovery is false), so an auth or
+ * network failure keeps the existing blocker path.
+ * @param {{runCommit: function, runVerify: function, runRecoverEdit: function}} steps the commit, re-verify, and recover-edit thunks
+ * @returns {Promise<object>} the final FIX_SCHEMA result
+ */
+async function commitWithRecovery({ runCommit, runVerify, runRecoverEdit }) {
+  let commitResult = await runCommit()
+  let attempt = 0
+  while (commitNeedsCodeRecovery(commitResult) && attempt < FIX_RECOVERY_MAX_ATTEMPTS) {
+    attempt += 1
+    const recoverEdit = await runRecoverEdit(commitResult.blockerDetail, attempt)
+    if (recoverEdit?.edited !== true) break
+    const verifyTranscript = await runVerify()
+    if (!verdictPassed(verifyTranscript)) break
+    commitResult = await runCommit()
+  }
+  return commitResult
 }
 
 /**
@@ -791,7 +869,11 @@ async function applyFixes(head, findings, sourceLabel) {
       summary: `verify step did not pass the working-tree fixes for ${findings.length} finding(s) — not committing`,
     }
   }
-  return commitVerifiedFixes(head, sourceLabel)
+  return commitWithRecovery({
+    runCommit: () => commitVerifiedFixes(head, sourceLabel),
+    runVerify: () => verifyFixesInWorkingTree(head, findings, sourceLabel),
+    runRecoverEdit: (detail, attempt) => recoverCommitBlockEdit(head, detail, sourceLabel, attempt),
+  })
 }
 
 /**
@@ -978,7 +1060,10 @@ function commitRepairFixes(head, wasRebased) {
       `Rules:\n` +
       `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Do not run a formatter, do not re-fix anything — only commit and push what is already there.\n` +
       `- Commit any uncommitted bot-thread fix in ONE commit (skip the commit when the working tree carries only already-committed rebase results). ${pushInstruction}\n\n` +
-      `Return values: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, and a one-line summary. If the commit or push is blocked or fails, return newSha=${head}, pushed=false, resolvedWithoutCommit=false, and a summary naming the failure.`,
+      `Return values:\n` +
+      `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
+      `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
+      `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
     { label: 'repair-commit', phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder' },
   )
 }
@@ -1017,7 +1102,12 @@ async function repairConvergence(head, failures) {
       summary: `repair verify step did not pass the working-tree repair on HEAD ${head} — not pushing`,
     }
   }
-  return commitRepairFixes(head, editResult?.rebased === true)
+  const wasRebased = editResult?.rebased === true
+  return commitWithRecovery({
+    runCommit: () => commitRepairFixes(head, wasRebased),
+    runVerify: () => verifyRepairChanges(head, failures),
+    runRecoverEdit: (detail, attempt) => recoverCommitBlockEdit(head, detail, 'repair', attempt),
+  })
 }
 
 /**
