@@ -465,3 +465,43 @@ def test_should_evaluate_full_file_content_when_supplied() -> None:
     assert not any(
         "'number'" in each_issue for each_issue in issues
     ), f"Read field 'number' must not be flagged, got: {issues}"
+
+
+def test_should_not_flag_field_on_module_level_singleton() -> None:
+    source = (
+        "from dataclasses import dataclass\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class AppConfig:\n"
+        "    timeout: int\n"
+        "    retries: int\n"
+        "\n"
+        "SETTINGS = AppConfig(timeout=30, retries=3)\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_flag_local_dataclass_but_not_module_level_singleton() -> None:
+    source = (
+        "from dataclasses import dataclass\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class AppConfig:\n"
+        "    timeout: int\n"
+        "\n"
+        "@dataclass\n"
+        "class LocalRow:\n"
+        "    url: str\n"
+        "\n"
+        "SETTINGS = AppConfig(timeout=30)\n"
+        "\n"
+        "def build() -> LocalRow:\n"
+        "    return LocalRow(url='x')\n"
+    )
+    issues = _check(source, PRODUCTION_FILE_PATH)
+    assert any(
+        "'url'" in each_issue and "LocalRow" in each_issue for each_issue in issues
+    ), f"Locally-constructed dead field must still be flagged, got: {issues}"
+    assert not any(
+        "AppConfig" in each_issue for each_issue in issues
+    ), f"Module-level singleton fields must not be flagged, got: {issues}"
