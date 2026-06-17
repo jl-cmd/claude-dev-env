@@ -188,9 +188,26 @@ def _exported_names(tree: ast.Module) -> set[str]:
     return exported
 
 
-def _namespace_variable_names(tree: ast.Module) -> set[str]:
-    """Return names bound to the result of a ``parse_args``/``parse_known_args`` call."""
-    all_namespace_names: set[str] = set()
+def _target_namespace_names(assign_target: ast.expr) -> set[str]:
+    """Return names an assignment target binds the namespace to.
+
+    A bare ``ast.Name`` target (``parsed = parse_args()``) binds one namespace
+    name. A tuple- or list-unpack target (``parsed, remaining =
+    parse_known_args()``) binds the namespace to its first ``ast.Name`` element,
+    matching the documented ``(namespace, remaining)`` return shape.
+    """
+    if isinstance(assign_target, ast.Name):
+        return {assign_target.id}
+    if isinstance(assign_target, (ast.Tuple, ast.List)):
+        for each_element in assign_target.elts:
+            if isinstance(each_element, ast.Name):
+                return {each_element.id}
+    return set()
+
+
+def _parse_call_namespace_names(tree: ast.Module) -> set[str]:
+    """Return names bound directly to a ``parse_args``/``parse_known_args`` result."""
+    parse_call_names: set[str] = set()
     for each_node in ast.walk(tree):
         if not isinstance(each_node, ast.Assign):
             continue
@@ -202,9 +219,45 @@ def _namespace_variable_names(tree: ast.Module) -> set[str]:
         if function_node.attr not in ALL_PARSE_METHOD_NAMES:
             continue
         for each_target in each_node.targets:
-            if isinstance(each_target, ast.Name):
-                all_namespace_names.add(each_target.id)
+            parse_call_names |= _target_namespace_names(each_target)
+    return parse_call_names
+
+
+def _alias_namespace_names(tree: ast.Module, all_parse_call_names: set[str]) -> set[str]:
+    """Return names bound by re-assigning an existing namespace variable.
+
+    A simple ``alias = parsed_arguments`` re-binding aliases the namespace, and a
+    chain (``second = alias``) aliases it again, so the set grows to a fixed point
+    before it is returned.
+    """
+    all_namespace_names = set(all_parse_call_names)
+    keeps_growing = True
+    while keeps_growing:
+        keeps_growing = False
+        for each_node in ast.walk(tree):
+            if not isinstance(each_node, ast.Assign):
+                continue
+            if not isinstance(each_node.value, ast.Name):
+                continue
+            if each_node.value.id not in all_namespace_names:
+                continue
+            for each_target in each_node.targets:
+                if isinstance(each_target, ast.Name) and each_target.id not in all_namespace_names:
+                    all_namespace_names.add(each_target.id)
+                    keeps_growing = True
     return all_namespace_names
+
+
+def _namespace_variable_names(tree: ast.Module) -> set[str]:
+    """Return names bound to a ``parse_args``/``parse_known_args`` result or its alias.
+
+    A direct binding (``parsed = parse_args()``), the first element of a
+    tuple-unpack of the documented ``(namespace, remaining)`` return
+    (``parsed, remaining = parse_known_args()``), and a simple re-binding chain
+    (``alias = parsed``) each name the same namespace.
+    """
+    parse_call_names = _parse_call_namespace_names(tree)
+    return _alias_namespace_names(tree, parse_call_names)
 
 
 def _namespace_escapes(tree: ast.Module, all_namespace_names: set[str]) -> bool:
