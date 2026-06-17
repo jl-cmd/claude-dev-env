@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.64.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.63.0...claude-dev-env-v1.64.0) (2026-06-17)
+
+
+### Features
+
+* **code-rules:** block dead argparse CLI arguments at Write/Edit time ([a6bcc1e](https://github.com/jl-cmd/claude-code-config/commit/a6bcc1e864ee650e37dfd8b59bddbdd7a5e350f9))
+
+
+### Bug Fixes
+
+* **code-rules:** generalize argparse namespace-escape suppression ([c5644e2](https://github.com/jl-cmd/claude-code-config/commit/c5644e290206579e5b808a3e8dd94e3f119725ba))
+* **code-rules:** recognize tuple-unpacked and aliased argparse namespaces ([dce2428](https://github.com/jl-cmd/claude-code-config/commit/dce2428d0c3e4d9634dad8b53dca140e427dd6b7))
+* **code-rules:** skip argparse argument with a non-literal dest ([e3fce1c](https://github.com/jl-cmd/claude-code-config/commit/e3fce1c2bed7cddc2fd5267cc85a5e22d4b06b15))
+* **code-rules:** suppress dead-argparse check for an inline-consumed parse result ([a1f1945](https://github.com/jl-cmd/claude-code-config/commit/a1f1945dd27d7eaa7c8a2cc0afd8f43f62a66da9))
+* **code-rules:** suppress dead-argparse false positives for untracked namespaces ([60a7314](https://github.com/jl-cmd/claude-code-config/commit/60a731427dd00f98efba581245df1a74b748d0f4))
+* **code-rules:** track annotated argparse namespace bindings ([66ad9c8](https://github.com/jl-cmd/claude-code-config/commit/66ad9c80d0dd9cad8a05b2a8ef6583709906070a))
+
 ## [1.63.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.62.1...claude-dev-env-v1.63.0) (2026-06-16)
 
 
