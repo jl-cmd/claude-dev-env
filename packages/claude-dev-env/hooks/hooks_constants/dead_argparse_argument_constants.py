@@ -8,12 +8,12 @@ requirement and share a home with the other hook-tree configuration.
 ADD_ARGUMENT_METHOD_NAME: str = "add_argument"
 ALL_PARSE_METHOD_NAMES: frozenset[str] = frozenset({"parse_args", "parse_known_args"})
 DEST_KEYWORD_NAME: str = "dest"
+NAMESPACE_KEYWORD_NAME: str = "namespace"
 ACTION_KEYWORD_NAME: str = "action"
 ALL_SUPPRESSED_ACTION_NAMES: frozenset[str] = frozenset({"help", "version"})
 GETATTR_FUNCTION_NAME: str = "getattr"
 GETATTR_NAME_ARGUMENT_MINIMUM: int = 2
 ATTRGETTER_FUNCTION_NAME: str = "attrgetter"
-VARS_FUNCTION_NAME: str = "vars"
 NAMESPACE_DICT_ATTRIBUTE_NAME: str = "__dict__"
 OPTION_PREFIX: str = "-"
 LONG_OPTION_PREFIX: str = "--"

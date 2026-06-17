@@ -370,6 +370,58 @@ def test_should_suppress_when_namespace_forwarded_inside_container() -> None:
     assert _check(source, PRODUCTION_FILE_PATH) == []
 
 
+def test_should_suppress_when_namespace_keyword_object_is_consumed() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def build() -> dict:\n"
+        "    options = argparse.Namespace()\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    argument_parser.parse_args(namespace=options)\n"
+        "    return vars(options)\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_suppress_when_namespace_keyword_object_is_forwarded() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def run(parsed_arguments: argparse.Namespace) -> None:\n"
+        "    print('run')\n"
+        "\n"
+        "def build() -> None:\n"
+        "    options = argparse.Namespace()\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    argument_parser.parse_args(namespace=options)\n"
+        "    run(options)\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_flag_when_namespace_keyword_object_only_attribute_read() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def build() -> str:\n"
+        "    options = argparse.Namespace()\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    argument_parser.add_argument('--verbose', action='store_true')\n"
+        "    argument_parser.parse_args(namespace=options)\n"
+        "    return options.repo\n"
+    )
+    issues = _check(source, PRODUCTION_FILE_PATH)
+    assert any("'verbose'" in each_issue for each_issue in issues), (
+        f"Expected the unread '--verbose' flag flagged, got: {issues}"
+    )
+    assert not any("'repo'" in each_issue for each_issue in issues), (
+        f"The read namespace= attribute must not be flagged, got: {issues}"
+    )
+
+
 def test_validate_content_runs_dead_argparse_check() -> None:
     source = (
         "import argparse\n"
