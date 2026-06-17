@@ -220,20 +220,50 @@ def _target_namespace_names(assign_target: ast.expr) -> set[str]:
     return set()
 
 
+def _is_parse_method_call(node: ast.AST | None) -> bool:
+    """Return whether a node is a ``parse_args``/``parse_known_args`` method call.
+
+    The call's function is an attribute access (``parser.parse_args``) whose
+    attribute name is one of the tracked parse methods.
+    """
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in ALL_PARSE_METHOD_NAMES
+    )
+
+
+def _parse_result_binding_targets(node: ast.AST) -> list[ast.expr] | None:
+    """Return the targets a statement binds a parse-method result to, or None.
+
+    A plain ``ast.Assign`` (``parsed = parse_args()``) or an annotated
+    ``ast.AnnAssign`` (``parsed: Namespace = parse_args()``) whose value is a
+    parse-method call binds the namespace; the returned list holds its target nodes,
+    one for an annotated assignment and one or more for a plain assignment. A node
+    that is not such a binding, including an annotated assignment with no value
+    (``parsed: Namespace``), returns None.
+    """
+    if isinstance(node, ast.Assign):
+        binding_targets: list[ast.expr] = node.targets
+        bound_value: ast.expr | None = node.value
+    elif isinstance(node, ast.AnnAssign):
+        binding_targets = [node.target]
+        bound_value = node.value
+    else:
+        return None
+    if not _is_parse_method_call(bound_value):
+        return None
+    return binding_targets
+
+
 def _parse_call_namespace_names(tree: ast.Module) -> set[str]:
-    """Return names bound directly to a ``parse_args``/``parse_known_args`` result."""
+    """Return names bound to a plain or annotated ``parse_args``/``parse_known_args`` result."""
     parse_call_names: set[str] = set()
     for each_node in ast.walk(tree):
-        if not isinstance(each_node, ast.Assign):
+        binding_targets = _parse_result_binding_targets(each_node)
+        if binding_targets is None:
             continue
-        if not isinstance(each_node.value, ast.Call):
-            continue
-        function_node = each_node.value.func
-        if not isinstance(function_node, ast.Attribute):
-            continue
-        if function_node.attr not in ALL_PARSE_METHOD_NAMES:
-            continue
-        for each_target in each_node.targets:
+        for each_target in binding_targets:
             parse_call_names |= _target_namespace_names(each_target)
     return parse_call_names
 
@@ -288,9 +318,10 @@ def _namespace_keyword_argument_names(tree: ast.Module) -> set[str]:
 def _namespace_variable_names(tree: ast.Module) -> set[str]:
     """Return names bound to a parse result, a ``namespace=`` object, or an alias.
 
-    A direct binding (``parsed = parse_args()``), the first element of a
-    tuple-unpack of the documented ``(namespace, remaining)`` return
-    (``parsed, remaining = parse_known_args()``), a ``namespace=`` keyword object
+    A direct binding plain or annotated (``parsed = parse_args()`` or
+    ``parsed: Namespace = parse_args()``), the first element of a tuple-unpack of the
+    documented ``(namespace, remaining)`` return (``parsed, remaining =
+    parse_known_args()``), a ``namespace=`` keyword object
     (``parse_args(namespace=options)``), and a simple re-binding chain
     (``alias = parsed``) each name the same namespace.
     """
@@ -420,23 +451,17 @@ def _parse_method_is_aliased(tree: ast.Module) -> bool:
 def _parse_result_binds_untracked_target(tree: ast.Module) -> bool:
     """Return whether a parse-method result binds to a target the scan cannot track.
 
-    A ``parse_args``/``parse_known_args`` result assigned to a plain ``ast.Name``
-    target, or to a tuple/list whose first element is a plain ``ast.Name``, is
-    tracked as a namespace variable. A result assigned to an attribute target
-    (``self.args``) or a subscript target binds the namespace where the scan
-    cannot follow its attribute reads, so it escapes.
+    A ``parse_args``/``parse_known_args`` result bound by a plain or annotated
+    assignment to a plain ``ast.Name`` target, or to a tuple/list whose first
+    element is a plain ``ast.Name``, is tracked as a namespace variable. A result
+    bound to an attribute target (``self.args``) or a subscript target binds the
+    namespace where the scan cannot follow its attribute reads, so it escapes.
     """
     for each_node in ast.walk(tree):
-        if not isinstance(each_node, ast.Assign):
+        binding_targets = _parse_result_binding_targets(each_node)
+        if binding_targets is None:
             continue
-        if not isinstance(each_node.value, ast.Call):
-            continue
-        function_node = each_node.value.func
-        if not isinstance(function_node, ast.Attribute):
-            continue
-        if function_node.attr not in ALL_PARSE_METHOD_NAMES:
-            continue
-        for each_target in each_node.targets:
+        for each_target in binding_targets:
             if not _target_namespace_names(each_target):
                 return True
     return False
@@ -446,32 +471,22 @@ def _parse_call_consumed_inline(tree: ast.Module) -> bool:
     """Return whether a parse-method result is consumed inline rather than bound to a target.
 
     A ``parse_args``/``parse_known_args`` call is statically trackable only when its
-    result is the value of an assignment (``parsed = parser.parse_args()``) or of a
-    bare expression statement (``parser.parse_args(namespace=options)``, whose result
-    is discarded after populating the keyword object). Consumed inside a larger
+    result is the value of a plain assignment (``parsed = parser.parse_args()``), an
+    annotated assignment (``parsed: Namespace = parser.parse_args()``), or a bare
+    expression statement (``parser.parse_args(namespace=options)``, whose result is
+    discarded after populating the keyword object). Consumed inside a larger
     expression instead -- returned directly, passed to ``vars``, double-star
     unpacked, or bound by a walrus -- the namespace never reaches a tracked name, so
     the check suppresses.
     """
     statement_bound_call_ids: set[int] = set()
     for each_node in ast.walk(tree):
-        if not isinstance(each_node, (ast.Assign, ast.Expr)):
+        if not isinstance(each_node, (ast.Assign, ast.AnnAssign, ast.Expr)):
             continue
-        bound_value = each_node.value
-        if not isinstance(bound_value, ast.Call):
-            continue
-        function_node = bound_value.func
-        if isinstance(function_node, ast.Attribute) and function_node.attr in ALL_PARSE_METHOD_NAMES:
-            statement_bound_call_ids.add(id(bound_value))
+        if _is_parse_method_call(each_node.value):
+            statement_bound_call_ids.add(id(each_node.value))
     for each_node in ast.walk(tree):
-        if not isinstance(each_node, ast.Call):
-            continue
-        function_node = each_node.func
-        if not isinstance(function_node, ast.Attribute):
-            continue
-        if function_node.attr not in ALL_PARSE_METHOD_NAMES:
-            continue
-        if id(each_node) not in statement_bound_call_ids:
+        if _is_parse_method_call(each_node) and id(each_node) not in statement_bound_call_ids:
             return True
     return False
 

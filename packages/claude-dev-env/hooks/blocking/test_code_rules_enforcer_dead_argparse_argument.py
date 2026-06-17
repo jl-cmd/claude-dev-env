@@ -461,6 +461,51 @@ def test_should_suppress_when_parse_result_double_star_unpacked_inline() -> None
     assert _check(source, PRODUCTION_FILE_PATH) == []
 
 
+def test_should_flag_when_annotated_namespace_dest_is_unread() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def build() -> None:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    parsed_arguments: argparse.Namespace = argument_parser.parse_args()\n"
+        "    print('done')\n"
+    )
+    issues = _check(source, PRODUCTION_FILE_PATH)
+    assert any("'repo'" in each_issue for each_issue in issues), (
+        f"Expected the dead flag flagged through the annotated binding, got: {issues}"
+    )
+
+
+def test_should_not_flag_when_annotated_namespace_dest_is_read() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def build() -> str:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    parsed_arguments: argparse.Namespace = argument_parser.parse_args()\n"
+        "    return parsed_arguments.repo\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_suppress_when_annotated_namespace_is_forwarded() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def run(parsed_arguments: argparse.Namespace) -> None:\n"
+        "    print('run')\n"
+        "\n"
+        "def build() -> None:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    parsed_arguments: argparse.Namespace = argument_parser.parse_args()\n"
+        "    run(parsed_arguments)\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
 def test_should_suppress_when_parse_result_bound_by_walrus() -> None:
     source = (
         "import argparse\n"
