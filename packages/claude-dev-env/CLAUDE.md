@@ -87,6 +87,28 @@ When changing how skills, rules, or hooks install or sync in this repo (for exam
 - **confirm_implementation_forks:** When two or more viable paths would satisfy the goal and the choice changes the deliverable — its scope, completeness, deferred work, dependencies, or a hard-to-reverse contract — stop and ask which path via AskUserQuestion before implementing. A path that defers work or leaves a placeholder creating a follow-up task is itself a fork to surface, not a default to take silently. Phrase the question in plain language with only the detail needed to decide. See [`confirm-implementation-forks`](rules/confirm-implementation-forks.md).
 - **disambiguate_overloaded_terms:** When a word in the request has two different technical meanings — "conflict" (git-merge versus functional/behavioral), "sync" (fast-forward versus commit), and the like — confirm which one is meant via AskUserQuestion before analyzing or acting.
 
+## Serena (Code Intelligence MCP)
+
+The `mcp__serena__*` tools expose LSP-level code intelligence for any activated project.
+
+### CRITICAL: Call `initial_instructions` first
+Before any coding task, call the `initial_instructions` tool to load the Serena Instructions Manual.
+
+### When to use Serena
+- **Symbol declaration** → `mcp__serena__find_declaration`
+- **All references to a symbol** → `mcp__serena__find_referencing_symbols`
+- **Implementations of an interface/class** → `mcp__serena__find_implementations`
+- **Rename across codebase** → `mcp__serena__rename_symbol`
+- **Targeted body replacement / insertion** → `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`
+- **Safe symbol removal (no references)** → `mcp__serena__safe_delete_symbol`
+- **File diagnostics** → `mcp__serena__get_diagnostics_for_file`
+
+### Tool hierarchy for code navigation
+1. **Serena** — symbol-level navigation (declarations, references, implementations, rename)
+2. **Zoekt MCP** (`mcp__zoekt__*`) — content/text search within indexed repos
+3. **Everything** (`everything_search`) — file-system search by name/path/extension
+4. **Grep/Glob** — fallback pattern matching
+
 ## Everything Search (MCP Tool)
 
 This machine has **Everything (voidtools)** running with an HTTP server on port 54321.
