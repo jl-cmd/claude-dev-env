@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.64.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.64.1...claude-dev-env-v1.64.2) (2026-06-17)
+
+
+### Documentation
+
+* **CLAUDE.md:** add Everything Search MCP tool instructions ([3904dcb](https://github.com/jl-cmd/claude-code-config/commit/3904dcba2c94fb24edc0fb9338bc1232546fcd00))
+* **CLAUDE.md:** add Serena code intelligence MCP instructions # verify-skip ([704806a](https://github.com/jl-cmd/claude-code-config/commit/704806a810cf630a3499bc407bd43c8cb4631da4))
+
 ## [1.64.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.64.0...claude-dev-env-v1.64.1) (2026-06-17)
 
 
