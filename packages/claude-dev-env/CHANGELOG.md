@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.64.3](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.64.2...claude-dev-env-v1.64.3) (2026-06-17)
+
+
+### Documentation
+
+* **CLAUDE.md:** drop Zoekt MCP from code-navigation and search guidance ([d3c7cc0](https://github.com/jl-cmd/claude-code-config/commit/d3c7cc0a733b6d23341dc3464bf32b2df16ca0d2))
+* **CLAUDE.md:** drop Zoekt MCP from code-navigation and search guidance ([60c31b8](https://github.com/jl-cmd/claude-code-config/commit/60c31b8eb4194238a2c661333320a3863450e156))
+
 ## [1.64.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.64.1...claude-dev-env-v1.64.2) (2026-06-17)
 
 
