@@ -86,3 +86,29 @@ When changing how skills, rules, or hooks install or sync in this repo (for exam
 - **task_scope:** Match every action to what was explicitly requested. When intent is ambiguous, research official docs and present options via AskUserQuestion before making any changes. Proceed with edits only on explicit instruction.
 - **confirm_implementation_forks:** When two or more viable paths would satisfy the goal and the choice changes the deliverable — its scope, completeness, deferred work, dependencies, or a hard-to-reverse contract — stop and ask which path via AskUserQuestion before implementing. A path that defers work or leaves a placeholder creating a follow-up task is itself a fork to surface, not a default to take silently. Phrase the question in plain language with only the detail needed to decide. See [`confirm-implementation-forks`](rules/confirm-implementation-forks.md).
 - **disambiguate_overloaded_terms:** When a word in the request has two different technical meanings — "conflict" (git-merge versus functional/behavioral), "sync" (fast-forward versus commit), and the like — confirm which one is meant via AskUserQuestion before analyzing or acting.
+
+## Everything Search (MCP Tool)
+
+This machine has **Everything (voidtools)** running with an HTTP server on port 54321.
+The `everything_search` MCP tool is available in every session.
+
+### Use Everything for file-system searches
+Use `everything_search` for finding files by name, path, extension, size, or date. For content searches within Zoekt-indexed repos, prefer `mcp__zoekt__search` — Everything's `content:` search is the fallback when Zoekt is unavailable or returns nothing.
+
+### Fallback order
+1. **Zoekt MCP** (`mcp__zoekt__search`) — content search within indexed repos
+2. **Everything** (`everything_search`) — file-system search by name/path/extension/size/date, and content search outside indexed repos
+3. **Grep** — complex regex content searches if Everything's `content:` returns nothing
+4. **Glob** — precise relative-path pattern matching within the current project
+
+### Search syntax quick reference
+- `ext:py` — find by extension (multiple: `ext:ts;js`)
+- `path:src\components` — match against full path
+- `count:10` — limit number of results to 10
+- `*.config.*` — wildcards
+- `size:>10mb` — size filter
+- `dm:today` / `dm:thisweek` — date modified filter
+- `content:keyword` — search inside file contents
+- `parent:node_modules package.json` — match parent folder
+- `foo bar` — AND, `foo | bar` — OR, `!foo` — NOT
+- `"exact phrase"` — literal match
