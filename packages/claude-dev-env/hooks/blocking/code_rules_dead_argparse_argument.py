@@ -377,15 +377,19 @@ def _namespace_escapes(tree: ast.Module, all_namespace_names: set[str]) -> bool:
     dest unprovably dead, so the check suppresses. Each of the following is such an
     escape: a ``parse_args``/``parse_known_args`` bound method referenced as an
     aliased value rather than called inline; a parse result bound to an attribute-
-    or subscript-target the scan cannot track; a tracked namespace read through
-    ``__dict__``; and a tracked namespace Name used as a value rather than an
-    attribute read (passed to a call, returned, aliased, double-star unpacked, or
-    nested inside a container literal), excluding the object of an attribute access
-    and a Name passed as the ``namespace=`` keyword to a parse call.
+    or subscript-target the scan cannot track; a parse result consumed inline within
+    a larger expression rather than bound to an assignment or a bare statement; a
+    tracked namespace read through ``__dict__``; and a tracked namespace Name used as
+    a value rather than an attribute read (passed to a call, returned, aliased,
+    double-star unpacked, or nested inside a container literal), excluding the object
+    of an attribute access and a Name passed as the ``namespace=`` keyword to a parse
+    call.
     """
     if _parse_method_is_aliased(tree):
         return True
     if _parse_result_binds_untracked_target(tree):
+        return True
+    if _parse_call_consumed_inline(tree):
         return True
     if _namespace_dict_accessed(tree, all_namespace_names):
         return True
@@ -438,6 +442,40 @@ def _parse_result_binds_untracked_target(tree: ast.Module) -> bool:
     return False
 
 
+def _parse_call_consumed_inline(tree: ast.Module) -> bool:
+    """Return whether a parse-method result is consumed inline rather than bound to a target.
+
+    A ``parse_args``/``parse_known_args`` call is statically trackable only when its
+    result is the value of an assignment (``parsed = parser.parse_args()``) or of a
+    bare expression statement (``parser.parse_args(namespace=options)``, whose result
+    is discarded after populating the keyword object). Consumed inside a larger
+    expression instead -- returned directly, passed to ``vars``, double-star
+    unpacked, or bound by a walrus -- the namespace never reaches a tracked name, so
+    the check suppresses.
+    """
+    statement_bound_call_ids: set[int] = set()
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, (ast.Assign, ast.Expr)):
+            continue
+        bound_value = each_node.value
+        if not isinstance(bound_value, ast.Call):
+            continue
+        function_node = bound_value.func
+        if isinstance(function_node, ast.Attribute) and function_node.attr in ALL_PARSE_METHOD_NAMES:
+            statement_bound_call_ids.add(id(bound_value))
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.Call):
+            continue
+        function_node = each_node.func
+        if not isinstance(function_node, ast.Attribute):
+            continue
+        if function_node.attr not in ALL_PARSE_METHOD_NAMES:
+            continue
+        if id(each_node) not in statement_bound_call_ids:
+            return True
+    return False
+
+
 def check_dead_argparse_arguments(
     content: str, file_path: str, full_file_content: str | None = None
 ) -> list[str]:
@@ -449,12 +487,14 @@ def check_dead_argparse_arguments(
     in a module-level ``__all__``, and no parsed namespace escapes static view. A
     namespace escapes when a ``parse_args``/``parse_known_args`` bound method is
     referenced as an aliased value rather than called inline, when a parse result
-    binds to an attribute- or subscript-target the scan cannot track, when a tracked
-    namespace is read through ``__dict__``, or when a tracked namespace Name is used
-    as a value rather than an attribute read (passed to a call, returned, aliased,
-    double-star unpacked, or nested inside a container literal), excluding the object
-    of an attribute access and a Name passed as the ``namespace=`` keyword to a parse
-    call. A namespace name is tracked when it binds a parse result, a tuple-unpacked
+    binds to an attribute- or subscript-target the scan cannot track, when a parse
+    result is consumed inline within a larger expression rather than bound to an
+    assignment or a bare statement, when a tracked namespace is read through
+    ``__dict__``, or when a tracked namespace Name is used as a value rather than an
+    attribute read (passed to a call, returned, aliased, double-star unpacked, or
+    nested inside a container literal), excluding the object of an attribute access
+    and a Name passed as the ``namespace=`` keyword to a parse call. A namespace
+    name is tracked when it binds a parse result, a tuple-unpacked
     parse result, a ``namespace=`` keyword object, or an alias of one of these.
     Positional arguments and the argparse ``help``/``version`` auto-actions are never
     flagged. Whole-file analysis runs against ``full_file_content`` when supplied so

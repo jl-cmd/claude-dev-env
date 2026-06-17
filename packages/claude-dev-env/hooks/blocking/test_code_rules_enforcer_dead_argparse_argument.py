@@ -422,6 +422,57 @@ def test_should_flag_when_namespace_keyword_object_only_attribute_read() -> None
     )
 
 
+def test_should_suppress_when_parse_result_consumed_by_vars_inline() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def build() -> dict:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    return vars(argument_parser.parse_args())\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_suppress_when_parse_result_returned_inline() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def build() -> argparse.Namespace:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    return argument_parser.parse_args()\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_suppress_when_parse_result_double_star_unpacked_inline() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def run(repo: str) -> None:\n"
+        "    print(repo)\n"
+        "\n"
+        "def build() -> None:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    run(**vars(argument_parser.parse_args()))\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_suppress_when_parse_result_bound_by_walrus() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def build() -> dict:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    return vars(parsed_arguments := argument_parser.parse_args())\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
 def test_validate_content_runs_dead_argparse_check() -> None:
     source = (
         "import argparse\n"
