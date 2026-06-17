@@ -182,6 +182,39 @@ def test_should_suppress_when_namespace_is_forwarded_to_a_call() -> None:
     assert _check(source, PRODUCTION_FILE_PATH) == []
 
 
+def test_should_suppress_when_tuple_unpacked_namespace_is_forwarded() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def main(parsed_arguments: argparse.Namespace) -> None:\n"
+        "    print('run')\n"
+        "\n"
+        "def build() -> None:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--verbose', action='store_true')\n"
+        "    parsed_arguments, remaining = argument_parser.parse_known_args()\n"
+        "    main(parsed_arguments)\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
+def test_should_suppress_when_aliased_namespace_is_forwarded() -> None:
+    source = (
+        "import argparse\n"
+        "\n"
+        "def run(parsed_arguments: argparse.Namespace) -> None:\n"
+        "    print('run')\n"
+        "\n"
+        "def build() -> None:\n"
+        "    argument_parser = argparse.ArgumentParser()\n"
+        "    argument_parser.add_argument('--repo', default='.')\n"
+        "    parsed_arguments = argument_parser.parse_args()\n"
+        "    alias = parsed_arguments\n"
+        "    run(alias)\n"
+    )
+    assert _check(source, PRODUCTION_FILE_PATH) == []
+
+
 def test_should_suppress_when_namespace_consumed_by_vars() -> None:
     source = (
         "import argparse\n"
