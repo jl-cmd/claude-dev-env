@@ -217,6 +217,31 @@ def _constructed_class_names(tree: ast.Module) -> set[str]:
     return constructed
 
 
+def _module_level_singleton_class_names(tree: ast.Module) -> set[str]:
+    """Return class names constructed by a module-level assignment.
+
+    A module-level assignment such as ``CURRENT_OS = CurrentOsConfig()`` binds a
+    singleton that importer modules read across files, beyond this file's view.
+    The in-file read scan cannot observe those cross-module reads, so a field on
+    such a class is never provably dead from this file alone. A construction that
+    sits inside a function or class body is not collected, so a dataclass built
+    for local use stays in scope for the check.
+    """
+    singleton_class_names: set[str] = set()
+    for each_statement in tree.body:
+        if not isinstance(each_statement, (ast.Assign, ast.AnnAssign)):
+            continue
+        assigned_value = each_statement.value
+        if assigned_value is None:
+            continue
+        for each_node in ast.walk(assigned_value):
+            if isinstance(each_node, ast.Call) and isinstance(
+                each_node.func, ast.Name
+            ):
+                singleton_class_names.add(each_node.func.id)
+    return singleton_class_names
+
+
 def _is_whole_instance_stringify_call(node: ast.AST) -> bool:
     """Return whether a call stringifies a whole instance via ``str``/``repr``/``format``."""
     if not isinstance(node, ast.Call):
@@ -256,17 +281,18 @@ def check_dead_dataclass_fields(
 ) -> list[str]:
     """Flag a @dataclass field that the same file constructs but never reads.
 
-    A field is dead when its dataclass is instantiated somewhere in the file
-    (so the class is live), the field name never appears as an attribute read,
-    an augmented-assignment target, a class-pattern keyword, or a literal
-    ``getattr``/``attrgetter`` access anywhere in the file, and the file contains
-    no non-literal dynamic access, reflective whole-instance consumer
-    (``asdict``, ``astuple``, ``fields``, ``replace``, ``vars``), ``__dict__``
-    read, or auto-generated dataclass dunder field read (comparison, set/dict
-    membership, or whole-instance stringification) that could read it
-    indirectly. Whole-file analysis runs against ``full_file_content`` when
-    supplied so an Edit fragment is judged against the reconstructed post-edit
-    file.
+    A field is dead when its dataclass is instantiated by a call in the file
+    (so the class is live) but never bound to a module-level singleton (whose
+    fields importer modules read across files, beyond this file's view), the
+    field name never appears as an attribute read, an augmented-assignment
+    target, a class-pattern keyword, or a literal ``getattr``/``attrgetter``
+    access anywhere in the file, and the file contains no non-literal dynamic
+    access, reflective whole-instance consumer (``asdict``, ``astuple``,
+    ``fields``, ``replace``, ``vars``), ``__dict__`` read, or auto-generated
+    dataclass dunder field read (comparison, set/dict membership, or
+    whole-instance stringification) that could read it indirectly. Whole-file
+    analysis runs against ``full_file_content`` when supplied so an Edit
+    fragment is judged against the reconstructed post-edit file.
 
     Args:
         content: The new content under validation (Edit fragment or whole file).
@@ -300,11 +326,14 @@ def check_dead_dataclass_fields(
         | _exported_names(tree)
     )
     constructed_class_names = _constructed_class_names(tree)
+    singleton_class_names = _module_level_singleton_class_names(tree)
     issues: list[str] = []
     for each_node in ast.walk(tree):
         if not isinstance(each_node, ast.ClassDef) or not _is_dataclass(each_node):
             continue
         if each_node.name not in constructed_class_names:
+            continue
+        if each_node.name in singleton_class_names:
             continue
         for each_field_definition in _dataclass_field_definitions(each_node):
             field_name, field_line = each_field_definition
