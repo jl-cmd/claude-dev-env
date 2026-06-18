@@ -125,3 +125,70 @@ test('workflow error path returns the recovery keys', () => {
   assert.match(catchBody, /\brecovered\b/);
   assert.match(catchBody, /\brecoveryNote\b/);
 });
+
+test('workflow declares a reuse audit phase', () => {
+  assert.match(workflowSource, /Reuse audit/);
+  assert.match(workflowSource, /title:\s*'Reuse audit'/);
+});
+
+test('reuse audit runner uses a structured schema and the reuse audit phase', () => {
+  const reuseAuditBody = functionBody('runReuseAudit');
+  assert.match(reuseAuditBody, /schema:\s*reuseAuditSchema\(\)/);
+  assert.match(reuseAuditBody, /phase:\s*'Reuse audit'/);
+});
+
+test('reuse audit schema gates on allJustified', () => {
+  const reuseAuditSchemaBody = functionBody('reuseAuditSchema');
+  assert.match(reuseAuditSchemaBody, /allJustified/);
+  assert.match(reuseAuditSchemaBody, /findings/);
+  assert.match(reuseAuditSchemaBody, /summary/);
+});
+
+test('reuse audit prompt searches shared_utils for existing equivalents', () => {
+  const reuseAuditPromptBody = functionBody('reuseAuditPrompt');
+  assert.match(reuseAuditPromptBody, /shared_utils/);
+  assert.match(reuseAuditPromptBody, /reuse-audit\.md/);
+  assert.match(reuseAuditPromptBody, /unjustified-reproduction/);
+});
+
+test('workflow runs the reuse audit after writing the packet', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  const writeIndex = runBody.indexOf('await writePacket');
+  const reuseAuditIndex = runBody.indexOf('runReuseAudit');
+  assert.ok(writeIndex !== -1 && reuseAuditIndex !== -1);
+  assert.ok(writeIndex < reuseAuditIndex);
+});
+
+test('workflow folds the reuse audit gate into the clean validation check', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  assert.match(runBody, /reuseAudit\.allJustified/);
+  assert.match(runBody, /reuseAuditFindings/);
+});
+
+test('workflow declares a visualize phase', () => {
+  assert.match(workflowSource, /title:\s*'Visualize'/);
+});
+
+test('workflow runs the visualize phase after validation', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  const visualHtmlIndex = runBody.indexOf('runVisualHtml(packetPath)');
+  const validationLoopIndex = runBody.indexOf('while (!hasCleanValidation(');
+  assert.ok(visualHtmlIndex !== -1 && validationLoopIndex !== -1);
+  assert.ok(visualHtmlIndex > validationLoopIndex);
+});
+
+test('visual html schema carries the html path', () => {
+  const visualHtmlSchemaBody = functionBody('visualHtmlSchema');
+  assert.match(visualHtmlSchemaBody, /htmlPath/);
+});
+
+test('visual html prompt names the template and the output file', () => {
+  const visualHtmlPromptBody = functionBody('visualHtmlPrompt');
+  assert.match(visualHtmlPromptBody, /visual-plan\.template\.html/);
+  assert.match(visualHtmlPromptBody, /visual-plan\.html/);
+});
+
+test('workflow returns the visual html path', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  assert.match(runBody, /visualHtmlPath/);
+});

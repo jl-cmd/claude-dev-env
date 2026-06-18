@@ -76,6 +76,14 @@ def valid_markdown_for(relative_path: str) -> str:
             "Use only this packet. Read README.md, then context/source-map.md, then implementation/steps.md. "
             "Do not rely on prior chat history."
         )
+    if relative_path == "validation/reuse-audit.md":
+        return (
+            "# Reuse Audit\n\n"
+            "| Item | Kind | Verdict | Searched | Found | Decision | Evidence |\n"
+            "|---|---|---|---|---|---|---|\n"
+            "| authenticate_user | helper | reused | shared_utils/auth | existing public helper | call it directly | src/auth.py:12 |\n\n"
+            "Summary: reused 1.\n"
+        )
     return f"# {relative_path}\n\nGrounded implementation detail for this packet file.\n"
 
 
@@ -397,6 +405,48 @@ def test_bullet_list_steps_naming_test_contract_passes(tmp_path: Path) -> None:
         "# Steps\n\n"
         "- Test first: add login success coverage.\n"
         "- Production change: add the route handler; covered by test_auth_login_success.\n",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 0, validator_run.stderr
+
+
+def test_missing_reuse_audit_file_fails(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "validation" / "reuse-audit.md").unlink()
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 2
+    assert "missing required file: validation/reuse-audit.md" in validator_run.stderr
+
+
+def test_reuse_audit_without_verdict_keyword_fails(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "validation" / "reuse-audit.md").write_text(
+        "# Reuse Audit\n\nNo audit was performed for this packet.\n",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 2
+    assert "reuse-audit.md must record a reuse verdict for each new item" in validator_run.stderr
+
+
+def test_reuse_audit_with_verdict_keyword_passes(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "validation" / "reuse-audit.md").write_text(
+        "# Reuse Audit\n\n"
+        "| Item | Kind | Verdict | Searched | Found | Decision | Evidence |\n"
+        "|---|---|---|---|---|---|---|\n"
+        "| open_postgres_connection | helper | reused | shared_utils/theme_db | existing public helper | call it | shared_utils/theme_db/connection.py:20 |\n\n"
+        "Summary: reused 1.\n",
         encoding="utf-8",
     )
 

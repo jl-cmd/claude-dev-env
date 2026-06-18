@@ -6,6 +6,8 @@ export const meta = {
     { title: 'Discover', detail: 'Resolve repo root, read instructions, inspect matching source files, tests, configs, docs, skills, hooks, agents, and workflows.' },
     { title: 'Write packet', detail: 'Create the required docs/plans/<slug>/ tree with a thin README hub and detailed second-level docs.' },
     { title: 'Validate', detail: 'Run scripts/validate_packet.py, spawn plan-packet-validator in fresh context, and repair findings up to the cap.' },
+    { title: 'Reuse audit', detail: 'Search the codebase for existing equivalents of each new symbol or file the packet introduces; write validation/reuse-audit.md with a per-item verdict; gate approval on any unjustified reproduction.' },
+    { title: 'Visualize', detail: 'Build a single-file offline visual HTML of the finished packet from the visual-plan template; write it beside the packet as visual-plan.html.' },
     { title: 'Approval', detail: 'Return the packet path and validation verdict, then stop before implementation work.' },
   ],
 }
@@ -76,6 +78,48 @@ function repairSchema() {
       recoveryNote: { type: 'string' },
     },
     required: ['repaired', 'summary', 'recovered', 'recoveryNote'],
+  }
+}
+
+function reuseAuditSchema() {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      allJustified: { type: 'boolean' },
+      findings: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            item: { type: 'string' },
+            kind: { type: 'string' },
+            verdict: { type: 'string' },
+            searched: { type: 'string' },
+            found: { type: 'string' },
+            decision: { type: 'string' },
+            evidence: { type: 'string' },
+          },
+          required: ['item', 'kind', 'verdict', 'searched', 'found', 'decision', 'evidence'],
+        },
+      },
+      summary: { type: 'string' },
+    },
+    required: ['allJustified', 'findings', 'summary'],
+  }
+}
+
+function visualHtmlSchema() {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      htmlPath: { type: 'string' },
+      sectionsBuilt: { type: 'array', items: { type: 'string' } },
+      summary: { type: 'string' },
+    },
+    required: ['htmlPath', 'sectionsBuilt', 'summary'],
   }
 }
 
@@ -190,13 +234,40 @@ function semanticValidationPrompt(packetPath) {
   )
 }
 
-function repairPrompt(packetPath, deterministicValidation, semanticValidation) {
+function repairPrompt(packetPath, deterministicValidation, semanticValidation, reuseAudit) {
   return (
     `Repair only the plan packet at ${packetPath}. Do not edit source code.\n\n` +
     `Deterministic validation findings:\n${JSON.stringify(deterministicValidation.findings || [])}\n\n` +
     `Semantic validation findings:\n${JSON.stringify(semanticValidation.findings || [])}\n\n` +
+    `Reuse audit findings:\n${JSON.stringify(reuseAudit?.findings || [])}\n\n` +
+    `For each reuse audit finding marked unjustified-reproduction, either record the reuse decision in the packet that justifies the new code, or change the plan to reuse the existing public helper or extract it to shared_utils; update validation/reuse-audit.md accordingly. ` +
     `Make the packet pass by correcting documentation, adding missing source grounding, removing placeholders, strengthening TDD steps, and updating validation/validator-report.md. ` +
     `If the Edit or Write tool is blocked by a worktree or isolation guard, recover automatically: stage the corrected files under a writable temporary directory with the Write tool, then copy them over the packet path with a filesystem copy. Set recovered=true with recoveryNote describing the staging path and copy; otherwise set recovered=false with an empty recoveryNote.`
+  )
+}
+
+function reuseAuditPrompt(packetPath) {
+  return (
+    `Run the reuse audit for the plan packet at ${packetPath}. Resolve the repo root from packet.json. Do not edit source code; only write the packet doc.\n\n` +
+    `Read implementation/file-plan.md, spec/interfaces.md, implementation/tdd-plan.md, and spec/scope.md in the packet to enumerate every new file, public symbol, helper, and constant the build introduces.\n\n` +
+    `For each item, search the codebase with grep, serena, or zoekt — repo-wide and specifically under shared_utils — for an existing implementation or near-equivalent behavior.\n\n` +
+    `Assign exactly one verdict per item from: reused (an existing public helper is used), extract-to-shared (an equivalent exists but is not shared or public and should be extracted), new-justified (genuinely new, with the reason reuse or extract was rejected), config-local (a constant living in config/), or unjustified-reproduction (reproduces existing behavior that could be made public or extracted, with no recorded justification).\n\n` +
+    `Write validation/reuse-audit.md into the packet: a markdown table with columns Item, Kind, Verdict, Searched, Found, Decision, Evidence using real file:line evidence, plus a one-line summary of verdict counts. Write concrete content only — no angle-bracket placeholder tokens and no todo, tbd, or placeholder words.\n\n` +
+    `Return the structured object. Set allJustified=false when any finding has verdict unjustified-reproduction.`
+  )
+}
+
+function visualHtmlPrompt(packetPath) {
+  return (
+    `Build a single-file, offline, diagram-first visual HTML of the finished plan packet at ${packetPath}. Do not edit source code or the packet markdown; only write the HTML view.\n\n` +
+    `Read the style template first and reuse its CSS and section components exactly:\n` +
+    `$HOME/.claude/skills/anthropic-plan/templates/visual-plan.template.html\n\n` +
+    `Then read the packet: README.md, packet.json, every file under spec/ and implementation/, and validation/reuse-audit.md. Translate the packet into the template's visual vocabulary — stat hero, scenario row strips, is/isn't cards, edit-recipe step sequences, verdict badges, and a checklist. Show the plan as diagrams and compact cards, never walls of prose, and never paste the markdown verbatim.\n\n` +
+    `Write for the reviewer — a person reading the plan, not the computer that runs the code. State every label as what a step accomplishes, in plain language. Drop code symbols from the picture: no function names, selector strings, call traces, or snake_case test names in the visible diagram — those stay in the packet markdown for the build agent. Keep each touched file's repo-relative path, but dim it (the .rpath / .ap style) so it sits quietly beneath the human description.\n\n` +
+    `Render the change (section 05) as edit-recipe step sequences, one recipe per touched file: a plain-language title for what the file accomplishes, the dimmed repo-relative path, then an ordered row of colored steps — reused (green), modified (violet), new (amber). Fold a trivial one-line change into the recipe it supports as an "Also adds" line rather than giving it its own card. Name each test by the behavior it proves, not its function name.\n\n` +
+    `Surface validation/reuse-audit.md as a Reuse audit section with one verdict badge per item (reused, extract-to-shared, new-justified, config-local, unjustified-reproduction), each item titled in plain language with its file path dimmed.\n\n` +
+    `Write the result to ${packetPath}/visual-plan.html. Inline all CSS and JavaScript; make no network calls and reference no external assets, so the file opens offline. If the Write tool is blocked by a worktree or isolation guard, stage the file under $CLAUDE_JOB_DIR/tmp with the Write tool, then copy it to the packet path.\n\n` +
+    `Return htmlPath set to the written file path, sectionsBuilt listing the section names you included, and a one-line summary.`
   )
 }
 
@@ -238,8 +309,26 @@ async function runSemanticValidator(packetPath) {
   })
 }
 
-async function repairPacket(packetPath, deterministicValidation, semanticValidation) {
-  return agent(repairPrompt(packetPath, deterministicValidation, semanticValidation), {
+async function runReuseAudit(packetPath) {
+  return agent(reuseAuditPrompt(packetPath), {
+    label: `plan-packet-reuse-audit`,
+    phase: 'Reuse audit',
+    schema: reuseAuditSchema(),
+    agentType: 'general-purpose',
+  })
+}
+
+async function runVisualHtml(packetPath) {
+  return agent(visualHtmlPrompt(packetPath), {
+    label: `plan-packet-visual-html`,
+    phase: 'Visualize',
+    schema: visualHtmlSchema(),
+    agentType: 'general-purpose',
+  })
+}
+
+async function repairPacket(packetPath, deterministicValidation, semanticValidation, reuseAudit) {
+  return agent(repairPrompt(packetPath, deterministicValidation, semanticValidation, reuseAudit), {
     label: `plan-packet-repair`,
     phase: 'Validate',
     schema: repairSchema(),
@@ -255,8 +344,11 @@ async function runPlanPacketWorkflow(rawInput) {
   let packetWrite = null
   let deterministicValidation = null
   let semanticValidation = null
+  let reuseAudit = null
   let recovered = false
   let recoveryNote = ''
+  let visualHtmlPath = ''
+  const visualHtmlFindings = []
   const recordRecovery = (recovery) => {
     if (recovery?.recovered !== true) return
     recovered = true
@@ -267,20 +359,32 @@ async function runPlanPacketWorkflow(rawInput) {
     const discoverySummary = await discoverContext(runInput, packetPath)
     packetWrite = await writePacket(runInput, packetPath, discoverySummary)
     recordRecovery(packetWrite)
+    reuseAudit = await runReuseAudit(packetPath)
     deterministicValidation = await runDeterministicValidation(packetPath)
     semanticValidation = await runSemanticValidator(packetPath)
     const hasCleanValidation = () =>
-      deterministicValidation?.passed === true && semanticValidation && semanticValidation.allPassed === true
+      deterministicValidation?.passed === true &&
+      semanticValidation &&
+      semanticValidation.allPassed === true &&
+      reuseAudit &&
+      reuseAudit.allJustified === true
 
     while (!hasCleanValidation() && repairLoops < policy.maxRepairLoops) {
       repairLoops += 1
-      const repair = await repairPacket(packetPath, deterministicValidation, semanticValidation)
+      const repair = await repairPacket(packetPath, deterministicValidation, semanticValidation, reuseAudit)
       recordRecovery(repair)
+      reuseAudit = await runReuseAudit(packetPath)
       deterministicValidation = await runDeterministicValidation(packetPath)
       semanticValidation = await runSemanticValidator(packetPath)
     }
 
     const passed = hasCleanValidation()
+    try {
+      const visualHtml = await runVisualHtml(packetPath)
+      visualHtmlPath = visualHtml?.htmlPath || ''
+    } catch (visualHtmlError) {
+      visualHtmlFindings.push(String(visualHtmlError?.message || visualHtmlError))
+    }
     return {
       packetPath: packetWrite?.packetPath || packetPath,
       slug: packetWrite?.slug || slugFromTask(runInput.task || runInput.prompt || runInput.arguments),
@@ -288,10 +392,13 @@ async function runPlanPacketWorkflow(rawInput) {
       repairLoops,
       deterministicFindings: deterministicValidation?.findings || [],
       semanticFindings: semanticValidation?.findings || [],
+      reuseAuditFindings: reuseAudit?.findings || [],
       implementationStarted: false,
       approvalRequired: true,
       recovered,
       recoveryNote,
+      visualHtmlPath,
+      visualHtmlFindings,
     }
   } catch (workflowError) {
     return {
@@ -308,10 +415,13 @@ async function runPlanPacketWorkflow(rawInput) {
           detail: String(workflowError?.message || workflowError),
         },
       ],
+      reuseAuditFindings: reuseAudit?.findings || [],
       implementationStarted: false,
       approvalRequired: true,
       recovered,
       recoveryNote,
+      visualHtmlPath,
+      visualHtmlFindings,
     }
   }
 }

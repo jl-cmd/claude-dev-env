@@ -38,8 +38,10 @@ The workflow handles the full planning loop:
 5. Run `scripts/validate_packet.py`.
 6. Spawn `plan-packet-validator` in fresh context.
 7. Repair packet findings up to the workflow cap.
-8. Return packet path, validation state, and findings.
-9. Stop before implementation.
+8. Run the reuse audit: search the codebase for existing equivalents of each new file/symbol the packet introduces, write `validation/reuse-audit.md`, and gate approval on any unjustified reproduction.
+9. Build a single-file offline visual HTML of the finished packet from `templates/visual-plan.template.html` and write it beside the packet as `visual-plan.html`.
+10. Return packet path, validation state, and findings.
+11. Stop before implementation.
 
 ## Packet Shape
 
@@ -62,6 +64,12 @@ The packet depth rule is strict: `README.md` is a thin hub, first-level folders 
 The deterministic validator checks required files, placeholders, `Open Questions`, source-map strength, TDD coverage, standalone handoff prompts, and `packet.json` consistency.
 
 The `plan-packet-validator` agent checks source accuracy, scope, enough implementation detail for a blind build agent, real TDD order, invented APIs or commands, and end-to-end acceptance criteria.
+
+The reuse audit writes `validation/reuse-audit.md` with a per-item verdict for every new file or symbol the packet introduces and gates approval on any unjustified reproduction of existing behavior.
+
+## Visualize
+
+After validation and before approval, the workflow builds a single-file offline visual HTML of the finished packet from `templates/visual-plan.template.html` and writes it beside the packet as `visual-plan.html`. The file inlines all CSS and JavaScript and references no external assets, so it opens offline. It renders the packet as diagrams and compact cards — a stat hero, scenario strips, is/isn't cards, edit-recipe step sequences for the file-by-file change, reuse-audit verdict badges, and a checklist — rather than reproducing the markdown. Every label is written for the reviewer: the diagram says what each step does in plain words and leaves out code symbols (function names, selectors, test names), while each touched file keeps its repo-relative path dimmed for the build agent. Because it is generated after validation, `visual-plan.html` is not a required packet file.
 
 ## Rules
 
