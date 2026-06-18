@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.67.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.66.2...claude-dev-env-v1.67.0) (2026-06-18)
+
+
+### Features
+
+* **plan:** add reuse-audit phase to the plan-packet workflow ([f508002](https://github.com/jl-cmd/claude-code-config/commit/f508002776ec58f894470db4a8fd09ac86de0623))
+* **plan:** add reuse-audit phase to the plan-packet workflow ([1269f8e](https://github.com/jl-cmd/claude-code-config/commit/1269f8e4c328f144fff01f462eb3f8931bca3840))
+* **plan:** add Visualize phase that builds an offline visual HTML ([0828a73](https://github.com/jl-cmd/claude-code-config/commit/0828a739b0cea9cc60ca3b81bc3ec7ee90ffb9b7))
+
+
+### Refactoring
+
+* **plan:** make the visual-plan view human-first with edit-recipe steps ([825393d](https://github.com/jl-cmd/claude-code-config/commit/825393d0ef69768dba7367a29fa3cadc3bd7f397))
+
 ## [1.66.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.66.1...claude-dev-env-v1.66.2) (2026-06-18)
 
 
