@@ -6,7 +6,7 @@
 
 When a docstring enumerates the behaviors a body applies, the enumeration covers every behavior the body applies. A reader trusts the list to be complete: an item the code applies but the prose omits is a silent gap that misleads every future reader and reviewer.
 
-The gate validator `check_docstring_args_match_signature` covers the `Args:` section parameter names. Free-form prose — `"a field counts as read when ..."`, `"resolves to shared temp only"`, `"strip ceremony, then drop blockquotes"` — has no signature to compare against, so the gate cannot catch its drift. This rule is the judgment standard for that prose. It carries documented-but-pending hook coverage; the audit lane below is the enforcement until a deterministic gate check exists.
+The gate validator `check_docstring_args_match_signature` covers the `Args:` section parameter names. A second gate validator, `check_docstring_fallback_branch_coverage`, covers one deterministic slice of the free-form prose: a summary that scopes a fallback to a single condition (`only when`, `falls back to ... when`) while the body routes to that same fallback call from two or more distinct early-return guards. The remaining free-form prose — `"a field counts as read when ..."`, `"resolves to shared temp only"`, `"strip ceremony, then drop blockquotes"` — has no signature and no single structural shape to compare against, so the gate cannot catch its drift. This rule is the judgment standard for that prose; the audit lane below is the enforcement for everything outside the two gated slices.
 
 ## What to check before you write the docstring
 
@@ -14,6 +14,7 @@ Read the body and the docstring side by side:
 
 - **Read-source / match-source unions.** A body that computes `read_names = a | b | c` (or any union of "what counts") names each union member in the prose enumeration. A union member the code applies but the prose omits is a gap.
 - **Suppressor / skip lists.** A body with several early returns that suppress the check names each suppressor in the prose.
+- **Shared fallback routes.** A summary that scopes a fallback call to one condition names every condition that reaches that call. When the body routes to the same fallback from two or more early-return guards (`if a is None: fallback(); return` and `if random() < p: fallback(); return`), the prose enumerates both guards. The `check_docstring_fallback_branch_coverage` gate blocks the single-condition form of this drift at Write/Edit time.
 - **Step order.** A docstring that says `A then B then C` matches the call order in the body.
 - **Predicate breadth.** A boolean helper whose prose promises a narrow check accepts only the inputs the prose names — no broader input class the name and prose do not mention.
 
@@ -36,7 +37,7 @@ A docstring that enumerates "attribute read, augmented-assignment target, class-
 
 ## Enforcement (audit lane)
 
-This drift class is sub-bucket **O6** in `packages/claude-dev-env/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md` (free-form `Note:` / `Returns:` / responsibility-list claims). The audit teammate lists every prose enumeration in a changed docstring and verifies each item against the body, and lists every union member / suppressor / step in the body and verifies each appears in the prose. A union member or suppressor in the body that the prose omits is an O6 finding.
+This drift class is sub-bucket **O6** in `packages/claude-dev-env/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md` (free-form `Note:` / `Returns:` / responsibility-list claims). The audit teammate lists every prose enumeration in a changed docstring and verifies each item against the body, and lists every union member / suppressor / step in the body and verifies each appears in the prose. A union member or suppressor in the body that the prose omits is an O6 finding. The single-condition shared-fallback shape of this drift is gated deterministically by `check_docstring_fallback_branch_coverage` (`packages/claude-dev-env/hooks/blocking/code_rules_docstrings.py`); the audit lane covers every O6 shape the gate cannot match.
 
 ## Why
 
