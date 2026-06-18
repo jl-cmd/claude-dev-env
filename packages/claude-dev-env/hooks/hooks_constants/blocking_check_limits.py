@@ -36,6 +36,12 @@ ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES: tuple[str, ...] = (
     "fall back to",
 )
 
+ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES: tuple[str, ...] = (
+    " or ",
+    "either",
+    "both",
+)
+
 ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES: frozenset[str] = frozenset({"Exception", "BaseException"})
 ALL_BOUNDARY_TYPE_EXEMPT_FILENAMES: frozenset[str] = frozenset({"protocols.py", "types.py"})
 ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES: frozenset[str] = frozenset({"self", "cls"})

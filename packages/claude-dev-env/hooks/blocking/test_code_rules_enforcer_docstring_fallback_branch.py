@@ -192,6 +192,105 @@ def test_should_still_flag_word_boundary_scope_phrase() -> None:
     )
 
 
+def test_should_not_flag_when_summary_enumerates_both_conditions_inline() -> None:
+    source = (
+        "def scroll(bar: object) -> None:\n"
+        '    """Drive a scrollbar pass, falling back to the keyboard when the bar'
+        ' lacks geometry or on a random fraction of passes."""\n'
+        "    if bar is None:\n"
+        "        _keyboard(None)\n"
+        "        return\n"
+        "    if bar.is_random:\n"
+        "        _keyboard(bar)\n"
+        "        return\n"
+        "    _drive(bar)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "A summary that enumerates both fallback conditions inline with 'or' is not "
+        f"a single-condition scope and must not be flagged, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_single_condition_fallback_with_two_routes() -> None:
+    source = (
+        "def scroll(bar: object) -> None:\n"
+        '    """Drive a scrollbar pass, falling back to the keyboard when the bar'
+        ' lacks geometry."""\n'
+        "    if bar is None:\n"
+        "        _keyboard(None)\n"
+        "        return\n"
+        "    if bar.is_random:\n"
+        "        _keyboard(bar)\n"
+        "        return\n"
+        "    _drive(bar)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert any("_keyboard" in each for each in issues), (
+        "A summary scoping the fallback to one named condition while two routes reach "
+        f"it must still be flagged, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_when_scope_phrase_is_a_left_anchored_prefix() -> None:
+    source = (
+        "def forward(packet: object) -> None:\n"
+        '    """Forward the packet; falls back toward the default sink when both'
+        ' checks miss."""\n'
+        "    if packet is None:\n"
+        "        send_to_sink(None)\n"
+        "        return\n"
+        "    if packet.is_stale:\n"
+        "        send_to_sink(packet)\n"
+        "        return\n"
+        "    deliver(packet)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "'falls back toward' must not match the 'falls back to' scope phrase as a "
+        f"left-anchored prefix, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_only_whenever_left_anchored_prefix() -> None:
+    source = (
+        "def refresh(cache: object) -> None:\n"
+        '    """Rebuild the cache only whenever it is invalid or stale."""\n'
+        "    if cache is None:\n"
+        "        rebuild_cache(None)\n"
+        "        return\n"
+        "    if cache.is_cold:\n"
+        "        rebuild_cache(cache)\n"
+        "        return\n"
+        "    serve_cache(cache)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "'only whenever' must not match the 'only when' scope phrase as a "
+        f"left-anchored prefix, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_two_branches_to_same_method_on_distinct_indexed_receivers() -> None:
+    source = (
+        "class Pool:\n"
+        "    def shutdown(self, signal: object) -> None:\n"
+        '        """Close resources only when a shutdown signal arrives."""\n'
+        "        if signal is None:\n"
+        "            self.pool[0].close(signal)\n"
+        "            return\n"
+        "        if signal.is_secondary:\n"
+        "            self.pool[1].close(signal)\n"
+        "            return\n"
+        "        self.pool[2].drain(signal)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "Distinct indexed receivers calling the same method name are different "
+        f"fallbacks, got: {issues!r}"
+    )
+
+
 def test_should_not_flag_two_branches_to_same_named_method_on_distinct_receivers() -> None:
     source = (
         "class Closer:\n"

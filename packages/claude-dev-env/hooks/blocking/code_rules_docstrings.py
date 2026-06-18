@@ -23,6 +23,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES,
     ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES,
     ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES,
+    ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES,
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
@@ -317,7 +318,7 @@ def _callee_expression_name(expression: ast.expr) -> str:
     if isinstance(expression, ast.Attribute):
         receiver_name = _callee_expression_name(expression.value)
         if not receiver_name:
-            return expression.attr
+            return ast.unparse(expression)
         return f"{receiver_name}.{expression.attr}"
     return ""
 
@@ -385,17 +386,32 @@ def _summary_contains_phrase_at_word_boundary(summary_text: str, phrase: str) ->
         preceding_is_boundary = (
             match_index == 0 or not summary_text[match_index - 1].isalnum()
         )
-        if preceding_is_boundary:
+        following_index = match_index + len(phrase)
+        following_is_boundary = (
+            following_index >= len(summary_text)
+            or not summary_text[following_index].isalnum()
+        )
+        if preceding_is_boundary and following_is_boundary:
             return True
         search_start = match_index + 1
 
 
+def _summary_joins_multiple_conditions(summary_text: str) -> bool:
+    return any(
+        joining_phrase in summary_text
+        for joining_phrase in ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES
+    )
+
+
 def _docstring_summary_scopes_a_single_condition(docstring_text: str) -> bool:
     summary_text = docstring_text.split("\n\n", 1)[0].lower()
-    return any(
+    has_scope_phrase = any(
         _summary_contains_phrase_at_word_boundary(summary_text, each_phrase)
         for each_phrase in ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES
     )
+    if not has_scope_phrase:
+        return False
+    return not _summary_joins_multiple_conditions(summary_text)
 
 
 def check_docstring_fallback_branch_coverage(content: str, file_path: str) -> list[str]:
