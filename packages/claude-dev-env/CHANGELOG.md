@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.67.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.67.1...claude-dev-env-v1.67.2) (2026-06-18)
+
+
+### Bug Fixes
+
+* **anthropic-plan:** harden plan-packet writes against background isolation ([177197a](https://github.com/jl-cmd/claude-code-config/commit/177197a6e89cfeead0cbd58c7e54baee192243dc))
+* **anthropic-plan:** harden plan-packet writes against background isolation ([2e2ddd2](https://github.com/jl-cmd/claude-code-config/commit/2e2ddd2d9c3367bcb30b55e147144178258e6800))
+
 ## [1.67.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.67.0...claude-dev-env-v1.67.1) (2026-06-18)
 
 
