@@ -6,8 +6,10 @@ project, so a constant defined there is never proven dead by a single-file scan
 alone. This check resolves the enclosing package tree — the scan root — and
 flags an UPPER_SNAKE constant defined in the written module whose name appears
 in no ``.py`` module anywhere under that root: not as an imported name, not as a
-read, not as a re-export. That is the ``MEDIUM_TEXT``-style dead constant the
-CODE_RULES §9.8 dead-code rule targets, caught at Write/Edit time before the
+read, not as a re-export. When a constant looks dead in the package tree, the
+scan widens to the whole repository so a consumer in a sibling tree counts
+before the constant is flagged. That is the ``MEDIUM_TEXT``-style dead constant
+the CODE_RULES §9.8 dead-code rule targets, caught at Write/Edit time before the
 unused constant lands.
 
 The scan is deliberately conservative to keep false positives near zero:
@@ -18,11 +20,15 @@ The scan is deliberately conservative to keep false positives near zero:
   surface explicitly, so a name listed there is live by declaration and a name
   absent there is the author's stated intent, neither of which this check second
   guesses.
-- A constant is live when its name appears anywhere under the scan root —
+- A constant is live when its name appears anywhere the scan reaches —
   imported, read, listed in ``__all__``, or referenced in a string annotation —
   in any ``.py`` module, including the constants module itself.
-- Test modules under the scan root still count as references, so a constant used
-  only by a test stays live.
+- When the package-tree scan leaves a constant unreferenced, the scan widens to
+  the repository root (the nearest ``.git`` ancestor) so a consumer in a sibling
+  tree of the same repository counts; a module outside any repository is judged
+  on the package-tree scan alone.
+- Test modules under the scanned tree still count as references, so a constant
+  used only by a test stays live.
 """
 
 import ast
@@ -48,8 +54,8 @@ from hooks_constants.dead_module_constant_constants import (  # noqa: E402
     DEAD_MODULE_CONSTANT_GUIDANCE,
     DUNDER_ALL_NAME,
     DUNDER_INIT_FILENAME,
+    GIT_DIRECTORY_NAME,
     MAX_DEAD_MODULE_CONSTANT_ISSUES,
-    MAX_SCAN_ROOT_FILE_COUNT,
     MINIMUM_UPPER_SNAKE_LENGTH,
     PYTHON_SOURCE_SUFFIX,
 )
@@ -201,14 +207,13 @@ def _all_referenced_names_under_root(
     scan_root: Path,
     written_path: Path,
     written_content: str,
-) -> tuple[set[str], bool]:
-    """Return referenced names under the scan root and whether the file cap was hit.
+) -> set[str]:
+    """Return every name referenced by any module under the scan root.
 
     The written module's on-disk text is replaced by ``written_content`` so the
     post-edit view is judged, never the stale disk copy. Sibling modules are
-    read from disk. Reading stops after the configured file cap so a write under
-    an unexpectedly large tree cannot stall the hook; the boolean signals the
-    caller to treat that case as "cannot prove dead".
+    read from disk. Every ``.py`` module under the root is scanned so a consumer
+    counts regardless of how many files the tree holds.
 
     Args:
         scan_root: The directory tree to scan.
@@ -216,27 +221,44 @@ def _all_referenced_names_under_root(
         written_content: The post-edit text of the written module.
 
     Returns:
-        A (referenced_names, cap_was_hit) pair. The name set is the union across
-        every scanned module; cap_was_hit is True when the scan stopped at the
-        configured file cap before scanning the whole tree.
+        The set of names referenced across every scanned module, unioned with
+        the names the written module itself references.
     """
     all_referenced_names = _referenced_names_in_source(written_content, load_only=True)
     written_path_key = os.path.normcase(str(written_path))
-    scanned_file_count = 1
     for each_path in scan_root.rglob("*" + PYTHON_SOURCE_SUFFIX):
         if not each_path.is_file():
             continue
         if os.path.normcase(str(each_path.resolve())) == written_path_key:
             continue
-        scanned_file_count += 1
-        if scanned_file_count > MAX_SCAN_ROOT_FILE_COUNT:
-            return all_referenced_names, True
         try:
             sibling_source = each_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
         all_referenced_names |= _referenced_names_in_source(sibling_source)
-    return all_referenced_names, False
+    return all_referenced_names
+
+
+def _repository_root_for(written_path: Path) -> Path | None:
+    """Return the nearest ancestor directory that holds a ``.git`` entry.
+
+    Walks upward from the written module toward the filesystem root. A normal
+    checkout carries a ``.git`` directory and a git worktree carries a ``.git``
+    file; both satisfy ``exists()``. The repository root bounds the widened
+    cross-tree reference scan.
+
+    Args:
+        written_path: The resolved path of the constants module being written.
+
+    Returns:
+        The repository root directory, or ``None`` when no ancestor carries a
+        ``.git`` entry, so a module outside any repository triggers no widened
+        scan.
+    """
+    for each_ancestor in written_path.parents:
+        if (each_ancestor / GIT_DIRECTORY_NAME).exists():
+            return each_ancestor
+    return None
 
 
 def _module_is_exempt_from_constant_check(file_path: str) -> bool:
@@ -269,12 +291,14 @@ def check_dead_module_constants(
     Runs only on a dedicated constants module (``*_constants.py`` or a module
     under ``config/``); every other production module's file-global constants
     are governed by the use-count rule instead. A constant is dead when its name
-    appears in no ``.py`` module anywhere under the enclosing package tree — not
-    imported, not read, not listed in an ``__all__`` literal, not named in a
-    string annotation. A module declaring its own ``__all__`` is skipped so the
-    author's explicit export surface is never second-guessed. Whole-file
-    analysis runs against ``full_file_content`` when supplied so an Edit fragment
-    is judged against the reconstructed post-edit file.
+    appears in no ``.py`` module under the enclosing package tree, nor anywhere
+    in the repository the scan widens to when the package-tree scan leaves the
+    constant unreferenced — not imported, not read, not listed in an ``__all__``
+    literal, not named in a string annotation. A module declaring its own
+    ``__all__`` is skipped so the author's explicit export surface is never
+    second-guessed. Whole-file analysis runs against ``full_file_content`` when
+    supplied so an Edit fragment is judged against the reconstructed post-edit
+    file.
 
     Args:
         content: The new content under validation (Edit fragment or whole file).
@@ -301,13 +325,22 @@ def check_dead_module_constants(
         return []
     scan_root = _scan_root_for_constants_module(file_path)
     written_path = Path(file_path).resolve()
-    all_referenced_names, cap_was_hit = _all_referenced_names_under_root(
+    all_referenced_names = _all_referenced_names_under_root(
         scan_root,
         written_path,
         effective_content,
     )
-    if cap_was_hit:
-        return []
+    has_unreferenced_constant = any(
+        each_name not in all_referenced_names for each_name, _ in constant_definitions
+    )
+    if has_unreferenced_constant:
+        repository_root = _repository_root_for(written_path)
+        if repository_root is not None and repository_root != scan_root:
+            all_referenced_names |= _all_referenced_names_under_root(
+                repository_root,
+                written_path,
+                effective_content,
+            )
     issues: list[str] = []
     for each_name, each_line in constant_definitions:
         if each_name in all_referenced_names:

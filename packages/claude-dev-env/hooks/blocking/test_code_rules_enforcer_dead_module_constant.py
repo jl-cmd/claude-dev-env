@@ -39,8 +39,13 @@ def neutral_root() -> Iterator[Path]:
     own ``tmp_path`` directory name embeds the test name, which would make every
     synthetic constants path look like a test file. A neutral ``mkdtemp`` root
     mirrors how a production constants module path looks.
+
+    A ``.git`` marker is planted at the root so the cross-tree widening resolves
+    the repository root to this synthetic tree, never an enclosing real
+    checkout, keeping every test bounded and deterministic.
     """
     neutral_directory = Path(tempfile.mkdtemp(prefix="deadconst-")).resolve()
+    (neutral_directory / ".git").mkdir()
     try:
         yield neutral_directory
     finally:
@@ -186,3 +191,38 @@ def test_is_skipped_on_a_constants_test_file(neutral_root: Path) -> None:
     test_constants_path.write_text(body, encoding="utf-8")
     issues = _check(body, str(test_constants_path))
     assert issues == [], f"Test files are exempt, got: {issues}"
+
+
+def _build_cross_tree_repository(
+    repository_root: Path,
+    constants_body: str,
+    sibling_consumer_body: str,
+) -> Path:
+    config_directory = repository_root / "shared" / "theme_db" / "config"
+    config_directory.mkdir(parents=True)
+    constants_path = config_directory / "constants.py"
+    constants_path.write_text(constants_body, encoding="utf-8")
+    sibling_directory = repository_root / "cdp"
+    sibling_directory.mkdir(parents=True)
+    (sibling_directory / "tally.py").write_text(sibling_consumer_body, encoding="utf-8")
+    return constants_path
+
+
+def test_does_not_flag_constant_used_only_in_a_sibling_tree(neutral_root: Path) -> None:
+    constants_body = 'CROSS_TREE_CONSTANT = "cross"\nLOCALLY_DEAD_CONSTANT = "dead"\n'
+    sibling_consumer_body = (
+        "from shared.theme_db.config.constants import CROSS_TREE_CONSTANT\n"
+        "\n"
+        "def tally() -> str:\n"
+        "    return CROSS_TREE_CONSTANT\n"
+    )
+    constants_path = _build_cross_tree_repository(
+        neutral_root, constants_body, sibling_consumer_body
+    )
+    issues = _check(constants_body, str(constants_path))
+    assert not any("CROSS_TREE_CONSTANT" in each_issue for each_issue in issues), (
+        f"A constant consumed by a sibling tree in the repository must not be flagged, got: {issues}"
+    )
+    assert any("LOCALLY_DEAD_CONSTANT" in each_issue for each_issue in issues), (
+        f"A constant referenced nowhere in the repository stays flagged, got: {issues}"
+    )
