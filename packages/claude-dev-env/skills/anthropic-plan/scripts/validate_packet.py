@@ -192,7 +192,8 @@ def implementation_step_errors(packet_directory: Path) -> list[str]:
         packet_directory: Directory that should contain implementation/steps.md.
 
     Returns:
-        An error string when a numbered step names no test or non-code reason, else an empty list.
+        An error string when a numbered or bulleted step names no test or
+        non-code reason, else an empty list.
     """
     steps_file = packet_directory / "implementation" / "steps.md"
     if not steps_file.is_file():
@@ -200,7 +201,7 @@ def implementation_step_errors(packet_directory: Path) -> list[str]:
     step_lines = [
         each_line.strip()
         for each_line in steps_file.read_text(encoding="utf-8").splitlines()
-        if re.match(r"^\d+\.\s+", each_line.strip())
+        if is_step_line(each_line.strip())
     ]
     missing_test_lines = [
         each_line
@@ -309,13 +310,24 @@ def has_source_table_row(source_map_text: str) -> bool:
             continue
         if set(normalized_line.replace("|", "").strip()) <= {"-", ":"}:
             continue
-        if "source" in normalized_line.lower() and "facts" in normalized_line.lower():
-            continue
         if "/" in normalized_line or "\\" in normalized_line:
             return True
         if source_file_token_pattern.search(normalized_line):
             return True
     return False
+
+
+def is_step_line(stripped_line: str) -> bool:
+    """Return whether a stripped line is a numbered or bulleted implementation step.
+
+    Args:
+        stripped_line: A whitespace-stripped line from steps.md.
+
+    Returns:
+        True when the line begins with a numbered marker such as a digit run
+        followed by a dot, or a bullet marker (`-`, `*`, `+`), otherwise False.
+    """
+    return bool(re.match(r"^(?:\d+\.|[-*+])\s+", stripped_line))
 
 
 def step_line_has_test_contract(step_line: str) -> bool:

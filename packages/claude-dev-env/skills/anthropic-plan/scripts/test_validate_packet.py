@@ -331,3 +331,71 @@ def test_source_map_with_only_version_number_row_fails(tmp_path: Path) -> None:
 
     assert validator_run.returncode == 2
     assert "source-map.md must include source-grounded rows" in validator_run.stderr
+
+
+def test_source_map_data_row_naming_source_and_facts_passes(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "context" / "source-map.md").write_text(
+        "# Source Map\n\n"
+        "| Source | Why it matters | Facts extracted | Plan implication |\n"
+        "|---|---|---|---|\n"
+        "| src/auth.py | The source of truth for login | Key facts about hashing | Reuse it |\n",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 0, validator_run.stderr
+
+
+def test_has_source_table_row_keeps_grounded_row_with_source_and_facts_prose() -> None:
+    validator_module = load_validator_module()
+    source_map_text = (
+        "| Source | Why it matters | Facts extracted | Plan implication |\n"
+        "|---|---|---|---|\n"
+        "| src/auth.py | The source of truth for login | Key facts about hashing | Reuse it |\n"
+    )
+
+    assert validator_module.has_source_table_row(source_map_text) is True
+
+
+def test_has_source_table_row_skips_header_only_document() -> None:
+    validator_module = load_validator_module()
+    source_map_text = (
+        "| Source | Why it matters | Facts extracted | Plan implication |\n"
+        "|---|---|---|---|\n"
+    )
+
+    assert validator_module.has_source_table_row(source_map_text) is False
+
+
+def test_bullet_list_steps_without_test_contract_fails(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "implementation" / "steps.md").write_text(
+        "# Steps\n\n"
+        "- Add the route handler\n"
+        "- Wire the database call\n",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 2
+    assert "implementation/steps.md has steps without a test or non-code reason" in validator_run.stderr
+
+
+def test_bullet_list_steps_naming_test_contract_passes(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "implementation" / "steps.md").write_text(
+        "# Steps\n\n"
+        "- Test first: add login success coverage.\n"
+        "- Production change: add the route handler; covered by test_auth_login_success.\n",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 0, validator_run.stderr
