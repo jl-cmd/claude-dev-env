@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visual Plan — Component Gallery Template</title>
+<style>
+  :root{
+    --bg:#0a0e16; --panel:#121a28; --panel2:#0f1622; --line:#223049;
+    --ink:#e6edf7; --muted:#93a4bd; --faint:#5f7390;
+    --fail:#ef4444; --sent:#22c55e; --skip:#647892; --amber:#f59e0b;
+    --volt:#4cc9f0; --volt2:#4361ee;
+    --shadow:0 10px 30px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1100px 520px at 80% -10%, rgba(67,97,238,.16), transparent 60%),
+      radial-gradient(900px 480px at 0% 0%, rgba(76,201,240,.12), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font:15px/1.5 ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:34px 22px 90px}
+  .mono{font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace}
+
+  /* ---------- header ---------- */
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--volt);font-weight:700}
+  .kicker .dot{width:8px;height:8px;border-radius:50%;background:var(--volt);
+    box-shadow:0 0 12px var(--volt)}
+  h1{font-size:clamp(26px,4vw,40px);line-height:1.08;margin:14px 0 8px;letter-spacing:-.5px}
+  .sub{color:var(--muted);max-width:680px;font-size:16px}
+  .sub b{color:var(--ink)}
+
+  /* ---------- hero stat ---------- */
+  .hero{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:stretch;
+    margin:26px 0 8px}
+  .stat{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:16px;padding:20px 22px;box-shadow:var(--shadow)}
+  .stat .lab{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .stat .big{font-size:clamp(40px,7vw,68px);font-weight:800;line-height:1;margin-top:8px;letter-spacing:-2px}
+  .stat .cap{color:var(--faint);font-size:13px;margin-top:6px}
+  .stat.bad{border-color:rgba(239,68,68,.4)}
+  .stat.bad .big{color:var(--fail)}
+  .stat.good{border-color:rgba(76,201,240,.45)}
+  .stat.good .big{color:var(--volt)}
+  .arrowcol{display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:30px}
+
+  /* ---------- section ---------- */
+  section{margin-top:40px}
+  .h{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+  .h .n{font-family:ui-monospace,monospace;color:var(--volt);font-weight:700;font-size:14px;
+    border:1px solid var(--line);border-radius:8px;padding:2px 9px;background:var(--panel2)}
+  .h h2{font-size:21px;margin:0;letter-spacing:-.3px}
+  .h .lead{color:var(--muted);font-size:14px;margin:0 0 0 auto;text-align:right;max-width:420px}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:16px;padding:22px;box-shadow:var(--shadow);margin-top:14px}
+
+  /* ---------- cascade bar ---------- */
+  .cascade{display:flex;gap:2px;height:64px;align-items:flex-end;margin:6px 0 4px;flex-wrap:nowrap;overflow:hidden}
+  .cascade i{flex:1;background:linear-gradient(180deg,#ff6a6a,var(--fail));border-radius:2px 2px 0 0;
+    height:100%;opacity:.9;animation:rise .5s ease backwards}
+  .cascade i.ok{background:linear-gradient(180deg,#56e08a,var(--sent));height:62%}
+  @keyframes rise{from{transform:scaleY(.1);opacity:.2}to{transform:scaleY(1)}}
+  .meta{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin-top:14px}
+  .pill{display:inline-flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:999px;padding:5px 12px;font-size:12.5px}
+  .pill .k{color:var(--faint)}
+  .pill .v{font-weight:700}
+  .pill .v.r{color:var(--fail)} .pill .v.g{color:var(--sent)} .pill .v.s{color:var(--skip)}
+  .rootcause{display:flex;gap:12px;align-items:center;margin-top:16px;padding:12px 14px;
+    border:1px dashed rgba(245,158,11,.45);background:rgba(245,158,11,.07);border-radius:12px;color:#f8d99a}
+  .rootcause b{color:#ffd27a}
+
+  /* ---------- the rule banner ---------- */
+  .rule{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center;
+    border:1px solid rgba(76,201,240,.4);border-radius:18px;padding:22px 24px;
+    background:linear-gradient(110deg,rgba(67,97,238,.16),rgba(76,201,240,.07));box-shadow:var(--shadow)}
+  .bolt{font-size:40px;filter:drop-shadow(0 0 16px rgba(76,201,240,.6))}
+  .rule .txt{font-size:clamp(18px,2.6vw,26px);font-weight:700;line-height:1.25;letter-spacing:-.3px}
+  .rule .txt .hl{color:var(--volt)}
+  .rule .txt small{display:block;color:var(--muted);font-weight:500;font-size:13px;margin-top:8px;letter-spacing:0}
+
+  /* ---------- scenarios / row strips ---------- */
+  .scn{margin-top:16px;border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--panel2)}
+  .scn.headline{border-color:rgba(76,201,240,.4);background:linear-gradient(180deg,rgba(76,201,240,.06),var(--panel2))}
+  .scn-top{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .scn-title{font-weight:700;font-size:15px}
+  .tag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 10px}
+  .tag.stop{color:#ffd0d0;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.4)}
+  .tag.safe{color:#bff3d2;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.38)}
+  .tag.drain{color:#cfe0f5;background:rgba(100,120,146,.18);border:1px solid var(--line)}
+  .scn-note{margin-left:auto;color:var(--muted);font-size:13px}
+
+  .strip{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap}
+  .row{width:78px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
+    padding:10px 8px 8px;text-align:center;position:relative}
+  .row .ic{width:30px;height:30px;border-radius:9px;margin:2px auto 7px;display:flex;align-items:center;
+    justify-content:center;font-size:17px;font-weight:800}
+  .row.fail .ic{background:rgba(239,68,68,.16);color:var(--fail);border:1px solid rgba(239,68,68,.4)}
+  .row.sent .ic{background:rgba(34,197,94,.16);color:var(--sent);border:1px solid rgba(34,197,94,.4)}
+  .row.skip .ic{background:rgba(100,120,146,.18);color:#aebacd;border:1px solid var(--line)}
+  .row .rl{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+  .row .cnt{margin-top:8px;font-size:11px;color:var(--muted)}
+  .pips{display:flex;gap:4px;justify-content:center;margin-top:5px}
+  .pips u{width:9px;height:9px;border-radius:50%;background:#26334a;display:block}
+  .pips u.on{background:var(--fail);box-shadow:0 0 7px rgba(239,68,68,.7)}
+  .row.ghost{opacity:.32;filter:grayscale(.4)}
+  .row.ghost .ic{border-style:dashed}
+  .ghostlab{font-size:10px;color:var(--faint);margin-top:6px;font-style:italic}
+
+  .trip{display:flex;flex-direction:column;align-items:center;justify-content:center;width:96px;
+    border-radius:12px;border:1px solid rgba(239,68,68,.55);
+    background:linear-gradient(180deg,rgba(239,68,68,.22),rgba(239,68,68,.08))}
+  .trip .b{font-size:22px}
+  .trip .t{font-weight:800;color:#ff8c8c;font-size:13px;letter-spacing:.04em}
+  .trip .e{font-size:10.5px;color:#ffb3b3;margin-top:2px}
+  .arrow{display:flex;align-items:center;color:var(--faint);font-size:18px;padding:0 1px}
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:12.5px}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:13px;height:13px;border-radius:4px;display:inline-block}
+  .sw.f{background:var(--fail)} .sw.s{background:var(--sent)} .sw.k{background:var(--skip)}
+
+  /* ---------- two-col ---------- */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}.hero{grid-template-columns:1fr}.arrowcol{transform:rotate(90deg)}}
+  .mean{border-radius:14px;padding:18px;border:1px solid var(--line);background:var(--panel2)}
+  .mean.is{border-color:rgba(34,197,94,.4);background:linear-gradient(180deg,rgba(34,197,94,.07),var(--panel2))}
+  .mean.isnt{border-color:rgba(239,68,68,.32)}
+  .mean .lab{font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-bottom:10px}
+  .mean.is .lab{color:var(--sent)} .mean.isnt .lab{color:#ff9c9c}
+  .mean ul{margin:0;padding-left:0;list-style:none}
+  .mean li{display:flex;gap:9px;align-items:flex-start;margin:7px 0;font-size:14px}
+  .mean li .m{flex:0 0 auto;font-weight:800}
+  .mean.is li .m{color:var(--sent)} .mean.isnt li .m{color:var(--fail)}
+  .mean.isnt li{color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(239,68,68,.5)}
+
+  /* ---------- files ---------- */
+  .files{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.files{grid-template-columns:1fr}}
+  .file{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel2)}
+  .file .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .file .nm{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--volt);word-break:break-all}
+  .file .sz{font-size:11px;color:var(--faint);white-space:nowrap}
+  .file .desc{color:var(--muted);font-size:13px;margin-top:8px}
+  .bar{height:7px;border-radius:6px;background:#1b2740;margin-top:10px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--volt2),var(--volt))}
+  .nochange{margin-top:14px;color:var(--muted);font-size:13px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .nochange .lk{font-family:ui-monospace,monospace;font-size:12px;color:var(--faint);border:1px solid var(--line);
+    border-radius:7px;padding:3px 8px;background:var(--panel)}
+  .nochange .lk::before{content:"🔒 ";}
+
+  /* ---------- tests ---------- */
+  .tests{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.tests{grid-template-columns:1fr}}
+  .test{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--panel2);position:relative}
+  .test .rid{position:absolute;top:14px;right:14px;font-size:10px;font-weight:800;letter-spacing:.1em;
+    color:#ff9c9c;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.35);border-radius:6px;padding:2px 7px}
+  .test .tn{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--ink);padding-right:46px;line-height:1.4}
+  .test .pin{color:var(--muted);font-size:13px;margin-top:10px}
+  .test .pin b{color:var(--volt)}
+
+  /* ---------- acceptance ---------- */
+  .acc{display:grid;grid-template-columns:1fr 1fr;gap:9px 18px}
+  @media(max-width:760px){.acc{grid-template-columns:1fr}}
+  .ck{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--muted)}
+  .ck .b{flex:0 0 auto;width:18px;height:18px;border-radius:5px;background:rgba(34,197,94,.16);
+    border:1px solid rgba(34,197,94,.45);color:var(--sent);display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:800;margin-top:1px}
+  .ck b{color:var(--ink);font-weight:600}
+
+  footer{margin-top:50px;color:var(--faint);font-size:12px;text-align:center;border-top:1px solid var(--line);padding-top:18px}
+  .codeflow{font-family:ui-monospace,monospace;font-size:12px;color:var(--muted);line-height:1.9;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:14px;overflow-x:auto}
+  .codeflow .v{color:var(--volt)} .codeflow .g{color:var(--sent)} .codeflow .r{color:var(--fail)} .codeflow .c{color:var(--faint)}
+
+  /* reuse audit */
+  .auditsum{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .searchlog{margin-top:14px;border:1px dashed var(--line);border-radius:12px;padding:13px 15px;background:var(--panel)}
+  .searchlog .t{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:700;margin-bottom:8px}
+  .searchlog code{display:block;font-family:ui-monospace,monospace;font-size:12px;color:var(--muted);margin:4px 0;white-space:pre-wrap;word-break:break-word}
+  .searchlog code b{color:var(--volt)}
+  .searchlog code .hit{color:var(--sent)}
+  .audit{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+  .arow{border:1px solid var(--line);border-radius:14px;background:var(--panel2);padding:14px 16px}
+  .arow.x{border-color:rgba(76,201,240,.4);background:linear-gradient(180deg,rgba(76,201,240,.06),var(--panel2))}
+  .ahead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ahead .sym{font-family:ui-monospace,monospace;font-size:13px;color:var(--ink);font-weight:600;word-break:break-word}
+  .badge{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .badge.reuse{color:#bff3d2;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.42)}
+  .badge.extract{color:#cfe6ff;background:rgba(76,201,240,.16);border:1px solid rgba(76,201,240,.5)}
+  .badge.newj{color:#ffe2b0;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.42)}
+  .badge.cfg{color:#cdd8ea;background:rgba(100,120,146,.16);border:1px solid var(--line)}
+  .lines{margin-top:10px;display:grid;grid-template-columns:80px 1fr;gap:5px 12px;font-size:13px}
+  .lines .k{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+  .lines .v{color:var(--muted)}
+  .lines .v b{color:var(--ink);font-weight:600}
+  .lines .v .mono{font-family:ui-monospace,monospace;font-size:12px;color:var(--volt)}
+  .grow{margin-top:14px;display:flex;gap:11px;align-items:center;border:1px solid rgba(76,201,240,.4);
+    background:rgba(76,201,240,.06);border-radius:12px;padding:12px 14px;color:#cfe6ff;font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- COMPONENT: kicker + hero title — use for: the packet name, the change title, and a one/two-sentence summary of the problem and the fix -->
+  <div class="kicker"><span class="dot"></span> Plan packet · short context line goes here</div>
+  <h1>Plan Title Goes Here</h1>
+  <p class="sub">One or two sentences that state the problem and the fix. Wrap the key terms
+  in <b>bold</b> so the reader catches the <b>core idea</b> at a glance.</p>
+
+  <!-- COMPONENT: stat hero — use for: a single before → after comparison, the headline metric that motivates the change (current bad number vs target good number) -->
+  <div class="hero">
+    <div class="stat bad">
+      <div class="lab">Before · context label</div>
+      <div class="big">120</div>
+      <div class="cap">the current cost or count, in plain terms</div>
+    </div>
+    <div class="arrowcol">➜</div>
+    <div class="stat good">
+      <div class="lab">After · context label</div>
+      <div class="big">4</div>
+      <div class="cap">the target cost or count once the change lands</div>
+    </div>
+  </div>
+
+  <!-- COMPONENT: section header — use for: the numbered title + right-aligned lead paragraph that opens every section below -->
+  <section>
+    <div class="h"><span class="n">01</span><h2>Section title for the motivating incident</h2>
+      <p class="lead">A short right-aligned lead that frames what this section shows and why it matters.</p>
+    </div>
+
+    <!-- COMPONENT: cascade bar — use for: a run or batch result rendered as many small bars (one bar per item), with summary pills and a root-cause banner; the bars are drawn by the inline script from generic counts -->
+    <div class="card">
+      <div class="cascade" id="cascade"></div>
+      <div class="meta">
+        <span class="pill"><span class="k">batch result</span> <span class="v g">success 20</span> · <span class="v s">skipped 0</span> · <span class="v r">failed 24</span></span>
+        <span class="pill"><span class="k">started</span> <span class="v">00:00:00</span></span>
+        <span class="pill"><span class="k">log</span> <span class="v mono">run_log_name.log</span></span>
+      </div>
+      <div class="rootcause">⚠️ <div><b>Root cause:</b> one short sentence naming the systemic fault that made every item fail, and why per-item retry could not heal it.</div></div>
+    </div>
+  </section>
+
+  <!-- COMPONENT: labeled rule banner — use for: the single headline rule or decision the plan introduces, stated once in large type with a short clarifying note -->
+  <section>
+    <div class="rule">
+      <div class="bolt">⚡</div>
+      <div class="txt">
+        <span class="hl">The headline condition</span> → the action that follows when it is met.
+        <small>A short clarifying note: what the rule does and does not do, any fixed value, and why there is no flag or toggle.</small>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPONENT: scenario row-strip with state pips — use for: walking through concrete item sequences; each .row is one item with a state (fail/sent/skip), optional counter and pips, and a .trip marker when the rule fires -->
+  <section>
+    <div class="h"><span class="n">02</span><h2>How the rule behaves on real sequences</h2>
+      <p class="lead">One short line on the shared state the sequences ride on. Each strip below is one item sequence.</p>
+    </div>
+
+    <!-- COMPONENT: legend — use for: a small swatch key that maps each state color to its meaning before the scenario strips -->
+    <div class="legend">
+      <span><i class="sw f"></i> failure → counter +1</span>
+      <span><i class="sw s"></i> success → counter resets to 0</span>
+      <span><i class="sw k"></i> benign skip → counter resets to 0</span>
+    </div>
+
+    <div class="scn headline">
+      <div class="scn-top">
+        <span class="scn-title">Headline scenario — the rule fires</span>
+        <span class="tag stop">trips</span>
+        <span class="scn-note">a short note on the outcome</span>
+      </div>
+      <div class="strip">
+        <div class="row fail"><div class="ic">✕</div><div class="rl">Item 1</div><div class="cnt">counter → 1</div><div class="pips"><u class="on"></u><u></u></div></div>
+        <div class="arrow">→</div>
+        <div class="row fail"><div class="ic">✕</div><div class="rl">Item 2</div><div class="cnt">counter → 2</div><div class="pips"><u class="on"></u><u class="on"></u></div></div>
+        <div class="arrow">→</div>
+        <div class="trip"><div class="b">⚡</div><div class="t">STOP</div><div class="e">1 alert sent</div></div>
+        <div class="arrow">→</div>
+        <div class="row fail ghost"><div class="ic">✕</div><div class="rl">Item 3</div><div class="ghostlab">never reached</div></div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <div class="scn">
+        <div class="scn-top"><span class="scn-title">Many benign skips in a row</span><span class="tag drain">drains fully</span></div>
+        <div class="strip">
+          <div class="row skip"><div class="ic">⊘</div><div class="rl">skip</div><div class="pips"><u></u><u></u></div></div>
+          <div class="row skip"><div class="ic">⊘</div><div class="rl">skip</div><div class="pips"><u></u><u></u></div></div>
+          <div class="row skip"><div class="ic">⊘</div><div class="rl">skip</div><div class="pips"><u></u><u></u></div></div>
+        </div>
+        <div class="scn-note" style="margin:12px 0 0">counter stays 0 · no action taken</div>
+      </div>
+
+      <div class="scn">
+        <div class="scn-top"><span class="scn-title">A success resets the counter</span><span class="tag safe">no trip</span></div>
+        <div class="strip">
+          <div class="row fail"><div class="ic">✕</div><div class="rl">fail</div><div class="cnt">→ 1</div><div class="pips"><u class="on"></u><u></u></div></div>
+          <div class="arrow">→</div>
+          <div class="row sent"><div class="ic">✓</div><div class="rl">sent</div><div class="cnt">→ 0</div><div class="pips"><u></u><u></u></div></div>
+          <div class="arrow">→</div>
+          <div class="row fail"><div class="ic">✕</div><div class="rl">fail</div><div class="cnt">→ 1</div><div class="pips"><u class="on"></u><u></u></div></div>
+        </div>
+        <div class="scn-note" style="margin:12px 0 0">1 → 0 → 1 · never reaches the limit</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPONENT: code-flow block — use for: a short pseudocode or call-trace excerpt showing the precise signal the code reads, with .v/.g/.r/.c spans tinting key tokens and comments -->
+  <section>
+    <div class="h"><span class="n">03</span><h2>The signal the code reads</h2>
+      <p class="lead">One line on which value carries the signal and why it is the precise test.</p>
+    </div>
+    <div class="card" style="padding:18px 20px">
+      <div class="codeflow"><span class="c"># per item, inside the loop body</span><br>
+        count_before = state.<span class="v">failure_count</span><br>
+        outcome = <span class="c">await</span> pipeline.run_single(item)<br>
+        item_failed = state.<span class="v">failure_count</span> &gt; count_before&nbsp;&nbsp;<span class="c"># the precise failure test</span><br>
+        <br>
+        <span class="r">failure</span> → state.consecutive += 1&nbsp;&nbsp;<span class="c"># reaches the limit → record_stop(); return True</span><br>
+        <span class="g">success / skip</span> → state.consecutive = 0<br>
+        <br>
+        <span class="c"># stop signal travels up — no new teardown:</span><br>
+        return True → caller returns → runner <span class="v">finally</span>: report · summary · close
+      </div>
+      <div class="scn-note" style="margin:12px 0 0">A note on an edge case the signal already handles without extra branching.</div>
+    </div>
+  </section>
+
+  <!-- COMPONENT: is/isn't comparison cards — use for: scoping a term or decision; the left card lists what the change IS, the right card lists what it is NOT (struck through) -->
+  <section>
+    <div class="h"><span class="n">04</span><h2>What the change means here</h2></div>
+    <div class="cols">
+      <div class="mean is">
+        <div class="lab">✓ It is</div>
+        <ul>
+          <li><span class="m">→</span> The first thing the change actually does</li>
+          <li><span class="m">→</span> The second thing, reusing an existing path</li>
+          <li><span class="m">→</span> The third thing, through existing teardown</li>
+        </ul>
+      </div>
+      <div class="mean isnt">
+        <div class="lab">✕ It is not</div>
+        <ul>
+          <li><span class="m">×</span> A behavior the change deliberately avoids</li>
+          <li><span class="m">×</span> A second non-goal</li>
+          <li><span class="m">×</span> A configurable knob the change does not add</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPONENT: file-change cards — use for: the list of files the change touches; each card names a file, an estimated size, a one-line description, and a relative-size bar, with an untouched-files row below -->
+  <section>
+    <div class="h"><span class="n">05</span><h2>The change — file by file</h2>
+      <p class="lead">A short line on the overall shape of the change. Bars show relative change size.</p>
+    </div>
+    <div class="files">
+      <div class="file">
+        <div class="top"><span class="nm">config/example_constants.py</span><span class="sz">~6–8 lines</span></div>
+        <div class="desc">Add the named constants the new code reads, instead of inline literals.</div>
+        <div class="bar"><i style="width:12%"></i></div>
+      </div>
+      <div class="file">
+        <div class="top"><span class="nm">services/example_service.py</span><span class="sz">~12–16 lines</span></div>
+        <div class="desc">Add the new method that performs the action and reuses the existing path.</div>
+        <div class="bar"><i style="width:18%"></i></div>
+      </div>
+      <div class="file">
+        <div class="top"><span class="nm">services/example_loop.py</span><span class="sz">~10–16 lines</span></div>
+        <div class="desc">Add the field to the existing state object; count, reset, and trip in the loop.</div>
+        <div class="bar"><i style="width:16%"></i></div>
+      </div>
+      <div class="file">
+        <div class="top"><span class="nm">tests/test_example_loop.py</span><span class="sz">~70–110 lines</span></div>
+        <div class="desc">The behavioral tests, written RED first, reusing the existing doubles.</div>
+        <div class="bar"><i style="width:100%"></i></div>
+      </div>
+    </div>
+    <div class="nochange">Untouched:
+      <span class="lk">untouched_module_one.py</span>
+      <span class="lk">untouched_module_two.py</span>
+      <span class="lk">untouched_module_three.py</span>
+    </div>
+  </section>
+
+  <!-- COMPONENT: reuse-audit verdict badges + search log + audit rows — use for: showing every new symbol was checked against the codebase first; the badge summary counts verdicts, the search log lists the searches run, each audit row records searched / found / verdict, and the .grow banner notes any scope growth -->
+  <section>
+    <div class="h"><span class="n">06</span><h2>Reuse audit — why each new piece exists</h2>
+      <p class="lead">Every new symbol checked against the codebase before building, with the searches and the verdict.</p>
+    </div>
+
+    <div class="card" style="padding:20px">
+      <div class="auditsum">
+        <span class="badge reuse">3 reused</span>
+        <span class="badge extract">1 extracted → shared</span>
+        <span class="badge newj">1 new (justified)</span>
+        <span class="badge cfg">1 config-local</span>
+      </div>
+
+      <div class="searchlog">
+        <div class="t">Searches run</div>
+        <code><b>grep -i</b> "\b(term_one|term_two)\b" --glob *.py  →  <span class="hit">existing_module · ExistingHelper</span></code>
+        <code><b>grep -i</b> "alternate_term" shared/  →  <span class="hit">shared/example_helper.py</span></code>
+        <code><b>read</b> example_runner.py:100-140 · example_constants.py:11 · example_service.py:180</code>
+      </div>
+
+      <div class="audit">
+
+        <div class="arow x">
+          <div class="ahead"><span class="sym">the new shared kernel</span><span class="badge extract">extract → shared</span></div>
+          <div class="lines">
+            <span class="k">searched</span><span class="v">repo-wide for an existing helper that does this exact thing</span>
+            <span class="k">found</span><span class="v"><b>a second caller already hand-rolls this pattern</b> as a local copy with a different constant. A related helper exists but solves a different problem.</span>
+            <span class="k">verdict</span><span class="v">Reproduction. Extract one shared helper; both callers use it. Per-caller policy stays at the call site.</span>
+          </div>
+        </div>
+
+        <div class="arow">
+          <div class="ahead"><span class="sym">the existing action helper</span><span class="badge reuse">reused</span></div>
+          <div class="lines">
+            <span class="k">searched</span><span class="v">the existing action path in the service module</span>
+            <span class="k">found</span><span class="v">an existing helper already used by sibling paths</span>
+            <span class="k">verdict</span><span class="v">Reused verbatim — the change adds no new code here.</span>
+          </div>
+        </div>
+
+        <div class="arow">
+          <div class="ahead"><span class="sym">the new thin method</span><span class="badge newj">new (justified)</span></div>
+          <div class="lines">
+            <span class="k">searched</span><span class="v">the sibling methods that already perform the action</span>
+            <span class="k">found</span><span class="v">the siblings each mutate counters this method must leave untouched</span>
+            <span class="k">verdict</span><span class="v">Can't reuse — a new thin method that calls the shared action helper.</span>
+          </div>
+        </div>
+
+        <div class="arow">
+          <div class="ahead"><span class="sym">the new constants</span><span class="badge cfg">config-local</span></div>
+          <div class="lines">
+            <span class="k">searched</span><span class="v">the config module for an existing matching constant</span>
+            <span class="k">found</span><span class="v">no matching constant; a sibling uses a different value</span>
+            <span class="k">verdict</span><span class="v">Add to config/ — the value can't be shared because it differs.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="grow">⤴ This audit grows the change set — the new shared helper plus the second-caller rewire shown above.</div>
+    </div>
+  </section>
+
+  <!-- COMPONENT: test cards — use for: the test-first plan; each card carries a RED id, the test name in monospace, and a one-line "Pins:" statement of what behavior it locks in -->
+  <section>
+    <div class="h"><span class="n">07</span><h2>Test-first — RED before code</h2></div>
+    <div class="tests">
+      <div class="test"><span class="rid">RED 1</span>
+        <div class="tn">test_should_take_the_action_on_the_second_failure</div>
+        <div class="pin">Pins: <b>the action fires at the limit</b> — one alert, counter at the limit.</div>
+      </div>
+      <div class="test"><span class="rid">RED 2</span>
+        <div class="tn">test_should_not_fire_on_consecutive_benign_skips</div>
+        <div class="pin">Pins the <b>must-not</b>: many skips drain fully, zero actions.</div>
+      </div>
+      <div class="test"><span class="rid">RED 3</span>
+        <div class="tn">test_should_reset_the_counter_after_a_success</div>
+        <div class="pin">Pins the <b>reset</b>: fail → success → fail never reaches the limit.</div>
+      </div>
+      <div class="test"><span class="rid">RED 4</span>
+        <div class="tn">test_should_name_the_step_in_the_alert</div>
+        <div class="pin">Pins the alert: the recorded step matches the named constant.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPONENT: acceptance checklist — use for: the "done when" criteria; each .ck is one checked item with a bold lead phrase and a short clause naming the observable outcome -->
+  <section>
+    <div class="h"><span class="n">08</span><h2>Done when</h2>
+      <p class="lead">A short line on the test-count change and that baseline failures elsewhere stay unchanged.</p>
+    </div>
+    <div class="card">
+      <div class="acc">
+        <div class="ck"><span class="b">✓</span><div><b>The action fires at the limit</b> — next item never reached, one alert.</div></div>
+        <div class="ck"><span class="b">✓</span><div><b>Benign skips never fire</b> — the run drains, counter at 0.</div></div>
+        <div class="ck"><span class="b">✓</span><div><b>A success or skip resets</b> the counter to 0.</div></div>
+        <div class="ck"><span class="b">✓</span><div><b>The alert names the step</b> via the named constant.</div></div>
+        <div class="ck"><span class="b">✓</span><div><b>Counters stay in sync</b> — the change adds neither failure nor name.</div></div>
+        <div class="ck"><span class="b">✓</span><div><b>Reuses the existing path</b> — no new teardown.</div></div>
+        <div class="ck"><span class="b">✓</span><div><b>The loop compares the named constant</b>, not a literal.</div></div>
+        <div class="ck"><span class="b">✓</span><div><b>The code-rules gate</b> passes on the changed lines.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPONENT: footer — use for: the closing line naming the packet slug and the validator status -->
+  <footer>Plan title · plan packet <span class="mono">plan-slug-goes-here</span> · validator: approved, 0 open product questions</footer>
+</div>
+
+<script>
+  (function(){
+    var cascade=document.getElementById('cascade');
+    if(!cascade)return;
+    var total=44, failures=24, fragment=document.createDocumentFragment();
+    for(var i=0;i<total;i++){
+      var bar=document.createElement('i');
+      if(i>=failures)bar.className='ok';
+      bar.style.animationDelay=(i*7)+'ms';
+      bar.style.height=(i>=failures?62:(55+((i*13)%45)))+'%';
+      fragment.appendChild(bar);
+    }
+    cascade.appendChild(fragment);
+  })();
+</script>
+</body>
+</html>

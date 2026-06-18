@@ -7,6 +7,7 @@ export const meta = {
     { title: 'Write packet', detail: 'Create the required docs/plans/<slug>/ tree with a thin README hub and detailed second-level docs.' },
     { title: 'Validate', detail: 'Run scripts/validate_packet.py, spawn plan-packet-validator in fresh context, and repair findings up to the cap.' },
     { title: 'Reuse audit', detail: 'Search the codebase for existing equivalents of each new symbol or file the packet introduces; write validation/reuse-audit.md with a per-item verdict; gate approval on any unjustified reproduction.' },
+    { title: 'Visualize', detail: 'Build a single-file offline visual HTML of the finished packet from the visual-plan template; write it beside the packet as visual-plan.html.' },
     { title: 'Approval', detail: 'Return the packet path and validation verdict, then stop before implementation work.' },
   ],
 }
@@ -106,6 +107,19 @@ function reuseAuditSchema() {
       summary: { type: 'string' },
     },
     required: ['allJustified', 'findings', 'summary'],
+  }
+}
+
+function visualHtmlSchema() {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      htmlPath: { type: 'string' },
+      sectionsBuilt: { type: 'array', items: { type: 'string' } },
+      summary: { type: 'string' },
+    },
+    required: ['htmlPath', 'sectionsBuilt', 'summary'],
   }
 }
 
@@ -243,6 +257,18 @@ function reuseAuditPrompt(packetPath) {
   )
 }
 
+function visualHtmlPrompt(packetPath) {
+  return (
+    `Build a single-file, offline, diagram-first visual HTML of the finished plan packet at ${packetPath}. Do not edit source code or the packet markdown; only write the HTML view.\n\n` +
+    `Read the style template first and reuse its CSS and section components exactly:\n` +
+    `$HOME/.claude/skills/anthropic-plan/templates/visual-plan.template.html\n\n` +
+    `Then read the packet: README.md, packet.json, every file under spec/ and implementation/, and validation/reuse-audit.md. Translate the packet into the template's visual vocabulary — stat hero, timelines, scenario row strips, is/isn't cards, file-change cards, verdict badges, and a checklist. Show the plan as diagrams and compact cards, never walls of prose, and never paste the markdown verbatim.\n\n` +
+    `Surface validation/reuse-audit.md as a Reuse audit section with one verdict badge per item (reused, extract-to-shared, new-justified, config-local, unjustified-reproduction).\n\n` +
+    `Write the result to ${packetPath}/visual-plan.html. Inline all CSS and JavaScript; make no network calls and reference no external assets, so the file opens offline. If the Write tool is blocked by a worktree or isolation guard, stage the file under $CLAUDE_JOB_DIR/tmp with the Write tool, then copy it to the packet path.\n\n` +
+    `Return htmlPath set to the written file path, sectionsBuilt listing the section names you included, and a one-line summary.`
+  )
+}
+
 async function discoverContext(runInput, packetPath) {
   return agent(discoveryPrompt(runInput, packetPath), {
     label: `plan-packet-discover`,
@@ -290,6 +316,15 @@ async function runReuseAudit(packetPath) {
   })
 }
 
+async function runVisualHtml(packetPath) {
+  return agent(visualHtmlPrompt(packetPath), {
+    label: `plan-packet-visual-html`,
+    phase: 'Visualize',
+    schema: visualHtmlSchema(),
+    agentType: 'general-purpose',
+  })
+}
+
 async function repairPacket(packetPath, deterministicValidation, semanticValidation, reuseAudit) {
   return agent(repairPrompt(packetPath, deterministicValidation, semanticValidation, reuseAudit), {
     label: `plan-packet-repair`,
@@ -310,6 +345,8 @@ async function runPlanPacketWorkflow(rawInput) {
   let reuseAudit = null
   let recovered = false
   let recoveryNote = ''
+  let visualHtmlPath = ''
+  const visualHtmlFindings = []
   const recordRecovery = (recovery) => {
     if (recovery?.recovered !== true) return
     recovered = true
@@ -340,6 +377,12 @@ async function runPlanPacketWorkflow(rawInput) {
     }
 
     const passed = hasCleanValidation()
+    try {
+      const visualHtml = await runVisualHtml(packetPath)
+      visualHtmlPath = visualHtml?.htmlPath || ''
+    } catch (visualHtmlError) {
+      visualHtmlFindings.push(String(visualHtmlError?.message || visualHtmlError))
+    }
     return {
       packetPath: packetWrite?.packetPath || packetPath,
       slug: packetWrite?.slug || slugFromTask(runInput.task || runInput.prompt || runInput.arguments),
@@ -352,6 +395,8 @@ async function runPlanPacketWorkflow(rawInput) {
       approvalRequired: true,
       recovered,
       recoveryNote,
+      visualHtmlPath,
+      visualHtmlFindings,
     }
   } catch (workflowError) {
     return {
@@ -373,6 +418,8 @@ async function runPlanPacketWorkflow(rawInput) {
       approvalRequired: true,
       recovered,
       recoveryNote,
+      visualHtmlPath,
+      visualHtmlFindings,
     }
   }
 }

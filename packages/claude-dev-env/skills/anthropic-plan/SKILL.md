@@ -39,8 +39,9 @@ The workflow handles the full planning loop:
 6. Spawn `plan-packet-validator` in fresh context.
 7. Repair packet findings up to the workflow cap.
 8. Run the reuse audit: search the codebase for existing equivalents of each new file/symbol the packet introduces, write `validation/reuse-audit.md`, and gate approval on any unjustified reproduction.
-9. Return packet path, validation state, and findings.
-10. Stop before implementation.
+9. Build a single-file offline visual HTML of the finished packet from `templates/visual-plan.template.html` and write it beside the packet as `visual-plan.html`.
+10. Return packet path, validation state, and findings.
+11. Stop before implementation.
 
 ## Packet Shape
 
@@ -65,6 +66,10 @@ The deterministic validator checks required files, placeholders, `Open Questions
 The `plan-packet-validator` agent checks source accuracy, scope, enough implementation detail for a blind build agent, real TDD order, invented APIs or commands, and end-to-end acceptance criteria.
 
 The reuse audit writes `validation/reuse-audit.md` with a per-item verdict for every new file or symbol the packet introduces and gates approval on any unjustified reproduction of existing behavior.
+
+## Visualize
+
+After validation and before approval, the workflow builds a single-file offline visual HTML of the finished packet from `templates/visual-plan.template.html` and writes it beside the packet as `visual-plan.html`. The file inlines all CSS and JavaScript and references no external assets, so it opens offline. It renders the packet as diagrams and compact cards — a stat hero, timelines, scenario strips, is/isn't cards, file-change cards, reuse-audit verdict badges, and a checklist — rather than reproducing the markdown. Because it is generated after validation, `visual-plan.html` is not a required packet file.
 
 ## Rules
 

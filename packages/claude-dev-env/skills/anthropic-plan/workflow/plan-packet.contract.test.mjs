@@ -164,3 +164,31 @@ test('workflow folds the reuse audit gate into the clean validation check', () =
   assert.match(runBody, /reuseAudit\.allJustified/);
   assert.match(runBody, /reuseAuditFindings/);
 });
+
+test('workflow declares a visualize phase', () => {
+  assert.match(workflowSource, /title:\s*'Visualize'/);
+});
+
+test('workflow runs the visualize phase after validation', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  const visualHtmlIndex = runBody.indexOf('runVisualHtml(packetPath)');
+  const validationLoopIndex = runBody.indexOf('while (!hasCleanValidation(');
+  assert.ok(visualHtmlIndex !== -1 && validationLoopIndex !== -1);
+  assert.ok(visualHtmlIndex > validationLoopIndex);
+});
+
+test('visual html schema carries the html path', () => {
+  const visualHtmlSchemaBody = functionBody('visualHtmlSchema');
+  assert.match(visualHtmlSchemaBody, /htmlPath/);
+});
+
+test('visual html prompt names the template and the output file', () => {
+  const visualHtmlPromptBody = functionBody('visualHtmlPrompt');
+  assert.match(visualHtmlPromptBody, /visual-plan\.template\.html/);
+  assert.match(visualHtmlPromptBody, /visual-plan\.html/);
+});
+
+test('workflow returns the visual html path', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  assert.match(runBody, /visualHtmlPath/);
+});
