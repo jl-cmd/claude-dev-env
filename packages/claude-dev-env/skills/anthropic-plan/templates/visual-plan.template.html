@@ -9,7 +9,7 @@
     --bg:#0a0e16; --panel:#121a28; --panel2:#0f1622; --line:#223049;
     --ink:#e6edf7; --muted:#93a4bd; --faint:#5f7390;
     --fail:#ef4444; --sent:#22c55e; --skip:#647892; --amber:#f59e0b;
-    --volt:#4cc9f0; --volt2:#4361ee;
+    --mod:#a78bfa; --volt:#4cc9f0; --volt2:#4361ee;
     --shadow:0 10px 30px rgba(0,0,0,.45);
   }
   *{box-sizing:border-box}
@@ -124,6 +124,7 @@
   .legend span{display:inline-flex;align-items:center;gap:7px}
   .sw{width:13px;height:13px;border-radius:4px;display:inline-block}
   .sw.f{background:var(--fail)} .sw.s{background:var(--sent)} .sw.k{background:var(--skip)}
+  .sw.m{background:var(--mod)} .sw.a{background:var(--amber)}
 
   /* ---------- two-col ---------- */
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -139,17 +140,45 @@
   .mean.is li .m{color:var(--sent)} .mean.isnt li .m{color:var(--fail)}
   .mean.isnt li{color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(239,68,68,.5)}
 
-  /* ---------- files ---------- */
-  .files{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:760px){.files{grid-template-columns:1fr}}
-  .file{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel2)}
-  .file .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
-  .file .nm{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--volt);word-break:break-all}
-  .file .sz{font-size:11px;color:var(--faint);white-space:nowrap}
-  .file .desc{color:var(--muted);font-size:13px;margin-top:8px}
-  .bar{height:7px;border-radius:6px;background:#1b2740;margin-top:10px;overflow:hidden}
-  .bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--volt2),var(--volt))}
-  .nochange{margin-top:14px;color:var(--muted);font-size:13px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  /* ---------- edit-recipe (the change, in human steps) ---------- */
+  .reclegend{display:flex;gap:20px;flex-wrap:wrap;margin:14px 0 0;color:var(--muted);font-size:13.5px}
+  .reclegend span{display:inline-flex;align-items:center;gap:8px}
+  .recipe{border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,var(--panel),var(--panel2));
+    box-shadow:var(--shadow);padding:18px 20px;margin-top:14px}
+  .rhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .rhead .what{font-size:17px;color:var(--ink);font-weight:700;letter-spacing:-.2px}
+  .rhead .sz{margin-left:auto;font-size:12.5px;color:var(--faint);border:1px solid var(--line);border-radius:7px;
+    padding:3px 9px;background:var(--panel);white-space:nowrap}
+  .rpath{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--faint);opacity:.9;margin-top:6px;word-break:break-all}
+  .oprow{display:flex;gap:9px;align-items:stretch;flex-wrap:wrap;margin-top:16px}
+  .opnode{flex:1 1 0;min-width:166px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);
+    padding:14px 14px 13px;position:relative}
+  .opnode .ix{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:800;margin-bottom:10px;border:1px solid var(--line)}
+  .opnode .op{font-size:15px;color:var(--ink);font-weight:600;line-height:1.32}
+  .opnode .sub{font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.4}
+  .opnode .tg{position:absolute;top:13px;right:13px;font-size:10px;font-weight:800;letter-spacing:.05em;
+    text-transform:uppercase;border-radius:999px;padding:3px 8px}
+  .opnode.reused{border-color:rgba(34,197,94,.4)}
+  .opnode.reused .ix{color:var(--sent);background:rgba(34,197,94,.14);border-color:rgba(34,197,94,.4)}
+  .opnode.reused .tg{color:#bff3d2;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.4)}
+  .opnode.mod{border-color:rgba(167,139,250,.5)}
+  .opnode.mod .ix{color:var(--mod);background:rgba(167,139,250,.16);border-color:rgba(167,139,250,.5)}
+  .opnode.mod .tg{color:#d8c9ff;background:rgba(167,139,250,.16);border:1px solid rgba(167,139,250,.5)}
+  .opnode.new{border-color:rgba(245,158,11,.45)}
+  .opnode.new .ix{color:var(--amber);background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.45)}
+  .opnode.new .tg{color:#ffe2b0;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.45)}
+  .opconn{display:flex;align-items:center;color:var(--faint);font-size:18px}
+  @media(max-width:760px){.opconn{display:none}.opnode{flex:1 1 100%}}
+  .alsoadd{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-top:14px;padding-top:13px;
+    border-top:1px solid var(--line);font-size:13.5px;color:var(--muted)}
+  .alsoadd .plus{flex:0 0 auto;width:21px;height:21px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:14px;color:var(--amber);background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.45)}
+  .alsoadd .txt b{color:var(--ink);font-weight:600}
+  .alsoadd .ap{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--faint);opacity:.8;word-break:break-all}
+  .alsoadd .nt{margin-left:auto;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;border-radius:999px;
+    padding:3px 8px;color:#ffe2b0;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.45);white-space:nowrap}
+  .nochange{margin-top:16px;color:var(--muted);font-size:13px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .nochange .lk{font-family:ui-monospace,monospace;font-size:12px;color:var(--faint);border:1px solid var(--line);
     border-radius:7px;padding:3px 8px;background:var(--panel)}
   .nochange .lk::before{content:"🔒 ";}
@@ -160,7 +189,7 @@
   .test{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--panel2);position:relative}
   .test .rid{position:absolute;top:14px;right:14px;font-size:10px;font-weight:800;letter-spacing:.1em;
     color:#ff9c9c;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.35);border-radius:6px;padding:2px 7px}
-  .test .tn{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--ink);padding-right:46px;line-height:1.4}
+  .test .tn{font-size:14.5px;color:var(--ink);font-weight:600;padding-right:54px;line-height:1.35}
   .test .pin{color:var(--muted);font-size:13px;margin-top:10px}
   .test .pin b{color:var(--volt)}
 
@@ -189,7 +218,7 @@
   .arow{border:1px solid var(--line);border-radius:14px;background:var(--panel2);padding:14px 16px}
   .arow.x{border-color:rgba(76,201,240,.4);background:linear-gradient(180deg,rgba(76,201,240,.06),var(--panel2))}
   .ahead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .ahead .sym{font-family:ui-monospace,monospace;font-size:13px;color:var(--ink);font-weight:600;word-break:break-word}
+  .ahead .sym{font-size:14.5px;color:var(--ink);font-weight:700;letter-spacing:-.2px;word-break:break-word}
   .badge{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 10px;white-space:nowrap}
   .badge.reuse{color:#bff3d2;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.42)}
   .badge.extract{color:#cfe6ff;background:rgba(76,201,240,.16);border:1px solid rgba(76,201,240,.5)}
@@ -356,37 +385,60 @@
     </div>
   </section>
 
-  <!-- COMPONENT: file-change cards — use for: the list of files the change touches; each card names a file, an estimated size, a one-line description, and a relative-size bar, with an untouched-files row below -->
+  <!-- COMPONENT: edit-recipe step sequences — use for: the files the change touches. Describe each file by WHAT IT ACCOMPLISHES in plain language, as an ordered recipe of colored steps (reused / modified / new) — name the behavior, never the code symbol. Keep the file's repo-relative path in .rpath, dimmed, for the build agent. Fold a trivial one-line change into the recipe it supports as an "Also adds" line rather than giving it its own card. List untouched areas as dimmed paths below. -->
   <section>
     <div class="h"><span class="n">05</span><h2>The change — file by file</h2>
-      <p class="lead">A short line on the overall shape of the change. Bars show relative change size.</p>
+      <p class="lead">Each file is described by what it accomplishes, in plain terms — an ordered recipe of steps, colored kept · changed · added.</p>
     </div>
-    <div class="files">
-      <div class="file">
-        <div class="top"><span class="nm">config/example_constants.py</span><span class="sz">~6–8 lines</span></div>
-        <div class="desc">Add the named constants the new code reads, instead of inline literals.</div>
-        <div class="bar"><i style="width:12%"></i></div>
+
+    <!-- COMPONENT: recipe legend — use for: the three change-state colors, shown once above the recipes -->
+    <div class="reclegend">
+      <span><i class="sw s"></i> reused — existing behavior, kept</span>
+      <span><i class="sw m"></i> modified — existing behavior, changed</span>
+      <span><i class="sw a"></i> new — added by this change</span>
+    </div>
+
+    <!-- one recipe per touched file: a plain-language title, the dimmed path, an ordered row of colored steps, and an optional folded one-liner -->
+    <div class="recipe">
+      <div class="rhead">
+        <span class="what">What this file accomplishes, in plain language</span>
+        <span class="sz">~12–20 lines · 1 function</span>
       </div>
-      <div class="file">
-        <div class="top"><span class="nm">services/example_service.py</span><span class="sz">~12–16 lines</span></div>
-        <div class="desc">Add the new method that performs the action and reuses the existing path.</div>
-        <div class="bar"><i style="width:18%"></i></div>
+      <div class="rpath">path/relative/to/repo/root/the_changed_file.py</div>
+      <div class="oprow">
+        <div class="opnode reused"><div class="ix">1</div><div class="op">The first step, in human terms</div><div class="sub">a short clause on what it does and why</div><span class="tg">reused</span></div>
+        <div class="opconn">→</div>
+        <div class="opnode mod"><div class="ix">2</div><div class="op">The step that changes existing behavior</div><div class="sub">name the behavior, not the symbol</div><span class="tg">modified</span></div>
+        <div class="opconn">→</div>
+        <div class="opnode new"><div class="ix">3</div><div class="op">The step this change adds</div><div class="sub">what becomes true that wasn't before</div><span class="tg">new</span></div>
       </div>
-      <div class="file">
-        <div class="top"><span class="nm">services/example_loop.py</span><span class="sz">~10–16 lines</span></div>
-        <div class="desc">Add the field to the existing state object; count, reset, and trip in the loop.</div>
-        <div class="bar"><i style="width:16%"></i></div>
-      </div>
-      <div class="file">
-        <div class="top"><span class="nm">tests/test_example_loop.py</span><span class="sz">~70–110 lines</span></div>
-        <div class="desc">The behavioral tests, written RED first, reusing the existing doubles.</div>
-        <div class="bar"><i style="width:100%"></i></div>
+      <div class="alsoadd">
+        <span class="plus">+</span>
+        <span class="txt"><b>Also adds a small supporting one-liner</b> folded into the file it serves, in plain language</span>
+        <span class="ap">path/relative/to/repo/root/supporting_file.py</span>
+        <span class="nt">new · 1 line</span>
       </div>
     </div>
-    <div class="nochange">Untouched:
-      <span class="lk">untouched_module_one.py</span>
-      <span class="lk">untouched_module_two.py</span>
-      <span class="lk">untouched_module_three.py</span>
+
+    <div class="recipe">
+      <div class="rhead">
+        <span class="what">The tests — proven on real data</span>
+        <span class="sz">new · across the test files</span>
+      </div>
+      <div class="rpath">path/relative/to/repo/root/tests/test_the_behavior.py</div>
+      <div class="oprow">
+        <div class="opnode new"><div class="ix">1</div><div class="op">The behavior the first test pins</div><div class="sub">stated as what it proves, not the function name</div><span class="tg">new</span></div>
+        <div class="opconn">→</div>
+        <div class="opnode new"><div class="ix">2</div><div class="op">The behavior the second test pins</div><div class="sub">one human clause each</div><span class="tg">new</span></div>
+        <div class="opconn">→</div>
+        <div class="opnode reused"><div class="ix">3</div><div class="op">An existing test extended</div><div class="sub">what the extension now also covers</div><span class="tg">reused</span></div>
+      </div>
+    </div>
+
+    <div class="nochange">Left untouched:
+      <span class="lk">path/to/untouched_area_one.py</span>
+      <span class="lk">path/to/untouched_area_two.py</span>
+      <span class="lk">path/to/untouched_area_three.py</span>
     </div>
   </section>
 
@@ -455,25 +507,25 @@
     </div>
   </section>
 
-  <!-- COMPONENT: test cards — use for: the test-first plan; each card carries a RED id, the test name in monospace, and a one-line "Pins:" statement of what behavior it locks in -->
+  <!-- COMPONENT: test cards — use for: the test-first plan; each card carries a RED id, the behavior the test proves stated as a plain sentence (not the function name), and a one-line "Pins:" statement of what it locks in -->
   <section>
-    <div class="h"><span class="n">07</span><h2>Test-first — RED before code</h2></div>
+    <div class="h"><span class="n">07</span><h2>Test-first — written before the code</h2></div>
     <div class="tests">
       <div class="test"><span class="rid">RED 1</span>
-        <div class="tn">test_should_take_the_action_on_the_second_failure</div>
-        <div class="pin">Pins: <b>the action fires at the limit</b> — one alert, counter at the limit.</div>
+        <div class="tn">The action fires once the limit is reached</div>
+        <div class="pin">Pins: <b>the action fires at the limit</b> — one alert, nothing past it.</div>
       </div>
       <div class="test"><span class="rid">RED 2</span>
-        <div class="tn">test_should_not_fire_on_consecutive_benign_skips</div>
+        <div class="tn">A run of harmless skips never fires it</div>
         <div class="pin">Pins the <b>must-not</b>: many skips drain fully, zero actions.</div>
       </div>
       <div class="test"><span class="rid">RED 3</span>
-        <div class="tn">test_should_reset_the_counter_after_a_success</div>
+        <div class="tn">A success in between resets the count</div>
         <div class="pin">Pins the <b>reset</b>: fail → success → fail never reaches the limit.</div>
       </div>
       <div class="test"><span class="rid">RED 4</span>
-        <div class="tn">test_should_name_the_step_in_the_alert</div>
-        <div class="pin">Pins the alert: the recorded step matches the named constant.</div>
+        <div class="tn">The alert names the step that failed</div>
+        <div class="pin">Pins the alert: the recorded step matches what was named.</div>
       </div>
     </div>
   </section>

@@ -69,7 +69,7 @@ The reuse audit writes `validation/reuse-audit.md` with a per-item verdict for e
 
 ## Visualize
 
-After validation and before approval, the workflow builds a single-file offline visual HTML of the finished packet from `templates/visual-plan.template.html` and writes it beside the packet as `visual-plan.html`. The file inlines all CSS and JavaScript and references no external assets, so it opens offline. It renders the packet as diagrams and compact cards — a stat hero, timelines, scenario strips, is/isn't cards, file-change cards, reuse-audit verdict badges, and a checklist — rather than reproducing the markdown. Because it is generated after validation, `visual-plan.html` is not a required packet file.
+After validation and before approval, the workflow builds a single-file offline visual HTML of the finished packet from `templates/visual-plan.template.html` and writes it beside the packet as `visual-plan.html`. The file inlines all CSS and JavaScript and references no external assets, so it opens offline. It renders the packet as diagrams and compact cards — a stat hero, scenario strips, is/isn't cards, edit-recipe step sequences for the file-by-file change, reuse-audit verdict badges, and a checklist — rather than reproducing the markdown. Every label is written for the reviewer: the diagram says what each step does in plain words and leaves out code symbols (function names, selectors, test names), while each touched file keeps its repo-relative path dimmed for the build agent. Because it is generated after validation, `visual-plan.html` is not a required packet file.
 
 ## Rules
 
