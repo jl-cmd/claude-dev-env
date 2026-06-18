@@ -187,21 +187,37 @@ def tdd_plan_errors(packet_directory: Path) -> list[str]:
 
 
 def reuse_audit_errors(packet_directory: Path) -> list[str]:
-    """Return errors for a reuse audit that records no per-item verdict.
+    """Return errors for a reuse audit that names no justifying reuse verdict.
 
     Args:
         packet_directory: Directory that should contain validation/reuse-audit.md.
 
     Returns:
-        An error string when the reuse audit names no reuse verdict, else an empty list.
+        An error string when the reuse audit names none of the justifying reuse
+        verdicts (reused, extract-to-shared, new-justified, config-local) as a
+        whole token, else an empty list. Each verdict matches only as a whole
+        token, so unjustified-reproduction does not satisfy the check through the
+        justified or reproduction substrings, and an audit naming only the
+        unjustified-reproduction verdict is an error.
     """
     reuse_audit_file = packet_directory / "validation" / "reuse-audit.md"
     if not reuse_audit_file.is_file():
         return []
     reuse_audit_text = reuse_audit_file.read_text(encoding="utf-8").lower()
-    verdict_keywords = ("reused", "extract", "justified", "config-local", "reproduction")
-    if not any(each_keyword in reuse_audit_text for each_keyword in verdict_keywords):
-        return ["reuse-audit.md must record a reuse verdict for each new item"]
+    justifying_verdict_tokens = (
+        "reused",
+        "extract-to-shared",
+        "new-justified",
+        "config-local",
+    )
+    if not any(
+        re.search(r"\b" + re.escape(each_token) + r"\b", reuse_audit_text)
+        for each_token in justifying_verdict_tokens
+    ):
+        return [
+            "reuse-audit.md must name a justifying reuse verdict "
+            "(reused, extract-to-shared, new-justified, or config-local)"
+        ]
     return []
 
 

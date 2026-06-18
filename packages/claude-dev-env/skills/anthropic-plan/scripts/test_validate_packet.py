@@ -435,7 +435,7 @@ def test_reuse_audit_without_verdict_keyword_fails(tmp_path: Path) -> None:
     validator_run = run_validator(packet_directory)
 
     assert validator_run.returncode == 2
-    assert "reuse-audit.md must record a reuse verdict for each new item" in validator_run.stderr
+    assert "reuse-audit.md must name a justifying reuse verdict" in validator_run.stderr
 
 
 def test_reuse_audit_with_verdict_keyword_passes(tmp_path: Path) -> None:
@@ -453,3 +453,21 @@ def test_reuse_audit_with_verdict_keyword_passes(tmp_path: Path) -> None:
     validator_run = run_validator(packet_directory)
 
     assert validator_run.returncode == 0, validator_run.stderr
+
+
+def test_reuse_audit_with_only_unjustified_reproduction_fails(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "validation" / "reuse-audit.md").write_text(
+        "# Reuse Audit\n\n"
+        "| Item | Kind | Verdict | Searched | Found | Decision | Evidence |\n"
+        "|---|---|---|---|---|---|---|\n"
+        "| duplicate_alert | helper | unjustified-reproduction | shared_utils/alerts | no existing equivalent | duplicate the logic | src/alert.py:9 |\n\n"
+        "Summary: unjustified-reproduction 1.\n",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 2
+    assert "reuse-audit.md must name a justifying reuse verdict" in validator_run.stderr
