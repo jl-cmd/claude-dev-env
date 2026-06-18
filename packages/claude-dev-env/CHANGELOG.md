@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.65.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.65.0...claude-dev-env-v1.65.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **autoconverge:** correct recovery cap to 2 and complete FIX_SCHEMA early returns ([dd67abf](https://github.com/jl-cmd/claude-code-config/commit/dd67abf3b99488364dcdfcac3675f2ee71e6b701))
+* **autoconverge:** correct recovery cap to 2 and complete FIX_SCHEMA early returns ([7777e33](https://github.com/jl-cmd/claude-code-config/commit/7777e33a2aafea6a0fac2f9f9e3e1d7c43d6c4f5))
+* **hooks:** count cross-tree consumers in dead-module-constant scan ([9a81a43](https://github.com/jl-cmd/claude-code-config/commit/9a81a437b870c842983db6d026971b44dea56839))
+* **hooks:** count cross-tree consumers in dead-module-constant scan ([d2a8e15](https://github.com/jl-cmd/claude-code-config/commit/d2a8e15788c871682ca3f7c71254897bb916c8ed))
+* **hooks:** restore scan cap and single-read widening in dead-module-constant scan ([fd0e059](https://github.com/jl-cmd/claude-code-config/commit/fd0e0590b5de828f24d4f4b2d4b25d9c5fe7ecbd))
+
+
+### Tests
+
+* **autoconverge:** harden fix-recovery assertions ([1231bca](https://github.com/jl-cmd/claude-code-config/commit/1231bcae6d993cd0ef29b6a222b4288d7836c6f9))
+
 ## [1.65.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.64.3...claude-dev-env-v1.65.0) (2026-06-17)
 
 
