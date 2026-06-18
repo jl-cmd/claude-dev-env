@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.66.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.66.0...claude-dev-env-v1.66.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **anthropic-plan:** align plan-packet workflow with runtime contract ([a5b9bd5](https://github.com/jl-cmd/claude-code-config/commit/a5b9bd5a8bdc844def23f2306c83938823b34637))
+* **anthropic-plan:** align plan-packet workflow with runtime contract ([77bef2a](https://github.com/jl-cmd/claude-code-config/commit/77bef2a8d54692e67ef13bd591ba23e8d0f87015))
+
 ## [1.66.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.65.1...claude-dev-env-v1.66.0) (2026-06-18)
 
 
