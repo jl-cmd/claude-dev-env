@@ -25,6 +25,16 @@ MAX_LOGGING_FSTRING_ISSUES: int = 3
 MAX_WINDOWS_API_NONE_ISSUES: int = 3
 MAX_E2E_TEST_NAMING_ISSUES: int = 3
 DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT: int = 3
+MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES: int = 3
+DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT: int = 2
+
+ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES: tuple[str, ...] = (
+    "only when",
+    "only if",
+    "falls back to",
+    "falling back to",
+    "fall back to",
+)
 
 ALL_BARE_EXCEPT_BANNED_HANDLER_NAMES: frozenset[str] = frozenset({"Exception", "BaseException"})
 ALL_BOUNDARY_TYPE_EXEMPT_FILENAMES: frozenset[str] = frozenset({"protocols.py", "types.py"})

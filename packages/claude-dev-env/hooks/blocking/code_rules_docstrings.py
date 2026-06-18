@@ -20,10 +20,13 @@ from code_rules_shared import (  # noqa: E402
 )
 
 from hooks_constants.blocking_check_limits import (  # noqa: E402
+    ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES,
     ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES,
     ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES,
+    DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
+    MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
@@ -306,3 +309,119 @@ def check_docstring_args_match_signature(content: str, file_path: str) -> list[s
             if len(issues) >= MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES:
                 return issues[:MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES]
     return issues[:MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES]
+
+
+def _call_callee_name(call_node: ast.Call) -> str:
+    callee = call_node.func
+    if isinstance(callee, ast.Attribute):
+        return callee.attr
+    if isinstance(callee, ast.Name):
+        return callee.id
+    return ""
+
+
+def _branch_routes_directly_to_call(branch_node: ast.If) -> str:
+    """Return the callee name an early-return guard routes to, or empty string.
+
+    A guard counts only when its block both invokes exactly one call and then
+    returns, so a multi-statement block with incidental calls is not treated as
+    a route. The await wrapper around an async call is unwrapped first.
+    """
+    routed_callee = ""
+    saw_return = False
+    for each_statement in branch_node.body:
+        candidate_expression: ast.expr | None = None
+        if isinstance(each_statement, ast.Expr):
+            candidate_expression = each_statement.value
+        elif isinstance(each_statement, ast.Return):
+            saw_return = True
+            continue
+        if candidate_expression is None:
+            continue
+        if isinstance(candidate_expression, ast.Await):
+            candidate_expression = candidate_expression.value
+        if not isinstance(candidate_expression, ast.Call):
+            return ""
+        if routed_callee:
+            return ""
+        routed_callee = _call_callee_name(candidate_expression)
+    if not saw_return:
+        return ""
+    return routed_callee
+
+
+def _shared_fallback_route_count(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[str, int]:
+    route_count_by_callee: dict[str, int] = {}
+    for each_statement in function_node.body:
+        if not isinstance(each_statement, ast.If):
+            continue
+        routed_callee = _branch_routes_directly_to_call(each_statement)
+        if not routed_callee:
+            continue
+        route_count_by_callee[routed_callee] = (
+            route_count_by_callee.get(routed_callee, 0) + 1
+        )
+    if not route_count_by_callee:
+        return "", 0
+    busiest_callee = max(route_count_by_callee, key=lambda name: route_count_by_callee[name])
+    return busiest_callee, route_count_by_callee[busiest_callee]
+
+
+def _docstring_summary_scopes_a_single_condition(docstring_text: str) -> bool:
+    summary_text = docstring_text.split("\n\n", 1)[0].lower()
+    return any(
+        each_phrase in summary_text
+        for each_phrase in ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES
+    )
+
+
+def check_docstring_fallback_branch_coverage(content: str, file_path: str) -> list[str]:
+    """Flag a fallback docstring that scopes a branch the body reaches twice.
+
+    The drift this catches: a function whose summary describes a fallback
+    action under a single condition (``only when``, ``falls back to ... when``)
+    while the body routes to that same fallback call from two or more distinct
+    early-return guards. The second guard fires under a condition the prose
+    never names, so the enumeration the reader trusts is incomplete. This is
+    the deterministic slice of Category O6 (docstring prose vs implementation
+    drift): a structural branch-count-versus-prose-condition mismatch.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per function whose fallback prose omits a second route to the
+        same call, capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        docstring_text = _function_docstring_text(each_node)
+        if not docstring_text:
+            continue
+        if not _docstring_summary_scopes_a_single_condition(docstring_text):
+            continue
+        fallback_callee, route_count = _shared_fallback_route_count(each_node)
+        if route_count < DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT:
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: {each_node.name}() docstring scopes a fallback to "
+            f"one condition, but the body routes to {fallback_callee}() from {route_count} "
+            "distinct branches — enumerate every condition that reaches the fallback "
+            "(Category O6 docstring-vs-implementation drift)"
+        )
+        if len(issues) >= MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES:
+            break
+    return issues[:MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES]
