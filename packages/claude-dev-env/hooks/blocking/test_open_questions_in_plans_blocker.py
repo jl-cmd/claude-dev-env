@@ -1,5 +1,6 @@
 """Tests for open_questions_in_plans_blocker hook."""
 
+import ast
 import json
 import os
 import subprocess
@@ -9,6 +10,13 @@ import sys
 HOOK_SCRIPT_PATH = os.path.join(
     os.path.dirname(__file__), "open_questions_in_plans_blocker.py"
 )
+
+
+def _read_hook_module_docstring() -> str:
+    source_text = open(HOOK_SCRIPT_PATH, encoding="utf-8").read()
+    module_docstring = ast.get_docstring(ast.parse(source_text))
+    assert module_docstring is not None
+    return module_docstring
 
 _plan_with_open_questions = (
     "## Context\nA plan.\n\n## Open Questions\n- Which auth provider?\n"
@@ -73,6 +81,14 @@ def test_blocks_project_local_plans_directory():
     assert result.returncode == 0
     output = json.loads(result.stdout)
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_module_docstring_names_docs_plans_directory_family():
+    """The docstring enumerates every directory family the detector fires on,
+    including the repo-local `docs/plans/` family it now blocks."""
+    module_docstring = _read_hook_module_docstring()
+
+    assert "docs/plans/" in module_docstring
 
 
 def test_blocks_repo_docs_plan_packet_directory():
