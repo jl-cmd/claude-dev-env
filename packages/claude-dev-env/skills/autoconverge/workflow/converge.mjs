@@ -808,7 +808,7 @@ function recoverCommitBlockEdit(head, blockerDetail, sourceLabel, attempt) {
   )
 }
 
-const FIX_RECOVERY_MAX_ATTEMPTS = 4
+const FIX_RECOVERY_MAX_ATTEMPTS = 2
 
 /**
  * Run a commit step and, when it is blocked by a commit-time hook or gate that
@@ -858,6 +858,8 @@ async function applyFixes(head, findings, sourceLabel) {
       pushed: false,
       resolvedWithoutCommit: true,
       summary: editResult?.summary || 'fixes resolved without a code change',
+      blockedNeedingEdit: false,
+      blockerDetail: '',
     }
   }
   const verifyTranscript = await verifyFixesInWorkingTree(head, findings, sourceLabel)
@@ -867,6 +869,8 @@ async function applyFixes(head, findings, sourceLabel) {
       pushed: false,
       resolvedWithoutCommit: false,
       summary: `verify step did not pass the working-tree fixes for ${findings.length} finding(s) — not committing`,
+      blockedNeedingEdit: false,
+      blockerDetail: '',
     }
   }
   return commitWithRecovery({
@@ -1091,6 +1095,8 @@ async function repairConvergence(head, failures) {
       pushed: false,
       resolvedWithoutCommit: true,
       summary: editResult?.summary || 'convergence gates resolved without a code change or rebase',
+      blockedNeedingEdit: false,
+      blockerDetail: '',
     }
   }
   const verifyTranscript = await verifyRepairChanges(head, failures)
@@ -1100,6 +1106,8 @@ async function repairConvergence(head, failures) {
       pushed: false,
       resolvedWithoutCommit: false,
       summary: `repair verify step did not pass the working-tree repair on HEAD ${head} — not pushing`,
+      blockedNeedingEdit: false,
+      blockerDetail: '',
     }
   }
   const wasRebased = editResult?.rebased === true
