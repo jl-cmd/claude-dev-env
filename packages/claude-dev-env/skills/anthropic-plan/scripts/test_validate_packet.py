@@ -181,3 +181,86 @@ def test_handoff_prompt_depending_on_chat_history_fails(
 
     assert validator_run.returncode == 2
     assert "build-prompt.md must stand alone" in validator_run.stderr
+
+
+def test_tdd_plan_with_red_only_as_substring_fails(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "implementation" / "tdd-plan.md").write_text(
+        "# TDD Plan\n\nImplementation is required. Wire production code directly.",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 2
+    assert "tdd-plan.md must name failing tests" in validator_run.stderr
+
+
+def test_tdd_plan_naming_red_step_passes(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "implementation" / "tdd-plan.md").write_text(
+        "# TDD Plan\n\n1. Red step: add the failing coverage.\n2. Green production code follows.",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 0, validator_run.stderr
+
+
+def test_packet_path_with_forward_slashes_matches_native_directory(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    packet_file = packet_directory / "packet.json"
+    packet_payload = json.loads(packet_file.read_text(encoding="utf-8"))
+    packet_payload["packetPath"] = packet_directory.as_posix()
+    packet_file.write_text(json.dumps(packet_payload, indent=2), encoding="utf-8")
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 0, validator_run.stderr
+
+
+def test_packet_path_with_trailing_separator_matches_directory(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    packet_file = packet_directory / "packet.json"
+    packet_payload = json.loads(packet_file.read_text(encoding="utf-8"))
+    packet_payload["packetPath"] = str(packet_directory) + "/"
+    packet_file.write_text(json.dumps(packet_payload, indent=2), encoding="utf-8")
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 0, validator_run.stderr
+
+
+def test_packet_path_mismatch_still_fails(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    packet_file = packet_directory / "packet.json"
+    packet_payload = json.loads(packet_file.read_text(encoding="utf-8"))
+    packet_payload["packetPath"] = str(packet_directory.parent / "different-slug")
+    packet_file.write_text(json.dumps(packet_payload, indent=2), encoding="utf-8")
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 2
+    assert "packet.json packetPath must match the validated packet directory" in validator_run.stderr
+
+
+def test_source_map_with_bare_non_python_source_passes(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "context" / "source-map.md").write_text(
+        "# Source Map\n\n"
+        "| Source | Why it matters | Facts extracted | Plan implication |\n"
+        "|---|---|---|---|\n"
+        "| plan-packet.mjs | Workflow entry | Exports the run function. | Reuse the run shape. |\n",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 0, validator_run.stderr

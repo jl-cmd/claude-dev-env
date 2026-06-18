@@ -121,7 +121,7 @@ def test_unreadable_file_synthetic_content_triggers_heading_pattern() -> None:
     assert "UNREADABLE_FILE_SYNTHETIC_CONTENT" in constants_module.__all__
 
 
-def test_all_exports_enumerates_eight_public_constants_in_sorted_order() -> None:
+def test_all_exports_enumerates_ten_public_constants_in_sorted_order() -> None:
     expected_exports = [
         "CODE_FENCE_PATTERN",
         "DOCS_PLANS_PATH_PREFIX",

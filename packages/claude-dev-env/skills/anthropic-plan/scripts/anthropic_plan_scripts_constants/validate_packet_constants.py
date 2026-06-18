@@ -30,5 +30,4 @@ ALL_REQUIRED_RELATIVE_PATHS: tuple[str, ...] = (
     "handoff/verification-commands.md",
 )
 MARKDOWN_FILE_SUFFIX: str = ".md"
-PYTHON_FILE_SUFFIX: str = ".py"
 EXIT_CODE_VALIDATION_FAILED: int = 2

@@ -12,7 +12,6 @@ from anthropic_plan_scripts_constants.validate_packet_constants import (
     ALL_REQUIRED_RELATIVE_PATHS,
     EXIT_CODE_VALIDATION_FAILED,
     MARKDOWN_FILE_SUFFIX,
-    PYTHON_FILE_SUFFIX,
 )
 
 
@@ -123,11 +122,29 @@ def packet_json_errors(packet_directory: Path) -> list[str]:
     all_source_files = payload_object.get("sourceFiles")
     if not isinstance(all_source_files, list) or not all_source_files:
         all_errors.append("packet.json sourceFiles must be a non-empty list")
-    if str(packet_directory) != str(payload_object.get("packetPath", "")):
+    stored_packet_path = payload_object.get("packetPath", "")
+    if not is_same_packet_path(packet_directory, stored_packet_path):
         all_errors.append("packet.json packetPath must match the validated packet directory")
     if not isinstance(payload_object.get("validator"), dict):
         all_errors.append("packet.json validator must be an object")
     return all_errors
+
+
+def is_same_packet_path(packet_directory: Path, stored_packet_path: object) -> bool:
+    """Return whether a stored packetPath names the validated packet directory.
+
+    Args:
+        packet_directory: Directory passed to the validator on the command line.
+        stored_packet_path: The packetPath value read from packet.json.
+
+    Returns:
+        True when both paths resolve to the same directory regardless of
+        separator style, trailing separators, or relative-versus-absolute form,
+        otherwise False.
+    """
+    if not isinstance(stored_packet_path, str) or not stored_packet_path:
+        return False
+    return packet_directory.resolve() == Path(stored_packet_path).resolve()
 
 
 def source_map_errors(packet_directory: Path) -> list[str]:
@@ -161,7 +178,7 @@ def tdd_plan_errors(packet_directory: Path) -> list[str]:
     if not tdd_file.is_file():
         return []
     tdd_text = tdd_file.read_text(encoding="utf-8").lower()
-    if "failing test" not in tdd_text and "red" not in tdd_text:
+    if "failing test" not in tdd_text and not re.search(r"\bred\b", tdd_text):
         return ["tdd-plan.md must name failing tests"]
     if "production" not in tdd_text and "green" not in tdd_text:
         return ["tdd-plan.md must state the production-code step after red"]
@@ -269,6 +286,7 @@ def has_source_table_row(source_map_text: str) -> bool:
     Returns:
         True when at least one table row names a concrete source path, otherwise False.
     """
+    file_token_pattern = re.compile(r"[\w.-]+\.[A-Za-z0-9]+")
     for each_line in source_map_text.splitlines():
         normalized_line = each_line.strip()
         if not normalized_line.startswith("|"):
@@ -277,7 +295,9 @@ def has_source_table_row(source_map_text: str) -> bool:
             continue
         if "source" in normalized_line.lower() and "facts" in normalized_line.lower():
             continue
-        if "/" in normalized_line or "\\" in normalized_line or PYTHON_FILE_SUFFIX in normalized_line:
+        if "/" in normalized_line or "\\" in normalized_line:
+            return True
+        if file_token_pattern.search(normalized_line):
             return True
     return False
 
