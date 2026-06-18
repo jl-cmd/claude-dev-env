@@ -31,7 +31,14 @@ def test_skill_no_longer_mentions_single_home_plan_file() -> None:
     skill_text = SKILL_PATH.read_text(encoding="utf-8")
 
     assert "~/.claude/plans/<slug>.md" not in skill_text
-    assert "single-file" not in skill_text.lower()
+    assert "single-file plan" not in skill_text.lower()
+
+
+def test_skill_isolates_into_a_worktree_before_launch() -> None:
+    skill_text = SKILL_PATH.read_text(encoding="utf-8")
+
+    assert "EnterWorktree" in skill_text
+    assert ".claude/worktrees/" in skill_text
 
 
 def test_skill_documents_self_healing_writes() -> None:

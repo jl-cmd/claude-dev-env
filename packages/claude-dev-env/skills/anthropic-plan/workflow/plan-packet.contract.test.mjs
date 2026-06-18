@@ -159,6 +159,24 @@ test('workflow runs the reuse audit after writing the packet', () => {
   assert.ok(writeIndex < reuseAuditIndex);
 });
 
+test('reuse audit prompt self-heals a blocked write by staging and copying into place', () => {
+  const reuseAuditPromptBody = functionBody('reuseAuditPrompt');
+  assert.match(reuseAuditPromptBody, /stag/i);
+  assert.match(reuseAuditPromptBody, /copy/i);
+  assert.match(reuseAuditPromptBody, /recover/i);
+});
+
+test('reuse audit schema carries the recovery signal', () => {
+  const reuseAuditSchemaBody = functionBody('reuseAuditSchema');
+  assert.match(reuseAuditSchemaBody, /recovered/);
+  assert.match(reuseAuditSchemaBody, /recoveryNote/);
+});
+
+test('workflow folds reuse-audit recovery into the top-level recovered signal', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  assert.match(runBody, /recordRecovery\(reuseAudit\)/);
+});
+
 test('workflow folds the reuse audit gate into the clean validation check', () => {
   const runBody = functionBody('runPlanPacketWorkflow');
   assert.match(runBody, /reuseAudit\.allJustified/);
@@ -186,6 +204,24 @@ test('visual html prompt names the template and the output file', () => {
   const visualHtmlPromptBody = functionBody('visualHtmlPrompt');
   assert.match(visualHtmlPromptBody, /visual-plan\.template\.html/);
   assert.match(visualHtmlPromptBody, /visual-plan\.html/);
+});
+
+test('visual html prompt self-heals a blocked write by staging and copying into place', () => {
+  const visualHtmlPromptBody = functionBody('visualHtmlPrompt');
+  assert.match(visualHtmlPromptBody, /stag/i);
+  assert.match(visualHtmlPromptBody, /copy/i);
+  assert.match(visualHtmlPromptBody, /recover/i);
+});
+
+test('visual html schema carries the recovery signal', () => {
+  const visualHtmlSchemaBody = functionBody('visualHtmlSchema');
+  assert.match(visualHtmlSchemaBody, /recovered/);
+  assert.match(visualHtmlSchemaBody, /recoveryNote/);
+});
+
+test('workflow folds visual-html recovery into the top-level recovered signal', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  assert.match(runBody, /recordRecovery\(visualHtml\)/);
 });
 
 test('workflow returns the visual html path', () => {
