@@ -152,6 +152,10 @@ def test_angle_bracket_placeholder_text_fails(
         "Type the annotation as `list[str]` and call `<command>` from a code span.",
         "Reach the endpoint with `curl <url>` inside the inline code span.",
         "The comparison `attempt_count < threshold` must hold before the retry.",
+        "The handler accepts a List<Item> of records.",
+        "Wrap the field in Optional<User> when it may be absent.",
+        "The cache stores an Array<string> of identifiers.",
+        "The lookup uses a Map<Key, Value> keyed by request id.",
     ],
 )
 def test_inline_html_and_code_does_not_flag_placeholder(
