@@ -186,6 +186,7 @@ test('the round-loop fix-stalled blockers survive the recovery wiring', () => {
 
 const verifyObjectionModule = new Function(
   `${constantLine('VERIFY_OBJECTION_FALLBACK')}\n` +
+    `${functionSource('renderVerifyObjectionLine')}\n` +
     `${functionSource('extractVerifyObjection')}\n` +
     'return { extractVerifyObjection, VERIFY_OBJECTION_FALLBACK };',
 )();
@@ -222,6 +223,48 @@ test('extractVerifyObjection reads the LAST verdict fence', () => {
   const objection = extractVerifyObjection(transcript);
   assert.match(objection, /fresh — new/);
   assert.doesNotMatch(objection, /stale/);
+});
+
+test('extractVerifyObjection renders bare string findings as their text', () => {
+  const transcript =
+    '```verdict\n{"all_pass": false, "findings": ["boundary still over-blocks", "missing test for empty input"]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /1\. boundary still over-blocks/);
+  assert.match(objection, /2\. missing test for empty input/);
+  assert.doesNotMatch(objection, /unnamed check/);
+});
+
+test('extractVerifyObjection renders alternate-keyed objects (title, message, description, issue)', () => {
+  const transcript =
+    '```verdict\n{"all_pass": false, "findings": [{"title": "over-blocks", "detail": "boundary unchecked"}, {"message": "regex too broad"}, {"description": "no fallback path"}, {"issue": "stale fixture"}]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /over-blocks — boundary unchecked/);
+  assert.match(objection, /regex too broad/);
+  assert.match(objection, /no fallback path/);
+  assert.match(objection, /stale fixture/);
+  assert.doesNotMatch(objection, /unnamed check/);
+  assert.doesNotMatch(objection, /no detail/);
+});
+
+test('extractVerifyObjection renders mixed string and object findings', () => {
+  const transcript =
+    '```verdict\n{"all_pass": false, "findings": ["plain concern", {"check": "named", "detail": "explained"}]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /1\. plain concern/);
+  assert.match(objection, /2\. named — explained/);
+});
+
+test('extractVerifyObjection stringifies an object whose keys it does not recognize', () => {
+  const transcript = '```verdict\n{"all_pass": false, "findings": [{"severity": "P1", "line": 42}]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /severity/);
+  assert.match(objection, /42/);
+  assert.doesNotMatch(objection, /unnamed check/);
+});
+
+test('extractVerifyObjection falls back when no finding yields usable text', () => {
+  const transcript = '```verdict\n{"all_pass": false, "findings": [null, {}, ""]}\n```';
+  assert.equal(extractVerifyObjection(transcript), VERIFY_OBJECTION_FALLBACK);
 });
 
 test('recoverVerifyFailEdit is a clean-coder edit step bound to the verifier objection and leaves changes uncommitted', () => {
