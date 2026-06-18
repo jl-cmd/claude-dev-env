@@ -96,7 +96,7 @@ test('FIX_SCHEMA requires blockedNeedingEdit and blockerDetail', () => {
 });
 
 test('FIX_RECOVERY_MAX_ATTEMPTS is declared and bounds the recovery loop at 2', () => {
-  assert.match(constantLine('FIX_RECOVERY_MAX_ATTEMPTS'), /=\s*2/);
+  assert.match(constantLine('FIX_RECOVERY_MAX_ATTEMPTS'), /=\s*2\s*$/);
 });
 
 for (const commitFunctionName of ['commitVerifiedFixes', 'commitRepairFixes']) {
@@ -153,6 +153,13 @@ test('commitWithRecovery bounds the loop, re-verifies, and retries the commit on
   assert.ok(
     editGuardIndex < verifyGateIndex,
     'expected the no-edit break to precede the re-verify gate',
+  );
+  const recoverEditIndex = recoveryBody.search(/runRecoverEdit\(/);
+  const reverifyIndex = recoveryBody.search(/runVerify\(/);
+  const retryCommitIndex = recoveryBody.lastIndexOf('runCommit(');
+  assert.ok(
+    recoverEditIndex < reverifyIndex && reverifyIndex < retryCommitIndex,
+    'expected order recover-edit -> re-verify -> retry commit, so a verify/commit swap fails',
   );
 });
 
