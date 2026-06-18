@@ -26,7 +26,11 @@ The scan is deliberately conservative to keep false positives near zero:
 - When the package-tree scan leaves a constant unreferenced, the scan widens to
   the repository root (the nearest ``.git`` ancestor) so a consumer in a sibling
   tree of the same repository counts; a module outside any repository is judged
-  on the package-tree scan alone.
+  on the package-tree scan alone. The widened pass skips the package subtree the
+  first pass already covered, so no file is read twice.
+- The combined file count of the package-tree and widened passes is bounded by a
+  cap, so a write under an unexpectedly large tree cannot stall the hook; a write
+  whose scan hits the cap is treated as "cannot prove dead" and flags nothing.
 - Test modules under the scanned tree still count as references, so a constant
   used only by a test stays live.
 """
@@ -56,6 +60,7 @@ from hooks_constants.dead_module_constant_constants import (  # noqa: E402
     DUNDER_INIT_FILENAME,
     GIT_DIRECTORY_NAME,
     MAX_DEAD_MODULE_CONSTANT_ISSUES,
+    MAX_SCAN_ROOT_FILE_COUNT,
     MINIMUM_UPPER_SNAKE_LENGTH,
     PYTHON_SOURCE_SUFFIX,
 )
@@ -203,40 +208,78 @@ def _scan_root_for_constants_module(file_path: str) -> Path:
     return enclosing_directory
 
 
+def _is_under_directory(candidate_path: Path, ancestor_directory: Path) -> bool:
+    """Return whether a resolved path lies inside a resolved ancestor directory.
+
+    Args:
+        candidate_path: The resolved file path to test.
+        ancestor_directory: The resolved directory that may contain the path.
+
+    Returns:
+        True when ``candidate_path`` is the ancestor directory itself or a
+        descendant of it, False otherwise.
+    """
+    try:
+        candidate_path.relative_to(ancestor_directory)
+    except ValueError:
+        return False
+    return True
+
+
 def _all_referenced_names_under_root(
     scan_root: Path,
     written_path: Path,
     written_content: str,
-) -> set[str]:
-    """Return every name referenced by any module under the scan root.
+    already_scanned_count: int = 0,
+    excluded_subtree: Path | None = None,
+) -> tuple[set[str], int, bool]:
+    """Return referenced names under the scan root, the running count, and a cap flag.
 
     The written module's on-disk text is replaced by ``written_content`` so the
-    post-edit view is judged, never the stale disk copy. Sibling modules are
-    read from disk. Every ``.py`` module under the root is scanned so a consumer
-    counts regardless of how many files the tree holds.
+    post-edit view is judged, never the stale disk copy. Sibling modules are read
+    from disk. Reading stops once the running file count exceeds the configured
+    cap so a write under an unexpectedly large tree cannot stall the hook; the
+    boolean signals the caller to treat that case as "cannot prove dead". When
+    ``excluded_subtree`` is supplied, every ``.py`` module under that directory is
+    skipped, so the widened repository scan never re-reads a file the
+    package-tree scan already covered.
 
     Args:
         scan_root: The directory tree to scan.
         written_path: The resolved path of the module being written.
         written_content: The post-edit text of the written module.
+        already_scanned_count: The file count accumulated by a prior pass, so the
+            cap bounds the combined work of the package-tree and widened passes.
+        excluded_subtree: A resolved directory whose ``.py`` modules are skipped,
+            or None to scan every file under the root.
 
     Returns:
-        The set of names referenced across every scanned module, unioned with
-        the names the written module itself references.
+        A (referenced_names, running_count, cap_was_hit) triple. The name set is
+        the union across every scanned module, unioned with the names the written
+        module itself references; running_count is the cumulative file count
+        including ``already_scanned_count``; cap_was_hit is True when the scan
+        stopped at the configured file cap before scanning the whole tree.
     """
     all_referenced_names = _referenced_names_in_source(written_content, load_only=True)
     written_path_key = os.path.normcase(str(written_path))
+    scanned_file_count = already_scanned_count
     for each_path in scan_root.rglob("*" + PYTHON_SOURCE_SUFFIX):
         if not each_path.is_file():
             continue
-        if os.path.normcase(str(each_path.resolve())) == written_path_key:
+        resolved_path = each_path.resolve()
+        if os.path.normcase(str(resolved_path)) == written_path_key:
             continue
+        if excluded_subtree is not None and _is_under_directory(resolved_path, excluded_subtree):
+            continue
+        scanned_file_count += 1
+        if scanned_file_count > MAX_SCAN_ROOT_FILE_COUNT:
+            return all_referenced_names, scanned_file_count, True
         try:
             sibling_source = each_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
         all_referenced_names |= _referenced_names_in_source(sibling_source)
-    return all_referenced_names
+    return all_referenced_names, scanned_file_count, False
 
 
 def _repository_root_for(written_path: Path) -> Path | None:
@@ -296,9 +339,11 @@ def check_dead_module_constants(
     constant unreferenced — not imported, not read, not listed in an ``__all__``
     literal, not named in a string annotation. A module declaring its own
     ``__all__`` is skipped so the author's explicit export surface is never
-    second-guessed. Whole-file analysis runs against ``full_file_content`` when
-    supplied so an Edit fragment is judged against the reconstructed post-edit
-    file.
+    second-guessed. A scan whose combined package-tree and widened file count
+    exceeds the configured cap returns ``[]`` (cannot prove dead), bounding the
+    work so the blocking hook cannot stall under a large tree. Whole-file
+    analysis runs against ``full_file_content`` when supplied so an Edit fragment
+    is judged against the reconstructed post-edit file.
 
     Args:
         content: The new content under validation (Edit fragment or whole file).
@@ -309,7 +354,9 @@ def check_dead_module_constants(
 
     Returns:
         One violation message per dead module-level constant, capped at the
-        configured maximum.
+        configured maximum. Returns an empty list when the file is exempt, no
+        constant is defined, the module declares ``__all__``, the scan exceeds the
+        file cap, or a SyntaxError prevents parsing.
     """
     if _module_is_exempt_from_constant_check(file_path):
         return []
@@ -325,22 +372,29 @@ def check_dead_module_constants(
         return []
     scan_root = _scan_root_for_constants_module(file_path)
     written_path = Path(file_path).resolve()
-    all_referenced_names = _all_referenced_names_under_root(
+    all_referenced_names, scanned_file_count, cap_was_hit = _all_referenced_names_under_root(
         scan_root,
         written_path,
         effective_content,
     )
+    if cap_was_hit:
+        return []
     has_unreferenced_constant = any(
         each_name not in all_referenced_names for each_name, _ in constant_definitions
     )
     if has_unreferenced_constant:
         repository_root = _repository_root_for(written_path)
         if repository_root is not None and repository_root != scan_root:
-            all_referenced_names |= _all_referenced_names_under_root(
+            widened_names, _widened_count, widened_cap_was_hit = _all_referenced_names_under_root(
                 repository_root,
                 written_path,
                 effective_content,
+                already_scanned_count=scanned_file_count,
+                excluded_subtree=scan_root,
             )
+            if widened_cap_was_hit:
+                return []
+            all_referenced_names |= widened_names
     issues: list[str] = []
     for each_name, each_line in constant_definitions:
         if each_name in all_referenced_names:

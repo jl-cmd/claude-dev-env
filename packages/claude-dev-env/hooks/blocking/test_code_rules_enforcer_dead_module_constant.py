@@ -226,3 +226,51 @@ def test_does_not_flag_constant_used_only_in_a_sibling_tree(neutral_root: Path) 
     assert any("LOCALLY_DEAD_CONSTANT" in each_issue for each_issue in issues), (
         f"A constant referenced nowhere in the repository stays flagged, got: {issues}"
     )
+
+
+def test_returns_empty_list_at_file_cap(
+    neutral_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("code_rules_dead_module_constant.MAX_SCAN_ROOT_FILE_COUNT", 0)
+    constants_path = _build_constants_package(
+        neutral_root / "workflow",
+        CONSTANTS_BODY,
+        "def noop() -> None:\n    pass\n",
+    )
+    issues = _check(CONSTANTS_BODY, str(constants_path))
+    assert issues == [], f"File cap hit must return [] (cannot prove dead), got: {issues}"
+
+
+def test_widened_scan_reads_each_file_at_most_once(
+    neutral_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    constants_body = 'CROSS_TREE_CONSTANT = "cross"\nLOCALLY_DEAD_CONSTANT = "dead"\n'
+    sibling_consumer_body = (
+        "from shared.theme_db.config.constants import CROSS_TREE_CONSTANT\n"
+        "\n"
+        "def tally() -> str:\n"
+        "    return CROSS_TREE_CONSTANT\n"
+    )
+    constants_path = _build_cross_tree_repository(
+        neutral_root, constants_body, sibling_consumer_body
+    )
+    package_tree_neighbor = constants_path.parent.parent / "neighbor.py"
+    package_tree_neighbor.write_text(
+        "def neighbor() -> int:\n    return 1\n", encoding="utf-8"
+    )
+    read_counts: dict[str, int] = {}
+    original_read_text = Path.read_text
+
+    def counting_read_text(self: Path, *positional: object, **keyword: object) -> str:
+        normalized_key = os.path.normcase(str(self.resolve()))
+        read_counts[normalized_key] = read_counts.get(normalized_key, 0) + 1
+        return original_read_text(self, *positional, **keyword)  # type: ignore[arg-type]  # forwards args
+
+    monkeypatch.setattr(Path, "read_text", counting_read_text)
+    _check(constants_body, str(constants_path))
+    over_read_paths = {
+        each_path: each_count for each_path, each_count in read_counts.items() if each_count > 1
+    }
+    assert not over_read_paths, (
+        f"Widening must read each .py file at most once, got over-reads: {over_read_paths}"
+    )
