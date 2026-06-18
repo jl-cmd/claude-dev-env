@@ -26,9 +26,11 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES,
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
+    MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES,
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
     MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
+    MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_DOCSTRING_ARGS_SECTION_HEADERS,
@@ -462,3 +464,98 @@ def check_docstring_fallback_branch_coverage(content: str, file_path: str) -> li
         if len(issues) >= MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES:
             break
     return issues[:MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES]
+
+
+def _class_docstring_summary_is_single_line(docstring_text: str) -> bool:
+    stripped_text = docstring_text.strip()
+    if not stripped_text:
+        return False
+    summary_line, separator, _remainder = stripped_text.partition("\n")
+    if separator and stripped_text[len(summary_line):].strip():
+        return False
+    return bool(summary_line.strip())
+
+
+def _public_method_names(class_node: ast.ClassDef) -> list[str]:
+    public_names: list[str] = []
+    for each_statement in class_node.body:
+        if not isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_is_private_or_dunder(each_statement.name):
+            continue
+        public_names.append(each_statement.name)
+    return public_names
+
+
+def _name_tokens(method_name: str) -> list[str]:
+    return [each_token for each_token in method_name.split("_") if each_token]
+
+
+def _docstring_mentions_method(docstring_text: str, method_name: str) -> bool:
+    lowered_docstring = docstring_text.lower()
+    if method_name.lower() in lowered_docstring:
+        return True
+    return all(
+        each_token.lower() in lowered_docstring for each_token in _name_tokens(method_name)
+    )
+
+
+def _unmentioned_public_methods(class_node: ast.ClassDef, docstring_text: str) -> list[str]:
+    return [
+        each_name
+        for each_name in _public_method_names(class_node)
+        if not _docstring_mentions_method(docstring_text, each_name)
+    ]
+
+
+def check_class_docstring_names_public_methods(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a one-line class docstring that omits two or more public methods.
+
+    A class whose docstring is a single summary line names one responsibility,
+    so a reader trusts that line to describe the whole class. When the class
+    later gains a second public entry point — the drift pattern where a
+    coffee-break reporter grows a regular-pace method — the terse summary keeps
+    describing only the original feature. Each public method whose name (or all
+    of its underscore-separated tokens) appears nowhere in the summary counts as
+    omitted; a class with two or more omitted public methods is reported so the
+    summary is widened to name the broader surface. Classes with a multi-line
+    docstring body are left to the audit lane, since their prose can carry the
+    enumeration without naming each method by name.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per class whose single-line docstring omits two or more of its
+        public methods, capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, ast.ClassDef):
+            continue
+        class_docstring = ast.get_docstring(each_node) or ""
+        if not _class_docstring_summary_is_single_line(class_docstring):
+            continue
+        public_names = _public_method_names(each_node)
+        if len(public_names) < MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH:
+            continue
+        unmentioned_names = _unmentioned_public_methods(each_node, class_docstring)
+        if len(unmentioned_names) < MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH:
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: {each_node.name} one-line docstring omits "
+            f"public method(s) {', '.join(unmentioned_names)} — widen the summary "
+            "so it names the class's full public surface"
+        )
+        if len(issues) >= MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES:
+            break
+    return issues[:MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES]
