@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.66.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.65.1...claude-dev-env-v1.66.0) (2026-06-18)
+
+
+### Features
+
+* **anthropic-plan:** workflow-backed plan packet system ([b0b252e](https://github.com/jl-cmd/claude-code-config/commit/b0b252ed31f3806c6978129a245089b3c20ea179))
+* block flag-gated scenario test-naming violations at Write/Edit ([d58bf39](https://github.com/jl-cmd/claude-code-config/commit/d58bf39bfa722e1def5d2545d6f82c5f4d1a5448))
+
+
+### Bug Fixes
+
+* **anthropic-plan:** address converge-round review findings in validate_packet ([7d4891e](https://github.com/jl-cmd/claude-code-config/commit/7d4891e333fcfed62f598a22d37f67c86bc30cd8))
+* **anthropic-plan:** address review findings in validate_packet ([e6c2a8f](https://github.com/jl-cmd/claude-code-config/commit/e6c2a8ffe6ac482e2cee97d24c9c2ae9a6883a54))
+* **anthropic-plan:** harden packet path match and source-table detection ([71b39ea](https://github.com/jl-cmd/claude-code-config/commit/71b39eac2a0bddb23356817c185af44761d3eed2))
+* **anthropic-plan:** tighten source-map file-token regex to real extensions ([5b20975](https://github.com/jl-cmd/claude-code-config/commit/5b20975128892b9048e6e866861f33474d333df1))
+* **plan-packet:** broaden step detection and plan-path coverage ([31f47f2](https://github.com/jl-cmd/claude-code-config/commit/31f47f24118efaddc6a78359115c4946b8745175))
+
 ## [1.65.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.65.0...claude-dev-env-v1.65.1) (2026-06-18)
 
 
