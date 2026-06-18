@@ -1,107 +1,68 @@
 ---
 name: anthropic-plan
-description: Structured implementation planning through readonly codebase exploration before any code changes. Produces a plan file for approval. Use when the user says /anthropic-plan, "plan this first", "think before coding", "explore before implementing", "make a plan", or when approaching non-trivial tasks that benefit from upfront exploration and design. Also triggers on "what would the approach be", "scope this out", or "don't code yet, just plan".
+description: Workflow-backed implementation planning that creates a deep repo-local packet under docs/plans/<slug>/ before any code changes. Use for /anthropic-plan, /plan, "plan this first", "think before coding", "make a plan", "scope this out", "don't code yet", and non-trivial implementation requests that need source-grounded design, TDD steps, and validator approval before build work.
 ---
 
-# Claude Plan
+# Anthropic Plan
 
-Explore the codebase, design an approach, and write a plan file -- all without touching production code.
+Create a source-grounded plan packet through the Claude Code Workflow runtime. The output is a repo-local `docs/plans/<slug>/` folder with context, spec, implementation, validation, and handoff docs. Stop before implementation.
 
-## Why
+## Launch
 
-Jumping straight to code on non-trivial tasks leads to wasted effort when the approach conflicts with existing patterns, misses reusable code, or misunderstands the user's intent. This skill enforces "look before you leap": explore first, design second, write the plan third, get approval last. No code changes until the user says go.
+Call the workflow with the user request and current working directory:
 
-## Constraints
-
-Treat the codebase as readonly throughout this skill. The only file you may create or edit is the plan file.
-
-**Allowed:** Read files, Grep, Glob, launch Explore agents, launch Plan agents, write/edit the plan file, AskUserQuestion for clarification.
-
-**Not allowed:** Edit source files, Write new source files, run tests, install packages, run non-readonly Bash commands, or make any system changes.
-
-This discipline exists because the user invoked this skill specifically to understand the approach before committing to it. Violating readonly would undermine the whole point.
-
-## Plan File
-
-Write to `~/.claude/plans/<slug>.md`.
-
-Generate the slug from the task -- descriptive, kebab-case, 2-4 words. Examples: `add-user-auth.md`, `fix-payment-retry.md`, `refactor-config-loading.md`. Avoid the random-word convention used by built-in plan mode.
-
-**Announce at start:** "Planning: `<slug>` -- exploring before writing code."
-
-## Workflow
-
-### Phase 1: Explore
-
-Understand the problem space before proposing solutions. Launch Explore agents in parallel -- up to 3, but use the minimum needed. Quality over quantity.
-
-What to look for:
-- Files and modules the task will touch
-- Existing patterns for similar functionality
-- Utilities, helpers, constants, and shared code to reuse
-- Test patterns already in place
-
-Skip this phase only if the task is trivial and full context already exists in the conversation.
-
-### Phase 2: Design
-
-Launch Plan agent(s) to design the implementation -- up to 3 for complex or multi-area tasks, skip entirely for trivial tasks. Feed them comprehensive context from Phase 1; they cannot explore on their own, so everything they need must come from you.
-
-### Phase 3: Review
-
-Before committing to the plan:
-- Read the critical files yourself to verify the agents got it right
-- Check alignment with what the user actually asked for
-- If requirements are ambiguous, use AskUserQuestion now -- not after writing the plan
-
-### Phase 4: Write the Plan
-
-Write incrementally as you learn things in Phases 1-3, then refine here. The plan file has these sections:
-
-```markdown
-## Context
-Why this change is needed, what problem it solves, what the outcome looks like.
-
-## Approach
-The recommended implementation. One approach, not a menu of alternatives.
-Concise but detailed enough to execute without re-exploring.
-
-## Files
-Critical file paths that will be created or modified.
-
-## Reuse
-Existing functions, utilities, constants, or patterns to leverage.
-Include file:line references so the implementer can find them instantly.
-
-## Steps
-Ordered implementation steps. Each step is a discrete, testable unit of work.
-
-## Verification
-How to confirm end-to-end that the implementation works.
-Specific commands, test files, or manual verification steps.
-
-## Bash Permissions
-Semantic descriptions of bash actions the implementation will need:
-- "run tests"
-- "install dependencies"
-- "start dev server"
-These are action descriptions, not specific commands.
+```js
+Workflow({
+  scriptPath: "$HOME/.claude/skills/anthropic-plan/workflow/plan-packet.mjs",
+  input: {
+    task: "$ARGUMENTS",
+    cwd: "<current working directory>"
+  }
+})
 ```
 
-### Phase 5: Present for Approval
+If the Workflow tool is unavailable, say `anthropic-plan requires the Workflow tool; aborting` and stop.
 
-Use AskUserQuestion to present the completed plan. Do not ask about approval in regular text -- always use AskUserQuestion so the user gets a clear, structured decision point.
+## Workflow Contract
 
-Options:
-- **Approve** -- proceed with implementation
-- **Revise** -- user has feedback to incorporate
-- **Cancel** -- abandon the plan
+The workflow handles the full planning loop:
 
-## Scaling
+1. Resolve repo root and packet path.
+2. Read project instructions, rules, relevant skills, manifests, docs, tests, hooks, agents, commands, configs, and workflows.
+3. Build a source inventory and extract source facts into `context/source-map.md`.
+4. Write the packet under `docs/plans/<slug>/`.
+5. Run `scripts/validate_packet.py`.
+6. Spawn `plan-packet-validator` in fresh context.
+7. Repair packet findings up to the workflow cap.
+8. Return packet path, validation state, and findings.
+9. Stop before implementation.
 
-Not every task needs all five phases. Match effort to complexity:
+## Packet Shape
 
-- **Trivial** (rename, typo fix): Ask if a formal plan is even wanted. If yes, skip Phases 1-2, write a minimal plan.
-- **Small** (single-file change, clear scope): One Explore agent, skip Design phase, concise plan.
-- **Medium** (multi-file feature, some ambiguity): Full workflow, 1-2 agents per phase.
-- **Large** (cross-cutting change, architectural): Full workflow, max agents, thorough Review phase.
+Required root: `docs/plans/<slug>/`
+
+Required top-level files and folders:
+
+- `README.md`
+- `packet.json`
+- `context/`
+- `spec/`
+- `implementation/`
+- `validation/`
+- `handoff/`
+
+The packet depth rule is strict: `README.md` is a thin hub, first-level folders group purpose, and second-level files carry detail. Add `context/subsystems/<name>.md` only when the planner finds more than twelve source files or more than three subsystems.
+
+## Validation
+
+The deterministic validator checks required files, placeholders, `Open Questions`, source-map strength, TDD coverage, standalone handoff prompts, and `packet.json` consistency.
+
+The `plan-packet-validator` agent checks source accuracy, scope, enough implementation detail for a blind build agent, real TDD order, invented APIs or commands, and end-to-end acceptance criteria.
+
+## Rules
+
+- Write docs only.
+- Do not edit production code.
+- Do not run implementation commands.
+- Ask the user only for product choices that cannot be derived from local context.
+- Fold resolved answers into the packet. Never leave an `Open Questions` section.

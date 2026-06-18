@@ -13,6 +13,7 @@ from __future__ import annotations
 
 ALL_CONFIG_DIRECTORY_NAMES = frozenset(
     {
+        "anthropic_plan_scripts_constants",
         "config",
         "hooks_constants",
         "git_hooks_constants",

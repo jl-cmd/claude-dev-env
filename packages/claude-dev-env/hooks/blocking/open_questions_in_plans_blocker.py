@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """PreToolUse:Write|Edit|MultiEdit hook — blocks plan files that contain an "Open Questions" section.
 
-Plans under `~/.claude/plans/` (or any `.claude/plans/` directory) must not be
+Plans under `~/.claude/plans/` (or any `.claude/plans/` directory) and packet
+docs under any repo-local `docs/plans/` directory must not be
 written with an unresolved "Open Questions" section. When detected, the agent is
 forced to (1) investigate the codebase for answers itself first, then (2) confirm
 its interpretations via the AskUserQuestion tool in plain everyday language, and
@@ -20,6 +21,8 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.open_questions_in_plans_blocker_constants import (  # noqa: E402
     CODE_FENCE_PATTERN,
+    DOCS_PLANS_PATH_PREFIX,
+    DOCS_PLANS_PATH_SEGMENT,
     INLINE_CODE_PATTERN,
     MARKDOWN_EXTENSION,
     OPEN_QUESTIONS_HEADING_PATTERN,
@@ -40,6 +43,10 @@ def _is_inside_plans_directory(file_path: str) -> bool:
     if PLANS_PATH_SEGMENT in normalized:
         return True
     if normalized.startswith(PLANS_PATH_PREFIX):
+        return True
+    if DOCS_PLANS_PATH_SEGMENT in normalized:
+        return True
+    if normalized.startswith(DOCS_PLANS_PATH_PREFIX):
         return True
     return False
 
