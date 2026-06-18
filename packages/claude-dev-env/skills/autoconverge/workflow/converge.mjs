@@ -409,12 +409,40 @@ function verdictPassed(verifyTranscript) {
 const VERIFY_OBJECTION_FALLBACK = 'The verify step rejected the working-tree fixes without a parseable verdict; re-read the fix-verify transcript above and address every concern it raised.'
 
 /**
+ * Render one verdict finding as a single objection line, tolerant of the shapes a
+ * verifier realistically emits: a bare string, an object keyed by any of
+ * check/title/message/description/issue for the headline and detail/description
+ * for the body, or any other object (stringified so its content survives). A
+ * headline and a detail render as "headline — detail"; a headline alone renders
+ * as the headline; an entry that yields no usable text returns null so the caller
+ * can fall back rather than emit a content-free placeholder.
+ * @param {unknown} eachFinding one entry from the verdict findings array
+ * @returns {string|null} the rendered objection line, or null when unusable
+ */
+function renderVerifyObjectionLine(eachFinding) {
+  if (typeof eachFinding === 'string') {
+    const trimmedFinding = eachFinding.trim()
+    return trimmedFinding.length > 0 ? trimmedFinding : null
+  }
+  if (eachFinding === null || typeof eachFinding !== 'object') return null
+  const headline =
+    eachFinding.check || eachFinding.title || eachFinding.message || eachFinding.description || eachFinding.issue
+  const detail = eachFinding.detail || (headline === eachFinding.description ? '' : eachFinding.description)
+  if (typeof headline === 'string' && headline.length > 0) {
+    return typeof detail === 'string' && detail.length > 0 ? `${headline} — ${detail}` : headline
+  }
+  const stringifiedFinding = JSON.stringify(eachFinding)
+  return stringifiedFinding === '{}' ? null : stringifiedFinding
+}
+
+/**
  * Pull the verifier's stated objections out of a failed verify transcript so the
  * re-fix step knows what the verdict rejected. Reads the last fenced verdict JSON
- * (the same block verdictPassed reads) and renders its findings as a numbered
- * check-then-detail list. A missing fence, a parse failure, or an empty findings
- * list falls back to a generic re-read instruction, so the re-fix step always
- * receives actionable text.
+ * (the same block verdictPassed reads) and renders each finding through
+ * renderVerifyObjectionLine into a numbered list. A missing fence, a parse
+ * failure, an empty findings list, or a findings list where no entry yields
+ * usable text falls back to a generic re-read instruction, so the re-fix step
+ * always receives actionable text.
  * @param {string|null|undefined} verifyTranscript the failed verifier transcript text
  * @returns {string} a human-readable block of the verifier's objections
  */
@@ -429,11 +457,12 @@ function extractVerifyObjection(verifyTranscript) {
   if (lastFenceBody === null) return VERIFY_OBJECTION_FALLBACK
   try {
     const verdictRecord = JSON.parse(lastFenceBody)
-    const objections = Array.isArray(verdictRecord?.findings) ? verdictRecord.findings : []
-    if (objections.length === 0) return VERIFY_OBJECTION_FALLBACK
-    return objections
-      .map((each, position) => `${position + 1}. ${each.check || 'unnamed check'} — ${each.detail || 'no detail'}`)
-      .join('\n')
+    const allObjections = Array.isArray(verdictRecord?.findings) ? verdictRecord.findings : []
+    const renderedObjections = allObjections
+      .map((eachFinding) => renderVerifyObjectionLine(eachFinding))
+      .filter((eachLine) => eachLine !== null)
+    if (renderedObjections.length === 0) return VERIFY_OBJECTION_FALLBACK
+    return renderedObjections.map((eachLine, position) => `${position + 1}. ${eachLine}`).join('\n')
   } catch {
     return VERIFY_OBJECTION_FALLBACK
   }
