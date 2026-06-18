@@ -286,7 +286,13 @@ def has_source_table_row(source_map_text: str) -> bool:
     Returns:
         True when at least one table row names a concrete source path, otherwise False.
     """
-    file_token_pattern = re.compile(r"[\w.-]+\.[A-Za-z0-9]+")
+    source_file_token_pattern = re.compile(
+        r"[\w-]+\.(?:py|pyi|js|mjs|cjs|jsx|ts|tsx|mts|cts|json|jsonc|ya?ml|toml|ini|cfg"
+        r"|mdx?|rst|txt|sh|bash|ps[dm]?1|sql|html?|s?css|sass|less|go|rs|java|kts?|rb|php"
+        r"|cc?|cpp|h|hpp|cs|swift|scala|lua|vue|svelte|xml|env|lock|dockerfile|mk|gradle"
+        r"|proto|gr?aphql|gql)\b",
+        re.IGNORECASE,
+    )
     for each_line in source_map_text.splitlines():
         normalized_line = each_line.strip()
         if not normalized_line.startswith("|"):
@@ -297,7 +303,7 @@ def has_source_table_row(source_map_text: str) -> bool:
             continue
         if "/" in normalized_line or "\\" in normalized_line:
             return True
-        if file_token_pattern.search(normalized_line):
+        if source_file_token_pattern.search(normalized_line):
             return True
     return False
 

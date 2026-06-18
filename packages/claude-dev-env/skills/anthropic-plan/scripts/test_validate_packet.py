@@ -264,3 +264,20 @@ def test_source_map_with_bare_non_python_source_passes(tmp_path: Path) -> None:
     validator_run = run_validator(packet_directory)
 
     assert validator_run.returncode == 0, validator_run.stderr
+
+
+def test_source_map_with_only_version_number_row_fails(tmp_path: Path) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "context" / "source-map.md").write_text(
+        "# Source Map\n\n"
+        "| Source | Why it matters | Facts extracted | Plan implication |\n"
+        "|---|---|---|---|\n"
+        "| The login subsystem | We reviewed version 2.0 of the design | No file path named here | Build accordingly |\n",
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 2
+    assert "source-map.md must include source-grounded rows" in validator_run.stderr
