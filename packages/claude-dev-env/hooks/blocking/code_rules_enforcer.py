@@ -117,6 +117,7 @@ from code_rules_string_magic import (  # noqa: E402
 from code_rules_test_assertions import (  # noqa: E402
     check_constant_equality_tests,
     check_existence_check_tests,
+    check_flag_gated_scenario_test_naming,
     check_skip_decorators_in_tests,
 )
 from code_rules_test_branching_except import (  # noqa: E402
@@ -274,6 +275,7 @@ def validate_content(
         )
         all_issues.extend(check_existence_check_tests(content, file_path))
         all_issues.extend(check_constant_equality_tests(content, file_path))
+        check_flag_gated_scenario_test_naming(content, file_path)
         all_issues.extend(check_unused_optional_parameters(content, file_path))
         all_issues.extend(check_collection_prefix(content, file_path))
         all_issues.extend(check_stuttering_collection_prefix(content, file_path))
