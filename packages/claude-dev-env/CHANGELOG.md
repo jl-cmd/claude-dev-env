@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.66.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.66.1...claude-dev-env-v1.66.2) (2026-06-18)
+
+
+### Bug Fixes
+
+* **anthropic-plan:** fold repair-path recovery into top-level signal ([dc5c7f4](https://github.com/jl-cmd/claude-code-config/commit/dc5c7f42b14f9dc5ba74f85cf16ca0a65517a31a))
+* **anthropic-plan:** pass launch payload as args and self-heal isolated writes ([6359f5f](https://github.com/jl-cmd/claude-code-config/commit/6359f5f9d4aa0c05708cf96ecc5420d54fae89a3))
+* **anthropic-plan:** pass launch payload as args and self-heal isolated writes ([f0e74b7](https://github.com/jl-cmd/claude-code-config/commit/f0e74b73813c61a8f1c90452667b8650bfcd7f12))
+
 ## [1.66.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.66.0...claude-dev-env-v1.66.1) (2026-06-18)
 
 
