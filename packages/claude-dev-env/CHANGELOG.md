@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.68.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.67.2...claude-dev-env-v1.68.0) (2026-06-18)
+
+
+### Features
+
+* **hooks:** block docstring-prose-vs-impl drift at Write/Edit time ([b892e6a](https://github.com/jl-cmd/claude-code-config/commit/b892e6a08770e11af062debc468b0c03530c0b24))
+
+
+### Bug Fixes
+
+* **autoconverge:** apply converge-round review fixes ([d355f06](https://github.com/jl-cmd/claude-code-config/commit/d355f0641902ed271a5c149d1424203ced5bbaa4))
+* **autoconverge:** re-fix and re-verify when the verify step rejects a fix ([78a1f5f](https://github.com/jl-cmd/claude-code-config/commit/78a1f5fb65405d4f42ec9be5bf34c91aaaf46600))
+* **autoconverge:** re-fix and re-verify when the verify step rejects a fix ([08d0879](https://github.com/jl-cmd/claude-code-config/commit/08d0879c75f7860372273b2031e73c5f6304f481))
+* **hooks:** address review findings on O6 docstring fallback branch ([df70e79](https://github.com/jl-cmd/claude-code-config/commit/df70e7980e46ce20474508f2f17f4c398684e370))
+* **hooks:** harden O6 docstring fallback branch in code_rules_docstrings ([86ac337](https://github.com/jl-cmd/claude-code-config/commit/86ac337a9779f0dcb26f9de2b4992bf7d5408576))
+
 ## [1.67.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.67.1...claude-dev-env-v1.67.2) (2026-06-18)
 
 
