@@ -20,11 +20,26 @@ def test_skill_invokes_plan_packet_workflow() -> None:
     assert "docs/plans/<slug>/" in skill_text
 
 
+def test_skill_launches_workflow_with_args_payload() -> None:
+    skill_text = SKILL_PATH.read_text(encoding="utf-8")
+
+    assert "args:" in skill_text
+    assert "input:" not in skill_text
+
+
 def test_skill_no_longer_mentions_single_home_plan_file() -> None:
     skill_text = SKILL_PATH.read_text(encoding="utf-8")
 
     assert "~/.claude/plans/<slug>.md" not in skill_text
     assert "single-file" not in skill_text.lower()
+
+
+def test_skill_documents_self_healing_writes() -> None:
+    skill_text = SKILL_PATH.read_text(encoding="utf-8").lower()
+
+    assert "worktree" in skill_text
+    assert "stages" in skill_text
+    assert "copies" in skill_text
 
 
 def test_skill_names_validator_and_stop_before_code_rules() -> None:

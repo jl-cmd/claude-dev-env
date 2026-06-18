@@ -9,12 +9,12 @@ Create a source-grounded plan packet through the Claude Code Workflow runtime. T
 
 ## Launch
 
-Call the workflow with the user request and current working directory:
+Call the workflow with the user request and current working directory. The payload goes in `args` — the Workflow tool exposes `args` to the script as its global `args`, and substitutes the user's full request for `$ARGUMENTS`:
 
 ```js
 Workflow({
   scriptPath: "$HOME/.claude/skills/anthropic-plan/workflow/plan-packet.mjs",
-  input: {
+  args: {
     task: "$ARGUMENTS",
     cwd: "<current working directory>"
   }
@@ -22,6 +22,10 @@ Workflow({
 ```
 
 If the Workflow tool is unavailable, say `anthropic-plan requires the Workflow tool; aborting` and stop.
+
+## Self-healing writes
+
+The workflow writes the packet into the live checkout under `docs/plans/<slug>/`. When a session isolates writes into a worktree and blocks a direct write, the workflow stages each packet file through the Write tool — so the plain-language and historical-clutter checks still run — then copies the staged tree into the checkout. The packet lands under `docs/plans/<slug>/` in either session mode.
 
 ## Workflow Contract
 
