@@ -311,21 +311,28 @@ def check_docstring_args_match_signature(content: str, file_path: str) -> list[s
     return issues[:MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES]
 
 
-def _call_callee_name(call_node: ast.Call) -> str:
-    callee = call_node.func
-    if isinstance(callee, ast.Attribute):
-        return callee.attr
-    if isinstance(callee, ast.Name):
-        return callee.id
+def _callee_expression_name(expression: ast.expr) -> str:
+    if isinstance(expression, ast.Name):
+        return expression.id
+    if isinstance(expression, ast.Attribute):
+        receiver_name = _callee_expression_name(expression.value)
+        if not receiver_name:
+            return expression.attr
+        return f"{receiver_name}.{expression.attr}"
     return ""
+
+
+def _call_callee_name(call_node: ast.Call) -> str:
+    return _callee_expression_name(call_node.func)
 
 
 def _branch_routes_directly_to_call(branch_node: ast.If) -> str:
     """Return the callee name an early-return guard routes to, or empty string.
 
-    A guard counts only when its block both invokes exactly one call and then
-    returns, so a multi-statement block with incidental calls is not treated as
-    a route. The await wrapper around an async call is unwrapped first.
+    A guard counts when its block contains exactly one call expression and then
+    returns. A second call expression disqualifies the block; non-call
+    statements such as an assignment or a loop are skipped and do not
+    disqualify it. The await wrapper around an async call is unwrapped first.
     """
     routed_callee = ""
     saw_return = False
@@ -369,10 +376,24 @@ def _shared_fallback_route_count(
     return busiest_callee, route_count_by_callee[busiest_callee]
 
 
+def _summary_contains_phrase_at_word_boundary(summary_text: str, phrase: str) -> bool:
+    search_start = 0
+    while True:
+        match_index = summary_text.find(phrase, search_start)
+        if match_index == -1:
+            return False
+        preceding_is_boundary = (
+            match_index == 0 or not summary_text[match_index - 1].isalnum()
+        )
+        if preceding_is_boundary:
+            return True
+        search_start = match_index + 1
+
+
 def _docstring_summary_scopes_a_single_condition(docstring_text: str) -> bool:
     summary_text = docstring_text.split("\n\n", 1)[0].lower()
     return any(
-        each_phrase in summary_text
+        _summary_contains_phrase_at_word_boundary(summary_text, each_phrase)
         for each_phrase in ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES
     )
 

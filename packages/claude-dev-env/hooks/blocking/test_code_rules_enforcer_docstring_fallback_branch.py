@@ -155,6 +155,123 @@ def test_should_not_flag_when_docstring_has_no_scope_phrase() -> None:
     )
 
 
+def test_should_not_flag_when_scope_phrase_is_a_substring_of_another_word() -> None:
+    source = (
+        "def refresh(cache: object) -> None:\n"
+        '    """Rebuild the cache; commonly when idle it reuses the warm copy."""\n'
+        "    if cache is None:\n"
+        "        rebuild_cache(None)\n"
+        "        return\n"
+        "    if cache.is_cold:\n"
+        "        rebuild_cache(cache)\n"
+        "        return\n"
+        "    serve_cache(cache)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "'commonly when' must not match the 'only when' scope phrase as a bare "
+        f"substring, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_word_boundary_scope_phrase() -> None:
+    source = (
+        "def refresh(cache: object) -> None:\n"
+        '    """Rebuild the cache only when it is invalid."""\n'
+        "    if cache is None:\n"
+        "        rebuild_cache(None)\n"
+        "        return\n"
+        "    if cache.is_cold:\n"
+        "        rebuild_cache(cache)\n"
+        "        return\n"
+        "    serve_cache(cache)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert any("rebuild_cache" in each for each in issues), (
+        f"A genuine 'only when' scope phrase must still be flagged, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_two_branches_to_same_named_method_on_distinct_receivers() -> None:
+    source = (
+        "class Closer:\n"
+        "    def shutdown(self, signal: object) -> None:\n"
+        '        """Close resources only when a shutdown signal arrives."""\n'
+        "        if signal is None:\n"
+        "            self.primary.close(signal)\n"
+        "            return\n"
+        "        if signal.is_secondary:\n"
+        "            self.secondary.close(signal)\n"
+        "            return\n"
+        "        self.tertiary.close(signal)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        "Distinct receivers calling the same method name are different fallbacks, "
+        f"got: {issues!r}"
+    )
+
+
+def test_should_flag_two_branches_to_same_method_on_one_receiver() -> None:
+    source = (
+        "class Closer:\n"
+        "    def shutdown(self, signal: object) -> None:\n"
+        '        """Close resources only when a shutdown signal arrives."""\n'
+        "        if signal is None:\n"
+        "            self.primary.close(signal)\n"
+        "            return\n"
+        "        if signal.is_secondary:\n"
+        "            self.primary.close(signal)\n"
+        "            return\n"
+        "        self.primary.drain(signal)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert any("self.primary.close" in each for each in issues), (
+        f"Two routes to the same receiver.method must be flagged, got: {issues!r}"
+    )
+
+
+def test_should_flag_multi_statement_guard_with_one_call_before_return() -> None:
+    source = (
+        "def select(target: object) -> None:\n"
+        '    """Pick a candidate, falling back to the press action when idle."""\n'
+        "    if target is None:\n"
+        "        attempt = 1\n"
+        "        _press(None)\n"
+        "        return\n"
+        "    if target.is_idle:\n"
+        "        attempt = 1\n"
+        "        _press(target)\n"
+        "        return\n"
+        "    _drive(target)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert any("_press" in each for each in issues), (
+        "A guard with a non-call statement before its single call still routes "
+        f"to that call, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_guard_with_a_second_call_expression() -> None:
+    source = (
+        "def select(target: object) -> None:\n"
+        '    """Pick a candidate, falling back to the press action when idle."""\n'
+        "    if target is None:\n"
+        "        _press(None)\n"
+        "        _press(None)\n"
+        "        return\n"
+        "    if target.is_idle:\n"
+        "        _press(target)\n"
+        "        _press(target)\n"
+        "        return\n"
+        "    _drive(target)\n"
+    )
+    issues = check_docstring_fallback_branch_coverage(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A second call expression disqualifies the block as a route, got: {issues!r}"
+    )
+
+
 def test_should_skip_test_file() -> None:
     issues = check_docstring_fallback_branch_coverage(_drifted_scroll_method(), TEST_FILE_PATH)
     assert issues == [], f"Test files exempt, got: {issues!r}"
