@@ -101,3 +101,27 @@ test('workflow fails closed when a phase errors', () => {
   assert.match(runBody, /validationPassed:\s*false/);
   assert.match(runBody, /approvalRequired:\s*true/);
 });
+
+test('repair schema carries the recovery signal', () => {
+  const repairSchemaBody = functionBody('repairSchema');
+  assert.match(repairSchemaBody, /recovered/);
+  assert.match(repairSchemaBody, /recoveryNote/);
+});
+
+test('workflow folds repair-path recovery into the top-level recovered signal', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  const repairCallMatch = /const\s+(\w+)\s*=\s*await repairPacket\(/.exec(runBody);
+  assert.notEqual(repairCallMatch, null, 'expected the repair result to be captured');
+  const repairResultName = repairCallMatch[1];
+  const recordRecoveryMatch = new RegExp(`recordRecovery\\(${repairResultName}\\)`).exec(runBody);
+  assert.notEqual(recordRecoveryMatch, null, 'expected the repair result to feed the recovery signal');
+});
+
+test('workflow error path returns the recovery keys', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  const catchIndex = runBody.indexOf('catch (');
+  assert.notEqual(catchIndex, -1, 'expected a catch block');
+  const catchBody = runBody.slice(catchIndex);
+  assert.match(catchBody, /\brecovered\b/);
+  assert.match(catchBody, /\brecoveryNote\b/);
+});

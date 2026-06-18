@@ -72,8 +72,10 @@ function repairSchema() {
     properties: {
       repaired: { type: 'boolean' },
       summary: { type: 'string' },
+      recovered: { type: 'boolean' },
+      recoveryNote: { type: 'string' },
     },
-    required: ['repaired', 'summary'],
+    required: ['repaired', 'summary', 'recovered', 'recoveryNote'],
   }
 }
 
@@ -194,7 +196,7 @@ function repairPrompt(packetPath, deterministicValidation, semanticValidation) {
     `Deterministic validation findings:\n${JSON.stringify(deterministicValidation.findings || [])}\n\n` +
     `Semantic validation findings:\n${JSON.stringify(semanticValidation.findings || [])}\n\n` +
     `Make the packet pass by correcting documentation, adding missing source grounding, removing placeholders, strengthening TDD steps, and updating validation/validator-report.md. ` +
-    `If the Edit or Write tool is blocked by a worktree or isolation guard, recover automatically: stage the corrected files under a writable temporary directory with the Write tool, then copy them over the packet path with a filesystem copy.`
+    `If the Edit or Write tool is blocked by a worktree or isolation guard, recover automatically: stage the corrected files under a writable temporary directory with the Write tool, then copy them over the packet path with a filesystem copy. Set recovered=true with recoveryNote describing the staging path and copy; otherwise set recovered=false with an empty recoveryNote.`
   )
 }
 
@@ -253,10 +255,18 @@ async function runPlanPacketWorkflow(rawInput) {
   let packetWrite = null
   let deterministicValidation = null
   let semanticValidation = null
+  let recovered = false
+  let recoveryNote = ''
+  const recordRecovery = (recovery) => {
+    if (recovery?.recovered !== true) return
+    recovered = true
+    recoveryNote = recovery.recoveryNote || recoveryNote
+  }
 
   try {
     const discoverySummary = await discoverContext(runInput, packetPath)
     packetWrite = await writePacket(runInput, packetPath, discoverySummary)
+    recordRecovery(packetWrite)
     deterministicValidation = await runDeterministicValidation(packetPath)
     semanticValidation = await runSemanticValidator(packetPath)
     const hasCleanValidation = () =>
@@ -264,7 +274,8 @@ async function runPlanPacketWorkflow(rawInput) {
 
     while (!hasCleanValidation() && repairLoops < policy.maxRepairLoops) {
       repairLoops += 1
-      await repairPacket(packetPath, deterministicValidation, semanticValidation)
+      const repair = await repairPacket(packetPath, deterministicValidation, semanticValidation)
+      recordRecovery(repair)
       deterministicValidation = await runDeterministicValidation(packetPath)
       semanticValidation = await runSemanticValidator(packetPath)
     }
@@ -279,8 +290,8 @@ async function runPlanPacketWorkflow(rawInput) {
       semanticFindings: semanticValidation?.findings || [],
       implementationStarted: false,
       approvalRequired: true,
-      recovered: packetWrite?.recovered === true,
-      recoveryNote: packetWrite?.recoveryNote || '',
+      recovered,
+      recoveryNote,
     }
   } catch (workflowError) {
     return {
@@ -299,6 +310,8 @@ async function runPlanPacketWorkflow(rawInput) {
       ],
       implementationStarted: false,
       approvalRequired: true,
+      recovered,
+      recoveryNote,
     }
   }
 }
