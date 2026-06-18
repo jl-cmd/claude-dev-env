@@ -243,13 +243,17 @@ def has_placeholder_text(markdown_text: str) -> bool:
         True when the markdown prose contains keyword placeholders (todo, tbd,
         fixme, replace_me, placeholder, fill this in), curly-brace template
         tokens, or angle-bracket template tokens such as `<path>` or
-        `<Plan Title>` that are not known inline HTML tags, otherwise False.
+        `<Plan Title>` that are not known inline HTML tags. An angle bracket
+        directly preceded by an identifier character is a generic type in prose
+        (List<Item>, Optional<User>) rather than a placeholder, so it does not
+        count. Otherwise False.
     """
     keyword_pattern = re.compile(
         r"\b(?:todo|tbd|fixme|replace_me|placeholder|fill this in)\b|{{|}}",
         re.IGNORECASE,
     )
     angle_bracket_pattern = re.compile(
+        r"(?<![A-Za-z0-9_])"
         r"<(?!/?(?:details|summary|br|hr|div|span|img|a|p|kbd|code|pre|sub|sup"
         r"|table|thead|tbody|tr|td|th)[ />])[A-Za-z][\w \-]*>",
     )
