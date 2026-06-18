@@ -6,6 +6,7 @@ export const meta = {
     { title: 'Discover', detail: 'Resolve repo root, read instructions, inspect matching source files, tests, configs, docs, skills, hooks, agents, and workflows.' },
     { title: 'Write packet', detail: 'Create the required docs/plans/<slug>/ tree with a thin README hub and detailed second-level docs.' },
     { title: 'Validate', detail: 'Run scripts/validate_packet.py, spawn plan-packet-validator in fresh context, and repair findings up to the cap.' },
+    { title: 'Reuse audit', detail: 'Search the codebase for existing equivalents of each new symbol or file the packet introduces; write validation/reuse-audit.md with a per-item verdict; gate approval on any unjustified reproduction.' },
     { title: 'Approval', detail: 'Return the packet path and validation verdict, then stop before implementation work.' },
   ],
 }
@@ -76,6 +77,35 @@ function repairSchema() {
       recoveryNote: { type: 'string' },
     },
     required: ['repaired', 'summary', 'recovered', 'recoveryNote'],
+  }
+}
+
+function reuseAuditSchema() {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      allJustified: { type: 'boolean' },
+      findings: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            item: { type: 'string' },
+            kind: { type: 'string' },
+            verdict: { type: 'string' },
+            searched: { type: 'string' },
+            found: { type: 'string' },
+            decision: { type: 'string' },
+            evidence: { type: 'string' },
+          },
+          required: ['item', 'kind', 'verdict', 'searched', 'found', 'decision', 'evidence'],
+        },
+      },
+      summary: { type: 'string' },
+    },
+    required: ['allJustified', 'findings', 'summary'],
   }
 }
 
@@ -190,13 +220,26 @@ function semanticValidationPrompt(packetPath) {
   )
 }
 
-function repairPrompt(packetPath, deterministicValidation, semanticValidation) {
+function repairPrompt(packetPath, deterministicValidation, semanticValidation, reuseAudit) {
   return (
     `Repair only the plan packet at ${packetPath}. Do not edit source code.\n\n` +
     `Deterministic validation findings:\n${JSON.stringify(deterministicValidation.findings || [])}\n\n` +
     `Semantic validation findings:\n${JSON.stringify(semanticValidation.findings || [])}\n\n` +
+    `Reuse audit findings:\n${JSON.stringify(reuseAudit?.findings || [])}\n\n` +
+    `For each reuse audit finding marked unjustified-reproduction, either record the reuse decision in the packet that justifies the new code, or change the plan to reuse the existing public helper or extract it to shared_utils; update validation/reuse-audit.md accordingly. ` +
     `Make the packet pass by correcting documentation, adding missing source grounding, removing placeholders, strengthening TDD steps, and updating validation/validator-report.md. ` +
     `If the Edit or Write tool is blocked by a worktree or isolation guard, recover automatically: stage the corrected files under a writable temporary directory with the Write tool, then copy them over the packet path with a filesystem copy. Set recovered=true with recoveryNote describing the staging path and copy; otherwise set recovered=false with an empty recoveryNote.`
+  )
+}
+
+function reuseAuditPrompt(packetPath) {
+  return (
+    `Run the reuse audit for the plan packet at ${packetPath}. Resolve the repo root from packet.json. Do not edit source code; only write the packet doc.\n\n` +
+    `Read implementation/file-plan.md, spec/interfaces.md, implementation/tdd-plan.md, and spec/scope.md in the packet to enumerate every new file, public symbol, helper, and constant the build introduces.\n\n` +
+    `For each item, search the codebase with grep, serena, or zoekt — repo-wide and specifically under shared_utils — for an existing implementation or near-equivalent behavior.\n\n` +
+    `Assign exactly one verdict per item from: reused (an existing public helper is used), extract-to-shared (an equivalent exists but is not shared or public and should be extracted), new-justified (genuinely new, with the reason reuse or extract was rejected), config-local (a constant living in config/), or unjustified-reproduction (reproduces existing behavior that could be made public or extracted, with no recorded justification).\n\n` +
+    `Write validation/reuse-audit.md into the packet: a markdown table with columns Item, Kind, Verdict, Searched, Found, Decision, Evidence using real file:line evidence, plus a one-line summary of verdict counts. Write concrete content only — no angle-bracket placeholder tokens and no todo, tbd, or placeholder words.\n\n` +
+    `Return the structured object. Set allJustified=false when any finding has verdict unjustified-reproduction.`
   )
 }
 
@@ -238,8 +281,17 @@ async function runSemanticValidator(packetPath) {
   })
 }
 
-async function repairPacket(packetPath, deterministicValidation, semanticValidation) {
-  return agent(repairPrompt(packetPath, deterministicValidation, semanticValidation), {
+async function runReuseAudit(packetPath) {
+  return agent(reuseAuditPrompt(packetPath), {
+    label: `plan-packet-reuse-audit`,
+    phase: 'Reuse audit',
+    schema: reuseAuditSchema(),
+    agentType: 'general-purpose',
+  })
+}
+
+async function repairPacket(packetPath, deterministicValidation, semanticValidation, reuseAudit) {
+  return agent(repairPrompt(packetPath, deterministicValidation, semanticValidation, reuseAudit), {
     label: `plan-packet-repair`,
     phase: 'Validate',
     schema: repairSchema(),
@@ -255,6 +307,7 @@ async function runPlanPacketWorkflow(rawInput) {
   let packetWrite = null
   let deterministicValidation = null
   let semanticValidation = null
+  let reuseAudit = null
   let recovered = false
   let recoveryNote = ''
   const recordRecovery = (recovery) => {
@@ -267,15 +320,21 @@ async function runPlanPacketWorkflow(rawInput) {
     const discoverySummary = await discoverContext(runInput, packetPath)
     packetWrite = await writePacket(runInput, packetPath, discoverySummary)
     recordRecovery(packetWrite)
+    reuseAudit = await runReuseAudit(packetPath)
     deterministicValidation = await runDeterministicValidation(packetPath)
     semanticValidation = await runSemanticValidator(packetPath)
     const hasCleanValidation = () =>
-      deterministicValidation?.passed === true && semanticValidation && semanticValidation.allPassed === true
+      deterministicValidation?.passed === true &&
+      semanticValidation &&
+      semanticValidation.allPassed === true &&
+      reuseAudit &&
+      reuseAudit.allJustified === true
 
     while (!hasCleanValidation() && repairLoops < policy.maxRepairLoops) {
       repairLoops += 1
-      const repair = await repairPacket(packetPath, deterministicValidation, semanticValidation)
+      const repair = await repairPacket(packetPath, deterministicValidation, semanticValidation, reuseAudit)
       recordRecovery(repair)
+      reuseAudit = await runReuseAudit(packetPath)
       deterministicValidation = await runDeterministicValidation(packetPath)
       semanticValidation = await runSemanticValidator(packetPath)
     }
@@ -288,6 +347,7 @@ async function runPlanPacketWorkflow(rawInput) {
       repairLoops,
       deterministicFindings: deterministicValidation?.findings || [],
       semanticFindings: semanticValidation?.findings || [],
+      reuseAuditFindings: reuseAudit?.findings || [],
       implementationStarted: false,
       approvalRequired: true,
       recovered,
@@ -308,6 +368,7 @@ async function runPlanPacketWorkflow(rawInput) {
           detail: String(workflowError?.message || workflowError),
         },
       ],
+      reuseAuditFindings: reuseAudit?.findings || [],
       implementationStarted: false,
       approvalRequired: true,
       recovered,

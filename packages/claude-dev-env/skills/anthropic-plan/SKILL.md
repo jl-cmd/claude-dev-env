@@ -38,8 +38,9 @@ The workflow handles the full planning loop:
 5. Run `scripts/validate_packet.py`.
 6. Spawn `plan-packet-validator` in fresh context.
 7. Repair packet findings up to the workflow cap.
-8. Return packet path, validation state, and findings.
-9. Stop before implementation.
+8. Run the reuse audit: search the codebase for existing equivalents of each new file/symbol the packet introduces, write `validation/reuse-audit.md`, and gate approval on any unjustified reproduction.
+9. Return packet path, validation state, and findings.
+10. Stop before implementation.
 
 ## Packet Shape
 
@@ -62,6 +63,8 @@ The packet depth rule is strict: `README.md` is a thin hub, first-level folders 
 The deterministic validator checks required files, placeholders, `Open Questions`, source-map strength, TDD coverage, standalone handoff prompts, and `packet.json` consistency.
 
 The `plan-packet-validator` agent checks source accuracy, scope, enough implementation detail for a blind build agent, real TDD order, invented APIs or commands, and end-to-end acceptance criteria.
+
+The reuse audit writes `validation/reuse-audit.md` with a per-item verdict for every new file or symbol the packet introduces and gates approval on any unjustified reproduction of existing behavior.
 
 ## Rules
 
