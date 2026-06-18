@@ -7,6 +7,12 @@ description: Workflow-backed implementation planning that creates a deep repo-lo
 
 Create a source-grounded plan packet through the Claude Code Workflow runtime. The output is a repo-local `docs/plans/<slug>/` folder with context, spec, implementation, validation, and handoff docs. Stop before implementation.
 
+## Isolate first
+
+The workflow's background subagents write the packet into the working tree. A background session that has not isolated into a worktree cannot write a shared checkout — the background-isolation guard rejects the write. So put the session in a worktree before launching the workflow:
+
+If the working directory is not already inside a worktree — its path does not contain `.claude/worktrees/` — call `EnterWorktree` to create one. The session switches into the worktree, the packet is written under `docs/plans/<slug>/` there, and the build then proceeds in the same worktree. A session already inside a worktree skips this step.
+
 ## Launch
 
 Call the workflow with the user request and current working directory. The payload goes in `args` — the Workflow tool exposes `args` to the script as its global `args`, and substitutes the user's full request for `$ARGUMENTS`:
