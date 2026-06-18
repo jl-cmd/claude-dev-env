@@ -195,7 +195,7 @@ function repairPrompt(packetPath, deterministicValidation, semanticValidation) {
 
 async function discoverContext(runInput, packetPath) {
   return agent(discoveryPrompt(runInput, packetPath), {
-    label: `${meta.name}-discover`,
+    label: `plan-packet-discover`,
     phase: 'Discover',
     agentType: 'general-purpose',
   })
@@ -203,16 +203,16 @@ async function discoverContext(runInput, packetPath) {
 
 async function writePacket(runInput, packetPath, discoverySummary) {
   return agent(writePacketPrompt(runInput, packetPath, discoverySummary), {
-    label: `${meta.name}-write`,
+    label: `plan-packet-write`,
     phase: 'Write packet',
     schema: packetWriteSchema(),
-    agentType: 'docs-agent',
+    agentType: 'general-purpose',
   })
 }
 
 async function runDeterministicValidation(packetPath) {
   return agent(deterministicValidationPrompt(packetPath), {
-    label: `${meta.name}-deterministic-validation`,
+    label: `plan-packet-deterministic-validation`,
     phase: 'Validate',
     schema: deterministicSchema(),
     agentType: 'general-purpose',
@@ -224,7 +224,7 @@ async function runSemanticValidator(packetPath) {
     `${semanticValidationPrompt(packetPath)}\n\n` +
     `Confirm the packet is source-backed and complete enough for a blind build agent.`
   return agent(prompt, {
-    label: `${meta.name}-semantic-validator`,
+    label: `plan-packet-semantic-validator`,
     phase: 'Validate',
     schema: validationSchema(),
     agentType: 'plan-packet-validator',
@@ -233,10 +233,10 @@ async function runSemanticValidator(packetPath) {
 
 async function repairPacket(packetPath, deterministicValidation, semanticValidation) {
   return agent(repairPrompt(packetPath, deterministicValidation, semanticValidation), {
-    label: `${meta.name}-repair`,
+    label: `plan-packet-repair`,
     phase: 'Validate',
     schema: repairSchema(),
-    agentType: 'docs-agent',
+    agentType: 'general-purpose',
   })
 }
 
@@ -296,4 +296,4 @@ async function runPlanPacketWorkflow(rawInput) {
   }
 }
 
-return await runPlanPacketWorkflow(input)
+return await runPlanPacketWorkflow(args)
