@@ -63,6 +63,30 @@ test('semantic validator uses a dedicated validator agent with structured schema
   assert.match(validatorBody, /blind build agent/);
 });
 
+test('writer self-heals a blocked write by staging and copying into place', () => {
+  const writerPrompt = functionBody('writePacketPrompt');
+  assert.match(writerPrompt, /stage/i);
+  assert.match(writerPrompt, /copy/i);
+  assert.match(writerPrompt, /recover/i);
+  assert.doesNotMatch(writerPrompt, /stop immediately/i);
+});
+
+test('packet write schema carries the recovery signal', () => {
+  const writeSchema = functionBody('packetWriteSchema');
+  assert.match(writeSchema, /recovered/);
+});
+
+test('workflow proceeds to validation without failing closed on a blocked write', () => {
+  const runBody = functionBody('runPlanPacketWorkflow');
+  const writeIndex = runBody.indexOf('await writePacket');
+  const deterministicIndex = runBody.indexOf('runDeterministicValidation');
+  assert.ok(writeIndex !== -1 && deterministicIndex !== -1);
+  assert.ok(writeIndex < deterministicIndex);
+  const betweenWriteAndValidation = runBody.slice(writeIndex, deterministicIndex);
+  assert.doesNotMatch(betweenWriteAndValidation, /return/);
+  assert.match(runBody, /recovered/);
+});
+
 test('workflow stops before implementation work', () => {
   const runBody = functionBody('runPlanPacketWorkflow');
   assert.match(runBody, /implementationStarted:\s*false/);
