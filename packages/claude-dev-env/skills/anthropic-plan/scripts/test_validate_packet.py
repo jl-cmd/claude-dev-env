@@ -120,6 +120,56 @@ def test_placeholder_text_fails(tmp_path: Path) -> None:
     assert "placeholder text" in validator_run.stderr
 
 
+@pytest.mark.parametrize(
+    "template_placeholder_markdown",
+    [
+        "# <Plan Title>\n\nThis plan implements the feature.",
+        "This plan implements <feature name> for the <component> module.",
+        "| <path> | <reason> | <verified fact> | <implementation implication> |",
+    ],
+)
+def test_angle_bracket_placeholder_text_fails(
+    tmp_path: Path,
+    template_placeholder_markdown: str,
+) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "spec" / "scope.md").write_text(
+        template_placeholder_markdown,
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 2
+    assert "spec/scope.md contains placeholder text" in validator_run.stderr
+
+
+@pytest.mark.parametrize(
+    "non_placeholder_markdown",
+    [
+        "<details>\n<summary>Notes</summary>\nGrounded detail.\n</details>",
+        "Type the annotation as `list[str]` and call `<command>` from a code span.",
+        "Reach the endpoint with `curl <url>` inside the inline code span.",
+        "The comparison `attempt_count < threshold` must hold before the retry.",
+    ],
+)
+def test_inline_html_and_code_does_not_flag_placeholder(
+    tmp_path: Path,
+    non_placeholder_markdown: str,
+) -> None:
+    packet_directory = tmp_path / "docs" / "plans" / "add-login"
+    write_valid_packet(packet_directory)
+    (packet_directory / "spec" / "scope.md").write_text(
+        non_placeholder_markdown,
+        encoding="utf-8",
+    )
+
+    validator_run = run_validator(packet_directory)
+
+    assert validator_run.returncode == 0, validator_run.stderr
+
+
 def test_open_questions_heading_fails(tmp_path: Path) -> None:
     packet_directory = tmp_path / "docs" / "plans" / "add-login"
     write_valid_packet(packet_directory)

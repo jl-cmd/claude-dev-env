@@ -239,13 +239,23 @@ def has_placeholder_text(markdown_text: str) -> bool:
         markdown_text: Markdown content to inspect.
 
     Returns:
-        True when the markdown contains placeholder tokens, otherwise False.
+        True when the markdown prose contains keyword placeholders (todo, tbd,
+        fixme, replace_me, placeholder, fill this in), curly-brace template
+        tokens, or angle-bracket template tokens such as `<path>` or
+        `<Plan Title>` that are not known inline HTML tags, otherwise False.
     """
-    placeholder_pattern = re.compile(
+    keyword_pattern = re.compile(
         r"\b(?:todo|tbd|fixme|replace_me|placeholder|fill this in)\b|{{|}}",
         re.IGNORECASE,
     )
-    return bool(placeholder_pattern.search(markdown_text))
+    angle_bracket_pattern = re.compile(
+        r"<(?!/?(?:details|summary|br|hr|div|span|img|a|p|kbd|code|pre|sub|sup"
+        r"|table|thead|tbody|tr|td|th)[ />])[A-Za-z][\w \-]*>",
+    )
+    prose_text = strip_markdown_code(markdown_text)
+    if keyword_pattern.search(prose_text):
+        return True
+    return bool(angle_bracket_pattern.search(prose_text))
 
 
 def has_open_questions_heading(markdown_text: str) -> bool:
