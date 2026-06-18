@@ -406,6 +406,68 @@ function verdictPassed(verifyTranscript) {
   }
 }
 
+const VERIFY_OBJECTION_FALLBACK = 'The verify step rejected the working-tree fixes without a parseable verdict; re-read the fix-verify transcript above and address every concern it raised.'
+
+/**
+ * Render one verdict finding as a single objection line, tolerant of the shapes a
+ * verifier realistically emits: a bare string, an object keyed by any of
+ * check/title/message/description/issue for the headline and detail/description
+ * for the body, or any other object (stringified so its content survives). A
+ * headline and a detail render as "headline — detail"; a headline alone renders
+ * as the headline; an entry that yields no usable text returns null so the caller
+ * can fall back rather than emit a content-free placeholder.
+ * @param {unknown} eachFinding one entry from the verdict findings array
+ * @returns {string|null} the rendered objection line, or null when unusable
+ */
+function renderVerifyObjectionLine(eachFinding) {
+  if (typeof eachFinding === 'string') {
+    const trimmedFinding = eachFinding.trim()
+    return trimmedFinding.length > 0 ? trimmedFinding : null
+  }
+  if (eachFinding === null || typeof eachFinding !== 'object') return null
+  const headline =
+    eachFinding.check || eachFinding.title || eachFinding.message || eachFinding.description || eachFinding.issue
+  const detail = eachFinding.detail || (headline === eachFinding.description ? '' : eachFinding.description)
+  if (typeof headline === 'string' && headline.length > 0) {
+    return typeof detail === 'string' && detail.length > 0 ? `${headline} — ${detail}` : headline
+  }
+  const stringifiedFinding = JSON.stringify(eachFinding)
+  return stringifiedFinding === '{}' ? null : stringifiedFinding
+}
+
+/**
+ * Pull the verifier's stated objections out of a failed verify transcript so the
+ * re-fix step knows what the verdict rejected. Reads the last fenced verdict JSON
+ * (the same block verdictPassed reads) and renders each finding through
+ * renderVerifyObjectionLine into a numbered list. A missing fence, a parse
+ * failure, an empty findings list, or a findings list where no entry yields
+ * usable text falls back to a generic re-read instruction, so the re-fix step
+ * always receives actionable text.
+ * @param {string|null|undefined} verifyTranscript the failed verifier transcript text
+ * @returns {string} a human-readable block of the verifier's objections
+ */
+function extractVerifyObjection(verifyTranscript) {
+  if (typeof verifyTranscript !== 'string') return VERIFY_OBJECTION_FALLBACK
+  const fencePattern = /```verdict\s*\n([\s\S]*?)```/g
+  let lastFenceBody = null
+  let eachMatch
+  while ((eachMatch = fencePattern.exec(verifyTranscript)) !== null) {
+    lastFenceBody = eachMatch[1]
+  }
+  if (lastFenceBody === null) return VERIFY_OBJECTION_FALLBACK
+  try {
+    const verdictRecord = JSON.parse(lastFenceBody)
+    const allObjections = Array.isArray(verdictRecord?.findings) ? verdictRecord.findings : []
+    const renderedObjections = allObjections
+      .map((eachFinding) => renderVerifyObjectionLine(eachFinding))
+      .filter((eachLine) => eachLine !== null)
+    if (renderedObjections.length === 0) return VERIFY_OBJECTION_FALLBACK
+    return renderedObjections.map((eachLine, position) => `${position + 1}. ${eachLine}`).join('\n')
+  } catch {
+    return VERIFY_OBJECTION_FALLBACK
+  }
+}
+
 /**
  * Decide whether a fix lens actually advanced the round: a pushed fix that moved
  * HEAD progressed, and so did an all-stale round whose findings were every one
@@ -808,6 +870,32 @@ function recoverCommitBlockEdit(head, blockerDetail, sourceLabel, attempt) {
   )
 }
 
+/**
+ * Verify-recovery fixer: when the verify step rejects the working-tree fixes, one
+ * clean-coder re-fixes against the verdict's stated objections, test-first, and
+ * leaves the work uncommitted so the re-verify step can bind a fresh verdict. The
+ * objection text names which findings the verifier judged unresolved and why, so
+ * the fixer addresses those concerns; it does not touch GitHub review threads —
+ * the edit step already replied to and resolved those.
+ * @param {string} head PR HEAD SHA the fixes were raised against
+ * @param {string} objection the verifier's rendered objections from the failed verdict
+ * @param {string} sourceLabel short description of where the findings came from
+ * @param {number} attempt the 1-based recovery attempt number
+ * @returns {Promise<object>} EDIT_SCHEMA result
+ */
+function recoverVerifyFailEdit(head, objection, sourceLabel, attempt) {
+  return convergeAgent(
+    `You are the VERIFY-RECOVERY fixer (attempt ${attempt}) for fixes (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The verify step rejected the working-tree fixes; its verdict named what is still unresolved. A separate verify step then a separate commit step run after you.\n\n` +
+      `The verify step's objections:\n${objection}\n\n` +
+      `Rules:\n` +
+      `- Confirm the working tree is on the PR branch at HEAD ${head} with the prior fixes still present.\n` +
+      `- Address every objection above test-first (failing test, then minimum code to pass) per CODE_RULES, so each named concern is genuinely resolved the way the verdict requires. Do not touch GitHub review threads — the edit step already handled those.\n` +
+      `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
+      `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.`,
+    { label: `fix-verify-recover:${sourceLabel}`, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
+  )
+}
+
 const FIX_RECOVERY_MAX_ATTEMPTS = 2
 
 /**
@@ -837,6 +925,29 @@ async function commitWithRecovery({ runCommit, runVerify, runRecoverEdit }) {
 }
 
 /**
+ * Run the verify step and, when its verdict fails, route back to a fixer: re-fix
+ * against the verifier's objection, then re-verify — bounded by
+ * FIX_RECOVERY_MAX_ATTEMPTS. The loop breaks early when the fixer makes no edit,
+ * returning the last failed verify transcript so the caller's verdict-failed
+ * handling still applies; a verify that passes on any attempt returns its passing
+ * transcript so the caller proceeds to commit.
+ * @param {{runVerify: function, runRecoverEdit: function}} steps the verify and verify-recovery-edit thunks
+ * @returns {Promise<string>} the final verify transcript — passing, or the last failed one
+ */
+async function verifyWithRecovery({ runVerify, runRecoverEdit }) {
+  let verifyTranscript = await runVerify()
+  let attempt = 0
+  while (!verdictPassed(verifyTranscript) && attempt < FIX_RECOVERY_MAX_ATTEMPTS) {
+    attempt += 1
+    const objection = extractVerifyObjection(verifyTranscript)
+    const recoverEdit = await runRecoverEdit(objection, attempt)
+    if (recoverEdit?.edited !== true) break
+    verifyTranscript = await runVerify()
+  }
+  return verifyTranscript
+}
+
+/**
  * Fix lens: edit (clean-coder, no commit) -> verify (code-verifier emits a
  * verdict fence binding the working tree) -> commit (clean-coder, one commit +
  * push, no edits). Splitting the single editing-and-committing agent lets a
@@ -862,7 +973,10 @@ async function applyFixes(head, findings, sourceLabel) {
       blockerDetail: '',
     }
   }
-  const verifyTranscript = await verifyFixesInWorkingTree(head, findings, sourceLabel)
+  const verifyTranscript = await verifyWithRecovery({
+    runVerify: () => verifyFixesInWorkingTree(head, findings, sourceLabel),
+    runRecoverEdit: (objection, attempt) => recoverVerifyFailEdit(head, objection, sourceLabel, attempt),
+  })
   if (!verdictPassed(verifyTranscript)) {
     return {
       newSha: head,
@@ -1099,7 +1213,10 @@ async function repairConvergence(head, failures) {
       blockerDetail: '',
     }
   }
-  const verifyTranscript = await verifyRepairChanges(head, failures)
+  const verifyTranscript = await verifyWithRecovery({
+    runVerify: () => verifyRepairChanges(head, failures),
+    runRecoverEdit: (objection, attempt) => recoverVerifyFailEdit(head, objection, 'repair', attempt),
+  })
   if (!verdictPassed(verifyTranscript)) {
     return {
       newSha: head,

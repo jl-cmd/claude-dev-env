@@ -183,3 +183,138 @@ test('the round-loop fix-stalled blockers survive the recovery wiring', () => {
   assert.match(convergeSource, /fix lens landed no push for/);
   assert.match(convergeSource, /copilot fix lens landed no push for/);
 });
+
+const verifyObjectionModule = new Function(
+  `${constantLine('VERIFY_OBJECTION_FALLBACK')}\n` +
+    `${functionSource('renderVerifyObjectionLine')}\n` +
+    `${functionSource('extractVerifyObjection')}\n` +
+    'return { extractVerifyObjection, VERIFY_OBJECTION_FALLBACK };',
+)();
+
+const { extractVerifyObjection, VERIFY_OBJECTION_FALLBACK } = verifyObjectionModule;
+
+test('extractVerifyObjection falls back for a non-string transcript', () => {
+  assert.equal(extractVerifyObjection(null), VERIFY_OBJECTION_FALLBACK);
+});
+
+test('extractVerifyObjection falls back when no verdict fence is present', () => {
+  assert.equal(
+    extractVerifyObjection('the verifier wrote prose with no verdict fence'),
+    VERIFY_OBJECTION_FALLBACK,
+  );
+});
+
+test('extractVerifyObjection falls back when the verdict fence carries no findings', () => {
+  const transcript = '```verdict\n{"all_pass": false, "findings": []}\n```';
+  assert.equal(extractVerifyObjection(transcript), VERIFY_OBJECTION_FALLBACK);
+});
+
+test('extractVerifyObjection renders each verdict finding as check then detail', () => {
+  const transcript =
+    '```verdict\n{"all_pass": false, "findings": [{"check": "Finding 1", "detail": "still over-blocks"}, {"check": "Finding 2", "detail": "boundary unchecked"}]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /1\. Finding 1 — still over-blocks/);
+  assert.match(objection, /2\. Finding 2 — boundary unchecked/);
+});
+
+test('extractVerifyObjection reads the LAST verdict fence', () => {
+  const transcript =
+    '```verdict\n{"all_pass": false, "findings": [{"check": "stale", "detail": "old"}]}\n```\nretry\n```verdict\n{"all_pass": false, "findings": [{"check": "fresh", "detail": "new"}]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /fresh — new/);
+  assert.doesNotMatch(objection, /stale/);
+});
+
+test('extractVerifyObjection renders bare string findings as their text', () => {
+  const transcript =
+    '```verdict\n{"all_pass": false, "findings": ["boundary still over-blocks", "missing test for empty input"]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /1\. boundary still over-blocks/);
+  assert.match(objection, /2\. missing test for empty input/);
+  assert.doesNotMatch(objection, /unnamed check/);
+});
+
+test('extractVerifyObjection renders alternate-keyed objects (title, message, description, issue)', () => {
+  const transcript =
+    '```verdict\n{"all_pass": false, "findings": [{"title": "over-blocks", "detail": "boundary unchecked"}, {"message": "regex too broad"}, {"description": "no fallback path"}, {"issue": "stale fixture"}]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /over-blocks — boundary unchecked/);
+  assert.match(objection, /regex too broad/);
+  assert.match(objection, /no fallback path/);
+  assert.match(objection, /stale fixture/);
+  assert.doesNotMatch(objection, /unnamed check/);
+  assert.doesNotMatch(objection, /no detail/);
+});
+
+test('extractVerifyObjection renders mixed string and object findings', () => {
+  const transcript =
+    '```verdict\n{"all_pass": false, "findings": ["plain concern", {"check": "named", "detail": "explained"}]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /1\. plain concern/);
+  assert.match(objection, /2\. named — explained/);
+});
+
+test('extractVerifyObjection stringifies an object whose keys it does not recognize', () => {
+  const transcript = '```verdict\n{"all_pass": false, "findings": [{"severity": "P1", "line": 42}]}\n```';
+  const objection = extractVerifyObjection(transcript);
+  assert.match(objection, /severity/);
+  assert.match(objection, /42/);
+  assert.doesNotMatch(objection, /unnamed check/);
+});
+
+test('extractVerifyObjection falls back when no finding yields usable text', () => {
+  const transcript = '```verdict\n{"all_pass": false, "findings": [null, {}, ""]}\n```';
+  assert.equal(extractVerifyObjection(transcript), VERIFY_OBJECTION_FALLBACK);
+});
+
+test('recoverVerifyFailEdit is a clean-coder edit step bound to the verifier objection and leaves changes uncommitted', () => {
+  const recoverBody = functionSource('recoverVerifyFailEdit');
+  assert.match(recoverBody, /agentType:\s*'clean-coder'/, 'expected the fixer to use clean-coder');
+  assert.match(recoverBody, /schema:\s*EDIT_SCHEMA/, 'expected the fixer to reuse EDIT_SCHEMA');
+  assert.match(recoverBody, /label:\s*`fix-verify-recover:/, 'expected the fix-verify-recover label');
+  assert.match(recoverBody, /objection/, 'expected the fixer prompt to consume the verifier objection');
+  assert.match(
+    recoverBody,
+    /do not commit and do not push|Do NOT commit|leave .*uncommitted|uncommitted/i,
+    'expected the fixer to leave its fix uncommitted for the re-verify and retry commit',
+  );
+});
+
+test('verifyWithRecovery bounds the loop, re-fixes on a failed verdict, and re-verifies', () => {
+  const recoveryBody = functionSource('verifyWithRecovery');
+  assert.match(recoveryBody, /verdictPassed\(/, 'expected the loop guard to call verdictPassed');
+  assert.match(
+    recoveryBody,
+    /attempt\s*<\s*FIX_RECOVERY_MAX_ATTEMPTS/,
+    'expected the loop to be bounded by FIX_RECOVERY_MAX_ATTEMPTS',
+  );
+  assert.match(recoveryBody, /runRecoverEdit\(/, 'expected the loop to spawn the verify-recovery fixer');
+  assert.match(recoveryBody, /runVerify\(/, 'expected the loop to re-verify after the fixer edit');
+  assert.match(
+    recoveryBody,
+    /extractVerifyObjection\(/,
+    'expected the loop to feed the fixer the verifier objection',
+  );
+  const editGuardIndex = recoveryBody.search(/edited\s*!==\s*true/);
+  assert.notEqual(editGuardIndex, -1, 'expected an early break when the fixer made no edit');
+  const recoverEditIndex = recoveryBody.search(/runRecoverEdit\(/);
+  const reverifyIndex = recoveryBody.lastIndexOf('runVerify(');
+  assert.ok(recoverEditIndex < reverifyIndex, 'expected order recover-edit -> re-verify, so a swap fails');
+});
+
+test('applyFixes routes its verify through verifyWithRecovery before commitWithRecovery', () => {
+  const applyFixesBody = functionSource('applyFixes');
+  assert.match(applyFixesBody, /verifyWithRecovery\(/, 'expected applyFixes to call verifyWithRecovery');
+  assert.match(applyFixesBody, /runVerify:\s*\(\)\s*=>\s*verifyFixesInWorkingTree\(/);
+  assert.match(applyFixesBody, /runRecoverEdit:[\s\S]*?recoverVerifyFailEdit\(/);
+  const verifyIndex = applyFixesBody.search(/verifyWithRecovery\(/);
+  const commitIndex = applyFixesBody.search(/commitWithRecovery\(/);
+  assert.ok(verifyIndex < commitIndex, 'expected verify-recovery to precede commit-recovery');
+});
+
+test('repairConvergence routes its verify through verifyWithRecovery wired to the repair verify step', () => {
+  const repairBody = functionSource('repairConvergence');
+  assert.match(repairBody, /verifyWithRecovery\(/, 'expected repairConvergence to call verifyWithRecovery');
+  assert.match(repairBody, /runVerify:\s*\(\)\s*=>\s*verifyRepairChanges\(/);
+  assert.match(repairBody, /runRecoverEdit:[\s\S]*?recoverVerifyFailEdit\(/);
+});
