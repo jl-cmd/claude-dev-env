@@ -1,8 +1,11 @@
-"""Skip-decorator, existence-only, and constant-equality test-quality checks."""
+"""Skip-decorator, existence-only, constant-equality, and flag-gated scenario test-quality checks."""
 
 import ast
 import sys
 from pathlib import Path
+
+_SCENARIO_NAME_CLAUSES = ("_when_", "_passes", "_succeeds", "_on_clean")
+_MINIMUM_SIBLING_PATCH_COUNT = 2
 
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
@@ -224,3 +227,122 @@ def check_constant_equality_tests(content: str, file_path: str) -> list[str]:
             )
 
     return issues
+
+
+def _flag_symbol_from_setattr_target(target_node: ast.expr) -> str | None:
+    """Return the UPPER_SNAKE flag symbol a monkeypatch.setattr target names.
+
+    Accepts both target shapes monkeypatch.setattr supports: a dotted string
+    path (``"pkg.module.FLAG"``) and an attribute access (``module.FLAG``). The
+    flag is the final dotted segment when that segment is UPPER_SNAKE_CASE; any
+    other segment shape returns None so only module-level boolean flags qualify.
+
+    Args:
+        target_node: The first positional argument of a ``monkeypatch.setattr``
+            call.
+
+    Returns:
+        The UPPER_SNAKE flag name, or None when the target names no such symbol.
+    """
+    if isinstance(target_node, ast.Constant) and isinstance(target_node.value, str):
+        final_segment = target_node.value.rsplit(".", 1)[-1]
+        return final_segment if _is_upper_snake_name(final_segment) else None
+    if isinstance(target_node, ast.Attribute):
+        return target_node.attr if _is_upper_snake_name(target_node.attr) else None
+    return None
+
+
+def _is_monkeypatch_setattr(call_node: ast.Call) -> bool:
+    """Return True when a Call node is a ``monkeypatch.setattr(...)`` invocation."""
+    function_reference = call_node.func
+    return (
+        isinstance(function_reference, ast.Attribute)
+        and function_reference.attr == "setattr"
+        and isinstance(function_reference.value, ast.Name)
+        and function_reference.value.id == "monkeypatch"
+    )
+
+
+def _flags_patched_in_test(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """Return the set of UPPER_SNAKE flag symbols a test patches via monkeypatch.setattr."""
+    patched_flags: set[str] = set()
+    for each_node in ast.walk(function_node):
+        if not isinstance(each_node, ast.Call):
+            continue
+        if not _is_monkeypatch_setattr(each_node) or not each_node.args:
+            continue
+        flag_symbol = _flag_symbol_from_setattr_target(each_node.args[0])
+        if flag_symbol is not None:
+            patched_flags.add(flag_symbol)
+    return patched_flags
+
+
+def _name_encodes_scenario(test_name: str) -> bool:
+    """Return True when a test name carries a scenario clause asserting a condition."""
+    return any(each_clause in test_name for each_clause in _SCENARIO_NAME_CLAUSES)
+
+
+def check_flag_gated_scenario_test_naming(content: str, file_path: str) -> list[str]:
+    """Flag a scenario-named test that omits a flag its siblings establish.
+
+    When two or more sibling tests in a file monkeypatch the same module-level
+    UPPER_SNAKE flag, that flag governs which branch the code under test runs.
+    A test whose name asserts a scenario (``_when_``, ``_passes``, ``_succeeds``,
+    ``_on_clean``) but never patches that flag runs under the flag's default
+    value, so its named condition may not be in effect — the audit category N
+    test-name-scenario mismatch. Advisory only; emitted to stderr, never blocks.
+    Only applies to test files; production files are exempt.
+
+    Args:
+        content: The file body under validation.
+        file_path: Path to the file, used for the test-file gate.
+
+    Returns:
+        An empty list; advisories print to stderr so the write proceeds.
+    """
+    if not is_test_file(file_path):
+        return []
+
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    test_functions = [
+        each_node
+        for each_node in ast.walk(syntax_tree)
+        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and each_node.name.startswith("test")
+    ]
+    flags_patched_by_test = {
+        each_test.name: _flags_patched_in_test(each_test) for each_test in test_functions
+    }
+    sibling_patch_count_by_flag: dict[str, int] = {}
+    for patched_flags in flags_patched_by_test.values():
+        for each_flag in patched_flags:
+            sibling_patch_count_by_flag[each_flag] = (
+                sibling_patch_count_by_flag.get(each_flag, 0) + 1
+            )
+    established_flags = {
+        each_flag
+        for each_flag, patch_count in sibling_patch_count_by_flag.items()
+        if patch_count >= _MINIMUM_SIBLING_PATCH_COUNT
+    }
+    if not established_flags:
+        return []
+
+    for each_test in test_functions:
+        if not _name_encodes_scenario(each_test.name):
+            continue
+        unpatched_flags = established_flags - flags_patched_by_test[each_test.name]
+        if unpatched_flags:
+            flag_list = ", ".join(sorted(unpatched_flags))
+            print(
+                f"ADVISORY [CODE_RULES] Line {each_test.lineno}: scenario test"
+                f" {each_test.name!r} never patches {flag_list}, which sibling tests"
+                f" establish — the named scenario may run under the flag default."
+                f" Patch the flag (and assert the gated path runs) or rename the test.",
+                file=sys.stderr,
+            )
+
+    return []

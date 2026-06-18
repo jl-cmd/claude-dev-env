@@ -37,6 +37,12 @@ Customize per-artifact: a pure-function test corpus with no scenario claims redu
 
 ---
 
+## Write-time advisory for the flag-gated N1 slice
+
+`check_flag_gated_scenario_test_naming` in `code_rules_test_assertions.py` (wired into `code_rules_enforcer.py`) catches the deterministic N1 slice at Write/Edit time. When two or more sibling tests in a file `monkeypatch.setattr` the same module-level UPPER_SNAKE flag, that flag governs which branch the code under test runs. A `test_*` whose name carries a scenario clause (`_when_`, `_passes`, `_succeeds`, `_on_clean`) but never patches that flag runs under the flag's default value, so its named condition may not be in effect. The check prints an advisory to stderr and never blocks the write — the breadth of the sibling-pattern heuristic suits a judgment lane, where the author decides whether to patch the flag (and assert the gated path runs) or rename the test. The audit still owns the full N1–N10 surface; the advisory only surfaces this one mechanically-detectable shape early.
+
+---
+
 ## Sample prompt
 
 The reusable Variant C template for Category N is in [`../prompts/category-n-test-name-scenario-verifier.md`](../prompts/category-n-test-name-scenario-verifier.md). Inline every changed test function under `## Source material` along with the production function it claims to cover, so the audit can compare the named scenario against the body's act phase.
