@@ -25,6 +25,7 @@ ALL_REQUIRED_RELATIVE_PATHS: tuple[str, ...] = (
     "validation/validator-report.md",
     "validation/deterministic-checks.md",
     "validation/unresolved-risks.md",
+    "validation/reuse-audit.md",
     "handoff/build-prompt.md",
     "handoff/review-prompt.md",
     "handoff/verification-commands.md",
