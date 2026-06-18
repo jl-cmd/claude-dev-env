@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.67.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.67.0...claude-dev-env-v1.67.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **anthropic-plan:** match whole reuse-audit verdict tokens ([f06f8d3](https://github.com/jl-cmd/claude-code-config/commit/f06f8d30f6ab902dc49e2985168de912b796755e))
+* **anthropic-plan:** match whole reuse-audit verdict tokens ([341465f](https://github.com/jl-cmd/claude-code-config/commit/341465f386942650f6a09536829513dd796a2815)), closes [#676](https://github.com/jl-cmd/claude-code-config/issues/676)
+
 ## [1.67.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.66.2...claude-dev-env-v1.67.0) (2026-06-18)
 
 
