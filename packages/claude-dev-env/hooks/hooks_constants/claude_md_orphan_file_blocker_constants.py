@@ -16,6 +16,7 @@ import re
 __all__ = [
     "CLAUDE_MD_FILENAME",
     "TABLE_ROW_PATTERN",
+    "CODE_FENCE_PATTERN",
     "FIRST_COLUMN_BACKTICK_PATTERN",
     "SEPARATOR_CELL_PATTERN",
     "RELATIVE_PATH_SOURCE_PATTERN",
@@ -30,6 +31,8 @@ __all__ = [
 CLAUDE_MD_FILENAME: str = "CLAUDE.md"
 
 TABLE_ROW_PATTERN: re.Pattern[str] = re.compile(r"^\s*\|")
+
+CODE_FENCE_PATTERN: re.Pattern[str] = re.compile(r"^\s*(?:```|~~~)")
 
 FIRST_COLUMN_BACKTICK_PATTERN: re.Pattern[str] = re.compile(r"`([^`]+)`")
 

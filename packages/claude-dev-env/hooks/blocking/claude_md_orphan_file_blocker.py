@@ -26,6 +26,7 @@ if _hooks_dir not in sys.path:
 from hooks_constants.claude_md_orphan_file_blocker_constants import (  # noqa: E402
     ALL_REFERENCED_FILE_EXTENSIONS,
     CLAUDE_MD_FILENAME,
+    CODE_FENCE_PATTERN,
     FIRST_COLUMN_BACKTICK_PATTERN,
     MAX_ORPHAN_FILE_ISSUES,
     MAX_SUBTREE_FILES_SCANNED,
@@ -134,11 +135,13 @@ def find_referenced_filenames(content: str) -> list[str]:
 
     Walks the content line by line, grouping it into table blocks. A table block
     is a maximal run of consecutive markdown table rows; the prose lines since the
-    previous block introduce it. A block whose introducing region or own rows
-    declare an explicit relative-path source (a ``../`` token) documents files in
-    a sibling tree, so its rows are skipped — the exemption is scoped to the
-    block, not the whole file. Every remaining block contributes the bare filename
-    each first-column cell names.
+    previous block introduce it. A line inside a fenced code block (between a
+    ``` or ~~~ fence pair) is example or sample text, not a live table, so it
+    contributes nothing and never ends a block. A block whose introducing region
+    or own rows declare an explicit relative-path source (a ``../`` token)
+    documents files in a sibling tree, so its rows are skipped — the exemption is
+    scoped to the block, not the whole file. Every remaining block contributes the
+    bare filename each first-column cell names.
 
     Args:
         content: The CLAUDE.md content being written.
@@ -150,7 +153,13 @@ def find_referenced_filenames(content: str) -> list[str]:
     referenced_filenames: list[str] = []
     pending_region: list[str] = []
     current_block: list[str] = []
+    is_inside_code_fence = False
     for each_line in content.splitlines():
+        if CODE_FENCE_PATTERN.match(each_line) is not None:
+            is_inside_code_fence = not is_inside_code_fence
+            continue
+        if is_inside_code_fence:
+            continue
         if TABLE_ROW_PATTERN.match(each_line) is not None:
             current_block.append(each_line)
             continue
@@ -207,32 +216,101 @@ def _resolve_scan_root(claude_md_directory: Path) -> Path:
     return parent_directory
 
 
-def _filenames_in_subtree(claude_md_directory: Path) -> set[str]:
-    """Return the set of file basenames reachable from the CLAUDE.md directory.
+class _SubtreeScan:
+    """The basenames a bounded subtree walk collected and whether it ran complete.
 
-    Walks the subtree rooted at the CLAUDE.md directory's parent (or the
-    directory itself when it has no distinct parent), collecting each file's
-    basename. The wider parent root resolves files a table documents in a sibling
-    directory or one level up. The walk is bounded so a large tree never stalls a
-    write.
+    Attributes:
+        all_basenames: Each file basename the walk reached.
+        was_scan_complete: True when the walk visited the whole subtree within the
+            budget, so ``all_basenames`` is authoritative; False when the budget
+            truncated the walk, so a basename's absence from the set is not proof
+            of its absence on disk.
+    """
+
+    def __init__(self, all_basenames: set[str], was_scan_complete: bool) -> None:
+        self.all_basenames = all_basenames
+        self.was_scan_complete = was_scan_complete
+
+
+def _scan_subtree_basenames(scan_root: Path) -> _SubtreeScan:
+    """Return the bounded basename scan of *scan_root*, skipping unreadable entries.
+
+    Walks the subtree collecting each file's basename, stopping once the scan
+    budget is reached. A per-entry stat error skips that entry. The result records
+    whether the walk completed within the budget, so the caller knows whether the
+    set is authoritative.
 
     Args:
-        claude_md_directory: The directory that holds the target CLAUDE.md.
+        scan_root: The directory whose subtree bounds the existence search.
 
     Returns:
-        Each file basename found under the scan root, capped at the scan budget.
+        The collected basenames paired with the scan-completeness flag.
     """
-    scan_root = _resolve_scan_root(claude_md_directory)
     all_basenames: set[str] = set()
     scanned_count = 0
     for each_path in scan_root.rglob("*"):
-        if not each_path.is_file():
+        try:
+            if not each_path.is_file():
+                continue
+        except OSError:
             continue
         all_basenames.add(each_path.name)
         scanned_count += 1
         if scanned_count >= MAX_SUBTREE_FILES_SCANNED:
-            break
-    return all_basenames
+            return _SubtreeScan(all_basenames, was_scan_complete=False)
+    return _SubtreeScan(all_basenames, was_scan_complete=True)
+
+
+def _filename_exists_under(scan_root: Path, filename: str) -> bool:
+    """Return whether a file with basename *filename* exists anywhere under root.
+
+    A direct probe that resolves one filename deterministically even when the
+    bounded subtree walk was truncated. An unreadable entry mid-walk is skipped.
+
+    Args:
+        scan_root: The directory whose subtree bounds the existence search.
+        filename: The bare basename to look for.
+
+    Returns:
+        True when at least one matching file is reachable under the scan root.
+    """
+    for each_match in scan_root.rglob(filename):
+        try:
+            if each_match.is_file():
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _present_referenced_filenames(
+    all_referenced_filenames: list[str], scan_root: Path
+) -> set[str]:
+    """Return the referenced filenames that exist under the scan root.
+
+    A complete bounded walk yields an authoritative basename set, so membership in
+    it decides presence. When the budget truncated the walk, a name absent from
+    the partial set is probed directly with ``rglob`` so a truncated slice never
+    produces a false-missing verdict.
+
+    Args:
+        all_referenced_filenames: The bare filenames a CLAUDE.md table names.
+        scan_root: The directory whose subtree bounds the existence search.
+
+    Returns:
+        The subset of *all_referenced_filenames* that resolve to an existing file.
+    """
+    subtree_scan = _scan_subtree_basenames(scan_root)
+    present_filenames: set[str] = set()
+    for each_filename in all_referenced_filenames:
+        if each_filename in subtree_scan.all_basenames:
+            present_filenames.add(each_filename)
+            continue
+        if subtree_scan.was_scan_complete:
+            continue
+        if _filename_exists_under(scan_root, each_filename):
+            present_filenames.add(each_filename)
+    return present_filenames
 
 
 def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]:
@@ -244,7 +322,9 @@ def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]
     siblings. A table block that declares an explicit relative-path source (a
     ``../`` token in the block or the prose that introduces it) yields no findings
     for that block's rows, since those files legitimately live elsewhere; an
-    unrelated block in the same file is still checked.
+    unrelated block in the same file is still checked. A filesystem error that
+    halts the whole subtree walk yields no findings (fail open), so an unreadable
+    tree never blocks a write.
 
     Args:
         content: The CLAUDE.md content being written.
@@ -254,13 +334,18 @@ def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]
         Each referenced filename with no matching file under the scan root, in
         first-seen order with duplicates removed, capped at the issue budget.
     """
-    subtree_filenames = _filenames_in_subtree(claude_md_directory)
+    referenced_filenames = find_referenced_filenames(content)
+    scan_root = _resolve_scan_root(claude_md_directory)
+    try:
+        present_filenames = _present_referenced_filenames(referenced_filenames, scan_root)
+    except OSError:
+        return []
     missing_filenames: list[str] = []
     already_reported: set[str] = set()
-    for each_filename in find_referenced_filenames(content):
+    for each_filename in referenced_filenames:
         if each_filename in already_reported:
             continue
-        if each_filename in subtree_filenames:
+        if each_filename in present_filenames:
             continue
         already_reported.add(each_filename)
         missing_filenames.append(each_filename)
@@ -326,31 +411,59 @@ def _edit_fragments(all_edits: list[dict]) -> list[str]:
     return all_fragments
 
 
-def _candidate_contents(tool_name: str, tool_input: dict, file_path: str) -> list[str]:
-    """Return the post-edit content the relative-path exemption keys off.
+class _OrphanScanPlan:
+    """The contents to scan for orphans and the pre-existing orphans to exclude.
 
-    For Write the candidate is the full new content. For Edit and MultiEdit the
+    Attributes:
+        candidate_contents: Each content string whose table rows are scanned.
+        baseline_missing_filenames: The orphan filenames the file already held
+            before this edit; reporting excludes them so an unrelated edit over a
+            pre-existing orphan on an untouched line is not blocked. Empty for a
+            Write (the whole file is replaced) and for an edit whose existing file
+            cannot be read.
+    """
+
+    def __init__(
+        self, all_candidate_contents: list[str], all_baseline_missing_filenames: set[str]
+    ) -> None:
+        self.candidate_contents = all_candidate_contents
+        self.baseline_missing_filenames = all_baseline_missing_filenames
+
+
+def _build_orphan_scan_plan(
+    tool_name: str, tool_input: dict, file_path: str, claude_md_directory: Path
+) -> _OrphanScanPlan:
+    """Return the contents to scan and the pre-existing orphans to exclude.
+
+    For Write the candidate is the full new content with no baseline, so every
+    orphan it names is introduced by the write. For Edit and MultiEdit the
     candidate is the existing file with the replacements applied, so a ``../``
-    source line outside the edited rows still exempts that table block. When the
-    existing file cannot be read, the raw ``new_string`` fragment(s) are evaluated
-    so an orphan introduced by the edit itself is still caught.
+    source line outside the edited rows still exempts that table block; the
+    baseline is the orphan set the existing file already held, so a pre-existing
+    orphan on an untouched line is excluded and only an orphan the edit introduces
+    is reported. When the existing file cannot be read, the raw ``new_string``
+    fragment(s) are scanned with no baseline, so an orphan the edit itself adds is
+    still caught.
 
     Args:
         tool_name: The intercepted tool — ``Write``, ``Edit``, or ``MultiEdit``.
         tool_input: The tool's input payload.
         file_path: The destination path of the write or edit.
+        claude_md_directory: The directory that holds the target CLAUDE.md.
 
     Returns:
-        Each content string to scan; an empty list when none are present.
+        The scan plan pairing candidate contents with the baseline orphan set.
     """
     if tool_name == "Write":
         content = tool_input.get("content", "")
-        return [content] if isinstance(content, str) and content else []
+        candidate_contents = [content] if isinstance(content, str) and content else []
+        return _OrphanScanPlan(candidate_contents, set())
     all_edits = _edits_for_tool(tool_name, tool_input)
     existing_content = _read_existing_file_content(file_path)
     if existing_content is None:
-        return _edit_fragments(all_edits)
-    return [_apply_edits(existing_content, all_edits)]
+        return _OrphanScanPlan(_edit_fragments(all_edits), set())
+    baseline_missing = set(find_missing_filenames(existing_content, claude_md_directory))
+    return _OrphanScanPlan([_apply_edits(existing_content, all_edits)], baseline_missing)
 
 
 def _edits_for_tool(tool_name: str, tool_input: dict) -> list[dict]:
@@ -370,23 +483,28 @@ def _edits_for_tool(tool_name: str, tool_input: dict) -> list[dict]:
     return all_edits if isinstance(all_edits, list) else []
 
 
-def _collect_missing_filenames(
-    all_candidate_contents: list[str], claude_md_directory: Path
-) -> list[str]:
-    """Return every missing referenced filename across all candidate contents.
+def _collect_missing_filenames(scan_plan: _OrphanScanPlan, claude_md_directory: Path) -> list[str]:
+    """Return every orphan filename the scan plan introduces, excluding baselines.
+
+    An orphan the file already held before the edit (a member of the plan's
+    baseline set) is excluded, so an unrelated edit over a pre-existing orphan on
+    an untouched line reports nothing.
 
     Args:
-        all_candidate_contents: The content strings the tool would write.
+        scan_plan: The candidate contents to scan paired with the baseline orphan
+            set to exclude.
         claude_md_directory: The directory that holds the target CLAUDE.md.
 
     Returns:
-        Each missing filename in first-seen order with duplicates removed,
-        capped at the issue budget.
+        Each introduced orphan filename in first-seen order with duplicates
+        removed, capped at the issue budget.
     """
     missing_filenames: list[str] = []
     already_reported: set[str] = set()
-    for each_content in all_candidate_contents:
+    for each_content in scan_plan.candidate_contents:
         for each_filename in find_missing_filenames(each_content, claude_md_directory):
+            if each_filename in scan_plan.baseline_missing_filenames:
+                continue
             if each_filename in already_reported:
                 continue
             already_reported.add(each_filename)
@@ -460,11 +578,11 @@ def main() -> None:
     if not claude_md_directory.is_dir():
         sys.exit(0)
 
-    all_candidate_contents = _candidate_contents(tool_name, tool_input, file_path)
-    if not all_candidate_contents:
+    scan_plan = _build_orphan_scan_plan(tool_name, tool_input, file_path, claude_md_directory)
+    if not scan_plan.candidate_contents:
         sys.exit(0)
 
-    missing_filenames = _collect_missing_filenames(all_candidate_contents, claude_md_directory)
+    missing_filenames = _collect_missing_filenames(scan_plan, claude_md_directory)
     if not missing_filenames:
         sys.exit(0)
 

@@ -6,12 +6,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import claude_md_orphan_file_blocker as blocker_module
 from claude_md_orphan_file_blocker import (
     find_missing_filenames,
     find_referenced_filenames,
 )
+from code_rules_annotations_length import check_unused_known_pytest_fixture_parameters
+from code_rules_naming_collection import check_collection_prefix
 
 from hooks_constants.claude_md_orphan_file_blocker_constants import (
     ORPHAN_FILE_ADDITIONAL_CONTEXT,
@@ -392,3 +397,157 @@ def test_every_repo_claude_md_is_not_blocked():
         if missing_filenames:
             all_offenders.append(f"{each_path}: {missing_filenames}")
     assert not all_offenders, "\n".join(all_offenders)
+
+
+def test_unrelated_edit_over_preexisting_orphan_row_is_allowed(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    (claude_md_path.parent / "kept.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path.write_text(
+        "# example\n\n"
+        "A prose paragraph with a typoo to fix.\n\n"
+        "## Local files\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `kept.py` | row |\n"
+        "| `already_orphan.py` | pre-existing orphan |\n",
+        encoding="utf-8",
+    )
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": str(claude_md_path),
+            "old_string": "A prose paragraph with a typoo to fix.",
+            "new_string": "A prose paragraph with a typo fixed.",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_multiedit_unrelated_change_over_preexisting_orphan_is_allowed(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    (claude_md_path.parent / "kept.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path.write_text(
+        "# example\n\n"
+        "First prose paragraph.\n\n"
+        "## Local files\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `kept.py` | row |\n"
+        "| `already_orphan.py` | pre-existing orphan |\n",
+        encoding="utf-8",
+    )
+    result = _run_hook(
+        "MultiEdit",
+        {
+            "file_path": str(claude_md_path),
+            "edits": [
+                {"old_string": "First prose paragraph.", "new_string": "Revised prose paragraph."},
+            ],
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_fenced_example_table_row_is_skipped(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "An example table you might write:\n\n"
+        "```\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `ghostfile.py` | example row |\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_fenced_table_row_does_not_exempt_a_later_real_row():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `ghostfile.py` | fenced example |\n"
+        "```\n\n"
+        "## Local files\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `reviewer_specs.py` | real row |\n"
+    )
+    assert find_referenced_filenames(content) == ["reviewer_specs.py"]
+
+
+def test_tilde_fenced_example_table_row_is_skipped():
+    content = (
+        "# example\n\n"
+        "~~~\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `ghostfile.py` | example row |\n"
+        "~~~\n"
+    )
+    assert find_referenced_filenames(content) == []
+
+
+def test_file_present_only_past_the_scan_cap_is_not_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(blocker_module, "MAX_SUBTREE_FILES_SCANNED", 5)
+    package_directory = tmp_path / "package_directory"
+    package_directory.mkdir()
+    filler_directory = tmp_path / "filler"
+    filler_directory.mkdir()
+    for each_index in range(50):
+        (filler_directory / f"filler_{each_index}.py").write_text("x = 1\n", encoding="utf-8")
+    (package_directory / "real_target.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path = package_directory / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `real_target.py` | a file that genuinely exists |\n"
+    )
+    first_missing = find_missing_filenames(content, claude_md_path.parent)
+    second_missing = find_missing_filenames(content, claude_md_path.parent)
+    assert first_missing == []
+    assert second_missing == []
+
+
+def test_oserror_during_subtree_walk_fails_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    def _raise_oserror(self, pattern):
+        raise OSError("simulated unreadable directory")
+
+    monkeypatch.setattr(Path, "rglob", _raise_oserror)
+    claude_md_path = tmp_path / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `reviewer_specs.py` | absent |\n"
+    )
+    missing_filenames = find_missing_filenames(content, claude_md_path.parent)
+    assert missing_filenames == []
+
+
+def test_blocker_module_has_no_collection_parameter_naming_violations():
+    blocker_source = Path(HOOK_SCRIPT_PATH).read_text(encoding="utf-8")
+    assert check_collection_prefix(blocker_source, HOOK_SCRIPT_PATH) == []
+
+
+def test_test_module_has_no_unused_pytest_fixture_parameters():
+    test_file_path = str(Path(__file__).resolve())
+    test_source = Path(test_file_path).read_text(encoding="utf-8")
+    assert check_unused_known_pytest_fixture_parameters(test_source, test_file_path) == []
