@@ -6,9 +6,10 @@ When a first-column cell names a bare filename that exists nowhere under the sca
 root (the CLAUDE.md directory's parent, covering the directory, its
 subdirectories, and its siblings), the table points a reader at a file that is
 not there. This module holds the patterns that find those cells, the filename
-extensions that mark a cell as a file reference, the relative-path marker that
-exempts a cross-directory table block, the subtree scan budget, and the
-block-message text the hook emits.
+extensions that mark a cell as a file reference, the region-boundary marker that
+scopes a prose region to one section, the relative-path marker that exempts a
+cross-directory table block, the subtree scan budget, and the block-message text
+the hook emits.
 """
 
 import re
@@ -19,6 +20,7 @@ __all__ = [
     "CODE_FENCE_PATTERN",
     "FIRST_COLUMN_BACKTICK_PATTERN",
     "SEPARATOR_CELL_PATTERN",
+    "REGION_BOUNDARY_PATTERN",
     "RELATIVE_PATH_SOURCE_PATTERN",
     "ALL_REFERENCED_FILE_EXTENSIONS",
     "MAX_SUBTREE_FILES_SCANNED",
@@ -37,6 +39,8 @@ CODE_FENCE_PATTERN: re.Pattern[str] = re.compile(r"^\s*(?:```|~~~)")
 FIRST_COLUMN_BACKTICK_PATTERN: re.Pattern[str] = re.compile(r"`([^`]+)`")
 
 SEPARATOR_CELL_PATTERN: re.Pattern[str] = re.compile(r"^[\s:\-]+$")
+
+REGION_BOUNDARY_PATTERN: re.Pattern[str] = re.compile(r"^\s*#")
 
 RELATIVE_PATH_SOURCE_PATTERN: re.Pattern[str] = re.compile(r"\.\.[\\/]")
 

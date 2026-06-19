@@ -382,6 +382,40 @@ def test_block_lines_yield_nothing_when_region_declares_relative_source():
     assert find_referenced_filenames(content) == []
 
 
+def test_distant_relative_prose_does_not_exempt_later_local_table():
+    content = (
+        "Intro: see ../shared/ for context.\n\n"
+        "## Local files\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `alpha.py` | row |\n"
+    )
+    assert find_referenced_filenames(content) == ["alpha.py"]
+
+
+def test_relative_prose_then_distant_local_table_is_denied(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "Intro: see `../_shared/scripts/` for context.\n\n"
+        "## Local files\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `reviewer_specs.py` | Does a thing |\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "reviewer_specs.py" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
 def test_corrective_message_names_siblings_under_parent():
     assert "sibling" in ORPHAN_FILE_MESSAGE_TEMPLATE
     assert "sibling" in ORPHAN_FILE_ADDITIONAL_CONTEXT

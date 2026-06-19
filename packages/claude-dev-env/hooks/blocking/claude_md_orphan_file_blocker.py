@@ -33,6 +33,7 @@ from hooks_constants.claude_md_orphan_file_blocker_constants import (  # noqa: E
     ORPHAN_FILE_ADDITIONAL_CONTEXT,
     ORPHAN_FILE_MESSAGE_TEMPLATE,
     ORPHAN_FILE_SYSTEM_MESSAGE,
+    REGION_BOUNDARY_PATTERN,
     RELATIVE_PATH_SOURCE_PATTERN,
     SEPARATOR_CELL_PATTERN,
     TABLE_ROW_PATTERN,
@@ -134,13 +135,15 @@ def find_referenced_filenames(content: str) -> list[str]:
     """Return each bare filename a CLAUDE.md table references, in order.
 
     Walks the content line by line, grouping it into table blocks. A table block
-    is a maximal run of consecutive markdown table rows; the prose lines since the
-    previous block introduce it. A line inside a fenced code block (between a
-    ``` or ~~~ fence pair) is example or sample text, not a live table, so it
-    contributes nothing and never ends a block. A block whose introducing region
-    or own rows declare an explicit relative-path source (a ``../`` token)
-    documents files in a sibling tree, so its rows are skipped — the exemption is
-    scoped to the block, not the whole file. Every remaining block contributes the
+    is a maximal run of consecutive markdown table rows; the prose region since
+    the most recent heading introduces it, so prose under one section never
+    introduces a table under a later section. A line inside a fenced code block
+    (between a ``` or ~~~
+    fence pair) is example or sample text, not a live table, so it contributes
+    nothing and never ends a block. A block whose introducing region or own rows
+    declare an explicit relative-path source (a ``../`` token) documents files in
+    a sibling tree, so its rows are skipped — the exemption is scoped to that
+    region and block, not the whole file. Every remaining block contributes the
     bare filename each first-column cell names.
 
     Args:
@@ -166,6 +169,8 @@ def find_referenced_filenames(content: str) -> list[str]:
         if current_block:
             referenced_filenames.extend(_block_filenames(pending_region, current_block))
             current_block = []
+            pending_region = []
+        if REGION_BOUNDARY_PATTERN.match(each_line) is not None:
             pending_region = []
         pending_region.append(each_line)
     referenced_filenames.extend(_block_filenames(pending_region, current_block))
