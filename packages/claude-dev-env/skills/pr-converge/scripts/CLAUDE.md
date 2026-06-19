@@ -12,7 +12,6 @@ Python helper scripts for the `pr-converge` skill, plus their tests and a PowerS
 | `fetch_copilot_reviews.py` | Fetches Copilot reviewer reviews filtered to the current HEAD |
 | `post_fix_reply.py` | Posts an inline reply to a review comment thread |
 | `reflow_skill_md.py` | Reformats `SKILL.md` to enforce a line width limit |
-| `reviewer_specs.py` | Definitions of each reviewer's clean/dirty states and fetch logic |
 | `README.md` | MCP tool reference for PR operations used by the scripts |
 | `test_check_bugbot_ci.py` | Tests for `check_bugbot_ci.py` |
 | `test_check_convergence.py` | Tests for `check_convergence.py` |
