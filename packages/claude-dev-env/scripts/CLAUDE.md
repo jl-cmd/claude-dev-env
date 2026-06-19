@@ -26,7 +26,6 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `dev_env_scripts_constants/` | Named constants (`timing.py`) for scripts in this directory |
 | `sync_to_cursor/` | Package that builds Cursor `.mdc` files from Claude rules and docs |
 | `tests/` | pytest suite for the Python scripts in this directory |
-| `config/` | Configuration shared by scripts in this directory |
 
 ## Running tests
 

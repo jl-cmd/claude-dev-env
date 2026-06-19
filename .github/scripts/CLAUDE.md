@@ -6,7 +6,7 @@ Python helper scripts called by GitHub Actions workflows in `.github/workflows/`
 
 | File | Purpose |
 |------|---------|
-| `sync_ai_rules.py` | Syncs `AGENTS.md` from this repo into target repos. Fetches the source content, prepends a sync header (source commit, timestamp, SHA256 trailer), and commits to the target's default branch. Called by both `sync-ai-rules.yml` (target-side listener) and `fan-out-ai-rules.yml` (dispatch side). |
+| `sync_ai_rules.py` | Syncs `AGENTS.md` from this repo into target repos. Fetches the source content, prepends a sync header (source commit, timestamp, SHA256 trailer), and commits to the target's default branch. Called by `sync-ai-rules.yml` (target-side listener). |
 
 ## How `sync_ai_rules.py` works
 

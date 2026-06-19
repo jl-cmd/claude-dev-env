@@ -1,14 +1,14 @@
 # bin
 
-The installer and its companion modules. Running `npx claude-dev-env` (or `node bin/install.mjs`) copies package files into `~/.claude/`, merges hook entries into `~/.claude/settings.json`, installs Git hooks, and writes `~/.claude/mypy.ini`.
+The installer and its companion modules. Running `npx claude-dev-env` (or `node bin/install.mjs`) copies package files into `~/.claude/`, merges hook entries into `~/.claude/settings.json`, installs Git hooks, and writes `~/.mypy.ini`.
 
 ## Files
 
 | File | Purpose |
 |---|---|
 | `install.mjs` | Main installer: discovers install groups, copies content directories (`rules`, `docs`, `commands`, `agents`, `audit-rubrics`, `scripts`, `_shared`), merges hooks into `settings.json`, installs skills, runs `git_hooks_installer.mjs` and `install_mypy_ini.mjs` |
-| `git_hooks_installer.mjs` | Installs or updates the `commit-msg` and `pre-push` Git hooks in the user's git config; writes hook scripts that delegate to the installed Python hooks |
-| `install_mypy_ini.mjs` | Writes `~/.claude/mypy.ini` with settings that make mypy find the hooks package and enforce strict type checking |
+| `git_hooks_installer.mjs` | Installs or updates the `pre-commit`, `pre-push`, and `post-commit` Git hooks in the user's git config; writes hook scripts that delegate to the installed Python hooks |
+| `install_mypy_ini.mjs` | Writes `~/.mypy.ini` with settings that make mypy find the hooks package and enforce strict type checking |
 | `install.test.mjs` | Tests for `install.mjs` — covers conflict detection, interpreter detection, settings merging |
 | `git_hooks_installer.test.mjs` | Tests for `git_hooks_installer.mjs` |
 | `install_mypy_ini.test.mjs` | Tests for `install_mypy_ini.mjs` |

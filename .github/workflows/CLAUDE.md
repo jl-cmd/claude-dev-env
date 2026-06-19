@@ -17,4 +17,4 @@ GitHub Actions workflow definitions. Each YAML file is one workflow.
 - `publish.yml` is gated on `release-please-manifest.json`; do not bump the version manually.
 - `fan-out-ai-rules.yml` requires two GitHub App secrets (`APP_ID`, `APP_PRIVATE_KEY`) to mint tokens for the two GitHub accounts that own target repos.
 - `sync-ai-rules.yml` ships to dependent repos as part of the AI rules sync; the copy here is the authoritative template.
-- All workflows use `actions/checkout@v5` and `actions/setup-python@v5` with Python 3.11.
+- The Python AI-rules workflows (`fan-out-ai-rules.yml`, `sync-ai-rules.yml`, `ci-sync-ai-rules.yml`) use `actions/checkout@v5` and `actions/setup-python@v5` with Python 3.11. `pr-check.yml` uses neither; `publish.yml` uses `actions/checkout@v5` and pins no Python.

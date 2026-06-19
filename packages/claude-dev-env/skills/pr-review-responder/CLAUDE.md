@@ -17,7 +17,6 @@ Prevents missed review comments by enforcing a strict fetch-then-checklist-then-
 | `PRINCIPLES.md` | Design rationale behind the protocol |
 | `README.md` | Overview for readers new to the skill |
 | `TESTING.md` | Testing guidance for the skill |
-| `scripts/` | Helper scripts directory |
 
 ## Seven mandatory rules
 

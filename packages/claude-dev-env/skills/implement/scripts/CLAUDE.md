@@ -14,7 +14,6 @@ Support scripts for the spec-build (`implement`) skill. These scripts create and
 | Directory | Role |
 |---|---|
 | `implement_scripts_constants/` | Section slug → heading map and default filename constant |
-| `config/` | Script-level config |
 
 ## Conventions
 

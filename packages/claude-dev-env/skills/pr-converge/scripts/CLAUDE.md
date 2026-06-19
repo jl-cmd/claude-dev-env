@@ -29,7 +29,6 @@ Python helper scripts for the `pr-converge` skill, plus their tests and a PowerS
 | Directory | Role |
 |---|---|
 | `pr_converge_scripts_constants/` | Script-specific constants (re-exports skill constants plus adds reflow/CLI constants) |
-| `config/` | Script-level config |
 
 ## Conventions
 

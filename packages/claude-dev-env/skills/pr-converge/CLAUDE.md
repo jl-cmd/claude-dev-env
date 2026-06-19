@@ -19,7 +19,6 @@ Drives a draft PR to convergence by looping Cursor Bugbot, a code-review pass, a
 | `reference/` | Per-tick steps, convergence gates, fix protocol, obstacle runbooks, state schema, stop conditions, examples |
 | `scripts/` | Python helpers (bugbot check, convergence check, Copilot review fetcher, fix-reply poster, reflow tool) and their tests |
 | `workflows/` | ScheduleWakeup loop pacing specification |
-| `config/` | Skill-level config |
 
 ## Conventions
 
