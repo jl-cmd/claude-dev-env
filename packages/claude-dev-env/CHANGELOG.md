@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.70.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.69.2...claude-dev-env-v1.70.0) (2026-06-19)
+
+
+### Features
+
+* **hooks:** block CLAUDE.md table cells naming nonexistent own-area files ([92010e1](https://github.com/jl-cmd/claude-code-config/commit/92010e18ecca8a4220d83e3981a31044f448ecda))
+
+
+### Bug Fixes
+
+* **autoconverge:** repair mobile report layout, add visual summary ([fbe27d9](https://github.com/jl-cmd/claude-code-config/commit/fbe27d96b4b9bf930b050977b316f58699e638d1))
+* **autoconverge:** repair mobile report layout, add visual summary ([590b7d4](https://github.com/jl-cmd/claude-code-config/commit/590b7d497079abd52cb2d42b400ba7c104cf8cff))
+* **claude-md-orphan:** edit-aware detection, fenced-row skip, robust scan ([42db2a4](https://github.com/jl-cmd/claude-code-config/commit/42db2a4ca436b6c14554eab231ac613ed2716e5b))
+* **claude-md-orphan:** scope relative-path exemption to its own section ([90f8f11](https://github.com/jl-cmd/claude-code-config/commit/90f8f1111a557f26c7a618e4124efcd9d55adc62))
+
 ## [1.69.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.69.1...claude-dev-env-v1.69.2) (2026-06-19)
 
 
