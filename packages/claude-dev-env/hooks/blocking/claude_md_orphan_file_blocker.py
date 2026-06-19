@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """PreToolUse hook: blocks a per-directory CLAUDE.md table that names a file absent from its subtree.
 
-A per-directory ``CLAUDE.md`` documents the files in its own directory subtree in
-a markdown table whose first column names each file in backticks. When a
-first-column cell names a bare filename that exists nowhere in that subtree (the
-CLAUDE.md's own directory and every subdirectory of it), the table points a
-reader at a file that is not there. This hook fires on Write, Edit, and MultiEdit
-targeting a file named ``CLAUDE.md`` and blocks the write when any such cell
-names a file absent from the subtree. A table whose content declares an explicit
-relative-path source (a ``../`` token) documents files outside the subtree, so it
-is left alone.
+A per-directory ``CLAUDE.md`` documents the files reachable from its own
+directory in a markdown table whose first column names each file in backticks.
+When a first-column cell names a bare filename that exists nowhere under the scan
+root (the CLAUDE.md directory's parent, which covers the directory, its
+subdirectories, and its siblings), the table points a reader at a file that is
+not there. This hook fires on Write, Edit, and MultiEdit targeting a file named
+``CLAUDE.md`` and blocks the write when any such cell names a file absent from
+the scan root. A table block whose own region declares an explicit relative-path
+source (a ``../`` token) documents files outside the subtree, so that block's
+rows are left alone — the exemption is scoped to the block, not the whole file.
 """
 
 import json
@@ -95,46 +96,95 @@ def _referenced_filename_in_cell(cell_text: str) -> str | None:
     return inner_text
 
 
+def _filename_in_table_row(table_line: str) -> str | None:
+    """Return the bare filename a markdown table row references, when it has one.
+
+    Args:
+        table_line: A single line that begins with a pipe character.
+
+    Returns:
+        The bare filename in the row's first column, or None when the row is a
+        header-separator row or names no bare file.
+    """
+    first_cell = _first_table_cell(table_line)
+    if not first_cell or SEPARATOR_CELL_PATTERN.match(first_cell):
+        return None
+    return _referenced_filename_in_cell(first_cell)
+
+
+def _declares_relative_path_source(text: str) -> bool:
+    """Return whether *text* declares an explicit relative-path file source.
+
+    A ``../`` token signals that a table documents files in a sibling tree,
+    referenced by path rather than living in the CLAUDE.md's own subtree. The
+    block that carries such a token is out of scope, since its files legitimately
+    sit outside the subtree.
+
+    Args:
+        text: A table block together with the prose that introduces it.
+
+    Returns:
+        True when *text* contains a ``../`` relative-path token.
+    """
+    return RELATIVE_PATH_SOURCE_PATTERN.search(text) is not None
+
+
 def find_referenced_filenames(content: str) -> list[str]:
     """Return each bare filename a CLAUDE.md table references, in order.
 
-    Walks the content line by line, takes the first column of every markdown
-    table row, skips header-separator rows, and collects the bare filename each
-    qualifying cell names.
+    Walks the content line by line, grouping it into table blocks. A table block
+    is a maximal run of consecutive markdown table rows; the prose lines since the
+    previous block introduce it. A block whose introducing region or own rows
+    declare an explicit relative-path source (a ``../`` token) documents files in
+    a sibling tree, so its rows are skipped — the exemption is scoped to the
+    block, not the whole file. Every remaining block contributes the bare filename
+    each first-column cell names.
 
     Args:
         content: The CLAUDE.md content being written.
 
     Returns:
-        Each referenced filename, in the order it appears; duplicates preserved.
+        Each referenced filename from a non-exempt table block, in the order it
+        appears; duplicates preserved.
     """
     referenced_filenames: list[str] = []
+    pending_region: list[str] = []
+    current_block: list[str] = []
     for each_line in content.splitlines():
-        if TABLE_ROW_PATTERN.match(each_line) is None:
+        if TABLE_ROW_PATTERN.match(each_line) is not None:
+            current_block.append(each_line)
             continue
-        first_cell = _first_table_cell(each_line)
-        if not first_cell or SEPARATOR_CELL_PATTERN.match(first_cell):
-            continue
-        each_filename = _referenced_filename_in_cell(first_cell)
-        if each_filename is not None:
-            referenced_filenames.append(each_filename)
+        if current_block:
+            referenced_filenames.extend(_block_filenames(pending_region, current_block))
+            current_block = []
+            pending_region = []
+        pending_region.append(each_line)
+    referenced_filenames.extend(_block_filenames(pending_region, current_block))
     return referenced_filenames
 
 
-def _declares_relative_path_source(content: str) -> bool:
-    """Return whether the content declares an explicit relative-path file source.
-
-    A ``../`` token signals that the table documents files in a sibling tree,
-    referenced by path rather than living in the CLAUDE.md's own subtree. Such a
-    table is out of scope, since its files legitimately sit outside the subtree.
+def _block_filenames(all_region_lines: list[str], all_block_lines: list[str]) -> list[str]:
+    """Return the bare filenames a table block contributes, honoring its exemption.
 
     Args:
-        content: The CLAUDE.md content being written.
+        all_region_lines: The prose lines accumulated before this block.
+        all_block_lines: The consecutive table rows that form the block.
 
     Returns:
-        True when the content contains a ``../`` relative-path token.
+        Each bare filename the block's first-column cells name, or an empty list
+        when the block (with its introducing region) declares a ``../`` source.
     """
-    return RELATIVE_PATH_SOURCE_PATTERN.search(content) is not None
+    if not all_block_lines:
+        return []
+    block_region = "\n".join(all_region_lines + all_block_lines)
+    if _declares_relative_path_source(block_region):
+        return []
+    block_filenames: list[str] = []
+    for each_line in all_block_lines:
+        each_filename = _filename_in_table_row(each_line)
+        if each_filename is not None:
+            block_filenames.append(each_filename)
+    return block_filenames
 
 
 def _resolve_scan_root(claude_md_directory: Path) -> Path:
@@ -191,8 +241,10 @@ def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]
     A referenced filename is missing when it exists nowhere under the scan root
     — the CLAUDE.md directory's parent (or the directory itself when it has no
     distinct parent), which covers the directory, its subdirectories, and its
-    siblings. A table that declares an explicit relative-path source (a ``../``
-    token) yields no findings, since those files legitimately live elsewhere.
+    siblings. A table block that declares an explicit relative-path source (a
+    ``../`` token in the block or the prose that introduces it) yields no findings
+    for that block's rows, since those files legitimately live elsewhere; an
+    unrelated block in the same file is still checked.
 
     Args:
         content: The CLAUDE.md content being written.
@@ -202,8 +254,6 @@ def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]
         Each referenced filename with no matching file under the scan root, in
         first-seen order with duplicates removed, capped at the issue budget.
     """
-    if _declares_relative_path_source(content):
-        return []
     subtree_filenames = _filenames_in_subtree(claude_md_directory)
     missing_filenames: list[str] = []
     already_reported: set[str] = set()
@@ -219,34 +269,105 @@ def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]
     return missing_filenames
 
 
-def _candidate_contents(tool_name: str, tool_input: dict) -> list[str]:
-    """Return each content string the tool would write into the CLAUDE.md file.
+def _read_existing_file_content(file_path: str) -> str | None:
+    """Return the current on-disk content of *file_path*, or None when unreadable.
 
     Args:
-        tool_name: The intercepted tool — ``Write``, ``Edit``, or ``MultiEdit``.
-        tool_input: The tool's input payload.
+        file_path: The path of the file the edit targets.
 
     Returns:
-        The Write ``content``, the Edit ``new_string``, or each MultiEdit
-        ``new_string``; an empty list when none are present as strings.
+        The file's text, or None when the file is missing or cannot be decoded.
     """
-    if tool_name == "Write":
-        content = tool_input.get("content", "")
-        return [content] if isinstance(content, str) and content else []
-    if tool_name == "Edit":
-        new_string = tool_input.get("new_string", "")
-        return [new_string] if isinstance(new_string, str) and new_string else []
-    all_edits = tool_input.get("edits", [])
-    if not isinstance(all_edits, list):
-        return []
-    all_new_strings: list[str] = []
+    try:
+        return Path(file_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _apply_edits(existing_content: str, all_edits: list[dict]) -> str:
+    """Return *existing_content* with each MultiEdit replacement applied in order.
+
+    Args:
+        existing_content: The current on-disk file content.
+        all_edits: The MultiEdit ``edits`` list, each a mapping with an
+            ``old_string`` and a ``new_string``.
+
+    Returns:
+        The content after replacing the first occurrence of each edit's
+        ``old_string`` with its ``new_string``, in list order.
+    """
+    edited_content = existing_content
+    for each_edit in all_edits:
+        if not isinstance(each_edit, dict):
+            continue
+        old_string = each_edit.get("old_string", "")
+        new_string = each_edit.get("new_string", "")
+        if isinstance(old_string, str) and isinstance(new_string, str) and old_string:
+            edited_content = edited_content.replace(old_string, new_string, 1)
+    return edited_content
+
+
+def _edit_fragments(all_edits: list[dict]) -> list[str]:
+    """Return each MultiEdit ``new_string`` fragment present as a non-empty string.
+
+    Args:
+        all_edits: The MultiEdit ``edits`` list.
+
+    Returns:
+        Every ``new_string`` value that is a non-empty string, in list order.
+    """
+    all_fragments: list[str] = []
     for each_edit in all_edits:
         if not isinstance(each_edit, dict):
             continue
         new_string = each_edit.get("new_string", "")
         if isinstance(new_string, str) and new_string:
-            all_new_strings.append(new_string)
-    return all_new_strings
+            all_fragments.append(new_string)
+    return all_fragments
+
+
+def _candidate_contents(tool_name: str, tool_input: dict, file_path: str) -> list[str]:
+    """Return the post-edit content the relative-path exemption keys off.
+
+    For Write the candidate is the full new content. For Edit and MultiEdit the
+    candidate is the existing file with the replacements applied, so a ``../``
+    source line outside the edited rows still exempts that table block. When the
+    existing file cannot be read, the raw ``new_string`` fragment(s) are evaluated
+    so an orphan introduced by the edit itself is still caught.
+
+    Args:
+        tool_name: The intercepted tool — ``Write``, ``Edit``, or ``MultiEdit``.
+        tool_input: The tool's input payload.
+        file_path: The destination path of the write or edit.
+
+    Returns:
+        Each content string to scan; an empty list when none are present.
+    """
+    if tool_name == "Write":
+        content = tool_input.get("content", "")
+        return [content] if isinstance(content, str) and content else []
+    all_edits = _edits_for_tool(tool_name, tool_input)
+    existing_content = _read_existing_file_content(file_path)
+    if existing_content is None:
+        return _edit_fragments(all_edits)
+    return [_apply_edits(existing_content, all_edits)]
+
+
+def _edits_for_tool(tool_name: str, tool_input: dict) -> list[dict]:
+    """Return the edit mappings an Edit or MultiEdit payload carries.
+
+    Args:
+        tool_name: The intercepted tool — ``Edit`` or ``MultiEdit``.
+        tool_input: The tool's input payload.
+
+    Returns:
+        A single-element list holding the Edit payload, or the MultiEdit
+        ``edits`` list when it is present as a list; an empty list otherwise.
+    """
+    if tool_name == "Edit":
+        return [tool_input]
+    all_edits = tool_input.get("edits", [])
+    return all_edits if isinstance(all_edits, list) else []
 
 
 def _collect_missing_filenames(
@@ -339,7 +460,7 @@ def main() -> None:
     if not claude_md_directory.is_dir():
         sys.exit(0)
 
-    all_candidate_contents = _candidate_contents(tool_name, tool_input)
+    all_candidate_contents = _candidate_contents(tool_name, tool_input, file_path)
     if not all_candidate_contents:
         sys.exit(0)
 

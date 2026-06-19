@@ -1,12 +1,14 @@
 """Constants for the per-directory CLAUDE.md orphan-file-reference blocker.
 
-A per-directory ``CLAUDE.md`` documents the files in its own directory subtree in
-a markdown table whose first column names each file in backticks. When a
-first-column cell names a bare filename that exists nowhere in that subtree, the
-table points a reader at a file that is not there. This module holds the patterns
-that find those cells, the filename extensions that mark a cell as a file
-reference, the relative-path marker that exempts a cross-directory reference, the
-subtree scan budget, and the block-message text the hook emits.
+A per-directory ``CLAUDE.md`` documents the files reachable from its own
+directory in a markdown table whose first column names each file in backticks.
+When a first-column cell names a bare filename that exists nowhere under the scan
+root (the CLAUDE.md directory's parent, covering the directory, its
+subdirectories, and its siblings), the table points a reader at a file that is
+not there. This module holds the patterns that find those cells, the filename
+extensions that mark a cell as a file reference, the relative-path marker that
+exempts a cross-directory table block, the subtree scan budget, and the
+block-message text the hook emits.
 """
 
 import re
@@ -65,7 +67,8 @@ ORPHAN_FILE_MESSAGE_TEMPLATE: str = (
     "{missing}. A per-directory CLAUDE.md table names files in its own directory "
     "subtree; a first-column cell naming a file absent from that subtree points a "
     "reader at something that is not there. Drop the row, or correct the cell to "
-    "name a file that exists in this directory or a subdirectory of it."
+    "name a file that exists in this directory, a subdirectory of it, or a sibling "
+    "directory under its parent."
 )
 
 ORPHAN_FILE_SYSTEM_MESSAGE: str = (
@@ -75,11 +78,12 @@ ORPHAN_FILE_SYSTEM_MESSAGE: str = (
 
 ORPHAN_FILE_ADDITIONAL_CONTEXT: str = (
     "Each first-column table cell wrapped in backticks that ends in a known file "
-    "extension must name a file present in this CLAUDE.md's own directory or a "
-    "subdirectory of it. Cells holding a path with a slash, a subdirectory ending "
-    "in '/', or a slash-command are out of scope. A table whose content names an "
-    "explicit relative-path source (a '../' token) documents files outside the "
-    "subtree and is out of scope. For each missing file:\n"
+    "extension must name a file present under the scan root: this CLAUDE.md's own "
+    "directory, a subdirectory of it, or a sibling directory under its parent. "
+    "Cells holding a path with a slash, a subdirectory ending in '/', or a "
+    "slash-command are out of scope. A table whose own block names an explicit "
+    "relative-path source (a '../' token) documents files outside the subtree and "
+    "is out of scope. For each missing file:\n"
     "  - delete the table row, or\n"
-    "  - rename the cell to an existing file in this directory subtree."
+    "  - rename the cell to an existing file under the scan root."
 )
