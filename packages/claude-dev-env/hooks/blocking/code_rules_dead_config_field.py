@@ -23,9 +23,12 @@ The scan is deliberately conservative to keep false positives near zero:
   keyword-argument names on non-constructor calls (covers
   ``replace(cfg, debug_port=1)``), and match-pattern keyword attribute names
   (``case Config(field=found)``). Two field-write forms are excluded because they
-  name a field without consuming it: a keyword that writes a field in a
-  ``*Config`` constructor (``ThemeUpdateConfig(debug_port=1)``), and an attribute
-  read inside a ``*Config`` field's own default-value expression in the class body
+  name a field without consuming it: a keyword that writes a field in a constructor
+  of a known ``*Config`` dataclass defined under the scan root
+  (``ThemeUpdateConfig(debug_port=1)``, excluded per keyword node so a same-named
+  keyword on a ``replace`` call stays a read, and a factory function whose name
+  merely ends in ``"Config"`` is not excluded), and an attribute read inside a
+  ``*Config`` field's own default-value expression in the class body
   (``debug_port: int = source.debug_port``) — a field written only these ways and
   read by no module is the dead-config case this check exists to catch. Plain
   ``ast.Name`` references are excluded — a local variable named ``debug_port`` is
@@ -56,6 +59,7 @@ before writing it) is precise and remains a counted read.
 import ast
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 _blocking_directory = str(Path(__file__).resolve().parent)
@@ -143,52 +147,85 @@ def _reads_whole_instance_reflectively(tree: ast.Module) -> bool:
     return False
 
 
-def _call_constructs_config_class(call_node: ast.Call) -> bool:
-    """Return whether a call constructs a ``*Config`` dataclass.
+def _config_dataclass_names(tree: ast.Module) -> set[str]:
+    """Return names of ``*Config`` ``@dataclass`` classes defined in a module.
 
-    A call whose callee name ends in ``"Config"`` — ``AppInfoConfig(...)`` or a
-    qualified ``module.AppInfoConfig(...)`` — constructs a config instance. The
-    keyword arguments of such a call write the named fields rather than read
-    them, so they provide no evidence the field is consumed.
-
-    Args:
-        call_node: The call expression to test.
-
-    Returns:
-        True when the callee name ends in the config class name suffix.
-    """
-    callee_node = call_node.func
-    if isinstance(callee_node, ast.Name):
-        return callee_node.id.endswith(CONFIG_CLASS_NAME_SUFFIX)
-    if isinstance(callee_node, ast.Attribute):
-        return callee_node.attr.endswith(CONFIG_CLASS_NAME_SUFFIX)
-    return False
-
-
-def _config_constructor_keyword_names(tree: ast.Module) -> set[str]:
-    """Return keyword-argument names that write fields in a ``*Config`` constructor.
-
-    A keyword in a ``AppInfoConfig(field=value)`` call sets ``field`` rather than
-    reading it, so it must not count toward proving the field consumed. A keyword
-    in ``replace(cfg, field=value)`` reuses an existing live instance and stays a
-    read; only a direct ``*Config`` constructor keyword is excluded here.
+    A constructor-keyword exclusion fires only for a callee that names a genuine
+    config dataclass, so the caller first gathers the config dataclass names a
+    module defines, then unions those names across the scan root.
 
     Args:
         tree: The parsed module to inspect.
 
     Returns:
-        Every keyword-argument name passed to a ``*Config`` constructor call.
+        Every class name in the module that is a ``@dataclass`` whose name ends in
+        the config class name suffix.
     """
-    constructor_keyword_names: set[str] = set()
+    config_dataclass_names: set[str] = set()
+    for each_node in ast.walk(tree):
+        if isinstance(each_node, ast.ClassDef) and _is_config_dataclass(each_node):
+            config_dataclass_names.add(each_node.name)
+    return config_dataclass_names
+
+
+def _call_constructs_config_class(
+    call_node: ast.Call, all_known_config_class_names: set[str]
+) -> bool:
+    """Return whether a call constructs a known ``*Config`` dataclass.
+
+    A call whose callee names a ``*Config`` dataclass defined under the scan root —
+    ``AppInfoConfig(...)`` or a qualified ``module.AppInfoConfig(...)`` —
+    constructs a config instance, and its keyword arguments write the named fields
+    rather than read them. A factory function whose name merely ends in
+    ``"Config"`` (``getThemeConfig(...)``) is not a known config dataclass, so its
+    keyword arguments stay genuine reads.
+
+    Args:
+        call_node: The call expression to test.
+        all_known_config_class_names: Names of ``*Config`` dataclasses defined under
+            the scan root.
+
+    Returns:
+        True when the callee names a known ``*Config`` dataclass.
+    """
+    callee_node = call_node.func
+    if isinstance(callee_node, ast.Name):
+        return callee_node.id in all_known_config_class_names
+    if isinstance(callee_node, ast.Attribute):
+        return callee_node.attr in all_known_config_class_names
+    return False
+
+
+def _config_constructor_keyword_node_ids(
+    tree: ast.Module, all_known_config_class_names: set[str]
+) -> set[int]:
+    """Return ids of keyword nodes that write fields in a known ``*Config`` constructor.
+
+    A keyword in an ``AppInfoConfig(field=value)`` call sets ``field`` rather than
+    reading it, so its node id is collected for the caller to exclude. The
+    exclusion is keyed per keyword node, not by name, so a same-named keyword in a
+    ``replace(cfg, field=value)`` call — which reuses a live instance and stays a
+    read — keeps its own distinct node and is not stripped.
+
+    Args:
+        tree: The parsed module to inspect.
+        all_known_config_class_names: Names of ``*Config`` dataclasses defined under
+            the scan root.
+
+    Returns:
+        The ``id()`` of every keyword node passed to a known ``*Config``
+        constructor call.
+    """
+    constructor_keyword_node_ids: set[int] = set()
     for each_node in ast.walk(tree):
         if not isinstance(each_node, ast.Call):
             continue
-        if not _call_constructs_config_class(each_node):
+        if not _call_constructs_config_class(each_node, all_known_config_class_names):
             continue
         for each_keyword in each_node.keywords:
             if each_keyword.arg is not None:
-                constructor_keyword_names.add(each_keyword.arg)
-    return constructor_keyword_names
+                constructor_keyword_node_ids.add(id(each_keyword))
+    return constructor_keyword_node_ids
 
 
 def _config_field_default_value_nodes(tree: ast.Module) -> set[int]:
@@ -221,7 +258,9 @@ def _config_field_default_value_nodes(tree: ast.Module) -> set[int]:
     return default_value_node_ids
 
 
-def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
+def _attribute_read_names_in_source(
+    source: str, all_known_config_class_names: set[str]
+) -> tuple[set[str], bool]:
     """Return attribute names read in a module's source and a suppression flag.
 
     Collects attribute names via five mechanisms: ``ast.Attribute.attr`` values
@@ -232,12 +271,15 @@ def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
     contributes ``"debug_port"``), and ``ast.MatchClass.kwd_attrs`` names (so
     ``case Config(field=x)`` contributes ``"field"``). Two field-write forms are
     excluded because they name a field without consuming it: a keyword that writes
-    a field in a ``*Config`` constructor (``AppInfoConfig(field=value)``), and an
-    attribute read inside a ``*Config`` dataclass field's own default-value
+    a field in a known ``*Config`` constructor (``AppInfoConfig(field=value)``,
+    excluded per keyword node so a same-named ``replace`` keyword stays a read),
+    and an attribute read inside a ``*Config`` dataclass field's own default-value
     expression (``field: int = source.field`` in the class body) — counting either
-    would hide a field that is written but read by no module. The boolean reports
-    whether the module suppresses the dead-field check, which it does only when it
-    reflectively reads a whole instance — a bare or ``dataclasses``-qualified
+    would hide a field that is written but read by no module. A keyword passed to a
+    factory function whose name merely ends in ``"Config"`` is not a known config
+    constructor, so it stays a read. The boolean reports whether the module
+    suppresses the dead-field check, which it does only when it reflectively reads a
+    whole instance — a bare or ``dataclasses``-qualified
     ``asdict``/``astuple``/``fields``/``replace``/``vars`` call, or an
     ``obj.__dict__`` read — because that pattern reads every field at once without
     naming any single field, so the caller treats it as "cannot prove any field
@@ -245,11 +287,14 @@ def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
 
     Args:
         source: The full text of a ``.py`` module.
+        all_known_config_class_names: Names of ``*Config`` dataclasses defined under
+            the scan root, used to scope the constructor-keyword exclusion to
+            genuine config constructors.
 
     Returns:
         A (read_names, suppresses_dead_field_check) pair. The name set is every
-        attribute name the module reads via the mechanisms above, excluding
-        ``*Config`` constructor keyword names and config-field default-value
+        attribute name the module reads via the mechanisms above, excluding known
+        ``*Config`` constructor keyword nodes and config-field default-value
         attribute reads; suppresses_dead_field_check is True only when a reflective
         whole-instance read is present.
     """
@@ -258,7 +303,9 @@ def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
     except SyntaxError:
         return set(), False
     all_read_names: set[str] = _augmented_assignment_attribute_names(tree)
-    config_constructor_keyword_names = _config_constructor_keyword_names(tree)
+    config_constructor_keyword_node_ids = _config_constructor_keyword_node_ids(
+        tree, all_known_config_class_names
+    )
     config_field_default_node_ids = _config_field_default_value_nodes(tree)
     for each_node in ast.walk(tree):
         if isinstance(each_node, ast.Attribute) and isinstance(each_node.ctx, ast.Load):
@@ -269,40 +316,51 @@ def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
         elif isinstance(each_node, ast.MatchClass):
             all_read_names.update(each_node.kwd_attrs)
         elif isinstance(each_node, ast.keyword) and each_node.arg is not None:
-            if each_node.arg not in config_constructor_keyword_names:
+            if id(each_node) not in config_constructor_keyword_node_ids:
                 all_read_names.add(each_node.arg)
     suppresses_dead_field_check = _reads_whole_instance_reflectively(tree)
     return all_read_names, suppresses_dead_field_check
 
 
-def _all_production_read_names_under_root(
+def _config_dataclass_names_in_source(source: str) -> set[str]:
+    """Return names of ``*Config`` dataclasses defined in a module's source.
+
+    Args:
+        source: The full text of a ``.py`` module.
+
+    Returns:
+        Every ``*Config`` dataclass name the module defines, or an empty set when
+        the source does not parse.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    return _config_dataclass_names(tree)
+
+
+def _iter_production_module_sources(
     scan_root: Path,
     written_path: Path,
     written_content: str,
-) -> tuple[set[str], bool, bool]:
-    """Return read names, a cap-hit flag, and a suppression flag for the tree.
+) -> Iterator[str | None]:
+    """Yield the source of each production module under the scan root.
 
-    Scans every production ``.py`` module under ``scan_root`` (excluding test and
-    migration files) for attribute reads. The written module's post-edit content
-    replaces its on-disk text so the current edit is included. Scanning stops at
-    the configured file cap. A module that reflectively reads a whole instance —
-    a bare or ``dataclasses``-qualified ``asdict``/``astuple``/``fields``/
-    ``replace``/``vars`` call, or an ``obj.__dict__`` read — sets the suppression
-    flag, signalling the caller that no field can be proven dead.
+    Yields ``written_content`` for the written module so the current edit is
+    included, then each sibling production module's source (excluding test and
+    migration files). A sibling whose text cannot be read is skipped. A single
+    ``None`` is yielded when the production module count exceeds the configured
+    file cap, signalling the caller that no field can be proven dead.
 
     Args:
         scan_root: The directory tree to scan.
         written_path: The resolved path of the module being written.
         written_content: The post-edit text of the written module.
 
-    Returns:
-        A (read_names, cap_was_hit, suppresses_dead_field_check) triple. The name
-        set is the union of attribute reads across every scanned production
-        module; cap_was_hit is True when the scan stopped at the configured file
-        cap before finishing the tree; suppresses_dead_field_check is True when
-        any scanned module reflectively reads a whole instance.
+    Yields:
+        Each production module's source text, or a single ``None`` on a cap hit.
     """
-    all_read_names, suppresses_dead_field_check = _attribute_read_names_in_source(written_content)
+    yield written_content
     written_path_key = os.path.normcase(str(written_path))
     scanned_file_count = 1
     for each_path in scan_root.rglob("*" + PYTHON_SOURCE_SUFFIX):
@@ -316,17 +374,64 @@ def _all_production_read_names_under_root(
             continue
         scanned_file_count += 1
         if scanned_file_count > MAX_SCAN_ROOT_FILE_COUNT:
-            return all_read_names, True, suppresses_dead_field_check
+            yield None
+            return
         try:
-            sibling_source = each_path.read_text(encoding="utf-8")
+            yield each_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        sibling_read_names, sibling_suppresses_dead_field_check = _attribute_read_names_in_source(
-            sibling_source
+
+
+def _all_production_read_names_under_root(
+    scan_root: Path,
+    written_path: Path,
+    written_content: str,
+) -> tuple[set[str], bool, bool]:
+    """Return read names, a cap-hit flag, and a suppression flag for the tree.
+
+    Scans every production ``.py`` module under ``scan_root`` (excluding test and
+    migration files) for attribute reads. A first pass over the same modules
+    gathers every ``*Config`` dataclass name defined under the root so the
+    constructor-keyword exclusion fires only for a genuine config constructor; the
+    written module's post-edit content replaces its on-disk text so the current
+    edit is included in both passes. Scanning stops at the configured file cap. A
+    module that reflectively reads a whole instance — a bare or
+    ``dataclasses``-qualified ``asdict``/``astuple``/``fields``/``replace``/
+    ``vars`` call, or an ``obj.__dict__`` read — sets the suppression flag,
+    signalling the caller that no field can be proven dead.
+
+    Args:
+        scan_root: The directory tree to scan.
+        written_path: The resolved path of the module being written.
+        written_content: The post-edit text of the written module.
+
+    Returns:
+        A (read_names, cap_was_hit, suppresses_dead_field_check) triple. The name
+        set is the union of attribute reads across every scanned production
+        module; cap_was_hit is True when the scan stopped at the configured file
+        cap before finishing the tree; suppresses_dead_field_check is True when
+        any scanned module reflectively reads a whole instance.
+    """
+    all_known_config_class_names: set[str] = set()
+    for each_source in _iter_production_module_sources(
+        scan_root, written_path, written_content
+    ):
+        if each_source is None:
+            return set(), True, False
+        all_known_config_class_names |= _config_dataclass_names_in_source(each_source)
+    all_read_names: set[str] = set()
+    suppresses_dead_field_check = False
+    for each_source in _iter_production_module_sources(
+        scan_root, written_path, written_content
+    ):
+        if each_source is None:
+            return all_read_names, True, suppresses_dead_field_check
+        module_read_names, module_suppresses_dead_field_check = _attribute_read_names_in_source(
+            each_source, all_known_config_class_names
         )
-        all_read_names |= sibling_read_names
+        all_read_names |= module_read_names
         suppresses_dead_field_check = (
-            suppresses_dead_field_check or sibling_suppresses_dead_field_check
+            suppresses_dead_field_check or module_suppresses_dead_field_check
         )
     return all_read_names, False, suppresses_dead_field_check
 
