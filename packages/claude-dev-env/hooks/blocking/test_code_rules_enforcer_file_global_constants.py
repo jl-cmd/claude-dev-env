@@ -32,6 +32,7 @@ TYPESCRIPT_FILE_PATH = "packages/claude-dev-env/hooks/blocking/example.ts"
 TOP_LEVEL_CONFIG_FILE_PATH = "config/timing.py"
 NESTED_CONFIG_FILE_PATH = "packages/claude-dev-env/hooks/config/example_constants.py"
 BACKSLASH_CONFIG_FILE_PATH = "packages\\claude-dev-env\\hooks\\config\\example_constants.py"
+WORKFLOW_REGISTRY_FILE_PATH = "packages/claude-dev-env/hooks/blocking/workflow/app_info/states.py"
 
 
 def test_should_flag_constant_used_by_only_one_function() -> None:
@@ -112,6 +113,14 @@ def test_should_exempt_test_files() -> None:
         source, TEST_FILE_PATH
     )
     assert issues == [], f"Expected test file exemption, got: {issues}"
+
+
+def test_should_exempt_workflow_registry_files() -> None:
+    source = "UPPER = 1\n\ndef lonely_caller():\n    return UPPER\n"
+    issues = code_rules_enforcer.check_file_global_constants_use_count(
+        source, WORKFLOW_REGISTRY_FILE_PATH
+    )
+    assert issues == [], f"Expected workflow-registry file exemption, got: {issues}"
 
 
 def test_should_flag_constant_used_only_in_decorator_of_one_function() -> None:
