@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.69.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.68.0...claude-dev-env-v1.69.0) (2026-06-19)
+
+
+### Features
+
+* **claude-dev-env:** add run-claude-dev-env skill with sandboxed installer driver ([c5ac1d9](https://github.com/jl-cmd/claude-code-config/commit/c5ac1d9ffc0b4b44798514873b7851601420e6aa))
+* **claude-dev-env:** add run-claude-dev-env skill with sandboxed installer driver ([b3e7be2](https://github.com/jl-cmd/claude-code-config/commit/b3e7be24669842317bafa8775ea2fb8fca65e1f9))
+* **hooks:** block class-method docstring-prose drift at Write/Edit time ([aa39701](https://github.com/jl-cmd/claude-code-config/commit/aa3970178de60338b5126276608b300d27a766c4))
+* **hooks:** block class-method docstring-prose drift at Write/Edit time ([efc88d9](https://github.com/jl-cmd/claude-code-config/commit/efc88d9b2cd4c245ecbdf5b7af58da8f8663f6ea))
+
+
+### Bug Fixes
+
+* **code-rules:** exempt workflow-registry files from file-global-constant check ([e5fbbd5](https://github.com/jl-cmd/claude-code-config/commit/e5fbbd57edb7a17b6dd550a926dda1ab87cb4bac))
+* **code-rules:** exempt workflow-registry files from file-global-constant check ([b1bad63](https://github.com/jl-cmd/claude-code-config/commit/b1bad6318eeed6787dacf3e0e9d5561a618edb73))
+* **converge:** address review findings for docstring-prose class-method drift ([5a40e06](https://github.com/jl-cmd/claude-code-config/commit/5a40e06e36e7c9e39c92146627d0e135c6663392))
+
+
+### Documentation
+
+* add per-directory CLAUDE.md orientation files ([c69fdf8](https://github.com/jl-cmd/claude-code-config/commit/c69fdf864aadc48ead4bb417db6f9a28f297acc1))
+* **claude-dev-env:** add file index to run-claude-dev-env skill ([96f83c4](https://github.com/jl-cmd/claude-code-config/commit/96f83c4d6c2557e15d128aa2185998b61d84d6e4))
+* **claude-md:** apply converge-round review fixes to per-directory CLAUDE.md files ([a553dfd](https://github.com/jl-cmd/claude-code-config/commit/a553dfd6b28c44f93780d9fbbfeb187695744061))
+* **claude-md:** apply converge-round review fixes to per-directory CLAUDE.md files ([f76d78f](https://github.com/jl-cmd/claude-code-config/commit/f76d78f5964da5b8cba8cb856f62f68b4791261a))
+* **claude-md:** correct command descriptions and drop phantom file rows ([6d69de5](https://github.com/jl-cmd/claude-code-config/commit/6d69de5f28b84340990b6a4a8d015b56d9f2c93c))
+* **packages:** add per-directory CLAUDE.md across the claude-dev-env package ([d12f2f9](https://github.com/jl-cmd/claude-code-config/commit/d12f2f9838271494f1241745551fd83ddc026397))
+
+
+### Tests
+
+* **hooks:** guard the dead-module-constant gate on the edit-insert path ([0b5a1c4](https://github.com/jl-cmd/claude-code-config/commit/0b5a1c472b9b66aff714b1ea823688acfc73c893))
+
 ## [1.68.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.67.2...claude-dev-env-v1.68.0) (2026-06-18)
 
 
