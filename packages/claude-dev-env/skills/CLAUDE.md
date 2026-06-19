@@ -41,6 +41,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `deep-research` — multi-source research with citation
 - `research-mode` — activates anti-hallucination discipline for a session
 - `recall` — retrieves facts from memory files
+- `remember` — saves a decision, gotcha, or architectural choice to the Obsidian vault
 - `everything-search` — file-system search via the Everything MCP tool
 - `caveman` — trims noise from a draft artifact
 
@@ -54,7 +55,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `fresh-branch` — creates a clean branch off main
 - `rebase` — rebases onto main
 - `gotcha` — records a hard-won lesson to memory
-- `logifix` — logical error correction pass
+- `logifix` — restores the Logitech Gaming Software (LCore) tray icon when it disappears on Windows
 - `refine` — refinement pass on an artifact
 - `structure-prompt` — structures a freeform prompt
 - `monitor-open-prs` — polls open PRs for status
@@ -62,3 +63,4 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `qbug` — quick one-pass bug hunt (deprecated; use `bugteam`)
 - `skill-builder` — complete skill-building lifecycle
 - `doc-gist` — uploads an HTML file as a secret gist
+- `auditing-claude-config` — audits a Claude Code setup for context-budget waste and produces a migration table with savings
