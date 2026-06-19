@@ -8,7 +8,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from claude_md_orphan_file_blocker import find_missing_filenames
+from claude_md_orphan_file_blocker import (
+    find_missing_filenames,
+    find_referenced_filenames,
+)
+
+from hooks_constants.claude_md_orphan_file_blocker_constants import (
+    ORPHAN_FILE_ADDITIONAL_CONTEXT,
+    ORPHAN_FILE_MESSAGE_TEMPLATE,
+)
 
 HOOK_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "claude_md_orphan_file_blocker.py")
 
@@ -242,6 +250,136 @@ def test_separator_row_is_skipped(tmp_path: Path):
     )
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+def test_relative_path_table_does_not_exempt_sibling_local_table(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Local files\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `reviewer_specs.py` | Does a thing |\n\n"
+        "## Shared artifacts\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "| Script | Role |\n"
+        "|---|---|\n"
+        "| `preflight.py` | Pre-flight check |\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "reviewer_specs.py" in output["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "preflight.py" not in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_relative_path_prose_above_its_own_table_exempts_that_table(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Shared artifacts\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "| Script | Role |\n"
+        "|---|---|\n"
+        "| `preflight.py` | Pre-flight check |\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_edit_to_relative_path_sourced_table_is_allowed(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    claude_md_path.write_text(
+        "# example\n\n"
+        "## Shared artifacts\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "| Script | Role |\n"
+        "|---|---|\n"
+        "| `code_rules_gate.py` | Gate |\n",
+        encoding="utf-8",
+    )
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": str(claude_md_path),
+            "old_string": "| `code_rules_gate.py` | Gate |",
+            "new_string": (
+                "| `code_rules_gate.py` | Gate |\n"
+                "| `preflight.py` | Pre-flight gate that runs before the audit |"
+            ),
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_edit_adding_orphan_to_non_exempt_file_is_denied(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    claude_md_path.write_text(
+        "# example\n\n"
+        "## Local files\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `kept.py` | row |\n",
+        encoding="utf-8",
+    )
+    (claude_md_path.parent / "kept.py").write_text("x = 1\n", encoding="utf-8")
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": str(claude_md_path),
+            "old_string": "| `kept.py` | row |",
+            "new_string": (
+                "| `kept.py` | row |\n| `reviewer_specs.py` | Does a thing |"
+            ),
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "reviewer_specs.py" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_block_lines_yield_their_filenames_when_region_is_not_exempt():
+    content = (
+        "# example\n\n"
+        "## Local files\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `alpha.py` | row |\n"
+        "| `beta.py` | row |\n"
+    )
+    assert find_referenced_filenames(content) == ["alpha.py", "beta.py"]
+
+
+def test_block_lines_yield_nothing_when_region_declares_relative_source():
+    content = (
+        "# example\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "| Script | Role |\n"
+        "|---|---|\n"
+        "| `preflight.py` | Pre-flight check |\n"
+    )
+    assert find_referenced_filenames(content) == []
+
+
+def test_corrective_message_names_siblings_under_parent():
+    assert "sibling" in ORPHAN_FILE_MESSAGE_TEMPLATE
+    assert "sibling" in ORPHAN_FILE_ADDITIONAL_CONTEXT
 
 
 def test_every_repo_claude_md_is_not_blocked():
