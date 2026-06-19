@@ -92,6 +92,16 @@ TIMELINE_TERMINAL_BAR_LABEL = "terminal"
 
 CAUSE_MUTED_STYLE = "color:#94a3b8;"
 
+ISSUE_ICON_BY_CATEGORY = {
+    "bug": "\U0001f41e",
+    "code-standard": "\U0001f4cf",
+}
+DEFAULT_ISSUE_ICON = "\U0001f41e"
+
+SCORECARD_LABEL_CAUGHT = "caught"
+SCORECARD_LABEL_ROUNDS = "rounds"
+SCORECARD_LABEL_REMAINING = "left"
+
 GITHUB_PR_URL_TEMPLATE = "https://github.com/{owner}/{repo}/pull/{number}"
 
 SUMMARY_PR_COORDINATES_TEMPLATE = "owner={owner} repo={repo} PR #{pr_number} ({url})"
@@ -128,12 +138,13 @@ Write so a non-programmer understands every line. The reader has never seen the 
 - problemScenes/fixScenes example (a DIFFERENT project, to teach the style not the answer). Problem scene: trigger "export stops at batch 90", condition "you restart it", result "starts again at batch 1", caption "A halted export threw away the 90 batches it had already finished and began again." Mirroring fix scene: trigger "export stops at batch 90", condition "you restart it", result "continues at batch 91", caption "A restarted export now picks up at the next unfinished batch."
 - GROUP near-duplicate findings into issue CLASSES: the same KIND of problem across different files or lines becomes ONE class with a count. Example: seven "Missing return type annotation on test function" findings become one class with count 7.
 - TRANSLATE reviewer jargon into plain everyday English. Examples: "CodingGuidelineID 1000000 / Repository guideline (Types)" -> "a typing rule the project enforces"; "missing return type annotation / Add -> None" -> "a test did not declare what it returns"; "Banned identifier result" -> "a vague variable name the project bans"; a magic-value finding -> "a raw number or string that should be a named value".
-- plainName: a short plain symptom a non-programmer recognizes - name what BROKE or what a person would notice, not the internal component. Carry NO tool token, rule id, file path, line number, severity code (P0/P1/P2), or bot name. Good: "The install command quietly did nothing". Weak: "Entry-point guard misfires under symlinked bin invocation".
+- TRANSLATE internal-mechanism nouns the same way. "guard", "hook", "checker", "validator", "gate", "parser", "entry-point", "AST" each name a part of the machine a non-programmer never sees. Replace each with the everyday check it performs or, better, the effect it had: "the guard blocked the save" -> "saving the file was blocked"; "the hook fired" -> "the project's automatic check ran". Never leave a bare "guard", "hook", or "checker" in a sentence a reader sees.
+- plainName: a short plain symptom a non-programmer recognizes - name what BROKE or what a person would notice, not the internal component. Carry NO tool token, rule id, file path, line number, severity code (P0/P1/P2), bot name, or internal-mechanism noun (guard, hook, checker, validator, gate, parser, AST, annotation). Lead with the visible effect. Good: "The install command quietly did nothing"; "Saving a file was blocked by mistake". Weak: "Entry-point guard misfires under symlinked bin invocation"; "The guard wrongly flagged a field".
 - cause is the field that matters most. Sentence 1: the observable impact - what a person saw go wrong, or would have. Sentence 2: the cause in everyday terms. At most 2 sentences, no paragraphs.
 - In cause describe the CONSEQUENCE, never the internal mechanism. Do not narrate control flow, comparisons, or internal state. Banned phrasings: "a check returned false", "two forms of the path", "treated the run as a non-run", "the values did not match", "a guard misfired". Say what that meant for the person instead.
 - Prefer concrete everyday words: "the install command" and "on Mac and Linux" over "the launcher", "the entry-point guard", or "the symlink". Read each sentence as if aloud to a non-programmer; if they would not follow it, rewrite it.
 - cause worked example (a DIFFERENT problem, to show the style, not the answer). WEAK, do not write like this: "A cached value's timestamp was compared across mismatched time zones, so the freshness check evaluated false and the entry was treated as stale and re-fetched on every request." STRONG, write like this: "Every page re-downloaded the same data from scratch instead of reusing the copy it already had, so pages loaded slower than needed. The app misjudged its saved copy as out of date."
-- medium picks how the before/after panels are drawn: 'terminal' when the user-visible effect is command-line behavior; 'code' when the finding is best shown as a small before/after code snippet (e.g. a missing return type: before "def test_x():" / after "def test_x() -> None:"); 'text' otherwise.
+- medium picks how the before/after panels are drawn: 'terminal' when the user-visible effect is command-line behavior; 'code' when the finding is best shown as a small before/after code snippet (e.g. a missing return type: before "def test_x():" / after "def test_x() -> None:"); 'text' otherwise. PREFER 'terminal' or 'text' so the panels show what a PERSON sees; reserve 'code' for the rare finding whose fix truly is a one-line code change a reader would recognize. When in doubt, choose 'text' and describe the effect in plain words, not source code.
 - beforeLines and afterLines are the literal short lines to show in each panel - what a person sees. For a terminal: include the prompt + command + the (missing or present) output. For code: 1 to 4 lines before, 1 to 4 lines after. Keep every line short. Never fabricate exact output text that is not implied by the finding - if the exact text is unknown, show the shape (e.g. "(no output - nothing installed)"). Leave both arrays empty to fall back to the cause line alone.
 - Lead with category 'bug' classes, then 'code-standard'. Create one class per distinct KIND of problem, however many that is; never merge different kinds or drop classes to hit a number.
 - status is 'fixed' unless the fix summaries or the deferred code-standard note mark the class deferred, in which case status is 'deferred'.
@@ -148,6 +159,7 @@ HTML_DOCTYPE = "<!DOCTYPE html>"
 HTML_HEAD_TEMPLATE = """\
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PR #{pr_number} Convergence Summary</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 {style_block}
@@ -156,9 +168,10 @@ HTML_HEAD_TEMPLATE = """\
 HTML_STYLE_BLOCK = """\
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f1f5f9; color: #334155; line-height: 1.6; padding: 48px 20px; }
   .container { max-width: 860px; margin: 0 auto; }
-  h1 { font-size: 30px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; }
+  h1 { font-size: clamp(22px, 6vw, 30px); font-weight: 800; color: #0f172a; letter-spacing: -0.5px; line-height: 1.2; }
   .subtitle { color: #64748b; font-size: 14px; margin: 6px 0 26px; }
   h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #94a3b8; margin: 40px 0 16px; }
 
@@ -167,6 +180,14 @@ HTML_STYLE_BLOCK = """\
   .verdict .check { width: 34px; height: 34px; border-radius: 50%; background:#16a34a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:19px; flex:0 0 auto; }
   .verdict .vtext { font-size: 16px; font-weight: 700; color:#0f172a; }
   .verdict .vsub { font-size: 13px; font-weight: 500; color:#15803d; }
+
+  /* scorecard */
+  .scorecard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .stat { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px 14px; text-align:center; }
+  .stat-num { font-size: clamp(26px, 8vw, 34px); font-weight:800; color:#0f172a; line-height:1.1; }
+  .stat-label { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#94a3b8; margin-top:4px; }
+  .stat.good { border-color:#22c55e; background:linear-gradient(135deg,#f0fdf4,#dcfce7); }
+  .stat.good .stat-num { color:#16a34a; }
 
   /* problem / fix scenes */
   .pf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -186,8 +207,10 @@ HTML_STYLE_BLOCK = """\
   .scene-cap:last-child { margin-bottom:0; }
 
   /* bug class */
-  .bug-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:32px 0 12px; }
+  .bug-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:32px 0 12px; }
   .bug-head:first-of-type { margin-top:8px; }
+  .bug-title { display:flex; align-items:center; gap:8px; min-width:0; }
+  .bug-icon { font-size:18px; line-height:1; flex:0 0 auto; }
   .bug-name { font-size:16px; font-weight:700; color:#0f172a; }
   .bug-count { font-size:12px; font-weight:600; color:#64748b; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:20px; padding:3px 11px; white-space:nowrap; flex:0 0 auto; }
 
@@ -222,5 +245,13 @@ HTML_STYLE_BLOCK = """\
 
   footer { margin-top:40px; padding-top:16px; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:12px; }
   footer code { background:#e2e8f0; padding:1px 6px; border-radius:4px; font-family:'JetBrains Mono',monospace; }
-  @media (max-width:680px){ .pf-grid,.term-grid{grid-template-columns:1fr;} }
+  @media (max-width:680px){
+    body{ padding:24px 14px; }
+    .pf-grid,.term-grid{ grid-template-columns:1fr; }
+    .scorecard{ gap:8px; }
+    .stat{ padding:12px 8px; }
+    .stat-label{ font-size:11px; }
+    .bug-head{ flex-wrap:wrap; gap:6px; }
+    h2{ margin:28px 0 12px; }
+  }
 </style>"""

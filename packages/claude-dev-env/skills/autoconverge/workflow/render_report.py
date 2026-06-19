@@ -16,6 +16,7 @@ from autoconverge_report_constants.render_report_constants import (
     CAUSE_MUTED_STYLE,
     DEFAULT_FINDING_CATEGORY,
     DEFAULT_FINDING_SEVERITY,
+    DEFAULT_ISSUE_ICON,
     GITHUB_PR_URL_TEMPLATE,
     HTML_DOCTYPE,
     HTML_HEAD_TEMPLATE,
@@ -30,6 +31,7 @@ from autoconverge_report_constants.render_report_constants import (
     ISSUE_CLASS_FIELD_PLAINNAME,
     ISSUE_CLASS_FIELD_SEVERITY,
     ISSUE_CLASS_FIELD_STATUS,
+    ISSUE_ICON_BY_CATEGORY,
     JOURNAL_SIBLING_SUBAGENTS,
     JOURNAL_SIBLING_WORKFLOWS,
     LABEL_CONVERGENCE_SUMMARY,
@@ -43,6 +45,9 @@ from autoconverge_report_constants.render_report_constants import (
     SCENE_FIELD_CONDITION,
     SCENE_FIELD_RESULT,
     SCENE_FIELD_TRIGGER,
+    SCORECARD_LABEL_CAUGHT,
+    SCORECARD_LABEL_REMAINING,
+    SCORECARD_LABEL_ROUNDS,
     SEVERITY_SORT_RANK,
     SHORT_SHA_LENGTH,
     STATUS_LABEL_BY_VALUE,
@@ -456,6 +461,30 @@ def _render_verdict_banner(
     )
 
 
+def _render_scorecard(run_data: RunData, round_count: int) -> str:
+    """Return the at-a-glance scorecard: findings caught, rounds, and zero remaining.
+
+    Args:
+        run_data: Aggregated metrics from the journal.
+        round_count: Total number of convergence rounds.
+
+    Returns:
+        An HTML .scorecard grid of three .stat tiles; the remaining tile is marked
+        .good and reads zero, since the report renders only on a converged run.
+    """
+    remaining_count = 0
+    return (
+        '<div class="scorecard">'
+        f'<div class="stat"><div class="stat-num">{run_data.total_finding_count}</div>'
+        f'<div class="stat-label">{SCORECARD_LABEL_CAUGHT}</div></div>'
+        f'<div class="stat"><div class="stat-num">{round_count}</div>'
+        f'<div class="stat-label">{SCORECARD_LABEL_ROUNDS}</div></div>'
+        f'<div class="stat good"><div class="stat-num">{remaining_count}</div>'
+        f'<div class="stat-label">{SCORECARD_LABEL_REMAINING}</div></div>'
+        "</div>"
+    )
+
+
 def _render_scene_row(scene: dict, is_problem: bool) -> str:
     """Return one .scene row plus its caption for a problem-or-fix scene.
 
@@ -642,20 +671,26 @@ def _issue_class_sort_key(issue_class: dict) -> tuple[int, int]:
 
 
 def _render_issue_class_heading(issue_class: dict) -> str:
-    """Return the per-class heading with the plain bug name and an occurrence count.
+    """Return the per-class heading with a category icon, plain name, and count.
 
     Args:
         issue_class: One issue-class dict from the summary.
 
     Returns:
-        An HTML .bug-head block with the plain bug name and a finding-count chip.
+        An HTML .bug-head block: a category icon and the plain bug name grouped in
+        a .bug-title span, plus a finding-count chip.
     """
     plain_name = html.escape(str(issue_class.get(ISSUE_CLASS_FIELD_PLAINNAME, "")))
     count = _coerce_count(issue_class.get(ISSUE_CLASS_FIELD_COUNT, 0))
     count_phrase = html.escape(_pluralize(count, "finding", "findings"))
+    category = str(issue_class.get(ISSUE_CLASS_FIELD_CATEGORY, CATEGORY_BUG))
+    icon = ISSUE_ICON_BY_CATEGORY.get(category, DEFAULT_ISSUE_ICON)
     return (
         '<div class="bug-head">'
+        '<span class="bug-title">'
+        f'<span class="bug-icon">{icon}</span>'
         f'<span class="bug-name">{plain_name}</span>'
+        "</span>"
         f'<span class="bug-count">{count_phrase}</span>'
         "</div>"
     )
@@ -792,9 +827,10 @@ def _render_summary_body(
         final_sha_short: First eight characters of the final commit sha.
 
     Returns:
-        An HTML body fragment: verdict banner, problem/fix cards, then a single
-        caught section that opens with a run-stats lead line and holds the
-        issue-class before/after panels, followed by the collapsed appendix.
+        An HTML body fragment: verdict banner, an at-a-glance scorecard,
+        problem/fix cards, then a single caught section that opens with a
+        run-stats lead line and holds the issue-class before/after panels,
+        followed by the collapsed appendix.
     """
     convergence_summary = run_data.convergence_summary
     if convergence_summary is None:
@@ -803,12 +839,14 @@ def _render_summary_body(
     verdict_banner = _render_verdict_banner(
         convergence_summary, run_data, final_sha_short
     )
+    scorecard = _render_scorecard(run_data, round_count)
     pf_grid = _render_pf_grid(convergence_summary)
     caught_lead = _render_caught_lead(convergence_summary, run_data, round_count)
     issue_panels = _render_issue_class_panels(convergence_summary)
     appendix = _render_appendix(run_data.all_distinct_findings)
     return (
         f"{verdict_banner}"
+        f"{scorecard}"
         f"<h2>What this PR does</h2>{pf_grid}"
         f"<h2>What was caught &mdash; and how it looked</h2>{caught_lead}{issue_panels}"
         f"{appendix}"

@@ -138,6 +138,49 @@ def test_cli_renders_verdict_banner_with_python_computed_vsub(tmp_path: Path) ->
     assert "final commit 7c2f420c" in html_content
 
 
+def test_cli_renders_scorecard_with_caught_rounds_and_zero_remaining(
+    tmp_path: Path,
+) -> None:
+    """Should render an at-a-glance scorecard: findings caught, rounds, and zero left."""
+    out_path = tmp_path / "report-scorecard.html"
+
+    completed = _render_cli(FIXTURE_JOURNAL, out_path)
+    assert completed.returncode == 0, f"CLI failed:\n{completed.stderr}"
+
+    html_content = out_path.read_text(encoding="utf-8")
+    assert 'class="scorecard"' in html_content
+    assert 'class="stat good"' in html_content
+    assert f'<div class="stat-num">{EXPECTED_TOTAL_FINDINGS}</div>' in html_content
+    assert f'<div class="stat-num">{EXPECTED_ROUND_COUNT}</div>' in html_content
+    assert '<div class="stat-num">0</div>' in html_content
+    assert ">caught</div>" in html_content
+    assert ">rounds</div>" in html_content
+    assert ">left</div>" in html_content
+
+
+def test_render_issue_class_heading_carries_a_category_icon() -> None:
+    """Should prefix the plain name with the icon matching the issue category."""
+    bug_heading = render_report._render_issue_class_heading(
+        {"plainName": "A plain symptom", "count": 2, "category": "bug"}
+    )
+    assert 'class="bug-title"' in bug_heading
+    assert 'class="bug-icon"' in bug_heading
+    assert render_report.ISSUE_ICON_BY_CATEGORY["bug"] in bug_heading
+
+    standard_heading = render_report._render_issue_class_heading(
+        {"plainName": "A standard symptom", "count": 1, "category": "code-standard"}
+    )
+    assert render_report.ISSUE_ICON_BY_CATEGORY["code-standard"] in standard_heading
+
+
+def test_render_issue_class_heading_uses_default_icon_for_unknown_category() -> None:
+    """Should fall back to the default icon when the category has no mapped icon."""
+    heading = render_report._render_issue_class_heading(
+        {"plainName": "An unmapped symptom", "count": 1, "category": "mystery"}
+    )
+    assert render_report.DEFAULT_ISSUE_ICON in heading
+
+
 def test_cli_renders_problem_and_fix_scene_cards(tmp_path: Path) -> None:
     """Should draw problem and fix scene cards with trigger, result, and caption."""
     out_path = tmp_path / "report-scenes.html"
