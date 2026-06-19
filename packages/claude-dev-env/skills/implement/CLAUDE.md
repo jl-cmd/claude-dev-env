@@ -9,8 +9,8 @@ This skill (`implement`) runs a spec end-to-end while maintaining a sidecar `imp
 | File | Purpose |
 |---|---|
 | `SKILL.md` | Full workflow: resolve spec, run it, write notes via `append_note.py` |
-| `scripts/append_note.py` | CLI that creates or appends to `implementation-notes.html` |
-| `scripts/implement_scripts_constants/notes_constants.py` | Section slugs → headings and default filename |
+| `packages/claude-dev-env/skills/implement/scripts/append_note.py` | CLI that creates or appends to `implementation-notes.html` |
+| `packages/claude-dev-env/skills/implement/scripts/implement_scripts_constants/notes_constants.py` | Section slugs → headings and default filename |
 
 ## Subdirectories
 

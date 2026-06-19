@@ -43,4 +43,4 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 
 ## Hook enforcement
 
-Rules marked with ⚡ in `docs/CODE_RULES.md` are backed by a blocking hook in `hooks/blocking/`. Rules without a hook are judgment-based and enforced via audit rubrics (`audit-rubrics/`).
+Rules marked with ⚡ in `packages/claude-dev-env/docs/CODE_RULES.md` are backed by a blocking hook in `hooks/blocking/`. Rules without a hook are judgment-based and enforced via audit rubrics (`audit-rubrics/`).

@@ -60,7 +60,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `structure-prompt` — structures a freeform prompt
 - `monitor-open-prs` — polls open PRs for status
 - `pre-compact` — compact-safe session handoff
-- `qbug` — quick one-pass bug hunt (deprecated; use `bugteam`)
+- `qbug` — required baseline PR audit; one clean-coder subagent loops audit → fix → commit → push until clean or stuck
 - `skill-builder` — complete skill-building lifecycle
 - `doc-gist` — uploads an HTML file as a secret gist
 - `auditing-claude-config` — audits a Claude Code setup for context-budget waste and produces a migration table with savings

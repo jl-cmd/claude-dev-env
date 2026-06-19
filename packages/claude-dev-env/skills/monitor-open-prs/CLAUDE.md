@@ -10,8 +10,8 @@ Discovers every open pull request across the `jl-cmd/*` and `JonEcho/*` owner sc
 |---|---|
 | `SKILL.md` | Full workflow: refusal cases, discovery, dispatch, post-convergence polling, final report |
 | `test_skill_contract.py` | Contract tests for the skill |
-| `scripts/discover_open_prs.py` | Shells out to `gh search prs` per owner scope and flattens results to a uniform dict shape |
-| `scripts/test_discover_open_prs.py` | Tests for the discovery helper |
+| `packages/claude-dev-env/skills/monitor-open-prs/scripts/discover_open_prs.py` | Shells out to `gh search prs` per owner scope and flattens results to a uniform dict shape |
+| `packages/claude-dev-env/skills/monitor-open-prs/scripts/test_discover_open_prs.py` | Tests for the discovery helper |
 
 ## Subdirectories
 
