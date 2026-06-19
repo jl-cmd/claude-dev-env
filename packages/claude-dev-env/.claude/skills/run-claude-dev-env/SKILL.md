@@ -75,3 +75,10 @@ Runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` with Node's 
 - **`ERROR: No usable Python 3 found`**: no `py -3` / `python3` / `python` resolves to a non-Store Python 3. Install Python 3.8+ from python.org and reopen the shell.
 - **`fatal: detected dubious ownership in repository`**: add the `safe.directory` exception shown above, then rerun.
 - **`ERROR: settings.json is malformed JSON`**: `~/.claude/settings.json` has a syntax error; fix the JSON and rerun.
+
+## Files
+
+- `SKILL.md` — this page: the agent path (the driver), the human install path, the test command, gotchas, and troubleshooting.
+- `driver.mjs` — the smoke harness that drives `bin/install.mjs` against a sandbox home directory. Run it; you do not need to read it. It sits beside this file at `.claude/skills/run-claude-dev-env/driver.mjs`.
+
+The `/run` skill auto-discovers this skill when asked to run, install, or test `claude-dev-env`.
