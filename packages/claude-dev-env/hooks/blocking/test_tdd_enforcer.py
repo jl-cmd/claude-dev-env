@@ -1,6 +1,7 @@
 """Tests for tdd-enforcer hook (blocking behavior)."""
 
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -8,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
 
 SCRIPT_PATH = Path(__file__).parent / "tdd_enforcer.py"
 
@@ -25,13 +27,18 @@ FRESHNESS_SECONDS = _PRODUCTION_MODULE._freshness_seconds()
 STALE_MTIME_OFFSET_SECONDS = FRESHNESS_SECONDS + 60
 
 
-def _run_hook_with_payload(payload: dict) -> subprocess.CompletedProcess[str]:
+def _run_hook_with_payload(
+    payload: dict,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    subprocess_env = {**os.environ, **(extra_env or {})}
     return subprocess.run(
         [sys.executable, str(SCRIPT_PATH)],
         input=json.dumps(payload),
         text=True,
         capture_output=True,
         check=False,
+        env=subprocess_env,
     )
 
 
@@ -808,6 +815,104 @@ def test_should_deny_edit_that_swaps_an_import_target(tmp_path: Path) -> None:
     )
 
     assert _decision_from(completed) == "deny"
+
+
+def _run_hook_with_payload_and_env(
+    payload: dict,
+    extra_env: dict[str, str],
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT_PATH)],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        check=False,
+        env={**os.environ, **extra_env},
+    )
+
+
+_BEHAVIOR_BEARING_CONTENT = "def fulfill_order(order: str) -> str:\n    return order\n"
+
+
+def test_should_exit_zero_for_ephemeral_scratch_python() -> None:
+    """B16: behavior-bearing scratch .py under root-anchored /tmp exits 0 with no deny."""
+    ephemeral_path = "/tmp/scratch_work.py"
+    payload = _make_write_payload(Path(ephemeral_path), _BEHAVIOR_BEARING_CONTENT)
+    completed = _run_hook_with_payload(payload)
+    assert _decision_from(completed) != "deny", (
+        f"TDD enforcer must not deny ephemeral Python path, got: {completed.stdout!r}"
+    )
+
+
+def test_should_exit_zero_for_ephemeral_scratch_typescript() -> None:
+    """B17: ephemeral .ts scratch file under root-anchored /tmp exits 0 with no deny."""
+    ephemeral_path = "/tmp/scratch_work.ts"
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": ephemeral_path,
+            "content": "export function fulfillOrder(order: string): string { return order; }\n",
+        },
+    }
+    completed = _run_hook_with_payload(payload)
+    assert _decision_from(completed) != "deny", (
+        f"TDD enforcer must not deny ephemeral TypeScript path, got: {completed.stdout!r}"
+    )
+
+
+def test_should_still_deny_non_ephemeral_python_without_test() -> None:
+    """B18: a non-ephemeral .py file with no matching test still receives a deny."""
+    non_ephemeral_path = "/repo/src/orders.py"
+    payload = _make_write_payload(Path(non_ephemeral_path), _BEHAVIOR_BEARING_CONTENT)
+    completed = _run_hook_with_payload(payload)
+    assert _decision_from(completed) == "deny", (
+        f"TDD enforcer must deny non-ephemeral production file, got: {completed.stdout!r}"
+    )
+
+
+def test_should_deny_ephemeral_scratch_when_override_truthy() -> None:
+    """B19: with override set, an ephemeral scratch .py with no test still receives a deny."""
+    ephemeral_path = "/tmp/scratch_work.py"
+    payload = _make_write_payload(Path(ephemeral_path), _BEHAVIOR_BEARING_CONTENT)
+    completed = _run_hook_with_payload_and_env(
+        payload,
+        extra_env={"CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT": "1"},
+    )
+    assert _decision_from(completed) == "deny", (
+        f"TDD enforcer must deny ephemeral path when override is set, got: {completed.stdout!r}"
+    )
+
+
+def test_should_exit_before_fresh_test_lookup_for_ephemeral(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B20: the ephemeral exit precedes the fresh-test candidate search.
+
+    Spies on candidate_test_paths_for and asserts it is never reached for a
+    scratch .py under $CLAUDE_JOB_DIR/tmp, proving the early exit short-circuits
+    before any test-file lookup runs.
+    """
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+    monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path))
+    candidate_search_call_count = {"count": 0}
+
+    def _spy_candidate_test_paths_for(production_path: Path) -> list[Path]:
+        candidate_search_call_count["count"] += 1
+        return []
+
+    monkeypatch.setattr(
+        _PRODUCTION_MODULE, "candidate_test_paths_for", _spy_candidate_test_paths_for
+    )
+    scratch_path = str(tmp_path / "tmp" / "scratch_work.py")
+    payload = _make_write_payload(Path(scratch_path), _BEHAVIOR_BEARING_CONTENT)
+    monkeypatch.setattr(_PRODUCTION_MODULE.sys, "stdin", io.StringIO(json.dumps(payload)))
+    with pytest.raises(SystemExit) as raised_exit:
+        _PRODUCTION_MODULE.main()
+    assert int(raised_exit.value.code or 0) == 0
+    assert candidate_search_call_count["count"] == 0, (
+        "candidate_test_paths_for must not run for an ephemeral scratch path"
+    )
 
 
 def test_should_allow_edit_that_removes_an_import_statement(tmp_path: Path) -> None:
