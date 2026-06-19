@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.69.2](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.69.1...claude-dev-env-v1.69.2) (2026-06-19)
+
+
+### Bug Fixes
+
+* **hooks:** exempt ephemeral temp scripts from Write/Edit gates ([bbb4cf2](https://github.com/jl-cmd/claude-code-config/commit/bbb4cf249fc6e5959f21f8ab66ad8a3338fefcc7))
+
 ## [1.69.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.69.0...claude-dev-env-v1.69.1) (2026-06-19)
 
 
