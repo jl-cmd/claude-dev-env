@@ -477,14 +477,14 @@ def _class_docstring_summary_is_single_line(docstring_text: str) -> bool:
 
 
 def _public_method_names(class_node: ast.ClassDef) -> list[str]:
-    public_names: list[str] = []
+    deduplicated_names: dict[str, None] = {}
     for each_statement in class_node.body:
         if not isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if _function_is_private_or_dunder(each_statement.name):
             continue
-        public_names.append(each_statement.name)
-    return public_names
+        deduplicated_names[each_statement.name] = None
+    return list(deduplicated_names)
 
 
 def _name_tokens(method_name: str) -> list[str]:
