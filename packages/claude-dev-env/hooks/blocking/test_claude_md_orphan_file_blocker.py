@@ -576,6 +576,42 @@ def test_oserror_during_subtree_walk_fails_open(
     assert missing_filenames == []
 
 
+def test_no_referenced_filenames_performs_no_subtree_walk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    def _fail_if_walked(self, pattern):
+        raise AssertionError("rglob walked the subtree with no filenames to verify")
+
+    monkeypatch.setattr(Path, "rglob", _fail_if_walked)
+    claude_md_path = tmp_path / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "| Task | Command |\n"
+        "|---|---|\n"
+        "| Run the tests | npm test |\n"
+    )
+    missing_filenames = find_missing_filenames(content, claude_md_path.parent)
+    assert missing_filenames == []
+
+
+def test_noise_directories_are_excluded_from_the_walk(tmp_path: Path):
+    package_directory = tmp_path / "package_directory"
+    package_directory.mkdir()
+    for each_noise_name in (".git", "__pycache__", "node_modules", ".pytest_cache", ".ruff_cache"):
+        noise_directory = tmp_path / each_noise_name
+        noise_directory.mkdir()
+        (noise_directory / "buried_target.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path = package_directory / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "| File | Note |\n"
+        "|---|---|\n"
+        "| `buried_target.py` | only present inside noise directories |\n"
+    )
+    missing_filenames = find_missing_filenames(content, claude_md_path.parent)
+    assert missing_filenames == ["buried_target.py"]
+
+
 def test_blocker_module_has_no_collection_parameter_naming_violations():
     blocker_source = Path(HOOK_SCRIPT_PATH).read_text(encoding="utf-8")
     assert check_collection_prefix(blocker_source, HOOK_SCRIPT_PATH) == []
