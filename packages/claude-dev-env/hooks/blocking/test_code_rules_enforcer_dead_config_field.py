@@ -577,6 +577,98 @@ def test_dataclasses_qualified_replace_call_suppresses_so_no_field_flagged(
     )
 
 
+def test_aliased_replace_read_keeps_field_live_despite_constructor_keyword(
+    neutral_root: Path,
+) -> None:
+    """An aliased ``replace`` keyword read survives a same-module constructor keyword.
+
+    A module constructs ``ThemeUpdateConfig(debug_port=1)`` (a write) and also reads
+    the field through an aliased ``dataclasses.replace`` —
+    ``from dataclasses import replace as rep; rep(cfg, debug_port=2)``. The alias is
+    not the bare ``replace`` name, so the whole-instance reflective suppression does
+    not fire and the ``rep`` keyword stays a genuine field read. The constructor
+    keyword exclusion is scoped per-call, so the constructor's ``debug_port`` keyword
+    does not strip the ``rep`` keyword read and the field stays live.
+    """
+    consumer_body = (
+        "from dataclasses import replace as rep\n"
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def build_then_repoint() -> ThemeUpdateConfig:\n"
+        "    configuration = ThemeUpdateConfig(portal_url='x', debug_port=1, timeout_seconds=99)\n"
+        "    return rep(configuration, debug_port=2)\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert not any("'debug_port'" in each_issue for each_issue in issues), (
+        f"Aliased replace keyword read must keep debug_port live despite a"
+        f" same-module constructor keyword, got: {issues}"
+    )
+
+
+def test_factory_function_ending_in_config_keeps_field_live(
+    neutral_root: Path,
+) -> None:
+    """A keyword to a factory FUNCTION ending in ``Config`` is a read, not a write.
+
+    ``getThemeConfig(debug_port=1)`` calls a factory function, not a ``*Config``
+    dataclass constructor. The keyword passes a value into the function, so it
+    counts as a field read. The constructor-keyword exclusion fires only for a
+    callee that names a known ``*Config`` dataclass defined under the scan root, so
+    a factory function whose name merely ends in ``Config`` does not strip the
+    field.
+    """
+    consumer_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def getThemeConfig(portal_url: str, debug_port: int) -> ThemeUpdateConfig:\n"
+        "    return ThemeUpdateConfig(\n"
+        "        portal_url=portal_url, debug_port=debug_port, timeout_seconds=30\n"
+        "    )\n"
+        "\n"
+        "def run() -> ThemeUpdateConfig:\n"
+        "    print('x')\n"
+        "    return getThemeConfig(portal_url='x', debug_port=1)\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert not any("'debug_port'" in each_issue for each_issue in issues), (
+        f"A keyword passed to a factory function ending in Config must keep the"
+        f" field live, got: {issues}"
+    )
+
+
+def test_dead_config_field_module_has_no_collection_parameter_naming_violation() -> None:
+    """The hook module's own source must pass the collection-parameter naming check.
+
+    The cross-module dead-config-field check passes a ``set[str]`` of config class
+    names through several helpers; every such collection parameter must carry the
+    ``all_`` prefix (CODE_RULES §5). Run the real collection-prefix check over this
+    module's on-disk source so a regression that drops the prefix fails here.
+    """
+    collection_naming_path = (
+        Path(__file__).resolve().parent / "code_rules_naming_collection.py"
+    )
+    naming_specification = importlib.util.spec_from_file_location(
+        "code_rules_naming_collection", collection_naming_path
+    )
+    assert naming_specification is not None and naming_specification.loader is not None
+    code_rules_naming_collection = importlib.util.module_from_spec(naming_specification)
+    naming_specification.loader.exec_module(code_rules_naming_collection)
+    module_path = Path(__file__).resolve().parent / "code_rules_dead_config_field.py"
+    module_source = module_path.read_text(encoding="utf-8")
+    issues = code_rules_naming_collection.check_collection_prefix(
+        module_source, str(module_path)
+    )
+    assert not any("Collection parameter" in each_issue for each_issue in issues), (
+        f"dead-config-field module has a collection-parameter naming violation: {issues}"
+    )
+
+
 def test_validate_content_dispatch_runs_dead_config_field_check(neutral_root: Path) -> None:
     workflow_directory = neutral_root / "workflow"
     config_package = workflow_directory / "os_update_workflow"
