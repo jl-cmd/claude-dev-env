@@ -20,10 +20,16 @@ The scan is deliberately conservative to keep false positives near zero:
 - Field reads are collected as ``ast.Attribute.attr`` values (``obj.field``),
   augmented-assignment targets (``cfg.field += 1`` reads ``field`` before
   writing it), string literals (covers ``getattr(obj, "field")``),
-  keyword-argument names (covers ``ThemeUpdateConfig(debug_port=1)`` and
+  keyword-argument names on non-constructor calls (covers
   ``replace(cfg, debug_port=1)``), and match-pattern keyword attribute names
-  (``case Config(field=found)``). Plain ``ast.Name`` references are excluded — a
-  local variable named ``debug_port`` is not a read of ``config.debug_port``.
+  (``case Config(field=found)``). Two field-write forms are excluded because they
+  name a field without consuming it: a keyword that writes a field in a
+  ``*Config`` constructor (``ThemeUpdateConfig(debug_port=1)``), and an attribute
+  read inside a ``*Config`` field's own default-value expression in the class body
+  (``debug_port: int = source.debug_port``) — a field written only these ways and
+  read by no module is the dead-config case this check exists to catch. Plain
+  ``ast.Name`` references are excluded — a local variable named ``debug_port`` is
+  not a read of ``config.debug_port``.
 - A production module that reflectively reads a whole instance — a bare or
   ``dataclasses``-qualified call to ``asdict``, ``astuple``, ``fields``,
   ``replace``, or ``vars``, or a read of ``obj.__dict__`` — consumes every field
@@ -137,6 +143,84 @@ def _reads_whole_instance_reflectively(tree: ast.Module) -> bool:
     return False
 
 
+def _call_constructs_config_class(call_node: ast.Call) -> bool:
+    """Return whether a call constructs a ``*Config`` dataclass.
+
+    A call whose callee name ends in ``"Config"`` — ``AppInfoConfig(...)`` or a
+    qualified ``module.AppInfoConfig(...)`` — constructs a config instance. The
+    keyword arguments of such a call write the named fields rather than read
+    them, so they provide no evidence the field is consumed.
+
+    Args:
+        call_node: The call expression to test.
+
+    Returns:
+        True when the callee name ends in the config class name suffix.
+    """
+    callee_node = call_node.func
+    if isinstance(callee_node, ast.Name):
+        return callee_node.id.endswith(CONFIG_CLASS_NAME_SUFFIX)
+    if isinstance(callee_node, ast.Attribute):
+        return callee_node.attr.endswith(CONFIG_CLASS_NAME_SUFFIX)
+    return False
+
+
+def _config_constructor_keyword_names(tree: ast.Module) -> set[str]:
+    """Return keyword-argument names that write fields in a ``*Config`` constructor.
+
+    A keyword in a ``AppInfoConfig(field=value)`` call sets ``field`` rather than
+    reading it, so it must not count toward proving the field consumed. A keyword
+    in ``replace(cfg, field=value)`` reuses an existing live instance and stays a
+    read; only a direct ``*Config`` constructor keyword is excluded here.
+
+    Args:
+        tree: The parsed module to inspect.
+
+    Returns:
+        Every keyword-argument name passed to a ``*Config`` constructor call.
+    """
+    constructor_keyword_names: set[str] = set()
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.Call):
+            continue
+        if not _call_constructs_config_class(each_node):
+            continue
+        for each_keyword in each_node.keywords:
+            if each_keyword.arg is not None:
+                constructor_keyword_names.add(each_keyword.arg)
+    return constructor_keyword_names
+
+
+def _config_field_default_value_nodes(tree: ast.Module) -> set[int]:
+    """Return ids of AST nodes inside a ``*Config`` dataclass field default value.
+
+    A field default such as ``sound_upload_timeout_ms: int =``
+    ``submission_timing.sound_upload_timeout_ms`` is an attribute read whose name
+    matches the field being defined. That self-referential read inside the config
+    class body is not a consumer of the field, so its nodes are collected here for
+    the caller to exclude from the attribute-read set.
+
+    Args:
+        tree: The parsed module to inspect.
+
+    Returns:
+        The ``id()`` of every AST node within the default-value expression of a
+        field declared in a ``*Config`` dataclass body.
+    """
+    default_value_node_ids: set[int] = set()
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.ClassDef) or not _is_config_dataclass(each_node):
+            continue
+        for each_statement in each_node.body:
+            if not isinstance(each_statement, ast.AnnAssign):
+                continue
+            if each_statement.value is None:
+                continue
+            for each_inner_node in ast.walk(each_statement.value):
+                default_value_node_ids.add(id(each_inner_node))
+    return default_value_node_ids
+
+
 def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
     """Return attribute names read in a module's source and a suppression flag.
 
@@ -144,40 +228,49 @@ def _attribute_read_names_in_source(source: str) -> tuple[set[str], bool]:
     in Load context, augmented-assignment targets (so ``cfg.debug_port += 1``
     contributes ``"debug_port"`` because ``+=`` reads the attribute before
     writing it), string literals (so ``getattr(obj, "field")`` contributes
-    ``"field"``), keyword-argument names (so ``ThemeUpdateConfig(debug_port=1)``
-    and ``replace(cfg, debug_port=1)`` each contribute ``"debug_port"``), and
-    ``ast.MatchClass.kwd_attrs`` names (so ``case Config(field=x)`` contributes
-    ``"field"``). The boolean reports whether the module suppresses the
-    dead-field check, which it does only when it reflectively reads a whole
-    instance — a bare or ``dataclasses``-qualified ``asdict``/``astuple``/
-    ``fields``/``replace``/``vars`` call, or an ``obj.__dict__`` read — because
-    that pattern reads every field at once without naming any single field, so
-    the caller treats it as "cannot prove any field dead". A ``SyntaxError``
-    contributes no names and no suppression.
+    ``"field"``), keyword-argument names (so ``replace(cfg, debug_port=1)``
+    contributes ``"debug_port"``), and ``ast.MatchClass.kwd_attrs`` names (so
+    ``case Config(field=x)`` contributes ``"field"``). Two field-write forms are
+    excluded because they name a field without consuming it: a keyword that writes
+    a field in a ``*Config`` constructor (``AppInfoConfig(field=value)``), and an
+    attribute read inside a ``*Config`` dataclass field's own default-value
+    expression (``field: int = source.field`` in the class body) — counting either
+    would hide a field that is written but read by no module. The boolean reports
+    whether the module suppresses the dead-field check, which it does only when it
+    reflectively reads a whole instance — a bare or ``dataclasses``-qualified
+    ``asdict``/``astuple``/``fields``/``replace``/``vars`` call, or an
+    ``obj.__dict__`` read — because that pattern reads every field at once without
+    naming any single field, so the caller treats it as "cannot prove any field
+    dead". A ``SyntaxError`` contributes no names and no suppression.
 
     Args:
         source: The full text of a ``.py`` module.
 
     Returns:
         A (read_names, suppresses_dead_field_check) pair. The name set is every
-        attribute name the module reads via any of the five mechanisms above;
-        suppresses_dead_field_check is True only when a reflective whole-instance
-        read is present.
+        attribute name the module reads via the mechanisms above, excluding
+        ``*Config`` constructor keyword names and config-field default-value
+        attribute reads; suppresses_dead_field_check is True only when a reflective
+        whole-instance read is present.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return set(), False
     all_read_names: set[str] = _augmented_assignment_attribute_names(tree)
+    config_constructor_keyword_names = _config_constructor_keyword_names(tree)
+    config_field_default_node_ids = _config_field_default_value_nodes(tree)
     for each_node in ast.walk(tree):
         if isinstance(each_node, ast.Attribute) and isinstance(each_node.ctx, ast.Load):
-            all_read_names.add(each_node.attr)
+            if id(each_node) not in config_field_default_node_ids:
+                all_read_names.add(each_node.attr)
         elif isinstance(each_node, ast.Constant) and isinstance(each_node.value, str):
             all_read_names.add(each_node.value)
         elif isinstance(each_node, ast.MatchClass):
             all_read_names.update(each_node.kwd_attrs)
         elif isinstance(each_node, ast.keyword) and each_node.arg is not None:
-            all_read_names.add(each_node.arg)
+            if each_node.arg not in config_constructor_keyword_names:
+                all_read_names.add(each_node.arg)
     suppresses_dead_field_check = _reads_whole_instance_reflectively(tree)
     return all_read_names, suppresses_dead_field_check
 
@@ -247,9 +340,12 @@ def check_dead_config_dataclass_fields(
     in ``"Config"``. For each such config dataclass in the written file, every
     instance field whose name does not appear as an attribute read (``obj.field``),
     augmented-assignment target (``cfg.field += 1``), string literal,
-    keyword-argument name (constructor or ``replace`` keyword), or match-pattern
+    non-constructor keyword-argument name (``replace`` keyword), or match-pattern
     keyword attribute in any production module under the enclosing scan root is
-    flagged as dead. When any production module under the scan root reflectively
+    flagged as dead. A keyword that writes a field in a ``*Config`` constructor
+    (``ThemeUpdateConfig(debug_port=1)``) is a write, not a read, so it does not
+    clear a field — a field set by a constructor keyword and read by no module is
+    flagged. When any production module under the scan root reflectively
     reads a whole instance — a bare or ``dataclasses``-qualified call to
     ``asdict``, ``astuple``, ``fields``, ``replace``, or ``vars``, or a read of
     ``obj.__dict__`` — the check is suppressed for the whole tree and returns
