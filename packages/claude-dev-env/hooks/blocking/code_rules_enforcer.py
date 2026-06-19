@@ -65,6 +65,7 @@ from code_rules_dead_module_constant import (  # noqa: E402
     check_dead_module_constants,
 )
 from code_rules_docstrings import (  # noqa: E402
+    check_class_docstring_names_public_methods,
     check_docstring_args_match_signature,
     check_docstring_fallback_branch_coverage,
     check_docstring_format,
@@ -250,6 +251,9 @@ def validate_content(
         all_issues.extend(check_docstring_format(effective_content, file_path))
         all_issues.extend(check_docstring_args_match_signature(effective_content, file_path))
         all_issues.extend(check_docstring_fallback_branch_coverage(effective_content, file_path))
+        all_issues.extend(
+            check_class_docstring_names_public_methods(effective_content, file_path)
+        )
         all_issues.extend(
             check_boolean_naming(
                 effective_content,
