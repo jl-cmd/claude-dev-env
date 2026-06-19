@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.69.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.69.0...claude-dev-env-v1.69.1) (2026-06-19)
+
+
+### Bug Fixes
+
+* **code-rules:** address converge-round findings on dead-config-field check ([e5df152](https://github.com/jl-cmd/claude-code-config/commit/e5df15272665ed055736c592dd49d74d40f90587))
+* **code-rules:** apply converge-round fixes to dead-config-field check ([b805a99](https://github.com/jl-cmd/claude-code-config/commit/b805a9966df3608011875be67cb15db06dfb205d))
+* **dead-config:** treat *Config constructor keyword as a write, not a read ([1c5b4dd](https://github.com/jl-cmd/claude-code-config/commit/1c5b4dd9eb9ce38917fe68109dfb18fc65f9afb8))
+
 ## [1.69.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.68.0...claude-dev-env-v1.69.0) (2026-06-19)
 
 
