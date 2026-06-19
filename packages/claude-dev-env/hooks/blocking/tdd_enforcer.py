@@ -16,10 +16,15 @@ from pathlib import Path
 
 
 _hooks_root_path_string = str(Path(__file__).resolve().parent.parent)
+_blocking_directory_path_string = str(Path(__file__).resolve().parent)
 if _hooks_root_path_string not in sys.path:
     sys.path.insert(0, _hooks_root_path_string)
+if _blocking_directory_path_string not in sys.path:
+    sys.path.insert(0, _blocking_directory_path_string)
 
-from hooks_constants.messages import USER_FACING_TDD_NOTICE
+from code_rules_shared import is_ephemeral_script_path  # noqa: E402
+
+from hooks_constants.messages import USER_FACING_TDD_NOTICE  # noqa: E402
 
 PRODUCTION_EXTENSIONS = {'.py', '.ts', '.tsx', '.js', '.jsx'}
 SKIP_PATTERNS = {
@@ -581,7 +586,7 @@ def main() -> None:
     if not file_path:
         sys.exit(0)
 
-    if _is_inside_dotclaude_segment(file_path):
+    if _is_inside_dotclaude_segment(file_path) or is_ephemeral_script_path(file_path):
         sys.exit(0)
 
     path = Path(file_path)

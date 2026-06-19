@@ -108,6 +108,7 @@ from code_rules_paths_syspath import (  # noqa: E402
 from code_rules_shared import (  # noqa: E402
     changed_line_numbers,
     get_file_extension,
+    is_ephemeral_script_path,
     is_hook_infrastructure,
     is_test_file,
 )
@@ -395,6 +396,8 @@ def _is_validated_target(file_path: str) -> bool:
     """
     if not file_path:
         return False
+    if is_ephemeral_script_path(file_path):
+        return False
     if is_hook_infrastructure(file_path):
         return False
     return get_file_extension(file_path) in ALL_CODE_EXTENSIONS
@@ -415,6 +418,8 @@ def _is_hook_infrastructure_python_target(file_path: str) -> bool:
         True when the path names a Python file inside hook infrastructure.
     """
     if not file_path:
+        return False
+    if is_ephemeral_script_path(file_path):
         return False
     if not is_hook_infrastructure(file_path):
         return False

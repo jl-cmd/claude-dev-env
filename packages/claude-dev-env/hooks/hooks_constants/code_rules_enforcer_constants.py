@@ -17,6 +17,12 @@ ALL_JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx"}
 ALL_CODE_EXTENSIONS = ALL_PYTHON_EXTENSIONS | ALL_JAVASCRIPT_EXTENSIONS
 
 ALL_TEST_PATH_PATTERNS = {"test_", "_test.", ".test.", ".spec.", "/tests/", "\\tests\\", "/tests.py", "\\tests.py"}
+ALL_ROOT_ANCHORED_EPHEMERAL_DIRECTORIES: tuple[str, str] = ("/tmp", "/temp")
+CLAUDE_JOB_DIR_ENVIRONMENT_VARIABLE_NAME: str = "CLAUDE_JOB_DIR"
+CLAUDE_JOB_DIR_SCRATCH_SUBDIRECTORY: str = "tmp"
+EPHEMERAL_EXEMPT_DISABLE_ENVIRONMENT_VARIABLE_NAME: str = "CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT"
+ALL_EPHEMERAL_EXEMPT_DISABLE_TRUTHY_VALUES: frozenset[str] = frozenset({"1", "true", "yes", "on"})
+LEADING_DRIVE_LETTER_PATTERN: re.Pattern[str] = re.compile(r"^[a-z]:")
 ALL_HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\.claude/hooks/", "/packages/claude-dev-env/hooks/", "\\packages\\claude-dev-env\\hooks\\"}
 ALL_WORKFLOW_REGISTRY_PATTERNS = {"/workflow/", "\\workflow\\", "_tab.py", "/states.py", "\\states.py", "/modules.py", "\\modules.py"}
 ALL_MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}

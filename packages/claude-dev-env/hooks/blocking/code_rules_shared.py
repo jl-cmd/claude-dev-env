@@ -2,6 +2,7 @@
 
 import ast
 import difflib
+import os
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -15,10 +16,16 @@ if _hooks_directory not in sys.path:
 
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_DIFF_CHANGED_OPCODE_TAGS,
+    ALL_EPHEMERAL_EXEMPT_DISABLE_TRUTHY_VALUES,
     ALL_HOOK_INFRASTRUCTURE_PATTERNS,
     ALL_MIGRATION_PATH_PATTERNS,
+    ALL_ROOT_ANCHORED_EPHEMERAL_DIRECTORIES,
     ALL_TEST_PATH_PATTERNS,
     ALL_WORKFLOW_REGISTRY_PATTERNS,
+    CLAUDE_JOB_DIR_ENVIRONMENT_VARIABLE_NAME,
+    CLAUDE_JOB_DIR_SCRATCH_SUBDIRECTORY,
+    EPHEMERAL_EXEMPT_DISABLE_ENVIRONMENT_VARIABLE_NAME,
+    LEADING_DRIVE_LETTER_PATTERN,
 )
 from hooks_constants.unused_module_import_constants import (  # noqa: E402
     TYPE_CHECKING_IDENTIFIER,
@@ -199,6 +206,46 @@ def _extract_fstring_literal_parts(
         else:
             shape_segments.append(interpolation_placeholder)
     return "".join(display_segments), "".join(shape_segments)
+
+
+def is_ephemeral_script_path(file_path: str) -> bool:
+    """Return True when the path is rooted at a throwaway scratch directory.
+
+    Checks these sources in order:
+    - ``$CLAUDE_JOB_DIR/tmp`` — only when ``CLAUDE_JOB_DIR`` is set.
+    - Root-anchored ``/tmp`` and ``/temp`` (drive-letter tolerant).
+
+    The shared OS temp directory is deliberately not a source: pytest writes
+    its sandbox fixtures there, so matching it would exempt the suite's own
+    targets. Returns False when ``CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT``
+    is truthy, when ``file_path`` is empty, and when no root matches. Path
+    classification is string-only; the file need not exist.
+
+    Args:
+        file_path: The candidate path to classify.
+
+    Returns:
+        True when the path is rooted at a recognized ephemeral scratch directory.
+    """
+    if not file_path:
+        return False
+    disable_value = os.environ.get(EPHEMERAL_EXEMPT_DISABLE_ENVIRONMENT_VARIABLE_NAME, "").strip().lower()
+    if disable_value in ALL_EPHEMERAL_EXEMPT_DISABLE_TRUTHY_VALUES:
+        return False
+    normalized = LEADING_DRIVE_LETTER_PATTERN.sub("", os.path.abspath(file_path).replace("\\", "/").lower())
+    all_temp_roots: list[str] = []
+    job_dir = os.environ.get(CLAUDE_JOB_DIR_ENVIRONMENT_VARIABLE_NAME)
+    if job_dir:
+        job_dir_scratch = LEADING_DRIVE_LETTER_PATTERN.sub(
+            "", os.path.join(job_dir, CLAUDE_JOB_DIR_SCRATCH_SUBDIRECTORY).replace("\\", "/").lower()
+        )
+        all_temp_roots.append(job_dir_scratch)
+    for each_root in ALL_ROOT_ANCHORED_EPHEMERAL_DIRECTORIES:
+        all_temp_roots.append(each_root)
+    for each_temp_root in all_temp_roots:
+        if normalized == each_temp_root or normalized.startswith(each_temp_root + "/"):
+            return True
+    return False
 
 
 def is_migration_file(file_path: str) -> bool:
