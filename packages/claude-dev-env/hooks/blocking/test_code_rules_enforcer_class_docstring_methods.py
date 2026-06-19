@@ -197,6 +197,59 @@ def test_should_flag_real_break_reporter_widened_surface() -> None:
     assert len(issues) == 1
 
 
+def _overload_class_omitting_the_only_method() -> str:
+    return (
+        "from typing import overload\n"
+        "\n"
+        "class PayloadTransformer:\n"
+        '    """Hold a fixed payload value for later use."""\n'
+        "\n"
+        "    @overload\n"
+        "    def transform(self, payload: str) -> dict[str, str]: ...\n"
+        "\n"
+        "    @overload\n"
+        "    def transform(self, payload: bytes) -> dict[str, str]: ...\n"
+        "\n"
+        "    def transform(self, payload: str | bytes) -> dict[str, str]:\n"
+        "        return self._normalize(payload)\n"
+    )
+
+
+def test_should_not_flag_single_overloaded_method_below_breadth_threshold() -> None:
+    issues = check_class_docstring_names_public_methods(
+        _overload_class_omitting_the_only_method(), PRODUCTION_FILE_PATH
+    )
+    assert issues == [], f"One overloaded public method must not flag, got: {issues!r}"
+
+
+def test_should_not_repeat_an_overloaded_name_in_the_issue_message() -> None:
+    source = (
+        "from typing import overload\n"
+        "\n"
+        "class PayloadTransformer:\n"
+        '    """Hold a fixed payload value for later use."""\n'
+        "\n"
+        "    @overload\n"
+        "    def transform(self, payload: str) -> dict[str, str]: ...\n"
+        "\n"
+        "    @overload\n"
+        "    def transform(self, payload: bytes) -> dict[str, str]: ...\n"
+        "\n"
+        "    def transform(self, payload: str | bytes) -> dict[str, str]:\n"
+        "        return self._normalize(payload)\n"
+        "\n"
+        "    def reset(self) -> None:\n"
+        "        self._payload = None\n"
+    )
+    issues = check_class_docstring_names_public_methods(source, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1, f"Expected a single drift issue, got: {issues!r}"
+    only_issue = issues[0]
+    assert only_issue.count("transform") == 1, (
+        f"Overloaded name must appear once in the message, got: {only_issue!r}"
+    )
+    assert "reset" in only_issue
+
+
 def test_validate_content_surfaces_class_docstring_breadth_drift() -> None:
     issues = validate_content(
         _narrow_class_with_widened_surface(), PRODUCTION_FILE_PATH, old_content=""
