@@ -24,6 +24,7 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from hooks_constants.claude_md_orphan_file_blocker_constants import (  # noqa: E402
+    ALL_NOISE_DIRECTORY_NAMES,
     ALL_REFERENCED_FILE_EXTENSIONS,
     CLAUDE_MD_FILENAME,
     CODE_FENCE_PATTERN,
@@ -237,13 +238,35 @@ class _SubtreeScan:
         self.was_scan_complete = was_scan_complete
 
 
+def _is_under_noise_directory(scan_root: Path, candidate_path: Path) -> bool:
+    """Return whether *candidate_path* lies inside a pruned noise directory.
+
+    A noise directory (``.git``, ``__pycache__``, ``node_modules``, and the test
+    and lint caches) holds volatile generated files that no CLAUDE.md table
+    documents, so the walk skips them. This keeps generated files out of the
+    basename set and keeps them from consuming the scan budget.
+
+    Args:
+        scan_root: The directory the walk descends from.
+        candidate_path: A path the walk yielded under the scan root.
+
+    Returns:
+        True when any path segment below *scan_root* names a noise directory.
+    """
+    try:
+        relative_segments = candidate_path.relative_to(scan_root).parts
+    except ValueError:
+        relative_segments = candidate_path.parts
+    return any(each_segment in ALL_NOISE_DIRECTORY_NAMES for each_segment in relative_segments)
+
+
 def _scan_subtree_basenames(scan_root: Path) -> _SubtreeScan:
     """Return the bounded basename scan of *scan_root*, skipping unreadable entries.
 
     Walks the subtree collecting each file's basename, stopping once the scan
-    budget is reached. A per-entry stat error skips that entry. The result records
-    whether the walk completed within the budget, so the caller knows whether the
-    set is authoritative.
+    budget is reached. A path inside a noise directory is pruned, and a per-entry
+    stat error skips that entry. The result records whether the walk completed
+    within the budget, so the caller knows whether the set is authoritative.
 
     Args:
         scan_root: The directory whose subtree bounds the existence search.
@@ -254,6 +277,8 @@ def _scan_subtree_basenames(scan_root: Path) -> _SubtreeScan:
     all_basenames: set[str] = set()
     scanned_count = 0
     for each_path in scan_root.rglob("*"):
+        if _is_under_noise_directory(scan_root, each_path):
+            continue
         try:
             if not each_path.is_file():
                 continue
@@ -270,7 +295,9 @@ def _filename_exists_under(scan_root: Path, filename: str) -> bool:
     """Return whether a file with basename *filename* exists anywhere under root.
 
     A direct probe that resolves one filename deterministically even when the
-    bounded subtree walk was truncated. An unreadable entry mid-walk is skipped.
+    bounded subtree walk was truncated. A match inside a noise directory is pruned
+    so the probe agrees with the bounded walk, and an unreadable entry mid-walk is
+    skipped.
 
     Args:
         scan_root: The directory whose subtree bounds the existence search.
@@ -280,6 +307,8 @@ def _filename_exists_under(scan_root: Path, filename: str) -> bool:
         True when at least one matching file is reachable under the scan root.
     """
     for each_match in scan_root.rglob(filename):
+        if _is_under_noise_directory(scan_root, each_match):
+            continue
         try:
             if each_match.is_file():
                 return True
@@ -327,9 +356,10 @@ def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]
     siblings. A table block that declares an explicit relative-path source (a
     ``../`` token in the block or the prose that introduces it) yields no findings
     for that block's rows, since those files legitimately live elsewhere; an
-    unrelated block in the same file is still checked. A filesystem error that
-    halts the whole subtree walk yields no findings (fail open), so an unreadable
-    tree never blocks a write.
+    unrelated block in the same file is still checked. When the content references
+    no bare filename, no findings result and the subtree walk is skipped. A
+    filesystem error that halts the whole subtree walk yields no findings (fail
+    open), so an unreadable tree never blocks a write.
 
     Args:
         content: The CLAUDE.md content being written.
@@ -340,6 +370,8 @@ def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]
         first-seen order with duplicates removed, capped at the issue budget.
     """
     referenced_filenames = find_referenced_filenames(content)
+    if not referenced_filenames:
+        return []
     scan_root = _resolve_scan_root(claude_md_directory)
     try:
         present_filenames = _present_referenced_filenames(referenced_filenames, scan_root)

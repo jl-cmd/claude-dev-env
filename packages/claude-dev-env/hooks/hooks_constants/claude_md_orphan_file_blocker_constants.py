@@ -8,8 +8,8 @@ subdirectories, and its siblings), the table points a reader at a file that is
 not there. This module holds the patterns that find those cells, the filename
 extensions that mark a cell as a file reference, the region-boundary marker that
 scopes a prose region to one section, the relative-path marker that exempts a
-cross-directory table block, the subtree scan budget, and the block-message text
-the hook emits.
+cross-directory table block, the directory names the subtree walk prunes, the
+subtree scan budget, and the block-message text the hook emits.
 """
 
 import re
@@ -23,6 +23,7 @@ __all__ = [
     "REGION_BOUNDARY_PATTERN",
     "RELATIVE_PATH_SOURCE_PATTERN",
     "ALL_REFERENCED_FILE_EXTENSIONS",
+    "ALL_NOISE_DIRECTORY_NAMES",
     "MAX_SUBTREE_FILES_SCANNED",
     "MAX_ORPHAN_FILE_ISSUES",
     "ORPHAN_FILE_MESSAGE_TEMPLATE",
@@ -62,6 +63,16 @@ ALL_REFERENCED_FILE_EXTENSIONS: frozenset[str] = frozenset(
         ".cfg",
         ".toml",
         ".ini",
+    }
+)
+
+ALL_NOISE_DIRECTORY_NAMES: frozenset[str] = frozenset(
+    {
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".pytest_cache",
+        ".ruff_cache",
     }
 )
 
