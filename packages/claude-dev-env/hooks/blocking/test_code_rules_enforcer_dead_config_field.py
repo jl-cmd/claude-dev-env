@@ -223,19 +223,260 @@ def test_does_not_flag_field_used_only_as_replace_keyword(neutral_root: Path) ->
     )
 
 
-def test_does_not_flag_field_used_only_as_constructor_keyword(neutral_root: Path) -> None:
+def test_flags_field_set_only_by_constructor_keyword_and_read_nowhere(
+    neutral_root: Path,
+) -> None:
+    """A field set ONLY by a ``*Config`` constructor keyword, read nowhere, is dead.
+
+    A constructor keyword writes the field; it is not a read. When ``debug_port``
+    is set by ``ThemeUpdateConfig(debug_port=1)`` and read through no config
+    instance anywhere in production, tuning it has no effect, so it is flagged as
+    dead config (CODE_RULES §9.8).
+    """
     consumer_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def build() -> ThemeUpdateConfig:\n"
+        "    configuration = ThemeUpdateConfig(portal_url='x', debug_port=1, timeout_seconds=99)\n"
+        "    print(configuration.portal_url)\n"
+        "    print(configuration.timeout_seconds)\n"
+        "    return configuration\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert any("'debug_port'" in each_issue for each_issue in issues), (
+        f"Field set only by constructor keyword and read nowhere must be flagged, got: {issues}"
+    )
+    assert not any(
+        "'portal_url'" in each_issue or "'timeout_seconds'" in each_issue for each_issue in issues
+    ), f"Fields read through the config instance must not be flagged, got: {issues}"
+
+
+def test_qualified_config_constructor_keyword_does_not_clear_field(
+    neutral_root: Path,
+) -> None:
+    """A qualified ``module.ThemeUpdateConfig(field=value)`` keyword is a write, not a read.
+
+    The constructor callee may be a qualified attribute (``config_module.ThemeUpdateConfig``)
+    rather than a bare name. Its keyword still writes the field, so a field set only
+    this way and read through no config instance is flagged dead.
+    """
+    consumer_body = (
+        "import os_update_workflow.config as config_module\n"
+        "\n"
+        "def build() -> config_module.ThemeUpdateConfig:\n"
+        "    configuration = config_module.ThemeUpdateConfig(\n"
+        "        portal_url='x', debug_port=1, timeout_seconds=99\n"
+        "    )\n"
+        "    print(configuration.portal_url)\n"
+        "    print(configuration.timeout_seconds)\n"
+        "    return configuration\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert any("'debug_port'" in each_issue for each_issue in issues), (
+        f"A qualified config constructor keyword is a write, so debug_port is flagged, got: {issues}"
+    )
+
+
+def test_does_not_flag_field_set_by_constructor_keyword_and_read_elsewhere(
+    neutral_root: Path,
+) -> None:
+    """A field set by a constructor keyword AND read via attribute elsewhere is live.
+
+    The constructor keyword does not clear the field, but a genuine attribute read
+    of the same field in another module does, so the field is not flagged.
+    """
+    builder_body = (
         "from os_update_workflow.config import ThemeUpdateConfig\n"
         "\n"
         "def build() -> ThemeUpdateConfig:\n"
         "    return ThemeUpdateConfig(portal_url='x', debug_port=1, timeout_seconds=99)\n"
     )
     config_path = _build_config_package(
-        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, builder_body
     )
+    reader_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def connect(configuration: ThemeUpdateConfig) -> int:\n"
+        "    return configuration.debug_port\n"
+    )
+    (config_path.parent.parent / "reader.py").write_text(reader_body, encoding="utf-8")
     issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert not any("'debug_port'" in each_issue for each_issue in issues), (
+        f"An attribute read in another module keeps debug_port live, got: {issues}"
+    )
+
+
+def test_flags_field_set_by_default_and_constructor_keyword_only(
+    neutral_root: Path,
+) -> None:
+    """The PR #317 dead-config shape: field set by config default + constructor keyword only.
+
+    ``AppInfoConfig.sound_upload_max_attempts: int = submission_timing.sound_upload_max_attempts``
+    sets the field from a same-named attribute on another object inside the config
+    body, and the orchestrator sets ``sound_upload_timeout_ms`` by a constructor
+    keyword. Neither field is read through any config instance. The default-value
+    read inside the config body and the constructor keyword are both writes, so
+    both fields are flagged dead.
+
+    Residual limitation: when a consumer module's constructor VALUE expression
+    itself reads a same-named attribute on a different object
+    (``AppInfoConfig(field=other.field)``), the object-blind attribute-read
+    collector counts ``field`` as read and the field escapes. This test keeps the
+    constructor value a literal so the keyword-write and default-write exclusions
+    are exercised without that foreign-attribute leak.
+    """
+    config_body = (
+        "from dataclasses import dataclass\n"
+        "import submission_timing_module as submission_timing\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class AppInfoConfig:\n"
+        "    sound_upload_timeout_ms: int = submission_timing.sound_upload_timeout_ms\n"
+        "    sound_upload_max_attempts: int = submission_timing.sound_upload_max_attempts\n"
+    )
+    workflow_directory = neutral_root / "workflow"
+    config_package = workflow_directory / "os_update_workflow"
+    config_package.mkdir(parents=True)
+    (config_package / "__init__.py").write_text("", encoding="utf-8")
+    config_path = config_package / "config.py"
+    config_path.write_text(config_body, encoding="utf-8")
+    orchestrator_body = (
+        "from os_update_workflow.config import AppInfoConfig\n"
+        "\n"
+        "def build() -> AppInfoConfig:\n"
+        "    config = AppInfoConfig(sound_upload_timeout_ms=60000)\n"
+        "    return config\n"
+    )
+    (workflow_directory / "orchestrator.py").write_text(orchestrator_body, encoding="utf-8")
+    issues = _check(config_body, str(config_path))
+    assert any("'sound_upload_timeout_ms'" in each_issue for each_issue in issues), (
+        f"Field set by constructor keyword and read nowhere must be flagged, got: {issues}"
+    )
+    assert any("'sound_upload_max_attempts'" in each_issue for each_issue in issues), (
+        f"Field set by config default only and read nowhere must be flagged, got: {issues}"
+    )
+
+
+def test_does_not_flag_config_default_field_read_through_instance(
+    neutral_root: Path,
+) -> None:
+    """A field whose default reads a foreign attribute but is read through the instance is live.
+
+    The default-value exclusion only drops the self-referential read inside the
+    config body; a genuine ``config.sound_upload_timeout_ms`` read in production
+    keeps the field live.
+    """
+    config_body = (
+        "from dataclasses import dataclass\n"
+        "import submission_timing_module as submission_timing\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class AppInfoConfig:\n"
+        "    sound_upload_timeout_ms: int = submission_timing.sound_upload_timeout_ms\n"
+    )
+    workflow_directory = neutral_root / "workflow"
+    config_package = workflow_directory / "os_update_workflow"
+    config_package.mkdir(parents=True)
+    (config_package / "__init__.py").write_text("", encoding="utf-8")
+    config_path = config_package / "config.py"
+    config_path.write_text(config_body, encoding="utf-8")
+    processor_body = (
+        "from os_update_workflow.config import AppInfoConfig\n"
+        "\n"
+        "def wait(config: AppInfoConfig) -> int:\n"
+        "    return config.sound_upload_timeout_ms\n"
+    )
+    (workflow_directory / "processor.py").write_text(processor_body, encoding="utf-8")
+    issues = _check(config_body, str(config_path))
     assert issues == [], (
-        f"Constructor keyword arguments name every field, so none may be flagged, got: {issues}"
+        f"A genuine config-instance read keeps the field live, got: {issues}"
+    )
+
+
+def test_config_default_sourcing_differently_named_field_keeps_it_live(
+    neutral_root: Path,
+) -> None:
+    """A default that sources a DIFFERENTLY-named field on another config keeps it live.
+
+    ``AppConfig.timeout_ms: int = DEFAULT_TIMING.base_timeout`` reads
+    ``base_timeout`` on another config object inside the class body. The
+    default-value exclusion drops only the self-referential read whose attribute
+    name equals the field being defined; a differently-named attribute read is a
+    genuine consumer of ``base_timeout``, so it stays live and is not flagged.
+    """
+    config_body = (
+        "from dataclasses import dataclass\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class TimingConfig:\n"
+        "    base_timeout: int\n"
+        "    poll_interval: int\n"
+        "\n"
+        "DEFAULT_TIMING = TimingConfig(base_timeout=30, poll_interval=5)\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class AppConfig:\n"
+        "    timeout_ms: int = DEFAULT_TIMING.base_timeout\n"
+        "    poll_interval: int = DEFAULT_TIMING.poll_interval\n"
+    )
+    workflow_directory = neutral_root / "workflow"
+    config_package = workflow_directory / "os_update_workflow"
+    config_package.mkdir(parents=True)
+    (config_package / "__init__.py").write_text("", encoding="utf-8")
+    config_path = config_package / "config.py"
+    config_path.write_text(config_body, encoding="utf-8")
+    consumer_body = (
+        "from os_update_workflow.config import AppConfig\n"
+        "\n"
+        "def run(app_config: AppConfig) -> int:\n"
+        "    return app_config.timeout_ms + app_config.poll_interval\n"
+    )
+    (workflow_directory / "runner.py").write_text(consumer_body, encoding="utf-8")
+    issues = _check(config_body, str(config_path))
+    assert not any("'base_timeout'" in each_issue for each_issue in issues), (
+        f"A default sourcing a differently-named field must keep it live, got: {issues}"
+    )
+    assert not any("'poll_interval'" in each_issue for each_issue in issues), (
+        f"poll_interval is read both in the default and the consumer, got: {issues}"
+    )
+
+
+def test_self_referential_default_still_excludes_only_the_self_read(
+    neutral_root: Path,
+) -> None:
+    """The self-referential default read is still excluded after narrowing.
+
+    ``sound_upload_timeout_ms: int = submission_timing.sound_upload_timeout_ms``
+    reads an attribute whose name equals the field being defined, so it is still
+    excluded; when that field is read by no module it stays flagged dead.
+    """
+    config_body = (
+        "from dataclasses import dataclass\n"
+        "import submission_timing_module as submission_timing\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class AppInfoConfig:\n"
+        "    sound_upload_timeout_ms: int = submission_timing.sound_upload_timeout_ms\n"
+    )
+    workflow_directory = neutral_root / "workflow"
+    config_package = workflow_directory / "os_update_workflow"
+    config_package.mkdir(parents=True)
+    (config_package / "__init__.py").write_text("", encoding="utf-8")
+    config_path = config_package / "config.py"
+    config_path.write_text(config_body, encoding="utf-8")
+    (workflow_directory / "runner.py").write_text(
+        "def noop() -> None:\n    pass\n", encoding="utf-8"
+    )
+    issues = _check(config_body, str(config_path))
+    assert any("'sound_upload_timeout_ms'" in each_issue for each_issue in issues), (
+        f"Self-referential default read is excluded, so the field stays flagged, got: {issues}"
     )
 
 
@@ -413,6 +654,98 @@ def test_dataclasses_qualified_replace_call_suppresses_so_no_field_flagged(
     issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
     assert issues == [], (
         f"dataclasses.replace reads every field at once, so none may be flagged, got: {issues}"
+    )
+
+
+def test_aliased_replace_read_keeps_field_live_despite_constructor_keyword(
+    neutral_root: Path,
+) -> None:
+    """An aliased ``replace`` keyword read survives a same-module constructor keyword.
+
+    A module constructs ``ThemeUpdateConfig(debug_port=1)`` (a write) and also reads
+    the field through an aliased ``dataclasses.replace`` —
+    ``from dataclasses import replace as rep; rep(cfg, debug_port=2)``. The alias is
+    not the bare ``replace`` name, so the whole-instance reflective suppression does
+    not fire and the ``rep`` keyword stays a genuine field read. The constructor
+    keyword exclusion is scoped per-call, so the constructor's ``debug_port`` keyword
+    does not strip the ``rep`` keyword read and the field stays live.
+    """
+    consumer_body = (
+        "from dataclasses import replace as rep\n"
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def build_then_repoint() -> ThemeUpdateConfig:\n"
+        "    configuration = ThemeUpdateConfig(portal_url='x', debug_port=1, timeout_seconds=99)\n"
+        "    return rep(configuration, debug_port=2)\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert not any("'debug_port'" in each_issue for each_issue in issues), (
+        f"Aliased replace keyword read must keep debug_port live despite a"
+        f" same-module constructor keyword, got: {issues}"
+    )
+
+
+def test_factory_function_ending_in_config_keeps_field_live(
+    neutral_root: Path,
+) -> None:
+    """A keyword to a factory FUNCTION ending in ``Config`` is a read, not a write.
+
+    ``getThemeConfig(debug_port=1)`` calls a factory function, not a ``*Config``
+    dataclass constructor. The keyword passes a value into the function, so it
+    counts as a field read. The constructor-keyword exclusion fires only for a
+    callee that names a known ``*Config`` dataclass defined under the scan root, so
+    a factory function whose name merely ends in ``Config`` does not strip the
+    field.
+    """
+    consumer_body = (
+        "from os_update_workflow.config import ThemeUpdateConfig\n"
+        "\n"
+        "def getThemeConfig(portal_url: str, debug_port: int) -> ThemeUpdateConfig:\n"
+        "    return ThemeUpdateConfig(\n"
+        "        portal_url=portal_url, debug_port=debug_port, timeout_seconds=30\n"
+        "    )\n"
+        "\n"
+        "def run() -> ThemeUpdateConfig:\n"
+        "    print('x')\n"
+        "    return getThemeConfig(portal_url='x', debug_port=1)\n"
+    )
+    config_path = _build_config_package(
+        neutral_root / "workflow", THEME_UPDATE_CONFIG_BODY, consumer_body
+    )
+    issues = _check(THEME_UPDATE_CONFIG_BODY, str(config_path))
+    assert not any("'debug_port'" in each_issue for each_issue in issues), (
+        f"A keyword passed to a factory function ending in Config must keep the"
+        f" field live, got: {issues}"
+    )
+
+
+def test_dead_config_field_module_has_no_collection_parameter_naming_violation() -> None:
+    """The hook module's own source must pass the collection-parameter naming check.
+
+    The cross-module dead-config-field check passes a ``set[str]`` of config class
+    names through several helpers; every such collection parameter must carry the
+    ``all_`` prefix (CODE_RULES §5). Run the real collection-prefix check over this
+    module's on-disk source so a regression that drops the prefix fails here.
+    """
+    collection_naming_path = (
+        Path(__file__).resolve().parent / "code_rules_naming_collection.py"
+    )
+    naming_specification = importlib.util.spec_from_file_location(
+        "code_rules_naming_collection", collection_naming_path
+    )
+    assert naming_specification is not None and naming_specification.loader is not None
+    code_rules_naming_collection = importlib.util.module_from_spec(naming_specification)
+    naming_specification.loader.exec_module(code_rules_naming_collection)
+    module_path = Path(__file__).resolve().parent / "code_rules_dead_config_field.py"
+    module_source = module_path.read_text(encoding="utf-8")
+    issues = code_rules_naming_collection.check_collection_prefix(
+        module_source, str(module_path)
+    )
+    assert not any("Collection parameter" in each_issue for each_issue in issues), (
+        f"dead-config-field module has a collection-parameter naming violation: {issues}"
     )
 
 
