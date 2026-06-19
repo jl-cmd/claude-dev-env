@@ -23,4 +23,4 @@ Importable Python constants module for the `pr-converge` skill. Script-specific 
 ## Conventions
 
 - All path templates use `str.format(**kwargs)` with keys `owner`, `repo`, `number`.
-- `scripts/pr_converge_scripts_constants/pr_converge_constants.py` re-exports everything here via `from pr_converge_skill_constants.constants import ...` so scripts can import from either location.
+- `packages/claude-dev-env/skills/pr-converge/scripts/pr_converge_scripts_constants/pr_converge_constants.py` re-exports everything here via `from pr_converge_skill_constants.constants import ...` so scripts can import from either location.

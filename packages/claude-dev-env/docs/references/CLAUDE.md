@@ -10,4 +10,4 @@ Pointer documents to external sources and standard terminology. Files here are l
 
 ## Role
 
-Each file names an external concept, gives a one-line definition, and links a direct source. They back the rule text in `rules/` and `docs/CODE_RULES.md` without embedding full third-party content inline.
+Each file names an external concept, gives a one-line definition, and links a direct source. They back the rule text in `rules/` and `packages/claude-dev-env/docs/CODE_RULES.md` without embedding full third-party content inline.

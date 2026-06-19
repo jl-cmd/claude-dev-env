@@ -4,7 +4,7 @@ Designs fresh HTML artifacts and publishes them as secret GitHub gists with a sh
 
 ## Purpose
 
-The skill ships transport, not templates. For each request the model designs a fresh HTML artifact suited to the work, marks it with `<!-- @publish-as-gist -->`, and writes it to disk. A PostToolUse hook (`hooks/workflow/doc_gist_auto_publish.py`) spots the marker, runs `scripts/gist_upload.py`, and prints the gist and htmlpreview URLs into the tool output for the user to click.
+The skill ships transport, not templates. For each request the model designs a fresh HTML artifact suited to the work, marks it with `<!-- @publish-as-gist -->`, and writes it to disk. A PostToolUse hook (`hooks/workflow/doc_gist_auto_publish.py`) spots the marker, runs `packages/claude-dev-env/skills/doc-gist/scripts/gist_upload.py`, and prints the gist and htmlpreview URLs into the tool output for the user to click.
 
 ## Key files
 

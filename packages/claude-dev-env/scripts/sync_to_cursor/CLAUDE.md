@@ -1,6 +1,6 @@
 # sync_to_cursor
 
-Python package that syncs Claude rules and docs to Cursor `.mdc` files. Entry point is `scripts/sync_to_cursor.py`; this package holds the implementation modules.
+Python package that syncs Claude rules and docs to Cursor `.mdc` files. Entry point is `packages/claude-dev-env/scripts/sync_to_cursor.py`; this package holds the implementation modules.
 
 ## Modules
 
@@ -20,4 +20,4 @@ Python package that syncs Claude rules and docs to Cursor `.mdc` files. Entry po
 
 ## Tests
 
-Tests live in `scripts/tests/test_sync_to_cursor.py`.
+Tests live in `packages/claude-dev-env/scripts/tests/test_sync_to_cursor.py`.

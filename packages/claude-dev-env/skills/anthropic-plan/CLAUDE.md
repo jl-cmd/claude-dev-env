@@ -19,7 +19,7 @@ Creates a repo-local plan packet under `docs/plans/<slug>/` by running the `plan
 | `SKILL.md` | Entry point. Full planning protocol, workflow contract, packet shape, and validation rules. |
 | `workflow/plan-packet.mjs` | Main workflow script. Reads repo context, writes the packet, runs the validator, spawns `plan-packet-validator`, runs the reuse audit, builds the visual HTML, and returns the packet path. |
 | `workflow/plan-packet.contract.test.mjs` | Contract tests for the workflow script. |
-| `scripts/validate_packet.py` | Deterministic validator: checks required files, open questions, source-map strength, TDD coverage, and `packet.json` consistency. Exits with code 2 on failure. |
+| `packages/claude-dev-env/skills/anthropic-plan/scripts/validate_packet.py` | Deterministic validator: checks required files, open questions, source-map strength, TDD coverage, and `packet.json` consistency. Exits with code 2 on failure. |
 | `templates/visual-plan.template.html` | Template for the single-file offline visual HTML the workflow builds after validation. |
 
 ## Entry point

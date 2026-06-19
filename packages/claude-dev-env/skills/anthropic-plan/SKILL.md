@@ -41,7 +41,7 @@ The workflow handles the full planning loop:
 2. Read project instructions, rules, relevant skills, manifests, docs, tests, hooks, agents, commands, configs, and workflows.
 3. Build a source inventory and extract source facts into `context/source-map.md`.
 4. Write the packet under `docs/plans/<slug>/`.
-5. Run `scripts/validate_packet.py`.
+5. Run `packages/claude-dev-env/skills/anthropic-plan/scripts/validate_packet.py`.
 6. Spawn `plan-packet-validator` in fresh context.
 7. Repair packet findings up to the workflow cap.
 8. Run the reuse audit: search the codebase for existing equivalents of each new file/symbol the packet introduces, write `validation/reuse-audit.md`, and gate approval on any unjustified reproduction.
