@@ -203,14 +203,17 @@ def check_file_global_constants_use_count(content: str, file_path: str) -> list[
     """Flag module-level UPPER_SNAKE constants referenced by only one function/method.
 
     Enforces the file-global-constants use-count rule: a constant used by just
-    one caller belongs in that caller's scope. Test files, config files, and
-    non-Python files are exempt. Constants with zero references are out of
-    scope. The enforcer entry module (``hooks/blocking/code_rules_enforcer.py``)
-    is exempt to avoid self-blocking.
+    one caller belongs in that caller's scope. Test files, config files,
+    workflow-registry files, and non-Python files are exempt. Constants with
+    zero references are out of scope. The enforcer entry module
+    (``hooks/blocking/code_rules_enforcer.py``) is exempt to avoid
+    self-blocking.
     """
     if is_test_file(file_path):
         return []
     if is_config_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path):
         return []
     if get_file_extension(file_path) not in ALL_PYTHON_EXTENSIONS:
         return []
