@@ -9,6 +9,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `agent-spawn-protocol.md` | Protocol for spawning subagents: context sufficiency check, prompt generation via `/prompt-generator`, then spawn |
 | `ask-user-question-required.md` | Every user-directed question goes through the `AskUserQuestion` tool — no plain-text questions |
 | `bdd.md` | BDD discovery-driven development workflow and Example Mapping reference |
+| `claude-md-orphan-file.md` | Every backticked bare filename in a per-directory `CLAUDE.md` table's first column names a file in that directory's subtree |
 | `cleanup-temp-files.md` | Remove temporary files created during a task when the task is complete |
 | `code-reviews.md` | Mandatory protocol for responding to GitHub PR review feedback |
 | `code-standards.md` | Pointer to `CODE_RULES.md` as the single source of truth |

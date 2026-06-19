@@ -147,6 +147,7 @@ Full rule including the decision table, examples, and reference-counting details
   - Debug output files, log dumps, and intermediate data exports (e.g. `*.log` outside `logs/`, `output_*.txt`, `dump_*.json`).
   - Helper files created to work around a tool limitation that the PR did not explicitly call out.
   - Any file the PR description does not reference and that a reviewer cannot trace to one of the listed changes.
+- In a per-directory `CLAUDE.md`, every backticked bare filename in a markdown table's first column names a file that exists in the directory subtree the `CLAUDE.md` describes (the directory, its subdirectories, or its siblings under the parent). A first-column cell naming a file that exists nowhere under that scan root points the reader at something that is not there — drop the row or correct the cell to name an existing file. Cells that hold a path, a subdirectory ending in `/`, or a slash-command are out of scope, as is a table whose content names an explicit relative-path source (a `../` token).
 
 ### Scope of review
 
@@ -182,3 +183,4 @@ The table lists **where the rule is encoded** (the script or module that impleme
 | Thin wrapper modules (imports only, optionally with `__all__`, outside `__init__.py`) | `code_rules_enforcer.py::check_thin_wrapper_files` (Python) |
 | Zero-payload function aliases (body is only `return sibling(params...)` forwarding its own params unchanged, same module, no decorator/default/async mismatch, outside test/config) | `code_rules_enforcer.py::check_zero_payload_function_alias` (Python) |
 | Public functions missing Google-style `Args:` / `Returns:` / `Raises:` when warranted | `code_rules_enforcer.py::check_docstring_format` (Python) |
+| Per-directory `CLAUDE.md` table first-column cell naming a backticked bare filename absent from the directory subtree | `claude_md_orphan_file_blocker.py` (PreToolUse Write\|Edit\|MultiEdit) |
