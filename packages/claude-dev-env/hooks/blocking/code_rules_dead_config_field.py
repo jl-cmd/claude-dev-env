@@ -27,10 +27,14 @@ The scan is deliberately conservative to keep false positives near zero:
   of a known ``*Config`` dataclass defined under the scan root
   (``ThemeUpdateConfig(debug_port=1)``, excluded per keyword node so a same-named
   keyword on a ``replace`` call stays a read, and a factory function whose name
-  merely ends in ``"Config"`` is not excluded), and an attribute read inside a
-  ``*Config`` field's own default-value expression in the class body
+  merely ends in ``"Config"`` is not excluded), and a self-referential attribute
+  read inside a ``*Config`` field's own default-value expression in the class body
+  whose attribute name equals the field being defined
   (``debug_port: int = source.debug_port``) — a field written only these ways and
-  read by no module is the dead-config case this check exists to catch. Plain
+  read by no module is the dead-config case this check exists to catch. A default
+  that sources a differently-named field on another object
+  (``timeout_ms: int = other_config.base_timeout``) leaves that read counted, so
+  ``base_timeout`` stays a live consumer. Plain
   ``ast.Name`` references are excluded — a local variable named ``debug_port`` is
   not a read of ``config.debug_port``.
 - A production module that reflectively reads a whole instance — a bare or
@@ -228,21 +232,54 @@ def _config_constructor_keyword_node_ids(
     return constructor_keyword_node_ids
 
 
+def _self_referential_default_attribute_node_ids(
+    field_name: str, default_value: ast.expr
+) -> set[int]:
+    """Return ids of attribute reads in a default whose name equals the field.
+
+    Walks a ``*Config`` field's default-value expression and collects the ``id()``
+    of each ``ast.Attribute`` read whose ``.attr`` equals ``field_name``. Such a
+    read — ``sound_upload_timeout_ms: int = submission_timing.sound_upload_timeout_ms``
+    — names the field being defined inside the class body, so it is not a consumer
+    of the field. An attribute read of a differently-named field
+    (``timeout_ms: int = other_config.base_timeout``) is a genuine consumer and is
+    left out of the returned set.
+
+    Args:
+        field_name: The name of the field being defined.
+        default_value: The default-value expression of that field.
+
+    Returns:
+        The ``id()`` of every self-referential attribute read inside the
+        default-value expression.
+    """
+    self_referential_node_ids: set[int] = set()
+    for each_inner_node in ast.walk(default_value):
+        if isinstance(each_inner_node, ast.Attribute) and each_inner_node.attr == field_name:
+            self_referential_node_ids.add(id(each_inner_node))
+    return self_referential_node_ids
+
+
 def _config_field_default_value_nodes(tree: ast.Module) -> set[int]:
-    """Return ids of AST nodes inside a ``*Config`` dataclass field default value.
+    """Return ids of self-referential attribute reads in ``*Config`` field defaults.
 
     A field default such as ``sound_upload_timeout_ms: int =``
     ``submission_timing.sound_upload_timeout_ms`` is an attribute read whose name
     matches the field being defined. That self-referential read inside the config
-    class body is not a consumer of the field, so its nodes are collected here for
-    the caller to exclude from the attribute-read set.
+    class body is not a consumer of the field, so its node id is collected here for
+    the caller to exclude from the attribute-read set. Only the attribute read
+    whose ``.attr`` equals the field name is collected; a default that sources a
+    differently-named field on another object
+    (``timeout_ms: int = other_config.base_timeout``) leaves that read counted, so
+    ``base_timeout`` stays a live consumer.
 
     Args:
         tree: The parsed module to inspect.
 
     Returns:
-        The ``id()`` of every AST node within the default-value expression of a
-        field declared in a ``*Config`` dataclass body.
+        The ``id()`` of every self-referential attribute read within the
+        default-value expression of a field declared in a ``*Config`` dataclass
+        body.
     """
     default_value_node_ids: set[int] = set()
     for each_node in ast.walk(tree):
@@ -253,15 +290,18 @@ def _config_field_default_value_nodes(tree: ast.Module) -> set[int]:
                 continue
             if each_statement.value is None:
                 continue
-            for each_inner_node in ast.walk(each_statement.value):
-                default_value_node_ids.add(id(each_inner_node))
+            if not isinstance(each_statement.target, ast.Name):
+                continue
+            default_value_node_ids |= _self_referential_default_attribute_node_ids(
+                each_statement.target.id, each_statement.value
+            )
     return default_value_node_ids
 
 
-def _attribute_read_names_in_source(
-    source: str, all_known_config_class_names: set[str]
+def _attribute_read_names_in_tree(
+    tree: ast.Module, all_known_config_class_names: set[str]
 ) -> tuple[set[str], bool]:
-    """Return attribute names read in a module's source and a suppression flag.
+    """Return attribute names read in a parsed module and a suppression flag.
 
     Collects attribute names via five mechanisms: ``ast.Attribute.attr`` values
     in Load context, augmented-assignment targets (so ``cfg.debug_port += 1``
@@ -273,8 +313,9 @@ def _attribute_read_names_in_source(
     excluded because they name a field without consuming it: a keyword that writes
     a field in a known ``*Config`` constructor (``AppInfoConfig(field=value)``,
     excluded per keyword node so a same-named ``replace`` keyword stays a read),
-    and an attribute read inside a ``*Config`` dataclass field's own default-value
-    expression (``field: int = source.field`` in the class body) — counting either
+    and a self-referential attribute read inside a ``*Config`` dataclass field's
+    own default-value expression (``field: int = source.field`` in the class body,
+    excluded only when the read name equals the field name) — counting either
     would hide a field that is written but read by no module. A keyword passed to a
     factory function whose name merely ends in ``"Config"`` is not a known config
     constructor, so it stays a read. The boolean reports whether the module
@@ -283,10 +324,10 @@ def _attribute_read_names_in_source(
     ``asdict``/``astuple``/``fields``/``replace``/``vars`` call, or an
     ``obj.__dict__`` read — because that pattern reads every field at once without
     naming any single field, so the caller treats it as "cannot prove any field
-    dead". A ``SyntaxError`` contributes no names and no suppression.
+    dead".
 
     Args:
-        source: The full text of a ``.py`` module.
+        tree: The parsed module to inspect.
         all_known_config_class_names: Names of ``*Config`` dataclasses defined under
             the scan root, used to scope the constructor-keyword exclusion to
             genuine config constructors.
@@ -294,49 +335,34 @@ def _attribute_read_names_in_source(
     Returns:
         A (read_names, suppresses_dead_field_check) pair. The name set is every
         attribute name the module reads via the mechanisms above, excluding known
-        ``*Config`` constructor keyword nodes and config-field default-value
-        attribute reads; suppresses_dead_field_check is True only when a reflective
-        whole-instance read is present.
+        ``*Config`` constructor keyword nodes and self-referential config-field
+        default-value attribute reads; suppresses_dead_field_check is True only when
+        a reflective whole-instance read is present.
     """
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return set(), False
     all_read_names: set[str] = _augmented_assignment_attribute_names(tree)
     config_constructor_keyword_node_ids = _config_constructor_keyword_node_ids(
         tree, all_known_config_class_names
     )
     config_field_default_node_ids = _config_field_default_value_nodes(tree)
     for each_node in ast.walk(tree):
-        if isinstance(each_node, ast.Attribute) and isinstance(each_node.ctx, ast.Load):
-            if id(each_node) not in config_field_default_node_ids:
-                all_read_names.add(each_node.attr)
+        if (
+            isinstance(each_node, ast.Attribute)
+            and isinstance(each_node.ctx, ast.Load)
+            and id(each_node) not in config_field_default_node_ids
+        ):
+            all_read_names.add(each_node.attr)
         elif isinstance(each_node, ast.Constant) and isinstance(each_node.value, str):
             all_read_names.add(each_node.value)
         elif isinstance(each_node, ast.MatchClass):
             all_read_names.update(each_node.kwd_attrs)
-        elif isinstance(each_node, ast.keyword) and each_node.arg is not None:
-            if id(each_node) not in config_constructor_keyword_node_ids:
-                all_read_names.add(each_node.arg)
+        elif (
+            isinstance(each_node, ast.keyword)
+            and each_node.arg is not None
+            and id(each_node) not in config_constructor_keyword_node_ids
+        ):
+            all_read_names.add(each_node.arg)
     suppresses_dead_field_check = _reads_whole_instance_reflectively(tree)
     return all_read_names, suppresses_dead_field_check
-
-
-def _config_dataclass_names_in_source(source: str) -> set[str]:
-    """Return names of ``*Config`` dataclasses defined in a module's source.
-
-    Args:
-        source: The full text of a ``.py`` module.
-
-    Returns:
-        Every ``*Config`` dataclass name the module defines, or an empty set when
-        the source does not parse.
-    """
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return set()
-    return _config_dataclass_names(tree)
 
 
 def _iter_production_module_sources(
@@ -389,16 +415,18 @@ def _all_production_read_names_under_root(
 ) -> tuple[set[str], bool, bool]:
     """Return read names, a cap-hit flag, and a suppression flag for the tree.
 
-    Scans every production ``.py`` module under ``scan_root`` (excluding test and
-    migration files) for attribute reads. A first pass over the same modules
-    gathers every ``*Config`` dataclass name defined under the root so the
-    constructor-keyword exclusion fires only for a genuine config constructor; the
-    written module's post-edit content replaces its on-disk text so the current
-    edit is included in both passes. Scanning stops at the configured file cap. A
-    module that reflectively reads a whole instance — a bare or
-    ``dataclasses``-qualified ``asdict``/``astuple``/``fields``/``replace``/
-    ``vars`` call, or an ``obj.__dict__`` read — sets the suppression flag,
-    signalling the caller that no field can be proven dead.
+    Reads and AST-parses every production ``.py`` module under ``scan_root``
+    (excluding test and migration files) at most once: the module sources are
+    materialized once, a first pass over the cached sources gathers every
+    ``*Config`` dataclass name defined under the root so the constructor-keyword
+    exclusion fires only for a genuine config constructor, and a second pass over
+    the same cached sources collects attribute reads. The written module's
+    post-edit content replaces its on-disk text so the current edit is included.
+    Scanning stops at the configured file cap. A module that reflectively reads a
+    whole instance — a bare or ``dataclasses``-qualified
+    ``asdict``/``astuple``/``fields``/``replace``/``vars`` call, or an
+    ``obj.__dict__`` read — sets the suppression flag, signalling the caller that
+    no field can be proven dead.
 
     Args:
         scan_root: The directory tree to scan.
@@ -412,22 +440,27 @@ def _all_production_read_names_under_root(
         cap before finishing the tree; suppresses_dead_field_check is True when
         any scanned module reflectively reads a whole instance.
     """
-    all_known_config_class_names: set[str] = set()
-    for each_source in _iter_production_module_sources(
-        scan_root, written_path, written_content
-    ):
+    all_module_sources = list(
+        _iter_production_module_sources(scan_root, written_path, written_content)
+    )
+    if None in all_module_sources:
+        return set(), True, False
+    all_production_trees: list[ast.Module] = []
+    for each_source in all_module_sources:
         if each_source is None:
-            return set(), True, False
-        all_known_config_class_names |= _config_dataclass_names_in_source(each_source)
+            continue
+        try:
+            all_production_trees.append(ast.parse(each_source))
+        except SyntaxError:
+            continue
+    all_known_config_class_names: set[str] = set()
+    for each_tree in all_production_trees:
+        all_known_config_class_names |= _config_dataclass_names(each_tree)
     all_read_names: set[str] = set()
     suppresses_dead_field_check = False
-    for each_source in _iter_production_module_sources(
-        scan_root, written_path, written_content
-    ):
-        if each_source is None:
-            return all_read_names, True, suppresses_dead_field_check
-        module_read_names, module_suppresses_dead_field_check = _attribute_read_names_in_source(
-            each_source, all_known_config_class_names
+    for each_tree in all_production_trees:
+        module_read_names, module_suppresses_dead_field_check = _attribute_read_names_in_tree(
+            each_tree, all_known_config_class_names
         )
         all_read_names |= module_read_names
         suppresses_dead_field_check = (

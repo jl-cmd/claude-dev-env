@@ -400,6 +400,86 @@ def test_does_not_flag_config_default_field_read_through_instance(
     )
 
 
+def test_config_default_sourcing_differently_named_field_keeps_it_live(
+    neutral_root: Path,
+) -> None:
+    """A default that sources a DIFFERENTLY-named field on another config keeps it live.
+
+    ``AppConfig.timeout_ms: int = DEFAULT_TIMING.base_timeout`` reads
+    ``base_timeout`` on another config object inside the class body. The
+    default-value exclusion drops only the self-referential read whose attribute
+    name equals the field being defined; a differently-named attribute read is a
+    genuine consumer of ``base_timeout``, so it stays live and is not flagged.
+    """
+    config_body = (
+        "from dataclasses import dataclass\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class TimingConfig:\n"
+        "    base_timeout: int\n"
+        "    poll_interval: int\n"
+        "\n"
+        "DEFAULT_TIMING = TimingConfig(base_timeout=30, poll_interval=5)\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class AppConfig:\n"
+        "    timeout_ms: int = DEFAULT_TIMING.base_timeout\n"
+        "    poll_interval: int = DEFAULT_TIMING.poll_interval\n"
+    )
+    workflow_directory = neutral_root / "workflow"
+    config_package = workflow_directory / "os_update_workflow"
+    config_package.mkdir(parents=True)
+    (config_package / "__init__.py").write_text("", encoding="utf-8")
+    config_path = config_package / "config.py"
+    config_path.write_text(config_body, encoding="utf-8")
+    consumer_body = (
+        "from os_update_workflow.config import AppConfig\n"
+        "\n"
+        "def run(app_config: AppConfig) -> int:\n"
+        "    return app_config.timeout_ms + app_config.poll_interval\n"
+    )
+    (workflow_directory / "runner.py").write_text(consumer_body, encoding="utf-8")
+    issues = _check(config_body, str(config_path))
+    assert not any("'base_timeout'" in each_issue for each_issue in issues), (
+        f"A default sourcing a differently-named field must keep it live, got: {issues}"
+    )
+    assert not any("'poll_interval'" in each_issue for each_issue in issues), (
+        f"poll_interval is read both in the default and the consumer, got: {issues}"
+    )
+
+
+def test_self_referential_default_still_excludes_only_the_self_read(
+    neutral_root: Path,
+) -> None:
+    """The self-referential default read is still excluded after narrowing.
+
+    ``sound_upload_timeout_ms: int = submission_timing.sound_upload_timeout_ms``
+    reads an attribute whose name equals the field being defined, so it is still
+    excluded; when that field is read by no module it stays flagged dead.
+    """
+    config_body = (
+        "from dataclasses import dataclass\n"
+        "import submission_timing_module as submission_timing\n"
+        "\n"
+        "@dataclass(frozen=True)\n"
+        "class AppInfoConfig:\n"
+        "    sound_upload_timeout_ms: int = submission_timing.sound_upload_timeout_ms\n"
+    )
+    workflow_directory = neutral_root / "workflow"
+    config_package = workflow_directory / "os_update_workflow"
+    config_package.mkdir(parents=True)
+    (config_package / "__init__.py").write_text("", encoding="utf-8")
+    config_path = config_package / "config.py"
+    config_path.write_text(config_body, encoding="utf-8")
+    (workflow_directory / "runner.py").write_text(
+        "def noop() -> None:\n    pass\n", encoding="utf-8"
+    )
+    issues = _check(config_body, str(config_path))
+    assert any("'sound_upload_timeout_ms'" in each_issue for each_issue in issues), (
+        f"Self-referential default read is excluded, so the field stays flagged, got: {issues}"
+    )
+
+
 def test_returns_empty_list_at_file_cap(
     neutral_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
