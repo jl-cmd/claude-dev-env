@@ -27,6 +27,14 @@ When making code changes, make sure you are working in the proper worktree path 
 
 `Edit` changes existing files; `Write` creates new ones. Default to `Edit` — reach for `Write` only for a genuinely new path. For a true full rewrite, delete the file first, then `Write`.
 
+## Showing Files: Open Them, Don't Print the Path
+
+When I ask you to "show me", "open", "display", "let me see", or "pull up" a file — an image, PDF, HTML page, document, anything — open it on my screen. Launch the viewer so each image window matches the asset's size:
+
+`Start-Process pwsh -WindowStyle Hidden -ArgumentList '-NoProfile','-File',"$HOME\.claude\scripts\Show-Asset.ps1",'<path 1>','<path 2>'`
+
+It sizes each image window to the image (scaled down to fit the screen) and opens non-image files in their default app; pass every path I name. Printing a path or attaching the file is not showing it — do that only when the file truly cannot be opened, and say why.
+
 ## Test Philosophy
 
 When writing tests, always write tests that actually test the behavior of the function against actual, real data and environments.
