@@ -14,6 +14,7 @@ export const meta = {
   description: 'Drive one draft PR to convergence in a single autonomous run: parallel Bugbot + code-review + bug-audit lenses on the same HEAD each round, dedup findings, fix once, re-verify, then a Copilot wait-gate and a final convergence check that marks the PR ready.',
   whenToUse: 'Launched by the /autoconverge skill after it resolves PR scope, enters a worktree, and grants project .claude permissions.',
   phases: [
+    { title: 'Reuse', detail: 'Before convergence, one reuse lens scans the full diff for reuse improvements that are certain, behaviorally identical, and autonomously implementable, and applies the qualifying ones in one commit' },
     { title: 'Converge', detail: 'Bugbot + code-review + bug-audit in parallel each round; one clean-coder applies all fixes; loop until all three are clean on a stable HEAD' },
     { title: 'Copilot gate', detail: 'Request Copilot review and poll up to three times; route findings back into Converge; when Copilot is down or out of quota, log a notice and mark the PR ready with the gate bypassed' },
     { title: 'Finalize', detail: 'Run check_convergence.py; mark draft=false on a full pass' },
@@ -45,6 +46,11 @@ const HEADLESS_SAFETY_PREAMBLE =
  */
 const convergeAgent = (prompt, options) =>
   agent(`${HEADLESS_SAFETY_PREAMBLE}${prompt}`, options)
+
+const PRE_COMMIT_GATE_STEP =
+  `\n\nFINAL STEP — pre-commit gate check (do NOT commit): before your turn ends, prove your working-tree changes CAN be committed by dry-running the CODE_RULES commit gate that gates git commit (precommit_code_rules_gate). From inside the checkout that holds your changes, resolve its root with git rev-parse --show-toplevel, stage your changes with git add -A, then run exactly:\n` +
+  `   python "${CONFIG.prLoopScripts}/code_rules_gate.py" --repo-root "<that root>" --staged\n` +
+  `Exit 0 means the commit gate would accept the commit. On any non-zero exit, read every violation it prints, fix each one test-first per CODE_RULES, and re-run the gate until it exits 0. Then unstage with git restore --staged . so the verify step reads the working-tree diff. Make NO git commit and NO git push here — this is a dry committability check; the separate verify and commit steps run after you, and the verified-commit gate is their job, not yours. Your turn does not end while the commit gate would reject the commit.`
 
 const LENS_SCHEMA = {
   type: 'object',
@@ -750,6 +756,29 @@ function runAuditLens(head) {
 }
 
 /**
+ * Reuse lens: a one-time pre-convergence pass that scans the full diff for
+ * places the PR re-implements behavior the codebase already provides, and
+ * returns only the reuse improvements that are certain, behaviorally identical,
+ * and autonomously implementable. It reports findings without editing; the
+ * reuse pass routes the qualifying findings through applyFixes so they are
+ * implemented in one commit before the convergence rounds begin.
+ * @param {string} head PR HEAD SHA to evaluate
+ * @returns {Promise<object>} LENS_SCHEMA result carrying the qualifying reuse findings
+ */
+function runReuseAuditPass(head) {
+  return convergeAgent(
+    `You are the REUSE lens for ${prCoordinates}, HEAD ${head}. This pass runs once before convergence to find where the PR re-implements behavior the codebase already provides.\n\n` +
+      `Review the FULL origin/main...HEAD diff — every file the PR touches. Do NOT delta-scope to recent commits or a single file. The workflow already fetched origin/main, so do NOT run git fetch; run git diff --name-only origin/main...HEAD to enumerate the changed files, then read the complete diff of each. For every new function, helper, constant, type, or block of logic the PR introduces, search the repository (Serena symbol search, grep, and the project's config/ and shared/ modules) for an existing equivalent that already provides the same behavior.\n\n` +
+      `Report a reuse finding ONLY when ALL THREE criteria hold — when any one is in doubt, omit the finding:\n` +
+      `  A. CERTAIN: an existing symbol or module unquestionably covers the new code's behavior, and you can cite it at file:line.\n` +
+      `  B. BEHAVIORALLY IDENTICAL: replacing the new code with the existing one changes no observable behavior — same inputs, outputs, side effects, and error handling.\n` +
+      `  C. AUTONOMOUSLY IMPLEMENTABLE: the replacement is a mechanical edit (import and call the existing symbol, delete the duplicate) that needs no product decision, no API the existing code lacks, and no human judgment.\n\n` +
+      `Do NOT edit, commit, or push — report only; a separate fix step applies what you return. Return strictly the schema: clean=true with empty findings when no reuse case clears all three criteria, otherwise one entry per qualifying reuse improvement. For each: file and line of the duplicate in the PR; severity P2; category 'code-standard'; title naming the existing symbol to reuse; detail giving the existing symbol's file:line and the exact mechanical replacement; replyToCommentId=null. Set sha=${'`'}${head}${'`'}, down=false.`,
+    { label: 'lens:reuse', phase: 'Reuse', schema: LENS_SCHEMA, agentType: 'code-quality-agent' },
+  )
+}
+
+/**
  * Render the numbered findings block shared by the fix steps.
  * @param {Array<object>} findings deduped findings to render
  * @returns {string} one numbered line per finding, with any thread-id note
@@ -792,7 +821,8 @@ function applyFixesEdit(head, findings, sourceLabel) {
       `Return values:\n` +
       `- When you edited code to fix at least one finding: edited=true, resolvedWithoutCommit=false.\n` +
       `- When every finding was already addressed so no code change was needed — yet you still resolved each GitHub review thread above: edited=false, resolvedWithoutCommit=true. Only set this when every thread that carries a comment id is resolved; otherwise the round is treated as stalled.\n` +
-      `Always include a one-line summary.`,
+      `Always include a one-line summary.` +
+      PRE_COMMIT_GATE_STEP,
     { label: `fix-edit:${sourceLabel}`, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
   )
 }
@@ -865,7 +895,8 @@ function recoverCommitBlockEdit(head, blockerDetail, sourceLabel, attempt) {
       `- Confirm the working tree is on the PR branch at HEAD ${head} with the prior fixes still present.\n` +
       `- Fix ONLY the violation named above, test-first (failing test, then minimum code to pass) per CODE_RULES. Do not re-open the original findings, and do not touch GitHub review threads — the edit step already handled those.\n` +
       `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
-      `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.`,
+      `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.` +
+      PRE_COMMIT_GATE_STEP,
     { label: `fix-recover:${sourceLabel}`, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
   )
 }
@@ -891,7 +922,8 @@ function recoverVerifyFailEdit(head, objection, sourceLabel, attempt) {
       `- Confirm the working tree is on the PR branch at HEAD ${head} with the prior fixes still present.\n` +
       `- Address every objection above test-first (failing test, then minimum code to pass) per CODE_RULES, so each named concern is genuinely resolved the way the verdict requires. Do not touch GitHub review threads — the edit step already handled those.\n` +
       `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
-      `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.`,
+      `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.` +
+      PRE_COMMIT_GATE_STEP,
     { label: `fix-verify-recover:${sourceLabel}`, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
   )
 }
@@ -1130,7 +1162,8 @@ function repairConvergenceEdit(head, failures) {
       `- edited=true when you changed code in the working tree to fix a bot-thread concern.\n` +
       `- rebased=true when you rebased the branch onto origin/main.\n` +
       `- resolvedWithoutCommit=true only when you addressed the gates with neither a code change nor a rebase (bot threads resolved only), so there is nothing for the commit step to push.\n` +
-      `Always include a one-line summary.`,
+      `Always include a one-line summary.` +
+      PRE_COMMIT_GATE_STEP,
     { label: 'repair-edit', phase: 'Finalize', schema: REPAIR_EDIT_SCHEMA, agentType: 'clean-coder' },
   )
 }
@@ -1269,7 +1302,8 @@ function standardsFollowUpEdit(head, findings, sourceLabel) {
       `1. Follow-up fix issue: file a GitHub issue on ${input.owner}/${input.repo} (gh issue create --body-file with a temp file) titled "Deferred code-standard fixes from PR #${input.prNumber}". The body references the PR and lists each finding with its file:line, severity, and detail. The issue carries the fix work; do not open a fix PR. Capture the issue URL.\n` +
       `2. Stage the environment-hardening change: in the Claude environment config repo (the repo owning ~/.claude hooks and rules — JonEcho/llm-settings for hooks, jl-cmd/claude-code-config for rules/skills; pick whichever owns the surface that would block these violation classes), find or clone a local checkout, fetch origin, and create a branch off origin/main. Edit the hooks/rules in that checkout's WORKING TREE so each violation class found here is blocked at Write/Edit time, before code is written. Do NOT commit and do NOT push — the commit step does that after the verify step binds a verdict to the working tree. Return the checkout's absolute path in hardeningRepoPath, the branch name in hardeningBranch, and set hardeningEdited=true. When no hardening is feasible for these classes, leave hardeningRepoPath and hardeningBranch empty and hardeningEdited=false; the follow-up issue still stands.\n` +
       `3. For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue <url>." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
-      `Return the issue URL in issueUrl (empty string when it could not be filed), the hardening checkout path and branch, hardeningEdited, and a one-line summary.`,
+      `Return the issue URL in issueUrl (empty string when it could not be filed), the hardening checkout path and branch, hardeningEdited, and a one-line summary.` +
+      PRE_COMMIT_GATE_STEP,
     { label: `standards-edit:${sourceLabel}`, phase: 'Converge', schema: STANDARDS_EDIT_SCHEMA, agentType: 'clean-coder' },
   )
 }
@@ -1428,8 +1462,30 @@ let bugbotDown = input.bugbotDisabled || false
 let copilotDown = false
 let copilotNote = null
 let standardsNote = null
+let reuseNote = null
 const allRoundFindings = []
 const fixSummaries = []
+
+log('Reuse pass: scanning the full diff for certain, behaviorally identical, autonomously implementable reuse improvements before convergence')
+const reuseHead = await resolveHead()
+if (isResolvedHeadUsable(reuseHead)) {
+  await prefetchMainForRound()
+  const reuse = await runReuseAuditPass(reuseHead)
+  const reuseFindings = reuse?.findings || []
+  if (reuseFindings.length > 0) {
+    log(`Reuse pass: ${reuseFindings.length} qualifying reuse improvement(s) — applying before convergence`)
+    allRoundFindings.push(...reuseFindings)
+    const reuseFix = await applyFixes(reuseHead, reuseFindings, 'reuse-pass')
+    if (reuseFix?.summary) fixSummaries.push(reuseFix.summary)
+    reuseNote = reuseFix?.pushed === true
+      ? `${reuseFindings.length} reuse improvement(s) applied before convergence (${reuseFix.newSha?.slice(0, SHA_COMPARISON_PREFIX_LENGTH)})`
+      : `${reuseFindings.length} reuse improvement(s) identified before convergence but not landed — the code-review lens re-surfaces any that remain`
+  } else {
+    log('Reuse pass: no reuse case cleared all three criteria — proceeding to convergence')
+  }
+} else {
+  log('Reuse pass: could not resolve HEAD — proceeding to convergence')
+}
 
 while (iterations < CONFIG.maxIterations) {
   iterations += 1
@@ -1556,7 +1612,7 @@ while (iterations < CONFIG.maxIterations) {
       const readyOutcome = classifyReadyOutcome(readyResult)
       if (readyOutcome.converged) {
         await spawnConvergenceSummary(dedupeFindings(allRoundFindings), fixSummaries, rounds, standardsNote, copilotNote)
-        return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote }
+        return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, reuseNote }
       }
       blocker = readyOutcome.blocker
       break
@@ -1575,4 +1631,5 @@ return {
   blocker: blocker || `iteration cap reached (${CONFIG.maxIterations})`,
   standardsNote,
   copilotNote,
+  reuseNote,
 }

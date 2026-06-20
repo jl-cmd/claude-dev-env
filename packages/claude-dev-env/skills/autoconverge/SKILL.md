@@ -101,7 +101,7 @@ own. The workflow runs in the background and notifies this session on
 completion. Watch live progress with `/workflows`.
 
 The workflow returns
-`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote }`.
+`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, reuseNote }`.
 
 ## Budget-aware round boundaries
 
@@ -207,7 +207,30 @@ round records nothing resumable and replays dirty.
    Blocker: <blocker>        # only when blocked
    Standards: <standardsNote> # only when a round deferred code-standard findings
    Copilot: <copilotNote>     # only when Copilot was down or out of quota
+   Reuse: <reuseNote>         # only when the reuse pass identified an improvement
    ```
+
+## Reuse pass (before convergence)
+
+Before the first round, one reuse lens (`code-quality-agent`) scans the full
+`origin/main...HEAD` diff for places the PR re-implements behavior the codebase
+already provides. It reports a reuse improvement only when all three criteria
+hold, and drops any case where even one is in doubt:
+
+- **Certain** — an existing symbol or module unquestionably covers the new
+  code's behavior, cited at `file:line`.
+- **Behaviorally identical** — swapping the new code for the existing one
+  changes no observable behavior: same inputs, outputs, side effects, and error
+  handling.
+- **Autonomously implementable** — the replacement is a mechanical edit (import
+  and call the existing symbol, delete the duplicate) needing no product
+  decision and no human judgment.
+
+The reuse lens reports without editing. Qualifying improvements then run through
+the same edit → verify → commit fix flow the rounds use, so they land in one
+verified commit before convergence starts. The pass is best-effort: when no case
+clears all three criteria, the run proceeds straight to convergence, and
+`reuseNote` records what landed.
 
 ## What the workflow does each round
 
@@ -227,8 +250,12 @@ suite (`python -m pytest`) and keep scratch work in ephemeral temp dirs.
 - **Converge:** `parallel([Bugbot lens, code-review lens, bug-audit lens])` on
   the current HEAD, full `origin/main...HEAD` diff. Dedup findings; one
   `clean-coder` applies all fixes in a single commit, pushes, replies to and
-  resolves any bot threads; re-verify next round on the new HEAD. When all
-  three are clean on a stable HEAD, post the CLEAN bugteam audit artifact.
+  resolves any bot threads; re-verify next round on the new HEAD. Every edit
+  step ends with a pre-commit gate check: before its turn ends, the fixer
+  dry-runs the CODE_RULES commit gate (`code_rules_gate.py --staged`) and keeps
+  fixing until that gate would accept the commit — it makes no commit itself.
+  When all three are clean on a stable HEAD, post the CLEAN bugteam audit
+  artifact.
   A round whose findings are ALL code-standard violations (pure CODE_RULES/style,
   no behavioral impact) passes for convergence purposes: the workflow files a
   follow-up issue listing the findings, opens a draft environment-hardening PR
