@@ -544,6 +544,48 @@ def check_database_column_string_magic(content: str, file_path: str) -> list[str
     return issues
 
 
+def is_test_path(file_path: str) -> bool:
+    """Return True when *file_path* matches CODE_RULES.md test-file detection patterns.
+
+    Mirrors the test-file detection rule documented in CODE_RULES.md:
+    filename matches test_*.py OR *_test.py OR *.test.* OR *.spec.* OR
+    conftest.py, OR path contains the segment /tests/.
+
+    Args:
+        file_path: Path string to classify; backslashes are normalized to
+            forward slashes before pattern matching.
+
+    Returns:
+        True when the path matches any test-file pattern; False otherwise.
+    """
+    tests_path_segment = "/tests/"
+    conftest_filename = "conftest.py"
+    test_filename_prefix = "test_"
+    all_test_filename_suffixes = ("_test.py",)
+    all_test_filename_glob_suffixes = (".test.", ".spec.")
+    normalized_posix = file_path.replace("\\", "/")
+    filename_only = normalized_posix.rsplit("/", maxsplit=1)[-1]
+    if tests_path_segment in normalized_posix:
+        return True
+    if filename_only == conftest_filename:
+        return True
+    if filename_only.startswith(test_filename_prefix) and filename_only.endswith(
+        PYTHON_FILE_EXTENSION
+    ):
+        return True
+    if any(
+        filename_only.endswith(each_suffix)
+        for each_suffix in all_test_filename_suffixes
+    ):
+        return True
+    if any(
+        each_glob_suffix in filename_only
+        for each_glob_suffix in all_test_filename_glob_suffixes
+    ):
+        return True
+    return False
+
+
 def _iter_calls_excluding_nested_functions(node: ast.AST) -> Iterator[ast.Call]:
     for each_child in ast.iter_child_nodes(node):
         if isinstance(each_child, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -636,11 +678,11 @@ def check_wrapper_plumb_through(content: str, file_path: str) -> list[str]:
     Args:
         content: File content as a single string for AST parsing.
         file_path: Repository-relative POSIX path of the file (used to
-            skip non-Python code extensions early).
+            skip non-Python code extensions and test files early).
 
     Returns:
-        List of violation strings, one per dropped optional kwarg. Returns
-        an empty list when the file is not Python or has a syntax error.
+        List of violation strings, one per dropped optional kwarg. Empty for
+        a non-Python file, a test file, or a file with a syntax error.
     """
     non_python_code_extensions = ALL_CODE_FILE_EXTENSIONS - {PYTHON_FILE_EXTENSION}
     lowercase_file_path = file_path.lower()
@@ -648,6 +690,8 @@ def check_wrapper_plumb_through(content: str, file_path: str) -> list[str]:
         lowercase_file_path.endswith(each_extension)
         for each_extension in non_python_code_extensions
     ):
+        return []
+    if is_test_path(file_path):
         return []
     try:
         tree = ast.parse(content)
