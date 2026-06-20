@@ -69,6 +69,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_args_match_signature,
     check_docstring_fallback_branch_coverage,
     check_docstring_format,
+    check_docstring_no_consumer_claim,
 )
 from code_rules_duplicate_body import (  # noqa: E402
     advise_cross_skill_duplicate_helper,
@@ -122,6 +123,7 @@ from code_rules_test_assertions import (  # noqa: E402
     check_existence_check_tests,
     check_flag_gated_scenario_test_naming,
     check_skip_decorators_in_tests,
+    check_stale_test_name_target,
 )
 from code_rules_test_branching_except import (  # noqa: E402
     check_bare_except,
@@ -252,6 +254,7 @@ def validate_content(
         all_issues.extend(check_docstring_format(effective_content, file_path))
         all_issues.extend(check_docstring_args_match_signature(effective_content, file_path))
         all_issues.extend(check_docstring_fallback_branch_coverage(effective_content, file_path))
+        all_issues.extend(check_docstring_no_consumer_claim(effective_content, file_path))
         all_issues.extend(
             check_class_docstring_names_public_methods(effective_content, file_path)
         )
@@ -282,6 +285,7 @@ def validate_content(
         )
         all_issues.extend(check_existence_check_tests(content, file_path))
         all_issues.extend(check_constant_equality_tests(content, file_path))
+        all_issues.extend(check_stale_test_name_target(content, file_path))
         check_flag_gated_scenario_test_naming(content, file_path)
         all_issues.extend(check_unused_optional_parameters(content, file_path))
         all_issues.extend(check_collection_prefix(content, file_path))
