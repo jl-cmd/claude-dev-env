@@ -430,6 +430,45 @@ def test_check_wrapper_plumb_through_still_flags_attribute_call() -> None:
     )
 
 
+def test_check_wrapper_plumb_through_exempts_test_files() -> None:
+    source = (
+        "def _helper(name, *, clean_name=None):\n"
+        "    return (name, clean_name)\n"
+        "\n"
+        "def test_uses_helper():\n"
+        "    return _helper('a', clean_name='b')\n"
+    )
+    shared_issues = gate_module.check_wrapper_plumb_through(source, "pkg/test_thing.py")
+    bugteam_gate = _load_bugteam_gate_module()
+    bugteam_issues = bugteam_gate.check_wrapper_plumb_through(source, "pkg/test_thing.py")
+    assert shared_issues == [], (
+        "a test_* function in a test-file path that calls a module-level helper "
+        "exposing an optional kwarg is not a wrapper; the shared gate must exempt "
+        "test files and emit zero findings"
+    )
+    assert bugteam_issues == [], (
+        "the bugteam gate copy must apply the identical test-file exemption"
+    )
+
+
+def test_check_wrapper_plumb_through_still_flags_non_test_path_with_test_shape() -> None:
+    source = (
+        "def _helper(name, *, clean_name=None):\n"
+        "    return (name, clean_name)\n"
+        "\n"
+        "def test_uses_helper():\n"
+        "    return _helper('a', clean_name='b')\n"
+    )
+    issues = gate_module.check_wrapper_plumb_through(source, "pkg/module.py")
+    assert any(
+        "test_uses_helper" in each_issue and "clean_name" in each_issue
+        for each_issue in issues
+    ), (
+        "the test-file exemption is scoped to test paths only; the same wrapper "
+        "shape on a non-test path must still be flagged"
+    )
+
+
 def test_split_violations_by_scope_accepts_all_added_line_numbers_param_name() -> None:
     blocking_issues, advisory_issues = gate_module.split_violations_by_scope(
         ["Line 5: violation"],

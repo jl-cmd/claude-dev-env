@@ -790,6 +790,40 @@ def test_check_wrapper_plumb_through_flags_name_call_dropping_kwarg() -> None:
     )
 
 
+def test_check_wrapper_plumb_through_exempts_test_files() -> None:
+    """A test_* function in a test-file path that calls a module-level helper
+    exposing an optional kwarg is an ordinary pytest case, not a wrapper; the
+    bugteam gate must exempt test files and emit zero findings."""
+    source = (
+        "def _helper(name, *, clean_name=None):\n"
+        "    return (name, clean_name)\n"
+        "\n"
+        "def test_uses_helper():\n"
+        "    return _helper('a', clean_name='b')\n"
+    )
+    issues = gate_module.check_wrapper_plumb_through(source, "pkg/test_thing.py")
+    assert issues == [], (
+        f"a wrapper shape in a test file must yield no findings; got {issues!r}"
+    )
+
+
+def test_check_wrapper_plumb_through_still_flags_non_test_path_with_test_shape() -> None:
+    """The test-file exemption is scoped to test paths only; the same wrapper
+    shape on a non-test path must still be flagged."""
+    source = (
+        "def _helper(name, *, clean_name=None):\n"
+        "    return (name, clean_name)\n"
+        "\n"
+        "def test_uses_helper():\n"
+        "    return _helper('a', clean_name='b')\n"
+    )
+    issues = gate_module.check_wrapper_plumb_through(source, "pkg/module.py")
+    assert any(
+        "test_uses_helper" in each_issue and "clean_name" in each_issue
+        for each_issue in issues
+    ), f"the same wrapper shape on a non-test path must still flag; got {issues!r}"
+
+
 def test_check_wrapper_plumb_through_ignores_calls_nested_inside_delegate_arguments() -> None:
     """A callee nested as an argument (``delegate(helper(x))``) is not a
     separate call site; only the enclosing call is inspected, matching the
