@@ -1,6 +1,6 @@
 # Docstring Prose Matches Implementation
 
-**When this applies:** Any Write or Edit to a public function, method, class, or module whose docstring prose makes an enumerable claim about behavior — a list of inputs the code handles, the conditions it treats as a match, the cases it skips, or the order of its steps.
+**When this applies:** Any Write or Edit to a public function, method, class, or module whose docstring prose makes an enumerable claim about behavior — a list of inputs the code handles, the conditions it treats as a match, the cases it skips, or the order of its steps. It applies equally to a skill's companion `SKILL.md` (or any sibling `.md`) that describes a producer the skill's `scripts/` carry out: a doc sentence that claims a produced artifact's ordering or content is the prose this rule governs, and it tracks the producer function's own docstring and body.
 
 ## Rule
 
@@ -17,6 +17,7 @@ Read the body and the docstring side by side:
 - **Shared fallback routes.** A summary that scopes a fallback call to one condition names every condition that reaches that call. When the body routes to the same fallback from two or more early-return guards (`if a is None: fallback(); return` and `if random() < p: fallback(); return`), the prose enumerates both guards. The `check_docstring_fallback_branch_coverage` gate blocks the single-condition form of this drift at Write/Edit time.
 - **Step order.** A docstring that says `A then B then C` matches the call order in the body.
 - **Predicate breadth.** A boolean helper whose prose promises a narrow check accepts only the inputs the prose names — no broader input class the name and prose do not mention.
+- **Companion-doc ordering and content claims.** A `SKILL.md` (or sibling `.md`) sentence that names a produced artifact and claims its order (`sorted`, `alphabetical`, `in sorted order`) or its content (`the at-risk names`, `just the current set`) matches the producer function's docstring and body for that same artifact. A producer that builds the artifact by merging stored names with new names and appending — preserving file order, not re-sorting the union — leaves a doc that still says `sorted` drifted on both counts: the order claim is wrong, and the content claim hides the merged-in prior entries. When the producer's ordering or union changes, the same change updates the companion doc. The two move together in one commit, even when the producer edit does not touch the `.md` file.
 
 When the body changes the set of behaviors it applies, the same edit updates the prose enumeration. The two move together in one commit.
 
@@ -38,6 +39,8 @@ A docstring that enumerates "attribute read, augmented-assignment target, class-
 ## Enforcement (audit lane)
 
 This drift class is sub-bucket **O6** in `packages/claude-dev-env/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md` (free-form `Note:` / `Returns:` / responsibility-list claims). The audit teammate lists every prose enumeration in a changed docstring and verifies each item against the body, and lists every union member / suppressor / step in the body and verifies each appears in the prose. A union member or suppressor in the body that the prose omits is an O6 finding. The single-condition shared-fallback shape of this drift is gated deterministically by `check_docstring_fallback_branch_coverage` (`packages/claude-dev-env/hooks/blocking/code_rules_docstrings.py`); the audit lane covers every O6 shape the gate cannot match.
+
+When a changed PR touches a producer function whose ordering or union shifts, the O8 audit lane also reads that skill's companion `SKILL.md` and sibling `.md` docs for any sentence naming the same produced artifact. A doc sentence that claims the artifact is `sorted` or holds `just the at-risk names` while the producer merges prior names and appends without re-sorting is an O8 finding, even when the PR diff never touched the `.md` file — the behavior change orphaned the doc claim.
 
 ## Why
 
