@@ -1,4 +1,4 @@
-Audit [REPO/ARTIFACT] [TARGET_ID] for **Category O only** (docstring / fixture-prose vs implementation drift). Skip A–N, P. Sub-bucket forced-exhaustion mode: Category O is decomposed into 7 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
+Audit [REPO/ARTIFACT] [TARGET_ID] for **Category O only** (docstring / fixture-prose vs implementation drift). Skip A–N, P. Sub-bucket forced-exhaustion mode: Category O is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 [ARTIFACT METADATA — include every changed module's docstring AND the exported symbols of that module so the audit can compare claim vs body]
 
@@ -47,9 +47,13 @@ ID prefix: `find`.
 - When the diff includes a module split (one file becomes two), verify both modules' docstrings describe the responsibility each one actually owns after the split.
 - Adversarial probes: (a) for each module in the split, list its exported symbols and compare to the docstring's claimed responsibilities; (b) grep the responsibility's verb against the originating module — does the originating docstring still claim what moved; (c) check for cross-module imports that reveal which file hosts each responsibility.
 
+**O8. Companion-doc ordering/content vs producer**
+- When the diff changes a producer function's ordering or union, read that skill's companion `SKILL.md` and sibling `.md` docs for any sentence naming the same produced artifact (a file path, a JSON key, a named list). A doc sentence that claims the artifact is `sorted` / `alphabetical` / `in sorted order`, or holds `just the at-risk names` / `only the current set`, while the producer merges stored names with new names and appends — preserving file order, not re-sorting the union — is an O8 finding on both counts (wrong order claim, hidden merged-in entries). The finding stands even when the diff never touched the `.md` file, because the behavior change orphaned the doc claim.
+- Adversarial probes: (a) for each changed producer, name the artifact it builds and grep the skill's `SKILL.md` and sibling `.md` files for any sentence naming that artifact; (b) walk the producer body's build step — does it sort, or does it merge stored names and append in file order — and compare against the doc's order word (`sorted`, `alphabetical`); (c) check whether the doc's content claim (`just the at-risk names`, `only the current set`) hides merged-in prior entries the producer carries over from the stored file.
+
 ## Cross-bucket questions to answer at the end
 
-Q1: Across all 7 sub-buckets, which docstring claim is the most misleading — i.e., a future maintainer reading only the docstring would write or change code that contradicts the body? Cite file:line of the docstring AND the body line(s) that contradict it.
+Q1: Across all 8 sub-buckets, which docstring claim is the most misleading — i.e., a future maintainer reading only the docstring would write or change code that contradicts the body? Cite file:line of the docstring AND the body line(s) that contradict it.
 
 Q2: Which docstring claim is at highest risk of becoming load-bearing — i.e., a future caller or test author would rely on the claim to skip reading the body? Cite the claim and the use case.
 
@@ -57,13 +61,13 @@ Q3: Of the changed docstrings, which one most clearly shows a refactor was incom
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket O1-O7, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite (a) the docstring file:line, (b) the body file:line that contradicts it, and (c) one sentence describing the contradiction in concrete terms. Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 module-level docstring claims whose implementation moved during a refactor — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket O1-O8, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite (a) the docstring file:line, (b) the body file:line that contradicts it, and (c) one sentence describing the contradiction in concrete terms. Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 module-level docstring claims whose implementation moved during a refactor — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 ---
 
 # Worked example: jl-cmd/claude-code-config PR #522
 
-Audit jl-cmd/claude-code-config PR #522 for **Category O only** (docstring / fixture-prose vs implementation drift). Skip A-N, P. Sub-bucket forced-exhaustion mode: Category O is decomposed into 7 sub-buckets below.
+Audit jl-cmd/claude-code-config PR #522 for **Category O only** (docstring / fixture-prose vs implementation drift). Skip A-N, P. Sub-bucket forced-exhaustion mode: Category O is decomposed into 8 sub-buckets below.
 
 PR #522 split `pr_description_command_parser.py` into two modules — the original parser and a new `pr_description_pr_number.py` — but the originating module's docstring still claims the PR-number recovery responsibility. A sibling change to `pr_description_body_audit.py` introduced a module docstring whose verb (`detects vague language`) overstates the module's actual responsibility (it only exposes `_extract_vague_scan_text()`; detection runs elsewhere).
 
