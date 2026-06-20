@@ -22,8 +22,6 @@ import io
 import json
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FutureTimeoutError
 from pathlib import Path
 from typing import TextIO
 
@@ -47,7 +45,6 @@ from hooks_constants.code_verifier_spawn_preflight_gate_constants import (  # no
     ALL_MERGE_TREE_COMMAND_FLAGS,
     ALL_NAME_ONLY_WORKTREE_DIFF_FLAGS,
     ALL_UNIFIED_ZERO_DIFF_FLAGS,
-    CODE_RULES_CHECK_TIMEOUT_SECONDS,
     CODE_RULES_SECTION_HEADER,
     CODE_VERIFIER_SUBAGENT_TYPE,
     DENY_REASON_LEAD,
@@ -67,10 +64,11 @@ if _scripts_dir not in sys.path:
 
 from code_rules_gate import (  # noqa: E402
     ValidateContentCallable,
+    _collect_partitioned_violations,
+    _report_partitioned_violations,
     is_code_path,
     load_validate_content,
     parse_added_line_numbers,
-    run_gate,
     whole_file_line_set,
 )
 
@@ -263,9 +261,11 @@ def _code_rules_report(
 
     Returns:
         The engine's grouped file:line report when a blocking violation lands
-        on an added line, or None when the surface is clean, the engine fails
-        to load, the check times out, or any engine error arises — every
-        non-block outcome fails OPEN.
+        on an added line, or None when the surface is clean, only an unreadable
+        changed file caused a non-zero gate exit, the engine fails to load, or
+        any engine error arises — every non-block outcome fails OPEN. The
+        harness hook timeout in hooks.json is the wall-clock bound on a runaway
+        engine.
     """
     if not all_file_paths:
         return None
@@ -273,25 +273,15 @@ def _code_rules_report(
         validate_content = load_validate_content()
     except SystemExit:
         return None
-    captured_stderr = io.StringIO()
     try:
-        with ThreadPoolExecutor(max_workers=1) as engine_executor:
-            engine_future = engine_executor.submit(
-                _run_gate_capturing_stderr,
-                validate_content,
-                all_file_paths,
-                Path(repo_root),
-                all_added_lines_by_path,
-                captured_stderr,
-            )
-            exit_code = engine_future.result(timeout=CODE_RULES_CHECK_TIMEOUT_SECONDS)
-    except FutureTimeoutError:
-        return None
+        blocking_present, captured_report = _run_gate_capturing_stderr(
+            validate_content, all_file_paths, Path(repo_root), all_added_lines_by_path
+        )
     except OSError:
         return None
-    if exit_code == 0:
+    if not blocking_present:
         return None
-    return captured_stderr.getvalue()
+    return captured_report
 
 
 def _run_gate_capturing_stderr(
@@ -299,9 +289,8 @@ def _run_gate_capturing_stderr(
     all_file_paths: list[Path],
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]],
-    captured_stderr: io.StringIO,
-) -> int:
-    """Run the gate with its stderr report captured into a buffer.
+) -> tuple[bool, str]:
+    """Run the gate, reporting whether a blocking violation was actually found.
 
     Args:
         validate_content: The enforcer ``validate_content`` callable.
@@ -309,20 +298,33 @@ def _run_gate_capturing_stderr(
         repository_root: The repository root path the gate resolves against.
         all_added_lines_by_path: Per-file working-tree-added line numbers keyed
             by resolved absolute path.
-        captured_stderr: The buffer the gate's grouped report is written into.
 
     Returns:
-        The gate exit code: 0 when clean, non-zero on a blocking violation or
-        an unreadable file.
+        A ``(blocking_present, captured_report)`` pair. ``blocking_present`` is
+        True only when at least one blocking violation landed on an added line;
+        an unreadable changed file alone (which exits the gate non-zero) leaves
+        it False, so the caller fails OPEN. ``captured_report`` is the gate's
+        grouped stderr report.
     """
-    with contextlib.redirect_stderr(captured_stderr):
-        return run_gate(
+    blocking_by_file, advisory_by_file, skipped_unreadable_count = (
+        _collect_partitioned_violations(
             validate_content,
             all_file_paths,
             repository_root,
-            all_added_lines_by_path=all_added_lines_by_path,
-            read_staged_content_flag=False,
+            all_added_lines_by_path,
+            False,
         )
+    )
+    captured_stderr = io.StringIO()
+    with contextlib.redirect_stderr(captured_stderr):
+        _report_partitioned_violations(
+            blocking_by_file,
+            advisory_by_file,
+            repository_root,
+            False,
+            skipped_unreadable_count,
+        )
+    return bool(blocking_by_file), captured_stderr.getvalue()
 
 
 def _build_deny_reason(
