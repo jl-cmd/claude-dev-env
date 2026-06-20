@@ -136,6 +136,28 @@ const REPAIR_EDIT_SCHEMA = {
   required: ['edited', 'rebased', 'resolvedWithoutCommit', 'summary'],
 }
 
+const MERGE_CONFLICT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    conflicting: {
+      type: 'boolean',
+      description: 'true only when GitHub reports the PR branch conflicts with its base (mergeable:false or mergeable_state:dirty); false when it merges cleanly or mergeability could not be computed',
+    },
+  },
+  required: ['conflicting'],
+}
+
+const CONFLICT_EDIT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    rebased: { type: 'boolean', description: 'true when the branch was rebased onto origin/main and every conflict resolved in the working tree' },
+    summary: { type: 'string' },
+  },
+  required: ['rebased', 'summary'],
+}
+
 const STANDARDS_EDIT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -533,6 +555,19 @@ function commitNeedsCodeRecovery(commitResult) {
  */
 function isResolvedHeadUsable(resolvedHead) {
   return typeof resolvedHead === 'string' && resolvedHead.length > 0
+}
+
+/**
+ * Decide whether the pre-flight merge-conflict check found the PR branch in
+ * conflict with its base. A dead check agent (null/undefined result) reports
+ * not-conflicting so the run proceeds straight to the bug checks rather than
+ * force-pushing a rebase on a verdict that does not exist — a transient check
+ * failure must never trigger a destructive rebase.
+ * @param {object|null|undefined} mergeState the checkMergeConflicts result
+ * @returns {boolean} true only when the check reported conflicting:true
+ */
+function isMergeConflicting(mergeState) {
+  return mergeState != null && mergeState.conflicting === true
 }
 
 /**
@@ -1269,6 +1304,79 @@ async function repairConvergence(head, failures) {
 }
 
 /**
+ * Pre-flight merge-conflict check: ask GitHub whether the PR branch still merges
+ * cleanly into its base. GitHub computes mergeability asynchronously, so the
+ * agent polls until .mergeable resolves to a boolean before judging. Read-only —
+ * it makes no edit, commit, push, or rebase.
+ * @param {string} head PR HEAD SHA the check runs against
+ * @returns {Promise<object>} MERGE_CONFLICT_SCHEMA result
+ */
+function checkMergeConflicts(head) {
+  return convergeAgent(
+    `Report whether ${prCoordinates} (HEAD ${head}) has merge conflicts with its base branch. Do not edit, commit, push, or rebase — read only.\n\n` +
+      `GitHub computes mergeability asynchronously, so .mergeable is null right after a push until it finishes. Poll until it resolves: run\n` +
+      `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq '{mergeable: .mergeable, state: .mergeable_state}'\n` +
+      `up to 5 times, 5 seconds apart (delay each retry with "sleep 5", or the PowerShell alternative "Start-Sleep -Seconds 5"), stopping as soon as mergeable is true or false.\n\n` +
+      `Return conflicting:true when mergeable is false or state is "dirty" (the branch conflicts with the base). Return conflicting:false when mergeable is true, or when mergeable stays null after the full poll budget — mergeability is unknown, so let the bug checks proceed rather than rebase on a guess.`,
+    { label: 'check-merge-conflicts', phase: 'Converge', schema: MERGE_CONFLICT_SCHEMA, agentType: 'Explore' },
+  )
+}
+
+/**
+ * Conflict-resolution edit step: one clean-coder rebases the PR branch onto
+ * origin/main and resolves every conflict in the working tree, making NO push —
+ * the verify step binds a verdict to the rebased tree before the commit step
+ * force-pushes it. A rebase necessarily creates local commits, which is expected;
+ * only the force-push is withheld so the verifier binds the surface first.
+ * @param {string} head PR HEAD SHA before the rebase
+ * @returns {Promise<object>} CONFLICT_EDIT_SCHEMA result
+ */
+function resolveConflictsEdit(head) {
+  return convergeAgent(
+    `You are the EDIT step resolving merge conflicts for ${prCoordinates}, HEAD ${head}, before the bug checks run. The PR branch conflicts with origin/main. A separate verify step then a separate commit step run after you.\n\n` +
+      `Rules:\n` +
+      `- Confirm the working tree is on the PR branch at HEAD ${head} with no unrelated edits before you start.\n` +
+      `- Rebase the branch onto origin/main and resolve every conflict so the tree is clean and conflict-free: git fetch origin main; git rebase origin/main; resolve each conflict, preserving the intent of both the PR's change and the incoming base change. A rebase creates local commits, which is fine.\n` +
+      `- Do NOT push and do NOT force-push — the commit step force-pushes after the verify step binds a verdict. Pushing here would change the surface the verifier binds to.\n\n` +
+      `Return rebased=true with a one-line summary when you rebased onto origin/main and resolved the conflicts; rebased=false with a summary when the branch did not actually need a rebase or you could not complete it.`,
+    { label: 'resolve-conflicts-edit', phase: 'Converge', schema: CONFLICT_EDIT_SCHEMA, agentType: 'clean-coder' },
+  )
+}
+
+/**
+ * Pre-flight conflict resolution: when the PR branch conflicts with its base,
+ * rebase it clean before the bug checks run — check (Explore probes mergeability)
+ * -> edit (clean-coder rebases and resolves, no push) -> verify (code-verifier
+ * binds a verdict to the rebased tree) -> commit (clean-coder force-with-lease
+ * pushes). Returns the post-rebase HEAD so the first converge round runs its
+ * lenses on the conflict-free diff. A non-conflicting PR, a rebase the edit step
+ * declined, or a failed verdict returns the unchanged HEAD so the run proceeds to
+ * the bug checks unchanged. A mid-run conflict (origin/main advancing later) is
+ * still caught by the FINALIZE convergence repair, which also rebases.
+ * @param {string} head PR HEAD SHA before any rebase
+ * @returns {Promise<string>} the HEAD SHA after a successful rebase push, or the unchanged head
+ */
+async function resolveMergeConflicts(head) {
+  const mergeState = await checkMergeConflicts(head)
+  if (!isMergeConflicting(mergeState)) return head
+  log(`Pre-flight: ${prCoordinates} conflicts with origin/main — rebasing clean before the bug checks`)
+  const editResult = await resolveConflictsEdit(head)
+  if (editResult?.rebased !== true) return head
+  const failures = ['PR branch had merge conflicts with origin/main; the rebase must leave a clean, conflict-free tree']
+  const verifyTranscript = await verifyWithRecovery({
+    runVerify: () => verifyRepairChanges(head, failures),
+    runRecoverEdit: (objection, attempt) => recoverVerifyFailEdit(head, objection, 'conflict-rebase', attempt),
+  })
+  if (!verdictPassed(verifyTranscript)) return head
+  const commitResult = await commitWithRecovery({
+    runCommit: () => commitRepairFixes(head, true),
+    runVerify: () => verifyRepairChanges(head, failures),
+    runRecoverEdit: (detail, attempt) => recoverCommitBlockEdit(head, detail, 'conflict-rebase', attempt),
+  })
+  return commitResult?.newSha || head
+}
+
+/**
  * Decide whether a review round surfaced ONLY code-standard violations — pure
  * CODE_RULES/style findings with no behavioral impact. Such a round passes for
  * convergence purposes: the violations are deferred to a follow-up fix issue
@@ -1465,6 +1573,11 @@ let standardsNote = null
 let reuseNote = null
 const allRoundFindings = []
 const fixSummaries = []
+
+const preflightHead = await resolveHead()
+if (isResolvedHeadUsable(preflightHead)) {
+  await resolveMergeConflicts(preflightHead)
+}
 
 log('Reuse pass: scanning the full diff for certain, behaviorally identical, autonomously implementable reuse improvements before convergence')
 const reuseHead = await resolveHead()

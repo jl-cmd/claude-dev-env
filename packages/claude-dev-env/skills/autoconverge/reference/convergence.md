@@ -1,19 +1,33 @@
 # Convergence — round shape and the ready definition
 
-## Reuse pass (runs once before convergence)
+## Pre-flight: clear merge conflicts
 
-Before the first round, one reuse lens (`code-quality-agent`) reviews the full
-`origin/main...HEAD` diff for code that re-implements behavior the repository
-already provides. It reports a reuse improvement only when all three criteria
-hold together, and omits any case where even one is in doubt:
+Before the first round, the workflow checks once whether the PR branch conflicts
+with `origin/main`. When GitHub reports a conflict (`mergeable` false or
+`mergeable_state` dirty), one `clean-coder` rebases the branch onto `origin/main`
+and resolves every conflict — gated the same way as every other code change: the
+edit leaves the rebase in the working tree, a `code-verifier` binds a verdict to
+it, and the commit step force-pushes with lease. The bug checks then run on a
+conflict-free diff.
+
+A PR that merges cleanly skips the rebase. A conflict that surfaces mid-run, when
+`origin/main` advances during a later round, is caught by the convergence repair
+at the end of the loop, which also rebases.
+
+## Reuse pass (runs after the conflict pre-flight, before convergence)
+
+One reuse lens (`code-quality-agent`) reviews the full `origin/main...HEAD` diff
+for code that re-implements behavior the repository already provides. It reports a
+reuse improvement only when all three criteria hold together, and omits any case
+where even one is in doubt:
 
 1. **Certain** — an existing symbol or module unquestionably covers the new
    code's behavior, cited at `file:line`.
-2. **Behaviorally identical** — swapping the new code for the existing one
+2. **Behaviorally the same** — swapping the new code for the existing one
    changes no observable behavior: same inputs, outputs, side effects, and
    error handling.
 3. **Autonomously implementable** — the replacement is a mechanical edit (import
-   and call the existing symbol, delete the duplicate) needing no product
+   and call the existing symbol, drop the duplicate) needing no product
    decision and no human judgment.
 
 The lens reports without editing. Each qualifying improvement runs through the
