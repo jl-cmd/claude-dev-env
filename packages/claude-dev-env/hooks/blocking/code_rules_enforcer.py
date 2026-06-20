@@ -70,6 +70,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_fallback_branch_coverage,
     check_docstring_format,
     check_docstring_no_consumer_claim,
+    check_docstring_step_enumeration_dispatch_coverage,
     check_docstring_tuple_enumeration_match,
     check_module_docstring_names_public_checks,
 )
@@ -265,6 +266,11 @@ def validate_content(
         )
         all_issues.extend(
             check_docstring_tuple_enumeration_match(effective_content, file_path)
+        )
+        all_issues.extend(
+            check_docstring_step_enumeration_dispatch_coverage(
+                effective_content, file_path
+            )
         )
         all_issues.extend(
             check_boolean_naming(
