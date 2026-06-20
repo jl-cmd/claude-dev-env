@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.71.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.70.0...claude-dev-env-v1.71.0) (2026-06-20)
+
+
+### Features
+
+* **pre-push:** block feature branches landing on protected remote branches ([b8dce67](https://github.com/jl-cmd/claude-code-config/commit/b8dce67bf417872db7f5e0029da28618fec50fe6))
+* **pre-push:** block pushing a non-main local branch onto remote main ([b774a3a](https://github.com/jl-cmd/claude-code-config/commit/b774a3ace35d95f78d9fca1f9b9e90931028dda1))
+
+
+### Documentation
+
+* **audit:** align category-O prose-ordering claim across rubric and rule ([a2f785e](https://github.com/jl-cmd/claude-code-config/commit/a2f785e968d13b4a5f285623e1215aeefe4cfb67))
+* **audit:** catch companion-doc ordering/content drift in prose rule ([1af8574](https://github.com/jl-cmd/claude-code-config/commit/1af85746ac971ff1ddd679042105976e641786b0))
+
+
+### Performance
+
+* **hooks:** skip orphan-file scan when no cells and prune noise dirs ([f50ecad](https://github.com/jl-cmd/claude-code-config/commit/f50ecad4d22e524854b6c3107cbce9dff90ea534))
+* **hooks:** skip orphan-walk when no filenames referenced and prune noise directories ([3f031a0](https://github.com/jl-cmd/claude-code-config/commit/3f031a05adcf5c63c29388253fc5e954c15a37dc))
+
 ## [1.70.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.69.2...claude-dev-env-v1.70.0) (2026-06-19)
 
 
