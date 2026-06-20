@@ -1,4 +1,4 @@
-"""Type escape-hatch and boundary-type checks: Any imports, cast(), unjustified type: ignore, and Any in signatures."""
+"""Type escape-hatch and boundary-type checks: Any imports, cast(), unjustified type: ignore, object-typed dereferenced parameters, and Any in signatures."""
 
 import ast
 import re
@@ -190,8 +190,52 @@ def _file_path_matches_any_exemption(file_path: str) -> bool:
     return filename in {each_pattern.lower() for each_pattern in ALL_ANY_ALLOWED_PATTERNS}
 
 
+def _annotation_is_bare_object(annotation_node: Optional[ast.expr]) -> bool:
+    """Return True when an annotation is the bare builtin ``object`` name."""
+    return isinstance(annotation_node, ast.Name) and annotation_node.id == "object"
+
+
+def _parameter_names_read_as_attribute_base(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
+    """Return parameter names the body reads as ``name.attribute``."""
+    attribute_base_names: set[str] = set()
+    for each_descendant in ast.walk(function_node):
+        if not isinstance(each_descendant, ast.Attribute):
+            continue
+        base_node = each_descendant.value
+        if isinstance(base_node, ast.Name):
+            attribute_base_names.add(base_node.id)
+    return frozenset(attribute_base_names)
+
+
+def _find_object_annotated_parameter_lines(source: str) -> list[tuple[int, str]]:
+    """Return (line, parameter) for parameters typed ``object`` then read as ``param.attribute``.
+
+    A parameter annotated as the bare builtin ``object`` whose body accesses an
+    attribute on it is a type escape hatch: ``object`` declares no attributes,
+    so every ``param.attribute`` read goes unchecked. A parameter typed
+    ``object`` that the body never dereferences (identity-only use) is honest
+    and not flagged.
+    """
+    try:
+        parsed_tree = ast.parse(source)
+    except SyntaxError:
+        return []
+
+    offending_parameters: list[tuple[int, str]] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        attribute_base_names = _parameter_names_read_as_attribute_base(each_node)
+        for each_argument in _collect_annotated_arguments(each_node):
+            if not _annotation_is_bare_object(each_argument.annotation):
+                continue
+            if each_argument.arg in attribute_base_names:
+                offending_parameters.append((each_argument.lineno, each_argument.arg))
+    return offending_parameters
+
+
 def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
-    """Flag Any annotations, Any imports, cast() calls, and unjustified # type: ignore."""
+    """Flag Any annotations, Any imports, cast() calls, object-typed dereferenced parameters, and unjustified # type: ignore."""
     if is_test_file(file_path) or is_hook_infrastructure(file_path):
         return []
 
@@ -224,6 +268,15 @@ def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
                 f"Line {each_cast_line}: cast() call - escape hatch around the type system; use explicit types or runtime validation"
             )
         issues.extend(cast_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
+
+        object_parameter_issues: list[str] = []
+        for each_object_line, each_parameter_name in _find_object_annotated_parameter_lines(content):
+            object_parameter_issues.append(
+                f"Line {each_object_line}: parameter '{each_parameter_name}' typed 'object' but read as "
+                f"'{each_parameter_name}.attribute' - 'object' declares no attributes, so every access goes "
+                "unchecked; name the concrete type the body relies on"
+            )
+        issues.extend(object_parameter_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
     type_ignore_issues: list[str] = []
     for each_ignore_line in _find_unjustified_type_ignore_lines(content):
