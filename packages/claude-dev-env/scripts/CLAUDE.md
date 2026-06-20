@@ -18,6 +18,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `Migrate-ShellPolicy.ps1` | Applies automated fixes for common shell-policy violations found by the audit script |
 | `Install-SweepEmptyDirs.ps1` | Registers `sweep_empty_dirs.py` as a scheduled task on Windows |
 | `check.ps1` | Runs the full code-quality check suite |
+| `Show-Asset.ps1` | Opens files on screen, sizing each image window to the image's pixel dimensions (scaled to fit the screen); non-image files open in their default application |
 
 ## Subdirectories
 
