@@ -8,7 +8,7 @@ from pathlib import Path
 
 GIT_DASH_C_COMMIT_PATTERN: str = r"git\s+-C\s+[\"']?[^\"';&|]+?[\"']?\s+commit\b"
 GIT_COMMAND_TIMEOUT_SECONDS: int = 5
-GATE_TIMEOUT_SECONDS: int = 120
+GATE_TIMEOUT_SECONDS: int = 240
 GATE_RELATIVE_PATH: Path = Path("_shared") / "pr-loop" / "scripts" / "code_rules_gate.py"
 ALL_STAGED_PYTHON_FILES_COMMAND: tuple[str, ...] = (
     "git",
