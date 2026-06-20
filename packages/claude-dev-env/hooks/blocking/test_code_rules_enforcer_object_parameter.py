@@ -330,3 +330,170 @@ def test_should_still_flag_object_parameter_dereferenced_in_loop_without_rebind(
         f"A loop body that dereferences the object parameter without rebinding it must stay flagged, "
         f"got: {issues!r}"
     )
+
+
+def test_should_not_flag_object_parameter_rebound_by_except_handler_name() -> None:
+    source = (
+        "def f(node: object) -> None:\n"
+        "    try:\n"
+        "        go()\n"
+        "    except E as node:\n"
+        "        node.run()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"An 'except E as node' clause rebinds node to the caught exception; the handler-body read "
+        f"targets the exception, not the object parameter, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_object_parameter_read_in_other_handler_without_rebind() -> None:
+    source = (
+        "def f(node: object) -> None:\n"
+        "    try:\n"
+        "        go()\n"
+        "    except E as node:\n"
+        "        node.run()\n"
+        "    except OtherError:\n"
+        "        node.fail()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "node" in each_issue for each_issue in issues), (
+        f"A read in a sibling handler that does not rebind node must stay flagged even when another "
+        f"handler binds node, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_object_parameter_read_in_handler_without_as_binding() -> None:
+    source = (
+        "def f(node: object) -> None:\n"
+        "    try:\n"
+        "        go()\n"
+        "    except E:\n"
+        "        node.run()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "node" in each_issue for each_issue in issues), (
+        f"An 'except E' clause without an 'as' binding leaves node bound to the object parameter, so "
+        f"the handler-body read must stay flagged, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_object_parameter_rebound_by_match_case_capture() -> None:
+    source = (
+        "def f(node: object) -> None:\n"
+        "    match get():\n"
+        "        case node:\n"
+        "            node.run()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A 'case node' capture pattern rebinds node to the matched subject; the case-body read "
+        f"targets that subject, not the object parameter, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_object_parameter_rebound_by_match_as_subpattern() -> None:
+    source = (
+        "def f(node: object) -> None:\n"
+        "    match get():\n"
+        "        case Point(x=0) as node:\n"
+        "            node.run()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A 'case ... as node' pattern rebinds node to the matched value; the case-body read targets "
+        f"that value, not the object parameter, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_object_parameter_read_in_sibling_case_without_capture() -> None:
+    source = (
+        "def f(node: object) -> None:\n"
+        "    match get():\n"
+        "        case node:\n"
+        "            node.run()\n"
+        "        case 0:\n"
+        "            node.fail()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "node" in each_issue for each_issue in issues), (
+        f"A read in a sibling case that does not capture node must stay flagged even when another "
+        f"case captures node, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_object_parameter_narrowed_by_isinstance_guard() -> None:
+    source = (
+        "def f(value: object) -> None:\n"
+        "    if isinstance(value, Foo):\n"
+        "        value.bar()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"An isinstance(value, Foo) guard narrows value to Foo; the guarded read is type-checked, "
+        f"got: {issues!r}"
+    )
+
+
+def test_should_not_flag_eq_dunder_isinstance_narrowed_other() -> None:
+    source = (
+        "def __eq__(self, other: object) -> bool:\n"
+        "    if not isinstance(other, C):\n"
+        "        return NotImplemented\n"
+        "    return other.value == self.value\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"The canonical __eq__ idiom narrows other via isinstance before reading other.value; that "
+        f"read is type-checked, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_object_parameter_narrowed_then_method_called() -> None:
+    source = (
+        "def g(convergence_summary: object) -> bool:\n"
+        "    if not isinstance(convergence_summary, dict):\n"
+        "        return False\n"
+        "    return bool(convergence_summary.get('k'))\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A negative isinstance early return narrows the parameter on the fall-through path; the "
+        f"later read is type-checked, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_object_parameter_dereferenced_without_isinstance_guard() -> None:
+    source = "def g(value: object) -> None:\n    value.attr()\n"
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "value" in each_issue for each_issue in issues), (
+        f"An unguarded dereference of an object parameter must still be flagged, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_object_parameter_read_before_isinstance_guard() -> None:
+    source = (
+        "def f(value: object) -> None:\n"
+        "    value.early()\n"
+        "    if isinstance(value, Foo):\n"
+        "        value.bar()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "value" in each_issue for each_issue in issues), (
+        f"A read that precedes the isinstance guard is not narrowed and must stay flagged, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_object_parameter_read_in_else_of_isinstance_guard() -> None:
+    source = (
+        "def f(value: object) -> None:\n"
+        "    if isinstance(value, Foo):\n"
+        "        return\n"
+        "    value.attr()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "value" in each_issue for each_issue in issues), (
+        f"A positive isinstance guard does not narrow the fall-through path; the read after it must "
+        f"stay flagged, got: {issues!r}"
+    )

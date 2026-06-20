@@ -331,6 +331,31 @@ def _statement_chain(
     return all_statement_steps
 
 
+def _body_block_header_chain(
+    all_body_statements: list[ast.stmt],
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    parent_by_child_id: dict[int, ast.AST],
+) -> list[tuple[int, int]] | None:
+    """Return a chain that locates the head of a statement body, before its first statement.
+
+    An ``except ... as`` handler body, a ``match`` case body, and an
+    ``if isinstance(...)`` then-branch each bind or narrow a name for the
+    statements inside that body, the way a ``for`` header binds its loop target
+    for the loop body. The chain reuses the first body statement's path with the
+    final index replaced by a header sentinel that orders before every statement
+    in the block, so it dominates exactly the reads inside that one body and no
+    sibling body that shares the same parent.
+    """
+    if not all_body_statements:
+        return None
+    header_index_before_first_statement = -1
+    first_statement_chain = _statement_chain(all_body_statements[0], function_node, parent_by_child_id)
+    if not first_statement_chain:
+        return None
+    body_block_identity, _ = first_statement_chain[-1]
+    return [*first_statement_chain[:-1], (body_block_identity, header_index_before_first_statement)]
+
+
 def _rebind_dominates_read(
     all_rebind_steps: list[tuple[int, int]],
     all_read_steps: list[tuple[int, int]],
@@ -388,21 +413,154 @@ def _rebind_chains_by_name(
     return rebind_chains_by_name
 
 
+def _capture_names_a_match_pattern_binds(pattern_node: ast.pattern) -> set[str]:
+    """Return the names a ``case`` pattern binds to the matched subject.
+
+    A bare capture (``case node``), an ``as`` binding (``case Point() as node``),
+    and a star or double-star rest (``case [*rest]``, ``case {**rest}``) each bind
+    a name via a string attribute rather than an ``ast.Name`` ``Store`` node, so
+    the ``Store``-based collector never sees them.
+    """
+    bound_names: set[str] = set()
+    for each_descendant in ast.walk(pattern_node):
+        if isinstance(each_descendant, (ast.MatchAs, ast.MatchStar)) and each_descendant.name is not None:
+            bound_names.add(each_descendant.name)
+        if isinstance(each_descendant, ast.MatchMapping) and each_descendant.rest is not None:
+            bound_names.add(each_descendant.rest)
+    return bound_names
+
+
+def _handler_and_case_binding_chains_by_name(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    parent_by_child_id: dict[int, ast.AST],
+    all_object_parameter_names: frozenset[str],
+) -> dict[str, list[list[tuple[int, int]]]]:
+    """Return, per object-parameter name, the body-header chain of each ``except as`` or ``case`` rebind.
+
+    An ``except E as name`` clause binds ``name`` to the caught exception via
+    ``ExceptHandler.name`` (a string); a ``case`` capture binds via
+    ``MatchAs``/``MatchStar``/``MatchMapping`` name attributes. Neither is an
+    ``ast.Name`` ``Store`` node, so each is collected here as a body-header rebind
+    that dominates only the reads inside its own handler or case body.
+    """
+    binding_chains_by_name: dict[str, list[list[tuple[int, int]]]] = {}
+    for each_node in ast.walk(function_node):
+        if isinstance(each_node, ast.ExceptHandler) and each_node.name in all_object_parameter_names:
+            body_header_chain = _body_block_header_chain(each_node.body, function_node, parent_by_child_id)
+            if body_header_chain is not None:
+                binding_chains_by_name.setdefault(each_node.name, []).append(body_header_chain)
+        if isinstance(each_node, ast.match_case):
+            for each_bound_name in _capture_names_a_match_pattern_binds(each_node.pattern):
+                if each_bound_name not in all_object_parameter_names:
+                    continue
+                body_header_chain = _body_block_header_chain(each_node.body, function_node, parent_by_child_id)
+                if body_header_chain is not None:
+                    binding_chains_by_name.setdefault(each_bound_name, []).append(body_header_chain)
+    return binding_chains_by_name
+
+
+def _isinstance_narrowed_name(isinstance_test: ast.expr) -> str | None:
+    """Return the parameter name an ``isinstance(name, ...)`` test narrows, or None."""
+    if not isinstance(isinstance_test, ast.Call):
+        return None
+    if not isinstance(isinstance_test.func, ast.Name) or isinstance_test.func.id != "isinstance":
+        return None
+    if not isinstance_test.args:
+        return None
+    narrowed_subject = isinstance_test.args[0]
+    if isinstance(narrowed_subject, ast.Name):
+        return narrowed_subject.id
+    return None
+
+
+def _branch_body_always_exits(all_body_statements: list[ast.stmt]) -> bool:
+    """Return True when a statement body ends in a control-flow exit (return/raise/continue/break)."""
+    if not all_body_statements:
+        return False
+    last_statement = all_body_statements[-1]
+    return isinstance(last_statement, (ast.Return, ast.Raise, ast.Continue, ast.Break))
+
+
+def _isinstance_narrowing_chains_by_name(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    parent_by_child_id: dict[int, ast.AST],
+    all_object_parameter_names: frozenset[str],
+) -> dict[str, list[list[tuple[int, int]]]]:
+    """Return, per object-parameter name, the chains over which an ``isinstance`` guard narrows it.
+
+    A positive ``if isinstance(name, T):`` narrows ``name`` for its then-branch, so
+    its body-header chain dominates the reads inside that branch. A negated
+    ``if not isinstance(name, T):`` whose body always exits narrows ``name`` on the
+    fall-through, so the ``if`` statement's own chain dominates the same-block reads
+    after it. A type checker checks ``name.attribute`` over either narrowed region,
+    so a read there is not an unchecked ``object`` access.
+    """
+    narrowing_chains_by_name: dict[str, list[list[tuple[int, int]]]] = {}
+    for each_node in ast.walk(function_node):
+        if not isinstance(each_node, ast.If):
+            continue
+        guard_test = each_node.test
+        is_negated_guard = isinstance(guard_test, ast.UnaryOp) and isinstance(guard_test.op, ast.Not)
+        isinstance_test = guard_test.operand if isinstance(guard_test, ast.UnaryOp) else guard_test
+        narrowed_name = _isinstance_narrowed_name(isinstance_test)
+        if narrowed_name is None or narrowed_name not in all_object_parameter_names:
+            continue
+        if is_negated_guard:
+            if not _branch_body_always_exits(each_node.body):
+                continue
+            fall_through_chain = _statement_chain(each_node, function_node, parent_by_child_id)
+            narrowing_chains_by_name.setdefault(narrowed_name, []).append(fall_through_chain)
+            continue
+        body_header_chain = _body_block_header_chain(each_node.body, function_node, parent_by_child_id)
+        if body_header_chain is not None:
+            narrowing_chains_by_name.setdefault(narrowed_name, []).append(body_header_chain)
+    return narrowing_chains_by_name
+
+
+def _all_suppression_chains_by_name(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    parent_by_child_id: dict[int, ast.AST],
+    all_object_parameter_names: frozenset[str],
+) -> dict[str, list[list[tuple[int, int]]]]:
+    """Return, per object-parameter name, every statement chain that suppresses a dereference.
+
+    A read is suppressed when a chain in this map dominates it: an own-scope
+    ``Store`` rebind, an ``except as`` or ``case`` capture rebind, or an
+    ``isinstance`` narrowing guard. A read no chain dominates still resolves to the
+    bare ``object`` parameter and counts as an unchecked dereference.
+    """
+    suppression_chains_by_name: dict[str, list[list[tuple[int, int]]]] = {}
+    for each_collector in (
+        _rebind_chains_by_name,
+        _handler_and_case_binding_chains_by_name,
+        _isinstance_narrowing_chains_by_name,
+    ):
+        for each_name, each_chain_list in each_collector(
+            function_node, parent_by_child_id, all_object_parameter_names
+        ).items():
+            suppression_chains_by_name.setdefault(each_name, []).extend(each_chain_list)
+    return suppression_chains_by_name
+
+
 def _parameter_names_dereferenced_while_live(
     function_node: ast.FunctionDef | ast.AsyncFunctionDef,
     all_object_parameter_names: frozenset[str],
 ) -> frozenset[str]:
-    """Return object-parameter names read as ``name.attribute`` while still bound to the parameter.
+    """Return object-parameter names read as ``name.attribute`` while still bound to the parameter and unchecked.
 
-    A read counts only when it resolves to the parameter at the read site: it
-    sits in a scope that does not rebind the name (so it is not shadowed by a
-    nested function, lambda, or comprehension that reuses the name) and no
-    earlier rebind dominates it on the straight-line path to the read. A
-    conditional rebind on a branch the read need not enter leaves the read
-    bound to the parameter, so the read still counts.
+    A read counts only when it resolves to the bare ``object`` parameter at the
+    read site and no suppressor on the straight-line path to it makes the access
+    type-checked. It is not counted when it sits in a scope that rebinds the name
+    (a nested function, lambda, or comprehension that reuses the name), and not
+    counted when a dominating suppressor precedes it: an own-scope ``Store``
+    rebind, an ``except as`` or ``case`` capture rebind, or an ``isinstance``
+    narrowing guard. A suppressor on a branch the read need not enter leaves the
+    read bound to the bare parameter, so the read still counts.
     """
     parent_by_child_id = _parent_node_by_child(function_node)
-    rebind_chains_by_name = _rebind_chains_by_name(function_node, parent_by_child_id, all_object_parameter_names)
+    suppression_chains_by_name = _all_suppression_chains_by_name(
+        function_node, parent_by_child_id, all_object_parameter_names
+    )
     dereferenced_names: set[str] = set()
     for each_node in ast.walk(function_node):
         if not isinstance(each_node, ast.Attribute) or not isinstance(each_node.value, ast.Name):
@@ -413,10 +571,10 @@ def _parameter_names_dereferenced_while_live(
         if _read_is_shadowed_by_a_nested_scope(each_node.value, function_node, parent_by_child_id):
             continue
         all_read_steps = _statement_chain(each_node.value, function_node, parent_by_child_id)
-        all_dominating_rebinds = rebind_chains_by_name.get(base_name, [])
+        all_dominating_suppressors = suppression_chains_by_name.get(base_name, [])
         if any(
-            _rebind_dominates_read(each_rebind_chain, all_read_steps)
-            for each_rebind_chain in all_dominating_rebinds
+            _rebind_dominates_read(each_suppressor_chain, all_read_steps)
+            for each_suppressor_chain in all_dominating_suppressors
         ):
             continue
         dereferenced_names.add(base_name)
@@ -427,20 +585,21 @@ def _find_object_annotated_parameter_lines(source: str) -> list[tuple[int, str]]
     """Return (line, parameter) for positional/keyword parameters typed ``object`` then dereferenced.
 
     A positional or keyword parameter annotated as the bare builtin ``object``
-    whose body reads an attribute on it is a type escape hatch: ``object``
-    declares no attributes, so every ``param.attribute`` read goes unchecked.
-    The decision is per read, so a parameter is flagged when at least one read
-    of it resolves to the parameter at the read site. A parameter typed
-    ``object`` that the body never dereferences (identity-only use) is honest
-    and not flagged. A single read does not count when an earlier rebind
-    dominates it on the straight-line path to the read, or when the read sits
-    inside a nested function, lambda, or comprehension that reuses the name as
-    its own binding; a class body is not such a scope, so a method nested in a
-    class that reads an enclosing-function parameter still counts. A read on a
-    branch a non-dominating rebind does not reach, and a top-level read whose
-    name a later nested scope reuses, both still count. The ``*args``/``**kwargs``
-    slots are out of scope: ``object`` there types the elements, while the
-    binding is a concrete ``tuple``/``dict``.
+    whose body reads an unchecked attribute on it is a type escape hatch: a read
+    of a bare ``object`` value goes unchecked, because ``object`` declares no
+    attributes. The decision is per read, so a parameter is flagged when at least
+    one read of it resolves to the bare parameter at the read site. A parameter
+    typed ``object`` that the body never dereferences (identity-only use) is
+    honest and not flagged. A single read does not count when a dominating
+    suppressor precedes it on the straight-line path — an own-scope ``Store``
+    rebind, an ``except as`` or ``case`` capture rebind, or an ``isinstance``
+    narrowing guard — or when the read sits inside a nested function, lambda, or
+    comprehension that reuses the name as its own binding; a class body is not
+    such a scope, so a method nested in a class that reads an enclosing-function
+    parameter still counts. A read on a branch a non-dominating suppressor does
+    not reach, and a top-level read whose name a later nested scope reuses, both
+    still count. The ``*args``/``**kwargs`` slots are out of scope: ``object``
+    there types the elements, while the binding is a concrete ``tuple``/``dict``.
     """
     try:
         parsed_tree = ast.parse(source)
@@ -505,8 +664,9 @@ def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
         for each_object_line, each_parameter_name in _find_object_annotated_parameter_lines(content):
             object_parameter_issues.append(
                 f"Line {each_object_line}: parameter '{each_parameter_name}' typed 'object' but read as "
-                f"'{each_parameter_name}.attribute' - 'object' declares no attributes, so every access goes "
-                "unchecked; name the concrete type the body relies on"
+                f"'{each_parameter_name}.attribute' on a path where its type is not narrowed - a bare "
+                "'object' read goes unchecked; narrow it with an isinstance guard before the read, or name "
+                "the concrete type the body relies on"
             )
         issues.extend(object_parameter_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
