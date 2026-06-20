@@ -16,6 +16,7 @@ from code_rules_shared import (  # noqa: E402
     _walk_skipping_nested_functions,
     _walk_skipping_type_checking_blocks,
     is_hook_infrastructure,
+    is_strict_test_file,
     is_test_file,
 )
 
@@ -25,6 +26,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES,
     ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES,
     ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES,
+    ALL_GENERIC_CHECK_NAME_TOKENS,
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
     MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES,
@@ -32,13 +34,19 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
+    MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
+    MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
+    MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER,
     MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
+    MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_DOCSTRING_ARGS_SECTION_HEADERS,
     ALL_DOCSTRING_TERMINATING_SECTION_HEADERS,
     ALL_SELF_AND_CLS_PARAMETER_NAMES,
     DOCSTRING_ARG_ENTRY_PATTERN,
+    IDENTIFIER_SHAPED_TUPLE_MEMBER_PATTERN,
+    INLINE_CODE_TOKEN_PATTERN,
 )
 
 
@@ -619,3 +627,202 @@ def check_docstring_no_consumer_claim(content: str, file_path: str) -> list[str]
         if len(issues) >= MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES:
             break
     return issues[:MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES]
+
+
+def _module_docstring_summary_is_single_paragraph(module_docstring: str) -> bool:
+    stripped_text = module_docstring.strip()
+    if not stripped_text:
+        return False
+    return "\n" not in stripped_text
+
+
+def _module_public_check_names(parsed_tree: ast.Module) -> list[str]:
+    deduplicated_names: dict[str, None] = {}
+    for each_statement in parsed_tree.body:
+        if not isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not each_statement.name.startswith("check_"):
+            continue
+        if _function_is_private_or_dunder(each_statement.name):
+            continue
+        deduplicated_names[each_statement.name] = None
+    return list(deduplicated_names)
+
+
+def _distinctive_name_tokens(check_name: str) -> list[str]:
+    return [
+        each_token
+        for each_token in _name_tokens(check_name)
+        if each_token.lower() not in ALL_GENERIC_CHECK_NAME_TOKENS
+    ]
+
+
+def _docstring_mentions_check(docstring_text: str, check_name: str) -> bool:
+    lowered_docstring = docstring_text.lower()
+    if check_name.lower() in lowered_docstring:
+        return True
+    distinctive_tokens = _distinctive_name_tokens(check_name)
+    if not distinctive_tokens:
+        return True
+    return any(each_token.lower() in lowered_docstring for each_token in distinctive_tokens)
+
+
+def check_module_docstring_names_public_checks(content: str, file_path: str) -> list[str]:
+    """Flag a one-line module docstring that omits a public ``check_*`` function.
+
+    A check-registry module whose docstring is a single summary paragraph names
+    each check it dispatches, so a reader trusts that one line to be the full
+    roster. When the module grows a public ``check_*`` entry point the summary
+    never names, the enumeration under-describes the module — the
+    docstring-prose-vs-implementation drift the repo flags as Category O6/O8.
+    A check counts as named when the full ``check_*`` name, or any distinctive
+    (non-generic) underscore-separated token of it, appears in the summary;
+    generic tokens (``check``, ``test``, ``tests``) do not count. A module with
+    two or more public checks and any check the summary never names is reported
+    so the summary names the full roster. Modules with a multi-paragraph
+    docstring body are left to the audit lane, since their prose can carry the
+    roster without naming each check by name. This check covers hook
+    infrastructure, where the affected check registries live.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per public check the single-paragraph module docstring omits,
+        capped at the module limit.
+    """
+    if is_strict_test_file(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    module_docstring = ast.get_docstring(parsed_tree) or ""
+    if not _module_docstring_summary_is_single_paragraph(module_docstring):
+        return []
+    public_check_names = _module_public_check_names(parsed_tree)
+    if len(public_check_names) < MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER:
+        return []
+    issues: list[str] = []
+    for each_name in public_check_names:
+        if _docstring_mentions_check(module_docstring, each_name):
+            continue
+        issues.append(
+            f"Line 1: module docstring omits public check {each_name}() — name every "
+            "public check_* function the module exposes so the roster is complete "
+            "(Category O6/O8 docstring-vs-implementation drift)"
+        )
+        if len(issues) >= MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES:
+            break
+    return issues[:MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES]
+
+
+def _module_string_tuple_members(parsed_tree: ast.Module) -> dict[str, frozenset[str]]:
+    members_by_constant: dict[str, frozenset[str]] = {}
+    for each_statement in parsed_tree.body:
+        if not isinstance(each_statement, ast.Assign):
+            continue
+        if not isinstance(each_statement.value, ast.Tuple):
+            continue
+        literal_members: set[str] = set()
+        every_member_is_identifier_shaped = True
+        for each_element in each_statement.value.elts:
+            if (
+                isinstance(each_element, ast.Constant)
+                and isinstance(each_element.value, str)
+                and IDENTIFIER_SHAPED_TUPLE_MEMBER_PATTERN.match(each_element.value)
+            ):
+                literal_members.add(each_element.value.lstrip("."))
+                continue
+            every_member_is_identifier_shaped = False
+            break
+        if not every_member_is_identifier_shaped:
+            continue
+        if len(literal_members) < MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION:
+            continue
+        for each_target in each_statement.targets:
+            if isinstance(each_target, ast.Name):
+                members_by_constant[each_target.id] = frozenset(literal_members)
+    return members_by_constant
+
+
+def _names_referenced_in_function(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> set[str]:
+    return {
+        each_node.id
+        for each_node in ast.walk(function_node)
+        if isinstance(each_node, ast.Name)
+    }
+
+
+def _docstring_inline_code_tokens(docstring_text: str) -> set[str]:
+    tokens: set[str] = set()
+    for each_match in INLINE_CODE_TOKEN_PATTERN.finditer(docstring_text):
+        token = each_match.group(1).strip().lstrip(".")
+        if token:
+            tokens.add(token)
+    return tokens
+
+
+def check_docstring_tuple_enumeration_match(content: str, file_path: str) -> list[str]:
+    """Flag a docstring enumeration that drifts from a literal tuple it reads.
+
+    The drift this catches: a function reads a module-level tuple of literal
+    string members and its docstring enumerates inline-code tokens that name
+    some of those members, but the enumerated set and the tuple membership
+    differ. A token the docstring lists that the tuple lacks, or a tuple member
+    the docstring omits, misleads a reader who trusts the prose enumeration to
+    match the detection set — the deterministic slice of Category O6
+    docstring-prose-vs-implementation drift. The check binds only when the
+    docstring's inline-code tokens overlap the tuple membership, so a docstring
+    that names unrelated attributes is left alone. This check covers hook
+    infrastructure, where the affected detection tuples live.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per function whose docstring enumeration diverges from the
+        tuple it reads, capped at the module limit.
+    """
+    if is_strict_test_file(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    members_by_constant = _module_string_tuple_members(parsed_tree)
+    if not members_by_constant:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        docstring_text = _function_docstring_text(each_node)
+        if not docstring_text:
+            continue
+        docstring_tokens = _docstring_inline_code_tokens(docstring_text)
+        if not docstring_tokens:
+            continue
+        referenced_names = _names_referenced_in_function(each_node)
+        for each_constant_name in referenced_names & set(members_by_constant):
+            tuple_members = members_by_constant[each_constant_name]
+            if not (docstring_tokens & tuple_members):
+                continue
+            if docstring_tokens == tuple_members:
+                continue
+            docstring_only = sorted(docstring_tokens - tuple_members)
+            tuple_only = sorted(tuple_members - docstring_tokens)
+            issues.append(
+                f"Line {each_node.lineno}: {each_node.name}() docstring enumerates "
+                f"{sorted(docstring_tokens)} but {each_constant_name} holds "
+                f"{sorted(tuple_members)} — docstring-only: {docstring_only}, "
+                f"tuple-only: {tuple_only}; match the enumeration to the tuple "
+                "(Category O6 docstring-vs-implementation drift)"
+            )
+            if len(issues) >= MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES:
+                return issues[:MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES]
+    return issues[:MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES]
