@@ -27,6 +27,7 @@ def _load_enforcer_module() -> ModuleType:
 code_rules_enforcer = _load_enforcer_module()
 check_type_escape_hatches = code_rules_enforcer.check_type_escape_hatches
 check_collection_prefix = code_rules_enforcer.check_collection_prefix
+check_loop_variable_naming = code_rules_enforcer.check_loop_variable_naming
 
 PRODUCTION_FILE_PATH = "/project/src/module.py"
 TEST_FILE_PATH = "/project/src/test_module.py"
@@ -37,6 +38,12 @@ def test_type_escape_module_has_no_collection_prefix_violations() -> None:
     source = TYPE_ESCAPE_MODULE_PATH.read_text(encoding="utf-8")
     issues = check_collection_prefix(source, str(TYPE_ESCAPE_MODULE_PATH))
     assert issues == [], f"Collection-parameter naming must be clean, got: {issues!r}"
+
+
+def test_type_escape_module_has_no_loop_variable_naming_violations() -> None:
+    source = TYPE_ESCAPE_MODULE_PATH.read_text(encoding="utf-8")
+    issues = check_loop_variable_naming(source, str(TYPE_ESCAPE_MODULE_PATH))
+    assert issues == [], f"Loop-variable naming must be clean, got: {issues!r}"
 
 
 def test_should_flag_self_object_with_attribute_access() -> None:
@@ -174,4 +181,100 @@ def test_should_flag_object_parameter_dereferenced_inside_comprehension_body() -
     issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
     assert any("object" in each_issue and "node" in each_issue for each_issue in issues), (
         f"A genuine object-parameter dereference inside a comprehension body must be flagged, got: {issues!r}"
+    )
+
+
+def test_should_flag_object_parameter_dereferenced_inside_nested_class_method() -> None:
+    source = (
+        "def outer(node: object) -> object:\n"
+        "    class Inner:\n"
+        "        def m(self) -> None:\n"
+        "            print(node.text)\n"
+        "    return Inner\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "node" in each_issue for each_issue in issues), (
+        f"A class-nested method reads the outer object parameter from the enclosing scope; "
+        f"that dereference must be flagged, got: {issues!r}"
+    )
+
+
+def test_should_flag_earlier_object_deref_when_later_comprehension_reuses_name() -> None:
+    source = (
+        "def f(node: object) -> list:\n"
+        "    node.run()\n"
+        "    return [node for node in items()]\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "node" in each_issue for each_issue in issues), (
+        f"A genuine top-level dereference before a later comprehension reuses the name must stay flagged, "
+        f"got: {issues!r}"
+    )
+
+
+def test_should_flag_top_level_object_deref_when_nested_function_reuses_name() -> None:
+    source = (
+        "def outer(node: object) -> None:\n"
+        "    print(node.text)\n"
+        "    def inner(node: int) -> None:\n"
+        "        pass\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "node" in each_issue for each_issue in issues), (
+        f"A top-level dereference must stay flagged even when a nested function reuses the name, got: {issues!r}"
+    )
+
+
+def test_should_flag_top_level_object_deref_when_lambda_reuses_name() -> None:
+    source = (
+        "def outer(node: object) -> object:\n"
+        "    print(node.text)\n"
+        "    return lambda node: node.text\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "node" in each_issue for each_issue in issues), (
+        f"A top-level dereference must stay flagged even when a lambda reuses the name, got: {issues!r}"
+    )
+
+
+def test_should_flag_both_object_parameters_when_one_name_collides_with_comprehension_target() -> None:
+    source = (
+        "def f(a: object, b: object) -> None:\n"
+        "    print(a.x)\n"
+        "    print(b.y)\n"
+        "    all_squares = [a for a in range(3)]\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "'a'" in each_issue for each_issue in issues), (
+        f"Top-level a.x must be flagged even though a comprehension reuses 'a', got: {issues!r}"
+    )
+    assert any("object" in each_issue and "'b'" in each_issue for each_issue in issues), (
+        f"Top-level b.y must be flagged, got: {issues!r}"
+    )
+
+
+def test_should_flag_object_parameter_dereferenced_on_conditional_rebind_fall_through() -> None:
+    source = (
+        "def f(client: object, cond: bool) -> None:\n"
+        "    if cond:\n"
+        "        client = wrap(client)\n"
+        "    client.connect()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "client" in each_issue for each_issue in issues), (
+        f"A conditional rebind does not dominate the fall-through dereference, so client.connect() "
+        f"must stay flagged, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_object_parameter_rebound_then_dereferenced_in_same_branch() -> None:
+    source = (
+        "def f(client: object, cond: bool) -> None:\n"
+        "    if cond:\n"
+        "        client = wrap(client)\n"
+        "        client.connect()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A rebind that dominates the read within the same branch suppresses the dereference, got: {issues!r}"
     )
