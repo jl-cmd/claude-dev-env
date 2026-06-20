@@ -321,3 +321,121 @@ def test_invoke_gate_uses_resolved_path(
     assert exit_code == 0
     executed_path = recorded_path_file.read_text(encoding="utf-8")
     assert executed_path == str(resolved_path)
+
+
+def test_find_protected_branch_push_violation_flags_feature_branch_to_main() -> None:
+    stdin_text = (
+        f"refs/heads/feat/example {NON_ZERO_LOCAL_SHA} refs/heads/main {NON_ZERO_REMOTE_SHA_ONE}\n"
+    )
+
+    violation = pre_push.find_protected_branch_push_violation(stdin_text)
+
+    assert violation == ("feat/example", "main")
+
+
+def test_find_protected_branch_push_violation_flags_feature_branch_to_master() -> None:
+    stdin_text = (
+        f"refs/heads/topic {NON_ZERO_LOCAL_SHA} refs/heads/master {NON_ZERO_REMOTE_SHA_ONE}\n"
+    )
+
+    violation = pre_push.find_protected_branch_push_violation(stdin_text)
+
+    assert violation == ("topic", "master")
+
+
+def test_find_protected_branch_push_violation_allows_main_onto_main() -> None:
+    stdin_text = (
+        f"refs/heads/main {NON_ZERO_LOCAL_SHA} refs/heads/main {NON_ZERO_REMOTE_SHA_ONE}\n"
+    )
+
+    violation = pre_push.find_protected_branch_push_violation(stdin_text)
+
+    assert violation is None
+
+
+def test_find_protected_branch_push_violation_allows_feature_onto_own_ref() -> None:
+    stdin_text = (
+        f"refs/heads/feat/example {NON_ZERO_LOCAL_SHA} refs/heads/feat/example {NON_ZERO_REMOTE_SHA_ONE}\n"
+    )
+
+    violation = pre_push.find_protected_branch_push_violation(stdin_text)
+
+    assert violation is None
+
+
+def test_find_protected_branch_push_violation_ignores_deletion_of_main() -> None:
+    stdin_text = (
+        f"(delete) {ALL_ZEROS_OBJECT_NAME} refs/heads/main {NON_ZERO_REMOTE_SHA_ONE}\n"
+    )
+
+    violation = pre_push.find_protected_branch_push_violation(stdin_text)
+
+    assert violation is None
+
+
+def test_main_blocks_feature_branch_push_onto_main(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    passing_gate_path = tmp_path / "gate.py"
+    passing_gate_path.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(passing_gate_path))
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            f"refs/heads/feat/example {NON_ZERO_LOCAL_SHA} refs/heads/main {NON_ZERO_REMOTE_SHA_ONE}\n"
+        ),
+    )
+
+    exit_code = pre_push.main()
+
+    assert exit_code == git_hooks_constants.PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE
+    captured = capsys.readouterr()
+    assert "feat/example" in captured.err
+    assert "main" in captured.err
+
+
+def test_main_blocks_protected_push_even_when_gate_script_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(
+        "CODE_RULES_GATE_PATH",
+        str(tmp_path / "does_not_exist.py"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            f"refs/heads/feat/example {NON_ZERO_LOCAL_SHA} refs/heads/main {NON_ZERO_REMOTE_SHA_ONE}\n"
+        ),
+    )
+
+    exit_code = pre_push.main()
+
+    assert exit_code == git_hooks_constants.PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE
+    captured = capsys.readouterr()
+    assert "feat/example" in captured.err
+
+
+def test_main_allows_main_onto_main_push(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    passing_gate_path = tmp_path / "gate.py"
+    passing_gate_path.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(passing_gate_path))
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            f"refs/heads/main {NON_ZERO_LOCAL_SHA} refs/heads/main {NON_ZERO_REMOTE_SHA_ONE}\n"
+        ),
+    )
+
+    exit_code = pre_push.main()
+
+    assert exit_code == 0

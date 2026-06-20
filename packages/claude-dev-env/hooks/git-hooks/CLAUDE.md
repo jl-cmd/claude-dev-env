@@ -7,7 +7,7 @@ Native git hooks that run outside the Claude Code lifecycle — invoked directly
 | File | Git hook | What it does |
 |---|---|---|
 | `pre_commit.py` | `pre-commit` | Runs the CODE_RULES gate (`precommit_code_rules_gate.py`) over staged changes; exits 1 when any staged file has a blocking violation |
-| `pre_push.py` | `pre-push` | Runs the verified-commit gate check before a push reaches the remote |
+| `pre_push.py` | `pre-push` | Blocks a push that would land a non-`main` local branch onto remote `main` (or `master`), then runs the CODE_RULES gate over the commits about to be pushed |
 | `post_commit.py` | `post-commit` | Runs after a commit lands; performs any post-commit bookkeeping |
 | `gate_utils.py` | — | Shared helpers: resolves the gate script path, checks that the path is a safe regular file |
 | `test_config.py` | — | Test configuration helpers |
