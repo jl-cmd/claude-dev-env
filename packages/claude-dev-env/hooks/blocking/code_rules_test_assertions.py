@@ -1,4 +1,4 @@
-"""Skip-decorator, existence-only, constant-equality, and flag-gated scenario test-quality checks."""
+"""Skip-decorator, existence-only, constant-equality, stale-test-name, and flag-gated scenario test-quality checks."""
 
 import ast
 import sys
@@ -18,6 +18,10 @@ from code_rules_shared import (  # noqa: E402
     is_test_file,
 )
 
+from hooks_constants.blocking_check_limits import (  # noqa: E402
+    MAX_STALE_TEST_NAME_TARGET_ISSUES,
+    STALE_TEST_NAME_MINIMUM_SHARED_TOKEN_COUNT,
+)
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     UPPER_SNAKE_CONSTANT_PATTERN,
 )
@@ -346,3 +350,150 @@ def check_flag_gated_scenario_test_naming(content: str, file_path: str) -> list[
             )
 
     return []
+
+
+def _called_function_names(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """Return the bare names of every function the test body calls."""
+    called_names: set[str] = set()
+    for each_node in ast.walk(function_node):
+        if not isinstance(each_node, ast.Call):
+            continue
+        callee = each_node.func
+        if isinstance(callee, ast.Name):
+            called_names.add(callee.id)
+        elif isinstance(callee, ast.Attribute):
+            called_names.add(callee.attr)
+    return called_names
+
+
+def _module_known_callable_names(syntax_tree: ast.Module) -> set[str]:
+    """Return every callable-like name the module imports, defines, or calls.
+
+    A stale test name embeds a function that has been renamed away, so its name
+    appears nowhere as a real symbol. This set is the universe of names that DO
+    exist in the file, used to confirm the embedded name is absent.
+    """
+    known_names: set[str] = set()
+    for each_node in ast.walk(syntax_tree):
+        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            known_names.add(each_node.name)
+        elif isinstance(each_node, ast.ImportFrom):
+            for each_alias in each_node.names:
+                known_names.add(each_alias.asname or each_alias.name)
+        elif isinstance(each_node, ast.Import):
+            for each_alias in each_node.names:
+                known_names.add((each_alias.asname or each_alias.name).split(".")[0])
+        elif isinstance(each_node, ast.Call):
+            callee = each_node.func
+            if isinstance(callee, ast.Name):
+                known_names.add(callee.id)
+            elif isinstance(callee, ast.Attribute):
+                known_names.add(callee.attr)
+    return known_names
+
+
+def _leading_token_overlap(first_name: str, second_name: str) -> int:
+    """Return how many leading underscore-separated tokens two names share."""
+    first_tokens = first_name.split("_")
+    second_tokens = second_name.split("_")
+    shared = 0
+    for first_token, second_token in zip(first_tokens, second_tokens):
+        if first_token != second_token:
+            break
+        shared += 1
+    return shared
+
+
+def _renamed_sibling_for_candidate(candidate_name: str, called_names: set[str]) -> str | None:
+    """Return a called function that looks like the renamed form of the candidate.
+
+    A rename keeps the token count and the leading tokens but swaps one or more
+    interior or trailing tokens (``collect_skip_theme_names`` to
+    ``collect_skip_clean_names``). The match requires an equal token count and a
+    shared leading run, which excludes an ordinary descriptive test suffix where
+    the called function is a strict shorter prefix of the embedded name.
+    """
+    candidate_token_count = len(candidate_name.split("_"))
+    for each_called in sorted(called_names):
+        if each_called == candidate_name:
+            continue
+        if len(each_called.split("_")) != candidate_token_count:
+            continue
+        if (
+            _leading_token_overlap(candidate_name, each_called)
+            >= STALE_TEST_NAME_MINIMUM_SHARED_TOKEN_COUNT
+        ):
+            return each_called
+    return None
+
+
+def _embedded_target_candidates(test_name: str) -> list[str]:
+    """Return the function-name candidates a test name embeds after its test_ prefix.
+
+    For ``test_collect_skip_theme_names_keeps_only_sorted_at_risk`` the candidates
+    are the successive leading runs ``collect_skip_theme_names``,
+    ``collect_skip_theme``, ``collect_skip`` — longest first — so the embedded
+    function name is matched before its shorter prefixes.
+    """
+    if not test_name.startswith("test_"):
+        return []
+    remainder_tokens = test_name[len("test_"):].split("_")
+    candidates: list[str] = []
+    for token_count in range(len(remainder_tokens), STALE_TEST_NAME_MINIMUM_SHARED_TOKEN_COUNT - 1, -1):
+        candidates.append("_".join(remainder_tokens[:token_count]))
+    return candidates
+
+
+def check_stale_test_name_target(content: str, file_path: str) -> list[str]:
+    """Flag a test whose name embeds a renamed-away function the body no longer calls.
+
+    When a producer function is renamed (``collect_skip_theme_names`` to
+    ``collect_skip_clean_names``) the test bodies are updated to call the new
+    name but the test function identifiers keep the old one. The result is a test
+    name advertising a function that exists nowhere in the file. This catches that
+    Category N test-name-versus-scenario drift: a ``test_*`` name embeds a
+    snake_case run of at least two tokens that names nothing the module imports,
+    defines, or calls, while the same test body calls a function sharing the
+    embedded run's leading tokens — the renamed sibling. Only applies to test
+    files; production files are exempt.
+
+    Args:
+        content: The file body under validation.
+        file_path: Path to the file, used for the test-file gate.
+
+    Returns:
+        One issue per test whose name embeds a renamed-away target, capped at the
+        module limit.
+    """
+    if not is_test_file(file_path):
+        return []
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    known_names = _module_known_callable_names(syntax_tree)
+    issues: list[str] = []
+    for each_node in ast.walk(syntax_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not each_node.name.startswith("test"):
+            continue
+        called_names = _called_function_names(each_node)
+        for each_candidate in _embedded_target_candidates(each_node.name):
+            if each_candidate in known_names:
+                break
+            renamed_sibling = _renamed_sibling_for_candidate(each_candidate, called_names)
+            if renamed_sibling is None:
+                continue
+            issues.append(
+                f"Line {each_node.lineno}: test {each_node.name!r} names "
+                f"{each_candidate!r}, which the file never imports, defines, or calls; "
+                f"the body calls {renamed_sibling!r} instead — rename the test to match "
+                "the function it exercises (Category N test-name-vs-scenario drift)"
+            )
+            if len(issues) >= MAX_STALE_TEST_NAME_TARGET_ISSUES:
+                return issues[:MAX_STALE_TEST_NAME_TARGET_ISSUES]
+            break
+
+    return issues[:MAX_STALE_TEST_NAME_TARGET_ISSUES]

@@ -29,6 +29,20 @@ MAX_E2E_TEST_NAMING_ISSUES: int = 3
 DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT: int = 3
 MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES: int = 3
 DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT: int = 2
+MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES: int = 3
+MAX_STALE_TEST_NAME_TARGET_ISSUES: int = 3
+STALE_TEST_NAME_MINIMUM_SHARED_TOKEN_COUNT: int = 2
+
+ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES: tuple[str, ...] = (
+    "no consumer reads",
+    "no consumer yet",
+    "no submission-run consumer reads",
+    "producer-only artifact",
+    "no reader consumes",
+    "nothing reads it yet",
+    "no one reads it yet",
+    "not yet read by any consumer",
+)
 
 ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES: tuple[str, ...] = (
     "only when",

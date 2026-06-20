@@ -24,12 +24,14 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES,
     ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES,
     ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES,
+    ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES,
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
     MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES,
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
     MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
+    MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
     MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
@@ -559,3 +561,61 @@ def check_class_docstring_names_public_methods(
         if len(issues) >= MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES:
             break
     return issues[:MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES]
+
+
+def _docstring_claims_no_consumer(docstring_text: str) -> str:
+    lowered_docstring = docstring_text.lower()
+    for each_phrase in ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES:
+        if each_phrase in lowered_docstring:
+            return each_phrase
+    return ""
+
+
+def check_docstring_no_consumer_claim(content: str, file_path: str) -> list[str]:
+    """Flag a docstring that asserts no consumer reads its produced artifact yet.
+
+    A producer docstring claiming "no consumer reads it yet" (or
+    "producer-only artifact") is a transitional statement that drifts the moment
+    a consumer lands. Once a submission run, gate, or any reader loads the
+    artifact, the claim contradicts both the live behavior and any companion
+    SKILL.md that documents the consumer — the Category O8 docstring /
+    companion-doc producer-consumer drift. The claim is also a no-historical /
+    no-transitional-language violation in its own right: a docstring describes
+    the contract that exists, not a not-yet-wired future. Rephrase to state what
+    reads the artifact, or drop the no-consumer sentence entirely.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per function whose docstring claims no consumer reads its
+        output, capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        docstring_text = _function_docstring_text(each_node)
+        if not docstring_text:
+            continue
+        matched_phrase = _docstring_claims_no_consumer(docstring_text)
+        if not matched_phrase:
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: {each_node.name}() docstring claims "
+            f"'{matched_phrase}' — a no-consumer-yet claim drifts the moment a reader "
+            "lands and contradicts any companion SKILL.md; state what reads the artifact "
+            "or drop the sentence (Category O8 docstring / companion-doc drift)"
+        )
+        if len(issues) >= MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES:
+            break
+    return issues[:MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES]
