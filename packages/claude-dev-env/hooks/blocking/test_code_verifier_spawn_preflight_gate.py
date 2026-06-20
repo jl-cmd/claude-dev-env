@@ -225,6 +225,10 @@ def write_working_tree_file(repository_root: Path, relative_name: str, source_te
     (repository_root / relative_name).write_text(source_text, encoding="utf-8")
 
 
+def write_invalid_utf8_file(repository_root: Path, relative_name: str) -> None:
+    (repository_root / relative_name).write_bytes(b"\xff\xfe invalid utf-8 bytes\n")
+
+
 def advance_origin_main_divergent(
     repository_root: Path, base_sha: str, relative_name: str, source_text: str
 ) -> None:
@@ -412,6 +416,31 @@ def test_behind_but_conflict_free_allows(tmp_path: Path) -> None:
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
     assert is_allow(result)
+
+
+def test_unreadable_changed_file_alone_fails_open(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    write_invalid_utf8_file(repository_root, "binary.py")
+    payload = write_agent_payload("code-verifier", "verify the change", repository_root)
+    result = run_hook(payload, repository_root)
+    assert is_allow(result)
+
+
+def test_unreadable_changed_file_does_not_mask_real_violation(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    write_invalid_utf8_file(repository_root, "binary.py")
+    write_working_tree_file(repository_root, "fresh.py", VIOLATING_MODULE_SOURCE)
+    payload = write_agent_payload("code-verifier", "verify the change", repository_root)
+    result = run_hook(payload, repository_root)
+    assert not is_allow(result)
+    reason = deny_reason(result)
+    assert "fresh.py" in reason
 
 
 def test_conflict_and_violation_single_deny_names_both(tmp_path: Path) -> None:
