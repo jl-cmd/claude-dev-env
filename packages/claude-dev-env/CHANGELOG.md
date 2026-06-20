@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.72.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.71.0...claude-dev-env-v1.72.0) (2026-06-20)
+
+
+### Features
+
+* **autoconverge:** add reuse pass and pre-commit gate to fixers ([4f02aed](https://github.com/jl-cmd/claude-code-config/commit/4f02aed96823ba23d06a9f7e3590f8abc88ad400))
+* **autoconverge:** add reuse pass and pre-commit gate to fixers ([28927b8](https://github.com/jl-cmd/claude-code-config/commit/28927b8fcb48eca6fa1fe8e7092ebfd2648e2ee2))
+* **autoconverge:** rebase merge-conflicting PRs before bug checks ([4d04cfb](https://github.com/jl-cmd/claude-code-config/commit/4d04cfb8280ec94446a9765cbe919fde2722d252))
+* **autoconverge:** rebase merge-conflicting PRs before bug checks ([c567050](https://github.com/jl-cmd/claude-code-config/commit/c5670502f7432c0fc031b16343060fdc2a103778))
+* **claude-dev-env:** block stale test-name and no-consumer docstring at Write/Edit ([cf06267](https://github.com/jl-cmd/claude-code-config/commit/cf06267a7b43c4b764d83c37b4c5c3052ebc8f9f))
+* **claude-dev-env:** size image windows to the asset on "show me" ([3045b2b](https://github.com/jl-cmd/claude-code-config/commit/3045b2b2f2c0c5f3ce21c3506d8a83cc67e32bab))
+* **claude-dev-env:** size image windows to the asset on "show me" ([1a7c7b2](https://github.com/jl-cmd/claude-code-config/commit/1a7c7b2e9d970f97d52fe918c7ff7ff38a0b4fab))
+* **type-escape:** block object-typed dereferenced parameters at Write/Edit ([ed93f10](https://github.com/jl-cmd/claude-code-config/commit/ed93f104800eec3506de987b56e3b9b336310d6d))
+
+
+### Bug Fixes
+
+* **code-rules-gate:** exempt test files from check_wrapper_plumb_through ([0c1cbda](https://github.com/jl-cmd/claude-code-config/commit/0c1cbda545ecf0b22b7db77ebaf5ce8df46c1bf7))
+* **code-rules-gate:** exempt test files from check_wrapper_plumb_through false positive ([a369da7](https://github.com/jl-cmd/claude-code-config/commit/a369da76e7b31c6f08bca97871f8fdf689b89898))
+* **hooks:** address converge-round findings on object-parameter type-escape check ([7bd5fdb](https://github.com/jl-cmd/claude-code-config/commit/7bd5fdbb2f1f8d76d259a4632a238a8485e0cd28))
+* **hooks:** address converge-round review findings for object-parameter type-escape gate ([4c0ef02](https://github.com/jl-cmd/claude-code-config/commit/4c0ef02b9b0187954c3e2f3f608e1be3e649a365))
+* **hooks:** address converge-round review findings for object-type escape gate ([641d77a](https://github.com/jl-cmd/claude-code-config/commit/641d77a9f3ddc45b536cecb349cf64091f48be09))
+* **hooks:** apply converge-round review fixes for object type-escape gate ([282e9b2](https://github.com/jl-cmd/claude-code-config/commit/282e9b2475b6186c2ddaf519a87f33ef4196dda5))
+
 ## [1.71.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.70.0...claude-dev-env-v1.71.0) (2026-06-20)
 
 
