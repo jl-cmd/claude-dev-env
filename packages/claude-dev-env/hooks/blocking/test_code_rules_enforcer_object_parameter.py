@@ -278,3 +278,55 @@ def test_should_not_flag_object_parameter_rebound_then_dereferenced_in_same_bran
     assert issues == [], (
         f"A rebind that dominates the read within the same branch suppresses the dereference, got: {issues!r}"
     )
+
+
+def test_should_not_flag_object_parameter_rebound_by_for_loop_target() -> None:
+    source = (
+        "def f(node: object) -> None:\n"
+        "    for node in items():\n"
+        "        node.run()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A for-loop target rebinds node to the loop element; the body read targets the element, "
+        f"not the object parameter, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_object_parameter_rebound_by_with_as_target() -> None:
+    source = (
+        "def f(node: object) -> str:\n"
+        "    with open_ctx() as node:\n"
+        "        return node.read()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A with-as target rebinds node to the context object; the body read targets the context "
+        f"object, not the object parameter, got: {issues!r}"
+    )
+
+
+def test_should_not_flag_object_parameter_rebound_by_walrus_in_if_test() -> None:
+    source = (
+        "def f(node: object) -> str:\n"
+        "    if (node := wrap(node)):\n"
+        "        return node.text\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert issues == [], (
+        f"A walrus rebind in the if test rebinds node to the wrap() result; the body read targets "
+        f"that result, not the object parameter, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_object_parameter_dereferenced_in_loop_without_rebind() -> None:
+    source = (
+        "def f(node: object) -> None:\n"
+        "    while True:\n"
+        "        node.run()\n"
+    )
+    issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("object" in each_issue and "node" in each_issue for each_issue in issues), (
+        f"A loop body that dereferences the object parameter without rebinding it must stay flagged, "
+        f"got: {issues!r}"
+    )

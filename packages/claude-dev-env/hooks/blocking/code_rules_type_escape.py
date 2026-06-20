@@ -342,6 +342,13 @@ def _rebind_dominates_read(
     share a block with the rebind ordered before the read. A rebind nested
     deeper than that shared level lies on a branch the read need not enter, so it
     does not dominate.
+
+    A header rebind — a ``for`` target, a ``with ... as`` target, or a walrus
+    ``:=`` in an ``if``/``while`` test — locates at the same (block, index) as the
+    compound statement it heads, while a read nested in that statement's body
+    locates one level deeper at that same position. When the rebind chain is a
+    strict prefix of the read chain, the rebind heads a compound statement whose
+    body contains the read, so it dominates every read inside that body.
     """
     if not all_rebind_steps or len(all_rebind_steps) > len(all_read_steps):
         return False
@@ -350,7 +357,11 @@ def _rebind_dominates_read(
         return False
     rebind_block, rebind_index = all_rebind_steps[-1]
     read_block, read_index = all_read_steps[len(all_ancestor_steps)]
-    return rebind_block == read_block and rebind_index < read_index
+    if rebind_block != read_block:
+        return False
+    if rebind_index == read_index:
+        return len(all_rebind_steps) < len(all_read_steps)
+    return rebind_index < read_index
 
 
 def _rebind_chains_by_name(
