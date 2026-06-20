@@ -222,64 +222,159 @@ def _comprehension_target_names(comprehension_node: ast.AST) -> set[str]:
     return target_names
 
 
-def _names_shadowed_by_nested_scope(
-    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
-) -> frozenset[str]:
-    """Return names a nested function, lambda, or comprehension rebinds as its own local.
-
-    A name a nested scope reuses — a nested function/lambda parameter or a
-    comprehension loop target — resolves to that inner binding rather than the
-    enclosing parameter, so every ``name.attribute`` read inside the nested
-    scope dereferences the inner local, not the parameter.
-    """
-    shadowing_names: set[str] = set()
-    for each_descendant in ast.walk(function_node):
-        if each_descendant is function_node:
-            continue
-        if isinstance(each_descendant, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            shadowing_names.update(each_inner.arg for each_inner in _positional_and_keyword_arguments(each_descendant))
-        elif isinstance(each_descendant, ast.Lambda):
-            shadowing_names.update(each_inner.arg for each_inner in _positional_and_keyword_arguments_of_lambda(each_descendant))
-        elif isinstance(each_descendant, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
-            shadowing_names.update(_comprehension_target_names(each_descendant))
-    return frozenset(shadowing_names)
-
-
 def _positional_and_keyword_arguments_of_lambda(lambda_node: ast.Lambda) -> list[ast.arg]:
     """Return a lambda's positional and keyword parameters, excluding ``*args``/``**kwargs``."""
     arguments = lambda_node.args
     return [*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs]
 
 
-def _own_scope_nodes(
-    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
-) -> list[ast.AST]:
-    """Return every node in the function's own scope, not descending into nested scopes.
+def _names_a_scope_rebinds(scope_node: ast.AST) -> frozenset[str]:
+    """Return the names a single nested scope binds as its own locals.
 
-    Nested function, lambda, and comprehension scopes resolve their own
-    bindings, so a name read inside one does not reference the enclosing
-    parameter and is left out of the collection.
+    A nested function or lambda binds its positional and keyword parameters; a
+    comprehension binds its loop targets. A name in this set, read inside the
+    scope, resolves to the scope's own binding rather than to an enclosing
+    parameter.
     """
-    own_scope_nodes: list[ast.AST] = []
-    pending_nodes = list(ast.iter_child_nodes(function_node))
-    while pending_nodes:
-        each_node = pending_nodes.pop()
-        own_scope_nodes.append(each_node)
-        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+    if isinstance(scope_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return frozenset(each_argument.arg for each_argument in _positional_and_keyword_arguments(scope_node))
+    if isinstance(scope_node, ast.Lambda):
+        return frozenset(each_argument.arg for each_argument in _positional_and_keyword_arguments_of_lambda(scope_node))
+    if isinstance(scope_node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+        return frozenset(_comprehension_target_names(scope_node))
+    return frozenset()
+
+
+def _parent_node_by_child(root_node: ast.AST) -> dict[int, ast.AST]:
+    """Return a parent lookup keyed by each descendant node's identity."""
+    parent_by_child_id: dict[int, ast.AST] = {}
+    for each_parent in ast.walk(root_node):
+        for each_child in ast.iter_child_nodes(each_parent):
+            parent_by_child_id[id(each_child)] = each_parent
+    return parent_by_child_id
+
+
+def _read_is_shadowed_by_a_nested_scope(
+    read_node: ast.Name,
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    parent_by_child_id: dict[int, ast.AST],
+) -> bool:
+    """Return True when a name read sits inside a nested scope that rebinds that name.
+
+    The walk climbs from the read node up to the function node. A name-rebinding
+    scope between the read and the function — a nested function or lambda whose
+    parameter, or a comprehension whose loop target, reuses the read's name —
+    means the read resolves to that inner binding, not the enclosing parameter.
+    A class body is not such a scope: a method nested in a class still reads an
+    enclosing-function local from the function scope, so the climb passes
+    through ``ClassDef`` without suppressing the read.
+    """
+    read_name = read_node.id
+    current_node: ast.AST = read_node
+    while current_node is not function_node:
+        enclosing_node = parent_by_child_id.get(id(current_node))
+        if enclosing_node is None or enclosing_node is function_node:
+            return False
+        if read_name in _names_a_scope_rebinds(enclosing_node):
+            return True
+        current_node = enclosing_node
+    return False
+
+
+def _index_of_statement_in_enclosing_block(
+    statement_node: ast.stmt,
+    enclosing_node: ast.AST,
+) -> tuple[int, int] | None:
+    """Return the (block list identity, index) of a statement within its parent's statement block.
+
+    A statement lives in one of its parent's statement-body lists (``body``,
+    ``orelse``, ``finalbody``, and similar). The expression-level list fields a
+    parent also holds — an ``Assign``'s ``targets``, a ``Call``'s ``args`` — are
+    not statement blocks and are skipped, so the position locates the statement
+    on its control-flow path rather than its slot inside an expression.
+    """
+    for _, each_field_value in ast.iter_fields(enclosing_node):
+        if not isinstance(each_field_value, list):
             continue
-        pending_nodes.extend(ast.iter_child_nodes(each_node))
-    return own_scope_nodes
+        for each_index, each_block_member in enumerate(each_field_value):
+            if each_block_member is statement_node:
+                return (id(each_field_value), each_index)
+    return None
 
 
-def _first_rebind_line_by_name(all_own_scope_nodes: list[ast.AST]) -> dict[str, int]:
-    """Return, per name the scope reassigns, the line of its first ``Store`` rebind."""
-    first_rebind_line_by_name: dict[str, int] = {}
-    for each_node in all_own_scope_nodes:
-        if isinstance(each_node, ast.Name) and isinstance(each_node.ctx, ast.Store):
-            earlier_line = first_rebind_line_by_name.get(each_node.id)
-            if earlier_line is None or each_node.lineno < earlier_line:
-                first_rebind_line_by_name[each_node.id] = each_node.lineno
-    return first_rebind_line_by_name
+def _statement_chain(
+    target_node: ast.AST,
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    parent_by_child_id: dict[int, ast.AST],
+) -> list[tuple[int, int]]:
+    """Return the (block list identity, index) path of enclosing statements from the function body to a node.
+
+    Each entry locates an enclosing statement within its parent's statement
+    block, walking up from the target to the function body. Only statement nodes
+    contribute a step, so a rebind's path and a read's path are both expressed in
+    statement positions and compare directly: a rebind dominates a read only when
+    its statement is a straight-line predecessor on the read's path, never a
+    branch the read does not also enter.
+    """
+    all_statement_steps: list[tuple[int, int]] = []
+    current_node: ast.AST = target_node
+    while current_node is not function_node:
+        enclosing_node = parent_by_child_id.get(id(current_node))
+        if enclosing_node is None:
+            break
+        if isinstance(current_node, ast.stmt):
+            block_position = _index_of_statement_in_enclosing_block(current_node, enclosing_node)
+            if block_position is not None:
+                all_statement_steps.append(block_position)
+        current_node = enclosing_node
+    all_statement_steps.reverse()
+    return all_statement_steps
+
+
+def _rebind_dominates_read(
+    all_rebind_steps: list[tuple[int, int]],
+    all_read_steps: list[tuple[int, int]],
+) -> bool:
+    """Return True when a rebind statement is a straight-line predecessor of a read.
+
+    The rebind's ancestor blocks above its own statement must match the read's
+    path exactly (same block, same index), and at the rebind's own level the two
+    share a block with the rebind ordered before the read. A rebind nested
+    deeper than that shared level lies on a branch the read need not enter, so it
+    does not dominate.
+    """
+    if not all_rebind_steps or len(all_rebind_steps) > len(all_read_steps):
+        return False
+    all_ancestor_steps = all_rebind_steps[:-1]
+    if all_ancestor_steps != all_read_steps[: len(all_ancestor_steps)]:
+        return False
+    rebind_block, rebind_index = all_rebind_steps[-1]
+    read_block, read_index = all_read_steps[len(all_ancestor_steps)]
+    return rebind_block == read_block and rebind_index < read_index
+
+
+def _rebind_chains_by_name(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    parent_by_child_id: dict[int, ast.AST],
+    all_object_parameter_names: frozenset[str],
+) -> dict[str, list[list[tuple[int, int]]]]:
+    """Return, per object-parameter name, the statement chain of each own-scope ``Store`` rebind.
+
+    A ``Store`` inside a nested function, lambda, or comprehension binds that
+    scope's own local rather than the enclosing parameter, so only ``Store``
+    targets that resolve to the function's own scope are collected.
+    """
+    rebind_chains_by_name: dict[str, list[list[tuple[int, int]]]] = {}
+    for each_node in ast.walk(function_node):
+        if not isinstance(each_node, ast.Name) or not isinstance(each_node.ctx, ast.Store):
+            continue
+        if each_node.id not in all_object_parameter_names:
+            continue
+        if _read_is_shadowed_by_a_nested_scope(each_node, function_node, parent_by_child_id):
+            continue
+        all_rebind_steps = _statement_chain(each_node, function_node, parent_by_child_id)
+        rebind_chains_by_name.setdefault(each_node.id, []).append(all_rebind_steps)
+    return rebind_chains_by_name
 
 
 def _parameter_names_dereferenced_while_live(
@@ -288,22 +383,30 @@ def _parameter_names_dereferenced_while_live(
 ) -> frozenset[str]:
     """Return object-parameter names read as ``name.attribute`` while still bound to the parameter.
 
-    A name leaves the parameter binding once the function's own scope rebinds it
-    (its first ``Store`` target). An attribute read on a line at or after that
-    rebind dereferences the reassigned value, not the parameter, so only reads
-    on lines before the first rebind (or with no rebind at all) count.
+    A read counts only when it resolves to the parameter at the read site: it
+    sits in a scope that does not rebind the name (so it is not shadowed by a
+    nested function, lambda, or comprehension that reuses the name) and no
+    earlier rebind dominates it on the straight-line path to the read. A
+    conditional rebind on a branch the read need not enter leaves the read
+    bound to the parameter, so the read still counts.
     """
-    own_scope_nodes = _own_scope_nodes(function_node)
-    first_rebind_line_by_name = _first_rebind_line_by_name(own_scope_nodes)
+    parent_by_child_id = _parent_node_by_child(function_node)
+    rebind_chains_by_name = _rebind_chains_by_name(function_node, parent_by_child_id, all_object_parameter_names)
     dereferenced_names: set[str] = set()
-    for each_node in own_scope_nodes:
+    for each_node in ast.walk(function_node):
         if not isinstance(each_node, ast.Attribute) or not isinstance(each_node.value, ast.Name):
             continue
         base_name = each_node.value.id
         if base_name not in all_object_parameter_names:
             continue
-        rebind_line = first_rebind_line_by_name.get(base_name)
-        if rebind_line is not None and each_node.value.lineno >= rebind_line:
+        if _read_is_shadowed_by_a_nested_scope(each_node.value, function_node, parent_by_child_id):
+            continue
+        all_read_steps = _statement_chain(each_node.value, function_node, parent_by_child_id)
+        all_dominating_rebinds = rebind_chains_by_name.get(base_name, [])
+        if any(
+            _rebind_dominates_read(each_rebind_chain, all_read_steps)
+            for each_rebind_chain in all_dominating_rebinds
+        ):
             continue
         dereferenced_names.add(base_name)
     return frozenset(dereferenced_names)
@@ -314,15 +417,19 @@ def _find_object_annotated_parameter_lines(source: str) -> list[tuple[int, str]]
 
     A positional or keyword parameter annotated as the bare builtin ``object``
     whose body reads an attribute on it is a type escape hatch: ``object``
-    declares no attributes, so every ``param.attribute`` read goes unchecked. A
-    parameter typed ``object`` that the body never dereferences (identity-only
-    use) is honest and not flagged. A parameter the body reassigns before the
-    dereference no longer resolves to the parameter binding at the read and is
-    not flagged, and a parameter whose name a nested function, lambda, or
-    comprehension shadows is dereferenced through that inner binding, not the
-    parameter, and is not flagged. The ``*args``/``**kwargs`` slots are out of
-    scope: ``object`` there types the elements, while the binding is a concrete
-    ``tuple``/``dict``.
+    declares no attributes, so every ``param.attribute`` read goes unchecked.
+    The decision is per read, so a parameter is flagged when at least one read
+    of it resolves to the parameter at the read site. A parameter typed
+    ``object`` that the body never dereferences (identity-only use) is honest
+    and not flagged. A single read does not count when an earlier rebind
+    dominates it on the straight-line path to the read, or when the read sits
+    inside a nested function, lambda, or comprehension that reuses the name as
+    its own binding; a class body is not such a scope, so a method nested in a
+    class that reads an enclosing-function parameter still counts. A read on a
+    branch a non-dominating rebind does not reach, and a top-level read whose
+    name a later nested scope reuses, both still count. The ``*args``/``**kwargs``
+    slots are out of scope: ``object`` there types the elements, while the
+    binding is a concrete ``tuple``/``dict``.
     """
     try:
         parsed_tree = ast.parse(source)
@@ -341,11 +448,8 @@ def _find_object_annotated_parameter_lines(source: str) -> list[tuple[int, str]]
         if not object_parameters:
             continue
         object_parameter_names = frozenset(each_argument.arg for each_argument in object_parameters)
-        shadowed_names = _names_shadowed_by_nested_scope(each_node)
         dereferenced_names = _parameter_names_dereferenced_while_live(each_node, object_parameter_names)
         for each_argument in object_parameters:
-            if each_argument.arg in shadowed_names:
-                continue
             if each_argument.arg in dereferenced_names:
                 offending_parameters.append((each_argument.lineno, each_argument.arg))
     return offending_parameters
