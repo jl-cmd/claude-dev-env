@@ -17,6 +17,10 @@ ALL_JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx"}
 ALL_CODE_EXTENSIONS = ALL_PYTHON_EXTENSIONS | ALL_JAVASCRIPT_EXTENSIONS
 
 ALL_TEST_PATH_PATTERNS = {"test_", "_test.", ".test.", ".spec.", "/tests/", "\\tests\\", "/tests.py", "\\tests.py"}
+STRICT_TEST_FILE_BASENAME_PATTERN: re.Pattern[str] = re.compile(
+    r"^(test_.*|.*_test|.*\.test|.*\.spec)\.[^.]+$|^conftest\.py$"
+)
+ALL_STRICT_TEST_DIRECTORY_SEGMENTS: tuple[str, ...] = ("/tests/",)
 ALL_ROOT_ANCHORED_EPHEMERAL_DIRECTORIES: tuple[str, str] = ("/tmp", "/temp")
 CLAUDE_JOB_DIR_ENVIRONMENT_VARIABLE_NAME: str = "CLAUDE_JOB_DIR"
 CLAUDE_JOB_DIR_SCRATCH_SUBDIRECTORY: str = "tmp"
@@ -38,6 +42,8 @@ UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 ALL_MUST_CHECK_RETURN_FUNCTION_NAMES: frozenset[str] = frozenset({"find_and_click", "write_outcome"})
 
 DOCSTRING_ARG_ENTRY_PATTERN: re.Pattern[str] = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*[:(]")
+INLINE_CODE_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"``?(\.?[A-Za-z_][A-Za-z0-9_.]*)``?")
+IDENTIFIER_SHAPED_TUPLE_MEMBER_PATTERN: re.Pattern[str] = re.compile(r"^\.?[A-Za-z_][A-Za-z0-9_]*$")
 ALL_DOCSTRING_ARGS_SECTION_HEADERS: tuple[str, ...] = ("Args:", "Arguments:")
 ALL_DOCSTRING_TERMINATING_SECTION_HEADERS: frozenset[str] = frozenset({
     "Returns:",

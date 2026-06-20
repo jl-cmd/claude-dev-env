@@ -20,12 +20,14 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_HOOK_INFRASTRUCTURE_PATTERNS,
     ALL_MIGRATION_PATH_PATTERNS,
     ALL_ROOT_ANCHORED_EPHEMERAL_DIRECTORIES,
+    ALL_STRICT_TEST_DIRECTORY_SEGMENTS,
     ALL_TEST_PATH_PATTERNS,
     ALL_WORKFLOW_REGISTRY_PATTERNS,
     CLAUDE_JOB_DIR_ENVIRONMENT_VARIABLE_NAME,
     CLAUDE_JOB_DIR_SCRATCH_SUBDIRECTORY,
     EPHEMERAL_EXEMPT_DISABLE_ENVIRONMENT_VARIABLE_NAME,
     LEADING_DRIVE_LETTER_PATTERN,
+    STRICT_TEST_FILE_BASENAME_PATTERN,
 )
 from hooks_constants.unused_module_import_constants import (  # noqa: E402
     TYPE_CHECKING_IDENTIFIER,
@@ -53,6 +55,23 @@ def is_test_file(file_path: str) -> bool:
     if basename_lower == "conftest.py":
         return True
     return any(pattern in path_lower for pattern in ALL_TEST_PATH_PATTERNS)
+
+
+def is_strict_test_file(file_path: str) -> bool:
+    """Check if a file is a genuine test module by its basename, not a mid-name match.
+
+    A production module whose name carries the substring ``test`` mid-name —
+    such as ``code_rules_test_assertions.py`` — is not a test module. This
+    predicate anchors on the basename shape (``test_*`` / ``*_test.*`` /
+    ``*.test.*`` / ``*.spec.*`` / ``conftest.py``) or a ``/tests/`` path
+    segment, so it keeps such production modules out of the test exemption that
+    the substring-based is_test_file applies.
+    """
+    normalized_path = file_path.lower().replace("\\", "/")
+    if any(segment in normalized_path for segment in ALL_STRICT_TEST_DIRECTORY_SEGMENTS):
+        return True
+    basename_lower = normalized_path.rsplit("/", 1)[-1]
+    return STRICT_TEST_FILE_BASENAME_PATTERN.match(basename_lower) is not None
 
 
 def is_workflow_registry_file(file_path: str) -> bool:
