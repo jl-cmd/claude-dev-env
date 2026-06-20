@@ -16,6 +16,8 @@ DEFAULT_REMOTE_BASE_REFERENCE: str = "origin/HEAD"
 ALL_ZEROS_OBJECT_NAME_CHARACTER: str = "0"
 STDIN_LINE_FIELD_COUNT: int = 4
 STDIN_REMOTE_OBJECT_FIELD_INDEX: int = 3
+LOCAL_REFERENCE_FIELD_INDEX: int = 0
+REMOTE_REFERENCE_FIELD_INDEX: int = 2
 GATE_PATH_OVERRIDE_ENV_VAR: str = "CODE_RULES_GATE_PATH"
 CLAUDE_HOME_ENV_VAR: str = "CLAUDE_HOME"
 CLAUDE_HOME_DEFAULT_SUBDIRECTORY: str = ".claude"
@@ -46,3 +48,14 @@ NO_PARSEABLE_STDIN_LINES_MESSAGE: str = (
     "claude-dev-env pre-push: no parseable stdin lines; aborting"
 )
 NO_PARSEABLE_STDIN_LINES_SENTINEL: str = "__no_parseable_stdin_lines__"
+LOCAL_BRANCH_REFERENCE_PREFIX: str = "refs/heads/"
+ALL_PROTECTED_BRANCH_PUSH_NAMES: tuple[str, ...] = ("main", "master")
+PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE: int = 1
+PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE: str = (
+    "claude-dev-env pre-push: blocked a push of local branch {local_branch!r} "
+    "onto protected remote branch {remote_branch!r}.\n"
+    "A local branch that tracks origin/{remote_branch}, with push.default=upstream, "
+    "resolves a bare 'git push' to {remote_branch}.\n"
+    "To push the feature branch to its own ref, name the destination: "
+    "git push origin {local_branch}:refs/heads/{local_branch}"
+)
