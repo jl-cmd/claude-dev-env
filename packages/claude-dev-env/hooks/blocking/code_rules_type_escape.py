@@ -195,26 +195,134 @@ def _annotation_is_bare_object(annotation_node: Optional[ast.expr]) -> bool:
     return isinstance(annotation_node, ast.Name) and annotation_node.id == "object"
 
 
-def _parameter_names_read_as_attribute_base(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
-    """Return parameter names the body reads as ``name.attribute``."""
-    attribute_base_names: set[str] = set()
+def _positional_and_keyword_arguments(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.arg]:
+    """Return only the positional and keyword parameters, excluding ``*args``/``**kwargs``.
+
+    Annotating ``*args: object`` types each element as ``object`` while the
+    parameter binding itself is ``tuple[object, ...]``; ``**kwargs: object``
+    binds ``dict[str, object]``. Method access on those concrete tuple/dict
+    bindings (``args.count(...)``, ``kwargs.get(...)``) is type-safe and is not
+    an unchecked ``object`` dereference, so the vararg and kwarg slots are out
+    of scope for the object-dereference check.
+    """
+    arguments = function_node.args
+    return [*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs]
+
+
+def _comprehension_target_names(comprehension_node: ast.AST) -> set[str]:
+    """Return the loop-target names a comprehension binds as its own locals."""
+    target_names: set[str] = set()
+    generators = getattr(comprehension_node, "generators", [])
+    for each_generator in generators:
+        for each_target in ast.walk(each_generator.target):
+            if isinstance(each_target, ast.Name):
+                target_names.add(each_target.id)
+    return target_names
+
+
+def _names_shadowed_by_nested_scope(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> frozenset[str]:
+    """Return names a nested function, lambda, or comprehension rebinds as its own local.
+
+    A name a nested scope reuses — a nested function/lambda parameter or a
+    comprehension loop target — resolves to that inner binding rather than the
+    enclosing parameter, so every ``name.attribute`` read inside the nested
+    scope dereferences the inner local, not the parameter.
+    """
+    shadowing_names: set[str] = set()
     for each_descendant in ast.walk(function_node):
-        if not isinstance(each_descendant, ast.Attribute):
+        if each_descendant is function_node:
             continue
-        base_node = each_descendant.value
-        if isinstance(base_node, ast.Name):
-            attribute_base_names.add(base_node.id)
-    return frozenset(attribute_base_names)
+        if isinstance(each_descendant, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            shadowing_names.update(each_inner.arg for each_inner in _positional_and_keyword_arguments(each_descendant))
+        elif isinstance(each_descendant, ast.Lambda):
+            shadowing_names.update(each_inner.arg for each_inner in _positional_and_keyword_arguments_of_lambda(each_descendant))
+        elif isinstance(each_descendant, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+            shadowing_names.update(_comprehension_target_names(each_descendant))
+    return frozenset(shadowing_names)
+
+
+def _positional_and_keyword_arguments_of_lambda(lambda_node: ast.Lambda) -> list[ast.arg]:
+    """Return a lambda's positional and keyword parameters, excluding ``*args``/``**kwargs``."""
+    arguments = lambda_node.args
+    return [*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs]
+
+
+def _own_scope_nodes(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.AST]:
+    """Return every node in the function's own scope, not descending into nested scopes.
+
+    Nested function, lambda, and comprehension scopes resolve their own
+    bindings, so a name read inside one does not reference the enclosing
+    parameter and is left out of the collection.
+    """
+    own_scope_nodes: list[ast.AST] = []
+    pending_nodes = list(ast.iter_child_nodes(function_node))
+    while pending_nodes:
+        each_node = pending_nodes.pop()
+        own_scope_nodes.append(each_node)
+        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        pending_nodes.extend(ast.iter_child_nodes(each_node))
+    return own_scope_nodes
+
+
+def _first_rebind_line_by_name(all_own_scope_nodes: list[ast.AST]) -> dict[str, int]:
+    """Return, per name the scope reassigns, the line of its first ``Store`` rebind."""
+    first_rebind_line_by_name: dict[str, int] = {}
+    for each_node in all_own_scope_nodes:
+        if isinstance(each_node, ast.Name) and isinstance(each_node.ctx, ast.Store):
+            earlier_line = first_rebind_line_by_name.get(each_node.id)
+            if earlier_line is None or each_node.lineno < earlier_line:
+                first_rebind_line_by_name[each_node.id] = each_node.lineno
+    return first_rebind_line_by_name
+
+
+def _parameter_names_dereferenced_while_live(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    all_object_parameter_names: frozenset[str],
+) -> frozenset[str]:
+    """Return object-parameter names read as ``name.attribute`` while still bound to the parameter.
+
+    A name leaves the parameter binding once the function's own scope rebinds it
+    (its first ``Store`` target). An attribute read on a line at or after that
+    rebind dereferences the reassigned value, not the parameter, so only reads
+    on lines before the first rebind (or with no rebind at all) count.
+    """
+    own_scope_nodes = _own_scope_nodes(function_node)
+    first_rebind_line_by_name = _first_rebind_line_by_name(own_scope_nodes)
+    dereferenced_names: set[str] = set()
+    for each_node in own_scope_nodes:
+        if not isinstance(each_node, ast.Attribute) or not isinstance(each_node.value, ast.Name):
+            continue
+        base_name = each_node.value.id
+        if base_name not in all_object_parameter_names:
+            continue
+        rebind_line = first_rebind_line_by_name.get(base_name)
+        if rebind_line is not None and each_node.value.lineno >= rebind_line:
+            continue
+        dereferenced_names.add(base_name)
+    return frozenset(dereferenced_names)
 
 
 def _find_object_annotated_parameter_lines(source: str) -> list[tuple[int, str]]:
-    """Return (line, parameter) for parameters typed ``object`` then read as ``param.attribute``.
+    """Return (line, parameter) for positional/keyword parameters typed ``object`` then dereferenced.
 
-    A parameter annotated as the bare builtin ``object`` whose body accesses an
-    attribute on it is a type escape hatch: ``object`` declares no attributes,
-    so every ``param.attribute`` read goes unchecked. A parameter typed
-    ``object`` that the body never dereferences (identity-only use) is honest
-    and not flagged.
+    A positional or keyword parameter annotated as the bare builtin ``object``
+    whose body reads an attribute on it is a type escape hatch: ``object``
+    declares no attributes, so every ``param.attribute`` read goes unchecked. A
+    parameter typed ``object`` that the body never dereferences (identity-only
+    use) is honest and not flagged. A parameter the body reassigns before the
+    dereference no longer resolves to the parameter binding at the read and is
+    not flagged, and a parameter whose name a nested function, lambda, or
+    comprehension shadows is dereferenced through that inner binding, not the
+    parameter, and is not flagged. The ``*args``/``**kwargs`` slots are out of
+    scope: ``object`` there types the elements, while the binding is a concrete
+    ``tuple``/``dict``.
     """
     try:
         parsed_tree = ast.parse(source)
@@ -225,11 +333,20 @@ def _find_object_annotated_parameter_lines(source: str) -> list[tuple[int, str]]
     for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        attribute_base_names = _parameter_names_read_as_attribute_base(each_node)
-        for each_argument in _collect_annotated_arguments(each_node):
-            if not _annotation_is_bare_object(each_argument.annotation):
+        object_parameters = [
+            each_argument
+            for each_argument in _positional_and_keyword_arguments(each_node)
+            if _annotation_is_bare_object(each_argument.annotation)
+        ]
+        if not object_parameters:
+            continue
+        object_parameter_names = frozenset(each_argument.arg for each_argument in object_parameters)
+        shadowed_names = _names_shadowed_by_nested_scope(each_node)
+        dereferenced_names = _parameter_names_dereferenced_while_live(each_node, object_parameter_names)
+        for each_argument in object_parameters:
+            if each_argument.arg in shadowed_names:
                 continue
-            if each_argument.arg in attribute_base_names:
+            if each_argument.arg in dereferenced_names:
                 offending_parameters.append((each_argument.lineno, each_argument.arg))
     return offending_parameters
 
