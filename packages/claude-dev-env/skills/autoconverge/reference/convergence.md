@@ -1,5 +1,28 @@
 # Convergence — round shape and the ready definition
 
+## Reuse pass (runs once before convergence)
+
+Before the first round, one reuse lens (`code-quality-agent`) reviews the full
+`origin/main...HEAD` diff for code that re-implements behavior the repository
+already provides. It reports a reuse improvement only when all three criteria
+hold together, and omits any case where even one is in doubt:
+
+1. **Certain** — an existing symbol or module unquestionably covers the new
+   code's behavior, cited at `file:line`.
+2. **Behaviorally identical** — swapping the new code for the existing one
+   changes no observable behavior: same inputs, outputs, side effects, and
+   error handling.
+3. **Autonomously implementable** — the replacement is a mechanical edit (import
+   and call the existing symbol, delete the duplicate) needing no product
+   decision and no human judgment.
+
+The lens reports without editing. Each qualifying improvement runs through the
+same edit → verify → commit fix flow the rounds use, landing in one verified
+commit before convergence begins. The pass is best-effort: when no case clears
+all three criteria the run proceeds straight to convergence. Whatever the reuse
+pass surfaces also joins the round findings, so the code-review lens re-checks
+any improvement that did not land.
+
 ## The round loop
 
 The workflow holds three states and moves between them until the PR is ready or
@@ -26,7 +49,10 @@ tracks CONVERGE passes only and is never the cap.
    colliding threads.
 4. **Any findings** → one `clean-coder` applies every fix in a single test-first
    commit, pushes, then replies to and resolves each finding that carries a
-   GitHub review thread. A round progresses when the fix lens lands a push that
+   GitHub review thread. Before its turn ends, the edit step dry-runs the
+   CODE_RULES commit gate (`code_rules_gate.py --staged`) over its staged
+   changes and keeps fixing until that gate would accept the commit, so the
+   later commit step never hits a gate rejection. A round progresses when the fix lens lands a push that
    moves HEAD, or when every finding was already addressed so no code change is
    needed yet each finding thread is still resolved (the fix lens reports
    `resolvedWithoutCommit` and the run re-converges on the unchanged HEAD). A

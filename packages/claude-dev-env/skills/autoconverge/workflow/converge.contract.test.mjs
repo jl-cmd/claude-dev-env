@@ -457,3 +457,93 @@ test('both standards-deferral call sites build standardsNote from the spawnStand
     'expected no unconditional hardening-PR claim in standardsNote',
   );
 });
+
+test('a reuse-audit lens builder exists', () => {
+  assert.match(convergeSource, /function runReuseAuditPass\(/);
+});
+
+test('the reuse pass runs once before the convergence loop', () => {
+  const reuseCallIndex = convergeSource.indexOf('await runReuseAuditPass(');
+  const loopIndex = convergeSource.indexOf('while (iterations < CONFIG.maxIterations)');
+  assert.notEqual(reuseCallIndex, -1, 'expected the reuse pass to be invoked');
+  assert.notEqual(loopIndex, -1, 'expected the convergence loop to exist');
+  assert.ok(
+    reuseCallIndex < loopIndex,
+    'expected the reuse pass to run before the convergence loop starts',
+  );
+});
+
+test('the reuse lens prompt enumerates all three qualifying criteria and an omit rule', () => {
+  const reusePrompt = lensPromptBody('runReuseAuditPass');
+  assert.match(reusePrompt, /CERTAIN/);
+  assert.match(reusePrompt, /BEHAVIORALLY IDENTICAL/);
+  assert.match(reusePrompt, /AUTONOMOUSLY IMPLEMENTABLE/);
+  assert.match(
+    reusePrompt,
+    /when any one is in doubt, omit the finding/i,
+    'expected the reuse lens to drop any finding that fails a criterion',
+  );
+});
+
+test('the reuse lens reviews the full diff and does not edit', () => {
+  const reusePrompt = lensPromptBody('runReuseAuditPass');
+  assert.match(reusePrompt, /origin\/main\.\.\.HEAD/);
+  assert.match(
+    reusePrompt,
+    /Do NOT edit, commit, or push/,
+    'expected the reuse lens to report findings without editing',
+  );
+});
+
+test('the reuse pass applies its findings through applyFixes, not the standards-deferral path', () => {
+  const reuseCallIndex = convergeSource.indexOf('await runReuseAuditPass(');
+  const loopIndex = convergeSource.indexOf('while (iterations < CONFIG.maxIterations)');
+  const reuseBlock = convergeSource.slice(reuseCallIndex, loopIndex);
+  assert.match(
+    reuseBlock,
+    /applyFixes\(reuseHead, reuseFindings, 'reuse-pass'\)/,
+    'expected the reuse pass to apply its findings via applyFixes',
+  );
+  assert.doesNotMatch(
+    reuseBlock,
+    /spawnStandardsFollowUp/,
+    'expected the reuse pass to apply improvements, not defer them',
+  );
+});
+
+test('the reuse lens runs under the Reuse phase', () => {
+  const reusePrompt = lensPromptBody('runReuseAuditPass');
+  assert.match(reusePrompt, /phase: 'Reuse'/);
+});
+
+test('the pre-commit gate step is a shared constant that dry-runs the CODE_RULES commit gate', () => {
+  assert.match(convergeSource, /const PRE_COMMIT_GATE_STEP =/);
+  const stepStart = convergeSource.indexOf('const PRE_COMMIT_GATE_STEP =');
+  const stepEnd = convergeSource.indexOf('\n\n', stepStart);
+  const stepBody = convergeSource.slice(stepStart, stepEnd);
+  assert.match(stepBody, /code_rules_gate\.py/);
+  assert.match(stepBody, /--staged/);
+  assert.match(
+    stepBody,
+    /do NOT commit/i,
+    'expected the gate step to forbid committing — it is a dry committability check',
+  );
+});
+
+const editStepBuilders = [
+  'applyFixesEdit',
+  'recoverCommitBlockEdit',
+  'recoverVerifyFailEdit',
+  'repairConvergenceEdit',
+  'standardsFollowUpEdit',
+];
+
+for (const builderName of editStepBuilders) {
+  test(`${builderName} appends the pre-commit gate step to its edit prompt`, () => {
+    assert.match(
+      lensPromptBody(builderName),
+      /\+\s*PRE_COMMIT_GATE_STEP/,
+      `expected ${builderName} to append PRE_COMMIT_GATE_STEP`,
+    );
+  });
+}
