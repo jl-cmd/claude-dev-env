@@ -14,6 +14,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `claude_md_orphan_file_blocker_constants.py` | Table patterns, file extensions, scan budget, and block-message text for the CLAUDE.md orphan-file blocker |
 | `code_rules_enforcer_constants.py` | File-extension sets, test-path patterns, advisory line thresholds, boolean-name prefixes |
 | `code_rules_path_utils_constants.py` | Path-matching helpers used by the code-rules check modules |
+| `code_verifier_spawn_preflight_gate_constants.py` | Subagent type, merge-tree command flags, timeouts, and deny-message text for the code-verifier spawn pre-flight gate |
 | `convergence_branch_constants.py` | Branch and worktree naming patterns for the convergence gate |
 | `dead_argparse_argument_constants.py` | Patterns for detecting unused argparse arguments |
 | `dead_config_field_constants.py` | Patterns for detecting unused dataclass config fields |

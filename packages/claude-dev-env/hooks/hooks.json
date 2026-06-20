@@ -199,6 +199,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pr_converge_bugteam_enforcer.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_verifier_spawn_preflight_gate.py",
+            "timeout": 30
           }
         ]
       },
