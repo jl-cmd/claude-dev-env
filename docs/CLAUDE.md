@@ -13,6 +13,7 @@ what the system **is**, not how it got there.
 | File | Role |
 |------|------|
 | `ai-rules-sync.md` | Complete reference for the `AGENTS.md` fan-out sync system: architecture, editing rules, drift policy, opt-out, onboarding/offboarding, manual operations, GitHub App setup, reconciliation cron, and troubleshooting. Read this before changing `AGENTS.md` or the sync workflows. |
+| `claude-code-on-the-web.md` | How to mirror this config into Claude Code on the web: the environment setup script that installs `claude-dev-env`, the personal umbrella-package pattern, and the hooks verification check. |
 
 ## Subdirectories
 
