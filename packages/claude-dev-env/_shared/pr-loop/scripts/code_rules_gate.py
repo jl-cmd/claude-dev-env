@@ -594,11 +594,11 @@ def check_wrapper_plumb_through(content: str, file_path: str) -> list[str]:
     Args:
         content: File content as a single string for AST parsing.
         file_path: Repository-relative POSIX path of the file (used to
-            skip non-Python code extensions early).
+            skip non-Python code extensions and test files early).
 
     Returns:
-        List of violation strings, one per dropped optional kwarg. Returns
-        an empty list when the file is not Python or has a syntax error.
+        List of violation strings, one per dropped optional kwarg. Empty for
+        a non-Python file, a test file, or a file with a syntax error.
     """
     non_python_code_extensions = ALL_CODE_FILE_EXTENSIONS - {PYTHON_FILE_EXTENSION}
     lowercase_file_path = file_path.lower()
@@ -606,6 +606,8 @@ def check_wrapper_plumb_through(content: str, file_path: str) -> list[str]:
         lowercase_file_path.endswith(each_extension)
         for each_extension in non_python_code_extensions
     ):
+        return []
+    if is_test_path(file_path):
         return []
     try:
         tree = ast.parse(content)
