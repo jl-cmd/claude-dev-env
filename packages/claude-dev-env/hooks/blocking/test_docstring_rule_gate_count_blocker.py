@@ -75,6 +75,13 @@ OUT_OF_WINDOW_VALIDATOR_RULE_TEXT = (
     "enforcement section discusses but the count clause does not enumerate.\n"
 )
 
+REVERSED_COUNT_CLAUSE_ORDER_RULE_TEXT = (
+    "The audit lane covers everything outside the five gated slices. "
+    "`check_docstring_fallback_branch_coverage` covers a fallback. "
+    "`check_class_docstring_names_public_methods` covers a class. Four more gate "
+    "validators each cover one deterministic slice of the free-form prose.\n"
+)
+
 
 class _RunHook:
     """Helper to drive the hook via subprocess, mirroring the sibling test style."""
@@ -131,6 +138,10 @@ def should_report_no_drift_when_no_count_clause_is_present() -> None:
 
 def should_exclude_validators_named_outside_the_enumeration_window() -> None:
     assert find_gate_count_drift(OUT_OF_WINDOW_VALIDATOR_RULE_TEXT) == []
+
+
+def should_report_no_drift_when_count_clauses_appear_out_of_order() -> None:
+    assert find_gate_count_drift(REVERSED_COUNT_CLAUSE_ORDER_RULE_TEXT) == []
 
 
 def should_deny_a_write_with_a_stale_gate_count() -> None:

@@ -131,10 +131,12 @@ def _count_word_value(count_word: str) -> int | None:
 def find_gate_count_drift(content: str) -> list[str]:
     """Return one issue per gate-count word that drifts from the named validators.
 
-    Requires both count clauses to be present, since the validators are enumerated
-    in the window between them: the "<count> more gate validators" phrase and the
-    "<count> gated slices" total. When either clause is absent the content is not a
-    judgeable enumeration, so no issue results. The free-form validators are the
+    Requires both count clauses to be present and in document order, since the
+    validators are enumerated in the window between them: the "<count> more gate
+    validators" phrase first, then the "<count> gated slices" total. When either
+    clause is absent, or the total clause does not sit after the free-form clause,
+    the content is not a judgeable enumeration, so no issue results. The free-form
+    validators are the
     distinct backticked ``check_*`` tokens in that window, excluding the ``Args:``
     gate. When the "<count> more gate validators" spelled-out count disagrees with
     the number of validators named in the window, it is an issue; when the
@@ -152,6 +154,8 @@ def find_gate_count_drift(content: str) -> list[str]:
     free_form_match = FREE_FORM_GATE_COUNT_PATTERN.search(prose_text)
     total_match = TOTAL_GATED_SLICE_COUNT_PATTERN.search(prose_text)
     if free_form_match is None or total_match is None:
+        return []
+    if total_match.start() <= free_form_match.end():
         return []
     enumeration_window = prose_text[free_form_match.end() : total_match.start()]
     all_named_validators = _named_free_form_validators(enumeration_window)
