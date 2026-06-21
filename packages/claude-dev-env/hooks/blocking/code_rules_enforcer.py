@@ -74,6 +74,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_no_inline_literal_claim,
     check_docstring_step_enumeration_dispatch_coverage,
     check_docstring_tuple_enumeration_match,
+    check_docstring_unguarded_malformed_payload_claim,
     check_module_docstring_names_public_checks,
 )
 from code_rules_duplicate_body import (  # noqa: E402
@@ -260,6 +261,11 @@ def validate_content(
         all_issues.extend(check_docstring_args_match_signature(effective_content, file_path))
         all_issues.extend(check_docstring_fallback_branch_coverage(effective_content, file_path))
         all_issues.extend(check_docstring_no_consumer_claim(effective_content, file_path))
+        all_issues.extend(
+            check_docstring_unguarded_malformed_payload_claim(
+                effective_content, file_path
+            )
+        )
         all_issues.extend(
             check_docstring_no_inline_literal_claim(effective_content, file_path)
         )

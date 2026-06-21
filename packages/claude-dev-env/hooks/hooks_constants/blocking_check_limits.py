@@ -30,6 +30,7 @@ DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT: int = 3
 MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES: int = 3
 DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT: int = 2
 MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES: int = 3
+MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES: int = 3
 MAX_STALE_TEST_NAME_TARGET_ISSUES: int = 3
 STALE_TEST_NAME_MINIMUM_SHARED_TOKEN_COUNT: int = 2
 MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES: int = 5
@@ -92,6 +93,20 @@ ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES: tuple[str, ...] = (
     "nothing reads it yet",
     "no one reads it yet",
     "not yet read by any consumer",
+)
+
+ALL_DOCSTRING_GUARDED_FAILURE_CLAIM_PHRASES: tuple[str, ...] = (
+    "malformed payload resolves to none",
+    "a malformed payload resolves to none",
+    "malformed payload returns none",
+    "malformed response resolves to none",
+    "malformed response returns none",
+    "a bad payload resolves to none",
+    "bad payload resolves to none",
+    "an invalid payload resolves to none",
+    "invalid payload resolves to none",
+    "a malformed payload yields none",
+    "malformed payload yields none",
 )
 
 MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES: int = 3

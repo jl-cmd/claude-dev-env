@@ -25,6 +25,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES,
     ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES,
     ALL_DOCSTRING_FILE_REFERENCE_SUFFIXES,
+    ALL_DOCSTRING_GUARDED_FAILURE_CLAIM_PHRASES,
     ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES,
     ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES,
     ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES,
@@ -44,6 +45,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
     MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES,
+    MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES,
     MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
     MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK,
     MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER,
@@ -639,6 +641,106 @@ def check_docstring_no_consumer_claim(content: str, file_path: str) -> list[str]
         if len(issues) >= MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES:
             break
     return issues[:MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES]
+
+
+def _docstring_claims_malformed_payload_is_guarded(docstring_text: str) -> str:
+    collapsed_docstring = " ".join(docstring_text.lower().split())
+    for each_phrase in ALL_DOCSTRING_GUARDED_FAILURE_CLAIM_PHRASES:
+        if each_phrase in collapsed_docstring:
+            return each_phrase
+    return ""
+
+
+def _try_handler_returns_none(try_node: ast.Try) -> bool:
+    for each_handler in try_node.handlers:
+        for each_statement in each_handler.body:
+            if isinstance(each_statement, ast.Return) and isinstance(
+                each_statement.value, ast.Constant
+            ):
+                if each_statement.value.value is None:
+                    return True
+    return False
+
+
+def _statement_subscripts_a_name(statement: ast.stmt) -> bool:
+    for each_descendant in ast.walk(statement):
+        if isinstance(each_descendant, ast.Subscript) and isinstance(
+            each_descendant.value, ast.Name
+        ):
+            return True
+    return False
+
+
+def _function_has_unguarded_payload_dereference(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    saw_returning_guard = False
+    for each_statement in function_node.body:
+        if isinstance(each_statement, ast.Try) and _try_handler_returns_none(
+            each_statement
+        ):
+            saw_returning_guard = True
+            continue
+        if not saw_returning_guard:
+            continue
+        if _statement_subscripts_a_name(each_statement):
+            return True
+    return False
+
+
+def check_docstring_unguarded_malformed_payload_claim(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a docstring that promises malformed-payload safety the guard misses.
+
+    The drift this catches: a function whose docstring states that a malformed
+    payload "resolves to None" while a subscript dereference of that payload
+    (``payload["key"]``, ``float(payload["key"])``) sits OUTSIDE the try/except
+    whose handler returns None. A present-but-malformed payload then raises
+    KeyError or TypeError from that unguarded access and propagates rather than
+    resolving to None, so the docstring overstates the protection. This is the
+    deterministic slice of Category O8 (docstring prose vs implementation drift)
+    for an exception-guard claim: move the dereference inside the guarded block,
+    or narrow the docstring to the failures the guard actually catches.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per function whose malformed-payload claim outruns its guard,
+        capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        docstring_text = _function_docstring_text(each_node)
+        if not docstring_text:
+            continue
+        matched_phrase = _docstring_claims_malformed_payload_is_guarded(docstring_text)
+        if not matched_phrase:
+            continue
+        if not _function_has_unguarded_payload_dereference(each_node):
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: {each_node.name}() docstring claims "
+            f"'{matched_phrase}' but a payload subscript sits outside the try/except that "
+            "returns None — a malformed-but-present payload raises rather than resolving to "
+            "None; move the dereference inside the guard or narrow the docstring "
+            "(Category O8 docstring-vs-implementation drift)"
+        )
+        if len(issues) >= MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES:
+            break
+    return issues[:MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES]
 
 
 def _module_docstring_claims_no_inline_literal(module_docstring: str) -> str:
