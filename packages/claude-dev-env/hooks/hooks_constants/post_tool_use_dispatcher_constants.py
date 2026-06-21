@@ -2,8 +2,7 @@
 
 Holds the ordered hosted-hook list with each hook's extra command-line
 arguments and blocking flag, the PostToolUse block-decision string and key,
-and the hook-event name. The dispatcher imports these; no literals appear
-inline in the dispatcher script.
+and the hook-event name. The dispatcher imports each of these by name.
 """
 
 from __future__ import annotations

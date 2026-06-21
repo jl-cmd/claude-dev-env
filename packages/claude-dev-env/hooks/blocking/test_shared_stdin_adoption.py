@@ -33,6 +33,7 @@ ALL_CONVERTED_HOOK_FILENAMES = (
     "claude_md_orphan_file_blocker.py",
     "pr_converge_bugteam_enforcer.py",
     "verdict_directory_write_blocker.py",
+    "package_inventory_stale_blocker.py",
 )
 
 EMPTY_STDIN_PAYLOAD = ""
@@ -138,6 +139,47 @@ def test_open_questions_blocker_still_allows_plan_without_open_questions(
         }
     )
     completed = _run_hook_script("open_questions_in_plans_blocker.py", payload)
+    assert completed.returncode == 0
+    assert _decision_from_stdout(completed) is None
+
+
+def test_package_inventory_blocker_still_denies_uninventoried_new_file(
+    tmp_path: Path,
+) -> None:
+    inventory_body = "# package\n\n| File | Role |\n|---|---|\n| `alpha.py` | A |\n| `beta.py` | B |\n"
+    (tmp_path / "README.md").write_text(inventory_body, encoding="utf-8")
+    (tmp_path / "alpha.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "beta.py").write_text("x = 1\n", encoding="utf-8")
+    new_file_path = tmp_path / "gamma.py"
+    payload = json.dumps(
+        {
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(new_file_path), "content": "x = 1\n"},
+        }
+    )
+    completed = _run_hook_script("package_inventory_stale_blocker.py", payload)
+    assert completed.returncode == 0
+    assert _decision_from_stdout(completed) == "deny"
+
+
+def test_package_inventory_blocker_still_allows_inventoried_new_file(
+    tmp_path: Path,
+) -> None:
+    inventory_body = (
+        "# package\n\n| File | Role |\n|---|---|\n"
+        "| `alpha.py` | A |\n| `beta.py` | B |\n| `gamma.py` | G |\n"
+    )
+    (tmp_path / "README.md").write_text(inventory_body, encoding="utf-8")
+    (tmp_path / "alpha.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "beta.py").write_text("x = 1\n", encoding="utf-8")
+    new_file_path = tmp_path / "gamma.py"
+    payload = json.dumps(
+        {
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(new_file_path), "content": "x = 1\n"},
+        }
+    )
+    completed = _run_hook_script("package_inventory_stale_blocker.py", payload)
     assert completed.returncode == 0
     assert _decision_from_stdout(completed) is None
 
