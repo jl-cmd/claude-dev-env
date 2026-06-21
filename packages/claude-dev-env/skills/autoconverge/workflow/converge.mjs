@@ -36,16 +36,40 @@ const HEADLESS_SAFETY_PREAMBLE =
   '- Keep scratch files and cleanup inside the OS temp dir or $CLAUDE_JOB_DIR/tmp (auto-allowed as ephemeral); never target a repository or worktree path with rm -rf.\n' +
   '- If a step appears to require a real destructive command, use a non-destructive equivalent or report it as a blocker instead of running it.\n\n'
 
+let activeRepoPath = null
+
+/**
+ * Build the per-agent worktree directive for a path-scoped run.
+ *
+ * A multi-PR parent run drives several converge children from one shared
+ * working directory, so each child pins its own agents to the worktree its PR
+ * is checked out in; without that pin every child's git, gh, diff, edit,
+ * commit, and test commands would run in the shared launch directory rather
+ * than the PR's own checkout. The parent hands the worktree path in as
+ * input.repoPath, which sets activeRepoPath. A single-PR run carries no
+ * repoPath, so this returns an empty string and every agent keeps its own
+ * working directory — behavior identical to a run with no path scoping.
+ * @param {string|null} repoPath the PR worktree absolute path, or null for the single-PR default
+ * @returns {string} the worktree directive to prepend, or an empty string when repoPath is null
+ */
+const worktreeDirective = (repoPath) =>
+  repoPath
+    ? `WORKTREE — this PR is checked out at ${repoPath}. Unless a step explicitly names a different repository directory (for example an environment-hardening repo checkout, which you cd into exactly as that step directs), run every git, gh, diff, edit, commit, push, and test command for this PR in that worktree: cd "${repoPath}" before any such command, and resolve repository roots from there.\n\n`
+    : ''
+
 /**
  * Spawn a workflow agent with the headless-safety preamble prepended to its
  * prompt. Every agent in this convergence loop runs unattended, so each one is
- * routed through here to inherit the same no-confirmation-prompt guidance.
+ * routed through here to inherit the same no-confirmation-prompt guidance. On a
+ * path-scoped run the worktree directive is prepended too, so every agent runs
+ * in the PR's own worktree (activeRepoPath); on a single-PR run that directive
+ * is empty and the agent keeps its own working directory.
  * @param {string} prompt the agent's role-specific instruction body
  * @param {object} options the agent() options (label, phase, schema, agentType, model)
  * @returns {Promise<*>} the agent() result
  */
 const convergeAgent = (prompt, options) =>
-  agent(`${HEADLESS_SAFETY_PREAMBLE}${prompt}`, options)
+  agent(`${HEADLESS_SAFETY_PREAMBLE}${worktreeDirective(activeRepoPath)}${prompt}`, options)
 
 const PRE_COMMIT_GATE_STEP =
   `\n\nFINAL STEP — pre-commit gate check (do NOT commit): before your turn ends, prove your working-tree changes CAN be committed by dry-running the CODE_RULES commit gate that gates git commit (precommit_code_rules_gate). From inside the checkout that holds your changes, resolve its root with git rev-parse --show-toplevel, stage your changes with git add -A, then run exactly:\n` +
@@ -696,6 +720,7 @@ if (runInput.blocker) {
   return { converged: false, rounds: 0, finalSha: null, blocker: runInput.blocker }
 }
 const input = runInput.input
+activeRepoPath = typeof input.repoPath === 'string' && input.repoPath ? input.repoPath : null
 const prCoordinates = `owner=${input.owner} repo=${input.repo} PR #${input.prNumber} (https://github.com/${input.owner}/${input.repo}/pull/${input.prNumber})`
 
 /**

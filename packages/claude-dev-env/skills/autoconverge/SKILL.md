@@ -23,6 +23,22 @@ the workflow journal.
 autoconverge runs it as a deterministic workflow. The two skills share the same
 helper scripts and the same convergence gate.
 
+## Run scope: one PR or several
+
+Decide the scope from how many PRs the user named, then follow that path:
+
+1. **One PR** → the single-PR run described below (`workflow/converge.mjs`): one
+   worktree, one workflow launch, one teardown.
+2. **Several PRs** → the [Multiple PRs](#multiple-prs) run
+   (`workflow/converge_multi.mjs`): one worktree per PR and a single workflow
+   launch that drives every PR's converge run in parallel, then one teardown per
+   PR.
+
+The single-PR sections (Requirements, Pre-flight, Run the workflow, Teardown)
+each describe one converge run. The Multiple PRs section reuses them once per PR
+and adds only what fanning out needs: a per-PR worktree and a per-PR teardown
+loop.
+
 ## Requirements
 
 Scan the tool list at the top of this conversation for the literal string
@@ -270,10 +286,87 @@ suite (`python -m pytest`) and keep scratch work in ephemeral temp dirs.
 - **Convergence check:** `check_convergence.py` is the authoritative gate; on a
   full pass the workflow marks `draft=false`.
 
+## Multiple PRs
+
+The multi-PR run drives several draft PRs to ready in one launch:
+`workflow/converge_multi.mjs` fans out one `converge.mjs` child run per PR with
+`parallel()`, and every child is pinned to its own PR's worktree through the
+`repoPath` it receives, so the children never share a checkout. Each child run is
+the exact single-PR convergence loop — same rounds, same reuse pass, same Copilot
+gate, same convergence check — one per PR at once. The children share the run's
+concurrency cap, so the fan-out self-throttles rather than spawning every PR's
+lenses at the same instant.
+
+### Multi-PR pre-flight (main session)
+
+`EnterWorktree` puts the session on one branch only, so the multi-PR path gives
+each PR its own checkout with `git worktree add`. For each PR the user named:
+
+1. **Resolve PR scope** as the single-PR pre-flight step 2 does: capture `owner`,
+   `repo`, `prNumber`, and `headRefName`; confirm the PR is a draft, and mark it
+   draft (`gh pr ready <n> --repo <o>/<r> --undo`) when it is already ready so the
+   loop owns the ready transition.
+2. **Create a worktree on the PR's head ref** and capture its absolute path. From
+   inside the PR's repository checkout:
+   `git worktree add <abs worktree path> <headRefName>` (run `git fetch origin
+   <headRefName>` first when the ref is not local). Put each PR's worktree under a
+   path carrying its PR number so the fan-out keeps them distinct. Confirm
+   `git -C <abs worktree path> rev-parse --abbrev-ref HEAD` equals the head ref
+   and its `HEAD` equals the PR head SHA.
+3. **Verify each worktree is the PR's repo (strict pre-flight):**
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <owner> --repo <repo> --mode strict`,
+   run with that worktree as the working directory. A non-zero exit prints a
+   `PREFLIGHT_OUTCOME` line and an `ABORT` line: report it and drop that PR from
+   the run rather than aborting every PR.
+4. **Grant project permissions once per repository** — the single-PR pre-flight
+   step 4 grant covers every worktree of the same repo, so run it one time for
+   the repo the PRs live in.
+
+### Launch the multi-PR workflow
+
+Call the `Workflow` tool against the fan-out script, passing the absolute path of
+`converge.mjs` and one entry per PR:
+
+```
+Workflow({
+  scriptPath: "<this skill dir>/workflow/converge_multi.mjs",
+  args: {
+    convergeScriptPath: "<this skill dir>/workflow/converge.mjs",
+    prs: [
+      { owner: "<O>", repo: "<R>", prNumber: <N1>, repoPath: "<abs worktree 1>", bugbotDisabled: false },
+      { owner: "<O>", repo: "<R>", prNumber: <N2>, repoPath: "<abs worktree 2>", bugbotDisabled: false }
+    ]
+  }
+})
+```
+
+`convergeScriptPath` is the absolute path to `workflow/converge.mjs` in this same
+skill directory; each `repoPath` is the absolute path of the worktree that PR is
+checked out in. The workflow runs in the background and notifies this session on
+completion; watch live progress with `/workflows`, where each PR's child run
+appears under its own group.
+
+The workflow returns `{ converged, prCount, convergedCount, results, blocker }`,
+where `results` is one record per PR carrying
+`{ owner, repo, prNumber, converged, rounds, finalSha, blocker }`. The top-level
+`converged` is true only when every PR converged.
+
+### Multi-PR teardown (on workflow completion)
+
+Run the single-PR [Teardown](#teardown-on-workflow-completion) once per entry in
+`results`, using that PR's `owner`, `repo`, `prNumber`, and `finalSha`, and its
+own worktree as the working directory. Build and publish a PR's closing report
+only for a PR whose `converged` is true; for a PR that returned a blocker, skip
+its report and carry the blocker into the final summary. Revoke project
+permissions once per repository after every PR's teardown. Then print one summary
+report — a line per PR as
+`#<prNumber>: <converged | blocked> — rounds <N>, final <finalSha>[, blocker <blocker>]`.
+
 ## Folder map
 
 - `SKILL.md` — this hub.
 - `workflow/converge.mjs` — the convergence workflow script.
+- `workflow/converge_multi.mjs` — the multi-PR fan-out driver: one `converge.mjs` child run per PR in parallel, each pinned to its PR worktree via `repoPath`.
 - `workflow/aggregate_runs.py` — merges every autoconverge journal for a PR into one journal and returns its deduped findings, fix summaries, round count, and final SHA.
 - `workflow/convergence_summary.py` — builds the convergence-summary agent prompt over a PR's merged findings.
 - `workflow/render_report.py` — builds the closing convergence insights HTML report, taking the summary from `--summary-file`.
