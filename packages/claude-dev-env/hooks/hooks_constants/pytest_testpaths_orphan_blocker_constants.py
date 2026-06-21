@@ -5,9 +5,10 @@ explicit ``testpaths`` list runs only the directories that list names. A
 ``test_*.py`` file written into a directory that no ``testpaths`` entry covers is
 collected by no default ``pytest`` run, so the test silently never executes and a
 regression in the code it guards passes the standard suite undetected. This
-module holds the marker filename that anchors a pytest package, the section and
-key names that identify an explicit ``testpaths`` allowlist, the test-file
-basename pattern, the directory names the upward search prunes, the search
+module holds the marker filename that anchors a pytest package, the key name
+that identifies an explicit ``testpaths`` allowlist, the test-file basename
+pattern, the package-root entry tokens and glob metacharacters that classify a
+``testpaths`` entry, the directory names the upward search prunes, the search
 budget, and the block-message text the hook emits.
 """
 
@@ -15,11 +16,11 @@ import re
 
 __all__ = [
     "PYPROJECT_FILENAME",
-    "PYTEST_SECTION_HEADER",
     "TESTPATHS_KEY",
-    "PYTHON_FILES_KEY",
     "TEST_FILE_BASENAME_PATTERN",
-    "DEFAULT_PYTHON_FILES_PATTERN",
+    "PACKAGE_ROOT_ENTRY",
+    "PACKAGE_ROOT_ENTRY_PREFIX",
+    "GLOB_METACHARACTERS",
     "ALL_PRUNED_PARENT_DIRECTORY_NAMES",
     "MAX_PARENT_DIRECTORIES_SEARCHED",
     "UNREGISTERED_TEST_DIRECTORY_MESSAGE_TEMPLATE",
@@ -29,15 +30,15 @@ __all__ = [
 
 PYPROJECT_FILENAME: str = "pyproject.toml"
 
-PYTEST_SECTION_HEADER: str = "[tool.pytest.ini_options]"
-
 TESTPATHS_KEY: str = "testpaths"
-
-PYTHON_FILES_KEY: str = "python_files"
 
 TEST_FILE_BASENAME_PATTERN: re.Pattern[str] = re.compile(r"^test_.+\.py$")
 
-DEFAULT_PYTHON_FILES_PATTERN: str = "test_*.py"
+PACKAGE_ROOT_ENTRY: str = "."
+
+PACKAGE_ROOT_ENTRY_PREFIX: str = "./"
+
+GLOB_METACHARACTERS: frozenset[str] = frozenset({"*", "?", "["})
 
 ALL_PRUNED_PARENT_DIRECTORY_NAMES: frozenset[str] = frozenset(
     {

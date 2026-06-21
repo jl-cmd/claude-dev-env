@@ -9,6 +9,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pytest_testpaths_orphan_blocker import (
+    _explicit_testpaths,
+    _is_collected_by_entry,
     find_unregistered_test_directory,
     is_test_file,
 )
@@ -24,6 +26,18 @@ PYPROJECT_WITH_EXPLICIT_TESTPATHS = (
 PYPROJECT_WITH_NO_PYTEST_SECTION = '[build-system]\nrequires = ["setuptools"]\n'
 
 PYPROJECT_WITH_EMPTY_TESTPATHS = "[tool.pytest.ini_options]\ntestpaths = []\n"
+
+PYPROJECT_WITH_DOT_TESTPATHS = '[tool.pytest.ini_options]\ntestpaths = ["."]\n'
+
+PYPROJECT_WITH_DOT_PREFIXED_TESTPATHS = '[tool.pytest.ini_options]\ntestpaths = ["./tests"]\n'
+
+PYPROJECT_WITH_GLOB_TESTPATHS = '[tool.pytest.ini_options]\ntestpaths = ["tests/*"]\n'
+
+PYPROJECT_WITH_SCALAR_TOOL = 'tool = "x"\n'
+
+PYPROJECT_WITH_SCALAR_PYTEST = "[tool]\npytest = \"oops\"\n"
+
+PYPROJECT_WITH_SCALAR_INI_OPTIONS = "[tool.pytest]\nini_options = \"oops\"\n"
 
 
 def _write_package(package_root: Path, pyproject_text: str) -> None:
@@ -161,4 +175,73 @@ def test_hook_ignores_non_test_python_file(tmp_path: Path) -> None:
         "Write",
         {"file_path": str(production_module), "content": "VALUE = 1\n"},
     )
+    assert completed.stdout.strip() == ""
+
+
+def test_find_passes_when_testpaths_is_dot_for_nested_file(tmp_path: Path) -> None:
+    package_root = tmp_path / "shared_utils"
+    _write_package(package_root, PYPROJECT_WITH_DOT_TESTPATHS)
+    nested_test_file = package_root / "theme_assets" / "tests" / "test_palette.py"
+    assert find_unregistered_test_directory(str(nested_test_file)) is None
+
+
+def test_find_passes_when_testpaths_is_dot_for_root_file(tmp_path: Path) -> None:
+    package_root = tmp_path / "shared_utils"
+    _write_package(package_root, PYPROJECT_WITH_DOT_TESTPATHS)
+    root_test_file = package_root / "test_root_behavior.py"
+    assert find_unregistered_test_directory(str(root_test_file)) is None
+
+
+def test_find_passes_when_testpaths_entry_has_dot_slash_prefix(tmp_path: Path) -> None:
+    package_root = tmp_path / "shared_utils"
+    _write_package(package_root, PYPROJECT_WITH_DOT_PREFIXED_TESTPATHS)
+    registered_test_file = package_root / "tests" / "test_root_behavior.py"
+    assert find_unregistered_test_directory(str(registered_test_file)) is None
+
+
+def test_find_passes_when_testpaths_entry_is_glob(tmp_path: Path) -> None:
+    package_root = tmp_path / "shared_utils"
+    _write_package(package_root, PYPROJECT_WITH_GLOB_TESTPATHS)
+    registered_test_file = package_root / "tests" / "test_x.py"
+    assert find_unregistered_test_directory(str(registered_test_file)) is None
+
+
+def test_is_collected_by_entry_treats_dot_as_package_root() -> None:
+    assert _is_collected_by_entry(Path("theme_assets/tests/test_palette.py"), ".") is True
+
+
+def test_is_collected_by_entry_matches_glob_segment() -> None:
+    assert _is_collected_by_entry(Path("tests/test_x.py"), "tests/*") is True
+
+
+def test_explicit_testpaths_returns_none_for_scalar_tool(tmp_path: Path) -> None:
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text(PYPROJECT_WITH_SCALAR_TOOL, encoding="utf-8")
+    assert _explicit_testpaths(pyproject_path) is None
+
+
+def test_explicit_testpaths_returns_none_for_scalar_pytest(tmp_path: Path) -> None:
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text(PYPROJECT_WITH_SCALAR_PYTEST, encoding="utf-8")
+    assert _explicit_testpaths(pyproject_path) is None
+
+
+def test_explicit_testpaths_returns_none_for_scalar_ini_options(tmp_path: Path) -> None:
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text(PYPROJECT_WITH_SCALAR_INI_OPTIONS, encoding="utf-8")
+    assert _explicit_testpaths(pyproject_path) is None
+
+
+def test_hook_does_not_crash_on_scalar_tool_ancestor(tmp_path: Path) -> None:
+    package_root = tmp_path / "scalar_package"
+    _write_package(package_root, PYPROJECT_WITH_SCALAR_TOOL)
+    any_test_file = package_root / "deep" / "test_anything.py"
+    completed = _run_hook(
+        "Write",
+        {
+            "file_path": str(any_test_file),
+            "content": "def test_x() -> None:\n    assert True\n",
+        },
+    )
+    assert completed.returncode == 0
     assert completed.stdout.strip() == ""
