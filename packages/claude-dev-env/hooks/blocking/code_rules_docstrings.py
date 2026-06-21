@@ -36,6 +36,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
     MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
+    MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES,
     MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
     MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK,
     MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER,
@@ -44,6 +45,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
+    ALL_CAPS_WITH_UNDERSCORE_PATTERN,
     ALL_DOCSTRING_ARGS_SECTION_HEADERS,
     ALL_DOCSTRING_TERMINATING_SECTION_HEADERS,
     ALL_SELF_AND_CLS_PARAMETER_NAMES,
@@ -976,3 +978,95 @@ def check_docstring_step_enumeration_dispatch_coverage(
             if len(issues) >= MAX_DOCSTRING_STEP_DISPATCH_ISSUES:
                 return issues[:MAX_DOCSTRING_STEP_DISPATCH_ISSUES]
     return issues[:MAX_DOCSTRING_STEP_DISPATCH_ISSUES]
+
+
+def _imported_binding_names(import_node: ast.Import | ast.ImportFrom) -> set[str]:
+    bound_names: set[str] = set()
+    for each_alias in import_node.names:
+        bound_names.add(each_alias.asname or each_alias.name.split(".", 1)[0])
+    return bound_names
+
+
+def _module_defined_and_imported_names(parsed_tree: ast.Module) -> set[str]:
+    defined_names: set[str] = set()
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, (ast.Import, ast.ImportFrom)):
+            defined_names |= _imported_binding_names(each_node)
+        elif isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            defined_names.add(each_node.name)
+        elif isinstance(each_node, ast.Name) and isinstance(each_node.ctx, ast.Store):
+            defined_names.add(each_node.id)
+    return defined_names
+
+
+def _docstring_constant_tokens(docstring_text: str) -> set[str]:
+    candidate_tokens: set[str] = set()
+    for each_word in docstring_text.replace("`", " ").split():
+        stripped_word = each_word.strip(".,:;()[]{}'\"")
+        if stripped_word.startswith("__") and stripped_word.endswith("__"):
+            continue
+        if ALL_CAPS_WITH_UNDERSCORE_PATTERN.match(stripped_word):
+            candidate_tokens.add(stripped_word)
+    return candidate_tokens
+
+
+def _documentable_nodes_with_docstrings(
+    parsed_tree: ast.Module,
+) -> list[tuple[int, str]]:
+    documentable: list[tuple[int, str]] = []
+    module_docstring = ast.get_docstring(parsed_tree)
+    if module_docstring:
+        documentable.append((1, module_docstring))
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(
+            each_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ):
+            continue
+        node_docstring = ast.get_docstring(each_node)
+        if node_docstring:
+            documentable.append((each_node.lineno, node_docstring))
+    return documentable
+
+
+def check_docstring_names_undefined_constant(content: str, file_path: str) -> list[str]:
+    """Flag a docstring naming an UPPER_SNAKE constant the module never defines.
+
+    The drift this catches: a docstring names an all-caps, underscore-joined
+    token as a contract identifier (``NATIVE_EVALUATE_FUNCTION_NAME``) while the
+    enclosing module neither defines that name at module scope nor imports it. A
+    reader who trusts the docstring to name a real constant finds nothing — the
+    deterministic slice of Category O6 docstring-prose-vs-implementation drift
+    where the named symbol is structurally a constant and resolvable against the
+    module's defined-and-imported name set. Single-segment all-caps acronyms
+    (``HTTP``, ``JSON``) and dunder names (``__all__``) are not constants and are
+    left alone.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per docstring token that names no defined-or-imported constant,
+        capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    known_names = _module_defined_and_imported_names(parsed_tree)
+    issues: list[str] = []
+    for each_line_number, each_docstring in _documentable_nodes_with_docstrings(parsed_tree):
+        for each_token in sorted(_docstring_constant_tokens(each_docstring)):
+            if each_token in known_names:
+                continue
+            issues.append(
+                f"Line {each_line_number}: docstring names '{each_token}' which the "
+                "module neither defines at module scope nor imports — name the real "
+                "symbol or drop the reference (Category O6 docstring-vs-implementation "
+                "drift)"
+            )
+            if len(issues) >= MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES:
+                return issues[:MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES]
+    return issues[:MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES]
