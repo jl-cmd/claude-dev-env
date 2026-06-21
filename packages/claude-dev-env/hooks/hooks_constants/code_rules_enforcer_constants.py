@@ -42,6 +42,9 @@ UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 ALL_MUST_CHECK_RETURN_FUNCTION_NAMES: frozenset[str] = frozenset({"find_and_click", "write_outcome"})
 
 DOCSTRING_ARG_ENTRY_PATTERN: re.Pattern[str] = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*[:(]")
+DOCSTRING_PLURAL_FAMILY_STOP_PATTERN: re.Pattern[str] = re.compile(
+    r"\bthe\s+([a-z][a-z]+)\s+stops\b"
+)
 INLINE_CODE_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"``?(\.?[A-Za-z_][A-Za-z0-9_.]*)``?")
 IDENTIFIER_SHAPED_TUPLE_MEMBER_PATTERN: re.Pattern[str] = re.compile(r"^\.?[A-Za-z_][A-Za-z0-9_]*$")
 ALL_DOCSTRING_ARGS_SECTION_HEADERS: tuple[str, ...] = ("Args:", "Arguments:")
