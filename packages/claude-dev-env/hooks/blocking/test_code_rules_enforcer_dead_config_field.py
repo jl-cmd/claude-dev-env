@@ -793,6 +793,12 @@ def test_flags_selectors_dataclass_field_read_by_no_production_module(
     assert not any(
         "'show_more_button_active'" in each_issue for each_issue in issues
     ), f"Selector field read in the consumer must not be flagged, got: {issues}"
+    selector_issue = next(
+        each_issue for each_issue in issues if "'show_more_row_visible'" in each_issue
+    )
+    assert "config dataclass field" not in selector_issue, (
+        f"Flagged selectors field must not be mislabelled a config dataclass field, got: {selector_issue}"
+    )
 
 
 def test_does_not_flag_selectors_field_read_in_sibling_module(

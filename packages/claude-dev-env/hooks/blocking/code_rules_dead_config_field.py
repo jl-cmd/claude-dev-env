@@ -28,11 +28,11 @@ The scan is deliberately conservative to keep false positives near zero:
   ``replace(cfg, debug_port=1)``), and match-pattern keyword attribute names
   (``case Config(field=found)``). Two field-write forms are excluded because they
   name a field without consuming it: a keyword that writes a field in a constructor
-  of a known ``*Config`` dataclass defined under the scan root
+  of a known config-like dataclass defined under the scan root
   (``ThemeUpdateConfig(debug_port=1)``, excluded per keyword node so a same-named
   keyword on a ``replace`` call stays a read, and a factory function whose name
   merely ends in ``"Config"`` is not excluded), and a self-referential attribute
-  read inside a ``*Config`` field's own default-value expression in the class body
+  read inside a config-like field's own default-value expression in the class body
   whose attribute name equals the field being defined
   (``debug_port: int = source.debug_port``) — a field written only these ways and
   read by no module is the dead-config case this check exists to catch. A default
@@ -58,7 +58,7 @@ suppress on a dataclass-dunder whole-instance read — instance comparison
 (``str(cfg)``/``repr(cfg)``/``format(cfg)``). Those syntactic forms are not bound
 to a config instance, and tree-wide one incidental match anywhere would disable
 the check on any realistic package. The consequence is a documented, rare
-limitation: a ``*Config`` field read ONLY via whole-instance dunder comparison or
+limitation: a config-like field read ONLY via whole-instance dunder comparison or
 stringification, and never read directly anywhere in production, may be flagged.
 The augmented-assignment read mechanism (``cfg.field += 1`` reads ``field``
 before writing it) is precise and remains a counted read.
@@ -163,18 +163,18 @@ def _reads_whole_instance_reflectively(tree: ast.Module) -> bool:
 
 
 def _config_dataclass_names(tree: ast.Module) -> set[str]:
-    """Return names of ``*Config`` ``@dataclass`` classes defined in a module.
+    """Return names of config-like ``@dataclass`` classes defined in a module.
 
     A constructor-keyword exclusion fires only for a callee that names a genuine
-    config dataclass, so the caller first gathers the config dataclass names a
-    module defines, then unions those names across the scan root.
+    config-like dataclass, so the caller first gathers the config-like dataclass
+    names a module defines, then unions those names across the scan root.
 
     Args:
         tree: The parsed module to inspect.
 
     Returns:
         Every class name in the module that is a ``@dataclass`` whose name ends in
-        the config class name suffix.
+        one of ``ALL_CONFIG_CLASS_NAME_SUFFIXES``.
     """
     config_dataclass_names: set[str] = set()
     for each_node in ast.walk(tree):
@@ -186,22 +186,22 @@ def _config_dataclass_names(tree: ast.Module) -> set[str]:
 def _call_constructs_config_class(
     call_node: ast.Call, all_known_config_class_names: set[str]
 ) -> bool:
-    """Return whether a call constructs a known ``*Config`` dataclass.
+    """Return whether a call constructs a known config-like dataclass.
 
-    A call whose callee names a ``*Config`` dataclass defined under the scan root —
+    A call whose callee names a config-like dataclass defined under the scan root —
     ``AppInfoConfig(...)`` or a qualified ``module.AppInfoConfig(...)`` —
-    constructs a config instance, and its keyword arguments write the named fields
+    constructs the instance, and its keyword arguments write the named fields
     rather than read them. A factory function whose name merely ends in
-    ``"Config"`` (``getThemeConfig(...)``) is not a known config dataclass, so its
-    keyword arguments stay genuine reads.
+    ``"Config"`` (``getThemeConfig(...)``) is not a known config-like dataclass, so
+    its keyword arguments stay genuine reads.
 
     Args:
         call_node: The call expression to test.
-        all_known_config_class_names: Names of ``*Config`` dataclasses defined under
+        all_known_config_class_names: Names of config-like dataclasses defined under
             the scan root.
 
     Returns:
-        True when the callee names a known ``*Config`` dataclass.
+        True when the callee names a known config-like dataclass.
     """
     callee_node = call_node.func
     if isinstance(callee_node, ast.Name):
@@ -214,7 +214,7 @@ def _call_constructs_config_class(
 def _config_constructor_keyword_node_ids(
     tree: ast.Module, all_known_config_class_names: set[str]
 ) -> set[int]:
-    """Return ids of keyword nodes that write fields in a known ``*Config`` constructor.
+    """Return ids of keyword nodes that write fields in a known config-like constructor.
 
     A keyword in an ``AppInfoConfig(field=value)`` call sets ``field`` rather than
     reading it, so its node id is collected for the caller to exclude. The
@@ -224,11 +224,11 @@ def _config_constructor_keyword_node_ids(
 
     Args:
         tree: The parsed module to inspect.
-        all_known_config_class_names: Names of ``*Config`` dataclasses defined under
+        all_known_config_class_names: Names of config-like dataclasses defined under
             the scan root.
 
     Returns:
-        The ``id()`` of every keyword node passed to a known ``*Config``
+        The ``id()`` of every keyword node passed to a known config-like
         constructor call.
     """
     constructor_keyword_node_ids: set[int] = set()
@@ -248,7 +248,7 @@ def _self_referential_default_attribute_node_ids(
 ) -> set[int]:
     """Return ids of attribute reads in a default whose name equals the field.
 
-    Walks a ``*Config`` field's default-value expression and collects the ``id()``
+    Walks a config-like field's default-value expression and collects the ``id()``
     of each ``ast.Attribute`` read whose ``.attr`` equals ``field_name``. Such a
     read — ``sound_upload_timeout_ms: int = submission_timing.sound_upload_timeout_ms``
     — names the field being defined inside the class body, so it is not a consumer
@@ -272,15 +272,15 @@ def _self_referential_default_attribute_node_ids(
 
 
 def _config_field_default_value_nodes(tree: ast.Module) -> set[int]:
-    """Return ids of self-referential attribute reads in ``*Config`` field defaults.
+    """Return ids of self-referential attribute reads in config-like field defaults.
 
     A field default such as ``sound_upload_timeout_ms: int =``
     ``submission_timing.sound_upload_timeout_ms`` is an attribute read whose name
-    matches the field being defined. That self-referential read inside the config
-    class body is not a consumer of the field, so its node id is collected here for
-    the caller to exclude from the attribute-read set. Only the attribute read
-    whose ``.attr`` equals the field name is collected; a default that sources a
-    differently-named field on another object
+    matches the field being defined. That self-referential read inside the
+    config-like class body is not a consumer of the field, so its node id is
+    collected here for the caller to exclude from the attribute-read set. Only the
+    attribute read whose ``.attr`` equals the field name is collected; a default
+    that sources a differently-named field on another object
     (``timeout_ms: int = other_config.base_timeout``) leaves that read counted, so
     ``base_timeout`` stays a live consumer.
 
@@ -289,7 +289,7 @@ def _config_field_default_value_nodes(tree: ast.Module) -> set[int]:
 
     Returns:
         The ``id()`` of every self-referential attribute read within the
-        default-value expression of a field declared in a ``*Config`` dataclass
+        default-value expression of a field declared in a config-like dataclass
         body.
     """
     default_value_node_ids: set[int] = set()
@@ -322,14 +322,14 @@ def _attribute_read_names_in_tree(
     contributes ``"debug_port"``), and ``ast.MatchClass.kwd_attrs`` names (so
     ``case Config(field=x)`` contributes ``"field"``). Two field-write forms are
     excluded because they name a field without consuming it: a keyword that writes
-    a field in a known ``*Config`` constructor (``AppInfoConfig(field=value)``,
+    a field in a known config-like constructor (``AppInfoConfig(field=value)``,
     excluded per keyword node so a same-named ``replace`` keyword stays a read),
-    and a self-referential attribute read inside a ``*Config`` dataclass field's
+    and a self-referential attribute read inside a config-like dataclass field's
     own default-value expression (``field: int = source.field`` in the class body,
     excluded only when the read name equals the field name) — counting either
     would hide a field that is written but read by no module. A keyword passed to a
-    factory function whose name merely ends in ``"Config"`` is not a known config
-    constructor, so it stays a read. The boolean reports whether the module
+    factory function whose name merely ends in ``"Config"`` is not a known
+    config-like constructor, so it stays a read. The boolean reports whether the module
     suppresses the dead-field check, which it does only when it reflectively reads a
     whole instance — a bare or ``dataclasses``-qualified
     ``asdict``/``astuple``/``fields``/``replace``/``vars`` call, or an
@@ -339,14 +339,14 @@ def _attribute_read_names_in_tree(
 
     Args:
         tree: The parsed module to inspect.
-        all_known_config_class_names: Names of ``*Config`` dataclasses defined under
+        all_known_config_class_names: Names of config-like dataclasses defined under
             the scan root, used to scope the constructor-keyword exclusion to
-            genuine config constructors.
+            genuine config-like constructors.
 
     Returns:
         A (read_names, suppresses_dead_field_check) pair. The name set is every
         attribute name the module reads via the mechanisms above, excluding known
-        ``*Config`` constructor keyword nodes and self-referential config-field
+        config-like constructor keyword nodes and self-referential config-like-field
         default-value attribute reads; suppresses_dead_field_check is True only when
         a reflective whole-instance read is present.
     """
@@ -429,8 +429,8 @@ def _all_production_read_names_under_root(
     Reads and AST-parses every production ``.py`` module under ``scan_root``
     (excluding test and migration files) at most once: the module sources are
     materialized once, a first pass over the cached sources gathers every
-    ``*Config`` dataclass name defined under the root so the constructor-keyword
-    exclusion fires only for a genuine config constructor, and a second pass over
+    config-like dataclass name defined under the root so the constructor-keyword
+    exclusion fires only for a genuine config-like constructor, and a second pass over
     the same cached sources collects attribute reads. The written module's
     post-edit content replaces its on-disk text so the current edit is included.
     Scanning stops at the configured file cap. A module that reflectively reads a
@@ -493,7 +493,7 @@ def check_dead_config_dataclass_fields(
     augmented-assignment target (``cfg.field += 1``), string literal,
     non-constructor keyword-argument name (``replace`` keyword), or match-pattern
     keyword attribute in any production module under the enclosing scan root is
-    flagged as dead. A keyword that writes a field in a ``*Config`` constructor
+    flagged as dead. A keyword that writes a field in a config-like constructor
     (``ThemeUpdateConfig(debug_port=1)``) is a write, not a read, so it does not
     clear a field — a field set by a constructor keyword and read by no module is
     flagged. When any production module under the scan root reflectively
@@ -520,10 +520,10 @@ def check_dead_config_dataclass_fields(
             Edit, or None for a Write where ``content`` is already the whole file.
 
     Returns:
-        One violation message per dead config dataclass field, capped at the
+        One violation message per dead config-like dataclass field, capped at the
         configured maximum. Returns an empty list when the file is exempt, no
-        qualifying config dataclass is found, the scan root exceeds the file cap,
-        or a SyntaxError prevents parsing.
+        qualifying config-like dataclass is found, the scan root exceeds the file
+        cap, or a SyntaxError prevents parsing.
     """
     if is_test_file(file_path):
         return []
@@ -560,7 +560,7 @@ def check_dead_config_dataclass_fields(
             if each_field_name in all_read_names:
                 continue
             all_issues.append(
-                f"Line {each_field_line}: config dataclass field {each_field_name!r}"
+                f"Line {each_field_line}: dataclass field {each_field_name!r}"
                 f" on {each_class.name} - {DEAD_CONFIG_FIELD_GUIDANCE}"
             )
             if len(all_issues) >= MAX_DEAD_CONFIG_FIELD_ISSUES:
