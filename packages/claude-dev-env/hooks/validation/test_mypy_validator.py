@@ -15,6 +15,8 @@ the cache directory redirected to a temporary directory.
 """
 
 import importlib.util
+import os
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -275,3 +277,23 @@ def test_content_hash_skip_invalidated_when_mypy_config_tightens(
     )
     assert tightened_exit_code != 0
     assert ": error:" in tightened_output
+
+
+def test_project_relative_path_within_root_returns_relative() -> None:
+    validator = _load_validator()
+    project_root = os.path.join("base", "project")
+    target_file = os.path.join(project_root, "package", "module.py")
+    assert validator.project_relative_path(target_file, project_root) == os.path.join(
+        "package", "module.py"
+    )
+
+
+def test_project_relative_path_across_mounts_falls_back_to_absolute() -> None:
+    if sys.platform != "win32":
+        pytest.skip("cross-mount relpath ValueError only occurs on Windows")
+    validator = _load_validator()
+    target_file = "Y:\\repository\\package\\module.py"
+    project_root = "C:\\other\\root"
+    assert validator.project_relative_path(target_file, project_root) == os.path.abspath(
+        target_file
+    )

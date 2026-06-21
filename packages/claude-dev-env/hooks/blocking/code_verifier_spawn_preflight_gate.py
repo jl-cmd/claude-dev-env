@@ -25,13 +25,13 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
-_hooks_dir = str(Path(__file__).resolve().parent.parent)
-if _hooks_dir not in sys.path:
-    sys.path.insert(0, _hooks_dir)
-
 _blocking_dir = str(Path(__file__).resolve().parent)
 if _blocking_dir not in sys.path:
     sys.path.insert(0, _blocking_dir)
+
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.append(_hooks_dir)
 
 from verification_verdict_store import (  # noqa: E402
     candidate_base_references,

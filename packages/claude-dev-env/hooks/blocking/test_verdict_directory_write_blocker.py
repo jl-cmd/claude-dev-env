@@ -11,6 +11,8 @@ is denied, and commands that touch unrelated paths pass.
 import importlib.util
 import json
 import pathlib
+import shutil
+import subprocess
 import sys
 
 _HOOK_DIR = pathlib.Path(__file__).parent
@@ -718,3 +720,50 @@ def test_guard_is_registered_on_powershell() -> None:
         "verdict_directory_write_blocker.py" in each_command
         for each_command in _pretooluse_commands_for_matcher("PowerShell")
     )
+
+
+def test_hook_subprocess_imports_real_config_when_parent_holds_shadowing_config(
+    tmp_path: pathlib.Path,
+) -> None:
+    real_blocking_directory = pathlib.Path(__file__).resolve().parent
+    real_hooks_directory = real_blocking_directory.parent
+
+    staged_hooks_directory = tmp_path / "hooks"
+    staged_blocking_directory = staged_hooks_directory / "blocking"
+    staged_blocking_directory.mkdir(parents=True)
+
+    shutil.copy(
+        real_blocking_directory / "verdict_directory_write_blocker.py",
+        staged_blocking_directory / "verdict_directory_write_blocker.py",
+    )
+    shutil.copytree(
+        real_blocking_directory / "config",
+        staged_blocking_directory / "config",
+    )
+    shutil.copytree(
+        real_hooks_directory / "hooks_constants",
+        staged_hooks_directory / "hooks_constants",
+    )
+
+    shadowing_config_directory = staged_hooks_directory / "config"
+    shadowing_config_directory.mkdir(parents=True, exist_ok=True)
+    (shadowing_config_directory / "__init__.py").write_text("", encoding="utf-8")
+    (shadowing_config_directory / "unrelated_constants.py").write_text(
+        "UNRELATED_VALUE = 1\n", encoding="utf-8"
+    )
+
+    benign_payload = json.dumps(
+        {"tool_name": "Bash", "tool_input": {"command": "echo hello"}}
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(staged_blocking_directory / "verdict_directory_write_blocker.py"),
+        ],
+        input=benign_payload,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "ModuleNotFoundError" not in completed.stderr
+    assert completed.returncode == 0

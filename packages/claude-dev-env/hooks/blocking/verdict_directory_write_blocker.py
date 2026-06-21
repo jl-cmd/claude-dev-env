@@ -39,7 +39,7 @@ if blocking_directory not in sys.path:
 
 hooks_directory = str(Path(__file__).resolve().parent.parent)
 if hooks_directory not in sys.path:
-    sys.path.insert(0, hooks_directory)
+    sys.path.append(hooks_directory)
 
 from config.verified_commit_constants import (  # noqa: E402
     ALL_GATED_TOOL_NAMES,
