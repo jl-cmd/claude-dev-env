@@ -2,7 +2,7 @@
 
 Holds the ordered hosted-hook list with per-hook applicable-tool sets, the
 special exit codes, the deny decision string, and the hook-event name. The
-dispatcher imports these; no literals appear inline in the dispatcher script.
+dispatcher imports each of these by name.
 """
 
 from __future__ import annotations
