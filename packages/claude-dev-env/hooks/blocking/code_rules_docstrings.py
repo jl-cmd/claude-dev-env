@@ -42,6 +42,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
     MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
+    MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
     MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES,
     MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
@@ -50,6 +51,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
     MINIMUM_TOKENS_FOR_DISPATCH_CALLEE,
     MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
+    SINGLE_DICT_KEY_COUNT_FOR_PLURAL_CARDINALITY_DRIFT,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CAPS_WITH_UNDERSCORE_PATTERN,
@@ -57,6 +59,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_DOCSTRING_TERMINATING_SECTION_HEADERS,
     ALL_SELF_AND_CLS_PARAMETER_NAMES,
     DOCSTRING_ARG_ENTRY_PATTERN,
+    DOCSTRING_PLURAL_FAMILY_STOP_PATTERN,
     IDENTIFIER_SHAPED_TUPLE_MEMBER_PATTERN,
     INLINE_CODE_TOKEN_PATTERN,
 )
@@ -886,6 +889,107 @@ def check_docstring_tuple_enumeration_match(content: str, file_path: str) -> lis
             if len(issues) >= MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES:
                 return issues[:MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES]
     return issues[:MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES]
+
+
+def _returns_section_text(docstring_text: str) -> str:
+    docstring_lines = docstring_text.splitlines()
+    returns_section_lines: list[str] = []
+    inside_returns_section = False
+    for each_line in docstring_lines:
+        stripped_line = each_line.strip()
+        if stripped_line in ("Returns:", "Yields:"):
+            inside_returns_section = True
+            continue
+        if not inside_returns_section:
+            continue
+        if _is_docstring_terminating_section_header(stripped_line):
+            break
+        returns_section_lines.append(stripped_line)
+    return " ".join(returns_section_lines)
+
+
+def _plural_families_in_returns_section(returns_section_text: str) -> set[str]:
+    return {
+        each_match.group(1)
+        for each_match in DOCSTRING_PLURAL_FAMILY_STOP_PATTERN.finditer(returns_section_text)
+    }
+
+
+def _returned_dict_key_names(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> set[str]:
+    all_key_names: set[str] = set()
+    for each_node in ast.walk(function_node):
+        if not isinstance(each_node, ast.Return):
+            continue
+        if not isinstance(each_node.value, ast.Dict):
+            continue
+        for each_key in each_node.value.keys:
+            if isinstance(each_key, ast.Constant) and isinstance(each_key.value, str):
+                all_key_names.add(each_key.value)
+    return all_key_names
+
+
+def _family_prefixed_key_count(family: str, all_key_names: set[str]) -> int:
+    family_prefix = f"{family}_"
+    return sum(1 for each_key in all_key_names if each_key.startswith(family_prefix))
+
+
+def check_docstring_returns_plural_cardinality(content: str, file_path: str) -> list[str]:
+    """Flag a Returns clause plural noun that names one dict key in its family.
+
+    The drift this catches: a function returns a dict literal whose keys carry
+    prefix families (``sheen_mid``, ``body_highlight``), and its Returns clause
+    names one family with a plural noun (``the sheen stops``) while exactly one
+    key in that family exists. The plural prose claims two or more entries the
+    dict no longer holds — the shape that appears when a producer removes the
+    second key in a family but leaves the plural prose untouched. The check binds
+    only when the plural family prefixes exactly one returned dict key, so a
+    singular noun, a family with two or more keys, and a family absent from the
+    dict are all left alone. This is the deterministic single-key slice of
+    Category O6 docstring-prose-vs-implementation drift.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per function whose Returns clause names a plural family that
+        prefixes a single returned dict key, capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        docstring_text = _function_docstring_text(each_node)
+        if not docstring_text:
+            continue
+        returns_section_text = _returns_section_text(docstring_text)
+        if not returns_section_text:
+            continue
+        plural_families = _plural_families_in_returns_section(returns_section_text)
+        if not plural_families:
+            continue
+        all_key_names = _returned_dict_key_names(each_node)
+        for each_family in sorted(plural_families):
+            matching_key_count = _family_prefixed_key_count(each_family, all_key_names)
+            if matching_key_count != SINGLE_DICT_KEY_COUNT_FOR_PLURAL_CARDINALITY_DRIFT:
+                continue
+            issues.append(
+                f"Line {each_node.lineno}: {each_node.name}() Returns clause says "
+                f"'the {each_family} stops' (plural) but the returned dict holds a "
+                f"single {each_family}_ key — match the noun to the cardinality "
+                "(Category O6 docstring-vs-implementation drift)"
+            )
+            if len(issues) >= MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES:
+                return issues[:MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES]
+    return issues[:MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES]
 
 
 def _called_callee_name(statement: ast.stmt) -> str:
