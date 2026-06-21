@@ -148,6 +148,8 @@ def test_package_inventory_blocker_still_denies_uninventoried_new_file(
 ) -> None:
     inventory_body = "# package\n\n| File | Role |\n|---|---|\n| `alpha.py` | A |\n| `beta.py` | B |\n"
     (tmp_path / "README.md").write_text(inventory_body, encoding="utf-8")
+    (tmp_path / "alpha.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "beta.py").write_text("x = 1\n", encoding="utf-8")
     new_file_path = tmp_path / "gamma.py"
     payload = json.dumps(
         {
@@ -163,8 +165,13 @@ def test_package_inventory_blocker_still_denies_uninventoried_new_file(
 def test_package_inventory_blocker_still_allows_inventoried_new_file(
     tmp_path: Path,
 ) -> None:
-    inventory_body = "# package\n\n| File | Role |\n|---|---|\n| `alpha.py` | A |\n| `gamma.py` | G |\n"
+    inventory_body = (
+        "# package\n\n| File | Role |\n|---|---|\n"
+        "| `alpha.py` | A |\n| `beta.py` | B |\n| `gamma.py` | G |\n"
+    )
     (tmp_path / "README.md").write_text(inventory_body, encoding="utf-8")
+    (tmp_path / "alpha.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "beta.py").write_text("x = 1\n", encoding="utf-8")
     new_file_path = tmp_path / "gamma.py"
     payload = json.dumps(
         {

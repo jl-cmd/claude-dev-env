@@ -10,8 +10,8 @@ package's file set: a reader who trusts the inventory to map the directory misse
 the new file. This hook fires on a Write that creates such a file and blocks it,
 directing the author to add the inventory entry in the same change. Edits to an
 existing file, exempt files (``__init__.py``, ``conftest.py``, ``setup.py``,
-``_path_setup.py``), test files, and files under ``config/`` or ``tests/`` are
-out of scope.
+``_path_setup.py``), test files, and files inside a directory that carries no
+per-file inventory (such as ``config/`` or ``tests/``) are out of scope.
 """
 
 import json
@@ -214,8 +214,9 @@ def _is_test_file(basename: str) -> bool:
 def _is_under_exempt_directory(package_directory: Path) -> bool:
     """Return whether the file's directory is itself an exempt directory.
 
-    A file directly inside a ``config/`` or ``tests/`` directory carries no
-    individual inventory entry, so its directory exempts it.
+    A file directly inside a directory that carries no per-file inventory (such
+    as ``config/`` or ``tests/``) has no individual entry, so its directory
+    exempts it.
 
     Args:
         package_directory: The directory that holds the file being written.
@@ -230,9 +231,10 @@ def is_inventoried_production_file(file_path: str) -> bool:
     """Return whether *file_path* is a production file an inventory should name.
 
     A production file is a non-test, non-exempt code file (``.py``, ``.mjs``,
-    ``.js``, ``.ts``, ``.ps1``, ``.sh``) outside a ``config/`` or ``tests/``
-    directory. Exempt basenames (``__init__.py``, ``conftest.py``, ``setup.py``,
-    ``_path_setup.py``) and test files are out of scope.
+    ``.js``, ``.ts``, ``.ps1``, ``.sh``) outside a directory that carries no
+    per-file inventory (such as ``config/`` or ``tests/``). Exempt basenames
+    (``__init__.py``, ``conftest.py``, ``setup.py``, ``_path_setup.py``) and
+    test files are out of scope.
 
     Args:
         file_path: The destination path of the write.
