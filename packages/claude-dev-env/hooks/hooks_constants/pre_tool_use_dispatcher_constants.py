@@ -132,6 +132,10 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
+        script_relative_path="blocking/docstring_rule_gate_count_blocker.py",
+        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
+    ),
+    HostedHookEntry(
         script_relative_path="blocking/plain_language_blocker.py",
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
         native_module_name=PLAIN_LANGUAGE_BLOCKER_MODULE_NAME,
