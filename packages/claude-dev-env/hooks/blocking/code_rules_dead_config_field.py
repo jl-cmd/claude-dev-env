@@ -1,17 +1,21 @@
-"""Dead config-dataclass field check: cross-module scan for ``*Config`` @dataclass fields.
+"""Dead config-dataclass field check: cross-module scan for config-like @dataclass fields.
 
-A config ``@dataclass`` (any class whose name ends in ``"Config"``) is defined
-in one module but constructed and consumed in others, so the per-file dead-field
-check in ``code_rules_dead_dataclass_field`` cannot judge its fields — it skips
-any class that is not constructed in the same file. This check resolves the
-enclosing package tree — the scan root — and flags a ``*Config`` dataclass field
-whose name appears as an attribute read (``obj.field``) in no production module
-anywhere under that root.
+A config-like ``@dataclass`` — any class whose name ends in ``"Config"`` or
+``"Selectors"`` — is defined in one module but constructed and consumed in
+others, so the per-file dead-field check in
+``code_rules_dead_dataclass_field`` cannot judge its fields — it skips any class
+that is not constructed in the same file. This check resolves the enclosing
+package tree — the scan root — and flags a config-like dataclass field whose
+name appears as an attribute read (``obj.field``) in no production module
+anywhere under that root. A selectors dataclass is the same shape as a config
+dataclass: it is bound to a module-level singleton (``binary_selectors =
+BinarySelectors()``) and its fields are read across files, so an unwired
+selector field is caught the same way as a dead config field.
 
 The scan is deliberately conservative to keep false positives near zero:
 
-- Only ``@dataclass`` classes whose name ends in ``"Config"`` participate; other
-  dataclasses are covered by the per-file check.
+- Only ``@dataclass`` classes whose name ends in ``"Config"`` or ``"Selectors"``
+  participate; other dataclasses are covered by the per-file check.
 - Test and migration files are exempt as write destinations, so a field added to
   a config dataclass inside a test is never flagged.
 - Production modules under the scan root are scanned for attribute reads; test
@@ -87,8 +91,8 @@ from code_rules_shared import (  # noqa: E402
 )
 
 from hooks_constants.dead_config_field_constants import (  # noqa: E402
+    ALL_CONFIG_CLASS_NAME_SUFFIXES,
     ALL_REFLECTIVE_FIELD_CONSUMER_NAMES,
-    CONFIG_CLASS_NAME_SUFFIX,
     DATACLASSES_MODULE_NAME,
     DEAD_CONFIG_FIELD_GUIDANCE,
     MAX_DEAD_CONFIG_FIELD_ISSUES,
@@ -99,16 +103,23 @@ from hooks_constants.dead_config_field_constants import (  # noqa: E402
 
 
 def _is_config_dataclass(class_node: ast.ClassDef) -> bool:
-    """Return whether a class is a @dataclass whose name ends in ``"Config"``.
+    """Return whether a class is a @dataclass whose name ends in a config-like suffix.
+
+    A config-like surface is a ``@dataclass`` whose name ends in ``"Config"`` or
+    ``"Selectors"``. Both shapes are defined in one module, bound to a
+    module-level singleton, and read across files, so the per-file dead-field
+    check cannot judge their fields and the cross-module scan covers them here.
 
     Args:
         class_node: The class definition node to test.
 
     Returns:
         True when the class carries a ``@dataclass`` decorator and its name ends
-        in ``"Config"``.
+        in one of ``ALL_CONFIG_CLASS_NAME_SUFFIXES``.
     """
-    return _is_dataclass(class_node) and class_node.name.endswith(CONFIG_CLASS_NAME_SUFFIX)
+    return _is_dataclass(class_node) and class_node.name.endswith(
+        ALL_CONFIG_CLASS_NAME_SUFFIXES
+    )
 
 
 def _reads_whole_instance_reflectively(tree: ast.Module) -> bool:
@@ -472,10 +483,12 @@ def _all_production_read_names_under_root(
 def check_dead_config_dataclass_fields(
     content: str, file_path: str, full_file_content: str | None = None
 ) -> list[str]:
-    """Flag a ``*Config`` @dataclass field read by no production module in the package tree.
+    """Flag a config-like @dataclass field read by no production module in the package tree.
 
     Runs a cross-module scan restricted to ``@dataclass`` classes whose name ends
-    in ``"Config"``. For each such config dataclass in the written file, every
+    in ``"Config"`` or ``"Selectors"`` — both are config-like surfaces bound to a
+    module-level singleton and read across files. For each such dataclass in the
+    written file, every
     instance field whose name does not appear as an attribute read (``obj.field``),
     augmented-assignment target (``cfg.field += 1``), string literal,
     non-constructor keyword-argument name (``replace`` keyword), or match-pattern

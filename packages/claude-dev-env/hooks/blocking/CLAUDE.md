@@ -26,7 +26,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_comments.py` | No new inline comments; no deletion of existing ones |
 | `code_rules_constants_config.py` | Constants must live in `config/`; file-global constant use-count |
 | `code_rules_dead_argparse_argument.py` | Argparse arguments with no references in the same file |
-| `code_rules_dead_config_field.py` | Dataclass config fields with no live references |
+| `code_rules_dead_config_field.py` | `*Config` / `*Selectors` dataclass fields with no live references |
 | `code_rules_dead_dataclass_field.py` | Dataclass fields with no consuming references |
 | `code_rules_dead_module_constant.py` | `UPPER_SNAKE` constants in `*_constants.py` modules with no importers |
 | `code_rules_docstrings.py` | Google-style docstrings; `Args:` section matches signature; fallback-branch coverage |
