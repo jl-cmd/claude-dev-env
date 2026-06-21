@@ -183,4 +183,5 @@ The table lists **where the rule is encoded** (the script or module that impleme
 | Thin wrapper modules (imports only, optionally with `__all__`, outside `__init__.py`) | `code_rules_enforcer.py::check_thin_wrapper_files` (Python) |
 | Zero-payload function aliases (body is only `return sibling(params...)` forwarding its own params unchanged, same module, no decorator/default/async mismatch, outside test/config) | `code_rules_enforcer.py::check_zero_payload_function_alias` (Python) |
 | Public functions missing Google-style `Args:` / `Returns:` / `Raises:` when warranted | `code_rules_enforcer.py::check_docstring_format` (Python) |
+| Module docstring asserting "no literals appear inline" (or a like completeness claim) about a companion file — an unverifiable claim that drifts the moment a literal lands inline | `code_rules_enforcer.py::check_docstring_no_inline_literal_claim` (Python) |
 | Per-directory `CLAUDE.md` table first-column cell naming a backticked bare filename absent from the directory subtree | `claude_md_orphan_file_blocker.py` (PreToolUse Write\|Edit\|MultiEdit) |
