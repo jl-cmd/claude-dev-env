@@ -31,6 +31,9 @@ from hooks_constants.open_questions_in_plans_blocker_constants import (  # noqa:
     PLANS_PATH_SEGMENT,
     UNREADABLE_FILE_SYNTHETIC_CONTENT,
 )
+from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
+    read_hook_input_dictionary_from_stdin,
+)
 
 
 def _is_markdown_file(file_path: str) -> bool:
@@ -204,12 +207,8 @@ def _emit_hook_result(payload: dict, output_stream: TextIO) -> None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    if not isinstance(input_data, dict):
+    input_data = read_hook_input_dictionary_from_stdin()
+    if input_data is None:
         sys.exit(0)
 
     tool_name = input_data.get("tool_name", "")

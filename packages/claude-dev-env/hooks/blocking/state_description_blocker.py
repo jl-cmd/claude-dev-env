@@ -16,6 +16,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 from hooks_constants.state_description_blocker_constants import (  # noqa: E402
     ALL_BLOCK_COMMENT_EXTENSIONS,
     ALL_BLOCK_COMMENT_ONLY_EXTENSIONS,
@@ -160,57 +161,80 @@ def find_violations(text: str, file_path: str) -> list[str]:
     return all_detected
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
+def _build_deny_reason(file_path: str, all_detected_patterns: list[str]) -> str:
+    """Build the permissionDecisionReason text for a historical-language denial.
 
-    if not isinstance(input_data, dict):
-        sys.exit(0)
+    Args:
+        file_path: The target file path the violation was found in.
+        all_detected_patterns: The matched historical/comparative phrases.
 
-    tool_name = input_data.get("tool_name", "")
-    if not isinstance(tool_name, str):
-        sys.exit(0)
+    Returns:
+        The deny-reason text naming the file and the detected phrases.
+    """
+    formatted = ", ".join(f'"{each_pattern}"' for each_pattern in all_detected_patterns)
+    return (
+        f"Historical/comparative language detected in {file_path}: "
+        f"{formatted}. Describe current state only — no 'instead of', "
+        f"'previously', 'now uses', etc. The git log tracks what changed. "
+        f"Comments and docs describe what IS."
+    )
 
-    tool_input = input_data.get("tool_input", {})
-    if not isinstance(tool_input, dict):
-        sys.exit(0)
 
+def evaluate(payload_by_key: dict[str, object]) -> str | None:
+    """Decide whether a Write/Edit payload carries historical/comparative language.
+
+    Applies the same tool-name gate, file-extension gate, content selection, and
+    pattern scan the standalone hook applies. Returns the deny-reason text when a
+    historical phrase is found, or None to allow.
+
+    Args:
+        payload_by_key: The PreToolUse payload with tool_name and tool_input.
+
+    Returns:
+        The permissionDecisionReason text when the write is denied, or None when
+        the write is allowed.
+    """
+    raw_tool_name = payload_by_key.get("tool_name", "")
+    tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
     if tool_name not in ("Write", "Edit"):
-        sys.exit(0)
+        return None
+
+    raw_tool_input = payload_by_key.get("tool_input", {})
+    tool_input = raw_tool_input if isinstance(raw_tool_input, dict) else {}
 
     file_path = tool_input.get("file_path", "")
-    if not file_path or not (
-        is_markdown_file(file_path) or is_comment_bearing_file(file_path)
-    ):
-        sys.exit(0)
+    if not isinstance(file_path, str) or not file_path:
+        return None
+    if not (is_markdown_file(file_path) or is_comment_bearing_file(file_path)):
+        return None
 
-    content_to_check = ""
-    if tool_name == "Write":
-        content_to_check = tool_input.get("content", "")
-    elif tool_name == "Edit":
-        content_to_check = tool_input.get("new_string", "")
-
+    content_key = "content" if tool_name == "Write" else "new_string"
+    raw_content = tool_input.get(content_key, "")
+    content_to_check = raw_content if isinstance(raw_content, str) else ""
     if not content_to_check:
-        sys.exit(0)
+        return None
 
     all_detected_patterns = find_violations(content_to_check, file_path)
     if not all_detected_patterns:
+        return None
+
+    return _build_deny_reason(file_path, all_detected_patterns)
+
+
+def main() -> None:
+    payload_dictionary = read_hook_input_dictionary_from_stdin()
+    if payload_dictionary is None:
         sys.exit(0)
 
-    formatted = ", ".join(f'"{p}"' for p in all_detected_patterns)
+    deny_reason = evaluate(payload_dictionary)
+    if deny_reason is None:
+        sys.exit(0)
 
     block_payload = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
-            "permissionDecisionReason": (
-                f"Historical/comparative language detected in {file_path}: "
-                f"{formatted}. Describe current state only — no 'instead of', "
-                f"'previously', 'now uses', etc. The git log tracks what changed. "
-                f"Comments and docs describe what IS."
-            ),
+            "permissionDecisionReason": deny_reason,
             "additionalContext": (
                 "Rewrite the affected comments or documentation to describe "
                 "only the current state. For example:\n"

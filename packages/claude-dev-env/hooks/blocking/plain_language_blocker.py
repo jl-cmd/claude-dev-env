@@ -140,18 +140,47 @@ def _collect_prose_for_tool(tool_name: str, tool_input: dict) -> str:
     return ""
 
 
-def _emit_deny(all_matches: list[tuple[str, str]], output_stream: TextIO) -> None:
+def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
     deny_payload = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
-            "permissionDecisionReason": build_block_reason(all_matches),
+            "permissionDecisionReason": deny_reason,
         },
         "systemMessage": USER_FACING_PLAIN_LANGUAGE_NOTICE,
         "suppressOutput": True,
     }
     output_stream.write(json.dumps(deny_payload))
     output_stream.flush()
+
+
+def evaluate(payload_by_key: dict[str, object]) -> str | None:
+    """Decide whether a payload's prose carries heavy words to block.
+
+    Collects the prose for the payload's tool, scans it for banned terms, and
+    returns the deny-reason text when any heavy word is found, or None to allow.
+
+    Args:
+        payload_by_key: The PreToolUse payload with tool_name and tool_input.
+
+    Returns:
+        The permissionDecisionReason text when the prose is denied, or None when
+        the prose is allowed.
+    """
+    raw_tool_name = payload_by_key.get("tool_name", "")
+    raw_tool_input = payload_by_key.get("tool_input", {})
+    if not isinstance(raw_tool_name, str) or not isinstance(raw_tool_input, dict):
+        return None
+
+    prose_text = _collect_prose_for_tool(raw_tool_name, raw_tool_input)
+    if not prose_text:
+        return None
+
+    all_matches = find_banned_terms(prose_text)
+    if not all_matches:
+        return None
+
+    return build_block_reason(all_matches)
 
 
 def main() -> None:
@@ -163,20 +192,11 @@ def main() -> None:
     if not isinstance(input_data, dict):
         sys.exit(0)
 
-    tool_name = input_data.get("tool_name", "")
-    tool_input = input_data.get("tool_input", {})
-    if not isinstance(tool_name, str) or not isinstance(tool_input, dict):
+    deny_reason = evaluate(input_data)
+    if deny_reason is None:
         sys.exit(0)
 
-    prose_text = _collect_prose_for_tool(tool_name, tool_input)
-    if not prose_text:
-        sys.exit(0)
-
-    all_matches = find_banned_terms(prose_text)
-    if not all_matches:
-        sys.exit(0)
-
-    _emit_deny(all_matches, sys.stdout)
+    _emit_deny(deny_reason, sys.stdout)
     sys.exit(0)
 
 

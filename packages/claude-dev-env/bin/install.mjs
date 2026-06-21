@@ -294,17 +294,57 @@ function backupClaudeHubBeforeOverwrite(destPath, incomingPath) {
 }
 
 /**
+ * Hook script paths that were folded into the PreToolUse dispatcher in Stage 1.
+ * These entries no longer appear in hooks.json but must still be recognized as
+ * managed so a reinstall from an older settings shape prunes them and they do
+ * not double-run alongside the dispatcher.
+ */
+export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
+    'blocking/write_existing_file_blocker.py',
+    'blocking/sensitive_file_protector.py',
+    'validation/hook_format_validator.py',
+    'blocking/code_rules_enforcer.py',
+    'blocking/tdd_enforcer.py',
+    'blocking/windows_rmtree_blocker.py',
+    'blocking/state_description_blocker.py',
+    'blocking/subprocess_budget_completeness.py',
+    'blocking/hook_prose_detector_consistency.py',
+    'blocking/verified_commit_message_accuracy_blocker.py',
+    'blocking/workflow_substitution_slot_blocker.py',
+    'blocking/claude_md_orphan_file_blocker.py',
+    'blocking/open_questions_in_plans_blocker.py',
+    'blocking/plain_language_blocker.py',
+]);
+
+/**
+ * Hook script paths that were folded into the PostToolUse dispatcher. These
+ * after-write hooks no longer appear in hooks.json but must still be recognized
+ * as managed so a reinstall from an older settings shape prunes them and they do
+ * not double-run alongside the PostToolUse dispatcher.
+ */
+export const POST_FOLDED_HOOK_RELATIVE_PATHS = new Set([
+    'validation/mypy_validator.py',
+    'workflow/auto_formatter.py',
+    'workflow/doc_gist_auto_publish.py',
+]);
+
+/**
  * Builds the set of hook script paths this installer manages, each relative to
  * the hooks directory (e.g. 'blocking/code_rules_enforcer.py'), parsed from the
  * `${CLAUDE_PLUGIN_ROOT}/hooks/<path>` references in hooks.json. Inline
  * `python3 -c` commands reference the hooks directory without a script tail and
- * contribute nothing.
+ * contribute nothing. Also includes every path from FOLDED_HOOK_RELATIVE_PATHS
+ * and POST_FOLDED_HOOK_RELATIVE_PATHS so a reinstall from an older settings shape
+ * prunes both the PreToolUse and the PostToolUse folded entries.
  *
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.
  * @returns {Set<string>} Forward-slash relative script paths under hooks/.
  */
 export function managedHookScriptRelativePaths(hooksConfig) {
-    const relativePaths = new Set();
+    const relativePaths = new Set([
+        ...FOLDED_HOOK_RELATIVE_PATHS,
+        ...POST_FOLDED_HOOK_RELATIVE_PATHS,
+    ]);
     const scriptReferencePattern = /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/(\S+?\.py)/g;
     for (const matcherGroups of Object.values(hooksConfig.hooks)) {
         for (const sourceGroup of matcherGroups) {
@@ -427,11 +467,37 @@ export function commandIsInlineManagedValidatorRunner(normalizedCommand) {
 }
 
 /**
+ * Strips every managed hook (standalone script or inline validators runner) from
+ * all existing matcher groups of one event in a settings object, dropping any
+ * group left empty. Run before the per-group merge so a managed hook that an
+ * upgrade moves to a different matcher group is pruned from its old group rather
+ * than left to double-run. User-authored hooks outside the managed set stay.
+ *
+ * @param {object} settings The parsed settings.json object (mutated in place).
+ * @param {string} eventType The lifecycle event whose groups are pruned.
+ * @param {Set<string>} managedHookRelativePaths Managed script paths under hooks/.
+ * @returns {void}
+ */
+function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePaths) {
+    const existingGroups = settings.hooks[eventType];
+    if (!existingGroups) return;
+    settings.hooks[eventType] = existingGroups
+        .map(group => ({
+            ...group,
+            hooks: group.hooks.filter(
+                hook => !commandReferencesManagedHook(hook.command, managedHookRelativePaths)
+            ),
+        }))
+        .filter(group => group.hooks.length > 0);
+}
+
+/**
  * Merges the installer's managed hook groups into a settings object in memory,
  * pruning every prior managed hook (standalone script or inline validators
- * runner) from each matcher group before appending the freshly rewritten copies
- * so repeated merges stay idempotent. User-authored hooks in the same group are
- * preserved untouched.
+ * runner) from each event's existing matcher groups before appending the freshly
+ * rewritten copies so repeated merges stay idempotent and a managed hook moved to
+ * a new matcher group does not double-run. User-authored hooks are preserved
+ * untouched.
  *
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.
@@ -445,6 +511,7 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
     let groupCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(hooksConfig.hooks)) {
         if (!settings.hooks[eventType]) settings.hooks[eventType] = [];
+        pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePaths);
         for (const sourceGroup of matcherGroups) {
             const rewrittenHooks = sourceGroup.hooks.map(hook => {
                 let command = hook.command;
