@@ -39,6 +39,46 @@ MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION: int = 2
 MAX_DOCSTRING_STEP_DISPATCH_ISSUES: int = 5
 MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK: int = 2
 MINIMUM_TOKENS_FOR_DISPATCH_CALLEE: int = 2
+MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES: int = 3
+ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS: frozenset[str] = frozenset(
+    {
+        "UPPER_SNAKE_CASE",
+        "SCREAMING_SNAKE_CASE",
+        "UPPER_CASE",
+        "SNAKE_CASE",
+        "CAMEL_CASE",
+        "PASCAL_CASE",
+        "KEBAB_CASE",
+        "TITLE_CASE",
+    }
+)
+ALL_DOCSTRING_NON_CONSTANT_REFERENCE_MARKERS: frozenset[str] = frozenset(
+    {
+        "rule",
+        "rules",
+        "doc",
+        "docs",
+        "document",
+        "file",
+        "env",
+        "environment",
+        "variable",
+        "set",
+        "reads",
+        "read",
+        "per",
+        "follows",
+        "following",
+        "see",
+    }
+)
+ALL_DOCSTRING_FILE_REFERENCE_SUFFIXES: tuple[str, ...] = (
+    ".md",
+    ".py",
+    ".txt",
+    ".json",
+)
+DOCSTRING_REFERENCE_MARKER_WINDOW: int = 2
 ALL_GENERIC_CHECK_NAME_TOKENS: frozenset[str] = frozenset(
     {"check", "checks", "test", "tests", "in", "for", "and", "the"}
 )

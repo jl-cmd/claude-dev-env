@@ -1,6 +1,7 @@
 """Google-style docstring presence and docstring Args-versus-signature checks."""
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -23,11 +24,15 @@ from code_rules_shared import (  # noqa: E402
 from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES,
     ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES,
+    ALL_DOCSTRING_FILE_REFERENCE_SUFFIXES,
     ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES,
     ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES,
     ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES,
+    ALL_DOCSTRING_NON_CONSTANT_REFERENCE_MARKERS,
     ALL_GENERIC_CHECK_NAME_TOKENS,
+    ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS,
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
+    DOCSTRING_REFERENCE_MARKER_WINDOW,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
     MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES,
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
@@ -36,6 +41,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
     MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
+    MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES,
     MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
     MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK,
     MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER,
@@ -44,6 +50,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
+    ALL_CAPS_WITH_UNDERSCORE_PATTERN,
     ALL_DOCSTRING_ARGS_SECTION_HEADERS,
     ALL_DOCSTRING_TERMINATING_SECTION_HEADERS,
     ALL_SELF_AND_CLS_PARAMETER_NAMES,
@@ -976,3 +983,205 @@ def check_docstring_step_enumeration_dispatch_coverage(
             if len(issues) >= MAX_DOCSTRING_STEP_DISPATCH_ISSUES:
                 return issues[:MAX_DOCSTRING_STEP_DISPATCH_ISSUES]
     return issues[:MAX_DOCSTRING_STEP_DISPATCH_ISSUES]
+
+
+def _imported_binding_names(import_node: ast.Import | ast.ImportFrom) -> set[str]:
+    bound_names: set[str] = set()
+    for each_alias in import_node.names:
+        bound_names.add(each_alias.asname or each_alias.name.split(".", 1)[0])
+    return bound_names
+
+
+def _module_defined_and_imported_names(parsed_tree: ast.Module) -> set[str]:
+    defined_names: set[str] = set()
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, (ast.Import, ast.ImportFrom)):
+            defined_names |= _imported_binding_names(each_node)
+        elif isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            defined_names.add(each_node.name)
+        elif isinstance(each_node, ast.Name) and isinstance(each_node.ctx, ast.Store):
+            defined_names.add(each_node.id)
+    return defined_names
+
+
+def _module_attribute_access_names(parsed_tree: ast.Module) -> set[str]:
+    attribute_names: set[str] = set()
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, ast.Attribute):
+            attribute_names.add(each_node.attr)
+    return attribute_names
+
+
+def _docstring_constant_node_ids(parsed_tree: ast.Module) -> set[int]:
+    docstring_node_ids: set[int] = set()
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(
+            each_node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ):
+            continue
+        body_statements = each_node.body
+        if not body_statements or not _statement_is_docstring(body_statements[0]):
+            continue
+        first_statement = body_statements[0]
+        assert isinstance(first_statement, ast.Expr)
+        docstring_node_ids.add(id(first_statement.value))
+    return docstring_node_ids
+
+
+def _module_string_literal_word_runs(parsed_tree: ast.Module) -> set[str]:
+    docstring_node_ids = _docstring_constant_node_ids(parsed_tree)
+    word_runs: set[str] = set()
+    for each_node in ast.walk(parsed_tree):
+        if not (isinstance(each_node, ast.Constant) and isinstance(each_node.value, str)):
+            continue
+        if id(each_node) in docstring_node_ids:
+            continue
+        for each_run in re.findall(r"[A-Za-z0-9_]+", each_node.value):
+            if ALL_CAPS_WITH_UNDERSCORE_PATTERN.match(each_run):
+                word_runs.add(each_run)
+    return word_runs
+
+
+def _name_word_prefix_families(all_supporting_names: set[str]) -> set[str]:
+    prefix_families: set[str] = set()
+    for each_name in all_supporting_names:
+        leading_word = each_name.split("_", 1)[0]
+        prefix_families.add(leading_word)
+    return prefix_families
+
+
+def _token_is_word_run_of_any_name(token: str, all_supporting_names: set[str]) -> bool:
+    return any(f"_{token}_" in f"_{each_name}_" for each_name in all_supporting_names)
+
+
+def _docstring_words(docstring_text: str) -> list[str]:
+    return [
+        each_word.strip(".,:;()[]{}'\"`")
+        for each_word in docstring_text.replace("`", " ").split()
+    ]
+
+
+def _docstring_frames_token_as_non_constant_reference(
+    token: str, docstring_text: str
+) -> bool:
+    if any(
+        f"{token}{each_suffix}" in docstring_text
+        for each_suffix in ALL_DOCSTRING_FILE_REFERENCE_SUFFIXES
+    ):
+        return True
+    words = _docstring_words(docstring_text)
+    for each_index, each_word in enumerate(words):
+        if each_word != token:
+            continue
+        neighbors = words[max(each_index - DOCSTRING_REFERENCE_MARKER_WINDOW, 0) : each_index + DOCSTRING_REFERENCE_MARKER_WINDOW + 1]
+        if any(
+            each_neighbor.lower() in ALL_DOCSTRING_NON_CONSTANT_REFERENCE_MARKERS
+            for each_neighbor in neighbors
+        ):
+            return True
+    return False
+
+
+def _docstring_constant_token_is_supported(
+    token: str, parsed_tree: ast.Module, all_known_names: set[str], docstring_text: str
+) -> bool:
+    supporting_predicates = (
+        lambda: token in all_known_names,
+        lambda: token in ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS,
+        lambda: token in _module_attribute_access_names(parsed_tree),
+        lambda: token in _module_string_literal_word_runs(parsed_tree),
+        lambda: _token_is_word_run_of_any_name(token, all_known_names),
+        lambda: _docstring_frames_token_as_non_constant_reference(token, docstring_text),
+        lambda: token.split("_", 1)[0] in _name_word_prefix_families(all_known_names),
+    )
+    return any(each_predicate() for each_predicate in supporting_predicates)
+
+
+def _docstring_constant_tokens(docstring_text: str) -> set[str]:
+    candidate_tokens: set[str] = set()
+    for each_word in docstring_text.replace("`", " ").split():
+        stripped_word = each_word.strip(".,:;()[]{}'\"")
+        if stripped_word.startswith("__") and stripped_word.endswith("__"):
+            continue
+        if ALL_CAPS_WITH_UNDERSCORE_PATTERN.match(stripped_word):
+            candidate_tokens.add(stripped_word)
+    return candidate_tokens
+
+
+def _documentable_nodes_with_docstrings(
+    parsed_tree: ast.Module,
+) -> list[tuple[int, str]]:
+    documentable: list[tuple[int, str]] = []
+    module_docstring = ast.get_docstring(parsed_tree)
+    if module_docstring:
+        documentable.append((1, module_docstring))
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(
+            each_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ):
+            continue
+        node_docstring = ast.get_docstring(each_node)
+        if node_docstring:
+            documentable.append((each_node.lineno, node_docstring))
+    return documentable
+
+
+def check_docstring_names_undefined_constant(content: str, file_path: str) -> list[str]:
+    """Flag a docstring naming an UPPER_SNAKE constant nothing in the module backs.
+
+    The drift this catches: a docstring names an all-caps, underscore-joined
+    token as a contract identifier (``NATIVE_EVALUATE_FUNCTION_NAME``) while the
+    enclosing module carries no supporting reference for it. A reader who trusts
+    the docstring to name a real symbol finds nothing — the deterministic slice
+    of Category O6 docstring-prose-vs-implementation drift where the named token
+    is structurally a constant and unresolvable against the module.
+
+    A token counts as supported, and is left alone, when any of these holds: it
+    is defined at module scope or imported; it is a naming-convention descriptor
+    (``UPPER_SNAKE_CASE`` and its siblings, describing a style, not a symbol); it
+    is the attribute of an attribute access in the body (``os.O_NOFOLLOW``,
+    ``config.timing.MAX_DELAY``, resolving stdlib and dotted-import constants);
+    it is an all-caps word run inside a string literal (an env-var key read via
+    ``os.environ[...]`` or ``os.getenv(...)``, an API enum string value, a doc
+    stem in ``CODE_RULES.md``); it is a contiguous word run of a defined or
+    imported name (``GH_TOKEN`` within ``ALL_GH_TOKEN_ENV_VAR_NAMES``); it shares
+    a leading word component with a defined or imported name, marking the same
+    enum family (``MODE_CLASSIFY`` beside an imported ``MODE_STRICT``); or the
+    docstring prose frames it as a non-constant reference — followed by a file
+    suffix (``CODE_RULES.md``) or sitting within two words of a marker such as
+    ``rule``, ``doc``, ``file``, ``env``, ``variable``, ``set``, ``read``,
+    ``per``, ``follows``, or ``see`` (``per CODE_RULES``, ``LLM_SETTINGS_ROOT is
+    set to``). Single-segment all-caps acronyms (``HTTP``, ``JSON``) and dunder
+    names (``__all__``) are not constants and are left alone.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per docstring token that no module reference backs, capped at
+        the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    known_names = _module_defined_and_imported_names(parsed_tree)
+    issues: list[str] = []
+    for each_line_number, each_docstring in _documentable_nodes_with_docstrings(parsed_tree):
+        for each_token in sorted(_docstring_constant_tokens(each_docstring)):
+            if _docstring_constant_token_is_supported(
+                each_token, parsed_tree, known_names, each_docstring
+            ):
+                continue
+            issues.append(
+                f"Line {each_line_number}: docstring names '{each_token}' which the "
+                "module neither defines at module scope nor imports — name the real "
+                "symbol or drop the reference (Category O6 docstring-vs-implementation "
+                "drift)"
+            )
+            if len(issues) >= MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES:
+                return issues[:MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES]
+    return issues[:MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES]
