@@ -94,6 +94,17 @@ ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES: tuple[str, ...] = (
     "not yet read by any consumer",
 )
 
+MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES: int = 3
+ALL_DOCSTRING_NO_INLINE_LITERAL_CLAIM_PHRASES: tuple[str, ...] = (
+    "no literals appear inline",
+    "no literal appears inline",
+    "no literals inline",
+    "no inline literals",
+    "no string literals appear inline",
+    "without any inline literals",
+    "no hardcoded literals remain",
+)
+
 ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES: tuple[str, ...] = (
     "only when",
     "only if",

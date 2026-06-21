@@ -28,6 +28,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_IMPLICIT_INSTANCE_PARAMETER_NAMES,
     ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES,
     ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES,
+    ALL_DOCSTRING_NO_INLINE_LITERAL_CLAIM_PHRASES,
     ALL_DOCSTRING_NON_CONSTANT_REFERENCE_MARKERS,
     ALL_GENERIC_CHECK_NAME_TOKENS,
     ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS,
@@ -38,6 +39,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
     MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
+    MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
     MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
@@ -637,6 +639,54 @@ def check_docstring_no_consumer_claim(content: str, file_path: str) -> list[str]
         if len(issues) >= MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES:
             break
     return issues[:MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES]
+
+
+def _module_docstring_claims_no_inline_literal(module_docstring: str) -> str:
+    collapsed_docstring = " ".join(module_docstring.lower().split())
+    for each_phrase in ALL_DOCSTRING_NO_INLINE_LITERAL_CLAIM_PHRASES:
+        if each_phrase in collapsed_docstring:
+            return each_phrase
+    return ""
+
+
+def check_docstring_no_inline_literal_claim(content: str, file_path: str) -> list[str]:
+    """Flag a module docstring that asserts no literals appear inline elsewhere.
+
+    A constants-module docstring claiming "no literals appear inline in the
+    dispatcher" makes an unverifiable completeness claim about a companion file.
+    The claim drifts the moment a literal lands inline in that companion — a deny
+    or block reason left inline in the dispatcher contradicts the docstring even
+    though the constants file under edit never changed. This is the deterministic
+    slice of Category O6 (docstring prose vs implementation drift) and a
+    no-transitional-language violation in its own right: a docstring describes
+    what the module holds, not the absence of literals in a sibling. Rephrase to
+    state what the module centralizes, or drop the no-inline-literal sentence.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue when the module docstring carries a no-inline-literal claim,
+        capped at the module limit.
+    """
+    if is_strict_test_file(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    module_docstring = ast.get_docstring(parsed_tree) or ""
+    matched_phrase = _module_docstring_claims_no_inline_literal(module_docstring)
+    if not matched_phrase:
+        return []
+    issues = [
+        f"Line 1: module docstring claims '{matched_phrase}' about a companion file "
+        "— an unverifiable completeness claim that drifts the moment a literal lands "
+        "inline; state what the module centralizes instead (Category O6 docstring-vs-"
+        "implementation drift)"
+    ]
+    return issues[:MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES]
 
 
 def _module_docstring_summary_is_single_paragraph(module_docstring: str) -> bool:
