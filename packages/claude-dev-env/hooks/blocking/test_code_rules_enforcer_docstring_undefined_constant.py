@@ -139,3 +139,115 @@ def test_hook_infrastructure_is_exempt() -> None:
         "    native_module_name: str\n"
     )
     assert check_docstring_names_undefined_constant(content, HOOK_INFRASTRUCTURE_PATH) == []
+
+
+def test_passes_when_token_is_attribute_on_an_imported_stdlib_module() -> None:
+    content = (
+        "import os\n"
+        "def open_no_follow(target: str) -> int:\n"
+        '    """Open target with O_NOFOLLOW so a symlink at target raises."""\n'
+        "    return os.open(target, os.O_NOFOLLOW)\n"
+    )
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_token_is_attribute_on_a_dotted_imported_module() -> None:
+    content = (
+        "import config.timing\n"
+        "def delay() -> int:\n"
+        '    """Sleep up to MAX_DELAY seconds."""\n'
+        "    return config.timing.MAX_DELAY\n"
+    )
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_token_is_an_environment_variable_string_key() -> None:
+    content = (
+        "import os\n"
+        "def read_token() -> str:\n"
+        '    """Read the secret from BWS_ACCESS_TOKEN in the environment."""\n'
+        "    return os.environ['BWS_ACCESS_TOKEN']\n"
+    )
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_token_is_a_naming_convention_descriptor() -> None:
+    content = (
+        "def is_styled(name: str) -> bool:\n"
+        '    """Return True when name is UPPER_SNAKE_CASE styled."""\n'
+        "    return name.isupper()\n"
+    )
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_token_is_an_api_enum_string_literal() -> None:
+    content = (
+        "def submit_review(blocking: bool) -> dict[str, str]:\n"
+        '    """Submit with event REQUEST_CHANGES when blocking."""\n'
+        "    return {'event': 'REQUEST_CHANGES'} if blocking else {}\n"
+    )
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_token_is_a_word_run_of_a_defined_or_imported_name() -> None:
+    content = (
+        "from github_constants import GITHUB_REVIEW_EVENT_REQUEST_CHANGES\n"
+        "def submit_review() -> str:\n"
+        '    """Submit with the REQUEST_CHANGES event."""\n'
+        "    return GITHUB_REVIEW_EVENT_REQUEST_CHANGES\n"
+    )
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_token_is_an_enum_family_sibling_of_an_imported_constant() -> None:
+    content = (
+        "from preflight_constants import MODE_STRICT\n"
+        "def run(mode: str) -> None:\n"
+        '    """mode: MODE_STRICT (autoconverge) or MODE_CLASSIFY (pr-converge)."""\n'
+        "    if mode == MODE_STRICT:\n"
+        "        return None\n"
+        "    return None\n"
+    )
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_docstring_frames_token_as_a_doc_file_reference() -> None:
+    content = '"""Constants for code_rules_gate.py per CODE_RULES centralized-config rule."""\n\nMAX_VIOLATIONS = 3\n'
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_docstring_frames_token_with_a_file_suffix() -> None:
+    content = (
+        '"""Byte-copies CODE_RULES.md and TEST_QUALITY.md into the rules tree."""\n'
+        "\n"
+        "value_in_use = 3\n"
+    )
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_docstring_frames_token_as_an_env_variable_set() -> None:
+    content = (
+        '"""Resolve the layout root.\n'
+        "\n"
+        "    If LLM_SETTINGS_ROOT is set to the repo root, uses that root.\n"
+        '    """\n'
+        "value_in_use = 3\n"
+    )
+    assert check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_still_flags_the_genuine_miss_with_no_supporting_reference() -> None:
+    content = (
+        "class HostedHookEntry:\n"
+        '    """A hosted hook entry.\n'
+        "\n"
+        "    Attributes:\n"
+        "        native_module_name: The module exposes a function named\n"
+        "            NATIVE_EVALUATE_FUNCTION_NAME taking the payload.\n"
+        '    """\n'
+        "\n"
+        "    native_module_name: str\n"
+    )
+    issues = check_docstring_names_undefined_constant(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "NATIVE_EVALUATE_FUNCTION_NAME" in issues[0]
