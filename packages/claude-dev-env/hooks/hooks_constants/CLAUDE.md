@@ -17,7 +17,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `code_verifier_spawn_preflight_gate_constants.py` | Subagent type, merge-tree command flags, timeouts, and deny-message text for the code-verifier spawn pre-flight gate |
 | `convergence_branch_constants.py` | Branch and worktree naming patterns for the convergence gate |
 | `dead_argparse_argument_constants.py` | Patterns for detecting unused argparse arguments |
-| `dead_config_field_constants.py` | Patterns for detecting unused dataclass config fields |
+| `dead_config_field_constants.py` | Patterns for detecting unused `*Config` / `*Selectors` dataclass fields |
 | `dead_dataclass_field_constants.py` | Patterns for detecting unused dataclass fields |
 | `dead_module_constant_constants.py` | Patterns for detecting unexported `UPPER_SNAKE` constants in `*_constants.py` modules |
 | `destructive_command_segment_constants.py` | The list of destructive shell command patterns the blocker matches |

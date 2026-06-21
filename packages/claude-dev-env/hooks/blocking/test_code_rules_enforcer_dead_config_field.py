@@ -749,6 +749,81 @@ def test_dead_config_field_module_has_no_collection_parameter_naming_violation()
     )
 
 
+SELECTORS_DATACLASS_BODY = (
+    "from dataclasses import dataclass\n"
+    "\n"
+    "@dataclass(frozen=True)\n"
+    "class BinarySelectors:\n"
+    "    show_more_button_active: str = \"a.show_list_btn.active\"\n"
+    "    show_more_row_visible: str = \"tr.show_list_tr:not(.ng-hide)\"\n"
+    "\n"
+    "binary_selectors: BinarySelectors = BinarySelectors()\n"
+)
+
+
+def test_flags_selectors_dataclass_field_read_by_no_production_module(
+    neutral_root: Path,
+) -> None:
+    """A ``*Selectors`` @dataclass field read by no production module is flagged.
+
+    A selectors dataclass is a config-like export surface: defined once, bound to
+    a module-level singleton (``binary_selectors = BinarySelectors()``), and read
+    across files. The cross-module dead-field scan treats it the same as a
+    ``*Config`` dataclass, so a selector field no production module reads —
+    ``show_more_row_visible`` here — is flagged, while a selector a consumer reads
+    (``show_more_button_active``) is not.
+    """
+    consumer_body = (
+        "from selectors_module import binary_selectors\n"
+        "\n"
+        "def expand() -> str:\n"
+        "    return binary_selectors.show_more_button_active\n"
+    )
+    workflow_directory = neutral_root / "workflow"
+    selectors_package = workflow_directory / "selectors"
+    selectors_package.mkdir(parents=True)
+    (selectors_package / "__init__.py").write_text("", encoding="utf-8")
+    selectors_path = selectors_package / "selectors_module.py"
+    selectors_path.write_text(SELECTORS_DATACLASS_BODY, encoding="utf-8")
+    (workflow_directory / "processor.py").write_text(consumer_body, encoding="utf-8")
+    issues = _check(SELECTORS_DATACLASS_BODY, str(selectors_path))
+    assert any("'show_more_row_visible'" in each_issue for each_issue in issues), (
+        f"Selector field read by no production module must be flagged, got: {issues}"
+    )
+    assert not any(
+        "'show_more_button_active'" in each_issue for each_issue in issues
+    ), f"Selector field read in the consumer must not be flagged, got: {issues}"
+
+
+def test_does_not_flag_selectors_field_read_in_sibling_module(
+    neutral_root: Path,
+) -> None:
+    """A ``*Selectors`` field read through the singleton in a sibling module is live.
+
+    When every selector field is read by a production consumer, none is flagged.
+    """
+    consumer_body = (
+        "from selectors_module import binary_selectors\n"
+        "\n"
+        "def expand() -> tuple[str, str]:\n"
+        "    return (\n"
+        "        binary_selectors.show_more_button_active,\n"
+        "        binary_selectors.show_more_row_visible,\n"
+        "    )\n"
+    )
+    workflow_directory = neutral_root / "workflow"
+    selectors_package = workflow_directory / "selectors"
+    selectors_package.mkdir(parents=True)
+    (selectors_package / "__init__.py").write_text("", encoding="utf-8")
+    selectors_path = selectors_package / "selectors_module.py"
+    selectors_path.write_text(SELECTORS_DATACLASS_BODY, encoding="utf-8")
+    (workflow_directory / "processor.py").write_text(consumer_body, encoding="utf-8")
+    issues = _check(SELECTORS_DATACLASS_BODY, str(selectors_path))
+    assert issues == [], (
+        f"All selector fields are read in the consumer, none must be flagged, got: {issues}"
+    )
+
+
 def test_validate_content_dispatch_runs_dead_config_field_check(neutral_root: Path) -> None:
     workflow_directory = neutral_root / "workflow"
     config_package = workflow_directory / "os_update_workflow"

@@ -16,18 +16,18 @@ from hooks_constants.dead_module_constant_constants import (
     PYTHON_SOURCE_SUFFIX,
 )
 
-CONFIG_CLASS_NAME_SUFFIX: str = "Config"
+ALL_CONFIG_CLASS_NAME_SUFFIXES: tuple[str, ...] = ("Config", "Selectors")
 DATACLASSES_MODULE_NAME: str = "dataclasses"
 MAX_DEAD_CONFIG_FIELD_ISSUES: int = 25
 DEAD_CONFIG_FIELD_GUIDANCE: str = (
-    "config dataclass field is defined but read by no production module in the"
-    " enclosing package tree - remove the dead field, or read it where the value"
-    " is needed (CODE_RULES §9.8)"
+    "config or selectors dataclass field is defined but read by no production"
+    " module in the enclosing package tree - remove the dead field, or read it"
+    " where the value is needed (CODE_RULES §9.8)"
 )
 
 __all__ = [
+    "ALL_CONFIG_CLASS_NAME_SUFFIXES",
     "ALL_REFLECTIVE_FIELD_CONSUMER_NAMES",
-    "CONFIG_CLASS_NAME_SUFFIX",
     "CONFIG_DIRECTORY_SEGMENT",
     "DATACLASSES_MODULE_NAME",
     "DEAD_CONFIG_FIELD_GUIDANCE",
