@@ -72,6 +72,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_names_undefined_constant,
     check_docstring_no_consumer_claim,
     check_docstring_no_inline_literal_claim,
+    check_docstring_returns_plural_cardinality,
     check_docstring_step_enumeration_dispatch_coverage,
     check_docstring_tuple_enumeration_match,
     check_module_docstring_names_public_checks,
@@ -276,6 +277,9 @@ def validate_content(
             check_docstring_step_enumeration_dispatch_coverage(
                 effective_content, file_path
             )
+        )
+        all_issues.extend(
+            check_docstring_returns_plural_cardinality(effective_content, file_path)
         )
         all_issues.extend(
             check_docstring_names_undefined_constant(effective_content, file_path)
