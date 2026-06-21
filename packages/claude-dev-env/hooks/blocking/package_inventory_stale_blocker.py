@@ -35,6 +35,7 @@ from hooks_constants.package_inventory_stale_blocker_constants import (  # noqa:
     GLOB_METACHARACTER_PATTERN,
     MAX_INVENTORY_FILE_BYTES,
     MINIMUM_INVENTORY_ENTRY_COUNT,
+    NON_FILENAME_TOKEN_PATTERN,
     PYTHON_FILE_EXTENSION,
     STALE_INVENTORY_ADDITIONAL_CONTEXT,
     STALE_INVENTORY_MESSAGE_TEMPLATE,
@@ -48,13 +49,16 @@ from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
 def _basename_token(backtick_inner_text: str) -> str | None:
     """Return the bare filename a backticked token names, when it names one.
 
-    A token names a bare filename when it carries a known file extension. A
-    token that holds a path keeps only its final segment, so an inventory cell
-    naming ``pipeline/seam_continuity.py`` yields ``seam_continuity.py`` — the
-    basename the directory file would match. A slash-command token (leading
-    ``/``), a glob/pattern token carrying a metacharacter (``*``, ``?``, brace
-    or bracket range, so ``*.py`` and ``test_*.py`` name no literal file), and a
-    token with no file extension yield None.
+    A token names a bare filename when it is a single filename or path token
+    carrying a known file extension. A token that holds a path keeps only its
+    final segment, so an inventory cell naming ``pipeline/seam_continuity.py``
+    yields ``seam_continuity.py`` — the basename the directory file would match.
+    A slash-command token (leading ``/``), a glob/pattern token carrying a
+    metacharacter (``*``, ``?``, brace or bracket range, so ``*.py`` and
+    ``test_*.py`` name no literal file), a multi-word command-example span
+    carrying whitespace or shell punctuation (``:``, ``$``, ``<``, ``>``, so
+    ``parent:node_modules package.json`` and ``python <file>.py`` name no
+    literal file), and a token with no file extension yield None.
 
     Args:
         backtick_inner_text: The text between a backtick pair, stripped.
@@ -66,6 +70,8 @@ def _basename_token(backtick_inner_text: str) -> str | None:
     if not inner_text or inner_text.startswith("/"):
         return None
     if GLOB_METACHARACTER_PATTERN.search(inner_text) is not None:
+        return None
+    if NON_FILENAME_TOKEN_PATTERN.search(inner_text) is not None:
         return None
     basename = os.path.basename(inner_text.replace("\\", "/").rstrip("/"))
     if not basename:
@@ -105,10 +111,12 @@ def inventory_named_basenames(inventory_content: str) -> set[str]:
     """Return every bare filename a package inventory document names in backticks.
 
     Lines inside a fenced code block are skipped as example text. Each backticked
-    token on a remaining line is examined; one that names a literal file (carries
-    an extension and no glob metacharacter) contributes its basename, and a token
-    holding a path contributes its final segment. This covers both a README.md
-    table cell and a CLAUDE.md bullet, since both name files in backticks.
+    token on a remaining line is examined; one that names a literal file (a single
+    filename or path token that carries an extension, no glob metacharacter, and
+    no whitespace or shell punctuation) contributes its basename, and a token
+    holding a path contributes its final segment. A multi-word command-example
+    span contributes nothing. This covers both a README.md table cell and a
+    CLAUDE.md bullet, since both name files in backticks.
 
     Args:
         inventory_content: The text of a README.md or CLAUDE.md inventory.
@@ -243,16 +251,43 @@ def is_inventoried_production_file(file_path: str) -> bool:
     return not _is_under_exempt_directory(Path(file_path).resolve().parent)
 
 
+def _sibling_named_basenames(
+    package_directory: Path, all_named_basenames: set[str]
+) -> set[str]:
+    """Return the named basenames that exist as files in *package_directory*.
+
+    A maintained inventory lists the directory's own files, so a named basename
+    counts toward the inventory only when a file with that basename sits directly
+    in the directory. A name the inventory mentions in passing — a file living in
+    another directory (``install.mjs``), a sibling doc — is dropped, so prose that
+    references non-sibling files never reads as a maintained inventory.
+
+    Args:
+        package_directory: The directory that holds the file being written.
+        all_named_basenames: Every bare basename the inventory documents name.
+
+    Returns:
+        The subset of *all_named_basenames* present as a file in the directory.
+    """
+    sibling_basenames: set[str] = set()
+    for each_basename in all_named_basenames:
+        if (package_directory / each_basename).is_file():
+            sibling_basenames.add(each_basename)
+    return sibling_basenames
+
+
 def find_stale_inventory(file_path: str) -> _InventorySurvey | None:
     """Return the maintained inventory survey a new file is absent from, or None.
 
-    The file's directory inventories are surveyed. The survey reports a stale
-    inventory only when every condition holds: the directory carries at least one
-    inventory document, those documents together name at least the minimum entry
-    count of sibling files (marking them a maintained inventory rather than
-    incidental prose), and none of them names this file's basename. When any
-    condition fails the file is in step with its inventory (or there is no
-    inventory to be out of step with), so None results.
+    The file's directory inventories are surveyed, then the named basenames are
+    filtered to those that exist as files in the directory — the inventory's own
+    sibling files. The survey reports a stale inventory only when every condition
+    holds: the directory carries at least one inventory document, those documents
+    together name at least the minimum entry count of on-disk sibling files
+    (marking them a maintained inventory rather than incidental prose that
+    mentions files living elsewhere), and the inventory does not already name this
+    file's basename. When any condition fails the file is in step with its
+    inventory (or there is no inventory to be out of step with), so None results.
 
     Args:
         file_path: The destination path of the write.
@@ -266,11 +301,12 @@ def find_stale_inventory(file_path: str) -> _InventorySurvey | None:
     survey = survey_directory_inventories(package_directory)
     if not survey.present_inventory_names:
         return None
-    if len(survey.named_basenames) < MINIMUM_INVENTORY_ENTRY_COUNT:
+    sibling_basenames = _sibling_named_basenames(package_directory, survey.named_basenames)
+    if len(sibling_basenames) < MINIMUM_INVENTORY_ENTRY_COUNT:
         return None
     if os.path.basename(file_path) in survey.named_basenames:
         return None
-    return survey
+    return _InventorySurvey(survey.present_inventory_names, sibling_basenames)
 
 
 def _build_block_payload(file_path: str, survey: _InventorySurvey) -> dict:

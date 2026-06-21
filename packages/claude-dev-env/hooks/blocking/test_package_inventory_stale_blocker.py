@@ -53,6 +53,19 @@ README_LISTING_ONLY_FENCED_FILENAMES = (
     "```\n"
 )
 
+README_LISTING_ONLY_COMMAND_EXAMPLES = (
+    "# package\n\n"
+    "Run `parent:node_modules package.json` to find the manifest, then "
+    "`python <file>.py` and `psql $DATABASE_URL -f <query>.sql`. Import via "
+    "`from git_hooks_constants import VALUE`.\n"
+)
+
+README_PROSE_NAMES_NON_SIBLING_FILES = (
+    "# package\n\n"
+    "This directory works alongside `install.mjs` and is documented in "
+    "`source-material-section-types.md`.\n"
+)
+
 
 class _RunHook:
     """Helper to test the hook via subprocess, mirroring the sibling test style."""
@@ -79,6 +92,12 @@ def _package_directory_with_readme(tmp_path: Path, readme_content: str) -> Path:
     return package_directory
 
 
+def _write_sibling_files(package_directory: Path, all_basenames: list[str]) -> None:
+    """Create each named file on disk inside *package_directory*."""
+    for each_basename in all_basenames:
+        (package_directory / each_basename).write_text("x = 1\n", encoding="utf-8")
+
+
 def test_inventory_named_basenames_strips_path_to_basename():
     named_basenames = inventory_named_basenames(README_LISTING_TWO_FILES)
     assert named_basenames == {"dialer_compose.py", "compose_dialer_cli.py"}
@@ -99,8 +118,14 @@ def test_inventory_named_basenames_skips_fenced_code_block():
     assert named_basenames == set()
 
 
+def test_inventory_named_basenames_rejects_command_example_spans():
+    named_basenames = inventory_named_basenames(README_LISTING_ONLY_COMMAND_EXAMPLES)
+    assert named_basenames == set()
+
+
 def test_blocks_new_production_file_absent_from_readme(tmp_path: Path):
     package_directory = _package_directory_with_readme(tmp_path, README_LISTING_TWO_FILES)
+    _write_sibling_files(package_directory, ["dialer_compose.py", "compose_dialer_cli.py"])
     new_file_path = package_directory / "check_dialer_seam_cli.py"
     result = _run_hook(
         "Write",
@@ -117,6 +142,7 @@ def test_blocks_new_file_absent_from_claude_md_bullet_list(tmp_path: Path):
     package_directory = tmp_path / "package_directory"
     package_directory.mkdir()
     (package_directory / "CLAUDE.md").write_text(CLAUDE_MD_BULLET_LIST, encoding="utf-8")
+    _write_sibling_files(package_directory, ["compose_dialer_cli.py", "compose_aod_cli.py"])
     new_file_path = package_directory / "build_dialer_aod_roster_cli.py"
     result = _run_hook(
         "Write",
@@ -200,6 +226,34 @@ def test_allows_new_file_when_inventory_filenames_live_in_code_fence(tmp_path: P
     assert result.stdout.strip() == ""
 
 
+def test_allows_new_file_when_inventory_names_only_non_sibling_files(tmp_path: Path):
+    package_directory = _package_directory_with_readme(
+        tmp_path, README_PROSE_NAMES_NON_SIBLING_FILES
+    )
+    new_file_path = package_directory / "new_helper.py"
+    result = _run_hook(
+        "Write",
+        {"file_path": str(new_file_path), "content": "x = 1\n"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_blocks_new_file_when_inventory_names_sibling_files_on_disk(tmp_path: Path):
+    package_directory = _package_directory_with_readme(tmp_path, README_LISTING_TWO_FILES)
+    (package_directory / "dialer_compose.py").write_text("x = 1\n", encoding="utf-8")
+    (package_directory / "compose_dialer_cli.py").write_text("x = 1\n", encoding="utf-8")
+    new_file_path = package_directory / "check_dialer_seam_cli.py"
+    result = _run_hook(
+        "Write",
+        {"file_path": str(new_file_path), "content": "x = 1\n"},
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "check_dialer_seam_cli.py" in payload["hookSpecificOutput"]["permissionDecisionReason"]
+
+
 def test_allows_test_file_absent_from_inventory(tmp_path: Path):
     package_directory = _package_directory_with_readme(tmp_path, README_LISTING_TWO_FILES)
     new_file_path = package_directory / "test_check_dialer_seam_cli.py"
@@ -259,7 +313,17 @@ def test_is_inventoried_production_file_accepts_production_file(tmp_path: Path):
 
 def test_find_stale_inventory_returns_survey_for_omission(tmp_path: Path):
     package_directory = _package_directory_with_readme(tmp_path, README_LISTING_TWO_FILES)
+    _write_sibling_files(package_directory, ["dialer_compose.py", "compose_dialer_cli.py"])
     new_file_path = package_directory / "seam_continuity.py"
     survey = find_stale_inventory(str(new_file_path))
     assert survey is not None
     assert survey.present_inventory_names == ["README.md"]
+    assert survey.named_basenames == {"dialer_compose.py", "compose_dialer_cli.py"}
+
+
+def test_find_stale_inventory_skips_prose_only_directory():
+    audit_rubrics_directory = (
+        Path(__file__).resolve().parent.parent.parent / "audit-rubrics"
+    )
+    new_file_path = audit_rubrics_directory / "new_helper.py"
+    assert find_stale_inventory(str(new_file_path)) is None

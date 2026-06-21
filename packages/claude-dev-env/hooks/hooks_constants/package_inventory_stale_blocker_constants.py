@@ -9,9 +9,10 @@ inventory to map the directory misses the new file. This module holds the
 inventory document names, the production code extensions that earn an inventory
 entry, the backtick pattern that finds an inventory's named files, the code-fence
 pattern that marks lines to skip, the glob-metacharacter pattern that rejects
-pattern tokens, the minimum inventory size that marks a document as a maintained
-inventory, the filenames exempt from an entry, the scan budget, and the
-block-message text the hook emits.
+pattern tokens, the non-filename pattern that rejects command-example and
+path-bearing prose spans, the minimum inventory size that marks a document as a
+maintained inventory, the filenames exempt from an entry, the scan budget, and
+the block-message text the hook emits.
 """
 
 import re
@@ -24,6 +25,7 @@ __all__ = [
     "BACKTICK_TOKEN_PATTERN",
     "CODE_FENCE_PATTERN",
     "GLOB_METACHARACTER_PATTERN",
+    "NON_FILENAME_TOKEN_PATTERN",
     "MINIMUM_INVENTORY_ENTRY_COUNT",
     "ALL_EXEMPT_BASENAMES",
     "ALL_EXEMPT_DIRECTORY_NAMES",
@@ -55,6 +57,8 @@ BACKTICK_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"`([^`]+)`")
 CODE_FENCE_PATTERN: re.Pattern[str] = re.compile(r"^\s*(?:```|~~~)")
 
 GLOB_METACHARACTER_PATTERN: re.Pattern[str] = re.compile(r"[*?{}\[\]]")
+
+NON_FILENAME_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"[\s:$<>]")
 
 MINIMUM_INVENTORY_ENTRY_COUNT: int = 2
 
