@@ -8,6 +8,7 @@ test_precommit_code_rules_gate.py lines 1-70.
 """
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -454,3 +455,47 @@ def test_conflict_and_violation_single_deny_names_both(tmp_path: Path) -> None:
     assert "shared.py" in reason
     assert "CODE_RULES violations on changed lines:" in reason
     assert "violator.py" in reason
+
+
+def test_hook_imports_real_config_when_parent_holds_shadowing_config(
+    tmp_path: Path,
+) -> None:
+    real_hooks_directory = HOOK_PATH.parent.parent
+    real_package_directory = real_hooks_directory.parent
+
+    staged_package_directory = tmp_path / "claude-dev-env"
+    shutil.copytree(
+        real_hooks_directory,
+        staged_package_directory / "hooks",
+    )
+    shutil.copytree(
+        real_package_directory / "_shared",
+        staged_package_directory / "_shared",
+    )
+
+    shadowing_config_directory = staged_package_directory / "hooks" / "config"
+    shadowing_config_directory.mkdir(parents=True, exist_ok=True)
+    (shadowing_config_directory / "__init__.py").write_text("", encoding="utf-8")
+    (shadowing_config_directory / "unrelated_constants.py").write_text(
+        "UNRELATED_VALUE = 1\n", encoding="utf-8"
+    )
+
+    staged_hook = (
+        staged_package_directory
+        / "hooks"
+        / "blocking"
+        / "code_verifier_spawn_preflight_gate.py"
+    )
+    payload = write_agent_payload("general-purpose", "unrelated work", tmp_path)
+    completed = subprocess.run(
+        [sys.executable, str(staged_hook)],
+        check=False,
+        input=payload,
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+        timeout=120,
+    )
+
+    assert "ModuleNotFoundError" not in completed.stderr
+    assert completed.returncode == 0

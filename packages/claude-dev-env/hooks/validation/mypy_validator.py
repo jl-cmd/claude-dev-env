@@ -293,6 +293,28 @@ def build_mypy_command(relative_file_path: str, mypy_config_file: Path | None) -
     ]
 
 
+def project_relative_path(target_file: str, project_root: str) -> str:
+    """Return *target_file* relative to *project_root*, or its absolute path.
+
+    On Windows ``os.path.relpath`` raises ``ValueError`` when the two paths sit
+    on different mounts (for example a ``Y:`` drive file against a project root
+    that resolved to its backing UNC share), so no relative path can span them.
+    The absolute target path is then handed to mypy unchanged, which accepts it.
+
+    Args:
+        target_file: The absolute path of the file to type-check.
+        project_root: The directory mypy runs from.
+
+    Returns:
+        The path relative to *project_root* when one exists, otherwise the
+        absolute path of *target_file*.
+    """
+    try:
+        return os.path.relpath(target_file, project_root)
+    except ValueError:
+        return os.path.abspath(target_file)
+
+
 def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
     """Run mypy on one file from the project root and return its result.
 
@@ -325,7 +347,7 @@ def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
     Returns:
         The mypy exit code paired with its combined stdout and stderr text.
     """
-    relative_file_path = os.path.relpath(target_file, project_root)
+    relative_file_path = project_relative_path(target_file, project_root)
     mypy_config_file = discover_mypy_config(Path(target_file))
 
     content_hash = _composite_content_hash(target_file, mypy_config_file)
