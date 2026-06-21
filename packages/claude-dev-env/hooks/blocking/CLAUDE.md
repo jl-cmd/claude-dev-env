@@ -77,6 +77,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `precommit_code_rules_gate.py` | PreToolUse (Bash) | Staged changes that fail the CODE_RULES gate at commit time |
 | `pytest_testpaths_orphan_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | New `test_*.py` files created under a directory absent from a package's explicit pytest `testpaths` allowlist |
 | `question_to_user_enforcer.py` | Stop | User-directed questions not routed through `AskUserQuestion` |
+| `send_user_file_open_locally_blocker.py` | PreToolUse (SendUserFile) | A desk-side file attach (`SendUserFile` with `status` not `proactive`); points to opening the file locally via `Show-Asset.ps1` |
 | `sensitive_file_protector.py` | PreToolUse (Write/Edit) | Writes to sensitive credential or config files |
 | `session_handoff_blocker.py` | Stop | Responses suggesting a new session mid-task |
 | `state_description_blocker.py` | PreToolUse (Write/Edit) | Historical/comparative language in documentation |

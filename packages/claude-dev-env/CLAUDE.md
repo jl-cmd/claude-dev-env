@@ -35,6 +35,8 @@ When I ask you to "show me", "open", "display", "let me see", or "pull up" a fil
 
 It sizes each image window to the image (scaled down to fit the screen) and opens non-image files in their default app; pass every path I name. Printing a path or attaching the file is not showing it — do that only when the file truly cannot be opened, and say why.
 
+The `send_user_file_open_locally_blocker` hook backs this up: it blocks a desk-side `SendUserFile` attach and sends you back to this command, while a phone push (`status: "proactive"`) stays allowed.
+
 ## Test Philosophy
 
 When writing tests, always write tests that actually test the behavior of the function against actual, real data and environments.
