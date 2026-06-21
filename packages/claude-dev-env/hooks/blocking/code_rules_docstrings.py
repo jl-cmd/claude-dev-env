@@ -34,10 +34,13 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
+    MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
     MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
+    MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK,
     MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER,
     MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
+    MINIMUM_TOKENS_FOR_DISPATCH_CALLEE,
     MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
@@ -826,3 +829,150 @@ def check_docstring_tuple_enumeration_match(content: str, file_path: str) -> lis
             if len(issues) >= MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES:
                 return issues[:MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES]
     return issues[:MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES]
+
+
+def _called_callee_name(statement: ast.stmt) -> str:
+    candidate_expression: ast.expr | None = None
+    if isinstance(statement, ast.Expr):
+        candidate_expression = statement.value
+    elif isinstance(statement, ast.Assign):
+        candidate_expression = statement.value
+    elif isinstance(statement, ast.AnnAssign):
+        candidate_expression = statement.value
+    if candidate_expression is None:
+        return ""
+    if isinstance(candidate_expression, ast.Await):
+        candidate_expression = candidate_expression.value
+    if not isinstance(candidate_expression, ast.Call):
+        return ""
+    return _call_callee_name(candidate_expression)
+
+
+def _called_callees_in_expression(expression: ast.expr) -> set[str]:
+    callees: set[str] = set()
+    for each_descendant in ast.walk(expression):
+        if not isinstance(each_descendant, ast.Call):
+            continue
+        callee_name = _call_callee_name(each_descendant)
+        if callee_name:
+            callees.add(callee_name)
+    return callees
+
+
+def _linear_step_callees(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> set[str]:
+    callees: set[str] = set()
+    for each_statement in function_node.body:
+        callee_name = _called_callee_name(each_statement)
+        if callee_name:
+            callees.add(callee_name)
+        if isinstance(each_statement, ast.If):
+            callees |= _called_callees_in_expression(each_statement.test)
+    return callees
+
+
+def _branch_guarded_dispatch_callees(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> set[str]:
+    callees: set[str] = set()
+    for each_statement in function_node.body:
+        if not isinstance(each_statement, ast.If):
+            continue
+        for each_branch_statement in each_statement.body + each_statement.orelse:
+            for each_descendant in ast.walk(each_branch_statement):
+                if not isinstance(each_descendant, ast.If):
+                    continue
+                callees |= _called_callees_in_expression(each_descendant.test)
+    return callees
+
+
+def _bare_callee_name(qualified_callee: str) -> str:
+    return qualified_callee.rsplit(".", 1)[-1]
+
+
+def _docstring_names_all_callee_tokens(docstring_text: str, callee_name: str) -> bool:
+    bare_name = _bare_callee_name(callee_name)
+    lowered_docstring = docstring_text.lower()
+    if bare_name.lower() in lowered_docstring:
+        return True
+    callee_tokens = _name_tokens(bare_name)
+    if not callee_tokens:
+        return False
+    return all(each_token.lower() in lowered_docstring for each_token in callee_tokens)
+
+
+def check_docstring_step_enumeration_dispatch_coverage(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a step-enumeration docstring that omits a conditional dispatch call.
+
+    The drift this catches: a function whose docstring enumerates a linear
+    sequence of steps (``Navigates ..., searches ..., clicks ..., uploads ...``)
+    matching the body's linear-step calls, while the body also routes to a
+    corrective workflow step inside an ``if``/``elif`` branch — a cancel-and-reinitiate
+    or replace-target-row step — whose name the prose never spells out. A reader
+    who trusts the step list to be complete misses that the function can take that
+    conditional path. This is the deterministic slice of Category O4 (step-ordering
+    narrative): a body that guards a branch-only workflow step the enumeration omits.
+
+    A linear-step call is one made as a top-level statement or inside the ``If.test``
+    guard of a top-level ``if`` (``if not await self.navigate(): return``). A
+    dispatch step is a call inside a guard (``If.test``) nested within an
+    ``if``/``elif`` branch (``if not await cancel_and_reinitiate_update(...): return``)
+    that is never also a linear step — the same control-flow-gating shape as a
+    linear step, so plain logging, screenshot, or method-on-local calls inside a
+    branch are not dispatch steps. The check binds only when the docstring already
+    names two or more linear-step callees by their underscore tokens, proving the
+    prose is a step enumeration describing this body. A dispatch-step callee with
+    two or more underscore tokens, none of whose tokens appear in the prose, is
+    flagged.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per conditional dispatch call the step enumeration omits, capped
+        at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        docstring_text = _function_docstring_text(each_node)
+        if not docstring_text:
+            continue
+        linear_step_callees = _linear_step_callees(each_node)
+        named_linear_steps = [
+            each_callee
+            for each_callee in linear_step_callees
+            if _docstring_names_all_callee_tokens(docstring_text, each_callee)
+        ]
+        if len(named_linear_steps) < MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK:
+            continue
+        branch_only_callees = (
+            _branch_guarded_dispatch_callees(each_node) - linear_step_callees
+        )
+        for each_callee in sorted(branch_only_callees):
+            if len(_name_tokens(_bare_callee_name(each_callee))) < MINIMUM_TOKENS_FOR_DISPATCH_CALLEE:
+                continue
+            if _docstring_names_all_callee_tokens(docstring_text, each_callee):
+                continue
+            issues.append(
+                f"Line {each_node.lineno}: {each_node.name}() docstring enumerates linear "
+                f"steps but omits the conditional dispatch step {each_callee}() the body "
+                "guards inside a branch — add the corrective-path step to the enumeration "
+                "(Category O4 step-ordering narrative drift)"
+            )
+            if len(issues) >= MAX_DOCSTRING_STEP_DISPATCH_ISSUES:
+                return issues[:MAX_DOCSTRING_STEP_DISPATCH_ISSUES]
+    return issues[:MAX_DOCSTRING_STEP_DISPATCH_ISSUES]
