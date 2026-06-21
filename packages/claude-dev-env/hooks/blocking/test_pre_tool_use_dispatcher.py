@@ -581,6 +581,59 @@ def test_proceed_after_run_all_validators_removal_allows() -> None:
     )
 
 
+def _orphan_claude_md_payload(tmp_path: Path) -> str:
+    """Build a Write payload for a CLAUDE.md naming a file that does not exist.
+
+    Args:
+        tmp_path: A directory hosting the throwaway CLAUDE.md.
+
+    Returns:
+        JSON-encoded Write payload that trips claude_md_orphan_file_blocker.
+    """
+    claude_md_path = str(tmp_path / "CLAUDE.md")
+    orphan_table = (
+        "# Files\n\n"
+        "| File | Role |\n"
+        "|---|---|\n"
+        "| `file_that_does_not_exist_anywhere.py` | a missing file |\n"
+    )
+    return _write_payload(claude_md_path, orphan_table)
+
+
+def test_runpy_deny_preserves_additional_context_and_suppress_output(tmp_path: Path) -> None:
+    """A runpy-hosted deny carries its additionalContext and suppressOutput through the dispatcher.
+
+    claude_md_orphan_file_blocker emits hookSpecificOutput.additionalContext and a
+    top-level suppressOutput flag on a deny. The dispatcher must preserve both so
+    the dispatched denial matches the standalone hook's deny shape.
+
+    Args:
+        tmp_path: Pytest temp directory hosting the throwaway CLAUDE.md.
+    """
+    payload_text = _orphan_claude_md_payload(tmp_path)
+
+    standalone_result = _run_hook_subprocess(
+        "blocking/claude_md_orphan_file_blocker.py", payload_text
+    )
+    standalone_payload = json.loads(standalone_result.stdout.strip())
+    standalone_hook_specific = standalone_payload["hookSpecificOutput"]
+    expected_additional_context = standalone_hook_specific["additionalContext"]
+
+    dispatcher_result = _run_dispatcher(payload_text)
+    dispatcher_payload = json.loads(dispatcher_result.stdout.strip())
+    dispatcher_hook_specific = dispatcher_payload.get("hookSpecificOutput", {})
+    assert isinstance(dispatcher_hook_specific, dict)
+    assert dispatcher_hook_specific.get("additionalContext") == expected_additional_context, (
+        "Dispatcher must preserve the runpy hook's additionalContext.\n"
+        f"Expected: {expected_additional_context!r}\n"
+        f"Got: {dispatcher_hook_specific.get('additionalContext')!r}"
+    )
+    assert dispatcher_payload.get("suppressOutput") is True, (
+        "Dispatcher must preserve the runpy hook's suppressOutput flag.\n"
+        f"Got: {dispatcher_payload.get('suppressOutput')!r}"
+    )
+
+
 def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:
     """The hosted hook set covers all previously-registered Write/Edit blocking hooks.
 

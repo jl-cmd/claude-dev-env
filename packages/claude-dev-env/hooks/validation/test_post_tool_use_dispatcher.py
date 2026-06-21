@@ -34,6 +34,7 @@ if _VALIDATION_DIR_STR not in sys.path:
 from hooks_constants.post_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_POST_HOSTED_HOOK_ENTRIES,
     BLOCK_DECISION,
+    EMPTY_REASON_BLOCK_FALLBACK,
     PLUGIN_ROOT_PLACEHOLDER,
     PostHostedHookEntry,
 )
@@ -440,6 +441,69 @@ def test_non_blocking_hook_crash_leaves_decision_allow() -> None:
     assert not aggregated_decision.should_block, (
         "A non-blocking hook crash must not change an allow to a block"
     )
+
+
+def test_empty_reason_block_still_blocks_with_fallback_reason() -> None:
+    """A block decision carrying an empty reason still blocks with a fallback reason.
+
+    A blocking hook that emits decision=block with an empty reason string must
+    still block. The aggregator substitutes EMPTY_REASON_BLOCK_FALLBACK so the
+    block is not silently downgraded to allow.
+    """
+    empty_reason_block_json = json.dumps({"decision": BLOCK_DECISION, "reason": ""})
+    all_results = [
+        PostHostedHookResult(
+            captured_stdout=empty_reason_block_json, did_crash=False, is_blocking=True
+        ),
+    ]
+    aggregated_decision = aggregate_post_hosted_hook_results(all_results)
+    assert aggregated_decision.should_block, (
+        "An empty-reason block must still block, not downgrade to allow"
+    )
+    assert EMPTY_REASON_BLOCK_FALLBACK in aggregated_decision.all_block_reasons, (
+        "The aggregator must substitute a fallback reason for an empty-reason block.\n"
+        f"Got block reasons: {aggregated_decision.all_block_reasons!r}"
+    )
+    assert empty_reason_block_json not in aggregated_decision.all_non_block_stdout, (
+        "An empty-reason block's raw JSON must not leak into the informational stdout"
+    )
+
+
+def test_block_path_emits_single_parseable_json_object_on_stdout() -> None:
+    """On the block path the dispatcher emits a single parseable JSON object on stdout.
+
+    Writes a Python file with a real type error inside this repository so
+    mypy_validator discovers the project root and blocks, then asserts the
+    dispatcher's whole stdout parses as one JSON block object — no leading
+    informational text mixed onto the same stream.
+    """
+    type_error_file = _VALIDATION_DIR / "dispatcher_block_stdout_probe.py"
+    type_error_file.write_text(
+        "def add_one(value: int) -> int:\n    return value + 1\n\n\nadd_one('not an int')\n",
+        encoding="utf-8",
+    )
+    try:
+        payload_text = _write_payload(str(type_error_file), type_error_file.read_text())
+        direct_block, _direct_reason = _parse_block_decision(
+            _run_hook_subprocess(ALL_POST_HOSTED_HOOK_ENTRIES[0], payload_text)
+        )
+        assert direct_block, (
+            "Precondition failed: mypy_validator did not block a real type error directly. "
+            "Is mypy installed and the file inside the git project?"
+        )
+
+        dispatcher_result = _run_dispatcher(payload_text)
+        parsed_stdout = json.loads(dispatcher_result.stdout.strip())
+        assert isinstance(parsed_stdout, dict), (
+            "Dispatcher stdout on the block path must be a single JSON object.\n"
+            f"Got: {dispatcher_result.stdout!r}"
+        )
+        assert parsed_stdout.get("decision") == BLOCK_DECISION, (
+            "The single JSON object on stdout must carry the block decision.\n"
+            f"Got: {parsed_stdout!r}"
+        )
+    finally:
+        type_error_file.unlink(missing_ok=True)
 
 
 def test_blocking_hook_crash_surfaces_a_block() -> None:

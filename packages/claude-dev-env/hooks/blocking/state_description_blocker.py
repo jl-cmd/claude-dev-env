@@ -221,16 +221,21 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     return _build_deny_reason(file_path, all_detected_patterns)
 
 
-def main() -> None:
-    payload_dictionary = read_hook_input_dictionary_from_stdin()
-    if payload_dictionary is None:
-        sys.exit(0)
+def build_deny_payload(deny_reason: str) -> dict[str, object]:
+    """Build the full deny payload the hook writes for a deny-reason string.
 
-    deny_reason = evaluate(payload_dictionary)
-    if deny_reason is None:
-        sys.exit(0)
+    The payload carries the core permission decision plus the BAD/GOOD rewrite
+    guidance in additionalContext, the user-facing systemMessage, and output
+    suppression, so a caller routing this hook through a dispatcher reproduces
+    the same deny shape the standalone hook writes.
 
-    block_payload = {
+    Args:
+        deny_reason: The permissionDecisionReason text for the denial.
+
+    Returns:
+        The deny payload dictionary the hook serializes to stdout.
+    """
+    return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
@@ -247,7 +252,17 @@ def main() -> None:
         "suppressOutput": True,
     }
 
-    _emit_hook_result(block_payload, sys.stdout)
+
+def main() -> None:
+    payload_dictionary = read_hook_input_dictionary_from_stdin()
+    if payload_dictionary is None:
+        sys.exit(0)
+
+    deny_reason = evaluate(payload_dictionary)
+    if deny_reason is None:
+        sys.exit(0)
+
+    _emit_hook_result(build_deny_payload(deny_reason), sys.stdout)
     sys.exit(0)
 
 

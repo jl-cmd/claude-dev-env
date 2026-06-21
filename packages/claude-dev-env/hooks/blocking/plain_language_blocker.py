@@ -140,8 +140,20 @@ def _collect_prose_for_tool(tool_name: str, tool_input: dict) -> str:
     return ""
 
 
-def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
-    deny_payload = {
+def build_deny_payload(deny_reason: str) -> dict[str, object]:
+    """Build the full deny payload the hook writes for a deny-reason string.
+
+    The payload carries the core permission decision plus the user-facing notice
+    and output suppression, so a caller routing this hook through a dispatcher
+    reproduces the same deny shape the standalone hook writes.
+
+    Args:
+        deny_reason: The permissionDecisionReason text for the denial.
+
+    Returns:
+        The deny payload dictionary the hook serializes to stdout.
+    """
+    return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
@@ -150,7 +162,10 @@ def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
         "systemMessage": USER_FACING_PLAIN_LANGUAGE_NOTICE,
         "suppressOutput": True,
     }
-    output_stream.write(json.dumps(deny_payload))
+
+
+def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
+    output_stream.write(json.dumps(build_deny_payload(deny_reason)))
     output_stream.flush()
 
 

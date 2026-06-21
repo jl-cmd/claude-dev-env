@@ -246,6 +246,15 @@ def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
     introduce a type error still blocks. The discovered config is reused from the
     per-session cache keyed by project root.
 
+    The cache key is the target file's own bytes only, so the skip is blind to a
+    cross-file change: when a dependency is edited in a way that breaks this
+    file's call site and this file is later rewritten to its prior passing
+    content, the cached pass returns without re-running mypy. The post-write hook
+    already type-checks only the single edited file, so a dependent is never
+    re-checked on the dependency's own edit regardless of the cache; the cache
+    adds only the identical-rewrite skip on top of that existing single-file
+    scope.
+
     Args:
         target_file: The absolute path of the file to type-check.
         project_root: The directory mypy runs from.

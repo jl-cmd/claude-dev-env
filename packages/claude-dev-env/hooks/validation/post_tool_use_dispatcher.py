@@ -9,9 +9,10 @@ results, and emits one PostToolUse block decision when any hook blocked
 The hosted hooks keep every side effect they have today: the formatter writes
 the reformatted file to disk, and the doc publisher uploads the gist. Running
 them in-process preserves those side effects while collapsing three processes
-into one. The dispatcher imposes a fixed order but never writes the edited file
-between hooks, so the order is side-effect-free across hooks and cannot change
-a decision.
+into one. The dispatcher itself performs no file write; it runs the hooks in a
+fixed order that reproduces the prior registration order. One hosted hook (the
+formatter) does rewrite the edited file mid-sequence, so a later hook reads the
+file as the formatter left it — the same order the prior separate entries ran.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ import sys
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TextIO
 
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 if _hooks_directory not in sys.path:
@@ -32,6 +34,7 @@ from hooks_constants.post_tool_use_dispatcher_constants import (  # noqa: E402
     ALL_POST_HOSTED_HOOK_ENTRIES,
     BLOCK_DECISION,
     DECISION_KEY,
+    EMPTY_REASON_BLOCK_FALLBACK,
     HOOK_EVENT_NAME,
     PLUGIN_ROOT_PLACEHOLDER,
     REASON_KEY,
@@ -178,12 +181,14 @@ def aggregate_post_hosted_hook_results(
 ) -> PostDispatcherDecision:
     """Aggregate all hosted PostToolUse hook results into one dispatcher decision.
 
-    Parses each result's stdout for a block decision. A non-SystemExit crash in
-    a blocking hook also signals block. Block wins over allow: when any result
-    blocks, the aggregate blocks carrying every blocking reason. A side-effect
-    hook that exits cleanly contributes no block. Non-block stdout from every
-    hook is preserved so informational output reaches the harness on both the
-    allow and block paths.
+    Parses each result's stdout for a block decision. A block decision signals a
+    block regardless of its reason text; an empty-reason block draws
+    EMPTY_REASON_BLOCK_FALLBACK so the block is never downgraded to allow. A
+    non-SystemExit crash in a blocking hook also signals block. Block wins over
+    allow: when any result blocks, the aggregate blocks carrying every blocking
+    reason. A side-effect hook that exits cleanly contributes no block. Non-block
+    stdout from every hook is preserved so informational output reaches the
+    harness on both the allow and block paths.
 
     Args:
         all_results: Outcomes from running each hosted hook.
@@ -198,8 +203,8 @@ def aggregate_post_hosted_hook_results(
 
     for each_result in all_results:
         is_block, block_reason = _parse_block_from_hook_output(each_result.captured_stdout)
-        if is_block and block_reason:
-            all_block_reasons.append(block_reason)
+        if is_block:
+            all_block_reasons.append(block_reason if block_reason else EMPTY_REASON_BLOCK_FALLBACK)
         elif each_result.did_crash and each_result.is_blocking:
             all_block_reasons.append(blocking_crash_reason)
         else:
@@ -214,30 +219,32 @@ def aggregate_post_hosted_hook_results(
     )
 
 
-def _emit_non_block_stdout(all_non_block_stdout: list[str]) -> None:
-    """Write each non-block hook's stdout to the real stdout so the harness sees it.
+def _emit_non_block_stdout(all_non_block_stdout: list[str], output_stream: TextIO) -> None:
+    """Write each non-block hook's stdout to the given stream so the harness sees it.
 
     Args:
         all_non_block_stdout: The informational stdout lines from non-blocking
             hooks, in run order.
+        output_stream: The stream to write the informational lines to.
     """
     for each_line in all_non_block_stdout:
-        sys.stdout.write(each_line + "\n")
+        output_stream.write(each_line + "\n")
     if all_non_block_stdout:
-        sys.stdout.flush()
+        output_stream.flush()
 
 
 def _emit_block_decision(decision: PostDispatcherDecision) -> None:
-    """Write one PostToolUse block JSON object to stdout carrying all reasons.
+    """Write one PostToolUse block JSON object as the only stdout content.
 
-    Also writes any non-block hook stdout before the block JSON so the harness
-    receives informational output from side-effect hooks even on the block path.
+    Routes any non-block hook stdout to stderr so the harness can parse the whole
+    stdout stream as one JSON block object — informational text from a side-effect
+    hook never precedes the block JSON on stdout.
 
     Args:
         decision: The aggregated dispatcher decision with block reasons and
             non-block stdout from side-effect hooks.
     """
-    _emit_non_block_stdout(decision.all_non_block_stdout)
+    _emit_non_block_stdout(decision.all_non_block_stdout, sys.stderr)
     combined_reason = " | ".join(decision.all_block_reasons)
     block_payload: dict[str, object] = {
         DECISION_KEY: BLOCK_DECISION,
@@ -306,7 +313,7 @@ def dispatch(payload_text: str, plugin_root: str) -> None:
     if aggregated_decision.should_block:
         _emit_block_decision(aggregated_decision)
     else:
-        _emit_non_block_stdout(aggregated_decision.all_non_block_stdout)
+        _emit_non_block_stdout(aggregated_decision.all_non_block_stdout, sys.stdout)
 
 
 def _resolve_plugin_root() -> str:

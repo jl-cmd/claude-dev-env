@@ -15,6 +15,7 @@ __all__ = [
     "DECISION_KEY",
     "REASON_KEY",
     "HOOK_EVENT_NAME",
+    "EMPTY_REASON_BLOCK_FALLBACK",
     "PLUGIN_ROOT_PLACEHOLDER",
     "PostHostedHookEntry",
     "ALL_POST_HOSTED_HOOK_ENTRIES",
@@ -24,6 +25,7 @@ BLOCK_DECISION = "block"
 DECISION_KEY = "decision"
 REASON_KEY = "reason"
 HOOK_EVENT_NAME = "PostToolUse"
+EMPTY_REASON_BLOCK_FALLBACK = "[dispatcher] hook blocked with no reason — write blocked"
 
 PLUGIN_ROOT_PLACEHOLDER = "${CLAUDE_PLUGIN_ROOT}"
 
