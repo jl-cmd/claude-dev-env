@@ -200,6 +200,11 @@ def test_is_inventoried_production_file_rejects_config_directory(tmp_path: Path)
     assert is_inventoried_production_file(str(config_file_path)) is False
 
 
+def test_is_inventoried_production_file_accepts_production_file(tmp_path: Path):
+    production_file_path = tmp_path / "dialer_compose.py"
+    assert is_inventoried_production_file(str(production_file_path)) is True
+
+
 def test_find_stale_inventory_returns_survey_for_omission(tmp_path: Path):
     package_directory = _package_directory_with_readme(tmp_path, README_LISTING_TWO_FILES)
     new_file_path = package_directory / "seam_continuity.py"

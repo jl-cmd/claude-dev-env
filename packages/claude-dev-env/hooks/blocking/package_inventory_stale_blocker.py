@@ -204,9 +204,7 @@ def is_inventoried_production_file(file_path: str) -> bool:
         return False
     if _is_test_file(basename):
         return False
-    if _is_under_exempt_directory(Path(file_path).resolve().parent):
-        return False
-    return True
+    return not _is_under_exempt_directory(Path(file_path).resolve().parent)
 
 
 def find_stale_inventory(file_path: str) -> _InventorySurvey | None:
