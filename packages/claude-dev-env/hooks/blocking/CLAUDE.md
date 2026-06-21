@@ -75,6 +75,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `pr_converge_bugteam_enforcer.py` | PreToolUse | Enforces that bugteam runs in parallel with bugbot in pr-converge loops |
 | `pr_description_enforcer.py` | PreToolUse (Bash) | `gh pr create`/`edit` without a PR-description-writer-authored body |
 | `precommit_code_rules_gate.py` | PreToolUse (Bash) | Staged changes that fail the CODE_RULES gate at commit time |
+| `pytest_testpaths_orphan_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | New `test_*.py` files created under a directory absent from a package's explicit pytest `testpaths` allowlist |
 | `question_to_user_enforcer.py` | Stop | User-directed questions not routed through `AskUserQuestion` |
 | `sensitive_file_protector.py` | PreToolUse (Write/Edit) | Writes to sensitive credential or config files |
 | `session_handoff_blocker.py` | Stop | Responses suggesting a new session mid-task |
