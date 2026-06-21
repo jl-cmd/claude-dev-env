@@ -15,6 +15,7 @@ of scope, since pytest then discovers tests by recursive default and the file is
 collected wherever it lands.
 """
 
+import fnmatch
 import json
 import sys
 import tomllib
@@ -27,7 +28,10 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.pytest_testpaths_orphan_blocker_constants import (  # noqa: E402
     ALL_PRUNED_PARENT_DIRECTORY_NAMES,
+    GLOB_METACHARACTERS,
     MAX_PARENT_DIRECTORIES_SEARCHED,
+    PACKAGE_ROOT_ENTRY,
+    PACKAGE_ROOT_ENTRY_PREFIX,
     PYPROJECT_FILENAME,
     TEST_FILE_BASENAME_PATTERN,
     TESTPATHS_KEY,
@@ -63,6 +67,22 @@ class _PytestPackage:
         self.all_testpaths = all_testpaths
 
 
+def _nested_dict_table(parent_table: dict, table_key: str) -> dict | None:
+    """Return the child table at *table_key*, or None when it is absent or a scalar.
+
+    Args:
+        parent_table: The enclosing TOML table to look the key up in.
+        table_key: The key whose value is expected to be a nested table.
+
+    Returns:
+        The nested table, or None when the key is missing or maps to a non-table.
+    """
+    child_table = parent_table.get(table_key, {})
+    if not isinstance(child_table, dict):
+        return None
+    return child_table
+
+
 def _explicit_testpaths(pyproject_path: Path) -> list[str] | None:
     """Return the explicit testpaths entries a pyproject declares, when it has them.
 
@@ -70,7 +90,9 @@ def _explicit_testpaths(pyproject_path: Path) -> list[str] | None:
     ``[tool.pytest.ini_options]`` table holds a ``testpaths`` key whose value is a
     non-empty list of strings. A pyproject with no pytest table, no ``testpaths``
     key, or a malformed value yields None, so the caller treats that package as
-    out of scope (pytest then discovers tests by recursive default).
+    out of scope (pytest then discovers tests by recursive default). A scalar
+    ``tool``, ``pytest``, or ``ini_options`` value also yields None, since the
+    descent through those nested tables stops at the first non-table.
 
     Args:
         pyproject_path: The path of the pyproject.toml to read.
@@ -83,8 +105,12 @@ def _explicit_testpaths(pyproject_path: Path) -> list[str] | None:
         parsed_pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         return None
-    pytest_section = parsed_pyproject.get("tool", {}).get("pytest", {}).get("ini_options", {})
-    if not isinstance(pytest_section, dict):
+    tool_table = _nested_dict_table(parsed_pyproject, "tool")
+    pytest_table = _nested_dict_table(tool_table, "pytest") if tool_table is not None else None
+    pytest_section = (
+        _nested_dict_table(pytest_table, "ini_options") if pytest_table is not None else None
+    )
+    if pytest_section is None:
         return None
     declared_testpaths = pytest_section.get(TESTPATHS_KEY)
     if not isinstance(declared_testpaths, list):
@@ -130,11 +156,14 @@ def _find_governing_package(test_file: Path) -> _PytestPackage | None:
 def _is_collected_by_entry(relative_test_path: Path, testpaths_entry: str) -> bool:
     """Return whether one testpaths entry collects the test at *relative_test_path*.
 
-    An entry collects the file when the file sits inside the directory the entry
-    names (the entry is a path prefix of the file's relative path) or when the
-    entry names the file itself. Both the entry and the relative path are
-    normalized to forward-slash posix form so a Windows backslash path matches a
-    posix-written testpaths entry.
+    The entry and the relative path are normalized to forward-slash posix form
+    (a leading ``./`` is stripped) so a Windows backslash path matches a
+    posix-written testpaths entry. An entry that reduces to ``.`` or empty names
+    the package root, which collects every test recursively, so it collects the
+    file. An entry holding a glob metacharacter is matched as an fnmatch pattern
+    against the file's relative path. Otherwise the entry collects the file when
+    it names the file itself or names a directory the file sits inside (the entry
+    is a path prefix of the file's relative path).
 
     Args:
         relative_test_path: The test file's path relative to the package root.
@@ -143,11 +172,43 @@ def _is_collected_by_entry(relative_test_path: Path, testpaths_entry: str) -> bo
     Returns:
         True when the entry collects the test file.
     """
-    normalized_entry = testpaths_entry.strip().strip("/").replace("\\", "/")
     normalized_test_path = relative_test_path.as_posix()
+    normalized_entry = testpaths_entry.strip().replace("\\", "/")
+    if normalized_entry.startswith(PACKAGE_ROOT_ENTRY_PREFIX):
+        normalized_entry = normalized_entry[len(PACKAGE_ROOT_ENTRY_PREFIX) :]
+    normalized_entry = normalized_entry.strip("/")
+    if normalized_entry in (PACKAGE_ROOT_ENTRY, ""):
+        return True
+    if any(metacharacter in normalized_entry for metacharacter in GLOB_METACHARACTERS):
+        return _matches_glob_entry(normalized_test_path, normalized_entry)
     if normalized_test_path == normalized_entry:
         return True
     return normalized_test_path.startswith(normalized_entry + "/")
+
+
+def _matches_glob_entry(normalized_test_path: str, normalized_entry: str) -> bool:
+    """Return whether a glob testpaths entry collects the file at *normalized_test_path*.
+
+    A glob entry collects the file when the entry matches the file's relative
+    path, or when the entry matches an ancestor directory the file sits inside —
+    so ``tests/*`` (which fnmatch-matches the directory ``tests/data``) collects
+    ``tests/data/test_x.py``.
+
+    Args:
+        normalized_test_path: The test file's posix relative path.
+        normalized_entry: The glob entry, normalized to posix form.
+
+    Returns:
+        True when the entry matches the file or a directory containing it.
+    """
+    if fnmatch.fnmatch(normalized_test_path, normalized_entry):
+        return True
+    ancestor_path = Path(normalized_test_path).parent
+    while ancestor_path != ancestor_path.parent:
+        if fnmatch.fnmatch(ancestor_path.as_posix(), normalized_entry):
+            return True
+        ancestor_path = ancestor_path.parent
+    return False
 
 
 def _suggested_testpaths_entry(relative_test_path: Path) -> str:
