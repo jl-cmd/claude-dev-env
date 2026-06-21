@@ -110,11 +110,13 @@ def run_hosted_hook(
 ) -> HostedHookResult:
     """Run one hosted hook in-process and return its outcome.
 
-    Sets stdin to a fresh stream over payload_text, captures stdout into a
-    buffer, runs the hook via runpy under __main__, catches SystemExit to read
-    the exit code without ending the dispatcher, and catches a non-SystemExit
-    exception to log the crash and classify it. Always restores stdin and
-    stdout in the finally block.
+    Sets stdin to a fresh stream over payload_text, sets argv to the hook's own
+    script path so a hook that branches on sys.argv (such as code_rules_enforcer's
+    --check pre-check mode) reads the same argv it would standalone rather than
+    the dispatcher's, captures stdout into a buffer, runs the hook via runpy
+    under __main__, catches SystemExit to read the exit code without ending the
+    dispatcher, and catches a non-SystemExit exception to log the crash and
+    classify it. Always restores stdin, stdout, and argv in the finally block.
 
     Args:
         hook_script_path: Absolute path of the hook script to run.
@@ -127,6 +129,7 @@ def run_hosted_hook(
     """
     original_stdin = sys.stdin
     original_stdout = sys.stdout
+    original_argv = sys.argv
     captured_output = io.StringIO()
     hook_exit_code = 0
     hook_did_crash = False
@@ -134,6 +137,7 @@ def run_hosted_hook(
     try:
         sys.stdin = io.StringIO(payload_text)
         sys.stdout = captured_output
+        sys.argv = [hook_script_path]
         runpy.run_path(hook_script_path, run_name="__main__")
     except SystemExit as exit_signal:
         raw_code = exit_signal.code
@@ -145,6 +149,7 @@ def run_hosted_hook(
     finally:
         sys.stdin = original_stdin
         sys.stdout = original_stdout
+        sys.argv = original_argv
 
     return HostedHookResult(
         exit_code=hook_exit_code,

@@ -37,6 +37,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I
 from pre_tool_use_dispatcher import (  # noqa: E402, I001
     HostedHookResult,
     aggregate_hosted_hook_results,
+    run_hosted_hook,
 )
 
 _BLOCKING_DIR = Path(__file__).resolve().parent
@@ -746,6 +747,37 @@ def test_dispatcher_reemits_explicit_allow_from_tdd_enforcer(tmp_path: Path) -> 
         "dispatcher allow payload must match the standalone tdd_enforcer allow payload.\n"
         f"Standalone: {standalone_payload!r}\n"
         f"Dispatcher: {dispatcher_payload!r}"
+    )
+
+
+def test_runpy_hosted_hook_sees_its_own_argv_not_the_dispatchers(tmp_path: Path) -> None:
+    """A runpy-hosted hook resolves its own script path as sys.argv, not the dispatcher's.
+
+    The dispatcher must set sys.argv to the hosted hook's own script path before
+    runpy so a hook that branches on sys.argv (such as code_rules_enforcer's
+    --check pre-check mode) reads the same argv it would standalone, rather than
+    the dispatcher's argv. The probe writes the argv it observed to a result
+    file, and the test asserts argv[0] is the probe's own path.
+
+    Args:
+        tmp_path: Pytest temp directory hosting the probe script and result file.
+    """
+    argv_result_path = tmp_path / "observed_argv.json"
+    probe_script_path = tmp_path / "argv_probe_hook.py"
+    probe_script_path.write_text(
+        "import json\n"
+        "import sys\n"
+        "from pathlib import Path\n\n"
+        f"Path({str(argv_result_path)!r}).write_text(json.dumps(sys.argv), encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    run_hosted_hook(str(probe_script_path), _write_payload(_TEMP_FILE_PATH, "x"), True)
+
+    observed_argv = json.loads(argv_result_path.read_text(encoding="utf-8"))
+    assert observed_argv == [str(probe_script_path)], (
+        "A runpy-hosted hook must see its own script path as sys.argv, "
+        f"not the dispatcher's argv. Observed: {observed_argv!r}"
     )
 
 

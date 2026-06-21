@@ -31,6 +31,12 @@ NON_MYPY_PYPROJECT = "[tool.ruff]\nline-length = 100\n"
 CLEAN_MODULE_SOURCE = "value: int = 1\n"
 TYPE_ERROR_MODULE_SOURCE = 'value: int = "not an integer"\n'
 
+UNTYPED_DEF_MODULE_SOURCE = "def passthrough(supplied):\n    return supplied\n"
+LOOSE_TOOL_MYPY_PYPROJECT = "[tool.mypy]\nignore_missing_imports = true\n"
+STRICT_TOOL_MYPY_PYPROJECT = (
+    "[tool.mypy]\nignore_missing_imports = true\ndisallow_untyped_defs = true\n"
+)
+
 
 def _load_validator() -> ModuleType:
     spec = importlib.util.spec_from_file_location("mypy_validator_under_test", HOOK_PATH)
@@ -60,7 +66,7 @@ def test_discover_mypy_config_finds_nearest_tool_mypy_pyproject(tmp_path: Path) 
     nested_module.parent.mkdir(parents=True)
     nested_module.write_text("value: int = 1\n", encoding="utf-8")
 
-    discovered = validator.discover_mypy_config(nested_module, str(tmp_path))
+    discovered = validator.discover_mypy_config(nested_module)
 
     assert discovered is not None
     assert discovered.resolve() == (tmp_path / "pyproject.toml").resolve()
@@ -72,7 +78,7 @@ def test_discover_mypy_config_returns_none_without_tool_mypy(tmp_path: Path) -> 
     standalone_module = tmp_path / "module.py"
     standalone_module.write_text("value: int = 1\n", encoding="utf-8")
 
-    assert validator.discover_mypy_config(standalone_module, str(tmp_path)) is None
+    assert validator.discover_mypy_config(standalone_module) is None
 
 
 def test_build_mypy_command_includes_config_file_when_present(tmp_path: Path) -> None:
@@ -149,6 +155,33 @@ def test_config_walk_runs_once_per_root_across_two_edits(
     assert walk_count_after_second_edit == walk_count_after_first_edit
 
 
+def test_sibling_subtrees_each_resolve_their_own_nested_config(
+    tmp_path: Path,
+) -> None:
+    validator = _load_validator()
+    git_root = tmp_path / "monorepo"
+    first_subtree = git_root / "first_package"
+    second_subtree = git_root / "second_package"
+    first_subtree.mkdir(parents=True)
+    second_subtree.mkdir(parents=True)
+    first_config = first_subtree / "pyproject.toml"
+    second_config = second_subtree / "pyproject.toml"
+    first_config.write_text(TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    second_config.write_text(TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    first_module = first_subtree / "first.py"
+    second_module = second_subtree / "second.py"
+    first_module.write_text(CLEAN_MODULE_SOURCE, encoding="utf-8")
+    second_module.write_text(CLEAN_MODULE_SOURCE, encoding="utf-8")
+
+    first_discovered = validator.discover_mypy_config(first_module)
+    second_discovered = validator.discover_mypy_config(second_module)
+
+    assert first_discovered is not None
+    assert second_discovered is not None
+    assert first_discovered.resolve() == first_config.resolve()
+    assert second_discovered.resolve() == second_config.resolve()
+
+
 def test_warm_cache_still_blocks_file_edited_to_introduce_type_error(
     tmp_path: Path,
 ) -> None:
@@ -201,3 +234,44 @@ def test_warm_cache_skips_mypy_run_when_content_unchanged(
 
     assert second_exit_code == 0
     assert subprocess_run_call_count == 0
+
+
+def test_content_hash_skip_invalidated_when_mypy_config_tightens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
+    validator = _load_validator()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    config_path = project_root / "pyproject.toml"
+    config_path.write_text(LOOSE_TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    checked_module = project_root / "checked.py"
+    checked_module.write_text(UNTYPED_DEF_MODULE_SOURCE, encoding="utf-8")
+
+    loose_exit_code, _loose_output = validator.run_mypy(
+        str(checked_module), str(project_root)
+    )
+    assert loose_exit_code == 0
+
+    config_path.write_text(STRICT_TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    validator.reset_session_config_cache()
+
+    subprocess_run_call_count = 0
+    real_subprocess_run = validator.subprocess.run
+
+    def _counting_subprocess_run(*positional: object, **keyword: object) -> object:
+        nonlocal subprocess_run_call_count
+        subprocess_run_call_count += 1
+        return real_subprocess_run(*positional, **keyword)
+
+    monkeypatch.setattr(validator.subprocess, "run", _counting_subprocess_run)
+
+    tightened_exit_code, tightened_output = validator.run_mypy(
+        str(checked_module), str(project_root)
+    )
+
+    assert subprocess_run_call_count == 1, (
+        "A tightened mypy config must invalidate the content-hash skip and re-run mypy"
+    )
+    assert tightened_exit_code != 0
+    assert ": error:" in tightened_output

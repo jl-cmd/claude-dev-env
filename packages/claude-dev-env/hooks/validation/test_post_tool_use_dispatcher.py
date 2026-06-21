@@ -18,10 +18,12 @@ the decision allow, and a blocking hook crash surfaces a block.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 _HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
 if _HOOKS_DIR not in sys.path:
@@ -31,6 +33,9 @@ _VALIDATION_DIR_STR = str(Path(__file__).resolve().parent)
 if _VALIDATION_DIR_STR not in sys.path:
     sys.path.insert(0, _VALIDATION_DIR_STR)
 
+from hooks_constants.doc_gist_auto_publish_constants import (  # noqa: E402, I001
+    HOOK_SUBPROCESS_TIMEOUT_SECONDS as DOC_GIST_TIMEOUT_SECONDS,
+)
 from hooks_constants.post_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_POST_HOSTED_HOOK_ENTRIES,
     BLOCK_DECISION,
@@ -50,6 +55,24 @@ _DISPATCHER_SCRIPT = str(_VALIDATION_DIR / "post_tool_use_dispatcher.py")
 
 _WRITE_TOOL_NAME = "Write"
 _EDIT_TOOL_NAME = "Edit"
+
+
+def _load_module(module_filename: str, module_directory: Path) -> ModuleType:
+    """Load a hook module by file path so its module-level constants are readable.
+
+    Args:
+        module_filename: The module filename to load.
+        module_directory: The directory holding the module.
+
+    Returns:
+        The loaded module object.
+    """
+    module_path = module_directory / module_filename
+    spec = importlib.util.spec_from_file_location(module_path.stem, module_path)
+    assert spec is not None and spec.loader is not None
+    loaded_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loaded_module)
+    return loaded_module
 
 
 def _resolve_extra_arguments(each_entry: PostHostedHookEntry) -> list[str]:
@@ -223,6 +246,64 @@ def _assert_dispatcher_matches_individual_hooks(payload_text: str) -> None:
             f"Expected to find: {each_expected_reason!r}\n"
             f"Dispatcher reason: {dispatcher_reason!r}"
         )
+
+
+def _post_tool_use_dispatcher_harness_timeout_seconds() -> int:
+    """Return the PostToolUse dispatcher's harness timeout from hooks.json.
+
+    Returns:
+        The timeout the Write|Edit PostToolUse entry declares for the dispatcher.
+    """
+    hooks_json_path = _HOOKS_ROOT / "hooks.json"
+    parsed_hooks = json.loads(hooks_json_path.read_text(encoding="utf-8"))
+    for each_entry in parsed_hooks["hooks"]["PostToolUse"]:
+        for each_hook in each_entry["hooks"]:
+            if "post_tool_use_dispatcher.py" in each_hook["command"]:
+                return int(each_hook["timeout"])
+    raise AssertionError("PostToolUse dispatcher entry not found in hooks.json")
+
+
+def _hosted_hooks_worst_case_internal_seconds() -> int:
+    """Return the summed worst-case internal subprocess budget of the hosted hooks.
+
+    The three hosted hooks run sequentially in one dispatcher process. The
+    type-checker, the formatter (its slower JS path), and the doc-gist publisher
+    each carry their own internal subprocess timeout; their sum is the dispatcher
+    process's worst-case runtime when each hook runs to its own ceiling.
+
+    Returns:
+        The summed worst-case internal subprocess seconds across the hosted hooks.
+    """
+    mypy_validator = _load_module("mypy_validator.py", _VALIDATION_DIR)
+    auto_formatter = _load_module("auto_formatter.py", _HOOKS_ROOT / "workflow")
+    slowest_formatter_seconds = max(
+        auto_formatter.PYTHON_FORMAT_TIMEOUT_SECONDS,
+        auto_formatter.JS_FORMAT_TIMEOUT_SECONDS,
+    )
+    return (
+        mypy_validator.MYPY_TIMEOUT_SECONDS
+        + slowest_formatter_seconds
+        + DOC_GIST_TIMEOUT_SECONDS
+    )
+
+
+def test_dispatcher_harness_timeout_clears_summed_hosted_hook_budgets() -> None:
+    """The dispatcher harness timeout exceeds the summed worst-case hosted-hook budget.
+
+    The three hosted hooks run sequentially under one harness timeout. When the
+    harness timeout does not clear their summed worst-case internal budgets, a
+    near-full slow type-check run consumes the budget and the harness kills the
+    dispatcher before the formatter and doc-gist publisher get their turn. The
+    harness timeout must exceed the sum so every hosted hook runs to completion.
+    """
+    harness_timeout_seconds = _post_tool_use_dispatcher_harness_timeout_seconds()
+    summed_internal_seconds = _hosted_hooks_worst_case_internal_seconds()
+    assert harness_timeout_seconds > summed_internal_seconds, (
+        "PostToolUse dispatcher harness timeout "
+        f"({harness_timeout_seconds}s) must exceed the summed worst-case internal "
+        f"budgets of the hosted hooks ({summed_internal_seconds}s), or a slow "
+        "type-check run starves the formatter and doc-gist publisher."
+    )
 
 
 def test_clean_edit_of_plain_text_allows() -> None:

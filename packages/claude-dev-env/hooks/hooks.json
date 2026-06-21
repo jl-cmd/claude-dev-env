@@ -265,7 +265,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validation/post_tool_use_dispatcher.py",
-            "timeout": 60
+            "timeout": 180
           }
         ]
       },

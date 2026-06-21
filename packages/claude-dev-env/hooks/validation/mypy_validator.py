@@ -89,16 +89,16 @@ def is_file_within_project(target_file: str, project_root: Path) -> bool:
         return False
 
 
-_session_config_cache_by_project_root: dict[str, str | None] = {}
+_session_config_cache_by_target_directory: dict[str, str | None] = {}
 
 
 def reset_session_config_cache() -> None:
     """Clear the in-process config-walk cache so the next walk runs fresh.
 
-    The cache is normally seeded once per project root per session; tests call
-    this between scenarios so a redirected cache directory starts empty.
+    The cache is normally seeded once per target directory per session; tests
+    call this between scenarios so a redirected cache directory starts empty.
     """
-    _session_config_cache_by_project_root.clear()
+    _session_config_cache_by_target_directory.clear()
 
 
 def resolve_session_identifier() -> str:
@@ -149,52 +149,108 @@ def _walk_mypy_config(target_file: Path) -> Path | None:
     return discovered_config if isinstance(discovered_config, Path) else None
 
 
-def discover_mypy_config(target_file: Path, project_root: str) -> Path | None:
+def _config_cache_key_for(target_file: Path) -> str:
+    """Return the cache key for one file's config walk.
+
+    The walk climbs the ancestors of the target file's own directory, so its
+    result is determined by that directory, not by the shared project root. Two
+    files in sibling subtrees under one git root each carry their own nearer
+    ``[tool.mypy]`` config; keying the cache by the resolved target directory
+    keeps each file's walk distinct so the first file checked does not seed the
+    second file's config.
+
+    Args:
+        target_file: The Python file mypy will check.
+
+    Returns:
+        The resolved directory of the target file as the config-walk cache key.
+    """
+    return str(target_file.resolve().parent)
+
+
+def discover_mypy_config(target_file: Path) -> Path | None:
     """Return the nearest ancestor ``pyproject.toml`` that configures mypy.
 
     Mypy applies a project's ``[tool.mypy]`` settings only when the config file
     is on its invocation path; handing the discovered config to mypy lets a
     check run from the repository root still honor the project's own import
     resolution settings (such as ``ignore_missing_imports``) for a module that
-    imports its siblings by name. The discovered config is cached per project
-    root for the session, in process and in a session cache file, so a later
-    edit under the same root reuses the result rather than walking ancestors
-    again.
+    imports its siblings by name. The discovered config is cached per target
+    directory for the session, in process and in a session cache file, so a
+    later edit of a file in the same directory reuses the result rather than
+    walking ancestors again.
 
     Args:
-        target_file: The Python file mypy will check.
-        project_root: The directory mypy runs from; the cache key for the walk.
+        target_file: The Python file mypy will check; its directory keys the walk.
 
     Returns:
         The nearest ancestor ``pyproject.toml`` declaring a ``[tool.mypy]``
         table, or None when none exists above the file.
     """
-    if project_root in _session_config_cache_by_project_root:
-        cached_value = _session_config_cache_by_project_root[project_root]
+    cache_key = _config_cache_key_for(target_file)
+    if cache_key in _session_config_cache_by_target_directory:
+        cached_value = _session_config_cache_by_target_directory[cache_key]
         return Path(cached_value) if cached_value is not None else None
 
     config_cache_path = _session_cache_path(MYPY_CONFIG_CACHE_FILENAME)
     persisted_cache = _read_cache_file(config_cache_path)
-    if project_root in persisted_cache:
-        persisted_value = persisted_cache[project_root]
+    if cache_key in persisted_cache:
+        persisted_value = persisted_cache[cache_key]
         resolved_persisted = persisted_value if isinstance(persisted_value, str) else None
-        _session_config_cache_by_project_root[project_root] = resolved_persisted
+        _session_config_cache_by_target_directory[cache_key] = resolved_persisted
         return Path(resolved_persisted) if resolved_persisted is not None else None
 
     discovered_config = _walk_mypy_config(target_file)
     discovered_value = str(discovered_config) if discovered_config is not None else None
-    _session_config_cache_by_project_root[project_root] = discovered_value
-    persisted_cache[project_root] = discovered_value
+    _session_config_cache_by_target_directory[cache_key] = discovered_value
+    persisted_cache[cache_key] = discovered_value
     _write_cache_file(config_cache_path, persisted_cache)
     return discovered_config
 
 
-def _hash_file_contents(target_file: str) -> str | None:
+def _config_signature(mypy_config_file: Path | None) -> bytes:
+    """Return a byte signature of the discovered mypy config's current contents.
+
+    The signature folds the config file's own bytes into the content-hash cache
+    key so a change to the project's ``[tool.mypy]`` settings invalidates a
+    previously recorded passing hash: when the file's bytes are restored to a
+    prior passing version under a tightened config, the composite hash differs
+    and mypy re-runs rather than returning a stale pass. An absent config
+    contributes a fixed empty signature.
+
+    Args:
+        mypy_config_file: The discovered config path, or None when none exists.
+
+    Returns:
+        The config file's bytes, or an empty signature when there is no config
+        or it cannot be read.
+    """
+    if mypy_config_file is None:
+        return b""
+    try:
+        return mypy_config_file.read_bytes()
+    except OSError:
+        return b""
+
+
+def _composite_content_hash(target_file: str, mypy_config_file: Path | None) -> str | None:
+    """Return a hash over the target file's bytes and its mypy config's bytes.
+
+    Args:
+        target_file: The absolute path of the file to type-check.
+        mypy_config_file: The discovered mypy config path, or None.
+
+    Returns:
+        The combined hash, or None when the target file cannot be read.
+    """
     try:
         file_bytes = Path(target_file).read_bytes()
     except OSError:
         return None
-    return hashlib.sha256(file_bytes).hexdigest()
+    hasher = hashlib.sha256()
+    hasher.update(file_bytes)
+    hasher.update(_config_signature(mypy_config_file))
+    return hasher.hexdigest()
 
 
 def _read_cached_passing_hash(target_file: str) -> str | None:
@@ -240,20 +296,27 @@ def build_mypy_command(relative_file_path: str, mypy_config_file: Path | None) -
 def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
     """Run mypy on one file from the project root and return its result.
 
-    The mypy run is skipped when the target file's content hash matches the hash
-    recorded the last time mypy passed for that file; that recorded skip can only
-    return a pass, so a content change always re-runs mypy and a file edited to
-    introduce a type error still blocks. The discovered config is reused from the
-    per-session cache keyed by project root.
+    The mypy run is skipped when a composite hash over the target file's bytes
+    and its discovered mypy config's bytes matches the hash recorded the last
+    time mypy passed for that file; that recorded skip can only return a pass, so
+    a content change always re-runs mypy and a file edited to introduce a type
+    error still blocks. Folding the config bytes into the hash invalidates the
+    skip when the project's ``[tool.mypy]`` settings change, so a file whose
+    bytes are restored to a prior passing version under a tightened config
+    re-runs rather than returning a stale pass. The discovered config is reused
+    from the per-session cache keyed by the target file's own directory, so two
+    files in sibling subtrees under one project root each resolve their own
+    nearer config.
 
-    The cache key is the target file's own bytes only, so the skip is blind to a
-    cross-file change: when a dependency is edited in a way that breaks this
-    file's call site and this file is later rewritten to its prior passing
-    content, the cached pass returns without re-running mypy. The post-write hook
-    already type-checks only the single edited file, so a dependent is never
-    re-checked on the dependency's own edit regardless of the cache; the cache
-    adds only the identical-rewrite skip on top of that existing single-file
-    scope.
+    The composite hash covers the target file's own bytes and its config's
+    bytes only, so the skip is blind to a cross-file change in a dependency:
+    when a dependency is edited in a way that breaks this file's call site and
+    this file is later rewritten to its prior passing content, the cached pass
+    returns without re-running mypy. The post-write hook already type-checks only
+    the single edited file, so a dependent is never re-checked on the
+    dependency's own edit regardless of the cache; the cache adds only the
+    identical-rewrite-under-unchanged-config skip on top of that existing
+    single-file scope.
 
     Args:
         target_file: The absolute path of the file to type-check.
@@ -262,12 +325,13 @@ def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
     Returns:
         The mypy exit code paired with its combined stdout and stderr text.
     """
-    content_hash = _hash_file_contents(target_file)
+    relative_file_path = os.path.relpath(target_file, project_root)
+    mypy_config_file = discover_mypy_config(Path(target_file))
+
+    content_hash = _composite_content_hash(target_file, mypy_config_file)
     if content_hash is not None and content_hash == _read_cached_passing_hash(target_file):
         return CONTENT_HASH_CACHE_PASSING_EXIT_CODE, ""
 
-    relative_file_path = os.path.relpath(target_file, project_root)
-    mypy_config_file = discover_mypy_config(Path(target_file), project_root)
     mypy_command = build_mypy_command(relative_file_path, mypy_config_file)
 
     completed_process = subprocess.run(

@@ -2,7 +2,8 @@
 
 The validator keeps two per-session caches so a Write/Edit burst under one
 project root does not repeat work whose result has not changed: a config-walk
-cache keyed by project root, and a content-hash cache keyed by target file.
+cache keyed by the target file's directory, and a content-hash cache keyed by
+target file.
 Both live as JSON files under the per-session hook-state cache directory the
 live tree already uses for hook state. A cold or missing cache simply does the
 work, so these paths are safe to miss.
