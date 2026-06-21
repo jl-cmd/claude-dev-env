@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 __all__ = [
     "DENY_DECISION",
+    "ALLOW_DECISION",
     "HOOK_EVENT_NAME",
     "BLOCKING_CRASH_EXIT_CODE",
     "EXIT_CODE_TWO_DENY_REASON",
@@ -26,6 +27,7 @@ __all__ = [
 ]
 
 DENY_DECISION = "deny"
+ALLOW_DECISION = "allow"
 HOOK_EVENT_NAME = "PreToolUse"
 BLOCKING_CRASH_EXIT_CODE = 2
 EXIT_CODE_TWO_DENY_REASON = "[dispatcher] hook denied via exit code 2 — write blocked"

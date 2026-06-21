@@ -503,6 +503,58 @@ def test_aggregate_exit_code_zero_with_no_output_allows() -> None:
     )
 
 
+def test_aggregate_explicit_allow_payload_signals_allow_decision() -> None:
+    """An explicit permissionDecision allow from a hosted hook signals an allow decision.
+
+    tdd_enforcer writes an explicit allow payload on its allow path, which
+    auto-approves the write standalone. The aggregator must surface that as an
+    explicit allow decision so the dispatcher re-emits it rather than silently
+    falling back to the default permission flow.
+    """
+    explicit_allow_stdout = json.dumps(
+        {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
+    )
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=explicit_allow_stdout,
+            did_crash=False,
+            is_blocking=True,
+        )
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert not decision.should_deny, "an explicit allow must not deny"
+    assert decision.should_allow, (
+        "an explicit permissionDecision allow with no deny must signal an allow decision"
+    )
+
+
+def test_aggregate_explicit_allow_is_overridden_by_a_deny() -> None:
+    """A deny wins over an explicit allow from another hook in the same run."""
+    explicit_allow_stdout = json.dumps(
+        {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
+    )
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=explicit_allow_stdout,
+            did_crash=False,
+            is_blocking=True,
+        ),
+        HostedHookResult(
+            exit_code=BLOCKING_CRASH_EXIT_CODE,
+            captured_stdout="",
+            did_crash=False,
+            is_blocking=True,
+        ),
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert decision.should_deny, "a deny must win over an explicit allow"
+    assert not decision.should_allow, (
+        "should_allow must be False when any hook denies, so deny wins"
+    )
+
+
 def test_later_hook_deny_survives_early_hook_exit() -> None:
     """Dispatcher denies even when an earlier hook exits cleanly before a later hook denies.
 
@@ -631,6 +683,69 @@ def test_runpy_deny_preserves_additional_context_and_suppress_output(tmp_path: P
     assert dispatcher_payload.get("suppressOutput") is True, (
         "Dispatcher must preserve the runpy hook's suppressOutput flag.\n"
         f"Got: {dispatcher_payload.get('suppressOutput')!r}"
+    )
+
+
+def _parse_hook_allow(completed_process: subprocess.CompletedProcess[str]) -> bool:
+    """Parse one hook's subprocess result for an explicit permissionDecision allow.
+
+    Args:
+        completed_process: The completed subprocess from running a hook.
+
+    Returns:
+        True when the hook emitted an explicit allow decision.
+    """
+    stdout_text = completed_process.stdout.strip()
+    if not stdout_text:
+        return False
+    try:
+        parsed_output = json.loads(stdout_text)
+    except json.JSONDecodeError:
+        return False
+    hook_specific = parsed_output.get("hookSpecificOutput", {})
+    if not isinstance(hook_specific, dict):
+        return False
+    return hook_specific.get("permissionDecision") == "allow"
+
+
+def test_dispatcher_reemits_explicit_allow_from_tdd_enforcer(tmp_path: Path) -> None:
+    """The dispatcher re-emits an explicit allow when tdd_enforcer's allow branch fires.
+
+    tdd_enforcer writes an explicit allow payload for a constants-only Python
+    Write, which auto-approves the write standalone. Run against the dispatcher,
+    the same payload must produce an explicit allow decision identical to the
+    standalone tdd_enforcer output, rather than a silent fall-back to the default
+    permission flow.
+
+    Args:
+        tmp_path: Pytest temp directory hosting the fresh config target path.
+    """
+    config_target_path = str(tmp_path / "config" / "timing.py")
+    constants_only_content = (
+        '"""Timing constants."""\n\nMAXIMUM_RETRIES = 3\nRETRY_DELAY_SECONDS = 5\n'
+    )
+    payload_text = _write_payload(config_target_path, constants_only_content)
+
+    standalone_result = _run_hook_subprocess("blocking/tdd_enforcer.py", payload_text)
+    assert _parse_hook_allow(standalone_result), (
+        "tdd_enforcer must emit an explicit allow for a constants-only Python Write — "
+        "if it does not, this fixture no longer exercises the allow branch"
+    )
+
+    dispatcher_result = _run_dispatcher(payload_text)
+    dispatcher_is_deny, _reason = _parse_hook_decision(dispatcher_result)
+    assert not dispatcher_is_deny, "dispatcher must not deny a payload tdd_enforcer allows"
+    assert _parse_hook_allow(dispatcher_result), (
+        "dispatcher must re-emit an explicit allow when a hosted hook allows explicitly "
+        "and no hook denies, matching the standalone tdd_enforcer behavior — "
+        f"got stdout {dispatcher_result.stdout.strip()!r}"
+    )
+    dispatcher_payload = json.loads(dispatcher_result.stdout.strip())
+    standalone_payload = json.loads(standalone_result.stdout.strip())
+    assert dispatcher_payload == standalone_payload, (
+        "dispatcher allow payload must match the standalone tdd_enforcer allow payload.\n"
+        f"Standalone: {standalone_payload!r}\n"
+        f"Dispatcher: {dispatcher_payload!r}"
     )
 
 

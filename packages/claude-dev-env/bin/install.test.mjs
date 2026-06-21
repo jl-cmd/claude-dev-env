@@ -708,6 +708,7 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
                 hooks: [
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/workflow_substitution_slot_blocker.py', timeout: 10 },
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/claude_md_orphan_file_blocker.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/pytest_testpaths_orphan_blocker.py', timeout: 10 },
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/open_questions_in_plans_blocker.py', timeout: 10 },
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/plain_language_blocker.py', timeout: 10 },
                 ],
@@ -717,11 +718,44 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
 };
 
 
-test('FOLDED_HOOK_RELATIVE_PATHS contains all 14 hooks removed from hooks.json', () => {
-    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 14);
+test('FOLDED_HOOK_RELATIVE_PATHS contains all 15 hooks removed from hooks.json', () => {
+    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 15);
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/write_existing_file_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/plain_language_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
+    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/pytest_testpaths_orphan_blocker.py'));
+});
+
+
+test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher hosts', () => {
+    const dispatcherHostedHooks = [
+        'blocking/write_existing_file_blocker.py',
+        'blocking/sensitive_file_protector.py',
+        'validation/hook_format_validator.py',
+        'blocking/code_rules_enforcer.py',
+        'blocking/tdd_enforcer.py',
+        'blocking/windows_rmtree_blocker.py',
+        'blocking/state_description_blocker.py',
+        'blocking/subprocess_budget_completeness.py',
+        'blocking/hook_prose_detector_consistency.py',
+        'blocking/verified_commit_message_accuracy_blocker.py',
+        'blocking/workflow_substitution_slot_blocker.py',
+        'blocking/claude_md_orphan_file_blocker.py',
+        'blocking/pytest_testpaths_orphan_blocker.py',
+        'blocking/open_questions_in_plans_blocker.py',
+        'blocking/plain_language_blocker.py',
+    ];
+    for (const hostedPath of dispatcherHostedHooks) {
+        assert.ok(
+            FOLDED_HOOK_RELATIVE_PATHS.has(hostedPath),
+            `dispatcher-hosted hook ${hostedPath} must be in FOLDED_HOOK_RELATIVE_PATHS so a reinstall prunes its stale standalone entry and it does not double-run`
+        );
+    }
+    assert.equal(
+        FOLDED_HOOK_RELATIVE_PATHS.size,
+        dispatcherHostedHooks.length,
+        'FOLDED_HOOK_RELATIVE_PATHS must hold exactly the dispatcher-hosted hooks, no more, no fewer'
+    );
 });
 
 
