@@ -92,6 +92,16 @@ def test_main_blocks_when_status_missing() -> None:
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
+def test_main_blocks_when_tool_input_is_null() -> None:
+    hook_input = {
+        "tool_name": TOOL_NAME,
+        "tool_input": None,
+    }
+    output_text = _run_main_with_io(json.dumps(hook_input))
+    output = json.loads(output_text)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
 def test_main_passes_wrong_tool_name() -> None:
     hook_input = {
         "tool_name": "Write",

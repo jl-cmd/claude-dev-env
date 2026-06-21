@@ -42,7 +42,8 @@ def main() -> None:
     if hook_input.get("tool_name", "") != TOOL_NAME:
         sys.exit(0)
 
-    status = hook_input.get("tool_input", {}).get("status", "")
+    tool_input = hook_input.get("tool_input") or {}
+    status = tool_input.get("status", "")
     if not _should_block(status):
         sys.exit(0)
 
