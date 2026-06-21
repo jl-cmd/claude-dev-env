@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.73.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.72.0...claude-dev-env-v1.73.0) (2026-06-21)
+
+
+### Features
+
+* **autoconverge:** add a multi-PR sub-workflow that converges several PRs in parallel ([3c26687](https://github.com/jl-cmd/claude-code-config/commit/3c26687fe146d5c2139575da42e4f283c3a15ee7))
+* **autoconverge:** add a multi-PR sub-workflow that converges several PRs in parallel ([bb5a964](https://github.com/jl-cmd/claude-code-config/commit/bb5a964f485f33f45712fa29447e1be7c65ce162))
+* **claude-dev-env:** flag behavior-named tests that mock away their path ([471d537](https://github.com/jl-cmd/claude-code-config/commit/471d5379b74b5b86f327392b010b7128a8c0af0f))
+* **hooks:** block deferred dead-config-field violation classes at write time ([a9315bc](https://github.com/jl-cmd/claude-code-config/commit/a9315bcc6d8613f1ff9f3700aa95e988f47c8dc7))
+* **hooks:** block docstring claims that no literals appear inline ([433d663](https://github.com/jl-cmd/claude-code-config/commit/433d663de0e4bc90199ce11c896b4b33d2929446))
+* **hooks:** block docstring claims that no literals appear inline ([d74de4b](https://github.com/jl-cmd/claude-code-config/commit/d74de4ba1ced6bc3fed7d3c3ca822ce026c6565d))
+* **hooks:** block docstring step-enum prose drift at Write/Edit time ([524e1e0](https://github.com/jl-cmd/claude-code-config/commit/524e1e0e1b1619917af526074e1dda09a7cd1d9a))
+* **hooks:** block docstring step-enum prose drift at Write/Edit time ([ed0fa83](https://github.com/jl-cmd/claude-code-config/commit/ed0fa83d3e1b31ba00fac48b585ba3f6d0b4fc43))
+* **hooks:** block docstrings naming an undefined UPPER_SNAKE constant ([6aa91a1](https://github.com/jl-cmd/claude-code-config/commit/6aa91a178c70512b33f32607ebfa75ed20b92691))
+* **hooks:** block docstrings naming an undefined UPPER_SNAKE constant ([9bbdc22](https://github.com/jl-cmd/claude-code-config/commit/9bbdc22e4c46ae800afeb7f1337d50a0d556bd40))
+* **hooks:** block test files written outside pytest testpaths at Write/Edit ([280f498](https://github.com/jl-cmd/claude-code-config/commit/280f498c452addc546a37048e1fe3f3abd07cdda))
+* **hooks:** gate code-verifier spawn with conflict + CODE_RULES pre-flight ([f16f4eb](https://github.com/jl-cmd/claude-code-config/commit/f16f4eb5413a839ad2f14e39f32be74fa966c5db))
+* **hooks:** gate code-verifier spawn with conflict + CODE_RULES pre-flight ([cba8fba](https://github.com/jl-cmd/claude-code-config/commit/cba8fbaee29c782e94374ad3529834a8225bdf46))
+* **hooks:** host Write/Edit hooks in Pre/PostToolUse dispatchers ([c47304f](https://github.com/jl-cmd/claude-code-config/commit/c47304f419e0f7bd29587648013f4d4fa355ccb3))
+* **hooks:** host Write/Edit hooks in Pre/PostToolUse dispatchers ([a207481](https://github.com/jl-cmd/claude-code-config/commit/a207481bf6172b337201f5be7f1d5da29aed6796))
+
+
+### Bug Fixes
+
+* **hooks:** address converge-round findings for code-verifier spawn preflight gate ([fe8c941](https://github.com/jl-cmd/claude-code-config/commit/fe8c941dcd237f935a1ec41e073d2b73bc715ec6))
+* **hooks:** address converge-round findings for docstring undefined-constant check ([536958a](https://github.com/jl-cmd/claude-code-config/commit/536958ae87a5709943341847c522aab0b9069f57))
+* **hooks:** address converge-round findings for pytest testpaths orphan blocker ([cc7a57f](https://github.com/jl-cmd/claude-code-config/commit/cc7a57f5ba40a5733c7954c946e777b2e99358cd))
+* **hooks:** address converge-round review findings on dispatcher hooks ([32ea81d](https://github.com/jl-cmd/claude-code-config/commit/32ea81d354035b42c9298af8adbe284c966ce6ed))
+* **hooks:** address converge-round review findings on dispatcher hooks ([05fff85](https://github.com/jl-cmd/claude-code-config/commit/05fff85cb3a0c3bfb5207fd16c7e5c01f5755803))
+* **hooks:** address converge-round review findings on dispatcher hooks ([3f748d9](https://github.com/jl-cmd/claude-code-config/commit/3f748d914c5f1ee4391c1520f964f1a4f8c89417))
+* **hooks:** correct dead-config-field message label and align docstrings for selectors ([ce6605a](https://github.com/jl-cmd/claude-code-config/commit/ce6605a74c4b88f0c1dc689f0b81a8c71c02b68b))
+* **hooks:** correct dead-config-field message label and align docstrings for selectors ([6b21d1e](https://github.com/jl-cmd/claude-code-config/commit/6b21d1e9a1a0400225ee8f309da8f22a2baeb4b6))
+
+
+### Documentation
+
+* **rules:** correct dispatch-coverage docstring exclusion + harden O6 lane ([21908ed](https://github.com/jl-cmd/claude-code-config/commit/21908ed98eb3459a523bfd4f5bcd656689b4c78e))
+* **rules:** correct dispatch-coverage docstring exclusion + harden O6 lane ([ede86d1](https://github.com/jl-cmd/claude-code-config/commit/ede86d16e4ece42cd9eaea619f1218ccc0b4f23c))
+
 ## [1.72.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.71.0...claude-dev-env-v1.72.0) (2026-06-20)
 
 
