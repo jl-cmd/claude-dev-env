@@ -62,6 +62,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_verifier_spawn_preflight_gate.py` | PreToolUse (Agent) | Spawning the `code-verifier` subagent when the branch has a merge conflict vs its base or a CODE_RULES violation on a working-tree-added line |
 | `convergence_gate_blocker.py` | PreToolUse (Bash) | Convergence workflow actions on a conflicting PR |
 | `destructive_command_blocker.py` | PreToolUse (Bash/PowerShell) | Shell commands with destructive literals (`rm -rf`, `git reset --hard`, etc.) |
+| `docstring_rule_gate_count_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A stale spelled-out gate-validator count in `docstring-prose-matches-implementation.md` — the "N more gate validators" / "M gated slices" count drifting from the `check_docstring_*` validators the prose names |
 | `es_exe_path_rewriter.py` | PreToolUse | Rewrites paths referencing `.exe` under the Everything search path |
 | `gh_body_arg_blocker.py` | PreToolUse (Bash) | `gh` commands passing `--body`/`-b` directly (requires `--body-file` instead) |
 | `gh_pr_author_enforcer.py` | PreToolUse | Enforces PR author identity rules |
