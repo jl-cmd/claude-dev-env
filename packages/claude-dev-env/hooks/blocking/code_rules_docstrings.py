@@ -921,12 +921,12 @@ def check_docstring_step_enumeration_dispatch_coverage(
     dispatch step is a call inside a guard (``If.test``) nested within an
     ``if``/``elif`` branch (``if not await cancel_and_reinitiate_update(...): return``)
     that is never also a linear step — the same control-flow-gating shape as a
-    linear step, so plain logging, screenshot, or method-on-local calls inside a
-    branch are not dispatch steps. The check binds only when the docstring already
-    names two or more linear-step callees by their underscore tokens, proving the
-    prose is a step enumeration describing this body. A dispatch-step callee with
-    two or more underscore tokens, none of whose tokens appear in the prose, is
-    flagged.
+    linear step, so plain (unguarded) logging, screenshot, or method-on-local
+    calls inside a branch body are not dispatch steps. The check binds only when
+    the docstring already names two or more linear-step callees by their
+    underscore tokens, proving the prose is a step enumeration describing this
+    body. A dispatch-step callee with two or more underscore tokens, none of
+    whose tokens appear in the prose, is flagged.
 
     Args:
         content: The source text to inspect.
