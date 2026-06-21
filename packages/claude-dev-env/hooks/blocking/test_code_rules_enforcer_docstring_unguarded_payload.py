@@ -1,4 +1,4 @@
-"""Tests for check_docstring_unguarded_malformed_payload_claim — Category O8 drift.
+"""Tests for check_docstring_unguarded_malformed_payload_claim — Category O6 drift.
 
 A function docstring that promises "a malformed payload resolves to None" asserts
 the body catches a bad payload and turns it into a None return. The claim drifts
@@ -6,7 +6,7 @@ when the value construction that dereferences payload fields (``payload["key"]``
 ``float(payload["key"])``) sits OUTSIDE the try/except whose handler returns None:
 a present-but-malformed payload raises KeyError or TypeError from that unguarded
 dereference and propagates rather than resolving to None. This is the deterministic
-slice of Category O8 (docstring prose vs implementation drift) for an
+slice of Category O6 (docstring prose vs implementation drift) for an
 exception-guard claim.
 """
 
@@ -120,6 +120,54 @@ def test_passes_when_no_subscript_dereference_follows_the_guard() -> None:
         '    return parsed_metrics.get("found")\n'
     )
     assert check_docstring_unguarded_malformed_payload_claim(content, PRODUCTION_FILE_PATH) == []
+
+
+def test_passes_when_post_guard_subscript_dereferences_an_unrelated_name() -> None:
+    content = (
+        "def read_metrics(self, selector: str) -> object:\n"
+        '    """Read the geometry over CDP, or None on failure.\n'
+        "\n"
+        "    A malformed payload resolves to None so the caller skips the drag.\n"
+        '    """\n'
+        "    try:\n"
+        "        parsed_metrics = json.loads(self.cdp.run(selector))\n"
+        '        width = float(parsed_metrics["client_width"])\n'
+        "    except (KeyError, TypeError, ValueError):\n"
+        "        return None\n"
+        "    fallback = cache[selector]\n"
+        "    return Metrics(client_width=width, fallback=fallback)\n"
+    )
+    assert check_docstring_unguarded_malformed_payload_claim(content, PRODUCTION_FILE_PATH) == []
+
+
+def _unguarded_body_with_claim(claim_sentence: str) -> str:
+    return (
+        "def read_metrics(self, selector: str) -> object:\n"
+        '    """Read the container geometry over CDP, or None on failure.\n'
+        "\n"
+        f"    {claim_sentence}\n"
+        '    """\n'
+        "    try:\n"
+        "        parsed_metrics = json.loads(self.cdp.run(selector))\n"
+        "    except (KeyError, TypeError, ValueError):\n"
+        "        return None\n"
+        '    return float(parsed_metrics["client_width"])\n'
+    )
+
+
+def test_article_prefixed_claim_phrasings_still_flag_via_articleless_substring() -> None:
+    all_article_prefixed_claims = (
+        "A malformed payload resolves to None so the caller skips the drag.",
+        "A bad payload resolves to None so the caller skips the drag.",
+        "An invalid payload resolves to None so the caller skips the drag.",
+        "A malformed payload yields None so the caller skips the drag.",
+    )
+    for each_claim in all_article_prefixed_claims:
+        issues = check_docstring_unguarded_malformed_payload_claim(
+            _unguarded_body_with_claim(each_claim), PRODUCTION_FILE_PATH
+        )
+        assert len(issues) == 1
+        assert "read_metrics" in issues[0]
 
 
 def test_test_files_are_exempt() -> None:

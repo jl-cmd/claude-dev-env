@@ -97,15 +97,11 @@ ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES: tuple[str, ...] = (
 
 ALL_DOCSTRING_GUARDED_FAILURE_CLAIM_PHRASES: tuple[str, ...] = (
     "malformed payload resolves to none",
-    "a malformed payload resolves to none",
     "malformed payload returns none",
     "malformed response resolves to none",
     "malformed response returns none",
-    "a bad payload resolves to none",
     "bad payload resolves to none",
-    "an invalid payload resolves to none",
     "invalid payload resolves to none",
-    "a malformed payload yields none",
     "malformed payload yields none",
 )
 

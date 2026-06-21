@@ -662,10 +662,25 @@ def _try_handler_returns_none(try_node: ast.Try) -> bool:
     return False
 
 
-def _statement_subscripts_a_name(statement: ast.stmt) -> bool:
+def _names_bound_in_try_body(try_node: ast.Try) -> set[str]:
+    all_bound_names: set[str] = set()
+    for each_statement in try_node.body:
+        for each_descendant in ast.walk(each_statement):
+            if isinstance(each_descendant, ast.Name) and isinstance(
+                each_descendant.ctx, ast.Store
+            ):
+                all_bound_names.add(each_descendant.id)
+    return all_bound_names
+
+
+def _statement_subscripts_one_of(
+    statement: ast.stmt, all_payload_names: set[str]
+) -> bool:
     for each_descendant in ast.walk(statement):
-        if isinstance(each_descendant, ast.Subscript) and isinstance(
-            each_descendant.value, ast.Name
+        if (
+            isinstance(each_descendant, ast.Subscript)
+            and isinstance(each_descendant.value, ast.Name)
+            and each_descendant.value.id in all_payload_names
         ):
             return True
     return False
@@ -674,16 +689,18 @@ def _statement_subscripts_a_name(statement: ast.stmt) -> bool:
 def _function_has_unguarded_payload_dereference(
     function_node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> bool:
+    all_payload_names: set[str] = set()
     saw_returning_guard = False
     for each_statement in function_node.body:
         if isinstance(each_statement, ast.Try) and _try_handler_returns_none(
             each_statement
         ):
+            all_payload_names |= _names_bound_in_try_body(each_statement)
             saw_returning_guard = True
             continue
         if not saw_returning_guard:
             continue
-        if _statement_subscripts_a_name(each_statement):
+        if _statement_subscripts_one_of(each_statement, all_payload_names):
             return True
     return False
 
@@ -699,7 +716,7 @@ def check_docstring_unguarded_malformed_payload_claim(
     whose handler returns None. A present-but-malformed payload then raises
     KeyError or TypeError from that unguarded access and propagates rather than
     resolving to None, so the docstring overstates the protection. This is the
-    deterministic slice of Category O8 (docstring prose vs implementation drift)
+    deterministic slice of Category O6 (docstring prose vs implementation drift)
     for an exception-guard claim: move the dereference inside the guarded block,
     or narrow the docstring to the failures the guard actually catches.
 
@@ -736,7 +753,7 @@ def check_docstring_unguarded_malformed_payload_claim(
             f"'{matched_phrase}' but a payload subscript sits outside the try/except that "
             "returns None — a malformed-but-present payload raises rather than resolving to "
             "None; move the dereference inside the guard or narrow the docstring "
-            "(Category O8 docstring-vs-implementation drift)"
+            "(Category O6 docstring-vs-implementation drift)"
         )
         if len(issues) >= MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES:
             break
