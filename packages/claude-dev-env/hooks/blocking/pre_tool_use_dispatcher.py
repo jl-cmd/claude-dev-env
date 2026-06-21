@@ -39,6 +39,7 @@ from state_description_blocker import evaluate as evaluate_state_description  # 
 
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402
     ALL_HOSTED_HOOK_ENTRIES,
+    ALLOW_DECISION,
     BLOCKING_CRASH_EXIT_CODE,
     DENY_DECISION,
     EXIT_CODE_TWO_DENY_REASON,
@@ -202,6 +203,7 @@ class ParsedHookOutput:
 
     Attributes:
         is_deny: True when the hook output carries a permissionDecision of deny.
+        is_allow: True when the hook output carries a permissionDecision of allow.
         deny_reason: The permissionDecisionReason text when is_deny is True.
         system_message: The hook's top-level systemMessage, or non-JSON stdout
             text when the output is not a deny-shaped JSON object.
@@ -210,41 +212,68 @@ class ParsedHookOutput:
     """
 
     is_deny: bool
+    is_allow: bool
     deny_reason: str
     system_message: str
     additional_context: str
     suppress_output: bool
 
 
-def _parse_deny_from_hook_output(hook_output_text: str) -> ParsedHookOutput:
-    """Parse one hook's stdout for a deny decision and its user-facing fields.
+def _empty_parsed_hook_output(system_message: str) -> ParsedHookOutput:
+    """Build a non-deciding ParsedHookOutput carrying only a system message.
 
-    Captures the deny signal plus every supplementary field a hook emits on a
-    deny — the top-level systemMessage and suppressOutput, and the
-    hookSpecificOutput.additionalContext — so the dispatcher reproduces the
-    standalone hook's full deny shape.
+    Used for stdout that is empty or not deny-shaped JSON, where the only field
+    worth keeping is the raw stdout text surfaced as the system message.
+
+    Args:
+        system_message: The raw stdout text to surface as the system message.
+
+    Returns:
+        A ParsedHookOutput that neither denies nor allows.
+    """
+    return ParsedHookOutput(
+        is_deny=False,
+        is_allow=False,
+        deny_reason="",
+        system_message=system_message,
+        additional_context="",
+        suppress_output=False,
+    )
+
+
+def _parse_deny_from_hook_output(hook_output_text: str) -> ParsedHookOutput:
+    """Parse one hook's stdout for its permission decision and user-facing fields.
+
+    Captures the deny signal and the explicit allow signal, plus every
+    supplementary field a hook emits on a deny — the top-level systemMessage and
+    suppressOutput, and the hookSpecificOutput.additionalContext — so the
+    dispatcher reproduces the standalone hook's full deny shape and re-emits an
+    explicit allow when a hook auto-approves the write.
 
     Args:
         hook_output_text: The text the hook wrote to stdout.
 
     Returns:
-        A ParsedHookOutput carrying the deny signal, deny reason, systemMessage,
-        additionalContext, and suppressOutput flag. When the output is not
-        deny-shaped JSON, system_message carries the raw stdout text.
+        A ParsedHookOutput carrying the deny signal, the allow signal, deny
+        reason, systemMessage, additionalContext, and suppressOutput flag. When
+        the output is not deny-shaped JSON, system_message carries the raw stdout
+        text.
     """
     stripped_text = hook_output_text.strip()
     if not stripped_text:
-        return ParsedHookOutput(False, "", "", "", False)
+        return _empty_parsed_hook_output("")
     try:
         parsed_output = json.loads(stripped_text)
     except json.JSONDecodeError:
-        return ParsedHookOutput(False, "", stripped_text, "", False)
+        return _empty_parsed_hook_output(stripped_text)
     if not isinstance(parsed_output, dict):
-        return ParsedHookOutput(False, "", stripped_text, "", False)
+        return _empty_parsed_hook_output(stripped_text)
     hook_specific = parsed_output.get("hookSpecificOutput", {})
     if not isinstance(hook_specific, dict):
-        return ParsedHookOutput(False, "", stripped_text, "", False)
-    is_deny = hook_specific.get("permissionDecision") == DENY_DECISION
+        return _empty_parsed_hook_output(stripped_text)
+    permission_decision = hook_specific.get("permissionDecision")
+    is_deny = permission_decision == DENY_DECISION
+    is_allow = permission_decision == ALLOW_DECISION
     deny_reason = hook_specific.get("permissionDecisionReason", "")
     if not isinstance(deny_reason, str):
         deny_reason = ""
@@ -254,7 +283,12 @@ def _parse_deny_from_hook_output(hook_output_text: str) -> ParsedHookOutput:
     additional_context = raw_additional_context if isinstance(raw_additional_context, str) else ""
     suppress_output = parsed_output.get("suppressOutput") is True
     return ParsedHookOutput(
-        is_deny, deny_reason, system_message, additional_context, suppress_output
+        is_deny=is_deny,
+        is_allow=is_allow,
+        deny_reason=deny_reason,
+        system_message=system_message,
+        additional_context=additional_context,
+        suppress_output=suppress_output,
     )
 
 
@@ -264,6 +298,9 @@ class DispatcherDecision:
 
     Attributes:
         should_deny: True when at least one hosted hook denied.
+        should_allow: True when at least one hosted hook emitted an explicit
+            allow decision and no hook denied, so the dispatcher re-emits an
+            explicit allow matching the standalone hook's auto-approval.
         all_deny_reasons: All deny reasons from denying hooks, in run order.
         all_system_messages: Every hook's top-level systemMessage, in run order,
             joined into the deny payload's systemMessage.
@@ -274,6 +311,7 @@ class DispatcherDecision:
     """
 
     should_deny: bool
+    should_allow: bool
     all_deny_reasons: list[str]
     all_system_messages: list[str]
     all_additional_context: list[str]
@@ -285,27 +323,30 @@ def aggregate_hosted_hook_results(
 ) -> DispatcherDecision:
     """Aggregate all hosted hook results into one dispatcher decision.
 
-    Parses each result's stdout for a deny decision. A clean
-    BLOCKING_CRASH_EXIT_CODE from a blocking hook also signals deny. Deny wins
-    over allow: when any result
-    denies, the aggregate denies carrying every denying reason. When a deny
-    carries no reason text, EXIT_CODE_TWO_DENY_REASON supplies a fallback.
-    Collects every systemMessage and additionalContext message from every hook,
-    and the suppressOutput flag, whether or not it denied, so the emitted deny
-    reproduces each standalone hook's full deny shape.
+    Parses each result's stdout for a deny decision and an explicit allow
+    decision. A clean BLOCKING_CRASH_EXIT_CODE from a blocking hook also signals
+    deny. Deny wins over allow: when any result denies, the aggregate denies
+    carrying every denying reason. When a deny carries no reason text,
+    EXIT_CODE_TWO_DENY_REASON supplies a fallback. When no result denies and at
+    least one result carried an explicit allow decision, the aggregate signals an
+    explicit allow so the dispatcher re-emits it, matching the standalone hook's
+    auto-approval. Collects every systemMessage and additionalContext message
+    from every hook, and the suppressOutput flag, whether or not it denied, so
+    the emitted deny reproduces each standalone hook's full deny shape.
 
     Args:
         all_results: Outcomes from running each applicable hosted hook.
 
     Returns:
-        A DispatcherDecision with the aggregated allow-or-deny signal, all deny
-        reasons, all systemMessage and additionalContext messages, and the
-        suppressOutput flag.
+        A DispatcherDecision with the aggregated deny signal, the explicit allow
+        signal, all deny reasons, all systemMessage and additionalContext
+        messages, and the suppressOutput flag.
     """
     all_deny_reasons: list[str] = []
     all_system_messages: list[str] = []
     all_additional_context: list[str] = []
     should_suppress_output = False
+    saw_explicit_allow = False
 
     for each_result in all_results:
         parsed_output = _parse_deny_from_hook_output(each_result.captured_stdout)
@@ -319,6 +360,8 @@ def aggregate_hosted_hook_results(
             )
         elif each_result.exit_code == BLOCKING_CRASH_EXIT_CODE and each_result.is_blocking:
             all_deny_reasons.append(EXIT_CODE_TWO_DENY_REASON)
+        if parsed_output.is_allow:
+            saw_explicit_allow = True
         if parsed_output.system_message:
             all_system_messages.append(parsed_output.system_message)
         if parsed_output.additional_context:
@@ -326,8 +369,10 @@ def aggregate_hosted_hook_results(
         if parsed_output.suppress_output:
             should_suppress_output = True
 
+    should_deny = bool(all_deny_reasons)
     return DispatcherDecision(
-        should_deny=bool(all_deny_reasons),
+        should_deny=should_deny,
+        should_allow=saw_explicit_allow and not should_deny,
         all_deny_reasons=all_deny_reasons,
         all_system_messages=all_system_messages,
         all_additional_context=all_additional_context,
@@ -360,6 +405,23 @@ def _emit_deny_decision(decision: DispatcherDecision) -> None:
     if decision.should_suppress_output:
         deny_payload["suppressOutput"] = True
     sys.stdout.write(json.dumps(deny_payload) + "\n")
+    sys.stdout.flush()
+
+
+def _emit_allow_decision() -> None:
+    """Write one explicit allow JSON object to stdout.
+
+    Matches the shape a standalone hosted hook emits when it auto-approves the
+    write, so a write a hosted hook allows explicitly is auto-approved under the
+    dispatcher rather than falling back to the default permission flow.
+    """
+    allow_payload: dict[str, object] = {
+        "hookSpecificOutput": {
+            "hookEventName": HOOK_EVENT_NAME,
+            "permissionDecision": ALLOW_DECISION,
+        }
+    }
+    sys.stdout.write(json.dumps(allow_payload) + "\n")
     sys.stdout.flush()
 
 
@@ -436,8 +498,9 @@ def dispatch(
 
     Selects the applicable hosted hooks for tool_name, runs each one in-process
     (natively when the entry names a native module, otherwise via runpy),
-    aggregates the results, and either emits a deny JSON object or exits zero to
-    allow.
+    aggregates the results, and emits a deny JSON object when any hook denied, an
+    explicit allow JSON object when a hook allowed explicitly and none denied, or
+    exits zero with no output when no hook decided.
 
     Args:
         payload_text: The raw JSON payload text to replay to each runpy hook.
@@ -453,6 +516,9 @@ def dispatch(
     aggregated_decision = aggregate_hosted_hook_results(all_results)
     if aggregated_decision.should_deny:
         _emit_deny_decision(aggregated_decision)
+        return
+    if aggregated_decision.should_allow:
+        _emit_allow_decision()
 
 
 def main() -> None:
