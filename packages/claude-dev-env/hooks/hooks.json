@@ -161,6 +161,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "SendUserFile",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/send_user_file_open_locally_blocker.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SessionStart": [
