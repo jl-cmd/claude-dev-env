@@ -39,6 +39,9 @@ from hooks_constants.claude_md_orphan_file_blocker_constants import (  # noqa: E
     SEPARATOR_CELL_PATTERN,
     TABLE_ROW_PATTERN,
 )
+from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
+    read_hook_input_dictionary_from_stdin,
+)
 
 
 def is_claude_md_file(file_path: str) -> bool:
@@ -588,12 +591,8 @@ def _emit_hook_result(all_hook_data: dict, output_stream: TextIO) -> None:
 
 def main() -> None:
     """Read the PreToolUse payload from stdin and block an orphan-file CLAUDE.md."""
-    try:
-        input_data = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    if not isinstance(input_data, dict):
+    input_data = read_hook_input_dictionary_from_stdin()
+    if input_data is None:
         sys.exit(0)
 
     tool_name = input_data.get("tool_name", "")

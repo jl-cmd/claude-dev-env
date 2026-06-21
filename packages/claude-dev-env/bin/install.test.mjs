@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -9,6 +9,8 @@ import { pathToFileURL } from 'node:url';
 import {
     collectPackageSourceConflicts,
     CONTENT_DIRECTORIES,
+    FOLDED_HOOK_RELATIVE_PATHS,
+    POST_FOLDED_HOOK_RELATIVE_PATHS,
     pythonCandidatesForPlatform,
     isWindowsStorePythonStub,
     interpreterCommandFromPath,
@@ -361,7 +363,9 @@ test('managedHookScriptRelativePaths collects every installed hook script path a
     const relativePaths = managedHookScriptRelativePaths(SAMPLE_HOOKS_CONFIG);
     assert.ok(relativePaths.has('notification/attention_needed_notify.py'));
     assert.ok(relativePaths.has('blocking/hedging_language_blocker.py'));
-    assert.equal([...relativePaths].length, 2);
+    for (const foldedPath of FOLDED_HOOK_RELATIVE_PATHS) {
+        assert.ok(relativePaths.has(foldedPath), `folded hook ${foldedPath} must always be in the managed set`);
+    }
 });
 
 
@@ -566,7 +570,9 @@ test('managedHookScriptRelativePathsFromSourceRoots reads each root hooks.json s
 
         assert.ok(relativePaths.has('notification/attention_needed_notify.py'));
         assert.ok(relativePaths.has('blocking/hedging_language_blocker.py'));
-        assert.equal([...relativePaths].length, 2);
+        for (const foldedPath of FOLDED_HOOK_RELATIVE_PATHS) {
+            assert.ok(relativePaths.has(foldedPath), `folded hook ${foldedPath} must always be in the managed set`);
+        }
     } finally {
         rmSync(sourceRoot, { recursive: true, force: true });
     }
@@ -588,7 +594,9 @@ test('managedHookScriptRelativePathsFromSourceRoots unions managed scripts acros
 
         assert.ok(relativePaths.has('blocking/code_rules_enforcer.py'));
         assert.ok(relativePaths.has('blocking/pwsh_enforcer.py'));
-        assert.equal([...relativePaths].length, 2);
+        for (const foldedPath of FOLDED_HOOK_RELATIVE_PATHS) {
+            assert.ok(relativePaths.has(foldedPath), `folded hook ${foldedPath} must always be in the managed set`);
+        }
     } finally {
         rmSync(builtinRoot, { recursive: true, force: true });
         rmSync(dependencyRoot, { recursive: true, force: true });
@@ -646,4 +654,352 @@ test('purge set sourced from package hooks.json prunes standalone managed script
     } finally {
         rmSync(sourceRoot, { recursive: true, force: true });
     }
+});
+
+
+const DISPATCHER_HOOKS_CONFIG = {
+    hooks: {
+        PreToolUse: [
+            {
+                matcher: 'Write|Edit',
+                hooks: [
+                    {
+                        type: 'command',
+                        command: 'python3 -c "import sys; sys.path.insert(0, r\'${CLAUDE_PLUGIN_ROOT}/hooks\'); from validators.run_all_validators import main; sys.exit(main())"',
+                        timeout: 15,
+                    },
+                ],
+            },
+            {
+                matcher: 'Write|Edit|MultiEdit',
+                hooks: [
+                    {
+                        type: 'command',
+                        command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pre_tool_use_dispatcher.py',
+                        timeout: 60,
+                    },
+                ],
+            },
+        ],
+    },
+};
+
+const OLD_FOLDED_HOOKS_SETTINGS = {
+    hooks: {
+        PreToolUse: [
+            {
+                matcher: 'Write|Edit',
+                hooks: [
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/write_existing_file_blocker.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/sensitive_file_protector.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/validation/hook_format_validator.py', timeout: 15 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/code_rules_enforcer.py', timeout: 30 },
+                    { type: 'command', command: 'py -3 -c "import sys; sys.path.insert(0, r\'C:/Users/x/.claude/hooks\'); from validators.run_all_validators import main; sys.exit(main())"', timeout: 15 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/tdd_enforcer.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/windows_rmtree_blocker.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/state_description_blocker.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/subprocess_budget_completeness.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/hook_prose_detector_consistency.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/verified_commit_message_accuracy_blocker.py', timeout: 10 },
+                ],
+            },
+            {
+                matcher: 'Write|Edit|MultiEdit',
+                hooks: [
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/workflow_substitution_slot_blocker.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/claude_md_orphan_file_blocker.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/pytest_testpaths_orphan_blocker.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/open_questions_in_plans_blocker.py', timeout: 10 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/plain_language_blocker.py', timeout: 10 },
+                ],
+            },
+        ],
+    },
+};
+
+
+test('FOLDED_HOOK_RELATIVE_PATHS contains all 15 hooks removed from hooks.json', () => {
+    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 15);
+    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/write_existing_file_blocker.py'));
+    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/plain_language_blocker.py'));
+    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
+    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/pytest_testpaths_orphan_blocker.py'));
+});
+
+
+test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher hosts', () => {
+    const dispatcherHostedHooks = [
+        'blocking/write_existing_file_blocker.py',
+        'blocking/sensitive_file_protector.py',
+        'validation/hook_format_validator.py',
+        'blocking/code_rules_enforcer.py',
+        'blocking/tdd_enforcer.py',
+        'blocking/windows_rmtree_blocker.py',
+        'blocking/state_description_blocker.py',
+        'blocking/subprocess_budget_completeness.py',
+        'blocking/hook_prose_detector_consistency.py',
+        'blocking/verified_commit_message_accuracy_blocker.py',
+        'blocking/workflow_substitution_slot_blocker.py',
+        'blocking/claude_md_orphan_file_blocker.py',
+        'blocking/pytest_testpaths_orphan_blocker.py',
+        'blocking/open_questions_in_plans_blocker.py',
+        'blocking/plain_language_blocker.py',
+    ];
+    for (const hostedPath of dispatcherHostedHooks) {
+        assert.ok(
+            FOLDED_HOOK_RELATIVE_PATHS.has(hostedPath),
+            `dispatcher-hosted hook ${hostedPath} must be in FOLDED_HOOK_RELATIVE_PATHS so a reinstall prunes its stale standalone entry and it does not double-run`
+        );
+    }
+    assert.equal(
+        FOLDED_HOOK_RELATIVE_PATHS.size,
+        dispatcherHostedHooks.length,
+        'FOLDED_HOOK_RELATIVE_PATHS must hold exactly the dispatcher-hosted hooks, no more, no fewer'
+    );
+});
+
+
+test('managedHookScriptRelativePaths includes the dispatcher and all folded hooks so old entries are prunable', () => {
+    const relativePaths = managedHookScriptRelativePaths(DISPATCHER_HOOKS_CONFIG);
+    assert.ok(relativePaths.has('blocking/pre_tool_use_dispatcher.py'), 'dispatcher must be in managed set');
+    for (const foldedPath of FOLDED_HOOK_RELATIVE_PATHS) {
+        assert.ok(relativePaths.has(foldedPath), `folded hook ${foldedPath} must be in managed set`);
+    }
+});
+
+
+test('mergeHooksIntoSettings into old folded-hooks settings yields exactly one dispatcher entry and no folded entries', () => {
+    const settings = JSON.parse(JSON.stringify(OLD_FOLDED_HOOKS_SETTINGS));
+    mergeHooksIntoSettings(settings, DISPATCHER_HOOKS_CONFIG, 'C:/Users/x/.claude', 'py -3');
+
+    const allPreToolUseGroups = settings.hooks.PreToolUse || [];
+    const allHookCommands = allPreToolUseGroups.flatMap(group => group.hooks.map(hook => hook.command));
+
+    const allDispatcherCommands = allHookCommands.filter(cmd => cmd.includes('pre_tool_use_dispatcher.py'));
+    assert.equal(allDispatcherCommands.length, 1, 'exactly one dispatcher entry must be present');
+
+    for (const foldedPath of FOLDED_HOOK_RELATIVE_PATHS) {
+        const foldedBasename = foldedPath.split('/').pop();
+        const foldedCommands = allHookCommands.filter(
+            cmd => cmd.includes(foldedBasename) && !cmd.includes('pre_tool_use_dispatcher')
+        );
+        assert.equal(foldedCommands.length, 0, `folded hook ${foldedBasename} must not appear as a separate entry`);
+    }
+});
+
+
+test('mergeHooksIntoSettings into old folded-hooks settings preserves the inline validators runner', () => {
+    const settings = JSON.parse(JSON.stringify(OLD_FOLDED_HOOKS_SETTINGS));
+    mergeHooksIntoSettings(settings, DISPATCHER_HOOKS_CONFIG, 'C:/Users/x/.claude', 'py -3');
+
+    assert.equal(
+        countManagedRunAllValidatorsHooks(settings),
+        1,
+        'exactly one run_all_validators hook must remain in Write|Edit',
+    );
+});
+
+
+test('mergeHooksIntoSettings is idempotent when run twice against an already-updated settings shape', () => {
+    const settings = JSON.parse(JSON.stringify(OLD_FOLDED_HOOKS_SETTINGS));
+    mergeHooksIntoSettings(settings, DISPATCHER_HOOKS_CONFIG, 'C:/Users/x/.claude', 'py -3');
+    mergeHooksIntoSettings(settings, DISPATCHER_HOOKS_CONFIG, 'C:/Users/x/.claude', 'py -3');
+
+    const allPreToolUseGroups = settings.hooks.PreToolUse || [];
+    const allHookCommands = allPreToolUseGroups.flatMap(group => group.hooks.map(hook => hook.command));
+
+    const allDispatcherCommands = allHookCommands.filter(cmd => cmd.includes('pre_tool_use_dispatcher.py'));
+    assert.equal(allDispatcherCommands.length, 1, 'dispatcher must appear exactly once after two merges');
+    assert.equal(countManagedRunAllValidatorsHooks(settings), 1, 'run_all_validators must appear exactly once after two merges');
+});
+
+
+test('shipped hooks.json matches the dispatcher design: dispatchers registered, run_all_validators retained, no folded hook standalone', () => {
+    const shippedHooksConfig = JSON.parse(
+        readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
+    );
+
+    const allPreToolUseGroups = shippedHooksConfig.hooks.PreToolUse || [];
+    const allPreCommands = allPreToolUseGroups.flatMap(group => group.hooks.map(hook => hook.command));
+    const preDispatcherCommands = allPreCommands.filter(cmd => cmd.includes('pre_tool_use_dispatcher.py'));
+    assert.equal(preDispatcherCommands.length, 1, 'shipped hooks.json must register the PreToolUse dispatcher exactly once');
+
+    assert.equal(
+        countManagedRunAllValidatorsHooks(shippedHooksConfig),
+        1,
+        'shipped hooks.json must retain the inline run_all_validators runner in Write|Edit',
+    );
+
+    const allPostToolUseGroups = shippedHooksConfig.hooks.PostToolUse || [];
+    const postDispatcherCommands = allPostToolUseGroups
+        .flatMap(group => group.hooks.map(hook => hook.command))
+        .filter(cmd => cmd.includes('post_tool_use_dispatcher.py'));
+    assert.equal(postDispatcherCommands.length, 1, 'shipped hooks.json must register the PostToolUse dispatcher exactly once');
+
+    const writePathCommands = allPreToolUseGroups
+        .filter(group => /Write|Edit|MultiEdit/.test(group.matcher || ''))
+        .flatMap(group => group.hooks.map(hook => hook.command));
+    for (const foldedPath of FOLDED_HOOK_RELATIVE_PATHS) {
+        const foldedBasename = foldedPath.split('/').pop();
+        const standaloneFoldedCommands = writePathCommands.filter(
+            cmd => cmd.includes(foldedBasename) && !cmd.includes('pre_tool_use_dispatcher')
+        );
+        assert.equal(
+            standaloneFoldedCommands.length,
+            0,
+            `folded hook ${foldedBasename} must not ship as a standalone write-path PreToolUse entry`,
+        );
+    }
+});
+
+
+const POST_DISPATCHER_HOOKS_CONFIG = {
+    hooks: {
+        PostToolUse: [
+            {
+                matcher: 'Write|Edit',
+                hooks: [
+                    {
+                        type: 'command',
+                        command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validation/post_tool_use_dispatcher.py',
+                        timeout: 60,
+                    },
+                ],
+            },
+        ],
+    },
+};
+
+const OLD_POST_FOLDED_HOOKS_SETTINGS = {
+    hooks: {
+        PostToolUse: [
+            {
+                matcher: 'Write|Edit',
+                hooks: [
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/validation/mypy_validator.py', timeout: 30 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/workflow/auto_formatter.py', timeout: 30 },
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/workflow/doc_gist_auto_publish.py C:/Users/x/.claude', timeout: 60 },
+                ],
+            },
+        ],
+    },
+};
+
+
+test('POST_FOLDED_HOOK_RELATIVE_PATHS contains the three after-write hooks folded into the PostToolUse dispatcher', () => {
+    assert.equal(POST_FOLDED_HOOK_RELATIVE_PATHS.size, 3);
+    assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('validation/mypy_validator.py'));
+    assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('workflow/auto_formatter.py'));
+    assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('workflow/doc_gist_auto_publish.py'));
+});
+
+
+test('managedHookScriptRelativePaths includes the PostToolUse dispatcher and all post-folded hooks so old entries are prunable', () => {
+    const relativePaths = managedHookScriptRelativePaths(POST_DISPATCHER_HOOKS_CONFIG);
+    assert.ok(relativePaths.has('validation/post_tool_use_dispatcher.py'), 'PostToolUse dispatcher must be in managed set');
+    for (const foldedPath of POST_FOLDED_HOOK_RELATIVE_PATHS) {
+        assert.ok(relativePaths.has(foldedPath), `post-folded hook ${foldedPath} must be in managed set`);
+    }
+});
+
+
+test('mergeHooksIntoSettings into the old three PostToolUse entries yields exactly one post_tool_use_dispatcher entry and none of the three', () => {
+    const settings = JSON.parse(JSON.stringify(OLD_POST_FOLDED_HOOKS_SETTINGS));
+    mergeHooksIntoSettings(settings, POST_DISPATCHER_HOOKS_CONFIG, 'C:/Users/x/.claude', 'py -3');
+
+    const writeEditGroup = settings.hooks.PostToolUse.find(group => group.matcher === 'Write|Edit');
+    const allCommands = writeEditGroup.hooks.map(hook => hook.command);
+
+    const dispatcherCommands = allCommands.filter(cmd => cmd.includes('post_tool_use_dispatcher.py'));
+    assert.equal(dispatcherCommands.length, 1, 'exactly one PostToolUse dispatcher entry must be present');
+
+    for (const foldedPath of POST_FOLDED_HOOK_RELATIVE_PATHS) {
+        const foldedBasename = foldedPath.split('/').pop();
+        const foldedCommands = allCommands.filter(cmd => cmd.includes(foldedBasename));
+        assert.equal(foldedCommands.length, 0, `post-folded hook ${foldedBasename} must not appear as a separate entry`);
+    }
+});
+
+
+test('mergeHooksIntoSettings installs the PostToolUse dispatcher cleanly into an empty settings object', () => {
+    const settings = {};
+    mergeHooksIntoSettings(settings, POST_DISPATCHER_HOOKS_CONFIG, 'C:/Users/x/.claude', 'py -3');
+
+    const writeEditGroup = settings.hooks.PostToolUse.find(group => group.matcher === 'Write|Edit');
+    assert.equal(writeEditGroup.hooks.length, 1);
+    assert.equal(
+        writeEditGroup.hooks[0].command,
+        'py -3 C:/Users/x/.claude/hooks/validation/post_tool_use_dispatcher.py',
+    );
+});
+
+
+test('mergeHooksIntoSettings is idempotent for the PostToolUse dispatcher across two installs', () => {
+    const settings = JSON.parse(JSON.stringify(OLD_POST_FOLDED_HOOKS_SETTINGS));
+    mergeHooksIntoSettings(settings, POST_DISPATCHER_HOOKS_CONFIG, 'C:/Users/x/.claude', 'py -3');
+    mergeHooksIntoSettings(settings, POST_DISPATCHER_HOOKS_CONFIG, 'C:/Users/x/.claude', 'py -3');
+
+    const writeEditGroup = settings.hooks.PostToolUse.find(group => group.matcher === 'Write|Edit');
+    const dispatcherCommands = writeEditGroup.hooks.filter(hook => hook.command.includes('post_tool_use_dispatcher.py'));
+    assert.equal(dispatcherCommands.length, 1, 'PostToolUse dispatcher must appear exactly once after two merges');
+    assert.equal(writeEditGroup.hooks.length, 1);
+});
+
+
+const PRE_DISPATCHER_ONLY_HOOKS_CONFIG = {
+    hooks: {
+        PreToolUse: [
+            {
+                matcher: 'Write|Edit|MultiEdit',
+                hooks: [
+                    {
+                        type: 'command',
+                        command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pre_tool_use_dispatcher.py',
+                        timeout: 60,
+                    },
+                ],
+            },
+        ],
+    },
+};
+
+const SETTINGS_WITH_INLINE_RUNNER = {
+    hooks: {
+        PreToolUse: [
+            {
+                matcher: 'Write|Edit',
+                hooks: [
+                    {
+                        type: 'command',
+                        command: "py -3 -c \"import sys; sys.path.insert(0, r'C:/Users/x/.claude/hooks'); from validators.run_all_validators import main; sys.exit(main())\"",
+                        timeout: 15,
+                    },
+                ],
+            },
+            {
+                matcher: 'Write|Edit|MultiEdit',
+                hooks: [
+                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/pre_tool_use_dispatcher.py', timeout: 60 },
+                ],
+            },
+        ],
+    },
+};
+
+
+test('mergeHooksIntoSettings prunes the inline run_all_validators runner when the new shape no longer ships it', () => {
+    const settings = JSON.parse(JSON.stringify(SETTINGS_WITH_INLINE_RUNNER));
+    mergeHooksIntoSettings(settings, PRE_DISPATCHER_ONLY_HOOKS_CONFIG, 'C:/Users/x/.claude', 'py -3');
+
+    assert.equal(countManagedRunAllValidatorsHooks(settings), 0, 'the inline validators runner must be pruned');
+
+    const writeEditGroup = (settings.hooks.PreToolUse || []).find(group => group.matcher === 'Write|Edit');
+    if (writeEditGroup) {
+        const runnerSurvivors = writeEditGroup.hooks.filter(hook => hook.command.includes('run_all_validators'));
+        assert.equal(runnerSurvivors.length, 0);
+    }
+
+    const dispatcherGroup = settings.hooks.PreToolUse.find(group => group.matcher === 'Write|Edit|MultiEdit');
+    const dispatcherCommands = dispatcherGroup.hooks.filter(hook => hook.command.includes('pre_tool_use_dispatcher.py'));
+    assert.equal(dispatcherCommands.length, 1, 'the PreToolUse dispatcher must remain exactly once');
 });

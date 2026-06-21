@@ -45,6 +45,9 @@ from hooks_constants.pr_converge_bugteam_enforcer_state import (  # noqa: E402
     load_state_dictionary,
     resolve_state_path,
 )
+from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
+    read_hook_input_dictionary_from_stdin,
+)
 
 
 def _prompt_is_audit_shaped(agent_prompt: str) -> bool:
@@ -148,11 +151,8 @@ def _emit_deny_payload(output_stream: TextIO) -> None:
 
 
 def main() -> None:
-    try:
-        hook_payload = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-    if not isinstance(hook_payload, dict):
+    hook_payload = read_hook_input_dictionary_from_stdin()
+    if hook_payload is None:
         sys.exit(0)
     if not _should_block(hook_payload):
         sys.exit(0)

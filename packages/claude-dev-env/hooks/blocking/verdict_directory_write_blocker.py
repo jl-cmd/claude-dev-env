@@ -37,7 +37,11 @@ blocking_directory = str(Path(__file__).resolve().parent)
 if blocking_directory not in sys.path:
     sys.path.insert(0, blocking_directory)
 
-from config.verified_commit_constants import (
+hooks_directory = str(Path(__file__).resolve().parent.parent)
+if hooks_directory not in sys.path:
+    sys.path.insert(0, hooks_directory)
+
+from config.verified_commit_constants import (  # noqa: E402
     ALL_GATED_TOOL_NAMES,
     ALL_VERDICT_PATH_SEGMENT_BODIES,
     ALL_VERDICT_PATH_SEGMENT_NAMES,
@@ -61,17 +65,21 @@ from config.verified_commit_constants import (
     NON_REDIRECT_FILE_WRITE_PRIMITIVE_PATTERN,
     PATH_OBFUSCATION_PRIMITIVE_PATTERN,
     RELATIVE_VERDICT_DIRECTORY_PATTERN,
+    VERDICT_DIRECTORY_CHANGE_TARGET_PATTERN,
     VERDICT_DIRECTORY_GUARD_MESSAGE,
     VERDICT_DIRECTORY_NAME,
     VERDICT_DIRECTORY_NAME_SEPARATOR_PATTERN,
     VERDICT_DIRECTORY_PATH_BOUNDARY_PATTERN,
-    VERDICT_DIRECTORY_CHANGE_TARGET_PATTERN,
     VERDICT_DIRECTORY_TARGET_BOUNDARY_PATTERN,
     VERDICT_FILE_RELATIVE_REFERENCE_PATTERN,
     VERDICT_PATH_GLUE_PATTERN,
     VERDICT_PATH_JOINED_VARIABLE_PATTERN,
     VERDICT_PATH_VARIABLE_ASSIGNMENT_PATTERN,
     WRITE_CALL_REGION_PATTERN,
+)
+
+from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
+    read_hook_input_dictionary_from_stdin,
 )
 
 
@@ -650,11 +658,8 @@ def decision_for_payload(pretooluse_payload: dict) -> dict | None:
 
 def main() -> None:
     """Read the PreToolUse payload and deny verdict-directory shell access."""
-    try:
-        pretooluse_payload = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        return
-    if not isinstance(pretooluse_payload, dict):
+    pretooluse_payload = read_hook_input_dictionary_from_stdin()
+    if pretooluse_payload is None:
         return
     deny_decision = decision_for_payload(pretooluse_payload)
     if deny_decision is None:

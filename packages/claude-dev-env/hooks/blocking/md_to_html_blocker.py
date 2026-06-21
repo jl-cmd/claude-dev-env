@@ -18,6 +18,8 @@ _blocking_directory = str(Path(__file__).resolve().parent)
 if _blocking_directory not in sys.path:
     sys.path.insert(0, _blocking_directory)
 
+from md_path_exemptions import is_exempt_path  # noqa: E402
+
 from hooks_constants.md_to_html_blocker_constants import (  # noqa: E402
     ALL_CLAUDE_CODE_SOURCE_TOP_DIRECTORIES,
     ALL_EXEMPT_ANYWHERE_FILENAMES,
@@ -29,8 +31,9 @@ from hooks_constants.md_to_html_blocker_constants import (  # noqa: E402
     PACKAGES_TOP_LEVEL_SEGMENT,
     PLUGIN_ROOT_MARKER_DIRECTORY_NAME,
 )
-from md_path_exemptions import is_exempt_path  # noqa: E402
-
+from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
+    read_hook_input_dictionary_from_stdin,
+)
 
 _markdown_extension = ".md"
 _html_effectiveness_url = "https://thariqs.github.io/html-effectiveness/"
@@ -95,12 +98,8 @@ def main() -> None:
     Returns:
         None (exits process).
     """
-    try:
-        input_data = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    if not isinstance(input_data, dict):
+    input_data = read_hook_input_dictionary_from_stdin()
+    if input_data is None:
         sys.exit(0)
 
     tool_name = input_data.get("tool_name", "")
