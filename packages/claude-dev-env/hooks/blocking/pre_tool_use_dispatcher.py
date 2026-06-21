@@ -8,9 +8,9 @@ decision when any hook denied (carrying every denying reason) or exits zero to
 allow.
 
 The per-hook coverage matrix:
-- Write  -> Group A (10 hooks) + Group B (6 hooks) = 16 hooks
-- Edit   -> Group A (10 hooks) + Group B (6 hooks) = 16 hooks
-- MultiEdit -> Group B only (6 hooks)
+- Write  -> Group A (10 hooks) + Group B (7 hooks) = 17 hooks
+- Edit   -> Group A (10 hooks) + Group B (7 hooks) = 17 hooks
+- MultiEdit -> Group B only (7 hooks)
 """
 
 from __future__ import annotations

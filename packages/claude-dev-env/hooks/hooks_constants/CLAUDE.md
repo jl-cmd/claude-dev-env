@@ -22,6 +22,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `dead_module_constant_constants.py` | Patterns for detecting unexported `UPPER_SNAKE` constants in `*_constants.py` modules |
 | `destructive_command_segment_constants.py` | The list of destructive shell command patterns the blocker matches |
 | `doc_gist_auto_publish_constants.py` | Sentinel marker and URL patterns for the doc-gist auto-publish hook |
+| `docstring_rule_gate_count_blocker_constants.py` | Target rule basename, spelled-out-number lookup, count-clause and `check_*` validator patterns, and block-message text for the docstring-rule gate-count staleness blocker |
 | `duplicate_function_body_constants.py` | Hashing and comparison config for the duplicate-body check |
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
@@ -32,6 +33,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `inline_tuple_string_magic_constants.py` | Patterns for detecting magic strings in inline tuple literals |
 | `md_to_html_blocker_constants.py` | Path exemptions and trigger patterns for the markdown-to-html blocker |
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
+| `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |
 | `orphan_css_class_constants.py` | Scan radius and selector patterns for the orphan-CSS-class check |
 | `package_inventory_stale_blocker_constants.py` | Inventory document names, production code extensions, backtick token pattern, smallest inventory size, exempt names, scan budget, and block-message text for the package-inventory stale-entry blocker |
