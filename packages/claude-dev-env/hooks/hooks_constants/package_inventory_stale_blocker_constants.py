@@ -7,10 +7,11 @@ directory and the inventory carries no entry naming it, the inventory disagrees
 with the directory on the package's file set, and a reader trusting the
 inventory to map the directory misses the new file. This module holds the
 inventory document names, the production code extensions that earn an inventory
-entry, the backtick pattern that finds an inventory's named files, the minimum
-inventory size that marks a document as a maintained inventory, the filenames
-exempt from an entry, the scan budget, and the block-message text the hook
-emits.
+entry, the backtick pattern that finds an inventory's named files, the code-fence
+pattern that marks lines to skip, the glob-metacharacter pattern that rejects
+pattern tokens, the minimum inventory size that marks a document as a maintained
+inventory, the filenames exempt from an entry, the scan budget, and the
+block-message text the hook emits.
 """
 
 import re
@@ -21,6 +22,8 @@ __all__ = [
     "PYTHON_FILE_EXTENSION",
     "ALL_TEST_FILE_MARKERS",
     "BACKTICK_TOKEN_PATTERN",
+    "CODE_FENCE_PATTERN",
+    "GLOB_METACHARACTER_PATTERN",
     "MINIMUM_INVENTORY_ENTRY_COUNT",
     "ALL_EXEMPT_BASENAMES",
     "ALL_EXEMPT_DIRECTORY_NAMES",
@@ -48,6 +51,10 @@ ALL_PRODUCTION_CODE_EXTENSIONS: frozenset[str] = frozenset(
 )
 
 BACKTICK_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"`([^`]+)`")
+
+CODE_FENCE_PATTERN: re.Pattern[str] = re.compile(r"^\s*(?:```|~~~)")
+
+GLOB_METACHARACTER_PATTERN: re.Pattern[str] = re.compile(r"[*?{}\[\]]")
 
 MINIMUM_INVENTORY_ENTRY_COUNT: int = 2
 

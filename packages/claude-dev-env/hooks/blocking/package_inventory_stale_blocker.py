@@ -31,6 +31,8 @@ from hooks_constants.package_inventory_stale_blocker_constants import (  # noqa:
     ALL_PRODUCTION_CODE_EXTENSIONS,
     ALL_TEST_FILE_MARKERS,
     BACKTICK_TOKEN_PATTERN,
+    CODE_FENCE_PATTERN,
+    GLOB_METACHARACTER_PATTERN,
     MAX_INVENTORY_FILE_BYTES,
     MINIMUM_INVENTORY_ENTRY_COUNT,
     PYTHON_FILE_EXTENSION,
@@ -50,7 +52,9 @@ def _basename_token(backtick_inner_text: str) -> str | None:
     token that holds a path keeps only its final segment, so an inventory cell
     naming ``pipeline/seam_continuity.py`` yields ``seam_continuity.py`` — the
     basename the directory file would match. A slash-command token (leading
-    ``/``) and a token with no file extension yield None.
+    ``/``), a glob/pattern token carrying a metacharacter (``*``, ``?``, brace
+    or bracket range, so ``*.py`` and ``test_*.py`` name no literal file), and a
+    token with no file extension yield None.
 
     Args:
         backtick_inner_text: The text between a backtick pair, stripped.
@@ -61,6 +65,8 @@ def _basename_token(backtick_inner_text: str) -> str | None:
     inner_text = backtick_inner_text.strip()
     if not inner_text or inner_text.startswith("/"):
         return None
+    if GLOB_METACHARACTER_PATTERN.search(inner_text) is not None:
+        return None
     basename = os.path.basename(inner_text.replace("\\", "/").rstrip("/"))
     if not basename:
         return None
@@ -70,13 +76,39 @@ def _basename_token(backtick_inner_text: str) -> str | None:
     return basename
 
 
+def _lines_outside_code_fences(inventory_content: str) -> list[str]:
+    """Return the inventory lines that sit outside any fenced code block.
+
+    A line inside a ``` or ~~~ fence pair is example or sample text, not a live
+    listing, so it is dropped — mirroring the fence handling in
+    ``claude_md_orphan_file_blocker``.
+
+    Args:
+        inventory_content: The text of a README.md or CLAUDE.md inventory.
+
+    Returns:
+        The lines that lie outside every code fence, in document order.
+    """
+    live_lines: list[str] = []
+    is_inside_code_fence = False
+    for each_line in inventory_content.splitlines():
+        if CODE_FENCE_PATTERN.match(each_line) is not None:
+            is_inside_code_fence = not is_inside_code_fence
+            continue
+        if is_inside_code_fence:
+            continue
+        live_lines.append(each_line)
+    return live_lines
+
+
 def inventory_named_basenames(inventory_content: str) -> set[str]:
     """Return every bare filename a package inventory document names in backticks.
 
-    Each backticked token in the inventory is examined; one that names a file
-    (carries an extension) contributes its basename. A token holding a path
-    contributes its final segment. This covers both a README.md table cell and a
-    CLAUDE.md bullet, since both name files in backticks.
+    Lines inside a fenced code block are skipped as example text. Each backticked
+    token on a remaining line is examined; one that names a literal file (carries
+    an extension and no glob metacharacter) contributes its basename, and a token
+    holding a path contributes its final segment. This covers both a README.md
+    table cell and a CLAUDE.md bullet, since both name files in backticks.
 
     Args:
         inventory_content: The text of a README.md or CLAUDE.md inventory.
@@ -85,10 +117,11 @@ def inventory_named_basenames(inventory_content: str) -> set[str]:
         The set of bare basenames the inventory names.
     """
     named_basenames: set[str] = set()
-    for each_match in BACKTICK_TOKEN_PATTERN.finditer(inventory_content):
-        each_basename = _basename_token(each_match.group(1))
-        if each_basename is not None:
-            named_basenames.add(each_basename)
+    for each_line in _lines_outside_code_fences(inventory_content):
+        for each_match in BACKTICK_TOKEN_PATTERN.finditer(each_line):
+            each_basename = _basename_token(each_match.group(1))
+            if each_basename is not None:
+                named_basenames.add(each_basename)
     return named_basenames
 
 

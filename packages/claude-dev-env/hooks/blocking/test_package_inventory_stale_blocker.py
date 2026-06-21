@@ -37,6 +37,22 @@ CLAUDE_MD_BULLET_LIST = (
 
 README_LISTING_ONE_FILE = "# package\n\nSome prose mentioning `single_module.py` once.\n"
 
+README_LISTING_ONLY_GLOB_TOKENS = (
+    "# package\n\n"
+    "This directory holds files matching `*.py` and `*.mjs`.\n"
+)
+
+README_LISTING_ONLY_FENCED_FILENAMES = (
+    "# package\n\n"
+    "Example inventory table:\n\n"
+    "```\n"
+    "| Path | Role |\n"
+    "|---|---|\n"
+    "| `example_alpha.py` | Sample row. |\n"
+    "| `example_beta.py` | Sample row. |\n"
+    "```\n"
+)
+
 
 class _RunHook:
     """Helper to test the hook via subprocess, mirroring the sibling test style."""
@@ -71,6 +87,16 @@ def test_inventory_named_basenames_strips_path_to_basename():
 def test_inventory_named_basenames_reads_bullet_list():
     named_basenames = inventory_named_basenames(CLAUDE_MD_BULLET_LIST)
     assert named_basenames == {"compose_dialer_cli.py", "compose_aod_cli.py"}
+
+
+def test_inventory_named_basenames_rejects_glob_tokens():
+    named_basenames = inventory_named_basenames(README_LISTING_ONLY_GLOB_TOKENS)
+    assert named_basenames == set()
+
+
+def test_inventory_named_basenames_skips_fenced_code_block():
+    named_basenames = inventory_named_basenames(README_LISTING_ONLY_FENCED_FILENAMES)
+    assert named_basenames == set()
 
 
 def test_blocks_new_production_file_absent_from_readme(tmp_path: Path):
@@ -140,6 +166,32 @@ def test_allows_directory_with_no_inventory(tmp_path: Path):
 def test_allows_directory_whose_readme_names_too_few_files(tmp_path: Path):
     package_directory = _package_directory_with_readme(tmp_path, README_LISTING_ONE_FILE)
     new_file_path = package_directory / "another_module.py"
+    result = _run_hook(
+        "Write",
+        {"file_path": str(new_file_path), "content": "x = 1\n"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_allows_new_file_when_inventory_holds_only_glob_tokens(tmp_path: Path):
+    package_directory = _package_directory_with_readme(
+        tmp_path, README_LISTING_ONLY_GLOB_TOKENS
+    )
+    new_file_path = package_directory / "new_sibling_module.py"
+    result = _run_hook(
+        "Write",
+        {"file_path": str(new_file_path), "content": "x = 1\n"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_allows_new_file_when_inventory_filenames_live_in_code_fence(tmp_path: Path):
+    package_directory = _package_directory_with_readme(
+        tmp_path, README_LISTING_ONLY_FENCED_FILENAMES
+    )
+    new_file_path = package_directory / "new_sibling_module.py"
     result = _run_hook(
         "Write",
         {"file_path": str(new_file_path), "content": "x = 1\n"},
