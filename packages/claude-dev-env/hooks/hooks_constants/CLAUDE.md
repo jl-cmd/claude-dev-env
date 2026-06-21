@@ -43,6 +43,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `precommit_code_rules_gate_constants.py` | Scope argument and exit-code constants for the precommit gate |
 | `project_paths_reader.py` | Loads `~/.claude/project-paths.json` — the per-user project-path registry |
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |
+| `send_user_file_open_locally_blocker_constants.py` | Tool name, proactive status, and the block message for the open-locally attach blocker |
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
