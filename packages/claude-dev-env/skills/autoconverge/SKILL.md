@@ -262,12 +262,18 @@ agents never inline a destructive-command literal (`rm -rf`, `git reset --hard`,
 patterns as raw text, and a confirmation prompt no human can answer would stall
 the run. Agents verify destructive-blocker behavior through the committed test
 suite (`python -m pytest`) and keep scratch work in the OS temp dir. The preamble
-also enforces the exact rm shape the hook auto-allows: a standalone Bash call (not
-chained with `&&` / `;` / `|`), an absolute literal path (any `$` in the target
-makes the gate fail closed), targeting `/tmp` or the OS temp root. For any cleanup
-whose path is variable-built or whose teardown spans multiple steps, agents author
-a Python helper file and run it as `python <file>.py` — keeping every destructive
-literal out of a Bash command string entirely.
+describes the narrowest rm auto-allow path — a standalone Bash call whose target
+resolves inside the ephemeral namespace (`/tmp`, `/temp`, the OS temp root, or the
+run worktree) — and notes that a compound path also accepts an rm chained after a
+`cd` or joined with benign segments when every rm target is an absolute ephemeral
+path. Across those paths `$(...)` substitution and backtick subshells fail closed,
+and an unknown variable in the target fails closed; the known temporary variables
+`TEMP`, `TMP`, `TMPDIR`, and `CLAUDE_JOB_DIR` resolve to the OS temp root, so a
+bare `$CLAUDE_JOB_DIR/tmp/<name>` target is auto-allowed under an ephemeral cwd.
+Even so, for any cleanup whose path is variable-built or whose teardown spans
+multiple steps, agents author a Python helper file and run it as `python
+<file>.py` — keeping every destructive literal out of a Bash command string
+entirely and independent of which auto-allow path matches.
 
 - **Converge:** `parallel([Bugbot lens, code-review lens, bug-audit lens])` on
   the current HEAD, full `origin/main...HEAD` diff. Dedup findings; one

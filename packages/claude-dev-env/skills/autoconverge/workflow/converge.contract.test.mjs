@@ -10,6 +10,10 @@ const gotchasSource = readFileSync(
   join(workflowDirectory, '..', 'reference', 'gotchas.md'),
   'utf8',
 );
+const skillSource = readFileSync(
+  join(workflowDirectory, '..', 'SKILL.md'),
+  'utf8',
+);
 
 function lensPromptBody(builderName) {
   const builderStart = convergeSource.indexOf(`function ${builderName}(`);
@@ -555,26 +559,50 @@ function preambleText() {
   return convergeSource.slice(preambleStart, preambleEnd === -1 ? undefined : preambleEnd);
 }
 
-test('preamble instructs agents to run rm cleanup as its own standalone Bash call, not chained', () => {
-  assert.match(
-    preambleText(),
-    /standalone|its own.*call|separate.*call|not.*chain|never.*chain|not.*&&|never.*&&/i,
-    'expected the preamble to forbid chaining rm with && / || / ; / |',
-  );
-});
-
-test('preamble forbids a shell variable or $ expansion in the rm target path', () => {
-  assert.match(
-    preambleText(),
-    /no\s+\$|never.*\$|absolute.*literal|literal.*path|no.*variable|forbid.*\$|\$.*makes.*gate|any.*\$.*fail/i,
-    'expected the preamble to state that any $ in the rm target makes the gate fail closed',
-  );
-});
-
 test('preamble prescribes authoring a Python helper for variable-built or multi-step sandboxes', () => {
   assert.match(
     preambleText(),
     /python\s+<file>\.py|python\s+<.*>\.py|author.*python.*helper|python.*helper.*sandbox|sandbox.*python.*helper/i,
     'expected the preamble to prescribe running a Python helper file for multi-step sandbox teardown',
+  );
+});
+
+test('preamble does not claim any $ in the rm target makes the gate fail closed', () => {
+  assert.doesNotMatch(
+    preambleText(),
+    /any\s+\$[^\n]*fail closed/i,
+    'the hook resolves known temp variables (TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR), so a bare $ does not always fail closed',
+  );
+});
+
+test('preamble does not claim $CLAUDE_JOB_DIR/tmp is blocked', () => {
+  assert.doesNotMatch(
+    preambleText(),
+    /CLAUDE_JOB_DIR\/tmp is NOT auto-allowed/i,
+    'under an ephemeral cwd the hook auto-allows rm targeting $CLAUDE_JOB_DIR/tmp',
+  );
+});
+
+test('preamble scopes its rm-shape claim to the narrowest auto-allow path, not the full set', () => {
+  assert.doesNotMatch(
+    preambleText(),
+    /auto-allows rm only when ALL of these hold/i,
+    'the hook has three rm auto-allow paths, so the preamble must not assert one narrow shape is the complete set',
+  );
+});
+
+test('SKILL.md does not claim any $ in the rm target makes the gate fail closed', () => {
+  assert.doesNotMatch(
+    skillSource,
+    /any\s+`?\$`?[^\n]*fail closed/i,
+    'the hook resolves known temp variables (TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR), so a bare $ does not always fail closed',
+  );
+});
+
+test('SKILL.md does not claim it enforces the exact rm shape the hook auto-allows', () => {
+  assert.doesNotMatch(
+    skillSource,
+    /exact rm shape the hook auto-allows/i,
+    'the hook has multiple rm auto-allow paths, so SKILL.md must not assert one narrow shape is the exact set',
   );
 });
