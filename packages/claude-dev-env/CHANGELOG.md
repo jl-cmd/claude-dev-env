@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.74.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.73.0...claude-dev-env-v1.74.0) (2026-06-22)
+
+
+### Features
+
+* gate docstring guard-drift violation classes at Write/Edit time ([dbd44b3](https://github.com/jl-cmd/claude-code-config/commit/dbd44b34ab1323e1c09e5bcb980589473cd7bd30))
+* **hooks:** add hook-block logger and instrument all 37 blocking hooks ([21761bb](https://github.com/jl-cmd/claude-code-config/commit/21761bb43f806c55d250d04d0f3f9bbbe24ed8ab))
+* **hooks:** block desk-side SendUserFile attaches, require local open ([4dd3aa6](https://github.com/jl-cmd/claude-code-config/commit/4dd3aa6006aff8b6d692123b69c5ac9d79fac8c4))
+* **hooks:** block stale package-inventory CLAUDE.md entries at write time ([a7c12b0](https://github.com/jl-cmd/claude-code-config/commit/a7c12b0a48de2b8a5fe3ff27e87bfc78b074926b))
+* **hooks:** gate O6 Returns-clause plural-cardinality docstring drift ([58215d9](https://github.com/jl-cmd/claude-code-config/commit/58215d9e32f9785f67ae20b4f80e406bfbdc22c5))
+* **hooks:** gate stale gate-validator count in docstring-prose rule ([8c618aa](https://github.com/jl-cmd/claude-code-config/commit/8c618aac37fb76e7cc81bd1cea578d878fc3c74e))
+
+
+### Bug Fixes
+
+* address converge-round findings for package-inventory-stale blocker ([8ffef73](https://github.com/jl-cmd/claude-code-config/commit/8ffef736f37495930cc96f263d1057ef3c8ffe4d))
+* address converge-round review findings on package inventory blocker ([4b07f5f](https://github.com/jl-cmd/claude-code-config/commit/4b07f5f6e131b4bb69757bbf4cb2cea6b6bef472))
+* address reuse-pass review findings on package inventory blocker ([7c39661](https://github.com/jl-cmd/claude-code-config/commit/7c396614d139e99cfd042f95e2224009b3a81ee1))
+* **docstring-gate:** guard gate-count drift on count-clause order ([bb881a3](https://github.com/jl-cmd/claude-code-config/commit/bb881a32ab84d80cefb59ccf844df8e4e4e4a0f8))
+* **hooks:** address review findings in docstring guard-drift check ([dcd0315](https://github.com/jl-cmd/claude-code-config/commit/dcd03155a9639d0677b976e76fdaef3680be8ee7))
+* **hooks:** clarify exempt-directory wording and ground inventory tests ([ccf2f38](https://github.com/jl-cmd/claude-code-config/commit/ccf2f3869b2d29462b1f70fb6f3738f69d47a716))
+* **hooks:** drop inline-literal completeness claim from dispatcher constants docstrings ([dc17656](https://github.com/jl-cmd/claude-code-config/commit/dc176566d224d898749d3d8a3c037bdf56339a46))
+* **hooks:** log block at payload-build site and guard home resolution ([3b7359c](https://github.com/jl-cmd/claude-code-config/commit/3b7359ca39afd8fed762dd02bc80f6dec38fb901))
+* **hooks:** log correct hook event name on block ([9188c1c](https://github.com/jl-cmd/claude-code-config/commit/9188c1cb1f44a9ae3a680e41fb45414eea60a0e6))
+* **hooks:** simplify production-file predicate and cover its true branch ([ad1b831](https://github.com/jl-cmd/claude-code-config/commit/ad1b8314818cbccf4b9ec8530159ea59fc22f4a6))
+* **hooks:** stop config-shadowing and cross-mount mypy hook crashes ([18c1c71](https://github.com/jl-cmd/claude-code-config/commit/18c1c714e6688931567f0f20fb09626757543714))
+* **hooks:** stop config-shadowing and cross-mount mypy hook crashes ([e56b631](https://github.com/jl-cmd/claude-code-config/commit/e56b631210bc4c5bd1b5dc8bacdaa00413d2a814))
+
 ## [1.73.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.72.0...claude-dev-env-v1.73.0) (2026-06-21)
 
 
