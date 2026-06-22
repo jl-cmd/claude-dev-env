@@ -10,6 +10,10 @@ const gotchasSource = readFileSync(
   join(workflowDirectory, '..', 'reference', 'gotchas.md'),
   'utf8',
 );
+const skillSource = readFileSync(
+  join(workflowDirectory, '..', 'SKILL.md'),
+  'utf8',
+);
 
 function lensPromptBody(builderName) {
   const builderStart = convergeSource.indexOf(`function ${builderName}(`);
@@ -547,3 +551,105 @@ for (const builderName of editStepBuilders) {
     );
   });
 }
+
+function preambleText() {
+  const preambleStart = convergeSource.indexOf('const HEADLESS_SAFETY_PREAMBLE =');
+  assert.notEqual(preambleStart, -1, 'expected HEADLESS_SAFETY_PREAMBLE to exist');
+  const preambleEnd = convergeSource.indexOf('\n\nlet ', preambleStart);
+  return convergeSource.slice(preambleStart, preambleEnd === -1 ? undefined : preambleEnd);
+}
+
+test('preamble prescribes authoring a Python helper for variable-built or multi-step sandboxes', () => {
+  assert.match(
+    preambleText(),
+    /python\s+<file>\.py|python\s+<.*>\.py|author.*python.*helper|python.*helper.*sandbox|sandbox.*python.*helper/i,
+    'expected the preamble to prescribe running a Python helper file for multi-step sandbox teardown',
+  );
+});
+
+test('preamble does not claim any $ in the rm target makes the gate fail closed', () => {
+  assert.doesNotMatch(
+    preambleText(),
+    /any\s+\$[^\n]*fail closed/i,
+    'the hook resolves known temp variables (TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR), so a bare $ does not always fail closed',
+  );
+});
+
+test('preamble does not claim $CLAUDE_JOB_DIR/tmp is blocked', () => {
+  assert.doesNotMatch(
+    preambleText(),
+    /CLAUDE_JOB_DIR\/tmp is NOT auto-allowed/i,
+    'under an ephemeral cwd the hook auto-allows rm targeting $CLAUDE_JOB_DIR/tmp',
+  );
+});
+
+test('preamble scopes its rm-shape claim to the narrowest auto-allow path, not the full set', () => {
+  assert.doesNotMatch(
+    preambleText(),
+    /auto-allows rm only when ALL of these hold/i,
+    'the hook has three rm auto-allow paths, so the preamble must not assert one narrow shape is the complete set',
+  );
+});
+
+test('SKILL.md does not claim any $ in the rm target makes the gate fail closed', () => {
+  assert.doesNotMatch(
+    skillSource,
+    /any\s+`?\$`?[^\n]*fail closed/i,
+    'the hook resolves known temp variables (TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR), so a bare $ does not always fail closed',
+  );
+});
+
+test('SKILL.md does not claim it enforces the exact rm shape the hook auto-allows', () => {
+  assert.doesNotMatch(
+    skillSource,
+    /exact rm shape the hook auto-allows/i,
+    'the hook has multiple rm auto-allow paths, so SKILL.md must not assert one narrow shape is the exact set',
+  );
+});
+
+test('preamble does not attribute the known-temp-var resolution to the standalone or compound paths', () => {
+  assert.doesNotMatch(
+    preambleText().replace(/\s+/g, ' '),
+    /Across these paths[\s\S]*?CLAUDE_JOB_DIR/i,
+    'the temp-var resolution lives only in the broad cwd-scoped path; the standalone and compound paths fail closed on any $',
+  );
+});
+
+test('preamble attributes the known-temp-var resolution to a third cwd-scoped auto-allow path', () => {
+  const text = preambleText().replace(/\s+/g, ' ');
+  const tempVarSentenceMatch =
+    /[^.]*\bTMPDIR\b[^.]*CLAUDE_JOB_DIR[^.]*\./i.exec(text);
+  assert.notEqual(
+    tempVarSentenceMatch,
+    null,
+    'expected a sentence describing the TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR resolution',
+  );
+  assert.match(
+    tempVarSentenceMatch[0],
+    /declares? an ephemeral cwd|declared ephemeral cwd|ephemeral-cwd path|third (?:auto-allow )?path|cwd-scoped path/i,
+    'expected the temp-var resolution to be tied to the cwd-scoped path that declares an ephemeral working directory, not the standalone or compound paths',
+  );
+});
+
+test('SKILL.md does not attribute the known-temp-var resolution to the standalone or compound paths', () => {
+  assert.doesNotMatch(
+    skillSource.replace(/\s+/g, ' '),
+    /Across those paths[\s\S]*?CLAUDE_JOB_DIR/i,
+    'the temp-var resolution lives only in the broad cwd-scoped path; the standalone and compound paths fail closed on any $',
+  );
+});
+
+test('SKILL.md attributes the known-temp-var resolution to the cwd-scoped auto-allow path', () => {
+  const tempVarSentenceMatch =
+    /[^.]*\bTMPDIR\b[^.]*CLAUDE_JOB_DIR[^.]*\./i.exec(skillSource.replace(/\s+/g, ' '));
+  assert.notEqual(
+    tempVarSentenceMatch,
+    null,
+    'expected a sentence describing the TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR resolution',
+  );
+  assert.match(
+    tempVarSentenceMatch[0],
+    /declares? an ephemeral cwd|declared ephemeral cwd|ephemeral-cwd path|third (?:auto-allow )?path|cwd-scoped path/i,
+    'expected the temp-var resolution to be tied to the cwd-scoped path that declares an ephemeral working directory, not the standalone or compound paths',
+  );
+});
