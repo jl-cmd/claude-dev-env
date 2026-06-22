@@ -40,6 +40,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.workflow_substitution_slot_blocker_constants import (  # noqa: E402
     CORRECTIVE_MESSAGE,
     EDIT_TOOL_NAME,
@@ -111,16 +112,12 @@ def find_bare_path_segments(content: str) -> set[str]:
     return all_path_segments
 
 
-def find_bare_index_segments(content: str) -> set[str]:
-    return find_bare_path_segments(content)
-
-
 def content_has_violation(content: str) -> bool:
     if not uses_angle_slot_convention(content):
         return False
     if not has_iteration_loop(content):
         return False
-    return bool(find_bare_index_segments(content))
+    return bool(find_bare_path_segments(content))
 
 
 def main() -> None:
@@ -150,6 +147,14 @@ def main() -> None:
             "permissionDecisionReason": CORRECTIVE_MESSAGE,
         }
     }
+    raw_tool_name_for_log = hook_input.get("tool_name", "")
+    tool_name_for_log = raw_tool_name_for_log if isinstance(raw_tool_name_for_log, str) else ""
+    log_hook_block(
+        calling_hook_name="workflow_substitution_slot_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=CORRECTIVE_MESSAGE,
+        tool_name=tool_name_for_log,
+    )
     print(json.dumps(deny_payload))
     sys.stdout.flush()
     sys.exit(0)

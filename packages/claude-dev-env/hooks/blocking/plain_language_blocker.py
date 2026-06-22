@@ -19,6 +19,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     ALL_SOFTWARE_TERMS,
     ALL_TERM_PATTERNS,
@@ -165,6 +166,11 @@ def build_deny_payload(deny_reason: str) -> dict[str, object]:
 
 
 def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
+    log_hook_block(
+        calling_hook_name="plain_language_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=deny_reason,
+    )
     output_stream.write(json.dumps(build_deny_payload(deny_reason)))
     output_stream.flush()
 

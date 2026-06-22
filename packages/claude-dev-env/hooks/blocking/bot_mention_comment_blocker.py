@@ -21,6 +21,7 @@ from hooks_constants.bot_mention_comment_blocker_constants import (  # noqa: E40
     CURSOR_MENTION_TOKEN,
     TOOL_NAME,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 
 def _body_contains_token(body: str, token: str) -> bool:
@@ -60,6 +61,12 @@ def main() -> None:
             "permissionDecisionReason": corrective_message,
         }
     }
+    log_hook_block(
+        calling_hook_name="bot_mention_comment_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=corrective_message,
+        tool_name=TOOL_NAME,
+    )
     print(json.dumps(deny_payload))
     sys.stdout.flush()
     sys.exit(0)

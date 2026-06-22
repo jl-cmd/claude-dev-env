@@ -18,6 +18,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_INTENT_ENDING_NOTICE  # noqa: E402
 
 
@@ -131,22 +132,27 @@ def main() -> None:
     if not find_intent_only_ending(assistant_message):
         sys.exit(0)
 
+    block_reason = (
+        "LONG-HORIZON-AUTONOMY GUARDRAIL: Your turn ends on a promise about work "
+        "that is not yet done, rather than doing it. Do the work NOW with tool calls "
+        "instead of describing what you are about to do.\n\n"
+        "If the work is genuinely blocked on input only the user can give, route the "
+        "ask through an AskUserQuestion tool call and end the turn cleanly. Otherwise, "
+        "carry out the stated action this turn.\n\n"
+        "You MUST re-output the complete response with the work actually performed, "
+        "per the long-horizon-autonomy rule."
+    )
     block_response = {
         "decision": "block",
-        "reason": (
-            "LONG-HORIZON-AUTONOMY GUARDRAIL: Your turn ends on a promise about work "
-            "that is not yet done, rather than doing it. Do the work NOW with tool calls "
-            "instead of describing what you are about to do.\n\n"
-            "If the work is genuinely blocked on input only the user can give, route the "
-            "ask through an AskUserQuestion tool call and end the turn cleanly. Otherwise, "
-            "carry out the stated action this turn.\n\n"
-            "You MUST re-output the complete response with the work actually performed, "
-            "per the long-horizon-autonomy rule."
-        ),
+        "reason": block_reason,
         "systemMessage": USER_FACING_INTENT_ENDING_NOTICE,
         "suppressOutput": True,
     }
-
+    log_hook_block(
+        calling_hook_name="intent_only_ending_blocker.py",
+        hook_event="Stop",
+        block_reason=block_reason,
+    )
     print(json.dumps(block_response))
     sys.exit(0)
 

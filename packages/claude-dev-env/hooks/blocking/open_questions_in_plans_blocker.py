@@ -31,6 +31,7 @@ from hooks_constants.open_questions_in_plans_blocker_constants import (  # noqa:
     PLANS_PATH_SEGMENT,
     UNREADABLE_FILE_SYNTHETIC_CONTENT,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
@@ -236,17 +237,24 @@ def main() -> None:
     if not _content_has_open_questions(candidate_content):
         sys.exit(0)
 
+    deny_reason = _block_reason(file_path)
     block_payload = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
-            "permissionDecisionReason": _block_reason(file_path),
+            "permissionDecisionReason": deny_reason,
             "additionalContext": _block_context(),
         },
         "systemMessage": _block_system_message(),
         "suppressOutput": True,
     }
-
+    log_hook_block(
+        calling_hook_name="open_questions_in_plans_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=deny_reason,
+        tool_name=tool_name,
+        offending_input_preview=file_path,
+    )
     _emit_hook_result(block_payload, sys.stdout)
     sys.exit(0)
 

@@ -45,6 +45,7 @@ from hooks_constants.pr_converge_bugteam_enforcer_state import (  # noqa: E402
     load_state_dictionary,
     resolve_state_path,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
@@ -146,6 +147,11 @@ def _emit_deny_payload(output_stream: TextIO) -> None:
             "permissionDecisionReason": ENFORCER_CORRECTIVE_MESSAGE,
         }
     }
+    log_hook_block(
+        calling_hook_name="pr_converge_bugteam_enforcer.py",
+        hook_event="PreToolUse",
+        block_reason=ENFORCER_CORRECTIVE_MESSAGE,
+    )
     output_stream.write(json.dumps(deny_payload) + "\n")
     output_stream.flush()
 

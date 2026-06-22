@@ -19,6 +19,7 @@ from hooks_constants.convergence_branch_constants import (  # noqa: E402
     CONVERGENCE_BRANCH_SUFFIX_PATTERN,
     CONVERGENCE_FORCE_PUSH_DETECTION_PATTERN,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.destructive_command_segment_constants import (  # noqa: E402
     ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS,
     ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS,
@@ -197,6 +198,12 @@ def _build_silent_gh_deny_response(matched_description: str) -> dict:
         "Bash call prevents duplicate execution."
     )
     _append_destructive_gate_log_entry(brief_label, full_reason)
+    log_hook_block(
+        calling_hook_name="destructive_command_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=full_reason,
+        tool_name="Bash",
+    )
     return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",

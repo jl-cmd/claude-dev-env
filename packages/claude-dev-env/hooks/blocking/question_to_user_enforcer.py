@@ -19,6 +19,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_ASKUSERQUESTION_NOTICE  # noqa: E402
 
 
@@ -109,23 +110,28 @@ def main() -> None:
         f'"{each_indicator}"' for each_indicator in matched_indicators
     )
 
+    block_reason = (
+        f"ASKUSERQUESTION GUARDRAIL: Your response asks the user a question in prose "
+        f"(indicators: {formatted_indicator_list}). "
+        f"User-directed questions must route through the AskUserQuestion tool so the user "
+        f"sees structured options with labels.\n\n"
+        f"Re-output your response with the trailing question removed from prose and moved "
+        f"into an AskUserQuestion tool call. Rhetorical questions answered in the same "
+        f"paragraph are allowed; questions inside code fences, inline code, and blockquotes "
+        f"are ignored.\n\n"
+        f"You MUST re-output the complete, revised response with the correction applied."
+    )
     block_response = {
         "decision": "block",
-        "reason": (
-            f"ASKUSERQUESTION GUARDRAIL: Your response asks the user a question in prose "
-            f"(indicators: {formatted_indicator_list}). "
-            f"User-directed questions must route through the AskUserQuestion tool so the user "
-            f"sees structured options with labels.\n\n"
-            f"Re-output your response with the trailing question removed from prose and moved "
-            f"into an AskUserQuestion tool call. Rhetorical questions answered in the same "
-            f"paragraph are allowed; questions inside code fences, inline code, and blockquotes "
-            f"are ignored.\n\n"
-            f"You MUST re-output the complete, revised response with the correction applied."
-        ),
+        "reason": block_reason,
         "systemMessage": USER_FACING_ASKUSERQUESTION_NOTICE,
         "suppressOutput": True,
     }
-
+    log_hook_block(
+        calling_hook_name="question_to_user_enforcer.py",
+        hook_event="Stop",
+        block_reason=block_reason,
+    )
     print(json.dumps(block_response))
     sys.exit(0)
 

@@ -39,6 +39,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.hook_prose_detector_consistency_constants import (  # noqa: E402
     CONSTANTS_MODULE_SUFFIX,
     CORRECTIVE_MESSAGE,
@@ -141,6 +142,12 @@ def main() -> None:
             "permissionDecisionReason": CORRECTIVE_MESSAGE,
         }
     }
+    log_hook_block(
+        calling_hook_name="hook_prose_detector_consistency.py",
+        hook_event="PreToolUse",
+        block_reason=CORRECTIVE_MESSAGE,
+        tool_name=tool_name,
+    )
     print(json.dumps(deny_payload))
     sys.stdout.flush()
     sys.exit(0)
