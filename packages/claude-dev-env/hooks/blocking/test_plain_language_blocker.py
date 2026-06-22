@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 HOOK_SCRIPT_PATH = Path(__file__).parent / "plain_language_blocker.py"
 _HOOKS_DIR = str(Path(__file__).resolve().parent)
@@ -36,6 +37,8 @@ hook_module = _load_hook_module()
 find_banned_terms = hook_module.find_banned_terms
 strip_non_prose_regions = hook_module.strip_non_prose_regions
 build_block_reason = hook_module.build_block_reason
+
+from pre_tool_use_dispatcher import NativeHook, run_native_hook  # noqa: E402
 
 
 def _run_hook_with_payload(payload: dict) -> subprocess.CompletedProcess[str]:
@@ -245,3 +248,36 @@ def test_prose_slash_token_is_not_stripped_as_path() -> None:
 
 def test_real_file_path_is_still_stripped() -> None:
     assert "initiate" not in strip_non_prose_regions("Edit src/initiate.py to wire it.")
+
+
+def test_native_dispatch_path_logs_the_block(tmp_path: Path) -> None:
+    """A deny routed through the dispatcher's native path logs one record.
+
+    On the Write|Edit|MultiEdit surface this hook runs only through
+    pre_tool_use_dispatcher's native path, which calls evaluate() and
+    build_deny_payload() — never _emit_deny() or main(). The block must still
+    land in the hook-blocks log, so the log call lives on build_deny_payload,
+    the function the native path executes.
+    """
+    deny_payload = {
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": str(tmp_path / "notes.md"),
+            "new_string": "This guide explains how to utilize the new cache layer.",
+        },
+    }
+    native_hook = NativeHook(
+        evaluate=hook_module.evaluate,
+        build_deny_payload=hook_module.build_deny_payload,
+    )
+
+    with patch.object(Path, "home", return_value=tmp_path):
+        hosted_result = run_native_hook(native_hook, deny_payload, is_blocking=True)
+
+    assert hosted_result.captured_stdout
+    log_path = tmp_path / ".claude" / "logs" / "hook-blocks.log"
+    all_records = log_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(all_records) == 1
+    logged_record = json.loads(all_records[0])
+    assert logged_record["hook"] == "plain_language_blocker.py"
+    assert logged_record["event"] == "PreToolUse"

@@ -21,8 +21,9 @@ def log_hook_block(
 ) -> None:
     """Append one JSON record to the hook-blocks log for a block decision.
 
-    Creates the logs directory if absent. Silently swallows all IO errors
-    so a logging failure never changes a hook's decision.
+    Creates the logs directory if absent. Skips logging when the home directory
+    cannot be resolved, and silently swallows all IO errors otherwise, so a
+    logging failure never changes a hook's decision.
 
     Args:
         calling_hook_name: The script basename of the hook that is blocking.
@@ -33,7 +34,12 @@ def log_hook_block(
             the block; truncated to 500 characters before writing.
     """
     try:
-        log_path = Path.home() / _HOOK_BLOCKS_LOG_RELATIVE_PATH
+        home_directory = Path.home()
+    except RuntimeError:
+        return
+
+    try:
+        log_path = home_directory / _HOOK_BLOCKS_LOG_RELATIVE_PATH
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
         log_record: dict[str, str] = {

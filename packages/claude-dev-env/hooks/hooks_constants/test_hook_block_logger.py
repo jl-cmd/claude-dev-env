@@ -108,6 +108,23 @@ def test_log_hook_block_swallows_io_error_on_unwritable_log(tmp_path: Path) -> N
         log_path.chmod(stat.S_IREAD | stat.S_IWRITE)
 
 
+def test_log_hook_block_swallows_runtime_error_when_home_unresolvable() -> None:
+    def raise_home_resolution_failure() -> Path:
+        raise RuntimeError("Could not determine home directory.")
+
+    with patch.object(Path, "home", side_effect=raise_home_resolution_failure):
+        try:
+            returned_nothing = log_hook_block(
+                calling_hook_name="any_hook.py",
+                hook_event="PreToolUse",
+                block_reason="reason",
+            )
+        except RuntimeError:
+            pytest.fail("log_hook_block raised RuntimeError when home was unresolvable")
+
+    assert returned_nothing is None
+
+
 def test_log_hook_block_truncates_long_preview(tmp_path: Path) -> None:
     long_input = "x" * 600
 

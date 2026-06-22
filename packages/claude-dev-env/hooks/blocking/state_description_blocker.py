@@ -236,6 +236,11 @@ def build_deny_payload(deny_reason: str) -> dict[str, object]:
     Returns:
         The deny payload dictionary the hook serializes to stdout.
     """
+    log_hook_block(
+        calling_hook_name="state_description_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=deny_reason,
+    )
     return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
@@ -263,11 +268,6 @@ def main() -> None:
     if deny_reason is None:
         sys.exit(0)
 
-    log_hook_block(
-        calling_hook_name="state_description_blocker.py",
-        hook_event="PreToolUse",
-        block_reason=deny_reason,
-    )
     _emit_hook_result(build_deny_payload(deny_reason), sys.stdout)
     sys.exit(0)
 
