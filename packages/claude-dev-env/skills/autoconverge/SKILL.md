@@ -264,16 +264,21 @@ the run. Agents verify destructive-blocker behavior through the committed test
 suite (`python -m pytest`) and keep scratch work in the OS temp dir. The preamble
 describes the narrowest rm auto-allow path — a standalone Bash call whose target
 resolves inside the ephemeral namespace (`/tmp`, `/temp`, the OS temp root, or the
-run worktree) — and notes that a compound path also accepts an rm chained after a
-`cd` or joined with benign segments when every rm target is an absolute ephemeral
-path. Across those paths `$(...)` substitution and backtick subshells fail closed,
-and an unknown variable in the target fails closed; the known temporary variables
-`TEMP`, `TMP`, `TMPDIR`, and `CLAUDE_JOB_DIR` resolve to the OS temp root, so a
-bare `$CLAUDE_JOB_DIR/tmp/<name>` target is auto-allowed under an ephemeral cwd.
-Even so, for any cleanup whose path is variable-built or whose teardown spans
-multiple steps, agents author a Python helper file and run it as `python
-<file>.py` — keeping every destructive literal out of a Bash command string
-entirely and independent of which auto-allow path matches.
+run worktree) — and a compound path that accepts an rm joined with benign
+reporting segments when every rm target is an absolute ephemeral path. Both of
+those paths fail closed on `$(...)` substitution, backtick subshells, and any `$`
+in the target — including `$CLAUDE_JOB_DIR` — so neither resolves an environment
+variable. A third, broad path matches only when the command itself declares an
+ephemeral working directory (it `cd`s into one, or runs under one): that
+cwd-scoped path resolves the target against the declared cwd, fails closed on
+`$(...)`, backticks, and unknown variables, and resolves the known temporary
+variables `TEMP`, `TMP`, `TMPDIR`, and `CLAUDE_JOB_DIR` to the OS temp root, so
+under that declared ephemeral cwd a bare `$CLAUDE_JOB_DIR/tmp/<name>` target and a
+relative target after a `cd` are auto-allowed. Even so, for any cleanup whose path
+is variable-built or whose teardown spans multiple steps, agents author a Python
+helper file and run it as `python <file>.py` — keeping every destructive literal
+out of a Bash command string entirely and independent of which auto-allow path
+matches.
 
 - **Converge:** `parallel([Bugbot lens, code-review lens, bug-audit lens])` on
   the current HEAD, full `origin/main...HEAD` diff. Dedup findings; one

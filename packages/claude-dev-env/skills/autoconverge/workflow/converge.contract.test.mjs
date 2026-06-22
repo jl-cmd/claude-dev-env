@@ -606,3 +606,50 @@ test('SKILL.md does not claim it enforces the exact rm shape the hook auto-allow
     'the hook has multiple rm auto-allow paths, so SKILL.md must not assert one narrow shape is the exact set',
   );
 });
+
+test('preamble does not attribute the known-temp-var resolution to the standalone or compound paths', () => {
+  assert.doesNotMatch(
+    preambleText().replace(/\s+/g, ' '),
+    /Across these paths[\s\S]*?CLAUDE_JOB_DIR/i,
+    'the temp-var resolution lives only in the broad cwd-scoped path; the standalone and compound paths fail closed on any $',
+  );
+});
+
+test('preamble attributes the known-temp-var resolution to a third cwd-scoped auto-allow path', () => {
+  const text = preambleText().replace(/\s+/g, ' ');
+  const tempVarSentenceMatch =
+    /[^.]*\bTMPDIR\b[^.]*CLAUDE_JOB_DIR[^.]*\./i.exec(text);
+  assert.notEqual(
+    tempVarSentenceMatch,
+    null,
+    'expected a sentence describing the TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR resolution',
+  );
+  assert.match(
+    tempVarSentenceMatch[0],
+    /declares? an ephemeral cwd|declared ephemeral cwd|ephemeral-cwd path|third (?:auto-allow )?path|cwd-scoped path/i,
+    'expected the temp-var resolution to be tied to the cwd-scoped path that declares an ephemeral working directory, not the standalone or compound paths',
+  );
+});
+
+test('SKILL.md does not attribute the known-temp-var resolution to the standalone or compound paths', () => {
+  assert.doesNotMatch(
+    skillSource.replace(/\s+/g, ' '),
+    /Across those paths[\s\S]*?CLAUDE_JOB_DIR/i,
+    'the temp-var resolution lives only in the broad cwd-scoped path; the standalone and compound paths fail closed on any $',
+  );
+});
+
+test('SKILL.md attributes the known-temp-var resolution to the cwd-scoped auto-allow path', () => {
+  const tempVarSentenceMatch =
+    /[^.]*\bTMPDIR\b[^.]*CLAUDE_JOB_DIR[^.]*\./i.exec(skillSource.replace(/\s+/g, ' '));
+  assert.notEqual(
+    tempVarSentenceMatch,
+    null,
+    'expected a sentence describing the TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR resolution',
+  );
+  assert.match(
+    tempVarSentenceMatch[0],
+    /declares? an ephemeral cwd|declared ephemeral cwd|ephemeral-cwd path|third (?:auto-allow )?path|cwd-scoped path/i,
+    'expected the temp-var resolution to be tied to the cwd-scoped path that declares an ephemeral working directory, not the standalone or compound paths',
+  );
+});
