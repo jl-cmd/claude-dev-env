@@ -547,3 +547,34 @@ for (const builderName of editStepBuilders) {
     );
   });
 }
+
+function preambleText() {
+  const preambleStart = convergeSource.indexOf('const HEADLESS_SAFETY_PREAMBLE =');
+  assert.notEqual(preambleStart, -1, 'expected HEADLESS_SAFETY_PREAMBLE to exist');
+  const preambleEnd = convergeSource.indexOf('\n\nlet ', preambleStart);
+  return convergeSource.slice(preambleStart, preambleEnd === -1 ? undefined : preambleEnd);
+}
+
+test('preamble instructs agents to run rm cleanup as its own standalone Bash call, not chained', () => {
+  assert.match(
+    preambleText(),
+    /standalone|its own.*call|separate.*call|not.*chain|never.*chain|not.*&&|never.*&&/i,
+    'expected the preamble to forbid chaining rm with && / || / ; / |',
+  );
+});
+
+test('preamble forbids a shell variable or $ expansion in the rm target path', () => {
+  assert.match(
+    preambleText(),
+    /no\s+\$|never.*\$|absolute.*literal|literal.*path|no.*variable|forbid.*\$|\$.*makes.*gate|any.*\$.*fail/i,
+    'expected the preamble to state that any $ in the rm target makes the gate fail closed',
+  );
+});
+
+test('preamble prescribes authoring a Python helper for variable-built or multi-step sandboxes', () => {
+  assert.match(
+    preambleText(),
+    /python\s+<file>\.py|python\s+<.*>\.py|author.*python.*helper|python.*helper.*sandbox|sandbox.*python.*helper/i,
+    'expected the preamble to prescribe running a Python helper file for multi-step sandbox teardown',
+  );
+});
