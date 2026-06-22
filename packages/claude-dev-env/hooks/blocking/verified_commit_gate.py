@@ -38,6 +38,10 @@ blocking_directory = str(Path(__file__).resolve().parent)
 if blocking_directory not in sys.path:
     sys.path.insert(0, blocking_directory)
 
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
 from config.verified_commit_constants import (
     ALL_GIT_BINARY_NAMES,
     CORRECTIVE_MESSAGE,
@@ -55,6 +59,7 @@ from config.verified_commit_constants import (
     VERIFICATION_BYPASS_MARKER,
     WORK_TREE_OPTION,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from verification_verdict_store import (
     branch_surface_manifest,
     is_verification_exempt_diff,
@@ -543,6 +548,12 @@ def main() -> None:
                 "permissionDecisionReason": deny_reason,
             }
         }
+        log_hook_block(
+            calling_hook_name="verified_commit_gate.py",
+            hook_event="PreToolUse",
+            block_reason=deny_reason,
+            tool_name=pretooluse_payload.get("tool_name", "") if isinstance(pretooluse_payload.get("tool_name"), str) else None,
+        )
         print(json.dumps(deny_payload))
         return
 

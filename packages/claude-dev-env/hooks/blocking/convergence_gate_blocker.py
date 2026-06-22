@@ -14,6 +14,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+
+
 def _resolve_pr_number(command: str, cwd: str | None) -> int | None:
     direct_match = re.search(r"\bgh\s+pr\s+ready\s+(\d+)", command)
     if direct_match:
@@ -112,15 +119,22 @@ def main() -> None:
     if completed_process.returncode in (0, 2):
         sys.exit(0)
 
+    block_reason = (
+        "Convergence check failed — PR is not ready to mark ready:\n\n" + completed_process.stdout
+    )
     deny_payload = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
-            "permissionDecisionReason": (
-                "Convergence check failed — PR is not ready to mark ready:\n\n" + completed_process.stdout
-            ),
+            "permissionDecisionReason": block_reason,
         }
     }
+    log_hook_block(
+        calling_hook_name="convergence_gate_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=block_reason,
+        tool_name="Bash",
+    )
     print(json.dumps(deny_payload))
     sys.stdout.flush()
     sys.exit(0)

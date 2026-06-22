@@ -7,7 +7,13 @@ Blocks if hooks use simple 'python3 ~/.claude/...' instead of the exec(open(...)
 import json
 import re
 import sys
+from pathlib import Path
 
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 SIMPLE_PATTERN = re.compile(
     r'python3?\s+~/\.claude/hooks/'
@@ -56,6 +62,13 @@ def main() -> None:
                 "permissionDecisionReason": message
             }
         }
+        log_hook_block(
+            calling_hook_name="hook_format_validator.py",
+            hook_event="PreToolUse",
+            block_reason=message,
+            tool_name=tool_name,
+            offending_input_preview=file_path,
+        )
         print(json.dumps(result))
         sys.exit(0)
 

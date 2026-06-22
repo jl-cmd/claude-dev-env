@@ -17,6 +17,7 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.state_description_blocker_constants import (  # noqa: E402
     ALL_BLOCK_COMMENT_EXTENSIONS,
     ALL_BLOCK_COMMENT_ONLY_EXTENSIONS,
@@ -235,6 +236,11 @@ def build_deny_payload(deny_reason: str) -> dict[str, object]:
     Returns:
         The deny payload dictionary the hook serializes to stdout.
     """
+    log_hook_block(
+        calling_hook_name="state_description_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=deny_reason,
+    )
     return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",

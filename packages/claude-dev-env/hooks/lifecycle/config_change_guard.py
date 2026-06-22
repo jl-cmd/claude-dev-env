@@ -4,6 +4,13 @@ from datetime import datetime
 import json
 import os
 import sys
+from pathlib import Path
+
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 AUDIT_LOG = os.path.expanduser("~/.claude/cache/config-change-audit.log")
 # pragma: no-tdd-gate
@@ -68,6 +75,11 @@ def guard_hook_injection(file_path: str) -> None:
             "decision": "block",
             "reason": block_reason,
         }
+        log_hook_block(
+            calling_hook_name="config_change_guard.py",
+            hook_event="ConfigChange",
+            block_reason=block_reason,
+        )
         print(json.dumps(block_payload))
         return
 

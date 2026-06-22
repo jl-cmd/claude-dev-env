@@ -26,6 +26,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pytest_testpaths_orphan_blocker_constants import (  # noqa: E402
     ALL_PRUNED_PARENT_DIRECTORY_NAMES,
     GLOB_METACHARACTERS,
@@ -350,6 +351,13 @@ def main() -> None:
         sys.exit(0)
 
     block_payload = _build_block_payload(block_details)
+    log_hook_block(
+        calling_hook_name="pytest_testpaths_orphan_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=block_payload["hookSpecificOutput"]["permissionDecisionReason"],
+        tool_name=tool_name,
+        offending_input_preview=file_path,
+    )
     _emit_hook_result(block_payload, sys.stdout)
     sys.exit(0)
 

@@ -43,6 +43,7 @@ from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
     apply_edits,
     edits_for_tool,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
@@ -587,6 +588,13 @@ def main() -> None:
         sys.exit(0)
 
     block_payload = _build_block_payload(missing_filenames, str(claude_md_directory))
+    log_hook_block(
+        calling_hook_name="claude_md_orphan_file_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=block_payload["hookSpecificOutput"]["permissionDecisionReason"],
+        tool_name=tool_name,
+        offending_input_preview=file_path,
+    )
     _emit_hook_result(block_payload, sys.stdout)
     sys.exit(0)
 

@@ -3,6 +3,13 @@ import fnmatch
 import json
 import os
 import sys
+from pathlib import Path
+
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 SENSITIVE_PATTERNS = [
     ".env",
@@ -54,13 +61,20 @@ def main() -> None:
     matched_pattern = is_sensitive_file(file_path)
 
     if matched_pattern is not None:
+        deny_reason = f"BLOCKED: Sensitive file '{os.path.basename(file_path)}' (pattern: '{matched_pattern}'). Edit manually outside Claude Code."
         deny_response = {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
-                "permissionDecisionReason": f"BLOCKED: Sensitive file '{os.path.basename(file_path)}' (pattern: '{matched_pattern}'). Edit manually outside Claude Code."
+                "permissionDecisionReason": deny_reason,
             }
         }
+        log_hook_block(
+            calling_hook_name="sensitive_file_protector.py",
+            hook_event="PreToolUse",
+            block_reason=deny_reason,
+            offending_input_preview=file_path,
+        )
         print(json.dumps(deny_response))
 
     sys.exit(0)

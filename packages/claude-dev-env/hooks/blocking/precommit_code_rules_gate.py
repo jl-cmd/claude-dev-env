@@ -29,6 +29,7 @@ from block_main_commit import (  # noqa: E402
     parse_bash_command_from_stdin,
     resolve_directory,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.precommit_code_rules_gate_constants import (  # noqa: E402
     ALL_GIT_REPOSITORY_ROOT_COMMAND,
     ALL_STAGED_PYTHON_FILES_COMMAND,
@@ -189,7 +190,15 @@ def main() -> None:
     gate_exit_code, gate_report = run_staged_gate(repository_root)
     if gate_exit_code == 0:
         sys.exit(0)
-    print(json.dumps(build_denial_response(gate_report)))
+    denial = build_denial_response(gate_report)
+    log_hook_block(
+        calling_hook_name="precommit_code_rules_gate.py",
+        hook_event="PreToolUse",
+        block_reason=denial["hookSpecificOutput"]["permissionDecisionReason"],
+        tool_name="Bash",
+        offending_input_preview=bash_command,
+    )
+    print(json.dumps(denial))
     sys.exit(0)
 
 

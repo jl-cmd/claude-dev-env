@@ -16,6 +16,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_NOTICE  # noqa: E402
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -120,21 +121,26 @@ def main() -> None:
             "(no research-mode skill installed; verify with sources or prompt the user via AskUserQuestion with potential options + context)"
         )
 
+    block_reason = (
+        f"ANTI-HALLUCINATION GUARDRAIL: Your response contains hedging language: "
+        f"{formatted_term_list}. "
+        f"These words signal unverified claims. You MUST rewrite your response "
+        f"{skill_reference}\n\n"
+        f"Do NOT simply remove the hedging word and keep the unverified claim. "
+        f"Do more research to VERIFY it with a source, or prompt the user via AskUserQuestion with some potential options + context if you are unable to find anything online.\n\n"
+        f"You MUST re-output the complete, revised response with the corrections applied."
+    )
     block_response = {
         "decision": "block",
-        "reason": (
-            f"ANTI-HALLUCINATION GUARDRAIL: Your response contains hedging language: "
-            f"{formatted_term_list}. "
-            f"These words signal unverified claims. You MUST rewrite your response "
-            f"{skill_reference}\n\n"
-            f"Do NOT simply remove the hedging word and keep the unverified claim. "
-            f"Do more research to VERIFY it with a source, or prompt the user via AskUserQuestion with some potential options + context if you are unable to find anything online.\n\n"
-            f"You MUST re-output the complete, revised response with the corrections applied."
-        ),
+        "reason": block_reason,
         "systemMessage": USER_FACING_NOTICE,
         "suppressOutput": True,
     }
-
+    log_hook_block(
+        calling_hook_name="hedging_language_blocker.py",
+        hook_event="Stop",
+        block_reason=block_reason,
+    )
     print(json.dumps(block_response))
     sys.exit(0)
 

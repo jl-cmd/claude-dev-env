@@ -4,6 +4,21 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
+from unittest.mock import patch
+
+_BLOCKING_DIR = str(Path(__file__).resolve().parent)
+_HOOKS_ROOT = str(Path(__file__).resolve().parent.parent)
+if _BLOCKING_DIR not in sys.path:
+    sys.path.insert(0, _BLOCKING_DIR)
+if _HOOKS_ROOT not in sys.path:
+    sys.path.insert(0, _HOOKS_ROOT)
+
+from pre_tool_use_dispatcher import NativeHook, run_native_hook  # noqa: E402
+from state_description_blocker import (  # noqa: E402
+    build_deny_payload,
+    evaluate,
+)
 
 HOOK_SCRIPT_PATH = os.path.join(
     os.path.dirname(__file__), "state_description_blocker.py"
@@ -616,3 +631,29 @@ def test_handles_non_string_tool_name():
     )
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+def test_native_dispatch_path_logs_the_block(tmp_path: Path) -> None:
+    """A deny routed through the dispatcher's native path logs one record.
+
+    hooks.json wires this hook only through pre_tool_use_dispatcher, whose
+    native path calls evaluate() and build_deny_payload() — never main(). The
+    block must still land in the hook-blocks log, so the log call lives on
+    build_deny_payload, the function the native path executes.
+    """
+    deny_payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": "src/main.py", "content": VIOLATION_INSTEAD_OF_COMMENT},
+    }
+    native_hook = NativeHook(evaluate=evaluate, build_deny_payload=build_deny_payload)
+
+    with patch.object(Path, "home", return_value=tmp_path):
+        hosted_result = run_native_hook(native_hook, deny_payload, is_blocking=True)
+
+    assert hosted_result.captured_stdout
+    log_path = tmp_path / ".claude" / "logs" / "hook-blocks.log"
+    all_records = log_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(all_records) == 1
+    logged_record = json.loads(all_records[0])
+    assert logged_record["hook"] == "state_description_blocker.py"
+    assert logged_record["event"] == "PreToolUse"
