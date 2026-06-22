@@ -77,7 +77,7 @@ def guard_hook_injection(file_path: str) -> None:
         }
         log_hook_block(
             calling_hook_name="config_change_guard.py",
-            hook_event="Stop",
+            hook_event="ConfigChange",
             block_reason=block_reason,
         )
         print(json.dumps(block_payload))

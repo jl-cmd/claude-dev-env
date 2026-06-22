@@ -109,3 +109,26 @@ def test_non_user_settings_source_produces_no_output(tmp_path: Path) -> None:
     assert hook_run.returncode == 0
     assert hook_run.stderr.strip() == ""
     assert hook_run.stdout.strip() == ""
+
+
+def test_block_logs_config_change_event(tmp_path: Path) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    known_count_file = tmp_path / "known-hook-count.txt"
+    known_count_file.write_text("2")
+    settings_path = _make_settings_with_hook_count(5, tmp_path)
+
+    hook_run = _run_hook(
+        source="user_settings",
+        file_path=settings_path,
+        extra_env={
+            "KNOWN_HOOK_COUNT_FILE": str(known_count_file),
+            "HOME": str(fake_home),
+            "USERPROFILE": str(fake_home),
+        },
+    )
+
+    assert hook_run.returncode == 0
+    log_path = fake_home / ".claude" / "logs" / "hook-blocks.log"
+    logged_record = json.loads(log_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert logged_record["event"] == "ConfigChange"

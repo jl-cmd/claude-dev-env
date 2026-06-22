@@ -64,7 +64,7 @@ def main() -> None:
         }
         log_hook_block(
             calling_hook_name="hook_format_validator.py",
-            hook_event="PostToolUse",
+            hook_event="PreToolUse",
             block_reason=message,
             tool_name=tool_name,
             offending_input_preview=file_path,
