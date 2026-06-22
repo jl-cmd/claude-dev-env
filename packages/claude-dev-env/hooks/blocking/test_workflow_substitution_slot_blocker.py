@@ -23,7 +23,6 @@ hook_module = importlib.util.module_from_spec(hook_spec)
 hook_spec.loader.exec_module(hook_module)
 
 content_has_violation = hook_module.content_has_violation
-find_bare_index_segments = hook_module.find_bare_index_segments
 find_bare_path_segments = hook_module.find_bare_path_segments
 has_iteration_loop = hook_module.has_iteration_loop
 written_content = hook_module.written_content
@@ -47,37 +46,23 @@ _FIXED_TEMPLATE = (
 
 
 def test_detects_bare_index_in_path_segment() -> None:
-    assert find_bare_index_segments(
+    assert find_bare_path_segments(
         "render Path(r'${args.work_dir}\\\\cand_i\\\\plate.svg')"
     ) == {"cand_i"}
 
 
 def test_detects_quoted_key_when_token_also_appears_as_path_segment() -> None:
     looped_path_and_key = "write ${work}\\\\cand_i\\\\plate.svg\n{key: \"cand_i\", name}"
-    assert "cand_i" in find_bare_index_segments(looped_path_and_key)
+    assert "cand_i" in find_bare_path_segments(looped_path_and_key)
 
 
 def test_quoted_key_alone_without_path_segment_is_not_detected() -> None:
-    assert find_bare_index_segments('{key: "metric_i", name}') == set()
-
-
-def test_index_segments_equal_path_segments_for_looped_path_and_key() -> None:
-    looped_path_and_key = "write ${work}\\\\cand_i\\\\plate.svg\n{key: \"cand_i\", name}"
-    assert find_bare_index_segments(looped_path_and_key) == find_bare_path_segments(
-        looped_path_and_key
-    )
-
-
-def test_index_segments_equal_path_segments_for_quoted_only_key() -> None:
-    quoted_only_key = '{key: "metric_i", name}'
-    assert find_bare_index_segments(quoted_only_key) == find_bare_path_segments(
-        quoted_only_key
-    )
+    assert find_bare_path_segments('{key: "metric_i", name}') == set()
 
 
 def test_marked_substitution_slot_is_not_a_bare_segment() -> None:
     assert (
-        find_bare_index_segments(
+        find_bare_path_segments(
             "render Path(r'${args.work_dir}\\\\cand_<i>\\\\plate.svg')"
         )
         == set()

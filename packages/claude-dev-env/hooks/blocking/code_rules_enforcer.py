@@ -161,6 +161,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     PRECHECK_USAGE_EXIT_CODE,
     PRECHECK_USAGE_MESSAGE,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.setup_project_paths_constants import (  # noqa: E402
     UTF8_BYTE_ORDER_MARK,
 )
@@ -793,6 +794,11 @@ def _write_deny_payload(deny_reason: str, deny_stream: TextIO) -> None:
             "permissionDecisionReason": deny_reason,
         }
     }
+    log_hook_block(
+        calling_hook_name="code_rules_enforcer.py",
+        hook_event="PreToolUse",
+        block_reason=deny_reason,
+    )
     deny_stream.write(json.dumps(deny_payload) + "\n")
     deny_stream.flush()
 

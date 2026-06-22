@@ -15,6 +15,13 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
+
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 GIT_COMMAND_TIMEOUT_SECONDS = 5
 PROTECTED_BRANCHES = ("main", "master")
@@ -172,6 +179,13 @@ def main() -> None:
         sys.exit(0)
 
     denial = build_denial_response(current_branch, target_dir)
+    log_hook_block(
+        calling_hook_name="block_main_commit.py",
+        hook_event="PreToolUse",
+        block_reason=denial["hookSpecificOutput"]["permissionDecisionReason"],
+        tool_name="Bash",
+        offending_input_preview=bash_command,
+    )
     print(json.dumps(denial))
     sys.exit(0)
 

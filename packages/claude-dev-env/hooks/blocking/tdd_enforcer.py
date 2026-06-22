@@ -24,6 +24,7 @@ if _blocking_directory_path_string not in sys.path:
 
 from code_rules_shared import is_ephemeral_script_path  # noqa: E402
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_TDD_NOTICE  # noqa: E402
 
 PRODUCTION_EXTENSIONS = {'.py', '.ts', '.tsx', '.js', '.jsx'}
@@ -538,6 +539,11 @@ def emit_deny(reason: str) -> None:
         "suppressOutput": True,
         "systemMessage": USER_FACING_TDD_NOTICE,
     }
+    log_hook_block(
+        calling_hook_name="tdd_enforcer.py",
+        hook_event="PreToolUse",
+        block_reason=reason,
+    )
     print(json.dumps(deny_payload))
 
 

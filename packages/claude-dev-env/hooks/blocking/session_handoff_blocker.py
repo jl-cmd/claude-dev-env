@@ -18,6 +18,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_CONTEXT_REASSURANCE_NOTICE  # noqa: E402
 from hooks_constants.session_handoff_blocker_constants import (  # noqa: E402
     FIRST_PERSON_SUBJECT_PATTERN,
@@ -169,19 +170,24 @@ def main() -> None:
     if not find_session_handoff_proposal(assistant_message):
         sys.exit(0)
 
+    block_reason = (
+        "LONG-HORIZON-AUTONOMY GUARDRAIL: You have ample context remaining. Do not "
+        "stop, summarize, or suggest a new session on account of context limits. "
+        "Continue the work.\n\n"
+        "Re-output your response continuing the task without the handoff suggestion, "
+        "per the long-horizon-autonomy rule."
+    )
     block_response = {
         "decision": "block",
-        "reason": (
-            "LONG-HORIZON-AUTONOMY GUARDRAIL: You have ample context remaining. Do not "
-            "stop, summarize, or suggest a new session on account of context limits. "
-            "Continue the work.\n\n"
-            "Re-output your response continuing the task without the handoff suggestion, "
-            "per the long-horizon-autonomy rule."
-        ),
+        "reason": block_reason,
         "systemMessage": USER_FACING_CONTEXT_REASSURANCE_NOTICE,
         "suppressOutput": True,
     }
-
+    log_hook_block(
+        calling_hook_name="session_handoff_blocker.py",
+        hook_event="Stop",
+        block_reason=block_reason,
+    )
     print(json.dumps(block_response))
     sys.exit(0)
 

@@ -54,6 +54,7 @@ from hooks_constants.code_verifier_spawn_preflight_gate_constants import (  # no
     MERGE_TREE_CONFLICT_EXIT_CODE,
     MERGE_TREE_TIMEOUT_SECONDS,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pr_converge_bugteam_enforcer_constants import (  # noqa: E402
     AGENT_TOOL_NAME,
 )
@@ -370,6 +371,11 @@ def _emit_deny_payload(output_stream: TextIO, reason: str) -> None:
             "permissionDecisionReason": reason,
         }
     }
+    log_hook_block(
+        calling_hook_name="code_verifier_spawn_preflight_gate.py",
+        hook_event="PreToolUse",
+        block_reason=reason,
+    )
     output_stream.write(json.dumps(deny_payload) + "\n")
     output_stream.flush()
 

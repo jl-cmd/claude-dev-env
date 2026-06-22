@@ -44,6 +44,7 @@ if _hooks_dir not in sys.path:
 
 from code_rules_shared import is_test_file  # noqa: E402
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
@@ -360,15 +361,20 @@ def main() -> None:
         sys.exit(0)
 
     function_name, omitted_values = undercounted_budget
+    deny_reason = format_block_message(file_path, function_name, omitted_values)
+    log_hook_block(
+        calling_hook_name="subprocess_budget_completeness.py",
+        hook_event="PreToolUse",
+        block_reason=deny_reason,
+        offending_input_preview=file_path,
+    )
     print(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "deny",
-                    "permissionDecisionReason": format_block_message(
-                        file_path, function_name, omitted_values
-                    ),
+                    "permissionDecisionReason": deny_reason,
                 }
             }
         )

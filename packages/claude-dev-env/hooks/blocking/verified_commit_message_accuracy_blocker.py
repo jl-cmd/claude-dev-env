@@ -24,6 +24,13 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
+
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 
 def is_guarded_file(file_path: str) -> bool:
@@ -136,13 +143,21 @@ def main() -> None:
     if not claims_blanket_comment_exemption(written_text):
         sys.exit(0)
 
+    corrective_message = build_corrective_message()
     deny_response = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
-            "permissionDecisionReason": build_corrective_message(),
+            "permissionDecisionReason": corrective_message,
         }
     }
+    log_hook_block(
+        calling_hook_name="verified_commit_message_accuracy_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=corrective_message,
+        tool_name=tool_name,
+        offending_input_preview=file_path,
+    )
     print(json.dumps(deny_response))
     sys.stdout.flush()
     sys.exit(0)

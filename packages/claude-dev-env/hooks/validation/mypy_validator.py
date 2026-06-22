@@ -35,6 +35,7 @@ if _hooks_directory not in sys.path:
 
 from mypy_integration import find_pyproject_with_mypy_config  # noqa: E402
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.mypy_validator_cache_constants import (  # noqa: E402
     CACHE_FILE_ENCODING,
     CONTENT_HASH_CACHE_PASSING_EXIT_CODE,
@@ -479,6 +480,12 @@ def main() -> None:
     error_summary = format_error_summary(all_error_lines)
     send_block_notification(error_summary)
     block_response = build_block_response(error_summary)
+    log_hook_block(
+        calling_hook_name="mypy_validator.py",
+        hook_event="PostToolUse",
+        block_reason=f"[MYPY] Type errors: {error_summary}",
+        offending_input_preview=target_file_path,
+    )
     print(json.dumps(block_response))
     sys.exit(0)
 

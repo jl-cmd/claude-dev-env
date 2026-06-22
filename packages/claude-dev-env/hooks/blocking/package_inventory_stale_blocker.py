@@ -41,6 +41,7 @@ from hooks_constants.package_inventory_stale_blocker_constants import (  # noqa:
     STALE_INVENTORY_MESSAGE_TEMPLATE,
     STALE_INVENTORY_SYSTEM_MESSAGE,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
@@ -358,7 +359,8 @@ def main() -> None:
     if input_data is None:
         sys.exit(0)
 
-    tool_name = input_data.get("tool_name", "")
+    raw_tool_name = input_data.get("tool_name", "")
+    tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
     if tool_name != "Write":
         sys.exit(0)
 
@@ -381,6 +383,13 @@ def main() -> None:
         sys.exit(0)
 
     block_payload = _build_block_payload(file_path, survey)
+    log_hook_block(
+        calling_hook_name="package_inventory_stale_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=block_payload["hookSpecificOutput"]["permissionDecisionReason"],
+        tool_name=tool_name,
+        offending_input_preview=file_path,
+    )
     _emit_hook_result(block_payload, sys.stdout)
     sys.exit(0)
 

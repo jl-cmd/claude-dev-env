@@ -35,6 +35,7 @@ from blocking._gh_body_arg_utils import (  # noqa: E402
     get_logical_first_line,
     iter_significant_tokens,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 _GH_BODY_SUBCOMMANDS = re.compile(
     r"\bgh\s+(?:"
@@ -159,6 +160,13 @@ def main() -> None:
             "permissionDecisionReason": _CORRECTIVE_MESSAGE,
         }
     }
+    log_hook_block(
+        calling_hook_name="gh_body_arg_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=_CORRECTIVE_MESSAGE,
+        tool_name=tool_name,
+        offending_input_preview=command,
+    )
     print(json.dumps(deny_payload))
     sys.stdout.flush()
     sys.exit(0)

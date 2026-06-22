@@ -41,6 +41,7 @@ from blocking.pr_description_readability import (  # noqa: E402
     _is_readability_enabled,
     _load_readability_thresholds,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
     ALL_HEAVY_OPENING_HEADERS,
     ALL_HEAVY_TESTING_HEADERS,
@@ -187,6 +188,11 @@ def main() -> None:
                 "permissionDecisionReason": denial_reason,
             }
         }
+        log_hook_block(
+            calling_hook_name="pr_description_enforcer.py",
+            hook_event="PreToolUse",
+            block_reason=denial_reason,
+        )
         print(json.dumps(denial_payload))
         sys.stdout.flush()
 

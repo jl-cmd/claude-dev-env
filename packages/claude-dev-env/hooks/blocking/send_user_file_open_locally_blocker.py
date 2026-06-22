@@ -15,6 +15,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.send_user_file_open_locally_blocker_constants import (  # noqa: E402
     CORRECTIVE_MESSAGE,
     PROACTIVE_STATUS,
@@ -54,6 +55,12 @@ def main() -> None:
             "permissionDecisionReason": CORRECTIVE_MESSAGE,
         }
     }
+    log_hook_block(
+        calling_hook_name="send_user_file_open_locally_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=CORRECTIVE_MESSAGE,
+        tool_name=TOOL_NAME,
+    )
     print(json.dumps(deny_payload))
     sys.stdout.flush()
     sys.exit(0)

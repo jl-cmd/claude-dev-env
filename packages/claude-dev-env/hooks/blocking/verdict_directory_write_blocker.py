@@ -78,6 +78,7 @@ from config.verified_commit_constants import (  # noqa: E402
     WRITE_CALL_REGION_PATTERN,
 )
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
@@ -664,6 +665,14 @@ def main() -> None:
     deny_decision = decision_for_payload(pretooluse_payload)
     if deny_decision is None:
         return
+    raw_tool_name = pretooluse_payload.get("tool_name", "")
+    tool_name_for_log = raw_tool_name if isinstance(raw_tool_name, str) else ""
+    log_hook_block(
+        calling_hook_name="verdict_directory_write_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=VERDICT_DIRECTORY_GUARD_MESSAGE,
+        tool_name=tool_name_for_log,
+    )
     print(json.dumps(deny_decision))
     sys.stdout.flush()
 

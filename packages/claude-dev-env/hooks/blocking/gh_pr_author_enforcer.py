@@ -59,6 +59,7 @@ from hooks_constants.gh_pr_author_swap_constants import (
     STATE_FILE_PRIMARY_ACCOUNT_KEY,
     WEB_FLAG_PATTERN,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 
 def _active_gh_account() -> str | None:
@@ -410,6 +411,12 @@ def _emit_deny_payload(reason_text: str) -> None:
             "permissionDecisionReason": reason_text,
         }
     }
+    log_hook_block(
+        calling_hook_name="gh_pr_author_enforcer.py",
+        hook_event="PreToolUse",
+        block_reason=reason_text,
+        tool_name=BASH_TOOL_NAME,
+    )
     _write_line(json.dumps(deny_payload), sys.stdout)
 
 
