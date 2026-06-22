@@ -63,6 +63,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `convergence_gate_blocker.py` | PreToolUse (Bash) | Convergence workflow actions on a conflicting PR |
 | `destructive_command_blocker.py` | PreToolUse (Bash/PowerShell) | Shell commands with destructive literals (`rm -rf`, `git reset --hard`, etc.) |
 | `docstring_rule_gate_count_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A stale spelled-out gate-validator count in `docstring-prose-matches-implementation.md` — the "N more gate validators" / "M gated slices" count drifting from the `check_docstring_*` validators the prose names |
+| `duplicate_rmtree_helper_blocker.py` | PreToolUse (Write/Edit) | A local re-definition of the Windows-safe rmtree helper trio (`_strip_read_only_and_retry`, `_force_remove_tree` / `force_rmtree`) in place of importing a shared helper |
 | `es_exe_path_rewriter.py` | PreToolUse | Rewrites paths referencing `.exe` under the Everything search path |
 | `gh_body_arg_blocker.py` | PreToolUse (Bash) | `gh` commands passing `--body`/`-b` directly (requires `--body-file` instead) |
 | `gh_pr_author_enforcer.py` | PreToolUse | Enforces PR author identity rules |

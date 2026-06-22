@@ -95,6 +95,10 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
+        script_relative_path="blocking/duplicate_rmtree_helper_blocker.py",
+        applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
+    ),
+    HostedHookEntry(
         script_relative_path="blocking/state_description_blocker.py",
         applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
         native_module_name=STATE_DESCRIPTION_BLOCKER_MODULE_NAME,

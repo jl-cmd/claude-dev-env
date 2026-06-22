@@ -24,6 +24,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `doc_gist_auto_publish_constants.py` | Sentinel marker and URL patterns for the doc-gist auto-publish hook |
 | `docstring_rule_gate_count_blocker_constants.py` | Target rule basename, spelled-out-number lookup, count-clause and `check_*` validator patterns, and block-message text for the docstring-rule gate-count staleness blocker |
 | `duplicate_function_body_constants.py` | Hashing and comparison config for the duplicate-body check |
+| `duplicate_rmtree_helper_blocker_constants.py` | Sanctioned Windows-safe rmtree helper names, the definition pattern, and the exempt-path set for the duplicate-rmtree-helper blocker |
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
