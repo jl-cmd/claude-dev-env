@@ -70,10 +70,11 @@ def path_is_exempt(file_path: str) -> bool:
 
     Returns:
         True when the path's basename is the canonical shared-helper home, an
-        rmtree-blocker hook source, or a test file. A definition there is
-        intentional. Basename equality (not substring containment) prevents a
-        sibling whose name merely contains an exempt fragment from bypassing the
-        block.
+        rmtree-blocker hook source, one of the existing in-repo definition sites
+        (session_env_cleanup.py, _md_to_html_blocker_test_support.py,
+        teardown_worktrees.py), or a test file. A definition there is intentional.
+        Basename equality (not substring containment) prevents a sibling whose name
+        merely contains an exempt fragment from bypassing the block.
     """
     normalized_path = file_path.replace("\\", "/")
     file_name = normalized_path.rsplit("/", 1)[-1]
