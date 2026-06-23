@@ -8,8 +8,8 @@ decision when any hook denied (carrying every denying reason) or exits zero to
 allow.
 
 The per-hook coverage matrix:
-- Write  -> Group A (10 hooks) + Group B (7 hooks) = 17 hooks
-- Edit   -> Group A (10 hooks) + Group B (7 hooks) = 17 hooks
+- Write  -> Group A (11 hooks) + Group B (7 hooks) = 18 hooks
+- Edit   -> Group A (11 hooks) + Group B (7 hooks) = 18 hooks
 - MultiEdit -> Group B only (7 hooks)
 """
 
