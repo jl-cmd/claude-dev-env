@@ -9,6 +9,10 @@ HELPER_DEFINITION_PATTERN: re.Pattern[str] = re.compile(
     re.MULTILINE,
 )
 
+TRIPLE_QUOTED_STRING_PATTERN: re.Pattern[str] = re.compile(
+    r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'',
+)
+
 ALL_EXEMPT_PATH_FRAGMENTS: tuple[str, ...] = (
     "windows_rmtree_blocker.py",
     "duplicate_rmtree_helper_blocker.py",
