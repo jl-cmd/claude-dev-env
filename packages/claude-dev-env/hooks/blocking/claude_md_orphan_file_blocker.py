@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: blocks a per-directory CLAUDE.md table that names a file absent from its subtree.
+"""PreToolUse hook: blocks a per-directory CLAUDE.md that names a file absent from its subtree.
 
 A per-directory ``CLAUDE.md`` documents the files reachable from its own
-directory in a markdown table whose first column names each file in backticks.
-When a first-column cell names a bare filename that exists nowhere under the scan
+directory in a markdown table whose first column names each file in backticks,
+and shows run commands inside fenced code blocks that invoke those files. When a
+first-column cell, or an interpreter invocation inside a fenced run command
+(``python script.py``), names a bare filename that exists nowhere under the scan
 root (the CLAUDE.md directory's parent, which covers the directory, its
-subdirectories, and its siblings), the table points a reader at a file that is
-not there. This hook fires on Write, Edit, and MultiEdit targeting a file named
-``CLAUDE.md`` and blocks the write when any such cell names a file absent from
-the scan root. A table block whose own region declares an explicit relative-path
-source (a ``../`` token) documents files outside the subtree, so that block's
-rows are left alone — the exemption is scoped to the block, not the whole file.
+subdirectories, and its siblings), the doc points a reader at a file that is not
+there. This hook fires on Write, Edit, and MultiEdit targeting a file named
+``CLAUDE.md`` and blocks the write when any such cell or run command names a file
+absent from the scan root. A table block whose own region declares an explicit
+relative-path source (a ``../`` token) documents files outside the subtree, so
+that block's rows are left alone — the exemption is scoped to the block, not the
+whole file.
 """
 
 import json
@@ -26,6 +29,7 @@ if _hooks_dir not in sys.path:
 from hooks_constants.claude_md_orphan_file_blocker_constants import (  # noqa: E402
     ALL_NOISE_DIRECTORY_NAMES,
     ALL_REFERENCED_FILE_EXTENSIONS,
+    ALL_RUN_COMMAND_SCRIPT_EXTENSIONS,
     CLAUDE_MD_FILENAME,
     CODE_FENCE_PATTERN,
     FIRST_COLUMN_BACKTICK_PATTERN,
@@ -36,6 +40,7 @@ from hooks_constants.claude_md_orphan_file_blocker_constants import (  # noqa: E
     ORPHAN_FILE_SYSTEM_MESSAGE,
     REGION_BOUNDARY_PATTERN,
     RELATIVE_PATH_SOURCE_PATTERN,
+    RUN_COMMAND_SCRIPT_PATTERN,
     SEPARATOR_CELL_PATTERN,
     TABLE_ROW_PATTERN,
 )
@@ -210,6 +215,67 @@ def _block_filenames(all_region_lines: list[str], all_block_lines: list[str]) ->
     return block_filenames
 
 
+def _run_command_filename_in_line(fenced_line: str) -> str | None:
+    """Return the script basename an interpreter invocation on this line names.
+
+    A fenced run-command line such as ``python tools/verify.py --flag`` invokes a
+    script file; this returns that script's bare basename. A path-qualified script
+    keeps only its final segment, so ``node tools/build_bundle.mjs`` yields
+    ``build_bundle.mjs`` — the basename the directory file would match. A line with
+    no interpreter invocation, or whose named script carries no recognized
+    extension, yields None.
+
+    Args:
+        fenced_line: A single line drawn from inside a fenced code block.
+
+    Returns:
+        The bare script basename the invocation names, or None when the line names
+        no script.
+    """
+    invocation_match = RUN_COMMAND_SCRIPT_PATTERN.search(fenced_line)
+    if invocation_match is None:
+        return None
+    script_token = invocation_match.group(1).strip()
+    basename = os.path.basename(script_token.replace("\\", "/").rstrip("/"))
+    if not basename:
+        return None
+    _, extension = os.path.splitext(basename)
+    if extension.lower() not in ALL_RUN_COMMAND_SCRIPT_EXTENSIONS:
+        return None
+    return basename
+
+
+def find_run_command_filenames(content: str) -> list[str]:
+    """Return each script basename a fenced run command invokes, in order.
+
+    Walks the content line by line, inspecting only lines inside a fenced code
+    block (between a ``` or ~~~ fence pair). A fenced run-command line that invokes
+    an interpreter on a script (``python script.py``, ``node bundle.mjs``,
+    ``pwsh build.ps1``) contributes that script's bare basename. A line outside any
+    fence is prose, not a live command, and contributes nothing — an inline
+    ``python x.py`` in a sentence is documentation, not a runnable contract.
+
+    Args:
+        content: The CLAUDE.md content being written.
+
+    Returns:
+        Each script basename a fenced run command names, in the order it appears;
+        duplicates preserved.
+    """
+    run_command_filenames: list[str] = []
+    is_inside_code_fence = False
+    for each_line in content.splitlines():
+        if CODE_FENCE_PATTERN.match(each_line) is not None:
+            is_inside_code_fence = not is_inside_code_fence
+            continue
+        if not is_inside_code_fence:
+            continue
+        each_filename = _run_command_filename_in_line(each_line)
+        if each_filename is not None:
+            run_command_filenames.append(each_filename)
+    return run_command_filenames
+
+
 def _resolve_scan_root(claude_md_directory: Path) -> Path:
     """Return the directory whose subtree bounds the filename existence search.
 
@@ -358,16 +424,17 @@ def _present_referenced_filenames(
 def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]:
     """Return the referenced filenames absent from the CLAUDE.md's scan root.
 
-    A referenced filename is missing when it exists nowhere under the scan root
-    — the CLAUDE.md directory's parent (or the directory itself when it has no
-    distinct parent), which covers the directory, its subdirectories, and its
-    siblings. A table block that declares an explicit relative-path source (a
-    ``../`` token in the block or the prose that introduces it) yields no findings
-    for that block's rows, since those files legitimately live elsewhere; an
-    unrelated block in the same file is still checked. When the content references
-    no bare filename, no findings result and the subtree walk is skipped. A
-    filesystem error that halts the whole subtree walk yields no findings (fail
-    open), so an unreadable tree never blocks a write.
+    A referenced filename comes from two sources: a bare filename a table cell
+    names, and a script a fenced run command invokes (``python script.py``). It is
+    missing when it exists nowhere under the scan root — the CLAUDE.md directory's
+    parent (or the directory itself when it has no distinct parent), which covers
+    the directory, its subdirectories, and its siblings. A table block that
+    declares an explicit relative-path source (a ``../`` token in the block or the
+    prose that introduces it) yields no findings for that block's rows, since those
+    files legitimately live elsewhere; an unrelated block in the same file is still
+    checked. When the content references no bare filename, no findings result and
+    the subtree walk is skipped. A filesystem error that halts the whole subtree
+    walk yields no findings (fail open), so an unreadable tree never blocks a write.
 
     Args:
         content: The CLAUDE.md content being written.
@@ -377,7 +444,9 @@ def find_missing_filenames(content: str, claude_md_directory: Path) -> list[str]
         Each referenced filename with no matching file under the scan root, in
         first-seen order with duplicates removed, capped at the issue budget.
     """
-    referenced_filenames = find_referenced_filenames(content)
+    referenced_filenames = find_referenced_filenames(content) + find_run_command_filenames(
+        content
+    )
     if not referenced_filenames:
         return []
     scan_root = _resolve_scan_root(claude_md_directory)

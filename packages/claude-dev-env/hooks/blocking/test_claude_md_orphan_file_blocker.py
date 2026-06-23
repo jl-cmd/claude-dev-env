@@ -14,6 +14,7 @@ import claude_md_orphan_file_blocker as blocker_module
 from claude_md_orphan_file_blocker import (
     find_missing_filenames,
     find_referenced_filenames,
+    find_run_command_filenames,
 )
 from code_rules_annotations_length import check_unused_known_pytest_fixture_parameters
 from code_rules_naming_collection import check_collection_prefix
@@ -610,6 +611,164 @@ def test_noise_directories_are_excluded_from_the_walk(tmp_path: Path):
     )
     missing_filenames = find_missing_filenames(content, claude_md_path.parent)
     assert missing_filenames == ["buried_target.py"]
+
+
+def test_blocks_write_when_run_command_invokes_absent_script(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "Check environment readiness before a run:\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe test_verification_ready.py\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert (
+        "test_verification_ready.py"
+        in output["hookSpecificOutput"]["permissionDecisionReason"]
+    )
+
+
+def test_allows_run_command_invoking_present_script(tmp_path: Path):
+    package_directory = tmp_path / "package_directory"
+    package_directory.mkdir()
+    (package_directory / "verify_ready.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path = package_directory / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe verify_ready.py\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_invoking_path_qualified_present_script_is_allowed(tmp_path: Path):
+    tools_directory = tmp_path / "tools"
+    tools_directory.mkdir()
+    (tools_directory / "verify_themes.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path = tools_directory / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        'C:\\Python313\\python.exe "tools/verify_themes.py" path/to/theme.apk\n'
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_find_run_command_filenames_reads_only_fenced_interpreter_lines():
+    content = (
+        "# example\n\n"
+        "Run `python live_module.py` inline — this prose line is not a fence.\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe absent_script.py --flag value\n"
+        "node tools/build_bundle.mjs\n"
+        "echo not-a-script\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "absent_script.py",
+        "build_bundle.mjs",
+    ]
+
+
+def test_run_command_outside_a_fence_is_not_inspected(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "Run `python absent_script.py` to check readiness.\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_orphan_reported_via_edit(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    (claude_md_path.parent / "kept.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path.write_text(
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe kept.py\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": str(claude_md_path),
+            "old_string": "C:\\Python313\\python.exe kept.py",
+            "new_string": "C:\\Python313\\python.exe removed_script.py",
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert (
+        "removed_script.py"
+        in output["hookSpecificOutput"]["permissionDecisionReason"]
+    )
+
+
+def test_run_command_orphan_preexisting_on_untouched_line_is_allowed(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    (claude_md_path.parent / "kept.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path.write_text(
+        "# example\n\n"
+        "A prose paragraph with a typoo to fix.\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe kept.py\n"
+        "C:\\Python313\\python.exe already_orphan_script.py\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": str(claude_md_path),
+            "old_string": "A prose paragraph with a typoo to fix.",
+            "new_string": "A prose paragraph with a typo fixed.",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
 
 
 def test_blocker_module_has_no_collection_parameter_naming_violations():
