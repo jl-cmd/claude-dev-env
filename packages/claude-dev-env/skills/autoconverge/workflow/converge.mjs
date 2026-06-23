@@ -543,6 +543,7 @@ async function spawnConvergenceCheckAgent() {
  * @returns {Promise<object>} CONVERGENCE_SCHEMA result
  */
 function resumeConvergenceCheckAgent(agentId, context) {
+  const label = 'check-convergence'
   const bugbotDownFlag = context.bugbotDown ? ' --bugbot-down' : ''
   const copilotDownFlag = context.copilotDown ? ' --copilot-down' : ''
   return convergeAgent(
