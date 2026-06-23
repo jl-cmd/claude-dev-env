@@ -86,6 +86,45 @@ def test_allows_helper_name_inside_string_literal() -> None:
     assert not payload_defines_sanctioned_helper(corrective_message)
 
 
+def test_allows_helper_definition_inside_triple_quoted_string() -> None:
+    documentation_snippet = (
+        'EXAMPLE = """\\\n'
+        'def _strip_read_only_and_retry(removal_function, target_path, *_exc_info):\n'
+        '    pass\n'
+        '"""\n'
+    )
+    assert not payload_defines_sanctioned_helper(documentation_snippet)
+
+
+def test_allows_force_rmtree_definition_inside_triple_quoted_string() -> None:
+    documentation_snippet = (
+        "snippet = '''\n"
+        "def force_rmtree(target_path: str) -> None:\n"
+        "    pass\n"
+        "'''\n"
+    )
+    assert not payload_defines_sanctioned_helper(documentation_snippet)
+
+
+def test_detects_real_definition_following_triple_quoted_docstring() -> None:
+    module_text = (
+        '"""Module docstring."""\n'
+        'def force_rmtree(target_path: str) -> None:\n'
+        '    pass\n'
+    )
+    assert payload_defines_sanctioned_helper(module_text)
+
+
+def test_detects_real_definition_between_two_triple_quoted_strings() -> None:
+    module_text = (
+        '"""Leading docstring."""\n'
+        'def _force_remove_tree(target_path: str) -> None:\n'
+        '    pass\n'
+        '"""Trailing docstring."""\n'
+    )
+    assert payload_defines_sanctioned_helper(module_text)
+
+
 def test_allows_unrelated_definition() -> None:
     assert not payload_defines_sanctioned_helper("def categorize_and_move(theme_folder):\n    pass")
 
@@ -111,6 +150,15 @@ def test_path_does_not_exempt_production_module() -> None:
     assert not path_is_exempt(
         "shared_utils/samsung_utils/cert_failure_processor/failure_categorizer.py"
     )
+
+
+def test_path_does_not_exempt_filename_containing_exempt_fragment() -> None:
+    assert not path_is_exempt("packages/x/not_windows_filesystem.py")
+    assert not path_is_exempt("packages/x/my_windows_filesystem.py")
+
+
+def test_path_does_not_exempt_backslash_path_with_containing_fragment() -> None:
+    assert not path_is_exempt("packages\\x\\not_windows_filesystem.py")
 
 
 def test_extract_payload_text_reads_write_content() -> None:

@@ -37,6 +37,7 @@ from hooks_constants.duplicate_rmtree_helper_blocker_constants import (  # noqa:
     ALL_EXEMPT_TEST_FILE_SUFFIXES,
     HELPER_DEFINITION_PATTERN,
     PYTHON_FILE_EXTENSION,
+    TRIPLE_QUOTED_STRING_PATTERN,
 )
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 
@@ -49,13 +50,16 @@ def payload_defines_sanctioned_helper(payload_text: str) -> bool:
 
     Returns:
         True when a line defines `_strip_read_only_and_retry`, `_force_remove_tree`,
-        or `force_rmtree`. A helper name inside a quoted string (such as a corrective
-        message snippet) carries a quote before `def`, so the line-anchored pattern
-        leaves it untouched.
+        or `force_rmtree`. Triple-quoted string bodies are masked before the
+        line-anchored pattern runs, so a `def` that begins its own line inside a
+        documentation snippet or multi-line string literal is left untouched. A
+        helper name inside a single-line quoted string carries a quote before `def`,
+        so the line-anchored pattern leaves it untouched as well.
     """
     if not payload_text:
         return False
-    return bool(HELPER_DEFINITION_PATTERN.search(payload_text))
+    masked_text = TRIPLE_QUOTED_STRING_PATTERN.sub("", payload_text)
+    return bool(HELPER_DEFINITION_PATTERN.search(masked_text))
 
 
 def path_is_exempt(file_path: str) -> bool:
@@ -65,8 +69,11 @@ def path_is_exempt(file_path: str) -> bool:
         file_path: The target path the Write/Edit writes to.
 
     Returns:
-        True when the path is the canonical shared-helper home, an rmtree-blocker
-        hook source, or a test file. A definition there is intentional.
+        True when the path's basename is the canonical shared-helper home, an
+        rmtree-blocker hook source, or a test file. A definition there is
+        intentional. Basename equality (not substring containment) prevents a
+        sibling whose name merely contains an exempt fragment from bypassing the
+        block.
     """
     normalized_path = file_path.replace("\\", "/")
     file_name = normalized_path.rsplit("/", 1)[-1]
@@ -74,7 +81,7 @@ def path_is_exempt(file_path: str) -> bool:
         return True
     if any(file_name.endswith(each_suffix) for each_suffix in ALL_EXEMPT_TEST_FILE_SUFFIXES):
         return True
-    return any(each_fragment in normalized_path for each_fragment in ALL_EXEMPT_PATH_FRAGMENTS)
+    return file_name in ALL_EXEMPT_PATH_FRAGMENTS
 
 
 def extract_payload_text(tool_name: str, tool_input: dict) -> tuple[str, str]:
