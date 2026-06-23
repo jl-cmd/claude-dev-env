@@ -127,6 +127,10 @@ def _agent_type_from_meta_sidecar(agent_transcript_path: str) -> str | None:
     identically in interactive, background, and worktree-switched sessions and
     needs no parent-transcript scan or flush retry.
 
+    When the sidecar is absent — Agent-tool subagents have no sidecar — the
+    caller falls back to ``_transcript_has_code_verifier_verdict``, which checks
+    the transcript for a code-verifier verdict fence.
+
     Args:
         agent_transcript_path: The stopping subagent's own transcript path from
             the SubagentStop payload.
@@ -150,27 +154,61 @@ def _agent_type_from_meta_sidecar(agent_transcript_path: str) -> str | None:
     return recorded_type if isinstance(recorded_type, str) else None
 
 
+def _transcript_has_code_verifier_verdict(agent_transcript_path: str) -> bool:
+    """Decide whether a subagent transcript carries a code-verifier verdict.
+
+    A code-verifier is the only agent type prompted to emit a `` ```verdict ```
+    fence. When the ``agent-<id>.meta.json`` sidecar is absent (Agent-tool
+    subagents have no sidecar), a valid verdict fence in the transcript is
+    evidence that this subagent is a code-verifier. The transcript is authored
+    by the runtime, so this preserves the anti-forgery property: the main
+    session can neither write to the subagents directory nor forge agent
+    transcripts.
+
+    Args:
+        agent_transcript_path: The stopping subagent's own transcript path from
+            the SubagentStop payload.
+
+    Returns:
+        True when the transcript carries a valid verdict fence; False when the
+        path is empty, the file cannot be read, or no verdict block is present.
+    """
+    if not agent_transcript_path:
+        return False
+    all_text_blocks = assistant_text_blocks(agent_transcript_path)
+    return last_verdict_in_blocks(all_text_blocks) is not None
+
+
 def resolved_subagent_type(subagent_stop_payload: dict) -> str | None:
     """Recover the spawning agent type for a SubagentStop payload.
 
     The stopping subagent's own transcript (``agent_transcript_path``) sits
     beside a harness-written ``agent-<id>.meta.json`` sidecar naming its
-    ``agentType``. Reading the type from that sidecar binds it to the subagent
-    itself, so it resolves the same across interactive, background, and
-    worktree-switched sessions.
+    ``agentType`` (present for workflow-spawned subagents). When the sidecar is
+    absent — Agent-tool subagents have no sidecar — the hook falls back to
+    checking the transcript for a code-verifier verdict fence, since no other
+    agent type emits one. Both the transcript and the sidecar are authored by
+    the runtime, so the anti-forgery property is preserved.
 
     Args:
         subagent_stop_payload: The SubagentStop hook payload.
 
     Returns:
-        The agent type this subagent was spawned with, or None when the
-        ``agent_transcript_path`` is empty, the sidecar is absent or cannot be
-        read or parsed, it does not hold a JSON object, or it names no string
-        ``agentType``.
+        The agent type, or None when neither the sidecar nor the transcript
+        identifies a code-verifier — the ``agent_transcript_path`` is empty,
+        the sidecar is absent or unreadable and the transcript holds no valid
+        verdict fence, the sidecar names a type other than code-verifier, or
+        the sidecar does not hold a JSON object.
     """
-    return _agent_type_from_meta_sidecar(
-        subagent_stop_payload.get("agent_transcript_path", "")
+    agent_transcript_path: str = subagent_stop_payload.get(
+        "agent_transcript_path", ""
     )
+    resolved_type = _agent_type_from_meta_sidecar(agent_transcript_path)
+    if resolved_type is not None:
+        return resolved_type
+    if _transcript_has_code_verifier_verdict(agent_transcript_path):
+        return MINTING_AGENT_TYPE
+    return None
 
 
 def _attested_or_recomputed_hash(verdict_record: dict, repo_root: str) -> str | None:

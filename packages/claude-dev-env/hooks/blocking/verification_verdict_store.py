@@ -423,17 +423,28 @@ def _subagents_directory_for_transcript(transcript_path: str) -> Path | None:
 def _agent_type_for_transcript(transcript_file: Path) -> str | None:
     """Read an agent transcript's sidecar to learn the agent type it ran as.
 
+    When the ``agent-<id>.meta.json`` sidecar is absent (Agent-tool subagents
+    have no sidecar), falls back to checking the transcript for a code-verifier
+    verdict fence — no other agent type emits one. Both the sidecar and the
+    transcript are authored by the runtime, preserving the anti-forgery
+    property.
+
     Args:
         transcript_file: An ``agent-*.jsonl`` transcript path.
 
     Returns:
         The ``agentType`` recorded in the ``<stem>.meta.json`` sidecar, or
-        None when the sidecar is missing, unreadable, or carries no type.
+        ``MINTING_AGENT_TYPE`` when the sidecar is absent but the transcript
+        carries a valid verdict fence; None when neither the sidecar nor the
+        transcript identifies the agent as a code-verifier.
     """
     sidecar_file = transcript_file.with_suffix(AGENT_META_SIDECAR_SUFFIX)
     try:
         sidecar_record = json.loads(sidecar_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
+        all_text_blocks = _assistant_text_blocks(transcript_file)
+        if _last_verdict_record(all_text_blocks) is not None:
+            return MINTING_AGENT_TYPE
         return None
     if not isinstance(sidecar_record, dict):
         return None

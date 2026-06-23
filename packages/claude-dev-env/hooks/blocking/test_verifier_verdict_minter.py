@@ -290,6 +290,96 @@ def test_minter_refuses_when_recomputed_surface_is_empty(
     assert mint_for_payload(payload) is None
 
 
+def test_resolves_type_from_verdict_when_sidecar_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": 'ok\n```verdict\n{"all_pass": true, "findings": []}\n```\n',
+                        }
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    payload = {"agent_transcript_path": str(agent_transcript)}
+    assert resolved_subagent_type(payload) == MINTING_AGENT_TYPE
+
+
+def test_resolves_none_when_sidecar_absent_and_no_verdict_fence(
+    tmp_path: pathlib.Path,
+) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "just some regular text, no verdict here",
+                        }
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    payload = {"agent_transcript_path": str(agent_transcript)}
+    assert resolved_subagent_type(payload) is None
+
+
+def test_mints_verdict_when_sidecar_absent_but_transcript_has_verdict(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo_with_upstream_and_edit(repo_root)
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": 'ok\n```verdict\n{"all_pass": true, "findings": []}\n```\n',
+                        }
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    payload = {
+        "agent_transcript_path": str(agent_transcript),
+        "cwd": str(repo_root),
+        "agent_id": "no-sidecar-1",
+    }
+    verdict_path = mint_for_payload(payload)
+    try:
+        assert verdict_path is not None
+        verdict_record = json.loads(verdict_path.read_text(encoding="utf-8"))
+        assert verdict_record["all_pass"] is True
+        assert verdict_record["minted_from_agent_id"] == "no-sidecar-1"
+    finally:
+        if verdict_path is not None and verdict_path.exists():
+            verdict_path.unlink()
+
+
 def test_attested_manifest_hash_binds_over_cwd_surface(tmp_path: pathlib.Path) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()

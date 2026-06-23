@@ -418,7 +418,7 @@ def test_workflow_verdict_covers_surface_false_for_non_verifier_sidecar(
     )
 
 
-def test_workflow_verdict_covers_surface_false_for_missing_sidecar(
+def test_workflow_verdict_covers_surface_true_for_missing_sidecar_with_verdict(
     tmp_path: pathlib.Path,
 ) -> None:
     transcript_path = _session_transcript_path(tmp_path, "sess1")
@@ -428,6 +428,26 @@ def test_workflow_verdict_covers_surface_false_for_missing_sidecar(
         "01",
         VERIFIER_AGENT_TYPE,
         _verdict_transcript_text(True, MATCHING_MANIFEST_SHA256),
+        should_write_sidecar=False,
+    )
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is True
+    )
+
+
+def test_workflow_verdict_covers_surface_false_for_missing_sidecar_and_no_verdict(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        VERIFIER_AGENT_TYPE,
+        "no verdict fence in this transcript\n",
         should_write_sidecar=False,
     )
     assert (
