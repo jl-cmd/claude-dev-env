@@ -138,6 +138,36 @@ def test_path_exempts_shared_helper_module() -> None:
     assert path_is_exempt("shared_utils/web_automation/utils/windows_filesystem.py")
 
 
+def test_path_exempts_existing_session_env_cleanup_definition_site() -> None:
+    assert path_is_exempt("packages/claude-dev-env/hooks/session/session_env_cleanup.py")
+
+
+def test_path_exempts_existing_md_to_html_test_support_definition_site() -> None:
+    assert path_is_exempt(
+        "packages/claude-dev-env/hooks/blocking/_md_to_html_blocker_test_support.py"
+    )
+
+
+def test_path_exempts_existing_teardown_worktrees_definition_site() -> None:
+    assert path_is_exempt(
+        "packages/claude-dev-env/skills/_shared/pr-loop/scripts/teardown_worktrees.py"
+    )
+
+
+def test_main_allows_full_file_write_of_existing_definition_site() -> None:
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": "packages/claude-dev-env/hooks/session/session_env_cleanup.py",
+                "content": COPIED_TRIO,
+            },
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
 def test_path_exempts_test_file_prefix() -> None:
     assert path_is_exempt("hooks/blocking/test_duplicate_rmtree_helper_blocker.py")
 

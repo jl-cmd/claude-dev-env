@@ -18,6 +18,9 @@ ALL_EXEMPT_PATH_FRAGMENTS: tuple[str, ...] = (
     "duplicate_rmtree_helper_blocker.py",
     "windows_safe_rmtree.py",
     "windows_filesystem.py",
+    "session_env_cleanup.py",
+    "_md_to_html_blocker_test_support.py",
+    "teardown_worktrees.py",
 )
 
 ALL_EXEMPT_TEST_FILE_PREFIXES: tuple[str, ...] = ("test_",)
