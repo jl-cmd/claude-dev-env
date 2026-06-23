@@ -99,23 +99,21 @@ test('FIX_RECOVERY_MAX_ATTEMPTS is declared and bounds the recovery loop at 2', 
   assert.match(constantLine('FIX_RECOVERY_MAX_ATTEMPTS'), /=\s*2\s*$/);
 });
 
-for (const commitFunctionName of ['commitVerifiedFixes', 'commitRepairFixes']) {
-  test(`${commitFunctionName} prompt separates an edit-requiring block from a transient failure`, () => {
-    const commitBody = functionSource(commitFunctionName);
-    assert.match(commitBody, /blockedNeedingEdit/, 'expected the edit-block flag to be set in the prompt');
-    assert.match(commitBody, /blockerDetail/, 'expected the verbatim blocker detail to be requested');
-    assert.match(
-      commitBody,
-      /code_rules_gate|CODE_RULES/,
-      'expected the commit prompt to name the CODE_RULES commit gate as an edit-requiring block',
-    );
-    assert.match(
-      commitBody,
-      /transient/i,
-      'expected the commit prompt to name the transient (non-code) failure case',
-    );
-  });
-}
+test('the commit path in resumeCodeEditorAgent separates an edit-requiring block from a transient failure', () => {
+  const commitBody = functionSource('resumeCodeEditorAgent');
+  assert.match(commitBody, /blockedNeedingEdit/, 'expected the edit-block flag to be set in the prompt');
+  assert.match(commitBody, /blockerDetail/, 'expected the verbatim blocker detail to be requested');
+  assert.match(
+    commitBody,
+    /code_rules_gate|CODE_RULES/,
+    'expected the commit prompt to name the CODE_RULES commit gate as an edit-requiring block',
+  );
+  assert.match(
+    commitBody,
+    /transient/i,
+    'expected the commit prompt to name the transient (non-code) failure case',
+  );
+});
 
 test('recoverCommitBlockEdit is a clean-coder edit step bound to the blocker detail and leaves changes uncommitted', () => {
   const recoverBody = functionSource('recoverCommitBlockEdit');
@@ -163,20 +161,17 @@ test('commitWithRecovery bounds the loop, re-verifies, and retries the commit on
   );
 });
 
-test('applyFixes routes its commit through commitWithRecovery wired to the fix-path steps', () => {
+test('applyFixes routes through spawnFixerAgent and fixerWithRecovery', () => {
   const applyFixesBody = functionSource('applyFixes');
-  assert.match(applyFixesBody, /commitWithRecovery\(/, 'expected applyFixes to call commitWithRecovery');
-  assert.match(applyFixesBody, /runCommit:\s*\(\)\s*=>\s*commitVerifiedFixes\(/);
-  assert.match(applyFixesBody, /runVerify:\s*\(\)\s*=>\s*verifyFixesInWorkingTree\(/);
-  assert.match(applyFixesBody, /runRecoverEdit:[\s\S]*?recoverCommitBlockEdit\(/);
+  assert.match(applyFixesBody, /spawnFixerAgent\(/, 'expected applyFixes to call spawnFixerAgent');
+  assert.match(applyFixesBody, /fixerWithRecovery\(/, 'expected applyFixes to call fixerWithRecovery');
 });
 
 test('repairConvergence routes its commit through commitWithRecovery wired to the repair-path steps', () => {
   const repairBody = functionSource('repairConvergence');
   assert.match(repairBody, /commitWithRecovery\(/, 'expected repairConvergence to call commitWithRecovery');
-  assert.match(repairBody, /runCommit:\s*\(\)\s*=>\s*commitRepairFixes\(/);
-  assert.match(repairBody, /runVerify:\s*\(\)\s*=>\s*verifyRepairChanges\(/);
-  assert.match(repairBody, /runRecoverEdit:[\s\S]*?recoverCommitBlockEdit\(/);
+  assert.match(repairBody, /resumeCodeEditorAgent\(/, 'expected repairConvergence to use resumeCodeEditorAgent');
+  assert.match(repairBody, /resumeVerifierAgent\(/, 'expected repairConvergence to use resumeVerifierAgent');
 });
 
 test('the round-loop fix-stalled blockers survive the recovery wiring', () => {
@@ -185,7 +180,8 @@ test('the round-loop fix-stalled blockers survive the recovery wiring', () => {
 });
 
 const verifyObjectionModule = new Function(
-  `${constantLine('VERIFY_OBJECTION_FALLBACK')}\n` +
+  `${functionSource('parseLastVerdictFence')}\n` +
+    `${constantLine('VERIFY_OBJECTION_FALLBACK')}\n` +
     `${functionSource('renderVerifyObjectionLine')}\n` +
     `${functionSource('extractVerifyObjection')}\n` +
     'return { extractVerifyObjection, VERIFY_OBJECTION_FALLBACK };',
@@ -302,19 +298,15 @@ test('verifyWithRecovery bounds the loop, re-fixes on a failed verdict, and re-v
   assert.ok(recoverEditIndex < reverifyIndex, 'expected order recover-edit -> re-verify, so a swap fails');
 });
 
-test('applyFixes routes its verify through verifyWithRecovery before commitWithRecovery', () => {
+test('applyFixes routes through fixerWithRecovery which handles verify and commit', () => {
   const applyFixesBody = functionSource('applyFixes');
-  assert.match(applyFixesBody, /verifyWithRecovery\(/, 'expected applyFixes to call verifyWithRecovery');
-  assert.match(applyFixesBody, /runVerify:\s*\(\)\s*=>\s*verifyFixesInWorkingTree\(/);
-  assert.match(applyFixesBody, /runRecoverEdit:[\s\S]*?recoverVerifyFailEdit\(/);
-  const verifyIndex = applyFixesBody.search(/verifyWithRecovery\(/);
-  const commitIndex = applyFixesBody.search(/commitWithRecovery\(/);
-  assert.ok(verifyIndex < commitIndex, 'expected verify-recovery to precede commit-recovery');
+  assert.match(applyFixesBody, /fixerWithRecovery\(/, 'expected applyFixes to call fixerWithRecovery');
+  assert.match(applyFixesBody, /spawnFixerAgent\(/, 'expected applyFixes to call spawnFixerAgent');
 });
 
-test('repairConvergence routes its verify through verifyWithRecovery wired to the repair verify step', () => {
+test('repairConvergence routes its verify through verifyWithRecovery wired to resume helpers', () => {
   const repairBody = functionSource('repairConvergence');
   assert.match(repairBody, /verifyWithRecovery\(/, 'expected repairConvergence to call verifyWithRecovery');
-  assert.match(repairBody, /runVerify:\s*\(\)\s*=>\s*verifyRepairChanges\(/);
-  assert.match(repairBody, /runRecoverEdit:[\s\S]*?recoverVerifyFailEdit\(/);
+  assert.match(repairBody, /resumeVerifierAgent\(/, 'expected repairConvergence to use resumeVerifierAgent for verify');
+  assert.match(repairBody, /resumeCodeEditorAgent\(/, 'expected repairConvergence to use resumeCodeEditorAgent for recover');
 });

@@ -58,7 +58,7 @@ test('the standards-only call site breaks with a clean-audit blocker when the po
     convergeSource.indexOf('if (isStandardsOnlyRound(findings)) {'),
     convergeSource.indexOf('if (findings.length > 0) {'),
   );
-  assert.match(branch, /const auditResult = await postCleanAudit\(head\)/);
+  assert.match(branch, /resumeGeneralUtilityAgent\(.*'post-clean-audit'/);
   assert.match(branch, /if \(!auditResult\?\.posted\)/);
   assert.match(branch, /blocker = cleanAuditBlocker\(head, auditResult\)/);
   assert.match(branch, /\bbreak\b/);
@@ -69,7 +69,7 @@ test('the all-clean call site breaks with a clean-audit blocker when the post do
     convergeSource.indexOf('all lenses clean on'),
     convergeSource.indexOf("if (phase === 'COPILOT') {"),
   );
-  assert.match(branch, /const auditResult = await postCleanAudit\(head\)/);
+  assert.match(branch, /resumeGeneralUtilityAgent\(.*'post-clean-audit'/);
   assert.match(branch, /if \(!auditResult\?\.posted\)/);
   assert.match(branch, /blocker = cleanAuditBlocker\(head, auditResult\)/);
   assert.match(branch, /\bbreak\b/);

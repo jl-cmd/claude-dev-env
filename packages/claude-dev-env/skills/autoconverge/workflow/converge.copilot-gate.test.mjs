@@ -195,7 +195,7 @@ test('the standards-only Copilot sub-path resets copilotDown before FINALIZE', (
     -1,
     'expected the COPILOT phase to handle a standards-only Copilot fix outcome',
   );
-  const standardsBranch = convergeSource.slice(standardsBranchStart, standardsBranchStart + 600);
+  const standardsBranch = convergeSource.slice(standardsBranchStart, standardsBranchStart + 800);
   const resetIndex = standardsBranch.indexOf('copilotDown = false');
   const finalizeIndex = standardsBranch.indexOf("phase = 'FINALIZE'");
   assert.notEqual(
@@ -234,13 +234,13 @@ test('the COPILOT phase recomputes copilotDown from each gate outcome via resolv
 test('markReady receives copilotDown so it can opt the unflagged hook out of the Copilot gate', () => {
   const finalizeStart = convergeSource.indexOf("if (phase === 'FINALIZE') {");
   assert.notEqual(finalizeStart, -1, 'expected a FINALIZE phase block');
-  const markReadyCall = convergeSource.indexOf('await markReady(', finalizeStart);
-  assert.notEqual(markReadyCall, -1, 'expected the FINALIZE phase to call markReady');
-  const callSlice = convergeSource.slice(markReadyCall, markReadyCall + 40);
+  const markReadyCall = convergeSource.indexOf("'mark-ready'", finalizeStart);
+  assert.notEqual(markReadyCall, -1, 'expected the FINALIZE phase to route mark-ready through the general-utility agent');
+  const callSlice = convergeSource.slice(markReadyCall - 20, markReadyCall + 60);
   assert.match(
     callSlice,
-    /markReady\(head,\s*copilotDown\)/,
-    'expected markReady to receive copilotDown so the mark-ready agent can opt the unflagged hook out of the Copilot gate',
+    /copilotDown/,
+    'expected mark-ready context to include copilotDown so the agent can opt the unflagged hook out of the Copilot gate',
   );
 });
 
