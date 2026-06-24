@@ -26,6 +26,7 @@ if _HOOKS_DIR not in sys.path:
 
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_HOSTED_HOOK_ENTRIES,
+    BLOCKING_CRASH_DENY_REASON,
     BLOCKING_CRASH_EXIT_CODE,
     DENY_DECISION,
     EDIT_TOOL_NAME,
@@ -482,6 +483,52 @@ def test_aggregate_exit_code_two_signals_deny() -> None:
     assert EXIT_CODE_TWO_DENY_REASON in decision.all_deny_reasons[0], (
         f"deny reason must reference EXIT_CODE_TWO_DENY_REASON constant. "
         f"Got: {decision.all_deny_reasons[0]!r}"
+    )
+
+
+def test_aggregate_blocking_hook_crash_surfaces_a_deny() -> None:
+    """A crash in a blocking hook surfaces a deny with the crash reason.
+
+    When a blocking hook raises a non-SystemExit exception before emitting any
+    output, the aggregator must still deny so a bad write does not silently
+    pass. The deny reason must be the BLOCKING_CRASH_DENY_REASON constant.
+    """
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout="",
+            did_crash=True,
+            is_blocking=True,
+        )
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert decision.should_deny, "a blocking hook crash must surface a deny"
+    assert decision.all_deny_reasons, (
+        "the deny reasons list must be non-empty after a blocking hook crash"
+    )
+    assert BLOCKING_CRASH_DENY_REASON in decision.all_deny_reasons, (
+        "the deny reason from a blocking hook crash must be BLOCKING_CRASH_DENY_REASON.\n"
+        f"Got: {decision.all_deny_reasons!r}"
+    )
+
+
+def test_aggregate_non_blocking_hook_crash_does_not_deny() -> None:
+    """A crash in a non-blocking hook does not change an allow to a deny.
+
+    A hosted hook carrying is_blocking=False must not surface a deny when it
+    crashes — the aggregated decision stays allow.
+    """
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout="",
+            did_crash=True,
+            is_blocking=False,
+        )
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert not decision.should_deny, (
+        "a non-blocking hook crash must not change an allow to a deny"
     )
 
 

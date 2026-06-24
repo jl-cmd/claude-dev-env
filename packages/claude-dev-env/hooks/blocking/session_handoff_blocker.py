@@ -23,21 +23,7 @@ from hooks_constants.messages import USER_FACING_CONTEXT_REASSURANCE_NOTICE  # n
 from hooks_constants.session_handoff_blocker_constants import (  # noqa: E402
     FIRST_PERSON_SUBJECT_PATTERN,
 )
-
-
-def strip_code_and_quotes(text: str) -> str:
-    """Remove code blocks, inline code, and blockquotes to avoid false positives.
-
-    Args:
-        text: The raw assistant message to clean.
-    """
-    code_block_pattern = re.compile(r"```[\s\S]*?```", re.MULTILINE)
-    inline_code_pattern = re.compile(r"`[^`]+`")
-    quoted_block_pattern = re.compile(r"^>.*$", re.MULTILINE)
-    text = code_block_pattern.sub("", text)
-    text = inline_code_pattern.sub("", text)
-    text = quoted_block_pattern.sub("", text)
-    return text
+from hooks_constants.text_stripping import strip_code_and_quotes  # noqa: E402
 
 
 def split_into_sentences(text: str) -> list[str]:

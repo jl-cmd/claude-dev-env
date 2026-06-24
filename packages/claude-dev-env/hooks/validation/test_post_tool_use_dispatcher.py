@@ -39,6 +39,7 @@ from hooks_constants.doc_gist_auto_publish_constants import (  # noqa: E402, I00
 from hooks_constants.post_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_POST_HOSTED_HOOK_ENTRIES,
     BLOCK_DECISION,
+    BLOCKING_CRASH_DENY_REASON,
     EMPTY_REASON_BLOCK_FALLBACK,
     PLUGIN_ROOT_PLACEHOLDER,
     PostHostedHookEntry,
@@ -607,4 +608,9 @@ def test_blocking_hook_crash_surfaces_a_block() -> None:
     assert "dispatcher" in aggregated_decision.all_block_reasons[0].lower(), (
         "The block reason from a blocking hook crash must reference the dispatcher.\n"
         f"Got: {aggregated_decision.all_block_reasons[0]!r}"
+    )
+    assert BLOCKING_CRASH_DENY_REASON in aggregated_decision.all_block_reasons, (
+        "The block reason from a blocking hook crash must be the "
+        "BLOCKING_CRASH_DENY_REASON constant.\n"
+        f"Got: {aggregated_decision.all_block_reasons!r}"
     )

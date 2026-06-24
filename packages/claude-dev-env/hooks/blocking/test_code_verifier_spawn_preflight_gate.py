@@ -342,6 +342,22 @@ def test_real_code_rules_violation_on_added_line_denies(tmp_path: Path) -> None:
     assert "Line " in reason
 
 
+def test_committed_on_branch_violation_with_clean_working_tree_denies(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    commit_file(repository_root, "committed.py", VIOLATING_MODULE_SOURCE, "commit violation")
+    status_output = run_git(repository_root, "status", "--porcelain")
+    assert status_output == "", "working tree must be clean so the deny comes from the committed line"
+    payload = write_agent_payload("code-verifier", "verify the change", repository_root)
+    result = run_hook(payload, repository_root)
+    assert not is_allow(result)
+    reason = deny_reason(result)
+    assert "committed.py" in reason
+    assert "Line " in reason
+
+
 def test_preexisting_violation_on_untouched_line_allows(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     repository_root.mkdir()

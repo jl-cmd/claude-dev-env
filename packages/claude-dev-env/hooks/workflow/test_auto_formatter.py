@@ -105,6 +105,39 @@ class TestRuffFixOnNewFiles:
         assert completed_hook.returncode == 0
         assert "import os" in edited_file.read_text(encoding="utf-8")
 
+    def should_leave_tracked_python_file_arriving_through_write_untouched(
+        self, git_repository: Path
+    ) -> None:
+        tracked_file = git_repository / "tracked.py"
+        tracked_file.write_text(UNUSED_IMPORT_SOURCE, encoding="utf-8")
+        subprocess.run(
+            ["git", "add", "tracked.py"],
+            cwd=git_repository,
+            capture_output=True,
+            check=True,
+        )
+
+        completed_hook = _run_hook("Write", tracked_file)
+
+        assert completed_hook.returncode == 0
+        assert "import os" in tracked_file.read_text(encoding="utf-8")
+
+
+def test_tracked_write_leaves_unused_import_in_place(git_repository: Path) -> None:
+    tracked_file = git_repository / "tracked_module.py"
+    tracked_file.write_text(UNUSED_IMPORT_SOURCE, encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "tracked_module.py"],
+        cwd=git_repository,
+        capture_output=True,
+        check=True,
+    )
+
+    completed_hook = _run_hook("Write", tracked_file)
+
+    assert completed_hook.returncode == 0
+    assert "import os" in tracked_file.read_text(encoding="utf-8")
+
 
 def _load_auto_formatter_module() -> object:
     module_spec = importlib.util.spec_from_file_location("auto_formatter", HOOK_SCRIPT_PATH)

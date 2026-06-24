@@ -2,7 +2,8 @@
 
 The gate denies an ``Agent`` spawn whose ``subagent_type`` is ``code-verifier``
 when the branch carries a merge conflict against its base ref or a CODE_RULES
-violation on a line added in the uncommitted working tree. It runs two
+violation on a line added in the working tree since the merge base (committed on
+the branch or uncommitted). It runs two
 pre-flight checks before the expensive verification spawn and addresses its
 deny reason to the spawning agent so that agent fixes the named issues and
 re-spawns. Every literal the hook body reads lives here; the hook imports
