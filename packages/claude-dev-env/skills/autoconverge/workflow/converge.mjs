@@ -69,8 +69,507 @@ const worktreeDirective = (repoPath) =>
  * @param {object} options the agent() options (label, phase, schema, agentType, model)
  * @returns {Promise<*>} the agent() result
  */
-const convergeAgent = (prompt, options) =>
-  agent(`${HEADLESS_SAFETY_PREAMBLE}${worktreeDirective(activeRepoPath)}${prompt}`, options)
+const convergeAgent = (prompt, options) => {
+  const isResume = typeof options?.resume === 'string' && options.resume.length > 0
+  const fullPrompt = isResume
+    ? prompt
+    : `${HEADLESS_SAFETY_PREAMBLE}${worktreeDirective(activeRepoPath)}${prompt}`
+  return agent(fullPrompt, options)
+}
+
+/**
+ * Spawn the git/utility Explore agent once before the converge loop.
+ * @returns {Promise<string>} the agent id
+ */
+async function spawnGitAgent() {
+  const result = await convergeAgent(
+    `You are the git-utility agent for ${prCoordinates}. Your role is to resolve the PR HEAD SHA, fetch origin main, and check merge conflicts when asked. Do not edit code.\n\n` +
+      `Initial task: print the current HEAD SHA of ${prCoordinates}. Run exactly:\n` +
+      `gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
+      `Return the full 40-character SHA in the sha field.`,
+    { label: 'git-utility', phase: 'Converge', schema: HEAD_SCHEMA, agentType: 'Explore' },
+  )
+  return result?.agentId
+}
+
+/**
+ * Resume the git/utility agent for a specific task.
+ * @param {string} agentId the agent id from spawnGitAgent
+ * @param {string} task the short task name
+ * @param {string} head optional HEAD SHA for conflict checks
+ * @returns {Promise<object>} the structured output
+ */
+function resumeGitAgent(agentId, task, head) {
+  if (task === 'resolve-head') {
+    return convergeAgent(
+      `Print the current HEAD SHA of ${prCoordinates}. Run exactly:\n` +
+        `gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
+        `Return the full 40-character SHA in the sha field. Do not modify any files.`,
+      { label: 'git-utility', phase: 'Converge', schema: HEAD_SCHEMA, agentType: 'Explore', resume: agentId },
+    )
+  }
+  if (task === 'prefetch-main') {
+    return convergeAgent(
+      `Refresh the base ref for ${prCoordinates} so the parallel review lenses can diff against an up-to-date origin/main without each running its own fetch. Run exactly:\n` +
+        `git fetch origin main\n` +
+        `Do not edit, commit, push, rebase, or modify any files — fetch only.`,
+      { label: 'git-utility', phase: 'Converge', agentType: 'Explore', resume: agentId },
+    )
+  }
+  return convergeAgent(
+    `Report whether ${prCoordinates} (HEAD ${head}) has merge conflicts with its base branch. Do not edit, commit, push, or rebase — read only.\n\n` +
+      `GitHub computes mergeability asynchronously, so .mergeable is null right after a push until it finishes. Poll until it resolves: run\n` +
+      `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq '{mergeable: .mergeable, state: .mergeable_state}'\n` +
+      `up to 5 times, 5 seconds apart (delay each retry with "sleep 5", or the PowerShell alternative "Start-Sleep -Seconds 5"), stopping as soon as mergeable is true or false.\n\n` +
+      `Return conflicting:true when mergeable is false or state is "dirty" (the branch conflicts with the base). Return conflicting:false when mergeable is true, or when mergeable stays null after the full poll budget — mergeability is unknown, so let the bug checks proceed rather than rebase on a guess.`,
+    { label: 'git-utility', phase: 'Converge', schema: MERGE_CONFLICT_SCHEMA, agentType: 'Explore', resume: agentId },
+  )
+}
+
+/**
+ * Spawn the fixer clean-coder agent for one fix batch, establishing its role and
+ * the PR coordinates so each later resume (verify-commit, commit, and recovery)
+ * continues the same session. The spawn makes no edits — the verify-commit resume
+ * is the first step that touches the working tree. Returns the runtime agent id
+ * so the resume calls target the live session; a runtime without resume support
+ * returns no agent id, and each resume falls back to a fresh spawn.
+ * @param {string} head PR HEAD SHA
+ * @param {Array<object>} findings the findings to fix
+ * @param {string} sourceLabel short description of where the findings came from
+ * @param {string} task initial task name
+ * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
+ */
+async function spawnFixerAgent(head, findings, sourceLabel, task) {
+  const result = await convergeAgent(
+    `You are the fixer agent for ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The edit step left fixes in the working tree, uncommitted. Across this session you run a sequence of steps (the first is ${task}): verify the working-tree fixes, commit and push them, and recover when a verify objection or a commit-gate block needs another edit. Make NO edits in this first turn — confirm only that the working tree is on the PR branch at HEAD ${head} with uncommitted fixes present, then wait for the verify-commit instructions. Reply READY.`,
+    { label: `fixer:${sourceLabel}`, phase: 'Converge', agentType: 'clean-coder' },
+  )
+  return result?.agentId
+}
+
+/**
+ * Resume the fixer agent for verify-commit or recovery.
+ * @param {string} agentId the agent id from spawnFixerAgent
+ * @param {string} task the short task name
+ * @param {object} context task-specific context
+ * @returns {Promise<object>} the structured output
+ */
+function resumeFixerAgent(agentId, task, context) {
+  const label = `fixer:${context.sourceLabel}`
+  if (task === 'verify-commit') {
+    const findingsBlock = renderFindingsBlock(context.findings)
+    return convergeAgent(
+      `You are the VERIFY step for ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree, uncommitted. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+        `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
+        `Steps:\n` +
+        `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
+        `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
+        `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
+      { label, phase: 'Converge', agentType: 'code-verifier', resume: agentId },
+    )
+  }
+  if (task === 'commit') {
+    return convergeAgent(
+      `You are the COMMIT step for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree.\n\n` +
+        `Rules:\n` +
+        `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the commit would be blocked. Do not run a formatter, do not touch a test, do not re-fix anything — only commit and push what is already there.\n` +
+        `- Make ONE commit for all the working-tree fixes, then push to the PR branch.\n\n` +
+        `Return values:\n` +
+        `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
+        `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
+        `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
+      { label, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    )
+  }
+  const objection = context.objection || VERIFY_OBJECTION_FALLBACK
+  const attempt = context.attempt || 1
+  return convergeAgent(
+    `You are the VERIFY-RECOVERY fixer (attempt ${attempt}) for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The verify step rejected the working-tree fixes; its verdict named what is still unresolved. A separate verify step then a separate commit step run after you.\n\n` +
+      `The verify step's objections:\n${objection}\n\n` +
+      `Rules:\n` +
+      `- Confirm the working tree is on the PR branch at HEAD ${context.head} with the prior fixes still present.\n` +
+      `- Address every objection above test-first (failing test, then minimum code to pass) per CODE_RULES, so each named concern is genuinely resolved the way the verdict requires. Do not touch GitHub review threads — the edit step already handled those.\n` +
+      `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
+      `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.` +
+      PRE_COMMIT_GATE_STEP,
+    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+  )
+}
+
+/**
+ * Joined fixer recovery loop: resume the fixer agent for verify+commit, extract the verdict,
+ * and recover when the verdict fails or the commit is blocked.
+ * @param {string} fixerAgentId the fixer agent id from spawnFixerAgent
+ * @param {string} head PR HEAD SHA
+ * @param {Array<object>} findings the findings to fix
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<object>} FIX_SCHEMA result
+ */
+async function fixerWithRecovery(fixerAgentId, head, findings, sourceLabel) {
+  const verifyTranscript = await resumeFixerAgent(fixerAgentId, 'verify-commit', { head, findings, sourceLabel })
+  const verdict = extractVerdict(verifyTranscript)
+  if (verdict && verdict.all_pass === true) {
+    const commitResult = await resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel })
+    if (commitNeedsCodeRecovery(commitResult)) {
+      let attempt = 0
+      let recoveryResult = commitResult
+      while (commitNeedsCodeRecovery(recoveryResult) && attempt < FIX_RECOVERY_MAX_ATTEMPTS) {
+        attempt += 1
+        const recoverEdit = await resumeFixerAgent(fixerAgentId, 'verify-recover', {
+          head, findings, sourceLabel, objection: recoveryResult.blockerDetail, attempt,
+        })
+        if (recoverEdit?.edited !== true) break
+        const reVerify = await resumeFixerAgent(fixerAgentId, 'verify-commit', { head, findings, sourceLabel })
+        const reVerdict = extractVerdict(reVerify)
+        if (!reVerdict || reVerdict.all_pass !== true) break
+        recoveryResult = await resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel })
+      }
+      return recoveryResult
+    }
+    return commitResult
+  }
+  let attempt = 0
+  let lastTranscript = verifyTranscript
+  while ((!verdict || verdict.all_pass !== true) && attempt < FIX_RECOVERY_MAX_ATTEMPTS) {
+    attempt += 1
+    const objection = extractVerifyObjection(lastTranscript)
+    const recoverEdit = await resumeFixerAgent(fixerAgentId, 'verify-recover', {
+      head, findings, sourceLabel, objection, attempt,
+    })
+    if (recoverEdit?.edited !== true) break
+    lastTranscript = await resumeFixerAgent(fixerAgentId, 'verify-commit', { head, findings, sourceLabel })
+    const freshVerdict = extractVerdict(lastTranscript)
+    if (freshVerdict && freshVerdict.all_pass === true) {
+      const commitResult = await resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel })
+      if (commitNeedsCodeRecovery(commitResult)) {
+        let commitAttempt = 0
+        let commitRecovery = commitResult
+        while (commitNeedsCodeRecovery(commitRecovery) && commitAttempt < FIX_RECOVERY_MAX_ATTEMPTS) {
+          commitAttempt += 1
+          const commitEdit = await resumeFixerAgent(fixerAgentId, 'verify-recover', {
+            head, findings, sourceLabel, objection: commitRecovery.blockerDetail, attempt: commitAttempt,
+          })
+          if (commitEdit?.edited !== true) break
+          const reVerify2 = await resumeFixerAgent(fixerAgentId, 'verify-commit', { head, findings, sourceLabel })
+          const reVerdict2 = extractVerdict(reVerify2)
+          if (!reVerdict2 || reVerdict2.all_pass !== true) break
+          commitRecovery = await resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel })
+        }
+        return commitRecovery
+      }
+      return commitResult
+    }
+  }
+  return {
+    newSha: head,
+    pushed: false,
+    resolvedWithoutCommit: false,
+    summary: `verify step did not pass the working-tree fixes for ${findings.length} finding(s) — not committing`,
+    blockedNeedingEdit: false,
+    blockerDetail: '',
+  }
+}
+
+/**
+ * Spawn the code-editor clean-coder agent once per converge round, establishing
+ * its role so each later resume (fix-edit, conflict-edit, repair-edit,
+ * repair-commit, standards-edit, hardening-commit, commit-recover, verify-recover)
+ * continues the same session. The spawn makes no edits — each resume carries the
+ * task-specific edit instructions. Returns the runtime agent id so the resume
+ * calls target the live session; a runtime without resume support returns no
+ * agent id, and each resume falls back to a fresh spawn.
+ * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
+ */
+async function spawnCodeEditorAgent() {
+  const result = await convergeAgent(
+    `You are the code-editor agent for ${prCoordinates}. Across this converge round you run a sequence of edit and commit steps, each delivered as its own instruction. Make NO edits in this first turn — wait for the first task's instructions. Reply READY.`,
+    { label: 'code-editor', phase: 'Converge', agentType: 'clean-coder' },
+  )
+  return result?.agentId
+}
+
+/**
+ * Resume the code-editor agent for a specific edit task.
+ * @param {string} agentId the agent id from spawnCodeEditorAgent
+ * @param {string} task the short task name
+ * @param {object} context task-specific context
+ * @returns {Promise<object>} the structured output
+ */
+function resumeCodeEditorAgent(agentId, task, context) {
+  const label = `code-editor:${task}`
+  if (task === 'fix-edit') {
+    const findingsBlock = renderFindingsBlock(context.findings)
+    const threadIds = context.findings
+      .flatMap((each) => collectFindingThreadIds(each))
+      .filter((each) => typeof each === 'number')
+    return convergeAgent(
+      `You are the EDIT step fixing ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. A separate verify step then a separate commit step run after you.\n\n` +
+        `Findings:\n${findingsBlock}\n\n` +
+        `Rules:\n` +
+        `- Confirm the working tree is on the PR branch at HEAD ${context.head} with no unrelated edits before you start.\n` +
+        `- Fix every finding test-first (failing test, then minimum code to pass) per CODE_RULES. Verify each concern against current code; a finding whose concern no longer applies needs no code change but still needs its thread resolved.\n` +
+        `- Leave all fixes in the working tree. Do NOT commit and do NOT push — the commit step does that after verification. Committing or pushing here would change the surface the verifier binds to.\n` +
+        `- For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply with python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "<what changed>". Then resolve the PR review thread by thread node id (PRRT_...): look up the thread id for that comment via GraphQL (match on comment databaseId == <id> in the pull request's reviewThreads), then call the github MCP pull_request_review_write method=resolve_thread with threadId=<PRRT_...> (not the numeric comment id), or run the resolveReviewThread GraphQL mutation with the same threadId.\n` +
+        `- Findings with replyToCommentId null are in-memory audit findings: fix them, no reply needed.\n\n` +
+        `Return values:\n` +
+        `- When you edited code to fix at least one finding: edited=true, resolvedWithoutCommit=false.\n` +
+        `- When every finding was already addressed so no code change was needed — yet you still resolved each GitHub review thread above: edited=false, resolvedWithoutCommit=true. Only set this when every thread that carries a comment id is resolved; otherwise the round is treated as stalled.\n` +
+        `Always include a one-line summary.` +
+        PRE_COMMIT_GATE_STEP,
+      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    )
+  }
+  if (task === 'conflict-edit') {
+    return convergeAgent(
+      `You are the EDIT step resolving merge conflicts for ${prCoordinates}, HEAD ${context.head}, before the bug checks run. The PR branch conflicts with origin/main. A separate verify step then a separate commit step run after you.\n\n` +
+        `Rules:\n` +
+        `- Confirm the working tree is on the PR branch at HEAD ${context.head} with no unrelated edits before you start.\n` +
+        `- Rebase the branch onto origin/main and resolve every conflict so the tree is clean and conflict-free: git fetch origin main; git rebase origin/main; resolve each conflict, preserving the intent of both the PR's change and the incoming base change. A rebase creates local commits, which is fine.\n` +
+        `- Do NOT push and do NOT force-push — the commit step force-pushes after the verify step binds a verdict. Pushing here would change the surface the verifier binds to.\n\n` +
+        `Return rebased=true with a one-line summary when you rebased onto origin/main and resolved the conflicts; rebased=false with a summary when the branch did not actually need a rebase or you could not complete it.`,
+      { label, phase: 'Converge', schema: CONFLICT_EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    )
+  }
+  if (task === 'repair-edit') {
+    const failureBlock = context.failures.length
+      ? context.failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
+      : 'none reported'
+    return convergeAgent(
+      `You are the EDIT step repairing the convergence gates that failed for ${prCoordinates} on HEAD ${context.head}. A separate verify step then a separate commit step run after you.\n\n` +
+        `Failing gates:\n${failureBlock}\n\n` +
+        `Address only the failing gates, and make NO commit and NO push — leave every code change in the working tree (a rebase necessarily creates local commits, which is fine; just do not push them):\n` +
+        `- Unresolved bot review threads: fetch the threads where isResolved is false (gh api graphql, or the github MCP pull_request_read get_review_comments), then keep only the bot-authored ones — a thread whose root comment author login contains "cursor", "claude", or "copilot" (case-insensitive substring). Explicitly skip every human reviewer thread; the convergence gate counts only unresolved bot threads, so touching a human thread is out of scope. For each bot thread, verify the concern against current code; if it still applies, fix it test-first in the working tree and leave the fix uncommitted; either way post an inline reply and resolve the thread by its PRRT_ node id (GraphQL lookup matching the comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n` +
+        `- PR not mergeable: rebase onto origin/main FIRST, before applying any uncommitted bot-thread fix, so the rebase runs on a clean tree (git fetch origin main; git rebase origin/main; resolve conflicts). Do NOT force-push — the commit step does that after verification.\n` +
+        `- A dirty bot review or a still-pending requested reviewer: leave it; the next round re-runs that reviewer.\n\n` +
+        `Return values:\n` +
+        `- edited=true when you changed code in the working tree to fix a bot-thread concern.\n` +
+        `- rebased=true when you rebased the branch onto origin/main.\n` +
+        `- resolvedWithoutCommit=true only when you addressed the gates with neither a code change nor a rebase (bot threads resolved only), so there is nothing for the commit step to push.\n` +
+        `Always include a one-line summary.` +
+        PRE_COMMIT_GATE_STEP,
+      { label, phase: 'Finalize', schema: REPAIR_EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    )
+  }
+  if (task === 'repair-commit') {
+    const pushInstruction = context.wasRebased
+      ? 'The edit step rebased the branch, so push with git push --force-with-lease.'
+      : 'Push to the PR branch with a plain git push.'
+    return convergeAgent(
+      `You are the COMMIT step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree.\n\n` +
+        `Rules:\n` +
+        `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Do not run a formatter, do not re-fix anything — only commit and push what is already there.\n` +
+        `- Commit any uncommitted bot-thread fix in ONE commit (skip the commit when the working tree carries only already-committed rebase results). ${pushInstruction}\n\n` +
+        `Return values:\n` +
+        `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
+        `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
+        `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
+      { label, phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    )
+  }
+  if (task === 'standards-edit') {
+    const findingsBlock = renderFindingsBlock(context.findings)
+    const threadIds = context.findings
+      .flatMap((each) => collectFindingThreadIds(each))
+      .filter((each) => typeof each === 'number')
+    return convergeAgent(
+      `You are the EDIT step deferring a code-standard-only round on ${prCoordinates}, HEAD ${context.head} (${context.sourceLabel}). The round surfaced ONLY code-standard violations (CODE_RULES/style, no behavioral impact); the run treats it as passed and defers the fixes to follow-up work, which you now stage. A separate verify step then a separate commit step open the hardening PR after you. Do NOT commit or push to the PR's own branch.\n\n` +
+        `Findings:\n${findingsBlock}\n\n` +
+        `1. Follow-up fix issue: file a GitHub issue on ${input.owner}/${input.repo} (gh issue create --body-file with a temp file) titled "Deferred code-standard fixes from PR #${input.prNumber}". The body references the PR and lists each finding with its file:line, severity, and detail. The issue carries the fix work; do not open a fix PR. Capture the issue URL.\n` +
+        `2. Stage the environment-hardening change: in the Claude environment config repo (the repo owning ~/.claude hooks and rules — JonEcho/llm-settings for hooks, jl-cmd/claude-code-config for rules/skills; pick whichever owns the surface that would block these violation classes), find or clone a local checkout, fetch origin, and create a branch off origin/main. Edit the hooks/rules in that checkout's WORKING TREE so each violation class found here is blocked at Write/Edit time, before code is written. Do NOT commit and do NOT push — the commit step does that after the verify step binds a verdict to the working tree. Return the checkout's absolute path in hardeningRepoPath, the branch name in hardeningBranch, and set hardeningEdited=true. When no hardening is feasible for these classes, leave hardeningRepoPath and hardeningBranch empty and hardeningEdited=false; the follow-up issue still stands.\n` +
+        `3. For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue <url>." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
+        `Return the issue URL in issueUrl (empty string when it could not be filed), the hardening checkout path and branch, hardeningEdited, and a one-line summary.` +
+        PRE_COMMIT_GATE_STEP,
+      { label, phase: 'Converge', schema: STANDARDS_EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    )
+  }
+  if (task === 'hardening-commit') {
+    return convergeAgent(
+      `You are the COMMIT step opening the environment-hardening PR (${context.sourceLabel}) for the change staged in ${context.hardeningRepoPath} on branch ${context.hardeningBranch}. The edit step left the hooks/rules edits in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree. Do NOT touch the PR's own branch.\n\n` +
+        `Rules:\n` +
+        `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Only commit and push what is already there.\n` +
+        `- In ${context.hardeningRepoPath}: make ONE commit of the staged hooks/rules change on branch ${context.hardeningBranch}, push it, then open a DRAFT PR. The PR body references the follow-up issue ${context.issueUrl || '(none)'} and states the PR hardens the environment so the deferred violation classes are blocked at Write/Edit time. Honor the gh-body-file rule: write a BOM-free temp file and pass --body-file.\n\n` +
+        `Return a one-line summary naming the hardening PR URL.`,
+      { label, phase: 'Converge', agentType: 'clean-coder', resume: agentId },
+    )
+  }
+  if (task === 'commit-recover') {
+    const attempt = context.attempt || 1
+    return convergeAgent(
+      `You are the COMMIT-RECOVERY fixer (attempt ${attempt}) for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. A prior commit step was blocked by a commit-time hook or gate that requires a code change. A separate verify step then a separate commit step run after you.\n\n` +
+        `The blocking hook or gate said:\n${context.blockerDetail}\n\n` +
+        `Rules:\n` +
+        `- Confirm the working tree is on the PR branch at HEAD ${context.head} with the prior fixes still present.\n` +
+        `- Fix ONLY the violation named above, test-first (failing test, then minimum code to pass) per CODE_RULES. Do not re-open the original findings, and do not touch GitHub review threads — the edit step already handled those.\n` +
+        `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
+        `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.` +
+        PRE_COMMIT_GATE_STEP,
+      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    )
+  }
+  // verify-recover
+  const attempt = context.attempt || 1
+  const objection = context.objection || VERIFY_OBJECTION_FALLBACK
+  return convergeAgent(
+    `You are the VERIFY-RECOVERY fixer (attempt ${attempt}) for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The verify step rejected the working-tree fixes; its verdict named what is still unresolved. A separate verify step then a separate commit step run after you.\n\n` +
+      `The verify step's objections:\n${objection}\n\n` +
+      `Rules:\n` +
+      `- Confirm the working tree is on the PR branch at HEAD ${context.head} with the prior fixes still present.\n` +
+      `- Address every objection above test-first (failing test, then minimum code to pass) per CODE_RULES, so each named concern is genuinely resolved the way the verdict requires. Do not touch GitHub review threads — the edit step already handled those.\n` +
+      `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
+      `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.` +
+      PRE_COMMIT_GATE_STEP,
+    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+  )
+}
+
+/**
+ * Spawn the verifier code-verifier agent once per converge round, establishing
+ * its role so each later resume (repair-verify, hardening-verify) continues the
+ * same session. The spawn makes no edits — verification only. Returns the runtime
+ * agent id so the resume calls target the live session; a runtime without resume
+ * support returns no agent id, and each resume falls back to a fresh spawn.
+ * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
+ */
+async function spawnVerifierAgent() {
+  const result = await convergeAgent(
+    `You are the verifier agent for ${prCoordinates}. Across this converge round you run a sequence of verify steps, each delivered as its own instruction; each ends with a fenced verdict block. Do NO edits of any kind — verification only. Make no move in this first turn — wait for the first verify task's instructions. Reply READY.`,
+    { label: 'verifier', phase: 'Converge', agentType: 'code-verifier' },
+  )
+  return result?.agentId
+}
+
+/**
+ * Resume the verifier agent for a specific verify task.
+ * @param {string} agentId the agent id from spawnVerifierAgent
+ * @param {string} task the short task name
+ * @param {object} context task-specific context
+ * @returns {Promise<string>} the verifier transcript carrying the verdict fence
+ */
+function resumeVerifierAgent(agentId, task, context) {
+  const label = `verifier:${task}`
+  if (task === 'repair-verify') {
+    const failureBlock = context.failures.length
+      ? context.failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
+      : 'none reported'
+    return convergeAgent(
+      `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+        `Concerns the working-tree repair must resolve (the gates the convergence check flagged):\n${failureBlock}\n\n` +
+        `Steps:\n` +
+        `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
+        `2. Verify the working tree against origin/main: any bot-thread code fix is correct test-first per CODE_RULES, and a rebase (if any) left a clean, conflict-free tree. Read the diff (git diff origin/main) and run the relevant tests and named gates.\n` +
+        `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
+      { label, phase: 'Finalize', agentType: 'code-verifier', resume: agentId },
+    )
+  }
+  return convergeAgent(
+    `You are the VERIFY step for an environment-hardening change (${context.sourceLabel}) staged in the working tree of ${context.hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+      `Concern the working-tree change must resolve: the edited hooks/rules block the code-standard violation classes from the deferred round at Write/Edit time, and a hook change carries a passing test per CODE_RULES.\n\n` +
+      `Steps:\n` +
+      `1. cd into ${context.hardeningRepoPath}, then resolve its repo root: REPO=$(git rev-parse --show-toplevel).\n` +
+      `2. Verify the uncommitted working-tree change in REPO: read the diff (git diff) and run the hook/rule tests in that repo, confirming each violation class is now blocked.\n` +
+      `3. Compute the binding hash for the live surface:\n` +
+      `   The hardening branch is: ${context.hardeningBranch}\n` +
+      `   Run exactly:\n` +
+      `      "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "${context.hardeningBranch}"\n` +
+      `   (substitute the REPO path you resolved for the script path). That prints a single 64-char hex hash on stdout — capture it.\n` +
+      `   Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
+      "      ```verdict\n" +
+      `      {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
+      "      ```\n" +
+      `      When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`,
+    { label, phase: 'Converge', agentType: 'code-verifier', resume: agentId },
+  )
+}
+
+/**
+ * Spawn the general-utility general-purpose agent once per converge round,
+ * establishing its role so each later resume (post-clean-audit, mark-ready)
+ * continues the same session. The spawn edits no code.
+ * Returns the runtime agent id so the resume calls target the live session; a
+ * runtime without resume support returns no agent id, and each resume falls back
+ * to a fresh spawn.
+ * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
+ */
+async function spawnGeneralUtilityAgent() {
+  const result = await convergeAgent(
+    `You are the general-utility agent for ${prCoordinates}. Across this converge round you run a sequence of administrative steps (posting the clean audit, marking the PR ready), each delivered as its own instruction. Do not edit code, commit, or push. Make no move in this first turn — wait for the first task's instructions. Reply READY.`,
+    { label: 'general-utility', phase: 'Converge', agentType: 'general-purpose' },
+  )
+  return result?.agentId
+}
+
+/**
+ * Resume the general-utility agent for one of its two administrative tasks:
+ * 'post-clean-audit' posts the terminal CLEAN bugteam review, and 'mark-ready'
+ * marks the PR ready and confirms it left draft state.
+ * @param {string} agentId the agent id from spawnGeneralUtilityAgent
+ * @param {'post-clean-audit'|'mark-ready'} task the short task name
+ * @param {object} context task-specific context
+ * @returns {Promise<object>} the task result
+ */
+function resumeGeneralUtilityAgent(agentId, task, context) {
+  const label = `general-utility:${task}`
+  if (task === 'post-clean-audit') {
+    return convergeAgent(
+      `Post a CLEAN bugteam audit review on ${prCoordinates} at commit ${context.head}. All review lenses are clean on this HEAD.\n\n` +
+        `Write an empty findings file: create a temp file containing exactly [] (an empty JSON array). Then run:\n` +
+        `python "${CONFIG.prLoopScripts}/post_audit_thread.py" --skill bugteam --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --commit ${context.head} --state CLEAN --findings-json <temp-file>\n` +
+        `Run the script with --help first if any flag name differs. This posts the APPROVE review body that check_convergence.py reads for the bugteam gate. Do not edit code, commit, or push.\n\n` +
+        `Report whether the review landed. When the script prints a review URL, return {posted:true, reviewUrl:<that URL>, reason:""}. When the script is denied (a permission prompt or auto-mode-classifier block), errors, or prints anything other than a review URL, return {posted:false, reviewUrl:"", reason:<the denial message or error as one line>}. Do not retry a denied post.`,
+      { label, phase: 'Converge', schema: CLEAN_AUDIT_SCHEMA, agentType: 'general-purpose', resume: agentId },
+    )
+  }
+  if (task === 'mark-ready') {
+    const copilotOptOut = context.copilotDown
+      ? `0. Copilot is down this run, so opt the independent mark-ready blocker hook out of the Copilot gate before step 1. Export the token in the same shell session as step 1 so the hook's convergence re-check inherits it:\n   bash: export CLAUDE_REVIEWS_DISABLED="copilot"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "copilot")\n`
+      : ''
+    return convergeAgent(
+      `All convergence gates pass for ${prCoordinates} on HEAD ${context.head}. Mark the PR ready, then confirm it left draft state. Do not edit code.\n\n` +
+        copilotOptOut +
+        `1. Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
+        `2. Re-query the draft state: gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .draft\n` +
+        `Return {ready:true} only when step 2 prints false (the PR is no longer a draft). If step 1 errors or step 2 still prints true, return {ready:false}.`,
+      { label, phase: 'Finalize', schema: READY_SCHEMA, agentType: 'general-purpose', resume: agentId },
+    )
+  }
+  throw new Error(`resumeGeneralUtilityAgent: unknown task ${task}`)
+}
+
+/**
+ * Spawn the convergence-check Explore agent once before the converge loop,
+ * establishing its role so each per-round resume runs the convergence gate in the
+ * same session. The spawn edits no code. Returns the runtime agent id so the
+ * resume calls target the live session; a runtime without resume support returns
+ * no agent id, and each resume falls back to a fresh spawn.
+ * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
+ */
+async function spawnConvergenceCheckAgent() {
+  const result = await convergeAgent(
+    `You are the convergence-check agent for ${prCoordinates}. Each round you run the authoritative convergence gate and report its result, delivered as its own instruction. Do not edit code. Make no move in this first turn — wait for the first check instruction. Reply READY.`,
+    { label: 'convergence-check', phase: 'Converge', agentType: 'Explore' },
+  )
+  return result?.agentId
+}
+
+/**
+ * Resume the convergence-check agent for the convergence check.
+ * @param {string} agentId the agent id from spawnConvergenceCheckAgent
+ * @param {object} context carries bugbotDown and copilotDown
+ * @returns {Promise<object>} CONVERGENCE_SCHEMA result
+ */
+function resumeConvergenceCheckAgent(agentId, context) {
+  const label = 'check-convergence'
+  const bugbotDownFlag = context.bugbotDown ? ' --bugbot-down' : ''
+  const copilotDownFlag = context.copilotDown ? ' --copilot-down' : ''
+  return convergeAgent(
+    `Run the convergence gate for ${prCoordinates} and report the result. Do not edit code.\n\n` +
+      `Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}\n\n` +
+      `Exit 0 -> every gate passed: return {pass:true, failures:[]}.\n` +
+      `Exit 1 -> return {pass:false, failures:[<each printed FAIL line verbatim>]}.\n` +
+      `Exit 2 -> retry once; if it still errors, return {pass:false, failures:["check_convergence gh error"]}.`,
+    { label, phase: 'Finalize', schema: CONVERGENCE_SCHEMA, agentType: 'Explore', resume: agentId },
+  )
+}
 
 const PRE_COMMIT_GATE_STEP =
   `\n\nFINAL STEP — pre-commit gate check (do NOT commit): before your turn ends, prove your working-tree changes CAN be committed by dry-running the CODE_RULES commit gate that gates git commit (precommit_code_rules_gate). From inside the checkout that holds your changes, resolve its root with git rev-parse --show-toplevel, stage your changes with git add -A, then run exactly:\n` +
@@ -408,30 +907,47 @@ function normalizeShaForComparison(sha) {
 }
 
 /**
+ * Parse the LAST ```verdict ...``` fenced JSON block from a transcript.
+ * Guards against non-string input, iterates all fence matches for the last one,
+ * parses the JSON, and returns the object or null on any failure.
+ * @param {string|null|undefined} transcript the agent transcript text
+ * @returns {object|null} the parsed verdict object, or null when absent or malformed
+ */
+function parseLastVerdictFence(transcript) {
+  if (typeof transcript !== 'string') return null
+  const fencePattern = /```verdict\s*\n([\s\S]*?)```/g
+  let lastFenceBody = null
+  let eachMatch
+  while ((eachMatch = fencePattern.exec(transcript)) !== null) {
+    lastFenceBody = eachMatch[1]
+  }
+  if (lastFenceBody === null) return null
+  try {
+    return JSON.parse(lastFenceBody)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Extract the full verdict object from a transcript carrying a verdict fence.
+ * @param {string|null|undefined} transcript the agent transcript text
+ * @returns {object|null} the parsed verdict with all_pass, findings, and manifest_sha256, or null
+ */
+function extractVerdict(transcript) {
+  return parseLastVerdictFence(transcript)
+}
+
+/**
  * Decide whether a workflow code-verifier transcript ended in a passing
- * verdict. The verify step runs with no schema so its verdict lands as plain
- * assistant text; this reads the LAST ```verdict ...``` fenced JSON block and
- * returns true only when it parses to an object with all_pass true. A missing
- * fence, a parse failure, or all_pass false reads as not-passed so the commit
- * step is skipped and the round reads as not-progressed.
+ * verdict. Reads the LAST ```verdict ...``` fenced JSON block via the shared
+ * parser and returns true only when it parses to an object with all_pass true.
  * @param {string|null|undefined} verifyTranscript the verifier's transcript text
  * @returns {boolean} true only when the last verdict fence reports all_pass true
  */
 function verdictPassed(verifyTranscript) {
-  if (typeof verifyTranscript !== 'string') return false
-  const fencePattern = /```verdict\s*\n([\s\S]*?)```/g
-  let lastFenceBody = null
-  let eachMatch
-  while ((eachMatch = fencePattern.exec(verifyTranscript)) !== null) {
-    lastFenceBody = eachMatch[1]
-  }
-  if (lastFenceBody === null) return false
-  try {
-    const verdictRecord = JSON.parse(lastFenceBody)
-    return verdictRecord != null && verdictRecord.all_pass === true
-  } catch {
-    return false
-  }
+  const verdictRecord = parseLastVerdictFence(verifyTranscript)
+  return verdictRecord != null && verdictRecord.all_pass === true
 }
 
 const VERIFY_OBJECTION_FALLBACK = 'The verify step rejected the working-tree fixes without a parseable verdict; re-read the fix-verify transcript above and address every concern it raised.'
@@ -475,25 +991,14 @@ function renderVerifyObjectionLine(eachFinding) {
  * @returns {string} a human-readable block of the verifier's objections
  */
 function extractVerifyObjection(verifyTranscript) {
-  if (typeof verifyTranscript !== 'string') return VERIFY_OBJECTION_FALLBACK
-  const fencePattern = /```verdict\s*\n([\s\S]*?)```/g
-  let lastFenceBody = null
-  let eachMatch
-  while ((eachMatch = fencePattern.exec(verifyTranscript)) !== null) {
-    lastFenceBody = eachMatch[1]
-  }
-  if (lastFenceBody === null) return VERIFY_OBJECTION_FALLBACK
-  try {
-    const verdictRecord = JSON.parse(lastFenceBody)
-    const allObjections = Array.isArray(verdictRecord?.findings) ? verdictRecord.findings : []
-    const renderedObjections = allObjections
-      .map((eachFinding) => renderVerifyObjectionLine(eachFinding))
-      .filter((eachLine) => eachLine !== null)
-    if (renderedObjections.length === 0) return VERIFY_OBJECTION_FALLBACK
-    return renderedObjections.map((eachLine, position) => `${position + 1}. ${eachLine}`).join('\n')
-  } catch {
-    return VERIFY_OBJECTION_FALLBACK
-  }
+  const verdictRecord = parseLastVerdictFence(verifyTranscript)
+  if (verdictRecord == null) return VERIFY_OBJECTION_FALLBACK
+  const allObjections = Array.isArray(verdictRecord?.findings) ? verdictRecord.findings : []
+  const renderedObjections = allObjections
+    .map((eachFinding) => renderVerifyObjectionLine(eachFinding))
+    .filter((eachLine) => eachLine !== null)
+  if (renderedObjections.length === 0) return VERIFY_OBJECTION_FALLBACK
+  return renderedObjections.map((eachLine, position) => `${position + 1}. ${eachLine}`).join('\n')
 }
 
 /**
@@ -700,37 +1205,6 @@ activeRepoPath = typeof input.repoPath === 'string' && input.repoPath ? input.re
 const prCoordinates = `owner=${input.owner} repo=${input.repo} PR #${input.prNumber} (https://github.com/${input.owner}/${input.repo}/pull/${input.prNumber})`
 
 /**
- * Resolve the current PR HEAD SHA from GitHub.
- * @returns {Promise<string>} the 40-char HEAD SHA
- */
-async function resolveHead() {
-  const head = await convergeAgent(
-    `Print the current HEAD SHA of ${prCoordinates}. Run exactly:\n` +
-      `gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
-      `Return the full 40-character SHA in the sha field. Do not modify any files.`,
-    { label: 'resolve-head', phase: 'Converge', schema: HEAD_SCHEMA, agentType: 'Explore' },
-  )
-  return head?.sha
-}
-
-/**
- * Fetch origin/main once per round before the parallel lenses spawn. The
- * code-review and bug-audit lenses both diff against origin/main; running their
- * own git fetch in parallel contends on the worktree .git lock and fails
- * intermittently, so a single serial fetch here keeps the ref current and the
- * parallel lenses do no git fetch of their own.
- * @returns {Promise<string>} agent transcript (unused)
- */
-function prefetchMainForRound() {
-  return convergeAgent(
-    `Refresh the base ref for ${prCoordinates} so the parallel review lenses can diff against an up-to-date origin/main without each running its own fetch. Run exactly:\n` +
-      `git fetch origin main\n` +
-      `Do not edit, commit, push, rebase, or modify any files — fetch only.`,
-    { label: 'prefetch-main', phase: 'Converge', agentType: 'Explore' },
-  )
-}
-
-/**
  * Bugbot lens: ensure Cursor Bugbot has rendered a verdict on the given HEAD,
  * triggering and polling its CI check run when needed, and return its findings.
  * @param {string} head PR HEAD SHA to evaluate
@@ -831,139 +1305,6 @@ function renderFindingsBlock(findings) {
     .join('\n')
 }
 
-/**
- * Edit step: one clean-coder fixes every finding test-first in the working
- * tree and resolves the GitHub review threads, making NO commit or push so the
- * verify step can bind a verdict to the unstaged fixes.
- * @param {string} head PR HEAD SHA the findings were raised against
- * @param {Array<object>} findings deduped findings across all lenses
- * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<object>} EDIT_SCHEMA result
- */
-function applyFixesEdit(head, findings, sourceLabel) {
-  const findingsBlock = renderFindingsBlock(findings)
-  const threadIds = findings
-    .flatMap((each) => collectFindingThreadIds(each))
-    .filter((each) => typeof each === 'number')
-  return convergeAgent(
-    `You are the EDIT step fixing ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. A separate verify step then a separate commit step run after you.\n\n` +
-      `Findings:\n${findingsBlock}\n\n` +
-      `Rules:\n` +
-      `- Confirm the working tree is on the PR branch at HEAD ${head} with no unrelated edits before you start.\n` +
-      `- Fix every finding test-first (failing test, then minimum code to pass) per CODE_RULES. Verify each concern against current code; a finding whose concern no longer applies needs no code change but still needs its thread resolved.\n` +
-      `- Leave all fixes in the working tree. Do NOT commit and do NOT push — the commit step does that after verification. Committing or pushing here would change the surface the verifier binds to.\n` +
-      `- For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply with python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "<what changed>". Then resolve the PR review thread by thread node id (PRRT_...): look up the thread id for that comment via GraphQL (match on comment databaseId == <id> in the pull request's reviewThreads), then call the github MCP pull_request_review_write method=resolve_thread with threadId=<PRRT_...> (not the numeric comment id), or run the resolveReviewThread GraphQL mutation with the same threadId.\n` +
-      `- Findings with replyToCommentId null are in-memory audit findings: fix them, no reply needed.\n\n` +
-      `Return values:\n` +
-      `- When you edited code to fix at least one finding: edited=true, resolvedWithoutCommit=false.\n` +
-      `- When every finding was already addressed so no code change was needed — yet you still resolved each GitHub review thread above: edited=false, resolvedWithoutCommit=true. Only set this when every thread that carries a comment id is resolved; otherwise the round is treated as stalled.\n` +
-      `Always include a one-line summary.` +
-      PRE_COMMIT_GATE_STEP,
-    { label: `fix-edit:${sourceLabel}`, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
-  )
-}
-
-/**
- * Verify step: a code-verifier checks the working-tree fixes against the
- * findings, computes the binding surface hash, and ends with a verdict fence
- * as plain assistant text (NO schema, so the fence is not consumed as
- * structured output). The fence's manifest_sha256 is what unlocks the
- * verified-commit gate for the commit step. The verifier makes no edits.
- * @param {string} head PR HEAD SHA the findings were raised against
- * @param {Array<object>} findings deduped findings the fixes must address
- * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<string>} the verifier transcript carrying the verdict fence
- */
-function verifyFixesInWorkingTree(head, findings, sourceLabel) {
-  const findingsBlock = renderFindingsBlock(findings)
-  return convergeAgent(
-    `You are the VERIFY step for ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The edit step left fixes in the working tree, uncommitted. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
-      `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
-      `Steps:\n` +
-      `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
-      `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
-      `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
-    { label: `fix-verify:${sourceLabel}`, phase: 'Converge', agentType: 'code-verifier' },
-  )
-}
-
-/**
- * Commit step: one clean-coder commits the already-verified working-tree fixes
- * in a single commit and pushes to the PR branch, making NO further file edits
- * — any edit changes the surface and invalidates the verifier verdict that
- * unlocks the commit gate.
- * @param {string} head PR HEAD SHA before the fix commit
- * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<object>} FIX_SCHEMA result
- */
-function commitVerifiedFixes(head, sourceLabel) {
-  return convergeAgent(
-    `You are the COMMIT step for fixes (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The edit step left fixes in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree.\n\n` +
-      `Rules:\n` +
-      `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the commit would be blocked. Do not run a formatter, do not touch a test, do not re-fix anything — only commit and push what is already there.\n` +
-      `- Make ONE commit for all the working-tree fixes, then push to the PR branch.\n\n` +
-      `Return values:\n` +
-      `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
-      `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
-      `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
-    { label: `fix-commit:${sourceLabel}`, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder' },
-  )
-}
-
-/**
- * Commit-recovery fixer: when a commit step is blocked by a commit-time hook or
- * gate that requires a code change, one clean-coder fixes only that blocking
- * violation test-first in the working tree and leaves it uncommitted, so the
- * re-verify step can bind a fresh verdict and the retry commit can push. It does
- * not re-open the original findings or touch GitHub threads — the edit step
- * already handled those.
- * @param {string} head PR HEAD SHA the fixes were raised against
- * @param {string} blockerDetail verbatim hook/gate message naming the file and rule to change
- * @param {string} sourceLabel short description of where the findings came from
- * @param {number} attempt the 1-based recovery attempt number
- * @returns {Promise<object>} EDIT_SCHEMA result
- */
-function recoverCommitBlockEdit(head, blockerDetail, sourceLabel, attempt) {
-  return convergeAgent(
-    `You are the COMMIT-RECOVERY fixer (attempt ${attempt}) for fixes (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. A prior commit step was blocked by a commit-time hook or gate that requires a code change. A separate verify step then a separate commit step run after you.\n\n` +
-      `The blocking hook or gate said:\n${blockerDetail}\n\n` +
-      `Rules:\n` +
-      `- Confirm the working tree is on the PR branch at HEAD ${head} with the prior fixes still present.\n` +
-      `- Fix ONLY the violation named above, test-first (failing test, then minimum code to pass) per CODE_RULES. Do not re-open the original findings, and do not touch GitHub review threads — the edit step already handled those.\n` +
-      `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
-      `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.` +
-      PRE_COMMIT_GATE_STEP,
-    { label: `fix-recover:${sourceLabel}`, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
-  )
-}
-
-/**
- * Verify-recovery fixer: when the verify step rejects the working-tree fixes, one
- * clean-coder re-fixes against the verdict's stated objections, test-first, and
- * leaves the work uncommitted so the re-verify step can bind a fresh verdict. The
- * objection text names which findings the verifier judged unresolved and why, so
- * the fixer addresses those concerns; it does not touch GitHub review threads —
- * the edit step already replied to and resolved those.
- * @param {string} head PR HEAD SHA the fixes were raised against
- * @param {string} objection the verifier's rendered objections from the failed verdict
- * @param {string} sourceLabel short description of where the findings came from
- * @param {number} attempt the 1-based recovery attempt number
- * @returns {Promise<object>} EDIT_SCHEMA result
- */
-function recoverVerifyFailEdit(head, objection, sourceLabel, attempt) {
-  return convergeAgent(
-    `You are the VERIFY-RECOVERY fixer (attempt ${attempt}) for fixes (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The verify step rejected the working-tree fixes; its verdict named what is still unresolved. A separate verify step then a separate commit step run after you.\n\n` +
-      `The verify step's objections:\n${objection}\n\n` +
-      `Rules:\n` +
-      `- Confirm the working tree is on the PR branch at HEAD ${head} with the prior fixes still present.\n` +
-      `- Address every objection above test-first (failing test, then minimum code to pass) per CODE_RULES, so each named concern is genuinely resolved the way the verdict requires. Do not touch GitHub review threads — the edit step already handled those.\n` +
-      `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
-      `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.` +
-      PRE_COMMIT_GATE_STEP,
-    { label: `fix-verify-recover:${sourceLabel}`, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
-  )
-}
-
 const FIX_RECOVERY_MAX_ATTEMPTS = 2
 
 /**
@@ -1030,7 +1371,8 @@ async function verifyWithRecovery({ runVerify, runRecoverEdit }) {
  * @returns {Promise<object>} FIX_SCHEMA result
  */
 async function applyFixes(head, findings, sourceLabel) {
-  const editResult = await applyFixesEdit(head, findings, sourceLabel)
+  const codeEditorId = await spawnCodeEditorAgent()
+  const editResult = await resumeCodeEditorAgent(codeEditorId, 'fix-edit', { head, findings, sourceLabel })
   if (editResult?.resolvedWithoutCommit === true && editResult?.edited !== true) {
     return {
       newSha: head,
@@ -1041,47 +1383,8 @@ async function applyFixes(head, findings, sourceLabel) {
       blockerDetail: '',
     }
   }
-  const verifyTranscript = await verifyWithRecovery({
-    runVerify: () => verifyFixesInWorkingTree(head, findings, sourceLabel),
-    runRecoverEdit: (objection, attempt) => recoverVerifyFailEdit(head, objection, sourceLabel, attempt),
-  })
-  if (!verdictPassed(verifyTranscript)) {
-    return {
-      newSha: head,
-      pushed: false,
-      resolvedWithoutCommit: false,
-      summary: `verify step did not pass the working-tree fixes for ${findings.length} finding(s) — not committing`,
-      blockedNeedingEdit: false,
-      blockerDetail: '',
-    }
-  }
-  return commitWithRecovery({
-    runCommit: () => commitVerifiedFixes(head, sourceLabel),
-    runVerify: () => verifyFixesInWorkingTree(head, findings, sourceLabel),
-    runRecoverEdit: (detail, attempt) => recoverCommitBlockEdit(head, detail, sourceLabel, attempt),
-  })
-}
-
-/**
- * Post the terminal CLEAN bugteam audit artifact so check_convergence.py sees
- * a clean bugteam review on the converged HEAD. The post is load-bearing: the
- * convergence gate's bugteam-review check can never pass until this review
- * lands, so the result reports whether the post succeeded rather than
- * discarding it. A blocked post (a permission or auto-mode-classifier denial)
- * or a script error returns posted:false with the reason so the caller can
- * surface a blocker instead of re-converging into the iteration cap.
- * @param {string} head converged PR HEAD SHA
- * @returns {Promise<object>} CLEAN_AUDIT_SCHEMA result
- */
-function postCleanAudit(head) {
-  return convergeAgent(
-    `Post a CLEAN bugteam audit review on ${prCoordinates} at commit ${head}. All review lenses are clean on this HEAD.\n\n` +
-      `Write an empty findings file: create a temp file containing exactly [] (an empty JSON array). Then run:\n` +
-      `python "${CONFIG.prLoopScripts}/post_audit_thread.py" --skill bugteam --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --commit ${head} --state CLEAN --findings-json <temp-file>\n` +
-      `Run the script with --help first if any flag name differs. This posts the APPROVE review body that check_convergence.py reads for the bugteam gate. Do not edit code, commit, or push.\n\n` +
-      `Report whether the review landed. When the script prints a review URL, return {posted:true, reviewUrl:<that URL>, reason:""}. When the script is denied (a permission prompt or auto-mode-classifier block), errors, or prints anything other than a review URL, return {posted:false, reviewUrl:"", reason:<the denial message or error as one line>}. Do not retry a denied post.`,
-    { label: 'post-clean-audit', phase: 'Converge', schema: CLEAN_AUDIT_SCHEMA, agentType: 'general-purpose' },
-  )
+  const fixerAgentId = await spawnFixerAgent(head, findings, sourceLabel, 'verify-commit')
+  return fixerWithRecovery(fixerAgentId, head, findings, sourceLabel)
 }
 
 /**
@@ -1090,7 +1393,7 @@ function postCleanAudit(head) {
  * post stops the run with an actionable message rather than re-converging until
  * the iteration cap. Handles a dead post agent (a null result) as not posted.
  * @param {string} head converged PR HEAD SHA
- * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from postCleanAudit, or null when the agent died
+ * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from the post-clean-audit resume, or null when the agent died
  * @returns {string} the blocker message naming the post failure and the unblock path
  */
 function cleanAuditBlocker(head, auditResult) {
@@ -1129,133 +1432,6 @@ function runCopilotGate(head) {
 }
 
 /**
- * Run the authoritative convergence gate.
- * @param {boolean} bugbotDown pass --bugbot-down when Bugbot is opted out or proved unreachable this run
- * @param {boolean} copilotDown pass --copilot-down when Copilot is down or out of quota this run
- * @returns {Promise<object>} CONVERGENCE_SCHEMA result
- */
-function checkConvergence(bugbotDown, copilotDown) {
-  const bugbotDownFlag = bugbotDown ? ' --bugbot-down' : ''
-  const copilotDownFlag = copilotDown ? ' --copilot-down' : ''
-  return convergeAgent(
-    `Run the convergence gate for ${prCoordinates} and report the result. Do not edit code.\n\n` +
-      `Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}\n\n` +
-      `Exit 0 -> every gate passed: return {pass:true, failures:[]}.\n` +
-      `Exit 1 -> return {pass:false, failures:[<each printed FAIL line verbatim>]}.\n` +
-      `Exit 2 -> retry once; if it still errors, return {pass:false, failures:["check_convergence gh error"]}.`,
-    { label: 'check-convergence', phase: 'Finalize', schema: CONVERGENCE_SCHEMA, agentType: 'Explore' },
-  )
-}
-
-/**
- * Mark the PR ready for review (draft=false) and confirm the transition landed.
- * When Copilot is down this run, the mark-ready agent first opts the
- * independent mark-ready blocker hook out of the Copilot gate by exporting
- * the Copilot token into CLAUDE_REVIEWS_DISABLED: that hook re-runs
- * check_convergence.py without --copilot-down, so the env token is the only
- * channel a genuine Copilot outage has to pass its Copilot review gate.
- * @param {string} head converged PR HEAD SHA
- * @param {boolean} copilotDown true when the Copilot gate was bypassed for an outage this run
- * @returns {Promise<object>} READY_SCHEMA result
- */
-function markReady(head, copilotDown) {
-  const copilotOptOut = copilotDown
-    ? `0. Copilot is down this run, so opt the independent mark-ready blocker hook out of the Copilot gate before step 1. Export the token in the same shell session as step 1 so the hook's convergence re-check inherits it:\n   bash: export CLAUDE_REVIEWS_DISABLED="copilot"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "copilot")\n`
-    : ''
-  return convergeAgent(
-    `All convergence gates pass for ${prCoordinates} on HEAD ${head}. Mark the PR ready, then confirm it left draft state. Do not edit code.\n\n` +
-      copilotOptOut +
-      `1. Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
-      `2. Re-query the draft state: gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .draft\n` +
-      `Return {ready:true} only when step 2 prints false (the PR is no longer a draft). If step 1 errors or step 2 still prints true, return {ready:false}.`,
-    { label: 'mark-ready', phase: 'Finalize', schema: READY_SCHEMA, agentType: 'general-purpose' },
-  )
-}
-
-/**
- * Repair edit step: one clean-coder resolves the lingering bot review threads
- * the convergence check flagged, fixes any still-applicable bot-thread concern
- * test-first in the working tree, and rebases onto origin/main when the PR is
- * not mergeable — making NO commit and NO push, so the verify step can bind a
- * verdict to the resulting surface before the commit step pushes it. Human
- * reviewer threads are never touched.
- * @param {string} head current PR HEAD SHA
- * @param {Array<string>} failures FAIL lines from the convergence check
- * @returns {Promise<object>} REPAIR_EDIT_SCHEMA result
- */
-function repairConvergenceEdit(head, failures) {
-  const failureBlock = failures.length
-    ? failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
-    : 'none reported'
-  return convergeAgent(
-    `You are the EDIT step repairing the convergence gates that failed for ${prCoordinates} on HEAD ${head}. A separate verify step then a separate commit step run after you.\n\n` +
-      `Failing gates:\n${failureBlock}\n\n` +
-      `Address only the failing gates, and make NO commit and NO push — leave every code change in the working tree (a rebase necessarily creates local commits, which is fine; just do not push them):\n` +
-      `- Unresolved bot review threads: fetch the threads where isResolved is false (gh api graphql, or the github MCP pull_request_read get_review_comments), then keep only the bot-authored ones — a thread whose root comment author login contains "cursor", "claude", or "copilot" (case-insensitive substring). Explicitly skip every human reviewer thread; the convergence gate counts only unresolved bot threads, so touching a human thread is out of scope. For each bot thread, verify the concern against current code; if it still applies, fix it test-first in the working tree and leave the fix uncommitted; either way post an inline reply and resolve the thread by its PRRT_ node id (GraphQL lookup matching the comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n` +
-      `- PR not mergeable: rebase onto origin/main FIRST, before applying any uncommitted bot-thread fix, so the rebase runs on a clean tree (git fetch origin main; git rebase origin/main; resolve conflicts). Do NOT force-push — the commit step does that after verification.\n` +
-      `- A dirty bot review or a still-pending requested reviewer: leave it; the next round re-runs that reviewer.\n\n` +
-      `Return values:\n` +
-      `- edited=true when you changed code in the working tree to fix a bot-thread concern.\n` +
-      `- rebased=true when you rebased the branch onto origin/main.\n` +
-      `- resolvedWithoutCommit=true only when you addressed the gates with neither a code change nor a rebase (bot threads resolved only), so there is nothing for the commit step to push.\n` +
-      `Always include a one-line summary.` +
-      PRE_COMMIT_GATE_STEP,
-    { label: 'repair-edit', phase: 'Finalize', schema: REPAIR_EDIT_SCHEMA, agentType: 'clean-coder' },
-  )
-}
-
-/**
- * Repair verify step: a code-verifier confirms the working-tree repair (any
- * bot-thread fix plus any rebase result) is sound, computes the binding surface
- * hash, and ends with a verdict fence as plain assistant text (NO schema). The
- * fence's manifest_sha256 unlocks the verified-commit gate for the commit step's
- * push. The verifier makes no edits.
- * @param {string} head PR HEAD SHA the repair started from
- * @param {Array<string>} failures FAIL lines the repair addressed
- * @returns {Promise<string>} the verifier transcript carrying the verdict fence
- */
-function verifyRepairChanges(head, failures) {
-  const failureBlock = failures.length
-    ? failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
-    : 'none reported'
-  return convergeAgent(
-    `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
-      `Concerns the working-tree repair must resolve (the gates the convergence check flagged):\n${failureBlock}\n\n` +
-      `Steps:\n` +
-      `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
-      `2. Verify the working tree against origin/main: any bot-thread code fix is correct test-first per CODE_RULES, and a rebase (if any) left a clean, conflict-free tree. Read the diff (git diff origin/main) and run the relevant tests and named gates.\n` +
-      `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
-    { label: 'repair-verify', phase: 'Finalize', agentType: 'code-verifier' },
-  )
-}
-
-/**
- * Repair commit step: one clean-coder commits any uncommitted bot-thread fix in
- * a single commit and pushes to the PR branch (force-with-lease when the edit
- * step rebased), making NO further file edits — any edit changes the surface and
- * invalidates the verifier verdict that unlocks the commit gate.
- * @param {string} head PR HEAD SHA before the repair push
- * @param {boolean} wasRebased true when the edit step rebased the branch, so the push must be force-with-lease
- * @returns {Promise<object>} FIX_SCHEMA result
- */
-function commitRepairFixes(head, wasRebased) {
-  const pushInstruction = wasRebased
-    ? 'The edit step rebased the branch, so push with git push --force-with-lease.'
-    : 'Push to the PR branch with a plain git push.'
-  return convergeAgent(
-    `You are the COMMIT step for the convergence repair on ${prCoordinates}, HEAD ${head}. The edit step left its repair in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree.\n\n` +
-      `Rules:\n` +
-      `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Do not run a formatter, do not re-fix anything — only commit and push what is already there.\n` +
-      `- Commit any uncommitted bot-thread fix in ONE commit (skip the commit when the working tree carries only already-committed rebase results). ${pushInstruction}\n\n` +
-      `Return values:\n` +
-      `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
-      `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
-      `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
-    { label: 'repair-commit', phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder' },
-  )
-}
-
-/**
  * Address the gates a convergence check reported as failing, then hand control
  * back to the converge phase: edit (clean-coder resolves bot threads, applies
  * any fix and rebase in the working tree, no push) -> verify (code-verifier
@@ -1270,7 +1446,8 @@ function commitRepairFixes(head, wasRebased) {
  * @returns {Promise<object>} FIX_SCHEMA result
  */
 async function repairConvergence(head, failures) {
-  const editResult = await repairConvergenceEdit(head, failures)
+  const codeEditorId = await spawnCodeEditorAgent()
+  const editResult = await resumeCodeEditorAgent(codeEditorId, 'repair-edit', { head, failures })
   const hasPushWork = editResult?.edited === true || editResult?.rebased === true
   if (!hasPushWork) {
     return {
@@ -1282,9 +1459,10 @@ async function repairConvergence(head, failures) {
       blockerDetail: '',
     }
   }
+  const verifierId = await spawnVerifierAgent()
   const verifyTranscript = await verifyWithRecovery({
-    runVerify: () => verifyRepairChanges(head, failures),
-    runRecoverEdit: (objection, attempt) => recoverVerifyFailEdit(head, objection, 'repair', attempt),
+    runVerify: () => resumeVerifierAgent(verifierId, 'repair-verify', { head, failures }),
+    runRecoverEdit: (objection, attempt) => resumeCodeEditorAgent(codeEditorId, 'verify-recover', { head, sourceLabel: 'repair', objection, attempt }),
   })
   if (!verdictPassed(verifyTranscript)) {
     return {
@@ -1298,51 +1476,12 @@ async function repairConvergence(head, failures) {
   }
   const wasRebased = editResult?.rebased === true
   return commitWithRecovery({
-    runCommit: () => commitRepairFixes(head, wasRebased),
-    runVerify: () => verifyRepairChanges(head, failures),
-    runRecoverEdit: (detail, attempt) => recoverCommitBlockEdit(head, detail, 'repair', attempt),
+    runCommit: () => resumeCodeEditorAgent(codeEditorId, 'repair-commit', { head, wasRebased }),
+    runVerify: () => resumeVerifierAgent(verifierId, 'repair-verify', { head, failures }),
+    runRecoverEdit: (detail, attempt) => resumeCodeEditorAgent(codeEditorId, 'commit-recover', { head, sourceLabel: 'repair', blockerDetail: detail, attempt }),
   })
 }
 
-/**
- * Pre-flight merge-conflict check: ask GitHub whether the PR branch still merges
- * cleanly into its base. GitHub computes mergeability asynchronously, so the
- * agent polls until .mergeable resolves to a boolean before judging. Read-only —
- * it makes no edit, commit, push, or rebase.
- * @param {string} head PR HEAD SHA the check runs against
- * @returns {Promise<object>} MERGE_CONFLICT_SCHEMA result
- */
-function checkMergeConflicts(head) {
-  return convergeAgent(
-    `Report whether ${prCoordinates} (HEAD ${head}) has merge conflicts with its base branch. Do not edit, commit, push, or rebase — read only.\n\n` +
-      `GitHub computes mergeability asynchronously, so .mergeable is null right after a push until it finishes. Poll until it resolves: run\n` +
-      `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq '{mergeable: .mergeable, state: .mergeable_state}'\n` +
-      `up to 5 times, 5 seconds apart (delay each retry with "sleep 5", or the PowerShell alternative "Start-Sleep -Seconds 5"), stopping as soon as mergeable is true or false.\n\n` +
-      `Return conflicting:true when mergeable is false or state is "dirty" (the branch conflicts with the base). Return conflicting:false when mergeable is true, or when mergeable stays null after the full poll budget — mergeability is unknown, so let the bug checks proceed rather than rebase on a guess.`,
-    { label: 'check-merge-conflicts', phase: 'Converge', schema: MERGE_CONFLICT_SCHEMA, agentType: 'Explore' },
-  )
-}
-
-/**
- * Conflict-resolution edit step: one clean-coder rebases the PR branch onto
- * origin/main and resolves every conflict in the working tree, making NO push —
- * the verify step binds a verdict to the rebased tree before the commit step
- * force-pushes it. A rebase necessarily creates local commits, which is expected;
- * only the force-push is withheld so the verifier binds the surface first.
- * @param {string} head PR HEAD SHA before the rebase
- * @returns {Promise<object>} CONFLICT_EDIT_SCHEMA result
- */
-function resolveConflictsEdit(head) {
-  return convergeAgent(
-    `You are the EDIT step resolving merge conflicts for ${prCoordinates}, HEAD ${head}, before the bug checks run. The PR branch conflicts with origin/main. A separate verify step then a separate commit step run after you.\n\n` +
-      `Rules:\n` +
-      `- Confirm the working tree is on the PR branch at HEAD ${head} with no unrelated edits before you start.\n` +
-      `- Rebase the branch onto origin/main and resolve every conflict so the tree is clean and conflict-free: git fetch origin main; git rebase origin/main; resolve each conflict, preserving the intent of both the PR's change and the incoming base change. A rebase creates local commits, which is fine.\n` +
-      `- Do NOT push and do NOT force-push — the commit step force-pushes after the verify step binds a verdict. Pushing here would change the surface the verifier binds to.\n\n` +
-      `Return rebased=true with a one-line summary when you rebased onto origin/main and resolved the conflicts; rebased=false with a summary when the branch did not actually need a rebase or you could not complete it.`,
-    { label: 'resolve-conflicts-edit', phase: 'Converge', schema: CONFLICT_EDIT_SCHEMA, agentType: 'clean-coder' },
-  )
-}
 
 /**
  * Pre-flight conflict resolution: when the PR branch conflicts with its base,
@@ -1357,22 +1496,24 @@ function resolveConflictsEdit(head) {
  * @param {string} head PR HEAD SHA before any rebase
  * @returns {Promise<string>} the HEAD SHA after a successful rebase push, or the unchanged head
  */
-async function resolveMergeConflicts(head) {
-  const mergeState = await checkMergeConflicts(head)
+async function resolveMergeConflicts(head, gitAgentId) {
+  const mergeState = await resumeGitAgent(gitAgentId, 'check-merge-conflicts', head)
   if (!isMergeConflicting(mergeState)) return head
   log(`Pre-flight: ${prCoordinates} conflicts with origin/main — rebasing clean before the bug checks`)
-  const editResult = await resolveConflictsEdit(head)
+  const codeEditorId = await spawnCodeEditorAgent()
+  const editResult = await resumeCodeEditorAgent(codeEditorId, 'conflict-edit', { head })
   if (editResult?.rebased !== true) return head
   const failures = ['PR branch had merge conflicts with origin/main; the rebase must leave a clean, conflict-free tree']
+  const verifierId = await spawnVerifierAgent()
   const verifyTranscript = await verifyWithRecovery({
-    runVerify: () => verifyRepairChanges(head, failures),
-    runRecoverEdit: (objection, attempt) => recoverVerifyFailEdit(head, objection, 'conflict-rebase', attempt),
+    runVerify: () => resumeVerifierAgent(verifierId, 'repair-verify', { head, failures }),
+    runRecoverEdit: (objection, attempt) => resumeCodeEditorAgent(codeEditorId, 'verify-recover', { head, sourceLabel: 'conflict-rebase', objection, attempt }),
   })
   if (!verdictPassed(verifyTranscript)) return head
   const commitResult = await commitWithRecovery({
-    runCommit: () => commitRepairFixes(head, true),
-    runVerify: () => verifyRepairChanges(head, failures),
-    runRecoverEdit: (detail, attempt) => recoverCommitBlockEdit(head, detail, 'conflict-rebase', attempt),
+    runCommit: () => resumeCodeEditorAgent(codeEditorId, 'repair-commit', { head, wasRebased: true }),
+    runVerify: () => resumeVerifierAgent(verifierId, 'repair-verify', { head, failures }),
+    runRecoverEdit: (detail, attempt) => resumeCodeEditorAgent(codeEditorId, 'commit-recover', { head, sourceLabel: 'conflict-rebase', blockerDetail: detail, attempt }),
   })
   return commitResult?.newSha || head
 }
@@ -1387,90 +1528,6 @@ async function resolveMergeConflicts(head) {
  */
 function isStandardsOnlyRound(findings) {
   return findings.length > 0 && findings.every((each) => each.category === 'code-standard')
-}
-
-/**
- * Standards-deferral edit step: one clean-coder files the follow-up fix issue,
- * stages an environment-hardening hooks/rules change in the config repo's
- * working tree WITHOUT committing, and resolves the PR's code-standard threads.
- * Leaving the hardening edit uncommitted lets the verify step bind a verdict to
- * it before the commit step opens the PR. The PR's own branch is never touched.
- * @param {string} head PR HEAD SHA the findings were raised against
- * @param {Array<object>} findings deduped code-standard-only findings
- * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<object>} STANDARDS_EDIT_SCHEMA result
- */
-function standardsFollowUpEdit(head, findings, sourceLabel) {
-  const findingsBlock = renderFindingsBlock(findings)
-  const threadIds = findings
-    .flatMap((each) => collectFindingThreadIds(each))
-    .filter((each) => typeof each === 'number')
-  return convergeAgent(
-    `You are the EDIT step deferring a code-standard-only round on ${prCoordinates}, HEAD ${head} (${sourceLabel}). The round surfaced ONLY code-standard violations (CODE_RULES/style, no behavioral impact); the run treats it as passed and defers the fixes to follow-up work, which you now stage. A separate verify step then a separate commit step open the hardening PR after you. Do NOT commit or push to the PR's own branch.\n\n` +
-      `Findings:\n${findingsBlock}\n\n` +
-      `1. Follow-up fix issue: file a GitHub issue on ${input.owner}/${input.repo} (gh issue create --body-file with a temp file) titled "Deferred code-standard fixes from PR #${input.prNumber}". The body references the PR and lists each finding with its file:line, severity, and detail. The issue carries the fix work; do not open a fix PR. Capture the issue URL.\n` +
-      `2. Stage the environment-hardening change: in the Claude environment config repo (the repo owning ~/.claude hooks and rules — JonEcho/llm-settings for hooks, jl-cmd/claude-code-config for rules/skills; pick whichever owns the surface that would block these violation classes), find or clone a local checkout, fetch origin, and create a branch off origin/main. Edit the hooks/rules in that checkout's WORKING TREE so each violation class found here is blocked at Write/Edit time, before code is written. Do NOT commit and do NOT push — the commit step does that after the verify step binds a verdict to the working tree. Return the checkout's absolute path in hardeningRepoPath, the branch name in hardeningBranch, and set hardeningEdited=true. When no hardening is feasible for these classes, leave hardeningRepoPath and hardeningBranch empty and hardeningEdited=false; the follow-up issue still stands.\n` +
-      `3. For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue <url>." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
-      `Return the issue URL in issueUrl (empty string when it could not be filed), the hardening checkout path and branch, hardeningEdited, and a one-line summary.` +
-      PRE_COMMIT_GATE_STEP,
-    { label: `standards-edit:${sourceLabel}`, phase: 'Converge', schema: STANDARDS_EDIT_SCHEMA, agentType: 'clean-coder' },
-  )
-}
-
-/**
- * Standards-hardening verify step: a code-verifier confirms the uncommitted
- * hooks/rules change staged in the hardening repo blocks the deferred violation
- * classes, computes the binding surface hash for that repo by branch (cwd-immune),
- * and ends with a verdict fence as plain assistant text (NO schema) — unlocking the
- * verified-commit gate for the cross-repo hardening commit. The verifier makes
- * no edits.
- * @param {string} hardeningRepoPath absolute path of the hardening repo checkout the edit staged
- * @param {string} hardeningBranch the branch in the hardening repo that the edit staged the change on
- * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<string>} the verifier transcript carrying the verdict fence
- */
-function verifyHardeningChanges(hardeningRepoPath, hardeningBranch, sourceLabel) {
-  return convergeAgent(
-    `You are the VERIFY step for an environment-hardening change (${sourceLabel}) staged in the working tree of ${hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
-      `Concern the working-tree change must resolve: the edited hooks/rules block the code-standard violation classes from the deferred round at Write/Edit time, and a hook change carries a passing test per CODE_RULES.\n\n` +
-      `Steps:\n` +
-      `1. cd into ${hardeningRepoPath}, then resolve its repo root: REPO=$(git rev-parse --show-toplevel).\n` +
-      `2. Verify the uncommitted working-tree change in REPO: read the diff (git diff) and run the hook/rule tests in that repo, confirming each violation class is now blocked.\n` +
-      `3. Compute the binding hash for the live surface:\n` +
-      `   The hardening branch is: ${hardeningBranch}\n` +
-      `   Run exactly:\n` +
-      `      "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "${hardeningBranch}"\n` +
-      `   (substitute the REPO path you resolved for the script path). That prints a single 64-char hex hash on stdout — capture it.\n` +
-      `   Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
-      "      ```verdict\n" +
-      `      {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
-      "      ```\n" +
-      `      When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`,
-    { label: `standards-verify:${sourceLabel}`, phase: 'Converge', agentType: 'code-verifier' },
-  )
-}
-
-/**
- * Standards-hardening commit step: one clean-coder commits the verified
- * working-tree hooks/rules change in a single commit, pushes the hardening
- * branch, and opens the DRAFT hardening PR — making NO further file edits, since
- * any edit changes the surface and invalidates the verdict that unlocks the
- * commit gate. The PR's own branch is never touched.
- * @param {string} hardeningRepoPath absolute path of the hardening repo checkout
- * @param {string} hardeningBranch the hardening branch the edit step created
- * @param {string} issueUrl the follow-up fix issue URL the PR body references
- * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<string>} agent transcript (unused)
- */
-function commitHardeningPr(hardeningRepoPath, hardeningBranch, issueUrl, sourceLabel) {
-  return convergeAgent(
-    `You are the COMMIT step opening the environment-hardening PR (${sourceLabel}) for the change staged in ${hardeningRepoPath} on branch ${hardeningBranch}. The edit step left the hooks/rules edits in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree. Do NOT touch the PR's own branch.\n\n` +
-      `Rules:\n` +
-      `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Only commit and push what is already there.\n` +
-      `- In ${hardeningRepoPath}: make ONE commit of the staged hooks/rules change on branch ${hardeningBranch}, push it, then open a DRAFT PR. The PR body references the follow-up issue ${issueUrl || '(none)'} and states the PR hardens the environment so the deferred violation classes are blocked at Write/Edit time. Honor the gh-body-file rule: write a BOM-free temp file and pass --body-file.\n\n` +
-      `Return a one-line summary naming the hardening PR URL.`,
-    { label: `standards-commit:${sourceLabel}`, phase: 'Converge', agentType: 'clean-coder' },
-  )
 }
 
 /**
@@ -1504,16 +1561,22 @@ function standardsDeferralNote(findingsCount, hardeningPrOpened) {
  * @param {string} sourceLabel short description of where the findings came from
  * @returns {Promise<object>} `{ hardeningPrOpened }` — true only when the hardening PR was opened this round
  */
-async function spawnStandardsFollowUp(head, findings, sourceLabel) {
-  const editResult = await standardsFollowUpEdit(head, findings, sourceLabel)
+async function spawnStandardsFollowUp(head, findings, sourceLabel, generalId) {
+  const codeEditorId = await spawnCodeEditorAgent()
+  const editResult = await resumeCodeEditorAgent(codeEditorId, 'standards-edit', { head, findings, sourceLabel })
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
     return { hardeningPrOpened: false }
   }
-  const verifyTranscript = await verifyHardeningChanges(editResult.hardeningRepoPath, editResult.hardeningBranch, sourceLabel)
+  const verifierId = await spawnVerifierAgent()
+  const verifyTranscript = await resumeVerifierAgent(verifierId, 'hardening-verify', {
+    head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch,
+  })
   if (!verdictPassed(verifyTranscript)) {
     return { hardeningPrOpened: false }
   }
-  await commitHardeningPr(editResult.hardeningRepoPath, editResult.hardeningBranch, editResult.issueUrl, sourceLabel)
+  await resumeCodeEditorAgent(codeEditorId, 'hardening-commit', {
+    head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch, issueUrl: editResult.issueUrl,
+  })
   return { hardeningPrOpened: true }
 }
 
@@ -1528,15 +1591,18 @@ let copilotNote = null
 let standardsNote = null
 let reuseNote = null
 
-const preflightHead = await resolveHead()
-if (isResolvedHeadUsable(preflightHead)) {
-  await resolveMergeConflicts(preflightHead)
+const gitAgentId = await spawnGitAgent()
+
+const preflightHead = await resumeGitAgent(gitAgentId, 'resolve-head')
+if (isResolvedHeadUsable(preflightHead?.sha)) {
+  await resolveMergeConflicts(preflightHead.sha, gitAgentId)
 }
 
 log('Reuse pass: scanning the full diff for certain, behaviorally identical, autonomously implementable reuse improvements before convergence')
-const reuseHead = await resolveHead()
+const reuseHeadResult = await resumeGitAgent(gitAgentId, 'resolve-head')
+const reuseHead = reuseHeadResult?.sha
 if (isResolvedHeadUsable(reuseHead)) {
-  await prefetchMainForRound()
+  await resumeGitAgent(gitAgentId, 'prefetch-main')
   const reuse = await runReuseAuditPass(reuseHead)
   const reuseFindings = reuse?.findings || []
   if (reuseFindings.length > 0) {
@@ -1552,16 +1618,19 @@ if (isResolvedHeadUsable(reuseHead)) {
   log('Reuse pass: could not resolve HEAD — proceeding to convergence')
 }
 
+const convergenceId = await spawnConvergenceCheckAgent()
+
 while (iterations < CONFIG.maxIterations) {
   iterations += 1
   if (phase === 'CONVERGE') {
     rounds += 1
-    head = await resolveHead()
+    const headResult = await resumeGitAgent(gitAgentId, 'resolve-head')
+    head = headResult?.sha
     if (!isResolvedHeadUsable(head)) {
       log(`Round ${rounds}: resolve-head agent returned no SHA — retrying without spawning lenses`)
       continue
     }
-    await prefetchMainForRound()
+    await resumeGitAgent(gitAgentId, 'prefetch-main')
     log(`Round ${rounds}: parallel Bugbot + code-review + bug-audit on ${head?.slice(0, 7)}`)
     const lenses = await parallel([
       () => runBugbotLens(head),
@@ -1577,9 +1646,10 @@ while (iterations < CONFIG.maxIterations) {
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
-      const standardsOutcome = await spawnStandardsFollowUp(head, findings, 'converge-round')
+      const generalId = await spawnGeneralUtilityAgent()
+      const standardsOutcome = await spawnStandardsFollowUp(head, findings, 'converge-round', generalId)
       standardsNote = standardsDeferralNote(findings.length, standardsOutcome?.hardeningPrOpened === true)
-      const auditResult = await postCleanAudit(head)
+      const auditResult = await resumeGeneralUtilityAgent(generalId, 'post-clean-audit', { head })
       if (!auditResult?.posted) {
         blocker = cleanAuditBlocker(head, auditResult)
         break
@@ -1605,7 +1675,8 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     log(`Round ${rounds}: all lenses clean on ${head?.slice(0, 7)} — posting clean audit artifact`)
-    const auditResult = await postCleanAudit(head)
+    const cleanGeneralId = await spawnGeneralUtilityAgent()
+    const auditResult = await resumeGeneralUtilityAgent(cleanGeneralId, 'post-clean-audit', { head })
     if (!auditResult?.posted) {
       blocker = cleanAuditBlocker(head, auditResult)
       break
@@ -1633,7 +1704,8 @@ while (iterations < CONFIG.maxIterations) {
     if (copilotOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
-        const standardsOutcome = await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot')
+        const copilotGeneralId = await spawnGeneralUtilityAgent()
+        const standardsOutcome = await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot', copilotGeneralId)
         standardsNote = standardsDeferralNote(copilotOutcome.findings.length, standardsOutcome?.hardeningPrOpened === true)
         copilotDown = false
         copilotNote = null
@@ -1660,14 +1732,15 @@ while (iterations < CONFIG.maxIterations) {
   }
 
   if (phase === 'FINALIZE') {
-    const convergence = await checkConvergence(bugbotDown, copilotDown)
+    const convergence = await resumeConvergenceCheckAgent(convergenceId, { bugbotDown, copilotDown })
     const convergenceOutcome = classifyConvergenceOutcome(convergence)
     if (convergenceOutcome.kind === 'retry') {
       log('Convergence check agent died or returned no FAIL lines — re-running the check on the same HEAD')
       continue
     }
     if (convergenceOutcome.kind === 'ready') {
-      const readyResult = await markReady(head, copilotDown)
+      const finalGeneralId = await spawnGeneralUtilityAgent()
+      const readyResult = await resumeGeneralUtilityAgent(finalGeneralId, 'mark-ready', { head, copilotDown })
       const readyOutcome = classifyReadyOutcome(readyResult)
       if (readyOutcome.converged) {
         return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, reuseNote }

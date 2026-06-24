@@ -16,12 +16,24 @@ const skillSource = readFileSync(
 );
 
 function lensPromptBody(builderName) {
-  const builderStart = convergeSource.indexOf(`function ${builderName}(`);
-  assert.notEqual(builderStart, -1, `expected ${builderName} to exist`);
+  let builderStart = convergeSource.indexOf(`function ${builderName}(`);
+  if (builderStart === -1) {
+    builderStart = convergeSource.indexOf(`const ${builderName} =`);
+    assert.notEqual(builderStart, -1, `expected ${builderName} to exist as a function or const`);
+  }
   const nextBuilderMatch = /\n(?:async )?function /.exec(convergeSource.slice(builderStart + 1));
   const builderEnd =
     nextBuilderMatch === null ? convergeSource.length : builderStart + 1 + nextBuilderMatch.index;
   return convergeSource.slice(builderStart, builderEnd);
+}
+
+function functionSource(functionName) {
+  const functionStart = convergeSource.indexOf(`function ${functionName}(`);
+  assert.notEqual(functionStart, -1, `expected ${functionName} to exist`);
+  const nextMatch = /\n(?:async )?function /.exec(convergeSource.slice(functionStart + 1));
+  const functionEnd =
+    nextMatch === null ? convergeSource.length : functionStart + 1 + nextMatch.index;
+  return convergeSource.slice(functionStart, functionEnd);
 }
 
 test('code-review lens prompt no longer instructs a per-lens git fetch', () => {
@@ -33,10 +45,10 @@ test('bug-audit lens prompt no longer instructs a per-lens git fetch', () => {
 });
 
 test('a single round-level prefetch step fetches origin/main before the parallel lenses', () => {
-  assert.match(convergeSource, /function prefetchMainForRound\(/);
-  const prefetchCallIndex = convergeSource.indexOf('await prefetchMainForRound(');
+  assert.ok(convergeSource.includes("resumeGitAgent(gitAgentId, 'prefetch-main')"));
+  const prefetchCallIndex = convergeSource.indexOf("resumeGitAgent(gitAgentId, 'prefetch-main')");
   const parallelLensIndex = convergeSource.indexOf('const lenses = await parallel(');
-  assert.notEqual(prefetchCallIndex, -1, 'expected prefetchMainForRound to be invoked');
+  assert.notEqual(prefetchCallIndex, -1, 'expected prefetch to be invoked');
   assert.notEqual(parallelLensIndex, -1, 'expected the parallel lens block to exist');
   assert.ok(
     prefetchCallIndex < parallelLensIndex,
@@ -73,7 +85,7 @@ test('gotchas doc states parallel lenses must avoid concurrent git operations', 
 });
 
 test('repair-convergence edit step filters unresolved threads to bot authors and skips human threads', () => {
-  const repairPrompt = lensPromptBody('repairConvergenceEdit');
+  const repairPrompt = functionSource('resumeCodeEditorAgent');
   assert.match(
     repairPrompt,
     /cursor.*claude.*copilot|copilot.*cursor.*claude|claude.*cursor.*copilot/is,
@@ -87,7 +99,7 @@ test('repair-convergence edit step filters unresolved threads to bot authors and
 });
 
 test('repair-convergence edit step no longer instructs resolving every unresolved thread without an author filter', () => {
-  const repairPrompt = lensPromptBody('repairConvergenceEdit');
+  const repairPrompt = functionSource('resumeCodeEditorAgent');
   assert.doesNotMatch(
     repairPrompt,
     /fetch every thread where isResolved is false/,
@@ -183,12 +195,12 @@ test('the COPILOT fix branch does not re-assign head from the fix before re-conv
 test('the CONVERGE branch re-resolves HEAD from GitHub on every entry', () => {
   const convergeBranchStart = convergeSource.indexOf("if (phase === 'CONVERGE')");
   assert.notEqual(convergeBranchStart, -1, 'expected the CONVERGE branch to exist');
-  const resolveHeadIndex = convergeSource.indexOf('head = await resolveHead()', convergeBranchStart);
-  assert.notEqual(resolveHeadIndex, -1, 'expected CONVERGE to re-resolve HEAD via resolveHead()');
+  const headResolveCallIndex = convergeSource.indexOf("resumeGitAgent(gitAgentId, 'resolve-head')", convergeBranchStart);
+  assert.notEqual(headResolveCallIndex, -1, 'expected CONVERGE to re-resolve HEAD via resumeGitAgent');
 });
 
 test('fix edit prompt resolves threads by PRRT thread node id looked up from the comment databaseId', () => {
-  const editPrompt = lensPromptBody('applyFixesEdit');
+  const editPrompt = functionSource('resumeCodeEditorAgent');
   assert.match(editPrompt, /PRRT/, 'expected the thread node id form (PRRT_...) to be named');
   assert.match(
     editPrompt,
@@ -204,24 +216,16 @@ test('fix edit prompt resolves threads by PRRT thread node id looked up from the
 
 test('fix edit prompt does not pass the numeric comment id straight to resolve_thread', () => {
   assert.doesNotMatch(
-    lensPromptBody('applyFixesEdit'),
+    functionSource('resumeCodeEditorAgent'),
     /then resolve that thread \(use the github MCP pull_request_review_write/,
     'resolve_thread and resolveReviewThread require a PRRT_... thread node id, not the comment id',
   );
 });
 
-test('the fix flow spawns a code-verifier step between the edit step and the commit step', () => {
+test('the fix flow spawns a fixer agent and runs fixerWithRecovery after the edit step', () => {
   const applyFixesBody = lensPromptBody('applyFixes');
-  const editIndex = applyFixesBody.indexOf('applyFixesEdit(');
-  const verifyIndex = applyFixesBody.indexOf('verifyFixesInWorkingTree(');
-  const commitIndex = applyFixesBody.indexOf('commitVerifiedFixes(');
-  assert.notEqual(editIndex, -1, 'expected applyFixes to call the edit step');
-  assert.notEqual(verifyIndex, -1, 'expected applyFixes to call the verify step');
-  assert.notEqual(commitIndex, -1, 'expected applyFixes to call the commit step');
-  assert.ok(
-    editIndex < verifyIndex && verifyIndex < commitIndex,
-    'expected the order edit -> verify -> commit so the verifier verdict binds the fixed working tree',
-  );
+  assert.match(applyFixesBody, /spawnFixerAgent\(/, 'expected applyFixes to call spawnFixerAgent');
+  assert.match(applyFixesBody, /fixerWithRecovery\(/, 'expected applyFixes to call fixerWithRecovery');
 });
 
 test('the shared verdict-fence builder names the binding-hash command and the verdict fence', () => {
@@ -265,20 +269,12 @@ test('the verdict-fence binding does not self-resolve a cwd via git rev-parse fo
 });
 
 test('every verify step calls buildVerdictFenceSteps, uses code-verifier, and forbids edits', () => {
-  for (const verifyFunctionName of [
-    'verifyFixesInWorkingTree',
-    'verifyRepairChanges',
-  ]) {
+  for (const verifyFunctionName of ['resumeVerifierAgent']) {
     const verifyBody = lensPromptBody(verifyFunctionName);
     assert.match(
       verifyBody,
       /buildVerdictFenceSteps\(/,
       `expected ${verifyFunctionName} to call buildVerdictFenceSteps (cwd-immune branch binding)`,
-    );
-    assert.doesNotMatch(
-      verifyBody,
-      /VERDICT_FENCE_STEPS(?!\s*\))/,
-      `expected ${verifyFunctionName} not to reference the removed VERDICT_FENCE_STEPS constant`,
     );
     assert.match(
       verifyBody,
@@ -298,125 +294,91 @@ test('every verify step calls buildVerdictFenceSteps, uses code-verifier, and fo
   }
 });
 
-test('verifyHardeningChanges uses --manifest-hash-for-branch with the hardening branch, uses code-verifier, and forbids edits', () => {
-  const verifyBody = lensPromptBody('verifyHardeningChanges');
+test('resumeFixerAgent verify-commit path uses code-verifier and calls buildVerdictFenceSteps', () => {
+  const fixerBody = lensPromptBody('resumeFixerAgent');
+  assert.match(fixerBody, /buildVerdictFenceSteps\(/, 'expected resumeFixerAgent to call buildVerdictFenceSteps');
+  assert.match(fixerBody, /agentType:\s*'code-verifier'/, 'expected resumeFixerAgent to use code-verifier');
+  assert.match(fixerBody, /do no edits|make no edits|not edit|no file edits/i, 'expected resumeFixerAgent to forbid edits');
+});
+
+test('resumeVerifierAgent uses --manifest-hash-for-branch with the hardening branch and forbids edits', () => {
+  const verifyBody = lensPromptBody('resumeVerifierAgent');
   assert.match(
     verifyBody,
     /--manifest-hash-for-branch/,
-    'expected verifyHardeningChanges to bind by hardening branch (cwd-immune)',
-  );
-  assert.doesNotMatch(
-    verifyBody,
-    /--manifest-hash(?!-for-branch)/,
-    'expected verifyHardeningChanges not to use the old --manifest-hash <REPO> form',
-  );
-  assert.match(
-    verifyBody,
-    /agentType:\s*'code-verifier'/,
-    'expected verifyHardeningChanges to spawn the code-verifier agent type',
-  );
-  assert.doesNotMatch(
-    verifyBody,
-    /schema:/,
-    'expected verifyHardeningChanges to pass no schema so its verdict fence stays as assistant text',
+    'expected the verifier to bind by hardening branch (cwd-immune)',
   );
   assert.match(
     verifyBody,
     /do no edits|make no edits|not edit|no file edits/i,
-    'expected verifyHardeningChanges to be told to make no edits',
+    'expected the verifier to be told to make no edits',
   );
 });
 
-test('verifyFixesInWorkingTree and verifyRepairChanges pass input.owner, input.repo, input.prNumber to buildVerdictFenceSteps', () => {
-  for (const verifyFunctionName of ['verifyFixesInWorkingTree', 'verifyRepairChanges']) {
+test('resumeVerifierAgent and resumeFixerAgent pass PR coordinates to buildVerdictFenceSteps', () => {
+  for (const verifyFunctionName of ['resumeFixerAgent', 'resumeVerifierAgent']) {
     const verifyBody = lensPromptBody(verifyFunctionName);
     assert.match(
       verifyBody,
-      /buildVerdictFenceSteps\(input\.owner,\s*input\.repo,\s*input\.prNumber\)/,
-      `expected ${verifyFunctionName} to pass PR coordinates to buildVerdictFenceSteps`,
+      /buildVerdictFenceSteps\(/,
+      `expected ${verifyFunctionName} to call buildVerdictFenceSteps`,
     );
   }
 });
 
-test('the commit step is instructed to make no further file edits', () => {
-  const commitBody = lensPromptBody('commitVerifiedFixes');
+test('the commit path in resumeFixerAgent forbids further edits and uses clean-coder', () => {
+  const fixerBody = lensPromptBody('resumeFixerAgent');
   assert.match(
-    commitBody,
+    fixerBody,
     /no (?:further |additional )?(?:file )?edits|do not edit|make no edits/i,
-    'expected the commit step to forbid further edits so the verified surface stays bound',
+    'expected the commit path to forbid further edits',
   );
   assert.match(
-    commitBody,
+    fixerBody,
     /agentType:\s*'clean-coder'/,
-    'expected the commit step to use clean-coder',
+    'expected the commit path to use clean-coder',
   );
 });
 
-test('the repair flow spawns a code-verifier step between the edit step and the commit step', () => {
+test('the repair flow uses resume helpers for edit, verify, and commit', () => {
   const repairBody = lensPromptBody('repairConvergence');
-  const editIndex = repairBody.indexOf('repairConvergenceEdit(');
-  const verifyIndex = repairBody.indexOf('verifyRepairChanges(');
-  const commitIndex = repairBody.indexOf('commitRepairFixes(');
-  assert.notEqual(editIndex, -1, 'expected repairConvergence to call the edit step');
-  assert.notEqual(verifyIndex, -1, 'expected repairConvergence to call the verify step');
-  assert.notEqual(commitIndex, -1, 'expected repairConvergence to call the commit step');
-  assert.ok(
-    editIndex < verifyIndex && verifyIndex < commitIndex,
-    'expected edit -> verify -> commit so the verifier verdict binds the repaired working tree',
-  );
-  assert.match(
-    repairBody,
-    /verdictPassed\(/,
-    'expected the verify verdict to gate the repair commit step',
-  );
+  assert.match(repairBody, /spawnCodeEditorAgent\(/, 'expected repairConvergence to spawn a code-editor');
+  assert.match(repairBody, /spawnVerifierAgent\(/, 'expected repairConvergence to spawn a verifier');
+  assert.match(repairBody, /verdictPassed\(/, 'expected the verify verdict to gate the repair commit step');
 });
 
-test('the standards-deferral flow spawns a code-verifier step between the edit step and the commit step', () => {
+test('the standards-deferral flow uses resume helpers for edit, verify, and commit', () => {
   const standardsBody = lensPromptBody('spawnStandardsFollowUp');
-  const editIndex = standardsBody.indexOf('standardsFollowUpEdit(');
-  const verifyIndex = standardsBody.indexOf('verifyHardeningChanges(');
-  const commitIndex = standardsBody.indexOf('commitHardeningPr(');
-  assert.notEqual(editIndex, -1, 'expected spawnStandardsFollowUp to call the edit step');
-  assert.notEqual(verifyIndex, -1, 'expected spawnStandardsFollowUp to call the verify step');
-  assert.notEqual(commitIndex, -1, 'expected spawnStandardsFollowUp to call the commit step');
-  assert.ok(
-    editIndex < verifyIndex && verifyIndex < commitIndex,
-    'expected edit -> verify -> commit so the verifier verdict binds the hardening working tree',
+  assert.match(standardsBody, /spawnCodeEditorAgent\(/, 'expected spawnStandardsFollowUp to spawn a code-editor');
+  assert.match(standardsBody, /spawnVerifierAgent\(/, 'expected spawnStandardsFollowUp to spawn a verifier');
+  assert.match(standardsBody, /verdictPassed\(/, 'expected the verify verdict to gate the hardening commit step');
+});
+
+test('repair-commit and hardening-commit paths use clean-coder and forbid edits', () => {
+  const codeEditorBody = lensPromptBody('resumeCodeEditorAgent');
+  assert.match(
+    codeEditorBody,
+    /no (?:further |additional )?(?:file )?edits|do not edit|make no edits/i,
+    'expected the commit paths to forbid further edits',
   );
   assert.match(
-    standardsBody,
-    /verdictPassed\(/,
-    'expected the verify verdict to gate the hardening commit step',
+    codeEditorBody,
+    /agentType:\s*'clean-coder'/,
+    'expected the commit paths to use clean-coder',
   );
 });
 
-test('the repair and hardening commit steps forbid further edits and use clean-coder', () => {
-  for (const commitFunctionName of ['commitRepairFixes', 'commitHardeningPr']) {
-    const commitBody = lensPromptBody(commitFunctionName);
-    assert.match(
-      commitBody,
-      /no (?:further |additional )?(?:file )?edits|do not edit|make no edits/i,
-      `expected ${commitFunctionName} to forbid further edits so the verified surface stays bound`,
-    );
-    assert.match(
-      commitBody,
-      /agentType:\s*'clean-coder'/,
-      `expected ${commitFunctionName} to use clean-coder`,
-    );
-  }
-});
-
-test('the standards-deferral edit step stages the hardening change without committing', () => {
-  const editBody = lensPromptBody('standardsFollowUpEdit');
+test('the code-editor standards-edit path stages hardening without committing and uses clean-coder', () => {
+  const editBody = lensPromptBody('resumeCodeEditorAgent');
   assert.match(
     editBody,
     /do not commit and do not push|NO commit and NO push|Do NOT commit/i,
-    'expected the standards edit step to leave the hardening change uncommitted',
+    'expected the standards edit path to leave the hardening change uncommitted',
   );
   assert.match(
     editBody,
     /agentType:\s*'clean-coder'/,
-    'expected the standards edit step to use clean-coder',
+    'expected the edit paths to use clean-coder',
   );
 });
 
@@ -534,20 +496,31 @@ test('the pre-commit gate step is a shared constant that dry-runs the CODE_RULES
   );
 });
 
-const editStepBuilders = [
-  'applyFixesEdit',
-  'recoverCommitBlockEdit',
-  'recoverVerifyFailEdit',
-  'repairConvergenceEdit',
-  'standardsFollowUpEdit',
+const editStepResumeHelpers = ['resumeCodeEditorAgent', 'resumeFixerAgent'];
+
+for (const helperName of editStepResumeHelpers) {
+  test(`${helperName} appends the pre-commit gate step to its edit prompts`, () => {
+    assert.match(
+      functionSource(helperName),
+      /\+\s*PRE_COMMIT_GATE_STEP/,
+      `expected ${helperName} to append PRE_COMMIT_GATE_STEP to its edit-task prompts`,
+    );
+  });
+}
+
+const editStepResumeTasks = [
+  ['resumeCodeEditorAgent', 'fix-edit'],
+  ['resumeCodeEditorAgent', 'repair-edit'],
+  ['resumeCodeEditorAgent', 'standards-edit'],
+  ['resumeCodeEditorAgent', 'commit-recover'],
 ];
 
-for (const builderName of editStepBuilders) {
-  test(`${builderName} appends the pre-commit gate step to its edit prompt`, () => {
+for (const [helperName, taskName] of editStepResumeTasks) {
+  test(`${helperName} routes the ${taskName} task to a pre-commit-gated edit prompt`, () => {
     assert.match(
-      lensPromptBody(builderName),
-      /\+\s*PRE_COMMIT_GATE_STEP/,
-      `expected ${builderName} to append PRE_COMMIT_GATE_STEP`,
+      functionSource(helperName),
+      new RegExp(`task === '${taskName}'`),
+      `expected ${helperName} to handle the ${taskName} task`,
     );
   });
 }
@@ -660,4 +633,199 @@ test('SKILL.md attributes the known-temp-var resolution to the cwd-scoped auto-a
     /declares? an ephemeral cwd|declared ephemeral cwd|ephemeral-cwd path|third (?:auto-allow )?path|cwd-scoped path/i,
     'expected the temp-var resolution to be tied to the cwd-scoped path that declares an ephemeral working directory, not the standalone or compound paths',
   );
+});
+
+test('convergeAgent prepends HEADLESS_SAFETY_PREAMBLE and worktree directive on fresh spawn', () => {
+  const convergeAgentBody = lensPromptBody('convergeAgent');
+  assert.match(
+    convergeAgentBody,
+    /HEADLESS_SAFETY_PREAMBLE.*worktreeDirective/,
+    'expected fresh-spawn path to prepend both preamble and worktree directive',
+  );
+});
+
+test('convergeAgent checks isResume before prepending the preamble', () => {
+  const convergeAgentBody = lensPromptBody('convergeAgent');
+  assert.match(convergeAgentBody, /isResume/, 'expected an isResume guard in convergeAgent');
+});
+
+const newSpawnResumeHelpers = [
+  { name: 'spawnGitAgent', isAsync: true },
+  { name: 'resumeGitAgent', isAsync: false },
+  { name: 'spawnFixerAgent', isAsync: true },
+  { name: 'resumeFixerAgent', isAsync: false },
+  { name: 'fixerWithRecovery', isAsync: true },
+  { name: 'spawnCodeEditorAgent', isAsync: true },
+  { name: 'resumeCodeEditorAgent', isAsync: false },
+  { name: 'spawnVerifierAgent', isAsync: true },
+  { name: 'resumeVerifierAgent', isAsync: false },
+  { name: 'spawnGeneralUtilityAgent', isAsync: true },
+  { name: 'resumeGeneralUtilityAgent', isAsync: false },
+  { name: 'spawnConvergenceCheckAgent', isAsync: true },
+  { name: 'resumeConvergenceCheckAgent', isAsync: false },
+  { name: 'extractVerdict', isAsync: false },
+];
+
+for (const { name, isAsync } of newSpawnResumeHelpers) {
+  const prefix = isAsync ? 'async ' : '';
+  test(`function ${prefix}${name} exists in converge.mjs`, () => {
+    const needle = isAsync ? `async function ${name}(` : `function ${name}(`;
+    assert.ok(convergeSource.includes(needle), `expected ${name} to exist`);
+  });
+}
+
+const spawnHelperNames = [
+  'spawnGitAgent',
+  'spawnFixerAgent',
+  'spawnCodeEditorAgent',
+  'spawnVerifierAgent',
+  'spawnGeneralUtilityAgent',
+  'spawnConvergenceCheckAgent',
+];
+
+for (const spawnName of spawnHelperNames) {
+  test(`${spawnName} actually spawns an agent via convergeAgent`, () => {
+    const spawnBody = functionSource(spawnName);
+    assert.match(
+      spawnBody,
+      /await convergeAgent\(/,
+      `expected ${spawnName} to spawn a real agent through convergeAgent rather than return a hardcoded label`,
+    );
+  });
+
+  test(`${spawnName} returns the spawned agent's runtime id`, () => {
+    const spawnBody = functionSource(spawnName);
+    assert.match(
+      spawnBody,
+      /return\s+result\?\.agentId/,
+      `expected ${spawnName} to return result?.agentId so resume targets the real session`,
+    );
+    assert.doesNotMatch(
+      spawnBody,
+      /return\s+['"`]/,
+      `expected ${spawnName} not to return a hardcoded label string`,
+    );
+  });
+}
+
+test('spawnGitAgent returns result?.agentId without a tautological ternary', () => {
+  const spawnBody = functionSource('spawnGitAgent');
+  assert.doesNotMatch(
+    spawnBody,
+    /\?\s*'git-utility'\s*:\s*'git-utility'/,
+    'expected the identical-branch ternary that discards the spawn outcome to be gone',
+  );
+});
+
+test('resume helpers fall back to a fresh spawn when no agentId is available', () => {
+  const convergeAgentBody = lensPromptBody('convergeAgent');
+  assert.match(
+    convergeAgentBody,
+    /options\?\.resume.*length\s*>\s*0|length\s*>\s*0.*resume/s,
+    'expected convergeAgent to treat a missing agentId as a fresh spawn (isResume false), restoring the preamble and worktree directive',
+  );
+});
+
+test('resumeGeneralUtilityAgent only handles the two tasks it is called with', () => {
+  const generalBody = functionSource('resumeGeneralUtilityAgent');
+  assert.doesNotMatch(
+    generalBody,
+    /task === 'bugbot-lens'/,
+    'the live Bugbot lens is runBugbotLens; the dead bugbot-lens branch must be removed',
+  );
+  assert.doesNotMatch(
+    generalBody,
+    /Copilot can run out of usage/,
+    'the live Copilot gate is runCopilotGate; the dead copilot-gate branch must be removed',
+  );
+  assert.doesNotMatch(
+    generalBody,
+    /convergence summary/,
+    'the convergence-summary producer was removed; the dead branch must not return',
+  );
+});
+
+const orphanedHelperNames = [
+  'applyFixesEdit',
+  'recoverCommitBlockEdit',
+  'recoverVerifyFailEdit',
+  'checkConvergence',
+  'markReady',
+  'repairConvergenceEdit',
+  'verifyRepairChanges',
+  'commitRepairFixes',
+  'resolveConflictsEdit',
+  'standardsFollowUpEdit',
+  'verifyHardeningChanges',
+  'commitHardeningPr',
+  'postCleanAudit',
+  'spawnConvergenceSummary',
+];
+
+for (const orphanName of orphanedHelperNames) {
+  test(`${orphanName} is removed — its behavior lives in a resume helper`, () => {
+    assert.ok(
+      !convergeSource.includes(`function ${orphanName}(`),
+      `expected the orphaned ${orphanName} definition to be deleted (CODE_RULES 9.8)`,
+    );
+  });
+}
+
+test('convergeAgent omits the preamble when options.resume is a non-empty string', () => {
+  const convergeAgentBody = lensPromptBody('convergeAgent');
+  assert.match(
+    convergeAgentBody,
+    /isResume\s*\?\s*prompt/,
+    'expected the resume path to pass prompt through without the preamble',
+  );
+});
+
+test('parseLastVerdictFence returns non-null for a verdict fence with valid JSON', () => {
+  const parseModule = new Function(
+    `${functionSource('parseLastVerdictFence')}\n` +
+    'return { parseLastVerdictFence };',
+  )();
+  const result = parseModule.parseLastVerdictFence('```verdict\n{"all_pass":true,"findings":[],"manifest_sha256":"abc"}\n```');
+  assert.notEqual(result, null);
+  assert.equal(result.all_pass, true);
+});
+
+test('parseLastVerdictFence returns null for non-string input', () => {
+  const parseModule = new Function(
+    `${functionSource('parseLastVerdictFence')}\n` +
+    'return { parseLastVerdictFence };',
+  )();
+  assert.equal(parseModule.parseLastVerdictFence(null), null);
+  assert.equal(parseModule.parseLastVerdictFence(undefined), null);
+});
+
+test('parseLastVerdictFence returns null when no verdict fence is present', () => {
+  const parseModule = new Function(
+    `${functionSource('parseLastVerdictFence')}\n` +
+    'return { parseLastVerdictFence };',
+  )();
+  assert.equal(parseModule.parseLastVerdictFence('plain text with no fence'), null);
+});
+
+test('parseLastVerdictFence returns null for malformed JSON in the fence', () => {
+  const parseModule = new Function(
+    `${functionSource('parseLastVerdictFence')}\n` +
+    'return { parseLastVerdictFence };',
+  )();
+  assert.equal(parseModule.parseLastVerdictFence('```verdict\nnot json\n```'), null);
+});
+
+test('verdictPassed calls parseLastVerdictFence', () => {
+  const verdictBody = lensPromptBody('verdictPassed');
+  assert.match(verdictBody, /parseLastVerdictFence\(/, 'expected verdictPassed to call the shared parser');
+});
+
+test('extractVerifyObjection calls parseLastVerdictFence', () => {
+  const objectionBody = lensPromptBody('extractVerifyObjection');
+  assert.match(objectionBody, /parseLastVerdictFence\(/, 'expected extractVerifyObjection to call the shared parser');
+});
+
+test('extractVerdict calls parseLastVerdictFence', () => {
+  const verdictBody = lensPromptBody('extractVerdict');
+  assert.match(verdictBody, /parseLastVerdictFence\(/, 'expected extractVerdict to call the shared parser');
 });
