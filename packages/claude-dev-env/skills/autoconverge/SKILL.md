@@ -266,9 +266,12 @@ describes the narrowest rm auto-allow path — a standalone Bash call whose targ
 resolves inside the ephemeral namespace (`/tmp`, `/temp`, the OS temp root, or the
 run worktree) — and a compound path that accepts an rm joined with benign
 reporting segments when every rm target is an absolute ephemeral path. Both of
-those paths fail closed on `$(...)` substitution, backtick subshells, and any `$`
-in the target — including `$CLAUDE_JOB_DIR` — so neither resolves an environment
-variable. A third, broad path matches only when the command itself declares an
+those paths fail closed on `$(...)` substitution and backtick subshells. The
+compound path also fails closed on any `$` in the target — including
+`$CLAUDE_JOB_DIR`. The standalone path declines a `$`-bearing target only when
+the literal path is not already under an ephemeral root, so it does not by
+itself stop a `$VAR` that expands inside an ephemeral root. A third, broad path
+matches only when the command itself declares an
 ephemeral working directory (it `cd`s into one, or runs under one): that
 cwd-scoped path resolves the target against the declared cwd, fails closed on
 `$(...)`, backticks, and unknown variables, and resolves the known temporary

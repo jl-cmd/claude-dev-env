@@ -83,7 +83,7 @@ def build_summary_prompt(
         copilot_note: Outage note when the Copilot gate was bypassed, else None.
 
     Returns:
-        The full agent prompt instructing a StructuredOutput convergence summary.
+        The full agent prompt instructing a plain-JSON convergence summary.
     """
     pr_url = GITHUB_PR_URL_TEMPLATE.format(owner=owner, repo=repo, number=pr_number)
     pr_coordinates = SUMMARY_PR_COORDINATES_TEMPLATE.format(

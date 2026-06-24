@@ -47,6 +47,23 @@ def test_prompt_carries_pr_coordinates_and_round_count() -> None:
     assert "gh api repos/jl-cmd/claude-code-config/pulls/581" in prompt
 
 
+def test_prompt_instructs_plain_json_object_not_structured_output() -> None:
+    """Should instruct a plain JSON object answer and never name the StructuredOutput tool."""
+    prompt = convergence_summary.build_summary_prompt(
+        owner="jl-cmd",
+        repo="claude-code-config",
+        pr_number=581,
+        round_count=39,
+        findings=SAMPLE_FINDINGS,
+        fix_summaries=[],
+        standards_note=None,
+        copilot_note=None,
+    )
+
+    assert "StructuredOutput" not in prompt
+    assert "Return strictly a JSON object with keys" in prompt
+
+
 def test_prompt_numbers_every_finding_with_severity_and_location() -> None:
     """Should list each aggregated finding numbered with severity, file, and line."""
     prompt = convergence_summary.build_summary_prompt(

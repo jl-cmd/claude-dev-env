@@ -17,7 +17,6 @@ from autoconverge_report_constants.render_report_constants import (
     DEFAULT_FINDING_CATEGORY,
     DEFAULT_FINDING_SEVERITY,
     DEFAULT_ISSUE_ICON,
-    GITHUB_PR_URL_TEMPLATE,
     HTML_DOCTYPE,
     HTML_HEAD_TEMPLATE,
     HTML_STYLE_BLOCK,
@@ -91,12 +90,11 @@ class FixRecord:
 
 @dataclass(frozen=True)
 class PrMetadata:
-    """Owner, repo, number, and pre-built URL for the PR being reported on."""
+    """Owner, repo, number, final sha, and round count for the PR being reported on."""
 
     owner: str
     repo: str
     number: int
-    url: str
     final_sha: str
     round_count: int
 
@@ -888,7 +886,7 @@ def render_report_html(
 
     Args:
         run_data: Aggregated metrics from the workflow journal and transcripts.
-        pr_metadata: Owner, repo, number, URL, final sha, and round count for the PR.
+        pr_metadata: Owner, repo, number, final sha, and round count for the PR.
         generated_date: ISO date string derived from the journal timestamp.
 
     Returns:
@@ -1004,13 +1002,11 @@ def main(out_stream: TextIO = sys.stdout, err_stream: TextIO = sys.stderr) -> in
         return 1
 
     owner, repo, pr_number = parsed_pr
-    pr_url = GITHUB_PR_URL_TEMPLATE.format(owner=owner, repo=repo, number=pr_number)
 
     pr_metadata = PrMetadata(
         owner=owner,
         repo=repo,
         number=pr_number,
-        url=pr_url,
         final_sha=parsed_args.final_sha,
         round_count=parsed_args.rounds,
     )

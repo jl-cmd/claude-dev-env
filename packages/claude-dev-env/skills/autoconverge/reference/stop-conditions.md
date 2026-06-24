@@ -31,6 +31,13 @@ skill still runs teardown (revoke permissions, final report).
   cannot confirm the PR left draft state (`gh pr ready` errored, or the draft
   re-query still reports true). The workflow does not report `converged: true`;
   the run ends with a `blocker` naming the failed ready transition.
+- **Clean-audit post blocked** — every review lens is clean on HEAD, but the
+  CLEAN bugteam review cannot be posted (the `post_audit_thread.py` post is
+  denied, errors, or its agent dies). The convergence gate's bugteam-review
+  check can never pass without that CLEAN review, so the run stops rather than
+  re-converge to the iteration cap. The `blocker` names the post failure and the
+  HEAD. Unblock by allowing `post_audit_thread.py` with a Bash permission rule,
+  or post the CLEAN review by hand, then re-run.
 
 ## Not a blocker (the run continues)
 
