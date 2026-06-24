@@ -129,12 +129,12 @@ test('a Copilot no-show after the poll cap returns a down result rather than a b
   );
 });
 
-test('checkConvergence wires the --copilot-down flag from a copilotDown argument', () => {
-  const checkConvergenceBody = functionBody('checkConvergence');
+test('resumeConvergenceCheckAgent wires the --copilot-down flag from the copilotDown context', () => {
+  const checkConvergenceBody = functionBody('resumeConvergenceCheckAgent');
   assert.match(
     checkConvergenceBody,
-    /copilotDown \? ' --copilot-down' : ''/,
-    'expected checkConvergence to append --copilot-down when copilotDown is set',
+    /context\.copilotDown \? ' --copilot-down' : ''/,
+    'expected resumeConvergenceCheckAgent to append --copilot-down when copilotDown is set',
   );
   assert.match(
     checkConvergenceBody,
@@ -244,22 +244,22 @@ test('markReady receives copilotDown so it can opt the unflagged hook out of the
   );
 });
 
-test('the markReady prompt opts the unflagged convergence hook out of Copilot when copilotDown', () => {
-  const markReadyBody = functionBody('markReady');
+test('the mark-ready task in resumeGeneralUtilityAgent opts the unflagged convergence hook out of Copilot when copilotDown', () => {
+  const markReadyBody = functionBody('resumeGeneralUtilityAgent');
   assert.match(
     markReadyBody,
-    /copilotDown/,
-    'expected markReady to branch on copilotDown',
+    /context\.copilotDown/,
+    'expected the mark-ready task to branch on copilotDown',
   );
   assert.match(
     markReadyBody,
     /CLAUDE_REVIEWS_DISABLED/,
-    'expected the markReady prompt to set CLAUDE_REVIEWS_DISABLED so the unflagged hook re-derives the Copilot bypass',
+    'expected the mark-ready prompt to set CLAUDE_REVIEWS_DISABLED so the unflagged hook re-derives the Copilot bypass',
   );
   assert.match(
     markReadyBody,
     /copilot/,
-    'expected the markReady opt-out to name the copilot token',
+    'expected the mark-ready opt-out to name the copilot token',
   );
 });
 

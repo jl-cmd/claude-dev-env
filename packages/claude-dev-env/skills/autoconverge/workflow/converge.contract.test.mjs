@@ -85,7 +85,7 @@ test('gotchas doc states parallel lenses must avoid concurrent git operations', 
 });
 
 test('repair-convergence edit step filters unresolved threads to bot authors and skips human threads', () => {
-  const repairPrompt = lensPromptBody('repairConvergenceEdit');
+  const repairPrompt = functionSource('resumeCodeEditorAgent');
   assert.match(
     repairPrompt,
     /cursor.*claude.*copilot|copilot.*cursor.*claude|claude.*cursor.*copilot/is,
@@ -99,7 +99,7 @@ test('repair-convergence edit step filters unresolved threads to bot authors and
 });
 
 test('repair-convergence edit step no longer instructs resolving every unresolved thread without an author filter', () => {
-  const repairPrompt = lensPromptBody('repairConvergenceEdit');
+  const repairPrompt = functionSource('resumeCodeEditorAgent');
   assert.doesNotMatch(
     repairPrompt,
     /fetch every thread where isResolved is false/,
@@ -200,7 +200,7 @@ test('the CONVERGE branch re-resolves HEAD from GitHub on every entry', () => {
 });
 
 test('fix edit prompt resolves threads by PRRT thread node id looked up from the comment databaseId', () => {
-  const editPrompt = lensPromptBody('applyFixesEdit');
+  const editPrompt = functionSource('resumeCodeEditorAgent');
   assert.match(editPrompt, /PRRT/, 'expected the thread node id form (PRRT_...) to be named');
   assert.match(
     editPrompt,
@@ -216,7 +216,7 @@ test('fix edit prompt resolves threads by PRRT thread node id looked up from the
 
 test('fix edit prompt does not pass the numeric comment id straight to resolve_thread', () => {
   assert.doesNotMatch(
-    lensPromptBody('applyFixesEdit'),
+    functionSource('resumeCodeEditorAgent'),
     /then resolve that thread \(use the github MCP pull_request_review_write/,
     'resolve_thread and resolveReviewThread require a PRRT_... thread node id, not the comment id',
   );
@@ -496,20 +496,31 @@ test('the pre-commit gate step is a shared constant that dry-runs the CODE_RULES
   );
 });
 
-const editStepBuilders = [
-  'applyFixesEdit',
-  'recoverCommitBlockEdit',
-  'recoverVerifyFailEdit',
-  'repairConvergenceEdit',
-  'standardsFollowUpEdit',
+const editStepResumeHelpers = ['resumeCodeEditorAgent', 'resumeFixerAgent'];
+
+for (const helperName of editStepResumeHelpers) {
+  test(`${helperName} appends the pre-commit gate step to its edit prompts`, () => {
+    assert.match(
+      functionSource(helperName),
+      /\+\s*PRE_COMMIT_GATE_STEP/,
+      `expected ${helperName} to append PRE_COMMIT_GATE_STEP to its edit-task prompts`,
+    );
+  });
+}
+
+const editStepResumeTasks = [
+  ['resumeCodeEditorAgent', 'fix-edit'],
+  ['resumeCodeEditorAgent', 'repair-edit'],
+  ['resumeCodeEditorAgent', 'standards-edit'],
+  ['resumeCodeEditorAgent', 'commit-recover'],
 ];
 
-for (const builderName of editStepBuilders) {
-  test(`${builderName} appends the pre-commit gate step to its edit prompt`, () => {
+for (const [helperName, taskName] of editStepResumeTasks) {
+  test(`${helperName} routes the ${taskName} task to a pre-commit-gated edit prompt`, () => {
     assert.match(
-      lensPromptBody(builderName),
-      /\+\s*PRE_COMMIT_GATE_STEP/,
-      `expected ${builderName} to append PRE_COMMIT_GATE_STEP`,
+      functionSource(helperName),
+      new RegExp(`task === '${taskName}'`),
+      `expected ${helperName} to handle the ${taskName} task`,
     );
   });
 }
@@ -660,6 +671,103 @@ for (const { name, isAsync } of newSpawnResumeHelpers) {
   test(`function ${prefix}${name} exists in converge.mjs`, () => {
     const needle = isAsync ? `async function ${name}(` : `function ${name}(`;
     assert.ok(convergeSource.includes(needle), `expected ${name} to exist`);
+  });
+}
+
+const spawnHelperNames = [
+  'spawnGitAgent',
+  'spawnFixerAgent',
+  'spawnCodeEditorAgent',
+  'spawnVerifierAgent',
+  'spawnGeneralUtilityAgent',
+  'spawnConvergenceCheckAgent',
+];
+
+for (const spawnName of spawnHelperNames) {
+  test(`${spawnName} actually spawns an agent via convergeAgent`, () => {
+    const spawnBody = functionSource(spawnName);
+    assert.match(
+      spawnBody,
+      /await convergeAgent\(/,
+      `expected ${spawnName} to spawn a real agent through convergeAgent rather than return a hardcoded label`,
+    );
+  });
+
+  test(`${spawnName} returns the spawned agent's runtime id`, () => {
+    const spawnBody = functionSource(spawnName);
+    assert.match(
+      spawnBody,
+      /return\s+result\?\.agentId/,
+      `expected ${spawnName} to return result?.agentId so resume targets the real session`,
+    );
+    assert.doesNotMatch(
+      spawnBody,
+      /return\s+['"`]/,
+      `expected ${spawnName} not to return a hardcoded label string`,
+    );
+  });
+}
+
+test('spawnGitAgent returns result?.agentId without a tautological ternary', () => {
+  const spawnBody = functionSource('spawnGitAgent');
+  assert.doesNotMatch(
+    spawnBody,
+    /\?\s*'git-utility'\s*:\s*'git-utility'/,
+    'expected the identical-branch ternary that discards the spawn outcome to be gone',
+  );
+});
+
+test('resume helpers fall back to a fresh spawn when no agentId is available', () => {
+  const convergeAgentBody = lensPromptBody('convergeAgent');
+  assert.match(
+    convergeAgentBody,
+    /options\?\.resume.*length\s*>\s*0|length\s*>\s*0.*resume/s,
+    'expected convergeAgent to treat a missing agentId as a fresh spawn (isResume false), restoring the preamble and worktree directive',
+  );
+});
+
+test('resumeGeneralUtilityAgent only handles the two tasks it is called with', () => {
+  const generalBody = functionSource('resumeGeneralUtilityAgent');
+  assert.doesNotMatch(
+    generalBody,
+    /task === 'bugbot-lens'/,
+    'the live Bugbot lens is runBugbotLens; the dead bugbot-lens branch must be removed',
+  );
+  assert.doesNotMatch(
+    generalBody,
+    /Copilot can run out of usage/,
+    'the live Copilot gate is runCopilotGate; the dead copilot-gate branch must be removed',
+  );
+  assert.doesNotMatch(
+    generalBody,
+    /convergence summary/,
+    'the convergence-summary producer was removed; the dead branch must not return',
+  );
+});
+
+const orphanedHelperNames = [
+  'applyFixesEdit',
+  'recoverCommitBlockEdit',
+  'recoverVerifyFailEdit',
+  'checkConvergence',
+  'markReady',
+  'repairConvergenceEdit',
+  'verifyRepairChanges',
+  'commitRepairFixes',
+  'resolveConflictsEdit',
+  'standardsFollowUpEdit',
+  'verifyHardeningChanges',
+  'commitHardeningPr',
+  'postCleanAudit',
+  'spawnConvergenceSummary',
+];
+
+for (const orphanName of orphanedHelperNames) {
+  test(`${orphanName} is removed — its behavior lives in a resume helper`, () => {
+    assert.ok(
+      !convergeSource.includes(`function ${orphanName}(`),
+      `expected the orphaned ${orphanName} definition to be deleted (CODE_RULES 9.8)`,
+    );
   });
 }
 

@@ -115,12 +115,12 @@ test('the commit path in resumeCodeEditorAgent separates an edit-requiring block
   );
 });
 
-test('recoverCommitBlockEdit is a clean-coder edit step bound to the blocker detail and leaves changes uncommitted', () => {
-  const recoverBody = functionSource('recoverCommitBlockEdit');
+test('the commit-recover task in resumeCodeEditorAgent is a clean-coder edit step bound to the blocker detail and leaves changes uncommitted', () => {
+  const recoverBody = functionSource('resumeCodeEditorAgent');
   assert.match(recoverBody, /agentType:\s*'clean-coder'/, 'expected the fixer to use clean-coder');
   assert.match(recoverBody, /schema:\s*EDIT_SCHEMA/, 'expected the fixer to reuse EDIT_SCHEMA');
-  assert.match(recoverBody, /label:\s*`fix-recover:/, 'expected the fix-recover label');
-  assert.match(recoverBody, /blockerDetail/, 'expected the fixer prompt to consume the blocker detail');
+  assert.match(recoverBody, /task === 'commit-recover'/, 'expected the commit-recover task branch');
+  assert.match(recoverBody, /context\.blockerDetail/, 'expected the fixer prompt to consume the blocker detail');
   assert.match(
     recoverBody,
     /only the (?:violation|finding|block)/i,
@@ -263,12 +263,12 @@ test('extractVerifyObjection falls back when no finding yields usable text', () 
   assert.equal(extractVerifyObjection(transcript), VERIFY_OBJECTION_FALLBACK);
 });
 
-test('recoverVerifyFailEdit is a clean-coder edit step bound to the verifier objection and leaves changes uncommitted', () => {
-  const recoverBody = functionSource('recoverVerifyFailEdit');
+test('the verify-recover task in resumeCodeEditorAgent is a clean-coder edit step bound to the verifier objection and leaves changes uncommitted', () => {
+  const recoverBody = functionSource('resumeCodeEditorAgent');
   assert.match(recoverBody, /agentType:\s*'clean-coder'/, 'expected the fixer to use clean-coder');
   assert.match(recoverBody, /schema:\s*EDIT_SCHEMA/, 'expected the fixer to reuse EDIT_SCHEMA');
-  assert.match(recoverBody, /label:\s*`fix-verify-recover:/, 'expected the fix-verify-recover label');
-  assert.match(recoverBody, /objection/, 'expected the fixer prompt to consume the verifier objection');
+  assert.match(recoverBody, /VERIFY-RECOVERY fixer/, 'expected the verify-recovery prompt body');
+  assert.match(recoverBody, /context\.objection/, 'expected the fixer prompt to consume the verifier objection');
   assert.match(
     recoverBody,
     /do not commit and do not push|Do NOT commit|leave .*uncommitted|uncommitted/i,

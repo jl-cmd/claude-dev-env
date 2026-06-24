@@ -40,8 +40,9 @@ test('cleanAuditBlocker falls back to a no-result reason when the post agent die
   assert.match(message, /the post agent returned no result/);
 });
 
-test('postCleanAudit returns the CLEAN_AUDIT_SCHEMA result rather than an unused transcript', () => {
-  const body = functionBody('postCleanAudit');
+test('the post-clean-audit task in resumeGeneralUtilityAgent returns the CLEAN_AUDIT_SCHEMA result rather than an unused transcript', () => {
+  const body = functionBody('resumeGeneralUtilityAgent');
+  assert.match(body, /task === 'post-clean-audit'/);
   assert.match(body, /schema: CLEAN_AUDIT_SCHEMA/);
   assert.doesNotMatch(body, /agent transcript \(unused\)/);
 });
