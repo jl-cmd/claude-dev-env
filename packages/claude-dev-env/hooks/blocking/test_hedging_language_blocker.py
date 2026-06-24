@@ -17,6 +17,12 @@ if _HOOKS_ROOT not in sys.path:
     sys.path.insert(0, _HOOKS_ROOT)
 import hedging_language_blocker
 from hooks_constants.messages import USER_FACING_NOTICE
+from hooks_constants.text_stripping import strip_code_and_quotes
+
+
+def test_blocker_uses_shared_strip_code_and_quotes() -> None:
+    assert hedging_language_blocker.strip_code_and_quotes is strip_code_and_quotes
+
 
 RESEARCH_MODE_SKILL_BODY_MARKER = "Three anti-hallucination constraints are ALWAYS active."
 HEDGING_MESSAGE = "This is likely correct."

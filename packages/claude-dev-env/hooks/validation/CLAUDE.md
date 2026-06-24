@@ -9,6 +9,7 @@ PostToolUse hooks that validate code quality after Claude writes or edits a file
 | `mypy_validator.py` | PostToolUse (Write/Edit on `.py` files) | Runs mypy on the written file and blocks (via PostToolUse block decision) when type errors are found — catches missing attributes, wrong signatures, type mismatches, and import errors |
 | `hook_format_validator.py` | PostToolUse | Validates that a hook script's output JSON matches the expected Claude Code hook-output schema |
 | `test_mypy_validator.py` | — | Tests for `mypy_validator.py` |
+| `test_hook_format_validator.py` | — | Tests for `hook_format_validator.py` |
 
 ## Conventions
 

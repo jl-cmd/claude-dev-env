@@ -5,7 +5,8 @@ The hook fires only on an ``Agent`` tool call whose ``subagent_type`` is
 ``code-verifier``. Before that verification spawn runs, the hook checks the
 branch for two committability problems against the resolved base ref: a real
 merge conflict (a non-mutating trial-merge of HEAD against the base ref) and a
-CODE_RULES violation on a line added in the uncommitted working tree. When
+CODE_RULES violation on a line added in the working tree since the merge base
+(committed on the branch or uncommitted). When
 either fires, the hook denies the spawn with a reason addressed to the spawning
 agent that names the conflicting files and the violating file:line, so that
 agent fixes them and re-spawns. Both checks fail OPEN on any infrastructure

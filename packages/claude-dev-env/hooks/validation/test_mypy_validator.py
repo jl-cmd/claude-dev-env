@@ -94,7 +94,7 @@ def test_build_mypy_command_includes_config_file_when_present(tmp_path: Path) ->
     assert command[-1] == "package/module.py"
 
 
-def test_build_mypy_command_omits_config_file_when_absent(tmp_path: Path) -> None:
+def test_build_mypy_command_omits_config_file_when_absent() -> None:
     validator = _load_validator()
 
     command = validator.build_mypy_command("package/module.py", None)

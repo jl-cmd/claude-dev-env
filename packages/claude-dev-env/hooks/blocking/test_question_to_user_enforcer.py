@@ -14,7 +14,9 @@ if _HOOKS_DIR not in sys.path:
     sys.path.insert(0, _HOOKS_DIR)
 if _HOOKS_ROOT not in sys.path:
     sys.path.insert(0, _HOOKS_ROOT)
+import question_to_user_enforcer
 from hooks_constants.messages import USER_FACING_ASKUSERQUESTION_NOTICE
+from hooks_constants.text_stripping import strip_code_and_quotes
 
 CLEAN_DECLARATIVE_MESSAGE = "I applied the rename across both files. The tests pass."
 TRAILING_QUESTION_MESSAGE = (
@@ -66,6 +68,10 @@ def run_hook_with_payload(payload: dict) -> subprocess.CompletedProcess:
 
 def run_hook_with_message(assistant_message: str) -> subprocess.CompletedProcess:
     return run_hook_with_payload({"last_assistant_message": assistant_message})
+
+
+def test_blocker_uses_shared_strip_code_and_quotes() -> None:
+    assert question_to_user_enforcer.strip_code_and_quotes is strip_code_and_quotes
 
 
 def test_clean_declarative_message_passes_through():

@@ -16,6 +16,11 @@ if _HOOKS_ROOT not in sys.path:
     sys.path.insert(0, _HOOKS_ROOT)
 import intent_only_ending_blocker
 from hooks_constants.messages import USER_FACING_INTENT_ENDING_NOTICE
+from hooks_constants.text_stripping import strip_code_and_quotes
+
+def test_blocker_uses_shared_strip_code_and_quotes() -> None:
+    assert intent_only_ending_blocker.strip_code_and_quotes is strip_code_and_quotes
+
 
 INTENT_ENDING_MESSAGE = "I'll now run the test suite and fix any failures that come up."
 NEXT_STEPS_MESSAGE = "Next steps:"
