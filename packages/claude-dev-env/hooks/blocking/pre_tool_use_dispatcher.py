@@ -40,6 +40,7 @@ from state_description_blocker import evaluate as evaluate_state_description  # 
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402
     ALL_HOSTED_HOOK_ENTRIES,
     ALLOW_DECISION,
+    BLOCKING_CRASH_DENY_REASON,
     BLOCKING_CRASH_EXIT_CODE,
     DENY_DECISION,
     EXIT_CODE_TWO_DENY_REASON,
@@ -360,9 +361,7 @@ def aggregate_hosted_hook_results(
                 parsed_output.deny_reason if parsed_output.deny_reason else EXIT_CODE_TWO_DENY_REASON
             )
         elif each_result.did_crash and each_result.is_blocking:
-            all_deny_reasons.append(
-                "[dispatcher] hook crash in blocking hook — write blocked for safety"
-            )
+            all_deny_reasons.append(BLOCKING_CRASH_DENY_REASON)
         elif each_result.exit_code == BLOCKING_CRASH_EXIT_CODE and each_result.is_blocking:
             all_deny_reasons.append(EXIT_CODE_TWO_DENY_REASON)
         if parsed_output.is_allow:

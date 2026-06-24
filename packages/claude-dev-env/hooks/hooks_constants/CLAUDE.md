@@ -28,6 +28,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
+| `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
 | `hook_log_extractor_constants.py` | Neon table name, offset state file path, timeouts, and outcome-type mapping for the hook-log extractor |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
 | `html_companion_constants.py` | Blocked URL schemes and other config for the `.md`-to-`.html` companion hook |
@@ -56,6 +57,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `stuttering_import_binding_constants.py` | Import-binding patterns for the stuttering check |
 | `subprocess_budget_completeness_constants.py` | Required argument names for the subprocess-budget completeness check |
 | `sys_path_insert_constants.py` | Patterns for detecting unguarded `sys.path.insert` calls |
+| `text_stripping.py` | `strip_code_and_quotes()` — shared helper that removes fenced code blocks, inline code, and blockquotes from prose, imported by the Stop-hook prose blockers |
 | `unused_module_import_constants.py` | Patterns for detecting unused module-level imports |
 | `windows_rmtree_blocker_constants.py` | The unsafe `shutil.rmtree` pattern and the safe replacement pattern |
 | `workflow_substitution_slot_blocker_constants.py` | Per-iteration token patterns for the workflow-slot blocker |
@@ -65,4 +67,4 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 - Every file in this package is a pure constants module — no side effects, no I/O.
 - Hooks import from this package with `from hooks_constants.<module> import <CONSTANT>`.
 - Tests for these modules live beside them as `test_<module>.py`. Run with `python -m pytest hooks_constants/test_<name>.py`.
-- `dynamic_stderr_handler.py` and `pre_tool_use_stdin.py` are utility modules (not pure constants) but live here because they are shared across many hooks.
+- `dynamic_stderr_handler.py`, `pre_tool_use_stdin.py`, `multi_edit_reconstruction.py`, and `text_stripping.py` are utility modules (not pure constants) but live here because they are shared across many hooks.

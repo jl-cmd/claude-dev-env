@@ -15,6 +15,7 @@ __all__ = [
     "HOOK_EVENT_NAME",
     "BLOCKING_CRASH_EXIT_CODE",
     "EXIT_CODE_TWO_DENY_REASON",
+    "BLOCKING_CRASH_DENY_REASON",
     "WRITE_TOOL_NAME",
     "EDIT_TOOL_NAME",
     "MULTI_EDIT_TOOL_NAME",
@@ -31,6 +32,7 @@ ALLOW_DECISION = "allow"
 HOOK_EVENT_NAME = "PreToolUse"
 BLOCKING_CRASH_EXIT_CODE = 2
 EXIT_CODE_TWO_DENY_REASON = "[dispatcher] hook denied via exit code 2 — write blocked"
+BLOCKING_CRASH_DENY_REASON = "[dispatcher] hook crash in blocking hook — write blocked for safety"
 
 WRITE_TOOL_NAME = "Write"
 EDIT_TOOL_NAME = "Edit"
@@ -59,8 +61,8 @@ class HostedHookEntry:
         native_module_name: The importable module name whose evaluate function
             the dispatcher calls in-process for this hook, or None when the hook
             runs via runpy under __main__. The named module exposes a function
-            named NATIVE_EVALUATE_FUNCTION_NAME taking the payload dict and
-            returning a deny-reason string or None.
+            named `evaluate` taking the payload dict and returning a deny-reason
+            string or None.
     """
 
     script_relative_path: str

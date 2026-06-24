@@ -20,21 +20,7 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_INTENT_ENDING_NOTICE  # noqa: E402
-
-
-def strip_code_and_quotes(text: str) -> str:
-    """Remove code blocks, inline code, and blockquotes to avoid false positives.
-
-    Args:
-        text: The raw assistant message to clean.
-    """
-    code_block_pattern = re.compile(r"```[\s\S]*?```", re.MULTILINE)
-    inline_code_pattern = re.compile(r"`[^`]+`")
-    quoted_block_pattern = re.compile(r"^>.*$", re.MULTILINE)
-    text = code_block_pattern.sub("", text)
-    text = inline_code_pattern.sub("", text)
-    text = quoted_block_pattern.sub("", text)
-    return text
+from hooks_constants.text_stripping import strip_code_and_quotes  # noqa: E402
 
 
 def extract_final_paragraph(text: str) -> str:

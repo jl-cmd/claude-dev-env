@@ -18,6 +18,7 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_NOTICE  # noqa: E402
+from hooks_constants.text_stripping import strip_code_and_quotes  # noqa: E402
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -57,19 +58,6 @@ HEDGING_PHRASES = [
 ALL_HEDGING_PATTERNS = [
     re.compile(pattern, re.IGNORECASE) for pattern in HEDGING_WORDS + HEDGING_PHRASES
 ]
-
-CODE_BLOCK_PATTERN = re.compile(r"```[\s\S]*?```", re.MULTILINE)
-INLINE_CODE_PATTERN = re.compile(r"`[^`]+`")
-QUOTED_BLOCK_PATTERN = re.compile(r"^>.*$", re.MULTILINE)
-
-
-def strip_code_and_quotes(text: str) -> str:
-    """Remove code blocks, inline code, and blockquotes to avoid false positives."""
-    text = CODE_BLOCK_PATTERN.sub("", text)
-    text = INLINE_CODE_PATTERN.sub("", text)
-    text = QUOTED_BLOCK_PATTERN.sub("", text)
-    return text
-
 
 def find_hedging_words(text: str) -> list[str]:
     """Return all hedging words/phrases found in the text."""

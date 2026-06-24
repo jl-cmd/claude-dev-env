@@ -33,6 +33,7 @@ if _hooks_directory not in sys.path:
 from hooks_constants.post_tool_use_dispatcher_constants import (  # noqa: E402
     ALL_POST_HOSTED_HOOK_ENTRIES,
     BLOCK_DECISION,
+    BLOCKING_CRASH_DENY_REASON,
     DECISION_KEY,
     EMPTY_REASON_BLOCK_FALLBACK,
     HOOK_EVENT_NAME,
@@ -197,7 +198,6 @@ def aggregate_post_hosted_hook_results(
         A PostDispatcherDecision with the aggregated allow-or-block signal,
         all block reasons, and all non-block stdout.
     """
-    blocking_crash_reason = "[dispatcher] hook crash in blocking hook — write blocked for safety"
     all_block_reasons: list[str] = []
     all_non_block_stdout: list[str] = []
 
@@ -206,7 +206,7 @@ def aggregate_post_hosted_hook_results(
         if is_block:
             all_block_reasons.append(block_reason if block_reason else EMPTY_REASON_BLOCK_FALLBACK)
         elif each_result.did_crash and each_result.is_blocking:
-            all_block_reasons.append(blocking_crash_reason)
+            all_block_reasons.append(BLOCKING_CRASH_DENY_REASON)
         else:
             non_block_text = each_result.captured_stdout.strip()
             if non_block_text:
