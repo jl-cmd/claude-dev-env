@@ -34,7 +34,7 @@ const HEADLESS_SAFETY_PREAMBLE =
   '- Never place a destructive-command literal inside a Bash command — not in echo, not in a heredoc, and not as an argument to python -c, node -e, or awk. To exercise or verify destructive_command_blocker (or any hook) behavior, run the committed test suite, e.g. python -m pytest <test_file>, which passes the command strings as in-language data rather than as a shell command.\n' +
   '- When a commit message, or a PR / issue / review-comment body, must describe destructive-command behavior, write that text to a file and pass it by path (git commit -F <file>, gh ... --body-file <file>); never inline it with git commit -m or gh ... -b, where the literal lands in the Bash command and stalls you.\n' +
   '- Keep scratch files and cleanup inside the OS temp dir; never target a repository or worktree path.\n' +
-  '- rm shape rules — the hook grants several rm auto-allow paths. The simplest one accepts a standalone Bash call whose target resolves inside the ephemeral namespace (/tmp, /temp, the OS temp root, or the run worktree); a compound path accepts an rm joined with benign reporting segments when every rm target is an absolute ephemeral path. Both of those paths fail closed on $(...) command substitution, on backtick subshells, and on any $ in the target — including $CLAUDE_JOB_DIR — so neither resolves an environment variable. A third, broad path matches only when the command itself declares an ephemeral working directory (it cds into one, or runs under one): that cwd-scoped path resolves the target against the declared cwd, fails closed on $(...) , backticks, and unknown variables, and resolves the known temporary variables TEMP, TMP, TMPDIR, and CLAUDE_JOB_DIR to the OS temp root, so under that declared ephemeral cwd a bare $CLAUDE_JOB_DIR/tmp/<name> target and a relative target after a cd are auto-allowed. Even so, prefer a Python helper for any cleanup whose path is variable-built or whose setup/teardown spans multiple steps: author the helper file and run it as python <file>.py, which keeps every destructive literal out of a Bash command string entirely and never depends on which auto-allow path matches.\n' +
+  '- rm shape rules — the hook grants several rm auto-allow paths. The simplest one accepts a standalone Bash call whose target resolves inside the ephemeral namespace (/tmp, /temp, the OS temp root, or the run worktree); a compound path accepts an rm joined with benign reporting segments when every rm target is an absolute ephemeral path. Both of those paths fail closed on $(...) command substitution and on backtick subshells. The compound path additionally fails closed on any $ in the target — including $CLAUDE_JOB_DIR. The standalone path declines a $-bearing target only when the literal path is not already under an ephemeral root, so it does not by itself stop a $VAR that expands inside an ephemeral root. A third, broad path matches only when the command itself declares an ephemeral working directory (it cds into one, or runs under one): that cwd-scoped path resolves the target against the declared cwd, fails closed on $(...) , backticks, and unknown variables, and resolves the known temporary variables TEMP, TMP, TMPDIR, and CLAUDE_JOB_DIR to the OS temp root, so under that declared ephemeral cwd a bare $CLAUDE_JOB_DIR/tmp/<name> target and a relative target after a cd are auto-allowed. Even so, prefer a Python helper for any cleanup whose path is variable-built or whose setup/teardown spans multiple steps: author the helper file and run it as python <file>.py, which keeps every destructive literal out of a Bash command string entirely and never depends on which auto-allow path matches.\n' +
   '- If a step appears to require a real destructive command, use a non-destructive equivalent or report it as a blocker instead of running it.\n\n'
 
 let activeRepoPath = null
@@ -222,31 +222,6 @@ function buildVerdictFenceSteps(prOwner, prRepo, prNumber) {
     "   ```\n" +
     `   When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`
   )
-}
-
-const CONVERGENCE_SUMMARY_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    verdictLine: { type: 'string', description: 'one factual BLUF sentence: converged?, distinct issue-class count, all fixed or deferred. No hedging words.' },
-    issueClasses: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          plainName: { type: 'string', description: 'everyday-language name of the issue class — no tool tokens, rule ids, file paths, line numbers, severity codes (P0/P1/P2), or bot names' },
-          count: { type: 'integer', description: 'number of raw findings grouped into this class' },
-          severity: { type: 'string', enum: ['P0', 'P1', 'P2'], description: 'most severe among the class' },
-          category: { type: 'string', enum: ['bug', 'code-standard'] },
-          status: { type: 'string', enum: ['fixed', 'deferred'] },
-          whatItWas: { type: 'string', description: 'at most 2 sentences, plain language, what the problem was' },
-        },
-        required: ['plainName', 'count', 'severity', 'category', 'status', 'whatItWas'],
-      },
-    },
-  },
-  required: ['verdictLine', 'issueClasses'],
 }
 
 const CONVERGENCE_SCHEMA = {
@@ -1542,51 +1517,6 @@ async function spawnStandardsFollowUp(head, findings, sourceLabel) {
   return { hardeningPrOpened: true }
 }
 
-/**
- * Spawn the convergence-summary agent at finalize so its StructuredOutput is
- * recorded into the run journal for the closing report to read. The agent groups
- * the deduped findings into plain-language issue classes, translates reviewer
- * jargon to everyday English, and writes one BLUF verdict line. The side effect
- * is the journal record; the return value is discarded by the caller.
- * @param {Array<object>} distinctFindings deduped findings across every round
- * @param {Array<string>} fixSummaries per-round fix-lens one-line summaries
- * @param {number} roundCount the number of converge rounds the run took
- * @param {string|null} standardsNote deferral note when a round was code-standard-only
- * @param {string|null} copilotNote outage note when the Copilot gate was bypassed
- * @returns {Promise<object>} CONVERGENCE_SUMMARY_SCHEMA result (journal side effect)
- */
-function spawnConvergenceSummary(distinctFindings, fixSummaries, roundCount, standardsNote, copilotNote) {
-  const findingsBlock = distinctFindings.length
-    ? distinctFindings
-        .map((each, position) => {
-          const truncatedDetail = (each.detail || '').slice(0, 400)
-          return `${position + 1}. [${each.severity}/${each.category}] ${each.file}:${each.line} — ${each.title} :: ${truncatedDetail}`
-        })
-        .join('\n')
-    : 'none — every lens was clean on a stable HEAD'
-  const fixSummariesBlock = fixSummaries.length
-    ? fixSummaries.map((each, position) => `${position + 1}. ${each}`).join('\n')
-    : 'none'
-  const standardsBlock = standardsNote ? `\nDeferred code-standard note: ${standardsNote}\n` : ''
-  const copilotBlock = copilotNote ? `\nCopilot gate note: ${copilotNote}\n` : ''
-  return convergeAgent(
-    `You write the plain-language convergence summary for ${prCoordinates}. The autoconverge run reached convergence in ${roundCount} round(s). Use ONLY the findings and fix summaries below; invent nothing not present.\n\n` +
-      `Distinct findings caught across the run (already deduped):\n${findingsBlock}\n\n` +
-      `Per-round fix summaries:\n${fixSummariesBlock}\n${standardsBlock}${copilotBlock}\n` +
-      `Produce a summary an everyday reader understands:\n` +
-      `- GROUP near-duplicate findings into issue CLASSES: the same KIND of problem across different files or lines becomes ONE class with a count. Example: seven "Missing return type annotation on test function" findings become one class with count 7.\n` +
-      `- TRANSLATE reviewer jargon into plain everyday English. Examples: "CodingGuidelineID 1000000 / Repository guideline (Types)" -> "a typing rule the project enforces"; "missing return type annotation / Add -> None" -> "a test did not declare what it returns"; "Banned identifier result" -> "a vague variable name the project bans"; a magic-value finding -> "a raw number or string that should be a named value".\n` +
-      `- plainName must carry NO tool token, rule id, file path, line number, severity code (P0/P1/P2), or bot name.\n` +
-      `- Lead with category 'bug' classes, then 'code-standard'. Cap to about 5 classes. whatItWas is at most 2 sentences. No paragraphs.\n` +
-      `- status is 'fixed' unless the fix summaries or the deferred code-standard note mark the class deferred, in which case status is 'deferred'.\n` +
-      `- Use NO hedging words anywhere (likely, probably, should, appears, seems, may, might, could, possibly). State facts ("caught and fixed").\n` +
-      `- When there are zero findings, return issueClasses: [] and a verdictLine stating the run converged with no issues caught.\n` +
-      `- verdictLine is one factual sentence naming the round count and that all classes are fixed or deferred.\n\n` +
-      `Return strictly the schema.`,
-    { label: 'convergence-summary', phase: 'Finalize', schema: CONVERGENCE_SUMMARY_SCHEMA, agentType: 'general-purpose' },
-  )
-}
-
 let phase = 'CONVERGE'
 let head = null
 let rounds = 0
@@ -1597,8 +1527,6 @@ let copilotDown = false
 let copilotNote = null
 let standardsNote = null
 let reuseNote = null
-const allRoundFindings = []
-const fixSummaries = []
 
 const preflightHead = await resolveHead()
 if (isResolvedHeadUsable(preflightHead)) {
@@ -1613,9 +1541,7 @@ if (isResolvedHeadUsable(reuseHead)) {
   const reuseFindings = reuse?.findings || []
   if (reuseFindings.length > 0) {
     log(`Reuse pass: ${reuseFindings.length} qualifying reuse improvement(s) — applying before convergence`)
-    allRoundFindings.push(...reuseFindings)
     const reuseFix = await applyFixes(reuseHead, reuseFindings, 'reuse-pass')
-    if (reuseFix?.summary) fixSummaries.push(reuseFix.summary)
     reuseNote = reuseFix?.pushed === true
       ? `${reuseFindings.length} reuse improvement(s) applied before convergence (${reuseFix.newSha?.slice(0, SHA_COMPARISON_PREFIX_LENGTH)})`
       : `${reuseFindings.length} reuse improvement(s) identified before convergence but not landed — the code-review lens re-surfaces any that remain`
@@ -1651,7 +1577,6 @@ while (iterations < CONFIG.maxIterations) {
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
-      allRoundFindings.push(...findings)
       const standardsOutcome = await spawnStandardsFollowUp(head, findings, 'converge-round')
       standardsNote = standardsDeferralNote(findings.length, standardsOutcome?.hardeningPrOpened === true)
       const auditResult = await postCleanAudit(head)
@@ -1664,9 +1589,7 @@ while (iterations < CONFIG.maxIterations) {
     }
     if (findings.length > 0) {
       log(`Round ${rounds}: ${findings.length} finding(s) — applying fixes`)
-      allRoundFindings.push(...findings)
       const fixResult = await applyFixes(head, findings, 'converge-round')
-      if (fixResult?.summary) fixSummaries.push(fixResult.summary)
       const hadThreadBearingFinding = findings.some((each) => collectFindingThreadIds(each).length > 0)
       const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
       if (!fixProgress.progressed) {
@@ -1710,7 +1633,6 @@ while (iterations < CONFIG.maxIterations) {
     if (copilotOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
-        allRoundFindings.push(...copilotOutcome.findings)
         const standardsOutcome = await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot')
         standardsNote = standardsDeferralNote(copilotOutcome.findings.length, standardsOutcome?.hardeningPrOpened === true)
         copilotDown = false
@@ -1719,9 +1641,7 @@ while (iterations < CONFIG.maxIterations) {
         continue
       }
       log(`Copilot raised ${copilotOutcome.findings.length} finding(s) — fixing and re-converging`)
-      allRoundFindings.push(...copilotOutcome.findings)
       const fixResult = await applyFixes(head, copilotOutcome.findings, 'copilot')
-      if (fixResult?.summary) fixSummaries.push(fixResult.summary)
       const hadThreadBearingFinding = copilotOutcome.findings.some((each) => collectFindingThreadIds(each).length > 0)
       const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
       if (!fixProgress.progressed) {
@@ -1750,7 +1670,6 @@ while (iterations < CONFIG.maxIterations) {
       const readyResult = await markReady(head, copilotDown)
       const readyOutcome = classifyReadyOutcome(readyResult)
       if (readyOutcome.converged) {
-        await spawnConvergenceSummary(dedupeFindings(allRoundFindings), fixSummaries, rounds, standardsNote, copilotNote)
         return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, reuseNote }
       }
       blocker = readyOutcome.blocker

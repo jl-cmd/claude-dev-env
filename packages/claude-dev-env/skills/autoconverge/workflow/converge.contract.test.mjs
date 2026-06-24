@@ -567,11 +567,15 @@ test('preamble prescribes authoring a Python helper for variable-built or multi-
   );
 });
 
-test('preamble does not claim any $ in the rm target makes the gate fail closed', () => {
-  assert.doesNotMatch(
-    preambleText(),
-    /any\s+\$[^\n]*fail closed/i,
-    'the hook resolves known temp variables (TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR), so a bare $ does not always fail closed',
+test('preamble does not claim the standalone or both rm auto-allow paths fail closed on any $', () => {
+  const text = preambleText().replace(/\$\(\.\.\.\)/g, 'SUBSHELL').replace(/\s+/g, ' ');
+  const overstatesStandalone =
+    /\b(?:both|standalone|neither)\b[^.]*fail closed[^.]*any \$/i.test(text) ||
+    /\b(?:both|standalone|neither)\b[^.]*any \$[^.]*fail closed/i.test(text);
+  assert.equal(
+    overstatesStandalone,
+    false,
+    'only the compound path fails closed on any $ in the target; the standalone path accepts a $-bearing target whose literal path already sits under an ephemeral root',
   );
 });
 
@@ -591,11 +595,15 @@ test('preamble scopes its rm-shape claim to the narrowest auto-allow path, not t
   );
 });
 
-test('SKILL.md does not claim any $ in the rm target makes the gate fail closed', () => {
-  assert.doesNotMatch(
-    skillSource,
-    /any\s+`?\$`?[^\n]*fail closed/i,
-    'the hook resolves known temp variables (TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR), so a bare $ does not always fail closed',
+test('SKILL.md does not claim the standalone or both rm auto-allow paths fail closed on any $', () => {
+  const text = skillSource.replace(/`/g, '').replace(/\$\(\.\.\.\)/g, 'SUBSHELL').replace(/\s+/g, ' ');
+  const overstatesStandalone =
+    /\b(?:both|standalone|neither)\b[^.]*fail closed[^.]*any \$/i.test(text) ||
+    /\b(?:both|standalone|neither)\b[^.]*any \$[^.]*fail closed/i.test(text);
+  assert.equal(
+    overstatesStandalone,
+    false,
+    'only the compound path fails closed on any $ in the target; the standalone path accepts a $-bearing target whose literal path already sits under an ephemeral root',
   );
 });
 
@@ -611,7 +619,7 @@ test('preamble does not attribute the known-temp-var resolution to the standalon
   assert.doesNotMatch(
     preambleText().replace(/\s+/g, ' '),
     /Across these paths[\s\S]*?CLAUDE_JOB_DIR/i,
-    'the temp-var resolution lives only in the broad cwd-scoped path; the standalone and compound paths fail closed on any $',
+    'the temp-var resolution lives only in the broad cwd-scoped path; the standalone and compound paths do not resolve known temp variables',
   );
 });
 
@@ -635,7 +643,7 @@ test('SKILL.md does not attribute the known-temp-var resolution to the standalon
   assert.doesNotMatch(
     skillSource.replace(/\s+/g, ' '),
     /Across those paths[\s\S]*?CLAUDE_JOB_DIR/i,
-    'the temp-var resolution lives only in the broad cwd-scoped path; the standalone and compound paths fail closed on any $',
+    'the temp-var resolution lives only in the broad cwd-scoped path; the standalone and compound paths do not resolve known temp variables',
   );
 });
 

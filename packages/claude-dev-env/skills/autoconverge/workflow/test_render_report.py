@@ -448,6 +448,7 @@ def test_cli_injects_summary_from_file_bypassing_transcripts(tmp_path: Path) -> 
     assert "An injected class the transcript never carried" in html_content
     assert 'class="pf-grid"' in html_content
     assert f"Raw findings ({EXPECTED_TOTAL_FINDINGS})" in html_content
+    assert "https://github.com/example-owner/example-repo/pull/211" not in html_content
 
 
 def test_html_contains_no_hedging_words(tmp_path: Path) -> None:
