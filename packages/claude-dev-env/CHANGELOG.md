@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.75.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.74.0...claude-dev-env-v1.75.0) (2026-06-24)
+
+
+### Features
+
+* **autoconverge:** consolidate non-clean-room agent spawns into 6 persistent groups ([899db40](https://github.com/jl-cmd/claude-code-config/commit/899db40606e0b9e81754092a3aa809419ea8fe3b))
+* **autoconverge:** consolidate non-clean-room agent spawns into 6 persistent groups ([5e20638](https://github.com/jl-cmd/claude-code-config/commit/5e20638eabc1c976b8b03ceb92f6d05ee67c164b))
+* **hooks:** block duplicate Windows rmtree helper trio at Write/Edit time ([26ca03c](https://github.com/jl-cmd/claude-code-config/commit/26ca03cc0c48fa74ea11e919edc38a5ed29b731c))
+
+
+### Bug Fixes
+
+* **autoconverge:** apply converge-round review fixes ([8048c76](https://github.com/jl-cmd/claude-code-config/commit/8048c7634321c19ae5e669ac0c823152c7ea7e7c))
+* **autoconverge:** define label in resumeConvergenceCheckAgent ([d639d04](https://github.com/jl-cmd/claude-code-config/commit/d639d04cce77c87cf3069e90141e6ebeed7d7f9e))
+* **rmtree-blocker:** mask triple-quoted strings and exempt by basename ([c6d60e7](https://github.com/jl-cmd/claude-code-config/commit/c6d60e7d31a9bf9d30ee43b0d215423480b74bd0))
+
+
+### Refactoring
+
+* **autoconverge:** close deferred code-standard items [#577](https://github.com/jl-cmd/claude-code-config/issues/577) [#610](https://github.com/jl-cmd/claude-code-config/issues/610) [#612](https://github.com/jl-cmd/claude-code-config/issues/612) [#615](https://github.com/jl-cmd/claude-code-config/issues/615) [#744](https://github.com/jl-cmd/claude-code-config/issues/744) ([317e671](https://github.com/jl-cmd/claude-code-config/commit/317e671ad564c76bfc04ee360c85a66d7d455904))
+* **autoconverge:** close deferred code-standard items [#577](https://github.com/jl-cmd/claude-code-config/issues/577) [#610](https://github.com/jl-cmd/claude-code-config/issues/610) [#612](https://github.com/jl-cmd/claude-code-config/issues/612) [#615](https://github.com/jl-cmd/claude-code-config/issues/615) [#744](https://github.com/jl-cmd/claude-code-config/issues/744) ([8b5ca00](https://github.com/jl-cmd/claude-code-config/commit/8b5ca00a450f1412cb735a01bd476c41fc02787c))
+* **hooks:** close deferred code-standard items [#579](https://github.com/jl-cmd/claude-code-config/issues/579) [#580](https://github.com/jl-cmd/claude-code-config/issues/580) [#623](https://github.com/jl-cmd/claude-code-config/issues/623) [#719](https://github.com/jl-cmd/claude-code-config/issues/719) [#725](https://github.com/jl-cmd/claude-code-config/issues/725) [#731](https://github.com/jl-cmd/claude-code-config/issues/731) [#742](https://github.com/jl-cmd/claude-code-config/issues/742) ([deeee6a](https://github.com/jl-cmd/claude-code-config/commit/deeee6ae128f672444f6cc6a7a2f50c31c4ec15b))
+* **hooks:** close deferred code-standard items [#579](https://github.com/jl-cmd/claude-code-config/issues/579) [#580](https://github.com/jl-cmd/claude-code-config/issues/580) [#623](https://github.com/jl-cmd/claude-code-config/issues/623) [#719](https://github.com/jl-cmd/claude-code-config/issues/719) [#725](https://github.com/jl-cmd/claude-code-config/issues/725) [#731](https://github.com/jl-cmd/claude-code-config/issues/731) [#742](https://github.com/jl-cmd/claude-code-config/issues/742) ([41cd44e](https://github.com/jl-cmd/claude-code-config/commit/41cd44e6d19fc83b0c13a67d4c62b6f5e872b89a))
+
 ## [1.74.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.73.0...claude-dev-env-v1.74.0) (2026-06-22)
 
 
