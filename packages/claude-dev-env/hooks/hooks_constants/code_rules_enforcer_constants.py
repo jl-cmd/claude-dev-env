@@ -138,6 +138,10 @@ TASK_DISPATCH_NAME_PATTERN: re.Pattern[str] = re.compile(
 ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(
     r"\s*,\s*|\s+and\s+"
 )
+ENUMERATION_LEADING_CONJUNCTION_PATTERN: re.Pattern[str] = re.compile(
+    r"^and\s+"
+)
+ALL_JAVASCRIPT_STRING_DELIMITERS: frozenset[str] = frozenset({"'", '"', "`"})
 ENUMERATION_TASK_ITEM_PATTERN: re.Pattern[str] = re.compile(
     r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 )

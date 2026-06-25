@@ -167,6 +167,126 @@ def should_not_flag_single_word_task_named_in_enumeration() -> None:
     assert check_js_resume_task_enumeration_coverage(source, _MJS_PATH) == []
 
 
+def should_flag_drift_under_oxford_comma_enumeration() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the fixer so each later resume (verify-commit, commit, and\n"
+        " * recovery) continues the same session.\n"
+        " */\n"
+        "async function spawnFixerAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeFixerAgent(agentId, task, context) {\n"
+        "  if (task === 'verify-commit') {\n"
+        "    return doVerify(agentId, context)\n"
+        "  }\n"
+        "  if (task === 'commit') {\n"
+        "    return doCommit(agentId, context)\n"
+        "  }\n"
+        "  if (task === 'recovery') {\n"
+        "    return doRecovery(agentId, context)\n"
+        "  }\n"
+        "  return doBrandNewUndocumented(agentId, context)\n"
+        "}\n"
+    ).replace(
+        "  return doBrandNewUndocumented(agentId, context)\n",
+        "  if (task === 'brand-new-undocumented') {\n"
+        "    return doBrandNewUndocumented(agentId, context)\n"
+        "  }\n"
+        "  return doRecovery(agentId, context)\n",
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "brand-new-undocumented" in issues[0]
+    assert "spawnFixerAgent" in issues[0]
+
+
+def should_not_overrun_into_sibling_on_unbalanced_prose_brace() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return run(agentId, 'return JSON shaped like { newSha ...')\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+        "\n"
+        "/**\n"
+        " * Spawn other so each later resume (stray-leak) continues the session.\n"
+        " */\n"
+        "async function spawnOtherAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeOtherAgent(agentId, task, context) {\n"
+        "  if (task === 'stray-leak') {\n"
+        "    return doStray(agentId, context)\n"
+        "  }\n"
+        "  return doDefault(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert issues == []
+
+
+def should_not_count_task_dispatch_inside_prompt_string() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  const prompt = `when task === 'gamma-task' is set, do the thing`\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, prompt)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    assert check_js_resume_task_enumeration_coverage(source, _MJS_PATH) == []
+
+
+def should_flag_drift_when_task_list_follows_descriptive_parenthetical() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier on resume (re-establishing the session). Each\n"
+        " * later resume (alpha-task, beta-task) continues the same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  if (task === 'alpha-task') {\n"
+        "    return doA(agentId, context)\n"
+        "  }\n"
+        "  if (task === 'beta-task') {\n"
+        "    return doB(agentId, context)\n"
+        "  }\n"
+        "  if (task === 'gamma-task') {\n"
+        "    return doG(agentId, context)\n"
+        "  }\n"
+        "  return doDefault(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "gamma-task" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
 def should_flag_single_word_task_absent_from_mixed_enumeration() -> None:
     source = (
         "/**\n"
