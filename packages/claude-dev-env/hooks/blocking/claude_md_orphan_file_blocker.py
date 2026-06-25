@@ -221,8 +221,11 @@ def _run_command_filename_in_line(fenced_line: str) -> str | None:
     A fenced run-command line such as ``python tools/verify.py --flag`` invokes a
     script file; this returns that script's bare basename. A path-qualified script
     keeps only its final segment, so ``node tools/build_bundle.mjs`` yields
-    ``build_bundle.mjs`` — the basename the directory file would match. A line with
-    no interpreter invocation, or whose named script carries no recognized
+    ``build_bundle.mjs`` — the basename the directory file would match. A script
+    named by an explicit relative-path source (a ``../`` token, as in
+    ``python ../shared/preflight.py``) lives outside the subtree by design, so it
+    is exempt and yields None, mirroring the table-cell ``../`` exemption. A line
+    with no interpreter invocation, or whose named script carries no recognized
     extension, yields None.
 
     Args:
@@ -230,12 +233,14 @@ def _run_command_filename_in_line(fenced_line: str) -> str | None:
 
     Returns:
         The bare script basename the invocation names, or None when the line names
-        no script.
+        no script or names one by an explicit relative-path source.
     """
     invocation_match = RUN_COMMAND_SCRIPT_PATTERN.search(fenced_line)
     if invocation_match is None:
         return None
     script_token = invocation_match.group(1).strip()
+    if _declares_relative_path_source(script_token):
+        return None
     basename = os.path.basename(script_token.replace("\\", "/").rstrip("/"))
     if not basename:
         return None

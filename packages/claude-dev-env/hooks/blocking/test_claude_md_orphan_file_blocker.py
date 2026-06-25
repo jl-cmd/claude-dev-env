@@ -746,6 +746,79 @@ def test_run_command_orphan_reported_via_edit(tmp_path: Path):
     )
 
 
+def test_run_command_interpreter_substring_in_word_is_not_matched():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "git stash  # WIP on parse.py\n"
+        "rush build  # then run verify.py\n"
+        "dash run.py\n"
+        "ssh deploy@host ./remote_install.sh\n"
+        "git stash list build.sh\n"
+        "rebash deploy.sh\n"
+        "fish shell run.sh\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
+def test_run_command_standalone_interpreter_still_matches():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python deploy.py\n"
+        "node build.mjs\n"
+        "C:\\Python313\\python.exe verify_ready.py\n"
+        "bash setup.sh\n"
+        "sh install.sh\n"
+        "node tools/build_bundle.mjs\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "deploy.py",
+        "build.mjs",
+        "verify_ready.py",
+        "setup.sh",
+        "install.sh",
+        "build_bundle.mjs",
+    ]
+
+
+def test_run_command_with_relative_path_source_is_exempt():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python ../shared/preflight.py --check\n"
+        "python ../../tools/deploy.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
+def test_run_command_relative_path_exempt_while_bare_orphan_still_blocks(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "python ../shared/preflight.py --check\n"
+        "python absent_script.py\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "absent_script.py" in output["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "preflight.py" not in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
 def test_run_command_orphan_preexisting_on_untouched_line_is_allowed(tmp_path: Path):
     claude_md_path = _isolated_claude_md_path(tmp_path)
     (claude_md_path.parent / "kept.py").write_text("x = 1\n", encoding="utf-8")

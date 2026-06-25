@@ -51,7 +51,7 @@ REGION_BOUNDARY_PATTERN: re.Pattern[str] = re.compile(r"^\s*#")
 RELATIVE_PATH_SOURCE_PATTERN: re.Pattern[str] = re.compile(r"\.\.[\\/]")
 
 RUN_COMMAND_SCRIPT_PATTERN: re.Pattern[str] = re.compile(
-    r"(?:python(?:\.exe)?|python3|node|pwsh|powershell(?:\.exe)?|bash|sh|ruby|perl)"
+    r"(?<![\w.])(?:python(?:\.exe)?|python3|node|pwsh|powershell(?:\.exe)?|bash|sh|ruby|perl)"
     r"\b[^\n]*?[\"'\s]([\w./\\-]+\.(?:py|mjs|js|ts|ps1|sh|rb|pl))\b"
 )
 
