@@ -78,6 +78,7 @@ from hooks_constants.duplicate_function_body_constants import (  # noqa: E402
     MINIMUM_INLINE_DUPLICATE_BODY_STATEMENTS,
     PYTHON_SOURCE_SUFFIX,
     SAME_FILE_INLINE_DUPLICATE_GUIDANCE,
+    SAME_FILE_INLINE_DUPLICATE_SPAN_SUFFIX_TEMPLATE,
     SKILL_SCRIPTS_DIRECTORY_NAME,
     SKILLS_DIRECTORY_NAME,
 )
@@ -630,11 +631,16 @@ def check_same_file_inline_duplicate_body(
             helper_span = _function_definition_span(each_helper)
             enclosing_span = _function_definition_span(each_enclosing)
             in_scope_lines = frozenset(helper_span) | frozenset(enclosing_span)
+            span_suffix = SAME_FILE_INLINE_DUPLICATE_SPAN_SUFFIX_TEMPLATE.format(
+                helper_start=helper_span.start,
+                helper_length=len(helper_span),
+                enclosing_start=enclosing_span.start,
+                enclosing_length=len(enclosing_span),
+            )
             message = (
                 f"Function {each_helper.name!r} duplicates an inline block in "
                 f"{each_enclosing.name!r} — {SAME_FILE_INLINE_DUPLICATE_GUIDANCE} "
-                f"(duplicate body span at line {helper_span.start}, "
-                f"spanning {len(helper_span)} lines)"
+                f"{span_suffix}"
             )
             all_violations_in_walk_order.append((in_scope_lines, message))
             break

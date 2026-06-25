@@ -428,3 +428,39 @@ def test_should_flag_when_edit_touches_the_enclosing_in_the_non_adjacent_layout(
         "An edit touching the enclosing function must still flag in the "
         f"non-adjacent layout, got: {issues}"
     )
+
+
+def test_should_carry_both_helper_and_enclosing_spans_for_the_commit_gate_scoper() -> None:
+    helper_definition_line = _line_number_of(
+        PR_470_SHAPE_SOURCE,
+        "async def _wait_for_content_image_to_render(automation: object) -> None:",
+    )
+    enclosing_definition_line = _line_number_of(
+        PR_470_SHAPE_SOURCE,
+        "async def _wait_for_page_after_account_switch(automation: object) -> None:",
+    )
+    helper_span_length = 10
+    enclosing_span_length = 11
+    issues = check_same_file_inline_duplicate_body(
+        PR_470_SHAPE_SOURCE,
+        "account_switcher.py",
+        all_changed_lines=None,
+        defer_scope_to_caller=True,
+    )
+    matching_issues = [
+        each_issue
+        for each_issue in issues
+        if "_wait_for_content_image_to_render" in each_issue
+    ]
+    assert matching_issues, f"expected an inline-duplicate issue, got: {issues}"
+    expected_fragment = (
+        f"(inline duplicate body spans: helper at line {helper_definition_line} "
+        f"spanning {helper_span_length} lines, enclosing at line "
+        f"{enclosing_definition_line} spanning {enclosing_span_length} lines)"
+    )
+    assert expected_fragment in matching_issues[0], (
+        "The commit gate reconstructs scope from the message text, so the inline "
+        "duplicate message must carry BOTH the helper and the enclosing spans — "
+        "the union the PreToolUse path scopes on — not the helper span alone, "
+        f"got: {matching_issues[0]}"
+    )

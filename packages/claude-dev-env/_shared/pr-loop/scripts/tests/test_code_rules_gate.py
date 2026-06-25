@@ -32,7 +32,7 @@ def _load_gate_module() -> ModuleType:
 gate_module = _load_gate_module()
 
 
-def _load_duplicate_body_check() -> Callable[..., list[str]]:
+def _load_duplicate_body_module() -> ModuleType:
     package_root = gate_module.resolve_claude_dev_env_root(
         Path(gate_module.__file__).resolve()
     )
@@ -42,10 +42,16 @@ def _load_duplicate_body_check() -> Callable[..., list[str]]:
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.check_duplicate_function_body_across_files
+    return module
 
 
-check_duplicate_function_body_across_files = _load_duplicate_body_check()
+_duplicate_body_module = _load_duplicate_body_module()
+check_duplicate_function_body_across_files = (
+    _duplicate_body_module.check_duplicate_function_body_across_files
+)
+check_same_file_inline_duplicate_body = (
+    _duplicate_body_module.check_same_file_inline_duplicate_body
+)
 
 
 def run_git_in_repository(repository_root: Path, *arguments: str) -> str:
@@ -765,6 +771,144 @@ def test_split_violations_advises_duplicate_body_when_span_misses_added_lines(
     )
     assert advisory == [duplicate_body_issue]
     assert blocking == []
+
+
+_INLINE_DUPLICATE_MESSAGE_HELPER_FIRST = (
+    "Function '_wait_for_render' duplicates an inline block in '_navigate_then_wait'"
+    " — this function body is also present inline (Reuse before create / DRY) "
+    "(inline duplicate body spans: helper at line 4 spanning 10 lines, "
+    "enclosing at line 16 spanning 11 lines)"
+)
+
+
+def test_inline_duplicate_body_span_lines_unions_helper_and_enclosing_spans() -> None:
+    """The same-file inline-duplicate message carries both spans, and the gate
+    recovers their union as a line-number set so a touch of either function blocks —
+    mirroring the live Write/Edit hook's union scoping."""
+    span_lines = gate_module.inline_duplicate_body_span_lines(
+        _INLINE_DUPLICATE_MESSAGE_HELPER_FIRST
+    )
+    assert span_lines == frozenset(range(4, 14)) | frozenset(range(16, 27))
+
+
+def test_inline_duplicate_body_span_lines_returns_none_for_other_messages() -> None:
+    """A cross-file duplicate-body message carries the single-span suffix, which the
+    inline-duplicate extractor must not claim — so the gate routes it to the
+    single-range extractor registry instead."""
+    cross_file_message = (
+        "Function 'strip' duplicates existing_helper.py::strip — extract a shared "
+        "helper (duplicate body span at line 3, spanning 5 lines)"
+    )
+    assert gate_module.inline_duplicate_body_span_lines(cross_file_message) is None
+
+
+def test_inline_duplicate_blocks_when_only_enclosing_copy_added() -> None:
+    """The finding's real-world shape: the helper pre-exists (untouched) and a copy
+    is added INTO a growing enclosing function. An added line in the enclosing span
+    alone must block, because the live Write/Edit hook scopes by the union of both
+    spans and blocks the same edit."""
+    added_line_in_enclosing_only = 18
+    blocking, advisory = gate_module.split_violations_by_scope(
+        [_INLINE_DUPLICATE_MESSAGE_HELPER_FIRST],
+        all_added_line_numbers={added_line_in_enclosing_only},
+    )
+    assert blocking == [_INLINE_DUPLICATE_MESSAGE_HELPER_FIRST]
+    assert advisory == []
+
+
+def test_inline_duplicate_blocks_when_only_helper_copy_added() -> None:
+    """The mirror case: an edit touching only the helper span blocks too, since the
+    union covers both functions."""
+    added_line_in_helper_only = 5
+    blocking, advisory = gate_module.split_violations_by_scope(
+        [_INLINE_DUPLICATE_MESSAGE_HELPER_FIRST],
+        all_added_line_numbers={added_line_in_helper_only},
+    )
+    assert blocking == [_INLINE_DUPLICATE_MESSAGE_HELPER_FIRST]
+    assert advisory == []
+
+
+def test_inline_duplicate_advises_when_gap_line_added() -> None:
+    """An edit confined to an unrelated function that sits strictly between the
+    helper (lines 4-13) and the enclosing copy (lines 16-26) — line 14, in the gap —
+    must not block, matching the live hook that leaves such an edit unflagged. A
+    single contiguous range over both spans would wrongly block this; the union set
+    keeps the gap out of scope."""
+    gap_line_between_spans = 14
+    blocking, advisory = gate_module.split_violations_by_scope(
+        [_INLINE_DUPLICATE_MESSAGE_HELPER_FIRST],
+        all_added_line_numbers={gap_line_between_spans},
+    )
+    assert advisory == [_INLINE_DUPLICATE_MESSAGE_HELPER_FIRST]
+    assert blocking == []
+
+
+_INLINE_DUPLICATE_END_TO_END_SOURCE = (
+    "import asyncio\n"
+    "\n"
+    "\n"
+    "async def _wait_for_render(automation: object) -> None:\n"
+    "    assert automation.detector is not None\n"
+    "    try:\n"
+    "        await automation.detector.wait_for_element(selector)\n"
+    "    except (TimeoutError, RuntimeError) as render_error:\n"
+    "        logger.warning('did not render: %s', render_error)\n"
+    "\n"
+    "\n"
+    "async def _navigate_then_wait(automation: object) -> None:\n"
+    "    await automation.cdp.navigate(url)\n"
+    "    assert automation.detector is not None\n"
+    "    try:\n"
+    "        await automation.detector.wait_for_element(selector)\n"
+    "    except (TimeoutError, RuntimeError) as render_error:\n"
+    "        logger.warning('did not render: %s', render_error)\n"
+)
+
+
+def test_gate_blocks_inline_duplicate_when_only_enclosing_copy_is_added() -> None:
+    """End-to-end parity check for the finding's real-world shape. The helper is
+    defined first (pre-existing, untouched) and the inline copy lives in a later
+    enclosing function; an edit that adds only the enclosing copy lines makes the
+    live Write/Edit hook BLOCK. The deferred message the commit/push gate re-scopes
+    must produce the same verdict — blocking, not advisory — so the two enforcement
+    surfaces agree.
+    """
+    enclosing_definition_line = (
+        _INLINE_DUPLICATE_END_TO_END_SOURCE.splitlines().index(
+            "async def _navigate_then_wait(automation: object) -> None:"
+        )
+        + 1
+    )
+    enclosing_added_lines = set(range(enclosing_definition_line, enclosing_definition_line + 6))
+
+    pretooluse_issues = check_same_file_inline_duplicate_body(
+        _INLINE_DUPLICATE_END_TO_END_SOURCE,
+        "account_switcher.py",
+        all_changed_lines=enclosing_added_lines,
+    )
+    assert any("_wait_for_render" in each_issue for each_issue in pretooluse_issues), (
+        "The live Write/Edit path must block when the enclosing copy is added, "
+        f"got: {pretooluse_issues}"
+    )
+
+    deferred_issues = check_same_file_inline_duplicate_body(
+        _INLINE_DUPLICATE_END_TO_END_SOURCE,
+        "account_switcher.py",
+        all_changed_lines=enclosing_added_lines,
+        defer_scope_to_caller=True,
+    )
+    blocking, advisory = gate_module.split_violations_by_scope(
+        deferred_issues, enclosing_added_lines
+    )
+    assert any("_wait_for_render" in each_issue for each_issue in blocking), (
+        "The commit/push gate must reconstruct the union scope and BLOCK the same "
+        f"enclosing-only edit the live hook blocks, got blocking: {blocking}, "
+        f"advisory: {advisory}"
+    )
+    assert advisory == [], (
+        "No inline-duplicate violation may land in advisory when the gate and the "
+        f"live hook agree on blocking, got advisory: {advisory}"
+    )
 
 
 def test_collect_partitioned_violations_advises_pre_existing_sibling_duplicate(
