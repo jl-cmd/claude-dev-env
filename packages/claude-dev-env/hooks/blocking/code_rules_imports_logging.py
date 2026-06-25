@@ -1,4 +1,4 @@
-"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, E2E spec naming, file-length advisory, and library-print checks."""
+"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, E2E spec naming, JS resume-task enumeration coverage, file-length advisory, and library-print checks."""
 
 import ast
 import json
@@ -33,6 +33,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     IMPORT_BLOCK_SORT_RULE_CODE,
     MAX_E2E_TEST_NAMING_ISSUES,
     MAX_IMPORT_BLOCK_SORT_ISSUES,
+    MAX_JS_RESUME_TASK_ENUMERATION_ISSUES,
     MAX_LOGGING_FSTRING_ISSUES,
     MAX_LOGGING_PRINTF_TOKEN_ISSUES,
     MAX_WINDOWS_API_NONE_ISSUES,
@@ -45,11 +46,16 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ADVISORY_LINE_THRESHOLD_SOFT,
     ALL_CLI_FILE_PATH_MARKERS,
     ALL_IMPORT_STATEMENT_PREFIXES,
+    ALL_JAVASCRIPT_EXTENSIONS,
     ALL_PYTHON_EXTENSIONS,
+    ENUMERATION_TASK_TOKEN_PATTERN,
     LOGGING_FSTRING_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
     MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT,
     NOT_INSIDE_TYPE_CHECKING_BLOCK,
+    RESUME_TASK_ENUMERATION_PATTERN,
+    SPAWN_AGENT_WITH_JSDOC_PATTERN,
+    TASK_DISPATCH_NAME_PATTERN,
     TRIPLE_DOUBLE_QUOTE_DELIMITER,
     TRIPLE_QUOTE_PARITY_DIVISOR,
     TRIPLE_SINGLE_QUOTE_DELIMITER,
@@ -595,6 +601,95 @@ def check_e2e_test_naming(content: str, file_path: str) -> list[str]:
             break
 
     return issues
+
+
+def _balanced_brace_body(content: str, from_index: int) -> str | None:
+    opening_index = content.find("{", from_index)
+    if opening_index == -1:
+        return None
+    depth = 0
+    for each_position in range(opening_index, len(content)):
+        character = content[each_position]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return content[opening_index : each_position + 1]
+    return content[opening_index:]
+
+
+def _resume_function_body(content: str, role: str) -> str | None:
+    header_pattern = re.compile(
+        r"(?:async\s+)?function\s+resume" + re.escape(role) + r"Agent\s*\("
+    )
+    header_match = header_pattern.search(content)
+    if header_match is None:
+        return None
+    return _balanced_brace_body(content, header_match.end())
+
+
+def _enumeration_task_names(jsdoc_text: str) -> set[str] | None:
+    enumeration_match = RESUME_TASK_ENUMERATION_PATTERN.search(jsdoc_text)
+    if enumeration_match is None:
+        return None
+    enumeration_text = enumeration_match.group("enumeration").replace("*", " ")
+    return set(ENUMERATION_TASK_TOKEN_PATTERN.findall(enumeration_text))
+
+
+def check_js_resume_task_enumeration_coverage(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a spawn JSDoc whose resume enumeration omits a dispatched task.
+
+    The drift this catches: a ``spawn<Role>Agent`` function carries a JSDoc that
+    enumerates the resume tasks of its sibling ``resume<Role>Agent`` in a
+    parenthetical ``resume (repair-verify, hardening-verify)`` list, while the
+    ``resume<Role>Agent`` body dispatches on a ``task === '<name>'`` branch the
+    enumeration never names. A reader who trusts the spawn JSDoc to list every
+    step that runs on the session misses the omitted task. This is the JS/.mjs
+    slice of Category O6 docstring-prose-vs-implementation drift; the Python
+    enforcer's AST docstring checks never inspect JavaScript source.
+
+    A spawn JSDoc binds to its sibling resume function by the shared ``<Role>``
+    token (``spawnVerifierAgent`` pairs with ``resumeVerifierAgent``). The check
+    binds only when the JSDoc already names a parenthetical ``resume (...)``
+    enumeration carrying at least one hyphenated task token, proving the prose is
+    a resume-task enumeration describing the sibling. Each ``task === '<name>'``
+    branch name the resume body dispatches on that the enumeration omits is
+    flagged.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per dispatched task name the spawn enumeration omits, capped at
+        the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    if get_file_extension(file_path) not in ALL_JAVASCRIPT_EXTENSIONS:
+        return []
+    issues: list[str] = []
+    for each_spawn_match in SPAWN_AGENT_WITH_JSDOC_PATTERN.finditer(content):
+        role = each_spawn_match.group("role")
+        enumerated_tasks = _enumeration_task_names(each_spawn_match.group("jsdoc"))
+        if not enumerated_tasks:
+            continue
+        resume_body = _resume_function_body(content, role)
+        if resume_body is None:
+            continue
+        dispatched_tasks = set(TASK_DISPATCH_NAME_PATTERN.findall(resume_body))
+        for each_task in sorted(dispatched_tasks - enumerated_tasks):
+            issues.append(
+                f"spawn{role}Agent() JSDoc resume enumeration omits the "
+                f"'{each_task}' task that resume{role}Agent dispatches on — add it "
+                "to the parenthetical (Category O6 docstring-vs-implementation drift)"
+            )
+            if len(issues) >= MAX_JS_RESUME_TASK_ENUMERATION_ISSUES:
+                return issues[:MAX_JS_RESUME_TASK_ENUMERATION_ISSUES]
+    return issues[:MAX_JS_RESUME_TASK_ENUMERATION_ISSUES]
 
 
 def _is_cli_entry_point(file_path: str) -> bool:
