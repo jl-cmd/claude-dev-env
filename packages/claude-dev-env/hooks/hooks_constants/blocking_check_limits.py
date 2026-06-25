@@ -61,6 +61,24 @@ MINIMUM_TOKENS_FOR_DISPATCH_CALLEE: int = 2
 MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES: int = 3
 MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES: int = 5
 SINGLE_DICT_KEY_COUNT_FOR_PLURAL_CARDINALITY_DRIFT: int = 1
+MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES: int = 3
+ALL_DOCSTRING_SINGLE_LINE_SCOPE_PHRASES: tuple[str, ...] = (
+    "anchor line is among the changed lines",
+    "anchor line is among the edited lines",
+    "anchor line is among the changed",
+    "first line is among the changed lines",
+    "start line is among the changed lines",
+)
+ALL_DOCSTRING_SPAN_SCOPE_OVERRIDE_PHRASES: tuple[str, ...] = (
+    "any line of",
+    "any line in",
+    "any of its lines",
+    "any span line",
+)
+ALL_DOCSTRING_SPAN_RANGE_BODY_CALLEE_NAMES: tuple[str, ...] = (
+    "_scope_violations_to_changed_lines",
+    "_scope_violations",
+)
 ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS: frozenset[str] = frozenset(
     {
         "UPPER_SNAKE_CASE",
