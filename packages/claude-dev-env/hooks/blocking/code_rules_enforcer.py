@@ -88,6 +88,7 @@ from code_rules_imports_logging import (  # noqa: E402
     check_imports_at_top,
     check_library_print,
     check_logging_fstrings,
+    check_logging_printf_tokens,
     check_windows_api_none,
 )
 from code_rules_magic_values import (  # noqa: E402
@@ -226,6 +227,7 @@ def validate_content(
             all_issues.extend(check_comment_changes(old_content, content, file_path))
         all_issues.extend(check_imports_at_top(content))
         all_issues.extend(check_logging_fstrings(content))
+        all_issues.extend(check_logging_printf_tokens(content, file_path))
         all_issues.extend(check_windows_api_none(content))
         all_issues.extend(check_magic_values(content, file_path))
         all_issues.extend(check_fstring_structural_literals(content, file_path))

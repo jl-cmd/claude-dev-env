@@ -119,6 +119,7 @@ LOGGING_FSTRING_PATTERN = re.compile(
     r'|(?:logger|logging|log)\.(?:debug|info|warning|error|critical|exception))'
     r'\s*\(\s*(?:[rR][fF]|[fF][rR]?)["\']'
 )
+LOGGING_PRINTF_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"%[sdrixf]")
 ALL_BUILTIN_DICT_METHOD_NAMES: frozenset[str] = frozenset({
     "get", "items", "keys", "values", "update", "pop",
     "setdefault", "copy", "clear",
