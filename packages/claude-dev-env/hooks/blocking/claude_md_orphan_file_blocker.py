@@ -215,30 +215,23 @@ def _block_filenames(all_region_lines: list[str], all_block_lines: list[str]) ->
     return block_filenames
 
 
-def _run_command_filename_in_line(fenced_line: str) -> str | None:
-    """Return the script basename an interpreter invocation on this line names.
+def _script_basename_from_token(script_token: str) -> str | None:
+    """Return the bare basename one captured script token names, when it has one.
 
-    A fenced run-command line such as ``python tools/verify.py --flag`` invokes a
-    script file; this returns that script's bare basename. A path-qualified script
-    keeps only its final segment, so ``node tools/build_bundle.mjs`` yields
-    ``build_bundle.mjs`` — the basename the directory file would match. A script
-    named by an explicit relative-path source (a ``../`` token, as in
-    ``python ../shared/preflight.py``) lives outside the subtree by design, so it
-    is exempt and yields None, mirroring the table-cell ``../`` exemption. A line
-    with no interpreter invocation, or whose named script carries no recognized
-    extension, yields None.
+    A path-qualified script keeps only its final segment, so ``tools/build_bundle.mjs``
+    yields ``build_bundle.mjs`` — the basename the directory file would match. A
+    script named by an explicit relative-path source (a ``../`` token, as in
+    ``../shared/preflight.py``) lives outside the subtree by design, so it is exempt
+    and yields None, mirroring the table-cell ``../`` exemption. A token whose
+    basename carries no recognized script extension yields None.
 
     Args:
-        fenced_line: A single line drawn from inside a fenced code block.
+        script_token: One script path captured from an interpreter invocation.
 
     Returns:
-        The bare script basename the invocation names, or None when the line names
-        no script or names one by an explicit relative-path source.
+        The bare script basename, or None when the token is relative-path-sourced
+        or carries no recognized extension.
     """
-    invocation_match = RUN_COMMAND_SCRIPT_PATTERN.search(fenced_line)
-    if invocation_match is None:
-        return None
-    script_token = invocation_match.group(1).strip()
     if _declares_relative_path_source(script_token):
         return None
     basename = os.path.basename(script_token.replace("\\", "/").rstrip("/"))
@@ -250,15 +243,45 @@ def _run_command_filename_in_line(fenced_line: str) -> str | None:
     return basename
 
 
+def _run_command_filenames_in_line(fenced_line: str) -> list[str]:
+    """Return each script basename the interpreter invocations on this line name.
+
+    A fenced run-command line such as ``python tools/verify.py --flag`` invokes a
+    script file; this returns that script's bare basename. A line that chains
+    several invocations with a shell separator (``python deploy.py && node build.mjs``,
+    ``python first.py; python second.py``) contributes each invocation's basename in
+    order. A shell comment line (its first non-whitespace character is ``#``)
+    documents a removed or alternative command rather than a runnable contract, so
+    it contributes nothing. A line with no interpreter invocation contributes
+    nothing.
+
+    Args:
+        fenced_line: A single line drawn from inside a fenced code block.
+
+    Returns:
+        Each bare script basename the line's invocations name, in order; empty when
+        the line is a comment or names no runnable script.
+    """
+    if fenced_line.lstrip().startswith("#"):
+        return []
+    line_filenames: list[str] = []
+    for each_match in RUN_COMMAND_SCRIPT_PATTERN.finditer(fenced_line):
+        each_basename = _script_basename_from_token(each_match.group(1).strip())
+        if each_basename is not None:
+            line_filenames.append(each_basename)
+    return line_filenames
+
+
 def find_run_command_filenames(content: str) -> list[str]:
     """Return each script basename a fenced run command invokes, in order.
 
     Walks the content line by line, inspecting only lines inside a fenced code
     block (between a ``` or ~~~ fence pair). A fenced run-command line that invokes
     an interpreter on a script (``python script.py``, ``node bundle.mjs``,
-    ``pwsh build.ps1``) contributes that script's bare basename. A line outside any
-    fence is prose, not a live command, and contributes nothing — an inline
-    ``python x.py`` in a sentence is documentation, not a runnable contract.
+    ``pwsh build.ps1``) contributes that script's bare basename, and a line that
+    chains several invocations with a shell separator contributes each one. A line
+    outside any fence is prose, not a live command, and contributes nothing — an
+    inline ``python x.py`` in a sentence is documentation, not a runnable contract.
 
     Args:
         content: The CLAUDE.md content being written.
@@ -275,9 +298,7 @@ def find_run_command_filenames(content: str) -> list[str]:
             continue
         if not is_inside_code_fence:
             continue
-        each_filename = _run_command_filename_in_line(each_line)
-        if each_filename is not None:
-            run_command_filenames.append(each_filename)
+        run_command_filenames.extend(_run_command_filenames_in_line(each_line))
     return run_command_filenames
 
 

@@ -837,6 +837,79 @@ def test_run_command_with_module_flag_and_value_still_matches():
     ]
 
 
+def test_run_command_single_valueless_flag_before_path_captures_full_basename():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "pwsh -File scripts/check.ps1\n"
+        "python3 -u app.py\n"
+        "python -u verify_ready.py\n"
+        "bash -c deploy.sh\n"
+        "node --experimental-vm-modules tools/build.mjs\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "check.ps1",
+        "app.py",
+        "verify_ready.py",
+        "deploy.sh",
+        "build.mjs",
+    ]
+
+
+def test_allows_run_command_with_valueless_flag_invoking_present_script(tmp_path: Path):
+    scripts_directory = tmp_path / "scripts"
+    scripts_directory.mkdir()
+    (scripts_directory / "check.ps1").write_text("Write-Host ok\n", encoding="utf-8")
+    claude_md_path = scripts_directory / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "pwsh -File scripts/check.ps1\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_chained_commands_each_contribute_their_basename():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python deploy.py && node build.mjs\n"
+        "python first.py; python second.py\n"
+        "python upstream.py | python downstream.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "deploy.py",
+        "build.mjs",
+        "first.py",
+        "second.py",
+        "upstream.py",
+        "downstream.py",
+    ]
+
+
+def test_run_command_commented_line_inside_fence_is_skipped():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "# python deploy.py   (commented out)\n"
+        "  # node build.mjs\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
 def test_run_command_with_relative_path_source_is_exempt():
     content = (
         "# example\n\n"
