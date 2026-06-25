@@ -81,6 +81,7 @@ from code_rules_docstrings import (  # noqa: E402
 from code_rules_duplicate_body import (  # noqa: E402
     advise_cross_skill_duplicate_helper,
     check_duplicate_function_body_across_files,
+    check_same_file_inline_duplicate_body,
 )
 from code_rules_imports_logging import (  # noqa: E402
     advise_file_line_count,
@@ -239,6 +240,14 @@ def validate_content(
                 all_changed_lines,
                 defer_scope_to_caller,
                 sibling_directory,
+            )
+        )
+        all_issues.extend(
+            check_same_file_inline_duplicate_body(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
             )
         )
         all_issues.extend(check_type_escape_hatches(effective_content, file_path))
@@ -472,11 +481,11 @@ def _hook_infrastructure_blocking_issues(
     """Run the checks that still guard a hook Python target.
 
     The whole code-rules verdict stays off hook-infrastructure files, so this
-    runs the two checks that must still guard them: the cross-file duplicate-body
-    check, span-scoped to the lines an edit touched exactly as ``validate_content``
-    scopes it for production code; and the zero-payload alias check, whose
-    docstring names hook modules as its motivating case, run over the whole
-    post-edit file.
+    runs the checks that must still guard them: the cross-file duplicate-body
+    check and the same-file inline-duplicate-body check, each span-scoped to the
+    lines an edit touched exactly as ``validate_content`` scopes it for production
+    code; and the zero-payload alias check, whose docstring names hook modules as
+    its motivating case, run over the whole post-edit file.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -500,6 +509,13 @@ def _hook_infrastructure_blocking_issues(
         effective_content,
         file_path,
         all_changed_lines,
+    )
+    all_issues.extend(
+        check_same_file_inline_duplicate_body(
+            effective_content,
+            file_path,
+            all_changed_lines,
+        )
     )
     all_issues.extend(check_zero_payload_function_alias(effective_content, file_path))
     return all_issues

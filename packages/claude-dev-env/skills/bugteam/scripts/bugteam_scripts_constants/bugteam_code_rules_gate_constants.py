@@ -31,6 +31,15 @@ BANNED_NOUN_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
 BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX: int = 1
 BANNED_NOUN_SPAN_GROUP_INDEX: int = 2
 
+INLINE_DUPLICATE_BODY_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
+    r"\(inline duplicate body spans: helper at line (\d+) spanning (\d+) lines, "
+    r"enclosing at line (\d+) spanning (\d+) lines\)"
+)
+INLINE_DUPLICATE_BODY_HELPER_LINE_GROUP_INDEX: int = 1
+INLINE_DUPLICATE_BODY_HELPER_SPAN_GROUP_INDEX: int = 2
+INLINE_DUPLICATE_BODY_ENCLOSING_LINE_GROUP_INDEX: int = 3
+INLINE_DUPLICATE_BODY_ENCLOSING_SPAN_GROUP_INDEX: int = 4
+
 ALL_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset(
     {".py", ".js", ".ts", ".tsx", ".jsx"}
 )
