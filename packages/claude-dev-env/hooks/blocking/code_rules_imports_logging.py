@@ -47,7 +47,9 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CLI_FILE_PATH_MARKERS,
     ALL_IMPORT_STATEMENT_PREFIXES,
     ALL_JAVASCRIPT_EXTENSIONS,
+    ALL_JAVASCRIPT_STRING_DELIMITERS,
     ALL_PYTHON_EXTENSIONS,
+    ENUMERATION_LEADING_CONJUNCTION_PATTERN,
     ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN,
     ENUMERATION_TASK_ITEM_PATTERN,
     HYPHENATED_TASK_ITEM_PATTERN,
@@ -605,19 +607,56 @@ def check_e2e_test_naming(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _strip_string_literals(body_text: str) -> str:
+    """Blank the interior of backtick template literals in a resume body.
+
+    The resume bodies build agent prompts as backtick template literals whose
+    prose commonly discusses task dispatch (``task === 'gamma-task'``). Such a
+    mention is prose, not a dispatch branch, so the task-dispatch scan must not
+    see it. Single- and double-quoted operands stay intact: a real dispatch
+    branch (``task === 'fix-verify'``) names its task in a single- or
+    double-quoted literal, and JavaScript forbids an unescaped same-quote inside
+    those literals, so a prompt that embeds a quoted ``task === '...'`` mention
+    is a backtick template literal.
+    """
+    rendered_characters: list[str] = []
+    is_inside_template_literal = False
+    previous_character = ""
+    for each_character in body_text:
+        if each_character == "`" and previous_character != "\\":
+            is_inside_template_literal = not is_inside_template_literal
+            rendered_characters.append(each_character)
+        elif is_inside_template_literal:
+            rendered_characters.append(" " if each_character != "\n" else "\n")
+        else:
+            rendered_characters.append(each_character)
+        previous_character = each_character
+    return "".join(rendered_characters)
+
+
 def _balanced_brace_body(content: str, from_index: int) -> str | None:
     opening_index = content.find("{", from_index)
     if opening_index == -1:
         return None
     depth = 0
+    active_string_delimiter: str | None = None
+    previous_character = ""
     for each_position in range(opening_index, len(content)):
         character = content[each_position]
-        if character == "{":
+        if active_string_delimiter is not None:
+            if character == active_string_delimiter and previous_character != "\\":
+                active_string_delimiter = None
+            previous_character = character
+            continue
+        if character in ALL_JAVASCRIPT_STRING_DELIMITERS:
+            active_string_delimiter = character
+        elif character == "{":
             depth += 1
         elif character == "}":
             depth -= 1
             if depth == 0:
                 return content[opening_index : each_position + 1]
+        previous_character = character
     return content[opening_index:]
 
 
@@ -628,21 +667,41 @@ def _resume_function_body(content: str, role: str) -> str | None:
     header_match = header_pattern.search(content)
     if header_match is None:
         return None
-    return _balanced_brace_body(content, header_match.end())
+    bounded_content = content[: _next_top_level_function_index(content, header_match.end())]
+    return _balanced_brace_body(bounded_content, header_match.end())
 
 
-def _enumeration_task_names(jsdoc_text: str) -> set[str] | None:
-    enumeration_match = RESUME_TASK_ENUMERATION_PATTERN.search(jsdoc_text)
-    if enumeration_match is None:
-        return None
-    enumeration_text = enumeration_match.group("enumeration").replace("*", " ")
+def _next_top_level_function_index(content: str, from_index: int) -> int:
+    next_function_match = re.compile(
+        r"^(?:async\s+)?function\s+\w+", re.MULTILINE
+    ).search(content, from_index)
+    if next_function_match is None:
+        return len(content)
+    return next_function_match.start()
+
+
+def _task_list_from_enumeration_text(enumeration_text: str) -> set[str] | None:
     enumerated_items = ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN.split(enumeration_text)
-    task_items = {each_item.strip() for each_item in enumerated_items}
+    task_items = {_strip_leading_conjunction(each_item) for each_item in enumerated_items}
     if not all(ENUMERATION_TASK_ITEM_PATTERN.match(each_item) for each_item in task_items):
         return None
     if not any(HYPHENATED_TASK_ITEM_PATTERN.match(each_item) for each_item in task_items):
         return None
     return task_items
+
+
+def _strip_leading_conjunction(enumeration_item: str) -> str:
+    stripped_item = enumeration_item.strip()
+    return ENUMERATION_LEADING_CONJUNCTION_PATTERN.sub("", stripped_item).strip()
+
+
+def _enumeration_task_names(jsdoc_text: str) -> set[str] | None:
+    for each_enumeration_match in RESUME_TASK_ENUMERATION_PATTERN.finditer(jsdoc_text):
+        enumeration_text = each_enumeration_match.group("enumeration").replace("*", " ")
+        task_items = _task_list_from_enumeration_text(enumeration_text)
+        if task_items is not None:
+            return task_items
+    return None
 
 
 def check_js_resume_task_enumeration_coverage(
@@ -661,15 +720,21 @@ def check_js_resume_task_enumeration_coverage(
 
     A spawn JSDoc binds to its sibling resume function by the shared ``<Role>``
     token (``spawnVerifierAgent`` pairs with ``resumeVerifierAgent``). The check
-    binds only when the parenthetical ``resume (...)`` reads as a task list:
-    every comma- or ``and``-delimited item is a single dispatch-shaped task token
-    (no embedded spaces, so a descriptive phrase such as
-    ``re-establishing the session`` is not a task list) and at least one item is
-    hyphenated, proving the prose is a resume-task enumeration describing the
-    sibling rather than incidental prose. This keeps the enumerated token set a
-    superset of the sibling's dispatched task set. Each ``task === '<name>'``
-    branch name the resume body dispatches on that the enumeration omits is
-    flagged.
+    scans each ``resume (...)`` parenthetical in the JSDoc and binds to the first
+    that reads as a task list: every comma- or ``and``-delimited item (including
+    the Oxford-comma ``a, b, and c`` form, where the trailing ``and`` is stripped
+    from the final item) is a single dispatch-shaped task token (no embedded
+    spaces, so a descriptive phrase such as ``re-establishing the session`` is not
+    a task list, and a later real task list still binds when an earlier
+    descriptive parenthetical precedes it) and at least one item is hyphenated,
+    proving the prose is a resume-task enumeration describing the sibling rather
+    than incidental prose. This keeps the enumerated token set a superset of the
+    sibling's dispatched task set. The resume body is read up to the next
+    top-level ``function`` declaration, and its backtick template-literal prose is
+    blanked before the dispatch scan so a ``task === '<name>'`` mention inside an
+    agent-prompt string is not counted as a dispatch branch. Each
+    ``task === '<name>'`` branch name the resume body dispatches on that the
+    enumeration omits is flagged.
 
     Args:
         content: The source text to inspect.
@@ -692,7 +757,8 @@ def check_js_resume_task_enumeration_coverage(
         resume_body = _resume_function_body(content, role)
         if resume_body is None:
             continue
-        dispatched_tasks = set(TASK_DISPATCH_NAME_PATTERN.findall(resume_body))
+        dispatch_source = _strip_string_literals(resume_body)
+        dispatched_tasks = set(TASK_DISPATCH_NAME_PATTERN.findall(dispatch_source))
         for each_task in sorted(dispatched_tasks - enumerated_tasks):
             issues.append(
                 f"spawn{role}Agent() JSDoc resume enumeration omits the "
