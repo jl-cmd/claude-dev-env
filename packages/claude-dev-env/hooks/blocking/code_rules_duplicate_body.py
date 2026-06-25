@@ -615,7 +615,7 @@ def check_same_file_inline_duplicate_body(
         for each_node in tree.body
         if isinstance(each_node, ast.FunctionDef | ast.AsyncFunctionDef)
     ]
-    all_violations_in_walk_order: list[tuple[range, str]] = []
+    all_violations_in_walk_order: list[tuple[frozenset[int], str]] = []
     for each_helper in all_top_level_functions:
         helper_window_dumps = _helper_match_window_dumps(each_helper)
         if helper_window_dumps is None:
@@ -629,17 +629,14 @@ def check_same_file_inline_duplicate_body(
                 continue
             helper_span = _function_definition_span(each_helper)
             enclosing_span = _function_definition_span(each_enclosing)
-            combined_span = range(
-                min(helper_span.start, enclosing_span.start),
-                max(helper_span.stop, enclosing_span.stop),
-            )
+            in_scope_lines = frozenset(helper_span) | frozenset(enclosing_span)
             message = (
                 f"Function {each_helper.name!r} duplicates an inline block in "
                 f"{each_enclosing.name!r} — {SAME_FILE_INLINE_DUPLICATE_GUIDANCE} "
                 f"(duplicate body span at line {helper_span.start}, "
                 f"spanning {len(helper_span)} lines)"
             )
-            all_violations_in_walk_order.append((combined_span, message))
+            all_violations_in_walk_order.append((in_scope_lines, message))
             break
         if len(all_violations_in_walk_order) >= MAX_DUPLICATE_BODY_ISSUES:
             break
