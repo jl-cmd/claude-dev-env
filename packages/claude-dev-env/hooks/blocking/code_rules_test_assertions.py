@@ -286,7 +286,7 @@ def _name_encodes_scenario(test_name: str) -> bool:
     return any(each_clause in test_name for each_clause in _SCENARIO_NAME_CLAUSES)
 
 
-def check_flag_gated_scenario_test_naming(content: str, file_path: str) -> list[str]:
+def check_flag_gated_scenario_test_naming(content: str, file_path: str) -> None:
     """Flag a scenario-named test that omits a flag its siblings establish.
 
     When two or more sibling tests in a file monkeypatch the same module-level
@@ -302,15 +302,16 @@ def check_flag_gated_scenario_test_naming(content: str, file_path: str) -> list[
         file_path: Path to the file, used for the test-file gate.
 
     Returns:
-        An empty list; advisories print to stderr so the write proceeds.
+        None; advisories print to stderr and this check never contributes to
+        the blocking issue list, so the write proceeds.
     """
     if not is_test_file(file_path):
-        return []
+        return
 
     try:
         syntax_tree = ast.parse(content)
     except SyntaxError:
-        return []
+        return
 
     test_functions = [
         each_node
@@ -333,7 +334,7 @@ def check_flag_gated_scenario_test_naming(content: str, file_path: str) -> list[
         if patch_count >= _MINIMUM_SIBLING_PATCH_COUNT
     }
     if not established_flags:
-        return []
+        return
 
     for each_test in test_functions:
         if not _name_encodes_scenario(each_test.name):
@@ -348,8 +349,6 @@ def check_flag_gated_scenario_test_naming(content: str, file_path: str) -> list[
                 f" Patch the flag (and assert the gated path runs) or rename the test.",
                 file=sys.stderr,
             )
-
-    return []
 
 
 def _called_function_names(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
