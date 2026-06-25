@@ -124,19 +124,25 @@ LOGGING_PRINTF_TOKEN_PATTERN: re.Pattern[str] = re.compile(
 )
 MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT = 2
 SPAWN_AGENT_WITH_JSDOC_PATTERN: re.Pattern[str] = re.compile(
-    r"/\*\*(?P<jsdoc>.*?)\*/\s*"
+    r"/\*\*(?P<jsdoc>(?:(?!\*/).)*?)\*/\s*"
     r"(?:async\s+)?function\s+spawn(?P<role>\w+?)Agent\s*\(",
     re.DOTALL,
 )
 RESUME_TASK_ENUMERATION_PATTERN: re.Pattern[str] = re.compile(
-    r"resume\s*\((?P<enumeration>[^)]*?-[^)]*?)\)",
+    r"resume\s*\((?P<enumeration>[^)]*?)\)",
     re.DOTALL,
 )
 TASK_DISPATCH_NAME_PATTERN: re.Pattern[str] = re.compile(
     r"""task\s*===\s*['"](?P<task>[a-z0-9-]+)['"]"""
 )
-ENUMERATION_TASK_TOKEN_PATTERN: re.Pattern[str] = re.compile(
-    r"[a-z0-9]+(?:-[a-z0-9]+)+"
+ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(
+    r"\s*,\s*|\s+and\s+"
+)
+ENUMERATION_TASK_ITEM_PATTERN: re.Pattern[str] = re.compile(
+    r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+)
+HYPHENATED_TASK_ITEM_PATTERN: re.Pattern[str] = re.compile(
+    r"^[a-z0-9]+(?:-[a-z0-9]+)+$"
 )
 ALL_BUILTIN_DICT_METHOD_NAMES: frozenset[str] = frozenset({
     "get", "items", "keys", "values", "update", "pop",

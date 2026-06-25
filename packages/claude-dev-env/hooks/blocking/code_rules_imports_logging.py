@@ -48,7 +48,9 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_IMPORT_STATEMENT_PREFIXES,
     ALL_JAVASCRIPT_EXTENSIONS,
     ALL_PYTHON_EXTENSIONS,
-    ENUMERATION_TASK_TOKEN_PATTERN,
+    ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN,
+    ENUMERATION_TASK_ITEM_PATTERN,
+    HYPHENATED_TASK_ITEM_PATTERN,
     LOGGING_FSTRING_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
     MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT,
@@ -634,7 +636,13 @@ def _enumeration_task_names(jsdoc_text: str) -> set[str] | None:
     if enumeration_match is None:
         return None
     enumeration_text = enumeration_match.group("enumeration").replace("*", " ")
-    return set(ENUMERATION_TASK_TOKEN_PATTERN.findall(enumeration_text))
+    enumerated_items = ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN.split(enumeration_text)
+    task_items = {each_item.strip() for each_item in enumerated_items}
+    if not all(ENUMERATION_TASK_ITEM_PATTERN.match(each_item) for each_item in task_items):
+        return None
+    if not any(HYPHENATED_TASK_ITEM_PATTERN.match(each_item) for each_item in task_items):
+        return None
+    return task_items
 
 
 def check_js_resume_task_enumeration_coverage(
@@ -653,9 +661,13 @@ def check_js_resume_task_enumeration_coverage(
 
     A spawn JSDoc binds to its sibling resume function by the shared ``<Role>``
     token (``spawnVerifierAgent`` pairs with ``resumeVerifierAgent``). The check
-    binds only when the JSDoc already names a parenthetical ``resume (...)``
-    enumeration carrying at least one hyphenated task token, proving the prose is
-    a resume-task enumeration describing the sibling. Each ``task === '<name>'``
+    binds only when the parenthetical ``resume (...)`` reads as a task list:
+    every comma- or ``and``-delimited item is a single dispatch-shaped task token
+    (no embedded spaces, so a descriptive phrase such as
+    ``re-establishing the session`` is not a task list) and at least one item is
+    hyphenated, proving the prose is a resume-task enumeration describing the
+    sibling rather than incidental prose. This keeps the enumerated token set a
+    superset of the sibling's dispatched task set. Each ``task === '<name>'``
     branch name the resume body dispatches on that the enumeration omits is
     flagged.
 
