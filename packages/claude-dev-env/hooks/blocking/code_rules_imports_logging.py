@@ -47,12 +47,18 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CLI_FILE_PATH_MARKERS,
     ALL_IMPORT_STATEMENT_PREFIXES,
     ALL_JAVASCRIPT_EXTENSIONS,
+    ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS,
     ALL_JAVASCRIPT_STRING_DELIMITERS,
     ALL_PYTHON_EXTENSIONS,
     ENUMERATION_LEADING_CONJUNCTION_PATTERN,
     ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN,
     ENUMERATION_TASK_ITEM_PATTERN,
     HYPHENATED_TASK_ITEM_PATTERN,
+    JAVASCRIPT_BLOCK_COMMENT_CLOSER,
+    JAVASCRIPT_BLOCK_COMMENT_OPENER,
+    JAVASCRIPT_LINE_COMMENT_OPENER,
+    JAVASCRIPT_REGEX_DELIMITER,
+    JAVASCRIPT_STRING_ESCAPE_CHARACTER,
     LOGGING_FSTRING_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
     MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT,
@@ -607,56 +613,161 @@ def check_e2e_test_naming(content: str, file_path: str) -> list[str]:
     return issues
 
 
-def _strip_string_literals(body_text: str) -> str:
-    """Blank the interior of backtick template literals in a resume body.
+class _JavaScriptRegionScanner:
+    """Walks JavaScript source one character at a time, tracking string,
+    comment, and regex regions so a caller can tell code from non-code.
 
-    The resume bodies build agent prompts as backtick template literals whose
-    prose commonly discusses task dispatch (``task === 'gamma-task'``). Such a
-    mention is prose, not a dispatch branch, so the task-dispatch scan must not
-    see it. Single- and double-quoted operands stay intact: a real dispatch
-    branch (``task === 'fix-verify'``) names its task in a single- or
-    double-quoted literal, and JavaScript forbids an unescaped same-quote inside
-    those literals, so a prompt that embeds a quoted ``task === '...'`` mention
-    is a backtick template literal.
+    The scanner holds the region the current character sits in. ``consume``
+    advances the state for one character and returns whether that character is
+    structural code (``True``) or part of a string, comment, or regex literal
+    (``False``).
     """
-    rendered_characters: list[str] = []
-    is_inside_template_literal = False
-    previous_character = ""
-    for each_character in body_text:
-        if each_character == "`" and previous_character != "\\":
-            is_inside_template_literal = not is_inside_template_literal
-            rendered_characters.append(each_character)
-        elif is_inside_template_literal:
-            rendered_characters.append(" " if each_character != "\n" else "\n")
-        else:
-            rendered_characters.append(each_character)
-        previous_character = each_character
+
+    def __init__(self) -> None:
+        self._active_string_delimiter: str | None = None
+        self._is_inside_line_comment = False
+        self._is_inside_block_comment = False
+        self._is_inside_regex_literal = False
+        self._previous_code_character = "\n"
+
+    def consume(self, character: str, source: str, index: int) -> bool:
+        if self._active_string_delimiter is not None:
+            return self._consume_inside_string(character, source, index)
+        if self._is_inside_line_comment:
+            return self._consume_inside_line_comment(character)
+        if self._is_inside_block_comment:
+            return self._consume_inside_block_comment(source, index)
+        if self._is_inside_regex_literal:
+            return self._consume_inside_regex(character, source, index)
+        return self._consume_inside_code(character, source, index)
+
+    def _consume_inside_string(self, character: str, source: str, index: int) -> bool:
+        if character == self._active_string_delimiter and not _is_escaped(source, index):
+            self._active_string_delimiter = None
+        return False
+
+    def _consume_inside_line_comment(self, character: str) -> bool:
+        if character == "\n":
+            self._is_inside_line_comment = False
+        return False
+
+    def _consume_inside_block_comment(self, source: str, index: int) -> bool:
+        if source[index - 1 : index + 1] == JAVASCRIPT_BLOCK_COMMENT_CLOSER:
+            self._is_inside_block_comment = False
+        return False
+
+    def _consume_inside_regex(self, character: str, source: str, index: int) -> bool:
+        if character == JAVASCRIPT_REGEX_DELIMITER and not _is_escaped(source, index):
+            self._is_inside_regex_literal = False
+        return False
+
+    def _consume_inside_code(self, character: str, source: str, index: int) -> bool:
+        if character in ALL_JAVASCRIPT_STRING_DELIMITERS:
+            self._active_string_delimiter = character
+            return False
+        if source.startswith(JAVASCRIPT_LINE_COMMENT_OPENER, index):
+            self._is_inside_line_comment = True
+            return False
+        if source.startswith(JAVASCRIPT_BLOCK_COMMENT_OPENER, index):
+            self._is_inside_block_comment = True
+            return False
+        if character == JAVASCRIPT_REGEX_DELIMITER and self._is_regex_start():
+            self._is_inside_regex_literal = True
+            return False
+        if not character.isspace():
+            self._previous_code_character = character
+        return True
+
+    def _is_regex_start(self) -> bool:
+        return self._previous_code_character in ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS
+
+
+def _is_escaped(source: str, index: int) -> bool:
+    backslash_run_length = 0
+    scan_index = index - 1
+    while scan_index >= 0 and source[scan_index] == JAVASCRIPT_STRING_ESCAPE_CHARACTER:
+        backslash_run_length += 1
+        scan_index -= 1
+    return backslash_run_length % 2 == 1
+
+
+def _code_position_flags(source: str) -> list[bool]:
+    """Return one flag per character: ``True`` for structural code, ``False`` for
+    a character inside a string literal, comment, or regex literal.
+
+    A backslash escapes the next character inside a string literal, so a delimiter
+    preceded by an odd run of backslashes stays inside the literal and a delimiter
+    preceded by an even run (including zero) closes it. A ``/`` opens a regex
+    literal only when the previous structural character marks an expression
+    position; after a value it is the division operator and is left intact.
+    """
+    region = _JavaScriptRegionScanner()
+    return [
+        region.consume(each_character, source, each_index)
+        for each_index, each_character in enumerate(source)
+    ]
+
+
+def _blank_non_code_regions(body_text: str) -> str:
+    """Replace every non-code region in JavaScript source with spaces.
+
+    A non-code region is a string literal (single-, double-, or backtick-quoted),
+    a ``//`` line comment, a ``/* */`` block comment, or a ``/.../`` regex
+    literal. Each is blanked to spaces, newlines preserved, so the returned text
+    has the same length and line structure as the input while carrying only
+    structural code characters.
+
+    Blanking comments and regex literals keeps a stray brace inside either from
+    skewing the brace-depth scan that bounds the resume body, and blanking string
+    literals keeps a brace inside a prompt string from skewing it the same way.
+    """
+    code_flags = _code_position_flags(body_text)
+    rendered_characters = [
+        each_character if (code_flags[each_index] or each_character == "\n") else " "
+        for each_index, each_character in enumerate(body_text)
+    ]
     return "".join(rendered_characters)
 
 
+def _dispatched_task_names(resume_body: str) -> set[str]:
+    """Return the task names the resume body dispatches on in code position.
+
+    A real dispatch branch (``task === 'fix-verify'``) has its ``task`` keyword in
+    structural code; a ``task === '<name>'`` mention inside an agent-prompt string,
+    a comment, or a regex literal is prose and its keyword sits in a non-code
+    region. Only a match whose ``task`` keyword is at a code position counts, so a
+    prose mention is never read as a dispatch branch.
+    """
+    code_flags = _code_position_flags(resume_body)
+    dispatched_tasks: set[str] = set()
+    for each_match in TASK_DISPATCH_NAME_PATTERN.finditer(resume_body):
+        if code_flags[each_match.start()]:
+            dispatched_tasks.add(each_match.group("task"))
+    return dispatched_tasks
+
+
 def _balanced_brace_body(content: str, from_index: int) -> str | None:
-    opening_index = content.find("{", from_index)
+    """Return the brace-balanced span of ``content`` starting at the first ``{``.
+
+    Braces inside string literals, comments, and regex literals do not count
+    toward the depth: the scan walks a blanked copy where those regions are
+    spaces, so only structural braces move the depth. The returned span is a slice
+    of the original ``content`` so the caller reads real source for the dispatch
+    scan.
+    """
+    blanked_content = _blank_non_code_regions(content)
+    opening_index = blanked_content.find("{", from_index)
     if opening_index == -1:
         return None
     depth = 0
-    active_string_delimiter: str | None = None
-    previous_character = ""
-    for each_position in range(opening_index, len(content)):
-        character = content[each_position]
-        if active_string_delimiter is not None:
-            if character == active_string_delimiter and previous_character != "\\":
-                active_string_delimiter = None
-            previous_character = character
-            continue
-        if character in ALL_JAVASCRIPT_STRING_DELIMITERS:
-            active_string_delimiter = character
-        elif character == "{":
+    for each_position in range(opening_index, len(blanked_content)):
+        character = blanked_content[each_position]
+        if character == "{":
             depth += 1
         elif character == "}":
             depth -= 1
             if depth == 0:
                 return content[opening_index : each_position + 1]
-        previous_character = character
     return content[opening_index:]
 
 
@@ -730,9 +841,10 @@ def check_js_resume_task_enumeration_coverage(
     proving the prose is a resume-task enumeration describing the sibling rather
     than incidental prose. This keeps the enumerated token set a superset of the
     sibling's dispatched task set. The resume body is read up to the next
-    top-level ``function`` declaration, and its backtick template-literal prose is
-    blanked before the dispatch scan so a ``task === '<name>'`` mention inside an
-    agent-prompt string is not counted as a dispatch branch. Each
+    top-level ``function`` declaration, and only a ``task === '<name>'`` whose
+    ``task`` keyword sits in structural code counts as a dispatch branch: a
+    ``task === '<name>'`` mention inside a string literal (any quote flavor), a
+    comment, or a regex literal is prose and is skipped. Each
     ``task === '<name>'`` branch name the resume body dispatches on that the
     enumeration omits is flagged.
 
@@ -757,8 +869,7 @@ def check_js_resume_task_enumeration_coverage(
         resume_body = _resume_function_body(content, role)
         if resume_body is None:
             continue
-        dispatch_source = _strip_string_literals(resume_body)
-        dispatched_tasks = set(TASK_DISPATCH_NAME_PATTERN.findall(dispatch_source))
+        dispatched_tasks = _dispatched_task_names(resume_body)
         for each_task in sorted(dispatched_tasks - enumerated_tasks):
             issues.append(
                 f"spawn{role}Agent() JSDoc resume enumeration omits the "
