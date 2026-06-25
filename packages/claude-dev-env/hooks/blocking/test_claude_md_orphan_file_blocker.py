@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ import claude_md_orphan_file_blocker as blocker_module
 from claude_md_orphan_file_blocker import (
     find_missing_filenames,
     find_referenced_filenames,
+    find_run_command_filenames,
 )
 from code_rules_annotations_length import check_unused_known_pytest_fixture_parameters
 from code_rules_naming_collection import check_collection_prefix
@@ -26,6 +28,8 @@ from hooks_constants.claude_md_orphan_file_blocker_constants import (
 HOOK_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "claude_md_orphan_file_blocker.py")
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+
+ONE_SECOND = 1.0
 
 TABLE_WITH_PRESENT_FILE = (
     "# example\n\n| File | What it does |\n|---|---|\n| `present_module.py` | Does a thing |\n"
@@ -610,6 +614,486 @@ def test_noise_directories_are_excluded_from_the_walk(tmp_path: Path):
     )
     missing_filenames = find_missing_filenames(content, claude_md_path.parent)
     assert missing_filenames == ["buried_target.py"]
+
+
+def test_blocks_write_when_run_command_invokes_absent_script(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "Check environment readiness before a run:\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe test_verification_ready.py\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert (
+        "test_verification_ready.py"
+        in output["hookSpecificOutput"]["permissionDecisionReason"]
+    )
+
+
+def test_allows_run_command_invoking_present_script(tmp_path: Path):
+    package_directory = tmp_path / "package_directory"
+    package_directory.mkdir()
+    (package_directory / "verify_ready.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path = package_directory / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe verify_ready.py\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_invoking_path_qualified_present_script_is_allowed(tmp_path: Path):
+    tools_directory = tmp_path / "tools"
+    tools_directory.mkdir()
+    (tools_directory / "verify_themes.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path = tools_directory / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        'C:\\Python313\\python.exe "tools/verify_themes.py" path/to/theme.apk\n'
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_find_run_command_filenames_reads_only_fenced_interpreter_lines():
+    content = (
+        "# example\n\n"
+        "Run `python live_module.py` inline — this prose line is not a fence.\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe absent_script.py --flag value\n"
+        "node tools/build_bundle.mjs\n"
+        "echo not-a-script\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "absent_script.py",
+        "build_bundle.mjs",
+    ]
+
+
+def test_run_command_outside_a_fence_is_not_inspected(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "Run `python absent_script.py` to check readiness.\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_orphan_reported_via_edit(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    (claude_md_path.parent / "kept.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path.write_text(
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe kept.py\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": str(claude_md_path),
+            "old_string": "C:\\Python313\\python.exe kept.py",
+            "new_string": "C:\\Python313\\python.exe removed_script.py",
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert (
+        "removed_script.py"
+        in output["hookSpecificOutput"]["permissionDecisionReason"]
+    )
+
+
+def test_run_command_interpreter_substring_in_word_is_not_matched():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "git stash  # WIP on parse.py\n"
+        "rush build  # then run verify.py\n"
+        "dash run.py\n"
+        "ssh deploy@host ./remote_install.sh\n"
+        "git stash list build.sh\n"
+        "rebash deploy.sh\n"
+        "fish shell run.sh\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
+def test_run_command_standalone_interpreter_still_matches():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python deploy.py\n"
+        "node build.mjs\n"
+        "C:\\Python313\\python.exe verify_ready.py\n"
+        "bash setup.sh\n"
+        "sh install.sh\n"
+        "node tools/build_bundle.mjs\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "deploy.py",
+        "build.mjs",
+        "verify_ready.py",
+        "setup.sh",
+        "install.sh",
+        "build_bundle.mjs",
+    ]
+
+
+def test_run_command_prose_mentioning_interpreter_and_script_yields_nothing():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python entrypoint crashed inside order_handler.py during startup\n"
+        "python: see config.py for details\n"
+        "node --version  # build.mjs is the entry\n"
+        "python is great; edit build.py later\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
+def test_run_command_invokes_absent_script_is_not_blocked_when_prose(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "python entrypoint crashed inside order_handler.py during startup\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_with_module_flag_and_value_still_matches():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python -m pytest tests/test_foo.py\n"
+        "python script.py --flag value\n"
+        "C:\\Python313\\python.exe \"tools/verify_themes.py\" path/to/theme.apk\n"
+        "node tools/build_bundle.mjs\n"
+        "pwsh build.ps1\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "test_foo.py",
+        "script.py",
+        "verify_themes.py",
+        "build_bundle.mjs",
+        "build.ps1",
+    ]
+
+
+def test_run_command_single_valueless_flag_before_path_captures_full_basename():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "pwsh -File scripts/check.ps1\n"
+        "python3 -u app.py\n"
+        "python -u verify_ready.py\n"
+        "bash -c deploy.sh\n"
+        "node --experimental-vm-modules tools/build.mjs\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "check.ps1",
+        "app.py",
+        "verify_ready.py",
+        "deploy.sh",
+        "build.mjs",
+    ]
+
+
+def test_allows_run_command_with_valueless_flag_invoking_present_script(tmp_path: Path):
+    scripts_directory = tmp_path / "scripts"
+    scripts_directory.mkdir()
+    (scripts_directory / "check.ps1").write_text("Write-Host ok\n", encoding="utf-8")
+    claude_md_path = scripts_directory / "CLAUDE.md"
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "pwsh -File scripts/check.ps1\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_script_valued_flag_does_not_shadow_real_script():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "node -r ./reg.js app.js\n"
+        "node --require setup.js main.js\n"
+        "node --import ./loader.mjs entry.mjs\n"
+        "node --loader ts-node/esm runner.ts\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "app.js",
+        "main.js",
+        "entry.mjs",
+        "runner.ts",
+    ]
+
+
+def test_allows_run_command_with_script_valued_flag_invoking_present_script(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    (claude_md_path.parent / "app.js").write_text("console.log('ok');\n", encoding="utf-8")
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "node -r ./reg.js app.js\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_chained_commands_each_contribute_their_basename():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python deploy.py && node build.mjs\n"
+        "python first.py; python second.py\n"
+        "python upstream.py | python downstream.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "deploy.py",
+        "build.mjs",
+        "first.py",
+        "second.py",
+        "upstream.py",
+        "downstream.py",
+    ]
+
+
+def test_run_command_commented_line_inside_fence_is_skipped():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "# python deploy.py   (commented out)\n"
+        "  # node build.mjs\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
+def test_run_command_with_relative_path_source_is_exempt():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python ../shared/preflight.py --check\n"
+        "python ../../tools/deploy.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
+def test_run_command_relative_prose_region_exempts_bare_basename_command():
+    content = (
+        "# example\n\n"
+        "## Shared scripts (referenced from `../_shared/scripts/`)\n\n"
+        "```\n"
+        "python preflight.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
+def test_run_command_relative_prose_region_exempts_run_command_via_write(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Shared scripts\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "```\n"
+        "python preflight.py\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_relative_prose_does_not_exempt_distant_later_fence():
+    content = (
+        "# example\n\n"
+        "## Shared scripts\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "```\n"
+        "python preflight.py\n"
+        "```\n\n"
+        "## Local scripts\n\n"
+        "```\n"
+        "python local_orphan.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == ["local_orphan.py"]
+
+
+def test_run_command_relative_prose_does_not_exempt_second_fence_under_same_heading():
+    content = (
+        "# example\n\n"
+        "## Shared scripts\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "```\n"
+        "python preflight.py\n"
+        "```\n\n"
+        "Run the local check below:\n\n"
+        "```\n"
+        "python local_orphan.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == ["local_orphan.py"]
+
+
+def test_run_command_long_multi_flag_no_script_line_returns_quickly():
+    fenced_flags = " ".join(f"-x{each_index}" for each_index in range(200))
+    content = "# example\n\n```\n" f"python {fenced_flags} endingword" "\n```\n"
+    started_at = time.perf_counter()
+    found_filenames = find_run_command_filenames(content)
+    elapsed_seconds = time.perf_counter() - started_at
+    assert found_filenames == []
+    assert elapsed_seconds < ONE_SECOND
+
+
+def test_run_command_inline_trailing_comment_is_not_scanned():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python real.py  # was: python old_build.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == ["real.py"]
+
+
+def test_run_command_relative_path_exempt_while_bare_orphan_still_blocks(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "python ../shared/preflight.py --check\n"
+        "python absent_script.py\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "absent_script.py" in output["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "preflight.py" not in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_run_command_orphan_preexisting_on_untouched_line_is_allowed(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    (claude_md_path.parent / "kept.py").write_text("x = 1\n", encoding="utf-8")
+    claude_md_path.write_text(
+        "# example\n\n"
+        "A prose paragraph with a typoo to fix.\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "C:\\Python313\\python.exe kept.py\n"
+        "C:\\Python313\\python.exe already_orphan_script.py\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": str(claude_md_path),
+            "old_string": "A prose paragraph with a typoo to fix.",
+            "new_string": "A prose paragraph with a typo fixed.",
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
 
 
 def test_blocker_module_has_no_collection_parameter_naming_violations():
