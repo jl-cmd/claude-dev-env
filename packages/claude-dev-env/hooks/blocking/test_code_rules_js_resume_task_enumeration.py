@@ -643,6 +643,60 @@ def should_not_flag_single_hyphenated_word_descriptive_parenthetical() -> None:
         assert check_js_resume_task_enumeration_coverage(source, _MJS_PATH) == []
 
 
+def should_flag_real_dispatch_when_false_resume_header_precedes_it_in_template_literal() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  const doc = `see function resumeVerifierAgent( ... ) below`\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, context)\n"
+        "  }\n"
+        "  if (task === 'real-leak') {\n"
+        "    return doLeak(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "real-leak" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
+def should_flag_real_dispatch_when_false_resume_header_precedes_it_in_comment() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  // function resumeVerifierAgent( is documented below\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, context)\n"
+        "  }\n"
+        "  if (task === 'real-leak') {\n"
+        "    return doLeak(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "real-leak" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
 def should_not_flag_shipped_converge_workflow() -> None:
     converge_source = _SHIPPED_CONVERGE_MJS.read_text(encoding="utf-8")
     issues = check_js_resume_task_enumeration_coverage(

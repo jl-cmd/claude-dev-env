@@ -797,7 +797,7 @@ def _resume_function_body(content: str, role: str) -> str | None:
     header_pattern = re.compile(
         r"(?:async\s+)?function\s+resume" + re.escape(role) + r"Agent\s*\("
     )
-    header_match = header_pattern.search(content)
+    header_match = header_pattern.search(_blank_non_code_regions(content))
     if header_match is None:
         return None
     bounded_content = content[: _next_top_level_function_index(content, header_match.end())]
