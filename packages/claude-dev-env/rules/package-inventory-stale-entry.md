@@ -8,6 +8,14 @@ A package directory that documents its own files in a `README.md` Layout table o
 
 When you create a new production file in such a directory, add an entry naming it — a row in the `README.md` table, a bullet in the `CLAUDE.md` list — in the same change. The entry names the file in backticks and says what it does.
 
+## Companion: keep the Purpose/scope sentence in step with the new responsibility
+
+The file-list entry is the deterministic slice the gate enforces. A package inventory also carries a free-prose scope sentence — a `## Purpose` paragraph in a `CLAUDE.md`, a one-line summary the parent directory's inventory gives each subdirectory — that names the responsibilities the package's modules cover. When the new module adds a responsibility the scope sentence omits, the same change broadens that sentence to name it, and updates the parent inventory's one-line summary of this subdirectory to match.
+
+Take a `files/` package whose `Purpose` reads "Holds helpers for downloading files over HTTP and extracting zip archives" and whose parent summary reads "file download, extraction, and path config helpers". Once a `force_remove.py` module that removes a directory tree sits beside the download helpers, both sentences name a narrower responsibility set than the directory holds. The required file-list bullet alone leaves that gap open. Broaden the `Purpose` sentence to name directory removal, and broaden the parent summary to match, in the same change that adds the module and its bullet.
+
+This scope-sentence slice is free prose: a hook cannot derive a module's responsibility from its filename, so the gate leaves it to judgment. It is the judgment companion to the file-list entry the gate enforces, and it belongs in the same change. This is the `category-o-docstring-vs-impl-drift` (O8) orphaned-doc-claim shape applied to a package inventory: a behavior change orphans a scope claim the prose still makes.
+
 ## What the gate checks
 
 The `package_inventory_stale_blocker.py` hook runs on every Write whose target is a new file (a path not yet on disk). It:
