@@ -784,6 +784,59 @@ def test_run_command_standalone_interpreter_still_matches():
     ]
 
 
+def test_run_command_prose_mentioning_interpreter_and_script_yields_nothing():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python entrypoint crashed inside order_handler.py during startup\n"
+        "python: see config.py for details\n"
+        "node --version  # build.mjs is the entry\n"
+        "python is great; edit build.py later\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
+def test_run_command_invokes_absent_script_is_not_blocked_when_prose(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "python entrypoint crashed inside order_handler.py during startup\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_with_module_flag_and_value_still_matches():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python -m pytest tests/test_foo.py\n"
+        "python script.py --flag value\n"
+        "C:\\Python313\\python.exe \"tools/verify_themes.py\" path/to/theme.apk\n"
+        "node tools/build_bundle.mjs\n"
+        "pwsh build.ps1\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "test_foo.py",
+        "script.py",
+        "verify_themes.py",
+        "build_bundle.mjs",
+        "build.ps1",
+    ]
+
+
 def test_run_command_with_relative_path_source_is_exempt():
     content = (
         "# example\n\n"
