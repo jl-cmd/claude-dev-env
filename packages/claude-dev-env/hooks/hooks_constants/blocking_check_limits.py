@@ -79,6 +79,9 @@ ALL_DOCSTRING_SPAN_RANGE_BODY_CALLEE_NAMES: tuple[str, ...] = (
     "_scope_violations_to_changed_lines",
     "_scope_violations",
 )
+MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES: int = 5
+MINIMUM_CONSTANT_FAMILY_MEMBERS_FOR_CARDINAL_CHECK: int = 2
+MINIMUM_DOCSTRING_FAMILY_OVERLAP_FOR_CARDINAL_CHECK: int = 2
 ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS: frozenset[str] = frozenset(
     {
         "UPPER_SNAKE_CASE",
