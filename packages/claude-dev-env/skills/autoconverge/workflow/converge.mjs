@@ -128,27 +128,32 @@ function resumeGitAgent(agentId, task, head) {
 
 /**
  * Spawn the fixer clean-coder agent for one fix batch, establishing its role and
- * the PR coordinates so each later resume (verify-commit, commit, and recovery)
- * continues the same session. The spawn makes no edits — the verify-commit resume
- * is the first step that touches the working tree. Returns the runtime agent id
- * so the resume calls target the live session; a runtime without resume support
- * returns no agent id, and each resume falls back to a fresh spawn.
+ * the PR coordinates so each later resume (commit and recovery edits) continues
+ * the same session. The fixer never verifies — a separate verifier agent grades
+ * the working tree, so the verdict comes from a different session than the one
+ * that commits and recovers, mirroring the repair and conflict paths. The spawn
+ * makes no edits — the first recovery resume is the earliest step that touches
+ * the working tree. Returns the runtime agent id so the resume calls target the
+ * live session; a runtime without resume support returns no agent id, and each
+ * resume falls back to a fresh spawn.
  * @param {string} head PR HEAD SHA
  * @param {Array<object>} findings the findings to fix
  * @param {string} sourceLabel short description of where the findings came from
- * @param {string} task initial task name
  * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
  */
-async function spawnFixerAgent(head, findings, sourceLabel, task) {
+async function spawnFixerAgent(head, findings, sourceLabel) {
   const result = await convergeAgent(
-    `You are the fixer agent for ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The edit step left fixes in the working tree, uncommitted. Across this session you run a sequence of steps (the first is ${task}): verify the working-tree fixes, commit and push them, and recover when a verify objection or a commit-gate block needs another edit. Make NO edits in this first turn — confirm only that the working tree is on the PR branch at HEAD ${head} with uncommitted fixes present, then wait for the verify-commit instructions. Reply READY.`,
+    `You are the fixer agent for ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The edit step left fixes in the working tree, uncommitted. Across this session you run a sequence of steps: commit and push the working-tree fixes once a separate verifier passes them, and recover when a verify objection or a commit-gate block needs another edit. A separate verifier agent grades the working tree, so you never verify your own edits. Make NO edits in this first turn — confirm only that the working tree is on the PR branch at HEAD ${head} with uncommitted fixes present, then wait for the next step's instructions. Reply READY.`,
     { label: `fixer:${sourceLabel}`, phase: 'Converge', agentType: 'clean-coder' },
   )
   return result?.agentId
 }
 
 /**
- * Resume the fixer agent for verify-commit or recovery.
+ * Resume the fixer agent for commit or recovery edits. The fixer never verifies;
+ * a separate verifier agent emits the verdict, so commit, verify-recover, and
+ * commit-recover all run on the editing session while the verdict that gates the
+ * commit comes from a different session.
  * @param {string} agentId the agent id from spawnFixerAgent
  * @param {string} task the short task name
  * @param {object} context task-specific context
@@ -156,18 +161,6 @@ async function spawnFixerAgent(head, findings, sourceLabel, task) {
  */
 function resumeFixerAgent(agentId, task, context) {
   const label = `fixer:${context.sourceLabel}`
-  if (task === 'verify-commit') {
-    const findingsBlock = renderFindingsBlock(context.findings)
-    return convergeAgent(
-      `You are the VERIFY step for ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree, uncommitted. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
-        `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
-        `Steps:\n` +
-        `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
-        `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
-        `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
-      { label, phase: 'Converge', agentType: 'code-verifier', resume: agentId },
-    )
-  }
   if (task === 'commit') {
     return convergeAgent(
       `You are the COMMIT step for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree.\n\n` +
@@ -179,6 +172,20 @@ function resumeFixerAgent(agentId, task, context) {
         `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
         `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
       { label, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    )
+  }
+  if (task === 'commit-recover') {
+    const attempt = context.attempt || 1
+    return convergeAgent(
+      `You are the COMMIT-RECOVERY fixer (attempt ${attempt}) for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. A prior commit step was blocked by a commit-time hook or gate that requires a code change. A separate verify step then a separate commit step run after you.\n\n` +
+        `The blocking hook or gate said:\n${context.blockerDetail}\n\n` +
+        `Rules:\n` +
+        `- Confirm the working tree is on the PR branch at HEAD ${context.head} with the prior fixes still present.\n` +
+        `- Fix ONLY the violation named above, test-first (failing test, then minimum code to pass) per CODE_RULES. Do not re-open the original findings, and do not touch GitHub review threads — the edit step already handled those.\n` +
+        `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
+        `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.` +
+        PRE_COMMIT_GATE_STEP,
+      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
     )
   }
   const objection = context.objection || VERIFY_OBJECTION_FALLBACK
@@ -197,77 +204,41 @@ function resumeFixerAgent(agentId, task, context) {
 }
 
 /**
- * Joined fixer recovery loop: resume the fixer agent for verify+commit, extract the verdict,
- * and recover when the verdict fails or the commit is blocked.
+ * Joined fixer recovery loop: a separate verifier agent grades the working-tree
+ * fixes while the fixer session only recovers and commits, so the verdict that
+ * gates the commit comes from a different session than the one that edits and
+ * pushes — the same editor/verifier separation the repair and conflict paths
+ * use. The verify step routes through verifyWithRecovery (verify on the verifier,
+ * recover on the fixer); the commit step routes through commitWithRecovery
+ * (commit and commit-recover on the fixer, re-verify on the verifier). A failed
+ * verdict returns the unchanged HEAD so the round reads as not-progressed.
  * @param {string} fixerAgentId the fixer agent id from spawnFixerAgent
+ * @param {string} verifierId the verifier agent id from spawnVerifierAgent
  * @param {string} head PR HEAD SHA
  * @param {Array<object>} findings the findings to fix
  * @param {string} sourceLabel short description of where the findings came from
  * @returns {Promise<object>} FIX_SCHEMA result
  */
-async function fixerWithRecovery(fixerAgentId, head, findings, sourceLabel) {
-  const verifyTranscript = await resumeFixerAgent(fixerAgentId, 'verify-commit', { head, findings, sourceLabel })
-  const verdict = extractVerdict(verifyTranscript)
-  if (verdict && verdict.all_pass === true) {
-    const commitResult = await resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel })
-    if (commitNeedsCodeRecovery(commitResult)) {
-      let attempt = 0
-      let recoveryResult = commitResult
-      while (commitNeedsCodeRecovery(recoveryResult) && attempt < FIX_RECOVERY_MAX_ATTEMPTS) {
-        attempt += 1
-        const recoverEdit = await resumeFixerAgent(fixerAgentId, 'verify-recover', {
-          head, findings, sourceLabel, objection: recoveryResult.blockerDetail, attempt,
-        })
-        if (recoverEdit?.edited !== true) break
-        const reVerify = await resumeFixerAgent(fixerAgentId, 'verify-commit', { head, findings, sourceLabel })
-        const reVerdict = extractVerdict(reVerify)
-        if (!reVerdict || reVerdict.all_pass !== true) break
-        recoveryResult = await resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel })
-      }
-      return recoveryResult
-    }
-    return commitResult
-  }
-  let attempt = 0
-  let lastTranscript = verifyTranscript
-  while ((!verdict || verdict.all_pass !== true) && attempt < FIX_RECOVERY_MAX_ATTEMPTS) {
-    attempt += 1
-    const objection = extractVerifyObjection(lastTranscript)
-    const recoverEdit = await resumeFixerAgent(fixerAgentId, 'verify-recover', {
-      head, findings, sourceLabel, objection, attempt,
-    })
-    if (recoverEdit?.edited !== true) break
-    lastTranscript = await resumeFixerAgent(fixerAgentId, 'verify-commit', { head, findings, sourceLabel })
-    const freshVerdict = extractVerdict(lastTranscript)
-    if (freshVerdict && freshVerdict.all_pass === true) {
-      const commitResult = await resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel })
-      if (commitNeedsCodeRecovery(commitResult)) {
-        let commitAttempt = 0
-        let commitRecovery = commitResult
-        while (commitNeedsCodeRecovery(commitRecovery) && commitAttempt < FIX_RECOVERY_MAX_ATTEMPTS) {
-          commitAttempt += 1
-          const commitEdit = await resumeFixerAgent(fixerAgentId, 'verify-recover', {
-            head, findings, sourceLabel, objection: commitRecovery.blockerDetail, attempt: commitAttempt,
-          })
-          if (commitEdit?.edited !== true) break
-          const reVerify2 = await resumeFixerAgent(fixerAgentId, 'verify-commit', { head, findings, sourceLabel })
-          const reVerdict2 = extractVerdict(reVerify2)
-          if (!reVerdict2 || reVerdict2.all_pass !== true) break
-          commitRecovery = await resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel })
-        }
-        return commitRecovery
-      }
-      return commitResult
+async function fixerWithRecovery(fixerAgentId, verifierId, head, findings, sourceLabel) {
+  const verifyTranscript = await verifyWithRecovery({
+    runVerify: () => resumeVerifierAgent(verifierId, 'fix-verify', { head, findings, sourceLabel }),
+    runRecoverEdit: (objection, attempt) => resumeFixerAgent(fixerAgentId, 'verify-recover', { head, findings, sourceLabel, objection, attempt }),
+  })
+  if (!verdictPassed(verifyTranscript)) {
+    return {
+      newSha: head,
+      pushed: false,
+      resolvedWithoutCommit: false,
+      summary: `verify step did not pass the working-tree fixes for ${findings.length} finding(s) — not committing`,
+      blockedNeedingEdit: false,
+      blockerDetail: '',
     }
   }
-  return {
-    newSha: head,
-    pushed: false,
-    resolvedWithoutCommit: false,
-    summary: `verify step did not pass the working-tree fixes for ${findings.length} finding(s) — not committing`,
-    blockedNeedingEdit: false,
-    blockerDetail: '',
-  }
+  return commitWithRecovery({
+    runCommit: () => resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel }),
+    runVerify: () => resumeVerifierAgent(verifierId, 'fix-verify', { head, findings, sourceLabel }),
+    runRecoverEdit: (detail, attempt) => resumeFixerAgent(fixerAgentId, 'commit-recover', { head, findings, sourceLabel, blockerDetail: detail, attempt }),
+  })
 }
 
 /**
@@ -447,6 +418,18 @@ async function spawnVerifierAgent() {
  */
 function resumeVerifierAgent(agentId, task, context) {
   const label = `verifier:${task}`
+  if (task === 'fix-verify') {
+    const findingsBlock = renderFindingsBlock(context.findings)
+    return convergeAgent(
+      `You are the VERIFY step for ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree, uncommitted. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+        `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
+        `Steps:\n` +
+        `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
+        `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
+        `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
+      { label, phase: 'Converge', agentType: 'code-verifier', resume: agentId },
+    )
+  }
   if (task === 'repair-verify') {
     const failureBlock = context.failures.length
       ? context.failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
@@ -930,15 +913,6 @@ function parseLastVerdictFence(transcript) {
 }
 
 /**
- * Extract the full verdict object from a transcript carrying a verdict fence.
- * @param {string|null|undefined} transcript the agent transcript text
- * @returns {object|null} the parsed verdict with all_pass, findings, and manifest_sha256, or null
- */
-function extractVerdict(transcript) {
-  return parseLastVerdictFence(transcript)
-}
-
-/**
  * Decide whether a workflow code-verifier transcript ended in a passing
  * verdict. Reads the LAST ```verdict ...``` fenced JSON block via the shared
  * parser and returns true only when it parses to an object with all_pass true.
@@ -1055,7 +1029,7 @@ function commitNeedsCodeRecovery(commitResult) {
  * resolve-head agent or a malformed result yields a falsy SHA; spawning lenses
  * against it interpolates the literal string 'HEAD undefined' into their prompts
  * and produces a spurious clean verdict on a non-existent commit.
- * @param {string|null|undefined} resolvedHead the SHA from resolveHead()
+ * @param {string|null|undefined} resolvedHead the SHA from the git-utility agent resume for 'resolve-head'
  * @returns {boolean} true only when the SHA is a non-empty string
  */
 function isResolvedHeadUsable(resolvedHead) {
@@ -1068,7 +1042,7 @@ function isResolvedHeadUsable(resolvedHead) {
  * not-conflicting so the run proceeds straight to the bug checks rather than
  * force-pushing a rebase on a verdict that does not exist — a transient check
  * failure must never trigger a destructive rebase.
- * @param {object|null|undefined} mergeState the checkMergeConflicts result
+ * @param {object|null|undefined} mergeState the git-utility agent resume result for 'check-merge-conflicts'
  * @returns {boolean} true only when the check reported conflicting:true
  */
 function isMergeConflicting(mergeState) {
@@ -1357,14 +1331,16 @@ async function verifyWithRecovery({ runVerify, runRecoverEdit }) {
 }
 
 /**
- * Fix lens: edit (clean-coder, no commit) -> verify (code-verifier emits a
- * verdict fence binding the working tree) -> commit (clean-coder, one commit +
- * push, no edits). Splitting the single editing-and-committing agent lets a
- * workflow code-verifier produce the verdict the verified-commit gate requires,
- * which the SubagentStop minter cannot mint for workflow-spawned agents. When
- * verification fails (or the edit step stalled with no thread to resolve), the
- * commit step is skipped and the unchanged HEAD is returned so the round reads
- * as not-progressed.
+ * Fix lens: edit (clean-coder, no commit) -> verify (a separate code-verifier
+ * emits a verdict fence binding the working tree) -> commit (clean-coder, one
+ * commit + push, no edits). The verifier is a distinct persistent group from the
+ * fixer, so the verdict that gates the commit comes from a different session than
+ * the one that edits and pushes — the same editor/verifier separation the repair
+ * and conflict paths use, and the separation a workflow code-verifier needs to
+ * produce the verdict the verified-commit gate requires, which the SubagentStop
+ * minter cannot mint for workflow-spawned agents. When verification fails (or the
+ * edit step stalled with no thread to resolve), the commit step is skipped and the
+ * unchanged HEAD is returned so the round reads as not-progressed.
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped findings across all lenses
  * @param {string} sourceLabel short description of where the findings came from
@@ -1383,8 +1359,9 @@ async function applyFixes(head, findings, sourceLabel) {
       blockerDetail: '',
     }
   }
-  const fixerAgentId = await spawnFixerAgent(head, findings, sourceLabel, 'verify-commit')
-  return fixerWithRecovery(fixerAgentId, head, findings, sourceLabel)
+  const fixerAgentId = await spawnFixerAgent(head, findings, sourceLabel)
+  const verifierId = await spawnVerifierAgent()
+  return fixerWithRecovery(fixerAgentId, verifierId, head, findings, sourceLabel)
 }
 
 /**
@@ -1561,7 +1538,7 @@ function standardsDeferralNote(findingsCount, hardeningPrOpened) {
  * @param {string} sourceLabel short description of where the findings came from
  * @returns {Promise<object>} `{ hardeningPrOpened }` — true only when the hardening PR was opened this round
  */
-async function spawnStandardsFollowUp(head, findings, sourceLabel, generalId) {
+async function spawnStandardsFollowUp(head, findings, sourceLabel) {
   const codeEditorId = await spawnCodeEditorAgent()
   const editResult = await resumeCodeEditorAgent(codeEditorId, 'standards-edit', { head, findings, sourceLabel })
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
@@ -1647,7 +1624,7 @@ while (iterations < CONFIG.maxIterations) {
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
       const generalId = await spawnGeneralUtilityAgent()
-      const standardsOutcome = await spawnStandardsFollowUp(head, findings, 'converge-round', generalId)
+      const standardsOutcome = await spawnStandardsFollowUp(head, findings, 'converge-round')
       standardsNote = standardsDeferralNote(findings.length, standardsOutcome?.hardeningPrOpened === true)
       const auditResult = await resumeGeneralUtilityAgent(generalId, 'post-clean-audit', { head })
       if (!auditResult?.posted) {
@@ -1704,8 +1681,7 @@ while (iterations < CONFIG.maxIterations) {
     if (copilotOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
-        const copilotGeneralId = await spawnGeneralUtilityAgent()
-        const standardsOutcome = await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot', copilotGeneralId)
+        const standardsOutcome = await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot')
         standardsNote = standardsDeferralNote(copilotOutcome.findings.length, standardsOutcome?.hardeningPrOpened === true)
         copilotDown = false
         copilotNote = null

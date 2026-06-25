@@ -294,11 +294,11 @@ test('every verify step calls buildVerdictFenceSteps, uses code-verifier, and fo
   }
 });
 
-test('resumeFixerAgent verify-commit path uses code-verifier and calls buildVerdictFenceSteps', () => {
+test('resumeFixerAgent never verifies its own session — verification belongs to the separate verifier', () => {
   const fixerBody = lensPromptBody('resumeFixerAgent');
-  assert.match(fixerBody, /buildVerdictFenceSteps\(/, 'expected resumeFixerAgent to call buildVerdictFenceSteps');
-  assert.match(fixerBody, /agentType:\s*'code-verifier'/, 'expected resumeFixerAgent to use code-verifier');
-  assert.match(fixerBody, /do no edits|make no edits|not edit|no file edits/i, 'expected resumeFixerAgent to forbid edits');
+  assert.doesNotMatch(fixerBody, /buildVerdictFenceSteps\(/, 'expected the fixer to not emit a verdict fence — the separate verifier does');
+  assert.doesNotMatch(fixerBody, /agentType:\s*'code-verifier'/, 'expected the fixer session to be clean-coder only');
+  assert.match(fixerBody, /agentType:\s*'clean-coder'/, 'expected the fixer to use clean-coder for its commit and recovery edits');
 });
 
 test('resumeVerifierAgent uses --manifest-hash-for-branch with the hardening branch and forbids edits', () => {
@@ -315,15 +315,14 @@ test('resumeVerifierAgent uses --manifest-hash-for-branch with the hardening bra
   );
 });
 
-test('resumeVerifierAgent and resumeFixerAgent pass PR coordinates to buildVerdictFenceSteps', () => {
-  for (const verifyFunctionName of ['resumeFixerAgent', 'resumeVerifierAgent']) {
-    const verifyBody = lensPromptBody(verifyFunctionName);
-    assert.match(
-      verifyBody,
-      /buildVerdictFenceSteps\(/,
-      `expected ${verifyFunctionName} to call buildVerdictFenceSteps`,
-    );
-  }
+test('resumeVerifierAgent passes PR coordinates to buildVerdictFenceSteps for the fix-verify and repair-verify tasks', () => {
+  const verifyBody = lensPromptBody('resumeVerifierAgent');
+  assert.match(verifyBody, /task === 'fix-verify'/, 'expected resumeVerifierAgent to carry the fix-path verify task');
+  assert.match(
+    verifyBody,
+    /buildVerdictFenceSteps\(input\.owner, input\.repo, input\.prNumber\)/,
+    'expected resumeVerifierAgent to pass PR coordinates to buildVerdictFenceSteps',
+  );
 });
 
 test('the commit path in resumeFixerAgent forbids further edits and uses clean-coder', () => {
@@ -663,7 +662,6 @@ const newSpawnResumeHelpers = [
   { name: 'resumeGeneralUtilityAgent', isAsync: false },
   { name: 'spawnConvergenceCheckAgent', isAsync: true },
   { name: 'resumeConvergenceCheckAgent', isAsync: false },
-  { name: 'extractVerdict', isAsync: false },
 ];
 
 for (const { name, isAsync } of newSpawnResumeHelpers) {
@@ -823,9 +821,4 @@ test('verdictPassed calls parseLastVerdictFence', () => {
 test('extractVerifyObjection calls parseLastVerdictFence', () => {
   const objectionBody = lensPromptBody('extractVerifyObjection');
   assert.match(objectionBody, /parseLastVerdictFence\(/, 'expected extractVerifyObjection to call the shared parser');
-});
-
-test('extractVerdict calls parseLastVerdictFence', () => {
-  const verdictBody = lensPromptBody('extractVerdict');
-  assert.match(verdictBody, /parseLastVerdictFence\(/, 'expected extractVerdict to call the shared parser');
 });
