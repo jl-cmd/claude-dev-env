@@ -37,6 +37,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_PYTHON_EXTENSIONS,
     LOGGING_FSTRING_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
+    MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT,
     NOT_INSIDE_TYPE_CHECKING_BLOCK,
     TRIPLE_DOUBLE_QUOTE_DELIMITER,
     TRIPLE_QUOTE_PARITY_DIVISOR,
@@ -226,8 +227,10 @@ def _printf_token_log_call_line(
 
     Returns:
         The 1-based line number when ``node`` is a bare-name call to a format
-        logger whose first string-literal argument carries a printf token;
-        otherwise None.
+        logger that has at least one format argument after the message and
+        whose first string-literal argument carries a printf token; otherwise
+        None. A call with only the message and no format arguments never runs
+        ``.format(*args)``, so its token prints intact and is not flagged.
     """
     if not isinstance(node, ast.Call):
         return None
@@ -237,7 +240,7 @@ def _printf_token_log_call_line(
         or function_reference.id not in all_format_logger_names
     ):
         return None
-    if not node.args:
+    if len(node.args) < MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT:
         return None
     message_argument = node.args[0]
     if not isinstance(message_argument, ast.Constant) or not isinstance(
@@ -253,12 +256,16 @@ def check_logging_printf_tokens(content: str, file_path: str) -> list[str]:
     """Flag printf tokens in a str.format-logger (automation_logging) message.
 
     The ``shared_utils.automation_logging`` helpers (``log_info``, ``log_error``,
-    ...) format with ``str.format`` (``{}`` placeholders), so a printf-style
-    token such as ``%s`` in the message literal is never substituted: the
-    arguments are dropped and the literal token prints. The check fires only in a
-    file that imports one of those helpers from an ``automation_logging`` module,
-    and only for a bare-name call to such a helper whose first argument is a
-    string literal carrying a token. An attribute call (``logger.info``) or a
+    ...) format with ``str.format`` (``{}`` placeholders) only when format
+    arguments follow the message (``message.format(*args) if args else
+    message``), so a printf-style token such as ``%s`` in the message literal is
+    never substituted: the format arguments are dropped and the literal token
+    prints. The check fires only in a file that imports one of those helpers
+    from an ``automation_logging`` module, and only for a bare-name call to such
+    a helper that passes at least one format argument after the message and
+    whose first argument is a string literal carrying a token. A call with only
+    the message and no format arguments never runs ``.format``, so its token
+    prints intact and is left alone. An attribute call (``logger.info``) or a
     ``log_*`` helper from any other module formats ``%``-tokens correctly and is
     left alone. Test files are exempt so a test may exercise the malformed shape.
 
