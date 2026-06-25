@@ -42,6 +42,10 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_FORMAT_ISSUES,
     MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
+    ALL_DOCSTRING_SINGLE_LINE_SCOPE_PHRASES,
+    ALL_DOCSTRING_SPAN_RANGE_BODY_CALLEE_NAMES,
+    ALL_DOCSTRING_SPAN_SCOPE_OVERRIDE_PHRASES,
+    MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES,
     MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
@@ -1458,3 +1462,131 @@ def check_docstring_names_undefined_constant(content: str, file_path: str) -> li
             if len(issues) >= MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES:
                 return issues[:MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES]
     return issues[:MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES]
+
+
+def _args_entry_prose_by_argument(docstring_text: str) -> dict[str, str]:
+    docstring_lines = docstring_text.splitlines()
+    args_section_index = _find_args_section_index(docstring_lines)
+    if args_section_index is None:
+        return {}
+    prose_by_argument: dict[str, list[str]] = {}
+    current_argument_name: str | None = None
+    entry_indent: int | None = None
+    for each_line in docstring_lines[args_section_index + 1:]:
+        stripped_line = each_line.strip()
+        if not stripped_line:
+            continue
+        if _is_docstring_terminating_section_header(stripped_line):
+            break
+        current_indent = len(each_line) - len(each_line.lstrip())
+        if current_indent == 0:
+            break
+        if entry_indent is None:
+            entry_indent = current_indent
+        if current_indent <= entry_indent:
+            entry_match = DOCSTRING_ARG_ENTRY_PATTERN.match(stripped_line)
+            if entry_match is not None:
+                current_argument_name = entry_match.group(1)
+                prose_by_argument[current_argument_name] = [stripped_line]
+                continue
+        if current_argument_name is not None:
+            prose_by_argument[current_argument_name].append(stripped_line)
+    return {
+        each_name: " ".join(each_lines).lower()
+        for each_name, each_lines in prose_by_argument.items()
+    }
+
+
+def _argument_prose_scopes_a_single_line(argument_prose: str) -> bool:
+    if any(
+        each_phrase in argument_prose for each_phrase in ALL_DOCSTRING_SPAN_SCOPE_OVERRIDE_PHRASES
+    ):
+        return False
+    return any(
+        each_phrase in argument_prose for each_phrase in ALL_DOCSTRING_SINGLE_LINE_SCOPE_PHRASES
+    )
+
+
+def _call_node_builds_two_argument_range(call_node: ast.Call) -> bool:
+    callee = call_node.func
+    return (
+        isinstance(callee, ast.Name)
+        and callee.id == "range"
+        and len(call_node.args) >= MINIMUM_TOKENS_FOR_DISPATCH_CALLEE
+    )
+
+
+def _function_body_scopes_a_span_by_intersection(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    builds_range_span = False
+    calls_span_scoper = False
+    for each_node in ast.walk(function_node):
+        if not isinstance(each_node, ast.Call):
+            continue
+        if _call_node_builds_two_argument_range(each_node):
+            builds_range_span = True
+        if _call_callee_name(each_node) in ALL_DOCSTRING_SPAN_RANGE_BODY_CALLEE_NAMES:
+            calls_span_scoper = True
+    return builds_range_span and calls_span_scoper
+
+
+def check_docstring_args_single_line_scope_vs_span(content: str, file_path: str) -> list[str]:
+    """Flag a docstring Args entry scoping a finding to one line over a span body.
+
+    The drift this catches: an ``Args:`` entry whose prose says a finding blocks
+    "only when its block-anchor line is among the changed lines" (a single named
+    line) while the function body builds a ``range(...)`` span over the finding's
+    source lines and routes it through a span-intersection scoper that blocks when
+    ANY line of the span is among the changed lines. The Args sentence claims a
+    narrower single-line scope than the body applies, so an edit touching a
+    non-anchor line of the span still blocks — contradicting the Args entry. This
+    is the deterministic slice of Category O6 docstring-vs-implementation drift
+    for an Args single-line scope claim disagreeing with a span-intersection body.
+
+    An entry is left alone when its prose says "any line of" / "any line in" its
+    span, since that wording matches the span body. The body is judged a
+    span-intersection scoper only when it both builds a two-argument ``range(...)``
+    and calls a known span scoper, so a body that scopes by a single line never
+    trips the check. Hook infrastructure is in scope here — the import-sort gate
+    that carries this drift class is itself a hook — and test files are exempt.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per function whose Args single-line scope claim disagrees with
+        its span-intersection body, capped at the module limit.
+    """
+    if is_test_file(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        docstring_text = _function_docstring_text(each_node)
+        if not docstring_text:
+            continue
+        if not _function_body_scopes_a_span_by_intersection(each_node):
+            continue
+        for each_argument, each_prose in _args_entry_prose_by_argument(docstring_text).items():
+            if not _argument_prose_scopes_a_single_line(each_prose):
+                continue
+            issues.append(
+                f"Line {each_node.lineno}: {each_node.name}() Args entry '{each_argument}' "
+                "scopes a finding to a single line ('anchor line is among the changed lines') "
+                "while the body builds a range() span and scopes by span intersection — an "
+                "edit touching any non-anchor line of the span still blocks; restate the Args "
+                "entry as 'any line of its span is among the changed lines' (Category O6 "
+                "docstring-vs-implementation drift)"
+            )
+            if len(issues) >= MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES:
+                return issues[:MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES]
+    return issues[:MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES]
