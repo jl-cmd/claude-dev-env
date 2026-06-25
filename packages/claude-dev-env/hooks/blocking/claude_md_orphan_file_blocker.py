@@ -10,10 +10,11 @@ root (the CLAUDE.md directory's parent, which covers the directory, its
 subdirectories, and its siblings), the doc points a reader at a file that is not
 there. This hook fires on Write, Edit, and MultiEdit targeting a file named
 ``CLAUDE.md`` and blocks the write when any such cell or run command names a file
-absent from the scan root. A table block whose own region declares an explicit
-relative-path source (a ``../`` token) documents files outside the subtree, so
-that block's rows are left alone — the exemption is scoped to the block, not the
-whole file.
+absent from the scan root. A table block or a run-command fence whose own region
+declares an explicit relative-path source (a ``../`` token, in the rows/fence or
+the prose that introduces it) documents files outside the subtree, so that block's
+rows or that fence's commands are left alone — the exemption is scoped to the
+region, not the whole file.
 """
 
 import json
@@ -220,10 +221,13 @@ def _script_basename_from_token(script_token: str) -> str | None:
 
     A path-qualified script keeps only its final segment, so ``tools/build_bundle.mjs``
     yields ``build_bundle.mjs`` — the basename the directory file would match. A
-    script named by an explicit relative-path source (a ``../`` token, as in
-    ``../shared/preflight.py``) lives outside the subtree by design, so it is exempt
-    and yields None, mirroring the table-cell ``../`` exemption. A token whose
-    basename carries no recognized script extension yields None.
+    script named by an explicit relative-path source (a ``../`` token in the token
+    itself, as in ``../shared/preflight.py``) lives outside the subtree by design, so
+    it is exempt and yields None. This token-scoped ``../`` check is one of two
+    relative-path exemptions: ``find_run_command_filenames`` also skips a whole fence
+    whose introducing prose region declares a ``../`` source, which is the
+    region-scoped counterpart to the table-cell exemption. A token whose basename
+    carries no recognized script extension yields None.
 
     Args:
         script_token: One script path captured from an interpreter invocation.
@@ -282,6 +286,11 @@ def find_run_command_filenames(content: str) -> list[str]:
     chains several invocations with a shell separator contributes each one. A line
     outside any fence is prose, not a live command, and contributes nothing — an
     inline ``python x.py`` in a sentence is documentation, not a runnable contract.
+    A fence whose introducing region declares an explicit relative-path source (a
+    ``../`` token in the prose since the most recent heading) documents commands
+    that run scripts in a sibling tree, so that fence's run commands are skipped —
+    mirroring the region-scoped table-cell ``../`` exemption, and scoped to that
+    region's fence, not a fence under a later heading.
 
     Args:
         content: The CLAUDE.md content being written.
@@ -291,14 +300,24 @@ def find_run_command_filenames(content: str) -> list[str]:
         duplicates preserved.
     """
     run_command_filenames: list[str] = []
+    pending_region: list[str] = []
     is_inside_code_fence = False
+    is_region_relative_path_sourced = False
     for each_line in content.splitlines():
         if CODE_FENCE_PATTERN.match(each_line) is not None:
+            if not is_inside_code_fence:
+                is_region_relative_path_sourced = _declares_relative_path_source(
+                    "\n".join(pending_region)
+                )
             is_inside_code_fence = not is_inside_code_fence
             continue
-        if not is_inside_code_fence:
+        if is_inside_code_fence:
+            if not is_region_relative_path_sourced:
+                run_command_filenames.extend(_run_command_filenames_in_line(each_line))
             continue
-        run_command_filenames.extend(_run_command_filenames_in_line(each_line))
+        if REGION_BOUNDARY_PATTERN.match(each_line) is not None:
+            pending_region = []
+        pending_region.append(each_line)
     return run_command_filenames
 
 

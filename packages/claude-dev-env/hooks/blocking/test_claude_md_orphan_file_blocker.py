@@ -921,6 +921,54 @@ def test_run_command_with_relative_path_source_is_exempt():
     assert find_run_command_filenames(content) == []
 
 
+def test_run_command_relative_prose_region_exempts_bare_basename_command():
+    content = (
+        "# example\n\n"
+        "## Shared scripts (referenced from `../_shared/scripts/`)\n\n"
+        "```\n"
+        "python preflight.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == []
+
+
+def test_run_command_relative_prose_region_exempts_run_command_via_write(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    content = (
+        "# example\n\n"
+        "## Shared scripts\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "```\n"
+        "python preflight.py\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_run_command_relative_prose_does_not_exempt_distant_later_fence():
+    content = (
+        "# example\n\n"
+        "## Shared scripts\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "```\n"
+        "python preflight.py\n"
+        "```\n\n"
+        "## Local scripts\n\n"
+        "```\n"
+        "python local_orphan.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == ["local_orphan.py"]
+
+
 def test_run_command_relative_path_exempt_while_bare_orphan_still_blocks(tmp_path: Path):
     claude_md_path = _isolated_claude_md_path(tmp_path)
     content = (
