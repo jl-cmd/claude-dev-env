@@ -440,11 +440,17 @@ def _agent_type_for_transcript(transcript_file: Path) -> str | None:
     """
     sidecar_file = transcript_file.with_suffix(AGENT_META_SIDECAR_SUFFIX)
     try:
-        sidecar_record = json.loads(sidecar_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        sidecar_text = sidecar_file.read_text(encoding="utf-8")
+    except FileNotFoundError:
         all_text_blocks = _assistant_text_blocks(transcript_file)
         if _last_verdict_record(all_text_blocks) is not None:
             return MINTING_AGENT_TYPE
+        return None
+    except OSError:
+        return None
+    try:
+        sidecar_record = json.loads(sidecar_text)
+    except json.JSONDecodeError:
         return None
     if not isinstance(sidecar_record, dict):
         return None

@@ -315,6 +315,33 @@ def test_resolves_type_from_verdict_when_sidecar_absent(
     assert resolved_subagent_type(payload) == MINTING_AGENT_TYPE
 
 
+def test_resolves_none_when_sidecar_corrupt_even_with_verdict_fence(
+    tmp_path: pathlib.Path,
+) -> None:
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    agent_transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": 'ok\n```verdict\n{"all_pass": true, "findings": []}\n```\n',
+                        }
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    sidecar_file = agent_transcript.with_name("agent-7.meta.json")
+    sidecar_file.write_text("{not valid json", encoding="utf-8")
+    payload = {"agent_transcript_path": str(agent_transcript)}
+    assert resolved_subagent_type(payload) is None
+
+
 def test_resolves_none_when_sidecar_absent_and_no_verdict_fence(
     tmp_path: pathlib.Path,
 ) -> None:
