@@ -52,7 +52,7 @@ RELATIVE_PATH_SOURCE_PATTERN: re.Pattern[str] = re.compile(r"\.\.[\\/]")
 
 RUN_COMMAND_SCRIPT_PATTERN: re.Pattern[str] = re.compile(
     r"(?<![\w.])(?:python(?:\.exe)?|python3|node|pwsh|powershell(?:\.exe)?|bash|sh|ruby|perl)"
-    r"\b(?:\s+-\S+(?:\s+[\w./\\-]+(?=\s+\S))?)*"
+    r"\b(?:\s+-\S+(?:\s+[\w./\\][\w./\\-]*(?=\s+\S))?)*"
     r"\s+[\"']?"
     r"([\w./\\-]+\.(?:py|mjs|js|ts|ps1|sh|rb|pl))\b"
 )

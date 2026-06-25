@@ -247,6 +247,38 @@ def _script_basename_from_token(script_token: str) -> str | None:
     return basename
 
 
+def _command_text_before_comment(fenced_line: str) -> str:
+    """Return the runnable portion of a fenced line, with any shell comment removed.
+
+    A shell comment starts at a ``#`` that begins a word — at the line's start or
+    after whitespace — outside any quoted span, and runs to end of line. The text
+    after it documents a removed or alternative command rather than a runnable
+    contract, so it is dropped: a full-line comment yields an empty string, and an
+    inline trailing comment (``python real.py  # was: python old.py``) yields only
+    the part before the ``#``. A ``#`` inside single or double quotes, or one
+    glued to a preceding non-space character, stays in the runnable text.
+
+    Args:
+        fenced_line: A single line drawn from inside a fenced code block.
+
+    Returns:
+        The line truncated at its first unquoted word-leading ``#``, or the whole
+        line when it carries no such comment marker.
+    """
+    open_quote_character = ""
+    previous_character = ""
+    for each_index, each_character in enumerate(fenced_line):
+        if open_quote_character:
+            if each_character == open_quote_character:
+                open_quote_character = ""
+        elif each_character in ("'", '"'):
+            open_quote_character = each_character
+        elif each_character == "#" and (each_index == 0 or previous_character.isspace()):
+            return fenced_line[:each_index]
+        previous_character = each_character
+    return fenced_line
+
+
 def _run_command_filenames_in_line(fenced_line: str) -> list[str]:
     """Return each script basename the interpreter invocations on this line name.
 
@@ -254,10 +286,11 @@ def _run_command_filenames_in_line(fenced_line: str) -> list[str]:
     script file; this returns that script's bare basename. A line that chains
     several invocations with a shell separator (``python deploy.py && node build.mjs``,
     ``python first.py; python second.py``) contributes each invocation's basename in
-    order. A shell comment line (its first non-whitespace character is ``#``)
-    documents a removed or alternative command rather than a runnable contract, so
-    it contributes nothing. A line with no interpreter invocation contributes
-    nothing.
+    order. A shell comment — a ``#`` that begins a word outside any quoted span,
+    whether it opens the line or trails a command (``python real.py  # was python
+    old.py``) — documents a removed or alternative command rather than a runnable
+    contract, so the text from that ``#`` to end of line contributes nothing. A line
+    with no interpreter invocation contributes nothing.
 
     Args:
         fenced_line: A single line drawn from inside a fenced code block.
@@ -266,10 +299,9 @@ def _run_command_filenames_in_line(fenced_line: str) -> list[str]:
         Each bare script basename the line's invocations name, in order; empty when
         the line is a comment or names no runnable script.
     """
-    if fenced_line.lstrip().startswith("#"):
-        return []
+    runnable_text = _command_text_before_comment(fenced_line)
     line_filenames: list[str] = []
-    for each_match in RUN_COMMAND_SCRIPT_PATTERN.finditer(fenced_line):
+    for each_match in RUN_COMMAND_SCRIPT_PATTERN.finditer(runnable_text):
         each_basename = _script_basename_from_token(each_match.group(1).strip())
         if each_basename is not None:
             line_filenames.append(each_basename)
@@ -287,10 +319,12 @@ def find_run_command_filenames(content: str) -> list[str]:
     outside any fence is prose, not a live command, and contributes nothing — an
     inline ``python x.py`` in a sentence is documentation, not a runnable contract.
     A fence whose introducing region declares an explicit relative-path source (a
-    ``../`` token in the prose since the most recent heading) documents commands
-    that run scripts in a sibling tree, so that fence's run commands are skipped —
-    mirroring the region-scoped table-cell ``../`` exemption, and scoped to that
-    region's fence, not a fence under a later heading.
+    ``../`` token in the prose accumulated since the prior fence or heading)
+    documents commands that run scripts in a sibling tree, so that fence's run
+    commands are skipped — mirroring the region-scoped table-cell ``../``
+    exemption. The region resets when a fence closes, so the exemption is scoped to
+    that fence alone: a second fence under the same heading, introduced by prose
+    that names no ``../`` source, is still inspected.
 
     Args:
         content: The CLAUDE.md content being written.
@@ -309,6 +343,8 @@ def find_run_command_filenames(content: str) -> list[str]:
                 is_region_relative_path_sourced = _declares_relative_path_source(
                     "\n".join(pending_region)
                 )
+            else:
+                pending_region = []
             is_inside_code_fence = not is_inside_code_fence
             continue
         if is_inside_code_fence:

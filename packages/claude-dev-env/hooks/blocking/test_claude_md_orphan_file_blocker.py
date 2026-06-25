@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,8 @@ from hooks_constants.claude_md_orphan_file_blocker_constants import (
 HOOK_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "claude_md_orphan_file_blocker.py")
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+
+ONE_SECOND = 1.0
 
 TABLE_WITH_PRESENT_FILE = (
     "# example\n\n| File | What it does |\n|---|---|\n| `present_module.py` | Does a thing |\n"
@@ -1006,6 +1009,42 @@ def test_run_command_relative_prose_does_not_exempt_distant_later_fence():
         "```\n"
     )
     assert find_run_command_filenames(content) == ["local_orphan.py"]
+
+
+def test_run_command_relative_prose_does_not_exempt_second_fence_under_same_heading():
+    content = (
+        "# example\n\n"
+        "## Shared scripts\n\n"
+        "Referenced from `../_shared/scripts/`:\n\n"
+        "```\n"
+        "python preflight.py\n"
+        "```\n\n"
+        "Run the local check below:\n\n"
+        "```\n"
+        "python local_orphan.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == ["local_orphan.py"]
+
+
+def test_run_command_long_multi_flag_no_script_line_returns_quickly():
+    fenced_flags = " ".join(f"-x{each_index}" for each_index in range(200))
+    content = "# example\n\n```\n" f"python {fenced_flags} endingword" "\n```\n"
+    started_at = time.perf_counter()
+    found_filenames = find_run_command_filenames(content)
+    elapsed_seconds = time.perf_counter() - started_at
+    assert found_filenames == []
+    assert elapsed_seconds < ONE_SECOND
+
+
+def test_run_command_inline_trailing_comment_is_not_scanned():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "python real.py  # was: python old_build.py\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == ["real.py"]
 
 
 def test_run_command_relative_path_exempt_while_bare_orphan_still_blocks(tmp_path: Path):
