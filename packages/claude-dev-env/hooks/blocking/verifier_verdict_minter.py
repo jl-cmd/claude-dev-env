@@ -6,14 +6,14 @@ SubagentStop payload names the stopping subagent's own transcript
 (``agent_transcript_path``), which sits beside a harness-written
 ``agent-<id>.meta.json`` sidecar naming the spawning ``agentType``. The hook
 reads that type from the sidecar, so it resolves identically in interactive,
-background, and worktree-switched sessions. When that type is
+background, and worktree-switched sessions; only the harness writes the
+sidecar, so the type it records cannot be forged. When that type is
 ``code-verifier``, the hook pulls the verdict block out of the agent's own
-transcript (``agent_transcript_path``); the main session writes neither that
-transcript nor the sidecar, so text it prints can never mint — recomputes the
-live change-surface hash for the session repository, and writes the verdict
-bound to that hash. The companion ``verified_commit_gate.py`` (PreToolUse)
-then allows ``git commit`` / ``git push`` only while the work tree still
-matches the verified state.
+transcript (``agent_transcript_path``), recomputes the live change-surface
+hash for the session repository, and writes the verdict bound to that hash.
+The companion ``verified_commit_gate.py`` (PreToolUse) then allows ``git
+commit`` / ``git push`` only while the work tree still matches the verified
+state.
 
 The verifier's final message must end with a fenced block::
 
@@ -125,7 +125,8 @@ def _agent_type_from_meta_sidecar(agent_transcript_path: str) -> str | None:
     ``agent-<id>.meta.json`` naming the spawning ``agentType``. Reading the type
     from this sidecar binds it to the stopping subagent itself, so it resolves
     identically in interactive, background, and worktree-switched sessions and
-    needs no parent-transcript scan or flush retry.
+    needs no parent-transcript scan or flush retry. Only the harness writes this
+    sidecar, so a session cannot forge the type it reports.
 
     Args:
         agent_transcript_path: The stopping subagent's own transcript path from
@@ -133,7 +134,7 @@ def _agent_type_from_meta_sidecar(agent_transcript_path: str) -> str | None:
 
     Returns:
         The recorded ``agentType``, or None when the path is empty, the sidecar
-        is absent or cannot be read or parsed, it does not hold a JSON object,
+        is absent, unreadable, or unparseable, it does not hold a JSON object,
         or it names no string ``agentType``.
     """
     if not agent_transcript_path:
@@ -155,17 +156,19 @@ def resolved_subagent_type(subagent_stop_payload: dict) -> str | None:
 
     The stopping subagent's own transcript (``agent_transcript_path``) sits
     beside a harness-written ``agent-<id>.meta.json`` sidecar naming its
-    ``agentType``. Reading the type from that sidecar binds it to the subagent
-    itself, so it resolves the same across interactive, background, and
-    worktree-switched sessions.
+    ``agentType``. The type comes solely from that sidecar, which only the
+    harness writes — the main session can neither write the sidecar nor forge
+    the agentType it records. A verdict fence in the transcript is never used to
+    infer the type, because the main session controls the prompt of any
+    Agent-tool subagent it spawns and could instruct one to print such a fence.
 
     Args:
         subagent_stop_payload: The SubagentStop hook payload.
 
     Returns:
-        The agent type this subagent was spawned with, or None when the
-        ``agent_transcript_path`` is empty, the sidecar is absent or cannot be
-        read or parsed, it does not hold a JSON object, or it names no string
+        The agent type the sidecar records, or None when the
+        ``agent_transcript_path`` is empty, the sidecar is absent, unreadable,
+        or unparseable, it does not hold a JSON object, or it names no string
         ``agentType``.
     """
     return _agent_type_from_meta_sidecar(

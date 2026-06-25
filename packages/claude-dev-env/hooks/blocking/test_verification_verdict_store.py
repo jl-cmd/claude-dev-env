@@ -418,7 +418,7 @@ def test_workflow_verdict_covers_surface_false_for_non_verifier_sidecar(
     )
 
 
-def test_workflow_verdict_covers_surface_false_for_missing_sidecar(
+def test_workflow_verdict_covers_surface_false_for_missing_sidecar_with_verdict(
     tmp_path: pathlib.Path,
 ) -> None:
     transcript_path = _session_transcript_path(tmp_path, "sess1")
@@ -429,6 +429,71 @@ def test_workflow_verdict_covers_surface_false_for_missing_sidecar(
         VERIFIER_AGENT_TYPE,
         _verdict_transcript_text(True, MATCHING_MANIFEST_SHA256),
         should_write_sidecar=False,
+    )
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is False
+    )
+
+
+def test_workflow_verdict_covers_surface_false_for_corrupt_sidecar_with_verdict(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        VERIFIER_AGENT_TYPE,
+        _verdict_transcript_text(True, MATCHING_MANIFEST_SHA256),
+        should_write_sidecar=False,
+    )
+    corrupt_sidecar = (
+        subagents_dir / "workflows" / "wf_x" / "agent-01.meta.json"
+    )
+    corrupt_sidecar.write_text("{not valid json", encoding="utf-8")
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is False
+    )
+
+
+def test_workflow_verdict_covers_surface_false_for_invalid_utf8_sidecar(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        VERIFIER_AGENT_TYPE,
+        _verdict_transcript_text(True, MATCHING_MANIFEST_SHA256),
+        should_write_sidecar=False,
+    )
+    invalid_utf8_sidecar = subagents_dir / "workflows" / "wf_x" / "agent-01.meta.json"
+    invalid_utf8_sidecar.write_bytes(b'{"agentType": "\xff\xfe bad"}')
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is False
+    )
+
+
+def test_workflow_verdict_covers_surface_false_for_invalid_utf8_transcript(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    workflow_dir = subagents_dir / "workflows" / "wf_x"
+    workflow_dir.mkdir(parents=True, exist_ok=True)
+    (workflow_dir / "agent-01.jsonl").write_bytes(b'{"type": "assistant"}\xff\xfe\n')
+    (workflow_dir / "agent-01.meta.json").write_text(
+        json.dumps({"agentType": VERIFIER_AGENT_TYPE}), encoding="utf-8"
     )
     assert (
         workflow_verdict_covers_surface(

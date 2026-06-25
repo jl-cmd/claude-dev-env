@@ -423,17 +423,29 @@ def _subagents_directory_for_transcript(transcript_path: str) -> Path | None:
 def _agent_type_for_transcript(transcript_file: Path) -> str | None:
     """Read an agent transcript's sidecar to learn the agent type it ran as.
 
+    The agent type comes solely from the harness-written
+    ``agent-<id>.meta.json`` sidecar, which only the harness writes — the main
+    session can neither write the sidecar nor forge the agentType it records. A
+    verdict fence in the transcript is never used to infer the type, because the
+    main session controls the prompt of any Agent-tool subagent it spawns and
+    could instruct one to print such a fence.
+
     Args:
         transcript_file: An ``agent-*.jsonl`` transcript path.
 
     Returns:
-        The ``agentType`` recorded in the ``<stem>.meta.json`` sidecar, or
-        None when the sidecar is missing, unreadable, or carries no type.
+        The ``agentType`` recorded in the ``<stem>.meta.json`` sidecar, or None
+        when the sidecar is absent, unreadable, or unparseable, it does not hold
+        a JSON object, or it names no string ``agentType``.
     """
     sidecar_file = transcript_file.with_suffix(AGENT_META_SIDECAR_SUFFIX)
     try:
-        sidecar_record = json.loads(sidecar_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        sidecar_text = sidecar_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    try:
+        sidecar_record = json.loads(sidecar_text)
+    except json.JSONDecodeError:
         return None
     if not isinstance(sidecar_record, dict):
         return None
@@ -452,7 +464,9 @@ def _assistant_text_blocks(transcript_file: Path) -> list[str]:
         when the file is missing, unreadable, or holds no assistant text.
     """
     try:
-        transcript_lines = transcript_file.read_text(encoding="utf-8").splitlines()
+        transcript_lines = (
+            transcript_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        )
     except OSError:
         return []
     all_text_blocks: list[str] = []
