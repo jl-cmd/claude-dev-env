@@ -47,6 +47,41 @@ DOCSTRING_PLURAL_FAMILY_STOP_PATTERN: re.Pattern[str] = re.compile(
 )
 INLINE_CODE_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"``?(\.?[A-Za-z_][A-Za-z0-9_.]*)``?")
 IDENTIFIER_SHAPED_TUPLE_MEMBER_PATTERN: re.Pattern[str] = re.compile(r"^\.?[A-Za-z_][A-Za-z0-9_]*$")
+ALL_CARDINAL_NUMBER_WORD_VALUES: dict[str, int] = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+}
+ALL_DOCSTRING_OUTCOME_ENUMERATION_NOUNS: tuple[str, ...] = (
+    "outcome",
+    "branch",
+    "case",
+    "status",
+    "state",
+    "code",
+    "kind",
+    "variant",
+    "path",
+    "scenario",
+)
+DOCSTRING_CARDINAL_OUTCOME_PHRASE_PATTERN: re.Pattern[str] = re.compile(
+    r"\b(" + "|".join(ALL_CARDINAL_NUMBER_WORD_VALUES) + r")\b"
+    r"\s+(?:[A-Za-z]+\s+){0,2}"
+    r"(?:" + "|".join(ALL_DOCSTRING_OUTCOME_ENUMERATION_NOUNS) + r")(?:e?s)?\b",
+    re.IGNORECASE,
+)
+DOCSTRING_MULTI_SEGMENT_SNAKE_TOKEN_PATTERN: re.Pattern[str] = re.compile(
+    r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b"
+)
 ALL_DOCSTRING_ARGS_SECTION_HEADERS: tuple[str, ...] = ("Args:", "Arguments:")
 ALL_DOCSTRING_TERMINATING_SECTION_HEADERS: frozenset[str] = frozenset({
     "Returns:",
