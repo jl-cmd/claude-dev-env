@@ -5,9 +5,20 @@ description: Workflow-backed implementation planning that creates a deep repo-lo
 
 # Anthropic Plan
 
-Create a source-grounded plan packet through the Claude Code Workflow runtime. The output is a repo-local `docs/plans/<slug>/` folder with context, spec, implementation, validation, and handoff docs. Stop before implementation.
+Create a source-grounded plan packet through the Claude Code Workflow runtime. First draft a short starting plan and get it approved in plan mode; then the workflow builds the full repo-local `docs/plans/<slug>/` packet — context, spec, implementation, validation, and handoff docs. Stop before implementation.
 
-## Isolate first
+## Plan first (plan mode)
+
+Before any worktree or workflow, build a short starting plan in plan mode and get the user's approval. This is a cheap gate: it confirms the direction before the workflow spends tokens building the full packet.
+
+1. Enter plan mode with `EnterPlanMode` if the session is not already in it.
+2. Read the handful of files closest to the request — the entry points, the modules the change touches, the tests that cover them — enough to ground the approach in real source.
+3. Write a short plan: the goal in a sentence or two, the approach, the files the build will touch, and the main risks or open choices. Use `AskUserQuestion` for any product choice that local context cannot settle.
+4. Call `ExitPlanMode` to hand the plan to the user for approval.
+
+On approval, fold the approved scope and direction into the `task` payload at launch, then continue with the steps below. If the user revises the plan, fold the changes in and present it again. Do not isolate a worktree or launch the workflow until the starting plan is approved.
+
+## Isolate the session
 
 The workflow's background subagents write the packet into the working tree. A background session that has not isolated into a worktree cannot write a shared checkout — the background-isolation guard rejects the write. So put the session in a worktree before launching the workflow:
 
@@ -26,6 +37,8 @@ Workflow({
   }
 })
 ```
+
+The `task` string carries the user request together with the approved starting plan, so the packet reflects the direction the user signed off on.
 
 If the Workflow tool is unavailable, say `anthropic-plan requires the Workflow tool; aborting` and stop.
 

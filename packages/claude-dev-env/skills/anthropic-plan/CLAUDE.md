@@ -2,7 +2,7 @@
 
 **Trigger:** `/anthropic-plan`, `/plan`, "plan this first", "think before coding", "make a plan", "scope this out", "don't code yet", and non-trivial requests that need source-grounded design before build work.
 
-Creates a repo-local plan packet under `docs/plans/<slug>/` by running the `plan-packet.mjs` workflow. The packet holds context, spec, implementation steps, validation, and a handoff prompt for the build agent. The skill stops before any production code changes.
+Creates a repo-local plan packet under `docs/plans/<slug>/` by running the `plan-packet.mjs` workflow. The skill first drafts a short starting plan and gets the user's approval in plan mode (`EnterPlanMode` / `ExitPlanMode`); on approval it runs the workflow. The packet holds context, spec, implementation steps, validation, and a handoff prompt for the build agent. The skill stops before any production code changes.
 
 ## Subdirectories
 
