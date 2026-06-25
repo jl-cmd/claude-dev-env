@@ -85,6 +85,7 @@ from code_rules_duplicate_body import (  # noqa: E402
 from code_rules_imports_logging import (  # noqa: E402
     advise_file_line_count,
     check_e2e_test_naming,
+    check_import_block_sorted,
     check_imports_at_top,
     check_library_print,
     check_logging_fstrings,
@@ -225,6 +226,7 @@ def validate_content(
         if not is_test_file(file_path):
             all_issues.extend(check_comment_changes(old_content, content, file_path))
         all_issues.extend(check_imports_at_top(content))
+        all_issues.extend(check_import_block_sorted(effective_content, file_path))
         all_issues.extend(check_logging_fstrings(content))
         all_issues.extend(check_windows_api_none(content))
         all_issues.extend(check_magic_values(content, file_path))

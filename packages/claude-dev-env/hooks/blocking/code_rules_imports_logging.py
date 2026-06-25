@@ -1,7 +1,9 @@
-"""Imports-at-top, logging f-string, win32gui None, E2E spec naming, file-length advisory, and library-print checks."""
+"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, E2E spec naming, file-length advisory, and library-print checks."""
 
 import ast
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,9 +25,17 @@ from code_rules_shared import (  # noqa: E402
 )
 
 from hooks_constants.blocking_check_limits import (  # noqa: E402
+    ALL_IMPORT_BLOCK_SORT_RUFF_COMMAND_PREFIX,
+    ALL_RUFF_STANDALONE_CONFIG_FILENAMES,
+    IMPORT_BLOCK_SORT_RUFF_TIMEOUT_SECONDS,
+    IMPORT_BLOCK_SORT_RULE_CODE,
     MAX_E2E_TEST_NAMING_ISSUES,
+    MAX_IMPORT_BLOCK_SORT_ISSUES,
     MAX_LOGGING_FSTRING_ISSUES,
     MAX_WINDOWS_API_NONE_ISSUES,
+    RUFF_PYPROJECT_CONFIG_FILENAME,
+    RUFF_PYPROJECT_TOOL_TABLE_MARKER,
+    RUFF_STDIN_ENCODING,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ADVISORY_LINE_THRESHOLD_HARD,
@@ -127,6 +137,174 @@ def check_imports_at_top(content: str) -> list[str]:
         )
 
     return issues
+
+
+def check_import_block_sorted(content: str, file_path: str) -> list[str]:
+    """Flag a Python import block left un-sorted per isort rules (ruff I001).
+
+    ruff/isort treats a contiguous run of ``import`` and ``from`` statements as
+    one sortable unit. An edit that re-touches such a block pulls the whole block
+    into the gate's scope, so a pre-existing mis-ordering in an untouched line of
+    that block becomes a quality-gate failure (``check.ps1`` runs ruff over
+    ``hooks/blocking``). This catches that drift at Write/Edit time by delegating
+    to ruff itself, the same sorter the quality gate uses, so the two surfaces
+    never disagree.
+
+    The check resolves *file_path* to an absolute path and runs ruff against
+    *content* on stdin under that path, so ruff walks parents to find the repo's
+    ``[tool.ruff]`` config. Without a discoverable config ruff falls back to
+    default isort first-party grouping, which orders sibling imports differently
+    and produces false positives, so the check fails open when no ruff config is
+    found above the file. Non-Python files and test files are exempt. When ruff
+    is not installed, times out, or returns output the parser cannot read, the
+    check also fails open and reports nothing — a missing or slow tool never
+    blocks a write.
+
+    Args:
+        content: The full file content the Write or Edit would leave on disk.
+        file_path: The destination path, used both to gate by extension and to
+            give ruff the filename it needs for config discovery.
+
+    Returns:
+        One issue string per detected I001 finding, capped at
+        ``MAX_IMPORT_BLOCK_SORT_ISSUES``; an empty list when the block sorts
+        cleanly or the check fails open.
+    """
+    if get_file_extension(file_path) not in ALL_PYTHON_EXTENSIONS:
+        return []
+    if is_test_file(file_path):
+        return []
+
+    absolute_file_path = Path(file_path).resolve()
+    if not _ruff_config_discoverable(absolute_file_path):
+        return []
+
+    ruff_findings = _run_ruff_import_sort_check(content, str(absolute_file_path))
+    if ruff_findings is None:
+        return []
+
+    issues: list[str] = []
+    for each_finding in ruff_findings:
+        if each_finding.get("code") != IMPORT_BLOCK_SORT_RULE_CODE:
+            continue
+        line_number = _finding_line_number(each_finding.get("location"))
+        issues.append(
+            f"Line {line_number}: Import block is un-sorted (ruff I001) - "
+            f"run 'ruff check --fix' to sort the block before writing"
+        )
+        if len(issues) >= MAX_IMPORT_BLOCK_SORT_ISSUES:
+            break
+
+    return issues
+
+
+def _run_ruff_import_sort_check(content: str, file_path: str) -> list[dict[str, object]] | None:
+    """Run ruff's I001 check over *content* and return its parsed JSON findings.
+
+    Args:
+        content: The file content fed to ruff on stdin.
+        file_path: The filename ruff is told the stdin content belongs to, so it
+            discovers the surrounding ``[tool.ruff]`` config.
+
+    Returns:
+        The list of ruff finding dictionaries, or ``None`` when ruff is absent,
+        times out, or emits output that is not the expected JSON list.
+    """
+    ruff_command = [
+        *ALL_IMPORT_BLOCK_SORT_RUFF_COMMAND_PREFIX,
+        "--stdin-filename",
+        file_path,
+        "-",
+    ]
+    try:
+        completed_process = subprocess.run(
+            ruff_command,
+            input=content.encode(RUFF_STDIN_ENCODING),
+            capture_output=True,
+            timeout=IMPORT_BLOCK_SORT_RUFF_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+
+    try:
+        ruff_stdout = completed_process.stdout.decode(RUFF_STDIN_ENCODING)
+    except UnicodeDecodeError:
+        return None
+
+    try:
+        parsed_findings = json.loads(ruff_stdout)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(parsed_findings, list):
+        return None
+    return [each_finding for each_finding in parsed_findings if isinstance(each_finding, dict)]
+
+
+def _ruff_config_discoverable(absolute_file_path: Path) -> bool:
+    """Return whether a ruff config sits above *absolute_file_path*.
+
+    Walks the file's parent directories looking for a standalone ``ruff.toml`` /
+    ``.ruff.toml`` or a ``pyproject.toml`` that declares a ``[tool.ruff`` table.
+    ruff uses this same nearest-ancestor walk to resolve its settings; mirroring
+    it lets the check confirm ruff will see the project's isort configuration
+    rather than its built-in defaults before trusting an I001 finding.
+
+    Args:
+        absolute_file_path: The resolved path of the file under validation.
+
+    Returns:
+        True when a ruff config is found in the file's directory or any ancestor;
+        False when the walk reaches the filesystem root without one.
+    """
+    for each_directory in absolute_file_path.parents:
+        for each_standalone_name in ALL_RUFF_STANDALONE_CONFIG_FILENAMES:
+            if (each_directory / each_standalone_name).is_file():
+                return True
+        pyproject_path = each_directory / RUFF_PYPROJECT_CONFIG_FILENAME
+        if _pyproject_declares_ruff_table(pyproject_path):
+            return True
+    return False
+
+
+def _pyproject_declares_ruff_table(pyproject_path: Path) -> bool:
+    """Return whether *pyproject_path* exists and declares a ``[tool.ruff`` table.
+
+    Args:
+        pyproject_path: The candidate ``pyproject.toml`` path to inspect.
+
+    Returns:
+        True when the file exists and its text contains the ``[tool.ruff`` table
+        marker; False when the file is absent or unreadable.
+    """
+    if not pyproject_path.is_file():
+        return False
+    try:
+        pyproject_text = pyproject_path.read_text(encoding=RUFF_STDIN_ENCODING)
+    except OSError:
+        return False
+    return RUFF_PYPROJECT_TOOL_TABLE_MARKER in pyproject_text
+
+
+def _finding_line_number(location: object) -> int:
+    """Return the source line a ruff finding's location anchors to.
+
+    Args:
+        location: The ``location`` value from one ruff JSON finding, expected to
+            be a mapping carrying an integer ``row``; any other shape yields a
+            zero line number.
+
+    Returns:
+        The ``row`` value as an integer, or a zero line number when the location
+        is absent or carries no readable row.
+    """
+    if not isinstance(location, dict):
+        return 0
+    row = location.get("row")
+    if not isinstance(row, int):
+        return 0
+    return row
 
 
 def _update_triple_quote_state_for_line(
