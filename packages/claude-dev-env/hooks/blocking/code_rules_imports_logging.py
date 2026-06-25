@@ -37,6 +37,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_LOGGING_FSTRING_ISSUES,
     MAX_LOGGING_PRINTF_TOKEN_ISSUES,
     MAX_WINDOWS_API_NONE_ISSUES,
+    MINIMUM_RESUME_TASK_ENUMERATION_ITEMS,
     RUFF_PYPROJECT_CONFIG_FILENAME,
     RUFF_PYPROJECT_TOOL_TABLE_MARKER,
     RUFF_STDIN_ENCODING,
@@ -813,12 +814,16 @@ def _next_top_level_function_index(content: str, from_index: int) -> int:
     return next_function_match.start()
 
 
-def _task_list_from_enumeration_text(enumeration_text: str) -> set[str] | None:
+def _task_list_from_enumeration_text(
+    enumeration_text: str, all_dispatched_tasks: frozenset[str]
+) -> set[str] | None:
     enumerated_items = ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN.split(enumeration_text)
     task_items = {_strip_leading_conjunction(each_item) for each_item in enumerated_items}
     if not all(ENUMERATION_TASK_ITEM_PATTERN.match(each_item) for each_item in task_items):
         return None
     if not any(HYPHENATED_TASK_ITEM_PATTERN.match(each_item) for each_item in task_items):
+        return None
+    if len(task_items) < MINIMUM_RESUME_TASK_ENUMERATION_ITEMS and not (task_items & all_dispatched_tasks):
         return None
     return task_items
 
@@ -828,10 +833,12 @@ def _strip_leading_conjunction(enumeration_item: str) -> str:
     return ENUMERATION_LEADING_CONJUNCTION_PATTERN.sub("", stripped_item).strip()
 
 
-def _enumeration_task_names(jsdoc_text: str) -> set[str] | None:
+def _enumeration_task_names(
+    jsdoc_text: str, all_dispatched_tasks: frozenset[str]
+) -> set[str] | None:
     for each_enumeration_match in RESUME_TASK_ENUMERATION_PATTERN.finditer(jsdoc_text):
         enumeration_text = each_enumeration_match.group("enumeration").replace("*", " ")
-        task_items = _task_list_from_enumeration_text(enumeration_text)
+        task_items = _task_list_from_enumeration_text(enumeration_text, all_dispatched_tasks)
         if task_items is not None:
             return task_items
     return None
@@ -853,15 +860,22 @@ def check_js_resume_task_enumeration_coverage(
 
     A spawn JSDoc binds to its sibling resume function by the shared ``<Role>``
     token (``spawnVerifierAgent`` pairs with ``resumeVerifierAgent``). The check
-    scans each ``resume (...)`` parenthetical in the JSDoc and binds to the first
-    that reads as a task list: every comma- or ``and``-delimited item (including
-    the Oxford-comma ``a, b, and c`` form, where the trailing ``and`` is stripped
-    from the final item) is a single dispatch-shaped task token (no embedded
-    spaces, so a descriptive phrase such as ``re-establishing the session`` is not
-    a task list, and a later real task list still binds when an earlier
-    descriptive parenthetical precedes it) and at least one item is hyphenated,
-    proving the prose is a resume-task enumeration describing the sibling rather
-    than incidental prose. This keeps the enumerated token set a superset of the
+    reads the sibling resume body's dispatched task set first, then scans each
+    standalone-word ``resume (...)`` parenthetical in the JSDoc (a longer word
+    ending in ``resume``, such as ``presume (...)``, does not introduce an
+    enumeration) and binds to the first that reads as a task list: every comma- or
+    ``and``-delimited item (including the Oxford-comma ``a, b, and c`` form, where
+    the trailing ``and`` is stripped from the final item) is a single
+    dispatch-shaped task token (no embedded spaces, so a descriptive phrase such as
+    ``re-establishing the session`` is not a task list, and a later real task list
+    still binds when an earlier descriptive parenthetical precedes it) and at least
+    one item is hyphenated, proving the prose is a resume-task enumeration
+    describing the sibling rather than incidental prose. A multi-item parenthetical
+    that clears those gates is a task list. A single-item parenthetical clears them
+    only when its lone token is itself one of the sibling's dispatched tasks, so a
+    descriptive single hyphenated word such as ``re-entry`` or ``fast-forward`` —
+    which names no dispatched task — stays descriptive prose rather than a
+    one-item task list. This keeps the enumerated token set a superset of the
     sibling's dispatched task set. The resume body is read up to the next
     top-level ``function`` declaration, and only a ``task === '<name>'`` whose
     ``task`` keyword sits in structural code counts as a dispatch branch: a
@@ -885,13 +899,15 @@ def check_js_resume_task_enumeration_coverage(
     issues: list[str] = []
     for each_spawn_match in SPAWN_AGENT_WITH_JSDOC_PATTERN.finditer(content):
         role = each_spawn_match.group("role")
-        enumerated_tasks = _enumeration_task_names(each_spawn_match.group("jsdoc"))
-        if not enumerated_tasks:
-            continue
         resume_body = _resume_function_body(content, role)
         if resume_body is None:
             continue
         dispatched_tasks = _dispatched_task_names(resume_body)
+        enumerated_tasks = _enumeration_task_names(
+            each_spawn_match.group("jsdoc"), frozenset(dispatched_tasks)
+        )
+        if not enumerated_tasks:
+            continue
         for each_task in sorted(dispatched_tasks - enumerated_tasks):
             issues.append(
                 f"spawn{role}Agent() JSDoc resume enumeration omits the "

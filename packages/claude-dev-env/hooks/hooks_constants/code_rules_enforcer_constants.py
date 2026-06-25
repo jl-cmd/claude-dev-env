@@ -129,7 +129,7 @@ SPAWN_AGENT_WITH_JSDOC_PATTERN: re.Pattern[str] = re.compile(
     re.DOTALL,
 )
 RESUME_TASK_ENUMERATION_PATTERN: re.Pattern[str] = re.compile(
-    r"resume\s*\((?P<enumeration>[^)]*?)\)",
+    r"(?<![A-Za-z])resume\s*\((?P<enumeration>[^)]*?)\)",
     re.DOTALL,
 )
 TASK_DISPATCH_NAME_PATTERN: re.Pattern[str] = re.compile(

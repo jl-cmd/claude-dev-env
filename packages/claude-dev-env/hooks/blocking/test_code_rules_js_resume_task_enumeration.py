@@ -595,6 +595,54 @@ def should_flag_dispatch_after_column_zero_function_inside_template_literal() ->
     assert "spawnVerifierAgent" in issues[0]
 
 
+def should_ignore_presume_parenthetical_before_real_resume_enumeration() -> None:
+    source = (
+        "/**\n"
+        " * We presume (alpha-beta) is fine; each later resume (fix-verify)\n"
+        " * continues the same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, context)\n"
+        "  }\n"
+        "  if (task === 'undocumented') {\n"
+        "    return doUndoc(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "'undocumented'" in issues[0]
+    assert "fix-verify" not in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
+def should_not_flag_single_hyphenated_word_descriptive_parenthetical() -> None:
+    for each_descriptive_word in ("re-entry", "fast-forward", "pre-flight", "no-op", "auto-resume"):
+        source = (
+            "/**\n"
+            f" * Spawn the verifier so each later resume ({each_descriptive_word})\n"
+            " * continues the same session.\n"
+            " */\n"
+            "async function spawnVerifierAgent() {\n"
+            "  return undefined\n"
+            "}\n"
+            "\n"
+            "function resumeVerifierAgent(agentId, task, context) {\n"
+            "  if (task === 'repair-verify') {\n"
+            "    return doRepair(agentId, context)\n"
+            "  }\n"
+            "  return doHardening(agentId, context)\n"
+            "}\n"
+        )
+        assert check_js_resume_task_enumeration_coverage(source, _MJS_PATH) == []
+
+
 def should_not_flag_shipped_converge_workflow() -> None:
     converge_source = _SHIPPED_CONVERGE_MJS.read_text(encoding="utf-8")
     issues = check_js_resume_task_enumeration_coverage(
