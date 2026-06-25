@@ -78,3 +78,57 @@ def test_should_resolve_aliased_format_logger_import() -> None:
     )
     issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
     assert len(issues) == 1
+
+
+def test_should_allow_token_bearing_message_with_no_format_args() -> None:
+    source = FORMAT_LOGGER_IMPORT + 'log_info("Use %s for string substitution")\n'
+    issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_documentation_style_token_message_with_no_args() -> None:
+    source = FORMAT_LOGGER_IMPORT + 'log_warning("avoid %s-style tokens here")\n'
+    issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_percent_adjacent_to_word_in_format_message() -> None:
+    source = FORMAT_LOGGER_IMPORT + 'log_info("memory 80%free now", host)\n'
+    issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_doubled_percent_in_format_message() -> None:
+    source = FORMAT_LOGGER_IMPORT + 'log_info("100%% done", host)\n'
+    issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_trailing_percent_in_format_message() -> None:
+    source = FORMAT_LOGGER_IMPORT + 'log_info("100% done", host)\n'
+    issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_flag_width_token_in_format_logger_call() -> None:
+    source = FORMAT_LOGGER_IMPORT + 'log_error("item %5d", index)\n'
+    issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+
+
+def test_should_flag_precision_token_in_format_logger_call() -> None:
+    source = FORMAT_LOGGER_IMPORT + 'log_error("took %0.2f sec", elapsed)\n'
+    issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+
+
+def test_should_flag_float_general_token_in_format_logger_call() -> None:
+    source = FORMAT_LOGGER_IMPORT + 'log_error("ratio %g", ratio)\n'
+    issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+
+
+def test_should_flag_scientific_token_in_format_logger_call() -> None:
+    source = FORMAT_LOGGER_IMPORT + 'log_error("value %e", measurement)\n'
+    issues = enforcer.check_logging_printf_tokens(source, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
