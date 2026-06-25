@@ -13,7 +13,7 @@ ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS: tuple[type[BaseException], ...] = (
 )
 
 ALL_PYTHON_EXTENSIONS = {".py"}
-ALL_JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx"}
+ALL_JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs", ".mts", ".cts"}
 ALL_CODE_EXTENSIONS = ALL_PYTHON_EXTENSIONS | ALL_JAVASCRIPT_EXTENSIONS
 
 ALL_TEST_PATH_PATTERNS = {"test_", "_test.", ".test.", ".spec.", "/tests/", "\\tests\\", "/tests.py", "\\tests.py"}
@@ -123,6 +123,42 @@ LOGGING_PRINTF_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r"(?<!%)%[#0\- +]?[0-9.*]*[sdrixfgeEcoX](?![a-zA-Z])"
 )
 MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT = 2
+SPAWN_AGENT_WITH_JSDOC_PATTERN: re.Pattern[str] = re.compile(
+    r"/\*\*(?P<jsdoc>(?:(?!\*/).)*?)\*/\s*"
+    r"(?:async\s+)?function\s+spawn(?P<role>\w+?)Agent\s*\(",
+    re.DOTALL,
+)
+RESUME_TASK_ENUMERATION_PATTERN: re.Pattern[str] = re.compile(
+    r"(?<![A-Za-z])resume\s*\((?P<enumeration>[^)]*?)\)",
+    re.DOTALL,
+)
+TASK_DISPATCH_NAME_PATTERN: re.Pattern[str] = re.compile(
+    r"""(?<![A-Za-z0-9_])task\s*===\s*['"](?P<task>[a-z0-9-]+)['"]"""
+)
+ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(
+    r"\s*,\s*|\s+and\s+"
+)
+ENUMERATION_LEADING_CONJUNCTION_PATTERN: re.Pattern[str] = re.compile(
+    r"^and\s+"
+)
+ALL_JAVASCRIPT_STRING_DELIMITERS: frozenset[str] = frozenset({"'", '"', "`"})
+JAVASCRIPT_STRING_ESCAPE_CHARACTER: str = "\\"
+JAVASCRIPT_LINE_COMMENT_OPENER: str = "//"
+JAVASCRIPT_BLOCK_COMMENT_OPENER: str = "/*"
+JAVASCRIPT_BLOCK_COMMENT_CLOSER: str = "*/"
+JAVASCRIPT_REGEX_DELIMITER: str = "/"
+ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS: frozenset[str] = frozenset(
+    {"(", ",", "=", ":", "[", "{", "}", ";", "!", "&", "|", "?", "+", "-", "*", "%", "<", ">", "~", "^", "\n"}
+)
+ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS: frozenset[str] = frozenset(
+    {"return", "typeof", "case", "in", "of", "do", "else", "void", "delete", "instanceof", "new", "yield", "await", "throw"}
+)
+ENUMERATION_TASK_ITEM_PATTERN: re.Pattern[str] = re.compile(
+    r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+)
+HYPHENATED_TASK_ITEM_PATTERN: re.Pattern[str] = re.compile(
+    r"^[a-z0-9]+(?:-[a-z0-9]+)+$"
+)
 ALL_BUILTIN_DICT_METHOD_NAMES: frozenset[str] = frozenset({
     "get", "items", "keys", "values", "update", "pop",
     "setdefault", "copy", "clear",

@@ -1,4 +1,4 @@
-"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, E2E spec naming, file-length advisory, and library-print checks."""
+"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, E2E spec naming, JS resume-task enumeration coverage, file-length advisory, and library-print checks."""
 
 import ast
 import json
@@ -33,9 +33,11 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     IMPORT_BLOCK_SORT_RULE_CODE,
     MAX_E2E_TEST_NAMING_ISSUES,
     MAX_IMPORT_BLOCK_SORT_ISSUES,
+    MAX_JS_RESUME_TASK_ENUMERATION_ISSUES,
     MAX_LOGGING_FSTRING_ISSUES,
     MAX_LOGGING_PRINTF_TOKEN_ISSUES,
     MAX_WINDOWS_API_NONE_ISSUES,
+    MINIMUM_RESUME_TASK_ENUMERATION_ITEMS,
     RUFF_PYPROJECT_CONFIG_FILENAME,
     RUFF_PYPROJECT_TOOL_TABLE_MARKER,
     RUFF_STDIN_ENCODING,
@@ -45,11 +47,27 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ADVISORY_LINE_THRESHOLD_SOFT,
     ALL_CLI_FILE_PATH_MARKERS,
     ALL_IMPORT_STATEMENT_PREFIXES,
+    ALL_JAVASCRIPT_EXTENSIONS,
+    ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS,
+    ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS,
+    ALL_JAVASCRIPT_STRING_DELIMITERS,
     ALL_PYTHON_EXTENSIONS,
+    ENUMERATION_LEADING_CONJUNCTION_PATTERN,
+    ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN,
+    ENUMERATION_TASK_ITEM_PATTERN,
+    HYPHENATED_TASK_ITEM_PATTERN,
+    JAVASCRIPT_BLOCK_COMMENT_CLOSER,
+    JAVASCRIPT_BLOCK_COMMENT_OPENER,
+    JAVASCRIPT_LINE_COMMENT_OPENER,
+    JAVASCRIPT_REGEX_DELIMITER,
+    JAVASCRIPT_STRING_ESCAPE_CHARACTER,
     LOGGING_FSTRING_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
     MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT,
     NOT_INSIDE_TYPE_CHECKING_BLOCK,
+    RESUME_TASK_ENUMERATION_PATTERN,
+    SPAWN_AGENT_WITH_JSDOC_PATTERN,
+    TASK_DISPATCH_NAME_PATTERN,
     TRIPLE_DOUBLE_QUOTE_DELIMITER,
     TRIPLE_QUOTE_PARITY_DIVISOR,
     TRIPLE_SINGLE_QUOTE_DELIMITER,
@@ -595,6 +613,310 @@ def check_e2e_test_naming(content: str, file_path: str) -> list[str]:
             break
 
     return issues
+
+
+class _JavaScriptRegionScanner:
+    """Walks JavaScript source one character at a time, tracking string,
+    comment, and regex regions so a caller can tell code from non-code.
+
+    The scanner holds the region the current character sits in. ``consume``
+    advances the state for one character and returns whether that character is
+    structural code (``True``) or part of a string, comment, or regex literal
+    (``False``).
+    """
+
+    def __init__(self) -> None:
+        self._active_string_delimiter: str | None = None
+        self._is_inside_line_comment = False
+        self._is_inside_block_comment = False
+        self._is_inside_regex_literal = False
+        self._previous_code_character = "\n"
+        self._previous_code_word = ""
+        self._is_building_code_word = False
+
+    def consume(self, character: str, source: str, index: int) -> bool:
+        if self._active_string_delimiter is not None:
+            return self._consume_inside_string(character, source, index)
+        if self._is_inside_line_comment:
+            return self._consume_inside_line_comment(character)
+        if self._is_inside_block_comment:
+            return self._consume_inside_block_comment(source, index)
+        if self._is_inside_regex_literal:
+            return self._consume_inside_regex(character, source, index)
+        return self._consume_inside_code(character, source, index)
+
+    def _consume_inside_string(self, character: str, source: str, index: int) -> bool:
+        if character == self._active_string_delimiter and not _is_escaped(source, index):
+            self._active_string_delimiter = None
+        return False
+
+    def _consume_inside_line_comment(self, character: str) -> bool:
+        if character == "\n":
+            self._is_inside_line_comment = False
+        return False
+
+    def _consume_inside_block_comment(self, source: str, index: int) -> bool:
+        if source[index - 1 : index + 1] == JAVASCRIPT_BLOCK_COMMENT_CLOSER:
+            self._is_inside_block_comment = False
+        return False
+
+    def _consume_inside_regex(self, character: str, source: str, index: int) -> bool:
+        if character == JAVASCRIPT_REGEX_DELIMITER and not _is_escaped(source, index):
+            self._is_inside_regex_literal = False
+        return False
+
+    def _consume_inside_code(self, character: str, source: str, index: int) -> bool:
+        if character in ALL_JAVASCRIPT_STRING_DELIMITERS:
+            self._active_string_delimiter = character
+            return False
+        if source.startswith(JAVASCRIPT_LINE_COMMENT_OPENER, index):
+            self._is_inside_line_comment = True
+            return False
+        if source.startswith(JAVASCRIPT_BLOCK_COMMENT_OPENER, index):
+            self._is_inside_block_comment = True
+            return False
+        if character == JAVASCRIPT_REGEX_DELIMITER and self._is_regex_start():
+            self._is_inside_regex_literal = True
+            return False
+        self._track_preceding_word(character)
+        if not character.isspace():
+            self._previous_code_character = character
+        return True
+
+    def _track_preceding_word(self, character: str) -> None:
+        if character.isalnum() or character == "_":
+            if not self._is_building_code_word:
+                self._previous_code_word = ""
+                self._is_building_code_word = True
+            self._previous_code_word += character
+            return
+        if not character.isspace():
+            self._previous_code_word = ""
+        self._is_building_code_word = False
+
+    def _is_regex_start(self) -> bool:
+        if self._previous_code_character in ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS:
+            return True
+        return self._previous_code_word in ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS
+
+
+def _is_escaped(source: str, index: int) -> bool:
+    backslash_run_length = 0
+    scan_index = index - 1
+    while scan_index >= 0 and source[scan_index] == JAVASCRIPT_STRING_ESCAPE_CHARACTER:
+        backslash_run_length += 1
+        scan_index -= 1
+    return backslash_run_length % 2 == 1
+
+
+def _code_position_flags(source: str) -> list[bool]:
+    """Return one flag per character: ``True`` for structural code, ``False`` for
+    a character inside a string literal, comment, or regex literal.
+
+    A backslash escapes the next character inside a string literal, so a delimiter
+    preceded by an odd run of backslashes stays inside the literal and a delimiter
+    preceded by an even run (including zero) closes it. A ``/`` opens a regex
+    literal only when it sits at an expression position: either the previous
+    structural character is a punctuation/operator that precedes an expression, or
+    the preceding identifier token is an expression-introducing keyword (``return``,
+    ``typeof``, ``case``, ``in``, ``of``, ``do``, ``else``, ``void``, ``delete``,
+    ``instanceof``, ``new``, ``yield``, ``await``, ``throw``). After a value it is
+    the division operator and is left intact.
+    """
+    region = _JavaScriptRegionScanner()
+    return [
+        region.consume(each_character, source, each_index)
+        for each_index, each_character in enumerate(source)
+    ]
+
+
+def _blank_non_code_regions(body_text: str) -> str:
+    """Replace every non-code region in JavaScript source with spaces.
+
+    A non-code region is a string literal (single-, double-, or backtick-quoted),
+    a ``//`` line comment, a ``/* */`` block comment, or a ``/.../`` regex
+    literal. Each is blanked to spaces, newlines preserved, so the returned text
+    has the same length and line structure as the input while carrying only
+    structural code characters.
+
+    Blanking comments and regex literals keeps a stray brace inside either from
+    skewing the brace-depth scan that bounds the resume body, and blanking string
+    literals keeps a brace inside a prompt string from skewing it the same way.
+    """
+    code_flags = _code_position_flags(body_text)
+    rendered_characters = [
+        each_character if (code_flags[each_index] or each_character == "\n") else " "
+        for each_index, each_character in enumerate(body_text)
+    ]
+    return "".join(rendered_characters)
+
+
+def _dispatched_task_names(resume_body: str) -> set[str]:
+    """Return the task names the resume body dispatches on in code position.
+
+    A real dispatch branch (``task === 'fix-verify'``) has its ``task`` keyword in
+    structural code; a ``task === '<name>'`` mention inside an agent-prompt string,
+    a comment, or a regex literal is prose and its keyword sits in a non-code
+    region. Only a match whose ``task`` keyword is at a code position counts, so a
+    prose mention is never read as a dispatch branch.
+    """
+    code_flags = _code_position_flags(resume_body)
+    dispatched_tasks: set[str] = set()
+    for each_match in TASK_DISPATCH_NAME_PATTERN.finditer(resume_body):
+        if code_flags[each_match.start()]:
+            dispatched_tasks.add(each_match.group("task"))
+    return dispatched_tasks
+
+
+def _balanced_brace_body(content: str, from_index: int) -> str | None:
+    """Return the brace-balanced span of ``content`` starting at the first ``{``.
+
+    Braces inside string literals, comments, and regex literals do not count
+    toward the depth: the scan walks a blanked copy where those regions are
+    spaces, so only structural braces move the depth. The returned span is a slice
+    of the original ``content`` so the caller reads real source for the dispatch
+    scan.
+    """
+    blanked_content = _blank_non_code_regions(content)
+    opening_index = blanked_content.find("{", from_index)
+    if opening_index == -1:
+        return None
+    depth = 0
+    for each_position in range(opening_index, len(blanked_content)):
+        character = blanked_content[each_position]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return content[opening_index : each_position + 1]
+    return content[opening_index:]
+
+
+def _resume_function_body(content: str, role: str) -> str | None:
+    header_pattern = re.compile(
+        r"(?:async\s+)?function\s+resume" + re.escape(role) + r"Agent\s*\("
+    )
+    header_match = header_pattern.search(_blank_non_code_regions(content))
+    if header_match is None:
+        return None
+    bounded_content = content[: _next_top_level_function_index(content, header_match.end())]
+    return _balanced_brace_body(bounded_content, header_match.end())
+
+
+def _next_top_level_function_index(content: str, from_index: int) -> int:
+    blanked_content = _blank_non_code_regions(content)
+    next_function_match = re.compile(
+        r"^(?:async\s+)?function\s+\w+", re.MULTILINE
+    ).search(blanked_content, from_index)
+    if next_function_match is None:
+        return len(content)
+    return next_function_match.start()
+
+
+def _task_list_from_enumeration_text(
+    enumeration_text: str, all_dispatched_tasks: frozenset[str]
+) -> set[str] | None:
+    enumerated_items = ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN.split(enumeration_text)
+    task_items = {_strip_leading_conjunction(each_item) for each_item in enumerated_items}
+    if not all(ENUMERATION_TASK_ITEM_PATTERN.match(each_item) for each_item in task_items):
+        return None
+    if not any(HYPHENATED_TASK_ITEM_PATTERN.match(each_item) for each_item in task_items):
+        return None
+    if len(task_items) < MINIMUM_RESUME_TASK_ENUMERATION_ITEMS and not (task_items & all_dispatched_tasks):
+        return None
+    return task_items
+
+
+def _strip_leading_conjunction(enumeration_item: str) -> str:
+    stripped_item = enumeration_item.strip()
+    return ENUMERATION_LEADING_CONJUNCTION_PATTERN.sub("", stripped_item).strip()
+
+
+def _enumeration_task_names(
+    jsdoc_text: str, all_dispatched_tasks: frozenset[str]
+) -> set[str] | None:
+    for each_enumeration_match in RESUME_TASK_ENUMERATION_PATTERN.finditer(jsdoc_text):
+        enumeration_text = each_enumeration_match.group("enumeration").replace("*", " ")
+        task_items = _task_list_from_enumeration_text(enumeration_text, all_dispatched_tasks)
+        if task_items is not None:
+            return task_items
+    return None
+
+
+def check_js_resume_task_enumeration_coverage(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a spawn JSDoc whose resume enumeration omits a dispatched task.
+
+    The drift this catches: a ``spawn<Role>Agent`` function carries a JSDoc that
+    enumerates the resume tasks of its sibling ``resume<Role>Agent`` in a
+    parenthetical ``resume (repair-verify, hardening-verify)`` list, while the
+    ``resume<Role>Agent`` body dispatches on a ``task === '<name>'`` branch the
+    enumeration never names. A reader who trusts the spawn JSDoc to list every
+    step that runs on the session misses the omitted task. This is the JS/.mjs
+    slice of Category O6 docstring-prose-vs-implementation drift; the Python
+    enforcer's AST docstring checks never inspect JavaScript source.
+
+    A spawn JSDoc binds to its sibling resume function by the shared ``<Role>``
+    token (``spawnVerifierAgent`` pairs with ``resumeVerifierAgent``). The check
+    reads the sibling resume body's dispatched task set first, then scans each
+    standalone-word ``resume (...)`` parenthetical in the JSDoc (a longer word
+    ending in ``resume``, such as ``presume (...)``, does not introduce an
+    enumeration) and binds to the first that reads as a task list: every comma- or
+    ``and``-delimited item (including the Oxford-comma ``a, b, and c`` form, where
+    the trailing ``and`` is stripped from the final item) is a single
+    dispatch-shaped task token (no embedded spaces, so a descriptive phrase such as
+    ``re-establishing the session`` is not a task list, and a later real task list
+    still binds when an earlier descriptive parenthetical precedes it) and at least
+    one item is hyphenated, proving the prose is a resume-task enumeration
+    describing the sibling rather than incidental prose. A multi-item parenthetical
+    that clears those gates is a task list. A single-item parenthetical clears them
+    only when its lone token is itself one of the sibling's dispatched tasks, so a
+    descriptive single hyphenated word such as ``re-entry`` or ``fast-forward`` —
+    which names no dispatched task — stays descriptive prose rather than a
+    one-item task list. This keeps the enumerated token set a superset of the
+    sibling's dispatched task set. The resume body is read up to the next
+    top-level ``function`` declaration, and only a ``task === '<name>'`` whose
+    ``task`` keyword sits in structural code counts as a dispatch branch: a
+    ``task === '<name>'`` mention inside a string literal (any quote flavor), a
+    comment, or a regex literal is prose and is skipped. Each
+    ``task === '<name>'`` branch name the resume body dispatches on that the
+    enumeration omits is flagged.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per dispatched task name the spawn enumeration omits, capped at
+        the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    if get_file_extension(file_path) not in ALL_JAVASCRIPT_EXTENSIONS:
+        return []
+    issues: list[str] = []
+    for each_spawn_match in SPAWN_AGENT_WITH_JSDOC_PATTERN.finditer(content):
+        role = each_spawn_match.group("role")
+        resume_body = _resume_function_body(content, role)
+        if resume_body is None:
+            continue
+        dispatched_tasks = _dispatched_task_names(resume_body)
+        enumerated_tasks = _enumeration_task_names(
+            each_spawn_match.group("jsdoc"), frozenset(dispatched_tasks)
+        )
+        if not enumerated_tasks:
+            continue
+        for each_task in sorted(dispatched_tasks - enumerated_tasks):
+            issues.append(
+                f"spawn{role}Agent() JSDoc resume enumeration omits the "
+                f"'{each_task}' task that resume{role}Agent dispatches on — add it "
+                "to the parenthetical (Category O6 docstring-vs-implementation drift)"
+            )
+            if len(issues) >= MAX_JS_RESUME_TASK_ENUMERATION_ISSUES:
+                return issues[:MAX_JS_RESUME_TASK_ENUMERATION_ISSUES]
+    return issues[:MAX_JS_RESUME_TASK_ENUMERATION_ISSUES]
 
 
 def _is_cli_entry_point(file_path: str) -> bool:
