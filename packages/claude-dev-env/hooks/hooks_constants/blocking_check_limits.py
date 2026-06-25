@@ -7,7 +7,6 @@ under the file-global-constants use-count rule (CODE_RULES §file-global-constan
 
 from __future__ import annotations
 
-
 MAX_BANNED_PREFIX_ISSUES: int = 3
 MAX_STUB_IMPLEMENTATION_ISSUES: int = 3
 MAX_TYPED_DICT_PAIR_ISSUES: int = 3
@@ -27,6 +26,22 @@ MAX_LOGGING_FSTRING_ISSUES: int = 3
 MAX_LOGGING_PRINTF_TOKEN_ISSUES: int = 3
 MAX_WINDOWS_API_NONE_ISSUES: int = 3
 MAX_E2E_TEST_NAMING_ISSUES: int = 3
+MAX_IMPORT_BLOCK_SORT_ISSUES: int = 1
+IMPORT_BLOCK_SORT_RUFF_TIMEOUT_SECONDS: int = 15
+IMPORT_BLOCK_SORT_RULE_CODE: str = "I001"
+RUFF_STDIN_ENCODING: str = "utf-8"
+RUFF_PYPROJECT_CONFIG_FILENAME: str = "pyproject.toml"
+RUFF_PYPROJECT_TOOL_TABLE_MARKER: str = "[tool.ruff"
+ALL_RUFF_STANDALONE_CONFIG_FILENAMES: tuple[str, ...] = ("ruff.toml", ".ruff.toml")
+ALL_IMPORT_BLOCK_SORT_RUFF_COMMAND_PREFIX: tuple[str, ...] = (
+    "ruff",
+    "check",
+    "--select",
+    "I001",
+    "--no-cache",
+    "--output-format",
+    "json",
+)
 DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT: int = 3
 MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES: int = 3
 DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT: int = 2

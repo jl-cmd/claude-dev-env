@@ -1022,3 +1022,45 @@ def test_main_staged_mode_passes_on_staged_deletion_of_clean_file(
         "a staged deletion has no staged blob; the gate must skip it cleanly "
         "rather than fail closed as if the file were unreadable"
     )
+
+
+_INLINE_DUPLICATE_MESSAGE = (
+    "Function '_wait_for_render' duplicates an inline block in '_navigate_then_wait'"
+    " — this function body is also present inline (Reuse before create / DRY) "
+    "(inline duplicate body spans: helper at line 4 spanning 10 lines, "
+    "enclosing at line 16 spanning 11 lines)"
+)
+
+
+def test_inline_duplicate_body_span_lines_unions_helper_and_enclosing_spans() -> None:
+    """The same-file inline-duplicate message carries both spans, and the gate
+    recovers their union as a line-number set so a touch of either function blocks —
+    mirroring the live Write/Edit hook's union scoping."""
+    span_lines = gate_module.inline_duplicate_body_span_lines(_INLINE_DUPLICATE_MESSAGE)
+    assert span_lines == frozenset(range(4, 14)) | frozenset(range(16, 27))
+
+
+def test_inline_duplicate_blocks_when_only_enclosing_copy_added() -> None:
+    """An added line in the enclosing span alone blocks, because the live hook scopes
+    by the union of both spans and blocks the same edit — the common shape where a
+    block is copied INTO a growing enclosing function, leaving the helper untouched."""
+    added_line_in_enclosing_only = 18
+    blocking, advisory = gate_module.split_violations_by_scope(
+        [_INLINE_DUPLICATE_MESSAGE],
+        all_added_line_numbers={added_line_in_enclosing_only},
+    )
+    assert blocking == [_INLINE_DUPLICATE_MESSAGE]
+    assert advisory == []
+
+
+def test_inline_duplicate_advises_when_gap_line_added() -> None:
+    """An edit confined to the gap between the helper span (4-13) and the enclosing
+    span (16-26) must not block, matching the live hook. The union set keeps the gap
+    out of scope where a single contiguous range would wrongly block it."""
+    gap_line_between_spans = 14
+    blocking, advisory = gate_module.split_violations_by_scope(
+        [_INLINE_DUPLICATE_MESSAGE],
+        all_added_line_numbers={gap_line_between_spans},
+    )
+    assert advisory == [_INLINE_DUPLICATE_MESSAGE]
+    assert blocking == []

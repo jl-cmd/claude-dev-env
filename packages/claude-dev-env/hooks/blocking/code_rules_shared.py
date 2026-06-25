@@ -4,7 +4,7 @@ import ast
 import difflib
 import os
 import sys
-from collections.abc import Iterator
+from collections.abc import Collection, Iterator
 from pathlib import Path
 
 _blocking_directory = str(Path(__file__).resolve().parent)
@@ -360,7 +360,7 @@ def changed_line_numbers(prior_content: str, post_edit_content: str) -> set[int]
 
 
 def _scope_violations_to_changed_lines(
-    all_violations_in_walk_order: list[tuple[range, str]],
+    all_violations_in_walk_order: list[tuple[Collection[int], str]],
     all_changed_lines: set[int] | None,
     defer_scope_to_caller: bool = False,
 ) -> list[str]:
@@ -381,9 +381,12 @@ def _scope_violations_to_changed_lines(
       block a single-file edit.
 
     Args:
-        all_violations_in_walk_order: ``(span_range, issue_message)`` pairs in
-            ``ast.walk`` traversal order, where ``span_range`` covers the
-            violation's source lines.
+        all_violations_in_walk_order: ``(line_collection, issue_message)`` pairs
+            in ``ast.walk`` traversal order, where ``line_collection`` holds the
+            violation's source lines. A whole-function violation passes a
+            contiguous ``range``; a two-function violation passes the union of
+            both functions' lines, so the lines between the two functions stay
+            out of scope and an edit to only that gap does not block.
         all_changed_lines: Post-edit line numbers the current edit touched, or
             None to treat every violation as in-scope.
         defer_scope_to_caller: When True, return every violation message in walk

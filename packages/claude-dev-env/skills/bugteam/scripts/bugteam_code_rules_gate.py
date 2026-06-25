@@ -23,6 +23,11 @@ from bugteam_scripts_constants.bugteam_code_rules_gate_constants import (
     BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX,
     BANNED_NOUN_SPAN_GROUP_INDEX,
     BANNED_NOUN_VIOLATION_PATTERN,
+    INLINE_DUPLICATE_BODY_ENCLOSING_LINE_GROUP_INDEX,
+    INLINE_DUPLICATE_BODY_ENCLOSING_SPAN_GROUP_INDEX,
+    INLINE_DUPLICATE_BODY_HELPER_LINE_GROUP_INDEX,
+    INLINE_DUPLICATE_BODY_HELPER_SPAN_GROUP_INDEX,
+    INLINE_DUPLICATE_BODY_VIOLATION_PATTERN,
     HUNK_HEADER_RAW_PATTERN,
     ISOLATION_DEFINITION_LINE_GROUP_INDEX,
     ISOLATION_SPAN_GROUP_INDEX,
@@ -958,6 +963,43 @@ def banned_noun_span_range(violation_text: str) -> range | None:
     return range(definition_line, definition_line + line_span)
 
 
+def inline_duplicate_body_span_lines(violation_text: str) -> frozenset[int] | None:
+    """Return the union of both spans of a same-file inline-duplicate issue, or None.
+
+    The same-file inline-duplicate message names two functions that share a body —
+    the helper and the enclosing function carrying the inline copy — and the live
+    Write/Edit hook scopes the violation by the UNION of both spans, blocking when
+    an edit touches either function. So the message carries both spans: ``(inline
+    duplicate body spans: helper at line H spanning P lines, enclosing at line E
+    spanning Q lines)``. The two spans can be disjoint (an unrelated function may
+    sit between the helper and its inline copy), so this returns the union as a
+    line-number set rather than a single contiguous range — a range covering the
+    gap would wrongly block an edit confined to that intervening function, which
+    the PreToolUse path leaves unflagged.
+
+    Args:
+        violation_text: A single violation string emitted by the enforcer.
+
+    Returns:
+        The frozenset of every line in the helper span and the enclosing span, or
+        None when the text is not a same-file inline-duplicate violation.
+    """
+    span_match = INLINE_DUPLICATE_BODY_VIOLATION_PATTERN.search(violation_text)
+    if span_match is None:
+        return None
+    helper_line = int(span_match.group(INLINE_DUPLICATE_BODY_HELPER_LINE_GROUP_INDEX))
+    helper_span = int(span_match.group(INLINE_DUPLICATE_BODY_HELPER_SPAN_GROUP_INDEX))
+    enclosing_line = int(
+        span_match.group(INLINE_DUPLICATE_BODY_ENCLOSING_LINE_GROUP_INDEX)
+    )
+    enclosing_span = int(
+        span_match.group(INLINE_DUPLICATE_BODY_ENCLOSING_SPAN_GROUP_INDEX)
+    )
+    helper_lines = range(helper_line, helper_line + helper_span)
+    enclosing_lines = range(enclosing_line, enclosing_line + enclosing_span)
+    return frozenset(helper_lines) | frozenset(enclosing_lines)
+
+
 def _all_span_range_extractors() -> tuple[Callable[[str], range | None], ...]:
     return (
         function_length_span_range,
@@ -1003,10 +1045,15 @@ def split_violations_by_scope(
 
     Returns:
         Tuple ``(blocking, advisory)``. When *all_added_line_numbers* is
-        None, every issue is blocking. Every diff-scoped violation
-        (function-length, HOME/TMP isolation, banned-noun) carries an
-        enclosing-unit span fragment that ``enclosing_span_range`` reconstructs
-        through one shared extractor registry; such a violation is blocking
+        None, every issue is blocking. A same-file inline-duplicate violation
+        carries both the helper span and the enclosing span;
+        ``inline_duplicate_body_span_lines`` reconstructs their union as a
+        line-number set, and the violation is blocking when an added line falls
+        in either span — matching the live Write/Edit hook's union scoping. Every
+        other diff-scoped violation (function-length, HOME/TMP isolation,
+        banned-noun) carries one enclosing-unit span fragment that
+        ``enclosing_span_range`` reconstructs through one shared extractor
+        registry; such a violation is blocking
         when its declared span intersects the added lines (the unit grew or its
         signature changed in this diff) and advisory otherwise (a pre-existing
         untouched unit). Every other issue is blocking when its ``Line N:``
@@ -1017,6 +1064,13 @@ def split_violations_by_scope(
     blocking: list[str] = []
     advisory: list[str] = []
     for each_issue in all_issues:
+        inline_duplicate_lines = inline_duplicate_body_span_lines(each_issue)
+        if inline_duplicate_lines is not None:
+            if inline_duplicate_lines & all_added_line_numbers:
+                blocking.append(each_issue)
+            else:
+                advisory.append(each_issue)
+            continue
         span_range = enclosing_span_range(each_issue)
         if span_range is not None:
             if any(each_line in all_added_line_numbers for each_line in span_range):

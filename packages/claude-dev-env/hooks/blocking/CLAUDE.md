@@ -30,7 +30,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_dead_dataclass_field.py` | Dataclass fields with no consuming references |
 | `code_rules_dead_module_constant.py` | `UPPER_SNAKE` constants in `*_constants.py` modules with no importers |
 | `code_rules_docstrings.py` | Google-style docstrings; `Args:` section matches signature; fallback-branch coverage |
-| `code_rules_duplicate_body.py` | Functions whose bodies match another function's body in the same file |
+| `code_rules_duplicate_body.py` | A function body copied from a sibling module, or a helper body inlined as a block inside a larger function in the same file |
 | `code_rules_imports_logging.py` | Imports at top of file; logging format-arg style; printf tokens in `str.format`-logger messages |
 | `code_rules_magic_values.py` | No magic numbers or strings in production code bodies |
 | `code_rules_mock_completeness.py` | Mock calls that skip required arguments |
