@@ -458,6 +458,30 @@ def test_workflow_verdict_covers_surface_false_for_missing_sidecar_and_no_verdic
     )
 
 
+def test_workflow_verdict_covers_surface_false_for_corrupt_sidecar_with_verdict(
+    tmp_path: pathlib.Path,
+) -> None:
+    transcript_path = _session_transcript_path(tmp_path, "sess1")
+    subagents_dir = tmp_path / "projects" / "demo" / "sess1" / "subagents"
+    _write_agent_transcript(
+        subagents_dir,
+        "01",
+        VERIFIER_AGENT_TYPE,
+        _verdict_transcript_text(True, MATCHING_MANIFEST_SHA256),
+        should_write_sidecar=False,
+    )
+    corrupt_sidecar = (
+        subagents_dir / "workflows" / "wf_x" / "agent-01.meta.json"
+    )
+    corrupt_sidecar.write_text("{not valid json", encoding="utf-8")
+    assert (
+        workflow_verdict_covers_surface(
+            str(transcript_path), MATCHING_MANIFEST_SHA256
+        )
+        is False
+    )
+
+
 def test_workflow_verdict_covers_surface_false_for_missing_subagents_dir(
     tmp_path: pathlib.Path,
 ) -> None:
