@@ -395,7 +395,7 @@ function resumeCodeEditorAgent(agentId, task, context) {
 
 /**
  * Spawn the verifier code-verifier agent once per converge round, establishing
- * its role so each later resume (repair-verify, hardening-verify) continues the
+ * its role so each later resume (fix-verify, repair-verify, hardening-verify) continues the
  * same session. The spawn makes no edits — verification only. Returns the runtime
  * agent id so the resume calls target the live session; a runtime without resume
  * support returns no agent id, and each resume falls back to a fresh spawn.
