@@ -26,6 +26,7 @@ from code_rules_shared import (  # noqa: E402
 )
 
 from hooks_constants.blocking_check_limits import (  # noqa: E402
+    ALL_FORMAT_LOGGER_FUNCTION_NAMES,
     ALL_IMPORT_BLOCK_SORT_RUFF_COMMAND_PREFIX,
     ALL_RUFF_STANDALONE_CONFIG_FILENAMES,
     IMPORT_BLOCK_SORT_RUFF_TIMEOUT_SECONDS,
@@ -33,6 +34,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_E2E_TEST_NAMING_ISSUES,
     MAX_IMPORT_BLOCK_SORT_ISSUES,
     MAX_LOGGING_FSTRING_ISSUES,
+    MAX_LOGGING_PRINTF_TOKEN_ISSUES,
     MAX_WINDOWS_API_NONE_ISSUES,
     RUFF_PYPROJECT_CONFIG_FILENAME,
     RUFF_PYPROJECT_TOOL_TABLE_MARKER,
@@ -45,6 +47,8 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_IMPORT_STATEMENT_PREFIXES,
     ALL_PYTHON_EXTENSIONS,
     LOGGING_FSTRING_PATTERN,
+    LOGGING_PRINTF_TOKEN_PATTERN,
+    MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT,
     NOT_INSIDE_TYPE_CHECKING_BLOCK,
     TRIPLE_DOUBLE_QUOTE_DELIMITER,
     TRIPLE_QUOTE_PARITY_DIVISOR,
@@ -417,6 +421,121 @@ def check_logging_fstrings(content: str) -> list[str]:
         if len(issues) >= maximum_issues:
             break
 
+    return issues
+
+
+def _format_logger_names_imported(tree: ast.Module) -> set[str]:
+    """Return the local names bound to automation_logging log helpers.
+
+    Scans every ``from ... import ...`` statement for an import whose module
+    path contains ``automation_logging`` and collects the local binding of each
+    imported ``log_*`` helper (the alias when ``as`` is present, otherwise the
+    imported name). Only these names identify a str.format-logger call; a
+    ``log_*`` helper from any other module is not collected, because a
+    ``%``-style logger formats its tokens correctly.
+
+    Args:
+        tree: The parsed module to scan for logger imports.
+
+    Returns:
+        The set of local names bound to automation_logging log helpers.
+    """
+    bound_names: set[str] = set()
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.ImportFrom):
+            continue
+        if each_node.module is None or "automation_logging" not in each_node.module:
+            continue
+        for each_alias in each_node.names:
+            if each_alias.name in ALL_FORMAT_LOGGER_FUNCTION_NAMES:
+                bound_names.add(each_alias.asname or each_alias.name)
+    return bound_names
+
+
+def _printf_token_log_call_line(
+    node: ast.AST, all_format_logger_names: set[str]
+) -> int | None:
+    """Return the line of a format-logger call carrying a printf token, else None.
+
+    Args:
+        node: The AST node to inspect.
+        all_format_logger_names: Local names bound to automation_logging log
+            helpers.
+
+    Returns:
+        The 1-based line number when ``node`` is a bare-name call to a format
+        logger that has at least one format argument after the message and
+        whose first string-literal argument carries a printf token; otherwise
+        None. A call with only the message and no format arguments never runs
+        ``.format(*args)``, so its token prints intact and is not flagged.
+    """
+    if not isinstance(node, ast.Call):
+        return None
+    function_reference = node.func
+    if (
+        not isinstance(function_reference, ast.Name)
+        or function_reference.id not in all_format_logger_names
+    ):
+        return None
+    if len(node.args) < MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT:
+        return None
+    message_argument = node.args[0]
+    if not isinstance(message_argument, ast.Constant) or not isinstance(
+        message_argument.value, str
+    ):
+        return None
+    if not LOGGING_PRINTF_TOKEN_PATTERN.search(message_argument.value):
+        return None
+    return node.lineno
+
+
+def check_logging_printf_tokens(content: str, file_path: str) -> list[str]:
+    """Flag printf tokens in a str.format-logger (automation_logging) message.
+
+    The ``shared_utils.automation_logging`` helpers (``log_info``, ``log_error``,
+    ...) format with ``str.format`` (``{}`` placeholders) only when format
+    arguments follow the message (``message.format(*args) if args else
+    message``), so a printf-style token such as ``%s`` in the message literal is
+    never substituted: the format arguments are dropped and the literal token
+    prints. The check fires only in a file that imports one of those helpers
+    from an ``automation_logging`` module, and only for a bare-name call to such
+    a helper that passes at least one format argument after the message and
+    whose first argument is a string literal carrying a token. A call with only
+    the message and no format arguments never runs ``.format``, so its token
+    prints intact and is left alone. An attribute call (``logger.info``) or a
+    ``log_*`` helper from any other module formats ``%``-tokens correctly and is
+    left alone. Test files are exempt so a test may exercise the malformed shape.
+
+    Args:
+        content: The Python source under validation.
+        file_path: The destination path, used to skip test files and non-Python.
+
+    Returns:
+        One issue line per offending call, capped at the configured maximum.
+    """
+    if is_test_file(file_path):
+        return []
+    if get_file_extension(file_path) not in ALL_PYTHON_EXTENSIONS:
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    all_format_logger_names = _format_logger_names_imported(tree)
+    if not all_format_logger_names:
+        return []
+    issues: list[str] = []
+    for each_node in ast.walk(tree):
+        offending_line = _printf_token_log_call_line(each_node, all_format_logger_names)
+        if offending_line is None:
+            continue
+        issues.append(
+            f"Line {offending_line}: printf token in a str.format logger "
+            "message - the automation_logging helpers format with str.format; "
+            "use {} placeholders (the %-arguments are silently dropped)"
+        )
+        if len(issues) >= MAX_LOGGING_PRINTF_TOKEN_ISSUES:
+            break
     return issues
 
 

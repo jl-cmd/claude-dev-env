@@ -23,6 +23,7 @@ MAX_TYPE_ESCAPE_HATCH_ISSUES: int = 5
 MAX_THIN_WRAPPER_ISSUES: int = 1
 MAX_ZERO_PAYLOAD_ALIAS_ISSUES: int = 3
 MAX_LOGGING_FSTRING_ISSUES: int = 3
+MAX_LOGGING_PRINTF_TOKEN_ISSUES: int = 3
 MAX_WINDOWS_API_NONE_ISSUES: int = 3
 MAX_E2E_TEST_NAMING_ISSUES: int = 3
 MAX_IMPORT_BLOCK_SORT_ISSUES: int = 1
@@ -99,6 +100,17 @@ ALL_DOCSTRING_FILE_REFERENCE_SUFFIXES: tuple[str, ...] = (
 DOCSTRING_REFERENCE_MARKER_WINDOW: int = 2
 ALL_GENERIC_CHECK_NAME_TOKENS: frozenset[str] = frozenset(
     {"check", "checks", "test", "tests", "in", "for", "and", "the"}
+)
+ALL_FORMAT_LOGGER_FUNCTION_NAMES: frozenset[str] = frozenset(
+    {
+        "log_debug",
+        "log_info",
+        "log_ok",
+        "log_error",
+        "log_warning",
+        "log_batch",
+        "log_background",
+    }
 )
 
 ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES: tuple[str, ...] = (

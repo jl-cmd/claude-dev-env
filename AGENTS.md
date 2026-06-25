@@ -108,6 +108,7 @@ Full rule including the decision table, examples, and reference-counting details
 - `import` statements live at the top of the file.
 - Application and library code uses logging calls. CLI tools and automation entrypoints may use `print()` when stdout is the integration contract (`print(json.dumps(...))`).
 - `log_*` and `logger.*` calls use `%`-style placeholders: `logger.info("delivered %s", message_id)`.
+- A `log_*` helper imported from a `str.format`-based logger (`shared_utils.automation_logging`) is the exception: its messages take `{}` placeholders, and a `%s`/`%d` token there is dropped by `str.format`, so the arguments never print.
 
 ### Design
 
@@ -166,6 +167,7 @@ The table lists **where the rule is encoded** (the script or module that impleme
 | No new inline comments in production diffs | `code_rules_enforcer.py` (Python; JS/TS comment-change checks only where `validate_content` runs them) |
 | Imports at file top, never inside functions | `code_rules_enforcer.py` (Python) |
 | Logging format args (no f-strings inside `log_*` and `logger.*`) | `code_rules_enforcer.py` (Python) |
+| Printf tokens (`%s`/`%d`) in a `str.format`-logger message (`log_*` imported from `automation_logging`) | `code_rules_enforcer.py` (Python) |
 | No literal values in production function bodies | `code_rules_enforcer.py` (Python) |
 | `UPPER_SNAKE_CASE` constants live under `config/` | `code_rules_enforcer.py` (Python) |
 | Production `Write|Edit` touches require a recently modified sibling test candidate | `tdd_enforcer.py` (heuristic freshness gate — not a proof that a brand-new test assertion shipped in the same PR) |
