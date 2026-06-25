@@ -1,33 +1,44 @@
-"""Cross-file duplicate top-level function body detection.
+"""Duplicate top-level function body detection.
 
-The check flags a top-level function in the file being written whose body is
-structurally identical to a top-level function already defined in a sibling
-``.py`` module in the same directory. This catches the Reuse-before-create / DRY
-violation where a helper is copy-pasted across several modules instead of being
-imported from one shared home.
+``check_duplicate_function_body_across_files`` flags a top-level function in the
+file being written whose body is structurally identical to a top-level function
+already defined in a sibling ``.py`` module in the same directory.
+``check_same_file_inline_duplicate_body`` flags a top-level function whose body
+appears verbatim as a contiguous statement block inside another function in the
+same file — the inlined-block copy the cross-file whole-function comparison
+misses. Both catch the Reuse-before-create / DRY violation where a block of logic
+is copied instead of called from one shared home, so a fix that lands in one copy
+leaves the other carrying the bug.
 
-The scan is deliberately conservative to keep false positives near zero:
+The scans are deliberately conservative to keep false positives near zero:
 
 - Only module-scope ``def`` / ``async def`` bodies are compared (the copied-helper
   case), never methods nested in a class.
-- Bodies are compared by their normalized AST structure with the leading
-  docstring dropped, so reformatting and comment differences do not hide a copy.
-  The comparison keeps identifier names, so a match requires the body statements,
-  including local variable names, to be structurally identical; it does not
-  consider the parameter list, decorators, or whether the function is ``async``.
-- A body must contain at least ``MINIMUM_DUPLICATE_BODY_STATEMENTS`` statements;
-  trivial one- or two-line helpers (``return None``, a single delegation) are too
-  common to flag.
+- The cross-file scan compares whole bodies by their normalized AST structure
+  with the leading docstring dropped, keeping identifier names, so a match
+  requires the body statements — local variable names included — to be
+  structurally identical; it ignores the parameter list, decorators, and whether
+  the function is ``async``, and a body must hold at least
+  ``MINIMUM_DUPLICATE_BODY_STATEMENTS`` statements.
+- The same-file inline scan trims a helper's leading ``assert`` preconditions and
+  drops its docstring, then seeks the remaining window verbatim inside another
+  function's reachable statement blocks. String-literal constants are canonicalized
+  before comparison, so two blocks that differ only in a logging or error message
+  still collide, while the window must hold a substantial compound statement
+  (``try``, ``for``, ``while``, ``with``) and sit inside a strictly larger,
+  non-twin enclosing body. A bare ``if`` guard, a flat run, and a structural-twin
+  peer helper never flag.
 - Test files and ``__init__.py`` re-export surfaces never participate, on either
   the writing side or the sibling side.
 
-Unlike most code-rules checks, this one runs on hook-infrastructure files: the
-copied-helper violation it targets appears most often in the ``blocking/`` hook
-directory itself, so gating it behind the hook-infrastructure exemption would
+Unlike most code-rules checks, these run on hook-infrastructure files: the
+copied-block violation they target appears often in the ``blocking/`` hook
+directory itself, so gating them behind the hook-infrastructure exemption would
 leave the exact violation class unguarded. The enforcer entry points route a
-hook ``.py`` target to this single check even though the full code-rules verdict
-stays off hook infrastructure, so a Write or pre-check against a file under the
-``blocking/`` directory still blocks a copied sibling helper.
+hook ``.py`` target to both checks even though the full code-rules verdict stays
+off hook infrastructure, so a Write or pre-check against a file under the
+``blocking/`` directory still blocks a copied sibling helper and an inlined
+helper body.
 
 ``advise_cross_skill_duplicate_helper`` is the non-blocking companion for a
 different layout: a helper copied between two skills' ``scripts`` directories.
@@ -40,6 +51,7 @@ folders; within one skill the blocking check above already covers the copy.
 """
 
 import ast
+import copy
 import sys
 from pathlib import Path
 
@@ -63,7 +75,9 @@ from hooks_constants.duplicate_function_body_constants import (  # noqa: E402
     MAX_CROSS_SKILL_ADVISORY_ISSUES,
     MAX_DUPLICATE_BODY_ISSUES,
     MINIMUM_DUPLICATE_BODY_STATEMENTS,
+    MINIMUM_INLINE_DUPLICATE_BODY_STATEMENTS,
     PYTHON_SOURCE_SUFFIX,
+    SAME_FILE_INLINE_DUPLICATE_GUIDANCE,
     SKILL_SCRIPTS_DIRECTORY_NAME,
     SKILLS_DIRECTORY_NAME,
 )
@@ -292,6 +306,315 @@ def check_duplicate_function_body_across_files(
             f"(duplicate body span at line {each_span.start}, spanning {len(each_span)} lines)"
         )
         all_violations_in_walk_order.append((each_span, message))
+        if len(all_violations_in_walk_order) >= MAX_DUPLICATE_BODY_ISSUES:
+            break
+    return _scope_violations_to_changed_lines(
+        all_violations_in_walk_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
+
+
+class _StringConstantCanonicalizer(ast.NodeTransformer):
+    """Rewrite every string-literal constant to one placeholder.
+
+    Two copied blocks most often differ only in a message string — a logging or
+    error suffix the author tweaked while leaving the call, selector, and control
+    structure identical. Canonicalizing string constants before dumping lets such
+    blocks collide while a different call target, selector, or numeric constant
+    still keeps two blocks distinct. Non-string constants (numbers, ``None``,
+    booleans) are left untouched so a genuine value difference stays visible.
+    """
+
+    def visit_Constant(self, node: ast.Constant) -> ast.Constant:
+        """Replace a string-valued constant with a fixed placeholder string.
+
+        Args:
+            node: The constant node under transformation.
+
+        Returns:
+            A placeholder constant for a string value, or the node unchanged for
+            any non-string constant.
+        """
+        if isinstance(node.value, str):
+            return ast.copy_location(ast.Constant(value=""), node)
+        return node
+
+
+def _normalized_statement_dump(statement: ast.stmt) -> str:
+    """Return the normalized AST dump of one statement.
+
+    Canonicalizes every string-literal constant to one placeholder before
+    dumping, so two statements that differ only in a message string still produce
+    the same dump. The call structure, selectors, exception handlers, and numeric
+    constants are preserved, so a genuine logic difference still keeps two
+    statements distinct.
+
+    Args:
+        statement: The statement node to fingerprint.
+
+    Returns:
+        The annotate-fields-suppressed AST dump of the statement after string
+        constants are canonicalized.
+    """
+    canonical_statement = _StringConstantCanonicalizer().visit(
+        copy.deepcopy(statement)
+    )
+    return ast.dump(canonical_statement, annotate_fields=False)
+
+
+def _statement_blocks_in_function(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[list[ast.stmt]]:
+    """Return every statement list reachable inside a function body.
+
+    A copied helper body can sit at the function's top level or nested inside a
+    branch, loop, or context block, so the inline-duplicate scan walks each nested
+    statement list as its own window source. The function's own immediate body is
+    the first block; every nested block (``If`` arms, ``For``/``While`` bodies,
+    ``With``/``Try`` bodies and handlers) follows.
+
+    Args:
+        function_node: The module-scope function whose blocks to collect.
+
+    Returns:
+        A list of statement lists, one per reachable block in the function.
+    """
+    all_blocks: list[list[ast.stmt]] = []
+    for each_node in ast.walk(function_node):
+        for each_field_name in ("body", "orelse", "finalbody"):
+            block = getattr(each_node, each_field_name, None)
+            if isinstance(block, list) and block and isinstance(block[0], ast.stmt):
+                all_blocks.append(block)
+        for each_handler in getattr(each_node, "handlers", []) or []:
+            if isinstance(each_handler, ast.ExceptHandler):
+                all_blocks.append(each_handler.body)
+    return all_blocks
+
+
+def _substantive_body_statement_count(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> int:
+    """Return the function's top-level statement count after a leading docstring.
+
+    Args:
+        function_node: The function whose immediate body to measure.
+
+    Returns:
+        The number of top-level body statements, excluding a leading docstring.
+    """
+    body_statements = list(function_node.body)
+    if body_statements and isinstance(body_statements[0], ast.Expr):
+        first_value = body_statements[0].value
+        if isinstance(first_value, ast.Constant) and isinstance(first_value.value, str):
+            body_statements = body_statements[1:]
+    return len(body_statements)
+
+
+def _normalized_body_dump_multiset(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[str]:
+    """Return the function's docstring-stripped statement dumps, sorted.
+
+    Used to test whether two functions are structural twins — same statements in
+    any arrangement under string normalization. Sorting makes the comparison
+    order-independent, so two peer helpers that read different inputs but share
+    the same statement shapes compare equal and are left to the cross-file check.
+
+    Args:
+        function_node: The function whose body to fingerprint.
+
+    Returns:
+        The sorted per-statement normalized dumps of the docstring-stripped body.
+    """
+    body_statements = list(function_node.body)
+    if body_statements and isinstance(body_statements[0], ast.Expr):
+        first_value = body_statements[0].value
+        if isinstance(first_value, ast.Constant) and isinstance(first_value.value, str):
+            body_statements = body_statements[1:]
+    return sorted(_normalized_statement_dump(each) for each in body_statements)
+
+
+def _function_inlines_window(
+    helper_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    enclosing_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    all_helper_window_dumps: list[str],
+) -> bool:
+    """Return whether a function inlines a helper window inside a larger body.
+
+    Slides a window the length of ``all_helper_window_dumps`` over each reachable
+    statement block in the enclosing function; a window whose per-statement dumps
+    match the helper's, in order, is the inlined copy. Two guards keep the report
+    to the genuine "helper inlined inside a larger function" shape:
+
+    - The enclosing function carries more top-level statements than the window, so
+      a copy that fills a whole peer function is not reported here.
+    - The two functions are not structural twins — their docstring-stripped
+      statement multisets differ — so two peer helpers that share a statement
+      shape but read different inputs are left to the cross-file whole-function
+      check ``check_duplicate_function_body_across_files`` rather than reported as
+      an inline duplicate.
+
+    Args:
+        helper_node: The candidate helper whose window is sought.
+        enclosing_node: The candidate enclosing function to scan.
+        all_helper_window_dumps: The helper's substantive-block per-statement dumps.
+
+    Returns:
+        True when some block in the enclosing function contains the helper window
+        verbatim as a contiguous run inside a strictly larger, non-twin body.
+    """
+    window_length = len(all_helper_window_dumps)
+    if _substantive_body_statement_count(enclosing_node) <= window_length:
+        return False
+    if _normalized_body_dump_multiset(helper_node) == _normalized_body_dump_multiset(
+        enclosing_node
+    ):
+        return False
+    for each_block in _statement_blocks_in_function(enclosing_node):
+        if len(each_block) < window_length:
+            continue
+        block_dumps = [_normalized_statement_dump(each) for each in each_block]
+        for each_start_index in range(len(block_dumps) - window_length + 1):
+            window = block_dumps[each_start_index : each_start_index + window_length]
+            if window == all_helper_window_dumps:
+                return True
+    return False
+
+
+def _helper_match_window_dumps(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[str] | None:
+    """Return the helper's substantive block as per-statement dumps, or None.
+
+    Drops a leading docstring the same way ``_normalized_body_signature`` does,
+    then trims leading ``assert`` precondition guards so the match window begins at
+    the helper's first non-assert statement. A helper commonly wraps a copied block
+    in its own ``assert`` precondition, so trimming those lets the helper's
+    substantive block match the same block inlined elsewhere without the guard.
+    Only ``assert`` is trimmed — a leading assignment or call carries data the
+    duplicate must share, so trimming it would expose a generic tail and match
+    unrelated peer helpers.
+
+    The window must hold at least ``MINIMUM_INLINE_DUPLICATE_BODY_STATEMENTS``
+    statements and must contain a substantial compound statement — a ``try``,
+    ``for``, ``while``, or ``with`` block. A run of flat statements, and a bare
+    ``if`` guard (an idiomatic strict-vs-optional validator pair where one wraps a
+    ``None`` check around the other's ``if ...: raise`` narrow), are too common to
+    be a meaningful inline duplicate and never flag, while a duplicated
+    ``try``/``except`` or loop block — the substantial control structure worth a
+    shared helper — does.
+
+    Args:
+        function_node: The module-scope function to treat as a candidate helper.
+
+    Returns:
+        The per-statement normalized dumps of the helper's substantive block, or
+        None when it has no compound statement or is shorter than the minimum.
+    """
+    body_statements = list(function_node.body)
+    if body_statements and isinstance(body_statements[0], ast.Expr):
+        first_value = body_statements[0].value
+        if isinstance(first_value, ast.Constant) and isinstance(first_value.value, str):
+            body_statements = body_statements[1:]
+    first_non_assert_index = next(
+        (
+            each_index
+            for each_index, each_statement in enumerate(body_statements)
+            if not isinstance(each_statement, ast.Assert)
+        ),
+        None,
+    )
+    if first_non_assert_index is None:
+        return None
+    match_window = body_statements[first_non_assert_index:]
+    if len(match_window) < MINIMUM_INLINE_DUPLICATE_BODY_STATEMENTS:
+        return None
+    substantial_compound_statement_types = (ast.Try, ast.For, ast.While, ast.With)
+    has_substantial_compound = any(
+        isinstance(each, substantial_compound_statement_types)
+        for each in match_window
+    )
+    if not has_substantial_compound:
+        return None
+    return [_normalized_statement_dump(each) for each in match_window]
+
+
+def check_same_file_inline_duplicate_body(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    """Flag a module-scope helper whose body is inlined inside another function.
+
+    Compares each module-scope function's body against every other module-scope
+    function in the same file, reporting any helper whose body appears verbatim as
+    a contiguous statement block inside another function. This is the same-file
+    counterpart to ``check_duplicate_function_body_across_files``, which only
+    compares whole functions across sibling modules and so misses a helper that
+    duplicates a block already inlined in a same-file function.
+
+    Violations are span-scoped to the lines an edit touched the same way the
+    cross-file check scopes its own: a violation blocks when either the helper's
+    span or the enclosing function's span intersects the changed lines, so an
+    unrelated edit to a file that already carries the duplication does not block,
+    while a Write or an edit touching either function still flags.
+
+    Args:
+        content: The full post-edit file content being written.
+        file_path: The destination path of the write.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a violation
+            blocks only when the helper's span or the enclosing function's span
+            intersects the changed lines.
+        defer_scope_to_caller: When True, return every violation so the commit/push
+            gate's ``split_violations_by_scope`` can scope by added line.
+
+    Returns:
+        Human-readable violation strings, one per inlined-duplicate helper, scoped
+        to the changed lines unless *defer_scope_to_caller* is True or
+        *all_changed_lines* is None.
+    """
+    if Path(file_path).name == DUNDER_INIT_FILENAME:
+        return []
+    if is_test_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    all_top_level_functions = [
+        each_node
+        for each_node in tree.body
+        if isinstance(each_node, ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
+    all_violations_in_walk_order: list[tuple[range, str]] = []
+    for each_helper in all_top_level_functions:
+        helper_window_dumps = _helper_match_window_dumps(each_helper)
+        if helper_window_dumps is None:
+            continue
+        for each_enclosing in all_top_level_functions:
+            if each_enclosing is each_helper:
+                continue
+            if not _function_inlines_window(
+                each_helper, each_enclosing, helper_window_dumps
+            ):
+                continue
+            helper_span = _function_definition_span(each_helper)
+            enclosing_span = _function_definition_span(each_enclosing)
+            combined_span = range(
+                min(helper_span.start, enclosing_span.start),
+                max(helper_span.stop, enclosing_span.stop),
+            )
+            message = (
+                f"Function {each_helper.name!r} duplicates an inline block in "
+                f"{each_enclosing.name!r} — {SAME_FILE_INLINE_DUPLICATE_GUIDANCE} "
+                f"(duplicate body span at line {helper_span.start}, "
+                f"spanning {len(helper_span)} lines)"
+            )
+            all_violations_in_walk_order.append((combined_span, message))
+            break
         if len(all_violations_in_walk_order) >= MAX_DUPLICATE_BODY_ISSUES:
             break
     return _scope_violations_to_changed_lines(
