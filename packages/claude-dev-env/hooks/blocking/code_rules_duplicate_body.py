@@ -83,6 +83,30 @@ from hooks_constants.duplicate_function_body_constants import (  # noqa: E402
 )
 
 
+def _body_statements_without_docstring(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.stmt]:
+    """Return the function's top-level body statements with a leading docstring dropped.
+
+    A function whose first statement is a bare string-literal expression carries a
+    docstring; that statement is omitted so two copies that differ only in their
+    docstring compare equal. A function with no leading docstring returns its body
+    unchanged.
+
+    Args:
+        function_node: The module-scope function whose body to read.
+
+    Returns:
+        The top-level body statements, excluding a leading docstring expression.
+    """
+    body_statements = list(function_node.body)
+    if body_statements and isinstance(body_statements[0], ast.Expr):
+        first_value = body_statements[0].value
+        if isinstance(first_value, ast.Constant) and isinstance(first_value.value, str):
+            return body_statements[1:]
+    return body_statements
+
+
 def _normalized_body_signature(function_node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
     """Return a position-independent structural fingerprint of the function body.
 
@@ -98,11 +122,7 @@ def _normalized_body_signature(function_node: ast.FunctionDef | ast.AsyncFunctio
         A normalized AST dump of the body statements, or None when the body is
         too small to compare.
     """
-    body_statements = list(function_node.body)
-    if body_statements and isinstance(body_statements[0], ast.Expr):
-        first_value = body_statements[0].value
-        if isinstance(first_value, ast.Constant) and isinstance(first_value.value, str):
-            body_statements = body_statements[1:]
+    body_statements = _body_statements_without_docstring(function_node)
     if len(body_statements) < MINIMUM_DUPLICATE_BODY_STATEMENTS:
         return None
     return "\n".join(
@@ -392,23 +412,34 @@ def _statement_blocks_in_function(
     return all_blocks
 
 
-def _substantive_body_statement_count(
+def _total_reachable_statement_count(
     function_node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> int:
-    """Return the function's top-level statement count after a leading docstring.
+    """Return the count of every statement reachable inside the function body.
+
+    Walks the function's immediate body and every nested block — ``If`` arms,
+    loop and context bodies, ``Try`` bodies and handlers and ``finalbody`` — so a
+    duplicated window wrapped inside a single top-level compound (a ``try``/
+    ``finally`` cleanup or one ``if`` guard) still counts the statements the window
+    occupies plus the statements around it. The leading docstring is excluded from
+    the immediate body so a docstring does not inflate the count.
 
     Args:
-        function_node: The function whose immediate body to measure.
+        function_node: The function whose reachable statements to count.
 
     Returns:
-        The number of top-level body statements, excluding a leading docstring.
+        The number of statements reachable in the function, excluding a leading
+        docstring expression.
     """
-    body_statements = list(function_node.body)
-    if body_statements and isinstance(body_statements[0], ast.Expr):
-        first_value = body_statements[0].value
-        if isinstance(first_value, ast.Constant) and isinstance(first_value.value, str):
-            body_statements = body_statements[1:]
-    return len(body_statements)
+    has_leading_docstring = len(_body_statements_without_docstring(function_node)) < len(
+        function_node.body
+    )
+    total_statement_count = sum(
+        1 for each_node in ast.walk(function_node) if isinstance(each_node, ast.stmt)
+    )
+    if has_leading_docstring:
+        return total_statement_count - 1
+    return total_statement_count
 
 
 def _normalized_body_dump_multiset(
@@ -427,11 +458,7 @@ def _normalized_body_dump_multiset(
     Returns:
         The sorted per-statement normalized dumps of the docstring-stripped body.
     """
-    body_statements = list(function_node.body)
-    if body_statements and isinstance(body_statements[0], ast.Expr):
-        first_value = body_statements[0].value
-        if isinstance(first_value, ast.Constant) and isinstance(first_value.value, str):
-            body_statements = body_statements[1:]
+    body_statements = _body_statements_without_docstring(function_node)
     return sorted(_normalized_statement_dump(each) for each in body_statements)
 
 
@@ -447,8 +474,11 @@ def _function_inlines_window(
     match the helper's, in order, is the inlined copy. Two guards keep the report
     to the genuine "helper inlined inside a larger function" shape:
 
-    - The enclosing function carries more top-level statements than the window, so
-      a copy that fills a whole peer function is not reported here.
+    - The enclosing function carries more total reachable statements than the
+      window, so a copy that fills a whole peer function is not reported here. The
+      count spans every nested block, so a window wrapped inside one top-level
+      compound — a ``try``/``finally`` cleanup, an ``except`` handler, or a single
+      ``if`` guard — still clears the guard and is scanned.
     - The two functions are not structural twins — their docstring-stripped
       statement multisets differ — so two peer helpers that share a statement
       shape but read different inputs are left to the cross-file whole-function
@@ -465,7 +495,7 @@ def _function_inlines_window(
         verbatim as a contiguous run inside a strictly larger, non-twin body.
     """
     window_length = len(all_helper_window_dumps)
-    if _substantive_body_statement_count(enclosing_node) <= window_length:
+    if _total_reachable_statement_count(enclosing_node) <= window_length:
         return False
     if _normalized_body_dump_multiset(helper_node) == _normalized_body_dump_multiset(
         enclosing_node
@@ -512,11 +542,7 @@ def _helper_match_window_dumps(
         The per-statement normalized dumps of the helper's substantive block, or
         None when it has no compound statement or is shorter than the minimum.
     """
-    body_statements = list(function_node.body)
-    if body_statements and isinstance(body_statements[0], ast.Expr):
-        first_value = body_statements[0].value
-        if isinstance(first_value, ast.Constant) and isinstance(first_value.value, str):
-            body_statements = body_statements[1:]
+    body_statements = _body_statements_without_docstring(function_node)
     first_non_assert_index = next(
         (
             each_index

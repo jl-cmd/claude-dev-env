@@ -154,6 +154,97 @@ def test_should_flag_two_statement_helper_with_a_compound_statement() -> None:
     )
 
 
+def test_should_flag_helper_inlined_inside_an_enclosing_finally_block() -> None:
+    source = (
+        "def _drain_queue(queue: object) -> None:\n"
+        "    for each_message in queue.pending:\n"
+        "        queue.deliver(each_message)\n"
+        "        queue.acknowledge(each_message)\n"
+        "\n"
+        "\n"
+        "def shutdown(queue: object) -> None:\n"
+        "    try:\n"
+        "        queue.stop_accepting()\n"
+        "    finally:\n"
+        "        for each_message in queue.pending:\n"
+        "            queue.deliver(each_message)\n"
+        "            queue.acknowledge(each_message)\n"
+    )
+    issues = check_same_file_inline_duplicate_body(source, "module.py")
+    assert any("_drain_queue" in each_issue for each_issue in issues), (
+        "A helper whose loop body is inlined verbatim in an enclosing function's "
+        f"finally block is a real duplicate and must flag, got: {issues}"
+    )
+
+
+def test_should_flag_helper_inlined_inside_an_enclosing_except_handler() -> None:
+    source = (
+        "def _drain_queue(queue: object) -> None:\n"
+        "    for each_message in queue.pending:\n"
+        "        queue.deliver(each_message)\n"
+        "        queue.acknowledge(each_message)\n"
+        "\n"
+        "\n"
+        "def run(queue: object) -> None:\n"
+        "    try:\n"
+        "        queue.start()\n"
+        "    except RuntimeError:\n"
+        "        for each_message in queue.pending:\n"
+        "            queue.deliver(each_message)\n"
+        "            queue.acknowledge(each_message)\n"
+    )
+    issues = check_same_file_inline_duplicate_body(source, "module.py")
+    assert any("_drain_queue" in each_issue for each_issue in issues), (
+        "A helper whose loop body is inlined verbatim in an enclosing function's "
+        f"except handler is a real duplicate and must flag, got: {issues}"
+    )
+
+
+def test_should_flag_helper_inlined_inside_a_single_top_level_if_guard() -> None:
+    source = (
+        "def _send_pending(client: object) -> None:\n"
+        "    queued = client.collect()\n"
+        "    try:\n"
+        "        client.transmit(queued)\n"
+        "    except (TimeoutError, ConnectionError) as send_error:\n"
+        "        logger.warning('send failed: %s', send_error)\n"
+        "\n"
+        "\n"
+        "def flush(client: object) -> None:\n"
+        "    if client.enabled:\n"
+        "        queued = client.collect()\n"
+        "        try:\n"
+        "            client.transmit(queued)\n"
+        "        except (TimeoutError, ConnectionError) as send_error:\n"
+        "            logger.warning('send failed: %s', send_error)\n"
+    )
+    issues = check_same_file_inline_duplicate_body(source, "module.py")
+    assert any("_send_pending" in each_issue for each_issue in issues), (
+        "A helper whose two-statement window is inlined inside a single top-level "
+        f"if guard is a real duplicate and must flag, got: {issues}"
+    )
+
+
+def test_should_not_flag_structural_twin_peers_wrapped_in_a_compound() -> None:
+    source = (
+        "def _deliver_left(queue: object) -> None:\n"
+        "    for each_message in queue.left:\n"
+        "        queue.deliver(each_message)\n"
+        "        queue.acknowledge(each_message)\n"
+        "\n"
+        "\n"
+        "def _deliver_right(queue: object) -> None:\n"
+        "    for each_message in queue.left:\n"
+        "        queue.deliver(each_message)\n"
+        "        queue.acknowledge(each_message)\n"
+    )
+    issues = check_same_file_inline_duplicate_body(source, "module.py")
+    assert issues == [], (
+        "Two peer helpers that share the same statement shape are structural twins "
+        f"left to the cross-file check, so neither must flag, got: {issues}"
+    )
+
+
 def test_should_match_through_a_docstring_only_difference() -> None:
     source = (
         "def render_block(target: object) -> None:\n"
