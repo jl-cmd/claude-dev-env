@@ -1,5 +1,60 @@
 # Changelog
 
+## [1.76.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.75.0...claude-dev-env-v1.76.0) (2026-06-25)
+
+
+### Features
+
+* **anthropic-plan:** add plan-mode approval gate before packet workflow ([1beab23](https://github.com/jl-cmd/claude-code-config/commit/1beab23e5217e168e65e43a135d7448401378b2a))
+* **anthropic-plan:** add plan-mode approval gate before packet workflow ([6f09fb1](https://github.com/jl-cmd/claude-code-config/commit/6f09fb1b1cba3efc363b72c252f75f840bdcc60e))
+* flag printf tokens in str.format-logger (automation_logging) messages ([ea5f7b3](https://github.com/jl-cmd/claude-code-config/commit/ea5f7b3df4fee55adc0312950f380b1e98fdcc8f))
+* **hooks:** block JS/.mjs spawn-JSDoc resume-task enumeration drift ([334fb4a](https://github.com/jl-cmd/claude-code-config/commit/334fb4a330066c25e2c53cc9dc4c69672308e462))
+* **hooks:** block JS/.mjs spawn-JSDoc resume-task enumeration drift ([4e3dce3](https://github.com/jl-cmd/claude-code-config/commit/4e3dce39a42a93c02d5aab2609e33725a1a7a24b))
+* **hooks:** block same-file inline duplicate function bodies at Write/Edit ([1068fd1](https://github.com/jl-cmd/claude-code-config/commit/1068fd1157be116343572e3ad109e0abaafddeae))
+* **hooks:** block un-sorted import blocks at Write/Edit time (ruff I001) ([bf0fe36](https://github.com/jl-cmd/claude-code-config/commit/bf0fe361da8e692878c2149996d4af56966141b6))
+* **hooks:** block un-sorted import blocks at Write/Edit time (ruff I001) ([6f5c193](https://github.com/jl-cmd/claude-code-config/commit/6f5c193f581e631f97b76bd7171f6e6e64a9bd61))
+* **hooks:** extend CLAUDE.md orphan blocker to fenced run-command scripts ([44f73ed](https://github.com/jl-cmd/claude-code-config/commit/44f73ed2c2b45c2b657aeb53d2eb8df196818279))
+* **hooks:** flag printf tokens in str.format-logger (automation_logging) calls ([17b2531](https://github.com/jl-cmd/claude-code-config/commit/17b25311faead731d9d918ccd552911c5f678158))
+
+
+### Bug Fixes
+
+* address converge-round findings on verdict recognition and orphan blocker ([e5496d2](https://github.com/jl-cmd/claude-code-config/commit/e5496d2ae99500077472240badd6fe22d1a8cb4c))
+* address converge-round findings on verdict store and orphan blocker ([25dcc17](https://github.com/jl-cmd/claude-code-config/commit/25dcc17d1d4421a3a70103143fd8ac7711a48185))
+* **autoconverge:** address converge-round findings on claude_md orphan blocker ([fa5d06c](https://github.com/jl-cmd/claude-code-config/commit/fa5d06cc7123c310d180cbfedcb60f2e3f0603b3))
+* **autoconverge:** address converge-round findings on claude_md orphan blocker ([6b2dcc8](https://github.com/jl-cmd/claude-code-config/commit/6b2dcc8eae9bcc34ba46d59ae141a6d3a496a1ed))
+* **autoconverge:** address review findings on JS resume task enumeration ([ee9f64b](https://github.com/jl-cmd/claude-code-config/commit/ee9f64baff760ba0abd06ee9c99837403198e375))
+* **autoconverge:** address review findings on JS resume-task enumeration check ([dafb221](https://github.com/jl-cmd/claude-code-config/commit/dafb221a61d5221b710996ff995203bf3d3ab446))
+* **autoconverge:** apply converge-round fixes for claude_md orphan blocker ([88cf807](https://github.com/jl-cmd/claude-code-config/commit/88cf807023ab47a0bf898e68a2651fdc20b7bdc2))
+* **autoconverge:** apply converge-round fixes for import-sort hardening ([185c904](https://github.com/jl-cmd/claude-code-config/commit/185c9045279582b39dd3f0fb6708c95f77faf90b))
+* **autoconverge:** enumerate fix-verify resume phase in verifier docstring ([67227fc](https://github.com/jl-cmd/claude-code-config/commit/67227fc9d661d891e4b47ffec3dd8997bfb0a1de))
+* **autoconverge:** harden JS resume-task enumeration check against false negatives ([0122ac8](https://github.com/jl-cmd/claude-code-config/commit/0122ac835f9dd472ae75c9f2304f8b9695564f7b))
+* **autoconverge:** isolate the converge fix path verifier from the editor ([b10beae](https://github.com/jl-cmd/claude-code-config/commit/b10beae84cb8b885c44a9b12b7be7ab61d581eb8))
+* **claude-md-orphan:** handle trailing comments and avoid regex backtracking ([e022d77](https://github.com/jl-cmd/claude-code-config/commit/e022d775c7fd2645bb6f8c42cde03e8387b1a92f))
+* **converge:** restore fresh-context isolation in fix-path verify, remove unused generalId parameter ([e63b354](https://github.com/jl-cmd/claude-code-config/commit/e63b3544c78d66435baaa77e631e6a3f5628992e))
+* harden same-file inline duplicate body detection ([3680af7](https://github.com/jl-cmd/claude-code-config/commit/3680af78c717ea5226a3a1ee195c4b1d427c6cdb))
+* harden same-file inline duplicate-body span detection ([f095bf2](https://github.com/jl-cmd/claude-code-config/commit/f095bf2a3c0dc33193f0583618653cacc60f6163))
+* **hooks:** address converge-round findings on claude_md_orphan_file_blocker ([806b7ae](https://github.com/jl-cmd/claude-code-config/commit/806b7ae383872ce62a221e7345bb17c489e79fbe))
+* **hooks:** address converge-round findings on JS resume task enumeration ([76d2de6](https://github.com/jl-cmd/claude-code-config/commit/76d2de6188f5dab2de991a7e14c6fc1a45c60715))
+* **hooks:** address review findings in JS resume-task enumeration check ([1e048d4](https://github.com/jl-cmd/claude-code-config/commit/1e048d4f2b6e7e196c2099ee63082a4ae9376eee))
+* **hooks:** address review findings on logging printf-token enforcer ([28ca5dc](https://github.com/jl-cmd/claude-code-config/commit/28ca5dca24723f8446832b322a15c1d5e6e12813))
+* **hooks:** blank non-code regions before locating JS resume header ([4be7c19](https://github.com/jl-cmd/claude-code-config/commit/4be7c19d897ad9ac9af7509261206ad4c3340c96))
+* **hooks:** correct run-command script-valued flag regex in claude_md orphan blocker ([22f0903](https://github.com/jl-cmd/claude-code-config/commit/22f0903d44ae3a119f78ed8e950ab06d4f3b039f))
+* **hooks:** count nested statements in same-file duplicate-body guard ([007efa4](https://github.com/jl-cmd/claude-code-config/commit/007efa4f64d80f981c688f06b7721b5d9dd41449))
+* **hooks:** harden JS region scanner for keyword-position regex and template-literal functions ([7545277](https://github.com/jl-cmd/claude-code-config/commit/75452771097e86ab863b5f42c754b6f420714954))
+* **verdict:** recognize code-verifier from transcript when sidecar absent ([3d2ef56](https://github.com/jl-cmd/claude-code-config/commit/3d2ef564c16455adb63d1ee68301bbb28766cf25))
+* **verdict:** recognize code-verifier from transcript when sidecar absent ([52659f2](https://github.com/jl-cmd/claude-code-config/commit/52659f2d7f8fda7d50f1d8e8a8a8521c84626d8c)), closes [#668](https://github.com/jl-cmd/claude-code-config/issues/668)
+
+
+### Documentation
+
+* **rules:** harden package-inventory scope-sentence drift at Write time ([78fdd21](https://github.com/jl-cmd/claude-code-config/commit/78fdd219f935ea71c03c547177ab05b3038c7567))
+
+
+### Tests
+
+* classify flag-gated advisory and allowlist illustrative docstring path ([59f9a0a](https://github.com/jl-cmd/claude-code-config/commit/59f9a0af95c988849d18c0d50d6137e0a002b205))
+
 ## [1.75.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.74.0...claude-dev-env-v1.75.0) (2026-06-24)
 
 
