@@ -880,6 +880,45 @@ def test_allows_run_command_with_valueless_flag_invoking_present_script(tmp_path
     assert result.stdout == ""
 
 
+def test_run_command_script_valued_flag_does_not_shadow_real_script():
+    content = (
+        "# example\n\n"
+        "```\n"
+        "node -r ./reg.js app.js\n"
+        "node --require setup.js main.js\n"
+        "node --import ./loader.mjs entry.mjs\n"
+        "node --loader ts-node/esm runner.ts\n"
+        "```\n"
+    )
+    assert find_run_command_filenames(content) == [
+        "app.js",
+        "main.js",
+        "entry.mjs",
+        "runner.ts",
+    ]
+
+
+def test_allows_run_command_with_script_valued_flag_invoking_present_script(tmp_path: Path):
+    claude_md_path = _isolated_claude_md_path(tmp_path)
+    (claude_md_path.parent / "app.js").write_text("console.log('ok');\n", encoding="utf-8")
+    content = (
+        "# example\n\n"
+        "## Running / testing\n\n"
+        "```\n"
+        "node -r ./reg.js app.js\n"
+        "```\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": str(claude_md_path),
+            "content": content,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
 def test_run_command_chained_commands_each_contribute_their_basename():
     content = (
         "# example\n\n"
