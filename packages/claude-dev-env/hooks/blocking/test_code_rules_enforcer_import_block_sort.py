@@ -92,3 +92,66 @@ def test_should_fail_open_when_no_ruff_config_is_discoverable(tmp_path: Path) ->
         UNSORTED_IMPORT_BLOCK_SOURCE, str(target_without_config)
     )
     assert issues == []
+
+
+def test_should_skip_unsorted_block_when_edit_is_distant_from_it() -> None:
+    changed_lines_away_from_block = {9}
+    issues = imports_logging.check_import_block_sorted(
+        UNSORTED_IMPORT_BLOCK_SOURCE,
+        PRODUCTION_PYTHON_TARGET,
+        changed_lines_away_from_block,
+    )
+    assert issues == []
+
+
+def test_should_flag_unsorted_block_when_edit_touches_anchor_line() -> None:
+    changed_lines_on_block_anchor = {1}
+    issues = imports_logging.check_import_block_sorted(
+        UNSORTED_IMPORT_BLOCK_SOURCE,
+        PRODUCTION_PYTHON_TARGET,
+        changed_lines_on_block_anchor,
+    )
+    assert len(issues) == 1
+    assert "un-sorted (ruff I001)" in issues[0]
+
+
+def test_should_flag_unsorted_block_when_edit_touches_non_anchor_block_line() -> None:
+    changed_lines_inside_block_below_anchor = {4}
+    issues = imports_logging.check_import_block_sorted(
+        UNSORTED_IMPORT_BLOCK_SOURCE,
+        PRODUCTION_PYTHON_TARGET,
+        changed_lines_inside_block_below_anchor,
+    )
+    assert len(issues) == 1
+    assert "un-sorted (ruff I001)" in issues[0]
+
+
+def test_should_flag_unsorted_block_when_edit_touches_last_block_line() -> None:
+    changed_lines_on_block_final_line = {6}
+    issues = imports_logging.check_import_block_sorted(
+        UNSORTED_IMPORT_BLOCK_SOURCE,
+        PRODUCTION_PYTHON_TARGET,
+        changed_lines_on_block_final_line,
+    )
+    assert len(issues) == 1
+    assert "un-sorted (ruff I001)" in issues[0]
+
+
+def test_should_flag_unsorted_block_when_changed_lines_is_none() -> None:
+    issues = imports_logging.check_import_block_sorted(
+        UNSORTED_IMPORT_BLOCK_SOURCE,
+        PRODUCTION_PYTHON_TARGET,
+        None,
+    )
+    assert len(issues) == 1
+
+
+def test_should_defer_unsorted_block_to_caller_scope() -> None:
+    changed_lines_away_from_block = {9}
+    issues = imports_logging.check_import_block_sorted(
+        UNSORTED_IMPORT_BLOCK_SOURCE,
+        PRODUCTION_PYTHON_TARGET,
+        changed_lines_away_from_block,
+        defer_scope_to_caller=True,
+    )
+    assert len(issues) == 1

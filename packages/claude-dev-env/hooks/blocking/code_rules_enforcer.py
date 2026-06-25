@@ -226,7 +226,14 @@ def validate_content(
         if not is_test_file(file_path):
             all_issues.extend(check_comment_changes(old_content, content, file_path))
         all_issues.extend(check_imports_at_top(content))
-        all_issues.extend(check_import_block_sorted(effective_content, file_path))
+        all_issues.extend(
+            check_import_block_sorted(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
         all_issues.extend(check_logging_fstrings(content))
         all_issues.extend(check_windows_api_none(content))
         all_issues.extend(check_magic_values(content, file_path))

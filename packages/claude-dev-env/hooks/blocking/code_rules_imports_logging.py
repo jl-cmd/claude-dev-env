@@ -18,6 +18,7 @@ from code_rules_path_utils import (  # noqa: E402
     is_config_file,
 )
 from code_rules_shared import (  # noqa: E402
+    _scope_violations_to_changed_lines,
     get_file_extension,
     is_hook_infrastructure,
     is_spec_file,
@@ -139,7 +140,12 @@ def check_imports_at_top(content: str) -> list[str]:
     return issues
 
 
-def check_import_block_sorted(content: str, file_path: str) -> list[str]:
+def check_import_block_sorted(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
     """Flag a Python import block left un-sorted per isort rules (ruff I001).
 
     ruff/isort treats a contiguous run of ``import`` and ``from`` statements as
@@ -160,15 +166,32 @@ def check_import_block_sorted(content: str, file_path: str) -> list[str]:
     check also fails open and reports nothing — a missing or slow tool never
     blocks a write.
 
+    An I001 finding covers the whole sortable block, so each finding carries a
+    span from the block's anchor line (``location.row``) through its last line
+    (``end_location.row``) scoped through the shared
+    ``_scope_violations_to_changed_lines`` helper. On a terminal diff-scoped Edit
+    a finding is returned when any line in that block span is among
+    ``all_changed_lines``, so an edit touching any line of an unsorted block
+    blocks while an edit far from the block does not. On a new-file or full-file
+    write (``all_changed_lines`` None) every finding is in scope;
+    ``defer_scope_to_caller`` returns every finding so the commit/push gate
+    scopes by added line through its own ``Line N:`` partitioning.
+
     Args:
         content: The full file content the Write or Edit would leave on disk.
         file_path: The destination path, used both to gate by extension and to
             give ruff the filename it needs for config discovery.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a finding
+            blocks only when its block-anchor line is among the changed lines.
+        defer_scope_to_caller: When True, return every finding so the commit/push
+            gate's ``Line N:`` partitioning scopes by added line.
 
     Returns:
         One issue string per detected I001 finding, capped at
         ``MAX_IMPORT_BLOCK_SORT_ISSUES``; an empty list when the block sorts
-        cleanly or the check fails open.
+        cleanly, every finding falls outside the changed lines, or the check
+        fails open.
     """
     if get_file_extension(file_path) not in ALL_PYTHON_EXTENSIONS:
         return []
@@ -183,19 +206,29 @@ def check_import_block_sorted(content: str, file_path: str) -> list[str]:
     if ruff_findings is None:
         return []
 
-    issues: list[str] = []
+    span_end_line_offset = 1
+    all_violations_in_finding_order: list[tuple[range, str]] = []
     for each_finding in ruff_findings:
         if each_finding.get("code") != IMPORT_BLOCK_SORT_RULE_CODE:
             continue
         line_number = _finding_line_number(each_finding.get("location"))
-        issues.append(
+        block_end_line_number = _finding_block_end_line_number(
+            each_finding.get("end_location"), line_number
+        )
+        span_range = range(line_number, block_end_line_number + span_end_line_offset)
+        message = (
             f"Line {line_number}: Import block is un-sorted (ruff I001) - "
             f"run 'ruff check --fix' to sort the block before writing"
         )
-        if len(issues) >= MAX_IMPORT_BLOCK_SORT_ISSUES:
+        all_violations_in_finding_order.append((span_range, message))
+        if len(all_violations_in_finding_order) >= MAX_IMPORT_BLOCK_SORT_ISSUES:
             break
 
-    return issues
+    return _scope_violations_to_changed_lines(
+        all_violations_in_finding_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
 
 
 def _run_ruff_import_sort_check(content: str, file_path: str) -> list[dict[str, object]] | None:
@@ -304,6 +337,32 @@ def _finding_line_number(location: object) -> int:
     row = location.get("row")
     if not isinstance(row, int):
         return 0
+    return row
+
+
+def _finding_block_end_line_number(end_location: object, anchor_line_number: int) -> int:
+    """Return the last source line a ruff finding's block spans.
+
+    ruff anchors an I001 finding at its block's first line and records the
+    block's last line in ``end_location.row``, so the two together bound the
+    whole sortable run. The end row falls back to the anchor line when the
+    ``end_location`` is absent or carries no readable row, or when it would land
+    above the anchor — keeping the span to at least the anchor line itself.
+
+    Args:
+        end_location: The ``end_location`` value from one ruff JSON finding,
+            expected to be a mapping carrying an integer ``row``.
+        anchor_line_number: The finding's block-anchor line, used as the floor
+            for the returned end line.
+
+    Returns:
+        The block's last line as an integer, never below *anchor_line_number*.
+    """
+    if not isinstance(end_location, dict):
+        return anchor_line_number
+    row = end_location.get("row")
+    if not isinstance(row, int) or row < anchor_line_number:
+        return anchor_line_number
     return row
 
 
