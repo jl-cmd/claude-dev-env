@@ -133,7 +133,7 @@ RESUME_TASK_ENUMERATION_PATTERN: re.Pattern[str] = re.compile(
     re.DOTALL,
 )
 TASK_DISPATCH_NAME_PATTERN: re.Pattern[str] = re.compile(
-    r"""task\s*===\s*['"](?P<task>[a-z0-9-]+)['"]"""
+    r"""(?<![A-Za-z0-9_])task\s*===\s*['"](?P<task>[a-z0-9-]+)['"]"""
 )
 ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(
     r"\s*,\s*|\s+and\s+"
