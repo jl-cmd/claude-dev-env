@@ -150,6 +150,9 @@ JAVASCRIPT_REGEX_DELIMITER: str = "/"
 ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS: frozenset[str] = frozenset(
     {"(", ",", "=", ":", "[", "{", "}", ";", "!", "&", "|", "?", "+", "-", "*", "%", "<", ">", "~", "^", "\n"}
 )
+ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS: frozenset[str] = frozenset(
+    {"return", "typeof", "case", "in", "of", "do", "else", "void", "delete", "instanceof", "new", "yield", "await", "throw"}
+)
 ENUMERATION_TASK_ITEM_PATTERN: re.Pattern[str] = re.compile(
     r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 )

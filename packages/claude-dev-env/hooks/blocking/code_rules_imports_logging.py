@@ -48,6 +48,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_IMPORT_STATEMENT_PREFIXES,
     ALL_JAVASCRIPT_EXTENSIONS,
     ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS,
+    ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS,
     ALL_JAVASCRIPT_STRING_DELIMITERS,
     ALL_PYTHON_EXTENSIONS,
     ENUMERATION_LEADING_CONJUNCTION_PATTERN,
@@ -629,6 +630,8 @@ class _JavaScriptRegionScanner:
         self._is_inside_block_comment = False
         self._is_inside_regex_literal = False
         self._previous_code_character = "\n"
+        self._previous_code_word = ""
+        self._is_building_code_word = False
 
     def consume(self, character: str, source: str, index: int) -> bool:
         if self._active_string_delimiter is not None:
@@ -674,12 +677,26 @@ class _JavaScriptRegionScanner:
         if character == JAVASCRIPT_REGEX_DELIMITER and self._is_regex_start():
             self._is_inside_regex_literal = True
             return False
+        self._track_preceding_word(character)
         if not character.isspace():
             self._previous_code_character = character
         return True
 
+    def _track_preceding_word(self, character: str) -> None:
+        if character.isalnum() or character == "_":
+            if not self._is_building_code_word:
+                self._previous_code_word = ""
+                self._is_building_code_word = True
+            self._previous_code_word += character
+            return
+        if not character.isspace():
+            self._previous_code_word = ""
+        self._is_building_code_word = False
+
     def _is_regex_start(self) -> bool:
-        return self._previous_code_character in ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS
+        if self._previous_code_character in ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS:
+            return True
+        return self._previous_code_word in ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS
 
 
 def _is_escaped(source: str, index: int) -> bool:
@@ -698,8 +715,12 @@ def _code_position_flags(source: str) -> list[bool]:
     A backslash escapes the next character inside a string literal, so a delimiter
     preceded by an odd run of backslashes stays inside the literal and a delimiter
     preceded by an even run (including zero) closes it. A ``/`` opens a regex
-    literal only when the previous structural character marks an expression
-    position; after a value it is the division operator and is left intact.
+    literal only when it sits at an expression position: either the previous
+    structural character is a punctuation/operator that precedes an expression, or
+    the preceding identifier token is an expression-introducing keyword (``return``,
+    ``typeof``, ``case``, ``in``, ``of``, ``do``, ``else``, ``void``, ``delete``,
+    ``instanceof``, ``new``, ``yield``, ``await``, ``throw``). After a value it is
+    the division operator and is left intact.
     """
     region = _JavaScriptRegionScanner()
     return [
@@ -783,9 +804,10 @@ def _resume_function_body(content: str, role: str) -> str | None:
 
 
 def _next_top_level_function_index(content: str, from_index: int) -> int:
+    blanked_content = _blank_non_code_regions(content)
     next_function_match = re.compile(
         r"^(?:async\s+)?function\s+\w+", re.MULTILINE
-    ).search(content, from_index)
+    ).search(blanked_content, from_index)
     if next_function_match is None:
         return len(content)
     return next_function_match.start()

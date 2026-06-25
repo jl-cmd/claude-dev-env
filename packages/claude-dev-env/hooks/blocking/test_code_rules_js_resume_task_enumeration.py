@@ -540,6 +540,61 @@ def should_flag_dispatch_after_brace_inside_block_comment() -> None:
     assert "spawnVerifierAgent" in issues[0]
 
 
+def should_flag_dispatch_after_keyword_position_regex_with_stray_brace() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return /pat}tern/.test(context)\n"
+        "  }\n"
+        "  if (task === 'undocumented-leak') {\n"
+        "    return doLeak(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "undocumented-leak" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
+def should_flag_dispatch_after_column_zero_function_inside_template_literal() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  const prompt = `do this:\n"
+        "function notReal() { return 1 }\n"
+        "then finish`\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, prompt)\n"
+        "  }\n"
+        "  if (task === 'undocumented-leak') {\n"
+        "    return doLeak(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "undocumented-leak" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
 def should_not_flag_shipped_converge_workflow() -> None:
     converge_source = _SHIPPED_CONVERGE_MJS.read_text(encoding="utf-8")
     issues = check_js_resume_task_enumeration_coverage(
