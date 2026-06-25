@@ -142,6 +142,14 @@ ENUMERATION_LEADING_CONJUNCTION_PATTERN: re.Pattern[str] = re.compile(
     r"^and\s+"
 )
 ALL_JAVASCRIPT_STRING_DELIMITERS: frozenset[str] = frozenset({"'", '"', "`"})
+JAVASCRIPT_STRING_ESCAPE_CHARACTER: str = "\\"
+JAVASCRIPT_LINE_COMMENT_OPENER: str = "//"
+JAVASCRIPT_BLOCK_COMMENT_OPENER: str = "/*"
+JAVASCRIPT_BLOCK_COMMENT_CLOSER: str = "*/"
+JAVASCRIPT_REGEX_DELIMITER: str = "/"
+ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS: frozenset[str] = frozenset(
+    {"(", ",", "=", ":", "[", "{", "}", ";", "!", "&", "|", "?", "+", "-", "*", "%", "<", ">", "~", "^", "\n"}
+)
 ENUMERATION_TASK_ITEM_PATTERN: re.Pattern[str] = re.compile(
     r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 )

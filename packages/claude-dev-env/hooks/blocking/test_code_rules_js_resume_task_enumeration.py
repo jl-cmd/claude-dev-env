@@ -364,6 +364,182 @@ def should_not_flag_descriptive_resume_parenthetical() -> None:
     assert check_js_resume_task_enumeration_coverage(source, _MJS_PATH) == []
 
 
+def should_not_count_task_dispatch_inside_double_quoted_string() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  const note = \"when task === 'leaked-from-dq' the agent acts\"\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, note)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    assert check_js_resume_task_enumeration_coverage(source, _MJS_PATH) == []
+
+
+def should_not_count_task_dispatch_inside_single_quoted_string() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  const note = 'handle the task === \"phantom\" edge'\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, note)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    assert check_js_resume_task_enumeration_coverage(source, _MJS_PATH) == []
+
+
+def should_still_flag_real_dispatch_after_lone_backtick_in_quoted_string() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  const note = \"use the ` char in markdown\"\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, note)\n"
+        "  }\n"
+        "  if (task === 'undocumented-leak') {\n"
+        "    return doLeak(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "undocumented-leak" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
+def should_still_flag_real_dispatch_after_template_literal_ending_in_escaped_backslash() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  const note = `a path ending in a backslash C:\\\\`\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, note)\n"
+        "  }\n"
+        "  if (task === 'undocumented-leak') {\n"
+        "    return doLeak(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "undocumented-leak" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
+def should_flag_dispatch_after_brace_inside_line_comment() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, context)\n"
+        "  } // close brace } here\n"
+        "  if (task === 'phantom-comment') {\n"
+        "    return doPhantom(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "phantom-comment" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
+def should_flag_dispatch_after_brace_inside_regex_literal() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  const pattern = /a}b/\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, pattern)\n"
+        "  }\n"
+        "  if (task === 'phantom-regex') {\n"
+        "    return doPhantom(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "phantom-regex" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
+def should_flag_dispatch_after_brace_inside_block_comment() -> None:
+    source = (
+        "/**\n"
+        " * Spawn the verifier so each later resume (fix-verify) continues the\n"
+        " * same session.\n"
+        " */\n"
+        "async function spawnVerifierAgent() {\n"
+        "  return undefined\n"
+        "}\n"
+        "\n"
+        "function resumeVerifierAgent(agentId, task, context) {\n"
+        "  if (task === 'fix-verify') {\n"
+        "    return doFix(agentId, context)\n"
+        "  }\n"
+        "  /* a stray brace } in a block comment */\n"
+        "  if (task === 'phantom-block') {\n"
+        "    return doPhantom(agentId, context)\n"
+        "  }\n"
+        "  return doHardening(agentId, context)\n"
+        "}\n"
+    )
+    issues = check_js_resume_task_enumeration_coverage(source, _MJS_PATH)
+    assert len(issues) == 1
+    assert "phantom-block" in issues[0]
+    assert "spawnVerifierAgent" in issues[0]
+
+
 def should_not_flag_shipped_converge_workflow() -> None:
     converge_source = _SHIPPED_CONVERGE_MJS.read_text(encoding="utf-8")
     issues = check_js_resume_task_enumeration_coverage(
