@@ -13,7 +13,7 @@ ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS: tuple[type[BaseException], ...] = (
 )
 
 ALL_PYTHON_EXTENSIONS = {".py"}
-ALL_JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx"}
+ALL_JAVASCRIPT_EXTENSIONS = {".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs", ".mts", ".cts"}
 ALL_CODE_EXTENSIONS = ALL_PYTHON_EXTENSIONS | ALL_JAVASCRIPT_EXTENSIONS
 
 ALL_TEST_PATH_PATTERNS = {"test_", "_test.", ".test.", ".spec.", "/tests/", "\\tests\\", "/tests.py", "\\tests.py"}
@@ -123,6 +123,21 @@ LOGGING_PRINTF_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r"(?<!%)%[#0\- +]?[0-9.*]*[sdrixfgeEcoX](?![a-zA-Z])"
 )
 MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT = 2
+SPAWN_AGENT_WITH_JSDOC_PATTERN: re.Pattern[str] = re.compile(
+    r"/\*\*(?P<jsdoc>.*?)\*/\s*"
+    r"(?:async\s+)?function\s+spawn(?P<role>\w+?)Agent\s*\(",
+    re.DOTALL,
+)
+RESUME_TASK_ENUMERATION_PATTERN: re.Pattern[str] = re.compile(
+    r"resume\s*\((?P<enumeration>[^)]*?-[^)]*?)\)",
+    re.DOTALL,
+)
+TASK_DISPATCH_NAME_PATTERN: re.Pattern[str] = re.compile(
+    r"""task\s*===\s*['"](?P<task>[a-z0-9-]+)['"]"""
+)
+ENUMERATION_TASK_TOKEN_PATTERN: re.Pattern[str] = re.compile(
+    r"[a-z0-9]+(?:-[a-z0-9]+)+"
+)
 ALL_BUILTIN_DICT_METHOD_NAMES: frozenset[str] = frozenset({
     "get", "items", "keys", "values", "update", "pop",
     "setdefault", "copy", "clear",
