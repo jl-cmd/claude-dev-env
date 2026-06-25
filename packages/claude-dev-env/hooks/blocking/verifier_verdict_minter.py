@@ -6,14 +6,14 @@ SubagentStop payload names the stopping subagent's own transcript
 (``agent_transcript_path``), which sits beside a harness-written
 ``agent-<id>.meta.json`` sidecar naming the spawning ``agentType``. The hook
 reads that type from the sidecar, so it resolves identically in interactive,
-background, and worktree-switched sessions. When that type is
+background, and worktree-switched sessions; only the harness writes the
+sidecar, so the type it records cannot be forged. When that type is
 ``code-verifier``, the hook pulls the verdict block out of the agent's own
-transcript (``agent_transcript_path``); the main session writes neither that
-transcript nor the sidecar, so text it prints can never mint — recomputes the
-live change-surface hash for the session repository, and writes the verdict
-bound to that hash. The companion ``verified_commit_gate.py`` (PreToolUse)
-then allows ``git commit`` / ``git push`` only while the work tree still
-matches the verified state.
+transcript (``agent_transcript_path``), recomputes the live change-surface
+hash for the session repository, and writes the verdict bound to that hash.
+The companion ``verified_commit_gate.py`` (PreToolUse) then allows ``git
+commit`` / ``git push`` only while the work tree still matches the verified
+state.
 
 The verifier's final message must end with a fenced block::
 
@@ -118,94 +118,37 @@ def last_verdict_in_blocks(all_text_blocks: list[str]) -> dict | None:
     return None
 
 
-class _SidecarLookup:
-    """The outcome of reading a subagent transcript's meta sidecar.
-
-    Attributes:
-        agent_type: The recorded ``agentType`` string, or None when the sidecar
-            named no string type, did not hold a JSON object, or was present but
-            unreadable or unparseable.
-        was_absent: True only when the sidecar file did not exist, so the caller
-            may fall back to the transcript verdict fence; False when the sidecar
-            was present (whether it resolved a type or could not be read or
-            parsed), so the caller does not fall back.
-    """
-
-    def __init__(self, agent_type: str | None, was_absent: bool) -> None:
-        self.agent_type = agent_type
-        self.was_absent = was_absent
-
-
-def _agent_type_from_meta_sidecar(agent_transcript_path: str) -> _SidecarLookup:
+def _agent_type_from_meta_sidecar(agent_transcript_path: str) -> str | None:
     """Read the spawning agentType from a subagent transcript's sidecar.
 
     Each subagent transcript ``agent-<id>.jsonl`` sits beside a harness-written
     ``agent-<id>.meta.json`` naming the spawning ``agentType``. Reading the type
     from this sidecar binds it to the stopping subagent itself, so it resolves
     identically in interactive, background, and worktree-switched sessions and
-    needs no parent-transcript scan or flush retry.
-
-    When the sidecar is absent — Agent-tool subagents have no sidecar — the
-    lookup reports that absence so the caller falls back to
-    ``_transcript_has_code_verifier_verdict``. A sidecar that is present but
-    unreadable or unparseable resolves no type and reports no absence, so the
-    caller does not fall back.
+    needs no parent-transcript scan or flush retry. Only the harness writes this
+    sidecar, so a session cannot forge the type it reports.
 
     Args:
         agent_transcript_path: The stopping subagent's own transcript path from
             the SubagentStop payload.
 
     Returns:
-        A lookup whose ``agent_type`` is the recorded type (None when the path is
-        empty, the sidecar is unreadable or unparseable, it does not hold a JSON
-        object, or it names no string type) and whose ``was_absent`` is True only
-        when the sidecar file did not exist.
+        The recorded ``agentType``, or None when the path is empty, the sidecar
+        is absent, unreadable, or unparseable, it does not hold a JSON object,
+        or it names no string ``agentType``.
     """
     if not agent_transcript_path:
-        return _SidecarLookup(None, was_absent=False)
+        return None
     transcript_file = Path(agent_transcript_path)
     sidecar_file = transcript_file.with_name(f"{transcript_file.stem}.meta.json")
     try:
-        sidecar_text = sidecar_file.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return _SidecarLookup(None, was_absent=True)
-    except (OSError, UnicodeDecodeError):
-        return _SidecarLookup(None, was_absent=False)
-    try:
-        sidecar_record = json.loads(sidecar_text)
-    except json.JSONDecodeError:
-        return _SidecarLookup(None, was_absent=False)
+        sidecar_record = json.loads(sidecar_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
     if not isinstance(sidecar_record, dict):
-        return _SidecarLookup(None, was_absent=False)
+        return None
     recorded_type = sidecar_record.get("agentType")
-    if isinstance(recorded_type, str):
-        return _SidecarLookup(recorded_type, was_absent=False)
-    return _SidecarLookup(None, was_absent=False)
-
-
-def _transcript_has_code_verifier_verdict(agent_transcript_path: str) -> bool:
-    """Decide whether a subagent transcript carries a code-verifier verdict.
-
-    A code-verifier is the only agent type prompted to emit a `` ```verdict ```
-    fence. When the ``agent-<id>.meta.json`` sidecar is absent (Agent-tool
-    subagents have no sidecar), a valid verdict fence in the transcript is
-    evidence that this subagent is a code-verifier. The transcript is authored
-    by the runtime, so this preserves the anti-forgery property: the main
-    session can neither write to the subagents directory nor forge agent
-    transcripts.
-
-    Args:
-        agent_transcript_path: The stopping subagent's own transcript path from
-            the SubagentStop payload.
-
-    Returns:
-        True when the transcript carries a valid verdict fence; False when the
-        path is empty, the file cannot be read, or no verdict block is present.
-    """
-    if not agent_transcript_path:
-        return False
-    all_text_blocks = assistant_text_blocks(agent_transcript_path)
-    return last_verdict_in_blocks(all_text_blocks) is not None
+    return recorded_type if isinstance(recorded_type, str) else None
 
 
 def resolved_subagent_type(subagent_stop_payload: dict) -> str | None:
@@ -213,37 +156,24 @@ def resolved_subagent_type(subagent_stop_payload: dict) -> str | None:
 
     The stopping subagent's own transcript (``agent_transcript_path``) sits
     beside a harness-written ``agent-<id>.meta.json`` sidecar naming its
-    ``agentType`` (present for workflow-spawned subagents). When the sidecar is
-    absent — Agent-tool subagents have no sidecar — the hook falls back to
-    checking the transcript for a code-verifier verdict fence, since no other
-    agent type emits one. A sidecar that is present but unreadable or
-    unparseable resolves no type and does not trigger the fallback, so a
-    corrupt sidecar never lets a non-verifier subagent classify as a verifier.
-    Both the transcript and the sidecar are authored by the runtime, so the
-    anti-forgery property is preserved.
+    ``agentType``. The type comes solely from that sidecar, which only the
+    harness writes — the main session can neither write the sidecar nor forge
+    the agentType it records. A verdict fence in the transcript is never used to
+    infer the type, because the main session controls the prompt of any
+    Agent-tool subagent it spawns and could instruct one to print such a fence.
 
     Args:
         subagent_stop_payload: The SubagentStop hook payload.
 
     Returns:
-        The agent type, or None when neither the sidecar nor the transcript
-        identifies a code-verifier — the ``agent_transcript_path`` is empty,
-        the sidecar is absent and the transcript holds no valid verdict fence,
-        the sidecar is present but unreadable or unparseable, the sidecar names
-        a type other than code-verifier, or the sidecar does not hold a JSON
-        object.
+        The agent type the sidecar records, or None when the
+        ``agent_transcript_path`` is empty, the sidecar is absent, unreadable,
+        or unparseable, it does not hold a JSON object, or it names no string
+        ``agentType``.
     """
-    agent_transcript_path: str = subagent_stop_payload.get(
-        "agent_transcript_path", ""
+    return _agent_type_from_meta_sidecar(
+        subagent_stop_payload.get("agent_transcript_path", "")
     )
-    sidecar_lookup = _agent_type_from_meta_sidecar(agent_transcript_path)
-    if sidecar_lookup.agent_type is not None:
-        return sidecar_lookup.agent_type
-    if not sidecar_lookup.was_absent:
-        return None
-    if _transcript_has_code_verifier_verdict(agent_transcript_path):
-        return MINTING_AGENT_TYPE
-    return None
 
 
 def _attested_or_recomputed_hash(verdict_record: dict, repo_root: str) -> str | None:

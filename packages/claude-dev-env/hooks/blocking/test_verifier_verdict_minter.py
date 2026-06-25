@@ -7,11 +7,13 @@ SubagentStop payload names the stopping subagent's own transcript
 tests build that sidecar and assert the minter gates on the resolved type and
 on the shared MINTING_AGENT_TYPE constant, so a rename in config propagates to
 the minter without a second edit. A malformed or non-string sidecar resolves
-nothing, and an absent sidecar mints nothing — the main session writes neither
-the transcript nor the sidecar, so it cannot forge a passing verdict. A
-further test holds the shipped settings.json to the minter docstring's
-anti-forgery claim: the main session is denied writes to the verdict
-directory, so only this hook can mint a passing verdict.
+nothing, and an absent sidecar mints nothing even when the transcript carries a
+verdict fence — the main session controls the prompt of any Agent-tool subagent
+it spawns, so a verdict fence in the transcript proves nothing about the agent
+type, and only the harness-written sidecar attests a code-verifier. A further
+test holds the shipped settings.json to the minter docstring's anti-forgery
+claim: the main session is denied writes to the verdict directory, so only this
+hook can mint a passing verdict.
 """
 
 import importlib.util
@@ -290,7 +292,7 @@ def test_minter_refuses_when_recomputed_surface_is_empty(
     assert mint_for_payload(payload) is None
 
 
-def test_resolves_type_from_verdict_when_sidecar_absent(
+def test_resolves_none_when_sidecar_absent_even_with_verdict_fence(
     tmp_path: pathlib.Path,
 ) -> None:
     agent_transcript = tmp_path / "agent-7.jsonl"
@@ -312,62 +314,10 @@ def test_resolves_type_from_verdict_when_sidecar_absent(
         encoding="utf-8",
     )
     payload = {"agent_transcript_path": str(agent_transcript)}
-    assert resolved_subagent_type(payload) == MINTING_AGENT_TYPE
-
-
-def test_resolves_none_when_sidecar_corrupt_even_with_verdict_fence(
-    tmp_path: pathlib.Path,
-) -> None:
-    agent_transcript = tmp_path / "agent-7.jsonl"
-    agent_transcript.write_text(
-        json.dumps(
-            {
-                "type": "assistant",
-                "message": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": 'ok\n```verdict\n{"all_pass": true, "findings": []}\n```\n',
-                        }
-                    ]
-                },
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    sidecar_file = agent_transcript.with_name("agent-7.meta.json")
-    sidecar_file.write_text("{not valid json", encoding="utf-8")
-    payload = {"agent_transcript_path": str(agent_transcript)}
     assert resolved_subagent_type(payload) is None
 
 
-def test_resolves_none_when_sidecar_absent_and_no_verdict_fence(
-    tmp_path: pathlib.Path,
-) -> None:
-    agent_transcript = tmp_path / "agent-7.jsonl"
-    agent_transcript.write_text(
-        json.dumps(
-            {
-                "type": "assistant",
-                "message": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "just some regular text, no verdict here",
-                        }
-                    ]
-                },
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    payload = {"agent_transcript_path": str(agent_transcript)}
-    assert resolved_subagent_type(payload) is None
-
-
-def test_mints_verdict_when_sidecar_absent_but_transcript_has_verdict(
+def test_does_not_mint_when_sidecar_absent_but_transcript_has_verdict(
     tmp_path: pathlib.Path,
 ) -> None:
     repo_root = tmp_path / "repo"
@@ -396,15 +346,7 @@ def test_mints_verdict_when_sidecar_absent_but_transcript_has_verdict(
         "cwd": str(repo_root),
         "agent_id": "no-sidecar-1",
     }
-    verdict_path = mint_for_payload(payload)
-    try:
-        assert verdict_path is not None
-        verdict_record = json.loads(verdict_path.read_text(encoding="utf-8"))
-        assert verdict_record["all_pass"] is True
-        assert verdict_record["minted_from_agent_id"] == "no-sidecar-1"
-    finally:
-        if verdict_path is not None and verdict_path.exists():
-            verdict_path.unlink()
+    assert mint_for_payload(payload) is None
 
 
 def test_attested_manifest_hash_binds_over_cwd_surface(tmp_path: pathlib.Path) -> None:
