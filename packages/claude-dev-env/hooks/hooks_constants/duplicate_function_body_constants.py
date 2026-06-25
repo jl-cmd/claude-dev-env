@@ -31,6 +31,11 @@ SAME_FILE_INLINE_DUPLICATE_GUIDANCE: str = (
     "sites and a fix cannot land in one copy while the other keeps the bug "
     "(Reuse before create / DRY)"
 )
+SAME_FILE_INLINE_DUPLICATE_SPAN_SUFFIX_TEMPLATE: str = (
+    "(inline duplicate body spans: helper at line {helper_start} spanning "
+    "{helper_length} lines, enclosing at line {enclosing_start} spanning "
+    "{enclosing_length} lines)"
+)
 
 SKILLS_DIRECTORY_NAME: str = "skills"
 SKILL_SCRIPTS_DIRECTORY_NAME: str = "scripts"
