@@ -336,3 +336,95 @@ def test_should_return_every_violation_when_scope_deferred_to_caller() -> None:
         "The commit gate scopes by added line, so the check must return every "
         f"violation when scope is deferred, got: {issues}"
     )
+
+
+NON_ADJACENT_DUPLICATE_SOURCE = (
+    "import asyncio\n"
+    "\n"
+    "\n"
+    "async def _wait_for_content_image_to_render(automation: object) -> None:\n"
+    '    """Wait for the content image to render before detection."""\n'
+    "    assert automation.detector is not None\n"
+    "    try:\n"
+    "        await automation.detector.wait_for_element(\n"
+    "            account_detector_config.content_image_selector,\n"
+    "            timeout=page_navigation_delays.account_switch_page_load,\n"
+    "        )\n"
+    "    except (TimeoutError, RuntimeError) as content_error:\n"
+    "        logger.warning('content images did not appear: %s', content_error)\n"
+    "\n"
+    "\n"
+    "def _unrelated_intervening(left: int, right: int) -> int:\n"
+    "    summed = left + right\n"
+    "    tripled = summed * 3\n"
+    "    return tripled\n"
+    "\n"
+    "\n"
+    "async def _wait_for_page_after_account_switch(automation: object) -> None:\n"
+    "    await asyncio.to_thread(automation.cdp._navigate_to_url, url)\n"
+    "    await asyncio.to_thread(automation.cdp._wait_for_page_load)\n"
+    "    assert automation.detector is not None\n"
+    "    try:\n"
+    "        await automation.detector.wait_for_element(\n"
+    "            account_detector_config.content_image_selector,\n"
+    "            timeout=page_navigation_delays.account_switch_page_load,\n"
+    "        )\n"
+    "    except (TimeoutError, RuntimeError) as content_error:\n"
+    "        logger.warning('content images did not appear: %s', content_error)\n"
+)
+
+
+def _line_number_of(source: str, needle: str) -> int:
+    return source.splitlines().index(needle) + 1
+
+
+def test_should_not_flag_when_edit_touches_only_a_line_between_the_two_functions() -> None:
+    intervening_body_line = (
+        _line_number_of(NON_ADJACENT_DUPLICATE_SOURCE, "    summed = left + right")
+    )
+    issues = check_same_file_inline_duplicate_body(
+        NON_ADJACENT_DUPLICATE_SOURCE,
+        "account_switcher.py",
+        all_changed_lines={intervening_body_line},
+    )
+    assert issues == [], (
+        "An edit confined to an unrelated function that sits strictly between the "
+        "helper and its inline copy must not block, even though that line falls in "
+        f"the gap between the two duplicate functions, got: {issues}"
+    )
+
+
+def test_should_flag_when_edit_touches_the_helper_in_the_non_adjacent_layout() -> None:
+    helper_body_line = (
+        _line_number_of(
+            NON_ADJACENT_DUPLICATE_SOURCE,
+            "    assert automation.detector is not None",
+        )
+    )
+    issues = check_same_file_inline_duplicate_body(
+        NON_ADJACENT_DUPLICATE_SOURCE,
+        "account_switcher.py",
+        all_changed_lines={helper_body_line},
+    )
+    assert any("_wait_for_content_image_to_render" in each_issue for each_issue in issues), (
+        "An edit touching the helper must still flag in the non-adjacent layout, "
+        f"got: {issues}"
+    )
+
+
+def test_should_flag_when_edit_touches_the_enclosing_in_the_non_adjacent_layout() -> None:
+    enclosing_first_body_line = (
+        _line_number_of(
+            NON_ADJACENT_DUPLICATE_SOURCE,
+            "    await asyncio.to_thread(automation.cdp._navigate_to_url, url)",
+        )
+    )
+    issues = check_same_file_inline_duplicate_body(
+        NON_ADJACENT_DUPLICATE_SOURCE,
+        "account_switcher.py",
+        all_changed_lines={enclosing_first_body_line},
+    )
+    assert any("_wait_for_page_after_account_switch" in each_issue for each_issue in issues), (
+        "An edit touching the enclosing function must still flag in the "
+        f"non-adjacent layout, got: {issues}"
+    )
