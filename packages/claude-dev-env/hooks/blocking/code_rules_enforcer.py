@@ -77,6 +77,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_names_undefined_constant,
     check_docstring_no_consumer_claim,
     check_docstring_no_inline_literal_claim,
+    check_docstring_punctuation_mark_enumeration_coverage,
     check_docstring_raises_unraisable_largezipfile,
     check_docstring_returns_plural_cardinality,
     check_docstring_runon_sentence,
@@ -312,6 +313,11 @@ def validate_content(
         )
         all_issues.extend(
             check_docstring_tuple_enumeration_match(effective_content, file_path)
+        )
+        all_issues.extend(
+            check_docstring_punctuation_mark_enumeration_coverage(
+                effective_content, file_path
+            )
         )
         all_issues.extend(
             check_docstring_step_enumeration_dispatch_coverage(

@@ -34,17 +34,22 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_RUNON_JOINER_MARKERS,
     ALL_GENERIC_CHECK_NAME_TOKENS,
     ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS,
+    ALL_PUNCTUATION_MARK_GLYPH_PROSE_NAMES,
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
     DOCSTRING_REFERENCE_MARKER_WINDOW,
     DOCSTRING_RUNON_SENTENCE_BOUNDARY_PATTERN,
     DOCSTRING_RUNON_SENTENCE_WORD_LIMIT,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
     MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES,
+    MAX_COMPANION_MODULE_RESOLUTION_DEPTH,
+    PYTHON_MODULE_FILE_SUFFIX,
+    WORD_BOUNDARY_REGEX,
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
     MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES,
     MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
     MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES,
+    MAX_DOCSTRING_MARK_GLYPH_ENUMERATION_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
     MAX_DOCSTRING_RUNON_SENTENCE_ISSUES,
     ALL_DOCSTRING_SINGLE_LINE_SCOPE_PHRASES,
@@ -68,6 +73,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_CONSTANT_FAMILY_MEMBERS_FOR_CARDINAL_CHECK,
     MINIMUM_DOCSTRING_FAMILY_OVERLAP_FOR_CARDINAL_CHECK,
     MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK,
+    MINIMUM_NAMED_MARKS_FOR_PROSE_ENUMERATION,
     MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER,
     MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
     MINIMUM_TOKENS_FOR_DISPATCH_CALLEE,
@@ -1030,6 +1036,203 @@ def check_docstring_tuple_enumeration_match(content: str, file_path: str) -> lis
             if len(issues) >= MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES:
                 return issues[:MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES]
     return issues[:MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES]
+
+
+def _known_glyph_marker_members(
+    sequence_node: ast.Tuple | ast.List,
+) -> frozenset[str] | None:
+    normalized_glyphs: set[str] = set()
+    for each_element in sequence_node.elts:
+        if not (
+            isinstance(each_element, ast.Constant)
+            and isinstance(each_element.value, str)
+        ):
+            return None
+        normalized_glyph = each_element.value.strip()
+        if normalized_glyph not in ALL_PUNCTUATION_MARK_GLYPH_PROSE_NAMES:
+            return None
+        normalized_glyphs.add(normalized_glyph)
+    return frozenset(normalized_glyphs)
+
+
+def _assignment_targets_and_sequence(
+    statement: ast.stmt,
+) -> tuple[list[str], ast.Tuple | ast.List | None]:
+    if isinstance(statement, ast.Assign) and isinstance(
+        statement.value, (ast.Tuple, ast.List)
+    ):
+        plain_target_names = [
+            each_target.id
+            for each_target in statement.targets
+            if isinstance(each_target, ast.Name)
+        ]
+        return plain_target_names, statement.value
+    if (
+        isinstance(statement, ast.AnnAssign)
+        and isinstance(statement.target, ast.Name)
+        and isinstance(statement.value, (ast.Tuple, ast.List))
+    ):
+        return [statement.target.id], statement.value
+    return [], None
+
+
+def _module_glyph_marker_tuples(parsed_tree: ast.Module) -> dict[str, frozenset[str]]:
+    glyphs_by_constant: dict[str, frozenset[str]] = {}
+    for each_statement in parsed_tree.body:
+        target_names, sequence_node = _assignment_targets_and_sequence(each_statement)
+        if sequence_node is None:
+            continue
+        marker_glyphs = _known_glyph_marker_members(sequence_node)
+        if marker_glyphs is None:
+            continue
+        if len(marker_glyphs) < MINIMUM_NAMED_MARKS_FOR_PROSE_ENUMERATION:
+            continue
+        for each_target_name in target_names:
+            glyphs_by_constant[each_target_name] = marker_glyphs
+    return glyphs_by_constant
+
+
+def _companion_module_file(dotted_module: str, file_path: str) -> Path | None:
+    relative_module_path = Path(*dotted_module.split(".")).with_suffix(
+        PYTHON_MODULE_FILE_SUFFIX
+    )
+    file_directory = Path(file_path).parent
+    candidate_roots = [file_directory, *file_directory.parents]
+    for each_root in candidate_roots[:MAX_COMPANION_MODULE_RESOLUTION_DEPTH]:
+        candidate_path = each_root / relative_module_path
+        if candidate_path.is_file():
+            return candidate_path
+    return None
+
+
+def _companion_glyph_marker_tuples(companion_path: Path) -> dict[str, frozenset[str]]:
+    try:
+        companion_source = companion_path.read_text(encoding="utf-8")
+        companion_tree = ast.parse(companion_source)
+    except (OSError, ValueError, SyntaxError):
+        return {}
+    return _module_glyph_marker_tuples(companion_tree)
+
+
+def _import_brings_upper_snake_name(import_node: ast.ImportFrom) -> bool:
+    return any(
+        ALL_CAPS_WITH_UNDERSCORE_PATTERN.match(each_alias.name)
+        for each_alias in import_node.names
+    )
+
+
+def _imported_glyph_marker_tuples(
+    parsed_tree: ast.Module, file_path: str
+) -> dict[str, frozenset[str]]:
+    glyphs_by_imported_name: dict[str, frozenset[str]] = {}
+    for each_statement in parsed_tree.body:
+        if not isinstance(each_statement, ast.ImportFrom):
+            continue
+        if not each_statement.module:
+            continue
+        if not _import_brings_upper_snake_name(each_statement):
+            continue
+        companion_path = _companion_module_file(each_statement.module, file_path)
+        if companion_path is None:
+            continue
+        companion_tuples = _companion_glyph_marker_tuples(companion_path)
+        for each_alias in each_statement.names:
+            if each_alias.name not in companion_tuples:
+                continue
+            imported_name = each_alias.asname or each_alias.name
+            glyphs_by_imported_name[imported_name] = companion_tuples[each_alias.name]
+    return glyphs_by_imported_name
+
+
+def _docstring_names_mark_glyph(docstring_text: str, normalized_glyph: str) -> bool:
+    lowercased_docstring = docstring_text.lower()
+    for each_name in ALL_PUNCTUATION_MARK_GLYPH_PROSE_NAMES[normalized_glyph]:
+        boundary_wrapped_name = (
+            WORD_BOUNDARY_REGEX + re.escape(each_name) + WORD_BOUNDARY_REGEX
+        )
+        if re.search(boundary_wrapped_name, lowercased_docstring):
+            return True
+    return False
+
+
+def _marks_named_in_docstring(
+    docstring_text: str, all_marker_glyphs: frozenset[str]
+) -> set[str]:
+    return {
+        each_glyph
+        for each_glyph in all_marker_glyphs
+        if _docstring_names_mark_glyph(docstring_text, each_glyph)
+    }
+
+
+def _text_names_multiple_marks(content_text: str) -> bool:
+    all_known_glyphs = frozenset(ALL_PUNCTUATION_MARK_GLYPH_PROSE_NAMES)
+    named_glyphs = _marks_named_in_docstring(content_text, all_known_glyphs)
+    return len(named_glyphs) >= MINIMUM_NAMED_MARKS_FOR_PROSE_ENUMERATION
+
+
+def check_docstring_punctuation_mark_enumeration_coverage(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a docstring that names some marks of a glyph tuple but omits one.
+
+    A module reads a tuple of punctuation-mark glyphs as its detection set. The
+    tuple is defined in the module or imported from a companion module beside it.
+    A docstring then enumerates those marks by their English names. When the
+    prose names a closed set of marks but leaves one the tuple holds unnamed, a
+    reader trusts the enumeration and believes an active mark never triggers the
+    check. This is the shape that appears when a glyph joins the tuple while the
+    prose enumeration stays as it was.
+
+    The check binds only when a docstring names two or more marks of one tuple. A
+    docstring that mentions a single mark, names every mark, or describes
+    unrelated punctuation is left alone. This is the deterministic glyph-prose
+    slice of Category O6 docstring-prose-vs-implementation drift, the companion
+    to check_docstring_tuple_enumeration_match for glyph members named in prose
+    rather than identifier members named in inline code. It covers hook
+    infrastructure, where the affected detection tuples live.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per docstring whose mark enumeration omits a glyph the tuple it
+        describes holds, capped at the module limit.
+    """
+    if is_strict_test_file(file_path):
+        return []
+    if not _text_names_multiple_marks(content):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    glyphs_by_constant = {
+        **_module_glyph_marker_tuples(parsed_tree),
+        **_imported_glyph_marker_tuples(parsed_tree, file_path),
+    }
+    if not glyphs_by_constant:
+        return []
+    issues: list[str] = []
+    for each_line, each_docstring in _documentable_docstrings_with_line(parsed_tree):
+        for each_constant_name in sorted(glyphs_by_constant):
+            marker_glyphs = glyphs_by_constant[each_constant_name]
+            named_glyphs = _marks_named_in_docstring(each_docstring, marker_glyphs)
+            if len(named_glyphs) < MINIMUM_NAMED_MARKS_FOR_PROSE_ENUMERATION:
+                continue
+            omitted_glyphs = marker_glyphs - named_glyphs
+            if not omitted_glyphs:
+                continue
+            issues.append(
+                f"Line {each_line}: docstring names {sorted(named_glyphs)} from "
+                f"{each_constant_name} but omits {sorted(omitted_glyphs)} — name every "
+                "mark the tuple holds so the enumeration matches the detection set "
+                "(Category O6 docstring-vs-implementation drift)"
+            )
+            if len(issues) >= MAX_DOCSTRING_MARK_GLYPH_ENUMERATION_ISSUES:
+                return issues[:MAX_DOCSTRING_MARK_GLYPH_ENUMERATION_ISSUES]
+    return issues[:MAX_DOCSTRING_MARK_GLYPH_ENUMERATION_ISSUES]
 
 
 def _returns_section_text(docstring_text: str) -> str:
