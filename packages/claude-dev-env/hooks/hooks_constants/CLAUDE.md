@@ -39,6 +39,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |
 | `orphan_css_class_constants.py` | Scan radius and selector patterns for the orphan-CSS-class check |
 | `package_inventory_stale_blocker_constants.py` | Inventory document names, production code extensions, backtick token pattern, smallest inventory size, exempt names, scan budget, and block-message text for the package-inventory stale-entry blocker |
+| `paired_test_coverage_constants.py` | Test-directory name, stem-test filename affixes, test-file globs, exempt public-function names, scan budget, coverage threshold, and guidance text for the public-function paired-test coverage check |
 | `path_rewriter_constants.py` | Path rewriting patterns for the Everything-search path rewriter |
 | `plain_language_blocker_constants.py` | The list of heavy words and their everyday replacements |
 | `pr_converge_bugteam_enforcer_constants.py` | State keys and timing config for the bugteam-parallel enforcer |
