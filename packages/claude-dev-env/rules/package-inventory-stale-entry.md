@@ -16,6 +16,14 @@ Take a `files/` package whose `Purpose` reads "Holds helpers for downloading fil
 
 This scope-sentence slice is free prose: a hook cannot derive a module's responsibility from its filename, so the gate leaves it to judgment. It is the judgment companion to the file-list entry the gate enforces, and it belongs in the same change. This is the `category-o-docstring-vs-impl-drift` (O8) orphaned-doc-claim shape applied to a package inventory: a behavior change orphans a scope claim the prose still makes.
 
+## Companion: keep a per-file description in step with the file it describes
+
+The per-file entry a `CLAUDE.md` "Key files" list or a `README.md` Layout table gives each file carries more than the backticked filename the gate checks for. The clause after the file name — the em-dash description — is itself a free-prose scope claim about what the file holds. When the file gains a responsibility the description omits — a new public function, a new constant — the same change broadens the description clause to name it. The gate's file-list check passes the moment the file name appears once; it never reads the description clause, so a stale description beside a present file name stays invisible to the gate.
+
+A constants module is the common shape of this drift. A file whose name ends `_constants.py`, or any `.py` directly inside a `config/` directory, holds a set of module-level constants, and a sibling inventory describes that file by listing the set — `` `stp_constants.py` — the STP archive member constants: the Properties.xml member name, the workspace prefix every asset reference carries, and the source-form nine-patch filename suffix ``. When the file gains a module-level constant the list omits, three claims drift together: the list itself, the scope label that heads it (`the STP archive member constants`), and the package `## Purpose` sentence when that sentence describes the file's contents. The constant's other home — the module docstring of the constants file — and the sibling inventory's description of that file cover the same set, so the clause that lands in the docstring lands in the inventory description in the same change.
+
+This slice sits outside the gate. The gate fires on a Write that creates a new file, and it skips a file directly inside a `config/` directory, so an Edit that adds a constant to an existing `config/` constants module matches neither path. Like the Purpose/scope companion above, it is free prose a hook cannot derive from a file name, so it stays judgment here and a Category O8 finding at audit: a behavior change orphans a description claim the inventory still makes.
+
 ## What the gate checks
 
 The `package_inventory_stale_blocker.py` hook runs on every Write whose target is a new file (a path not yet on disk). It:
