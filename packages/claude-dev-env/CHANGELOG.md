@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.77.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.76.0...claude-dev-env-v1.77.0) (2026-06-26)
+
+
+### Features
+
+* add cardinal-count docstring-drift gate to block it at write time ([15e9367](https://github.com/jl-cmd/claude-code-config/commit/15e9367eadd30d421ecee8917c37a3b25a872bd2))
+* **code-rules:** flag run-on docstring sentences in narrative prose ([51a3eac](https://github.com/jl-cmd/claude-code-config/commit/51a3eacffd3ab56cfe01cf4a69476761519ed4b2))
+* **code-rules:** flag run-on docstring sentences in narrative prose ([a0dee71](https://github.com/jl-cmd/claude-code-config/commit/a0dee71ff7e34e1957d7efd6a2addf91f8c387d4))
+* **hooks:** block Args single-line scope drift over span-intersection body ([6997537](https://github.com/jl-cmd/claude-code-config/commit/69975372b8883017598ad2b98dcf4fdfb075c3c8))
+
+
+### Bug Fixes
+
+* **hooks:** scope docstring run-on joiner to spaced double-hyphen ([411e3dc](https://github.com/jl-cmd/claude-code-config/commit/411e3dc9156a1ddac52fdbf850c355555ede47b0))
+
+
+### Documentation
+
+* add plain-illustrative-docstrings rule and Category O9 audit sub-bucket ([e56c4a2](https://github.com/jl-cmd/claude-code-config/commit/e56c4a2b2ce97eb08ebde6d675f370bd05cfd2f5))
+* add plain-illustrative-docstrings rule and Category O9 audit sub-bucket ([372902d](https://github.com/jl-cmd/claude-code-config/commit/372902d480d40a28af6faccb5556b1e6f4ce5834))
+
+
+### Maintenance
+
+* **hooks:** scope PR to the run-on docstring check ([90e8ba7](https://github.com/jl-cmd/claude-code-config/commit/90e8ba76a23eebef36d7e3824743c8a1004f56df))
+
+
+### Style
+
+* **hooks:** order hook_block_logger import alphabetically ([b2e8e1e](https://github.com/jl-cmd/claude-code-config/commit/b2e8e1e670923ee0582dbbf04b570570f80897d5))
+
 ## [1.76.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.75.0...claude-dev-env-v1.76.0) (2026-06-25)
 
 
