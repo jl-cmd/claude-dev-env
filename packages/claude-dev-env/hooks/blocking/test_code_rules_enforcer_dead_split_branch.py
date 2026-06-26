@@ -82,6 +82,15 @@ def test_does_not_flag_when_name_is_parameter() -> None:
     assert _check(source) == []
 
 
+def test_does_not_flag_attribute_receiver_split() -> None:
+    source = (
+        "def first(s: object) -> object:\n"
+        '    parts = s.str.split(",")\n'
+        "    return parts[0] if parts else 0\n"
+    )
+    assert _check(source) == []
+
+
 def test_does_not_flag_in_test_file() -> None:
     source = (
         "def helper(uid: str) -> str:\n"

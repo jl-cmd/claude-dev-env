@@ -34,7 +34,10 @@ def _is_separator_split_call(call_node: ast.Call) -> bool:
     whenever a separator argument is supplied, so the result is always truthy.
     Requiring a non-empty string or bytes literal separator keeps the guarantee
     airtight: ``split()`` with no argument can return an empty list, and an
-    empty separator raises at runtime.
+    empty separator raises at runtime. The receiver is restricted to a bare
+    ``Name`` or a string/bytes literal so an intermediate attribute chain such
+    as a pandas ``s.str.split(",")`` — whose result is a Series, not a list —
+    is not treated as an always-non-empty split.
 
     Args:
         call_node: The call expression on the right-hand side of an assignment.
@@ -47,6 +50,12 @@ def _is_separator_split_call(call_node: ast.Call) -> bool:
     if not isinstance(function_node, ast.Attribute):
         return False
     if function_node.attr not in ALL_ALWAYS_NONEMPTY_SPLIT_METHOD_NAMES:
+        return False
+    receiver_node = function_node.value
+    if isinstance(receiver_node, ast.Constant):
+        if not isinstance(receiver_node.value, (str, bytes)):
+            return False
+    elif not isinstance(receiver_node, ast.Name):
         return False
     if not call_node.args:
         return False
