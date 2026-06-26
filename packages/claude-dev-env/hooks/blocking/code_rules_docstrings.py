@@ -38,6 +38,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
     MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES,
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
+    MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES,
     MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
     MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES,
@@ -52,6 +53,8 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES,
     MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES,
     MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
+    MINIMUM_CONSTANT_FAMILY_MEMBERS_FOR_CARDINAL_CHECK,
+    MINIMUM_DOCSTRING_FAMILY_OVERLAP_FOR_CARDINAL_CHECK,
     MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK,
     MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER,
     MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
@@ -61,10 +64,13 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CAPS_WITH_UNDERSCORE_PATTERN,
+    ALL_CARDINAL_NUMBER_WORD_VALUES,
     ALL_DOCSTRING_ARGS_SECTION_HEADERS,
     ALL_DOCSTRING_TERMINATING_SECTION_HEADERS,
     ALL_SELF_AND_CLS_PARAMETER_NAMES,
     DOCSTRING_ARG_ENTRY_PATTERN,
+    DOCSTRING_CARDINAL_OUTCOME_PHRASE_PATTERN,
+    DOCSTRING_MULTI_SEGMENT_SNAKE_TOKEN_PATTERN,
     DOCSTRING_PLURAL_FAMILY_STOP_PATTERN,
     IDENTIFIER_SHAPED_TUPLE_MEMBER_PATTERN,
     INLINE_CODE_TOKEN_PATTERN,
@@ -1113,6 +1119,122 @@ def check_docstring_returns_plural_cardinality(content: str, file_path: str) -> 
             if len(issues) >= MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES:
                 return issues[:MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES]
     return issues[:MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES]
+
+
+def _referenced_constant_families(parsed_tree: ast.Module) -> dict[str, set[str]]:
+    members_by_family: dict[str, set[str]] = {}
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, ast.Name):
+            continue
+        if not isinstance(each_node.ctx, ast.Load):
+            continue
+        if not ALL_CAPS_WITH_UNDERSCORE_PATTERN.match(each_node.id):
+            continue
+        family_prefix, _, member_suffix = each_node.id.partition("_")
+        if not member_suffix:
+            continue
+        members_by_family.setdefault(family_prefix, set()).add(member_suffix.lower())
+    return members_by_family
+
+
+def _eligible_constant_families(parsed_tree: ast.Module) -> dict[str, set[str]]:
+    return {
+        each_family: each_members
+        for each_family, each_members in _referenced_constant_families(parsed_tree).items()
+        if len(each_members) >= MINIMUM_CONSTANT_FAMILY_MEMBERS_FOR_CARDINAL_CHECK
+    }
+
+
+def _docstring_snake_case_tokens(docstring_text: str) -> set[str]:
+    return set(DOCSTRING_MULTI_SEGMENT_SNAKE_TOKEN_PATTERN.findall(docstring_text))
+
+
+def _docstring_stated_outcome_cardinals(docstring_text: str) -> set[int]:
+    return {
+        ALL_CARDINAL_NUMBER_WORD_VALUES[each_match.group(1).lower()]
+        for each_match in DOCSTRING_CARDINAL_OUTCOME_PHRASE_PATTERN.finditer(docstring_text)
+    }
+
+
+def _documentable_docstrings_with_line(parsed_tree: ast.Module) -> list[tuple[int, str]]:
+    docstrings_with_line: list[tuple[int, str]] = []
+    module_docstring = ast.get_docstring(parsed_tree) or ""
+    if module_docstring:
+        docstrings_with_line.append((1, module_docstring))
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(
+            each_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ):
+            continue
+        node_docstring = ast.get_docstring(each_node) or ""
+        if node_docstring:
+            docstrings_with_line.append((each_node.lineno, node_docstring))
+    return docstrings_with_line
+
+
+def check_docstring_cardinal_count_matches_constant_family(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a docstring cardinal count that under-names a referenced constant family.
+
+    The drift this catches: a docstring states a cardinal count of an outcome
+    family (``Covers the four outcome branches: ...``) and enumerates that
+    family's members in prose, while the module references more members of the
+    same ``UPPER_SNAKE`` constant family than the count names. The prose
+    under-describes the code — a reader trusts the count and the enumeration to
+    be the full set, but the module imports and exercises an outcome the summary
+    omits. The check binds only when the docstring states a cardinal beside an
+    outcome noun, names two or more members of one referenced family, leaves at
+    least one referenced family member unnamed, and the family member count
+    differs from every stated cardinal; a complete enumeration, a count that
+    matches the family, and a single passing mention are all left alone. This is
+    the deterministic cardinal-count slice of Category O6
+    docstring-prose-vs-implementation drift. The check runs on test files too,
+    since the drift class lives in a test-module summary.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per docstring whose cardinal count and enumeration omit a
+        referenced constant-family member, capped at the module limit.
+    """
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    eligible_families = _eligible_constant_families(parsed_tree)
+    if not eligible_families:
+        return []
+    issues: list[str] = []
+    for each_line, each_docstring in _documentable_docstrings_with_line(parsed_tree):
+        stated_cardinals = _docstring_stated_outcome_cardinals(each_docstring)
+        if not stated_cardinals:
+            continue
+        docstring_tokens = _docstring_snake_case_tokens(each_docstring)
+        if not docstring_tokens:
+            continue
+        for each_family in sorted(eligible_families):
+            family_members = eligible_families[each_family]
+            named_members = docstring_tokens & family_members
+            if len(named_members) < MINIMUM_DOCSTRING_FAMILY_OVERLAP_FOR_CARDINAL_CHECK:
+                continue
+            omitted_members = family_members - docstring_tokens
+            if not omitted_members:
+                continue
+            if len(family_members) in stated_cardinals:
+                continue
+            issues.append(
+                f"Line {each_line}: docstring names {sorted(stated_cardinals)} as the "
+                f"{each_family}_ count but the module references {len(family_members)} "
+                f"{each_family}_ constants — omits {sorted(omitted_members)}; match the "
+                "count and enumeration to the referenced family "
+                "(Category O6 docstring-vs-implementation drift)"
+            )
+            if len(issues) >= MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES:
+                return issues[:MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES]
+    return issues[:MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES]
 
 
 def _called_callee_name(statement: ast.stmt) -> str:
