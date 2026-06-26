@@ -24,7 +24,6 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.package_inventory_stale_blocker_constants import (  # noqa: E402
     ALL_EXEMPT_BASENAMES,
     ALL_EXEMPT_DIRECTORY_NAMES,
@@ -42,6 +41,7 @@ from hooks_constants.package_inventory_stale_blocker_constants import (  # noqa:
     STALE_INVENTORY_MESSAGE_TEMPLATE,
     STALE_INVENTORY_SYSTEM_MESSAGE,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )

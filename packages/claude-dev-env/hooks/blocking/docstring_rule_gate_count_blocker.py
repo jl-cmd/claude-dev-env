@@ -38,11 +38,11 @@ from hooks_constants.docstring_rule_gate_count_blocker_constants import (  # noq
     TARGET_RULE_BASENAME,
     TOTAL_GATED_SLICE_COUNT_PATTERN,
 )
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
     apply_edits,
     edits_for_tool,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
