@@ -115,6 +115,9 @@ from code_rules_optional_params import (  # noqa: E402
 from code_rules_orphan_css_class import (  # noqa: E402
     check_orphan_css_classes,
 )
+from code_rules_paired_test import (  # noqa: E402
+    check_public_function_missing_paired_test,
+)
 from code_rules_paths_syspath import (  # noqa: E402
     check_hardcoded_user_paths,
     check_sys_path_insert_deduplication_guard,
@@ -380,6 +383,14 @@ def validate_content(
         all_issues.extend(check_return_annotations(content, file_path))
         all_issues.extend(
             check_function_length(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
+        all_issues.extend(
+            check_public_function_missing_paired_test(
                 effective_content,
                 file_path,
                 all_changed_lines,
