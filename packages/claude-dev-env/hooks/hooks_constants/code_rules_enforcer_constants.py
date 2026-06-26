@@ -138,6 +138,7 @@ MAX_FSTRING_STRUCTURAL_LITERAL_ISSUES = 100
 ALL_ALLOWED_MAGIC_NUMBER_LITERALS: frozenset[str] = frozenset({"0", "1", "-1", "0.0", "1.0"})
 ALL_NON_MAGIC_FSTRING_STRIPPED_VALUES: frozenset[str] = frozenset({"", "True", "False"})
 INDENTATION_MAGIC_MINIMUM_SPACE_RUN = 4
+INDENTATION_MAGIC_MINIMUM_TAB_RUN = 2
 MAX_WHITESPACE_INDENTATION_MAGIC_ISSUES = 100
 WHITESPACE_INDENTATION_MAGIC_MESSAGE_SUFFIX: str = (
     "whitespace indentation literal in a function body - extract to a named "

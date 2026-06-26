@@ -35,6 +35,16 @@ def test_flags_tab_indent_constant() -> None:
     assert len(_check(source)) == 1
 
 
+def test_does_not_flag_single_tab_delimiter() -> None:
+    source = 'def split_columns(text: str) -> list[str]:\n    return text.split("\\t")\n'
+    assert _check(source) == []
+
+
+def test_does_not_flag_single_tab_join_delimiter() -> None:
+    source = 'def join_rows(rows: list[str]) -> str:\n    return "\\t".join(rows)\n'
+    assert _check(source) == []
+
+
 def test_does_not_flag_single_space() -> None:
     source = 'def join_words(left: str, right: str) -> str:\n    return left + " " + right\n'
     assert _check(source) == []
