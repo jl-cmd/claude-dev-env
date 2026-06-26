@@ -28,10 +28,14 @@ The scan is deliberately conservative to keep false positives near zero:
   a name listed only in the constants module's own ``__all__`` does not keep an
   exported constant live.
 - When the package-tree scan leaves a constant unreferenced, the scan widens to
-  the repository root (the nearest ``.git`` ancestor) so a consumer in a sibling
-  tree of the same repository counts; a module outside any repository is judged
-  on the package-tree scan alone. The widened pass skips the package subtree the
-  first pass already covered, so no file is read twice.
+  the repository root (the nearest ``.git`` ancestor). The widened pass counts a
+  sibling-tree reference only when a module imports the name through a
+  ``from <module> import`` whose final dotted segment equals the written
+  module's filename stem, so a genuine cross-tree consumer of this constants
+  module keeps the constant live while a same-named constant exported by an
+  unrelated module never masks a dead one. A module outside any repository is
+  judged on the package-tree scan alone, and the widened pass skips the package
+  subtree the first pass already covered, so no file is read twice.
 - The combined file count of the package-tree and widened passes is bounded by a
   cap, so a write under an unexpectedly large tree cannot stall the hook; a write
   whose scan hits the cap is treated as "cannot prove dead" and flags nothing.
@@ -42,6 +46,8 @@ The scan is deliberately conservative to keep false positives near zero:
 import ast
 import os
 import sys
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 
 _blocking_directory = str(Path(__file__).resolve().parent)
@@ -232,6 +238,54 @@ def _referenced_names_in_source(
     return referenced_names
 
 
+def _module_final_segment(module_path: str | None) -> str:
+    """Return the final dotted segment of an import module path.
+
+    Args:
+        module_path: The ``module`` attribute of a ``from ... import`` node, or
+            None for a bare relative import (``from . import x``).
+
+    Returns:
+        The text after the last dot, the whole string when it carries no dot, or
+        the empty string when ``module_path`` is None or empty.
+    """
+    if not module_path:
+        return ""
+    return module_path.rsplit(".", 1)[-1]
+
+
+def _qualified_import_member_names(source: str, module_stem: str) -> set[str]:
+    """Return names imported from a module whose filename stem is ``module_stem``.
+
+    A cross-package consumer of an exported constant imports it through an
+    explicit ``from <module> import NAME`` whose module path ends in the defining
+    module's filename stem. Collecting only those member names binds a
+    widened-scan reference to the module that actually defines the constant, so a
+    same-named constant exported by an unrelated module never masks a dead one.
+
+    Args:
+        source: The full text of a ``.py`` module under the repository root.
+        module_stem: The filename stem of the constants module being judged.
+
+    Returns:
+        The member names imported from a module whose final dotted segment equals
+        ``module_stem``. A module that fails to parse contributes no names.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    member_names: set[str] = set()
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.ImportFrom):
+            continue
+        if _module_final_segment(each_node.module) != module_stem:
+            continue
+        for each_alias in each_node.names:
+            member_names.add(each_alias.name)
+    return member_names
+
+
 def _scan_root_for_constants_module(file_path: str) -> Path:
     """Return the directory tree to scan for references to the module's constants.
 
@@ -274,51 +328,48 @@ def _is_under_directory(candidate_path: Path, ancestor_directory: Path) -> bool:
     return True
 
 
-def _all_referenced_names_under_root(
+def _collect_names_under_root(
     scan_root: Path,
     written_path: Path,
-    written_content: str,
+    all_seed_names: set[str],
+    extract_names: Callable[[str], set[str]],
     already_scanned_count: int = 0,
     excluded_subtree: Path | None = None,
-    seed_collect_string_literals: bool = True,
 ) -> tuple[set[str], int, bool]:
-    """Return referenced names under the scan root, the running count, and a cap flag.
+    """Collect referenced names under the scan root via a per-module extractor.
 
-    The written module's on-disk text is replaced by ``written_content`` so the
-    post-edit view is judged, never the stale disk copy. Sibling modules are read
-    from disk. Reading stops once the running file count exceeds the configured
-    cap so a write under an unexpectedly large tree cannot stall the hook; the
-    boolean signals the caller to treat that case as "cannot prove dead". When
-    ``excluded_subtree`` is supplied, every ``.py`` module under that directory is
-    skipped, so the widened repository scan never re-reads a file the
+    Walks every ``.py`` module under ``scan_root`` (excluding the written module
+    itself, and any module under ``excluded_subtree``), applies ``extract_names``
+    to each module's text, and unions the result onto ``all_seed_names``. Reading
+    stops once the running file count exceeds the configured cap so a write under
+    an unexpectedly large tree cannot stall the hook; the boolean signals the
+    caller to treat that case as "cannot prove dead". The ``excluded_subtree``
+    skip keeps the widened repository scan from re-reading a file the
     package-tree scan already covered.
 
     Args:
         scan_root: The directory tree to scan.
-        written_path: The resolved path of the module being written.
-        written_content: The post-edit text of the written module.
+        written_path: The resolved path of the module being written, skipped so
+            its own text is judged through ``all_seed_names`` rather than the
+            stale disk copy.
+        all_seed_names: The names the written module itself contributes, unioned
+            in before the walk begins.
+        extract_names: Maps one module's source text to the set of names it
+            contributes — the generous reference collector for the package-tree
+            pass, the stem-bound import collector for the widened pass.
         already_scanned_count: The file count accumulated by a prior pass, so the
             cap bounds the combined work of the package-tree and widened passes.
         excluded_subtree: A resolved directory whose ``.py`` modules are skipped,
             or None to scan every file under the root.
-        seed_collect_string_literals: Whether the written module's own string
-            literals seed the referenced-name set. Set False under an ``__all__``
-            export check so the module's own ``__all__`` entry never counts as the
-            consumer of an exported constant; sibling modules always contribute
-            their string literals so a consumer's re-export still counts.
 
     Returns:
-        A (referenced_names, running_count, cap_was_hit) triple. The name set is
-        the union across every scanned module, unioned with the names the written
-        module itself references; running_count is the cumulative file count
-        including ``already_scanned_count``; cap_was_hit is True when the scan
-        stopped at the configured file cap before scanning the whole tree.
+        A (collected_names, running_count, cap_was_hit) triple. collected_names
+        is ``all_seed_names`` unioned with every scanned module's contribution;
+        running_count is the cumulative file count including
+        ``already_scanned_count``; cap_was_hit is True when the scan stopped at
+        the configured file cap before scanning the whole tree.
     """
-    all_referenced_names = _referenced_names_in_source(
-        written_content,
-        load_only=True,
-        collect_string_literals=seed_collect_string_literals,
-    )
+    collected_names = set(all_seed_names)
     written_path_key = os.path.normcase(str(written_path))
     scanned_file_count = already_scanned_count
     for each_path in scan_root.rglob("*" + PYTHON_SOURCE_SUFFIX):
@@ -331,13 +382,13 @@ def _all_referenced_names_under_root(
             continue
         scanned_file_count += 1
         if scanned_file_count > MAX_SCAN_ROOT_FILE_COUNT:
-            return all_referenced_names, scanned_file_count, True
+            return collected_names, scanned_file_count, True
         try:
             sibling_source = each_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        all_referenced_names |= _referenced_names_in_source(sibling_source)
-    return all_referenced_names, scanned_file_count, False
+        collected_names |= extract_names(sibling_source)
+    return collected_names, scanned_file_count, False
 
 
 def _repository_root_for(written_path: Path) -> Path | None:
@@ -423,20 +474,23 @@ def check_dead_module_constants(
     Runs only on a dedicated constants module (``*_constants.py`` or a module
     under ``config/``); every other production module's file-global constants
     are governed by the use-count rule instead. A constant is dead when its name
-    appears in no ``.py`` module under the enclosing package tree, nor anywhere
-    in the repository the scan widens to when the package-tree scan leaves the
-    constant unreferenced — not imported, not read, not listed in another
-    module's ``__all__`` literal, not named in a string annotation. A module
-    declaring ``__all__`` narrows the check to the constants its ``__all__`` list
-    names: each must be imported or read by another module, and the module's own
-    ``__all__`` entry never counts as that consumer, so an exported constant no
-    module consumes is flagged; a constant the module defines but ``__all__``
-    omits is the author's private value and is left alone. A scan whose combined
-    package-tree and widened file count exceeds the configured cap returns ``[]``
-    (cannot prove dead), bounding the work so the blocking hook cannot stall under
-    a large tree. Whole-file analysis runs against ``full_file_content`` when
-    supplied so an Edit fragment is judged against the reconstructed post-edit
-    file.
+    appears in no ``.py`` module under the enclosing package tree — not imported,
+    not read, not listed in another module's ``__all__`` literal, not named in a
+    string annotation — and, in the repository-wide scan the check widens to when
+    the package-tree scan leaves the constant unreferenced, no module imports the
+    name from a ``from <module> import`` whose final dotted segment equals this
+    module's filename stem. Binding the widened scan to the stem keeps a genuine
+    cross-tree consumer counting while a same-named constant exported by an
+    unrelated module never masks a dead one. A module declaring ``__all__``
+    narrows the check to the constants its ``__all__`` list names: each must be
+    imported or read by another module, and the module's own ``__all__`` entry
+    never counts as that consumer, so an exported constant no module consumes is
+    flagged; a constant the module defines but ``__all__`` omits is the author's
+    private value and is left alone. A scan whose combined package-tree and
+    widened file count exceeds the configured cap returns ``[]`` (cannot prove
+    dead), bounding the work so the blocking hook cannot stall under a large tree.
+    Whole-file analysis runs against ``full_file_content`` when supplied so an
+    Edit fragment is judged against the reconstructed post-edit file.
 
     Args:
         content: The new content under validation (Edit fragment or whole file).
@@ -464,11 +518,16 @@ def check_dead_module_constants(
         return []
     scan_root = _scan_root_for_constants_module(file_path)
     written_path = Path(file_path).resolve()
-    all_referenced_names, scanned_file_count, cap_was_hit = _all_referenced_names_under_root(
+    written_seed_names = _referenced_names_in_source(
+        effective_content,
+        load_only=True,
+        collect_string_literals=seed_collect_string_literals,
+    )
+    all_referenced_names, scanned_file_count, cap_was_hit = _collect_names_under_root(
         scan_root,
         written_path,
-        effective_content,
-        seed_collect_string_literals=seed_collect_string_literals,
+        written_seed_names,
+        _referenced_names_in_source,
     )
     if cap_was_hit:
         return []
@@ -478,13 +537,16 @@ def check_dead_module_constants(
     if has_unreferenced_constant:
         repository_root = _repository_root_for(written_path)
         if repository_root is not None and repository_root != scan_root:
-            widened_names, _widened_count, widened_cap_was_hit = _all_referenced_names_under_root(
+            collect_qualified_imports = partial(
+                _qualified_import_member_names, module_stem=written_path.stem
+            )
+            widened_names, _widened_count, widened_cap_was_hit = _collect_names_under_root(
                 repository_root,
                 written_path,
-                effective_content,
+                set(),
+                collect_qualified_imports,
                 already_scanned_count=scanned_file_count,
                 excluded_subtree=scan_root,
-                seed_collect_string_literals=seed_collect_string_literals,
             )
             if widened_cap_was_hit:
                 return []

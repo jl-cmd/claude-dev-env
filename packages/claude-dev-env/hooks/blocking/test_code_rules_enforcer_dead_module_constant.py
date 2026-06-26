@@ -292,6 +292,65 @@ def test_does_not_flag_constant_used_only_in_a_sibling_tree(neutral_root: Path) 
     )
 
 
+def _build_name_collision_repository(
+    repository_root: Path,
+    promoter_timing_body: str,
+    promoter_consumer_body: str,
+    harness_constants_body: str,
+    harness_consumer_body: str,
+) -> Path:
+    promoter_config = repository_root / "promoter" / "config"
+    promoter_config.mkdir(parents=True)
+    timing_path = promoter_config / "timing.py"
+    timing_path.write_text(promoter_timing_body, encoding="utf-8")
+    (repository_root / "promoter" / "runtime.py").write_text(
+        promoter_consumer_body, encoding="utf-8"
+    )
+    harness_config = repository_root / "harness" / "config"
+    harness_config.mkdir(parents=True)
+    (harness_config / "lockfile_constants.py").write_text(
+        harness_constants_body, encoding="utf-8"
+    )
+    (repository_root / "harness" / "lockfile.py").write_text(
+        harness_consumer_body, encoding="utf-8"
+    )
+    return timing_path
+
+
+def test_same_named_constant_in_an_unrelated_module_does_not_mask_a_dead_one(
+    neutral_root: Path,
+) -> None:
+    promoter_timing_body = "LOCKFILE_ACQUIRE_BYTE_LENGTH = 1\nSWEEP_INTERVAL_SECONDS = 30\n"
+    promoter_consumer_body = (
+        "from config.timing import SWEEP_INTERVAL_SECONDS\n"
+        "\n"
+        "def deadline() -> int:\n"
+        "    return SWEEP_INTERVAL_SECONDS\n"
+    )
+    harness_constants_body = "LOCKFILE_ACQUIRE_BYTE_LENGTH = 1\n"
+    harness_consumer_body = (
+        "from harness.config.lockfile_constants import LOCKFILE_ACQUIRE_BYTE_LENGTH\n"
+        "\n"
+        "def acquire() -> int:\n"
+        "    return LOCKFILE_ACQUIRE_BYTE_LENGTH\n"
+    )
+    timing_path = _build_name_collision_repository(
+        neutral_root,
+        promoter_timing_body,
+        promoter_consumer_body,
+        harness_constants_body,
+        harness_consumer_body,
+    )
+    issues = _check(promoter_timing_body, str(timing_path))
+    assert any("LOCKFILE_ACQUIRE_BYTE_LENGTH" in each_issue for each_issue in issues), (
+        "A constant whose only same-named twin lives in an unrelated module's "
+        f"import must still be flagged dead, got: {issues}"
+    )
+    assert not any("SWEEP_INTERVAL_SECONDS" in each_issue for each_issue in issues), (
+        f"A constant consumed within its own package must not be flagged, got: {issues}"
+    )
+
+
 def test_returns_empty_list_at_file_cap(
     neutral_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
