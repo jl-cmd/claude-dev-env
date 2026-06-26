@@ -10,8 +10,18 @@ and leaves the "is it illustrative" judgment to the audit lane.
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 from types import ModuleType
+
+_HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+if _HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _HOOKS_DIRECTORY)
+
+from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
+    ALL_DOCSTRING_ARGS_SECTION_HEADERS,
+    ALL_DOCSTRING_TERMINATING_SECTION_HEADERS,
+)
 
 
 def _load_enforcer_module() -> ModuleType:
@@ -196,3 +206,62 @@ def test_validate_content_surfaces_docstring_runon_wall() -> None:
     issues = validate_content(_run_lifecycle_module(), PRODUCTION_FILE_PATH, old_content="")
     matching_issues = [each for each in issues if "run-on" in each]
     assert matching_issues, f"Expected validate_content to surface the run-on wall, got: {issues!r}"
+
+
+def _attached_cli_flag_double_hyphen() -> str:
+    return (
+        "def gather_remote_reviews() -> None:\n"
+        '    """Read every review the bot left across all the pages it produced and\n'
+        "    gather them into one ordered list by paging through the endpoint with the\n"
+        "    --paginate --slurp flags so the newest review across the whole set rises to\n"
+        "    the top of the report for the reader.\n"
+        '    """\n'
+        "    return None\n"
+    )
+
+
+def _spaced_double_hyphen_joiner() -> str:
+    return (
+        "def gather_remote_reviews() -> None:\n"
+        '    """Read every review the bot left across all the pages it produced and\n'
+        "    gather them into one ordered list so the newest review rises to the top of\n"
+        "    the report -- the single line a tired reader scans first to learn how the\n"
+        "    whole run actually ended today.\n"
+        '    """\n'
+        "    return None\n"
+    )
+
+
+def test_should_not_flag_attached_cli_flag_double_hyphen() -> None:
+    issues = check_docstring_runon_sentence(
+        _attached_cli_flag_double_hyphen(), PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        "An attached --flag token is not a clause joiner and must not flag, "
+        f"got: {issues!r}"
+    )
+
+
+def test_should_flag_spaced_double_hyphen_joiner() -> None:
+    issues = check_docstring_runon_sentence(
+        _spaced_double_hyphen_joiner(), PRODUCTION_FILE_PATH
+    )
+    assert any("run-on" in each for each in issues), (
+        f"A spaced double-hyphen joiner past the word limit must flag, got: {issues!r}"
+    )
+    assert len(issues) == 1
+
+
+def test_docstring_names_every_inspected_section_header() -> None:
+    docstring = code_rules_enforcer.check_docstring_runon_sentence.__doc__
+    assert docstring is not None
+    inspected_headers = set(ALL_DOCSTRING_ARGS_SECTION_HEADERS) | set(
+        ALL_DOCSTRING_TERMINATING_SECTION_HEADERS
+    )
+    missing_headers = sorted(
+        each_header for each_header in inspected_headers if each_header not in docstring
+    )
+    assert missing_headers == [], (
+        "The docstring must name every section header the body cuts the narrative on; "
+        f"missing: {missing_headers!r}"
+    )
