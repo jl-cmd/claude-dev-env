@@ -1797,9 +1797,11 @@ def check_docstring_runon_sentence(content: str, file_path: str) -> list[str]:
     developer follows on the first read. The one mechanical mark of a wall is a
     single sentence that runs past the word limit while chaining clauses with an
     em-dash or a semicolon. This check inspects the narrative prose of module,
-    class, and public-function docstrings — the text before the first ``Args:`` /
-    ``Returns:`` / ``Raises:`` / ``Yields:`` section header — and reports a
-    sentence that is both over the word limit and joined by one of those marks.
+    class, and public-function docstrings — the text before the first structured
+    section header (``Args:``, ``Arguments:``, ``Returns:``, ``Yields:``,
+    ``Raises:``, ``Note:``, ``Notes:``, ``Example:``, or ``Examples:``) — and
+    reports a sentence that is both over the word limit and joined by one of those
+    marks.
     Whether the prose paints a concrete, illustrative picture is judgment the
     plain-illustrative-docstrings audit lane carries; this gate catches only the
     run-on mark.
