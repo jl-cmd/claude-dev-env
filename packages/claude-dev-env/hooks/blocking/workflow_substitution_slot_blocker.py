@@ -49,6 +49,7 @@ from hooks_constants.workflow_substitution_slot_blocker_constants import (  # no
     WRITE_TOOL_NAME,
 )
 
+
 def multi_edit_new_strings(all_tool_input: dict[str, object]) -> str:
     all_edits = all_tool_input.get("edits", [])
     if not isinstance(all_edits, list):

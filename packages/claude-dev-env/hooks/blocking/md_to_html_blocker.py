@@ -20,6 +20,7 @@ if _blocking_directory not in sys.path:
 
 from md_path_exemptions import is_exempt_path  # noqa: E402
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.md_to_html_blocker_constants import (  # noqa: E402
     ALL_CLAUDE_CODE_SOURCE_TOP_DIRECTORIES,
     ALL_EXEMPT_ANYWHERE_FILENAMES,
@@ -31,7 +32,6 @@ from hooks_constants.md_to_html_blocker_constants import (  # noqa: E402
     PACKAGES_TOP_LEVEL_SEGMENT,
     PLUGIN_ROOT_MARKER_DIRECTORY_NAME,
 )
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
