@@ -26,6 +26,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CAPS_WITH_UNDERSCORE_PATTERN,
     DOTTED_SEGMENT_PATTERN,
     INDENTATION_MAGIC_MINIMUM_SPACE_RUN,
+    INDENTATION_MAGIC_MINIMUM_TAB_RUN,
     INLINE_COLLECTION_MIN_LENGTH,
     MAX_WHITESPACE_INDENTATION_MAGIC_ISSUES,
     WHITESPACE_INDENTATION_MAGIC_MESSAGE_SUFFIX,
@@ -215,7 +216,7 @@ def _is_whitespace_indentation_literal(string_value: str) -> bool:
         return False
     if string_value.strip():
         return False
-    if "\t" in string_value:
+    if "\t" * INDENTATION_MAGIC_MINIMUM_TAB_RUN in string_value:
         return True
     return " " * INDENTATION_MAGIC_MINIMUM_SPACE_RUN in string_value
 
@@ -224,8 +225,9 @@ def check_whitespace_indentation_magic(content: str, file_path: str) -> list[str
     """Flag a whitespace-only indentation literal in a function body.
 
     A string literal that is entirely whitespace and carries a run of at least
-    ``INDENTATION_MAGIC_MINIMUM_SPACE_RUN`` spaces, or any tab, is a formatting
-    default — the indentation an output builder prepends — so it belongs in a
+    ``INDENTATION_MAGIC_MINIMUM_SPACE_RUN`` spaces, or a run of at least
+    ``INDENTATION_MAGIC_MINIMUM_TAB_RUN`` tabs, is a formatting default — the
+    indentation an output builder prepends — so it belongs in a
     named constant in ``config/`` that one definition feeds to every call site.
     Both a standalone string constant (``"            "``) and the literal
     fragment of an f-string (``f"\\n            {value}"``) are inspected, so an
