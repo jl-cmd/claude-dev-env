@@ -29,6 +29,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `no-inline-destructive-literals.md` | No destructive-command literals in Bash tool command strings, even as data |
 | `orphan-css-class.md` | Every `class="..."` attribute in Python-generated markup has a matching selector in the `<style>` block |
 | `parallel-tools.md` | Make all independent tool calls in a single response |
+| `plain-illustrative-docstrings.md` | Public docstring narrative reads plainly and paints a concrete scene a general developer follows on first read; a run-on backstop hook plus Category O9 audit enforce it |
 | `plain-language.md` | Everyday words, short active sentences, lead with the answer |
 | `prompt-workflow-context-controls.md` | Keep prompt-workflow instruction layers small and stable; load heavy skills on demand |
 | `research-mode.md` | Three anti-hallucination constraints: say "I don't know", verify with citations, quote for factual grounding |
