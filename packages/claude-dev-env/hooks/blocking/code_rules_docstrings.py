@@ -51,9 +51,17 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_SPAN_RANGE_BODY_CALLEE_NAMES,
     ALL_DOCSTRING_SPAN_SCOPE_OVERRIDE_PHRASES,
     MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES,
+    ALL_ZIPFILE_WRITE_MODE_VALUES,
+    DOCSTRING_LARGE_ZIP_FILE_EXCEPTION_NAME,
+    MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES,
     MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
+    ZIPFILE_ALLOW_ZIP64_KEYWORD,
+    ZIPFILE_ALLOW_ZIP64_POSITIONAL_INDEX,
+    ZIPFILE_MODE_KEYWORD,
+    ZIPFILE_MODE_POSITIONAL_INDEX,
+    ZIPFILE_WRITER_CLASS_NAME,
     MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES,
     MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES,
     MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
@@ -1836,3 +1844,144 @@ def check_docstring_runon_sentence(content: str, file_path: str) -> list[str]:
         if len(issues) >= MAX_DOCSTRING_RUNON_SENTENCE_ISSUES:
             break
     return issues[:MAX_DOCSTRING_RUNON_SENTENCE_ISSUES]
+
+
+def _raises_section_text(docstring_text: str) -> str:
+    docstring_lines = docstring_text.splitlines()
+    raises_section_lines: list[str] = []
+    inside_raises_section = False
+    for each_line in docstring_lines:
+        stripped_line = each_line.strip()
+        if stripped_line == "Raises:":
+            inside_raises_section = True
+            continue
+        if not inside_raises_section:
+            continue
+        if _is_docstring_terminating_section_header(stripped_line):
+            break
+        raises_section_lines.append(stripped_line)
+    return " ".join(raises_section_lines)
+
+
+def _call_argument_by_keyword_or_position(
+    call_node: ast.Call, keyword_name: str, positional_index: int
+) -> ast.expr | None:
+    for each_keyword in call_node.keywords:
+        if each_keyword.arg == keyword_name:
+            return each_keyword.value
+    if positional_index >= len(call_node.args):
+        return None
+    if any(
+        isinstance(each_argument, ast.Starred)
+        for each_argument in call_node.args[: positional_index + 1]
+    ):
+        return None
+    return call_node.args[positional_index]
+
+
+def _call_opens_zipfile_write_mode_writer(call_node: ast.Call) -> bool:
+    callee = call_node.func
+    if isinstance(callee, ast.Attribute):
+        callee_name = callee.attr
+    elif isinstance(callee, ast.Name):
+        callee_name = callee.id
+    else:
+        return False
+    if callee_name != ZIPFILE_WRITER_CLASS_NAME:
+        return False
+    mode_argument = _call_argument_by_keyword_or_position(
+        call_node, ZIPFILE_MODE_KEYWORD, ZIPFILE_MODE_POSITIONAL_INDEX
+    )
+    return (
+        isinstance(mode_argument, ast.Constant)
+        and mode_argument.value in ALL_ZIPFILE_WRITE_MODE_VALUES
+    )
+
+
+def _zipfile_writer_forbids_zip64(call_node: ast.Call) -> bool:
+    allow_zip64_argument = _call_argument_by_keyword_or_position(
+        call_node, ZIPFILE_ALLOW_ZIP64_KEYWORD, ZIPFILE_ALLOW_ZIP64_POSITIONAL_INDEX
+    )
+    return (
+        isinstance(allow_zip64_argument, ast.Constant)
+        and allow_zip64_argument.value is False
+    )
+
+
+def _function_documents_unraisable_largezipfile(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    docstring_text: str,
+) -> bool:
+    if DOCSTRING_LARGE_ZIP_FILE_EXCEPTION_NAME not in _raises_section_text(docstring_text):
+        return False
+    write_mode_writers = [
+        each_descendant
+        for each_descendant in _walk_skipping_nested_functions(function_node)
+        if isinstance(each_descendant, ast.Call)
+        and _call_opens_zipfile_write_mode_writer(each_descendant)
+    ]
+    if not write_mode_writers:
+        return False
+    return not any(
+        _zipfile_writer_forbids_zip64(each_writer) for each_writer in write_mode_writers
+    )
+
+
+def check_docstring_raises_unraisable_largezipfile(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a Raises clause naming LargeZipFile over a default-ZIP64 writer.
+
+    The drift this catches: a function whose docstring Raises clause lists
+    ``zipfile.LargeZipFile`` while the function opens its ``zipfile.ZipFile``
+    writer in a write mode (``w``/``a``/``x``) with ``allowZip64`` left at its
+    default of True. The stdlib raises ``LargeZipFile`` only when an entry needs
+    ZIP64 AND ``allowZip64`` is False; with ZIP64 permitted the writer
+    transparently uses it and never raises. The Raises entry then documents an
+    exception the body cannot produce, so a caller guarding ``LargeZipFile`` on
+    the strength of the docstring guards an unreachable path. This is the
+    deterministic slice of Category O6 docstring-prose-vs-implementation drift
+    where a writer opened with default ZIP64 disagrees with a LargeZipFile
+    Raises clause.
+
+    The check binds only when the function opens at least one write-mode
+    ``ZipFile`` and every such writer permits ZIP64, so a function that forbids
+    ZIP64 on any writer (``allowZip64=False``, by keyword or position), a
+    read-only open, and a function that opens no writer — where the exception may
+    propagate from a callee — are all left alone.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per function whose LargeZipFile Raises clause names an
+        unreachable exception, capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        docstring_text = _function_docstring_text(each_node)
+        if not docstring_text:
+            continue
+        if not _function_documents_unraisable_largezipfile(each_node, docstring_text):
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: {each_node.name}() docstring Raises lists "
+            "zipfile.LargeZipFile, but the function opens its ZipFile writer with ZIP64 "
+            "permitted (allowZip64 defaults to True) — LargeZipFile raises only when "
+            "allowZip64 is False, so drop the entry or pass allowZip64=False "
+            "(Category O6 docstring-vs-implementation drift)"
+        )
+        if len(issues) >= MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES:
+            break
+    return issues[:MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES]
