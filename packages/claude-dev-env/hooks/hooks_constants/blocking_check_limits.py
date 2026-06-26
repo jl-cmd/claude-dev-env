@@ -7,6 +7,8 @@ under the file-global-constants use-count rule (CODE_RULES §file-global-constan
 
 from __future__ import annotations
 
+import re
+
 MAX_BANNED_PREFIX_ISSUES: int = 3
 MAX_STUB_IMPLEMENTATION_ISSUES: int = 3
 MAX_TYPED_DICT_PAIR_ISSUES: int = 3
@@ -135,6 +137,10 @@ ALL_FORMAT_LOGGER_FUNCTION_NAMES: frozenset[str] = frozenset(
         "log_background",
     }
 )
+DOCSTRING_RUNON_SENTENCE_WORD_LIMIT: int = 30
+MAX_DOCSTRING_RUNON_SENTENCE_ISSUES: int = 5
+ALL_DOCSTRING_RUNON_JOINER_MARKERS: tuple[str, ...] = ("—", "--", ";")
+DOCSTRING_RUNON_SENTENCE_BOUNDARY_PATTERN: re.Pattern[str] = re.compile(r"(?<=[.!?])\s+")
 
 ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES: tuple[str, ...] = (
     "no consumer reads",

@@ -31,10 +31,13 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES,
     ALL_DOCSTRING_NO_INLINE_LITERAL_CLAIM_PHRASES,
     ALL_DOCSTRING_NON_CONSTANT_REFERENCE_MARKERS,
+    ALL_DOCSTRING_RUNON_JOINER_MARKERS,
     ALL_GENERIC_CHECK_NAME_TOKENS,
     ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS,
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
     DOCSTRING_REFERENCE_MARKER_WINDOW,
+    DOCSTRING_RUNON_SENTENCE_BOUNDARY_PATTERN,
+    DOCSTRING_RUNON_SENTENCE_WORD_LIMIT,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
     MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES,
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
@@ -43,6 +46,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_FORMAT_ISSUES,
     MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
+    MAX_DOCSTRING_RUNON_SENTENCE_ISSUES,
     ALL_DOCSTRING_SINGLE_LINE_SCOPE_PHRASES,
     ALL_DOCSTRING_SPAN_RANGE_BODY_CALLEE_NAMES,
     ALL_DOCSTRING_SPAN_SCOPE_OVERRIDE_PHRASES,
@@ -1712,3 +1716,121 @@ def check_docstring_args_single_line_scope_vs_span(content: str, file_path: str)
             if len(issues) >= MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES:
                 return issues[:MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES]
     return issues[:MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES]
+
+
+def _is_narrative_cut_header(stripped_line: str) -> bool:
+    return (
+        stripped_line in ALL_DOCSTRING_TERMINATING_SECTION_HEADERS
+        or stripped_line in ALL_DOCSTRING_ARGS_SECTION_HEADERS
+    )
+
+
+def _docstring_narrative_text(docstring_text: str) -> str:
+    narrative_lines: list[str] = []
+    for each_line in docstring_text.splitlines():
+        stripped_line = each_line.strip()
+        if _is_narrative_cut_header(stripped_line):
+            break
+        narrative_lines.append(stripped_line)
+    return " ".join(narrative_lines)
+
+
+def _sentence_word_count(sentence_text: str) -> int:
+    return sum(
+        1
+        for each_token in sentence_text.split()
+        if any(each_character.isalnum() for each_character in each_token)
+    )
+
+
+def _sentence_carries_joiner_marker(sentence_text: str) -> bool:
+    return any(
+        each_marker in sentence_text for each_marker in ALL_DOCSTRING_RUNON_JOINER_MARKERS
+    )
+
+
+def _runon_sentences(narrative_text: str) -> list[str]:
+    flagged_sentences: list[str] = []
+    for each_sentence in DOCSTRING_RUNON_SENTENCE_BOUNDARY_PATTERN.split(narrative_text):
+        stripped_sentence = each_sentence.strip()
+        if not stripped_sentence:
+            continue
+        if _sentence_word_count(stripped_sentence) <= DOCSTRING_RUNON_SENTENCE_WORD_LIMIT:
+            continue
+        if not _sentence_carries_joiner_marker(stripped_sentence):
+            continue
+        flagged_sentences.append(stripped_sentence)
+    return flagged_sentences
+
+
+def _documentable_docstring_targets(
+    parsed_tree: ast.Module,
+) -> list[tuple[int, str, str]]:
+    documentable_targets: list[tuple[int, str, str]] = []
+    module_docstring = ast.get_docstring(parsed_tree)
+    if module_docstring and parsed_tree.body:
+        documentable_targets.append((parsed_tree.body[0].lineno, "module", module_docstring))
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if isinstance(each_node, ast.ClassDef):
+            class_docstring = ast.get_docstring(each_node)
+            if class_docstring:
+                documentable_targets.append((each_node.lineno, each_node.name, class_docstring))
+            continue
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_is_private_or_dunder(each_node.name):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        function_docstring = _function_docstring_text(each_node)
+        if function_docstring:
+            documentable_targets.append(
+                (each_node.lineno, f"{each_node.name}()", function_docstring)
+            )
+    return documentable_targets
+
+
+def check_docstring_runon_sentence(content: str, file_path: str) -> list[str]:
+    """Flag a docstring narrative sentence that reads as a dense run-on wall.
+
+    A readable docstring breaks its narrative into short sentences a general
+    developer follows on the first read. The one mechanical mark of a wall is a
+    single sentence that runs past the word limit while chaining clauses with an
+    em-dash or a semicolon. This check inspects the narrative prose of module,
+    class, and public-function docstrings — the text before the first ``Args:`` /
+    ``Returns:`` / ``Raises:`` / ``Yields:`` section header — and reports a
+    sentence that is both over the word limit and joined by one of those marks.
+    Whether the prose paints a concrete, illustrative picture is judgment the
+    plain-illustrative-docstrings audit lane carries; this gate catches only the
+    run-on mark.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per docstring whose narrative carries a run-on sentence, capped
+        at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_line_number, each_label, each_docstring in _documentable_docstring_targets(
+        parsed_tree
+    ):
+        flagged_sentences = _runon_sentences(_docstring_narrative_text(each_docstring))
+        if not flagged_sentences:
+            continue
+        run_on_word_count = _sentence_word_count(flagged_sentences[0])
+        issues.append(
+            f"Line {each_line_number}: {each_label} docstring carries a {run_on_word_count}-word "
+            "run-on sentence — break the narrative into short, illustrative sentences a general "
+            "developer reads in one pass (plain-illustrative-docstrings)"
+        )
+        if len(issues) >= MAX_DOCSTRING_RUNON_SENTENCE_ISSUES:
+            break
+    return issues[:MAX_DOCSTRING_RUNON_SENTENCE_ISSUES]
