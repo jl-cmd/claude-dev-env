@@ -402,8 +402,6 @@ def _post_edit_suite_referenced_identifiers(
 def check_test_file_omits_module_public_function(
     content: str,
     file_path: str,
-    all_changed_lines: set[int] | None = None,
-    defer_scope_to_caller: bool = False,
 ) -> list[str]:
     """Flag a public function the written test file's paired suite omits.
 
@@ -419,28 +417,25 @@ def check_test_file_omits_module_public_function(
     itself exempt — a test module, hook infrastructure, config module, migration,
     workflow registry, or ``__init__`` module — is skipped.
 
-    Each violation carries a ``Line N:`` prefix naming the production-module
-    definition line and is scoped through ``_scope_violations_to_changed_lines``,
-    so a single-file edit to an established test file does not block on a
-    pre-existing coverage gap and the commit/push gate classifies that untouched
-    gap as advisory — mirroring the production-side check.
+    A stem-matched test-file write authors the whole pairing relationship, so
+    every omission is reported unscoped: the gap lives in the test file under
+    edit, while the omitted function's definition line lives in the production
+    module — a different file whose line numbers are not addressable against the
+    test file's changed lines. Diff-line intersection would compare the two
+    unrelated coordinate spaces, so this check returns each omission directly
+    and the commit/push gate treats it as blocking.
 
     Args:
         content: The reconstructed post-edit whole-file content of the test file.
         file_path: The destination path of the written test file, used to resolve
             its paired production module on disk.
-        all_changed_lines: Post-edit line numbers the current edit touched, or
-            None to treat every omission as in scope.
-        defer_scope_to_caller: When True, return every violation so the
-            commit/push gate scopes by added line.
 
     Returns:
         One violation per public function the suite omits, capped at the
-        configured maximum, scoped to the changed lines unless deferred or
-        unscoped. Empty when the file is not a stem-matched test file, no paired
-        production module exists on disk, the production module is exempt or
-        defines no public function, or the suite covers none of the module's
-        public functions.
+        configured maximum. Empty when the file is not a stem-matched test file,
+        no paired production module exists on disk, the production module is
+        exempt or defines no public function, or the suite covers none of the
+        module's public functions.
     """
     production_stem = _production_stem_from_test_filename(Path(file_path).name)
     if production_stem is None:
@@ -473,22 +468,15 @@ def check_test_file_omits_module_public_function(
     if covered_function_count < MINIMUM_COVERED_PUBLIC_FUNCTIONS:
         return []
     production_module_name = production_module_path.name
-    all_violations_in_walk_order: list[tuple[range, str]] = []
-    for each_name, each_definition_line in all_public_definitions:
+    all_omission_violations: list[str] = []
+    for each_name, _each_definition_line in all_public_definitions:
         if each_name in all_referenced_identifiers:
             continue
-        message = (
-            f"Line {each_definition_line}: {production_module_name} public function "
+        all_omission_violations.append(
+            f"{production_module_name} public function "
             f"{each_name!r} {TEST_SUITE_OMITS_FUNCTION_GUIDANCE}"
         )
-        all_violations_in_walk_order.append(
-            (range(each_definition_line, each_definition_line + 1), message)
-        )
-        if len(all_violations_in_walk_order) >= MAX_PAIRED_TEST_COVERAGE_ISSUES:
+        if len(all_omission_violations) >= MAX_PAIRED_TEST_COVERAGE_ISSUES:
             break
-    return _scope_violations_to_changed_lines(
-        all_violations_in_walk_order,
-        all_changed_lines,
-        defer_scope_to_caller,
-    )
+    return all_omission_violations
 
