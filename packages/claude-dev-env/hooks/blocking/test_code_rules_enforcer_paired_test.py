@@ -103,6 +103,29 @@ def test_skips_when_suite_covers_no_public_function(
     assert all_issues == []
 
 
+def test_flags_public_surface_when_suite_exercises_only_private_helper(
+    neutral_package_directory: Path,
+) -> None:
+    module_source = (
+        "def _aarrggbb_to_css(value):\n    return value\n\n\n"
+        "def render_table():\n    return _aarrggbb_to_css('x')\n\n\n"
+        "def render_summary():\n    return 2\n"
+    )
+    _write_test_file(
+        neutral_package_directory,
+        "test_mod.py",
+        "from pkg.mod import _aarrggbb_to_css\n\n"
+        "def test_helper():\n    assert _aarrggbb_to_css('x') == 'x'\n",
+    )
+    all_issues = check_public_function_missing_paired_test(
+        module_source, str(neutral_package_directory / "mod.py")
+    )
+    assert len(all_issues) == 2
+    flagged_names = " ".join(all_issues)
+    assert "render_table" in flagged_names
+    assert "render_summary" in flagged_names
+
+
 def test_counts_coverage_across_sibling_test_files(
     neutral_package_directory: Path,
 ) -> None:
