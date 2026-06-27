@@ -152,7 +152,7 @@ def test_does_not_flag_constant_imported_one_directory_up(neutral_root: Path) ->
     assert issues == [], f"No constant is dead when all are imported, got: {issues}"
 
 
-def test_does_not_flag_when_module_declares_dunder_all(neutral_root: Path) -> None:
+def test_does_not_flag_dunder_all_member_with_a_live_consumer(neutral_root: Path) -> None:
     constants_body = CONSTANTS_BODY + '__all__ = ["MEDIUM_TERMINAL"]\n'
     consumer_body = (
         "from report_constants.render_report_constants import MEDIUM_TERMINAL\n"
@@ -164,7 +164,35 @@ def test_does_not_flag_when_module_declares_dunder_all(neutral_root: Path) -> No
         neutral_root / "workflow", constants_body, consumer_body
     )
     issues = _check(constants_body, str(constants_path))
-    assert issues == [], f"__all__ surface suppresses the check, got: {issues}"
+    assert issues == [], f"An __all__ member a consumer imports stays live, got: {issues}"
+
+
+def test_dunder_all_narrows_check_to_exported_constants(neutral_root: Path) -> None:
+    constants_body = (
+        'JSONL_APPEND_OPEN_MODE = "a"\n'
+        'ZIPFILE_READ_OPEN_MODE = "r"\n'
+        "PRIVATE_BUFFER_BYTES = 1024\n"
+        '__all__ = ["JSONL_APPEND_OPEN_MODE", "ZIPFILE_READ_OPEN_MODE"]\n'
+    )
+    consumer_body = (
+        "from report_constants.render_report_constants import JSONL_APPEND_OPEN_MODE\n"
+        "\n"
+        "def open_mode() -> str:\n"
+        "    return JSONL_APPEND_OPEN_MODE\n"
+    )
+    constants_path = _build_constants_package(
+        neutral_root / "workflow", constants_body, consumer_body
+    )
+    issues = _check(constants_body, str(constants_path))
+    assert any("ZIPFILE_READ_OPEN_MODE" in each_issue for each_issue in issues), (
+        f"An exported constant no module imports is dead, got: {issues}"
+    )
+    assert not any("JSONL_APPEND_OPEN_MODE" in each_issue for each_issue in issues), (
+        f"An exported constant a consumer imports must not be flagged, got: {issues}"
+    )
+    assert not any("PRIVATE_BUFFER_BYTES" in each_issue for each_issue in issues), (
+        f"A constant __all__ omits is the author's private value and is exempt, got: {issues}"
+    )
 
 
 def test_does_not_run_on_ordinary_production_module(neutral_root: Path) -> None:
