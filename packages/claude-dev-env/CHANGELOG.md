@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.78.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.77.0...claude-dev-env-v1.78.0) (2026-06-27)
+
+
+### Features
+
+* **code-rules:** block dead __all__-exported constants at write time ([8f4e969](https://github.com/jl-cmd/claude-code-config/commit/8f4e969e6760e3ebf989bca10cf06a186bc13d81))
+* **code-rules:** block deferred code-standard classes at write time ([3f8532a](https://github.com/jl-cmd/claude-code-config/commit/3f8532a1d433a25f1e8ea195c0d9f98807c73c01))
+* **code-rules:** block public functions missing a paired behavioral test ([a84bd70](https://github.com/jl-cmd/claude-code-config/commit/a84bd7051de98be40229c601c933209b0d2155dc))
+* **code-rules:** block punctuation-mark glyph-enumeration docstring drift at write time ([fde3df4](https://github.com/jl-cmd/claude-code-config/commit/fde3df493b5285eff2f5c75e687ca3c2fd4c981a))
+* **code-rules:** block unraisable LargeZipFile Raises clause at write time ([62dc36f](https://github.com/jl-cmd/claude-code-config/commit/62dc36f1cf1b80cba89e058e056f20ae91885db2))
+* **code-rules:** widen dead-module-constant scan to resist same-name collisions ([15a81cb](https://github.com/jl-cmd/claude-code-config/commit/15a81cbfa77786ac8998e61c1ae6ff062cb6bf1d))
+
+
+### Bug Fixes
+
+* address converge-round findings on dead split branch hook ([e8e4dbb](https://github.com/jl-cmd/claude-code-config/commit/e8e4dbbf432c34f03184a05fd4e1939c0a85b48e))
+* address converge-round review findings ([f33df66](https://github.com/jl-cmd/claude-code-config/commit/f33df668fffc1093aae5e93daaa83b47bbcba5f7))
+* **hooks:** resolve convergence gate HEAD against the gh pr ready worktree ([6445a96](https://github.com/jl-cmd/claude-code-config/commit/6445a96e0cf54e8f4ff34fdad7eaf6189099fb60))
+* **hooks:** resolve convergence gate HEAD against the gh pr ready worktree ([d30c0b1](https://github.com/jl-cmd/claude-code-config/commit/d30c0b1dd6b70eeb83d7996df8db654fe42bac6c))
+
 ## [1.77.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.76.0...claude-dev-env-v1.77.0) (2026-06-26)
 
 
