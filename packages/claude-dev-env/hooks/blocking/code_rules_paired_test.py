@@ -9,8 +9,9 @@ partially-covered module lands.
 
 ``check_public_function_missing_paired_test`` fires on the production-module
 write: when a module has an established paired test suite — a stem-matched
-``test_<stem>.py`` that already exercises at least one of the module's public
-functions — a public function that suite references nowhere is flagged.
+``test_<stem>.py`` that already exercises the module, either by covering at least
+one of its public functions or by referencing one of its private helpers — a
+public function that suite references nowhere is flagged.
 
 ``check_test_file_omits_module_public_function`` fires on the stem-matched
 test-file write, covering the reverse order in which the production module is
@@ -26,9 +27,14 @@ Both checks stay conservative to keep false positives near zero:
   test file already exists; a module with no dedicated test file is out of scope
   and left to the file-level TDD gate. The test-side check runs only on a
   stem-matched test file whose paired production module exists on disk.
-- Either check fires only when the suite already covers at least one public
-  function of the paired module — the signature of a maintained per-function
-  suite rather than an unrelated or placeholder test file.
+- The production-side check fires only when the suite already exercises the
+  module — covering at least one of its public functions, or referencing one of
+  its private helpers by name — the signature of a maintained per-module suite
+  rather than an unrelated or placeholder test file. A suite that exercises only
+  a private helper while omitting the public surface is the exact shape the
+  private-helper establishment catches. The test-side check fires only when the
+  post-edit suite already covers at least one public function of the paired
+  module.
 - A public function counts as covered when its name appears in any test file in
   the suite directory — imported, called, or named — so a function exercised by
   a differently-named sibling test still counts.
@@ -109,6 +115,26 @@ def _public_function_definitions(tree: ast.Module) -> list[tuple[str, int]]:
         if _is_public_function_name(each_statement.name):
             all_definitions.append((each_statement.name, each_statement.lineno))
     return all_definitions
+
+
+def _private_function_names(tree: ast.Module) -> set[str]:
+    """Return the names of module-scope underscore-prefixed function definitions.
+
+    Args:
+        tree: The parsed production module.
+
+    Returns:
+        Each module-scope function name that begins with an underscore - the
+        private helpers a paired test suite reaches when it exercises the
+        module's internals.
+    """
+    all_private_names: set[str] = set()
+    for each_statement in tree.body:
+        if not isinstance(each_statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if each_statement.name.startswith("_"):
+            all_private_names.add(each_statement.name)
+    return all_private_names
 
 
 def _ancestor_tests_directories(start_directory: Path) -> list[Path]:
@@ -249,7 +275,8 @@ def check_public_function_missing_paired_test(
     """Flag a public function the module's established paired test suite omits.
 
     Runs only on a production module whose stem-matched ``test_<stem>.py`` already
-    exists and already exercises at least one of the module's public functions.
+    exists and already exercises the module — by covering at least one of its
+    public functions, or by referencing one of its private helpers by name.
     Under that established-suite precondition, a public function the suite
     references nowhere is flagged, so the forgotten function gets a behavioral
     test before the partially-covered module lands. ``main`` and
@@ -269,8 +296,9 @@ def check_public_function_missing_paired_test(
     Returns:
         One violation per uncovered public function, capped at the configured
         maximum, scoped to the changed lines unless deferred or unscoped. Empty
-        when the module is exempt, has no dedicated test file, the suite covers
-        no public function, or the content fails to parse.
+        when the module is exempt, has no dedicated test file, the suite neither
+        covers a public function nor references a private helper of the module,
+        or the content fails to parse.
     """
     if _module_is_exempt(file_path):
         return []
@@ -290,7 +318,14 @@ def check_public_function_missing_paired_test(
         for each_name, _each_line in all_public_definitions
         if each_name in all_referenced_identifiers
     )
-    if covered_function_count < MINIMUM_COVERED_PUBLIC_FUNCTIONS:
+    suite_references_private_helper = bool(
+        _private_function_names(tree) & all_referenced_identifiers
+    )
+    suite_is_established = (
+        covered_function_count >= MINIMUM_COVERED_PUBLIC_FUNCTIONS
+        or suite_references_private_helper
+    )
+    if not suite_is_established:
         return []
     all_violations_in_walk_order: list[tuple[range, str]] = []
     for each_name, each_definition_line in all_public_definitions:
