@@ -64,6 +64,9 @@ from code_rules_dead_dataclass_field import (  # noqa: E402
 from code_rules_dead_module_constant import (  # noqa: E402
     check_dead_module_constants,
 )
+from code_rules_dead_split_branch import (  # noqa: E402
+    check_dead_split_truthiness_branch,
+)
 from code_rules_docstrings import (  # noqa: E402
     check_class_docstring_names_public_methods,
     check_docstring_args_match_signature,
@@ -135,6 +138,7 @@ from code_rules_string_magic import (  # noqa: E402
     check_inline_literal_collections,
     check_inline_tuple_string_magic,
     check_string_literal_magic,
+    check_whitespace_indentation_magic,
 )
 from code_rules_test_assertions import (  # noqa: E402
     check_constant_equality_tests,
@@ -380,6 +384,7 @@ def validate_content(
         all_issues.extend(
             check_dead_module_constants(content, file_path, full_file_content)
         )
+        all_issues.extend(check_dead_split_truthiness_branch(content, file_path))
         all_issues.extend(check_library_print(content, file_path))
         all_issues.extend(check_parameter_annotations(content, file_path))
         all_issues.extend(check_known_pytest_fixture_annotations(content, file_path))
@@ -407,6 +412,7 @@ def validate_content(
         all_issues.extend(check_inline_literal_collections(content, file_path))
         all_issues.extend(check_inline_tuple_string_magic(content, file_path))
         all_issues.extend(check_string_literal_magic(content, file_path))
+        all_issues.extend(check_whitespace_indentation_magic(content, file_path))
         all_issues.extend(check_orphan_css_classes(effective_content, file_path))
         check_incomplete_mocks(content, file_path)
         check_duplicated_format_patterns(content, file_path)

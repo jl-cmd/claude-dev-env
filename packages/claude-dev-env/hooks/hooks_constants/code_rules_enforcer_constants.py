@@ -137,6 +137,20 @@ MINIMUM_FSTRING_LITERAL_LENGTH = 2
 MAX_FSTRING_STRUCTURAL_LITERAL_ISSUES = 100
 ALL_ALLOWED_MAGIC_NUMBER_LITERALS: frozenset[str] = frozenset({"0", "1", "-1", "0.0", "1.0"})
 ALL_NON_MAGIC_FSTRING_STRIPPED_VALUES: frozenset[str] = frozenset({"", "True", "False"})
+INDENTATION_MAGIC_MINIMUM_SPACE_RUN = 4
+INDENTATION_MAGIC_MINIMUM_TAB_RUN = 2
+MAX_WHITESPACE_INDENTATION_MAGIC_ISSUES = 100
+WHITESPACE_INDENTATION_MAGIC_MESSAGE_SUFFIX: str = (
+    "whitespace indentation literal in a function body - extract to a named "
+    "indent constant in config/"
+)
+ALL_ALWAYS_NONEMPTY_SPLIT_METHOD_NAMES: frozenset[str] = frozenset({"split", "rsplit"})
+MAX_DEAD_SPLIT_BRANCH_ISSUES = 100
+DEAD_SPLIT_BRANCH_MESSAGE_SUFFIX: str = (
+    "is bound from a str.split() call with a separator, which never returns an "
+    "empty list, so this truthiness test's falsy branch is unreachable dead "
+    "code - remove the dead branch"
+)
 DUPLICATED_FORMAT_MINIMUM_REPETITION_COUNT = 3
 DUPLICATED_FORMAT_MINIMUM_LITERAL_CHARACTER_COUNT = 5
 FILE_GLOBAL_UPPER_SNAKE_PATTERN = re.compile(r"^_?[A-Z][A-Z0-9_]*$")

@@ -29,6 +29,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_dead_config_field.py` | `*Config` / `*Selectors` dataclass fields with no live references |
 | `code_rules_dead_dataclass_field.py` | Dataclass fields with no consuming references |
 | `code_rules_dead_module_constant.py` | `UPPER_SNAKE` constants in `*_constants.py` modules with no importers |
+| `code_rules_dead_split_branch.py` | A conditional whose falsy branch is unreachable because the tested value comes from a separator `str.split()`, which never returns an empty list |
 | `code_rules_docstrings.py` | Google-style docstrings; `Args:` section matches signature; fallback-branch coverage |
 | `code_rules_duplicate_body.py` | A function body copied from a sibling module, or a helper body inlined as a block inside a larger function in the same file |
 | `code_rules_imports_logging.py` | Imports at top of file; logging format-arg style; printf tokens in `str.format`-logger messages |
@@ -45,7 +46,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_probe_recording.py` | Probe recording utilities |
 | `code_rules_scope_binding.py` | Scope/binding analysis utilities |
 | `code_rules_shared.py` | Shared dataclasses and helpers used by multiple check modules |
-| `code_rules_string_magic.py` | Magic string detection with masking and f-string support |
+| `code_rules_string_magic.py` | Magic string detection with masking and f-string support; whitespace-only indentation literals in function bodies |
 | `code_rules_test_assertions.py` | Test assertion style rules |
 | `code_rules_test_branching_except.py` | No bare or broad `except` in test branches |
 | `code_rules_test_isolation.py` | Tests must not rely on home-dir or temp-dir side effects |
