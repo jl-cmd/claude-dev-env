@@ -22,6 +22,7 @@
 - A module's existing `_resolve_base_ref` guards a missing remote with `getattr(remote, "name", "") or DEFAULT_REMOTE`; the diff adds `_resolve_head_ref` beside it that dereferences `remote.name` bare, crashing on the detached-HEAD case its sibling survives.
 - A rules reference whose enforcement table marks letter J with ⚡ (blocking hook) while its audit-surface section three paragraphs later lists J under "non-blocking, multi-file reasoning" — one letter, two contradictory enforcement claims in one document.
 - A hooks.json with the same hook registered in two parallel matcher blocks (Write|Edit + MultiEdit) when an existing Write|Edit|MultiEdit block already handles the same surface.
+- A new function re-implements an in-place atomic file rewrite — stream to a temp sibling, `os.replace` over the original, best-effort temp cleanup on failure — that a shared helper already centralizes (`rewrite_stp_member_atomically` and the like); the two copies drift the moment one gets a temp-naming or concurrency fix the other misses (CODE_RULES §3, reuse before create). The audit catches it by matching the diff's temp-sibling-plus-`os.replace` orchestration against the shared module the same file already imports from.
 
 **Companion reference:** see `../source-material-section-types.md`.
 

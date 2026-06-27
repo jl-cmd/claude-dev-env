@@ -1,4 +1,4 @@
-"""Skip-decorator, existence-only, constant-equality, stale-test-name, and flag-gated scenario test-quality checks."""
+"""Skip-decorator, existence-only, constant-equality, stale-test-name, flag-gated scenario, and vacuous cleanup-assertion test-quality checks."""
 
 import ast
 import sys
@@ -6,6 +6,37 @@ from pathlib import Path
 
 _SCENARIO_NAME_CLAUSES = ("_when_", "_passes", "_succeeds", "_on_clean")
 _MINIMUM_SIBLING_PATCH_COUNT = 2
+_CLEANUP_REMOVAL_NAME_TOKENS = (
+    "remove",
+    "removes",
+    "removed",
+    "cleanup",
+    "clean_up",
+    "deletes",
+    "discards",
+    "no_tmp",
+    "no_temp",
+    "no_leftover",
+    "leftover",
+)
+_FAILURE_CONDITION_NAME_TOKENS = (
+    "on_failure",
+    "_failure",
+    "on_error",
+    "_fails",
+    "_failed",
+    "raises",
+    "bad_source",
+)
+_ARRANGEMENT_METHOD_NAMES = (
+    "setattr",
+    "mkdir",
+    "write_text",
+    "write_bytes",
+    "touch",
+    "symlink_to",
+    "exists",
+)
 
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
@@ -229,6 +260,133 @@ def check_constant_equality_tests(content: str, file_path: str) -> list[str]:
                 f"Line {each_node.lineno}: constant-value test"
                 f" — delete; tests must cover behavior"
             )
+
+    return issues
+
+
+def _name_signals_cleanup_on_failure(test_name: str) -> bool:
+    """Return True when a test name pairs a removal token with a failure token."""
+    lowered_name = test_name.lower()
+    has_removal_token = any(
+        each_token in lowered_name for each_token in _CLEANUP_REMOVAL_NAME_TOKENS
+    )
+    has_failure_token = any(
+        each_token in lowered_name for each_token in _FAILURE_CONDITION_NAME_TOKENS
+    )
+    return has_removal_token and has_failure_token
+
+
+def _is_absence_assertion(assert_node: ast.Assert) -> bool:
+    """Return True when an assertion only checks that a collection is empty."""
+    test_expr = assert_node.test
+    if isinstance(test_expr, ast.UnaryOp) and isinstance(test_expr.op, ast.Not):
+        return True
+    if not isinstance(test_expr, ast.Compare):
+        return False
+    if len(test_expr.ops) != 1 or not isinstance(test_expr.ops[0], ast.Eq):
+        return False
+    comparator = test_expr.comparators[0]
+    if (
+        isinstance(comparator, ast.Constant)
+        and isinstance(comparator.value, int)
+        and not isinstance(comparator.value, bool)
+        and comparator.value == 0
+    ):
+        return True
+    return isinstance(comparator, ast.List) and not comparator.elts
+
+
+def _body_calls_attribute(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef, attribute_name: str
+) -> bool:
+    """Return True when the function body calls a method with the given attribute name."""
+    for each_node in ast.walk(function_node):
+        if not isinstance(each_node, ast.Call):
+            continue
+        callee = each_node.func
+        if isinstance(callee, ast.Attribute) and callee.attr == attribute_name:
+            return True
+    return False
+
+
+def _body_arranges_temp_existence(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    """Return True when the body creates a temp file or arranges a post-creation failure.
+
+    A sound cleanup-on-failure test proves the temp existed before asserting its
+    removal: it monkeypatches the operation to fail after the temp is created, or
+    it creates the temp directly and checks its presence. Either signal means the
+    leftover-absence assertion is not vacuous.
+
+    Args:
+        function_node: The test function whose body is inspected.
+
+    Returns:
+        True when the body references ``monkeypatch`` or calls a file-creation or
+        existence method that establishes the temp file before the cleanup runs.
+    """
+    for each_node in ast.walk(function_node):
+        if isinstance(each_node, ast.Name) and each_node.id == "monkeypatch":
+            return True
+        if not isinstance(each_node, ast.Call):
+            continue
+        callee = each_node.func
+        if isinstance(callee, ast.Attribute) and callee.attr in _ARRANGEMENT_METHOD_NAMES:
+            return True
+    return False
+
+
+def check_vacuous_cleanup_assertion_tests(content: str, file_path: str) -> list[str]:
+    """Flag a cleanup-on-failure test whose leftover-absence assertion is vacuous.
+
+    A test named for removal on failure that globs a directory and asserts the
+    result is empty, yet never creates the temp file nor arranges a failure after
+    the temp exists, passes even when the on-failure cleanup is entirely broken —
+    the leftover set is empty because nothing ever staged a leftover. The gate
+    fires when the test name pairs a removal token with a failure token, the body
+    globs a directory, every assertion only checks emptiness, and the body neither
+    monkeypatches a post-creation failure nor creates and checks the temp first.
+    Only applies to test files; production files are exempt.
+
+    Args:
+        content: The file body under validation.
+        file_path: Path to the file, used for the test-file gate.
+
+    Returns:
+        One issue per test whose cleanup-on-failure assertion passes vacuously.
+    """
+    if not is_test_file(file_path):
+        return []
+    try:
+        syntax_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(syntax_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not each_node.name.startswith("test"):
+            continue
+        if not _name_signals_cleanup_on_failure(each_node.name):
+            continue
+        if not _body_calls_attribute(each_node, "glob"):
+            continue
+        if _body_arranges_temp_existence(each_node):
+            continue
+        body_assertions = _collect_body_assertions(each_node.body)
+        if not body_assertions:
+            continue
+        if not all(_is_absence_assertion(each_assert) for each_assert in body_assertions):
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: vacuous cleanup-on-failure test"
+            f" — asserts no leftover temp file but never proves the temp was created,"
+            f" so it passes even when cleanup is broken; arrange a post-creation"
+            f" failure (e.g. monkeypatch os.replace to raise after the temp exists)"
+            f" then assert the temp was removed"
+        )
 
     return issues
 
