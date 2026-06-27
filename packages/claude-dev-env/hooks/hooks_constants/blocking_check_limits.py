@@ -57,6 +57,22 @@ MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES: int = 5
 MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER: int = 2
 MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES: int = 5
 MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION: int = 2
+MAX_DOCSTRING_MARK_GLYPH_ENUMERATION_ISSUES: int = 5
+MINIMUM_NAMED_MARKS_FOR_PROSE_ENUMERATION: int = 2
+MAX_COMPANION_MODULE_RESOLUTION_DEPTH: int = 6
+PYTHON_MODULE_FILE_SUFFIX: str = ".py"
+WORD_BOUNDARY_REGEX: str = r"\b"
+ALL_PUNCTUATION_MARK_GLYPH_PROSE_NAMES: dict[str, tuple[str, ...]] = {
+    "—": ("em-dash", "em dash"),
+    "–": ("en-dash", "en dash"),
+    "--": ("double-hyphen", "double hyphen", "spaced double-hyphen"),
+    ";": ("semicolon",),
+    ":": ("colon",),
+    ",": ("comma",),
+    "/": ("slash", "forward slash"),
+    "|": ("pipe", "vertical bar"),
+    "&": ("ampersand",),
+}
 MAX_DOCSTRING_STEP_DISPATCH_ISSUES: int = 5
 MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK: int = 2
 MINIMUM_TOKENS_FOR_DISPATCH_CALLEE: int = 2
