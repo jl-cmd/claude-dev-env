@@ -416,7 +416,12 @@ def validate_content(
             )
         )
         all_issues.extend(
-            check_test_file_omits_module_public_function(effective_content, file_path)
+            check_test_file_omits_module_public_function(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
         )
         all_issues.extend(check_loop_variable_naming(content, file_path))
         all_issues.extend(check_inline_literal_collections(content, file_path))
