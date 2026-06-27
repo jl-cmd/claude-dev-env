@@ -632,24 +632,24 @@ def test_dispatcher_write_applies_both_groups() -> None:
     assert "blocking/plain_language_blocker.py" in all_write_script_paths, (
         "plain_language_blocker (Group B) must be in Write applicable set"
     )
-    assert len(all_write_entries) == 18, (
-        f"Write tool must apply to all 18 hosted hooks, got {len(all_write_entries)}"
+    assert len(all_write_entries) == 19, (
+        f"Write tool must apply to all 19 hosted hooks, got {len(all_write_entries)}"
     )
 
 
 def test_dispatcher_edit_applies_both_groups() -> None:
     """Edit tool triggers both Group A and Group B hooks through the dispatcher."""
     all_edit_entries = _applicable_entries_for_tool(EDIT_TOOL_NAME)
-    assert len(all_edit_entries) == 18, (
-        f"Edit tool must apply to all 18 hosted hooks, got {len(all_edit_entries)}"
+    assert len(all_edit_entries) == 19, (
+        f"Edit tool must apply to all 19 hosted hooks, got {len(all_edit_entries)}"
     )
 
 
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit tool triggers only Group B (7 hooks), not Group A."""
+    """MultiEdit tool triggers only Group B (8 hooks), not Group A."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 7, (
-        f"MultiEdit tool must apply to exactly 7 Group-B hooks, got {len(all_multi_edit_entries)}"
+    assert len(all_multi_edit_entries) == 8, (
+        f"MultiEdit tool must apply to exactly 8 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 
