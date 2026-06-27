@@ -1,7 +1,8 @@
 """Constants for the package-inventory stale-entry blocker.
 
 A package directory documents its own files in a sibling inventory document —
-a ``README.md`` Layout table or a ``CLAUDE.md`` "Key files" list — whose entries
+a ``README.md`` Layout table, a ``CLAUDE.md`` "Key files" list, or a skill
+``SKILL.md`` Layout table that maps the ``scripts/`` subdirectory — whose entries
 name each file in backticks. When a new production code file lands in that
 directory and the inventory carries no entry naming it, the inventory disagrees
 with the directory on the package's file set, and a reader trusting the
@@ -19,6 +20,8 @@ import re
 
 __all__ = [
     "ALL_INVENTORY_DOCUMENT_NAMES",
+    "SKILL_INVENTORY_DOCUMENT_NAME",
+    "SCRIPTS_SUBDIRECTORY_NAME",
     "ALL_PRODUCTION_CODE_EXTENSIONS",
     "PYTHON_FILE_EXTENSION",
     "ALL_TEST_FILE_MARKERS",
@@ -35,7 +38,13 @@ __all__ = [
     "STALE_INVENTORY_ADDITIONAL_CONTEXT",
 ]
 
-ALL_INVENTORY_DOCUMENT_NAMES: frozenset[str] = frozenset({"README.md", "CLAUDE.md"})
+SKILL_INVENTORY_DOCUMENT_NAME: str = "SKILL.md"
+
+SCRIPTS_SUBDIRECTORY_NAME: str = "scripts"
+
+ALL_INVENTORY_DOCUMENT_NAMES: frozenset[str] = frozenset(
+    {"README.md", "CLAUDE.md", SKILL_INVENTORY_DOCUMENT_NAME}
+)
 
 PYTHON_FILE_EXTENSION: str = ".py"
 
@@ -96,16 +105,18 @@ STALE_INVENTORY_MESSAGE_TEMPLATE: str = (
 
 STALE_INVENTORY_SYSTEM_MESSAGE: str = (
     "New production file is absent from its package inventory (README.md / "
-    "CLAUDE.md) - add the inventory entry in this same change"
+    "CLAUDE.md / SKILL.md) - add the inventory entry in this same change"
 )
 
 STALE_INVENTORY_ADDITIONAL_CONTEXT: str = (
-    "A package directory whose README.md or CLAUDE.md lists its files in "
-    "backticks is a maintained inventory of the package's file set. A new "
-    "production code file (.py, .mjs, .js, .ts, .ps1, .sh) in that directory "
-    "carries one inventory entry naming it. Add a row to the README.md table or "
-    "a bullet to the CLAUDE.md list naming this file, describing what it does, "
-    "in the same change that creates the file. Exempt files (no entry needed): "
+    "A package directory whose README.md, CLAUDE.md, or SKILL.md lists its files "
+    "in backticks is a maintained inventory of the package's file set. A skill "
+    "SKILL.md Layout table that maps the scripts/ subdirectory counts as the "
+    "inventory for files in that subdirectory. A new production code file (.py, "
+    ".mjs, .js, .ts, .ps1, .sh) in an inventoried directory carries one entry "
+    "naming it. Add a row to the README.md or SKILL.md table or a bullet to the "
+    "CLAUDE.md list naming this file, describing what it does, in the same change "
+    "that creates the file. Exempt files (no entry needed): "
     "__init__.py, conftest.py, setup.py, _path_setup.py, files under config/ or "
     "tests/, and test files (test_*.py, *_test.py, *.spec.*, *.test.*)."
 )
