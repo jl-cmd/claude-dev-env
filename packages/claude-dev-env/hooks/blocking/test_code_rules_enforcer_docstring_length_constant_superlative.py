@@ -127,6 +127,70 @@ def test_constant_with_no_length_comparison_is_not_flagged() -> None:
     assert _run_gate_over_package(SUPERLATIVE_SWATCH_MODULE, consumer_body) == []
 
 
+def test_superlative_in_function_docstring_is_not_flagged() -> None:
+    function_docstring_module = (
+        '"""The exact #AARRGGBB length the swatch renders."""\n\n'
+        "from typing import Final\n\n"
+        "COLOR_AARRGGBB_LENGTH: Final[int] = 9\n\n\n"
+        "def describe() -> str:\n"
+        '    """Return the longest color string the swatch accepts."""\n'
+        '    return "swatch"\n'
+    )
+    consumer_body = (
+        "from config.color_swatch import COLOR_AARRGGBB_LENGTH\n\n\n"
+        "def to_css(hex_color: str) -> bool:\n"
+        "    return len(hex_color) == COLOR_AARRGGBB_LENGTH\n"
+    )
+    assert _run_gate_over_package(function_docstring_module, consumer_body) == []
+
+
+def test_superlative_bound_to_other_constant_is_not_flagged() -> None:
+    two_constant_module = (
+        '"""Color-swatch rendering constants for the HTML run report.\n\n'
+        "COLOR_AARRGGBB_LENGTH is the exact #AARRGGBB length the swatch renders.\n"
+        "MAX_NAME_LENGTH is the longest swatch label the legend lays out.\n"
+        '"""\n\n'
+        "from typing import Final\n\n"
+        "COLOR_AARRGGBB_LENGTH: Final[int] = 9\n"
+        "MAX_NAME_LENGTH: Final[int] = 32\n"
+    )
+    consumer_body = (
+        "from config.color_swatch import COLOR_AARRGGBB_LENGTH, MAX_NAME_LENGTH\n\n\n"
+        "def to_css(hex_color: str) -> str | None:\n"
+        "    if len(hex_color) != COLOR_AARRGGBB_LENGTH:\n"
+        "        return None\n"
+        "    return hex_color\n\n\n"
+        "def fits(label: str) -> bool:\n"
+        "    return len(label) <= MAX_NAME_LENGTH\n"
+    )
+    assert _run_gate_over_package(two_constant_module, consumer_body) == []
+
+
+def test_superlative_bound_to_exact_gated_constant_is_flagged() -> None:
+    two_constant_module = (
+        '"""Color-swatch rendering constants for the HTML run report.\n\n'
+        "COLOR_AARRGGBB_LENGTH is the longest #AARRGGBB string the swatch accepts.\n"
+        "MAX_NAME_LENGTH is the exact swatch label width the legend lays out.\n"
+        '"""\n\n'
+        "from typing import Final\n\n"
+        "COLOR_AARRGGBB_LENGTH: Final[int] = 9\n"
+        "MAX_NAME_LENGTH: Final[int] = 32\n"
+    )
+    consumer_body = (
+        "from config.color_swatch import COLOR_AARRGGBB_LENGTH, MAX_NAME_LENGTH\n\n\n"
+        "def to_css(hex_color: str) -> str | None:\n"
+        "    if len(hex_color) != COLOR_AARRGGBB_LENGTH:\n"
+        "        return None\n"
+        "    return hex_color\n\n\n"
+        "def fits(label: str) -> bool:\n"
+        "    return len(label) <= MAX_NAME_LENGTH\n"
+    )
+    issues = _run_gate_over_package(two_constant_module, consumer_body)
+    assert len(issues) == 1
+    assert "COLOR_AARRGGBB_LENGTH" in issues[0]
+    assert "MAX_NAME_LENGTH" not in issues[0]
+
+
 def test_syntax_error_returns_empty() -> None:
     issues = check_length_gate(
         "def broken(\n", "/stp_contrast_fix/config/color_swatch.py"

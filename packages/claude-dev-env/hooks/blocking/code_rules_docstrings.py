@@ -1539,13 +1539,35 @@ def _module_level_length_constant_names(parsed_tree: ast.Module) -> set[str]:
     return all_length_constant_names
 
 
-def _length_superlative_phrase_in_docstrings(parsed_tree: ast.Module) -> str:
-    for _, each_docstring in _documentable_docstrings_with_line(parsed_tree):
-        lowered_docstring = each_docstring.lower()
-        for each_phrase in ALL_LENGTH_SUPERLATIVE_RANGE_PHRASES:
-            if each_phrase in lowered_docstring:
-                return each_phrase
-    return ""
+def _superlative_phrase_by_length_constant(
+    parsed_tree: ast.Module, all_length_constant_names: set[str]
+) -> tuple[dict[str, str], str]:
+    module_docstring = ast.get_docstring(parsed_tree) or ""
+    phrase_by_constant: dict[str, str] = {}
+    unattributed_phrase = ""
+    for each_sentence in DOCSTRING_RUNON_SENTENCE_BOUNDARY_PATTERN.split(module_docstring):
+        lowered_sentence = each_sentence.lower()
+        sentence_phrase = next(
+            (
+                each_phrase
+                for each_phrase in ALL_LENGTH_SUPERLATIVE_RANGE_PHRASES
+                if each_phrase in lowered_sentence
+            ),
+            "",
+        )
+        if not sentence_phrase:
+            continue
+        named_constants = {
+            each_name
+            for each_name in all_length_constant_names
+            if each_name in each_sentence
+        }
+        if named_constants:
+            for each_name in named_constants:
+                phrase_by_constant.setdefault(each_name, sentence_phrase)
+        elif not unattributed_phrase:
+            unattributed_phrase = sentence_phrase
+    return phrase_by_constant, unattributed_phrase
 
 
 def _compare_targets_a_length_constant(
@@ -1644,10 +1666,16 @@ def check_docstring_length_constant_superlative_vs_exact_gate(
     subdirectory) for the comparison; it binds only when a length constant is
     compared with ``==``/``!=`` against ``len(...)`` somewhere in that tree and
     never with an ordered operator, so a constant genuinely used as a ceiling
-    (``len(x) <= LIMIT``) is left alone. This is the deterministic exact-gate
-    slice of Category O6/O8 docstring-vs-implementation drift; the cross-module
-    free-prose variant where the docstring never names the constant stays an
-    audit-lane finding.
+    (``len(x) <= LIMIT``) is left alone. The superlative phrase is read from the
+    module docstring only, and it is bound to a constant before flagging: a
+    constant is flagged when the docstring sentence carrying the phrase names
+    that constant, or when the phrase sits in a sentence naming no length
+    constant and the docstring never names the constant elsewhere — so a phrase
+    describing one constant (``MAX_NAME_LENGTH is the longest label``) does not
+    flag a different exact-gated constant documented on its own terms. This is
+    the deterministic exact-gate slice of Category O6/O8
+    docstring-vs-implementation drift; the cross-module free-prose variant where
+    the docstring never names the constant stays an audit-lane finding.
 
     Args:
         content: The source text to inspect.
@@ -1656,7 +1684,8 @@ def check_docstring_length_constant_superlative_vs_exact_gate(
 
     Returns:
         One issue per length constant the package exact-gates while the module
-        docstring carries a superlative phrase, capped at the module limit.
+        docstring binds a superlative phrase to that constant, capped at the
+        module limit.
     """
     if is_test_file(file_path) or is_hook_infrastructure(file_path):
         return []
@@ -1667,16 +1696,27 @@ def check_docstring_length_constant_superlative_vs_exact_gate(
     all_length_constant_names = _module_level_length_constant_names(parsed_tree)
     if not all_length_constant_names:
         return []
-    superlative_phrase = _length_superlative_phrase_in_docstrings(parsed_tree)
-    if not superlative_phrase:
+    phrase_by_constant, unattributed_phrase = _superlative_phrase_by_length_constant(
+        parsed_tree, all_length_constant_names
+    )
+    if not phrase_by_constant and not unattributed_phrase:
         return []
+    module_docstring = ast.get_docstring(parsed_tree) or ""
+    named_length_constants = {
+        each_name for each_name in all_length_constant_names if each_name in module_docstring
+    }
     exact_gate_constants = _exact_length_gate_constants_in_package(
         file_path, all_length_constant_names
     )
     issues: list[str] = []
     for each_constant in sorted(exact_gate_constants):
+        bound_phrase = phrase_by_constant.get(each_constant, "")
+        if not bound_phrase and each_constant not in named_length_constants:
+            bound_phrase = unattributed_phrase
+        if not bound_phrase:
+            continue
         issues.append(
-            f"Line 1: module docstring says '{superlative_phrase}' about "
+            f"Line 1: module docstring says '{bound_phrase}' about "
             f"{each_constant}, but the package compares len(...) against it only "
             "with ==/!= (an exact-length gate that rejects every other length) — "
             "state the exact required length, not a longest/maximum range "
