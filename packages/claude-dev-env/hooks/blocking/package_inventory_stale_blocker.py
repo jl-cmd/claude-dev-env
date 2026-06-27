@@ -2,7 +2,8 @@
 """PreToolUse hook: blocks a new production file absent from its package inventory.
 
 A package directory documents its own files in a sibling inventory document — a
-``README.md`` Layout table or a ``CLAUDE.md`` "Key files" list — whose entries
+``README.md`` Layout table, a ``CLAUDE.md`` "Key files" list, or a skill
+``SKILL.md`` Layout table that maps the ``scripts/`` subdirectory — whose entries
 name each file in backticks. When a Write creates a new production code file in a
 directory whose inventory already names two or more sibling files but carries no
 entry naming the new file, the inventory and the directory disagree on the
@@ -24,6 +25,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.package_inventory_stale_blocker_constants import (  # noqa: E402
     ALL_EXEMPT_BASENAMES,
     ALL_EXEMPT_DIRECTORY_NAMES,
@@ -37,11 +39,12 @@ from hooks_constants.package_inventory_stale_blocker_constants import (  # noqa:
     MINIMUM_INVENTORY_ENTRY_COUNT,
     NON_FILENAME_TOKEN_PATTERN,
     PYTHON_FILE_EXTENSION,
+    SCRIPTS_SUBDIRECTORY_NAME,
+    SKILL_INVENTORY_DOCUMENT_NAME,
     STALE_INVENTORY_ADDITIONAL_CONTEXT,
     STALE_INVENTORY_MESSAGE_TEMPLATE,
     STALE_INVENTORY_SYSTEM_MESSAGE,
 )
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
@@ -279,18 +282,48 @@ def _sibling_named_basenames(
     return sibling_basenames
 
 
+def _parent_skill_inventory(package_directory: Path) -> _InventorySurvey | None:
+    """Return the parent skill ``SKILL.md`` survey for a ``scripts/`` directory.
+
+    A skill package keeps its ``SKILL.md`` at the skill root and maps the
+    ``scripts/`` subdirectory in a Layout table whose rows name files by their
+    ``scripts/<name>`` path. A production file landing in that ``scripts/``
+    directory is governed by the parent ``SKILL.md``, which sits one level up
+    rather than beside the file. This reads that parent ``SKILL.md`` and reports
+    the basenames it names. Any directory not named ``scripts/`` and any missing
+    or unreadable parent ``SKILL.md`` yield None.
+
+    Args:
+        package_directory: The directory that holds the file being written.
+
+    Returns:
+        The parent ``SKILL.md`` survey, or None when there is none to read.
+    """
+    if package_directory.name != SCRIPTS_SUBDIRECTORY_NAME:
+        return None
+    skill_inventory_path = package_directory.parent / SKILL_INVENTORY_DOCUMENT_NAME
+    inventory_content = _read_inventory_content(skill_inventory_path)
+    if inventory_content is None:
+        return None
+    return _InventorySurvey(
+        [SKILL_INVENTORY_DOCUMENT_NAME], inventory_named_basenames(inventory_content)
+    )
+
+
 def find_stale_inventory(file_path: str) -> _InventorySurvey | None:
     """Return the maintained inventory survey a new file is absent from, or None.
 
-    The file's directory inventories are surveyed, then the named basenames are
-    filtered to those that exist as files in the directory — the inventory's own
+    The file's own directory inventories are surveyed and, when the file sits in
+    a ``scripts/`` subdirectory, the parent skill ``SKILL.md`` Layout table is
+    surveyed too; the named basenames union across both. They are then filtered
+    to those that exist as files in the file's directory — the inventory's own
     sibling files. The survey reports a stale inventory only when every condition
-    holds: the directory carries at least one inventory document, those documents
-    together name at least the minimum entry count of on-disk sibling files
-    (marking them a maintained inventory rather than incidental prose that
-    mentions files living elsewhere), and the inventory does not already name this
-    file's basename. When any condition fails the file is in step with its
-    inventory (or there is no inventory to be out of step with), so None results.
+    holds: at least one inventory document is present, those documents together
+    name at least the minimum entry count of on-disk sibling files (marking them
+    a maintained inventory rather than incidental prose that mentions files living
+    elsewhere), and no inventory already names this file's basename. When any
+    condition fails the file is in step with its inventory (or there is no
+    inventory to be out of step with), so None results.
 
     Args:
         file_path: The destination path of the write.
@@ -302,14 +335,20 @@ def find_stale_inventory(file_path: str) -> _InventorySurvey | None:
     if not package_directory.is_dir():
         return None
     survey = survey_directory_inventories(package_directory)
-    if not survey.present_inventory_names:
+    present_inventory_names = list(survey.present_inventory_names)
+    named_basenames = set(survey.named_basenames)
+    parent_skill_survey = _parent_skill_inventory(package_directory)
+    if parent_skill_survey is not None:
+        present_inventory_names += parent_skill_survey.present_inventory_names
+        named_basenames |= parent_skill_survey.named_basenames
+    if not present_inventory_names:
         return None
-    sibling_basenames = _sibling_named_basenames(package_directory, survey.named_basenames)
+    sibling_basenames = _sibling_named_basenames(package_directory, named_basenames)
     if len(sibling_basenames) < MINIMUM_INVENTORY_ENTRY_COUNT:
         return None
-    if os.path.basename(file_path) in survey.named_basenames:
+    if os.path.basename(file_path) in named_basenames:
         return None
-    return _InventorySurvey(survey.present_inventory_names, sibling_basenames)
+    return _InventorySurvey(present_inventory_names, sibling_basenames)
 
 
 def _build_block_payload(file_path: str, survey: _InventorySurvey) -> dict:

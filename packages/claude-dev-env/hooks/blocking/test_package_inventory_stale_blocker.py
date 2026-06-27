@@ -311,6 +311,51 @@ def test_is_inventoried_production_file_accepts_production_file(tmp_path: Path):
     assert is_inventoried_production_file(str(production_file_path)) is True
 
 
+SKILL_MD_SCRIPTS_LAYOUT = (
+    "# base-theme-match\n\n"
+    "## Layout\n\n"
+    "| Path | Role |\n"
+    "|---|---|\n"
+    "| `scripts/discover_candidates.py` | Discovers candidates. |\n"
+    "| `scripts/resolve_stp.py` | Resolves the STP filename. |\n"
+)
+
+
+def _skill_scripts_directory(tmp_path: Path) -> Path:
+    """Return a skill package's scripts/ directory under a SKILL.md Layout table."""
+    skill_directory = tmp_path / "base-theme-match"
+    skill_directory.mkdir()
+    (skill_directory / "SKILL.md").write_text(SKILL_MD_SCRIPTS_LAYOUT, encoding="utf-8")
+    scripts_directory = skill_directory / "scripts"
+    scripts_directory.mkdir()
+    _write_sibling_files(scripts_directory, ["discover_candidates.py", "resolve_stp.py"])
+    return scripts_directory
+
+
+def test_blocks_new_script_absent_from_parent_skill_layout(tmp_path: Path):
+    scripts_directory = _skill_scripts_directory(tmp_path)
+    new_file_path = scripts_directory / "stp_selection.py"
+    result = _run_hook(
+        "Write",
+        {"file_path": str(new_file_path), "content": "x = 1\n"},
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "stp_selection.py" in payload["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_allows_new_script_named_in_parent_skill_layout(tmp_path: Path):
+    scripts_directory = _skill_scripts_directory(tmp_path)
+    new_file_path = scripts_directory / "resolve_stp.py"
+    result = _run_hook(
+        "Write",
+        {"file_path": str(new_file_path), "content": "x = 1\n"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
 def test_find_stale_inventory_returns_survey_for_omission(tmp_path: Path):
     package_directory = _package_directory_with_readme(tmp_path, README_LISTING_TWO_FILES)
     _write_sibling_files(package_directory, ["dialer_compose.py", "compose_dialer_cli.py"])
