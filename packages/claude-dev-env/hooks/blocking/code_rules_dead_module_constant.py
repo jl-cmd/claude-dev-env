@@ -16,13 +16,17 @@ The scan is deliberately conservative to keep false positives near zero:
 
 - Only dedicated constants modules participate; ordinary production modules,
   whose file-global constants are governed by the use-count rule, are skipped.
-- A module declaring ``__all__`` is skipped: the author has named its export
-  surface explicitly, so a name listed there is live by declaration and a name
-  absent there is the author's stated intent, neither of which this check second
-  guesses.
-- A constant is live when its name appears anywhere the scan reaches —
-  imported, read, listed in ``__all__``, or referenced in a string annotation —
-  in any ``.py`` module, including the constants module itself.
+- A module declaring ``__all__`` narrows the check to the constants its
+  ``__all__`` list names — the explicit export surface. Each exported constant
+  must be imported or read by some other module, since a name an author exports
+  yet no module consumes is dead by §9.8; the module's own ``__all__`` entry
+  never counts as that consumer. A constant the module defines but ``__all__``
+  omits is the author's stated private value and is left alone.
+- A constant is live when its name appears in another ``.py`` module the scan
+  reaches — imported, read, listed in that module's ``__all__``, or referenced
+  in a string annotation — or when the constants module itself reads it in code;
+  a name listed only in the constants module's own ``__all__`` does not keep an
+  exported constant live.
 - When the package-tree scan leaves a constant unreferenced, the scan widens to
   the repository root (the nearest ``.git`` ancestor) so a consumer in a sibling
   tree of the same repository counts; a module outside any repository is judged
@@ -146,21 +150,61 @@ def _module_declares_dunder_all(tree: ast.Module) -> bool:
     return any(_statement_binds_dunder_all(each_node) for each_node in tree.body)
 
 
-def _referenced_names_in_source(source: str, load_only: bool = False) -> set[str]:
+def _dunder_all_member_names(tree: ast.Module) -> set[str]:
+    """Return the string member names a module's ``__all__`` sequence lists.
+
+    Reads the value of each ``__all__`` assignment whose value is a list, tuple,
+    or set literal and collects every string element. A non-literal ``__all__``
+    value (built by concatenation or a comprehension) contributes no names, so a
+    constant the check cannot prove is exported stays out of the exported set.
+
+    Args:
+        tree: The parsed constants module.
+
+    Returns:
+        The set of names the module names in its ``__all__`` literal.
+    """
+    member_names: set[str] = set()
+    for each_statement in tree.body:
+        if not _statement_binds_dunder_all(each_statement):
+            continue
+        value_node: ast.expr | None = None
+        if isinstance(each_statement, ast.Assign):
+            value_node = each_statement.value
+        elif isinstance(each_statement, ast.AnnAssign):
+            value_node = each_statement.value
+        if not isinstance(value_node, ast.List | ast.Tuple | ast.Set):
+            continue
+        for each_element in value_node.elts:
+            if isinstance(each_element, ast.Constant) and isinstance(each_element.value, str):
+                member_names.add(each_element.value)
+    return member_names
+
+
+def _referenced_names_in_source(
+    source: str,
+    load_only: bool = False,
+    collect_string_literals: bool = True,
+) -> set[str]:
     """Return every name a module references — imported, read, or re-exported.
 
     Collects imported binding names, ``from`` import member names, name
-    references, attribute roots, and string literals (so a name listed in an
-    ``__all__`` literal or named in a string annotation counts as a reference).
-    A module that fails to parse contributes no names. With ``load_only`` set,
-    only ``Load``-context names count, so a constant's own assignment target in
-    the module being judged does not count as a reference to itself.
+    references, attribute roots, and (when ``collect_string_literals`` is set)
+    string literals, so a name listed in an ``__all__`` literal or named in a
+    string annotation counts as a reference. A module that fails to parse
+    contributes no names. With ``load_only`` set, only ``Load``-context names
+    count, so a constant's own assignment target in the module being judged does
+    not count as a reference to itself.
 
     Args:
         source: The full text of a ``.py`` module under the scan root.
         load_only: When True, count only ``Load``-context name references,
             excluding ``Store``/``Del`` targets. Used for the written constants
             module so a definition is not mistaken for its own consumer.
+        collect_string_literals: When True, count every string literal as a
+            referenced name. Set False for the written module under an ``__all__``
+            export check so the module's own ``__all__`` entry never shields an
+            exported constant that no other module consumes.
 
     Returns:
         The set of names the module references.
@@ -179,7 +223,11 @@ def _referenced_names_in_source(source: str, load_only: bool = False) -> set[str
             for each_alias in each_node.names:
                 referenced_names.add(each_alias.asname or each_alias.name)
                 referenced_names.add(each_alias.name)
-        elif isinstance(each_node, ast.Constant) and isinstance(each_node.value, str):
+        elif (
+            collect_string_literals
+            and isinstance(each_node, ast.Constant)
+            and isinstance(each_node.value, str)
+        ):
             referenced_names.add(each_node.value)
     return referenced_names
 
@@ -232,6 +280,7 @@ def _all_referenced_names_under_root(
     written_content: str,
     already_scanned_count: int = 0,
     excluded_subtree: Path | None = None,
+    seed_collect_string_literals: bool = True,
 ) -> tuple[set[str], int, bool]:
     """Return referenced names under the scan root, the running count, and a cap flag.
 
@@ -252,6 +301,11 @@ def _all_referenced_names_under_root(
             cap bounds the combined work of the package-tree and widened passes.
         excluded_subtree: A resolved directory whose ``.py`` modules are skipped,
             or None to scan every file under the root.
+        seed_collect_string_literals: Whether the written module's own string
+            literals seed the referenced-name set. Set False under an ``__all__``
+            export check so the module's own ``__all__`` entry never counts as the
+            consumer of an exported constant; sibling modules always contribute
+            their string literals so a consumer's re-export still counts.
 
     Returns:
         A (referenced_names, running_count, cap_was_hit) triple. The name set is
@@ -260,7 +314,11 @@ def _all_referenced_names_under_root(
         including ``already_scanned_count``; cap_was_hit is True when the scan
         stopped at the configured file cap before scanning the whole tree.
     """
-    all_referenced_names = _referenced_names_in_source(written_content, load_only=True)
+    all_referenced_names = _referenced_names_in_source(
+        written_content,
+        load_only=True,
+        collect_string_literals=seed_collect_string_literals,
+    )
     written_path_key = os.path.normcase(str(written_path))
     scanned_file_count = already_scanned_count
     for each_path in scan_root.rglob("*" + PYTHON_SOURCE_SUFFIX):
@@ -324,6 +382,37 @@ def _module_is_exempt_from_constant_check(file_path: str) -> bool:
     return not _is_dedicated_constants_module(file_path)
 
 
+def _constants_under_check(tree: ast.Module) -> tuple[list[tuple[str, int]], bool]:
+    """Return the constants to judge and whether the seed counts string literals.
+
+    A module without ``__all__`` judges every module-scope constant and lets its
+    own string literals seed the reference scan. A module declaring ``__all__``
+    judges only the constants its ``__all__`` list names — the explicit export
+    surface — and withholds its own string literals from the seed, so an
+    ``__all__`` entry never counts as the consumer that keeps an exported constant
+    live. A constant the module defines but ``__all__`` omits is the author's
+    stated private value and is left out of the judged set.
+
+    Args:
+        tree: The parsed constants module.
+
+    Returns:
+        A (definitions, seed_collect_string_literals) pair: the (name, line)
+        constants to judge, and whether the written module's string literals seed
+        the referenced-name set.
+    """
+    constant_definitions = _module_constant_definitions(tree)
+    if not _module_declares_dunder_all(tree):
+        return constant_definitions, True
+    exported_names = _dunder_all_member_names(tree)
+    exported_definitions = [
+        (each_name, each_line)
+        for each_name, each_line in constant_definitions
+        if each_name in exported_names
+    ]
+    return exported_definitions, False
+
+
 def check_dead_module_constants(
     content: str,
     file_path: str,
@@ -336,14 +425,18 @@ def check_dead_module_constants(
     are governed by the use-count rule instead. A constant is dead when its name
     appears in no ``.py`` module under the enclosing package tree, nor anywhere
     in the repository the scan widens to when the package-tree scan leaves the
-    constant unreferenced — not imported, not read, not listed in an ``__all__``
-    literal, not named in a string annotation. A module declaring its own
-    ``__all__`` is skipped so the author's explicit export surface is never
-    second-guessed. A scan whose combined package-tree and widened file count
-    exceeds the configured cap returns ``[]`` (cannot prove dead), bounding the
-    work so the blocking hook cannot stall under a large tree. Whole-file
-    analysis runs against ``full_file_content`` when supplied so an Edit fragment
-    is judged against the reconstructed post-edit file.
+    constant unreferenced — not imported, not read, not listed in another
+    module's ``__all__`` literal, not named in a string annotation. A module
+    declaring ``__all__`` narrows the check to the constants its ``__all__`` list
+    names: each must be imported or read by another module, and the module's own
+    ``__all__`` entry never counts as that consumer, so an exported constant no
+    module consumes is flagged; a constant the module defines but ``__all__``
+    omits is the author's private value and is left alone. A scan whose combined
+    package-tree and widened file count exceeds the configured cap returns ``[]``
+    (cannot prove dead), bounding the work so the blocking hook cannot stall under
+    a large tree. Whole-file analysis runs against ``full_file_content`` when
+    supplied so an Edit fragment is judged against the reconstructed post-edit
+    file.
 
     Args:
         content: The new content under validation (Edit fragment or whole file).
@@ -355,8 +448,9 @@ def check_dead_module_constants(
     Returns:
         One violation message per dead module-level constant, capped at the
         configured maximum. Returns an empty list when the file is exempt, no
-        constant is defined, the module declares ``__all__``, the scan exceeds the
-        file cap, or a SyntaxError prevents parsing.
+        constant is in scope (none defined, or none exported when ``__all__`` is
+        declared), the scan exceeds the file cap, or a SyntaxError prevents
+        parsing.
     """
     if _module_is_exempt_from_constant_check(file_path):
         return []
@@ -365,9 +459,7 @@ def check_dead_module_constants(
         tree = ast.parse(effective_content)
     except SyntaxError:
         return []
-    if _module_declares_dunder_all(tree):
-        return []
-    constant_definitions = _module_constant_definitions(tree)
+    constant_definitions, seed_collect_string_literals = _constants_under_check(tree)
     if not constant_definitions:
         return []
     scan_root = _scan_root_for_constants_module(file_path)
@@ -376,6 +468,7 @@ def check_dead_module_constants(
         scan_root,
         written_path,
         effective_content,
+        seed_collect_string_literals=seed_collect_string_literals,
     )
     if cap_was_hit:
         return []
@@ -391,6 +484,7 @@ def check_dead_module_constants(
                 effective_content,
                 already_scanned_count=scanned_file_count,
                 excluded_subtree=scan_root,
+                seed_collect_string_literals=seed_collect_string_literals,
             )
             if widened_cap_was_hit:
                 return []
