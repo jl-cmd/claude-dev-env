@@ -1,6 +1,9 @@
 # Public-Function Paired-Test Coverage
 
-**When this applies:** Any Write or Edit to a production Python module that already has a dedicated stem-matched test file — `test_<stem>.py` beside the module or under an ancestor `tests/` directory — and whose paired test suite already exercises at least one of the module's public functions.
+**When this applies:** Either side of a paired module/test pair, so the check fires whichever file the write touches:
+
+- A Write or Edit to a production Python module that already has a dedicated stem-matched test file — `test_<stem>.py` beside the module or under an ancestor `tests/` directory — whose paired suite already exercises at least one of the module's public functions.
+- A Write or Edit to a stem-matched test file (`test_<stem>.py` or `<stem>_test.py`) whose paired production module exists on disk and whose post-edit suite already exercises at least one of that module's public functions.
 
 ## Rule
 
@@ -10,14 +13,18 @@ When you add a public function to a module whose test suite already covers a sib
 
 ## What the gate checks
 
-The `check_public_function_missing_paired_test` check in `code_rules_paired_test.py` (dispatched from `code_rules_enforcer.py`) runs on every production Python write or edit. It flags a public function when all of these hold:
+Two complementary checks in `code_rules_paired_test.py` (both dispatched from `code_rules_enforcer.py`) cover the two write orders.
+
+`check_public_function_missing_paired_test` runs on a production Python write or edit and flags a public function when all of these hold:
 
 1. The target is production code — not a test module, hook infrastructure, config module, migration, workflow registry, or `__init__.py`.
 2. A stem-matched test file (`test_<stem>.py` or `<stem>_test.py`) exists for the module.
 3. That suite already references at least one public function the module defines — the signature of a maintained per-function suite rather than a placeholder or unrelated test file.
 4. The public function is referenced by no test file in the directory that holds the stem-matched test.
 
-A public function counts as covered when its name appears — imported, called, or named — in any `test_*.py` or `*_test.py` file in that directory, so a function exercised by a differently-named sibling test still counts. `main` and underscore-prefixed functions are never required to carry a test.
+`check_test_file_omits_module_public_function` runs on a stem-matched test-file write or edit and closes the reverse order, in which the production module is written before its test file exists. It resolves the production module the written `test_<stem>.py` or `<stem>_test.py` file pairs with — beside the test file, or in the parent of the `tests/` directory that holds it — reads that module from disk, and flags every public function the post-edit suite references nowhere, subject to the same established-suite precondition (the suite already covers at least one of the module's public functions). A production module that is itself exempt — a test module, hook infrastructure, config module, migration, workflow registry, or `__init__.py` — is skipped.
+
+A public function counts as covered when its name appears — imported, called, or named — in any `test_*.py` or `*_test.py` file in the suite directory, so a function exercised by a differently-named sibling test still counts. `main` and underscore-prefixed functions are never required to carry a test.
 
 ## Relationship to the file-level TDD gate
 
