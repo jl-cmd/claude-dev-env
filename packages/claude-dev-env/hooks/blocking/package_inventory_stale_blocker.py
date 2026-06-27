@@ -162,7 +162,7 @@ class _InventorySurvey:
 
     Attributes:
         present_inventory_names: The inventory document basenames present in the
-            directory (``README.md`` and/or ``CLAUDE.md``).
+            directory (``README.md``, ``CLAUDE.md``, and/or ``SKILL.md``).
         named_basenames: Every bare filename the present inventories name.
     """
 
