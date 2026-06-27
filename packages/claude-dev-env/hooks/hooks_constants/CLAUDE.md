@@ -13,6 +13,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `bot_mention_comment_blocker_constants.py` | Patterns for detecting bot @-mentions in PR comments |
 | `claude_md_orphan_file_blocker_constants.py` | Table patterns, file extensions, scan budget, and block-message text for the CLAUDE.md orphan-file blocker |
 | `code_rules_enforcer_constants.py` | File-extension sets, test-path patterns, advisory line thresholds, boolean-name prefixes |
+| `env_var_table_code_drift_constants.py` | Table patterns, env-var-name and code-file recognizers, scan budget, and block-message text for the env-var-table code-drift blocker |
 | `code_rules_path_utils_constants.py` | Path-matching helpers used by the code-rules check modules |
 | `code_verifier_spawn_preflight_gate_constants.py` | Subagent type, merge-tree command flags, timeouts, and deny-message text for the code-verifier spawn pre-flight gate |
 | `convergence_branch_constants.py` | Branch and worktree naming patterns for the convergence gate |
