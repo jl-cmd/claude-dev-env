@@ -273,6 +273,57 @@ def test_counts_coverage_across_sibling_test_files_on_test_write(
     assert all_issues == []
 
 
+def test_test_side_message_uses_line_prefix_for_gate_scoping(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    all_issues = check_test_file_omits_module_public_function(
+        _SUITE_COVERS_ALPHA_BETA, test_path
+    )
+    assert len(all_issues) == 1
+    assert all_issues[0].startswith("Line 9:")
+    assert "mod.py" in all_issues[0]
+
+
+def test_test_side_omission_scoped_out_by_unrelated_changed_lines(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    all_issues = check_test_file_omits_module_public_function(
+        _SUITE_COVERS_ALPHA_BETA, test_path, all_changed_lines={1}
+    )
+    assert all_issues == []
+
+
+def test_test_side_omission_kept_when_changed_lines_intersect_span(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    all_issues = check_test_file_omits_module_public_function(
+        _SUITE_COVERS_ALPHA_BETA, test_path, all_changed_lines={9}
+    )
+    assert len(all_issues) == 1
+    assert "gamma" in all_issues[0]
+
+
+def test_test_side_defer_scope_returns_every_omission(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    all_issues = check_test_file_omits_module_public_function(
+        _SUITE_COVERS_ALPHA_BETA,
+        test_path,
+        all_changed_lines={1},
+        defer_scope_to_caller=True,
+    )
+    assert len(all_issues) == 1
+    assert "gamma" in all_issues[0]
+
+
 def test_skips_when_paired_production_module_is_exempt(
     neutral_package_directory: Path,
 ) -> None:
