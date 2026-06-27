@@ -68,6 +68,27 @@ def _resolve_owner_repo(cwd: str | None) -> tuple[str, str] | None:
     return parts[0], parts[1]
 
 
+def _run_convergence_check(
+    script: str, owner: str, repo: str, pr_number: int, cwd: str | None
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            script,
+            "--owner",
+            owner,
+            "--repo",
+            repo,
+            "--pr-number",
+            str(pr_number),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=cwd or None,
+        check=False,
+    )
+
+
 def main() -> None:
     check_convergence_script = str(
         Path.home() / ".claude/skills/pr-converge/scripts/check_convergence.py"
@@ -90,7 +111,7 @@ def main() -> None:
     if not gh_pr_ready_pattern.search(command):
         sys.exit(0)
 
-    cwd = hook_input.get("tool_input", {}).get("cwd")
+    cwd = hook_input.get("cwd")
     pr_number = _resolve_pr_number(command, cwd)
     if pr_number is None:
         sys.exit(0)
@@ -100,20 +121,8 @@ def main() -> None:
         sys.exit(0)
     owner, repo = owner_repo
 
-    completed_process = subprocess.run(
-        [
-            sys.executable,
-            check_convergence_script,
-            "--owner",
-            owner,
-            "--repo",
-            repo,
-            "--pr-number",
-            str(pr_number),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+    completed_process = _run_convergence_check(
+        check_convergence_script, owner, repo, pr_number, cwd
     )
 
     if completed_process.returncode in (0, 2):
