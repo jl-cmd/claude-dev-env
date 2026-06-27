@@ -312,6 +312,7 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/verified_commit_message_accuracy_blocker.py',
     'blocking/workflow_substitution_slot_blocker.py',
     'blocking/claude_md_orphan_file_blocker.py',
+    'blocking/env_var_table_code_drift_blocker.py',
     'blocking/pytest_testpaths_orphan_blocker.py',
     'blocking/open_questions_in_plans_blocker.py',
     'blocking/plain_language_blocker.py',

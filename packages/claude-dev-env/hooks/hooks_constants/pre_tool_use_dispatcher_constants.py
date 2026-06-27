@@ -130,6 +130,10 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
+        script_relative_path="blocking/env_var_table_code_drift_blocker.py",
+        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
+    ),
+    HostedHookEntry(
         script_relative_path="blocking/pytest_testpaths_orphan_blocker.py",
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),

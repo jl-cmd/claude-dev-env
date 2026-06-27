@@ -718,8 +718,8 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
 };
 
 
-test('FOLDED_HOOK_RELATIVE_PATHS contains all 15 hooks removed from hooks.json', () => {
-    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 15);
+test('FOLDED_HOOK_RELATIVE_PATHS contains all 16 hooks removed from hooks.json', () => {
+    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 16);
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/write_existing_file_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/plain_language_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
@@ -741,6 +741,7 @@ test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher host
         'blocking/verified_commit_message_accuracy_blocker.py',
         'blocking/workflow_substitution_slot_blocker.py',
         'blocking/claude_md_orphan_file_blocker.py',
+        'blocking/env_var_table_code_drift_blocker.py',
         'blocking/pytest_testpaths_orphan_blocker.py',
         'blocking/open_questions_in_plans_blocker.py',
         'blocking/plain_language_blocker.py',

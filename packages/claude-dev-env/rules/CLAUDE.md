@@ -27,6 +27,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `no-cross-skill-duplicate-helpers.md` | No duplicating shared helpers across skills; use `_shared/` |
 | `no-historical-clutter.md` | Documentation describes current state only; no historical or transitional language |
 | `no-inline-destructive-literals.md` | No destructive-command literals in Bash tool command strings, even as data |
+| `env-var-table-code-drift.md` | Every env-var summary table row in a `.md` file names a code file whose source references the variable |
 | `orphan-css-class.md` | Every `class="..."` attribute in Python-generated markup has a matching selector in the `<style>` block |
 | `package-inventory-stale-entry.md` | A new production code file added to a directory carries an entry in that directory's `README.md`/`CLAUDE.md` file inventory |
 | `paired-test-coverage.md` | A public function omitted by a module's established paired test suite must get a behavioral test |
