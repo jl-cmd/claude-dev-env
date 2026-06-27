@@ -39,6 +39,20 @@ DENY_REASON_ISSUE_PREVIEW_COUNT = 10
 ALL_BOOLEAN_NAME_PREFIXES: tuple[str, ...] = ("is_", "has_", "should_", "can_", "was_", "did_")
 UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
+ALL_POLARITY_ANTONYM_TOKEN_PAIRS: tuple[tuple[str, str], ...] = (
+    ("allowed", "forbidden"),
+    ("allowed", "denied"),
+    ("allowed", "blocked"),
+    ("permitted", "forbidden"),
+    ("permitted", "denied"),
+    ("included", "excluded"),
+    ("valid", "invalid"),
+    ("enabled", "disabled"),
+    ("visible", "hidden"),
+    ("present", "missing"),
+)
+POLARITY_TOKEN_BOUNDARY_PATTERN: str = r"(?:^|_)%s(?:_|$)"
+
 ALL_MUST_CHECK_RETURN_FUNCTION_NAMES: frozenset[str] = frozenset({"find_and_click", "write_outcome"})
 
 DOCSTRING_ARG_ENTRY_PATTERN: re.Pattern[str] = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*[:(]")
