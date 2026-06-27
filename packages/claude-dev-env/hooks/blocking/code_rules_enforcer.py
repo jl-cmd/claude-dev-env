@@ -72,6 +72,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_args_match_signature,
     check_docstring_args_single_line_scope_vs_span,
     check_docstring_cardinal_count_matches_constant_family,
+    check_docstring_documents_unreferenced_parameter,
     check_docstring_fallback_branch_coverage,
     check_docstring_format,
     check_docstring_names_undefined_constant,
@@ -296,6 +297,9 @@ def validate_content(
         all_issues.extend(check_boundary_types(effective_content, file_path))
         all_issues.extend(check_docstring_format(effective_content, file_path))
         all_issues.extend(check_docstring_args_match_signature(effective_content, file_path))
+        all_issues.extend(
+            check_docstring_documents_unreferenced_parameter(effective_content, file_path)
+        )
         all_issues.extend(check_docstring_fallback_branch_coverage(effective_content, file_path))
         all_issues.extend(check_docstring_no_consumer_claim(effective_content, file_path))
         all_issues.extend(
