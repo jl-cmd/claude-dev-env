@@ -1,8 +1,13 @@
 """Unit tests for convergence-gate-blocker PreToolUse hook."""
 
 import importlib.util
+import io
+import json
 import pathlib
+import subprocess
 import sys
+
+import pytest
 
 _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:
@@ -61,3 +66,69 @@ def test_returns_none_when_no_number_and_no_repo() -> None:
 
 def test_matches_gh_pr_ready_in_compound_command() -> None:
     assert not _GH_PR_READY_PATTERN.search("gh pr ready --undo && gh pr create")
+
+
+def test_run_convergence_check_forwards_cwd_to_subprocess(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_cwd: list[object] = []
+
+    def fake_run(*_run_args: object, **run_keywords: object) -> subprocess.CompletedProcess[str]:
+        captured_cwd.append(run_keywords.get("cwd"))
+        return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(hook_module.subprocess, "run", fake_run)
+    hook_module._run_convergence_check(
+        "check_convergence.py", "owner", "repo", 783, "C:/worktrees/pr-783"
+    )
+    assert captured_cwd == ["C:/worktrees/pr-783"]
+
+
+def test_run_convergence_check_forwards_none_cwd_as_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_cwd: list[object] = []
+
+    def fake_run(*_run_args: object, **run_keywords: object) -> subprocess.CompletedProcess[str]:
+        captured_cwd.append(run_keywords.get("cwd"))
+        return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(hook_module.subprocess, "run", fake_run)
+    hook_module._run_convergence_check("check_convergence.py", "owner", "repo", 783, None)
+    assert captured_cwd == [None]
+
+
+def test_main_reads_cwd_from_top_level_payload(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    convergence_script = (
+        tmp_path / ".claude" / "skills" / "pr-converge" / "scripts" / "check_convergence.py"
+    )
+    convergence_script.parent.mkdir(parents=True)
+    convergence_script.write_text("")
+    monkeypatch.setattr(hook_module.Path, "home", classmethod(lambda _cls: tmp_path))
+
+    worktree_path = str(tmp_path / "worktrees" / "pr-783")
+    monkeypatch.setattr(hook_module, "_resolve_owner_repo", lambda _cwd: ("jl-cmd", "repo"))
+
+    captured_cwd: list[object] = []
+
+    def fake_check(
+        _script: str, _owner: str, _repo: str, _pr_number: int, cwd: str | None
+    ) -> subprocess.CompletedProcess[str]:
+        captured_cwd.append(cwd)
+        return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(hook_module, "_run_convergence_check", fake_check)
+
+    payload = {
+        "tool_name": "Bash",
+        "cwd": worktree_path,
+        "tool_input": {"command": "gh pr ready 783", "cwd": "C:/wrong/session/dir"},
+    }
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+
+    with pytest.raises(SystemExit):
+        hook_module.main()
+
+    assert captured_cwd == [worktree_path]
