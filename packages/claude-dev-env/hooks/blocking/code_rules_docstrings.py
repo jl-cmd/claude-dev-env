@@ -369,6 +369,71 @@ def check_docstring_args_match_signature(content: str, file_path: str) -> list[s
     return issues[:MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES]
 
 
+def check_docstring_documents_unreferenced_parameter(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a documented Args parameter the function body never references.
+
+    A parameter that appears in the ``Args:`` block but is named nowhere in the
+    body is dead: the function does not read it, yet the docstring describes
+    behavior keyed to it. The common shape is a flag that a caller wired in,
+    then moved the real logic up a level — the parameter and its Args line stay
+    behind, claiming a behavior the body does not implement. Both the unused
+    parameter and the stale Args claim drift together, so the gate catches them
+    as one finding.
+
+    Functions whose signature accepts ``**kwargs`` are skipped, because a
+    documented name may be a keyword key consumed through the kwargs mapping
+    rather than a named parameter. Private, dunder, abstract, and stub-bodied
+    functions are skipped, since a parameter declared for interface conformance
+    legitimately goes unread.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per documented-but-unreferenced parameter, capped at the
+        module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_is_private_or_dunder(each_node.name):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        if _function_body_line_count(each_node) <= DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT:
+            continue
+        if each_node.args.kwarg is not None:
+            continue
+        documented_names = _documented_argument_names(_function_docstring_text(each_node))
+        if not documented_names:
+            continue
+        real_names = _signature_parameter_names(each_node)
+        referenced_names = _names_referenced_in_function(each_node)
+        for each_documented_name in documented_names:
+            if each_documented_name not in real_names:
+                continue
+            if each_documented_name in referenced_names:
+                continue
+            issues.append(
+                f"Line {each_node.lineno}: {each_node.name}() docstring Args: documents "
+                f"'{each_documented_name}' but the body never references it - drop the "
+                "unused parameter and its Args line, or use it"
+            )
+            if len(issues) >= MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES:
+                return issues[:MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES]
+    return issues[:MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES]
+
+
 def _callee_expression_name(expression: ast.expr) -> str:
     if isinstance(expression, ast.Name):
         return expression.id
