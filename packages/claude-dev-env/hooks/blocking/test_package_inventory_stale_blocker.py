@@ -318,6 +318,7 @@ SKILL_MD_SCRIPTS_LAYOUT = (
     "|---|---|\n"
     "| `scripts/discover_candidates.py` | Discovers candidates. |\n"
     "| `scripts/resolve_stp.py` | Resolves the STP filename. |\n"
+    "| `scripts/select_stp.py` | Selects the STP filename. |\n"
 )
 
 
@@ -347,7 +348,7 @@ def test_blocks_new_script_absent_from_parent_skill_layout(tmp_path: Path):
 
 def test_allows_new_script_named_in_parent_skill_layout(tmp_path: Path):
     scripts_directory = _skill_scripts_directory(tmp_path)
-    new_file_path = scripts_directory / "resolve_stp.py"
+    new_file_path = scripts_directory / "select_stp.py"
     result = _run_hook(
         "Write",
         {"file_path": str(new_file_path), "content": "x = 1\n"},
