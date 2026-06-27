@@ -123,6 +123,7 @@ from code_rules_orphan_css_class import (  # noqa: E402
 )
 from code_rules_paired_test import (  # noqa: E402
     check_public_function_missing_paired_test,
+    check_test_file_omits_module_public_function,
 )
 from code_rules_paths_syspath import (  # noqa: E402
     check_hardcoded_user_paths,
@@ -413,6 +414,9 @@ def validate_content(
                 all_changed_lines,
                 defer_scope_to_caller,
             )
+        )
+        all_issues.extend(
+            check_test_file_omits_module_public_function(effective_content, file_path)
         )
         all_issues.extend(check_loop_variable_naming(content, file_path))
         all_issues.extend(check_inline_literal_collections(content, file_path))

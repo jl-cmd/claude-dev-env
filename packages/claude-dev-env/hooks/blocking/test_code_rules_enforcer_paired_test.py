@@ -21,9 +21,15 @@ if str(_BLOCKING_DIRECTORY) not in sys.path:
 
 from code_rules_paired_test import (  # noqa: E402
     check_public_function_missing_paired_test,
+    check_test_file_omits_module_public_function,
 )
 
 _TWO_PUBLIC_FUNCTIONS = "def alpha():\n    return 1\n\n\ndef beta():\n    return 2\n"
+_THREE_PUBLIC_FUNCTIONS = (
+    "def alpha():\n    return 1\n\n\n"
+    "def beta():\n    return 2\n\n\n"
+    "def gamma():\n    return 3\n"
+)
 
 
 @pytest.fixture
@@ -147,3 +153,138 @@ def test_exempts_hook_infrastructure_and_test_paths(
     test_path = str(neutral_package_directory / "tests" / "test_mod.py")
     assert check_public_function_missing_paired_test(_TWO_PUBLIC_FUNCTIONS, hook_path) == []
     assert check_public_function_missing_paired_test(_TWO_PUBLIC_FUNCTIONS, test_path) == []
+
+
+def _write_module(package_directory: Path, body: str) -> None:
+    (package_directory / "mod.py").write_text(body, encoding="utf-8")
+
+
+_SUITE_COVERS_ALPHA_BETA = (
+    "from pkg.mod import alpha, beta\n\n"
+    "def test_pair():\n    assert alpha() == 1 and beta() == 2\n"
+)
+
+
+def test_flags_module_public_function_when_test_suite_omits_it(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    all_issues = check_test_file_omits_module_public_function(
+        _SUITE_COVERS_ALPHA_BETA, test_path
+    )
+    assert len(all_issues) == 1
+    assert "gamma" in all_issues[0]
+    assert "mod.py" in all_issues[0]
+    assert "alpha" not in all_issues[0]
+    assert "beta" not in all_issues[0]
+
+
+def test_clean_when_test_suite_covers_every_module_public_function(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    suite_covers_all = (
+        "from pkg.mod import alpha, beta, gamma\n\n"
+        "def test_all():\n    assert alpha() and beta() and gamma()\n"
+    )
+    all_issues = check_test_file_omits_module_public_function(suite_covers_all, test_path)
+    assert all_issues == []
+
+
+def test_skips_when_test_suite_covers_no_module_public_function(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    all_issues = check_test_file_omits_module_public_function(
+        "def test_unrelated():\n    assert 1 + 1 == 2\n", test_path
+    )
+    assert all_issues == []
+
+
+def test_skips_test_file_with_no_paired_production_module(
+    neutral_package_directory: Path,
+) -> None:
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    all_issues = check_test_file_omits_module_public_function(
+        _SUITE_COVERS_ALPHA_BETA, test_path
+    )
+    assert all_issues == []
+
+
+def test_ignores_a_non_stem_matched_written_file(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    helper_path = str(neutral_package_directory / "helper.py")
+    all_issues = check_test_file_omits_module_public_function(
+        _SUITE_COVERS_ALPHA_BETA, helper_path
+    )
+    assert all_issues == []
+
+
+def test_resolves_production_module_beside_the_test_file(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    beside_test_path = str(neutral_package_directory / "test_mod.py")
+    all_issues = check_test_file_omits_module_public_function(
+        _SUITE_COVERS_ALPHA_BETA, beside_test_path
+    )
+    assert len(all_issues) == 1
+    assert "gamma" in all_issues[0]
+
+
+def test_judges_post_edit_content_over_stale_on_disk_test(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    _write_test_file(
+        neutral_package_directory,
+        "test_mod.py",
+        _SUITE_COVERS_ALPHA_BETA,
+    )
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    post_edit_covers_all = (
+        "from pkg.mod import alpha, beta, gamma\n\n"
+        "def test_all():\n    assert alpha() and beta() and gamma()\n"
+    )
+    all_issues = check_test_file_omits_module_public_function(
+        post_edit_covers_all, test_path
+    )
+    assert all_issues == []
+
+
+def test_counts_coverage_across_sibling_test_files_on_test_write(
+    neutral_package_directory: Path,
+) -> None:
+    _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
+    _write_test_file(
+        neutral_package_directory,
+        "test_extra.py",
+        "from pkg.mod import gamma\n\ndef test_gamma():\n    assert gamma() == 3\n",
+    )
+    test_path = str(neutral_package_directory / "tests" / "test_mod.py")
+    all_issues = check_test_file_omits_module_public_function(
+        _SUITE_COVERS_ALPHA_BETA, test_path
+    )
+    assert all_issues == []
+
+
+def test_skips_when_paired_production_module_is_exempt(
+    neutral_package_directory: Path,
+) -> None:
+    (neutral_package_directory / "__init__.py").write_text(
+        _THREE_PUBLIC_FUNCTIONS, encoding="utf-8"
+    )
+    beside_test_path = str(neutral_package_directory / "test___init__.py")
+    suite_covers_all = (
+        "from pkg import alpha, beta, gamma\n\n"
+        "def test_all():\n    assert alpha() and beta() and gamma()\n"
+    )
+    all_issues = check_test_file_omits_module_public_function(
+        suite_covers_all, beside_test_path
+    )
+    assert all_issues == []

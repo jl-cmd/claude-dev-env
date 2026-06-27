@@ -38,7 +38,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_naming_collection.py` | Collection names must use `all_*` prefix |
 | `code_rules_optional_params.py` | No optional parameters where a required one would do |
 | `code_rules_orphan_css_class.py` | CSS class attributes in Python markup with no matching `.<class>` selector |
-| `code_rules_paired_test.py` | A public function omitted by a module's established paired test suite must get a behavioral test |
+| `code_rules_paired_test.py` | A public function omitted by a module's established paired test suite must get a behavioral test — checked on both the production-module write and the stem-matched test-file write |
 | `code_rules_path_utils.py` | Path utility helpers shared across check modules |
 | `code_rules_paths_syspath.py` | `sys.path.insert` must be guarded |
 | `code_rules_probe_chains.py` | Probe-chain detection logic |
