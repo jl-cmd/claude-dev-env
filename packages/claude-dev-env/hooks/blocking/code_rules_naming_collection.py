@@ -1,6 +1,7 @@
-"""Collection-prefix, stuttering-prefix, and loop-variable naming checks."""
+"""Collection-prefix, stuttering-prefix, loop-variable, and polarity-name-contradiction naming checks."""
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -22,11 +23,13 @@ from code_rules_shared import (  # noqa: E402
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_COLLECTION_TYPE_NAMES,
     ALL_LOOP_INDEX_LETTER_EXEMPTIONS,
+    ALL_POLARITY_ANTONYM_TOKEN_PAIRS,
     ALL_SUBSCRIPT_ONLY_COLLECTION_TYPE_NAMES,
     ALL_UNION_TYPING_NAMES,
     BARE_EACH_TOKEN,
     COLLECTION_BY_NAME_PATTERN,
     EACH_PREFIX,
+    POLARITY_TOKEN_BOUNDARY_PATTERN,
     UPPER_SNAKE_CONSTANT_PATTERN,
 )
 from hooks_constants.stuttering_check_config import (  # noqa: E402
@@ -261,4 +264,84 @@ def check_loop_variable_naming(content: str, file_path: str) -> list[str]:
             issues.append(
                 f"Line {each_name_node.lineno}: loop variable {target_name!r} - prefix with each_ (CODE_RULES §5)"
             )
+    return issues
+
+
+def _name_carries_token(name: str, token: str) -> bool:
+    """True when name carries token as a whole underscore-delimited word."""
+    return re.search(POLARITY_TOKEN_BOUNDARY_PATTERN % re.escape(token), name) is not None
+
+
+def _called_name(call_node: ast.Call) -> str | None:
+    """The simple name of a call's callee — the bare name or the final attribute."""
+    if isinstance(call_node.func, ast.Name):
+        return call_node.func.id
+    if isinstance(call_node.func, ast.Attribute):
+        return call_node.func.attr
+    return None
+
+
+def _contradicting_polarity_pair(target_name: str, called_name: str) -> tuple[str, str] | None:
+    """The (target_token, called_token) antonym pair when target and callee assert opposite polarity."""
+    target_lower = target_name.lower()
+    called_lower = called_name.lower()
+    for each_positive_token, each_negative_token in ALL_POLARITY_ANTONYM_TOKEN_PAIRS:
+        if _name_carries_token(target_lower, each_positive_token) and _name_carries_token(
+            called_lower, each_negative_token
+        ):
+            return each_positive_token, each_negative_token
+        if _name_carries_token(target_lower, each_negative_token) and _name_carries_token(
+            called_lower, each_positive_token
+        ):
+            return each_negative_token, each_positive_token
+    return None
+
+
+def check_polarity_name_contradiction(content: str, file_path: str) -> list[str]:
+    """Flag a boolean assignment whose target and callee assert opposite polarity.
+
+    Catches the self-contradicting statement ``is_inside_allowed =
+    _point_hits_any_forbidden(...)`` — a target name carrying one polarity token
+    (``allowed``) assigned directly from a single call whose callee name carries
+    the antonym token (``forbidden``). One side lies about the behavior, so the
+    reader cannot trust either name. Rename the callee to a neutral form that
+    reads truthfully at every call site.
+    """
+    if is_test_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in ast.walk(tree):
+        target_name: str | None = None
+        value_node: ast.expr | None = None
+        target_line = 0
+        if isinstance(each_node, ast.Assign) and len(each_node.targets) == 1 and isinstance(
+            each_node.targets[0], ast.Name
+        ):
+            target_name = each_node.targets[0].id
+            value_node = each_node.value
+            target_line = each_node.lineno
+        elif isinstance(each_node, ast.AnnAssign) and isinstance(each_node.target, ast.Name):
+            target_name = each_node.target.id
+            value_node = each_node.value
+            target_line = each_node.lineno
+        if target_name is None or not isinstance(value_node, ast.Call):
+            continue
+        called_name = _called_name(value_node)
+        if called_name is None:
+            continue
+        contradicting_pair = _contradicting_polarity_pair(target_name, called_name)
+        if contradicting_pair is None:
+            continue
+        target_token, called_token = contradicting_pair
+        issues.append(
+            f"Line {target_line}: {target_name!r} (says {target_token!r}) is assigned from"
+            f" {called_name!r} (says {called_token!r}) - the name contradicts the value; rename the"
+            f" callee to a neutral form so each call site reads truthfully (CODE_RULES §5)"
+        )
     return issues

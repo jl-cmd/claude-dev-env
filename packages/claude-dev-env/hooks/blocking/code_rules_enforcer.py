@@ -112,6 +112,7 @@ from code_rules_mock_completeness import (  # noqa: E402
 from code_rules_naming_collection import (  # noqa: E402
     check_collection_prefix,
     check_loop_variable_naming,
+    check_polarity_name_contradiction,
     check_stuttering_collection_prefix,
 )
 from code_rules_optional_params import (  # noqa: E402
@@ -415,6 +416,7 @@ def validate_content(
             )
         )
         all_issues.extend(check_loop_variable_naming(content, file_path))
+        all_issues.extend(check_polarity_name_contradiction(content, file_path))
         all_issues.extend(check_inline_literal_collections(content, file_path))
         all_issues.extend(check_inline_tuple_string_magic(content, file_path))
         all_issues.extend(check_string_literal_magic(content, file_path))
