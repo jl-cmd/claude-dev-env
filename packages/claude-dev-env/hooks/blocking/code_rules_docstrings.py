@@ -32,6 +32,11 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_NO_INLINE_LITERAL_CLAIM_PHRASES,
     ALL_DOCSTRING_NON_CONSTANT_REFERENCE_MARKERS,
     ALL_DOCSTRING_RUNON_JOINER_MARKERS,
+    ALL_DATA_SCHEMA_CONSTANT_NAME_MARKERS,
+    ALL_DATA_SCHEMA_DOCSTRING_ACKNOWLEDGEMENT_PHRASES,
+    ALL_USER_FACING_TEXT_SCOPE_DOCSTRING_PHRASES,
+    MAX_MODULE_DOCSTRING_DATA_SCHEMA_SCOPE_ISSUES,
+    MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT,
     ALL_GENERIC_CHECK_NAME_TOKENS,
     ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS,
     ALL_PUNCTUATION_MARK_GLYPH_PROSE_NAMES,
@@ -926,6 +931,105 @@ def check_module_docstring_names_public_checks(content: str, file_path: str) -> 
         if len(issues) >= MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES:
             break
     return issues[:MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES]
+
+
+def _module_level_upper_snake_constant_names(parsed_tree: ast.Module) -> list[str]:
+    constant_names: list[str] = []
+    for each_statement in parsed_tree.body:
+        target_nodes: list[ast.expr] = []
+        if isinstance(each_statement, ast.Assign):
+            target_nodes = list(each_statement.targets)
+        elif isinstance(each_statement, ast.AnnAssign):
+            target_nodes = [each_statement.target]
+        for each_target in target_nodes:
+            if (
+                isinstance(each_target, ast.Name)
+                and ALL_CAPS_WITH_UNDERSCORE_PATTERN.match(each_target.id)
+            ):
+                constant_names.append(each_target.id)
+    return constant_names
+
+
+def _constant_name_data_schema_marker(constant_name: str) -> str:
+    for each_marker in ALL_DATA_SCHEMA_CONSTANT_NAME_MARKERS:
+        if each_marker in constant_name:
+            return each_marker
+    return ""
+
+
+def _module_data_schema_constant_names(parsed_tree: ast.Module) -> list[str]:
+    return [
+        each_name
+        for each_name in _module_level_upper_snake_constant_names(parsed_tree)
+        if _constant_name_data_schema_marker(each_name)
+    ]
+
+
+def _module_docstring_claims_user_facing_text_scope(module_docstring: str) -> bool:
+    lowered_docstring = module_docstring.lower()
+    return any(
+        each_phrase in lowered_docstring
+        for each_phrase in ALL_USER_FACING_TEXT_SCOPE_DOCSTRING_PHRASES
+    )
+
+
+def _module_docstring_acknowledges_data_schema_scope(module_docstring: str) -> bool:
+    lowered_docstring = module_docstring.lower()
+    return any(
+        each_phrase in lowered_docstring
+        for each_phrase in ALL_DATA_SCHEMA_DOCSTRING_ACKNOWLEDGEMENT_PHRASES
+    )
+
+
+def check_module_docstring_scope_omits_data_schema_constants(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a user-facing-text module docstring that omits data-schema constants.
+
+    A module whose one-line docstring scopes its contents to user-facing text
+    claims a strings-only surface, and a reader trusts that line to map the whole
+    module. The drift this catches is a summary such as "User-facing strings: CLI
+    flag names, help text, and log messages". The body below it also defines
+    serialization field keys, run-metadata schema keys, and runtime config. The
+    summary then under-describes the module, the Category O module-responsibility
+    drift the repo flags. A constant counts as a data-schema or runtime-config
+    value when its name carries a ``_FIELD_``, ``_KEY_``, ``_SCHEMA_``,
+    ``_ENCODING``, or ``_FORMAT_STRING`` marker. The check fires only when the
+    docstring claims a user-facing-text scope and acknowledges no data-schema or
+    runtime-config category. A docstring that already names "field keys", "schema",
+    or "runtime config" passes, so broadening the summary clears the gate.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue naming the unacknowledged data-schema constants, capped at the
+        module limit.
+    """
+    if is_test_file(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    module_docstring = ast.get_docstring(parsed_tree) or ""
+    if not _module_docstring_claims_user_facing_text_scope(module_docstring):
+        return []
+    if _module_docstring_acknowledges_data_schema_scope(module_docstring):
+        return []
+    data_schema_constant_names = _module_data_schema_constant_names(parsed_tree)
+    if not data_schema_constant_names:
+        return []
+    sampled_names = ", ".join(
+        data_schema_constant_names[:MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT]
+    )
+    return [
+        "Line 1: module docstring scopes the module to user-facing text but the module "
+        f"defines data-schema or runtime-config constants ({sampled_names}) the summary "
+        "never names — broaden the summary to name the data-schema keys and "
+        "runtime-config constants it holds (Category O module-responsibility drift)"
+    ][:MAX_MODULE_DOCSTRING_DATA_SCHEMA_SCOPE_ISSUES]
 
 
 def _module_string_tuple_members(parsed_tree: ast.Module) -> dict[str, frozenset[str]]:

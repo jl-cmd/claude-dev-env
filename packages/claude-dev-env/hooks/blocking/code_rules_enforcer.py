@@ -85,6 +85,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_tuple_enumeration_match,
     check_docstring_unguarded_malformed_payload_claim,
     check_module_docstring_names_public_checks,
+    check_module_docstring_scope_omits_data_schema_constants,
 )
 from code_rules_duplicate_body import (  # noqa: E402
     advise_cross_skill_duplicate_helper,
@@ -310,6 +311,11 @@ def validate_content(
         all_issues.extend(check_docstring_runon_sentence(effective_content, file_path))
         all_issues.extend(
             check_module_docstring_names_public_checks(effective_content, file_path)
+        )
+        all_issues.extend(
+            check_module_docstring_scope_omits_data_schema_constants(
+                effective_content, file_path
+            )
         )
         all_issues.extend(
             check_docstring_tuple_enumeration_match(effective_content, file_path)

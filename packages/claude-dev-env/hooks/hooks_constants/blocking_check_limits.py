@@ -228,3 +228,30 @@ ALL_TEST_INDICATING_ENVIRONMENT_VARIABLE_NAMES: frozenset[str] = frozenset(
         "UNIT_TEST",
     }
 )
+
+MAX_MODULE_DOCSTRING_DATA_SCHEMA_SCOPE_ISSUES: int = 1
+MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT: int = 6
+ALL_USER_FACING_TEXT_SCOPE_DOCSTRING_PHRASES: tuple[str, ...] = (
+    "user-facing",
+    "user facing",
+)
+ALL_DATA_SCHEMA_CONSTANT_NAME_MARKERS: tuple[str, ...] = (
+    "_FIELD_",
+    "_KEY_",
+    "_SCHEMA_",
+    "_ENCODING",
+    "_FORMAT_STRING",
+)
+ALL_DATA_SCHEMA_DOCSTRING_ACKNOWLEDGEMENT_PHRASES: tuple[str, ...] = (
+    "field key",
+    "schema key",
+    "schema",
+    "metadata",
+    "encoding",
+    "format string",
+    "runtime config",
+    "runtime-config",
+    "data schema",
+    "data-schema",
+    "config constant",
+)
