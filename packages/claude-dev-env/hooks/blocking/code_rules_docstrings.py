@@ -84,6 +84,11 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_TOKENS_FOR_DISPATCH_CALLEE,
     MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
     SINGLE_DICT_KEY_COUNT_FOR_PLURAL_CARDINALITY_DRIFT,
+    ALL_LENGTH_CONSTANT_NAME_SUFFIXES,
+    ALL_LENGTH_SUPERLATIVE_RANGE_PHRASES,
+    LENGTH_CONFIG_SUBDIRECTORY_NAME,
+    LENGTH_GATE_PACKAGE_SCAN_FILE_LIMIT,
+    MAX_LENGTH_CONSTANT_SUPERLATIVE_ISSUES,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CAPS_WITH_UNDERSCORE_PATTERN,
@@ -1503,6 +1508,183 @@ def check_docstring_returns_plural_cardinality(content: str, file_path: str) -> 
             if len(issues) >= MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES:
                 return issues[:MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES]
     return issues[:MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES]
+
+
+def _module_level_length_constant_names(parsed_tree: ast.Module) -> set[str]:
+    all_length_constant_names: set[str] = set()
+    for each_statement in parsed_tree.body:
+        target_names: list[str] = []
+        assigned_value: ast.expr | None = None
+        if isinstance(each_statement, ast.Assign):
+            assigned_value = each_statement.value
+            target_names = [
+                each_target.id
+                for each_target in each_statement.targets
+                if isinstance(each_target, ast.Name)
+            ]
+        elif isinstance(each_statement, ast.AnnAssign) and isinstance(
+            each_statement.target, ast.Name
+        ):
+            assigned_value = each_statement.value
+            target_names = [each_statement.target.id]
+        if not isinstance(assigned_value, ast.Constant) or not isinstance(
+            assigned_value.value, int
+        ):
+            continue
+        for each_name in target_names:
+            if not ALL_CAPS_WITH_UNDERSCORE_PATTERN.match(each_name):
+                continue
+            if each_name.endswith(ALL_LENGTH_CONSTANT_NAME_SUFFIXES):
+                all_length_constant_names.add(each_name)
+    return all_length_constant_names
+
+
+def _length_superlative_phrase_in_docstrings(parsed_tree: ast.Module) -> str:
+    for _, each_docstring in _documentable_docstrings_with_line(parsed_tree):
+        lowered_docstring = each_docstring.lower()
+        for each_phrase in ALL_LENGTH_SUPERLATIVE_RANGE_PHRASES:
+            if each_phrase in lowered_docstring:
+                return each_phrase
+    return ""
+
+
+def _compare_targets_a_length_constant(
+    compare_node: ast.Compare, all_length_constant_names: set[str]
+) -> str:
+    operands = [compare_node.left, *compare_node.comparators]
+    has_length_call = any(
+        isinstance(each_operand, ast.Call)
+        and isinstance(each_operand.func, ast.Name)
+        and each_operand.func.id == "len"
+        for each_operand in operands
+    )
+    if not has_length_call:
+        return ""
+    for each_operand in operands:
+        if isinstance(each_operand, ast.Name) and each_operand.id in all_length_constant_names:
+            return each_operand.id
+    return ""
+
+
+def _length_gate_comparison_kinds_in_tree(
+    parsed_tree: ast.Module, all_length_constant_names: set[str]
+) -> dict[str, set[str]]:
+    comparison_kinds_by_constant: dict[str, set[str]] = {}
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, ast.Compare):
+            continue
+        compared_constant = _compare_targets_a_length_constant(
+            each_node, all_length_constant_names
+        )
+        if not compared_constant:
+            continue
+        for each_operator in each_node.ops:
+            kind = (
+                "equality"
+                if isinstance(each_operator, (ast.Eq, ast.NotEq))
+                else "ordered"
+            )
+            comparison_kinds_by_constant.setdefault(compared_constant, set()).add(kind)
+    return comparison_kinds_by_constant
+
+
+def _package_scan_python_files(file_path: str) -> list[Path]:
+    file = Path(file_path)
+    scan_root = (
+        file.parent.parent
+        if file.parent.name == LENGTH_CONFIG_SUBDIRECTORY_NAME
+        else file.parent
+    )
+    try:
+        all_python_files = sorted(scan_root.rglob(f"*{PYTHON_MODULE_FILE_SUFFIX}"))
+    except OSError:
+        return []
+    return [
+        each_file
+        for each_file in all_python_files[:LENGTH_GATE_PACKAGE_SCAN_FILE_LIMIT]
+        if each_file.resolve() != file.resolve()
+        and not is_test_file(str(each_file))
+    ]
+
+
+def _exact_length_gate_constants_in_package(
+    file_path: str, all_length_constant_names: set[str]
+) -> set[str]:
+    aggregate_kinds: dict[str, set[str]] = {}
+    for each_file in _package_scan_python_files(file_path):
+        try:
+            sibling_tree = ast.parse(each_file.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, ValueError):
+            continue
+        for each_constant, each_kinds in _length_gate_comparison_kinds_in_tree(
+            sibling_tree, all_length_constant_names
+        ).items():
+            aggregate_kinds.setdefault(each_constant, set()).update(each_kinds)
+    return {
+        each_constant
+        for each_constant, each_kinds in aggregate_kinds.items()
+        if "equality" in each_kinds and "ordered" not in each_kinds
+    }
+
+
+def check_docstring_length_constant_superlative_vs_exact_gate(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a length-constant docstring that calls an exact gate the "longest" form.
+
+    The drift this catches: a config module defines an integer ``*_LENGTH``
+    constant and its docstring describes that constant with a superlative or
+    range word (``the longest color string the swatch accepts``), while the only
+    code that consumes the constant treats it as an exact-length equality gate
+    (``len(hex_color) != COLOR_AARRGGBB_LENGTH``) — a shorter string is rejected,
+    not accepted at a shorter length. The superlative prose implies a range of
+    accepted lengths the code never allows. The consumer lives in a sibling
+    module, so the check scans the constant module's package tree (its own
+    directory, or its parent package when the module sits in a ``config/``
+    subdirectory) for the comparison; it binds only when a length constant is
+    compared with ``==``/``!=`` against ``len(...)`` somewhere in that tree and
+    never with an ordered operator, so a constant genuinely used as a ceiling
+    (``len(x) <= LIMIT``) is left alone. This is the deterministic exact-gate
+    slice of Category O6/O8 docstring-vs-implementation drift; the cross-module
+    free-prose variant where the docstring never names the constant stays an
+    audit-lane finding.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions
+            and to locate the package tree the consumer lives in.
+
+    Returns:
+        One issue per length constant the package exact-gates while the module
+        docstring carries a superlative phrase, capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    all_length_constant_names = _module_level_length_constant_names(parsed_tree)
+    if not all_length_constant_names:
+        return []
+    superlative_phrase = _length_superlative_phrase_in_docstrings(parsed_tree)
+    if not superlative_phrase:
+        return []
+    exact_gate_constants = _exact_length_gate_constants_in_package(
+        file_path, all_length_constant_names
+    )
+    issues: list[str] = []
+    for each_constant in sorted(exact_gate_constants):
+        issues.append(
+            f"Line 1: module docstring says '{superlative_phrase}' about "
+            f"{each_constant}, but the package compares len(...) against it only "
+            "with ==/!= (an exact-length gate that rejects every other length) — "
+            "state the exact required length, not a longest/maximum range "
+            "(Category O6 docstring-vs-implementation drift)"
+        )
+        if len(issues) >= MAX_LENGTH_CONSTANT_SUPERLATIVE_ISSUES:
+            return issues[:MAX_LENGTH_CONSTANT_SUPERLATIVE_ISSUES]
+    return issues[:MAX_LENGTH_CONSTANT_SUPERLATIVE_ISSUES]
 
 
 def _referenced_constant_families(parsed_tree: ast.Module) -> dict[str, set[str]]:
