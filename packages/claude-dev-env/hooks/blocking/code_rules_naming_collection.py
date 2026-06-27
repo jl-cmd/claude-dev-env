@@ -12,6 +12,7 @@ if _blocking_directory not in sys.path:
 if _hooks_directory not in sys.path:
     sys.path.insert(0, _hooks_directory)
 
+from code_rules_boolean_mustcheck import _called_terminal_name  # noqa: E402
 from code_rules_shared import (  # noqa: E402
     _collect_annotated_arguments,
     _collect_target_names,
@@ -272,15 +273,6 @@ def _name_carries_token(name: str, token: str) -> bool:
     return re.search(POLARITY_TOKEN_BOUNDARY_PATTERN % re.escape(token), name) is not None
 
 
-def _called_name(call_node: ast.Call) -> str | None:
-    """The simple name of a call's callee — the bare name or the final attribute."""
-    if isinstance(call_node.func, ast.Name):
-        return call_node.func.id
-    if isinstance(call_node.func, ast.Attribute):
-        return call_node.func.attr
-    return None
-
-
 def _contradicting_polarity_pair(target_name: str, called_name: str) -> tuple[str, str] | None:
     """The (target_token, called_token) antonym pair when target and callee assert opposite polarity."""
     target_lower = target_name.lower()
@@ -332,7 +324,7 @@ def check_polarity_name_contradiction(content: str, file_path: str) -> list[str]
             target_line = each_node.lineno
         if target_name is None or not isinstance(value_node, ast.Call):
             continue
-        called_name = _called_name(value_node)
+        called_name = _called_terminal_name(value_node)
         if called_name is None:
             continue
         contradicting_pair = _contradicting_polarity_pair(target_name, called_name)
