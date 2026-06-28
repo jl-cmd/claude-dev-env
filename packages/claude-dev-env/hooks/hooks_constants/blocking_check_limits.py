@@ -51,6 +51,7 @@ MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES: int = 3
 DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT: int = 2
 MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES: int = 3
 MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES: int = 3
+MAX_DOCSTRING_NO_NETWORK_CLAIM_ISSUES: int = 3
 MAX_STALE_TEST_NAME_TARGET_ISSUES: int = 3
 STALE_TEST_NAME_MINIMUM_SHARED_TOKEN_COUNT: int = 2
 MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES: int = 5
@@ -215,6 +216,26 @@ ALL_DOCSTRING_GUARDED_FAILURE_CLAIM_PHRASES: tuple[str, ...] = (
     "bad payload resolves to none",
     "invalid payload resolves to none",
     "malformed payload yields none",
+)
+
+ALL_DOCSTRING_NO_NETWORK_CLAIM_PHRASES: tuple[str, ...] = (
+    "without touching the network",
+    "without touching the share",
+    "without touching the network share",
+    "without hitting the network",
+    "without hitting the share",
+    "without a network call",
+    "without any network call",
+    "without network access",
+    "without a network round-trip",
+    "without a network round trip",
+    "no network access",
+    "no network round-trip",
+    "no network round trip",
+)
+
+ALL_PATH_METADATA_ACCESS_METHOD_NAMES: frozenset[str] = frozenset(
+    {"is_file", "is_dir", "exists", "stat", "lstat"}
 )
 
 MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES: int = 3

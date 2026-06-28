@@ -32,6 +32,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_MULTIPLE_CONDITION_JOINING_PHRASES,
     ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES,
     ALL_DOCSTRING_NO_INLINE_LITERAL_CLAIM_PHRASES,
+    ALL_DOCSTRING_NO_NETWORK_CLAIM_PHRASES,
     ALL_DOCSTRING_NON_CONSTANT_REFERENCE_MARKERS,
     ALL_DOCSTRING_PER_RECORD_WRITE_OUTCOME_PHRASES,
     ALL_DOCSTRING_RUN_MODE_PHRASES,
@@ -44,6 +45,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_LENGTH_CONSTANT_NAME_SUFFIXES,
     ALL_LENGTH_SUPERLATIVE_RANGE_PHRASES,
     ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS,
+    ALL_PATH_METADATA_ACCESS_METHOD_NAMES,
     ALL_PUNCTUATION_MARK_GLYPH_PROSE_NAMES,
     ALL_USER_FACING_TEXT_SCOPE_DOCSTRING_PHRASES,
     ALL_ZIPFILE_WRITE_MODE_VALUES,
@@ -66,6 +68,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES,
     MAX_DOCSTRING_MARK_GLYPH_ENUMERATION_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
+    MAX_DOCSTRING_NO_NETWORK_CLAIM_ISSUES,
     MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES,
     MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES,
     MAX_DOCSTRING_RUNON_SENTENCE_ISSUES,
@@ -868,6 +871,92 @@ def check_docstring_unguarded_malformed_payload_claim(
         if len(issues) >= MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES:
             break
     return issues[:MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES]
+
+
+def _docstring_claims_no_network_access(docstring_text: str) -> str:
+    collapsed_docstring = " ".join(docstring_text.lower().split())
+    for each_phrase in ALL_DOCSTRING_NO_NETWORK_CLAIM_PHRASES:
+        if each_phrase in collapsed_docstring:
+            return each_phrase
+    return ""
+
+
+def _function_performs_path_metadata_access(
+    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> str:
+    for each_descendant in ast.walk(function_node):
+        if not isinstance(each_descendant, ast.Call):
+            continue
+        callee = each_descendant.func
+        if (
+            isinstance(callee, ast.Attribute)
+            and callee.attr in ALL_PATH_METADATA_ACCESS_METHOD_NAMES
+        ):
+            return callee.attr
+    return ""
+
+
+def check_docstring_no_network_claim_with_metadata_access(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a docstring promising no network touch while the body stats a path.
+
+    Picture a cache helper whose docstring says it returns the warm cache
+    "without touching the network." A reader trusts that a cache hit costs
+    nothing on the share. But the body calls ``share_path.is_file()`` and
+    ``share_path.stat().st_size`` before it can return the cache — and on a
+    network share each of those metadata calls is a round-trip over the wire.
+    The promise drifts: every cache hit still pays two network stats the
+    docstring swore it avoided.
+
+    This is the deterministic slice of Category O6 (docstring prose versus
+    implementation drift) for a no-network claim: a function docstring that
+    states the path returns ``without touching the network`` (or a sibling
+    no-network phrase) while the body calls ``is_file``, ``is_dir``,
+    ``exists``, ``stat``, or ``lstat``. Either reword the claim to state that
+    the path is stat-checked on every call, or short-circuit to the cached
+    path before the share is touched.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per function whose no-network claim coexists with a
+        path-metadata call, capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _function_has_exempt_decorator(each_node):
+            continue
+        docstring_text = _function_docstring_text(each_node)
+        if not docstring_text:
+            continue
+        matched_phrase = _docstring_claims_no_network_access(docstring_text)
+        if not matched_phrase:
+            continue
+        accessed_method = _function_performs_path_metadata_access(each_node)
+        if not accessed_method:
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: {each_node.name}() docstring claims "
+            f"'{matched_phrase}' but the body calls .{accessed_method}() on a path — "
+            "a metadata stat is itself a network touch on a share, so the no-network "
+            "claim drifts; reword the docstring to state the path is stat-checked on "
+            "every call, or short-circuit before touching the share "
+            "(Category O6 docstring-vs-implementation drift)"
+        )
+        if len(issues) >= MAX_DOCSTRING_NO_NETWORK_CLAIM_ISSUES:
+            break
+    return issues[:MAX_DOCSTRING_NO_NETWORK_CLAIM_ISSUES]
 
 
 def _module_docstring_claims_no_inline_literal(module_docstring: str) -> str:
