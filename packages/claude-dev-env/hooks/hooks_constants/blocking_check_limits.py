@@ -88,6 +88,27 @@ ALL_LENGTH_SUPERLATIVE_RANGE_PHRASES: tuple[str, ...] = (
     "maximum length",
     "no longer than",
 )
+MAX_DOCSTRING_FIELD_RUNMODE_OUTCOME_ISSUES: int = 5
+ALL_DOCSTRING_RUNMODE_FLAG_FIELD_NAME_TOKENS: tuple[str, ...] = ("dry_run",)
+ALL_DOCSTRING_PER_RECORD_WRITE_OUTCOME_PHRASES: tuple[str, ...] = (
+    "was written",
+    "is written",
+    "were written",
+    "nothing was written",
+    "no file was written",
+    "wrote",
+    "written to disk",
+    "written to the file",
+)
+ALL_DOCSTRING_RUN_MODE_PHRASES: tuple[str, ...] = (
+    "dry run",
+    "dry-run",
+    "execute run",
+    "--execute",
+    "run mode",
+    "live run",
+    "not an execute",
+)
 MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES: int = 5
 DOCSTRING_LARGE_ZIP_FILE_EXCEPTION_NAME: str = "LargeZipFile"
 ZIPFILE_WRITER_CLASS_NAME: str = "ZipFile"
