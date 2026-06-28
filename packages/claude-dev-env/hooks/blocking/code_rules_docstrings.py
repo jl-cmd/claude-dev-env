@@ -22,6 +22,8 @@ from code_rules_shared import (  # noqa: E402
 )
 
 from hooks_constants.blocking_check_limits import (  # noqa: E402
+    ALL_DATA_SCHEMA_CONSTANT_NAME_MARKERS,
+    ALL_DATA_SCHEMA_DOCSTRING_ACKNOWLEDGEMENT_PHRASES,
     ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES,
     ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES,
     ALL_DOCSTRING_FILE_REFERENCE_SUFFIXES,
@@ -31,50 +33,49 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_DOCSTRING_NO_CONSUMER_CLAIM_PHRASES,
     ALL_DOCSTRING_NO_INLINE_LITERAL_CLAIM_PHRASES,
     ALL_DOCSTRING_NON_CONSTANT_REFERENCE_MARKERS,
+    ALL_DOCSTRING_PER_RECORD_WRITE_OUTCOME_PHRASES,
+    ALL_DOCSTRING_RUN_MODE_PHRASES,
+    ALL_DOCSTRING_RUNMODE_FLAG_FIELD_NAME_TOKENS,
     ALL_DOCSTRING_RUNON_JOINER_MARKERS,
-    ALL_DATA_SCHEMA_CONSTANT_NAME_MARKERS,
-    ALL_DATA_SCHEMA_DOCSTRING_ACKNOWLEDGEMENT_PHRASES,
-    ALL_USER_FACING_TEXT_SCOPE_DOCSTRING_PHRASES,
-    MAX_MODULE_DOCSTRING_DATA_SCHEMA_SCOPE_ISSUES,
-    MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT,
+    ALL_DOCSTRING_SINGLE_LINE_SCOPE_PHRASES,
+    ALL_DOCSTRING_SPAN_RANGE_BODY_CALLEE_NAMES,
+    ALL_DOCSTRING_SPAN_SCOPE_OVERRIDE_PHRASES,
     ALL_GENERIC_CHECK_NAME_TOKENS,
+    ALL_LENGTH_CONSTANT_NAME_SUFFIXES,
+    ALL_LENGTH_SUPERLATIVE_RANGE_PHRASES,
     ALL_NAMING_CONVENTION_DESCRIPTOR_TOKENS,
     ALL_PUNCTUATION_MARK_GLYPH_PROSE_NAMES,
+    ALL_USER_FACING_TEXT_SCOPE_DOCSTRING_PHRASES,
+    ALL_ZIPFILE_WRITE_MODE_VALUES,
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
+    DOCSTRING_LARGE_ZIP_FILE_EXCEPTION_NAME,
     DOCSTRING_REFERENCE_MARKER_WINDOW,
     DOCSTRING_RUNON_SENTENCE_BOUNDARY_PATTERN,
     DOCSTRING_RUNON_SENTENCE_WORD_LIMIT,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
+    LENGTH_CONFIG_SUBDIRECTORY_NAME,
+    LENGTH_GATE_PACKAGE_SCAN_FILE_LIMIT,
     MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES,
     MAX_COMPANION_MODULE_RESOLUTION_DEPTH,
-    PYTHON_MODULE_FILE_SUFFIX,
-    WORD_BOUNDARY_REGEX,
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
+    MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES,
     MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES,
     MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
+    MAX_DOCSTRING_FIELD_RUNMODE_OUTCOME_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
     MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES,
     MAX_DOCSTRING_MARK_GLYPH_ENUMERATION_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
-    MAX_DOCSTRING_RUNON_SENTENCE_ISSUES,
-    ALL_DOCSTRING_SINGLE_LINE_SCOPE_PHRASES,
-    ALL_DOCSTRING_SPAN_RANGE_BODY_CALLEE_NAMES,
-    ALL_DOCSTRING_SPAN_SCOPE_OVERRIDE_PHRASES,
-    MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES,
-    ALL_ZIPFILE_WRITE_MODE_VALUES,
-    DOCSTRING_LARGE_ZIP_FILE_EXCEPTION_NAME,
     MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES,
-    MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES,
+    MAX_DOCSTRING_RUNON_SENTENCE_ISSUES,
+    MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
-    ZIPFILE_ALLOW_ZIP64_KEYWORD,
-    ZIPFILE_ALLOW_ZIP64_POSITIONAL_INDEX,
-    ZIPFILE_MODE_KEYWORD,
-    ZIPFILE_MODE_POSITIONAL_INDEX,
-    ZIPFILE_WRITER_CLASS_NAME,
     MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES,
     MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES,
+    MAX_LENGTH_CONSTANT_SUPERLATIVE_ISSUES,
     MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
+    MAX_MODULE_DOCSTRING_DATA_SCHEMA_SCOPE_ISSUES,
     MINIMUM_CONSTANT_FAMILY_MEMBERS_FOR_CARDINAL_CHECK,
     MINIMUM_DOCSTRING_FAMILY_OVERLAP_FOR_CARDINAL_CHECK,
     MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK,
@@ -83,12 +84,15 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
     MINIMUM_TOKENS_FOR_DISPATCH_CALLEE,
     MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
+    MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT,
+    PYTHON_MODULE_FILE_SUFFIX,
     SINGLE_DICT_KEY_COUNT_FOR_PLURAL_CARDINALITY_DRIFT,
-    ALL_LENGTH_CONSTANT_NAME_SUFFIXES,
-    ALL_LENGTH_SUPERLATIVE_RANGE_PHRASES,
-    LENGTH_CONFIG_SUBDIRECTORY_NAME,
-    LENGTH_GATE_PACKAGE_SCAN_FILE_LIMIT,
-    MAX_LENGTH_CONSTANT_SUPERLATIVE_ISSUES,
+    WORD_BOUNDARY_REGEX,
+    ZIPFILE_ALLOW_ZIP64_KEYWORD,
+    ZIPFILE_ALLOW_ZIP64_POSITIONAL_INDEX,
+    ZIPFILE_MODE_KEYWORD,
+    ZIPFILE_MODE_POSITIONAL_INDEX,
+    ZIPFILE_WRITER_CLASS_NAME,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CAPS_WITH_UNDERSCORE_PATTERN,
@@ -2398,7 +2402,7 @@ def check_docstring_runon_sentence(content: str, file_path: str) -> list[str]:
     A readable docstring breaks its narrative into short sentences a general
     developer follows on the first read. The one mechanical mark of a wall is a
     single sentence that runs past the word limit while chaining clauses with an
-    em-dash or a semicolon. This check inspects the narrative prose of module,
+    em-dash, a double-hyphen, or a semicolon. This check inspects the narrative prose of module,
     class, and public-function docstrings — the text before the first structured
     section header (``Args:``, ``Arguments:``, ``Returns:``, ``Yields:``,
     ``Raises:``, ``Note:``, ``Notes:``, ``Example:``, or ``Examples:``) — and
@@ -2519,6 +2523,115 @@ def _function_documents_unraisable_largezipfile(
     return not any(
         _zipfile_writer_forbids_zip64(each_writer) for each_writer in write_mode_writers
     )
+
+
+def _attributes_section_entries(docstring_text: str) -> list[tuple[str, str]]:
+    """Return each ``name: description`` entry under an Attributes section.
+
+    A continuation line indented under an entry joins that entry's description,
+    so a field whose description wraps across lines reads as one string. The
+    scan ends at the next Google-style section header or at the docstring end.
+
+    Args:
+        docstring_text: The full class docstring text to scan.
+
+    Returns:
+        One ``(field_name, description)`` pair per Attributes entry, in order.
+    """
+    all_lines = docstring_text.splitlines()
+    inside_section = False
+    entries: list[tuple[str, str]] = []
+    for each_line in all_lines:
+        stripped_line = each_line.strip()
+        if not inside_section:
+            if stripped_line in ("Attributes:", "Attrs:"):
+                inside_section = True
+            continue
+        if stripped_line.endswith(":") and not each_line.startswith((" ", "\t")):
+            break
+        if stripped_line in ALL_DOCSTRING_TERMINATING_SECTION_HEADERS:
+            break
+        entry_match = re.match(
+            r"^\s+(?P<field_name>[A-Za-z_][A-Za-z0-9_]*):\s*(?P<description>.*)$",
+            each_line,
+        )
+        if entry_match:
+            entries.append(
+                (entry_match.group("field_name"), entry_match.group("description"))
+            )
+        elif entries and stripped_line:
+            previous_name, previous_description = entries[-1]
+            entries[-1] = (previous_name, f"{previous_description} {stripped_line}")
+    return entries
+
+def _field_name_is_run_mode_flag(field_name: str) -> bool:
+    lowered_name = field_name.lower()
+    return any(
+        each_token in lowered_name
+        for each_token in ALL_DOCSTRING_RUNMODE_FLAG_FIELD_NAME_TOKENS
+    )
+
+def _description_claims_per_record_write_outcome(description: str) -> bool:
+    lowered_description = description.lower()
+    has_write_outcome_phrase = any(
+        each_phrase in lowered_description
+        for each_phrase in ALL_DOCSTRING_PER_RECORD_WRITE_OUTCOME_PHRASES
+    )
+    has_run_mode_phrase = any(
+        each_phrase in lowered_description
+        for each_phrase in ALL_DOCSTRING_RUN_MODE_PHRASES
+    )
+    return has_write_outcome_phrase and not has_run_mode_phrase
+
+def check_docstring_field_runmode_outcome(content: str, file_path: str) -> list[str]:
+    """Flag a run-mode flag field documented as a per-record write outcome.
+
+    The drift this catches: a dataclass or TypedDict field whose name marks a
+    run-mode flag (``is_dry_run``) is documented in the class Attributes block
+    with per-record write-outcome prose (``True when no STP was written``),
+    while the value is set the same way for every record from the run mode
+    (``is_dry_run=not is_execute``). An already-OK record in an execute run then
+    writes no file yet still stores ``False``, so the per-record prose misleads
+    every reader. The check binds only when the description carries a
+    write-outcome phrase and no run-mode phrase, so a field documented by its
+    run-mode meaning is left alone. This is the deterministic single-file slice
+    of Category O6 run-mode-versus-per-record docstring drift.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per run-mode flag field whose Attributes description claims a
+        per-record write outcome, capped at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, ast.ClassDef):
+            continue
+        docstring_text = ast.get_docstring(each_node) or ""
+        if not docstring_text:
+            continue
+        for each_field_name, each_description in _attributes_section_entries(docstring_text):
+            if not _field_name_is_run_mode_flag(each_field_name):
+                continue
+            if not _description_claims_per_record_write_outcome(each_description):
+                continue
+            issues.append(
+                f"Line {each_node.lineno}: {each_node.name}.{each_field_name} is a "
+                "run-mode flag but its Attributes description claims a per-record "
+                "write outcome — restate it as the run-mode meaning the assignment "
+                "gives it (Category O6 run-mode-versus-per-record docstring drift)"
+            )
+            if len(issues) >= MAX_DOCSTRING_FIELD_RUNMODE_OUTCOME_ISSUES:
+                return issues[:MAX_DOCSTRING_FIELD_RUNMODE_OUTCOME_ISSUES]
+    return issues[:MAX_DOCSTRING_FIELD_RUNMODE_OUTCOME_ISSUES]
 
 
 def check_docstring_raises_unraisable_largezipfile(
