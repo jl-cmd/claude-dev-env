@@ -74,9 +74,10 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_cardinal_count_matches_constant_family,
     check_docstring_documents_unreferenced_parameter,
     check_docstring_fallback_branch_coverage,
+    check_docstring_field_runmode_outcome,
     check_docstring_format,
-    check_docstring_names_undefined_constant,
     check_docstring_length_constant_superlative_vs_exact_gate,
+    check_docstring_names_undefined_constant,
     check_docstring_no_consumer_claim,
     check_docstring_no_inline_literal_claim,
     check_docstring_punctuation_mark_enumeration_coverage,
@@ -345,6 +346,9 @@ def validate_content(
             check_docstring_length_constant_superlative_vs_exact_gate(
                 effective_content, file_path
             )
+        )
+        all_issues.extend(
+            check_docstring_field_runmode_outcome(effective_content, file_path)
         )
         all_issues.extend(
             check_docstring_raises_unraisable_largezipfile(effective_content, file_path)
