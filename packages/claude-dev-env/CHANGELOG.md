@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.79.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.78.0...claude-dev-env-v1.79.0) (2026-06-29)
+
+
+### Features
+
+* **hooks:** block boolean polarity name contradictions at Write/Edit time ([98385be](https://github.com/jl-cmd/claude-code-config/commit/98385bef49decf4805f36db2bd69e11036d4b799))
+* **hooks:** block dataclass field run-mode vs per-record drift at Write/Edit time ([47a4d43](https://github.com/jl-cmd/claude-code-config/commit/47a4d43e2b066caff439dc55826fb9310e1593cd))
+* **hooks:** block documented-but-unreferenced parameter at Write/Edit time ([50e2fa5](https://github.com/jl-cmd/claude-code-config/commit/50e2fa5a8620f4ccc8147884872f9b4dc6bb2ba7))
+* **hooks:** block env-var table/code drift at Write/Edit time ([9a0aa5d](https://github.com/jl-cmd/claude-code-config/commit/9a0aa5d048eaeb046e58ad8b1b44abc2ad47687d))
+* **hooks:** block module-docstring data-schema scope drift at Write/Edit time ([bd7a3f4](https://github.com/jl-cmd/claude-code-config/commit/bd7a3f4dce6799e5ab954fa08765f9303bd8ebc7))
+* **hooks:** block vacuous cleanup-on-failure tests at Write/Edit time ([f6edba9](https://github.com/jl-cmd/claude-code-config/commit/f6edba94f2785f6dbaa2e458ed218bb05245d067))
+* **hooks:** gate docstring length-constant superlative drift at Write/Edit time ([16efa97](https://github.com/jl-cmd/claude-code-config/commit/16efa97735c41d3abd3110e6a2db307a7d0f4a31))
+* **hooks:** harden package-inventory stale-entry gate for SKILL.md inventories ([10bfe78](https://github.com/jl-cmd/claude-code-config/commit/10bfe78d9f47679aa842998aa9575f4e118cdd04))
+* **hooks:** harden paired-test coverage gate for private-only suites ([f50911f](https://github.com/jl-cmd/claude-code-config/commit/f50911fe18f19f4e57be013a54a3c276a92f0d5e))
+* **paired-test-coverage:** block dead public function on the test-file write order ([604d6a8](https://github.com/jl-cmd/claude-code-config/commit/604d6a8bbd88521781993ad23361f9a85c742eb4))
+
+
+### Bug Fixes
+
+* address converge-round findings for dead-public-function gate ([1856687](https://github.com/jl-cmd/claude-code-config/commit/1856687d45a593096f2f0b6bcbc6d9b3efeabe62))
+* address converge-round findings for docstring length-constant superlative gate ([3755686](https://github.com/jl-cmd/claude-code-config/commit/375568631874b101ed4958f375c9b15ecc3686ef))
+* **hooks:** block docstring no-network claim contradicted by path-metadata access ([d0606ae](https://github.com/jl-cmd/claude-code-config/commit/d0606ae81beaac84b1af4653e9fb2887611021c9))
+* **hooks:** resolve reuse-pass findings in code_rules_naming_collection ([f3acc9f](https://github.com/jl-cmd/claude-code-config/commit/f3acc9f2251faeab789a7fd5adca2e908eaa30ec))
+* **package-inventory:** address converge-round review findings ([cbf6e10](https://github.com/jl-cmd/claude-code-config/commit/cbf6e101c3776523a62d4554ae47708d2d18ac23))
+* **paired-test-coverage:** apply converge-round review fixes ([f9d9417](https://github.com/jl-cmd/claude-code-config/commit/f9d94178208de675d98fc11ab90f617762589683))
+
 ## [1.78.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.77.0...claude-dev-env-v1.78.0) (2026-06-27)
 
 
