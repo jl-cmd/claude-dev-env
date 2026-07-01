@@ -45,8 +45,8 @@ test('bug-audit lens prompt no longer instructs a per-lens git fetch', () => {
 });
 
 test('a single round-level prefetch step fetches origin/main before the parallel lenses', () => {
-  assert.ok(convergeSource.includes("resumeGitAgent(gitAgentId, 'prefetch-main')"));
-  const prefetchCallIndex = convergeSource.indexOf("resumeGitAgent(gitAgentId, 'prefetch-main')");
+  assert.ok(convergeSource.includes("runGitTask('prefetch-main')"));
+  const prefetchCallIndex = convergeSource.indexOf("runGitTask('prefetch-main')");
   const parallelLensIndex = convergeSource.indexOf('const lenses = await parallel(');
   assert.notEqual(prefetchCallIndex, -1, 'expected prefetch to be invoked');
   assert.notEqual(parallelLensIndex, -1, 'expected the parallel lens block to exist');
@@ -85,7 +85,7 @@ test('gotchas doc states parallel lenses must avoid concurrent git operations', 
 });
 
 test('repair-convergence edit step filters unresolved threads to bot authors and skips human threads', () => {
-  const repairPrompt = functionSource('resumeCodeEditorAgent');
+  const repairPrompt = functionSource('runCodeEditorTask');
   assert.match(
     repairPrompt,
     /cursor.*claude.*copilot|copilot.*cursor.*claude|claude.*cursor.*copilot/is,
@@ -99,7 +99,7 @@ test('repair-convergence edit step filters unresolved threads to bot authors and
 });
 
 test('repair-convergence edit step no longer instructs resolving every unresolved thread without an author filter', () => {
-  const repairPrompt = functionSource('resumeCodeEditorAgent');
+  const repairPrompt = functionSource('runCodeEditorTask');
   assert.doesNotMatch(
     repairPrompt,
     /fetch every thread where isResolved is false/,
@@ -195,12 +195,12 @@ test('the COPILOT fix branch does not re-assign head from the fix before re-conv
 test('the CONVERGE branch re-resolves HEAD from GitHub on every entry', () => {
   const convergeBranchStart = convergeSource.indexOf("if (phase === 'CONVERGE')");
   assert.notEqual(convergeBranchStart, -1, 'expected the CONVERGE branch to exist');
-  const headResolveCallIndex = convergeSource.indexOf("resumeGitAgent(gitAgentId, 'resolve-head')", convergeBranchStart);
-  assert.notEqual(headResolveCallIndex, -1, 'expected CONVERGE to re-resolve HEAD via resumeGitAgent');
+  const headResolveCallIndex = convergeSource.indexOf("runGitTask('resolve-head')", convergeBranchStart);
+  assert.notEqual(headResolveCallIndex, -1, 'expected CONVERGE to re-resolve HEAD via runGitTask');
 });
 
 test('fix edit prompt resolves threads by PRRT thread node id looked up from the comment databaseId', () => {
-  const editPrompt = functionSource('resumeCodeEditorAgent');
+  const editPrompt = functionSource('runCodeEditorTask');
   assert.match(editPrompt, /PRRT/, 'expected the thread node id form (PRRT_...) to be named');
   assert.match(
     editPrompt,
@@ -216,15 +216,15 @@ test('fix edit prompt resolves threads by PRRT thread node id looked up from the
 
 test('fix edit prompt does not pass the numeric comment id straight to resolve_thread', () => {
   assert.doesNotMatch(
-    functionSource('resumeCodeEditorAgent'),
+    functionSource('runCodeEditorTask'),
     /then resolve that thread \(use the github MCP pull_request_review_write/,
     'resolve_thread and resolveReviewThread require a PRRT_... thread node id, not the comment id',
   );
 });
 
-test('the fix flow spawns a fixer agent and runs fixerWithRecovery after the edit step', () => {
+test('the fix flow runs the edit task then fixerWithRecovery after the edit step', () => {
   const applyFixesBody = lensPromptBody('applyFixes');
-  assert.match(applyFixesBody, /spawnFixerAgent\(/, 'expected applyFixes to call spawnFixerAgent');
+  assert.match(applyFixesBody, /runCodeEditorTask\('fix-edit'/, "expected applyFixes to call runCodeEditorTask('fix-edit')");
   assert.match(applyFixesBody, /fixerWithRecovery\(/, 'expected applyFixes to call fixerWithRecovery');
 });
 
@@ -269,7 +269,7 @@ test('the verdict-fence binding does not self-resolve a cwd via git rev-parse fo
 });
 
 test('every verify step calls buildVerdictFenceSteps, uses code-verifier, and forbids edits', () => {
-  for (const verifyFunctionName of ['resumeVerifierAgent']) {
+  for (const verifyFunctionName of ['runVerifierTask']) {
     const verifyBody = lensPromptBody(verifyFunctionName);
     assert.match(
       verifyBody,
@@ -294,15 +294,15 @@ test('every verify step calls buildVerdictFenceSteps, uses code-verifier, and fo
   }
 });
 
-test('resumeFixerAgent never verifies its own session — verification belongs to the separate verifier', () => {
-  const fixerBody = lensPromptBody('resumeFixerAgent');
+test('runFixerTask never verifies — verification belongs to the separate verifier', () => {
+  const fixerBody = lensPromptBody('runFixerTask');
   assert.doesNotMatch(fixerBody, /buildVerdictFenceSteps\(/, 'expected the fixer to not emit a verdict fence — the separate verifier does');
-  assert.doesNotMatch(fixerBody, /agentType:\s*'code-verifier'/, 'expected the fixer session to be clean-coder only');
+  assert.doesNotMatch(fixerBody, /agentType:\s*'code-verifier'/, 'expected the fixer to be clean-coder only');
   assert.match(fixerBody, /agentType:\s*'clean-coder'/, 'expected the fixer to use clean-coder for its commit and recovery edits');
 });
 
-test('resumeVerifierAgent uses --manifest-hash-for-branch with the hardening branch and forbids edits', () => {
-  const verifyBody = lensPromptBody('resumeVerifierAgent');
+test('runVerifierTask uses --manifest-hash-for-branch with the hardening branch and forbids edits', () => {
+  const verifyBody = lensPromptBody('runVerifierTask');
   assert.match(
     verifyBody,
     /--manifest-hash-for-branch/,
@@ -315,18 +315,18 @@ test('resumeVerifierAgent uses --manifest-hash-for-branch with the hardening bra
   );
 });
 
-test('resumeVerifierAgent passes PR coordinates to buildVerdictFenceSteps for the fix-verify and repair-verify tasks', () => {
-  const verifyBody = lensPromptBody('resumeVerifierAgent');
-  assert.match(verifyBody, /task === 'fix-verify'/, 'expected resumeVerifierAgent to carry the fix-path verify task');
+test('runVerifierTask passes PR coordinates to buildVerdictFenceSteps for the fix-verify and repair-verify tasks', () => {
+  const verifyBody = lensPromptBody('runVerifierTask');
+  assert.match(verifyBody, /task === 'fix-verify'/, 'expected runVerifierTask to carry the fix-path verify task');
   assert.match(
     verifyBody,
     /buildVerdictFenceSteps\(input\.owner, input\.repo, input\.prNumber\)/,
-    'expected resumeVerifierAgent to pass PR coordinates to buildVerdictFenceSteps',
+    'expected runVerifierTask to pass PR coordinates to buildVerdictFenceSteps',
   );
 });
 
-test('the commit path in resumeFixerAgent forbids further edits and uses clean-coder', () => {
-  const fixerBody = lensPromptBody('resumeFixerAgent');
+test('the commit path in runFixerTask forbids further edits and uses clean-coder', () => {
+  const fixerBody = lensPromptBody('runFixerTask');
   assert.match(
     fixerBody,
     /no (?:further |additional )?(?:file )?edits|do not edit|make no edits/i,
@@ -339,22 +339,22 @@ test('the commit path in resumeFixerAgent forbids further edits and uses clean-c
   );
 });
 
-test('the repair flow uses resume helpers for edit, verify, and commit', () => {
+test('the repair flow uses the direct-spawn task helpers for edit, verify, and commit', () => {
   const repairBody = lensPromptBody('repairConvergence');
-  assert.match(repairBody, /spawnCodeEditorAgent\(/, 'expected repairConvergence to spawn a code-editor');
-  assert.match(repairBody, /spawnVerifierAgent\(/, 'expected repairConvergence to spawn a verifier');
+  assert.match(repairBody, /runCodeEditorTask\(/, 'expected repairConvergence to call runCodeEditorTask');
+  assert.match(repairBody, /runVerifierTask\(/, 'expected repairConvergence to call runVerifierTask');
   assert.match(repairBody, /verdictPassed\(/, 'expected the verify verdict to gate the repair commit step');
 });
 
-test('the standards-deferral flow uses resume helpers for edit, verify, and commit', () => {
+test('the standards-deferral flow uses the direct-spawn task helpers for edit, verify, and commit', () => {
   const standardsBody = lensPromptBody('spawnStandardsFollowUp');
-  assert.match(standardsBody, /spawnCodeEditorAgent\(/, 'expected spawnStandardsFollowUp to spawn a code-editor');
-  assert.match(standardsBody, /spawnVerifierAgent\(/, 'expected spawnStandardsFollowUp to spawn a verifier');
+  assert.match(standardsBody, /runCodeEditorTask\(/, 'expected spawnStandardsFollowUp to call runCodeEditorTask');
+  assert.match(standardsBody, /runVerifierTask\(/, 'expected spawnStandardsFollowUp to call runVerifierTask');
   assert.match(standardsBody, /verdictPassed\(/, 'expected the verify verdict to gate the hardening commit step');
 });
 
 test('repair-commit and hardening-commit paths use clean-coder and forbid edits', () => {
-  const codeEditorBody = lensPromptBody('resumeCodeEditorAgent');
+  const codeEditorBody = lensPromptBody('runCodeEditorTask');
   assert.match(
     codeEditorBody,
     /no (?:further |additional )?(?:file )?edits|do not edit|make no edits/i,
@@ -368,7 +368,7 @@ test('repair-commit and hardening-commit paths use clean-coder and forbid edits'
 });
 
 test('the code-editor standards-edit path stages hardening without committing and uses clean-coder', () => {
-  const editBody = lensPromptBody('resumeCodeEditorAgent');
+  const editBody = lensPromptBody('runCodeEditorTask');
   assert.match(
     editBody,
     /do not commit and do not push|NO commit and NO push|Do NOT commit/i,
@@ -495,9 +495,9 @@ test('the pre-commit gate step is a shared constant that dry-runs the CODE_RULES
   );
 });
 
-const editStepResumeHelpers = ['resumeCodeEditorAgent', 'resumeFixerAgent'];
+const editStepTaskDispatchers = ['runCodeEditorTask', 'runFixerTask'];
 
-for (const helperName of editStepResumeHelpers) {
+for (const helperName of editStepTaskDispatchers) {
   test(`${helperName} appends the pre-commit gate step to its edit prompts`, () => {
     assert.match(
       functionSource(helperName),
@@ -507,14 +507,14 @@ for (const helperName of editStepResumeHelpers) {
   });
 }
 
-const editStepResumeTasks = [
-  ['resumeCodeEditorAgent', 'fix-edit'],
-  ['resumeCodeEditorAgent', 'repair-edit'],
-  ['resumeCodeEditorAgent', 'standards-edit'],
-  ['resumeCodeEditorAgent', 'commit-recover'],
+const editStepTasks = [
+  ['runCodeEditorTask', 'fix-edit'],
+  ['runCodeEditorTask', 'repair-edit'],
+  ['runCodeEditorTask', 'standards-edit'],
+  ['runCodeEditorTask', 'commit-recover'],
 ];
 
-for (const [helperName, taskName] of editStepResumeTasks) {
+for (const [helperName, taskName] of editStepTasks) {
   test(`${helperName} routes the ${taskName} task to a pre-commit-gated edit prompt`, () => {
     assert.match(
       functionSource(helperName),
@@ -634,37 +634,26 @@ test('SKILL.md attributes the known-temp-var resolution to the cwd-scoped auto-a
   );
 });
 
-test('convergeAgent prepends HEADLESS_SAFETY_PREAMBLE and worktree directive on fresh spawn', () => {
+test('convergeAgent prepends HEADLESS_SAFETY_PREAMBLE and the worktree directive to every prompt', () => {
   const convergeAgentBody = lensPromptBody('convergeAgent');
   assert.match(
     convergeAgentBody,
     /HEADLESS_SAFETY_PREAMBLE.*worktreeDirective/,
-    'expected fresh-spawn path to prepend both preamble and worktree directive',
+    'expected convergeAgent to prepend both preamble and worktree directive',
   );
 });
 
-test('convergeAgent checks isResume before prepending the preamble', () => {
-  const convergeAgentBody = lensPromptBody('convergeAgent');
-  assert.match(convergeAgentBody, /isResume/, 'expected an isResume guard in convergeAgent');
-});
-
-const newSpawnResumeHelpers = [
-  { name: 'spawnGitAgent', isAsync: true },
-  { name: 'resumeGitAgent', isAsync: false },
-  { name: 'spawnFixerAgent', isAsync: true },
-  { name: 'resumeFixerAgent', isAsync: false },
+const taskDispatchers = [
+  { name: 'runGitTask', isAsync: false },
+  { name: 'runFixerTask', isAsync: false },
   { name: 'fixerWithRecovery', isAsync: true },
-  { name: 'spawnCodeEditorAgent', isAsync: true },
-  { name: 'resumeCodeEditorAgent', isAsync: false },
-  { name: 'spawnVerifierAgent', isAsync: true },
-  { name: 'resumeVerifierAgent', isAsync: false },
-  { name: 'spawnGeneralUtilityAgent', isAsync: true },
-  { name: 'resumeGeneralUtilityAgent', isAsync: false },
-  { name: 'spawnConvergenceCheckAgent', isAsync: true },
-  { name: 'resumeConvergenceCheckAgent', isAsync: false },
+  { name: 'runCodeEditorTask', isAsync: false },
+  { name: 'runVerifierTask', isAsync: false },
+  { name: 'runGeneralUtilityTask', isAsync: false },
+  { name: 'runConvergenceCheck', isAsync: false },
 ];
 
-for (const { name, isAsync } of newSpawnResumeHelpers) {
+for (const { name, isAsync } of taskDispatchers) {
   const prefix = isAsync ? 'async ' : '';
   test(`function ${prefix}${name} exists in converge.mjs`, () => {
     const needle = isAsync ? `async function ${name}(` : `function ${name}(`;
@@ -672,60 +661,8 @@ for (const { name, isAsync } of newSpawnResumeHelpers) {
   });
 }
 
-const spawnHelperNames = [
-  'spawnGitAgent',
-  'spawnFixerAgent',
-  'spawnCodeEditorAgent',
-  'spawnVerifierAgent',
-  'spawnGeneralUtilityAgent',
-  'spawnConvergenceCheckAgent',
-];
-
-for (const spawnName of spawnHelperNames) {
-  test(`${spawnName} actually spawns an agent via convergeAgent`, () => {
-    const spawnBody = functionSource(spawnName);
-    assert.match(
-      spawnBody,
-      /await convergeAgent\(/,
-      `expected ${spawnName} to spawn a real agent through convergeAgent rather than return a hardcoded label`,
-    );
-  });
-
-  test(`${spawnName} returns the spawned agent's runtime id`, () => {
-    const spawnBody = functionSource(spawnName);
-    assert.match(
-      spawnBody,
-      /return\s+result\?\.agentId/,
-      `expected ${spawnName} to return result?.agentId so resume targets the real session`,
-    );
-    assert.doesNotMatch(
-      spawnBody,
-      /return\s+['"`]/,
-      `expected ${spawnName} not to return a hardcoded label string`,
-    );
-  });
-}
-
-test('spawnGitAgent returns result?.agentId without a tautological ternary', () => {
-  const spawnBody = functionSource('spawnGitAgent');
-  assert.doesNotMatch(
-    spawnBody,
-    /\?\s*'git-utility'\s*:\s*'git-utility'/,
-    'expected the identical-branch ternary that discards the spawn outcome to be gone',
-  );
-});
-
-test('resume helpers fall back to a fresh spawn when no agentId is available', () => {
-  const convergeAgentBody = lensPromptBody('convergeAgent');
-  assert.match(
-    convergeAgentBody,
-    /options\?\.resume.*length\s*>\s*0|length\s*>\s*0.*resume/s,
-    'expected convergeAgent to treat a missing agentId as a fresh spawn (isResume false), restoring the preamble and worktree directive',
-  );
-});
-
-test('resumeGeneralUtilityAgent only handles the two tasks it is called with', () => {
-  const generalBody = functionSource('resumeGeneralUtilityAgent');
+test('runGeneralUtilityTask only handles the two tasks it is called with', () => {
+  const generalBody = functionSource('runGeneralUtilityTask');
   assert.doesNotMatch(
     generalBody,
     /task === 'bugbot-lens'/,
@@ -761,7 +698,7 @@ const orphanedHelperNames = [
 ];
 
 for (const orphanName of orphanedHelperNames) {
-  test(`${orphanName} is removed — its behavior lives in a resume helper`, () => {
+  test(`${orphanName} is removed — its behavior lives in a direct-spawn task dispatcher`, () => {
     assert.ok(
       !convergeSource.includes(`function ${orphanName}(`),
       `expected the orphaned ${orphanName} definition to be deleted (CODE_RULES 9.8)`,
@@ -769,12 +706,11 @@ for (const orphanName of orphanedHelperNames) {
   });
 }
 
-test('convergeAgent omits the preamble when options.resume is a non-empty string', () => {
-  const convergeAgentBody = lensPromptBody('convergeAgent');
-  assert.match(
-    convergeAgentBody,
-    /isResume\s*\?\s*prompt/,
-    'expected the resume path to pass prompt through without the preamble',
+test('the whole priming spawn-agent family is removed — every dispatcher spawns fresh', () => {
+  assert.doesNotMatch(
+    convergeSource,
+    /function\s+spawn\w+Agent\s*\(/,
+    'expected no spawn<Role>Agent priming function to survive — each task dispatcher spawns a fresh agent',
   );
 });
 

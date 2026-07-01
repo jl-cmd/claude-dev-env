@@ -69,43 +69,25 @@ const worktreeDirective = (repoPath) =>
  * @param {object} options the agent() options (label, phase, schema, agentType, model)
  * @returns {Promise<*>} the agent() result
  */
-const convergeAgent = (prompt, options) => {
-  const isResume = typeof options?.resume === 'string' && options.resume.length > 0
-  const fullPrompt = isResume
-    ? prompt
-    : `${HEADLESS_SAFETY_PREAMBLE}${worktreeDirective(activeRepoPath)}${prompt}`
-  return agent(fullPrompt, options)
-}
+const convergeAgent = (prompt, options) =>
+  agent(`${HEADLESS_SAFETY_PREAMBLE}${worktreeDirective(activeRepoPath)}${prompt}`, options)
 
 /**
- * Spawn the git/utility Explore agent once before the converge loop.
- * @returns {Promise<string>} the agent id
- */
-async function spawnGitAgent() {
-  const result = await convergeAgent(
-    `You are the git-utility agent for ${prCoordinates}. Your role is to resolve the PR HEAD SHA, fetch origin main, and check merge conflicts when asked. Do not edit code.\n\n` +
-      `Initial task: print the current HEAD SHA of ${prCoordinates}. Run exactly:\n` +
-      `gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
-      `Return the full 40-character SHA in the sha field.`,
-    { label: 'git-utility', phase: 'Converge', schema: HEAD_SCHEMA, agentType: 'Explore' },
-  )
-  return result?.agentId
-}
-
-/**
- * Resume the git/utility agent for a specific task.
- * @param {string} agentId the agent id from spawnGitAgent
+ * Spawn a fresh git-utility Explore agent for a specific task. 'resolve-head'
+ * prints the PR HEAD SHA, 'prefetch-main' fetches origin main so the review
+ * lenses diff against an up-to-date base, and any other task reports whether the
+ * branch has merge conflicts. The agent never edits code.
  * @param {string} task the short task name
  * @param {string} head optional HEAD SHA for conflict checks
  * @returns {Promise<object>} the structured output
  */
-function resumeGitAgent(agentId, task, head) {
+function runGitTask(task, head) {
   if (task === 'resolve-head') {
     return convergeAgent(
       `Print the current HEAD SHA of ${prCoordinates}. Run exactly:\n` +
         `gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
         `Return the full 40-character SHA in the sha field. Do not modify any files.`,
-      { label: 'git-utility', phase: 'Converge', schema: HEAD_SCHEMA, agentType: 'Explore', resume: agentId },
+      { label: 'git-utility', phase: 'Converge', schema: HEAD_SCHEMA, agentType: 'Explore' },
     )
   }
   if (task === 'prefetch-main') {
@@ -113,7 +95,7 @@ function resumeGitAgent(agentId, task, head) {
       `Refresh the base ref for ${prCoordinates} so the parallel review lenses can diff against an up-to-date origin/main without each running its own fetch. Run exactly:\n` +
         `git fetch origin main\n` +
         `Do not edit, commit, push, rebase, or modify any files — fetch only.`,
-      { label: 'git-utility', phase: 'Converge', agentType: 'Explore', resume: agentId },
+      { label: 'git-utility', phase: 'Converge', agentType: 'Explore' },
     )
   }
   return convergeAgent(
@@ -122,44 +104,20 @@ function resumeGitAgent(agentId, task, head) {
       `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq '{mergeable: .mergeable, state: .mergeable_state}'\n` +
       `up to 5 times, 5 seconds apart (delay each retry with "sleep 5", or the PowerShell alternative "Start-Sleep -Seconds 5"), stopping as soon as mergeable is true or false.\n\n` +
       `Return conflicting:true when mergeable is false or state is "dirty" (the branch conflicts with the base). Return conflicting:false when mergeable is true, or when mergeable stays null after the full poll budget — mergeability is unknown, so let the bug checks proceed rather than rebase on a guess.`,
-    { label: 'git-utility', phase: 'Converge', schema: MERGE_CONFLICT_SCHEMA, agentType: 'Explore', resume: agentId },
+    { label: 'git-utility', phase: 'Converge', schema: MERGE_CONFLICT_SCHEMA, agentType: 'Explore' },
   )
 }
 
 /**
- * Spawn the fixer clean-coder agent for one fix batch, establishing its role and
- * the PR coordinates so each later resume (commit and recovery edits) continues
- * the same session. The fixer never verifies — a separate verifier agent grades
- * the working tree, so the verdict comes from a different session than the one
- * that commits and recovers, mirroring the repair and conflict paths. The spawn
- * makes no edits — the first recovery resume is the earliest step that touches
- * the working tree. Returns the runtime agent id so the resume calls target the
- * live session; a runtime without resume support returns no agent id, and each
- * resume falls back to a fresh spawn.
- * @param {string} head PR HEAD SHA
- * @param {Array<object>} findings the findings to fix
- * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
- */
-async function spawnFixerAgent(head, findings, sourceLabel) {
-  const result = await convergeAgent(
-    `You are the fixer agent for ${findings.length} finding(s) (${sourceLabel}) on ${prCoordinates}, HEAD ${head}. The edit step left fixes in the working tree, uncommitted. Across this session you run a sequence of steps: commit and push the working-tree fixes once a separate verifier passes them, and recover when a verify objection or a commit-gate block needs another edit. A separate verifier agent grades the working tree, so you never verify your own edits. Make NO edits in this first turn — confirm only that the working tree is on the PR branch at HEAD ${head} with uncommitted fixes present, then wait for the next step's instructions. Reply READY.`,
-    { label: `fixer:${sourceLabel}`, phase: 'Converge', agentType: 'clean-coder' },
-  )
-  return result?.agentId
-}
-
-/**
- * Resume the fixer agent for commit or recovery edits. The fixer never verifies;
- * a separate verifier agent emits the verdict, so commit, verify-recover, and
- * commit-recover all run on the editing session while the verdict that gates the
- * commit comes from a different session.
- * @param {string} agentId the agent id from spawnFixerAgent
+ * Spawn a fresh fixer clean-coder agent for a commit or recovery edit. The fixer
+ * never verifies; a separate verifier agent emits the verdict, so the verdict
+ * that gates the commit comes from a different agent than the one that commits
+ * and recovers.
  * @param {string} task the short task name
  * @param {object} context task-specific context
  * @returns {Promise<object>} the structured output
  */
-function resumeFixerAgent(agentId, task, context) {
+function runFixerTask(task, context) {
   const label = `fixer:${context.sourceLabel}`
   if (task === 'commit') {
     return convergeAgent(
@@ -171,7 +129,7 @@ function resumeFixerAgent(agentId, task, context) {
         `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
         `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
         `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
-      { label, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder', resume: agentId },
+      { label, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder' },
     )
   }
   if (task === 'commit-recover') {
@@ -185,7 +143,7 @@ function resumeFixerAgent(agentId, task, context) {
         `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
         `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
     )
   }
   const objection = context.objection || VERIFY_OBJECTION_FALLBACK
@@ -199,30 +157,29 @@ function resumeFixerAgent(agentId, task, context) {
       `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
       `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.` +
       PRE_COMMIT_GATE_STEP,
-    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
   )
 }
 
 /**
- * Joined fixer recovery loop: a separate verifier agent grades the working-tree
- * fixes while the fixer session only recovers and commits, so the verdict that
- * gates the commit comes from a different session than the one that edits and
- * pushes — the same editor/verifier separation the repair and conflict paths
- * use. The verify step routes through verifyWithRecovery (verify on the verifier,
- * recover on the fixer); the commit step routes through commitWithRecovery
- * (commit and commit-recover on the fixer, re-verify on the verifier). A failed
- * verdict returns the unchanged HEAD so the round reads as not-progressed.
- * @param {string} fixerAgentId the fixer agent id from spawnFixerAgent
- * @param {string} verifierId the verifier agent id from spawnVerifierAgent
+ * Joined fixer recovery loop: the verify step spawns a code-verifier agent to
+ * grade the working-tree fixes while the commit and recovery steps spawn
+ * clean-coder fixer agents, so the verdict that gates the commit comes from a
+ * different agent than the one that edits and pushes — the same editor/verifier
+ * separation the repair and conflict paths use. The verify step routes through
+ * verifyWithRecovery (verify on the verifier, recover on the fixer); the commit
+ * step routes through commitWithRecovery (commit and commit-recover on the fixer,
+ * re-verify on the verifier). A failed verdict returns the unchanged HEAD so the
+ * round reads as not-progressed.
  * @param {string} head PR HEAD SHA
  * @param {Array<object>} findings the findings to fix
  * @param {string} sourceLabel short description of where the findings came from
  * @returns {Promise<object>} FIX_SCHEMA result
  */
-async function fixerWithRecovery(fixerAgentId, verifierId, head, findings, sourceLabel) {
+async function fixerWithRecovery(head, findings, sourceLabel) {
   const verifyTranscript = await verifyWithRecovery({
-    runVerify: () => resumeVerifierAgent(verifierId, 'fix-verify', { head, findings, sourceLabel }),
-    runRecoverEdit: (objection, attempt) => resumeFixerAgent(fixerAgentId, 'verify-recover', { head, findings, sourceLabel, objection, attempt }),
+    runVerify: () => runVerifierTask('fix-verify', { head, findings, sourceLabel }),
+    runRecoverEdit: (objection, attempt) => runFixerTask('verify-recover', { head, findings, sourceLabel, objection, attempt }),
   })
   if (!verdictPassed(verifyTranscript)) {
     return {
@@ -235,38 +192,21 @@ async function fixerWithRecovery(fixerAgentId, verifierId, head, findings, sourc
     }
   }
   return commitWithRecovery({
-    runCommit: () => resumeFixerAgent(fixerAgentId, 'commit', { head, findings, sourceLabel }),
-    runVerify: () => resumeVerifierAgent(verifierId, 'fix-verify', { head, findings, sourceLabel }),
-    runRecoverEdit: (detail, attempt) => resumeFixerAgent(fixerAgentId, 'commit-recover', { head, findings, sourceLabel, blockerDetail: detail, attempt }),
+    runCommit: () => runFixerTask('commit', { head, findings, sourceLabel }),
+    runVerify: () => runVerifierTask('fix-verify', { head, findings, sourceLabel }),
+    runRecoverEdit: (detail, attempt) => runFixerTask('commit-recover', { head, findings, sourceLabel, blockerDetail: detail, attempt }),
   })
 }
 
 /**
- * Spawn the code-editor clean-coder agent once per converge round, establishing
- * its role so each later resume (fix-edit, conflict-edit, repair-edit,
- * repair-commit, standards-edit, hardening-commit, commit-recover, verify-recover)
- * continues the same session. The spawn makes no edits — each resume carries the
- * task-specific edit instructions. Returns the runtime agent id so the resume
- * calls target the live session; a runtime without resume support returns no
- * agent id, and each resume falls back to a fresh spawn.
- * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
- */
-async function spawnCodeEditorAgent() {
-  const result = await convergeAgent(
-    `You are the code-editor agent for ${prCoordinates}. Across this converge round you run a sequence of edit and commit steps, each delivered as its own instruction. Make NO edits in this first turn — wait for the first task's instructions. Reply READY.`,
-    { label: 'code-editor', phase: 'Converge', agentType: 'clean-coder' },
-  )
-  return result?.agentId
-}
-
-/**
- * Resume the code-editor agent for a specific edit task.
- * @param {string} agentId the agent id from spawnCodeEditorAgent
+ * Spawn a fresh code-editor clean-coder agent for a specific edit task (fix-edit,
+ * conflict-edit, repair-edit, repair-commit, standards-edit, hardening-commit,
+ * commit-recover, verify-recover). Each task carries its own edit instructions.
  * @param {string} task the short task name
  * @param {object} context task-specific context
  * @returns {Promise<object>} the structured output
  */
-function resumeCodeEditorAgent(agentId, task, context) {
+function runCodeEditorTask(task, context) {
   const label = `code-editor:${task}`
   if (task === 'fix-edit') {
     const findingsBlock = renderFindingsBlock(context.findings)
@@ -287,7 +227,7 @@ function resumeCodeEditorAgent(agentId, task, context) {
         `- When every finding was already addressed so no code change was needed — yet you still resolved each GitHub review thread above: edited=false, resolvedWithoutCommit=true. Only set this when every thread that carries a comment id is resolved; otherwise the round is treated as stalled.\n` +
         `Always include a one-line summary.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
     )
   }
   if (task === 'conflict-edit') {
@@ -298,7 +238,7 @@ function resumeCodeEditorAgent(agentId, task, context) {
         `- Rebase the branch onto origin/main and resolve every conflict so the tree is clean and conflict-free: git fetch origin main; git rebase origin/main; resolve each conflict, preserving the intent of both the PR's change and the incoming base change. A rebase creates local commits, which is fine.\n` +
         `- Do NOT push and do NOT force-push — the commit step force-pushes after the verify step binds a verdict. Pushing here would change the surface the verifier binds to.\n\n` +
         `Return rebased=true with a one-line summary when you rebased onto origin/main and resolved the conflicts; rebased=false with a summary when the branch did not actually need a rebase or you could not complete it.`,
-      { label, phase: 'Converge', schema: CONFLICT_EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+      { label, phase: 'Converge', schema: CONFLICT_EDIT_SCHEMA, agentType: 'clean-coder' },
     )
   }
   if (task === 'repair-edit') {
@@ -318,7 +258,7 @@ function resumeCodeEditorAgent(agentId, task, context) {
         `- resolvedWithoutCommit=true only when you addressed the gates with neither a code change nor a rebase (bot threads resolved only), so there is nothing for the commit step to push.\n` +
         `Always include a one-line summary.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Finalize', schema: REPAIR_EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+      { label, phase: 'Finalize', schema: REPAIR_EDIT_SCHEMA, agentType: 'clean-coder' },
     )
   }
   if (task === 'repair-commit') {
@@ -334,7 +274,7 @@ function resumeCodeEditorAgent(agentId, task, context) {
         `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
         `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
         `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
-      { label, phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder', resume: agentId },
+      { label, phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder' },
     )
   }
   if (task === 'standards-edit') {
@@ -350,7 +290,7 @@ function resumeCodeEditorAgent(agentId, task, context) {
         `3. For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue <url>." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
         `Return the issue URL in issueUrl (empty string when it could not be filed), the hardening checkout path and branch, hardeningEdited, and a one-line summary.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Converge', schema: STANDARDS_EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+      { label, phase: 'Converge', schema: STANDARDS_EDIT_SCHEMA, agentType: 'clean-coder' },
     )
   }
   if (task === 'hardening-commit') {
@@ -360,7 +300,7 @@ function resumeCodeEditorAgent(agentId, task, context) {
         `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Only commit and push what is already there.\n` +
         `- In ${context.hardeningRepoPath}: make ONE commit of the staged hooks/rules change on branch ${context.hardeningBranch}, push it, then open a DRAFT PR. The PR body references the follow-up issue ${context.issueUrl || '(none)'} and states the PR hardens the environment so the deferred violation classes are blocked at Write/Edit time. Honor the gh-body-file rule: write a BOM-free temp file and pass --body-file.\n\n` +
         `Return a one-line summary naming the hardening PR URL.`,
-      { label, phase: 'Converge', agentType: 'clean-coder', resume: agentId },
+      { label, phase: 'Converge', agentType: 'clean-coder' },
     )
   }
   if (task === 'commit-recover') {
@@ -374,7 +314,7 @@ function resumeCodeEditorAgent(agentId, task, context) {
         `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
         `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
     )
   }
   // verify-recover
@@ -389,34 +329,19 @@ function resumeCodeEditorAgent(agentId, task, context) {
       `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
       `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.` +
       PRE_COMMIT_GATE_STEP,
-    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', resume: agentId },
+    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
   )
 }
 
 /**
- * Spawn the verifier code-verifier agent once per converge round, establishing
- * its role so each later resume (fix-verify, repair-verify, hardening-verify) continues the
- * same session. The spawn makes no edits — verification only. Returns the runtime
- * agent id so the resume calls target the live session; a runtime without resume
- * support returns no agent id, and each resume falls back to a fresh spawn.
- * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
- */
-async function spawnVerifierAgent() {
-  const result = await convergeAgent(
-    `You are the verifier agent for ${prCoordinates}. Across this converge round you run a sequence of verify steps, each delivered as its own instruction; each ends with a fenced verdict block. Do NO edits of any kind — verification only. Make no move in this first turn — wait for the first verify task's instructions. Reply READY.`,
-    { label: 'verifier', phase: 'Converge', agentType: 'code-verifier' },
-  )
-  return result?.agentId
-}
-
-/**
- * Resume the verifier agent for a specific verify task.
- * @param {string} agentId the agent id from spawnVerifierAgent
+ * Spawn a fresh verifier code-verifier agent for a specific verify task
+ * (fix-verify, repair-verify, hardening-verify). The agent makes no edits —
+ * verification only — and ends its message with a fenced verdict block.
  * @param {string} task the short task name
  * @param {object} context task-specific context
  * @returns {Promise<string>} the verifier transcript carrying the verdict fence
  */
-function resumeVerifierAgent(agentId, task, context) {
+function runVerifierTask(task, context) {
   const label = `verifier:${task}`
   if (task === 'fix-verify') {
     const findingsBlock = renderFindingsBlock(context.findings)
@@ -427,7 +352,7 @@ function resumeVerifierAgent(agentId, task, context) {
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
         `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
         `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
-      { label, phase: 'Converge', agentType: 'code-verifier', resume: agentId },
+      { label, phase: 'Converge', agentType: 'code-verifier' },
     )
   }
   if (task === 'repair-verify') {
@@ -441,7 +366,7 @@ function resumeVerifierAgent(agentId, task, context) {
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
         `2. Verify the working tree against origin/main: any bot-thread code fix is correct test-first per CODE_RULES, and a rebase (if any) left a clean, conflict-free tree. Read the diff (git diff origin/main) and run the relevant tests and named gates.\n` +
         `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
-      { label, phase: 'Finalize', agentType: 'code-verifier', resume: agentId },
+      { label, phase: 'Finalize', agentType: 'code-verifier' },
     )
   }
   return convergeAgent(
@@ -460,37 +385,20 @@ function resumeVerifierAgent(agentId, task, context) {
       `      {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
       "      ```\n" +
       `      When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`,
-    { label, phase: 'Converge', agentType: 'code-verifier', resume: agentId },
+    { label, phase: 'Converge', agentType: 'code-verifier' },
   )
 }
 
 /**
- * Spawn the general-utility general-purpose agent once per converge round,
- * establishing its role so each later resume (post-clean-audit, mark-ready)
- * continues the same session. The spawn edits no code.
- * Returns the runtime agent id so the resume calls target the live session; a
- * runtime without resume support returns no agent id, and each resume falls back
- * to a fresh spawn.
- * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
- */
-async function spawnGeneralUtilityAgent() {
-  const result = await convergeAgent(
-    `You are the general-utility agent for ${prCoordinates}. Across this converge round you run a sequence of administrative steps (posting the clean audit, marking the PR ready), each delivered as its own instruction. Do not edit code, commit, or push. Make no move in this first turn — wait for the first task's instructions. Reply READY.`,
-    { label: 'general-utility', phase: 'Converge', agentType: 'general-purpose' },
-  )
-  return result?.agentId
-}
-
-/**
- * Resume the general-utility agent for one of its two administrative tasks:
- * 'post-clean-audit' posts the terminal CLEAN bugteam review, and 'mark-ready'
- * marks the PR ready and confirms it left draft state.
- * @param {string} agentId the agent id from spawnGeneralUtilityAgent
+ * Spawn a fresh general-utility general-purpose agent for one of its two
+ * administrative tasks: 'post-clean-audit' posts the terminal CLEAN bugteam
+ * review, and 'mark-ready' marks the PR ready and confirms it left draft state.
+ * The agent edits no code.
  * @param {'post-clean-audit'|'mark-ready'} task the short task name
  * @param {object} context task-specific context
  * @returns {Promise<object>} the task result
  */
-function resumeGeneralUtilityAgent(agentId, task, context) {
+function runGeneralUtilityTask(task, context) {
   const label = `general-utility:${task}`
   if (task === 'post-clean-audit') {
     return convergeAgent(
@@ -499,7 +407,7 @@ function resumeGeneralUtilityAgent(agentId, task, context) {
         `python "${CONFIG.prLoopScripts}/post_audit_thread.py" --skill bugteam --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --commit ${context.head} --state CLEAN --findings-json <temp-file>\n` +
         `Run the script with --help first if any flag name differs. This posts the APPROVE review body that check_convergence.py reads for the bugteam gate. Do not edit code, commit, or push.\n\n` +
         `Report whether the review landed. When the script prints a review URL, return {posted:true, reviewUrl:<that URL>, reason:""}. When the script is denied (a permission prompt or auto-mode-classifier block), errors, or prints anything other than a review URL, return {posted:false, reviewUrl:"", reason:<the denial message or error as one line>}. Do not retry a denied post.`,
-      { label, phase: 'Converge', schema: CLEAN_AUDIT_SCHEMA, agentType: 'general-purpose', resume: agentId },
+      { label, phase: 'Converge', schema: CLEAN_AUDIT_SCHEMA, agentType: 'general-purpose' },
     )
   }
   if (task === 'mark-ready') {
@@ -512,35 +420,18 @@ function resumeGeneralUtilityAgent(agentId, task, context) {
         `1. Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
         `2. Re-query the draft state: gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .draft\n` +
         `Return {ready:true} only when step 2 prints false (the PR is no longer a draft). If step 1 errors or step 2 still prints true, return {ready:false}.`,
-      { label, phase: 'Finalize', schema: READY_SCHEMA, agentType: 'general-purpose', resume: agentId },
+      { label, phase: 'Finalize', schema: READY_SCHEMA, agentType: 'general-purpose' },
     )
   }
-  throw new Error(`resumeGeneralUtilityAgent: unknown task ${task}`)
+  throw new Error(`runGeneralUtilityTask: unknown task ${task}`)
 }
 
 /**
- * Spawn the convergence-check Explore agent once before the converge loop,
- * establishing its role so each per-round resume runs the convergence gate in the
- * same session. The spawn edits no code. Returns the runtime agent id so the
- * resume calls target the live session; a runtime without resume support returns
- * no agent id, and each resume falls back to a fresh spawn.
- * @returns {Promise<string|undefined>} the runtime agent id, or undefined when the runtime returns none
- */
-async function spawnConvergenceCheckAgent() {
-  const result = await convergeAgent(
-    `You are the convergence-check agent for ${prCoordinates}. Each round you run the authoritative convergence gate and report its result, delivered as its own instruction. Do not edit code. Make no move in this first turn — wait for the first check instruction. Reply READY.`,
-    { label: 'convergence-check', phase: 'Converge', agentType: 'Explore' },
-  )
-  return result?.agentId
-}
-
-/**
- * Resume the convergence-check agent for the convergence check.
- * @param {string} agentId the agent id from spawnConvergenceCheckAgent
+ * Spawn a fresh convergence-check Explore agent for the convergence check.
  * @param {object} context carries bugbotDown and copilotDown
  * @returns {Promise<object>} CONVERGENCE_SCHEMA result
  */
-function resumeConvergenceCheckAgent(agentId, context) {
+function runConvergenceCheck(context) {
   const label = 'check-convergence'
   const bugbotDownFlag = context.bugbotDown ? ' --bugbot-down' : ''
   const copilotDownFlag = context.copilotDown ? ' --copilot-down' : ''
@@ -550,7 +441,7 @@ function resumeConvergenceCheckAgent(agentId, context) {
       `Exit 0 -> every gate passed: return {pass:true, failures:[]}.\n` +
       `Exit 1 -> return {pass:false, failures:[<each printed FAIL line verbatim>]}.\n` +
       `Exit 2 -> retry once; if it still errors, return {pass:false, failures:["check_convergence gh error"]}.`,
-    { label, phase: 'Finalize', schema: CONVERGENCE_SCHEMA, agentType: 'Explore', resume: agentId },
+    { label, phase: 'Finalize', schema: CONVERGENCE_SCHEMA, agentType: 'Explore' },
   )
 }
 
@@ -1029,7 +920,7 @@ function commitNeedsCodeRecovery(commitResult) {
  * resolve-head agent or a malformed result yields a falsy SHA; spawning lenses
  * against it interpolates the literal string 'HEAD undefined' into their prompts
  * and produces a spurious clean verdict on a non-existent commit.
- * @param {string|null|undefined} resolvedHead the SHA from the git-utility agent resume for 'resolve-head'
+ * @param {string|null|undefined} resolvedHead the SHA from the git-utility 'resolve-head' task
  * @returns {boolean} true only when the SHA is a non-empty string
  */
 function isResolvedHeadUsable(resolvedHead) {
@@ -1042,7 +933,7 @@ function isResolvedHeadUsable(resolvedHead) {
  * not-conflicting so the run proceeds straight to the bug checks rather than
  * force-pushing a rebase on a verdict that does not exist — a transient check
  * failure must never trigger a destructive rebase.
- * @param {object|null|undefined} mergeState the git-utility agent resume result for 'check-merge-conflicts'
+ * @param {object|null|undefined} mergeState the git-utility 'check-merge-conflicts' task result
  * @returns {boolean} true only when the check reported conflicting:true
  */
 function isMergeConflicting(mergeState) {
@@ -1333,10 +1224,10 @@ async function verifyWithRecovery({ runVerify, runRecoverEdit }) {
 /**
  * Fix lens: edit (clean-coder, no commit) -> verify (a separate code-verifier
  * emits a verdict fence binding the working tree) -> commit (clean-coder, one
- * commit + push, no edits). The verifier is a distinct persistent group from the
- * fixer, so the verdict that gates the commit comes from a different session than
- * the one that edits and pushes — the same editor/verifier separation the repair
- * and conflict paths use, and the separation a workflow code-verifier needs to
+ * commit + push, no edits). The verifier is a distinct agent from the fixer, so
+ * the verdict that gates the commit comes from a different agent than the one
+ * that edits and pushes — the same editor/verifier separation the repair and
+ * conflict paths use, and the separation a workflow code-verifier needs to
  * produce the verdict the verified-commit gate requires, which the SubagentStop
  * minter cannot mint for workflow-spawned agents. When verification fails (or the
  * edit step stalled with no thread to resolve), the commit step is skipped and the
@@ -1347,8 +1238,7 @@ async function verifyWithRecovery({ runVerify, runRecoverEdit }) {
  * @returns {Promise<object>} FIX_SCHEMA result
  */
 async function applyFixes(head, findings, sourceLabel) {
-  const codeEditorId = await spawnCodeEditorAgent()
-  const editResult = await resumeCodeEditorAgent(codeEditorId, 'fix-edit', { head, findings, sourceLabel })
+  const editResult = await runCodeEditorTask('fix-edit', { head, findings, sourceLabel })
   if (editResult?.resolvedWithoutCommit === true && editResult?.edited !== true) {
     return {
       newSha: head,
@@ -1359,9 +1249,7 @@ async function applyFixes(head, findings, sourceLabel) {
       blockerDetail: '',
     }
   }
-  const fixerAgentId = await spawnFixerAgent(head, findings, sourceLabel)
-  const verifierId = await spawnVerifierAgent()
-  return fixerWithRecovery(fixerAgentId, verifierId, head, findings, sourceLabel)
+  return fixerWithRecovery(head, findings, sourceLabel)
 }
 
 /**
@@ -1370,7 +1258,7 @@ async function applyFixes(head, findings, sourceLabel) {
  * post stops the run with an actionable message rather than re-converging until
  * the iteration cap. Handles a dead post agent (a null result) as not posted.
  * @param {string} head converged PR HEAD SHA
- * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from the post-clean-audit resume, or null when the agent died
+ * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from the post-clean-audit task, or null when the agent died
  * @returns {string} the blocker message naming the post failure and the unblock path
  */
 function cleanAuditBlocker(head, auditResult) {
@@ -1423,8 +1311,7 @@ function runCopilotGate(head) {
  * @returns {Promise<object>} FIX_SCHEMA result
  */
 async function repairConvergence(head, failures) {
-  const codeEditorId = await spawnCodeEditorAgent()
-  const editResult = await resumeCodeEditorAgent(codeEditorId, 'repair-edit', { head, failures })
+  const editResult = await runCodeEditorTask('repair-edit', { head, failures })
   const hasPushWork = editResult?.edited === true || editResult?.rebased === true
   if (!hasPushWork) {
     return {
@@ -1436,10 +1323,9 @@ async function repairConvergence(head, failures) {
       blockerDetail: '',
     }
   }
-  const verifierId = await spawnVerifierAgent()
   const verifyTranscript = await verifyWithRecovery({
-    runVerify: () => resumeVerifierAgent(verifierId, 'repair-verify', { head, failures }),
-    runRecoverEdit: (objection, attempt) => resumeCodeEditorAgent(codeEditorId, 'verify-recover', { head, sourceLabel: 'repair', objection, attempt }),
+    runVerify: () => runVerifierTask('repair-verify', { head, failures }),
+    runRecoverEdit: (objection, attempt) => runCodeEditorTask('verify-recover', { head, sourceLabel: 'repair', objection, attempt }),
   })
   if (!verdictPassed(verifyTranscript)) {
     return {
@@ -1453,9 +1339,9 @@ async function repairConvergence(head, failures) {
   }
   const wasRebased = editResult?.rebased === true
   return commitWithRecovery({
-    runCommit: () => resumeCodeEditorAgent(codeEditorId, 'repair-commit', { head, wasRebased }),
-    runVerify: () => resumeVerifierAgent(verifierId, 'repair-verify', { head, failures }),
-    runRecoverEdit: (detail, attempt) => resumeCodeEditorAgent(codeEditorId, 'commit-recover', { head, sourceLabel: 'repair', blockerDetail: detail, attempt }),
+    runCommit: () => runCodeEditorTask('repair-commit', { head, wasRebased }),
+    runVerify: () => runVerifierTask('repair-verify', { head, failures }),
+    runRecoverEdit: (detail, attempt) => runCodeEditorTask('commit-recover', { head, sourceLabel: 'repair', blockerDetail: detail, attempt }),
   })
 }
 
@@ -1473,24 +1359,22 @@ async function repairConvergence(head, failures) {
  * @param {string} head PR HEAD SHA before any rebase
  * @returns {Promise<string>} the HEAD SHA after a successful rebase push, or the unchanged head
  */
-async function resolveMergeConflicts(head, gitAgentId) {
-  const mergeState = await resumeGitAgent(gitAgentId, 'check-merge-conflicts', head)
+async function resolveMergeConflicts(head) {
+  const mergeState = await runGitTask('check-merge-conflicts', head)
   if (!isMergeConflicting(mergeState)) return head
   log(`Pre-flight: ${prCoordinates} conflicts with origin/main — rebasing clean before the bug checks`)
-  const codeEditorId = await spawnCodeEditorAgent()
-  const editResult = await resumeCodeEditorAgent(codeEditorId, 'conflict-edit', { head })
+  const editResult = await runCodeEditorTask('conflict-edit', { head })
   if (editResult?.rebased !== true) return head
   const failures = ['PR branch had merge conflicts with origin/main; the rebase must leave a clean, conflict-free tree']
-  const verifierId = await spawnVerifierAgent()
   const verifyTranscript = await verifyWithRecovery({
-    runVerify: () => resumeVerifierAgent(verifierId, 'repair-verify', { head, failures }),
-    runRecoverEdit: (objection, attempt) => resumeCodeEditorAgent(codeEditorId, 'verify-recover', { head, sourceLabel: 'conflict-rebase', objection, attempt }),
+    runVerify: () => runVerifierTask('repair-verify', { head, failures }),
+    runRecoverEdit: (objection, attempt) => runCodeEditorTask('verify-recover', { head, sourceLabel: 'conflict-rebase', objection, attempt }),
   })
   if (!verdictPassed(verifyTranscript)) return head
   const commitResult = await commitWithRecovery({
-    runCommit: () => resumeCodeEditorAgent(codeEditorId, 'repair-commit', { head, wasRebased: true }),
-    runVerify: () => resumeVerifierAgent(verifierId, 'repair-verify', { head, failures }),
-    runRecoverEdit: (detail, attempt) => resumeCodeEditorAgent(codeEditorId, 'commit-recover', { head, sourceLabel: 'conflict-rebase', blockerDetail: detail, attempt }),
+    runCommit: () => runCodeEditorTask('repair-commit', { head, wasRebased: true }),
+    runVerify: () => runVerifierTask('repair-verify', { head, failures }),
+    runRecoverEdit: (detail, attempt) => runCodeEditorTask('commit-recover', { head, sourceLabel: 'conflict-rebase', blockerDetail: detail, attempt }),
   })
   return commitResult?.newSha || head
 }
@@ -1539,19 +1423,17 @@ function standardsDeferralNote(findingsCount, hardeningPrOpened) {
  * @returns {Promise<object>} `{ hardeningPrOpened }` — true only when the hardening PR was opened this round
  */
 async function spawnStandardsFollowUp(head, findings, sourceLabel) {
-  const codeEditorId = await spawnCodeEditorAgent()
-  const editResult = await resumeCodeEditorAgent(codeEditorId, 'standards-edit', { head, findings, sourceLabel })
+  const editResult = await runCodeEditorTask('standards-edit', { head, findings, sourceLabel })
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
     return { hardeningPrOpened: false }
   }
-  const verifierId = await spawnVerifierAgent()
-  const verifyTranscript = await resumeVerifierAgent(verifierId, 'hardening-verify', {
+  const verifyTranscript = await runVerifierTask('hardening-verify', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch,
   })
   if (!verdictPassed(verifyTranscript)) {
     return { hardeningPrOpened: false }
   }
-  await resumeCodeEditorAgent(codeEditorId, 'hardening-commit', {
+  await runCodeEditorTask('hardening-commit', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch, issueUrl: editResult.issueUrl,
   })
   return { hardeningPrOpened: true }
@@ -1568,18 +1450,16 @@ let copilotNote = null
 let standardsNote = null
 let reuseNote = null
 
-const gitAgentId = await spawnGitAgent()
-
-const preflightHead = await resumeGitAgent(gitAgentId, 'resolve-head')
+const preflightHead = await runGitTask('resolve-head')
 if (isResolvedHeadUsable(preflightHead?.sha)) {
-  await resolveMergeConflicts(preflightHead.sha, gitAgentId)
+  await resolveMergeConflicts(preflightHead.sha)
 }
 
 log('Reuse pass: scanning the full diff for certain, behaviorally identical, autonomously implementable reuse improvements before convergence')
-const reuseHeadResult = await resumeGitAgent(gitAgentId, 'resolve-head')
+const reuseHeadResult = await runGitTask('resolve-head')
 const reuseHead = reuseHeadResult?.sha
 if (isResolvedHeadUsable(reuseHead)) {
-  await resumeGitAgent(gitAgentId, 'prefetch-main')
+  await runGitTask('prefetch-main')
   const reuse = await runReuseAuditPass(reuseHead)
   const reuseFindings = reuse?.findings || []
   if (reuseFindings.length > 0) {
@@ -1595,19 +1475,17 @@ if (isResolvedHeadUsable(reuseHead)) {
   log('Reuse pass: could not resolve HEAD — proceeding to convergence')
 }
 
-const convergenceId = await spawnConvergenceCheckAgent()
-
 while (iterations < CONFIG.maxIterations) {
   iterations += 1
   if (phase === 'CONVERGE') {
     rounds += 1
-    const headResult = await resumeGitAgent(gitAgentId, 'resolve-head')
+    const headResult = await runGitTask('resolve-head')
     head = headResult?.sha
     if (!isResolvedHeadUsable(head)) {
       log(`Round ${rounds}: resolve-head agent returned no SHA — retrying without spawning lenses`)
       continue
     }
-    await resumeGitAgent(gitAgentId, 'prefetch-main')
+    await runGitTask('prefetch-main')
     log(`Round ${rounds}: parallel Bugbot + code-review + bug-audit on ${head?.slice(0, 7)}`)
     const lenses = await parallel([
       () => runBugbotLens(head),
@@ -1623,10 +1501,9 @@ while (iterations < CONFIG.maxIterations) {
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
-      const generalId = await spawnGeneralUtilityAgent()
       const standardsOutcome = await spawnStandardsFollowUp(head, findings, 'converge-round')
       standardsNote = standardsDeferralNote(findings.length, standardsOutcome?.hardeningPrOpened === true)
-      const auditResult = await resumeGeneralUtilityAgent(generalId, 'post-clean-audit', { head })
+      const auditResult = await runGeneralUtilityTask('post-clean-audit', { head })
       if (!auditResult?.posted) {
         blocker = cleanAuditBlocker(head, auditResult)
         break
@@ -1652,8 +1529,7 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     log(`Round ${rounds}: all lenses clean on ${head?.slice(0, 7)} — posting clean audit artifact`)
-    const cleanGeneralId = await spawnGeneralUtilityAgent()
-    const auditResult = await resumeGeneralUtilityAgent(cleanGeneralId, 'post-clean-audit', { head })
+    const auditResult = await runGeneralUtilityTask('post-clean-audit', { head })
     if (!auditResult?.posted) {
       blocker = cleanAuditBlocker(head, auditResult)
       break
@@ -1708,15 +1584,14 @@ while (iterations < CONFIG.maxIterations) {
   }
 
   if (phase === 'FINALIZE') {
-    const convergence = await resumeConvergenceCheckAgent(convergenceId, { bugbotDown, copilotDown })
+    const convergence = await runConvergenceCheck({ bugbotDown, copilotDown })
     const convergenceOutcome = classifyConvergenceOutcome(convergence)
     if (convergenceOutcome.kind === 'retry') {
       log('Convergence check agent died or returned no FAIL lines — re-running the check on the same HEAD')
       continue
     }
     if (convergenceOutcome.kind === 'ready') {
-      const finalGeneralId = await spawnGeneralUtilityAgent()
-      const readyResult = await resumeGeneralUtilityAgent(finalGeneralId, 'mark-ready', { head, copilotDown })
+      const readyResult = await runGeneralUtilityTask('mark-ready', { head, copilotDown })
       const readyOutcome = classifyReadyOutcome(readyResult)
       if (readyOutcome.converged) {
         return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, reuseNote }
