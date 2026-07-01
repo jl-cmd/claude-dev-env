@@ -42,6 +42,9 @@ from pr_loop_shared_constants.code_rules_gate_constants import (  # noqa: E402
     TEST_FILENAME_PREFIX,
     TESTS_PATH_SEGMENT,
 )
+from pr_loop_shared_constants.preflight_constants import (  # noqa: E402
+    PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
+)
 from pr_loop_shared_constants.inline_duplicate_body_span_constants import (  # noqa: E402
     INLINE_DUPLICATE_BODY_ENCLOSING_LINE_GROUP_INDEX,
     INLINE_DUPLICATE_BODY_ENCLOSING_SPAN_GROUP_INDEX,
@@ -774,12 +777,13 @@ def renamed_file_source_map_since(
 
     Runs `git diff --name-status -M -z merge_base..HEAD` and collects both
     paths of every rename entry (status code starting with R, e.g. `R100`).
-    Keys are destination posix paths; values are source posix paths. The
-    -z flag asks git for null-terminated, unquoted output so paths
-    containing tab or newline bytes are not misparsed by column or line
-    splitting; rename records emit three null-terminated tokens in
-    sequence (status, source, destination), other status records emit
-    two (status, path).
+    Keys are destination posix paths; values are source posix paths.
+
+    The -z flag asks git for null-terminated, unquoted output. A path
+    holding a tab or newline byte then survives column and line splitting
+    unmangled. Each rename record emits three null-terminated tokens
+    (status, source, destination). Every other status record emits two
+    (status, path).
 
     Args:
         repository_root: Repository root used as the ``git -C`` target.
@@ -1030,11 +1034,13 @@ def duplicate_body_span_range(violation_text: str) -> range | None:
     The duplicate-body message carries the copied function's definition line and
     its full body span: ``Function 'NAME' duplicates location.py::name — ...
     (duplicate body span at line X, spanning Y lines)``. The function occupies
-    lines ``X`` through ``X + Y - 1`` inclusive, so a duplicate of a sibling helper
-    is blocking only when the diff touches the copied function and advisory when an
-    unrelated edit leaves a pre-existing copy untouched — matching the span-scoped
-    PreToolUse Write/Edit behavior rather than blocking every duplicate-body
-    message unconditionally.
+    lines ``X`` through ``X + Y - 1`` inclusive.
+
+    So a duplicate of a sibling helper blocks only when the diff touches the
+    copied function. An unrelated edit that leaves a pre-existing copy
+    untouched keeps it advisory. This matches the span-scoped PreToolUse
+    Write/Edit behavior rather than blocking every duplicate-body message
+    unconditionally.
 
     Args:
         violation_text: A single violation string emitted by the enforcer.
@@ -1054,16 +1060,18 @@ def duplicate_body_span_range(violation_text: str) -> range | None:
 def inline_duplicate_body_span_lines(violation_text: str) -> frozenset[int] | None:
     """Return the union of both spans of a same-file inline-duplicate issue, or None.
 
-    The same-file inline-duplicate message names two functions that share a body —
-    the helper and the enclosing function carrying the inline copy — and the live
-    Write/Edit hook scopes the violation by the UNION of both spans, blocking when
-    an edit touches either function. So the message carries both spans: ``(inline
-    duplicate body spans: helper at line H spanning P lines, enclosing at line E
-    spanning Q lines)``. The two spans can be disjoint (an unrelated function may
-    sit between the helper and its inline copy), so this returns the union as a
-    line-number set rather than a single contiguous range — a range covering the
-    gap would wrongly block an edit confined to that intervening function, which
-    the PreToolUse path leaves unflagged.
+    The same-file inline-duplicate message names two functions that share a body:
+    the helper and the enclosing function carrying the inline copy. The live
+    Write/Edit hook scopes the violation by the union of both spans. It blocks
+    when an edit touches either function. So the message carries both spans:
+    ``(inline duplicate body spans: helper at line H spanning P lines,
+    enclosing at line E spanning Q lines)``.
+
+    The two spans can be disjoint: an unrelated function may sit between the
+    helper and its inline copy. This returns the union as a line-number set
+    rather than a single contiguous range. A range covering the gap would
+    wrongly block an edit confined to that intervening function, which the
+    PreToolUse path leaves unflagged.
 
     Args:
         violation_text: A single violation string emitted by the enforcer.
@@ -1102,10 +1110,10 @@ def enclosing_span_range(violation_text: str) -> range | None:
 
     Every diff-scoped enforcer check tags its message with an enclosing-unit
     span fragment. This dispatcher tries each span extractor from
-    ``_all_span_range_extractors`` so the gate reconstructs every scoped
-    check's span through one shared mechanism — adding a new scoped check means
-    adding one extractor to that registry rather than threading a new branch
-    through ``split_violations_by_scope``.
+    ``_all_span_range_extractors``, so the gate reconstructs every scoped
+    check's span through one shared mechanism. Adding a new scoped check
+    means adding one extractor to that registry rather than threading a new
+    branch through ``split_violations_by_scope``.
 
     Args:
         violation_text: A single violation string emitted by the enforcer.
@@ -1542,9 +1550,10 @@ def run_staged_test_files(repository_root: Path) -> int:
         repository_root: The repository root the staged test files belong to.
 
     Returns:
-        pytest's exit code when any test file is staged, and 0 when none is
-        staged. A non-zero code blocks the commit; no staged test file leaves
-        the commit unblocked.
+        0 when no test file is staged, when the staged test files collect
+        no tests (pytest's no-tests-collected exit code), or when every staged
+        test passes. pytest's non-zero exit code otherwise, which blocks the
+        commit.
     """
     all_test_paths = _staged_test_file_paths(repository_root)
     if not all_test_paths:
@@ -1559,6 +1568,8 @@ def run_staged_test_files(repository_root: Path) -> int:
         timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
         check=False,
     )
+    if pytest_process.returncode == PYTEST_NO_TESTS_COLLECTED_EXIT_CODE:
+        return 0
     if pytest_process.returncode != 0:
         print(STAGED_TEST_FAILURE_HEADER, file=sys.stderr)
     return pytest_process.returncode

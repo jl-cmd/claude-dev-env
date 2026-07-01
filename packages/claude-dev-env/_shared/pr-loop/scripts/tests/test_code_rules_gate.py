@@ -1992,6 +1992,19 @@ def test_run_staged_test_files_zero_when_no_test_file_staged(
     assert gate_module.run_staged_test_files(temporary_git_repository) == 0
 
 
+def test_run_staged_test_files_zero_when_staged_conftest_collects_no_tests(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(
+        temporary_git_repository / "conftest.py",
+        "import pytest\n\n\n@pytest.fixture()\ndef sample_fixture() -> int:\n"
+        "    return 1\n",
+    )
+    stage_file(temporary_git_repository, "conftest.py")
+
+    assert gate_module.run_staged_test_files(temporary_git_repository) == 0
+
+
 def test_hunk_header_pattern_captures_new_start_and_count() -> None:
     header_match = gate_module.hunk_header_pattern().match("@@ -12,3 +45,6 @@ def scope")
     assert header_match is not None

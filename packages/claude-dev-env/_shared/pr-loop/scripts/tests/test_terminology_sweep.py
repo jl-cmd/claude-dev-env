@@ -20,6 +20,7 @@ sweep_module = _load_sweep_module()
 sweep_diff = sweep_module.sweep_diff
 staged_terminology_findings = sweep_module.staged_terminology_findings
 main = sweep_module.main
+parse_added_lines = sweep_module._parse_added_lines
 
 
 def _init_git_repository(repository_path: Path) -> None:
@@ -190,3 +191,25 @@ def test_staged_terminology_findings_empty_when_clean(tmp_path: Path) -> None:
     (tmp_path / "README.md").write_text("Nothing notable here.\n", encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, capture_output=True)
     assert staged_terminology_findings(tmp_path) == []
+
+
+def test_parse_added_lines_counts_pre_increment_content_as_added_line() -> None:
+    diff_with_pre_increment = (
+        "diff --git a/app.mjs b/app.mjs\n"
+        "--- a/app.mjs\n"
+        "+++ b/app.mjs\n"
+        "@@ -0,0 +1,3 @@\n"
+        "+++counter;\n"
+        "+let first_total = read_first_value();\n"
+        "+let second_total = read_second_value();\n"
+    )
+
+    all_added_lines = parse_added_lines(diff_with_pre_increment)
+
+    assert [
+        (each_line_number, each_text) for _, each_line_number, each_text in all_added_lines
+    ] == [
+        (1, "++counter;"),
+        (2, "let first_total = read_first_value();"),
+        (3, "let second_total = read_second_value();"),
+    ]
