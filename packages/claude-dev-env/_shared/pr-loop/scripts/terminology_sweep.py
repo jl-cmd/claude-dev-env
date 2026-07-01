@@ -20,6 +20,11 @@ while sparing those compounds, a candidate whose final token is a common English
 compound tail word (``only``, ``driven``, ``safe``, and the rest listed in
 ``ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS``) is treated as ordinary prose, not a
 near-miss.
+
+Ordinary singular/plural prose is spared the same way. A candidate that differs
+from an identifier only by a singular/plural form of one or more tokens
+(``test files`` against ``test_file``, ``retry policies`` against
+``retry_policy``) is treated as the same term, not a near-miss.
 """
 
 import argparse
@@ -258,6 +263,32 @@ def _spaced_candidates(
     return all_candidates
 
 
+def _tokens_are_plural_variants(first_word: str, second_word: str) -> bool:
+    """Return whether two words are singular/plural forms of one word.
+
+    Covers the regular English plural rules: an appended ``s`` (``file`` /
+    ``files``), an appended ``es`` (``box`` / ``boxes``), and the ``y`` to
+    ``ies`` swap (``policy`` / ``policies``). The check is symmetric, so it
+    holds whichever word is the singular form.
+    """
+    if first_word == second_word:
+        return True
+    shorter_word, longer_word = sorted((first_word, second_word), key=len)
+    if longer_word in (shorter_word + "s", shorter_word + "es"):
+        return True
+    return shorter_word.endswith("y") and longer_word == shorter_word[:-1] + "ies"
+
+
+def _tuples_match_ignoring_plural(
+    first_tuple: IdentifierTuple, second_tuple: IdentifierTuple
+) -> bool:
+    """Return whether two equal-length tuples match token-for-token by plural."""
+    return all(
+        _tokens_are_plural_variants(each_first_word, each_second_word)
+        for each_first_word, each_second_word in zip(first_tuple, second_tuple)
+    )
+
+
 def _near_miss_identifier(
     candidate_tuple: IdentifierTuple,
     all_identifier_tuples: frozenset[IdentifierTuple],
@@ -273,20 +304,24 @@ def _near_miss_identifier(
     Returns:
         The first identifier sharing the candidate's leading token and length but
         differing in a later token, or None when the candidate matches an
-        identifier exactly, shares no prefix, or ends in a common English
-        compound tail word (``read-only``, ``data-driven``), which marks it an
-        ordinary compound rather than a near-miss of the identifier.
+        identifier exactly, shares no prefix, ends in a common English compound
+        tail word (``read-only``, ``data-driven``), or differs from the
+        identifier only by a singular/plural form of one or more tokens
+        (``test files`` against ``test_file``) — each of which marks the
+        candidate ordinary prose rather than a near-miss of the identifier.
     """
     if not candidate_tuple or candidate_tuple in all_identifier_tuples:
         return None
     if candidate_tuple[-1] in ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS:
         return None
     for each_identifier in identifiers_by_first_token.get(candidate_tuple[0], []):
-        if (
-            len(each_identifier) == len(candidate_tuple)
-            and each_identifier != candidate_tuple
-        ):
-            return each_identifier
+        if len(each_identifier) != len(candidate_tuple):
+            continue
+        if each_identifier == candidate_tuple:
+            continue
+        if _tuples_match_ignoring_plural(each_identifier, candidate_tuple):
+            continue
+        return each_identifier
     return None
 
 

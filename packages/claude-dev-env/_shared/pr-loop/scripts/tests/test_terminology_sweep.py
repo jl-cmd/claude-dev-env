@@ -127,6 +127,88 @@ def test_does_not_flag_unrelated_hyphenated_prose() -> None:
     assert sweep_diff(diff) == []
 
 
+def test_does_not_flag_plural_prose_of_singular_identifier() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+test_file = 5\n"
+        "diff --git a/docs/README.md b/docs/README.md\n"
+        "--- a/docs/README.md\n"
+        "+++ b/docs/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+We scan the test files for coverage.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_does_not_flag_plural_prose_of_singular_identifier_audit_prompt() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+audit_prompt = 5\n"
+        "diff --git a/docs/README.md b/docs/README.md\n"
+        "--- a/docs/README.md\n"
+        "+++ b/docs/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+The audit prompts drive each round.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_does_not_flag_singular_prose_of_plural_identifier() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+audit_prompts = 5\n"
+        "diff --git a/docs/README.md b/docs/README.md\n"
+        "--- a/docs/README.md\n"
+        "+++ b/docs/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+The audit prompt drives each round.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_does_not_flag_y_to_ies_plural_variant() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+retry_policy = 5\n"
+        "diff --git a/docs/README.md b/docs/README.md\n"
+        "--- a/docs/README.md\n"
+        "+++ b/docs/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+The retry policies bound each attempt.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_still_flags_non_plural_divergent_tail() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+premium_interactions = 5\n"
+        "diff --git a/docs/README.md b/docs/README.md\n"
+        "--- a/docs/README.md\n"
+        "+++ b/docs/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+The premium request budget gates the run.\n"
+    )
+    findings = sweep_diff(diff)
+    assert len(findings) == 1
+    assert "premium request" in findings[0]
+
+
 def test_flags_near_miss_inside_code_comment() -> None:
     diff = (
         "diff --git a/api/quota.py b/api/quota.py\n"
