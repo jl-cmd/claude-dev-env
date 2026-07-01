@@ -94,13 +94,13 @@ def _parse_added_lines(diff_text: str) -> list[tuple[str, int, str]]:
         if hunk_match is not None:
             next_line_number = int(hunk_match.group(1))
             continue
-        if each_line.startswith(
-            (DIFF_NEW_FILE_HEADER_PREFIX, DIFF_OLD_FILE_HEADER_PREFIX)
-        ):
-            continue
         if each_line.startswith(DIFF_ADDED_LINE_PREFIX):
             all_added_lines.append((current_file_path, next_line_number, each_line[1:]))
             next_line_number += 1
+            continue
+        if each_line.startswith(
+            (DIFF_NEW_FILE_HEADER_PREFIX, DIFF_OLD_FILE_HEADER_PREFIX)
+        ):
             continue
         if each_line.startswith(DIFF_REMOVED_LINE_PREFIX):
             continue
