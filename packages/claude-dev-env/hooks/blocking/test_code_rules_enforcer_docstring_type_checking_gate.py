@@ -34,6 +34,7 @@ def check_type_checking_gate(content: str, file_path: str) -> list[str]:
 
 PRODUCTION_HOOK_PATH = "/home/user/.claude/hooks/blocking/code_rules_unused_imports.py"
 TEST_FILE_PATH = "/home/user/.claude/hooks/blocking/test_code_rules_unused_imports.py"
+MYPY_GATE_PRODUCTION_PATH = "/home/user/project/scripts/run_mypy_gate.py"
 
 
 def test_flags_module_docstring_naming_type_checking_gate_helpers() -> None:
@@ -134,6 +135,19 @@ def test_passes_when_no_docstring_names_the_gate() -> None:
         "    return []\n"
     )
     assert check_type_checking_gate(content, PRODUCTION_HOOK_PATH) == []
+
+
+def test_passes_on_mypy_static_type_checker_gate_docstring() -> None:
+    content = (
+        "\"\"\"Run the project's type-checking gate and report failures.\"\"\"\n"
+        "\n"
+        "import subprocess\n"
+        "\n"
+        "\n"
+        "def run_gate() -> int:\n"
+        '    return subprocess.run(["mypy", "hooks"]).returncode\n'
+    )
+    assert check_type_checking_gate(content, MYPY_GATE_PRODUCTION_PATH) == []
 
 
 def test_test_files_are_exempt() -> None:
