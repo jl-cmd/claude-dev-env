@@ -47,10 +47,6 @@ JAVASCRIPT_BOOLEAN_PREFIX_PATTERN: re.Pattern[str] = re.compile(
 
 BOOLEAN_PREFIX_GUIDANCE: str = "prefix with is/has/should/can/was/did"
 
-JAVASCRIPT_BANNED_IDENTIFIER_MESSAGE_SUFFIX: str = (
-    "use descriptive name (see CODE_RULES Naming section)"
-)
-
 SINGLE_CHARACTER_NAME_LENGTH: int = 1
 
 MAX_JAVASCRIPT_BOOLEAN_NAMING_ISSUES: int = 20

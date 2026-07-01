@@ -29,13 +29,15 @@ from code_rules_shared import (  # noqa: E402
     is_test_file,
 )
 
+from hooks_constants.banned_identifiers_constants import (  # noqa: E402
+    BANNED_IDENTIFIER_MESSAGE_SUFFIX,
+)
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_JAVASCRIPT_EXTENSIONS,
 )
 from hooks_constants.js_conventions_constants import (  # noqa: E402
     ALL_JAVASCRIPT_BANNED_IDENTIFIERS,
     BOOLEAN_PREFIX_GUIDANCE,
-    JAVASCRIPT_BANNED_IDENTIFIER_MESSAGE_SUFFIX,
     JAVASCRIPT_BOOLEAN_DECLARATION_PATTERN,
     JAVASCRIPT_BOOLEAN_JSDOC_PARAMETER_PATTERN,
     JAVASCRIPT_BOOLEAN_PREFIX_PATTERN,
@@ -229,7 +231,7 @@ def check_js_banned_identifiers(
                 continue
             message = (
                 f"Line {each_line_number}: Banned identifier '{name}' - "
-                f"{JAVASCRIPT_BANNED_IDENTIFIER_MESSAGE_SUFFIX}"
+                f"{BANNED_IDENTIFIER_MESSAGE_SUFFIX}"
             )
             all_violations_in_source_order.append(
                 (range(each_line_number, each_line_number + 1), message)

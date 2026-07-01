@@ -138,6 +138,12 @@ def test_accepts_descriptive_identifier_declaration() -> None:
     assert check_js_banned_identifiers(content, CONVERGE_PATH) == []
 
 
+def test_banned_identifier_message_carries_descriptive_name_guidance() -> None:
+    content = "let data = fetchThings()\n"
+    issues = check_js_banned_identifiers(content, CONVERGE_PATH)
+    assert "use descriptive name (see CODE_RULES Naming section)" in issues[0]
+
+
 def test_flags_each_banned_identifier_name() -> None:
     content = "const result = compute()\nlet response = call()\nvar ctx = build()\n"
     issues = check_js_banned_identifiers(content, CONVERGE_PATH)
