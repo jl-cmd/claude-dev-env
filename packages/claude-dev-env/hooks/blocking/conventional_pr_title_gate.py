@@ -13,12 +13,14 @@ first line (after joining bash/PowerShell continuations), extract the
 --title/-t value with a small shlex-based token scan, then resolve the git
 repo root from the tool call's cwd and scan `.github/workflows/*.yml(.yaml)`
 for a semantic-pull-request marker string. The gate only fires when a marker
-is found; every other case -- an unparseable command, a missing title, a
+workflow leaves the action's `types:` input at its default Conventional
+Commits list; every other case -- an unparseable command, a missing title, a
 title that is an unresolvable shell variable (a `$`-prefixed value this hook
 cannot resolve), a --repo flag pointing at a repo this hook cannot inspect on
-disk, a directory that resolves to no repo root, or a repo with no matching
-workflow -- fails OPEN (allow), since the authoritative CI check still runs on
-GitHub.
+disk, a directory that resolves to no repo root, a repo with no matching
+workflow, or a marker workflow whose semantic-pull-request action step declares
+a custom `types:` input (so this hook cannot know the repo's allowed types) --
+fails OPEN (allow), since the authoritative CI check still runs on GitHub.
 """
 
 import json
@@ -54,6 +56,7 @@ from hooks_constants.conventional_pr_title_gate_constants import (  # noqa: E402
     PR_SUBCOMMAND_TOKEN,
     REPO_LONG_FLAG,
     REPO_SHORT_FLAG,
+    SEMANTIC_ACTION_TYPES_INPUT_PATTERN,
     TITLE_LONG_FLAG,
     TITLE_SHORT_FLAG,
     WORKFLOWS_DIRECTORY_RELATIVE_PATH,
@@ -122,16 +125,74 @@ def _is_conventional_commit_title(title: str) -> bool:
     return bool(CONVENTIONAL_COMMIT_TITLE_PATTERN.match(title))
 
 
-def _repo_enforces_semantic_pr_titles(repo_root: str) -> bool:
+def _repo_enforces_default_conventional_pr_titles(repo_root: str) -> bool:
+    """Return whether a workflow enforces PR titles against the default type list.
+
+    A repo whose semantic-pull-request action step declares a custom ``types:``
+    input accepts types this gate's default Conventional Commits list omits, so
+    the gate cannot know the repo's allowed types and returns False (fail open)
+    even though the marker is present -- the authoritative CI check on GitHub
+    still validates the title. The gate only blocks when a marker workflow
+    leaves the action's type list at its default.
+    """
     workflows_directory = Path(repo_root) / WORKFLOWS_DIRECTORY_RELATIVE_PATH
     if not workflows_directory.is_dir():
         return False
+    all_marker_workflow_texts = _all_semantic_marker_workflow_texts(workflows_directory)
+    if not all_marker_workflow_texts:
+        return False
+    return not any(
+        _workflow_customizes_semantic_types(each_workflow_text)
+        for each_workflow_text in all_marker_workflow_texts
+    )
+
+
+def _all_semantic_marker_workflow_texts(workflows_directory: Path) -> list[str]:
+    all_marker_workflow_texts: list[str] = []
     for each_glob_pattern in ALL_WORKFLOW_FILE_GLOB_PATTERNS:
         for each_workflow_file in workflows_directory.glob(each_glob_pattern):
             workflow_text = _read_workflow_text(each_workflow_file)
-            if any(each_marker in workflow_text for each_marker in ALL_SEMANTIC_TITLE_CI_MARKERS):
-                return True
+            if _text_has_semantic_marker(workflow_text):
+                all_marker_workflow_texts.append(workflow_text)
+    return all_marker_workflow_texts
+
+
+def _text_has_semantic_marker(workflow_text: str) -> bool:
+    return any(each_marker in workflow_text for each_marker in ALL_SEMANTIC_TITLE_CI_MARKERS)
+
+
+def _workflow_customizes_semantic_types(workflow_text: str) -> bool:
+    """Return whether a semantic-pull-request step declares a custom ``types:`` input.
+
+    The action reads a ``types:`` input as the complete allowed-type list,
+    replacing this gate's default Conventional Commits set, so a title this gate
+    would reject may be one the repo's own CI accepts. Scoping the search to the
+    marker step's indented block keeps the top-level ``on: pull_request: types:``
+    event-activity list -- an unrelated ``types:`` key -- out of the match.
+    """
+    all_lines = workflow_text.splitlines()
+    for each_line_index, each_line in enumerate(all_lines):
+        if not _text_has_semantic_marker(each_line):
+            continue
+        if _step_block_declares_types_input(all_lines, each_line_index):
+            return True
     return False
+
+
+def _step_block_declares_types_input(all_lines: list[str], step_start_index: int) -> bool:
+    step_indentation = _leading_space_count(all_lines[step_start_index])
+    for each_line in all_lines[step_start_index + 1 :]:
+        if not each_line.strip():
+            continue
+        if _leading_space_count(each_line) <= step_indentation:
+            return False
+        if SEMANTIC_ACTION_TYPES_INPUT_PATTERN.match(each_line):
+            return True
+    return False
+
+
+def _leading_space_count(line: str) -> int:
+    return len(line) - len(line.lstrip())
 
 
 def _read_workflow_text(workflow_file: Path) -> str:
@@ -187,7 +248,7 @@ def _deny_reason(payload_by_field: dict[str, object]) -> str | None:
     repo_root = _resolved_repo_root(payload_by_field)
     if repo_root is None:
         return None
-    if not _repo_enforces_semantic_pr_titles(repo_root):
+    if not _repo_enforces_default_conventional_pr_titles(repo_root):
         return None
     return CORRECTIVE_MESSAGE
 
