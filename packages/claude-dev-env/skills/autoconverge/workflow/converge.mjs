@@ -97,7 +97,7 @@ async function spawnGitAgent() {
  * @param {string} agentId the agent id from spawnGitAgent
  * @param {string} task the short task name
  * @param {string} head optional HEAD SHA for conflict checks
- * @returns {Promise<object>} the structured output
+ * @returns {Promise<object|string>} the structured output, or the transcript string when the 'prefetch-main' resume runs schema-less
  */
 function resumeGitAgent(agentId, task, head) {
   if (task === 'resolve-head') {
@@ -264,7 +264,7 @@ async function spawnCodeEditorAgent() {
  * @param {string} agentId the agent id from spawnCodeEditorAgent
  * @param {string} task the short task name
  * @param {object} context task-specific context
- * @returns {Promise<object>} the structured output
+ * @returns {Promise<object|string>} the structured output, or the transcript string when the 'hardening-commit' resume runs schema-less
  */
 function resumeCodeEditorAgent(agentId, task, context) {
   const label = `code-editor:${task}`

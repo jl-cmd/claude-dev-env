@@ -34,6 +34,10 @@ check_js_returns_object_schemaless_branch = (
 
 _MJS_PATH = "skills/autoconverge/workflow/converge.mjs"
 
+_SHIPPED_CONVERGE_MJS = (
+    _HOOK_DIRECTORY.parents[1] / "skills" / "autoconverge" / "workflow" / "converge.mjs"
+)
+
 
 def _mixed_schema_source() -> str:
     return (
@@ -154,4 +158,10 @@ def test_skips_python_files() -> None:
     issues = check_js_returns_object_schemaless_branch(
         _mixed_schema_source(), "workflow/converge.py"
     )
+    assert issues == []
+
+
+def test_shipped_converge_mjs_passes_its_own_check() -> None:
+    shipped_source = _SHIPPED_CONVERGE_MJS.read_text(encoding="utf-8")
+    issues = check_js_returns_object_schemaless_branch(shipped_source, _MJS_PATH)
     assert issues == []
