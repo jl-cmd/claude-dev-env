@@ -3,11 +3,11 @@
 Hard-won lessons for the autoconverge workflow. Append a bullet each time a run
 fails in a new way.
 
-- **The workflow script cannot sleep.** `Date.now`, `Math.random`, and timers
-  are unavailable in the script body, and a foreground sleep is blocked. Every
-  reviewer wait lives inside an `agent`'s own poll loop — a shell-agnostic `sleep`
-  loop (PowerShell `Start-Sleep` is an allowed alternative), or `gh` check
-  polling. Never try to wait in the script itself.
+- **The workflow script cannot sleep, and neither can an agent's foreground shell.** `Date.now`, `Math.random`, and timers
+  are unavailable in the script body, and a foreground `sleep` / `Start-Sleep` is blocked in the headless harness. Every
+  reviewer wait lives inside an `agent`'s own poll loop, and that loop waits with the Monitor tool inside the same turn —
+  never a foreground sleep, and never backgrounding a wait and ending the turn to await it, which
+  leaves a schema-bearing agent with no `StructuredOutput` call. Never try to wait in the script itself.
 
 - **Workflow agents start blank.** Spawned agents do not inherit CLAUDE.md,
   rules, or this skill's context. Each agent prompt is self-contained: it names
