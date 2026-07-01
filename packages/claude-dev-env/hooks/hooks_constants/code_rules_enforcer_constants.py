@@ -222,6 +222,20 @@ ENUMERATION_TASK_ITEM_PATTERN: re.Pattern[str] = re.compile(
 HYPHENATED_TASK_ITEM_PATTERN: re.Pattern[str] = re.compile(
     r"^[a-z0-9]+(?:-[a-z0-9]+)+$"
 )
+FUNCTION_WITH_JSDOC_PATTERN: re.Pattern[str] = re.compile(
+    r"/\*\*(?P<jsdoc>(?:(?!\*/).)*?)\*/\s*"
+    r"(?:async\s+)?function\s+(?P<name>\w+)\s*\(",
+    re.DOTALL,
+)
+JSDOC_RETURNS_STRUCTURED_OBJECT_PROMISE_PATTERN: re.Pattern[str] = re.compile(
+    r"@returns?\s*\{[^}]*Promise\s*<\s*[Oo]bject\s*>[^}]*\}"
+)
+RETURN_CALL_OPENING_PARENTHESIS_PATTERN: re.Pattern[str] = re.compile(
+    r"\breturn\s+(?:await\s+)?(?P<callee>\w+)\s*\("
+)
+SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN: re.Pattern[str] = re.compile(
+    r"(?<![A-Za-z0-9_])schema\s*:"
+)
 ALL_BUILTIN_DICT_METHOD_NAMES: frozenset[str] = frozenset({
     "get", "items", "keys", "values", "update", "pop",
     "setdefault", "copy", "clear",
