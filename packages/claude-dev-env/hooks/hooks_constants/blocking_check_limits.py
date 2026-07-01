@@ -239,6 +239,13 @@ ALL_PATH_METADATA_ACCESS_METHOD_NAMES: frozenset[str] = frozenset(
     {"is_file", "is_dir", "exists", "stat", "lstat"}
 )
 
+MAX_DOCSTRING_TYPE_CHECKING_GATE_ISSUES: int = 3
+TYPE_CHECKING_IDENTIFIER_MARKER: str = "type_checking"
+ALL_ABSENT_TYPE_CHECKING_GATE_DOCSTRING_PHRASES: tuple[str, ...] = (
+    "type_checking gate",
+    "type-checking-gate",
+)
+
 MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES: int = 3
 ALL_DOCSTRING_NO_INLINE_LITERAL_CLAIM_PHRASES: tuple[str, ...] = (
     "no literals appear inline",

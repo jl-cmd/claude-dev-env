@@ -77,6 +77,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_field_runmode_outcome,
     check_docstring_format,
     check_docstring_length_constant_superlative_vs_exact_gate,
+    check_docstring_names_absent_type_checking_gate,
     check_docstring_names_undefined_constant,
     check_docstring_no_consumer_claim,
     check_docstring_no_inline_literal_claim,
@@ -367,6 +368,9 @@ def validate_content(
         )
         all_issues.extend(
             check_docstring_names_undefined_constant(effective_content, file_path)
+        )
+        all_issues.extend(
+            check_docstring_names_absent_type_checking_gate(effective_content, file_path)
         )
         all_issues.extend(
             check_docstring_args_single_line_scope_vs_span(effective_content, file_path)
