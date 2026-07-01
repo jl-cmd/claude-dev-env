@@ -357,8 +357,8 @@ test('openStandardsFollowUpOnce gates spawnStandardsFollowUp behind the run-once
   );
   assert.match(
     onceBody,
-    /await spawnStandardsFollowUp\(/,
-    'expected the helper to perform the create when the follow-up issue has not filed yet',
+    /await spawnStandardsFollowUp\(head, findings, sourceLabel, wasStandardsHardeningPrOpened\)/,
+    'expected the helper to pass the remembered hardening state into the spawn so an already-opened PR is never re-opened',
   );
   assert.match(
     onceBody,
@@ -367,8 +367,8 @@ test('openStandardsFollowUpOnce gates spawnStandardsFollowUp behind the run-once
   );
   assert.match(
     onceBody,
-    /wasStandardsHardeningPrOpened = standardsOutcome\?\.hardeningPrOpened === true/,
-    'expected the first path to remember the hardening outcome from the spawn result',
+    /wasStandardsHardeningPrOpened = wasStandardsHardeningPrOpened \|\| standardsOutcome\?\.hardeningPrOpened === true/,
+    'expected the hardening guard to latch the moment a hardening PR opens and stay latched across rounds so a later issue-filing retry never re-opens it',
   );
   assert.match(
     onceBody,
@@ -389,6 +389,90 @@ test('both standards-deferral call sites route the create through openStandardsF
     directCreates.length,
     1,
     'expected spawnStandardsFollowUp to be invoked once from openStandardsFollowUpOnce, never directly at a call site',
+  );
+});
+
+function extractCallableSource(functionName) {
+  const asyncStart = convergeSource.indexOf(`async function ${functionName}(`);
+  const plainStart = convergeSource.indexOf(`function ${functionName}(`);
+  const declarationStart = asyncStart !== -1 ? asyncStart : plainStart;
+  assert.notEqual(declarationStart, -1, `expected ${functionName} to exist`);
+  const bodyStart = convergeSource.indexOf('{', declarationStart);
+  let depth = 0;
+  let index = bodyStart;
+  for (; index < convergeSource.length; index += 1) {
+    const character = convergeSource[index];
+    if (character === '{') {
+      depth += 1;
+    } else if (character === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        index += 1;
+        break;
+      }
+    }
+  }
+  return convergeSource.slice(declarationStart, index);
+}
+
+function loadStandardsFollowUpRuntime(recordedTaskNames, standardsEditResult) {
+  const runtimeSource =
+    'let hasStandardsFollowUpFiled = false;\n' +
+    'let wasStandardsHardeningPrOpened = false;\n' +
+    'async function runCodeEditorTask(taskName) {\n' +
+    '  recordedTaskNames.push(taskName);\n' +
+    "  return taskName === 'standards-edit' ? standardsEditResult : {};\n" +
+    '}\n' +
+    'async function runVerifierTask() {\n' +
+    '  return { passed: true };\n' +
+    '}\n' +
+    'function verdictPassed() {\n' +
+    '  return true;\n' +
+    '}\n' +
+    'function log() {}\n' +
+    `${extractCallableSource('shouldOpenStandardsFollowUp')}\n` +
+    `${extractCallableSource('spawnStandardsFollowUp')}\n` +
+    `${extractCallableSource('openStandardsFollowUpOnce')}\n` +
+    'return {\n' +
+    '  openStandardsFollowUpOnce,\n' +
+    '  guards: () => ({ hasStandardsFollowUpFiled, wasStandardsHardeningPrOpened }),\n' +
+    '};';
+  return new Function('recordedTaskNames', 'standardsEditResult', runtimeSource)(
+    recordedTaskNames,
+    standardsEditResult,
+  );
+}
+
+test('a second standards-only round never re-opens a hardening PR after the first round opened one but failed to file the issue', async () => {
+  const recordedTaskNames = [];
+  const issueFailedHardeningStaged = {
+    issueUrl: '',
+    hardeningEdited: true,
+    hardeningRepoPath: '/tmp/hardening',
+    hardeningBranch: 'harden-standards',
+  };
+  const runtime = loadStandardsFollowUpRuntime(recordedTaskNames, issueFailedHardeningStaged);
+
+  const firstRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round');
+  const secondRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot');
+
+  const hardeningCommitCalls = recordedTaskNames.filter((taskName) => taskName === 'hardening-commit').length;
+  assert.equal(
+    hardeningCommitCalls,
+    1,
+    'expected the hardening PR to be committed exactly once even when the follow-up issue filing must retry on the second round',
+  );
+  assert.equal(firstRoundHardeningPr, true, 'expected the first round to open the hardening PR');
+  assert.equal(secondRoundHardeningPr, true, 'expected the second round to report the hardening PR as opened for this run');
+  assert.equal(
+    runtime.guards().wasStandardsHardeningPrOpened,
+    true,
+    'expected the hardening guard to stay latched across rounds',
+  );
+  assert.equal(
+    runtime.guards().hasStandardsFollowUpFiled,
+    false,
+    'expected the issue guard to stay clear so the filing keeps retrying',
   );
 });
 

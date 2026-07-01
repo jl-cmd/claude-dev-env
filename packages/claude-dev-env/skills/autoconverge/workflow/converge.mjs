@@ -1430,17 +1430,21 @@ function standardsDeferralNote(findingsCount, wasHardeningPrOpened) {
  * commit (clean-coder makes one commit, pushes, and opens the DRAFT hardening
  * PR). Splitting the edit from the push lets a workflow code-verifier produce the
  * verdict the verified-commit gate requires for the cross-repo hardening commit.
- * This PR's own branch is never touched. When the edit staged no hardening, or
- * the verify step fails, the follow-up issue still stands and the commit step is
- * skipped.
+ * This PR's own branch is never touched. When a hardening PR already opened for
+ * this run, the edit staged no hardening, or the verify step fails, the follow-up
+ * issue still stands and the commit step is skipped.
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
+ * @param {boolean} hasHardeningPrAlreadyOpened true when an earlier round already opened the environment-hardening PR for this run, so the verify and commit steps are skipped and no second PR opens while the edit retries the issue filing
  * @returns {Promise<object>} `{ followUpIssueFiled, hardeningPrOpened }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, hardeningPrOpened true only when the hardening PR was opened on this call
  */
-async function spawnStandardsFollowUp(head, findings, sourceLabel) {
+async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningPrAlreadyOpened) {
   const editResult = await runCodeEditorTask('standards-edit', { head, findings, sourceLabel })
   const followUpIssueFiled = typeof editResult?.issueUrl === 'string' && editResult.issueUrl.length > 0
+  if (hasHardeningPrAlreadyOpened === true) {
+    return { followUpIssueFiled, hardeningPrOpened: false }
+  }
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
     return { followUpIssueFiled, hardeningPrOpened: false }
   }
@@ -1458,13 +1462,16 @@ async function spawnStandardsFollowUp(head, findings, sourceLabel) {
 
 /**
  * File the deferred follow-up issue and open the environment-hardening PR at most
- * once per convergence run, then reuse them. The first standards-only round whose
- * filing succeeds runs spawnStandardsFollowUp and latches hasStandardsFollowUpFiled,
- * remembering whether a hardening PR actually opened; every later standards-only
- * round — in the converge phase or at the Copilot gate — skips the create and
- * returns the remembered outcome, so the run files one follow-up issue and opens
- * one hardening PR rather than a fresh duplicate per re-entry. A round whose
- * filing failed leaves the guard clear so a later round retries the filing.
+ * once per convergence run, then reuse them. The two guards latch independently:
+ * the follow-up issue latches only when its filing succeeds, and the hardening PR
+ * latches the moment one opens and never re-opens. A standards-only round whose
+ * issue filing already succeeded — in the converge phase or at the Copilot gate —
+ * skips spawnStandardsFollowUp and returns the remembered hardening outcome. A
+ * round whose issue filing failed re-runs spawnStandardsFollowUp to retry the
+ * filing, passing the remembered hardening state so an already-opened hardening PR
+ * is never re-opened. The run therefore files one follow-up issue and opens one
+ * hardening PR rather than a fresh duplicate per re-entry, even when the filing
+ * must retry after the hardening PR has opened.
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
@@ -1475,9 +1482,9 @@ async function openStandardsFollowUpOnce(head, findings, sourceLabel) {
     log(`Standards deferral (${sourceLabel}): reusing the follow-up fix issue already filed for this run rather than filing a duplicate; environment-hardening PR ${wasStandardsHardeningPrOpened ? 'was opened for this run' : 'was not opened for this run'}`)
     return wasStandardsHardeningPrOpened
   }
-  const standardsOutcome = await spawnStandardsFollowUp(head, findings, sourceLabel)
+  const standardsOutcome = await spawnStandardsFollowUp(head, findings, sourceLabel, wasStandardsHardeningPrOpened)
   hasStandardsFollowUpFiled = standardsOutcome?.followUpIssueFiled === true
-  wasStandardsHardeningPrOpened = standardsOutcome?.hardeningPrOpened === true
+  wasStandardsHardeningPrOpened = wasStandardsHardeningPrOpened || standardsOutcome?.hardeningPrOpened === true
   return wasStandardsHardeningPrOpened
 }
 
