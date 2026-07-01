@@ -347,9 +347,7 @@ test('the run seeds the standards follow-up flags to false so the first standard
 });
 
 test('openStandardsFollowUpOnce gates spawnStandardsFollowUp behind the run-once flag and remembers the outcome', () => {
-  const onceStart = convergeSource.indexOf('async function openStandardsFollowUpOnce(');
-  assert.notEqual(onceStart, -1, 'expected an openStandardsFollowUpOnce helper');
-  const onceBody = convergeSource.slice(onceStart, onceStart + 900);
+  const onceBody = extractCallableSource('openStandardsFollowUpOnce');
   assert.match(
     onceBody,
     /shouldOpenStandardsFollowUp\(hasStandardsFollowUpFiled\)/,
@@ -415,12 +413,13 @@ function extractCallableSource(functionName) {
   return convergeSource.slice(declarationStart, index);
 }
 
-function loadStandardsFollowUpRuntime(recordedTaskNames, standardsEditResult) {
+function loadStandardsFollowUpRuntime(recordedCalls, standardsEditResult) {
   const runtimeSource =
     'let hasStandardsFollowUpFiled = false;\n' +
     'let wasStandardsHardeningPrOpened = false;\n' +
-    'async function runCodeEditorTask(taskName) {\n' +
-    '  recordedTaskNames.push(taskName);\n' +
+    "let standardsFollowUpIssueUrl = '';\n" +
+    'async function runCodeEditorTask(taskName, context) {\n' +
+    '  recordedCalls.push({ task: taskName, context });\n' +
     "  return taskName === 'standards-edit' ? standardsEditResult : {};\n" +
     '}\n' +
     'async function runVerifierTask() {\n' +
@@ -430,33 +429,36 @@ function loadStandardsFollowUpRuntime(recordedTaskNames, standardsEditResult) {
     '  return true;\n' +
     '}\n' +
     'function log() {}\n' +
+    `${extractCallableSource('collectFindingThreadIds')}\n` +
+    `${extractCallableSource('findingsCarryThreads')}\n` +
     `${extractCallableSource('shouldOpenStandardsFollowUp')}\n` +
     `${extractCallableSource('spawnStandardsFollowUp')}\n` +
+    `${extractCallableSource('resolveStandardsThreadsForBatch')}\n` +
     `${extractCallableSource('openStandardsFollowUpOnce')}\n` +
     'return {\n' +
     '  openStandardsFollowUpOnce,\n' +
-    '  guards: () => ({ hasStandardsFollowUpFiled, wasStandardsHardeningPrOpened }),\n' +
+    '  guards: () => ({ hasStandardsFollowUpFiled, wasStandardsHardeningPrOpened, standardsFollowUpIssueUrl }),\n' +
     '};';
-  return new Function('recordedTaskNames', 'standardsEditResult', runtimeSource)(
-    recordedTaskNames,
+  return new Function('recordedCalls', 'standardsEditResult', runtimeSource)(
+    recordedCalls,
     standardsEditResult,
   );
 }
 
 test('a second standards-only round never re-opens a hardening PR after the first round opened one but failed to file the issue', async () => {
-  const recordedTaskNames = [];
+  const recordedCalls = [];
   const issueFailedHardeningStaged = {
     issueUrl: '',
     hardeningEdited: true,
     hardeningRepoPath: '/tmp/hardening',
     hardeningBranch: 'harden-standards',
   };
-  const runtime = loadStandardsFollowUpRuntime(recordedTaskNames, issueFailedHardeningStaged);
+  const runtime = loadStandardsFollowUpRuntime(recordedCalls, issueFailedHardeningStaged);
 
   const firstRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round');
   const secondRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot');
 
-  const hardeningCommitCalls = recordedTaskNames.filter((taskName) => taskName === 'hardening-commit').length;
+  const hardeningCommitCalls = recordedCalls.filter((call) => call.task === 'hardening-commit').length;
   assert.equal(
     hardeningCommitCalls,
     1,
@@ -473,6 +475,57 @@ test('a second standards-only round never re-opens a hardening PR after the firs
     runtime.guards().hasStandardsFollowUpFiled,
     false,
     'expected the issue guard to stay clear so the filing keeps retrying',
+  );
+});
+
+test('a later standards-only round resolves its own review threads after the follow-up issue was already filed', async () => {
+  const recordedCalls = [];
+  const issueFiledNoHardening = {
+    issueUrl: 'https://github.com/jl-cmd/claude-code-config/issues/900',
+    hardeningEdited: false,
+    hardeningRepoPath: '',
+    hardeningBranch: '',
+  };
+  const runtime = loadStandardsFollowUpRuntime(recordedCalls, issueFiledNoHardening);
+
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1, replyToCommentId: null }], 'converge-round');
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'b.py', line: 2, replyToCommentId: 42 }], 'copilot');
+
+  const standardsEditCalls = recordedCalls.filter((call) => call.task === 'standards-edit');
+  assert.equal(standardsEditCalls.length, 1, 'expected the follow-up issue to be filed exactly once across the run');
+
+  const resolveCalls = recordedCalls.filter((call) => call.task === 'standards-resolve-threads');
+  assert.equal(resolveCalls.length, 1, 'expected the reuse-path round to resolve its own batch review threads');
+  assert.deepEqual(
+    resolveCalls[0].context.findings,
+    [{ file: 'b.py', line: 2, replyToCommentId: 42 }],
+    'expected the resolve step to receive the reuse-path batch findings so their threads get replied-to and resolved',
+  );
+  assert.equal(
+    resolveCalls[0].context.issueUrl,
+    'https://github.com/jl-cmd/claude-code-config/issues/900',
+    'expected the resolve step to reference the already-filed follow-up issue in its inline reply',
+  );
+});
+
+test('a reuse-path standards round carrying no review threads spawns no thread-resolution agent', async () => {
+  const recordedCalls = [];
+  const issueFiledNoHardening = {
+    issueUrl: 'https://github.com/jl-cmd/claude-code-config/issues/901',
+    hardeningEdited: false,
+    hardeningRepoPath: '',
+    hardeningBranch: '',
+  };
+  const runtime = loadStandardsFollowUpRuntime(recordedCalls, issueFiledNoHardening);
+
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1, replyToCommentId: null }], 'converge-round');
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'b.py', line: 2, replyToCommentId: null }], 'copilot');
+
+  const resolveCalls = recordedCalls.filter((call) => call.task === 'standards-resolve-threads');
+  assert.equal(
+    resolveCalls.length,
+    0,
+    'expected no thread-resolution agent when the reuse-path batch of in-memory findings carries no review threads',
   );
 });
 
