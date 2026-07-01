@@ -27,7 +27,7 @@ python ~/.claude/skills/pr-converge/scripts/fetch_copilot_inline_comments.py --o
 
 When `copilot_down == true` (start-of-run quota pre-check), skip this gate
 entirely — no Copilot fetch, no request, no poll, no agent. Record evidence
-"Copilot bypassed (out of quota) at <SHA>" and continue to gate (b); the bypass
+"Copilot bypassed (quota pre-check non-zero) at <SHA>" and continue to gate (b); the bypass
 holds for the whole run and the quota API is not re-queried per tick. Otherwise
 decide among the four branches below.
 

@@ -102,6 +102,28 @@ function classifyMultiInput(rawArgs) {
   return { input: candidate, blocker: null }
 }
 
+/**
+ * Build the converge.mjs child-run args for one validated PR entry.
+ *
+ * Every per-run opt-out the child converge.mjs reads is forwarded here so the
+ * fan-out honors it: bugbotDisabled skips the Bugbot phase, and copilotDisabled
+ * short-circuits the Copilot quota gate when the account is out of premium
+ * requests. An entry that omits an opt-out defaults it to false so the child
+ * runs that phase.
+ * @param {object} prEntry one validated element of the args.prs array
+ * @returns {object} the args object passed to the converge.mjs child run
+ */
+function childRunInput(prEntry) {
+  return {
+    owner: prEntry.owner,
+    repo: prEntry.repo,
+    prNumber: prEntry.prNumber,
+    repoPath: prEntry.repoPath,
+    bugbotDisabled: Boolean(prEntry.bugbotDisabled),
+    copilotDisabled: Boolean(prEntry.copilotDisabled),
+  }
+}
+
 const multiInput = classifyMultiInput(args)
 if (multiInput.blocker) {
   return { converged: false, prCount: 0, convergedCount: 0, results: [], blocker: multiInput.blocker }
@@ -115,13 +137,7 @@ const childResults = await parallel(
   input.prs.map((eachPr) => async () => {
     const childOutcome = await workflow(
       { scriptPath: input.convergeScriptPath },
-      {
-        owner: eachPr.owner,
-        repo: eachPr.repo,
-        prNumber: eachPr.prNumber,
-        repoPath: eachPr.repoPath,
-        bugbotDisabled: Boolean(eachPr.bugbotDisabled),
-      },
+      childRunInput(eachPr),
     )
     return {
       owner: eachPr.owner,

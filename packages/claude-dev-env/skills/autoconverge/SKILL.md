@@ -355,6 +355,13 @@ each PR its own checkout with `git worktree add`. For each PR the user named:
 4. **Grant project permissions once per repository** — the single-PR pre-flight
    step 4 grant covers every worktree of the same repo, so run it one time for
    the repo the PRs live in.
+5. **Copilot quota pre-check once for the whole run** — run the single-PR
+   pre-flight step 5 check one time:
+   `python "$HOME/.claude/_shared/pr-loop/scripts/copilot_quota.py"`. Every PR in
+   the run shares one account's Copilot premium-request quota, so one check covers
+   them all. Exit 0 sets `copilotDisabled: false` on every PR entry below; any
+   non-zero exit sets `copilotDisabled: true` on every entry, so each child skips
+   the Copilot gate with no agent spawned.
 
 ### Launch the multi-PR workflow
 
@@ -367,8 +374,8 @@ Workflow({
   args: {
     convergeScriptPath: "<this skill dir>/workflow/converge.mjs",
     prs: [
-      { owner: "<O>", repo: "<R>", prNumber: <N1>, repoPath: "<abs worktree 1>", bugbotDisabled: false },
-      { owner: "<O>", repo: "<R>", prNumber: <N2>, repoPath: "<abs worktree 2>", bugbotDisabled: false }
+      { owner: "<O>", repo: "<R>", prNumber: <N1>, repoPath: "<abs worktree 1>", bugbotDisabled: false, copilotDisabled: false },
+      { owner: "<O>", repo: "<R>", prNumber: <N2>, repoPath: "<abs worktree 2>", bugbotDisabled: false, copilotDisabled: false }
     ]
   }
 })

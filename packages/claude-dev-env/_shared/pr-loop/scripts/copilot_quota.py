@@ -1,4 +1,4 @@
-"""Copilot premium-request quota pre-check.
+"""Copilot premium-interaction quota pre-check.
 
 Run this before any Copilot review step spawns. It reads a configured GitHub
 account's remaining premium-interaction quota and decides whether Copilot has
@@ -326,7 +326,7 @@ def _parse_arguments(all_argv: list[str]) -> argparse.Namespace:
         "--account",
         default=None,
         help=(
-            "GitHub login whose Copilot premium-request quota to check; "
+            "GitHub login whose Copilot premium-interaction quota to check; "
             "overrides COPILOT_QUOTA_ACCOUNT and the .env file"
         ),
     )
