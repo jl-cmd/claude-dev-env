@@ -236,6 +236,16 @@ RETURN_CALL_OPENING_PARENTHESIS_PATTERN: re.Pattern[str] = re.compile(
 SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN: re.Pattern[str] = re.compile(
     r"(?<![A-Za-z0-9_])schema\s*:"
 )
+RETURN_OBJECT_LITERAL_OPENING_PATTERN: re.Pattern[str] = re.compile(r"\breturn\s*\{")
+JS_OBJECT_KEY_IDENTIFIER_PATTERN: re.Pattern[str] = re.compile(r"[A-Za-z_$][\w$]*")
+ALL_JAVASCRIPT_CONTROL_FLOW_BLOCK_KEYWORDS: frozenset[str] = frozenset(
+    {"if", "for", "while", "switch", "catch", "with"}
+)
+ALL_JAVASCRIPT_BRACKET_OPENERS: frozenset[str] = frozenset({"(", "[", "{"})
+ALL_JAVASCRIPT_BRACKET_CLOSERS: frozenset[str] = frozenset({")", "]", "}"})
+ALL_JAVASCRIPT_IDENTIFIER_EXTRA_CHARACTERS: frozenset[str] = frozenset({"_", "$"})
+JAVASCRIPT_OBJECT_SPREAD_PREFIX: str = "..."
+JAVASCRIPT_MODULE_SCOPE_SENTINEL: int = -1
 ALL_BUILTIN_DICT_METHOD_NAMES: frozenset[str] = frozenset({
     "get", "items", "keys", "values", "update", "pop",
     "setdefault", "copy", "clear",
