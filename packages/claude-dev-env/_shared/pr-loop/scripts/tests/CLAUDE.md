@@ -21,9 +21,16 @@ pytest suite for the scripts and constants in `_shared/pr-loop/scripts/`. Each t
 | `test_preflight_constants.py` | `pr_loop_shared_constants/preflight_constants.py` |
 | `test_preflight_self_heal.py` | `preflight_self_heal.py` hooks-path repair |
 | `test_reviews_disabled.py` | `reviews_disabled.py` opt-out gate parsing |
+| `test_copilot_quota.py` | `copilot_quota.py` end-to-end: account resolution, premium-quota classification, exit codes, and skip logging |
+| `test_copilot_quota_constants.py` | `pr_loop_shared_constants/copilot_quota_constants.py` |
 | `test_revoke_project_claude_permissions.py` | `revoke_project_claude_permissions.py` end-to-end |
 | `test_agent_config_carveout.py` | Agent-config deny-rule carve-out logic |
 | `conftest.py` | Shared pytest fixtures |
+
+## Fixtures
+
+`fixtures/copilot_internal_user_jonecho.json` — a captured `gh api
+copilot_internal/user` response driving `test_copilot_quota.py`.
 
 ## Running
 

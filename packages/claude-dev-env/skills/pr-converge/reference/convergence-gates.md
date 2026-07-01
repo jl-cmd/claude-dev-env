@@ -25,6 +25,12 @@ python ~/.claude/skills/pr-converge/scripts/fetch_copilot_inline_comments.py --o
   → unaddressed inline threads on the latest Copilot review at current_head
 ```
 
+When `copilot_down == true` (start-of-run quota pre-check), skip this gate
+entirely — no Copilot fetch, no request, no poll, no agent. Record evidence
+"Copilot bypassed (out of quota) at <SHA>" and continue to gate (b); the bypass
+holds for the whole run and the quota API is not re-queried per tick. Otherwise
+decide among the four branches below.
+
 Decide (four branches; match first whose predicate holds):
 
 - **`classification == "dirty"` with non-empty inline comments matching
@@ -117,6 +123,12 @@ Persist `mergeable_state` into `merge_state_status`. Decide:
 
 ## (d) Post-convergence Copilot review request
 
+When `copilot_down == true` (start-of-run quota pre-check), skip this gate: do
+not request a Copilot review and do not enter `COPILOT_WAIT`. Export
+`CLAUDE_REVIEWS_DISABLED="copilot"` before gate (f)'s convergence check so
+`check_convergence.py` bypasses the Copilot review and pending-review gates.
+Continue to gate (e).
+
 Once gates (a), (b), and (c) all pass (Copilot clean at `current_head` *or* no
 Copilot review yet, AND Claude clean or absent at `current_head`, AND
 `mergeable_state == "clean"`), request Copilot review:
@@ -190,7 +202,7 @@ evidence from gates (a)–(e) above. All seven must be confirmed:
 
 - [ ] `bugbot_clean_at == current_head` (from per-tick.md Step 2 BUGBOT §c)
 - [ ] bugteam `convergence (zero findings)` at `current_head` (from per-tick.md Step 2 BUGTEAM §d)
-- [ ] `copilot_clean_at == current_head` (from gate (a) or gate (d))
+- [ ] `copilot_clean_at == current_head` (from gate (a) or gate (d)), or the Copilot gate bypassed for the run via `copilot_down`
 - [ ] Claude `APPROVED` or absent at `current_head` (from gate (b))
 - [ ] `mergeable_state == "clean"` AND `mergeable == true` (from gate (c))
 - [ ] Zero unresolved review threads anywhere on the PR (from gate (e))

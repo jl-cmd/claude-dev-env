@@ -97,6 +97,18 @@ PR's owner.
    prompt can add a standing Bash permission allow-rule for that script in their
    settings.
 
+5. **Copilot quota pre-check.** Before the `Workflow` call, run once:
+   `python "$HOME/.claude/_shared/pr-loop/scripts/copilot_quota.py"`
+   It reads the account's remaining Copilot premium-request quota via
+   `gh api copilot_internal/user` and prints one line — log that line. Exit 0
+   means Copilot has quota to run, so pass `copilotDisabled: false`. Any non-zero
+   exit means skip Copilot for this run — the account is out of quota, the quota
+   API or account access is down, or no account is set — so pass
+   `copilotDisabled: true`; the workflow then skips the Copilot gate with no agent
+   spawned. The account comes from the `COPILOT_QUOTA_ACCOUNT` environment
+   variable or a git-ignored `.env` file, and the no-account line names the exact
+   `.env` path and key to set.
+
 ## Run the workflow
 
 Call the `Workflow` tool against the colocated script:
@@ -104,7 +116,7 @@ Call the `Workflow` tool against the colocated script:
 ```
 Workflow({
   scriptPath: "<this skill dir>/workflow/converge.mjs",
-  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false }
+  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false }
 })
 ```
 
@@ -113,8 +125,10 @@ own directory (on this install,
 `<home>/.claude/skills/autoconverge/workflow/converge.mjs`). Set
 `bugbotDisabled: true` only when the user has opted Cursor Bugbot out for the
 run; otherwise the workflow detects an opt-out or an unreachable Bugbot on its
-own. The workflow runs in the background and notifies this session on
-completion. Watch live progress with `/workflows`.
+own. Set `copilotDisabled: true` when the step 5 quota pre-check exits non-zero,
+and `false` when it exits 0; on `true` the workflow skips the Copilot gate with
+no agent spawned. The workflow runs in the background and notifies this session
+on completion. Watch live progress with `/workflows`.
 
 The workflow returns
 `{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, reuseNote }`.
