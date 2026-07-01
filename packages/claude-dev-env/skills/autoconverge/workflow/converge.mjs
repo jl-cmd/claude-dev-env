@@ -1392,33 +1392,34 @@ function isStandardsOnlyRound(findings) {
 }
 
 /**
- * Decide whether a standards-only round should open the follow-up fix issue and
- * environment-hardening PR. Standards findings are deferred rather than fixed on
- * this PR, so the same code-standard findings re-surface on every converge round
- * and on the Copilot gate; without this guard each re-entry opens a fresh
- * duplicate follow-up issue and hardening PR for the one deferred finding class.
- * The follow-up is opened once per convergence run — the first standards-only
- * round opens it, and every later round reuses it.
- * @param {boolean} alreadyOpened true when an earlier standards-only round in this run already opened the follow-up
- * @returns {boolean} true only when the follow-up should be opened this round
+ * Decide whether a standards-only round should file the follow-up fix issue and
+ * open the environment-hardening PR. Standards findings are deferred rather than
+ * fixed on this PR, so the same code-standard findings re-surface on every
+ * converge round and on the Copilot gate; without this guard each re-entry files
+ * a fresh duplicate follow-up issue and hardening PR for the one deferred finding
+ * class. The follow-up issue is filed once per convergence run — a round whose
+ * filing succeeds latches the guard, while a round whose filing failed leaves it
+ * clear so a later round retries the filing.
+ * @param {boolean} hasAlreadyFiled true when an earlier standards-only round in this run already filed the follow-up issue
+ * @returns {boolean} true when this round should attempt the follow-up filing
  */
-function shouldOpenStandardsFollowUp(alreadyOpened) {
-  return alreadyOpened !== true
+function shouldOpenStandardsFollowUp(hasAlreadyFiled) {
+  return hasAlreadyFiled !== true
 }
 
 /**
  * Build the standards-deferral note for the closing report, naming the
- * environment-hardening PR only when one was opened this round so the note
+ * environment-hardening PR only when one was opened for this run so the note
  * never claims a PR the skip paths did not produce.
  * @param {number} findingsCount count of deferred code-standard findings
- * @param {boolean} hardeningPrOpened true when the hardening PR was opened this round
+ * @param {boolean} wasHardeningPrOpened true when the hardening PR was opened for this run
  * @returns {string} the human-facing deferral note
  */
-function standardsDeferralNote(findingsCount, hardeningPrOpened) {
+function standardsDeferralNote(findingsCount, wasHardeningPrOpened) {
   const base = `${findingsCount} code-standard finding(s) deferred to a follow-up fix issue`
-  return hardeningPrOpened
+  return wasHardeningPrOpened
     ? `${base} plus an environment-hardening PR — verify both land`
-    : `${base} — verify it lands (no environment-hardening PR was opened this round)`
+    : `${base} — verify it lands (no environment-hardening PR was opened for this run)`
 }
 
 /**
@@ -1435,47 +1436,49 @@ function standardsDeferralNote(findingsCount, hardeningPrOpened) {
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<object>} `{ hardeningPrOpened }` — true only when the hardening PR was opened this round
+ * @returns {Promise<object>} `{ followUpIssueFiled, hardeningPrOpened }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, hardeningPrOpened true only when the hardening PR was opened on this call
  */
 async function spawnStandardsFollowUp(head, findings, sourceLabel) {
   const editResult = await runCodeEditorTask('standards-edit', { head, findings, sourceLabel })
+  const followUpIssueFiled = typeof editResult?.issueUrl === 'string' && editResult.issueUrl.length > 0
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
-    return { hardeningPrOpened: false }
+    return { followUpIssueFiled, hardeningPrOpened: false }
   }
   const verifyTranscript = await runVerifierTask('hardening-verify', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch,
   })
   if (!verdictPassed(verifyTranscript)) {
-    return { hardeningPrOpened: false }
+    return { followUpIssueFiled, hardeningPrOpened: false }
   }
   await runCodeEditorTask('hardening-commit', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch, issueUrl: editResult.issueUrl,
   })
-  return { hardeningPrOpened: true }
+  return { followUpIssueFiled, hardeningPrOpened: true }
 }
 
 /**
- * Open the deferred follow-up issue and environment-hardening PR at most once per
- * convergence run, then reuse them. The first standards-only round runs
- * spawnStandardsFollowUp and latches standardsFollowUpOpened, remembering whether
- * a hardening PR actually opened; every later standards-only round — in the
- * converge phase or at the Copilot gate — skips the create and returns the
- * remembered outcome, so the run files one follow-up issue and opens one
- * hardening PR rather than a fresh duplicate per re-entry.
+ * File the deferred follow-up issue and open the environment-hardening PR at most
+ * once per convergence run, then reuse them. The first standards-only round whose
+ * filing succeeds runs spawnStandardsFollowUp and latches hasStandardsFollowUpFiled,
+ * remembering whether a hardening PR actually opened; every later standards-only
+ * round — in the converge phase or at the Copilot gate — skips the create and
+ * returns the remembered outcome, so the run files one follow-up issue and opens
+ * one hardening PR rather than a fresh duplicate per re-entry. A round whose
+ * filing failed leaves the guard clear so a later round retries the filing.
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<boolean>} true when a hardening PR is open for this run
+ * @returns {Promise<boolean>} true when a hardening PR was opened for this run
  */
 async function openStandardsFollowUpOnce(head, findings, sourceLabel) {
-  if (!shouldOpenStandardsFollowUp(standardsFollowUpOpened)) {
-    log(`Standards deferral (${sourceLabel}): the follow-up fix issue and environment-hardening PR already opened this run — reusing them rather than opening duplicates`)
-    return standardsHardeningPrOpened
+  if (!shouldOpenStandardsFollowUp(hasStandardsFollowUpFiled)) {
+    log(`Standards deferral (${sourceLabel}): reusing the follow-up fix issue already filed for this run rather than filing a duplicate; environment-hardening PR ${wasStandardsHardeningPrOpened ? 'was opened for this run' : 'was not opened for this run'}`)
+    return wasStandardsHardeningPrOpened
   }
   const standardsOutcome = await spawnStandardsFollowUp(head, findings, sourceLabel)
-  standardsFollowUpOpened = true
-  standardsHardeningPrOpened = standardsOutcome?.hardeningPrOpened === true
-  return standardsHardeningPrOpened
+  hasStandardsFollowUpFiled = standardsOutcome?.followUpIssueFiled === true
+  wasStandardsHardeningPrOpened = standardsOutcome?.hardeningPrOpened === true
+  return wasStandardsHardeningPrOpened
 }
 
 let phase = 'CONVERGE'
@@ -1487,8 +1490,8 @@ let bugbotDown = input.bugbotDisabled || false
 let copilotDown = input.copilotDisabled || false
 let copilotNote = null
 let standardsNote = null
-let standardsFollowUpOpened = false
-let standardsHardeningPrOpened = false
+let hasStandardsFollowUpFiled = false
+let wasStandardsHardeningPrOpened = false
 let reuseNote = null
 
 const preflightHead = await runGitTask('resolve-head')
@@ -1542,8 +1545,8 @@ while (iterations < CONFIG.maxIterations) {
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
-      const hardeningPrOpened = await openStandardsFollowUpOnce(head, findings, 'converge-round')
-      standardsNote = standardsDeferralNote(findings.length, hardeningPrOpened)
+      const wasHardeningPrOpened = await openStandardsFollowUpOnce(head, findings, 'converge-round')
+      standardsNote = standardsDeferralNote(findings.length, wasHardeningPrOpened)
       const auditResult = await runGeneralUtilityTask('post-clean-audit', { head })
       if (!auditResult?.posted) {
         blocker = cleanAuditBlocker(head, auditResult)
@@ -1605,8 +1608,8 @@ while (iterations < CONFIG.maxIterations) {
     if (copilotOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
-        const hardeningPrOpened = await openStandardsFollowUpOnce(head, copilotOutcome.findings, 'copilot')
-        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, hardeningPrOpened)
+        const wasHardeningPrOpened = await openStandardsFollowUpOnce(head, copilotOutcome.findings, 'copilot')
+        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, wasHardeningPrOpened)
         copilotDown = false
         copilotNote = null
         phase = 'FINALIZE'

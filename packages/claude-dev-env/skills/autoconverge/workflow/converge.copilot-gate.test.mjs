@@ -333,32 +333,47 @@ test('shouldOpenStandardsFollowUp opens on the first standards-only round and sk
   assert.equal(shouldOpenStandardsFollowUp(true), false);
 });
 
-test('the run seeds standardsFollowUpOpened to false so the first standards-only round opens the follow-up', () => {
+test('the run seeds the standards follow-up flags to false so the first standards-only round opens the follow-up', () => {
   assert.match(
     convergeSource,
-    /let standardsFollowUpOpened = false/,
-    'expected a run-scoped standardsFollowUpOpened flag seeded false',
+    /let hasStandardsFollowUpFiled = false/,
+    'expected a run-scoped hasStandardsFollowUpFiled flag seeded false',
+  );
+  assert.match(
+    convergeSource,
+    /let wasStandardsHardeningPrOpened = false/,
+    'expected a run-scoped wasStandardsHardeningPrOpened flag seeded false',
   );
 });
 
-test('openStandardsFollowUpOnce gates spawnStandardsFollowUp behind the run-once flag and latches it', () => {
+test('openStandardsFollowUpOnce gates spawnStandardsFollowUp behind the run-once flag and remembers the outcome', () => {
   const onceStart = convergeSource.indexOf('async function openStandardsFollowUpOnce(');
   assert.notEqual(onceStart, -1, 'expected an openStandardsFollowUpOnce helper');
-  const onceBody = convergeSource.slice(onceStart, onceStart + 700);
+  const onceBody = convergeSource.slice(onceStart, onceStart + 900);
   assert.match(
     onceBody,
-    /shouldOpenStandardsFollowUp\(standardsFollowUpOpened\)/,
+    /shouldOpenStandardsFollowUp\(hasStandardsFollowUpFiled\)/,
     'expected the helper to consult the run-once decision on the current flag',
   );
   assert.match(
     onceBody,
     /await spawnStandardsFollowUp\(/,
-    'expected the helper to perform the create when the follow-up has not opened yet',
+    'expected the helper to perform the create when the follow-up issue has not filed yet',
   );
   assert.match(
     onceBody,
-    /standardsFollowUpOpened = true/,
-    'expected the helper to latch the flag after opening so later rounds reuse the follow-up',
+    /hasStandardsFollowUpFiled = standardsOutcome\?\.followUpIssueFiled === true/,
+    'expected the helper to latch the flag only when the follow-up issue was actually filed so a transient failure retries on a later round',
+  );
+  assert.match(
+    onceBody,
+    /wasStandardsHardeningPrOpened = standardsOutcome\?\.hardeningPrOpened === true/,
+    'expected the first path to remember the hardening outcome from the spawn result',
+  );
+  assert.match(
+    onceBody,
+    /return wasStandardsHardeningPrOpened/,
+    'expected the skip path to return the cached hardening outcome',
   );
 });
 
