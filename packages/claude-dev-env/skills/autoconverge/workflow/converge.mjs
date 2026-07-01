@@ -23,7 +23,7 @@ export const meta = {
 
 const CONFIG = {
   maxIterations: 20,
-  copilotMaxPolls: 3,
+  copilotMaxPolls: 8,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
   bugteamRubric: '$HOME/.claude/skills/bugteam/reference/audit-contract.md',
@@ -1302,7 +1302,7 @@ function runCopilotGate(head) {
       `   gh api --method POST repos/${input.owner}/${input.repo}/pulls/${input.prNumber}/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'\n` +
       `2. Poll for Copilot's review on HEAD ${head}: up to ${CONFIG.copilotMaxPolls} attempts, 360 seconds apart (delay each attempt with "sleep 360", or the PowerShell alternative "Start-Sleep -Seconds 360"). Each attempt: python "${CONFIG.sharedScripts}/fetch_copilot_reviews.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} for the top-level review state, plus gh api "repos/${input.owner}/${input.repo}/pulls/${input.prNumber}/comments" --paginate --slurp for inline comment ids (Copilot's login contains "copilot", case-insensitive). Only count entries whose commit_id starts with ${head}.\n` +
       `   - Out-of-usage notice on HEAD -> return the down result above (clean:true, down:true) and stop.\n` +
-      `   - Copilot review present and clean/approved on HEAD -> return {sha:${'`'}${head}${'`'}, clean:true, down:false, findings:[]}.\n` +
+      `   - Copilot review present on HEAD whose state is APPROVED, or COMMENTED with no inline findings -> a clean pass: return {sha:${'`'}${head}${'`'}, clean:true, down:false, findings:[]}.\n` +
       `   - Copilot findings on HEAD -> return them (each with its inline comment id in replyToCommentId; category 'code-standard' for pure CODE_RULES/style violations with no behavioral impact, 'bug' otherwise), clean:false, down:false.\n` +
       `   - No review after ${CONFIG.copilotMaxPolls} attempts -> Copilot is down for this run (unreachable, or silently out of quota with no notice): return {sha:${'`'}${head}${'`'}, clean:false, down:true, findings:[]}.\n\n` +
       `Return strictly the schema.`,
