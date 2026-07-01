@@ -200,11 +200,12 @@ async function fixerWithRecovery(head, findings, sourceLabel) {
 
 /**
  * Spawn a fresh code-editor clean-coder agent for a specific edit task (fix-edit,
- * conflict-edit, repair-edit, repair-commit, standards-edit, hardening-commit,
- * commit-recover, verify-recover). Each task carries its own edit instructions.
+ * conflict-edit, repair-edit, repair-commit, standards-edit,
+ * standards-resolve-threads, hardening-commit, commit-recover, verify-recover).
+ * Each task carries its own edit instructions.
  * @param {string} task the short task name
  * @param {object} context task-specific context
- * @returns {Promise<object|string>} the structured output, or the transcript string when the 'hardening-commit' resume runs schema-less
+ * @returns {Promise<object|string>} the structured output, or the transcript string when a schema-less task ('hardening-commit', 'standards-resolve-threads') runs
  */
 function runCodeEditorTask(task, context) {
   const label = `code-editor:${task}`
@@ -291,6 +292,19 @@ function runCodeEditorTask(task, context) {
         `Return the issue URL in issueUrl (empty string when it could not be filed), the hardening checkout path and branch, hardeningEdited, and a one-line summary.` +
         PRE_COMMIT_GATE_STEP,
       { label, phase: 'Converge', schema: STANDARDS_EDIT_SCHEMA, agentType: 'clean-coder' },
+    )
+  }
+  if (task === 'standards-resolve-threads') {
+    const findingsBlock = renderFindingsBlock(context.findings)
+    const threadIds = context.findings
+      .flatMap((each) => collectFindingThreadIds(each))
+      .filter((each) => typeof each === 'number')
+    return convergeAgent(
+      `You are the THREAD-RESOLUTION step for a code-standard-only round on ${prCoordinates}, HEAD ${context.head} (${context.sourceLabel}). This run already filed the deferred-fix follow-up issue ${context.issueUrl}, so this batch's code-standard findings defer to that same issue. Make NO code edits, NO commit, and NO push — only reply to and resolve the review threads this batch carries.\n\n` +
+        `Findings:\n${findingsBlock}\n\n` +
+        `For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue ${context.issueUrl}." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
+        `Return a one-line summary naming the threads you resolved.`,
+      { label, phase: 'Converge', agentType: 'clean-coder' },
     )
   }
   if (task === 'hardening-commit') {
@@ -1392,18 +1406,34 @@ function isStandardsOnlyRound(findings) {
 }
 
 /**
+ * Decide whether a standards-only round should file the follow-up fix issue and
+ * open the environment-hardening PR. Standards findings are deferred rather than
+ * fixed on this PR, so the same code-standard findings re-surface on every
+ * converge round and on the Copilot gate; without this guard each re-entry files
+ * a fresh duplicate follow-up issue and hardening PR for the one deferred finding
+ * class. The follow-up issue is filed once per convergence run — a round whose
+ * filing succeeds latches the guard, while a round whose filing failed leaves it
+ * clear so a later round retries the filing.
+ * @param {boolean} hasAlreadyFiled true when an earlier standards-only round in this run already filed the follow-up issue
+ * @returns {boolean} true when this round should attempt the follow-up filing
+ */
+function shouldOpenStandardsFollowUp(hasAlreadyFiled) {
+  return hasAlreadyFiled !== true
+}
+
+/**
  * Build the standards-deferral note for the closing report, naming the
- * environment-hardening PR only when one was opened this round so the note
+ * environment-hardening PR only when one was opened for this run so the note
  * never claims a PR the skip paths did not produce.
  * @param {number} findingsCount count of deferred code-standard findings
- * @param {boolean} hardeningPrOpened true when the hardening PR was opened this round
+ * @param {boolean} wasHardeningPrOpened true when the hardening PR was opened for this run
  * @returns {string} the human-facing deferral note
  */
-function standardsDeferralNote(findingsCount, hardeningPrOpened) {
+function standardsDeferralNote(findingsCount, wasHardeningPrOpened) {
   const base = `${findingsCount} code-standard finding(s) deferred to a follow-up fix issue`
-  return hardeningPrOpened
+  return wasHardeningPrOpened
     ? `${base} plus an environment-hardening PR — verify both land`
-    : `${base} — verify it lands (no environment-hardening PR was opened this round)`
+    : `${base} — verify it lands (no environment-hardening PR was opened for this run)`
 }
 
 /**
@@ -1414,29 +1444,102 @@ function standardsDeferralNote(findingsCount, hardeningPrOpened) {
  * commit (clean-coder makes one commit, pushes, and opens the DRAFT hardening
  * PR). Splitting the edit from the push lets a workflow code-verifier produce the
  * verdict the verified-commit gate requires for the cross-repo hardening commit.
- * This PR's own branch is never touched. When the edit staged no hardening, or
- * the verify step fails, the follow-up issue still stands and the commit step is
- * skipped.
+ * This PR's own branch is never touched. When a hardening PR already opened for
+ * this run, the edit staged no hardening, or the verify step fails, the follow-up
+ * issue still stands and the commit step is skipped.
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<object>} `{ hardeningPrOpened }` — true only when the hardening PR was opened this round
+ * @param {boolean} hasHardeningPrAlreadyOpened true when an earlier round already opened the environment-hardening PR for this run, so the verify and commit steps are skipped and no second PR opens while the edit retries the issue filing
+ * @returns {Promise<object>} `{ followUpIssueFiled, issueUrl, hardeningPrOpened }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, issueUrl that filed URL (empty string when the filing failed) so a later reuse-path round can reference it when resolving its own threads, hardeningPrOpened true only when the hardening PR was opened on this call
  */
-async function spawnStandardsFollowUp(head, findings, sourceLabel) {
+async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningPrAlreadyOpened) {
   const editResult = await runCodeEditorTask('standards-edit', { head, findings, sourceLabel })
+  const followUpIssueFiled = typeof editResult?.issueUrl === 'string' && editResult.issueUrl.length > 0
+  const followUpIssueUrl = followUpIssueFiled ? editResult.issueUrl : ''
+  if (hasHardeningPrAlreadyOpened === true) {
+    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false }
+  }
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
-    return { hardeningPrOpened: false }
+    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false }
   }
   const verifyTranscript = await runVerifierTask('hardening-verify', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch,
   })
   if (!verdictPassed(verifyTranscript)) {
-    return { hardeningPrOpened: false }
+    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false }
   }
   await runCodeEditorTask('hardening-commit', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch, issueUrl: editResult.issueUrl,
   })
-  return { hardeningPrOpened: true }
+  return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: true }
+}
+
+/**
+ * Report whether any finding in a batch carries a GitHub review thread that needs
+ * an inline reply and resolution.
+ * @param {Array<object>} findings the batch of findings
+ * @returns {boolean} true when at least one finding carries a review comment id
+ */
+function findingsCarryThreads(findings) {
+  return findings.some((each) => collectFindingThreadIds(each).length > 0)
+}
+
+/**
+ * On the reuse path — after this run already filed the deferred-fix follow-up
+ * issue — reply to and resolve this batch's code-standard review threads against
+ * that same issue. The issue filing and hardening PR stay gated behind the
+ * run-once flags; only the per-batch thread resolution runs here, so a later
+ * standards-only round's bot threads are still marked resolved and the FINALIZE
+ * zero-unresolved-bot-threads gate passes. A batch of in-memory audit findings
+ * that carries no review thread needs no agent, so the resolve step is skipped.
+ * @param {string} head PR HEAD SHA the findings were raised against
+ * @param {Array<object>} findings this batch's deduped code-standard-only findings
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<void>}
+ */
+async function resolveStandardsThreadsForBatch(head, findings, sourceLabel) {
+  if (!findingsCarryThreads(findings)) {
+    return
+  }
+  await runCodeEditorTask('standards-resolve-threads', {
+    head, findings, sourceLabel, issueUrl: standardsFollowUpIssueUrl,
+  })
+}
+
+/**
+ * File the deferred follow-up issue and open the environment-hardening PR at most
+ * once per convergence run, then reuse them. The two guards latch independently:
+ * the follow-up issue latches only when its filing succeeds, and the hardening PR
+ * latches the moment one opens and never re-opens. A standards-only round whose
+ * issue filing already succeeded — in the converge phase or at the Copilot gate —
+ * skips spawnStandardsFollowUp, resolves this batch's own code-standard review
+ * threads against the already-filed issue via resolveStandardsThreadsForBatch, and
+ * returns the remembered hardening outcome. A round whose issue filing failed
+ * re-runs spawnStandardsFollowUp to retry the filing, passing the remembered
+ * hardening state so an already-opened hardening PR is never re-opened. The run
+ * therefore files one follow-up issue and opens one hardening PR rather than a
+ * fresh duplicate per re-entry — while every round still resolves the review
+ * threads its own findings carry, even when the filing must retry after the
+ * hardening PR has opened.
+ * @param {string} head PR HEAD SHA the findings were raised against
+ * @param {Array<object>} findings deduped code-standard-only findings
+ * @param {string} sourceLabel short description of where the findings came from
+ * @returns {Promise<boolean>} true when a hardening PR was opened for this run
+ */
+async function openStandardsFollowUpOnce(head, findings, sourceLabel) {
+  if (!shouldOpenStandardsFollowUp(hasStandardsFollowUpFiled)) {
+    log(`Standards deferral (${sourceLabel}): reusing the follow-up fix issue already filed for this run rather than filing a duplicate; environment-hardening PR ${wasStandardsHardeningPrOpened ? 'was opened for this run' : 'was not opened for this run'}`)
+    await resolveStandardsThreadsForBatch(head, findings, sourceLabel)
+    return wasStandardsHardeningPrOpened
+  }
+  const standardsOutcome = await spawnStandardsFollowUp(head, findings, sourceLabel, wasStandardsHardeningPrOpened)
+  hasStandardsFollowUpFiled = standardsOutcome?.followUpIssueFiled === true
+  if (hasStandardsFollowUpFiled) {
+    standardsFollowUpIssueUrl = standardsOutcome.issueUrl
+  }
+  wasStandardsHardeningPrOpened = wasStandardsHardeningPrOpened || standardsOutcome?.hardeningPrOpened === true
+  return wasStandardsHardeningPrOpened
 }
 
 let phase = 'CONVERGE'
@@ -1448,6 +1551,9 @@ let bugbotDown = input.bugbotDisabled || false
 let copilotDown = input.copilotDisabled || false
 let copilotNote = null
 let standardsNote = null
+let hasStandardsFollowUpFiled = false
+let wasStandardsHardeningPrOpened = false
+let standardsFollowUpIssueUrl = ''
 let reuseNote = null
 
 const preflightHead = await runGitTask('resolve-head')
@@ -1501,8 +1607,8 @@ while (iterations < CONFIG.maxIterations) {
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
-      const standardsOutcome = await spawnStandardsFollowUp(head, findings, 'converge-round')
-      standardsNote = standardsDeferralNote(findings.length, standardsOutcome?.hardeningPrOpened === true)
+      const wasHardeningPrOpened = await openStandardsFollowUpOnce(head, findings, 'converge-round')
+      standardsNote = standardsDeferralNote(findings.length, wasHardeningPrOpened)
       const auditResult = await runGeneralUtilityTask('post-clean-audit', { head })
       if (!auditResult?.posted) {
         blocker = cleanAuditBlocker(head, auditResult)
@@ -1564,8 +1670,8 @@ while (iterations < CONFIG.maxIterations) {
     if (copilotOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
-        const standardsOutcome = await spawnStandardsFollowUp(head, copilotOutcome.findings, 'copilot')
-        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, standardsOutcome?.hardeningPrOpened === true)
+        const wasHardeningPrOpened = await openStandardsFollowUpOnce(head, copilotOutcome.findings, 'copilot')
+        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, wasHardeningPrOpened)
         copilotDown = false
         copilotNote = null
         phase = 'FINALIZE'

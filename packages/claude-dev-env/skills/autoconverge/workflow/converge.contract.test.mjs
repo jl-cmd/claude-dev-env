@@ -385,8 +385,8 @@ test('spawnStandardsFollowUp reports whether a hardening PR opened on every path
   const body = lensPromptBody('spawnStandardsFollowUp');
   const falseReturns = body.match(/hardeningPrOpened:\s*false/g) || [];
   assert.ok(
-    falseReturns.length >= 2,
-    'expected both skip paths (no hardening staged, verify failed) to return hardeningPrOpened:false',
+    falseReturns.length >= 3,
+    'expected every skip path (hardening PR already opened, no hardening staged, verify failed) to return hardeningPrOpened:false',
   );
   assert.match(
     body,
