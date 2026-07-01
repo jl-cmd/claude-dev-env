@@ -98,10 +98,40 @@ def _transcript_typed_source() -> str:
     )
 
 
+def _destructured_parameter_mixed_schema_source() -> str:
+    return (
+        "/**\n"
+        " * Commit and verify with recovery.\n"
+        " * @returns {Promise<object>} the structured verify output\n"
+        " */\n"
+        "async function commitWithRecovery({ runCommit, runVerify, head }) {\n"
+        "  if (runVerify) {\n"
+        "    return convergeAgent(\n"
+        "      `Verify the commit for ${head}.`,\n"
+        "      { label: 'commit-recovery', phase: 'Converge', schema: VERIFY_SCHEMA, agentType: 'Explore' },\n"
+        "    )\n"
+        "  }\n"
+        "  return convergeAgent(\n"
+        "    `Commit ${head} without verification.`,\n"
+        "    { label: 'commit-recovery', phase: 'Converge', agentType: 'Explore' },\n"
+        "  )\n"
+        "}\n"
+    )
+
+
 def test_flags_schema_less_branch_under_returns_object_claim() -> None:
     issues = check_js_returns_object_schemaless_branch(_mixed_schema_source(), _MJS_PATH)
     assert len(issues) == 1
     assert "runGitTask" in issues[0]
+    assert "convergeAgent" in issues[0]
+
+
+def test_flags_schema_less_branch_with_destructured_parameter() -> None:
+    issues = check_js_returns_object_schemaless_branch(
+        _destructured_parameter_mixed_schema_source(), _MJS_PATH
+    )
+    assert len(issues) == 1
+    assert "commitWithRecovery" in issues[0]
     assert "convergeAgent" in issues[0]
 
 
