@@ -16,7 +16,7 @@ export const meta = {
   phases: [
     { title: 'Reuse', detail: 'Before convergence, one reuse lens scans the full diff for reuse improvements that are certain, behaviorally identical, and autonomously implementable, and applies the qualifying ones in one commit' },
     { title: 'Converge', detail: 'Bugbot + code-review + bug-audit in parallel each round; one clean-coder applies all fixes; loop until all three are clean on a stable HEAD' },
-    { title: 'Copilot gate', detail: 'When the quota pre-check reports Copilot out of premium-request quota or unavailable, skip the gate with no agent spawned; otherwise request a Copilot review and poll up to three times, route findings back into Converge, and when Copilot is down or out of quota log a notice and mark the PR ready with the gate bypassed' },
+    { title: 'Copilot gate', detail: 'When the quota pre-check reports Copilot out of premium-request quota or unavailable, skip the gate with no agent spawned; otherwise request a Copilot review and poll up to the configured cap, route findings back into Converge, and when Copilot is down or out of quota log a notice and mark the PR ready with the gate bypassed' },
     { title: 'Finalize', detail: 'Run check_convergence.py; mark draft=false on a full pass' },
   ],
 }
