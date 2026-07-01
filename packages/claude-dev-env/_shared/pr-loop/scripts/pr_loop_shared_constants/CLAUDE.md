@@ -15,6 +15,7 @@ Named constants for every script in `_shared/pr-loop/scripts/`. Each module owns
 | `preflight_constants.py` | `preflight.py` — env-var names, git subcommands, pytest exit codes, test discovery patterns |
 | `preflight_self_heal_constants.py` | `preflight_self_heal.py` — git config keys and local-scope detection strings |
 | `reviews_disabled_constants.py` | `reviews_disabled.py` — `CLAUDE_REVIEWS_DISABLED` token taxonomy |
+| `copilot_quota_constants.py` | `copilot_quota.py` — `COPILOT_QUOTA_ACCOUNT` env-var name, `copilot_internal/user` API path, the `premium_interactions` gating field names, the four skip/run exit codes, and the default `.env` path |
 | `__init__.py` | Empty package marker |
 
 ## Convention

@@ -13,6 +13,7 @@ Python scripts invoked at runtime by the PR-loop skills. Each script is a standa
 | `revoke_project_claude_permissions.py` | Removes the allow-rules and entries that `grant_project_claude_permissions.py` wrote; safe to run when no prior grant exists |
 | `code_rules_gate.py` | Pre-commit gate that runs `code_rules_enforcer` checks on staged Python files before a fix commit lands |
 | `reviews_disabled.py` | Shared helper for the `CLAUDE_REVIEWS_DISABLED` opt-out gate; parses the env-var token to find which reviewer types are suppressed |
+| `copilot_quota.py` | Copilot premium-request quota pre-check: resolves a configured GitHub account, reads its remaining `premium_interactions` quota via `gh api copilot_internal/user`, and exits 0 (run Copilot) or non-zero (skip: out of quota, API down, or no account configured) |
 | `fix_hookspath.py` | Repairs a malformed `core.hooksPath` global git config entry |
 | `_claude_permissions_common.py` | Internal helpers shared by the grant/revoke scripts: atomic settings.json writes, list mutation, path helpers |
 

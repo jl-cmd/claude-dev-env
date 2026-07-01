@@ -43,6 +43,26 @@ working directory routes into the PR's repo for local work and returns to
 the session worktree before teardown. See
 [`reference/per-tick.md` § Step 1.5](reference/per-tick.md).
 
+## Copilot quota pre-check (start of run)
+
+On the first tick, before Step 4, run the Copilot quota pre-check once:
+`python "$HOME/.claude/_shared/pr-loop/scripts/copilot_quota.py"`. It reads the
+account's remaining Copilot premium-request quota via `gh api
+copilot_internal/user` and prints one line — log that line. Exit 0 means Copilot
+has quota, so leave `copilot_down` false. Any non-zero exit means skip Copilot
+for the whole run — the account is out of quota, the quota API or account access
+is down, or no account is set — so set `copilot_down = true` in
+`pr-converge-state.json`. The account comes from the `COPILOT_QUOTA_ACCOUNT`
+environment variable or a git-ignored `.env` file, and the no-account line names
+the exact `.env` path and key to set.
+
+Run the pre-check once, not per tick. Every tick reads `copilot_down` from
+state. When `copilot_down` is true, skip the Copilot gate outright — no fetch,
+no request, no poll, no agent — and export `CLAUDE_REVIEWS_DISABLED="copilot"`
+in that tick's shell before the convergence check, so `check_convergence.py`
+bypasses the Copilot review gate and the pending-requested-reviews gate and the
+run still marks ready on the remaining signals.
+
 ## Budget-aware tick boundaries
 
 Before starting any tick, estimate whether the remaining session/usage
@@ -73,8 +93,8 @@ so the next tick resumes with accurate state.
 
 Fields: `phase`, `tick_count`, `bugbot_clean_at`, `code_review_clean_at`,
 `bugteam_clean_at`, `copilot_clean_at`, `current_head`,
-`bugbot_acknowledged_at`, `bugbot_down`, `bugteam_skill_invoked_at_head`,
-`bugteam_skill_invoked_at_tick`.
+`bugbot_acknowledged_at`, `bugbot_down`, `copilot_down`,
+`bugteam_skill_invoked_at_head`, `bugteam_skill_invoked_at_tick`.
 
 ## Gotchas
 
@@ -300,6 +320,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] Any unresolved? → For each: verify concern against current HEAD;
             if still applies → Fix (spawn `clean-coder`) → reply → resolve;
             if no longer applies → reply-with-note → resolve. Push if any code changed → return to Step 4
+      - [ ] When `copilot_down == true` (start-of-run quota pre-check), skip the Copilot fetch below — no request, no poll, no agent — and continue to gate (b); the Copilot gate is bypassed for the whole run.
       - [ ] Fetch Copilot review on `current_head` (top-level review state — uses get_reviews, identifies by reviewer):
             ```
             python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
@@ -316,6 +337,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] not mergeable → rebase → push → return to Step 1
 
       **(c) Request Copilot review**
+      - [ ] When `copilot_down == true`, skip the request and do not enter COPILOT_WAIT — continue to gate (d); the run marks ready on the remaining signals.
       - [ ] Check for pending Copilot review:
             ```
             python ~/.claude/skills/pr-converge/scripts/check_pending_reviews.py --owner <O> --repo <R> --pr-number <N>
@@ -341,6 +363,7 @@ round as converged. This rule holds every tick, every loop, every PR.
             Push if code changed → return to Step 4
 
       **(e) Mark ready**
+      - [ ] When `copilot_down == true`, export `CLAUDE_REVIEWS_DISABLED="copilot"` in this tick's shell before the check below, so it bypasses the Copilot review gate and the pending-requested-reviews gate.
       - [ ] Run automated convergence check:
             ```
             python $HOME/.claude/skills/pr-converge/scripts/check_convergence.py \
@@ -352,6 +375,9 @@ round as converged. This rule holds every tick, every loop, every PR.
 
 - [ ] **Step 7a: COPILOT_WAIT — fetch Copilot, decide**
       See: [`reference/per-tick.md` § Step 2 COPILOT_WAIT](reference/per-tick.md)
+
+      This step does not run when `copilot_down == true`: gate (c) skips the
+      Copilot request, so the loop never enters COPILOT_WAIT.
 
       Fetch Copilot reviews + inline comments on `current_head`.
 

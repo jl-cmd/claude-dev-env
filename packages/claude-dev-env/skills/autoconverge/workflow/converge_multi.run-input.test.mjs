@@ -17,9 +17,9 @@ function sourceSliceBetween(startNeedle, endNeedle) {
 
 const productionModule = new Function(
   `${sourceSliceBetween('function normalizeMultiInput(', '\nconst multiInput =')}\n` +
-    'return { normalizeMultiInput, isUsablePrEntry, classifyMultiInput };',
+    'return { normalizeMultiInput, isUsablePrEntry, classifyMultiInput, childRunInput };',
 )();
-const { normalizeMultiInput, classifyMultiInput } = productionModule;
+const { normalizeMultiInput, classifyMultiInput, childRunInput } = productionModule;
 
 const SCRIPT_PATH = '/abs/skills/autoconverge/workflow/converge.mjs';
 
@@ -97,4 +97,30 @@ test('a null payload is blocked', () => {
   const classified = classifyMultiInput('not json at all');
   assert.equal(classified.input, null);
   assert.match(classified.blocker, /did not parse/);
+});
+
+test('childRunInput forwards the PR coordinates to the child run', () => {
+  const childArgs = childRunInput(validEntry(398));
+  assert.equal(childArgs.owner, 'JonEcho');
+  assert.equal(childArgs.repo, 'python-automation');
+  assert.equal(childArgs.prNumber, 398);
+  assert.equal(childArgs.repoPath, '/worktrees/pr-398');
+});
+
+test('childRunInput forwards copilotDisabled true when the entry opts out', () => {
+  const optedOutEntry = { ...validEntry(398), copilotDisabled: true };
+  assert.equal(childRunInput(optedOutEntry).copilotDisabled, true);
+});
+
+test('childRunInput defaults copilotDisabled to false when the entry omits it', () => {
+  assert.equal(childRunInput(validEntry(398)).copilotDisabled, false);
+});
+
+test('childRunInput forwards bugbotDisabled true when the entry opts out', () => {
+  const optedOutEntry = { ...validEntry(398), bugbotDisabled: true };
+  assert.equal(childRunInput(optedOutEntry).bugbotDisabled, true);
+});
+
+test('childRunInput defaults bugbotDisabled to false when the entry omits it', () => {
+  assert.equal(childRunInput(validEntry(398)).bugbotDisabled, false);
 });
