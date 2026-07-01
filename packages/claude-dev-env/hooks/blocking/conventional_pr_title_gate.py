@@ -14,9 +14,11 @@ first line (after joining bash/PowerShell continuations), extract the
 repo root from the tool call's cwd and scan `.github/workflows/*.yml(.yaml)`
 for a semantic-pull-request marker string. The gate only fires when a marker
 is found; every other case -- an unparseable command, a missing title, a
---repo flag pointing at a repo this hook cannot inspect on disk, a directory
-that resolves to no repo root, or a repo with no matching workflow -- fails
-OPEN (allow), since the authoritative CI check still runs on GitHub.
+title that is an unresolvable shell variable (a `$`-prefixed value this hook
+cannot resolve), a --repo flag pointing at a repo this hook cannot inspect on
+disk, a directory that resolves to no repo root, or a repo with no matching
+workflow -- fails OPEN (allow), since the authoritative CI check still runs on
+GitHub.
 """
 
 import json
@@ -37,6 +39,7 @@ from verification_verdict_store import resolve_repo_root  # noqa: E402
 from blocking._gh_body_arg_utils import (  # noqa: E402
     count_extra_tokens_to_skip_for_split_quoted_value,
     get_logical_first_line,
+    is_unresolvable_shell_value,
     strip_surrounding_quotes,
 )
 from hooks_constants.conventional_pr_title_gate_constants import (  # noqa: E402
@@ -143,8 +146,10 @@ def _pull_request_title_to_validate(command: str) -> str | None:
 
     Returns None for a command that is not `gh pr create`/`gh pr edit`, an
     unparseable command, a command carrying a --repo/-R flag (a repo this hook
-    cannot inspect on the local filesystem), or a command with no --title/-t
-    value.
+    cannot inspect on the local filesystem), a command with no --title/-t
+    value, or a title that is an unresolvable shell variable (a `$`-prefixed
+    value whose resolved text this hook cannot know), which fails open so the
+    authoritative CI check on GitHub decides.
     """
     if not _matches_gh_pr_title_subcommand(command):
         return None
@@ -153,7 +158,10 @@ def _pull_request_title_to_validate(command: str) -> str | None:
         return None
     if _extract_flag_value(all_tokens, REPO_LONG_FLAG, REPO_SHORT_FLAG) is not None:
         return None
-    return _extract_flag_value(all_tokens, TITLE_LONG_FLAG, TITLE_SHORT_FLAG) or None
+    extracted_title = _extract_flag_value(all_tokens, TITLE_LONG_FLAG, TITLE_SHORT_FLAG)
+    if not extracted_title or is_unresolvable_shell_value(extracted_title):
+        return None
+    return extracted_title
 
 
 def _resolved_repo_root(payload_by_field: dict[str, object]) -> str | None:
