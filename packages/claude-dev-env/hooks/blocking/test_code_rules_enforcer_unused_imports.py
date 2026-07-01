@@ -190,15 +190,28 @@ def test_should_flag_dead_import_in_workflow_handler_file() -> None:
     )
 
 
-def test_should_skip_test_files() -> None:
+def test_should_flag_unused_import_in_test_file() -> None:
     source = (
-        "from hooks_constants.constants import UNUSED_NAME\n"
+        "import asyncio\n"
         "\n"
         "def test_thing() -> None:\n"
         "    assert True\n"
     )
     issues = check_unused_module_level_imports(source, TEST_FILE_PATH)
-    assert issues == [], f"Test files exempt, got: {issues}"
+    assert any("asyncio" in each_issue for each_issue in issues), (
+        f"Unused import in a test file must be flagged, got: {issues}"
+    )
+
+
+def test_should_not_flag_used_import_in_test_file() -> None:
+    source = (
+        "import asyncio\n"
+        "\n"
+        "def test_thing() -> None:\n"
+        "    asyncio.run(main())\n"
+    )
+    issues = check_unused_module_level_imports(source, TEST_FILE_PATH)
+    assert issues == [], f"Used import in a test file must not be flagged, got: {issues}"
 
 
 def test_should_handle_syntax_error_gracefully() -> None:

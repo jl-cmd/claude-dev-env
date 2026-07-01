@@ -10,8 +10,12 @@ orphan CSS class slip past the gate again.
 This module reads ``validate_content``'s source and asserts every ``check_*``
 attribute on the enforcer module appears in it. A check that is intentionally
 not wired must be listed in ``KNOWN_UNDISPATCHED_CHECKS`` with a reason in this
-docstring; no such checks exist today. The companion ``test_code_rules_enforcer_
-cap_meta.py`` guards the payload-cap convention; this module guards the wiring.
+docstring. ``check_unanchored_command_dispatch`` is listed there: it guards a
+``hooks/blocking`` command classifier, and the whole ``validate_content`` verdict
+stays off hook-infrastructure files, so the enforcer dispatches it from
+``_hook_infrastructure_blocking_issues`` instead. The companion
+``test_code_rules_enforcer_cap_meta.py`` guards the payload-cap convention; this
+module guards the wiring.
 """
 
 from __future__ import annotations
@@ -34,7 +38,9 @@ assert _hook_specification.loader is not None
 _hook_module = importlib.util.module_from_spec(_hook_specification)
 _hook_specification.loader.exec_module(_hook_module)
 
-KNOWN_UNDISPATCHED_CHECKS: frozenset[str] = frozenset()
+KNOWN_UNDISPATCHED_CHECKS: frozenset[str] = frozenset(
+    {"check_unanchored_command_dispatch"}
+)
 
 
 def _all_check_function_names() -> list[str]:

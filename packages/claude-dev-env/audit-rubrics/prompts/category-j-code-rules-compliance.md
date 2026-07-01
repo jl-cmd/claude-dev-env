@@ -11,9 +11,21 @@ ID prefix: `find`.
 
 ## Source material
 
-Inline the artifact (full diff or full file contents) under a clearly delimited block below this section. Use the chunking guide in [`../source-material-section-types.md`](../source-material-section-types.md) to choose the right Source-material section type (full-diff, file-set, patch-series, or excerpt-with-context). Mark every line range that is in scope; mark explicitly which files are test files (exempt) and which are production.
+Inline the artifact (full diff or full file contents) under a clearly delimited block below this section. Use the chunking guide in [`../source-material-section-types.md`](../source-material-section-types.md) to choose the right Source-material section type (full-diff, file-set, patch-series, or excerpt-with-context). Mark every line range that is in scope; mark explicitly which files are test files and which are production.
 
 Replace this paragraph with the chunked source material before issuing the prompt.
+
+## Write-time exemptions do not scope this audit
+
+The write-time hook skips several rules on test files and on `.mjs` / `.js` files; this audit does not. Apply these rules to every changed line — production, test, and JavaScript files alike:
+
+- Naming (J5, J6) — banned identifiers and banned function prefixes; boolean names prefixed `is_` / `has_` / `should_` / `can_` / `was_` / `did_`.
+- Logging format (J9) — the format string and its arguments pass as separate parameters, never an f-string.
+- Type annotations (J7) — every changed parameter and return is typed; no `Any`, no bare `# type: ignore`.
+- Unused imports — a module-level import a changed file does not read.
+- Function length — a changed function past the length threshold splits into named helpers.
+
+A `test_*.py` name or a `.mjs` extension takes the line out of the write-time gate, not out of this audit. J1 (magic values) and J3 (constants location) keep their test-file exemption; the five rules above do not.
 
 ## Sub-buckets (each requires Shape A finding OR Shape B with ≥3 adversarial probes)
 
@@ -40,18 +52,18 @@ Replace this paragraph with the chunked source material before issuing the promp
 - Adversarial probes: (a) is any imported constant referenced only once in the importing file (suggesting the import itself is gratuitous)? (b) is any helper function defined in a production file but never called from inside the same file (separate dead-code concern, surfaced here for completeness)? (c) does any constant in `config/` get imported from zero call sites across the repo?
 
 **J5. Abbreviations**
-- Walk every parameter, local, and attribute name in production code. Flag: `ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `elem`, `val`, `tmp`, `str`, `num`, `arr`, `obj`, `fn`, `cb`, `req`, `res`. Loop counters `i`/`j`/`k` and `e` for exceptions are exempt.
-- Test files are exempt.
+- Walk every parameter, local, and attribute name across production, test, and JavaScript changed lines. Flag: `ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `elem`, `val`, `tmp`, `str`, `num`, `arr`, `obj`, `fn`, `cb`, `req`, `res`. Loop counters `i`/`j`/`k` and `e` for exceptions are exempt.
+- This audit walks changed test-file and `.mjs` / `.js` lines for this rule, even though the write-time hook skips them.
 - Adversarial probes: (a) is there a borderline name (e.g., `removed`, `arguments`) that someone might mis-classify as an abbreviation but is actually a full English word? Confirm. (b) does any callback / parameter / attribute use a short variant of a domain term that is technically a full word but conventionally abbreviates a longer one? (c) does any variable in a comprehension or lambda use a single letter outside the `i`/`j`/`k`/`e` exemption?
 
 **J6. Vague names**
 - Flag any name from the vague list: `result`, `data`, `output`, `response`, `value`, `item`, `temp`, `info`, `stuff`, `thing`. Vague verb prefixes for function names: `handle`, `process`, `manage`, `do`.
-- Test files are exempt.
+- This audit walks changed test-file and `.mjs` / `.js` lines for this rule, even though the write-time hook skips them.
 - Adversarial probes: (a) does any local variable use a domain-adjacent name that is actually on the vague list (e.g., `result` from a parser, `data` from a fetch)? (b) does any newly-introduced function name start with a vague prefix? (c) does any public attribute / dict key use a vague label that the call site has to disambiguate by surrounding context?
 
 **J7. Type hints**
-- Walk every function in production files. Verify parameter and return types are present, no `Any`, no `# type: ignore`.
-- Test files are exempt.
+- Walk every function across production, test, and JavaScript changed lines. Verify parameter and return types are present, no `Any`, no `# type: ignore`.
+- This audit walks changed test-file and `.mjs` / `.js` lines for this rule, even though the write-time hook skips them.
 - Adversarial probes: (a) does any production function rely on inferred return type from a single `return` path? (b) does any parameter use a string-quoted forward reference that masks `Any`? (c) is there a `# type: ignore` anywhere? Grep the diff explicitly.
 
 **J8. New inline comments**
@@ -64,7 +76,7 @@ Replace this paragraph with the chunked source material before issuing the promp
 **J9. Logging format**
 - Walk every `log_*(...)` call. Must be `log_*("template with {}", arg)`, not `log_*(f"...")`.
 - The rule applies to the project's structured `log_*` family, not stdlib `print`. `print` f-strings are J2-scope (string-template magic), not J9-scope.
-- Test files are exempt.
+- This audit walks changed test-file and `.mjs` / `.js` lines for this rule, even though the write-time hook skips them.
 - Adversarial probes: (a) is there any imported `log_*` function in production code that uses an f-string? (b) is there a logger-equivalent call (e.g., `logger.info(f"...")` from `logging` stdlib) that should be subject to the same rule? (c) does any non-Python logger family (e.g., `console.log`, `Write-Host`, structured-log helpers) appear with a template-string pattern that mirrors the J9 anti-pattern?
 
 **J10. Imports inside functions**

@@ -10,6 +10,7 @@
 - A PowerShell cmdlet is invoked with a parameter that belongs to a different parameter set.
 - A new gate-time validator omits the `all_changed_lines` parameter that peer span-based validators accept, so the dispatcher cannot plumb diff scope through and the check silently over- or under-blocks.
 - A new span-based check applies its result cap before honoring `defer_scope_to_caller=True`, while peer checks return all violations in that mode and let the caller cap; this leaves the new sibling stale against the established pattern.
+- A call passes `PollingIntervals.resume_check` (a poll interval — how often to re-check) into a `progress_check_timeout` parameter (a timeout — how long to wait). The value's role does not match the parameter's role, so the call type-checks while the behavior is wrong.
 
 **Companion reference:** see `../source-material-section-types.md` for guidance on how to chunk the artifact under audit.
 
@@ -23,7 +24,7 @@ The decomposition that worked best for PR #394 (a Python+PowerShell scheduled-ta
 
 | ID | Axis name | Concrete checks |
 |---|---|---|
-| A1 | Python function signatures vs internal call sites | Parameter count, names, defaults, kw-only barriers; every internal call binds correctly. Is the symbol `async def`? Confirm the exact access path a caller uses: free function vs instance method reached through an object attribute vs import path. A keyword-only parameter with no default is required; omitting it raises `TypeError`. |
+| A1 | Python function signatures vs internal call sites | Parameter count, names, defaults, kw-only barriers; every internal call binds correctly. Is the symbol `async def`? Confirm the exact access path a caller uses: free function vs instance method reached through an object attribute vs import path. A keyword-only parameter with no default is required; omitting it raises `TypeError`. When a call passes a config value as an argument, confirm the value's documented role matches the parameter's role — a poll interval is not a timeout, and a timeout is not a budget. |
 | A2 | Python return-type annotation vs every code path | Each function's return annotation is satisfied by every path: explicit `return X`, fall-through, exception-handler exit. The full failure contract is the return value AND every exception raised — trace the body and the docstring `Raises:` for each `raise`, including custom errors. A `-> bool` function that also raises is not fully described by "returns bool". |
 | A3 | argparse parser → Namespace contract | Every `add_argument(...)` produces the exact dest name accessed downstream; `type=` matches downstream usage; switches produce bools. |
 | A4 | Stdlib callback contracts | `os.walk(onerror=...)` callback shape; `os.path.getctime` / `os.rmdir` argument and exception contracts; `time.sleep` argument types. Catch-site precision: for any claim that code "catches X", confirm the exact catch site and scope — an `except` around only a rollback inside `finally` does not catch the same error raised in the `with` body. |

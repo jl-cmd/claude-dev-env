@@ -384,24 +384,72 @@ def check_unused_known_pytest_fixture_parameters(
     return issues
 
 
-def check_return_annotations(content: str, file_path: str) -> list[str]:
-    if is_test_file(file_path):
-        return []
+def check_return_annotations(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    """Flag functions missing a return type annotation, scoped to changed lines.
+
+    In a production file every function definition needs a return annotation. In
+    a test file the requirement narrows to pytest-collectable test functions —
+    ``test_*`` at module top level or in a class body — which typically declare
+    ``-> None``; an ordinary helper in a test file stays exempt. Findings scope
+    to *all_changed_lines* so a pre-existing unannotated function on an untouched
+    line never blocks while a newly written one does.
+
+    Args:
+        content: The source text to inspect — the reconstructed full file on an
+            Edit so the parse succeeds.
+        file_path: The path the source will be written to, used for exemptions.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a violation
+            blocks only when the function's definition line is among the changed
+            lines.
+        defer_scope_to_caller: When True, return every violation so the
+            commit/push gate scopes by added line through its ``Line N:``
+            partitioning.
+
+    Returns:
+        One issue per function missing a return type annotation, scoped to the
+        changed lines unless *defer_scope_to_caller* is True or *all_changed_lines*
+        is None.
+    """
     if is_workflow_registry_file(file_path) or is_migration_file(file_path):
         return []
     try:
         tree = ast.parse(content)
     except SyntaxError:
         return []
-    issues: list[str] = []
-    for each_node in ast.walk(tree):
-        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    if is_test_file(file_path):
+        candidate_functions: list[ast.FunctionDef | ast.AsyncFunctionDef] = [
+            each_node
+            for each_node in _collect_pytest_collectable_functions(tree)
+            if _is_pytest_test_function(each_node)
+        ]
+    else:
+        candidate_functions = [
+            each_node
+            for each_node in ast.walk(tree)
+            if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+    all_violations_in_source_order: list[tuple[range, str]] = []
+    for each_node in candidate_functions:
+        if each_node.returns is not None:
             continue
-        if each_node.returns is None:
-            issues.append(
-                f"Line {each_node.lineno}: function {each_node.name!r} missing return type annotation (CODE_RULES §6)"
-            )
-    return issues
+        message = (
+            f"Line {each_node.lineno}: function {each_node.name!r} missing "
+            "return type annotation (CODE_RULES §6)"
+        )
+        all_violations_in_source_order.append(
+            (range(each_node.lineno, each_node.lineno + 1), message)
+        )
+    return _scope_violations_to_changed_lines(
+        all_violations_in_source_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
 
 
 def check_function_length(

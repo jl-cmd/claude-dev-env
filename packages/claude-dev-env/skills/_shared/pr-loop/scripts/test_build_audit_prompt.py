@@ -1,4 +1,4 @@
-"""Tests pinning build_audit_prompt's emitted A-P category taxonomy."""
+"""Tests pinning build_audit_prompt's emitted A-Q category taxonomy."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from skills_pr_loop_constants.path_resolver_constants import (
 )
 
 _CATEGORY_RUBRICS_DIR = _SCRIPTS_DIR.parents[3] / "audit-rubrics" / "category_rubrics"
-_HEADING_PATTERN = re.compile(r"^# Category ([A-P]) — (.+)$")
+_HEADING_PATTERN = re.compile(r"^# Category ([A-Q]) — (.+)$")
 
 
 def _load_build_audit_prompt() -> ModuleType:
@@ -84,12 +84,12 @@ def test_context_and_scope_render_paths_with_forward_slashes() -> None:
     assert "C:/Users/jon/AppData/Local/Temp/bugteam-pr-376/worktree" in scope.text
 
 
-def test_bug_categories_carry_ids_a_through_p_in_order() -> None:
+def test_bug_categories_carry_ids_a_through_q_in_order() -> None:
     root = _build_audit_root()
     bug_categories = root.find("bug_categories")
     assert bug_categories is not None
     all_emitted_ids = [each_category.get("id") for each_category in bug_categories]
-    all_expected_ids = list("ABCDEFGHIJKLMNOP")
+    all_expected_ids = list("ABCDEFGHIJKLMNOPQ")
     assert all_emitted_ids == all_expected_ids
 
 
@@ -161,3 +161,99 @@ def test_prompt_skeleton_sub_bucket_counts_match_rubric_rows() -> None:
                 f"{each_letter}{each_walk_match.group(1)} but rubric has "
                 f"{sub_bucket_row_count} rows"
             )
+
+
+def test_bug_categories_include_category_q() -> None:
+    root = _build_audit_root()
+    bug_categories = root.find("bug_categories")
+    assert bug_categories is not None
+    label_by_id = {
+        each_category.get("id"): each_category.text for each_category in bug_categories
+    }
+    assert label_by_id["Q"] == (
+        "Cross-surface claim consistency "
+        "(terminology, PR-description claims, message-vs-guard)"
+    )
+
+
+def test_pr_description_carries_body_text_when_supplied() -> None:
+    root = build_audit_prompt.build_audit_prompt_xml(
+        owner="jl-cmd",
+        repo="claude-code-config",
+        pr_number=422,
+        loop=1,
+        head_ref="feat/branch",
+        base_ref="main",
+        worktree_path=Path("/tmp/bugteam-pr-422/worktree"),
+        run_temp_dir=Path("/tmp/bugteam-pr-422"),
+        pr_body_text="## Summary\nCloses the gate.",
+    )
+    pr_description = root.find("pr_description")
+    assert pr_description is not None
+    assert pr_description.text == "## Summary\nCloses the gate."
+
+
+def test_pr_description_empty_when_body_absent() -> None:
+    root = _build_audit_root()
+    pr_description = root.find("pr_description")
+    assert pr_description is not None
+    assert pr_description.text is None
+
+
+def test_read_pr_body_text_returns_file_contents(tmp_path: Path) -> None:
+    body_file = tmp_path / "pr-body.md"
+    body_file.write_text("body from disk", encoding="utf-8")
+    assert build_audit_prompt.read_pr_body_text(body_file) == "body from disk"
+
+
+def test_read_pr_body_text_returns_none_when_path_absent() -> None:
+    assert build_audit_prompt.read_pr_body_text(None) is None
+
+
+def test_read_pr_body_text_returns_none_when_file_missing(tmp_path: Path) -> None:
+    missing_file = tmp_path / "does-not-exist.md"
+    assert build_audit_prompt.read_pr_body_text(missing_file) is None
+
+
+def test_emit_audit_prompt_embeds_pr_body_text_in_pr_description() -> None:
+    xml_text = build_audit_prompt.emit_audit_prompt(
+        owner="jl-cmd",
+        repo="claude-code-config",
+        pr_number=422,
+        loop=1,
+        head_ref="feat/branch",
+        base_ref="main",
+        worktree_path=Path("/tmp/bugteam-pr-422/worktree"),
+        run_temp_dir=Path("/tmp/bugteam-pr-422"),
+        pr_body_text="body via emit",
+    )
+    assert "body via emit" in xml_text
+
+
+def test_parse_arguments_defaults_pr_body_file_to_none() -> None:
+    arguments = build_audit_prompt.parse_arguments([
+        "--owner", "jl-cmd",
+        "--repo", "claude-code-config",
+        "--pr-number", "422",
+        "--loop", "1",
+        "--head-ref", "feat/branch",
+        "--base-ref", "main",
+        "--worktree-path", "/tmp/wt",
+        "--run-temp-dir", "/tmp/rt",
+    ])
+    assert arguments.pr_body_file is None
+
+
+def test_parse_arguments_reads_pr_body_file_path() -> None:
+    arguments = build_audit_prompt.parse_arguments([
+        "--owner", "jl-cmd",
+        "--repo", "claude-code-config",
+        "--pr-number", "422",
+        "--loop", "1",
+        "--head-ref", "feat/branch",
+        "--base-ref", "main",
+        "--worktree-path", "/tmp/wt",
+        "--run-temp-dir", "/tmp/rt",
+        "--pr-body-file", "/tmp/body.md",
+    ])
+    assert arguments.pr_body_file == Path("/tmp/body.md")

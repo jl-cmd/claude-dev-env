@@ -1,6 +1,6 @@
 # audit-rubrics/prompts
 
-Agent-ready audit prompt templates, one per category (A–P). An agent inlines the artifact under review into the `[INLINE THE FULL ARTIFACT HERE]` placeholder and runs the prompt as-is.
+Agent-ready audit prompt templates, one per category (A–Q). An agent inlines the artifact under review into the `[INLINE THE FULL ARTIFACT HERE]` placeholder and runs the prompt as-is.
 
 ## Files
 
@@ -22,6 +22,7 @@ Agent-ready audit prompt templates, one per category (A–P). An agent inlines t
 | `category-n-test-name-scenario-verifier.md` | N — Test name / scenario verifier |
 | `category-o-docstring-vs-impl-drift.md` | O — Docstring vs implementation drift |
 | `category-p-name-vs-behavior-contract.md` | P — Name vs behavior contract |
+| `category-q-cross-surface-claims.md` | Q — Cross-surface claim consistency |
 
 ## Prompt structure
 

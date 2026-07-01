@@ -89,10 +89,28 @@ def test_should_flag_async_function_without_return_annotation() -> None:
     )
 
 
-def test_should_skip_return_check_in_test_files() -> None:
+def test_should_skip_return_check_for_test_file_helper() -> None:
     source = "def fetch(url: str):\n    return url\n"
     issues = code_rules_enforcer.check_return_annotations(source, TEST_FILE_PATH)
-    assert issues == [], f"Test files must be exempt, got: {issues}"
+    assert issues == [], f"Non-test helper in a test file must be exempt, got: {issues}"
+
+
+def test_should_flag_test_function_missing_return_annotation() -> None:
+    source = "def test_loads():\n    assert True\n"
+    issues = code_rules_enforcer.check_return_annotations(source, TEST_FILE_PATH)
+    assert any("test_loads" in each_issue for each_issue in issues), (
+        f"Pytest test function must require a return annotation, got: {issues}"
+    )
+
+
+def test_should_scope_test_function_return_annotation_to_changed_lines() -> None:
+    source = "def helper():\n    return 1\n\n\ndef test_uses_it():\n    assert helper()\n"
+    unchanged = code_rules_enforcer.check_return_annotations(source, TEST_FILE_PATH, {2})
+    assert unchanged == []
+    on_definition = code_rules_enforcer.check_return_annotations(
+        source, TEST_FILE_PATH, {5}
+    )
+    assert any("test_uses_it" in each_issue for each_issue in on_definition)
 
 
 def test_should_flag_unannotated_known_fixture_in_test_file() -> None:

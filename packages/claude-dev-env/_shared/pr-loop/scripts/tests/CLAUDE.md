@@ -11,6 +11,7 @@ pytest suite for the scripts and constants in `_shared/pr-loop/scripts/`. Each t
 | `test_claude_permissions_constants.py` | `pr_loop_shared_constants/claude_permissions_constants.py` |
 | `test_claude_settings_keys_constants.py` | `pr_loop_shared_constants/claude_settings_keys_constants.py` |
 | `test_code_rules_gate.py` | `code_rules_gate.py` gate logic |
+| `test_terminology_sweep.py` | `terminology_sweep.py` near-miss detection and exit codes |
 | `test_code_rules_gate_constants.py` | `pr_loop_shared_constants/code_rules_gate_constants.py` |
 | `test_fix_hookspath.py` | `fix_hookspath.py` repair logic |
 | `test_fix_hookspath_constants.py` | `pr_loop_shared_constants/fix_hookspath_constants.py` |

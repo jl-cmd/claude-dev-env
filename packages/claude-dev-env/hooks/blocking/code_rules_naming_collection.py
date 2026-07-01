@@ -33,6 +33,9 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     POLARITY_TOKEN_BOUNDARY_PATTERN,
     UPPER_SNAKE_CONSTANT_PATTERN,
 )
+from hooks_constants.blocking_check_limits import (  # noqa: E402
+    MAX_POLARITY_CONTRADICTION_ISSUES,
+)
 from hooks_constants.stuttering_check_config import (  # noqa: E402
     MAX_STUTTERING_PREFIX_ISSUES,
     STUTTERING_ALL_PREFIX_PATTERN,
@@ -336,4 +339,6 @@ def check_polarity_name_contradiction(content: str, file_path: str) -> list[str]
             f" {called_name!r} (says {called_token!r}) - the name contradicts the value; rename the"
             f" callee to a neutral form so each call site reads truthfully (CODE_RULES §5)"
         )
+        if len(issues) >= MAX_POLARITY_CONTRADICTION_ISSUES:
+            break
     return issues

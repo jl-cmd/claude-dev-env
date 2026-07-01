@@ -1,6 +1,6 @@
 # audit-rubrics
 
-Audit rubrics for the PR-loop code-review suite. The rubrics define the 16 bug categories (A–P), their sub-bucket decompositions, and the prompt templates agents use during an audit pass. Installed into `~/.claude/audit-rubrics/` by `bin/install.mjs`.
+Audit rubrics for the PR-loop code-review suite. The rubrics define the 17 bug categories (A–Q), their sub-bucket decompositions, and the prompt templates agents use during an audit pass. Installed into `~/.claude/audit-rubrics/` by `bin/install.mjs`.
 
 ## Key file
 
@@ -12,7 +12,7 @@ Audit rubrics for the PR-loop code-review suite. The rubrics define the 16 bug c
 
 | Entry | Description |
 |---|---|
-| `category_rubrics/` | One `.md` per category (A–P): defines what the category audits, example findings, and a sub-bucket decomposition table |
+| `category_rubrics/` | One `.md` per category (A–Q): defines what the category audits, example findings, and a sub-bucket decomposition table |
 | `prompts/` | One `.md` per category: the ready-to-use audit prompt template an agent inlines the artifact into |
 
 ## Categories
@@ -35,6 +35,7 @@ Audit rubrics for the PR-loop code-review suite. The rubrics define the 16 bug c
 | N | Test name / scenario verifier |
 | O | Docstring vs implementation drift |
 | P | Name vs behavior contract |
+| Q | Cross-surface claim consistency |
 
 ## Breaking-change rule
 

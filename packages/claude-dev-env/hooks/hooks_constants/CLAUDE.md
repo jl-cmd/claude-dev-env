@@ -16,6 +16,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `env_var_table_code_drift_constants.py` | Table patterns, env-var-name and code-file recognizers, scan budget, and block-message text for the env-var-table code-drift blocker |
 | `code_rules_path_utils_constants.py` | Path-matching helpers used by the code-rules check modules |
 | `code_verifier_spawn_preflight_gate_constants.py` | Subagent type, merge-tree command flags, timeouts, and deny-message text for the code-verifier spawn pre-flight gate |
+| `command_dispatch_constants.py` | Command-word regex, command-key access pattern, tokenization pattern, and anchors for the unanchored command-dispatch meta-gate |
 | `convergence_branch_constants.py` | Branch and worktree naming patterns for the convergence gate |
 | `dead_argparse_argument_constants.py` | Patterns for detecting unused argparse arguments |
 | `dead_config_field_constants.py` | Patterns for detecting unused `*Config` / `*Selectors` dataclass fields |
@@ -34,6 +35,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
 | `html_companion_constants.py` | Blocked URL schemes and other config for the `.md`-to-`.html` companion hook |
 | `inline_tuple_string_magic_constants.py` | Patterns for detecting magic strings in inline tuple literals |
+| `js_conventions_constants.py` | Banned identifier set, boolean-prefix pattern, and declaration/JSDoc patterns for the JavaScript convention checks |
 | `md_to_html_blocker_constants.py` | Path exemptions and trigger patterns for the markdown-to-html blocker |
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |

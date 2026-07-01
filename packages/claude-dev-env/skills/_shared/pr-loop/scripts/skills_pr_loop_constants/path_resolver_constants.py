@@ -9,7 +9,6 @@ WORKTREE_DIRNAME = "worktree"
 DIFF_PATCH_TEMPLATE = "loop-{loop}.patch"
 OUTCOME_XML_TEMPLATE = ".bugteam-pr{number}-loop{loop}.outcomes.xml"
 FIX_OUTCOME_XML_TEMPLATE = ".bugteam-pr{number}-loop{loop}.fix-outcomes.xml"
-LOOP_STATE_FILENAME = "loop-state.json"
 SLUGIFY_SAFE_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 SLUGIFY_REPLACEMENT = "-"
 MULTI_PR_SLUG_TEMPLATE = "{owner}-{repo}-pr-{number}"
@@ -47,6 +46,7 @@ ALL_AUDIT_CATEGORY_ENTRIES = [
     ("N", "Test-name scenario verifier"),
     ("O", "Docstring / fixture-prose vs implementation drift"),
     ("P", "Name / regex / word-list vs behavior-contract precision"),
+    ("Q", "Cross-surface claim consistency (terminology, PR-description claims, message-vs-guard)"),
 ]
 
 AUDIT_RUBRIC_REFERENCE_TEXT = (
@@ -77,9 +77,6 @@ ALL_FIX_CONSTRAINT_TEXTS = [
     "forward slashes (e.g. C:/Users/...), even on Windows.",
 ]
 
-XML_PRETTY_INDENT = "  "
-XML_SERIALIZE_ENCODING = "unicode"
-XML_OUTPUT_ENCODING = "utf-8"
 ALL_PYTHON_ONEXC_VERSION = (3, 12)
 
 ALL_FINDING_BODY_ELEMENT_KEYS: tuple[str, ...] = (

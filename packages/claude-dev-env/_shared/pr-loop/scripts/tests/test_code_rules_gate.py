@@ -1953,3 +1953,329 @@ def test_main_staged_mode_passes_on_staged_deletion_of_clean_file(
         "a staged deletion has no staged blob; the gate must skip it cleanly "
         "rather than fail closed as if the file were unreadable"
     )
+
+
+def test_run_staged_test_files_passes_for_a_passing_staged_test(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(
+        temporary_git_repository / "test_ok.py",
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    stage_file(temporary_git_repository, "test_ok.py")
+
+    exit_code = gate_module.run_staged_test_files(temporary_git_repository)
+
+    assert exit_code == 0
+
+
+def test_run_staged_test_files_fails_for_a_failing_staged_test(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(
+        temporary_git_repository / "test_bad.py",
+        "def test_bad() -> None:\n    assert False\n",
+    )
+    stage_file(temporary_git_repository, "test_bad.py")
+
+    exit_code = gate_module.run_staged_test_files(temporary_git_repository)
+
+    assert exit_code != 0
+
+
+def test_run_staged_test_files_zero_when_no_test_file_staged(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "helper.py", "first_value = 1\n")
+    stage_file(temporary_git_repository, "helper.py")
+
+    assert gate_module.run_staged_test_files(temporary_git_repository) == 0
+
+
+def test_hunk_header_pattern_captures_new_start_and_count() -> None:
+    header_match = gate_module.hunk_header_pattern().match("@@ -12,3 +45,6 @@ def scope")
+    assert header_match is not None
+    assert header_match.group(1) == "45"
+    assert header_match.group(2) == "6"
+
+
+def test_hunk_header_pattern_leaves_count_group_none_for_single_line_hunk() -> None:
+    header_match = gate_module.hunk_header_pattern().match("@@ -0,0 +7 @@")
+    assert header_match is not None
+    assert header_match.group(1) == "7"
+    assert header_match.group(2) is None
+
+
+def test_violation_line_pattern_captures_leading_line_number() -> None:
+    violation_match = gate_module.violation_line_pattern().match(
+        "Line 88: banned identifier"
+    )
+    assert violation_match is not None
+    assert violation_match.group(1) == "88"
+
+
+def test_violation_line_pattern_does_not_match_unprefixed_text() -> None:
+    assert gate_module.violation_line_pattern().match("Function foo is too long") is None
+
+
+def test_filter_paths_under_prefixes_keeps_only_nested_paths(tmp_path: Path) -> None:
+    kept_path = tmp_path / "packages" / "core" / "module.py"
+    dropped_path = tmp_path / "docs" / "guide.py"
+    kept_path.parent.mkdir(parents=True)
+    dropped_path.parent.mkdir(parents=True)
+    kept_path.write_text("kept = 1\n", encoding="utf-8")
+    dropped_path.write_text("dropped = 1\n", encoding="utf-8")
+
+    filtered_paths = gate_module.filter_paths_under_prefixes(
+        [kept_path, dropped_path], tmp_path, ["packages/core"]
+    )
+
+    assert filtered_paths == [kept_path]
+
+
+def test_filter_paths_under_prefixes_returns_input_when_no_prefixes(
+    tmp_path: Path,
+) -> None:
+    only_path = tmp_path / "anywhere.py"
+    only_path.write_text("value = 1\n", encoding="utf-8")
+
+    filtered_paths = gate_module.filter_paths_under_prefixes([only_path], tmp_path, [])
+
+    assert filtered_paths == [only_path]
+
+
+def test_is_code_path_accepts_python_and_typescript_suffixes() -> None:
+    assert gate_module.is_code_path(Path("pkg/module.py"))
+    assert gate_module.is_code_path(Path("pkg/component.tsx"))
+
+
+def test_is_code_path_rejects_non_code_suffix() -> None:
+    assert not gate_module.is_code_path(Path("docs/readme.md"))
+
+
+def test_parse_added_line_numbers_collects_every_added_line() -> None:
+    unified_diff_text = (
+        "diff --git a/target.py b/target.py\n"
+        "@@ -1,0 +2,3 @@\n"
+        "+second = 2\n"
+        "+third = 3\n"
+        "+fourth = 4\n"
+    )
+
+    added_line_numbers = gate_module.parse_added_line_numbers(unified_diff_text)
+
+    assert added_line_numbers == {2, 3, 4}
+
+
+def test_parse_added_line_numbers_ignores_zero_count_hunks() -> None:
+    unified_diff_text = "@@ -5,2 +5,0 @@\n"
+
+    assert gate_module.parse_added_line_numbers(unified_diff_text) == set()
+
+
+def test_is_file_new_at_base_true_for_file_added_after_base(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "original.py", "first_count = 1\n")
+    commit_all_files(temporary_git_repository, "baseline")
+    base_sha = run_git_in_repository(
+        temporary_git_repository, "rev-parse", "HEAD"
+    ).strip()
+    write_file(temporary_git_repository / "added.py", "second_count = 2\n")
+    commit_all_files(temporary_git_repository, "add second file")
+
+    assert gate_module.is_file_new_at_base(temporary_git_repository, base_sha, "added.py")
+    assert not gate_module.is_file_new_at_base(
+        temporary_git_repository, base_sha, "original.py"
+    )
+
+
+def test_added_lines_for_file_reports_lines_added_since_base(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "target.py", "first = 1\nsecond = 2\n")
+    commit_all_files(temporary_git_repository, "baseline")
+    base_sha = run_git_in_repository(
+        temporary_git_repository, "rev-parse", "HEAD"
+    ).strip()
+    write_file(
+        temporary_git_repository / "target.py",
+        "first = 1\nsecond = 2\nthird = 3\nfourth = 4\n",
+    )
+    commit_all_files(temporary_git_repository, "append lines")
+
+    added_line_numbers = gate_module.added_lines_for_file(
+        temporary_git_repository, base_sha, "target.py"
+    )
+
+    assert 3 in added_line_numbers
+    assert 4 in added_line_numbers
+    assert 1 not in added_line_numbers
+
+
+def test_extract_violation_line_number_returns_parsed_line() -> None:
+    assert gate_module.extract_violation_line_number("Line 17: magic value") == 17
+
+
+def test_extract_violation_line_number_returns_none_for_unprefixed_text() -> None:
+    assert gate_module.extract_violation_line_number("no line prefix here") is None
+
+
+def test_function_length_span_range_covers_declared_span() -> None:
+    violation_text = "Function 'compute_total' (defined at line 10) is 25 lines - split it"
+
+    span_range = gate_module.function_length_span_range(violation_text)
+
+    assert span_range == range(10, 35)
+
+
+def test_function_length_span_range_returns_none_for_other_message() -> None:
+    assert gate_module.function_length_span_range("Line 3: banned identifier") is None
+
+
+def test_isolation_span_range_covers_enclosing_test_span() -> None:
+    violation_text = (
+        "Line 5: Test 'test_probe' (defined at line 12, spanning 8 lines) probes HOME"
+    )
+
+    span_range = gate_module.isolation_span_range(violation_text)
+
+    assert span_range == range(12, 20)
+
+
+def test_isolation_span_range_returns_none_for_other_message() -> None:
+    assert gate_module.isolation_span_range("Function foo is 5 lines") is None
+
+
+def test_enclosing_span_range_dispatches_to_function_length_extractor() -> None:
+    violation_text = "Function 'render' (defined at line 4) is 6 lines - too long"
+
+    span_range = gate_module.enclosing_span_range(violation_text)
+
+    assert span_range == range(4, 10)
+
+
+def test_enclosing_span_range_returns_none_when_no_span_fragment() -> None:
+    assert gate_module.enclosing_span_range("Line 9: plain violation") is None
+
+
+def test_print_violation_section_writes_header_and_grouped_paths(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    offending_path = tmp_path / "package" / "module.py"
+    offending_path.parent.mkdir(parents=True)
+    offending_path.write_text("value = 1\n", encoding="utf-8")
+
+    gate_module.print_violation_section(
+        "BLOCKING violations:",
+        {offending_path.resolve(): ["Line 3: magic value", "Line 4: banned name"]},
+        tmp_path,
+    )
+
+    captured = capsys.readouterr()
+    assert "BLOCKING violations:" in captured.err
+    assert "package/module.py" in captured.err.replace("\\", "/")
+    assert "Line 3: magic value" in captured.err
+    assert "Line 4: banned name" in captured.err
+
+
+def test_read_prior_committed_content_returns_head_version(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "tracked.py", "committed = 1\n")
+    commit_all_files(temporary_git_repository, "commit tracked")
+    write_file(temporary_git_repository / "tracked.py", "working_tree_edit = 2\n")
+
+    committed_content = gate_module.read_prior_committed_content(
+        temporary_git_repository, "tracked.py"
+    )
+
+    assert committed_content == "committed = 1\n"
+
+
+def test_read_prior_committed_content_returns_empty_for_untracked_path(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "anchor.py", "anchor = 1\n")
+    commit_all_files(temporary_git_repository, "baseline")
+
+    assert (
+        gate_module.read_prior_committed_content(temporary_git_repository, "missing.py")
+        == ""
+    )
+
+
+def test_read_staged_content_returns_staged_blob(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "staged.py", "staged_value = 1\n")
+    stage_file(temporary_git_repository, "staged.py")
+
+    staged_content = gate_module.read_staged_content(
+        temporary_git_repository, "staged.py"
+    )
+
+    assert staged_content == "staged_value = 1\n"
+
+
+def test_read_staged_content_returns_none_for_unstaged_path(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "anchor.py", "anchor = 1\n")
+    commit_all_files(temporary_git_repository, "baseline")
+
+    assert (
+        gate_module.read_staged_content(temporary_git_repository, "never_staged.py")
+        is None
+    )
+
+
+def test_staged_blob_exists_true_for_staged_file(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "present.py", "present_value = 1\n")
+    stage_file(temporary_git_repository, "present.py")
+
+    assert gate_module.staged_blob_exists(temporary_git_repository, "present.py")
+
+
+def test_staged_blob_exists_false_for_staged_deletion(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "removable.py", "first_count = 1\n")
+    commit_all_files(temporary_git_repository, "initial")
+    run_git_in_repository(temporary_git_repository, "rm", "--", "removable.py")
+
+    assert not gate_module.staged_blob_exists(temporary_git_repository, "removable.py")
+
+
+def test_parse_arguments_reads_staged_base_and_prefix_flags() -> None:
+    parsed_arguments = gate_module.parse_arguments(
+        [
+            "--staged",
+            "--base",
+            "main",
+            "--repo-root",
+            "some/root",
+            "--only-under",
+            "packages/core",
+            "explicit_file.py",
+        ]
+    )
+
+    assert parsed_arguments.staged is True
+    assert parsed_arguments.base == "main"
+    assert parsed_arguments.repo_root == Path("some/root")
+    assert parsed_arguments.only_under == ["packages/core"]
+    assert parsed_arguments.paths == [Path("explicit_file.py")]
+
+
+def test_parse_arguments_applies_documented_defaults() -> None:
+    parsed_arguments = gate_module.parse_arguments([])
+
+    assert parsed_arguments.staged is False
+    assert parsed_arguments.base == "origin/main"
+    assert parsed_arguments.repo_root is None
+    assert parsed_arguments.only_under == []
+    assert parsed_arguments.paths == []

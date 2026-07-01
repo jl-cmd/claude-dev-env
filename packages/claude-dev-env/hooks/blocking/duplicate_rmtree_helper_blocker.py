@@ -39,6 +39,7 @@ from hooks_constants.duplicate_rmtree_helper_blocker_constants import (  # noqa:
     PYTHON_FILE_EXTENSION,
     TRIPLE_QUOTED_STRING_PATTERN,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 
 
@@ -146,6 +147,12 @@ def main() -> None:
             "permissionDecisionReason": corrective_message,
         }
     }
+    log_hook_block(
+        calling_hook_name="duplicate_rmtree_helper_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=corrective_message,
+        tool_name=tool_name,
+    )
     print(json.dumps(deny_response))
     sys.stdout.flush()
     sys.exit(0)

@@ -30,7 +30,19 @@
 | J11 | sys.path.insert dedup | `sys.path.insert(0, X)` must be guarded by `if X not in sys.path:` (test files exempt). |
 | J12 | Hardcoded user paths | String literals naming a specific user's home directory (`C:/Users/jon/...`, `/Users/alice/...`, `/home/bob/...`). Use `pathlib.Path.home()`. |
 
-Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, paths under `/tests/`) are exempt from Category J except where the rule explicitly applies (e.g., J11 on `sys.path.insert`).
+The write-time hook (`code_rules_enforcer.py`) exempts test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, paths under `/tests/`) from most Category J sub-buckets, and skips the naming, logging, annotation, and unused-import rules on `.mjs` / `.js` files. J11 (`sys.path.insert`) always applies. Read the next section for the sub-buckets this audit applies more widely than the hook.
+
+## Write-time exemptions do not scope this audit
+
+The write-time hook skips several rules on test files and on `.mjs` / `.js` files. This audit does not. Apply these rules to every changed line — production files, test files, and JavaScript files alike:
+
+- **Naming (J5, J6)** — banned identifiers (`ctx`, `cfg`, `msg`, `result`, `data`, `output`, `value`, `item`, `temp`, `elem`, `val`, …) and banned function prefixes (`handle_`, `process_`, `manage_`, `do_`); boolean names prefixed `is_` / `has_` / `should_` / `can_` / `was_` / `did_`.
+- **Logging format (J9)** — the format string and its arguments pass as separate parameters (`log_*("...", arg)`), never an f-string.
+- **Type annotations (J7)** — every changed function parameter and return is typed; no `Any`, no bare `# type: ignore`.
+- **Unused imports** — a module-level import a changed file does not read is a finding.
+- **Function length** — a changed function that runs past the length threshold splits into named helpers.
+
+A `test_*.py` name or a `.mjs` extension takes the line out of the write-time gate, not out of this audit. When the diff touches a test or a JavaScript file, walk these five rules against the changed lines there too. J1 (magic values) and J3 (constants location) keep their test-file exemption.
 
 ---
 
