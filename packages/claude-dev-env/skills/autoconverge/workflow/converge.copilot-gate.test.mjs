@@ -129,12 +129,12 @@ test('a Copilot no-show after the poll cap returns a down result rather than a b
   );
 });
 
-test('resumeConvergenceCheckAgent wires the --copilot-down flag from the copilotDown context', () => {
-  const checkConvergenceBody = functionBody('resumeConvergenceCheckAgent');
+test('runConvergenceCheck wires the --copilot-down flag from the copilotDown context', () => {
+  const checkConvergenceBody = functionBody('runConvergenceCheck');
   assert.match(
     checkConvergenceBody,
     /context\.copilotDown \? ' --copilot-down' : ''/,
-    'expected resumeConvergenceCheckAgent to append --copilot-down when copilotDown is set',
+    'expected runConvergenceCheck to append --copilot-down when copilotDown is set',
   );
   assert.match(
     checkConvergenceBody,
@@ -244,8 +244,8 @@ test('markReady receives copilotDown so it can opt the unflagged hook out of the
   );
 });
 
-test('the mark-ready task in resumeGeneralUtilityAgent opts the unflagged convergence hook out of Copilot when copilotDown', () => {
-  const markReadyBody = functionBody('resumeGeneralUtilityAgent');
+test('the mark-ready task in runGeneralUtilityTask opts the unflagged convergence hook out of Copilot when copilotDown', () => {
+  const markReadyBody = functionBody('runGeneralUtilityTask');
   assert.match(
     markReadyBody,
     /context\.copilotDown/,

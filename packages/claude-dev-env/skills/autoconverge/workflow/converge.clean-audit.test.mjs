@@ -40,8 +40,8 @@ test('cleanAuditBlocker falls back to a no-result reason when the post agent die
   assert.match(message, /the post agent returned no result/);
 });
 
-test('the post-clean-audit task in resumeGeneralUtilityAgent returns the CLEAN_AUDIT_SCHEMA result rather than an unused transcript', () => {
-  const body = functionBody('resumeGeneralUtilityAgent');
+test('the post-clean-audit task in runGeneralUtilityTask returns the CLEAN_AUDIT_SCHEMA result rather than an unused transcript', () => {
+  const body = functionBody('runGeneralUtilityTask');
   assert.match(body, /task === 'post-clean-audit'/);
   assert.match(body, /schema: CLEAN_AUDIT_SCHEMA/);
   assert.doesNotMatch(body, /agent transcript \(unused\)/);
@@ -59,7 +59,7 @@ test('the standards-only call site breaks with a clean-audit blocker when the po
     convergeSource.indexOf('if (isStandardsOnlyRound(findings)) {'),
     convergeSource.indexOf('if (findings.length > 0) {'),
   );
-  assert.match(branch, /resumeGeneralUtilityAgent\(.*'post-clean-audit'/);
+  assert.match(branch, /runGeneralUtilityTask\(.*'post-clean-audit'/);
   assert.match(branch, /if \(!auditResult\?\.posted\)/);
   assert.match(branch, /blocker = cleanAuditBlocker\(head, auditResult\)/);
   assert.match(branch, /\bbreak\b/);
@@ -70,7 +70,7 @@ test('the all-clean call site breaks with a clean-audit blocker when the post do
     convergeSource.indexOf('all lenses clean on'),
     convergeSource.indexOf("if (phase === 'COPILOT') {"),
   );
-  assert.match(branch, /resumeGeneralUtilityAgent\(.*'post-clean-audit'/);
+  assert.match(branch, /runGeneralUtilityTask\(.*'post-clean-audit'/);
   assert.match(branch, /if \(!auditResult\?\.posted\)/);
   assert.match(branch, /blocker = cleanAuditBlocker\(head, auditResult\)/);
   assert.match(branch, /\bbreak\b/);

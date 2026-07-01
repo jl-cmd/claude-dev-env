@@ -32,7 +32,7 @@ test('isMergeConflicting reports a conflict only when the check returned conflic
 });
 
 test('the git agent handles merge-conflict checks with shell-agnostic polling', () => {
-  const gitBody = functionBody('resumeGitAgent');
+  const gitBody = functionBody('runGitTask');
   assert.match(gitBody, /mergeable/, 'expected the git agent to read the PR mergeable field');
   assert.match(
     gitBody,
@@ -43,8 +43,8 @@ test('the git agent handles merge-conflict checks with shell-agnostic polling', 
   assert.match(gitBody, /sleep 5|Start-Sleep/, 'expected a shell-agnostic poll delay');
 });
 
-test('resumeCodeEditorAgent conflict-edit path rebases onto origin/main and makes no push', () => {
-  const body = functionBody('resumeCodeEditorAgent');
+test('runCodeEditorTask conflict-edit path rebases onto origin/main and makes no push', () => {
+  const body = functionBody('runCodeEditorTask');
   assert.match(body, /git rebase origin\/main/, 'expected the edit path to rebase onto origin/main');
   assert.match(
     body,
@@ -55,9 +55,9 @@ test('resumeCodeEditorAgent conflict-edit path rebases onto origin/main and make
 
 test('resolveMergeConflicts runs check -> edit -> verify -> commit and gates the push on the verdict', () => {
   const body = functionBody('resolveMergeConflicts');
-  const checkIndex = body.indexOf("resumeGitAgent(gitAgentId, 'check-merge-conflicts'");
-  const editIndex = body.indexOf('spawnCodeEditorAgent(');
-  const verifyIndex = body.indexOf('spawnVerifierAgent(');
+  const checkIndex = body.indexOf("runGitTask('check-merge-conflicts'");
+  const editIndex = body.indexOf("runCodeEditorTask('conflict-edit'");
+  const verifyIndex = body.indexOf('runVerifierTask(');
   const commitIndex = body.indexOf('commitWithRecovery(');
   assert.notEqual(checkIndex, -1, 'expected the conflict check to run');
   assert.notEqual(editIndex, -1, 'expected the edit step to run');

@@ -99,8 +99,8 @@ test('FIX_RECOVERY_MAX_ATTEMPTS is declared and bounds the recovery loop at 2', 
   assert.match(constantLine('FIX_RECOVERY_MAX_ATTEMPTS'), /=\s*2\s*$/);
 });
 
-test('the commit path in resumeCodeEditorAgent separates an edit-requiring block from a transient failure', () => {
-  const commitBody = functionSource('resumeCodeEditorAgent');
+test('the commit path in runCodeEditorTask separates an edit-requiring block from a transient failure', () => {
+  const commitBody = functionSource('runCodeEditorTask');
   assert.match(commitBody, /blockedNeedingEdit/, 'expected the edit-block flag to be set in the prompt');
   assert.match(commitBody, /blockerDetail/, 'expected the verbatim blocker detail to be requested');
   assert.match(
@@ -115,8 +115,8 @@ test('the commit path in resumeCodeEditorAgent separates an edit-requiring block
   );
 });
 
-test('the commit-recover task in resumeCodeEditorAgent is a clean-coder edit step bound to the blocker detail and leaves changes uncommitted', () => {
-  const recoverBody = functionSource('resumeCodeEditorAgent');
+test('the commit-recover task in runCodeEditorTask is a clean-coder edit step bound to the blocker detail and leaves changes uncommitted', () => {
+  const recoverBody = functionSource('runCodeEditorTask');
   assert.match(recoverBody, /agentType:\s*'clean-coder'/, 'expected the fixer to use clean-coder');
   assert.match(recoverBody, /schema:\s*EDIT_SCHEMA/, 'expected the fixer to reuse EDIT_SCHEMA');
   assert.match(recoverBody, /task === 'commit-recover'/, 'expected the commit-recover task branch');
@@ -161,88 +161,92 @@ test('commitWithRecovery bounds the loop, re-verifies, and retries the commit on
   );
 });
 
-test('applyFixes routes through spawnFixerAgent and fixerWithRecovery', () => {
+test('applyFixes routes through the fix-edit task and fixerWithRecovery', () => {
   const applyFixesBody = functionSource('applyFixes');
-  assert.match(applyFixesBody, /spawnFixerAgent\(/, 'expected applyFixes to call spawnFixerAgent');
+  assert.match(applyFixesBody, /runCodeEditorTask\('fix-edit'/, "expected applyFixes to call runCodeEditorTask('fix-edit')");
   assert.match(applyFixesBody, /fixerWithRecovery\(/, 'expected applyFixes to call fixerWithRecovery');
 });
 
-test('applyFixes spawns a separate verifier and passes both ids into fixerWithRecovery', () => {
+test('applyFixes delegates to fixerWithRecovery, which grades fixes with a separate verifier from the fixer', () => {
   const applyFixesBody = functionSource('applyFixes');
   assert.match(
     applyFixesBody,
-    /spawnVerifierAgent\(/,
-    'expected applyFixes to spawn a separate verifier agent so the fix-path verdict is independent of the fixer',
+    /fixerWithRecovery\(head, findings, sourceLabel\)/,
+    'expected applyFixes to delegate the verify and commit flow to fixerWithRecovery',
   );
-  const fixerSpawnIndex = applyFixesBody.search(/spawnFixerAgent\(/);
-  const verifierSpawnIndex = applyFixesBody.search(/spawnVerifierAgent\(/);
-  assert.notEqual(fixerSpawnIndex, -1, 'expected applyFixes to spawn the fixer');
-  assert.notEqual(verifierSpawnIndex, -1, 'expected applyFixes to spawn the verifier');
-  assert.match(
-    applyFixesBody,
-    /fixerWithRecovery\(\s*fixerAgentId,\s*verifierId,/,
-    'expected applyFixes to pass both the fixer and verifier ids into fixerWithRecovery',
-  );
-});
-
-test('fixerWithRecovery runs verify on the verifier id and edits/commits on the fixer id', () => {
   const recoveryBody = functionSource('fixerWithRecovery');
   assert.match(
     recoveryBody,
-    /resumeVerifierAgent\(\s*verifierId,/,
-    'expected fixerWithRecovery to resume the separate verifier for the verify step',
+    /runVerifierTask\('fix-verify'/,
+    'expected fixerWithRecovery to grade the fixes with the code-verifier task so the verdict is independent of the fixer',
   );
   assert.match(
     recoveryBody,
-    /resumeFixerAgent\(\s*fixerAgentId,\s*'commit'/,
-    'expected fixerWithRecovery to resume the fixer for the commit step',
+    /runFixerTask\('commit'/,
+    'expected fixerWithRecovery to commit through the clean-coder fixer task',
+  );
+});
+
+test('fixerWithRecovery runs verify via runVerifierTask and edits/commits via runFixerTask', () => {
+  const recoveryBody = functionSource('fixerWithRecovery');
+  assert.match(
+    recoveryBody,
+    /runVerifierTask\('fix-verify'/,
+    'expected fixerWithRecovery to run the verify step through the separate verifier task',
+  );
+  assert.match(
+    recoveryBody,
+    /runFixerTask\('commit'/,
+    'expected fixerWithRecovery to run the commit step through the fixer task',
   );
   assert.doesNotMatch(
     recoveryBody,
-    /resumeFixerAgent\(\s*fixerAgentId,\s*'(?:verify-commit|fix-verify)'/,
-    'expected the verify step never to resume the fixer session — the verifier must grade a different session than the one that edits',
+    /runFixerTask\('(?:verify-commit|fix-verify)'/,
+    'expected the verify step never to route through the fixer task — the verifier grades a different agent than the one that edits',
   );
 });
 
-test('the fix-path verify resumes a different agent id than the fix-path edits, mirroring the repair path', () => {
+test('the fix-path verify routes through a different helper and agentType than the fix-path edits, mirroring the repair path', () => {
   const recoveryBody = functionSource('fixerWithRecovery');
-  const verifyResumeMatch = /resumeVerifierAgent\(\s*(\w+),/.exec(recoveryBody);
-  const editResumeMatch = /resumeFixerAgent\(\s*(\w+),/.exec(recoveryBody);
-  assert.ok(verifyResumeMatch, 'expected a verify resume call naming its agent id');
-  assert.ok(editResumeMatch, 'expected an edit/commit resume call naming its agent id');
+  const verifyHelperMatch = /(\w+)\('fix-verify'/.exec(recoveryBody);
+  const editHelperMatch = /(\w+)\('commit'/.exec(recoveryBody);
+  assert.ok(verifyHelperMatch, 'expected a verify call naming its task helper');
+  assert.ok(editHelperMatch, 'expected an edit/commit call naming its task helper');
+  assert.equal(verifyHelperMatch[1], 'runVerifierTask', 'expected verify to route through runVerifierTask (code-verifier)');
+  assert.equal(editHelperMatch[1], 'runFixerTask', 'expected commit to route through runFixerTask (clean-coder)');
   assert.notEqual(
-    verifyResumeMatch[1],
-    editResumeMatch[1],
-    'expected the verify step to resume a different agent id than the edit/commit step',
+    verifyHelperMatch[1],
+    editHelperMatch[1],
+    'expected the verify step to route through a different helper than the edit/commit step',
   );
 });
 
-test('the verifier carries a fix-verify task so the fix path verdict comes from the verifier group', () => {
-  const verifierBody = functionSource('resumeVerifierAgent');
-  assert.match(verifierBody, /task === 'fix-verify'/, 'expected resumeVerifierAgent to handle the fix-verify task');
+test('the verifier carries a fix-verify task so the fix path verdict comes from the verifier', () => {
+  const verifierBody = functionSource('runVerifierTask');
+  assert.match(verifierBody, /task === 'fix-verify'/, 'expected runVerifierTask to handle the fix-verify task');
   assert.match(verifierBody, /buildVerdictFenceSteps\(/, 'expected the fix-verify task to emit a verdict fence');
   assert.match(verifierBody, /agentType:\s*'code-verifier'/, 'expected the fix-verify task to run as code-verifier');
 });
 
-test('resumeFixerAgent no longer verifies its own edits — no code-verifier verify-commit task remains', () => {
-  const fixerBody = functionSource('resumeFixerAgent');
+test('runFixerTask no longer verifies its own edits — no code-verifier verify-commit task remains', () => {
+  const fixerBody = functionSource('runFixerTask');
   assert.doesNotMatch(
     fixerBody,
     /task === 'verify-commit'/,
-    'expected the fixer to no longer carry the verify-commit task that graded its own session',
+    'expected the fixer to no longer carry the verify-commit task that graded its own edits',
   );
   assert.doesNotMatch(
     fixerBody,
     /agentType:\s*'code-verifier'/,
-    'expected the fixer session to be clean-coder only — a separate verifier grades the working tree',
+    'expected the fixer to be clean-coder only — a separate verifier grades the working tree',
   );
 });
 
 test('repairConvergence routes its commit through commitWithRecovery wired to the repair-path steps', () => {
   const repairBody = functionSource('repairConvergence');
   assert.match(repairBody, /commitWithRecovery\(/, 'expected repairConvergence to call commitWithRecovery');
-  assert.match(repairBody, /resumeCodeEditorAgent\(/, 'expected repairConvergence to use resumeCodeEditorAgent');
-  assert.match(repairBody, /resumeVerifierAgent\(/, 'expected repairConvergence to use resumeVerifierAgent');
+  assert.match(repairBody, /runCodeEditorTask\(/, 'expected repairConvergence to use runCodeEditorTask');
+  assert.match(repairBody, /runVerifierTask\(/, 'expected repairConvergence to use runVerifierTask');
 });
 
 test('the round-loop fix-stalled blockers survive the recovery wiring', () => {
@@ -334,8 +338,8 @@ test('extractVerifyObjection falls back when no finding yields usable text', () 
   assert.equal(extractVerifyObjection(transcript), VERIFY_OBJECTION_FALLBACK);
 });
 
-test('the verify-recover task in resumeCodeEditorAgent is a clean-coder edit step bound to the verifier objection and leaves changes uncommitted', () => {
-  const recoverBody = functionSource('resumeCodeEditorAgent');
+test('the verify-recover task in runCodeEditorTask is a clean-coder edit step bound to the verifier objection and leaves changes uncommitted', () => {
+  const recoverBody = functionSource('runCodeEditorTask');
   assert.match(recoverBody, /agentType:\s*'clean-coder'/, 'expected the fixer to use clean-coder');
   assert.match(recoverBody, /schema:\s*EDIT_SCHEMA/, 'expected the fixer to reuse EDIT_SCHEMA');
   assert.match(recoverBody, /VERIFY-RECOVERY fixer/, 'expected the verify-recovery prompt body');
@@ -372,12 +376,12 @@ test('verifyWithRecovery bounds the loop, re-fixes on a failed verdict, and re-v
 test('applyFixes routes through fixerWithRecovery which handles verify and commit', () => {
   const applyFixesBody = functionSource('applyFixes');
   assert.match(applyFixesBody, /fixerWithRecovery\(/, 'expected applyFixes to call fixerWithRecovery');
-  assert.match(applyFixesBody, /spawnFixerAgent\(/, 'expected applyFixes to call spawnFixerAgent');
+  assert.match(applyFixesBody, /runCodeEditorTask\('fix-edit'/, "expected applyFixes to call runCodeEditorTask('fix-edit')");
 });
 
-test('repairConvergence routes its verify through verifyWithRecovery wired to resume helpers', () => {
+test('repairConvergence routes its verify through verifyWithRecovery wired to the task helpers', () => {
   const repairBody = functionSource('repairConvergence');
   assert.match(repairBody, /verifyWithRecovery\(/, 'expected repairConvergence to call verifyWithRecovery');
-  assert.match(repairBody, /resumeVerifierAgent\(/, 'expected repairConvergence to use resumeVerifierAgent for verify');
-  assert.match(repairBody, /resumeCodeEditorAgent\(/, 'expected repairConvergence to use resumeCodeEditorAgent for recover');
+  assert.match(repairBody, /runVerifierTask\(/, 'expected repairConvergence to use runVerifierTask for verify');
+  assert.match(repairBody, /runCodeEditorTask\(/, 'expected repairConvergence to use runCodeEditorTask for recover');
 });
