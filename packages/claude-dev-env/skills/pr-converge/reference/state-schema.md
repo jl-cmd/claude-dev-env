@@ -22,6 +22,17 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
   with no Copilot review surfaced at `current_head`. Escalate as hard blocker
   at `>= 3`. Reset to `0` when a Copilot review surfaces at `current_head`
   (APPROVED or dirty) or on any non-COPILOT_WAIT branch.
+- `copilot_down`: boolean, init `false`. Set `true` at the start of the run
+  when the Copilot quota pre-check
+  (`_shared/pr-loop/scripts/copilot_quota.py`) exits non-zero — the account is
+  out of premium-request quota, the quota API or account access is down, or no
+  account is set. Read once from the start-of-run pre-check, not re-queried per
+  tick. While `true`, every tick skips the Copilot gate outright (no fetch, no
+  request, no poll, no agent) and exports `CLAUDE_REVIEWS_DISABLED="copilot"`
+  before the convergence check, so `check_convergence.py` bypasses the Copilot
+  review gate and the pending-requested-reviews gate and the run marks ready on
+  the remaining signals. Unlike `bugbot_down`, it is not reset on push — a
+  quota outage holds for the whole run.
 - `inline_lag_streak`: integer, init `0`. Consecutive ticks where review
   body shows findings against `current_head` but inline API returns zero
   matching. Reset to `0` on any other branch outcome.

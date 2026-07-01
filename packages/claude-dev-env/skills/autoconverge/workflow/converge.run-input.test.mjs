@@ -79,3 +79,14 @@ test('the top-level run guards an unusable input into a structured blocker befor
   assert.match(guardBlock, /converged: false/);
   assert.match(guardBlock, /return/);
 });
+
+test('classifyRunInput passes copilotDisabled through alongside the coordinates', () => {
+  const classified = classifyRunInput({ ...VALID_COORDINATES, copilotDisabled: true });
+  assert.equal(classified.blocker, null);
+  assert.equal(classified.input.copilotDisabled, true);
+});
+
+test('classifyRunInput leaves copilotDisabled undefined when the input omits it', () => {
+  const classified = classifyRunInput(VALID_COORDINATES);
+  assert.equal(classified.input.copilotDisabled, undefined);
+});

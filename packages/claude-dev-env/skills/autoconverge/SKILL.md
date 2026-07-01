@@ -97,6 +97,18 @@ PR's owner.
    prompt can add a standing Bash permission allow-rule for that script in their
    settings.
 
+5. **Copilot quota pre-check.** Before the `Workflow` call, run once:
+   `python "$HOME/.claude/_shared/pr-loop/scripts/copilot_quota.py"`
+   It reads the account's remaining Copilot premium-request quota via
+   `gh api copilot_internal/user` and prints one line — log that line. Exit 0
+   means Copilot has quota to run, so pass `copilotDisabled: false`. Any non-zero
+   exit means skip Copilot for this run — the account is out of quota, the quota
+   API or account access is down, or no account is set — so pass
+   `copilotDisabled: true`; the workflow then skips the Copilot gate with no agent
+   spawned. The account comes from the `COPILOT_QUOTA_ACCOUNT` environment
+   variable or a git-ignored `.env` file, and the no-account line names the exact
+   `.env` path and key to set.
+
 ## Run the workflow
 
 Call the `Workflow` tool against the colocated script:
@@ -104,7 +116,7 @@ Call the `Workflow` tool against the colocated script:
 ```
 Workflow({
   scriptPath: "<this skill dir>/workflow/converge.mjs",
-  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false }
+  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false }
 })
 ```
 
@@ -113,8 +125,10 @@ own directory (on this install,
 `<home>/.claude/skills/autoconverge/workflow/converge.mjs`). Set
 `bugbotDisabled: true` only when the user has opted Cursor Bugbot out for the
 run; otherwise the workflow detects an opt-out or an unreachable Bugbot on its
-own. The workflow runs in the background and notifies this session on
-completion. Watch live progress with `/workflows`.
+own. Set `copilotDisabled: true` when the step 5 quota pre-check exits non-zero,
+and `false` when it exits 0; on `true` the workflow skips the Copilot gate with
+no agent spawned. The workflow runs in the background and notifies this session
+on completion. Watch live progress with `/workflows`.
 
 The workflow returns
 `{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, reuseNote }`.
@@ -341,6 +355,13 @@ each PR its own checkout with `git worktree add`. For each PR the user named:
 4. **Grant project permissions once per repository** — the single-PR pre-flight
    step 4 grant covers every worktree of the same repo, so run it one time for
    the repo the PRs live in.
+5. **Copilot quota pre-check once for the whole run** — run the single-PR
+   pre-flight step 5 check one time:
+   `python "$HOME/.claude/_shared/pr-loop/scripts/copilot_quota.py"`. Every PR in
+   the run shares one account's Copilot premium-request quota, so one check covers
+   them all. Exit 0 sets `copilotDisabled: false` on every PR entry below; any
+   non-zero exit sets `copilotDisabled: true` on every entry, so each child skips
+   the Copilot gate with no agent spawned.
 
 ### Launch the multi-PR workflow
 
@@ -353,8 +374,8 @@ Workflow({
   args: {
     convergeScriptPath: "<this skill dir>/workflow/converge.mjs",
     prs: [
-      { owner: "<O>", repo: "<R>", prNumber: <N1>, repoPath: "<abs worktree 1>", bugbotDisabled: false },
-      { owner: "<O>", repo: "<R>", prNumber: <N2>, repoPath: "<abs worktree 2>", bugbotDisabled: false }
+      { owner: "<O>", repo: "<R>", prNumber: <N1>, repoPath: "<abs worktree 1>", bugbotDisabled: false, copilotDisabled: false },
+      { owner: "<O>", repo: "<R>", prNumber: <N2>, repoPath: "<abs worktree 2>", bugbotDisabled: false, copilotDisabled: false }
     ]
   }
 })

@@ -263,3 +263,43 @@ test('the mark-ready task in runGeneralUtilityTask opts the unflagged convergenc
   );
 });
 
+test('the COPILOT phase short-circuits on input.copilotDisabled before spawning the gate agent', () => {
+  const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
+  assert.notEqual(copilotPhaseStart, -1, 'expected a COPILOT phase block');
+  const gateCallIndex = convergeSource.indexOf('await runCopilotGate(head)', copilotPhaseStart);
+  assert.notEqual(gateCallIndex, -1, 'expected the COPILOT phase to call runCopilotGate when Copilot is enabled');
+  const beforeGate = convergeSource.slice(copilotPhaseStart, gateCallIndex);
+  assert.match(
+    beforeGate,
+    /if \(input\.copilotDisabled\)/,
+    'expected the quota pre-check bypass to guard the COPILOT phase before any gate agent spawns',
+  );
+  assert.match(beforeGate, /copilotDown = true/, 'expected the bypass to mark copilotDown');
+  assert.match(beforeGate, /copilotNote =/, 'expected the bypass to set a copilotNote');
+  assert.match(beforeGate, /phase = 'FINALIZE'/, 'expected the bypass to advance to FINALIZE');
+  assert.match(beforeGate, /continue/, 'expected the bypass to continue without spawning the gate agent');
+});
+
+test('copilotDown initializes from input.copilotDisabled so the pre-check decision carries into the loop', () => {
+  assert.match(
+    convergeSource,
+    /let copilotDown = input\.copilotDisabled \|\| false/,
+    'expected copilotDown to seed from the copilotDisabled run input',
+  );
+});
+
+test('a copilotDisabled run reaches FINALIZE with --copilot-down', () => {
+  const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
+  const bypassStart = convergeSource.indexOf('if (input.copilotDisabled)', copilotPhaseStart);
+  assert.notEqual(bypassStart, -1, 'expected an input.copilotDisabled bypass in the COPILOT phase');
+  const bypassBlock = convergeSource.slice(bypassStart, bypassStart + 800);
+  assert.match(bypassBlock, /copilotDown = true/, 'expected the bypass to set copilotDown');
+  assert.match(bypassBlock, /phase = 'FINALIZE'/, 'expected the bypass to advance to FINALIZE');
+  const convergenceCheckBody = functionBody('resumeConvergenceCheckAgent');
+  assert.match(
+    convergenceCheckBody,
+    /context\.copilotDown \? ' --copilot-down' : ''/,
+    'expected the convergence check to pass --copilot-down when the bypassed copilotDown reaches FINALIZE',
+  );
+});
+
