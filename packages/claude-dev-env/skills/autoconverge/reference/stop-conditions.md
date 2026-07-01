@@ -47,7 +47,7 @@ skill still runs teardown (revoke permissions, final report).
   Bugbot gate is bypassed.
 - **Copilot down or out of quota** — when Copilot posts an out-of-usage notice on
   the current HEAD (the user who requested the review reached their quota limit)
-  rather than a code review, or surfaces no review at all after the poll cap, the
+  rather than a code review, or surfaces no review at all after the configured cap, the
   Copilot gate returns `down: true`. The run logs a notice, runs the convergence
   check with `--copilot-down` (the Copilot review gate and the
   pending-requested-reviews gate bypassed), and marks the PR ready. `copilotNote`

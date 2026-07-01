@@ -83,7 +83,7 @@ tracks CONVERGE passes only and is never the cap.
 - Copilot findings → fix them and return to CONVERGE on the new HEAD.
 - Copilot clean or approved → move to the convergence check.
 - Copilot down or out of quota (an out-of-usage notice, or no review after the
-  poll cap) → log a notice and move to the convergence check with the Copilot gate
+  configured cap) → log a notice and move to the convergence check with the Copilot gate
   bypassed.
 
 **Convergence check**:
