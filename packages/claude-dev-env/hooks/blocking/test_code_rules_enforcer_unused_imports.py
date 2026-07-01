@@ -5,9 +5,12 @@ ALL_REPOSITORY_ROOT_MARKER_FILENAMES, VENV_DIRECTORY_NAME and other
 imports that survived into a PR without ever being referenced.
 
 The detector is intentionally narrow: it only flags `from X import Y`
-or `import X` where Y/X is never referenced in the file body, the file
-does not declare `__all__`, and the file does not use TYPE_CHECKING
-conditional imports. The narrow scope keeps false positives low.
+or `import X` where Y/X is never referenced in the file body and the
+file does not declare `__all__`. A `TYPE_CHECKING` guard block no longer
+exempts the whole file — its guarded imports live nested inside the
+`if TYPE_CHECKING:` node so they are never flag candidates, while a
+genuinely dead top-level runtime import in the same file is still
+flagged. The narrow scope keeps false positives low.
 """
 
 from __future__ import annotations
@@ -102,7 +105,7 @@ def test_should_skip_file_with_dunder_all_annotated_assignment() -> None:
     )
 
 
-def test_should_skip_file_using_type_checking_block() -> None:
+def test_should_flag_dead_top_level_import_in_type_checking_file() -> None:
     source = (
         "from typing import TYPE_CHECKING\n"
         "from hooks_constants.constants import UNUSED_NAME\n"
@@ -114,8 +117,76 @@ def test_should_skip_file_using_type_checking_block() -> None:
         "    return None\n"
     )
     issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert any("UNUSED_NAME" in each_issue for each_issue in issues), (
+        "A dead top-level runtime import must be flagged even when the file "
+        f"also declares a TYPE_CHECKING block, got: {issues}"
+    )
+    assert not any("OtherName" in each_issue for each_issue in issues), (
+        "A TYPE_CHECKING-guarded import is nested inside the if block and is "
+        f"never a flag candidate, got: {issues}"
+    )
+
+
+def test_should_not_flag_standard_type_checking_idiom() -> None:
+    source = (
+        "from typing import TYPE_CHECKING\n"
+        "from hooks_constants.constants import RUNTIME_NAME\n"
+        "\n"
+        "if TYPE_CHECKING:\n"
+        "    from somewhere import TypeOnly\n"
+        "\n"
+        "def run(node: TypeOnly) -> None:\n"
+        "    RUNTIME_NAME()\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
     assert issues == [], (
-        f"TYPE_CHECKING-using files have annotation-only imports — skip, got: {issues}"
+        "The standard TYPE_CHECKING idiom — TYPE_CHECKING referenced by the "
+        "guard, the runtime import used in the body, and the guarded import "
+        f"used in an annotation — must produce no findings, got: {issues}"
+    )
+
+
+def test_should_flag_dead_import_beside_type_checking_string_annotation() -> None:
+    source = (
+        "from typing import TYPE_CHECKING\n"
+        "from shared_utils.config import portal_specific_timeouts\n"
+        "\n"
+        "if TYPE_CHECKING:\n"
+        "    from shared_utils.base import BaseAutomation\n"
+        "\n"
+        'async def run(automation: "BaseAutomation") -> None:\n'
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
+    assert any("portal_specific_timeouts" in each_issue for each_issue in issues), (
+        "A dead top-level import in a module that guards its annotation-only "
+        f"import under TYPE_CHECKING must still be flagged, got: {issues}"
+    )
+    assert not any("BaseAutomation" in each_issue for each_issue in issues), (
+        "The TYPE_CHECKING-guarded import used in a string annotation must not "
+        f"be flagged, got: {issues}"
+    )
+
+
+def test_should_flag_dead_import_in_workflow_handler_file() -> None:
+    workflow_handler_path = (
+        "shared_utils/web_automation/samsung_portal/workflow/binary/delete_handlers.py"
+    )
+    source = (
+        "from typing import TYPE_CHECKING\n"
+        "from shared_utils.config import portal_specific_timeouts\n"
+        "\n"
+        "if TYPE_CHECKING:\n"
+        "    from shared_utils.base import BaseAutomation\n"
+        "\n"
+        'async def run(automation: "BaseAutomation") -> None:\n'
+        "    return None\n"
+    )
+    issues = check_unused_module_level_imports(source, workflow_handler_path)
+    assert any("portal_specific_timeouts" in each_issue for each_issue in issues), (
+        "A handler file under a workflow/ directory is not a state/module "
+        "registry; a dead import in it must be flagged, not exempted by the "
+        f"workflow path, got: {issues}"
     )
 
 
@@ -364,7 +435,7 @@ def test_should_skip_when_full_file_declares_dunder_all() -> None:
     )
 
 
-def test_should_skip_when_full_file_uses_type_checking_gate() -> None:
+def test_should_flag_dead_fragment_import_when_full_file_uses_type_checking() -> None:
     fragment = "from hooks_constants.constants import NEW_NAME\n"
     full_file = (
         "from typing import TYPE_CHECKING\n"
@@ -379,9 +450,9 @@ def test_should_skip_when_full_file_uses_type_checking_gate() -> None:
     issues = check_unused_module_level_imports(
         fragment, PRODUCTION_FILE_PATH, full_file_content=full_file,
     )
-    assert issues == [], (
-        "TYPE_CHECKING gate in the post-edit file must skip the scan, "
-        f"got: {issues}"
+    assert any("NEW_NAME" in each_issue for each_issue in issues), (
+        "A TYPE_CHECKING block in the post-edit file must not exempt a dead "
+        f"import added by the edit fragment, got: {issues}"
     )
 
 
@@ -472,7 +543,7 @@ def test_should_flag_import_when_only_shadowed_local_name_is_loaded() -> None:
     )
 
 
-def test_should_skip_when_type_checking_uses_imported_alias() -> None:
+def test_should_not_flag_guarded_import_under_imported_type_checking_alias() -> None:
     source = (
         "from typing import TYPE_CHECKING as IS_TYPE_CHECKING\n"
         "from hooks_constants.constants import UNUSED_NAME\n"
@@ -484,12 +555,17 @@ def test_should_skip_when_type_checking_uses_imported_alias() -> None:
         "    return None\n"
     )
     issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
-    assert issues == [], (
-        f"TYPE_CHECKING imported aliases must skip annotation-only files, got: {issues}"
+    assert not any("OtherName" in each_issue for each_issue in issues), (
+        "An import guarded under an aliased TYPE_CHECKING is nested in the if "
+        f"block and is never a flag candidate, got: {issues}"
+    )
+    assert any("UNUSED_NAME" in each_issue for each_issue in issues), (
+        "A dead top-level import beside an aliased TYPE_CHECKING guard is still "
+        f"flagged, got: {issues}"
     )
 
 
-def test_should_skip_when_type_checking_uses_module_alias() -> None:
+def test_should_not_flag_guarded_import_under_module_type_checking_alias() -> None:
     source = (
         "import typing as t\n"
         "from hooks_constants.constants import UNUSED_NAME\n"
@@ -501,8 +577,13 @@ def test_should_skip_when_type_checking_uses_module_alias() -> None:
         "    return None\n"
     )
     issues = check_unused_module_level_imports(source, PRODUCTION_FILE_PATH)
-    assert issues == [], (
-        f"TYPE_CHECKING module aliases must skip annotation-only files, got: {issues}"
+    assert not any("OtherName" in each_issue for each_issue in issues), (
+        "An import guarded under a module-qualified TYPE_CHECKING is nested in "
+        f"the if block and is never a flag candidate, got: {issues}"
+    )
+    assert any("UNUSED_NAME" in each_issue for each_issue in issues), (
+        "A dead top-level import beside a module-qualified TYPE_CHECKING guard "
+        f"is still flagged, got: {issues}"
     )
 
 

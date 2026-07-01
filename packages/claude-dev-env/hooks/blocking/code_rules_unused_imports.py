@@ -20,13 +20,10 @@ from code_rules_shared import (  # noqa: E402
     _build_parent_map,
     is_migration_file,
     is_test_file,
-    is_workflow_registry_file,
 )
 
 from hooks_constants.unused_module_import_constants import (  # noqa: E402
-    ALL_TYPING_MODULE_NAMES,
     MAX_UNUSED_IMPORT_ISSUES,
-    TYPE_CHECKING_IDENTIFIER,
     UNUSED_IMPORT_GUIDANCE,
     line_suppresses_unused_import_via_noqa,
 )
@@ -71,59 +68,6 @@ def _line_number_falls_in_import_ranges(
         if each_start <= line_number <= each_end:
             return True
     return False
-
-
-def _type_checking_guard_aliases(tree: ast.Module) -> tuple[set[str], set[str]]:
-    all_type_checking_names = {TYPE_CHECKING_IDENTIFIER}
-    all_type_checking_module_aliases = set(ALL_TYPING_MODULE_NAMES)
-    for each_statement in tree.body:
-        if isinstance(each_statement, ast.Import):
-            for each_alias in each_statement.names:
-                if each_alias.name in ALL_TYPING_MODULE_NAMES:
-                    all_type_checking_module_aliases.add(
-                        each_alias.asname or each_alias.name
-                    )
-        elif isinstance(each_statement, ast.ImportFrom):
-            if each_statement.module not in ALL_TYPING_MODULE_NAMES:
-                continue
-            for each_alias in each_statement.names:
-                if each_alias.name == TYPE_CHECKING_IDENTIFIER:
-                    all_type_checking_names.add(each_alias.asname or each_alias.name)
-    return all_type_checking_names, all_type_checking_module_aliases
-
-
-def _expression_guards_type_checking_block(
-    test_expression: ast.expr,
-    all_type_checking_names: set[str],
-    all_type_checking_module_aliases: set[str],
-) -> bool:
-    if isinstance(test_expression, ast.Name):
-        return test_expression.id in all_type_checking_names
-    if isinstance(test_expression, ast.Attribute):
-        if test_expression.attr != TYPE_CHECKING_IDENTIFIER:
-            return False
-        receiver = test_expression.value
-        return (
-            isinstance(receiver, ast.Name)
-            and receiver.id in all_type_checking_module_aliases
-        )
-    return False
-
-
-def _module_body_declares_type_checking_gate(tree: ast.Module) -> bool:
-    (
-        all_type_checking_names,
-        all_type_checking_module_aliases,
-    ) = _type_checking_guard_aliases(tree)
-    return any(
-        isinstance(each_statement, ast.If)
-        and _expression_guards_type_checking_block(
-            each_statement.test,
-            all_type_checking_names,
-            all_type_checking_module_aliases,
-        )
-        for each_statement in tree.body
-    )
 
 
 def _collect_load_names_outside_import_ranges(
@@ -191,10 +135,12 @@ def check_unused_module_level_imports(
 
     References are detected from AST ``Name`` / ``Attribute`` loads outside import
     statements so mentions in comments or string literals do not count. Files
-    declaring ``__all__`` (including annotated assignments) are skipped. Files
-    whose module body includes ``if TYPE_CHECKING:`` (or
-    ``typing[._extensions].TYPE_CHECKING``) are skipped. Suppression honors bare
-    ``# noqa`` or an explicit ``F401`` code in the noqa list only.
+    declaring ``__all__`` (including annotated assignments) are skipped. A
+    ``if TYPE_CHECKING:`` block does not exempt the file: its guarded imports
+    are nested inside the ``If`` node and are never scanned as top-level
+    bindings, while a dead top-level runtime import in the same file is still
+    flagged. Suppression honors bare ``# noqa`` or an explicit ``F401`` code in
+    the noqa list only.
 
     When ``full_file_content`` is provided, ``content`` is treated as an Edit
     fragment containing the imports being added or replaced, while the
@@ -205,7 +151,7 @@ def check_unused_module_level_imports(
     """
     if is_test_file(file_path):
         return []
-    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+    if is_migration_file(file_path):
         return []
     try:
         fragment_tree = ast.parse(content)
@@ -217,8 +163,6 @@ def check_unused_module_level_imports(
     except SyntaxError:
         return []
     if _module_declares_dunder_all(reference_tree):
-        return []
-    if _module_body_declares_type_checking_gate(reference_tree):
         return []
     fragment_lines = content.splitlines()
     reference_import_ranges = _import_statement_line_ranges(reference_tree)

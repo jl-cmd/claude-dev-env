@@ -14,7 +14,6 @@ UNUSED_IMPORT_GUIDANCE: str = (
     "remove unused import; if kept for side effects, mark with `# noqa: F401`"
 )
 TYPE_CHECKING_IDENTIFIER: str = "TYPE_CHECKING"
-ALL_TYPING_MODULE_NAMES: frozenset[str] = frozenset({"typing", "typing_extensions"})
 
 
 def _comment_text_from_line(line_text: str) -> str | None:
