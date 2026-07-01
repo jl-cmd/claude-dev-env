@@ -295,11 +295,85 @@ test('a copilotDisabled run reaches FINALIZE with --copilot-down', () => {
   const bypassBlock = convergeSource.slice(bypassStart, bypassStart + 800);
   assert.match(bypassBlock, /copilotDown = true/, 'expected the bypass to set copilotDown');
   assert.match(bypassBlock, /phase = 'FINALIZE'/, 'expected the bypass to advance to FINALIZE');
-  const convergenceCheckBody = functionBody('resumeConvergenceCheckAgent');
+  const convergenceCheckBody = functionBody('runConvergenceCheck');
   assert.match(
     convergenceCheckBody,
     /context\.copilotDown \? ' --copilot-down' : ''/,
     'expected the convergence check to pass --copilot-down when the bypassed copilotDown reaches FINALIZE',
+  );
+});
+
+function loadStandardsFollowUpDecision() {
+  return new Function(
+    `${functionBody('shouldOpenStandardsFollowUp')}\n` +
+      'return shouldOpenStandardsFollowUp;',
+  )();
+}
+
+test('the deferred follow-up create runs exactly once across a three-round standards run', () => {
+  const shouldOpenStandardsFollowUp = loadStandardsFollowUpDecision();
+  let alreadyOpened = false;
+  let createCount = 0;
+  for (let round = 0; round < 3; round += 1) {
+    if (shouldOpenStandardsFollowUp(alreadyOpened)) {
+      createCount += 1;
+      alreadyOpened = true;
+    }
+  }
+  assert.equal(
+    createCount,
+    1,
+    'expected the deferred follow-up issue and hardening PR to be created exactly once across a multi-round run',
+  );
+});
+
+test('shouldOpenStandardsFollowUp opens on the first standards-only round and skips afterward', () => {
+  const shouldOpenStandardsFollowUp = loadStandardsFollowUpDecision();
+  assert.equal(shouldOpenStandardsFollowUp(false), true);
+  assert.equal(shouldOpenStandardsFollowUp(true), false);
+});
+
+test('the run seeds standardsFollowUpOpened to false so the first standards-only round opens the follow-up', () => {
+  assert.match(
+    convergeSource,
+    /let standardsFollowUpOpened = false/,
+    'expected a run-scoped standardsFollowUpOpened flag seeded false',
+  );
+});
+
+test('openStandardsFollowUpOnce gates spawnStandardsFollowUp behind the run-once flag and latches it', () => {
+  const onceStart = convergeSource.indexOf('async function openStandardsFollowUpOnce(');
+  assert.notEqual(onceStart, -1, 'expected an openStandardsFollowUpOnce helper');
+  const onceBody = convergeSource.slice(onceStart, onceStart + 700);
+  assert.match(
+    onceBody,
+    /shouldOpenStandardsFollowUp\(standardsFollowUpOpened\)/,
+    'expected the helper to consult the run-once decision on the current flag',
+  );
+  assert.match(
+    onceBody,
+    /await spawnStandardsFollowUp\(/,
+    'expected the helper to perform the create when the follow-up has not opened yet',
+  );
+  assert.match(
+    onceBody,
+    /standardsFollowUpOpened = true/,
+    'expected the helper to latch the flag after opening so later rounds reuse the follow-up',
+  );
+});
+
+test('both standards-deferral call sites route the create through openStandardsFollowUpOnce', () => {
+  const onceCalls = convergeSource.match(/await openStandardsFollowUpOnce\(/g) || [];
+  assert.equal(
+    onceCalls.length,
+    2,
+    'expected the converge-round and copilot standards call sites to both defer to openStandardsFollowUpOnce',
+  );
+  const directCreates = convergeSource.match(/await spawnStandardsFollowUp\(/g) || [];
+  assert.equal(
+    directCreates.length,
+    1,
+    'expected spawnStandardsFollowUp to be invoked once from openStandardsFollowUpOnce, never directly at a call site',
   );
 });
 
