@@ -26,6 +26,7 @@ _parsed_command_tokens = hook_module._parsed_command_tokens
 _extract_flag_value = hook_module._extract_flag_value
 _is_conventional_commit_title = hook_module._is_conventional_commit_title
 _repo_enforces_semantic_pr_titles = hook_module._repo_enforces_semantic_pr_titles
+_pull_request_title_to_validate = hook_module._pull_request_title_to_validate
 
 _SEMANTIC_WORKFLOW_TEXT = (
     "name: PR checks\n"
@@ -134,6 +135,16 @@ def test_is_conventional_commit_title_rejects_non_conventional_title() -> None:
     assert not _is_conventional_commit_title("add the thing")
 
 
+def test_pull_request_title_to_validate_returns_none_for_shell_variable_title() -> None:
+    assert _pull_request_title_to_validate('gh pr create --title "$TITLE"') is None
+
+
+def test_pull_request_title_to_validate_returns_literal_for_plain_title() -> None:
+    assert (
+        _pull_request_title_to_validate('gh pr create --title "add the thing"') == "add the thing"
+    )
+
+
 def test_repo_enforces_semantic_pr_titles_true_for_marker_workflow(tmp_path: pathlib.Path) -> None:
     repo_root = tmp_path / "semantic_repo"
     _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
@@ -171,6 +182,20 @@ def test_main_blocks_non_conventional_title_in_semantic_ci_repo(
     decision_block = response_payload["hookSpecificOutput"]
     assert decision_block["permissionDecision"] == "deny"
     assert "conventional-pr-title" in decision_block["permissionDecisionReason"]
+
+
+def test_main_allows_shell_variable_title_in_semantic_ci_repo(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "$TITLE"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
 
 
 def test_main_allows_conventional_title_in_semantic_ci_repo(tmp_path: pathlib.Path) -> None:
