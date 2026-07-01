@@ -39,9 +39,13 @@ if _hooks_dir not in sys.path:
 from verification_verdict_store import resolve_repo_root  # noqa: E402
 
 from blocking._gh_body_arg_utils import (  # noqa: E402
+    all_value_flags,
     count_extra_tokens_to_skip_for_split_quoted_value,
     get_logical_first_line,
+    is_flag_shaped_token,
     is_unresolvable_shell_value,
+    iter_significant_tokens,
+    match_non_body_value_flag_equals_prefix,
     strip_surrounding_quotes,
 )
 from hooks_constants.conventional_pr_title_gate_constants import (  # noqa: E402
@@ -56,6 +60,7 @@ from hooks_constants.conventional_pr_title_gate_constants import (  # noqa: E402
     PR_SUBCOMMAND_TOKEN,
     REPO_LONG_FLAG,
     REPO_SHORT_FLAG,
+    SEMANTIC_ACTION_FLOW_TYPES_INPUT_PATTERN,
     SEMANTIC_ACTION_TYPES_INPUT_PATTERN,
     TITLE_LONG_FLAG,
     TITLE_SHORT_FLAG,
@@ -87,7 +92,9 @@ def _parsed_command_tokens(command: str) -> list[str] | None:
         return None
 
 
-def _joined_equals_form_value(equals_prefix: str, each_token: str, all_remaining_tokens: list[str]) -> str | None:
+def _joined_equals_form_value(
+    equals_prefix: str, each_token: str, all_remaining_tokens: list[str]
+) -> str | None:
     """Join an equals-form flag value that shlex(posix=False) split on an internal space.
 
     shlex.split(command, posix=False) treats the quote character inside
@@ -106,20 +113,120 @@ def _joined_equals_form_value(equals_prefix: str, each_token: str, all_remaining
     )
 
 
-def _extract_flag_value(all_tokens: list[str], long_flag: str, short_flag: str) -> str | None:
+def _extract_flag_value(
+    command: str,
+    long_flag: str,
+    short_flag: str,
+    all_pre_tokenized: tuple[str, list[str]] | None = None,
+) -> str | None:
+    """Return the value of long_flag/short_flag, skipping preceding value-flag values.
+
+    Uses iter_significant_tokens so a long_flag/short_flag word exposed inside an
+    earlier value flag's split quoted value is never mistaken for the flag
+    itself, then scans the raw tokens to read the flag's own value. Recognizes
+    the space form, the equals form, and the attached short form
+    (``-Rowner/repo``). Returns None when the flag is absent or the command is
+    unparseable.
+
+    Args:
+        command: The full shell command string.
+        long_flag: The flag's long spelling, such as ``--title``.
+        short_flag: The flag's short spelling, such as ``-t``.
+        all_pre_tokenized: An optional ``(logical_line, raw_tokens)`` pair reused
+            in place of recomputing the logical line and shlex split.
+    """
+    if all_pre_tokenized is not None:
+        logical_line, all_tokens = all_pre_tokenized
+    else:
+        logical_line = get_logical_first_line(command)
+        if not logical_line:
+            return None
+        try:
+            all_tokens = shlex.split(logical_line, posix=False)
+        except ValueError:
+            return None
+    try:
+        all_significant_tokens = list(
+            iter_significant_tokens(command, pre_tokenized=(logical_line, all_tokens))
+        )
+    except ValueError:
+        return None
+    if not _flag_present_in_significant_tokens(all_significant_tokens, long_flag, short_flag):
+        return None
+    return _scan_tokens_for_flag_value(all_tokens, long_flag, short_flag)
+
+
+def _flag_present_in_significant_tokens(
+    all_significant_tokens: list[tuple[str, list[str]]], long_flag: str, short_flag: str
+) -> bool:
+    return any(
+        _token_begins_target_flag(each_token, long_flag, short_flag)
+        for each_token, _all_remaining_tokens in all_significant_tokens
+    )
+
+
+def _scan_tokens_for_flag_value(
+    all_tokens: list[str], long_flag: str, short_flag: str
+) -> str | None:
+    token_index = 0
+    while token_index < len(all_tokens):
+        each_token = all_tokens[token_index]
+        all_remaining_tokens = all_tokens[token_index + 1 :]
+        if _token_begins_target_flag(each_token, long_flag, short_flag):
+            return _target_flag_value(each_token, all_remaining_tokens, long_flag, short_flag)
+        token_index = _index_after_value_flag(all_tokens, token_index)
+    return None
+
+
+def _token_begins_target_flag(each_token: str, long_flag: str, short_flag: str) -> bool:
+    if each_token in {long_flag, short_flag}:
+        return True
+    if each_token.startswith(f"{long_flag}=") or each_token.startswith(f"{short_flag}="):
+        return True
+    return _is_attached_short_flag(each_token, short_flag)
+
+
+def _is_attached_short_flag(each_token: str, short_flag: str) -> bool:
+    if each_token == short_flag or not each_token.startswith(short_flag):
+        return False
+    return not each_token.startswith(f"{short_flag}=")
+
+
+def _target_flag_value(
+    each_token: str, all_remaining_tokens: list[str], long_flag: str, short_flag: str
+) -> str | None:
     long_flag_equals_prefix = f"{long_flag}="
     short_flag_equals_prefix = f"{short_flag}="
-    for each_token_index, each_token in enumerate(all_tokens):
-        all_remaining_tokens = all_tokens[each_token_index + 1 :]
-        if each_token.startswith(long_flag_equals_prefix):
-            return _joined_equals_form_value(long_flag_equals_prefix, each_token, all_remaining_tokens)
-        if each_token.startswith(short_flag_equals_prefix):
-            return _joined_equals_form_value(short_flag_equals_prefix, each_token, all_remaining_tokens)
-        if each_token in {long_flag, short_flag}:
-            if not all_remaining_tokens:
-                return None
-            return strip_surrounding_quotes(all_remaining_tokens[0])
-    return None
+    if each_token.startswith(long_flag_equals_prefix):
+        return _joined_equals_form_value(long_flag_equals_prefix, each_token, all_remaining_tokens)
+    if each_token.startswith(short_flag_equals_prefix):
+        return _joined_equals_form_value(short_flag_equals_prefix, each_token, all_remaining_tokens)
+    if each_token in {long_flag, short_flag}:
+        if not all_remaining_tokens:
+            return None
+        return strip_surrounding_quotes(all_remaining_tokens[0])
+    return strip_surrounding_quotes(each_token[len(short_flag) :])
+
+
+def _index_after_value_flag(all_tokens: list[str], token_index: int) -> int:
+    each_token = all_tokens[token_index]
+    all_remaining_tokens = all_tokens[token_index + 1 :]
+    equals_prefix = match_non_body_value_flag_equals_prefix(each_token)
+    if equals_prefix is not None:
+        value_token = each_token[len(equals_prefix) :]
+        extra_tokens_to_skip = count_extra_tokens_to_skip_for_split_quoted_value(
+            all_remaining_tokens, value_token
+        )
+        return token_index + 1 + (extra_tokens_to_skip or 0)
+    if each_token not in all_value_flags:
+        return token_index + 1
+    if not all_remaining_tokens or is_flag_shaped_token(all_remaining_tokens[0]):
+        return token_index + 1
+    value_token = all_remaining_tokens[0]
+    extra_tokens_to_skip = count_extra_tokens_to_skip_for_split_quoted_value(
+        all_remaining_tokens[1:], value_token
+    )
+    return token_index + 1 + 1 + (extra_tokens_to_skip or 0)
 
 
 def _is_conventional_commit_title(title: str) -> bool:
@@ -181,31 +288,47 @@ def _workflow_customizes_semantic_types(workflow_text: str) -> bool:
 
 
 def _step_block_declares_types_input(all_lines: list[str], marker_line_index: int) -> bool:
-    step_indentation = _enclosing_step_item_indentation(all_lines, marker_line_index)
-    for each_line in all_lines[marker_line_index + 1 :]:
+    step_item_index = _enclosing_step_item_index(all_lines, marker_line_index)
+    step_indentation = _leading_space_count(all_lines[step_item_index])
+    for each_line in all_lines[step_item_index + 1 :]:
         if not each_line.strip():
             continue
         if _leading_space_count(each_line) <= step_indentation:
             return False
-        if SEMANTIC_ACTION_TYPES_INPUT_PATTERN.match(each_line):
+        if _line_declares_types_input(each_line):
             return True
     return False
 
 
-def _enclosing_step_item_indentation(all_lines: list[str], marker_line_index: int) -> int:
-    """Return the indentation of the ``- `` list item that encloses the marker line.
+def _line_declares_types_input(line: str) -> bool:
+    """Return whether a step-block line declares a semantic-pull-request ``types:`` input.
+
+    Matches both the block-style key (``types: |`` on its own line) and the
+    flow-style mapping (``with: { types: [feat, wip] }``), so a custom type list
+    written in either YAML shape counts.
+    """
+    if SEMANTIC_ACTION_TYPES_INPUT_PATTERN.match(line):
+        return True
+    return bool(SEMANTIC_ACTION_FLOW_TYPES_INPUT_PATTERN.search(line))
+
+
+def _enclosing_step_item_index(all_lines: list[str], marker_line_index: int) -> int:
+    """Return the index of the ``- `` list item that encloses the marker line.
 
     The semantic-pull-request marker sits either on the step's ``- `` list-item
-    line or on a sibling ``uses:`` key one level in. Both step layouts share the
-    enclosing list item's indentation, so scanning the step block from that list
-    item -- rather than the marker line -- reaches the nested ``with: types:``
-    input that a ``- name:``/``uses:`` step keeps a level below its keys.
+    line or on a sibling ``uses:`` key one level in. Scanning the step block from
+    that list item -- rather than the marker line -- reaches a nested
+    ``with: types:`` input whether it sits above or below the ``uses:`` key,
+    since YAML mapping key order within a step is arbitrary.
     """
     marker_indentation = _leading_space_count(all_lines[marker_line_index])
-    for each_line in reversed(all_lines[: marker_line_index + 1]):
-        if _is_yaml_list_item(each_line) and _leading_space_count(each_line) <= marker_indentation:
-            return _leading_space_count(each_line)
-    return marker_indentation
+    for each_candidate_index in range(marker_line_index, -1, -1):
+        candidate_line = all_lines[each_candidate_index]
+        if not _is_yaml_list_item(candidate_line):
+            continue
+        if _leading_space_count(candidate_line) <= marker_indentation:
+            return each_candidate_index
+    return marker_line_index
 
 
 def _is_yaml_list_item(line: str) -> bool:
@@ -238,9 +361,12 @@ def _pull_request_title_to_validate(command: str) -> str | None:
     all_tokens = _parsed_command_tokens(command)
     if all_tokens is None:
         return None
-    if _extract_flag_value(all_tokens, REPO_LONG_FLAG, REPO_SHORT_FLAG) is not None:
+    all_pre_tokenized = (get_logical_first_line(command), all_tokens)
+    if _extract_flag_value(command, REPO_LONG_FLAG, REPO_SHORT_FLAG, all_pre_tokenized) is not None:
         return None
-    extracted_title = _extract_flag_value(all_tokens, TITLE_LONG_FLAG, TITLE_SHORT_FLAG)
+    extracted_title = _extract_flag_value(
+        command, TITLE_LONG_FLAG, TITLE_SHORT_FLAG, all_pre_tokenized
+    )
     if not extracted_title or is_unresolvable_shell_value(extracted_title):
         return None
     return extracted_title

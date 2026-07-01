@@ -43,6 +43,8 @@ CONVENTIONAL_COMMIT_TITLE_PATTERN: re.Pattern[str] = re.compile(
 
 SEMANTIC_ACTION_TYPES_INPUT_PATTERN: re.Pattern[str] = re.compile(r"^\s*types\s*:")
 
+SEMANTIC_ACTION_FLOW_TYPES_INPUT_PATTERN: re.Pattern[str] = re.compile(r"[{,]\s*types\s*:")
+
 YAML_LIST_ITEM_PREFIX: str = "- "
 
 CORRECTIVE_MESSAGE: str = (
