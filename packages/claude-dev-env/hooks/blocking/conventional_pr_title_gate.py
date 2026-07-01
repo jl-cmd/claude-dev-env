@@ -60,6 +60,7 @@ from hooks_constants.conventional_pr_title_gate_constants import (  # noqa: E402
     TITLE_LONG_FLAG,
     TITLE_SHORT_FLAG,
     WORKFLOWS_DIRECTORY_RELATIVE_PATH,
+    YAML_LIST_ITEM_PREFIX,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
@@ -179,9 +180,9 @@ def _workflow_customizes_semantic_types(workflow_text: str) -> bool:
     return False
 
 
-def _step_block_declares_types_input(all_lines: list[str], step_start_index: int) -> bool:
-    step_indentation = _leading_space_count(all_lines[step_start_index])
-    for each_line in all_lines[step_start_index + 1 :]:
+def _step_block_declares_types_input(all_lines: list[str], marker_line_index: int) -> bool:
+    step_indentation = _enclosing_step_item_indentation(all_lines, marker_line_index)
+    for each_line in all_lines[marker_line_index + 1 :]:
         if not each_line.strip():
             continue
         if _leading_space_count(each_line) <= step_indentation:
@@ -189,6 +190,26 @@ def _step_block_declares_types_input(all_lines: list[str], step_start_index: int
         if SEMANTIC_ACTION_TYPES_INPUT_PATTERN.match(each_line):
             return True
     return False
+
+
+def _enclosing_step_item_indentation(all_lines: list[str], marker_line_index: int) -> int:
+    """Return the indentation of the ``- `` list item that encloses the marker line.
+
+    The semantic-pull-request marker sits either on the step's ``- `` list-item
+    line or on a sibling ``uses:`` key one level in. Both step layouts share the
+    enclosing list item's indentation, so scanning the step block from that list
+    item -- rather than the marker line -- reaches the nested ``with: types:``
+    input that a ``- name:``/``uses:`` step keeps a level below its keys.
+    """
+    marker_indentation = _leading_space_count(all_lines[marker_line_index])
+    for each_line in reversed(all_lines[: marker_line_index + 1]):
+        if _is_yaml_list_item(each_line) and _leading_space_count(each_line) <= marker_indentation:
+            return _leading_space_count(each_line)
+    return marker_indentation
+
+
+def _is_yaml_list_item(line: str) -> bool:
+    return line.lstrip().startswith(YAML_LIST_ITEM_PREFIX)
 
 
 def _leading_space_count(line: str) -> int:

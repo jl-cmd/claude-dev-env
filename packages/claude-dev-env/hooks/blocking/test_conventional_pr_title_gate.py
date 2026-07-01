@@ -74,6 +74,23 @@ _SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT = (
     "      - uses: amannn/action-semantic-pull-request@v5\n"
 )
 
+_SEMANTIC_WORKFLOW_NAME_STEP_CUSTOM_TYPES_TEXT = (
+    "name: PR checks\n"
+    "on:\n"
+    "  pull_request:\n"
+    "    types: [opened, edited, synchronize]\n"
+    "jobs:\n"
+    "  validate:\n"
+    "    steps:\n"
+    "      - name: Validate PR title\n"
+    "        uses: amannn/action-semantic-pull-request@v5\n"
+    "        with:\n"
+    "          types: |\n"
+    "            feat\n"
+    "            fix\n"
+    "            wip\n"
+)
+
 
 def _init_repo_with_workflow(repo_root: pathlib.Path, workflow_text: str) -> None:
     subprocess.run(["git", "init", str(repo_root)], capture_output=True, check=True)
@@ -225,6 +242,18 @@ def test_workflow_customizes_semantic_types_false_for_event_types_only() -> None
     assert not _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT)
 
 
+def test_workflow_customizes_semantic_types_true_for_name_step_layout() -> None:
+    assert _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_NAME_STEP_CUSTOM_TYPES_TEXT)
+
+
+def test_repo_enforces_default_conventional_pr_titles_false_for_name_step_custom_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "name_step_custom_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_NAME_STEP_CUSTOM_TYPES_TEXT)
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
 def test_main_blocks_non_conventional_title_in_semantic_ci_repo(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -307,6 +336,22 @@ def test_main_allows_custom_type_title_when_action_customizes_types(
 ) -> None:
     repo_root = tmp_path / "custom_types_repo"
     _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "wip: iterate on the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_custom_type_title_for_name_step_layout(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "name_step_custom_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_NAME_STEP_CUSTOM_TYPES_TEXT)
     stdout_text, exit_code = _run_hook(
         {
             "tool_name": "Bash",
