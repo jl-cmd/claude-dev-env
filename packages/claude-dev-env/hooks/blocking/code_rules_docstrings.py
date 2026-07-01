@@ -966,10 +966,10 @@ def _module_code_references_type_checking(parsed_tree: ast.Module) -> bool:
     """Return True when a code identifier in the module handles TYPE_CHECKING.
 
     A module that names TYPE_CHECKING in code genuinely gates on it. That covers
-    a Name load, an import alias, an attribute access, or a function or class
-    definition whose name carries the type_checking marker. Docstring text is an
-    ast.Constant and never counts, so the check can still flag a gate the prose
-    names while the body performs none.
+    a Name reference (any context — load, store, or delete), an import alias, an
+    attribute access, or a function or class definition whose name carries the
+    type_checking marker. Docstring text is an ast.Constant and never counts, so
+    the check can still flag a gate the prose names while the body performs none.
     """
     for each_node in ast.walk(parsed_tree):
         if isinstance(each_node, ast.Name) and (

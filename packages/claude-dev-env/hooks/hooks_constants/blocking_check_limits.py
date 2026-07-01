@@ -243,7 +243,6 @@ TYPE_CHECKING_IDENTIFIER_MARKER: str = "type_checking"
 ALL_ABSENT_TYPE_CHECKING_GATE_DOCSTRING_PHRASES: tuple[str, ...] = (
     "type_checking gate",
     "type-checking-gate",
-    "type-checking gate",
 )
 
 MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES: int = 3
