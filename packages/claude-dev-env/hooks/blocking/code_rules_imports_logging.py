@@ -1,4 +1,4 @@
-"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, naive datetime construction, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, file-length advisory, and library-print checks."""
+"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, naive datetime construction, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, JS sibling return-object key drift, file-length advisory, and library-print checks."""
 
 import ast
 import json
@@ -38,11 +38,13 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_IMPORT_BLOCK_SORT_ISSUES,
     MAX_JS_RESUME_TASK_ENUMERATION_ISSUES,
     MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES,
+    MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES,
     MAX_LOGGING_FSTRING_ISSUES,
     MAX_LOGGING_PRINTF_TOKEN_ISSUES,
     MAX_NAIVE_DATETIME_ISSUES,
     MAX_WINDOWS_API_NONE_ISSUES,
     MINIMUM_RESUME_TASK_ENUMERATION_ITEMS,
+    MINIMUM_SIBLING_RETURN_OBJECT_KEYS,
     NAIVE_DATETIME_FROMTIMESTAMP_CONSTRUCTOR,
     NAIVE_DATETIME_TIMEZONE_KEYWORD,
     NAIVE_DATETIME_UTCFROMTIMESTAMP_CONSTRUCTOR,
@@ -50,13 +52,18 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     RUFF_PYPROJECT_CONFIG_FILENAME,
     RUFF_PYPROJECT_TOOL_TABLE_MARKER,
     RUFF_STDIN_ENCODING,
+    SIBLING_RETURN_OBJECT_EXACT_MISSING_KEY_COUNT,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ADVISORY_LINE_THRESHOLD_HARD,
     ADVISORY_LINE_THRESHOLD_SOFT,
     ALL_CLI_FILE_PATH_MARKERS,
     ALL_IMPORT_STATEMENT_PREFIXES,
+    ALL_JAVASCRIPT_BRACKET_CLOSERS,
+    ALL_JAVASCRIPT_BRACKET_OPENERS,
+    ALL_JAVASCRIPT_CONTROL_FLOW_BLOCK_KEYWORDS,
     ALL_JAVASCRIPT_EXTENSIONS,
+    ALL_JAVASCRIPT_IDENTIFIER_EXTRA_CHARACTERS,
     ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS,
     ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS,
     ALL_JAVASCRIPT_STRING_DELIMITERS,
@@ -69,8 +76,11 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     JAVASCRIPT_BLOCK_COMMENT_CLOSER,
     JAVASCRIPT_BLOCK_COMMENT_OPENER,
     JAVASCRIPT_LINE_COMMENT_OPENER,
+    JAVASCRIPT_MODULE_SCOPE_SENTINEL,
+    JAVASCRIPT_OBJECT_SPREAD_PREFIX,
     JAVASCRIPT_REGEX_DELIMITER,
     JAVASCRIPT_STRING_ESCAPE_CHARACTER,
+    JS_OBJECT_KEY_IDENTIFIER_PATTERN,
     JSDOC_RETURNS_STRUCTURED_OBJECT_PROMISE_PATTERN,
     LOGGING_FSTRING_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
@@ -78,6 +88,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     NOT_INSIDE_TYPE_CHECKING_BLOCK,
     RESUME_TASK_ENUMERATION_PATTERN,
     RETURN_CALL_OPENING_PARENTHESIS_PATTERN,
+    RETURN_OBJECT_LITERAL_OPENING_PATTERN,
     SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN,
     SPAWN_AGENT_WITH_JSDOC_PATTERN,
     TASK_DISPATCH_NAME_PATTERN,
@@ -1225,6 +1236,219 @@ def check_js_returns_object_schemaless_branch(content: str, file_path: str) -> l
         if len(issues) >= MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES:
             break
     return issues[:MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES]
+
+
+def _matching_open_parenthesis_index(blanked_content: str, closing_index: int) -> int | None:
+    """Return the index of the ``(`` that matches the ``)`` at ``closing_index``."""
+    depth = 0
+    for each_position in range(closing_index, -1, -1):
+        character = blanked_content[each_position]
+        if character == ")":
+            depth += 1
+        elif character == "(":
+            depth -= 1
+            if depth == 0:
+                return each_position
+    return None
+
+
+def _is_function_scope_opener(blanked_content: str, brace_index: int) -> bool:
+    """Report whether the ``{`` at ``brace_index`` opens a function or arrow body.
+
+    An arrow body follows ``=>``. A function or method body follows a ``)`` whose
+    matching ``(`` is not preceded by a control-flow keyword. A control block
+    (``if``, ``for``, ``while``, ``switch``, ``catch``, ``with``) opens a plain
+    block, not a scope, so a return inside it belongs to the enclosing function.
+    """
+    preceding_index = brace_index - 1
+    while preceding_index >= 0 and blanked_content[preceding_index].isspace():
+        preceding_index -= 1
+    if preceding_index < 1:
+        return False
+    if blanked_content[preceding_index] == ">" and blanked_content[preceding_index - 1] == "=":
+        return True
+    if blanked_content[preceding_index] != ")":
+        return False
+    open_parenthesis_index = _matching_open_parenthesis_index(blanked_content, preceding_index)
+    if open_parenthesis_index is None:
+        return False
+    keyword_end_index = open_parenthesis_index - 1
+    while keyword_end_index >= 0 and blanked_content[keyword_end_index].isspace():
+        keyword_end_index -= 1
+    keyword_start_index = keyword_end_index + 1
+    while keyword_start_index > 0 and (
+        blanked_content[keyword_start_index - 1].isalnum()
+        or blanked_content[keyword_start_index - 1] in ALL_JAVASCRIPT_IDENTIFIER_EXTRA_CHARACTERS
+    ):
+        keyword_start_index -= 1
+    preceding_keyword = blanked_content[keyword_start_index : keyword_end_index + 1]
+    return preceding_keyword not in ALL_JAVASCRIPT_CONTROL_FLOW_BLOCK_KEYWORDS
+
+
+def _split_top_level_object_entries(inner_content: str) -> list[str]:
+    """Split object-literal inner text into entries at bracket-depth-zero commas."""
+    entries: list[str] = []
+    depth = 0
+    entry_start_index = 0
+    for each_index, each_character in enumerate(inner_content):
+        if each_character in ALL_JAVASCRIPT_BRACKET_OPENERS:
+            depth += 1
+        elif each_character in ALL_JAVASCRIPT_BRACKET_CLOSERS:
+            depth -= 1
+        elif each_character == "," and depth == 0:
+            entries.append(inner_content[entry_start_index:each_index])
+            entry_start_index = each_index + 1
+    entries.append(inner_content[entry_start_index:])
+    return entries
+
+
+def _top_level_colon_index(entry_content: str) -> int | None:
+    """Return the index of the first bracket-depth-zero ``:`` in the entry, or None."""
+    depth = 0
+    for each_index, each_character in enumerate(entry_content):
+        if each_character in ALL_JAVASCRIPT_BRACKET_OPENERS:
+            depth += 1
+        elif each_character in ALL_JAVASCRIPT_BRACKET_CLOSERS:
+            depth -= 1
+        elif each_character == ":" and depth == 0:
+            return each_index
+    return None
+
+
+def _top_level_object_keys(blanked_content: str, brace_index: int) -> frozenset[str]:
+    """Return the identifier keys declared at the top level of the object literal.
+
+    The literal begins at the ``{`` at ``brace_index`` in blanked source, so a
+    brace, comma, or colon inside a nested object, array, call, or string never
+    counts toward a key. A property key is the identifier before its top-level
+    ``:``; a shorthand key is a bare-identifier entry. A spread entry and a
+    computed key are skipped.
+    """
+    object_span = _balanced_brace_body(blanked_content, brace_index)
+    if object_span is None:
+        return frozenset()
+    inner_content = object_span[1:-1]
+    object_keys: set[str] = set()
+    for each_entry in _split_top_level_object_entries(inner_content):
+        stripped_entry = each_entry.strip()
+        if not stripped_entry or stripped_entry.startswith(JAVASCRIPT_OBJECT_SPREAD_PREFIX):
+            continue
+        colon_index = _top_level_colon_index(stripped_entry)
+        candidate_key = (
+            stripped_entry if colon_index is None else stripped_entry[:colon_index].strip()
+        )
+        if JS_OBJECT_KEY_IDENTIFIER_PATTERN.fullmatch(candidate_key):
+            object_keys.add(candidate_key)
+    return frozenset(object_keys)
+
+
+def _return_object_literal_records(content: str) -> list[tuple[int, frozenset[str], int]]:
+    """Return one record per ``return { ... }`` object literal in the JS source.
+
+    Each record pairs the enclosing function-scope id, the literal's top-level key
+    set, and its 1-based line number. Two returns share a scope id when the nearest
+    enclosing function or arrow body is the same; a module-top-level return carries
+    the module sentinel. A control-flow block does not open a scope, so an early
+    return inside an ``if`` block shares its function's scope.
+    """
+    blanked_content = _blank_non_code_regions(content)
+    return_brace_indices = {
+        each_match.end() - 1
+        for each_match in RETURN_OBJECT_LITERAL_OPENING_PATTERN.finditer(blanked_content)
+    }
+    records: list[tuple[int, frozenset[str], int]] = []
+    scope_restore_stack: list[int] = []
+    current_scope_id = JAVASCRIPT_MODULE_SCOPE_SENTINEL
+    for each_index, each_character in enumerate(blanked_content):
+        if each_character == "{":
+            if each_index in return_brace_indices:
+                object_keys = _top_level_object_keys(blanked_content, each_index)
+                line_number = content.count("\n", 0, each_index) + 1
+                records.append((current_scope_id, object_keys, line_number))
+            scope_restore_stack.append(current_scope_id)
+            if _is_function_scope_opener(blanked_content, each_index):
+                current_scope_id = each_index
+        elif each_character == "}":
+            if scope_restore_stack:
+                current_scope_id = scope_restore_stack.pop()
+    return records
+
+
+def _single_missing_sibling_key(
+    all_return_object_keys: frozenset[str], all_scope_key_sets: list[frozenset[str]]
+) -> str | None:
+    """Return the lone key a sibling superset adds to ``all_return_object_keys``.
+
+    A sibling qualifies when ``all_return_object_keys`` is a proper subset of it and
+    exactly one key separates them. The first qualifying sibling's extra key is
+    returned so the caller names the omitted field, or None when no sibling adds
+    exactly one key.
+    """
+    for each_sibling_keys in all_scope_key_sets:
+        if not all_return_object_keys < each_sibling_keys:
+            continue
+        extra_keys = each_sibling_keys - all_return_object_keys
+        if len(extra_keys) == SIBLING_RETURN_OBJECT_EXACT_MISSING_KEY_COUNT:
+            return next(iter(extra_keys))
+    return None
+
+
+def check_js_sibling_return_object_key_drift(content: str, file_path: str) -> list[str]:
+    """Flag a return object literal that omits one field a sibling return carries.
+
+    Picture two return paths of the same function or workflow body. Both yield the
+    same record, so both list the same fields — except one early return drops a
+    single field the other carries. A caller that reads that field off the result
+    gets undefined on the short path, while the documented contract and the sibling
+    return both promise it.
+
+    Within one function or module scope, the check pairs each ``return { ... }``
+    object literal against its siblings. A literal whose key set is a proper subset
+    of a sibling's, missing exactly one key and carrying at least the minimum key
+    count, is flagged for that one missing key. A control-flow block does not open a
+    scope, so an early return inside an ``if`` block is compared with the tail
+    return of the same function. Returns differing by two or more keys are a
+    distinct exit shape and pass. This is the JS/.mjs slice of Category O
+    doc-vs-implementation drift; the Python enforcer's AST docstring checks never
+    inspect JavaScript source.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per return literal that omits a single sibling field, capped at
+        the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    if get_file_extension(file_path) not in ALL_JAVASCRIPT_EXTENSIONS:
+        return []
+    records = _return_object_literal_records(content)
+    records_by_scope: dict[int, list[tuple[frozenset[str], int]]] = {}
+    for each_scope_id, each_object_keys, each_line_number in records:
+        records_by_scope.setdefault(each_scope_id, []).append(
+            (each_object_keys, each_line_number)
+        )
+    issues: list[str] = []
+    for each_scope_records in records_by_scope.values():
+        all_scope_key_sets = [each_record[0] for each_record in each_scope_records]
+        for each_object_keys, each_line_number in each_scope_records:
+            if len(each_object_keys) < MINIMUM_SIBLING_RETURN_OBJECT_KEYS:
+                continue
+            missing_key = _single_missing_sibling_key(each_object_keys, all_scope_key_sets)
+            if missing_key is None:
+                continue
+            issues.append(
+                f"Line {each_line_number}: this return object literal omits '{missing_key}' "
+                "that a sibling return in the same scope carries — every return path that "
+                f"yields this record carries the same keys, so a caller reading '{missing_key}' "
+                f"gets undefined on this path; add '{missing_key}' "
+                "(Category O doc-vs-implementation return-shape drift)"
+            )
+            if len(issues) >= MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES:
+                return issues[:MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES]
+    return issues[:MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES]
 
 
 def _is_cli_entry_point(file_path: str) -> bool:
