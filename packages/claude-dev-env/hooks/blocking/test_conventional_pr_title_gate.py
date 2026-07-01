@@ -25,7 +25,10 @@ _matches_gh_pr_title_subcommand = hook_module._matches_gh_pr_title_subcommand
 _parsed_command_tokens = hook_module._parsed_command_tokens
 _extract_flag_value = hook_module._extract_flag_value
 _is_conventional_commit_title = hook_module._is_conventional_commit_title
-_repo_enforces_semantic_pr_titles = hook_module._repo_enforces_semantic_pr_titles
+_repo_enforces_default_conventional_pr_titles = (
+    hook_module._repo_enforces_default_conventional_pr_titles
+)
+_workflow_customizes_semantic_types = hook_module._workflow_customizes_semantic_types
 _pull_request_title_to_validate = hook_module._pull_request_title_to_validate
 
 _SEMANTIC_WORKFLOW_TEXT = (
@@ -40,6 +43,35 @@ _SEMANTIC_WORKFLOW_TEXT = (
 
 _PLAIN_WORKFLOW_TEXT = (
     "name: Tests\non:\n  push:\njobs:\n  test:\n    steps:\n      - run: npm test\n"
+)
+
+_SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT = (
+    "name: PR checks\n"
+    "on:\n"
+    "  pull_request:\n"
+    "    types: [opened, edited, synchronize]\n"
+    "jobs:\n"
+    "  validate:\n"
+    "    steps:\n"
+    "      - uses: amannn/action-semantic-pull-request@v5\n"
+    "        env:\n"
+    "          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"
+    "        with:\n"
+    "          types: |\n"
+    "            feat\n"
+    "            fix\n"
+    "            wip\n"
+)
+
+_SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT = (
+    "name: PR checks\n"
+    "on:\n"
+    "  pull_request:\n"
+    "    types: [opened, edited, synchronize]\n"
+    "jobs:\n"
+    "  validate:\n"
+    "    steps:\n"
+    "      - uses: amannn/action-semantic-pull-request@v5\n"
 )
 
 
@@ -145,24 +177,52 @@ def test_pull_request_title_to_validate_returns_literal_for_plain_title() -> Non
     )
 
 
-def test_repo_enforces_semantic_pr_titles_true_for_marker_workflow(tmp_path: pathlib.Path) -> None:
+def test_repo_enforces_default_conventional_pr_titles_true_for_marker_workflow(
+    tmp_path: pathlib.Path,
+) -> None:
     repo_root = tmp_path / "semantic_repo"
     _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
-    assert _repo_enforces_semantic_pr_titles(str(repo_root))
+    assert _repo_enforces_default_conventional_pr_titles(str(repo_root))
 
 
-def test_repo_enforces_semantic_pr_titles_false_for_plain_workflow(tmp_path: pathlib.Path) -> None:
+def test_repo_enforces_default_conventional_pr_titles_false_for_plain_workflow(
+    tmp_path: pathlib.Path,
+) -> None:
     repo_root = tmp_path / "plain_repo"
     _init_repo_with_workflow(repo_root, _PLAIN_WORKFLOW_TEXT)
-    assert not _repo_enforces_semantic_pr_titles(str(repo_root))
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
 
 
-def test_repo_enforces_semantic_pr_titles_false_when_no_workflows_directory(
+def test_repo_enforces_default_conventional_pr_titles_false_when_no_workflows_directory(
     tmp_path: pathlib.Path,
 ) -> None:
     repo_root = tmp_path / "no_workflows_repo"
     subprocess.run(["git", "init", str(repo_root)], capture_output=True, check=True)
-    assert not _repo_enforces_semantic_pr_titles(str(repo_root))
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_repo_enforces_default_conventional_pr_titles_false_when_action_customizes_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "custom_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_repo_enforces_default_conventional_pr_titles_true_when_only_event_types_present(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "event_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT)
+    assert _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_workflow_customizes_semantic_types_true_for_action_types_input() -> None:
+    assert _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+
+
+def test_workflow_customizes_semantic_types_false_for_event_types_only() -> None:
+    assert not _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT)
 
 
 def test_main_blocks_non_conventional_title_in_semantic_ci_repo(
@@ -240,6 +300,39 @@ def test_main_allows_junk_title_when_no_semantic_marker(tmp_path: pathlib.Path) 
     )
     assert exit_code == 0
     assert stdout_text == ""
+
+
+def test_main_allows_custom_type_title_when_action_customizes_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "custom_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "wip: iterate on the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_blocks_non_conventional_title_when_only_event_types_present(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "event_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    response_payload = json.loads(stdout_text)
+    assert response_payload["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 def test_main_allows_echoed_gh_pr_create_in_semantic_ci_repo(tmp_path: pathlib.Path) -> None:

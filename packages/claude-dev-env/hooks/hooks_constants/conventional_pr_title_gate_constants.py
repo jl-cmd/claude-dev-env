@@ -41,6 +41,8 @@ CONVENTIONAL_COMMIT_TITLE_PATTERN: re.Pattern[str] = re.compile(
     r"^(?:" + "|".join(ALL_CONVENTIONAL_COMMIT_TYPES) + r")(?:\([^)]+\))?!?: .+"
 )
 
+SEMANTIC_ACTION_TYPES_INPUT_PATTERN: re.Pattern[str] = re.compile(r"^\s*types\s*:")
+
 CORRECTIVE_MESSAGE: str = (
     "BLOCKED [conventional-pr-title]: this repository's CI validates PR titles "
     "against Conventional Commits, and the --title value here does not match. "
