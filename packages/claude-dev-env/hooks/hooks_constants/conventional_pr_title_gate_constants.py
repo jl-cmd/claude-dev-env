@@ -43,6 +43,8 @@ CONVENTIONAL_COMMIT_TITLE_PATTERN: re.Pattern[str] = re.compile(
 
 SEMANTIC_ACTION_TYPES_INPUT_PATTERN: re.Pattern[str] = re.compile(r"^\s*types\s*:")
 
+YAML_LIST_ITEM_PREFIX: str = "- "
+
 CORRECTIVE_MESSAGE: str = (
     "BLOCKED [conventional-pr-title]: this repository's CI validates PR titles "
     "against Conventional Commits, and the --title value here does not match. "

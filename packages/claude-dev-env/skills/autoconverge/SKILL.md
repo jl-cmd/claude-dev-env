@@ -474,11 +474,19 @@ deferred PRs converged across every generation.
 ### Conventional titles on deferred PRs
 
 Each hardening PR the loop opens targets a repo whose CI validates the PR title
-as a Conventional Commit. The `conventional_pr_title_gate` hook blocks a
-`gh pr create` whose `--title` is not a conventional commit in such a repo, so a
-deferred PR carries a conforming title (`feat(hooks): …`, `chore(rules): …`)
-before it exists — the loop never opens a PR that its target CI would reject on
-the title alone.
+as a Conventional Commit. The commit step's prompt directs the agent to title
+the hardening PR as a Conventional Commit — a type prefix, an optional scope,
+then a colon and a short summary — so a deferred PR carries a conforming title
+(`feat(hooks): …`, `chore(rules): …`) before it exists. That prompt is where the
+conforming title is enforced.
+
+The `conventional_pr_title_gate` hook is a best-effort backstop on that title,
+not the guarantee. It blocks a `gh pr create` with a non-conforming `--title`
+only for a repo whose semantic-pull-request workflow leaves the action's
+`types:` input at the default Conventional Commits list. For a repo that pins
+its own explicit `types:` list — which the main target repo does in
+`.github/workflows/pr-check.yml` — the hook fails open and lets the title
+through, and the CI title check on GitHub has the final say.
 
 ## Folder map
 
