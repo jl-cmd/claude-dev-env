@@ -924,10 +924,39 @@ def check_js_resume_task_enumeration_coverage(
     return issues[:MAX_JS_RESUME_TASK_ENUMERATION_ISSUES]
 
 
+def _parameter_list_end_index(blanked_content: str, after_open_parenthesis_index: int) -> int:
+    """Return the index just past the ``)`` that closes an opened parameter list.
+
+    ``after_open_parenthesis_index`` sits just past the opening ``(``, so the scan
+    starts one level deep and walks paren-balanced. A nested ``(`` inside the list
+    — a default-value call, a destructure default — does not close the list early.
+    """
+    depth = 1
+    for each_position in range(after_open_parenthesis_index, len(blanked_content)):
+        character = blanked_content[each_position]
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0:
+                return each_position + 1
+    return len(blanked_content)
+
+
 def _javascript_function_body(content: str, header_end_index: int) -> str | None:
-    """Return the brace-balanced body of the function whose header ends at the index."""
-    bounded_content = content[: _next_top_level_function_index(content, header_end_index)]
-    return _balanced_brace_body(bounded_content, header_end_index)
+    """Return the brace-balanced body of the function whose header ends at the index.
+
+    ``header_end_index`` sits just past the opening ``(`` of the parameter list, so
+    the scan advances past the paren-balanced parameter list before finding the body
+    brace. A destructured parameter (``function f({ ... }) { ... }``) opens a brace
+    inside that list; the body brace is the first ``{`` after the list closes, not
+    the destructure brace.
+    """
+    body_search_index = _parameter_list_end_index(
+        _blank_non_code_regions(content), header_end_index
+    )
+    bounded_content = content[: _next_top_level_function_index(content, body_search_index)]
+    return _balanced_brace_body(bounded_content, body_search_index)
 
 
 def _balanced_parenthesis_span(blanked_content: str, opening_index: int) -> str:
