@@ -1481,7 +1481,7 @@ function parseDeferredPr(prUrl) {
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
  * @param {boolean} hasHardeningPrAlreadyOpened true when an earlier round already opened the environment-hardening PR for this run, so the verify and commit steps are skipped and no second PR opens while the edit retries the issue filing
- * @returns {Promise<object>} `{ followUpIssueFiled, issueUrl, hardeningPrOpened, deferredPr }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, issueUrl that filed URL (empty string when the filing failed) so a later reuse-path round can reference it when resolving its own threads, hardeningPrOpened true only when the hardening PR was opened on this call, and deferredPr the opened PR's `{owner, repo, prNumber}` (null when none was opened) so the self-closing orchestrator can converge it in turn
+ * @returns {Promise<object>} `{ followUpIssueFiled, issueUrl, hardeningPrOpened, deferredPr }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, issueUrl that filed URL (empty string when the filing failed) so a later reuse-path round can reference it when resolving its own threads, hardeningPrOpened true once the hardening-commit step ran on this call (a PR-open was attempted) so the run-once latch holds even when the committed URL does not parse, and deferredPr the opened PR's `{owner, repo, prNumber}` (null when no PR was opened or the committed URL does not parse) so the self-closing orchestrator can converge it in turn
  */
 async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningPrAlreadyOpened) {
   const editResult = await runCodeEditorTask('standards-edit', { head, findings, sourceLabel })
@@ -1503,7 +1503,7 @@ async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningP
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch, issueUrl: editResult.issueUrl,
   })
   const deferredPr = parseDeferredPr(commitResult?.hardeningPrUrl)
-  return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: deferredPr !== null, deferredPr }
+  return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: true, deferredPr }
 }
 
 /**

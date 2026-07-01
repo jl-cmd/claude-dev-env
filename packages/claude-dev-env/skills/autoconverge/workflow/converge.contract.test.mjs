@@ -390,8 +390,8 @@ test('spawnStandardsFollowUp reports whether a hardening PR opened on every path
   );
   assert.match(
     body,
-    /hardeningPrOpened:\s*deferredPr !== null/,
-    'expected the commit path to report a hardening PR opened when the commit step parsed a deferred PR',
+    /hardeningPrOpened:\s*true/,
+    'expected the commit path to latch hardeningPrOpened once the commit step ran, so the run-once guard holds even when the committed URL does not parse',
   );
 });
 
@@ -407,10 +407,10 @@ test('spawnStandardsFollowUp reports the deferred PR identity on every path', ()
     /parseDeferredPr\(commitResult\?\.hardeningPrUrl\)/,
     'expected the commit path to parse the deferred PR identity from the commit step hardeningPrUrl',
   );
-  assert.match(
+  assert.doesNotMatch(
     body,
     /hardeningPrOpened:\s*deferredPr !== null/,
-    'expected the commit path to derive hardeningPrOpened from whether a deferred PR was parsed',
+    'expected the commit path to keep hardeningPrOpened separate from the parsed deferredPr so an unparseable URL still latches the guard',
   );
 });
 

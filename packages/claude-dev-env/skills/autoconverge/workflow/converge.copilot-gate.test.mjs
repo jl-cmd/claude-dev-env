@@ -431,7 +431,9 @@ function extractCallableSource(functionName) {
   return convergeSource.slice(declarationStart, index);
 }
 
-function loadStandardsFollowUpRuntime(recordedCalls, standardsEditResult) {
+const parseableHardeningCommitResult = { hardeningPrUrl: 'https://github.com/owner/repo/pull/7', summary: 'opened' };
+
+function loadStandardsFollowUpRuntime(recordedCalls, standardsEditResult, hardeningCommitResult = parseableHardeningCommitResult) {
   const runtimeSource =
     'let hasStandardsFollowUpFiled = false;\n' +
     'let wasStandardsHardeningPrOpened = false;\n' +
@@ -439,7 +441,7 @@ function loadStandardsFollowUpRuntime(recordedCalls, standardsEditResult) {
     'async function runCodeEditorTask(taskName, context) {\n' +
     '  recordedCalls.push({ task: taskName, context });\n' +
     "  if (taskName === 'standards-edit') return standardsEditResult;\n" +
-    "  if (taskName === 'hardening-commit') return { hardeningPrUrl: 'https://github.com/owner/repo/pull/7', summary: 'opened' };\n" +
+    "  if (taskName === 'hardening-commit') return hardeningCommitResult;\n" +
     '  return {};\n' +
     '}\n' +
     'async function runVerifierTask() {\n' +
@@ -460,9 +462,10 @@ function loadStandardsFollowUpRuntime(recordedCalls, standardsEditResult) {
     '  openStandardsFollowUpOnce,\n' +
     '  guards: () => ({ hasStandardsFollowUpFiled, wasStandardsHardeningPrOpened, standardsFollowUpIssueUrl }),\n' +
     '};';
-  return new Function('recordedCalls', 'standardsEditResult', runtimeSource)(
+  return new Function('recordedCalls', 'standardsEditResult', 'hardeningCommitResult', runtimeSource)(
     recordedCalls,
     standardsEditResult,
+    hardeningCommitResult,
   );
 }
 
@@ -496,6 +499,36 @@ test('a second standards-only round never re-opens a hardening PR after the firs
     runtime.guards().hasStandardsFollowUpFiled,
     false,
     'expected the issue guard to stay clear so the filing keeps retrying',
+  );
+});
+
+test('a hardening-commit that opens a PR but returns an unparseable URL still latches the run-once guard', async () => {
+  const recordedCalls = [];
+  const issueFailedHardeningStaged = {
+    issueUrl: '',
+    hardeningEdited: true,
+    hardeningRepoPath: '/tmp/hardening',
+    hardeningBranch: 'harden-standards',
+  };
+  const emptyUrlHardeningCommitResult = { hardeningPrUrl: '', summary: 'opened' };
+  const runtime = loadStandardsFollowUpRuntime(recordedCalls, issueFailedHardeningStaged, emptyUrlHardeningCommitResult);
+
+  const firstRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round');
+  const secondRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot');
+
+  const hardeningCommitCalls = recordedCalls.filter((call) => call.task === 'hardening-commit').length;
+  assert.equal(
+    hardeningCommitCalls,
+    1,
+    'expected the empty-URL commit to still latch the guard so a second round opens no duplicate hardening PR',
+  );
+  assert.equal(firstRoundHardeningPr.hardeningPrOpened, true, 'expected the commit step running to report the hardening PR as opened');
+  assert.equal(firstRoundHardeningPr.deferredPr, null, 'expected the unparseable URL to contribute no deferred coordinate');
+  assert.equal(secondRoundHardeningPr.hardeningPrOpened, true, 'expected the second round to report the hardening PR as opened for this run');
+  assert.equal(
+    runtime.guards().wasStandardsHardeningPrOpened,
+    true,
+    'expected the hardening guard to latch even though the returned URL never parsed',
   );
 });
 
