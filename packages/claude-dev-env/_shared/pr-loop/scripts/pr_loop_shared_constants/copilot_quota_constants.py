@@ -1,4 +1,4 @@
-"""Configuration constants for the Copilot premium-request quota pre-check."""
+"""Configuration constants for the Copilot premium-interaction quota pre-check."""
 
 from __future__ import annotations
 
