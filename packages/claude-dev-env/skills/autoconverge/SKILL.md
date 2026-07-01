@@ -312,7 +312,7 @@ matches.
   (hooks/rules that block those violation classes at Write/Edit time), resolves
   any bot threads with a deferral note, and reports the deferral in
   `standardsNote`.
-- **Copilot gate:** request a Copilot review, poll up to three times; findings
+- **Copilot gate:** request a Copilot review, poll up to the configured cap; findings
   route back into Converge. When Copilot is down or out of quota — it posts an
   out-of-usage notice (the requester hit their quota) on the HEAD, or surfaces no
   review at all after the cap — the gate logs a notice and the run marks the PR

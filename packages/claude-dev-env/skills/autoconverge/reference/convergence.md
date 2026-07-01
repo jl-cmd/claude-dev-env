@@ -79,11 +79,11 @@ tracks CONVERGE passes only and is never the cap.
 **COPILOT** gate:
 
 - Request a Copilot review on HEAD (skipping a duplicate request), then poll up
-  to three times, 360 seconds apart.
+  to the configured cap, 360 seconds apart.
 - Copilot findings → fix them and return to CONVERGE on the new HEAD.
 - Copilot clean or approved → move to the convergence check.
-- Copilot down or out of quota (an out-of-usage notice, or no review after three
-  polls) → log a notice and move to the convergence check with the Copilot gate
+- Copilot down or out of quota (an out-of-usage notice, or no review after the
+  poll cap) → log a notice and move to the convergence check with the Copilot gate
   bypassed.
 
 **Convergence check**:
