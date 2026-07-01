@@ -129,6 +129,24 @@ test('a Copilot no-show after the poll cap returns a down result rather than a b
   );
 });
 
+test('the Copilot gate accepts a COMMENTED review with no inline findings as a clean pass', () => {
+  const copilotPrompt = functionBody('runCopilotGate');
+  assert.match(
+    copilotPrompt,
+    /COMMENTED with no inline findings/,
+    'expected the clean-pass branch to accept a COMMENTED review with no inline findings, matching the canonical ALL_COPILOT_CLEAN_REVIEW_STATES rule where a Copilot COMMENTED review is a clean state',
+  );
+});
+
+test('the Copilot gate polls long enough to catch a normal-latency Copilot review', () => {
+  const budgetMatch = convergeSource.match(/copilotMaxPolls:\s*(\d+)/);
+  assert.notEqual(budgetMatch, null, 'expected copilotMaxPolls in CONFIG');
+  assert.ok(
+    Number(budgetMatch[1]) >= 6,
+    `expected copilotMaxPolls >= 6 (>= ~36 min at 360s per attempt) so a normal-latency Copilot review lands before the no-show fallback triggers, got ${budgetMatch[1]}`,
+  );
+});
+
 test('runConvergenceCheck wires the --copilot-down flag from the copilotDown context', () => {
   const checkConvergenceBody = functionBody('runConvergenceCheck');
   assert.match(
