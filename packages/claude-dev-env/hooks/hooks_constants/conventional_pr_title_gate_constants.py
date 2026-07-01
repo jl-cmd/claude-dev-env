@@ -2,10 +2,10 @@
 
 import re
 
-GH_PR_TITLE_SUBCOMMAND_PATTERN: re.Pattern[str] = re.compile(
-    r"\bgh\s+pr\s+(?:create|edit)\b",
-    re.IGNORECASE,
-)
+ALL_GH_EXECUTABLE_BASENAMES: frozenset[str] = frozenset({"gh", "gh.exe"})
+PR_SUBCOMMAND_TOKEN: str = "pr"
+ALL_PR_TITLE_SUBCOMMAND_VERBS: frozenset[str] = frozenset({"create", "edit"})
+GH_PR_SUBCOMMAND_MINIMUM_TOKEN_COUNT: int = 3
 
 BASH_TOOL_NAME: str = "Bash"
 

@@ -86,6 +86,14 @@ def test_does_not_match_unrelated_command() -> None:
     assert not _matches_gh_pr_title_subcommand("gh pr list --repo owner/repo")
 
 
+def test_does_not_match_echoed_gh_pr_create() -> None:
+    assert not _matches_gh_pr_title_subcommand('echo gh pr create --title "add x"')
+
+
+def test_matches_gh_pr_create_when_invoked_by_executable_path() -> None:
+    assert _matches_gh_pr_title_subcommand('/usr/bin/gh pr create --title "add x"')
+
+
 def test_extract_flag_value_space_form() -> None:
     all_tokens = _parsed_command_tokens('gh pr create --title "feat: add x" --draft')
     assert all_tokens is not None
@@ -203,6 +211,20 @@ def test_main_allows_junk_title_when_no_semantic_marker(tmp_path: pathlib.Path) 
             "tool_name": "Bash",
             "cwd": str(repo_root),
             "tool_input": {"command": 'gh pr create --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_echoed_gh_pr_create_in_semantic_ci_repo(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'echo gh pr create --title "add the thing"'},
         }
     )
     assert exit_code == 0

@@ -40,12 +40,15 @@ from blocking._gh_body_arg_utils import (  # noqa: E402
     strip_surrounding_quotes,
 )
 from hooks_constants.conventional_pr_title_gate_constants import (  # noqa: E402
+    ALL_GH_EXECUTABLE_BASENAMES,
+    ALL_PR_TITLE_SUBCOMMAND_VERBS,
     ALL_SEMANTIC_TITLE_CI_MARKERS,
     ALL_WORKFLOW_FILE_GLOB_PATTERNS,
     BASH_TOOL_NAME,
     CONVENTIONAL_COMMIT_TITLE_PATTERN,
     CORRECTIVE_MESSAGE,
-    GH_PR_TITLE_SUBCOMMAND_PATTERN,
+    GH_PR_SUBCOMMAND_MINIMUM_TOKEN_COUNT,
+    PR_SUBCOMMAND_TOKEN,
     REPO_LONG_FLAG,
     REPO_SHORT_FLAG,
     TITLE_LONG_FLAG,
@@ -56,7 +59,15 @@ from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 
 def _matches_gh_pr_title_subcommand(command: str) -> bool:
-    return bool(GH_PR_TITLE_SUBCOMMAND_PATTERN.search(get_logical_first_line(command)))
+    all_tokens = _parsed_command_tokens(command)
+    if all_tokens is None or len(all_tokens) < GH_PR_SUBCOMMAND_MINIMUM_TOKEN_COUNT:
+        return False
+    executable_basename = Path(strip_surrounding_quotes(all_tokens[0])).name
+    if executable_basename not in ALL_GH_EXECUTABLE_BASENAMES:
+        return False
+    if strip_surrounding_quotes(all_tokens[1]) != PR_SUBCOMMAND_TOKEN:
+        return False
+    return strip_surrounding_quotes(all_tokens[2]) in ALL_PR_TITLE_SUBCOMMAND_VERBS
 
 
 def _parsed_command_tokens(command: str) -> list[str] | None:
