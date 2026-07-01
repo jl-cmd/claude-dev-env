@@ -22,6 +22,7 @@ from code_rules_shared import (  # noqa: E402
 )
 
 from hooks_constants.blocking_check_limits import (  # noqa: E402
+    ALL_ABSENT_TYPE_CHECKING_GATE_DOCSTRING_PHRASES,
     ALL_DATA_SCHEMA_CONSTANT_NAME_MARKERS,
     ALL_DATA_SCHEMA_DOCSTRING_ACKNOWLEDGEMENT_PHRASES,
     ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES,
@@ -74,6 +75,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_RUNON_SENTENCE_ISSUES,
     MAX_DOCSTRING_STEP_DISPATCH_ISSUES,
     MAX_DOCSTRING_TUPLE_ENUMERATION_ISSUES,
+    MAX_DOCSTRING_TYPE_CHECKING_GATE_ISSUES,
     MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES,
     MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES,
     MAX_LENGTH_CONSTANT_SUPERLATIVE_ISSUES,
@@ -90,6 +92,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT,
     PYTHON_MODULE_FILE_SUFFIX,
     SINGLE_DICT_KEY_COUNT_FOR_PLURAL_CARDINALITY_DRIFT,
+    TYPE_CHECKING_IDENTIFIER_MARKER,
     WORD_BOUNDARY_REGEX,
     ZIPFILE_ALLOW_ZIP64_KEYWORD,
     ZIPFILE_ALLOW_ZIP64_POSITIONAL_INDEX,
@@ -957,6 +960,96 @@ def check_docstring_no_network_claim_with_metadata_access(
         if len(issues) >= MAX_DOCSTRING_NO_NETWORK_CLAIM_ISSUES:
             break
     return issues[:MAX_DOCSTRING_NO_NETWORK_CLAIM_ISSUES]
+
+
+def _module_code_references_type_checking(parsed_tree: ast.Module) -> bool:
+    """Return True when a code identifier in the module handles TYPE_CHECKING.
+
+    A module that names TYPE_CHECKING in code genuinely gates on it. That covers
+    a Name load, an import alias, an attribute access, or a function or class
+    definition whose name carries the type_checking marker. Docstring text is an
+    ast.Constant and never counts, so the check can still flag a gate the prose
+    names while the body performs none.
+    """
+    for each_node in ast.walk(parsed_tree):
+        if isinstance(each_node, ast.Name) and (
+            TYPE_CHECKING_IDENTIFIER_MARKER in each_node.id.lower()
+        ):
+            return True
+        if isinstance(each_node, ast.Attribute) and (
+            TYPE_CHECKING_IDENTIFIER_MARKER in each_node.attr.lower()
+        ):
+            return True
+        if isinstance(each_node, ast.alias) and any(
+            each_alias_name and TYPE_CHECKING_IDENTIFIER_MARKER in each_alias_name.lower()
+            for each_alias_name in (each_node.name, each_node.asname)
+        ):
+            return True
+        if isinstance(
+            each_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ) and TYPE_CHECKING_IDENTIFIER_MARKER in each_node.name.lower():
+            return True
+    return False
+
+
+def _docstring_names_absent_type_checking_gate(docstring_text: str) -> str:
+    collapsed_docstring = " ".join(docstring_text.replace("`", " ").lower().split())
+    for each_phrase in ALL_ABSENT_TYPE_CHECKING_GATE_DOCSTRING_PHRASES:
+        if each_phrase in collapsed_docstring:
+            return each_phrase
+    return ""
+
+
+def check_docstring_names_absent_type_checking_gate(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a docstring naming a TYPE_CHECKING gate the module's code never runs.
+
+    Picture a hook whose docstring advertises a `TYPE_CHECKING` gate-detection
+    step, or a module summary that names `type-checking-gate` helpers, while no
+    identifier in the body handles TYPE_CHECKING. A reader trusts the prose and
+    looks for the gate, but the code performs none, so the claim points at
+    machinery the module does not hold.
+
+    This is the deterministic slice of Category O6 docstring-prose-vs-
+    implementation drift for a TYPE_CHECKING gate claim. The check reads the
+    module docstring and every function and class docstring. It fires only when
+    a docstring names a `TYPE_CHECKING` gate or a `type-checking-gate` helper
+    family while no code identifier in the module carries the `type_checking`
+    marker, so a module that genuinely gates on TYPE_CHECKING is left alone.
+    Hook infrastructure is in scope, since the import-scan hooks that carry this
+    drift class are themselves hooks. Test files are exempt.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per docstring naming a TYPE_CHECKING gate the code never
+        performs, capped at the module limit.
+    """
+    if is_strict_test_file(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    if _module_code_references_type_checking(parsed_tree):
+        return []
+    issues: list[str] = []
+    for each_line_number, each_docstring in _documentable_nodes_with_docstrings(parsed_tree):
+        matched_phrase = _docstring_names_absent_type_checking_gate(each_docstring)
+        if not matched_phrase:
+            continue
+        issues.append(
+            f"Line {each_line_number}: docstring names a '{matched_phrase}' the module's "
+            "code never performs — no identifier in the body handles TYPE_CHECKING, so the "
+            "gate-detection claim is stale; drop the TYPE_CHECKING gate wording or add the "
+            "detection (Category O6 docstring-vs-implementation drift)"
+        )
+        if len(issues) >= MAX_DOCSTRING_TYPE_CHECKING_GATE_ISSUES:
+            break
+    return issues[:MAX_DOCSTRING_TYPE_CHECKING_GATE_ISSUES]
 
 
 def _module_docstring_claims_no_inline_literal(module_docstring: str) -> str:
