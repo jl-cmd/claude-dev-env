@@ -388,8 +388,8 @@ test('openStandardsFollowUpOnce gates spawnStandardsFollowUp behind the run-once
   );
   assert.match(
     onceBody,
-    /return wasStandardsHardeningPrOpened/,
-    'expected the skip path to return the cached hardening outcome',
+    /hardeningPrOpened: wasStandardsHardeningPrOpened/,
+    'expected the helper to return the cached hardening outcome as hardeningPrOpened',
   );
 });
 
@@ -438,7 +438,9 @@ function loadStandardsFollowUpRuntime(recordedCalls, standardsEditResult) {
     "let standardsFollowUpIssueUrl = '';\n" +
     'async function runCodeEditorTask(taskName, context) {\n' +
     '  recordedCalls.push({ task: taskName, context });\n' +
-    "  return taskName === 'standards-edit' ? standardsEditResult : {};\n" +
+    "  if (taskName === 'standards-edit') return standardsEditResult;\n" +
+    "  if (taskName === 'hardening-commit') return { hardeningPrUrl: 'https://github.com/owner/repo/pull/7', summary: 'opened' };\n" +
+    '  return {};\n' +
     '}\n' +
     'async function runVerifierTask() {\n' +
     '  return { passed: true };\n' +
@@ -450,6 +452,7 @@ function loadStandardsFollowUpRuntime(recordedCalls, standardsEditResult) {
     `${extractCallableSource('collectFindingThreadIds')}\n` +
     `${extractCallableSource('findingsCarryThreads')}\n` +
     `${extractCallableSource('shouldOpenStandardsFollowUp')}\n` +
+    `${extractCallableSource('parseDeferredPr')}\n` +
     `${extractCallableSource('spawnStandardsFollowUp')}\n` +
     `${extractCallableSource('resolveStandardsThreadsForBatch')}\n` +
     `${extractCallableSource('openStandardsFollowUpOnce')}\n` +
@@ -482,8 +485,8 @@ test('a second standards-only round never re-opens a hardening PR after the firs
     1,
     'expected the hardening PR to be committed exactly once even when the follow-up issue filing must retry on the second round',
   );
-  assert.equal(firstRoundHardeningPr, true, 'expected the first round to open the hardening PR');
-  assert.equal(secondRoundHardeningPr, true, 'expected the second round to report the hardening PR as opened for this run');
+  assert.equal(firstRoundHardeningPr.hardeningPrOpened, true, 'expected the first round to open the hardening PR');
+  assert.equal(secondRoundHardeningPr.hardeningPrOpened, true, 'expected the second round to report the hardening PR as opened for this run');
   assert.equal(
     runtime.guards().wasStandardsHardeningPrOpened,
     true,
