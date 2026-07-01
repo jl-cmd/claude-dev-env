@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.80.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.79.0...claude-dev-env-v1.80.0) (2026-07-01)
+
+
+### Features
+
+* **code-rules:** block dead top-level runtime imports in TYPE_CHECKING-gated and workflow-registry files ([b1363cc](https://github.com/jl-cmd/claude-code-config/commit/b1363ccdb7fb97c18b23c3f6cf84b0cb97609cbc))
+* **copilot-quota:** pre-check Copilot quota before the converge workflows ([91df044](https://github.com/jl-cmd/claude-code-config/commit/91df04408363d20a2815f57f43d220114576cf7d))
+* **copilot-quota:** pre-check Copilot quota before the converge workflows ([d09d3a2](https://github.com/jl-cmd/claude-code-config/commit/d09d3a2bc78d43c652b10ea366939a68e8c97418))
+* **hooks:** block JS [@returns](https://github.com/returns) object contradicted by a schema-less branch ([eea479c](https://github.com/jl-cmd/claude-code-config/commit/eea479c400650fe45792b9d284aebacb100578f7))
+* **hooks:** block JS [@returns](https://github.com/returns) object contradicted by a schema-less branch ([28668e8](https://github.com/jl-cmd/claude-code-config/commit/28668e8edf2e406e791f5d5d4f50cdf11b0dee88))
+
+
+### Bug Fixes
+
+* **autoconverge:** remove inert workflow-resume machinery from converge.mjs ([c761409](https://github.com/jl-cmd/claude-code-config/commit/c76140911317212cb4d004aef4185896faac0f91))
+* **autoconverge:** remove inert workflow-resume machinery from converge.mjs ([80e277a](https://github.com/jl-cmd/claude-code-config/commit/80e277abe1deff86fdcf6e9ae6fe7eee589a2a4d))
+* forward copilotDisabled to converge child runs and align quota wording ([3cbc07f](https://github.com/jl-cmd/claude-code-config/commit/3cbc07f703aea683f98244139a712f18a5462152))
+* **hooks:** align converge.mjs [@returns](https://github.com/returns) with schema-less resume branches ([80d0c71](https://github.com/jl-cmd/claude-code-config/commit/80d0c71ccbf8682f7d3b1dbb21d505139608f3a1))
+* **hooks:** handle destructured params in JS returns-object schemaless check ([2863853](https://github.com/jl-cmd/claude-code-config/commit/28638535a11b197ae7ede7d5d97791593aaf738c))
+
 ## [1.79.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.78.0...claude-dev-env-v1.79.0) (2026-06-29)
 
 
