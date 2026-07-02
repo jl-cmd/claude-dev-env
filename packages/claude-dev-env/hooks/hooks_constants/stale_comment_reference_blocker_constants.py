@@ -1,5 +1,4 @@
-"""Constants for the stale_comment_reference_blocker PreToolUse hook.
-"""
+"""Configuration constants for the PreToolUse hook stale_comment_reference_blocker."""
 
 from re import Pattern, compile
 
