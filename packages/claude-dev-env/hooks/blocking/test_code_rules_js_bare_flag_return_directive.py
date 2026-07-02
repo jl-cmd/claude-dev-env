@@ -195,3 +195,36 @@ def test_skips_python_files() -> None:
         _contract_with_bare_directive_source(), "workflow/converge.py"
     )
     assert issues == []
+
+
+def test_flags_directive_when_only_directive_line_changed_but_contract_sits_elsewhere() -> None:
+    directive_line_number = 6
+    issues = check_js_bare_flag_return_directive(
+        _contract_with_bare_directive_source(),
+        _MJS_PATH,
+        all_changed_lines={directive_line_number},
+    )
+    assert len(issues) == 1
+    assert "return down" in issues[0]
+
+
+def test_accepts_when_only_the_contract_line_changed_and_directive_line_did_not() -> None:
+    contract_line_number = 2
+    issues = check_js_bare_flag_return_directive(
+        _contract_with_bare_directive_source(),
+        _MJS_PATH,
+        all_changed_lines={contract_line_number},
+    )
+    assert issues == []
+
+
+def test_defer_scope_to_caller_returns_the_finding_regardless_of_changed_lines() -> None:
+    unrelated_line_number = 1
+    issues = check_js_bare_flag_return_directive(
+        _contract_with_bare_directive_source(),
+        _MJS_PATH,
+        all_changed_lines={unrelated_line_number},
+        defer_scope_to_caller=True,
+    )
+    assert len(issues) == 1
+    assert "return down" in issues[0]
