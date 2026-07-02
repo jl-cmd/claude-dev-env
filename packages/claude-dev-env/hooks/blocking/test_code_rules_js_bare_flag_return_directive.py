@@ -74,6 +74,20 @@ def _return_the_result_phrase_source() -> str:
     )
 
 
+def _contract_with_bare_false_directive_source() -> str:
+    return (
+        "const PREAMBLE =\n"
+        f"  'When the run carries a result schema, {_DOWN_CONTRACT}.'\n\n"
+        "function gate(head) {\n"
+        "  return spawn(\n"
+        "    `Poll for the review; once HEAD stays clean with no findings, "
+        "return down: false.`,\n"
+        "    { label: 'gate' },\n"
+        "  )\n"
+        "}\n"
+    )
+
+
 def _other_flag_name_source() -> str:
     return (
         "const PREAMBLE = 'the full result {clean, stale}, never a bare stale flag'\n\n"
@@ -89,6 +103,15 @@ def _other_flag_name_source() -> str:
 def test_flags_bare_down_directive_when_the_workflow_states_the_contract() -> None:
     issues = check_js_bare_flag_return_directive(
         _contract_with_bare_directive_source(), _MJS_PATH
+    )
+    assert len(issues) == 1
+    assert "return down" in issues[0]
+    assert "never a bare down flag" in issues[0]
+
+
+def test_flags_bare_down_false_directive_when_the_workflow_states_the_contract() -> None:
+    issues = check_js_bare_flag_return_directive(
+        _contract_with_bare_false_directive_source(), _MJS_PATH
     )
     assert len(issues) == 1
     assert "return down" in issues[0]
