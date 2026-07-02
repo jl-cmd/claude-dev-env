@@ -133,7 +133,9 @@ on completion. Watch live progress with `/workflows`.
 The workflow returns
 `{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, reuseNote, deferredPrs }`.
 `deferredPrs` is the list of draft environment-hardening PRs the standards-deferral
-path opened this run, each as `{ owner, repo, prNumber }` — the seed the
+path opened this run, each as `{ owner, repo, prNumber, copilotDisabled, bugbotDisabled }`.
+The two flags carry this run's Copilot and Bugbot availability, so the next generation
+skips a reviewer that is down or out of quota without re-probing. This list is the seed the
 [self-closing loop](#self-closing-loop-converge-the-deferred-prs) converges next.
 
 ## Budget-aware round boundaries
@@ -435,8 +437,8 @@ so there is nothing to converge. Report that and stop.
 
 ### Each generation
 
-Given a non-empty list of deferred PRs `{ owner, repo, prNumber }` (a generation
-may span more than one repository — a hardening PR lands in whichever repo owns
+Given a non-empty list of deferred PRs `{ owner, repo, prNumber, copilotDisabled, bugbotDisabled }`
+(a generation may span more than one repository — a hardening PR lands in whichever repo owns
 the surface that blocks the deferred class, so `JonEcho/llm-settings` for hooks
 and `jl-cmd/claude-code-config` for rules and skills both appear):
 
@@ -449,7 +451,11 @@ and `jl-cmd/claude-code-config` for rules and skills both appear):
    Grant project permissions once per repository the generation spans.
 2. **Converge the generation.** Launch `workflow/converge_multi.mjs` with one
    entry per checked-out deferred PR, exactly as the
-   [multi-PR launch](#launch-the-multi-pr-workflow) describes.
+   [multi-PR launch](#launch-the-multi-pr-workflow) describes. Each child run
+   re-checks Copilot and Bugbot availability every round through the workflow's own
+   pre-spawn probe, so a reviewer that is down or out of quota is never spawned in any
+   generation; the `copilotDisabled`/`bugbotDisabled` flags each deferred PR carries
+   seed that check for the first round.
 3. **Tear down.** Run the [multi-PR teardown](#multi-pr-teardown-on-workflow-completion)
    over the generation's `results`, and revoke project permissions once per
    repository.

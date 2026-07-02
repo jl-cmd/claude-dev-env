@@ -29,6 +29,8 @@ const CONFIG = {
   bugteamRubric: '$HOME/.claude/skills/bugteam/reference/audit-contract.md',
 }
 
+const REVIEWER_GATE_SENTINEL = 'CLAUDE_REVIEWER_GATE=autoconverge '
+
 const HEADLESS_SAFETY_PREAMBLE =
   'HEADLESS RUN — you run unattended: no human can answer a permission or confirmation prompt, and any such prompt stalls the entire convergence run. The destructive_command_blocker hook matches dangerous patterns (rm -rf, git reset --hard, dd, mkfs, chmod -R, fork bombs) as raw text anywhere in a Bash command, with no quote-awareness — so a destructive string stalls you even when it is only data you never execute. Therefore:\n' +
   '- Never place a destructive-command literal inside a Bash command — not in echo, not in a heredoc, and not as an argument to python -c, node -e, or awk. To exercise or verify destructive_command_blocker (or any hook) behavior, run the committed test suite, e.g. python -m pytest <test_file>, which passes the command strings as in-language data rather than as a shell command.\n' +
@@ -464,6 +466,27 @@ function runConvergenceCheck(context) {
   )
 }
 
+/**
+ * Spawn a single reviewer-availability Explore agent once per CONVERGE round,
+ * before either reviewer's own agent is spawned. It runs the shared
+ * reviewer_availability.py CLI for both Copilot and Bugbot and reports each
+ * one's down state and reason, so resolveReviewerDown can decide whether to
+ * spawn the Bugbot lens and the Copilot gate without depending on an
+ * externally pre-set input flag.
+ * @returns {Promise<object>} REVIEWER_AVAILABILITY_SCHEMA result
+ */
+function runReviewerAvailabilityCheck() {
+  return convergeAgent(
+    `Check whether GitHub Copilot and Cursor Bugbot are available to review ${prCoordinates} this round, before either reviewer's agent is spawned. Do not edit code, commit, or push.\n\n` +
+      `Run exactly:\n` +
+      `python "${CONFIG.prLoopScripts}/reviewer_availability.py" --reviewer copilot\n` +
+      `python "${CONFIG.prLoopScripts}/reviewer_availability.py" --reviewer bugbot\n` +
+      `Each run exits 0 when that reviewer is available and non-zero when it is down, and prints one line naming the reason (stdout when available, stderr when down) — capture that line.\n\n` +
+      `Return strictly the schema: copilot.down and bugbot.down report whether that reviewer's run exited non-zero, and copilot.reason / bugbot.reason carry its printed line.`,
+    { label: 'reviewer-availability', phase: 'Converge', schema: REVIEWER_AVAILABILITY_SCHEMA, agentType: 'Explore' },
+  )
+}
+
 const PRE_COMMIT_GATE_STEP =
   `\n\nFINAL STEP — pre-commit gate check (do NOT commit): before your turn ends, prove your working-tree changes CAN be committed by dry-running the CODE_RULES commit gate that gates git commit (precommit_code_rules_gate). From inside the checkout that holds your changes, resolve its root with git rev-parse --show-toplevel, stage your changes with git add -A, then run exactly:\n` +
   `   python "${CONFIG.prLoopScripts}/code_rules_gate.py" --repo-root "<that root>" --staged\n` +
@@ -507,6 +530,32 @@ const COPILOT_SCHEMA = {
     findings: LENS_SCHEMA.properties.findings,
   },
   required: ['sha', 'clean', 'down', 'findings'],
+}
+
+const REVIEWER_AVAILABILITY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    copilot: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        down: { type: 'boolean', description: 'true when reviewer_availability.py --reviewer copilot exited non-zero (opted out or out of premium-request quota)' },
+        reason: { type: 'string', description: 'the one-line reason reviewer_availability.py printed for Copilot' },
+      },
+      required: ['down', 'reason'],
+    },
+    bugbot: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        down: { type: 'boolean', description: 'true when reviewer_availability.py --reviewer bugbot exited non-zero (opted out via CLAUDE_REVIEWS_DISABLED)' },
+        reason: { type: 'string', description: 'the one-line reason reviewer_availability.py printed for Bugbot' },
+      },
+      required: ['down', 'reason'],
+    },
+  },
+  required: ['copilot', 'bugbot'],
 }
 
 const HEAD_SCHEMA = {
@@ -749,19 +798,27 @@ function isMoreSevere(candidateSeverity, currentSeverity) {
 }
 
 /**
- * Decide whether the convergence check should bypass the Bugbot gate this round,
- * recomputed from the current Bugbot lens result rather than latched across the
- * run, so a recovered Bugbot re-arms the gate. A dead lens agent (null/undefined
- * result) produces no Bugbot verdict on this HEAD, so it is treated as down to
- * keep the convergence gate from demanding a verdict that cannot exist.
- * @param {object|null|undefined} bugbotLens the current round's Bugbot lens result
- * @param {boolean} bugbotDisabled true when Bugbot is opted out for the whole run
- * @returns {boolean} true when the Bugbot gate is bypassed for the current HEAD
+ * Decide whether a reviewer is skipped this round — the one shared gate both
+ * Bugbot and Copilot consult before either reviewer's agent is spawned. The
+ * run's own disable flag always wins, so a deferred PR seeded with
+ * copilotDisabled or bugbotDisabled skips the reviewer without a probe.
+ * Otherwise the decision comes from the carried entry's down field, read from
+ * the round-start availability probe for a pre-spawn decision. A missing entry
+ * (a dead probe agent, or no result yet) reads as available rather than down,
+ * so an outage in the probe itself never wedges convergence — the reviewer's
+ * own runtime detection still runs and can report down on its own. This
+ * fail-open null handling suits a pre-spawn decision; a caller computing a
+ * post-round verdict from a reviewer's own lens/gate result — where a dead
+ * agent has no verdict to report, not an available one — guards that null
+ * case itself before calling this function.
+ * @param {{down: boolean}|null|undefined} reviewerAvailabilityEntry the probe's per-reviewer entry, or a reviewer's own result, carrying a down field
+ * @param {boolean} isReviewerDisabledByInput true when the run input opts this reviewer out for the whole run
+ * @returns {boolean} true when the reviewer is treated as down this round
  */
-function resolveBugbotDown(bugbotLens, bugbotDisabled) {
-  if (bugbotDisabled) return true
-  if (bugbotLens == null) return true
-  return bugbotLens.down === true
+function resolveReviewerDown(reviewerAvailabilityEntry, isReviewerDisabledByInput) {
+  if (isReviewerDisabledByInput) return true
+  if (reviewerAvailabilityEntry == null) return false
+  return reviewerAvailabilityEntry.down === true
 }
 
 /**
@@ -1015,9 +1072,10 @@ function classifyCopilotOutcome(copilot) {
 
 /**
  * Decide whether the Copilot review gate is bypassed for this COPILOT pass from
- * the gate outcome, mirroring resolveBugbotDown so the flag is recomputed every
- * pass rather than left sticky. Only a 'down' outcome (Copilot out of quota or
- * unreachable after the poll cap) bypasses the convergence Copilot gate; an
+ * the gate outcome, mirroring resolveReviewerDown's post-round bugbotDown
+ * recompute so the flag is recomputed every pass rather than left sticky. Only
+ * a 'down' outcome (Copilot out of quota or unreachable after the poll cap)
+ * bypasses the convergence Copilot gate; an
  * 'approved', 'fix', or 'retry' outcome means Copilot answered this pass, so the
  * gate must be evaluated against its review and is never bypassed. Recomputing
  * from the current outcome is what lets a recovered Copilot — one that returns
@@ -1105,9 +1163,6 @@ const prCoordinates = `owner=${input.owner} repo=${input.repo} PR #${input.prNum
  * @returns {Promise<object>} LENS_SCHEMA result
  */
 function runBugbotLens(head) {
-  if (input.bugbotDisabled) {
-    return Promise.resolve({ sha: head, clean: true, down: true, findings: [] })
-  }
   return convergeAgent(
     `You are the Cursor Bugbot lens for ${prCoordinates}, HEAD ${head}. Cursor Bugbot participates this run.\n\n` +
       `Goal: return Bugbot's verdict on HEAD ${head}. Do not edit code, commit, or push. You may post the literal trigger comment described below.\n\n` +
@@ -1120,7 +1175,7 @@ function runBugbotLens(head) {
       `   Only count entries whose commit_id starts with ${head}.\n` +
       `   - If findings exist on HEAD -> return them (each with its inline comment id in replyToCommentId when present, else null).\n` +
       `   - If a clean review exists on HEAD -> return clean.\n` +
-      `4. No review yet on HEAD: check_bugbot_ci.py --check-active. If active (exit 0), poll: repeat check_bugbot_ci.py --check-clean / --check-active every 60 seconds (wait each 60-second interval inside this turn with the Monitor tool, per the WAITS AND POLLS rule above) for up to 25 iterations, then re-fetch the review. If not active (exit 1), post the literal comment "bugbot run" (no @mention, no other text) via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --body "bugbot run", wait 8 seconds inside this turn with the Monitor tool (per the WAITS AND POLLS rule above), then poll as above.\n` +
+      `4. No review yet on HEAD: check_bugbot_ci.py --check-active. If active (exit 0), poll: repeat check_bugbot_ci.py --check-clean / --check-active every 60 seconds (wait each 60-second interval inside this turn with the Monitor tool, per the WAITS AND POLLS rule above) for up to 25 iterations, then re-fetch the review. If not active (exit 1), post the literal comment "bugbot run" (no @mention, no other text) via ${REVIEWER_GATE_SENTINEL}python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --body "bugbot run", wait 8 seconds inside this turn with the Monitor tool (per the WAITS AND POLLS rule above), then poll as above.\n` +
       `5. If after the full poll budget Bugbot has neither a check run nor a review on HEAD -> return {sha:${'`'}${head}${'`'}, clean:true, down:true, findings:[]} (treat as down).\n\n` +
       `Scope is the whole PR; you are only reading Bugbot's own output here. For each finding set category: 'code-standard' when it is a pure CODE_RULES/style violation (naming, comments, type hints, magic values, structure) with no behavioral impact; 'bug' otherwise. Return strictly the schema.`,
     { label: 'lens:bugbot', phase: 'Converge', schema: LENS_SCHEMA },
@@ -1314,7 +1369,7 @@ function runCopilotGate(head) {
     `You are the Copilot gate for ${prCoordinates}, HEAD ${head}. Do not edit code, commit, or push.\n\n` +
       `Copilot can run out of usage. When the newest Copilot review on HEAD carries an out-of-usage notice — a body stating Copilot was unable to review because the user who requested the review has reached their quota limit, or any equivalent quota / premium-request / usage-limit exhaustion message rather than an actual code review — Copilot is down for this run: return {sha:${'`'}${head}${'`'}, clean:true, down:true, findings:[]} and stop. Do NOT re-request a review, do NOT keep polling, and do NOT treat the notice as a finding.\n\n` +
       `1. Read any existing Copilot review on HEAD first: python "${CONFIG.sharedScripts}/fetch_copilot_reviews.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}. This lists every Copilot review across all commits newest-first; only count entries whose commit_id starts with ${head}. If the newest such HEAD-scoped Copilot review is the out-of-usage notice above -> return the down result and stop. A notice on any earlier commit is NOT down: ignore it and continue. With no Copilot review on HEAD, skip a duplicate request: python "${CONFIG.sharedScripts}/check_pending_reviews.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --user copilot. Exit 0 means a request is already pending; otherwise request one:\n` +
-      `   gh api --method POST repos/${input.owner}/${input.repo}/pulls/${input.prNumber}/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'\n` +
+      `   ${REVIEWER_GATE_SENTINEL}gh api --method POST repos/${input.owner}/${input.repo}/pulls/${input.prNumber}/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'\n` +
       `2. Poll for Copilot's review on HEAD ${head}: up to ${CONFIG.copilotMaxPolls} attempts, 360 seconds apart (wait each 360-second interval inside this turn with the Monitor tool, per the WAITS AND POLLS rule above; if the attempt budget is spent with no review on HEAD, return down: true). Each attempt: python "${CONFIG.sharedScripts}/fetch_copilot_reviews.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} for the top-level review state, plus gh api "repos/${input.owner}/${input.repo}/pulls/${input.prNumber}/comments" --paginate --slurp for inline comment ids (Copilot's login contains "copilot", case-insensitive). Only count entries whose commit_id starts with ${head}.\n` +
       `   - Out-of-usage notice on HEAD -> return the down result above (clean:true, down:true) and stop.\n` +
       `   - Copilot review present on HEAD whose state is APPROVED, or COMMENTED with no inline findings -> a clean pass: return {sha:${'`'}${head}${'`'}, clean:true, down:false, findings:[]}.\n` +
@@ -1485,9 +1540,10 @@ function parseDeferredPr(prUrl) {
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
  * @param {boolean} hasHardeningPrAlreadyOpened true when an earlier round already opened the environment-hardening PR for this run, so the verify and commit steps are skipped and no second PR opens while the edit retries the issue filing
- * @returns {Promise<object>} `{ followUpIssueFiled, issueUrl, hardeningPrOpened, deferredPr }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, issueUrl that filed URL (empty string when the filing failed) so a later reuse-path round can reference it when resolving its own threads, hardeningPrOpened true when the hardening-commit step returned a non-empty hardeningPrUrl (a PR opened) so the run-once latch holds even when that URL does not parse into coordinates, and false when the commit step returned an empty URL (no PR opened) so a later round retries the open, and deferredPr the opened PR's `{owner, repo, prNumber}` (null when no PR was opened or the committed URL does not parse) so the self-closing orchestrator can converge it in turn
+ * @param {{copilotDisabled: boolean, bugbotDisabled: boolean}} deferredReviewerFlags this run's latest resolved reviewer-down state, carried onto the deferred PR so a later generation converging it seeds the known-unavailable state instead of re-learning it
+ * @returns {Promise<object>} `{ followUpIssueFiled, issueUrl, hardeningPrOpened, deferredPr }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, issueUrl that filed URL (empty string when the filing failed) so a later reuse-path round can reference it when resolving its own threads, hardeningPrOpened true when the hardening-commit step returned a non-empty hardeningPrUrl (a PR opened) so the run-once latch holds even when that URL does not parse into coordinates, and false when the commit step returned an empty URL (no PR opened) so a later round retries the open, and deferredPr the opened PR's `{owner, repo, prNumber, copilotDisabled, bugbotDisabled}` (null when no PR was opened or the committed URL does not parse) so the self-closing orchestrator can converge it in turn
  */
-async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningPrAlreadyOpened) {
+async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningPrAlreadyOpened, deferredReviewerFlags) {
   const editResult = await runCodeEditorTask('standards-edit', { head, findings, sourceLabel })
   const followUpIssueFiled = typeof editResult?.issueUrl === 'string' && editResult.issueUrl.length > 0
   const followUpIssueUrl = followUpIssueFiled ? editResult.issueUrl : ''
@@ -1506,7 +1562,11 @@ async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningP
   const commitResult = await runCodeEditorTask('hardening-commit', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch, issueUrl: editResult.issueUrl,
   })
-  const deferredPr = parseDeferredPr(commitResult?.hardeningPrUrl)
+  const parsedDeferredPr = parseDeferredPr(commitResult?.hardeningPrUrl)
+  const deferredPr =
+    parsedDeferredPr === null
+      ? null
+      : { ...parsedDeferredPr, copilotDisabled: deferredReviewerFlags.copilotDisabled, bugbotDisabled: deferredReviewerFlags.bugbotDisabled }
   const hardeningPrOpened = typeof commitResult?.hardeningPrUrl === 'string' && commitResult.hardeningPrUrl.length > 0
   return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened, deferredPr }
 }
@@ -1561,15 +1621,16 @@ async function resolveStandardsThreadsForBatch(head, findings, sourceLabel) {
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<object>} `{ hardeningPrOpened, deferredPr }` — hardeningPrOpened true when a hardening PR was opened for this run, and deferredPr the opened PR's `{owner, repo, prNumber}` when this call opened it (null otherwise) so the self-closing orchestrator can converge it in turn
+ * @param {{copilotDisabled: boolean, bugbotDisabled: boolean}} deferredReviewerFlags this run's latest resolved reviewer-down state, carried onto the deferred PR so a later generation converging it seeds the known-unavailable state instead of re-learning it
+ * @returns {Promise<object>} `{ hardeningPrOpened, deferredPr }` — hardeningPrOpened true when a hardening PR was opened for this run, and deferredPr the opened PR's `{owner, repo, prNumber, copilotDisabled, bugbotDisabled}` when this call opened it (null otherwise) so the self-closing orchestrator can converge it in turn
  */
-async function openStandardsFollowUpOnce(head, findings, sourceLabel) {
+async function openStandardsFollowUpOnce(head, findings, sourceLabel, deferredReviewerFlags) {
   if (!shouldOpenStandardsFollowUp(hasStandardsFollowUpFiled)) {
     log(`Standards deferral (${sourceLabel}): reusing the follow-up fix issue already filed for this run rather than filing a duplicate; environment-hardening PR ${wasStandardsHardeningPrOpened ? 'was opened for this run' : 'was not opened for this run'}`)
     await resolveStandardsThreadsForBatch(head, findings, sourceLabel)
     return { hardeningPrOpened: wasStandardsHardeningPrOpened, deferredPr: null }
   }
-  const standardsOutcome = await spawnStandardsFollowUp(head, findings, sourceLabel, wasStandardsHardeningPrOpened)
+  const standardsOutcome = await spawnStandardsFollowUp(head, findings, sourceLabel, wasStandardsHardeningPrOpened, deferredReviewerFlags)
   hasStandardsFollowUpFiled = standardsOutcome?.followUpIssueFiled === true
   if (hasStandardsFollowUpFiled) {
     standardsFollowUpIssueUrl = standardsOutcome.issueUrl
@@ -1591,6 +1652,7 @@ let hasStandardsFollowUpFiled = false
 let wasStandardsHardeningPrOpened = false
 let standardsFollowUpIssueUrl = ''
 let reuseNote = null
+let reviewerAvailability = null
 const deferredPrs = []
 
 const preflightHead = await runGitTask('resolve-head')
@@ -1629,13 +1691,15 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     await runGitTask('prefetch-main')
+    reviewerAvailability = await runReviewerAvailabilityCheck()
+    const isBugbotDownPreSpawn = resolveReviewerDown(reviewerAvailability?.bugbot, input.bugbotDisabled || false)
     log(`Round ${rounds}: parallel Bugbot + code-review + bug-audit on ${head?.slice(0, 7)}`)
     const lenses = await parallel([
-      () => runBugbotLens(head),
+      () => (isBugbotDownPreSpawn ? Promise.resolve({ sha: head, clean: true, down: true, findings: [] }) : runBugbotLens(head)),
       () => runCodeReviewLens(head),
       () => runAuditLens(head),
     ])
-    bugbotDown = resolveBugbotDown(lenses[0], input.bugbotDisabled || false)
+    bugbotDown = lenses[0] == null ? true : resolveReviewerDown(lenses[0], input.bugbotDisabled || false)
     const roundOutcome = resolveRoundOutcome(lenses)
     if (roundOutcome.allLensesDead) {
       log(`Round ${rounds}: every lens agent died — retrying without posting a clean artifact`)
@@ -1644,7 +1708,7 @@ while (iterations < CONFIG.maxIterations) {
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
-      const standardsOutcome = await openStandardsFollowUpOnce(head, findings, 'converge-round')
+      const standardsOutcome = await openStandardsFollowUpOnce(head, findings, 'converge-round', { copilotDisabled: copilotDown, bugbotDisabled: bugbotDown })
       standardsNote = standardsDeferralNote(findings.length, standardsOutcome.hardeningPrOpened)
       if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
       const auditResult = await runGeneralUtilityTask('post-clean-audit', { head })
@@ -1683,10 +1747,10 @@ while (iterations < CONFIG.maxIterations) {
   }
 
   if (phase === 'COPILOT') {
-    if (input.copilotDisabled) {
+    if (resolveReviewerDown(reviewerAvailability?.copilot, input.copilotDisabled || false)) {
       copilotDown = true
-      copilotNote = 'Copilot was skipped by the quota pre-check (out of premium-request quota, unreachable, or unconfigured) — the Copilot gate was bypassed and the PR was marked ready without a Copilot review'
-      log('Copilot gate: the quota pre-check reported Copilot unavailable — skipping the Copilot gate with no agent spawned and proceeding to mark-ready with the gate bypassed.')
+      copilotNote = 'Copilot was unavailable or out of premium-request quota this round — the Copilot gate was bypassed with no agent spawned and the PR was marked ready without a Copilot review'
+      log('Copilot gate: the shared reviewer-availability probe (or the run input) reported Copilot unavailable — skipping the Copilot gate with no agent spawned and proceeding to mark-ready with the gate bypassed.')
       phase = 'FINALIZE'
       continue
     }
@@ -1708,7 +1772,7 @@ while (iterations < CONFIG.maxIterations) {
     if (copilotOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
-        const standardsOutcome = await openStandardsFollowUpOnce(head, copilotOutcome.findings, 'copilot')
+        const standardsOutcome = await openStandardsFollowUpOnce(head, copilotOutcome.findings, 'copilot', { copilotDisabled: copilotDown, bugbotDisabled: bugbotDown })
         standardsNote = standardsDeferralNote(copilotOutcome.findings.length, standardsOutcome.hardeningPrOpened)
         if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
         copilotDown = false
