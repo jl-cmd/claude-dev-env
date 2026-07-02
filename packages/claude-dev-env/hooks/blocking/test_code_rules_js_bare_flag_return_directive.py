@@ -100,6 +100,35 @@ def _other_flag_name_source() -> str:
     )
 
 
+def _capitalized_contract_with_bare_directive_source() -> str:
+    return (
+        "const PREAMBLE =\n"
+        "  'When the run carries a result schema, the full down result "
+        "{sha, clean:false, down:true, findings:[]}, Never a bare Down flag.'\n\n"
+        "function gate(head) {\n"
+        "  return spawn(\n"
+        "    `Poll for the review; once the budget runs out with no review on "
+        "HEAD, return down: true.`,\n"
+        "    { label: 'gate' },\n"
+        "  )\n"
+        "}\n"
+    )
+
+
+def _contract_with_capitalized_directive_source() -> str:
+    return (
+        "const PREAMBLE =\n"
+        f"  'When the run carries a result schema, {_DOWN_CONTRACT}.'\n\n"
+        "function gate(head) {\n"
+        "  return spawn(\n"
+        "    `Poll for the review; once the budget runs out with no review on "
+        "HEAD, Return down: true.`,\n"
+        "    { label: 'gate' },\n"
+        "  )\n"
+        "}\n"
+    )
+
+
 def test_flags_bare_down_directive_when_the_workflow_states_the_contract() -> None:
     issues = check_js_bare_flag_return_directive(
         _contract_with_bare_directive_source(), _MJS_PATH
@@ -143,6 +172,22 @@ def test_accepts_return_the_result_prose_that_names_no_bare_flag() -> None:
         _return_the_result_phrase_source(), _MJS_PATH
     )
     assert issues == []
+
+
+def test_flags_bare_directive_when_contract_uses_capitalized_never() -> None:
+    issues = check_js_bare_flag_return_directive(
+        _capitalized_contract_with_bare_directive_source(), _MJS_PATH
+    )
+    assert len(issues) == 1
+    assert "return down" in issues[0]
+
+
+def test_flags_capitalized_return_directive_against_lowercase_contract() -> None:
+    issues = check_js_bare_flag_return_directive(
+        _contract_with_capitalized_directive_source(), _MJS_PATH
+    )
+    assert len(issues) == 1
+    assert "never a bare down flag" in issues[0]
 
 
 def test_skips_python_files() -> None:
