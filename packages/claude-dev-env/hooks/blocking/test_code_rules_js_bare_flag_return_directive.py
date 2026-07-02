@@ -197,6 +197,18 @@ def test_skips_python_files() -> None:
     assert issues == []
 
 
+def _contract_with_six_bare_directives_source() -> str:
+    directive_lines = "\n".join(
+        f"  gate{each_index}(head) {{ return spawn(`return down: true.`) }}"
+        for each_index in range(1, 7)
+    )
+    return (
+        "const PREAMBLE =\n"
+        f"  'When the run carries a result schema, {_DOWN_CONTRACT}.'\n\n"
+        f"{directive_lines}\n"
+    )
+
+
 def test_flags_directive_when_only_directive_line_changed_but_contract_sits_elsewhere() -> None:
     directive_line_number = 6
     issues = check_js_bare_flag_return_directive(
@@ -216,6 +228,17 @@ def test_accepts_when_only_the_contract_line_changed_and_directive_line_did_not(
         all_changed_lines={contract_line_number},
     )
     assert issues == []
+
+
+def test_flags_a_changed_line_violation_past_the_cap_of_unchanged_ones() -> None:
+    sixth_directive_line_number = 9
+    issues = check_js_bare_flag_return_directive(
+        _contract_with_six_bare_directives_source(),
+        _MJS_PATH,
+        all_changed_lines={sixth_directive_line_number},
+    )
+    assert len(issues) == 1
+    assert f"Line {sixth_directive_line_number}:" in issues[0]
 
 
 def test_defer_scope_to_caller_returns_the_finding_regardless_of_changed_lines() -> None:

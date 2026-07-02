@@ -1819,13 +1819,14 @@ def check_js_bare_flag_return_directive(
         all_violations_in_source_order.append(
             (range(offending_line, offending_line + 1), message)
         )
-        if len(all_violations_in_source_order) >= MAX_JS_BARE_FLAG_RETURN_DIRECTIVE_ISSUES:
-            break
-    return _scope_violations_to_changed_lines(
+    scoped_issues = _scope_violations_to_changed_lines(
         all_violations_in_source_order,
         all_changed_lines,
         defer_scope_to_caller,
-    )[:MAX_JS_BARE_FLAG_RETURN_DIRECTIVE_ISSUES]
+    )
+    if defer_scope_to_caller:
+        return scoped_issues
+    return scoped_issues[:MAX_JS_BARE_FLAG_RETURN_DIRECTIVE_ISSUES]
 
 
 def _is_cli_entry_point(file_path: str) -> bool:
