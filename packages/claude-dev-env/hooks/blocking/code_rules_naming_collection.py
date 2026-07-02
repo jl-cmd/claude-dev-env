@@ -271,6 +271,147 @@ def check_loop_variable_naming(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _comprehension_rebinds_name(comprehension_node: ast.expr, target_name: str) -> bool:
+    """True when any generator of the comprehension binds its own target_name-named variable."""
+    generators = getattr(comprehension_node, "generators", [])
+    for each_generator in generators:
+        for each_name_node in _walk_assignment_targets(each_generator.target):
+            if each_name_node.id == target_name:
+                return True
+    return False
+
+
+def _function_binds_name(
+    function_node: ast.Lambda | ast.FunctionDef | ast.AsyncFunctionDef, target_name: str
+) -> bool:
+    """True when a lambda or nested def has a parameter named target_name."""
+    argument_specification = function_node.args
+    all_argument_nodes = [
+        *argument_specification.posonlyargs,
+        *argument_specification.args,
+        *argument_specification.kwonlyargs,
+    ]
+    if argument_specification.vararg is not None:
+        all_argument_nodes.append(argument_specification.vararg)
+    if argument_specification.kwarg is not None:
+        all_argument_nodes.append(argument_specification.kwarg)
+    return any(each_argument.arg == target_name for each_argument in all_argument_nodes)
+
+
+def _function_enclosing_scope_expressions(
+    function_node: ast.Lambda | ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.expr]:
+    """Return the sub-expressions a lambda or def evaluates in its enclosing scope.
+
+    Parameter defaults and decorators run before the parameters bind, so a Load of
+    the outer name there still reads the outer name; the body never does once a
+    parameter shadows it.
+    """
+    argument_specification = function_node.args
+    enclosing_expressions: list[ast.expr] = [*argument_specification.defaults]
+    enclosing_expressions.extend(
+        each_default
+        for each_default in argument_specification.kw_defaults
+        if each_default is not None
+    )
+    if isinstance(function_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        enclosing_expressions.extend(function_node.decorator_list)
+    return enclosing_expressions
+
+
+def _loop_rebinds_name(loop_node: ast.For | ast.AsyncFor, target_name: str) -> bool:
+    """True when the loop's own target rebinds target_name."""
+    return any(
+        each_name_node.id == target_name
+        for each_name_node in _walk_assignment_targets(loop_node.target)
+    )
+
+
+def _node_reads_name(node: ast.AST, target_name: str) -> bool:
+    """True when node contains a genuine Load of target_name, honoring scope shadowing.
+
+    A comprehension, a lambda, a nested def, or a nested loop that rebinds
+    target_name owns that name inside its body, so a Load there reads the inner
+    variable, not the outer loop variable. Only the parts each construct evaluates
+    in the enclosing scope can still read the outer name: a comprehension's or
+    nested loop's iterable, and a function's parameter defaults and decorators.
+    """
+    comprehension_node_types = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+    if isinstance(node, comprehension_node_types) and _comprehension_rebinds_name(
+        node, target_name
+    ):
+        outermost_iterable = node.generators[0].iter
+        return _node_reads_name(outermost_iterable, target_name)
+    if isinstance(node, (ast.Lambda, ast.FunctionDef, ast.AsyncFunctionDef)) and _function_binds_name(
+        node, target_name
+    ):
+        return any(
+            _node_reads_name(each_expression, target_name)
+            for each_expression in _function_enclosing_scope_expressions(node)
+        )
+    if isinstance(node, (ast.For, ast.AsyncFor)) and _loop_rebinds_name(node, target_name):
+        return _node_reads_name(node.iter, target_name)
+    if isinstance(node, ast.Name) and node.id == target_name and isinstance(node.ctx, ast.Load):
+        return True
+    for each_child_node in ast.iter_child_nodes(node):
+        if _node_reads_name(each_child_node, target_name):
+            return True
+    return False
+
+
+def _loop_body_references_name(loop_node: ast.For | ast.AsyncFor, target_name: str) -> bool:
+    for each_statement in [*loop_node.body, *loop_node.orelse]:
+        if _node_reads_name(each_statement, target_name):
+            return True
+    return False
+
+
+def check_referenced_underscore_loop_variable(content: str, file_path: str) -> list[str]:
+    """Flag a leading-underscore loop variable the loop body reads.
+
+    A leading underscore marks a name as a throwaway the reader can ignore, so
+    ``for _foreign_module_name in names:`` promises the body never touches it.
+    When the body then reads ``del sys.modules[_foreign_module_name]``, the
+    marker lies: the value carries meaning and earns a real name. This check
+    fires in test files too — a conftest that reuses an underscore-marked loop
+    variable is the exact shape this closes — because the misleading marker is a
+    naming smell everywhere, not a convention the test-file exemption waives.
+    Workflow-registry and migration files are exempt. A bare ``_`` target and a
+    genuinely unread ``_unused`` throwaway both pass.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per leading-underscore loop variable that its loop body reads.
+    """
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, (ast.For, ast.AsyncFor)):
+            continue
+        for each_name_node in _collect_target_names(each_node.target):
+            target_name = each_name_node.id
+            if not target_name.startswith("_"):
+                continue
+            if target_name.strip("_") == "":
+                continue
+            if not _loop_body_references_name(each_node, target_name):
+                continue
+            issues.append(
+                f"Line {each_name_node.lineno}: loop variable {target_name!r} is read"
+                f" in its body - drop the leading underscore throwaway marker and"
+                f" give it a real name (CODE_RULES §5)"
+            )
+    return issues
+
+
 def _name_carries_token(name: str, token: str) -> bool:
     """True when name carries token as a whole underscore-delimited word."""
     return re.search(POLARITY_TOKEN_BOUNDARY_PATTERN % re.escape(token), name) is not None
