@@ -3088,8 +3088,8 @@ def check_docstring_delegation_summary_enumeration_drift(
 
     The drift this catches: a thin wrapper method whose docstring summary
     enumerates the actions it stands for and points at the home of the real
-    body (``Apply App Info, Russia, review note, publication edits; full doc
-    on ``listing_edit_flow````), while the same-named function in that named
+    body ("Apply App Info, Russia, review note, publication edits; full doc
+    on `listing_edit_flow`"), while the same-named function in that named
     sibling file carries a summary enumeration that omits one of those
     actions. An edit that moves one action out of the delegated body and
     rewords only the delegated docstring leaves the wrapper claiming work the
