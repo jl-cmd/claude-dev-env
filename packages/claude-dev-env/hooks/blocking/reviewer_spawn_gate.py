@@ -17,8 +17,10 @@ A Copilot trigger is a command containing both `requested_reviewers` and
 containing `post_fix_reply.py` and a `--body "bugbot run"` argument.
 
 For the matched reviewer, the gate runs
-`reviewer_availability.py --reviewer copilot|bugbot` and denies the call when
-that script exits non-zero. The deny reason names the reviewer and carries
+`reviewer_availability.py --reviewer copilot|bugbot` and denies the call only
+when that script exits with the documented reviewer-down code (3). Any other
+exit code is an unexpected script failure, not a down report, so the call is
+allowed (fail open). The deny reason names the reviewer and carries
 the script's output. The script path resolves relative to this hook's
 install location by default, or from the
 `REVIEWER_SPAWN_GATE_AVAILABILITY_SCRIPT_PATH` environment variable when set.
@@ -39,7 +41,7 @@ if _hooks_dir not in sys.path:
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.reviewer_spawn_gate_constants import (  # noqa: E402
     ALL_COPILOT_TRIGGER_MARKERS,
-    AVAILABILITY_AVAILABLE_EXIT_CODE,
+    AVAILABILITY_DOWN_EXIT_CODE,
     AVAILABILITY_REVIEWER_FLAG,
     AVAILABILITY_SCRIPT_PATH_ENV_VAR_NAME,
     AVAILABILITY_SCRIPT_RELATIVE_PATH,
@@ -100,11 +102,13 @@ def _probe_reviewer_availability(reviewer_token: str) -> tuple[bool, str]:
             the availability script's --reviewer flag.
 
     Returns:
-        A pair of (is_available, detail_text). is_available is True when the
-        script reports the reviewer available. detail_text carries the script's combined stdout and
-        stderr for the deny message. A missing script, a timeout, or an
-        OS-level failure to launch the script reports available (fail open)
-        with a detail explaining why the check could not run.
+        A pair of (is_available, detail_text). is_available is False only
+        when the script exits with the documented reviewer-down code;
+        detail_text carries the script's combined stdout and stderr for the
+        deny message. A missing script, a timeout, an OS-level failure to
+        launch the script, or any exit code other than the documented down
+        code reports available (fail open), so an availability-check crash
+        never blocks a legitimate run.
     """
     script_path = _resolve_availability_script_path()
     if not script_path.is_file():
@@ -122,7 +126,8 @@ def _probe_reviewer_availability(reviewer_token: str) -> tuple[bool, str]:
     except (OSError, subprocess.TimeoutExpired) as availability_error:
         return True, f"availability script failed to run: {availability_error}"
     availability_detail_text = (completed_process.stdout + completed_process.stderr).strip()
-    return completed_process.returncode == AVAILABILITY_AVAILABLE_EXIT_CODE, availability_detail_text
+    is_reviewer_down = completed_process.returncode == AVAILABILITY_DOWN_EXIT_CODE
+    return not is_reviewer_down, availability_detail_text
 
 
 def main() -> None:

@@ -86,7 +86,7 @@ def test_reviewer_trigger_returns_none_for_unrecognized_command() -> None:
 def test_main_allows_copilot_shaped_command_with_no_sentinel_marker(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    fake_script_path = _write_fake_availability_script(tmp_path, exit_code=1)
+    fake_script_path = _write_fake_availability_script(tmp_path, exit_code=3)
     monkeypatch.setenv(_AVAILABILITY_SCRIPT_PATH_ENV_VAR_NAME, str(fake_script_path))
     stdout_text, exit_code = _run_hook(
         {
@@ -118,7 +118,7 @@ def test_main_allows_copilot_trigger_when_available(
 def test_main_denies_copilot_trigger_when_down(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    fake_script_path = _write_fake_availability_script(tmp_path, exit_code=1)
+    fake_script_path = _write_fake_availability_script(tmp_path, exit_code=3)
     monkeypatch.setenv(_AVAILABILITY_SCRIPT_PATH_ENV_VAR_NAME, str(fake_script_path))
     stdout_text, exit_code = _run_hook(
         {"tool_name": "Bash", "tool_input": {"command": _COPILOT_TRIGGER_COMMAND}}
@@ -130,7 +130,7 @@ def test_main_denies_copilot_trigger_when_down(
     assert "GitHub Copilot" in decision_block["permissionDecisionReason"]
 
 
-def test_main_denies_copilot_trigger_on_any_nonzero_exit(
+def test_main_allows_copilot_trigger_on_unexpected_exit_code(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
     fake_script_path = _write_fake_availability_script(tmp_path, exit_code=2)
@@ -139,9 +139,22 @@ def test_main_denies_copilot_trigger_on_any_nonzero_exit(
         {"tool_name": "Bash", "tool_input": {"command": _COPILOT_TRIGGER_COMMAND}}
     )
     assert exit_code == 0
-    response_payload = json.loads(stdout_text)
-    decision_block = response_payload["hookSpecificOutput"]
-    assert decision_block["permissionDecision"] == "deny"
+    assert stdout_text == ""
+
+
+def test_main_allows_copilot_trigger_when_availability_script_crashes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    fake_script_path = tmp_path / "fake_reviewer_availability.py"
+    fake_script_path.write_text(
+        "import module_that_does_not_exist_anywhere\n", encoding="utf-8"
+    )
+    monkeypatch.setenv(_AVAILABILITY_SCRIPT_PATH_ENV_VAR_NAME, str(fake_script_path))
+    stdout_text, exit_code = _run_hook(
+        {"tool_name": "Bash", "tool_input": {"command": _COPILOT_TRIGGER_COMMAND}}
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
 
 
 def test_main_allows_bugbot_trigger_when_available(
@@ -159,7 +172,7 @@ def test_main_allows_bugbot_trigger_when_available(
 def test_main_denies_bugbot_trigger_when_opted_out(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    fake_script_path = _write_fake_availability_script(tmp_path, exit_code=1)
+    fake_script_path = _write_fake_availability_script(tmp_path, exit_code=3)
     monkeypatch.setenv(_AVAILABILITY_SCRIPT_PATH_ENV_VAR_NAME, str(fake_script_path))
     stdout_text, exit_code = _run_hook(
         {"tool_name": "Bash", "tool_input": {"command": _BUGBOT_TRIGGER_COMMAND}}
@@ -174,7 +187,7 @@ def test_main_denies_bugbot_trigger_when_opted_out(
 def test_main_allows_marker_command_with_no_recognized_trigger(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    fake_script_path = _write_fake_availability_script(tmp_path, exit_code=1)
+    fake_script_path = _write_fake_availability_script(tmp_path, exit_code=3)
     monkeypatch.setenv(_AVAILABILITY_SCRIPT_PATH_ENV_VAR_NAME, str(fake_script_path))
     stdout_text, exit_code = _run_hook(
         {"tool_name": "Bash", "tool_input": {"command": f"{_SENTINEL_MARKER} gh pr list"}}
