@@ -107,42 +107,28 @@ test('repair-convergence edit step no longer instructs resolving every unresolve
   );
 });
 
-test('bugbot lens delay instructions are shell-agnostic with PowerShell as an alternative', () => {
+test('the bugbot lens waits through the Monitor tool, not a foreground sleep', () => {
   const bugbotPrompt = lensPromptBody('runBugbotLens');
-  assert.match(bugbotPrompt, /sleep 60/, 'expected a shell-agnostic 60-second poll delay');
-  assert.match(bugbotPrompt, /sleep 8/, 'expected a concrete 8-second delay command');
-  assert.match(
-    bugbotPrompt,
-    /Start-Sleep[\s\S]*alternative|alternative[\s\S]*Start-Sleep/i,
-    'expected PowerShell to be named only as an allowed alternative',
-  );
+  assert.match(bugbotPrompt, /Monitor tool/, 'expected the bugbot poll to wait via the Monitor tool');
   assert.doesNotMatch(
     bugbotPrompt,
-    /wait 8 seconds(?!,)/,
-    'the vague "wait 8 seconds" phrasing must carry a concrete command',
+    /sleep 60|sleep 8|Start-Sleep/,
+    'expected no foreground sleep in the bugbot poll delays',
   );
 });
 
-test('copilot gate delay instruction is shell-agnostic with PowerShell as an alternative', () => {
+test('the copilot gate waits through the Monitor tool, not a foreground sleep', () => {
   const copilotPrompt = lensPromptBody('runCopilotGate');
-  assert.match(copilotPrompt, /sleep 360/, 'expected a shell-agnostic 360-second poll delay');
-  assert.match(
-    copilotPrompt,
-    /Start-Sleep[\s\S]*alternative|alternative[\s\S]*Start-Sleep/i,
-    'expected PowerShell to be named only as an allowed alternative',
-  );
+  assert.match(copilotPrompt, /Monitor tool/, 'expected the copilot poll to wait via the Monitor tool');
+  assert.doesNotMatch(copilotPrompt, /sleep 360|Start-Sleep/, 'expected no foreground sleep in the copilot poll delay');
 });
 
-test('gotchas doc describes the reviewer wait as shell-agnostic', () => {
-  assert.match(
-    gotchasSource,
-    /\bsleep\b/i,
-    'expected the wait guidance to name a shell-agnostic sleep',
-  );
+test('gotchas doc describes the reviewer wait as a Monitor poll, not a foreground sleep', () => {
+  assert.match(gotchasSource, /Monitor tool/, 'expected the gotcha to name the Monitor-based reviewer wait');
   assert.doesNotMatch(
     gotchasSource,
-    /a single PowerShell\s*`?Start-Sleep`?\s*loop/i,
-    'PowerShell Start-Sleep must be an alternative, not the sole mechanism',
+    /shell-agnostic/i,
+    'the reviewer wait is a Monitor poll, not a shell-agnostic sleep loop',
   );
 });
 
@@ -757,4 +743,118 @@ test('verdictPassed calls parseLastVerdictFence', () => {
 test('extractVerifyObjection calls parseLastVerdictFence', () => {
   const objectionBody = lensPromptBody('extractVerifyObjection');
   assert.match(objectionBody, /parseLastVerdictFence\(/, 'expected extractVerifyObjection to call the shared parser');
+});
+
+test('the headless preamble routes waits through the Monitor tool and forbids ending a turn to await work', () => {
+  const preambleStart = convergeSource.indexOf('const HEADLESS_SAFETY_PREAMBLE =');
+  assert.notEqual(preambleStart, -1, 'expected a HEADLESS_SAFETY_PREAMBLE definition');
+  const preambleEnd = convergeSource.indexOf('\n\nlet activeRepoPath', preambleStart);
+  assert.notEqual(preambleEnd, -1, 'expected the preamble to end before activeRepoPath');
+  const preamble = convergeSource.slice(preambleStart, preambleEnd);
+  assert.match(preamble, /foreground sleep is blocked/i, 'expected the preamble to state foreground sleep is blocked');
+  assert.match(preamble, /Monitor tool/, 'expected the preamble to route waits through the Monitor tool');
+  assert.match(preamble, /StructuredOutput/, 'expected the preamble to require a schema agent to always call StructuredOutput');
+  assert.match(preamble, /never end your turn to wait/i, 'expected the preamble to forbid ending a turn to await background work');
+});
+
+test('the preamble describes the Monitor wait by its real contract: a bounded until-loop consuming notifications as they arrive, rather than an in-turn synchronous return', () => {
+  const blockStart = convergeSource.indexOf('const HEADLESS_SAFETY_PREAMBLE =');
+  assert.ok(blockStart !== -1, 'expected a wait-safety preamble to exist');
+  const blockEnd = convergeSource.indexOf('\n\nlet activeRepoPath', blockStart);
+  assert.ok(blockEnd !== -1, 'expected the preamble to end before activeRepoPath');
+  const preamble = convergeSource.slice(blockStart, blockEnd);
+  assert.doesNotMatch(
+    preamble,
+    /never move a wait to a background process/i,
+    'the Monitor tool is itself a background monitor, so the preamble must avoid forbidding a wait that moves to a background process',
+  );
+  assert.doesNotMatch(
+    preamble,
+    /return to you when the condition holds/i,
+    'the Monitor tool streams notifications across turns rather than returning in-turn, so the preamble must avoid describing an in-turn synchronous return',
+  );
+  assert.match(
+    preamble,
+    /until-loop/i,
+    'expected the preamble to describe the wait as a bounded until-loop paired with the Monitor tool',
+  );
+  assert.match(
+    preamble,
+    /notifications? as they arrive/i,
+    'expected the preamble to say Monitor notifications are consumed as they arrive',
+  );
+});
+
+test('the background-wait clause gives "await" an explicit object, not a dangling "await never resumes"', () => {
+  const text = preambleText();
+  assert.doesNotMatch(
+    text,
+    /end your turn to await never resumes/i,
+    'expected the background-wait clause to name what is awaited, not read as "await never resumes" with no object',
+  );
+  assert.match(
+    text,
+    /end your turn to await it/i,
+    'expected the background-wait clause to name the wait as the object of "await"',
+  );
+});
+
+test('the wait guidance names the full down-result schema, not a bare down flag', () => {
+  const text = preambleText();
+  assert.doesNotMatch(
+    text,
+    /Copilot gate, down: true\)/,
+    'expected the down signal to name the full schema, not a bare down flag that reads as a partial object',
+  );
+  assert.match(
+    text,
+    /down:true, findings:\[\]/,
+    'expected the wait guidance to name the full down-result fields',
+  );
+});
+
+test('no agent prompt instructs a foreground sleep as the poll delay', () => {
+  assert.doesNotMatch(
+    convergeSource,
+    /delay each (?:attempt|iteration|retry) with "sleep/,
+    'expected no poll directive to instruct a foreground sleep as the between-attempt delay',
+  );
+  assert.doesNotMatch(
+    convergeSource,
+    /Start-Sleep -Seconds/,
+    'expected no agent prompt to instruct a foreground PowerShell Start-Sleep',
+  );
+});
+
+test('the wait guidance sizes the Monitor timeout_ms above the 300s default', () => {
+  const text = preambleText();
+  assert.match(text, /timeout_ms/, 'names the timeout_ms parameter the wait rule tells the agent to set');
+  assert.match(text, /persistent/, 'offers persistent as an alternative to a sized timeout_ms');
+  assert.match(text, /300000|300 second/, 'names the 300000 default that truncates a long wait');
+  assert.match(
+    text,
+    /interval[\s\S]{0,60}attempt|interval-times-attempts/i,
+    'sizes timeout_ms to the interval-times-attempts span the step names',
+  );
+});
+
+test('the Monitor ceiling the guidance names covers the longest interval-times-attempts wait the steps prescribe', () => {
+  const cap = /(\d{7})\s*(?:ms|millisecond)/i.exec(preambleText());
+  assert.ok(cap !== null, 'the guidance names a seven-digit Monitor ceiling in milliseconds');
+  const ceiling = Number(cap[1]);
+
+  const copilot = lensPromptBody('runCopilotGate');
+  const bugbot = lensPromptBody('runBugbotLens');
+  const apart = Number(/(\d+)\s*seconds apart/.exec(copilot)[1]);
+  const polls = Number(/copilotMaxPolls:\s*(\d+)/.exec(convergeSource)[1]);
+  const seconds = Number(/every\s*(\d+)\s*seconds/.exec(bugbot)[1]);
+  const iterations = Number(/up to\s*(\d+)\s*iterations/.exec(bugbot)[1]);
+  const spans = [apart * polls * 1000, seconds * iterations * 1000];
+
+  for (const span of spans) {
+    assert.ok(
+      span <= ceiling,
+      `a ${span}ms wait span exceeds the ${ceiling}ms Monitor ceiling the guidance names`,
+    );
+  }
 });

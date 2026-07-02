@@ -31,7 +31,7 @@ test('isMergeConflicting reports a conflict only when the check returned conflic
   assert.equal(isMergeConflicting({ conflicting: false }), false);
 });
 
-test('the git agent handles merge-conflict checks with shell-agnostic polling', () => {
+test('the git agent handles merge-conflict checks with a Monitor-based poll', () => {
   const gitBody = functionBody('runGitTask');
   assert.match(gitBody, /mergeable/, 'expected the git agent to read the PR mergeable field');
   assert.match(
@@ -40,7 +40,7 @@ test('the git agent handles merge-conflict checks with shell-agnostic polling', 
     'expected the git agent merge check to be read-only',
   );
   assert.match(gitBody, /MERGE_CONFLICT_SCHEMA/, 'expected the git agent to return MERGE_CONFLICT_SCHEMA');
-  assert.match(gitBody, /sleep 5|Start-Sleep/, 'expected a shell-agnostic poll delay');
+  assert.match(gitBody, /Monitor tool/, 'expected a Monitor-based poll delay, not a foreground sleep');
 });
 
 test('runCodeEditorTask conflict-edit path rebases onto origin/main and makes no push', () => {
