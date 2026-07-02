@@ -244,6 +244,7 @@ ALL_JAVASCRIPT_CONTROL_FLOW_BLOCK_KEYWORDS: frozenset[str] = frozenset(
 ALL_JAVASCRIPT_BRACKET_OPENERS: frozenset[str] = frozenset({"(", "[", "{"})
 ALL_JAVASCRIPT_BRACKET_CLOSERS: frozenset[str] = frozenset({")", "]", "}"})
 ALL_JAVASCRIPT_IDENTIFIER_EXTRA_CHARACTERS: frozenset[str] = frozenset({"_", "$"})
+ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS: frozenset[str] = frozenset({"}", ">", "]"})
 JAVASCRIPT_OBJECT_SPREAD_PREFIX: str = "..."
 JAVASCRIPT_MODULE_SCOPE_SENTINEL: int = -1
 ALL_BUILTIN_DICT_METHOD_NAMES: frozenset[str] = frozenset({
