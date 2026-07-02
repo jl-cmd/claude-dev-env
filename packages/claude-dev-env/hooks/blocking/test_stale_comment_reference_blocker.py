@@ -68,6 +68,28 @@ def test_blocks_edit_that_orphans_the_comment_above(tmp_path: Path) -> None:
     assert "asyncio" in decision["hookSpecificOutput"]["permissionDecisionReason"]
 
 
+def test_blocks_edit_that_deletes_the_line_the_comment_names(tmp_path: Path) -> None:
+    """Deleting the patched line under an unchanged comment naming it is
+    denied the same as rewriting it would be.
+    """
+    written_module_path = _write_module(
+        tmp_path,
+        "def launch_export() -> None:\n" + KEPT_COMMENT_LINE + PATCHED_SLEEP_LINE,
+    )
+    outcome = _run_hook(
+        "Edit",
+        {
+            "file_path": str(written_module_path),
+            "old_string": PATCHED_SLEEP_LINE,
+            "new_string": "",
+        },
+    )
+    assert outcome.returncode == 0
+    decision = json.loads(outcome.stdout)
+    assert decision["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "asyncio" in decision["hookSpecificOutput"]["permissionDecisionReason"]
+
+
 def test_allows_edit_that_updates_the_comment_together(tmp_path: Path) -> None:
     """An edit rewriting the comment and the line together passes."""
     written_module_path = _write_module(

@@ -56,8 +56,6 @@ PYTHON_FILE_SUFFIX: str = ".py"
 
 COMMENT_LINE_PREFIX: str = "#"
 
-REPLACE_OPCODE_TAG: str = "replace"
-
 STALE_COMMENT_DENY_TEMPLATE: str = (
     "The comment above the changed line in {file_path} names "
     "'{orphaned_name}', which this edit removes from the line below. "
