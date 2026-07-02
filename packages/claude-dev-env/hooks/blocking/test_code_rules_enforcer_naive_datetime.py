@@ -101,7 +101,7 @@ def test_flags_utcfromtimestamp_with_second_positional_argument() -> None:
     content = (
         "from datetime import datetime\n"
         "def describe(stamp: float, other: float) -> object:\n"
-        "    return datetime.utcfromtimestamp(stamp)\n"
+        "    return datetime.utcfromtimestamp(stamp, other)\n"
     )
     issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
     assert len(issues) == 1
