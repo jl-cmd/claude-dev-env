@@ -234,10 +234,10 @@ RETURN_CALL_OPENING_PARENTHESIS_PATTERN: re.Pattern[str] = re.compile(
     r"\breturn\s+(?:await\s+)?(?P<callee>\w+)\s*\("
 )
 BARE_FLAG_CONTRACT_PATTERN: re.Pattern[str] = re.compile(
-    r"never a bare (?P<flag>\w+) flag"
+    r"never a bare (?P<flag>\w+) flag", re.IGNORECASE
 )
 BARE_FLAG_RETURN_DIRECTIVE_PATTERN: re.Pattern[str] = re.compile(
-    r"\breturn\s+(?P<flag>\w+)\s*:\s*(?:true|false)\b"
+    r"\breturn\s+(?P<flag>\w+)\s*:\s*(?:true|false)\b", re.IGNORECASE
 )
 SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN: re.Pattern[str] = re.compile(
     r"(?<![A-Za-z0-9_])schema\s*:"

@@ -1782,7 +1782,7 @@ def check_js_bare_flag_return_directive(content: str, file_path: str) -> list[st
     if get_file_extension(file_path) not in ALL_JAVASCRIPT_EXTENSIONS:
         return []
     forbidden_flags = {
-        each_contract.group("flag")
+        each_contract.group("flag").casefold()
         for each_contract in BARE_FLAG_CONTRACT_PATTERN.finditer(content)
     }
     if not forbidden_flags:
@@ -1790,7 +1790,7 @@ def check_js_bare_flag_return_directive(content: str, file_path: str) -> list[st
     issues: list[str] = []
     for each_directive in BARE_FLAG_RETURN_DIRECTIVE_PATTERN.finditer(content):
         forbidden_flag = each_directive.group("flag")
-        if forbidden_flag not in forbidden_flags:
+        if forbidden_flag.casefold() not in forbidden_flags:
             continue
         offending_line = content.count("\n", 0, each_directive.start()) + 1
         issues.append(
