@@ -18,9 +18,10 @@ function functionBody(functionName) {
 const productionModule = new Function(
   `${functionBody('classifyCopilotOutcome')}\n` +
     `${functionBody('resolveCopilotDown')}\n` +
-    'return { classifyCopilotOutcome, resolveCopilotDown };',
+    `${functionBody('resolveReviewerDown')}\n` +
+    'return { classifyCopilotOutcome, resolveCopilotDown, resolveReviewerDown };',
 )();
-const { classifyCopilotOutcome, resolveCopilotDown } = productionModule;
+const { classifyCopilotOutcome, resolveCopilotDown, resolveReviewerDown } = productionModule;
 
 function copilotResult(overrides) {
   return {
@@ -281,7 +282,7 @@ test('the mark-ready task in runGeneralUtilityTask opts the unflagged convergenc
   );
 });
 
-test('the COPILOT phase short-circuits on input.copilotDisabled before spawning the gate agent', () => {
+test('the COPILOT phase short-circuits on the unified reviewer-down gate before spawning the gate agent', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
   assert.notEqual(copilotPhaseStart, -1, 'expected a COPILOT phase block');
   const gateCallIndex = convergeSource.indexOf('await runCopilotGate(head)', copilotPhaseStart);
@@ -289,13 +290,23 @@ test('the COPILOT phase short-circuits on input.copilotDisabled before spawning 
   const beforeGate = convergeSource.slice(copilotPhaseStart, gateCallIndex);
   assert.match(
     beforeGate,
-    /if \(input\.copilotDisabled\)/,
-    'expected the quota pre-check bypass to guard the COPILOT phase before any gate agent spawns',
+    /if \(resolveReviewerDown\(reviewerAvailability\?\.copilot, input\.copilotDisabled \|\| false\)\)/,
+    'expected the unified resolveReviewerDown gate — fed by the reviewer-availability probe or the input override — to guard the COPILOT phase before any gate agent spawns',
   );
   assert.match(beforeGate, /copilotDown = true/, 'expected the bypass to mark copilotDown');
   assert.match(beforeGate, /copilotNote =/, 'expected the bypass to set a copilotNote');
   assert.match(beforeGate, /phase = 'FINALIZE'/, 'expected the bypass to advance to FINALIZE');
   assert.match(beforeGate, /continue/, 'expected the bypass to continue without spawning the gate agent');
+});
+
+test('the COPILOT phase pre-spawn gate skips the gate agent via input.copilotDisabled with no probe entry', () => {
+  const isDownFromInput = resolveReviewerDown(undefined, true);
+  assert.equal(isDownFromInput, true, 'expected the input override alone to report Copilot down with no probe entry');
+});
+
+test('the COPILOT phase pre-spawn gate skips the gate agent via a probe down entry with no input override', () => {
+  const isDownFromProbe = resolveReviewerDown({ down: true, reason: 'copilot-quota: out of premium-interaction quota' }, false);
+  assert.equal(isDownFromProbe, true, 'expected a probe entry reporting down to skip the gate agent with no input override set');
 });
 
 test('copilotDown initializes from input.copilotDisabled so the pre-check decision carries into the loop', () => {
@@ -308,8 +319,11 @@ test('copilotDown initializes from input.copilotDisabled so the pre-check decisi
 
 test('a copilotDisabled run reaches FINALIZE with --copilot-down', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
-  const bypassStart = convergeSource.indexOf('if (input.copilotDisabled)', copilotPhaseStart);
-  assert.notEqual(bypassStart, -1, 'expected an input.copilotDisabled bypass in the COPILOT phase');
+  const bypassStart = convergeSource.indexOf(
+    'if (resolveReviewerDown(reviewerAvailability?.copilot, input.copilotDisabled || false))',
+    copilotPhaseStart,
+  );
+  assert.notEqual(bypassStart, -1, 'expected the unified resolveReviewerDown bypass in the COPILOT phase');
   const bypassBlock = convergeSource.slice(bypassStart, bypassStart + 800);
   assert.match(bypassBlock, /copilotDown = true/, 'expected the bypass to set copilotDown');
   assert.match(bypassBlock, /phase = 'FINALIZE'/, 'expected the bypass to advance to FINALIZE');
@@ -373,7 +387,7 @@ test('openStandardsFollowUpOnce gates spawnStandardsFollowUp behind the run-once
   );
   assert.match(
     onceBody,
-    /await spawnStandardsFollowUp\(head, findings, sourceLabel, wasStandardsHardeningPrOpened\)/,
+    /await spawnStandardsFollowUp\(head, findings, sourceLabel, wasStandardsHardeningPrOpened, deferredReviewerFlags\)/,
     'expected the helper to pass the remembered hardening state into the spawn so an already-opened PR is never re-opened',
   );
   assert.match(
@@ -511,8 +525,8 @@ test('a second standards-only round never re-opens a hardening PR after the firs
   };
   const runtime = loadStandardsFollowUpRuntime(recordedCalls, issueFailedHardeningStaged);
 
-  const firstRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round');
-  const secondRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot');
+  const firstRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round', { copilotDisabled: false, bugbotDisabled: false });
+  const secondRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot', { copilotDisabled: false, bugbotDisabled: false });
 
   const hardeningCommitCalls = recordedCalls.filter((call) => call.task === 'hardening-commit').length;
   assert.equal(
@@ -545,8 +559,8 @@ test('a hardening-commit that opens a PR but returns an unparseable URL still la
   const unparseableUrlHardeningCommitResult = { hardeningPrUrl: 'draft-hardening-pr-opened', summary: 'opened' };
   const runtime = loadStandardsFollowUpRuntime(recordedCalls, issueFailedHardeningStaged, unparseableUrlHardeningCommitResult);
 
-  const firstRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round');
-  const secondRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot');
+  const firstRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round', { copilotDisabled: false, bugbotDisabled: false });
+  const secondRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot', { copilotDisabled: false, bugbotDisabled: false });
 
   const hardeningCommitCalls = recordedCalls.filter((call) => call.task === 'hardening-commit').length;
   assert.equal(
@@ -575,8 +589,8 @@ test('a hardening-commit that opens no PR (empty hardeningPrUrl) leaves the run-
   const noPrHardeningCommitResult = { hardeningPrUrl: '', summary: 'no PR opened' };
   const runtime = loadStandardsFollowUpRuntime(recordedCalls, issueFailedHardeningStaged, noPrHardeningCommitResult);
 
-  const firstRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round');
-  const secondRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot');
+  const firstRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round', { copilotDisabled: false, bugbotDisabled: false });
+  const secondRoundHardeningPr = await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot', { copilotDisabled: false, bugbotDisabled: false });
 
   const hardeningCommitCalls = recordedCalls.filter((call) => call.task === 'hardening-commit').length;
   assert.equal(
@@ -603,8 +617,8 @@ test('a later standards-only round resolves its own review threads after the fol
   };
   const runtime = loadStandardsFollowUpRuntime(recordedCalls, issueFiledNoHardening);
 
-  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1, replyToCommentId: null }], 'converge-round');
-  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'b.py', line: 2, replyToCommentId: 42 }], 'copilot');
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1, replyToCommentId: null }], 'converge-round', { copilotDisabled: false, bugbotDisabled: false });
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'b.py', line: 2, replyToCommentId: 42 }], 'copilot', { copilotDisabled: false, bugbotDisabled: false });
 
   const standardsEditCalls = recordedCalls.filter((call) => call.task === 'standards-edit');
   assert.equal(standardsEditCalls.length, 1, 'expected the follow-up issue to be filed exactly once across the run');
@@ -633,8 +647,8 @@ test('a reuse-path standards round carrying no review threads spawns no thread-r
   };
   const runtime = loadStandardsFollowUpRuntime(recordedCalls, issueFiledNoHardening);
 
-  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1, replyToCommentId: null }], 'converge-round');
-  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'b.py', line: 2, replyToCommentId: null }], 'copilot');
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1, replyToCommentId: null }], 'converge-round', { copilotDisabled: false, bugbotDisabled: false });
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'b.py', line: 2, replyToCommentId: null }], 'copilot', { copilotDisabled: false, bugbotDisabled: false });
 
   const resolveCalls = recordedCalls.filter((call) => call.task === 'standards-resolve-threads');
   assert.equal(
@@ -642,5 +656,27 @@ test('a reuse-path standards round carrying no review threads spawns no thread-r
     0,
     'expected no thread-resolution agent when the reuse-path batch of in-memory findings carries no review threads',
   );
+});
+
+test('resolveReviewerDown is the single reviewer-down gate; resolveBugbotDown no longer exists', () => {
+  assert.doesNotMatch(
+    convergeSource,
+    /function resolveBugbotDown\(/,
+    'expected resolveBugbotDown to be removed in favor of the shared resolveReviewerDown gate',
+  );
+  assert.match(convergeSource, /function resolveReviewerDown\(/, 'expected the shared resolveReviewerDown gate to exist');
+});
+
+test('resolveReviewerDown reports down when the input override is set, even with an available probe entry', () => {
+  assert.equal(resolveReviewerDown({ down: false, reason: 'available' }, true), true);
+});
+
+test('resolveReviewerDown reports available (fail-open) when the probe entry is missing and no input override is set', () => {
+  assert.equal(resolveReviewerDown(null, false), false);
+  assert.equal(resolveReviewerDown(undefined, false), false);
+});
+
+test('resolveReviewerDown reports available when the probe entry explicitly reports available', () => {
+  assert.equal(resolveReviewerDown({ down: false, reason: 'available' }, false), false);
 });
 

@@ -56,6 +56,75 @@ test('a single round-level prefetch step fetches origin/main before the parallel
   );
 });
 
+test('the CONVERGE round spawns a single shared reviewer-availability probe before the parallel lenses', () => {
+  const prefetchCallIndex = convergeSource.indexOf("runGitTask('prefetch-main')");
+  const probeCallIndex = convergeSource.indexOf('reviewerAvailability = await runReviewerAvailabilityCheck()');
+  const parallelLensIndex = convergeSource.indexOf('const lenses = await parallel(');
+  assert.notEqual(probeCallIndex, -1, 'expected the CONVERGE round to spawn the shared reviewer-availability probe');
+  assert.ok(
+    prefetchCallIndex < probeCallIndex && probeCallIndex < parallelLensIndex,
+    'expected the probe to run after the round prefetch and before the parallel lenses spawn',
+  );
+  const probeBody = functionSource('runReviewerAvailabilityCheck');
+  assert.match(probeBody, /reviewer_availability\.py/);
+  assert.match(probeBody, /--reviewer copilot/);
+  assert.match(probeBody, /--reviewer bugbot/);
+  assert.match(probeBody, /schema:\s*REVIEWER_AVAILABILITY_SCHEMA/);
+});
+
+test('the Bugbot lens is not spawned pre-spawn when the shared gate reports Bugbot down', () => {
+  const parallelLensIndex = convergeSource.indexOf('const lenses = await parallel(');
+  assert.notEqual(parallelLensIndex, -1, 'expected the parallel lens block to exist');
+  const isBugbotDownPreSpawnIndex = convergeSource.indexOf('const isBugbotDownPreSpawn = resolveReviewerDown(');
+  assert.notEqual(isBugbotDownPreSpawnIndex, -1, 'expected a pre-spawn Bugbot-down decision computed before the lens array');
+  assert.ok(
+    isBugbotDownPreSpawnIndex < parallelLensIndex,
+    'expected the pre-spawn Bugbot-down decision to be computed before the parallel lens array',
+  );
+  const lensArrayEnd = convergeSource.indexOf('])', parallelLensIndex);
+  const lensArray = convergeSource.slice(parallelLensIndex, lensArrayEnd);
+  assert.match(
+    lensArray,
+    /isBugbotDownPreSpawn \? Promise\.resolve\(\{ sha: head, clean: true, down: true, findings: \[\] \}\) : runBugbotLens\(head\)/,
+    'expected the Bugbot lens slot to substitute a resolved down placeholder instead of spawning runBugbotLens when isBugbotDownPreSpawn is true',
+  );
+});
+
+test('the post-round bugbotDown verdict treats a dead Bugbot lens as down, not fail-open', () => {
+  const parallelLensIndex = convergeSource.indexOf('const lenses = await parallel(');
+  assert.notEqual(parallelLensIndex, -1, 'expected the parallel lens block to exist');
+  const lensArrayEnd = convergeSource.indexOf('])', parallelLensIndex);
+  const bugbotDownAssignIndex = convergeSource.indexOf('bugbotDown = ', lensArrayEnd);
+  assert.notEqual(bugbotDownAssignIndex, -1, 'expected the post-round bugbotDown assignment after the lens array');
+  const bugbotDownAssignLineEnd = convergeSource.indexOf('\n', bugbotDownAssignIndex);
+  const bugbotDownAssignLine = convergeSource.slice(bugbotDownAssignIndex, bugbotDownAssignLineEnd);
+  assert.match(
+    bugbotDownAssignLine,
+    /bugbotDown = lenses\[0\] == null \? true : resolveReviewerDown\(lenses\[0\], input\.bugbotDisabled \|\| false\)/,
+    'expected a dead (null) Bugbot lens result to report bugbotDown:true — resolveReviewerDown alone is fail-open on null, which would wrongly report bugbotDown:false for a lens agent that actually spawned and died, leaving check_convergence.py to look for a bugbot review that was never posted',
+  );
+});
+
+test('both reviewer trigger commands carry the CLAUDE_REVIEWER_GATE=autoconverge sentinel', () => {
+  assert.match(
+    convergeSource,
+    /const REVIEWER_GATE_SENTINEL = 'CLAUDE_REVIEWER_GATE=autoconverge '/,
+    'expected the shared sentinel constant to exist',
+  );
+  const copilotPrompt = lensPromptBody('runCopilotGate');
+  assert.match(
+    copilotPrompt,
+    /\$\{REVIEWER_GATE_SENTINEL\}gh api --method POST[^\n]*requested_reviewers/,
+    'expected the Copilot requested_reviewers trigger to carry the sentinel prefix',
+  );
+  const bugbotPrompt = lensPromptBody('runBugbotLens');
+  assert.match(
+    bugbotPrompt,
+    /\$\{REVIEWER_GATE_SENTINEL\}python "\$\{CONFIG\.sharedScripts\}\/post_fix_reply\.py"[^\n]*--body "bugbot run"/,
+    'expected the Bugbot rerun-comment trigger to carry the sentinel prefix',
+  );
+});
+
 test('bugbot lens preamble does not blanket-instruct passing --owner/--repo to every script', () => {
   const bugbotPrompt = lensPromptBody('runBugbotLens');
   assert.doesNotMatch(

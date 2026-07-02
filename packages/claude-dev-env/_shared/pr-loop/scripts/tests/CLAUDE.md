@@ -24,6 +24,8 @@ pytest suite for the scripts and constants in `_shared/pr-loop/scripts/`. Each t
 | `test_reviews_disabled.py` | `reviews_disabled.py` opt-out gate parsing |
 | `test_copilot_quota.py` | `copilot_quota.py` end-to-end: account resolution, premium-quota classification, exit codes, and skip logging |
 | `test_copilot_quota_constants.py` | `pr_loop_shared_constants/copilot_quota_constants.py` |
+| `test_reviewer_availability.py` | `reviewer_availability.py` end-to-end: Copilot and Bugbot availability, opt-out via `CLAUDE_REVIEWS_DISABLED`, and every Copilot quota outcome |
+| `test_reviewer_availability_constants.py` | `pr_loop_shared_constants/reviewer_availability_constants.py` |
 | `test_revoke_project_claude_permissions.py` | `revoke_project_claude_permissions.py` end-to-end |
 | `test_agent_config_carveout.py` | Agent-config deny-rule carve-out logic |
 | `conftest.py` | Shared pytest fixtures |

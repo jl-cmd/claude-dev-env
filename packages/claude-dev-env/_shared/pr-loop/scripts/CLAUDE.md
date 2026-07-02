@@ -15,6 +15,7 @@ Python scripts invoked at runtime by the PR-loop skills. Each script is a standa
 | `terminology_sweep.py` | Flags a prose term that near-misses an identifier introduced on added code lines of a unified diff (shared leading word, divergent tail) |
 | `reviews_disabled.py` | Shared helper for the `CLAUDE_REVIEWS_DISABLED` opt-out gate; parses the env-var token to find which reviewer types are suppressed |
 | `copilot_quota.py` | Copilot premium-request quota pre-check: resolves a configured GitHub account, reads its remaining `premium_interactions` quota via `gh api copilot_internal/user`, and exits 0 (run Copilot) or non-zero (skip: out of quota, API down, or no account configured) |
+| `reviewer_availability.py` | Unified reviewer-availability entry point for Copilot and Bugbot: reuses `copilot_quota.py` and `reviews_disabled.py` and exits 0 when the named `--reviewer` may be spawned, non-zero when it is opted out or (for Copilot) out of quota |
 | `fix_hookspath.py` | Repairs a malformed `core.hooksPath` global git config entry |
 | `_claude_permissions_common.py` | Internal helpers shared by the grant/revoke scripts: atomic settings.json writes, list mutation, path helpers |
 
