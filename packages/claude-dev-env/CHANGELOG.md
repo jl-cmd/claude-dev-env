@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.81.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.80.0...claude-dev-env-v1.81.0) (2026-07-02)
+
+
+### Features
+
+* **code-rules:** block docstring TYPE_CHECKING gate claim the module's code never runs ([63c0efe](https://github.com/jl-cmd/claude-code-config/commit/63c0efe690c8c7d661ac9ef57573d8acb52641fb))
+* **converge:** close Copilot-only review gaps at write, commit, and audit layers ([fea4bb9](https://github.com/jl-cmd/claude-code-config/commit/fea4bb9de6b240e2155f1e7eecd707ee9efc6662))
+* **converge:** close Copilot-only review gaps at write, commit, and audit layers ([56d3337](https://github.com/jl-cmd/claude-code-config/commit/56d333797b6950a12a8e56f8ec20e6e790eb389c))
+
+
+### Bug Fixes
+
+* **autoconverge:** don't reopen hardening PR when issue filing retries ([b646255](https://github.com/jl-cmd/claude-code-config/commit/b646255cc9960af25b049e177dfa74e889792bb7))
+* **autoconverge:** make follow-up PR creation idempotent so the Copilot gate stops double-creating PRs ([c4d471d](https://github.com/jl-cmd/claude-code-config/commit/c4d471d5b56605a2866c41d6089a2007389ea82c))
+* **autoconverge:** make follow-up PR creation idempotent so the Copilot gate stops double-creating PRs ([236ce2b](https://github.com/jl-cmd/claude-code-config/commit/236ce2bb7b4698728ef17c7a8e0d772ba67ab461))
+* **autoconverge:** recognize a clean Copilot COMMENTED review so the gate stops false "down" bypasses ([5cb04ef](https://github.com/jl-cmd/claude-code-config/commit/5cb04ef96d72627e7eb504d65bf62a97a9311c25))
+* **autoconverge:** recognize a clean Copilot COMMENTED review so the gate stops false down bypasses ([1f9afd5](https://github.com/jl-cmd/claude-code-config/commit/1f9afd500e17c8c313b11b6c07da7f76042ae238))
+* **autoconverge:** resolve reuse-path standards threads against the filed issue ([7c7f332](https://github.com/jl-cmd/claude-code-config/commit/7c7f332c42187de1077bb07609c48d20f0d01c7d))
+* **autoconverge:** retry standards follow-up filing after a transient failure ([438dfbf](https://github.com/jl-cmd/claude-code-config/commit/438dfbfcfbdb8cb15f828173619098386abbc196))
+
+
+### Documentation
+
+* **autoconverge:** restate Copilot poll count as the configured cap ([71c18e8](https://github.com/jl-cmd/claude-code-config/commit/71c18e89c5521f695047acd43a1fe6a52d12d05e))
+* **autoconverge:** restate Copilot poll count as the configured cap ([9b6b268](https://github.com/jl-cmd/claude-code-config/commit/9b6b2681ef2da85a882f0bfda6094b2379899365))
+* **autoconverge:** unify Copilot poll limit on "configured cap" ([72f5deb](https://github.com/jl-cmd/claude-code-config/commit/72f5deb87bbdfe415a08114498126b54af602f24))
+* **autoconverge:** unify Copilot poll limit terminology on "configured cap" ([94a41b7](https://github.com/jl-cmd/claude-code-config/commit/94a41b783248712e7222fdb8c0663c2df60761ca))
+
 ## [1.80.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.79.0...claude-dev-env-v1.80.0) (2026-07-01)
 
 
