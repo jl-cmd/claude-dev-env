@@ -123,6 +123,74 @@ def check_string_literal_magic(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def check_join_separator_string_magic(content: str, file_path: str) -> list[str]:
+    """Flag a bare string-literal separator passed to ``str.join`` in a body.
+
+    A call like ``", ".join(all_paths)`` hard-codes the delimiter that stitches
+    a list into one string. That delimiter is a magic value: change the wording
+    once and every reader has to grep the whole file for the stray literal. A
+    named constant in ``config/`` gives the delimiter one home. The empty
+    separator ``"".join(...)`` is left alone because it carries no delimiter —
+    it is the idiomatic way to concatenate parts. Config files, test files,
+    workflow-registry files, and migration files are exempt.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per non-empty string-literal ``.join`` separator found in a
+        function body.
+    """
+    if is_test_file(file_path):
+        return []
+    if is_config_file(file_path):
+        return []
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    flagged_node_ids: set[int] = set()
+    for each_function_node in ast.walk(tree):
+        if not isinstance(each_function_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for each_body_statement in each_function_node.body:
+            for each_descendant in _walk_skipping_nested_function_defs(each_body_statement):
+                if not isinstance(each_descendant, ast.Call):
+                    continue
+                separator_literal = _join_call_string_separator(each_descendant)
+                if separator_literal is None:
+                    continue
+                if id(each_descendant) in flagged_node_ids:
+                    continue
+                flagged_node_ids.add(id(each_descendant))
+                issues.append(
+                    f"Line {each_descendant.lineno}: string separator"
+                    f" {separator_literal!r} passed to .join(...)"
+                    f" - extract to a named constant in config/"
+                )
+    return issues
+
+
+def _join_call_string_separator(call_node: ast.Call) -> str | None:
+    called = call_node.func
+    if not isinstance(called, ast.Attribute):
+        return None
+    if called.attr != "join":
+        return None
+    separator_node = called.value
+    if not isinstance(separator_node, ast.Constant):
+        return None
+    if not isinstance(separator_node.value, str):
+        return None
+    if separator_node.value == "":
+        return None
+    return separator_node.value
+
+
 def check_inline_literal_collections(content: str, file_path: str) -> list[str]:
     if is_test_file(file_path):
         return []
