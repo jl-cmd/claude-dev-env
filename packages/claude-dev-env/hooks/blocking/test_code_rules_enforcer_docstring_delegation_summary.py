@@ -199,3 +199,27 @@ def test_validate_content_surfaces_the_drift(tmp_path: Path) -> None:
     assert matching_issues, (
         f"Expected validate_content to surface the O6 finding, got: {issues!r}"
     )
+
+
+def _drifted_processor_source_with_wrapped_summary() -> str:
+    return (
+        "class PortalProcessor:\n"
+        "    async def _refresh_store_sections(self, page: object) -> bool:\n"
+        '        """Apply App Info, Russia, review note, publication\n'
+        " edits; full doc on ``listing_edit_flow``.\"\"\"\n"
+        "        return await _refresh_store_sections(self, page)\n"
+    )
+
+
+def test_should_flag_listed_action_when_the_summary_wraps_a_physical_line(
+    tmp_path: Path,
+) -> None:
+    _create_target_flow(tmp_path, _target_flow_source())
+    checked_path = str(tmp_path / PROCESSOR_FILE_NAME)
+    issues = check_docstring_delegation_summary_enumeration_drift(
+        _drifted_processor_source_with_wrapped_summary(), checked_path
+    )
+    assert any("App Info" in each for each in issues), (
+        f"A summary wrapped onto a second physical line still names 'App Info', "
+        f"got: {issues!r}"
+    )

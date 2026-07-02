@@ -2883,7 +2883,8 @@ def check_docstring_raises_unraisable_largezipfile(
 
 
 def _leading_summary_line(raw_docstring: str) -> str:
-    return raw_docstring.strip().split("\n", maxsplit=1)[0].strip()
+    summary_paragraph = raw_docstring.strip().split("\n\n", maxsplit=1)[0]
+    return " ".join(summary_paragraph.split())
 
 
 def _pointer_target_stem(raw_docstring: str) -> str:
