@@ -209,6 +209,74 @@ def _single_typescript_function_named_return_type_with_drift() -> str:
     )
 
 
+def _two_typescript_functions_with_function_type_return() -> str:
+    return (
+        "function toSummary(): (x: number) => void {\n"
+        "  return { count: 1, size: 2 }\n"
+        "}\n"
+        "function toDetail(): (x: number) => void {\n"
+        "  return { count: 3, size: 4, extra: 5 }\n"
+        "}\n"
+    )
+
+
+def _two_typescript_functions_with_mixed_union_return() -> str:
+    return (
+        "function alpha(): Promise<Foo> | Bar {\n"
+        "  return { x: 1, y: 2 }\n"
+        "}\n"
+        "function beta(): Promise<Foo> | Bar {\n"
+        "  return { x: 1, y: 2, z: 3 }\n"
+        "}\n"
+    )
+
+
+def _single_typescript_function_function_type_return_with_drift() -> str:
+    return (
+        "function classify(state): (x: number) => void {\n"
+        "  if (state == null) {\n"
+        "    return { converged: false, rounds: 0, blocker: 'bad state' }\n"
+        "  }\n"
+        "  return { converged: true, rounds: 5, blocker: null, deferred: [] }\n"
+        "}\n"
+    )
+
+
+def _for_await_drift_source() -> str:
+    return (
+        "async function drain(stream) {\n"
+        "  for await (const eachChunk of stream) {\n"
+        "    if (eachChunk.bad) {\n"
+        "      return { converged: false, rounds: 0, blocker: 'bad' }\n"
+        "    }\n"
+        "  }\n"
+        "  return { converged: true, rounds: 1, blocker: null, deferred: [] }\n"
+        "}\n"
+    )
+
+
+def _mixed_quote_shared_discriminant_drift_source() -> str:
+    return (
+        "function classify(state) {\n"
+        "  if (state == null) {\n"
+        '    return { action: "created", rounds: 0, blocker: \'bad\' }\n'
+        "  }\n"
+        "  return { action: 'created', rounds: 1, blocker: null, deferred: [] }\n"
+        "}\n"
+    )
+
+
+def _mixed_quote_differing_discriminant_source() -> str:
+    return (
+        "function classify(state) {\n"
+        "  if (state == null) {\n"
+        '    return { action: "skipped-existing", rounds: 0, blocker: \'bad\' }\n'
+        "  }\n"
+        "  return { action: 'created', rounds: 1, blocker: null, deferred: [] }\n"
+        "}\n"
+    )
+
+
 def test_flags_blocker_return_that_omits_one_documented_field() -> None:
     issues = check_js_sibling_return_object_key_drift(_drifted_blocker_source(), _MJS_PATH)
     assert len(issues) == 1
@@ -277,6 +345,45 @@ def test_typescript_named_return_type_still_flags_intra_function_drift() -> None
     )
     assert len(issues) == 1
     assert "deferred" in issues[0]
+
+
+def test_typescript_function_type_return_keeps_functions_in_separate_scopes() -> None:
+    source = _two_typescript_functions_with_function_type_return()
+    assert check_js_sibling_return_object_key_drift(source, _TYPESCRIPT_PATH) == []
+
+
+def test_typescript_mixed_union_return_keeps_functions_in_separate_scopes() -> None:
+    source = _two_typescript_functions_with_mixed_union_return()
+    assert check_js_sibling_return_object_key_drift(source, _TYPESCRIPT_PATH) == []
+
+
+def test_typescript_function_type_return_still_flags_intra_function_drift() -> None:
+    issues = check_js_sibling_return_object_key_drift(
+        _single_typescript_function_function_type_return_with_drift(), _TYPESCRIPT_PATH
+    )
+    assert len(issues) == 1
+    assert "deferred" in issues[0]
+
+
+def test_for_await_block_shares_its_functions_scope() -> None:
+    issues = check_js_sibling_return_object_key_drift(_for_await_drift_source(), _MJS_PATH)
+    assert len(issues) == 1
+    assert "deferred" in issues[0]
+
+
+def test_mixed_quote_shared_discriminant_does_not_suppress_drift() -> None:
+    issues = check_js_sibling_return_object_key_drift(
+        _mixed_quote_shared_discriminant_drift_source(), _MJS_PATH
+    )
+    assert len(issues) == 1
+    assert "deferred" in issues[0]
+
+
+def test_mixed_quote_differing_discriminant_still_passes_as_union() -> None:
+    issues = check_js_sibling_return_object_key_drift(
+        _mixed_quote_differing_discriminant_source(), _MJS_PATH
+    )
+    assert issues == []
 
 
 def test_skips_python_files() -> None:

@@ -75,6 +75,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ENUMERATION_TASK_ITEM_PATTERN,
     FUNCTION_WITH_JSDOC_PATTERN,
     HYPHENATED_TASK_ITEM_PATTERN,
+    JAVASCRIPT_ARROW_TOKEN_LENGTH,
     JAVASCRIPT_BLOCK_COMMENT_CLOSER,
     JAVASCRIPT_BLOCK_COMMENT_OPENER,
     JAVASCRIPT_LINE_COMMENT_OPENER,
@@ -1259,14 +1260,21 @@ def _return_type_annotation_colon_index(blanked_content: str, terminator_index: 
 
     Scanning backward from the annotation's terminating bracket at
     ``terminator_index``, nested ``{}``, ``[]``, ``<>``, and ``()`` are balanced so a
-    ``:`` inside the type never counts. The first ``:`` reached at annotation depth
-    zero is the return-type colon. The result is None when a statement boundary
-    (``;`` at depth zero, or an opener that drops the depth below zero) or the source
-    start is reached first, so a plain block brace is not read as a function body.
+    ``:`` inside the type never counts. An arrow ``=>`` inside a function-type
+    annotation (``(x: number) => void``) is depth-neutral: both characters are
+    skipped so the arrow's ``>`` never counts as a generic closer. The first ``:``
+    reached at annotation depth zero is the return-type colon. The result is None
+    when a statement boundary (``;`` at depth zero, or an opener that drops the
+    depth below zero) or the source start is reached first, so a plain block brace
+    is not read as a function body.
     """
     depth = 0
-    for each_index in range(terminator_index, -1, -1):
+    each_index = terminator_index
+    while each_index >= 0:
         character = blanked_content[each_index]
+        if character == ">" and each_index > 0 and blanked_content[each_index - 1] == "=":
+            each_index -= JAVASCRIPT_ARROW_TOKEN_LENGTH
+            continue
         if character in ALL_JAVASCRIPT_BRACKET_CLOSERS or character == ">":
             depth += 1
         elif character in ALL_JAVASCRIPT_BRACKET_OPENERS or character == "<":
@@ -1278,6 +1286,7 @@ def _return_type_annotation_colon_index(blanked_content: str, terminator_index: 
                 return each_index
             if character == ";":
                 return None
+        each_index -= 1
     return None
 
 
@@ -1303,13 +1312,19 @@ def _bare_return_type_annotation_colon_index(
 
     A bare return type ends in an identifier character rather than a bracket, so the
     scan walks backward from that last character at ``identifier_end_index`` across the
-    type's characters to the return-type ``:``. The result is None when any other
-    character is reached first, so a plain block brace is not read as a function body.
+    type's characters to the return-type ``:``. A closing bracket reached mid-walk
+    marks a bracketed segment inside the annotation — a generic union member
+    (``Promise<Foo> | Bar``) or a function type (``(x: number) => void``) — so the
+    scan hands off to the bracket-balancing walk from that bracket. The result is
+    None when any other non-bare character is reached first, so a plain block brace
+    is not read as a function body.
     """
     for each_index in range(identifier_end_index, -1, -1):
         character = blanked_content[each_index]
         if character == ":":
             return each_index
+        if character in ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS:
+            return _return_type_annotation_colon_index(blanked_content, each_index)
         if not _is_bare_return_type_character(character):
             return None
     return None
@@ -1363,9 +1378,11 @@ def _is_function_scope_opener(blanked_content: str, brace_index: int) -> bool:
     list ``)`` — directly, or across a TypeScript ``: <return type>`` annotation of
     any shape (a bracket-terminated object, generic, or tuple type, or a bare
     identifier, primitive, qualified, or union type) — whose matching ``(`` is not
-    preceded by a control-flow keyword. A control block (``if``, ``for``, ``while``,
-    ``switch``, ``catch``, ``with``) opens a plain block, not a scope, so a return
-    inside it belongs to the enclosing function.
+    preceded by a control-flow keyword. A control block (``if``, ``for``,
+    ``for await``, ``while``, ``switch``, ``catch``, ``with``) opens a plain block,
+    not a scope, so a return inside it belongs to the enclosing function; the
+    ``await`` token of a ``for await`` head is the word the lookback reads, so it
+    sits in the keyword set.
     """
     preceding_index = brace_index - 1
     while preceding_index >= 0 and blanked_content[preceding_index].isspace():
@@ -1428,15 +1445,19 @@ def _top_level_colon_index(entry_content: str) -> int | None:
 
 
 def _string_literal_value_or_none(value_text: str) -> str | None:
-    """Return the value text when it is a string literal, else None.
+    """Return the string literal's content when the value is one, else None.
 
-    A discriminated-union tag is a string literal (``'created'``). A value that is a
-    boolean, number, variable, call, or other expression is not a tag, so it maps to
-    None and never suppresses a drift finding for its key.
+    A discriminated-union tag is a string literal (``'created'``). The matching
+    quote delimiters are stripped so ``'created'`` and ``"created"`` carry the same
+    content and compare equal. A value that is a boolean, number, variable, call, or
+    other expression is not a tag, so it maps to None and never suppresses a drift
+    finding for its key.
     """
-    if value_text and value_text[0] in ALL_JAVASCRIPT_STRING_DELIMITERS:
-        return value_text
-    return None
+    if not value_text or value_text[0] not in ALL_JAVASCRIPT_STRING_DELIMITERS:
+        return None
+    if len(value_text) > 1 and value_text[-1] == value_text[0]:
+        return value_text[1:-1]
+    return value_text
 
 
 def _top_level_object_key_values(
@@ -1448,8 +1469,9 @@ def _top_level_object_key_values(
     come from the blanked source, so a brace, comma, or colon inside a nested
     object, array, call, or string never counts toward a key. Each value is read
     from the original ``content`` at the same offsets, so a string discriminant such
-    as ``action: 'created'`` keeps its text; a shorthand key and a non-string value
-    map to None. A spread entry and a computed key are skipped.
+    as ``action: 'created'`` keeps its quote-stripped text; a shorthand key and a
+    non-string value map to None. A spread entry, a computed key, and a quoted
+    string-literal key are skipped.
     """
     blanked_span = _balanced_brace_body(blanked_content, brace_index)
     if blanked_span is None:
