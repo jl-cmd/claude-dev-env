@@ -220,12 +220,23 @@ def test_flags_directive_when_only_directive_line_changed_but_contract_sits_else
     assert "return down" in issues[0]
 
 
-def test_accepts_when_only_the_contract_line_changed_and_directive_line_did_not() -> None:
+def test_flags_when_only_the_contract_line_changed_and_the_directive_line_did_not() -> None:
     contract_line_number = 2
     issues = check_js_bare_flag_return_directive(
         _contract_with_bare_directive_source(),
         _MJS_PATH,
         all_changed_lines={contract_line_number},
+    )
+    assert len(issues) == 1
+    assert "return down" in issues[0]
+
+
+def test_accepts_when_neither_the_contract_nor_the_directive_line_changed() -> None:
+    unrelated_line_number = 3
+    issues = check_js_bare_flag_return_directive(
+        _contract_with_bare_directive_source(),
+        _MJS_PATH,
+        all_changed_lines={unrelated_line_number},
     )
     assert issues == []
 

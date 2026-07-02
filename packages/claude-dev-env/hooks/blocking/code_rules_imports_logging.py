@@ -1770,8 +1770,9 @@ def check_js_bare_flag_return_directive(
     and the directive commonly sit far apart in a converge workflow file, so
     *content* must carry the whole file rather than an edit's changed fragment
     for the sweep to see both halves.
-    ``return <word>: <bool>`` never forms valid JavaScript, so a match always
-    marks agent-prompt prose rather than control flow. A full
+    ``return <word>: <bool>`` never forms the full-object return directive the
+    contract requires, so a match always marks agent-prompt prose rather than
+    a compliant control-flow return. A full
     ``return {sha:..., down:true, ...}`` object literal
     stays untouched, and so does a source that states no such contract. This
     belongs to the JS/.mjs slice of Category O6 docstring-prose-versus-body
@@ -1782,8 +1783,9 @@ def check_js_bare_flag_return_directive(
         file_path: The path the source will be written to, used for exemptions.
         all_changed_lines: Post-edit line numbers the current edit touched, or
             None to treat the whole file as in scope. When provided, a
-            violation blocks only when its directive line is among the
-            changed lines.
+            violation blocks when its directive line or any of its contract's
+            "never a bare <name> flag" lines are among the changed lines, so
+            editing either half of the contradiction trips the gate.
         defer_scope_to_caller: When True, return every violation so the
             commit/push gate scopes by added line through its ``Line N:``
             partitioning.
@@ -1798,16 +1800,20 @@ def check_js_bare_flag_return_directive(
         return []
     if get_file_extension(file_path) not in ALL_JAVASCRIPT_EXTENSIONS:
         return []
-    forbidden_flags = {
-        each_contract.group("flag").casefold()
-        for each_contract in BARE_FLAG_CONTRACT_PATTERN.finditer(content)
-    }
-    if not forbidden_flags:
+    contract_line_numbers_by_flag: dict[str, set[int]] = {}
+    for each_contract in BARE_FLAG_CONTRACT_PATTERN.finditer(content):
+        folded_flag = each_contract.group("flag").casefold()
+        contract_line_number = content.count("\n", 0, each_contract.start()) + 1
+        contract_line_numbers_by_flag.setdefault(folded_flag, set()).add(
+            contract_line_number
+        )
+    if not contract_line_numbers_by_flag:
         return []
-    all_violations_in_source_order: list[tuple[range, str]] = []
+    all_violations_in_source_order: list[tuple[set[int], str]] = []
     for each_directive in BARE_FLAG_RETURN_DIRECTIVE_PATTERN.finditer(content):
         forbidden_flag = each_directive.group("flag")
-        if forbidden_flag.casefold() not in forbidden_flags:
+        folded_flag = forbidden_flag.casefold()
+        if folded_flag not in contract_line_numbers_by_flag:
             continue
         offending_line = content.count("\n", 0, each_directive.start()) + 1
         message = (
@@ -1816,9 +1822,8 @@ def check_js_bare_flag_return_directive(
             f"('never a bare {forbidden_flag} flag'); return the whole result object "
             "with every StructuredOutput field set (Category O6 docstring drift)"
         )
-        all_violations_in_source_order.append(
-            (range(offending_line, offending_line + 1), message)
-        )
+        violation_lines = {offending_line} | contract_line_numbers_by_flag[folded_flag]
+        all_violations_in_source_order.append((violation_lines, message))
     scoped_issues = _scope_violations_to_changed_lines(
         all_violations_in_source_order,
         all_changed_lines,
