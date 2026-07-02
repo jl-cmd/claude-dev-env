@@ -26,9 +26,9 @@ from code_rules_shared import (  # noqa: E402
 )
 
 from hooks_constants.blocking_check_limits import (  # noqa: E402
+    ALL_ALWAYS_NAIVE_DATETIME_CONSTRUCTORS,
     ALL_FORMAT_LOGGER_FUNCTION_NAMES,
     ALL_IMPORT_BLOCK_SORT_RUFF_COMMAND_PREFIX,
-    ALL_NAIVE_CAPABLE_TIMESTAMP_CONSTRUCTORS,
     ALL_RUFF_STANDALONE_CONFIG_FILENAMES,
     DATETIME_CLASS_ATTRIBUTE_NAME,
     FROMTIMESTAMP_POSITIONAL_TIMEZONE_ARGUMENT_COUNT,
@@ -45,6 +45,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_RESUME_TASK_ENUMERATION_ITEMS,
     NAIVE_DATETIME_FROMTIMESTAMP_CONSTRUCTOR,
     NAIVE_DATETIME_TIMEZONE_KEYWORD,
+    NAIVE_DATETIME_UTCFROMTIMESTAMP_CONSTRUCTOR,
     NAIVE_DATETIME_UTCNOW_CONSTRUCTOR,
     RUFF_PYPROJECT_CONFIG_FILENAME,
     RUFF_PYPROJECT_TOOL_TABLE_MARKER,
@@ -626,20 +627,62 @@ def _attribute_base_is_datetime(attribute_node: ast.Attribute) -> bool:
     if isinstance(base_node, ast.Name):
         return base_node.id == DATETIME_CLASS_ATTRIBUTE_NAME
     if isinstance(base_node, ast.Attribute):
-        return base_node.attr == DATETIME_CLASS_ATTRIBUTE_NAME
+        inner_base = base_node.value
+        return (
+            base_node.attr == DATETIME_CLASS_ATTRIBUTE_NAME
+            and isinstance(inner_base, ast.Name)
+            and inner_base.id == DATETIME_CLASS_ATTRIBUTE_NAME
+        )
+    return False
+
+
+def _is_literal_none(node: ast.expr) -> bool:
+    """Report whether an expression is the literal ``None``.
+
+    A ``None`` timezone argument leaves a datetime naive, so it does not count as
+    a supplied zone.
+
+    Args:
+        node: The argument expression to inspect.
+
+    Returns:
+        True when the node is a literal ``None``, else False.
+    """
+    return isinstance(node, ast.Constant) and node.value is None
+
+
+def _fromtimestamp_supplies_concrete_timezone(call_node: ast.Call) -> bool:
+    """Report whether a ``fromtimestamp`` call pins a real timezone.
+
+    The zone arrives either as a ``tz=`` keyword or as the second positional
+    argument, matching the ``datetime.fromtimestamp(timestamp, tz=None)``
+    signature. A literal ``None`` in either slot leaves the value naive and does
+    not count.
+
+    Args:
+        call_node: The ``fromtimestamp`` call to inspect.
+
+    Returns:
+        True when a concrete (non-None) timezone is supplied, else False.
+    """
+    for each_keyword in call_node.keywords:
+        if each_keyword.arg == NAIVE_DATETIME_TIMEZONE_KEYWORD:
+            return not _is_literal_none(each_keyword.value)
+    if len(call_node.args) >= FROMTIMESTAMP_POSITIONAL_TIMEZONE_ARGUMENT_COUNT:
+        return not _is_literal_none(call_node.args[1])
     return False
 
 
 def _naive_datetime_constructor_name(call_node: ast.Call) -> str | None:
     """Return the naive datetime constructor a call uses, or None when it is safe.
 
-    ``fromtimestamp`` and ``utcfromtimestamp`` build a naive datetime only when
-    no timezone pins the zone; ``utcnow`` is always naive. A timezone counts as
-    supplied by a ``tz=`` keyword on either constructor, or by a second positional
-    argument to ``fromtimestamp`` — whose signature is
-    ``datetime.fromtimestamp(timestamp, tz=None)``, so
-    ``datetime.fromtimestamp(stamp, timezone.utc)`` is already aware. Any other
-    call, or a timestamp constructor carrying a timezone, is safe and returns None.
+    ``utcnow`` and ``utcfromtimestamp`` always build a naive datetime — neither
+    accepts a ``tz`` argument, so any such call is flagged. ``fromtimestamp``
+    builds a naive datetime only when no timezone pins the zone; a concrete
+    timezone counts when supplied as a ``tz=`` keyword or as a second positional
+    argument (``datetime.fromtimestamp(stamp, timezone.utc)``), while a literal
+    ``None`` in either slot still yields a naive value. Any other call is safe and
+    returns None.
 
     Args:
         call_node: The call expression to classify.
@@ -653,26 +696,34 @@ def _naive_datetime_constructor_name(call_node: ast.Call) -> str | None:
     if not _attribute_base_is_datetime(call_function):
         return None
     constructor_name = call_function.attr
-    if constructor_name == NAIVE_DATETIME_UTCNOW_CONSTRUCTOR:
+    if constructor_name in ALL_ALWAYS_NAIVE_DATETIME_CONSTRUCTORS:
         return constructor_name
-    if constructor_name not in ALL_NAIVE_CAPABLE_TIMESTAMP_CONSTRUCTORS:
+    if constructor_name != NAIVE_DATETIME_FROMTIMESTAMP_CONSTRUCTOR:
         return None
-    has_timezone_keyword = any(
-        each_keyword.arg == NAIVE_DATETIME_TIMEZONE_KEYWORD
-        for each_keyword in call_node.keywords
-    )
-    if has_timezone_keyword:
-        return None
-    accepts_positional_timezone = (
-        constructor_name == NAIVE_DATETIME_FROMTIMESTAMP_CONSTRUCTOR
-    )
-    has_positional_timezone = (
-        accepts_positional_timezone
-        and len(call_node.args) >= FROMTIMESTAMP_POSITIONAL_TIMEZONE_ARGUMENT_COUNT
-    )
-    if has_positional_timezone:
+    if _fromtimestamp_supplies_concrete_timezone(call_node):
         return None
     return constructor_name
+
+
+def _naive_datetime_remediation(constructor_name: str) -> str:
+    """Return the fix guidance for a specific naive datetime constructor.
+
+    ``utcnow`` and ``utcfromtimestamp`` accept no ``tz`` argument, so each points
+    at its aware replacement (``datetime.now(tz=...)`` and
+    ``datetime.fromtimestamp(..., tz=...)``); ``fromtimestamp`` keeps its shape and
+    only needs a ``tz=`` argument.
+
+    Args:
+        constructor_name: The naive constructor the call used.
+
+    Returns:
+        The remediation clause to embed in the emitted issue.
+    """
+    if constructor_name == NAIVE_DATETIME_UTCNOW_CONSTRUCTOR:
+        return "use datetime.now(tz=timezone.utc)"
+    if constructor_name == NAIVE_DATETIME_UTCFROMTIMESTAMP_CONSTRUCTOR:
+        return "use datetime.fromtimestamp(stamp, tz=timezone.utc)"
+    return "pass tz= (e.g. tz=timezone.utc)"
 
 
 def check_naive_datetime_construction(content: str, file_path: str) -> list[str]:
@@ -682,11 +733,13 @@ def check_naive_datetime_construction(content: str, file_path: str) -> list[str]
     build a datetime with no timezone, and ``datetime.utcnow()`` does the same for
     the current moment. A later ``.astimezone()`` on that naive value guesses the
     local offset, so a timestamp landing in a daylight-saving fold reads back an
-    hour off. Passing a timezone pins the instant to an unambiguous zone before any
-    local conversion — as the ``tz=`` keyword on either constructor, or as a second
-    positional argument to ``fromtimestamp`` (``datetime.fromtimestamp(stamp,
-    timezone.utc)``). A plain ``datetime.now()`` is left alone, since it does not
-    derive an instant from an epoch value.
+    hour off. The aware replacements differ by constructor: ``fromtimestamp`` takes
+    a ``tz=`` keyword or a second positional timezone (``datetime.fromtimestamp(
+    stamp, timezone.utc)``); ``utcnow`` becomes ``datetime.now(tz=timezone.utc)``;
+    and ``utcfromtimestamp`` becomes ``datetime.fromtimestamp(stamp,
+    tz=timezone.utc)`` — neither ``utc`` constructor accepts a ``tz`` argument. A
+    plain ``datetime.now()`` is left alone, since it does not derive an instant from
+    an epoch value.
 
     Args:
         content: The source text to inspect.
@@ -709,10 +762,11 @@ def check_naive_datetime_construction(content: str, file_path: str) -> list[str]
         naive_constructor_name = _naive_datetime_constructor_name(each_node)
         if naive_constructor_name is None:
             continue
+        remediation = _naive_datetime_remediation(naive_constructor_name)
         issues.append(
             f"Line {each_node.lineno}: naive datetime.{naive_constructor_name}() - "
-            "pass tz= (e.g. tz=timezone.utc) so the instant is unambiguous, then "
-            ".astimezone() for local display (avoids DST-fold ambiguity)"
+            f"{remediation} so the instant is unambiguous, then .astimezone() for "
+            "local display (avoids DST-fold ambiguity)"
         )
         if len(issues) >= MAX_NAIVE_DATETIME_ISSUES:
             break
