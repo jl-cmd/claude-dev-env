@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """PreToolUse hook: blocks an Edit that rewrites a Python code line while keeping a contradicting comment above it.
 
-An Edit that rewrites a code line but keeps the standalone comment directly
-above it can orphan that comment: the comment names an identifier the old line
-carried and the new line drops, so the kept comment describes code that is not
-there. The hook rebuilds the post-edit file, diffs it line by line against the
-pre-edit file, and for every replaced block whose immediately preceding shared
-line is a standalone ``#`` comment, checks each identifier the comment names.
-An identifier present in the replaced old lines and absent from the new lines
-denies the edit, pointing at the comment to update or remove in the same edit.
+Say a comment reads ``# Mock asyncio`` right above a line that patches
+``asyncio.sleep``. An Edit that rewrites just that line to patch something
+else, but leaves the comment untouched, orphans the comment: it still names
+``asyncio``, but the code below no longer does. The same gap opens when the
+Edit deletes the line outright instead of rewriting it. The hook locates
+each occurrence of the edit's ``old_string`` in the file and reads the line
+directly above it, denying the edit when that line is a standalone ``#``
+comment naming an identifier ``old_string`` carries and ``new_string`` drops.
 """
 
-import difflib
 import json
 import re
 import sys
@@ -30,7 +29,6 @@ from hooks_constants.stale_comment_reference_blocker_constants import (  # noqa:
     COMMENT_IDENTIFIER_PATTERN,
     COMMENT_LINE_PREFIX,
     PYTHON_FILE_SUFFIX,
-    REPLACE_OPCODE_TAG,
     STALE_COMMENT_ADDITIONAL_CONTEXT,
     STALE_COMMENT_DENY_TEMPLATE,
     STALE_COMMENT_SYSTEM_MESSAGE,
@@ -69,41 +67,87 @@ def _first_orphaned_identifier(
     return None
 
 
-def _find_stale_comment_reference(
+def _occurrence_start_offsets(
     old_content: str,
-    new_content: str,
-    file_path: str,
-) -> str | None:
-    """Diff the pre- and post-edit file and report the first orphaned comment.
+    old_string: str,
+    is_replace_all: bool,
+) -> list[int]:
+    """List the character offsets where old_string starts in old_content.
+
+    Walks old_content left to right the same way str.replace does, so the
+    offsets line up with the occurrences the edit actually rewrites.
 
     Args:
         old_content: The file text before the edit.
-        new_content: The file text after applying the edit.
+        old_string: The text the edit replaces.
+        is_replace_all: Whether every occurrence is collected, matching the
+            Edit tool's replace_all flag, or only the first one.
+
+    Returns:
+        The offset of each matching occurrence, in file order.
+    """
+    all_offsets: list[int] = []
+    search_from = 0
+    while True:
+        found_at = old_content.find(old_string, search_from)
+        if found_at == -1:
+            return all_offsets
+        all_offsets.append(found_at)
+        if not is_replace_all:
+            return all_offsets
+        search_from = found_at + len(old_string)
+
+
+def _preceding_line_text(old_content: str, occurrence_start: int) -> str | None:
+    """Return the stripped line directly above the line an occurrence sits in.
+
+    Args:
+        old_content: The file text before the edit.
+        occurrence_start: The character offset where the occurrence begins.
+
+    Returns:
+        The stripped text of the line above the occurrence's line, or None
+        when that line is the first line in the file.
+    """
+    containing_line_start = old_content.rfind("\n", 0, occurrence_start) + 1
+    if containing_line_start == 0:
+        return None
+    preceding_line_end = containing_line_start - 1
+    preceding_line_start = old_content.rfind("\n", 0, preceding_line_end) + 1
+    return old_content[preceding_line_start:preceding_line_end].strip()
+
+
+def _find_stale_comment_reference(
+    old_content: str,
+    old_string: str,
+    new_string: str,
+    is_replace_all: bool,
+    file_path: str,
+) -> str | None:
+    """Check each occurrence old_string rewrites for an orphaned comment above it.
+
+    Args:
+        old_content: The file text before the edit.
+        old_string: The text the edit replaces.
+        new_string: The text the edit substitutes in, empty for a straight
+            deletion.
+        is_replace_all: Whether every occurrence of old_string is checked,
+            matching the Edit tool's replace_all flag.
         file_path: The target path, named in the deny reason.
 
     Returns:
-        The deny-reason text for the first replaced block whose kept comment
-        names an identifier the edit removes, or None when every kept comment
-        stays consistent with the line below it.
+        The deny-reason text for the first occurrence whose kept comment
+        names an identifier old_string carries and new_string drops, or None
+        when every kept comment stays consistent with the rewritten line.
     """
-    all_old_lines = old_content.splitlines()
-    all_new_lines = new_content.splitlines()
-    matcher = difflib.SequenceMatcher(a=all_old_lines, b=all_new_lines, autojunk=False)
-    for each_opcode in matcher.get_opcodes():
-        opcode_tag, old_start, old_end, new_start, new_end = each_opcode
-        if opcode_tag != REPLACE_OPCODE_TAG:
-            continue
-        if old_start == 0 or new_start == 0:
-            continue
-        preceding_line = all_old_lines[old_start - 1].strip()
-        if preceding_line != all_new_lines[new_start - 1].strip():
-            continue
-        if not preceding_line.startswith(COMMENT_LINE_PREFIX):
+    all_old_block_lines = old_string.splitlines()
+    all_new_block_lines = new_string.splitlines()
+    for each_occurrence_start in _occurrence_start_offsets(old_content, old_string, is_replace_all):
+        preceding_line = _preceding_line_text(old_content, each_occurrence_start)
+        if preceding_line is None or not preceding_line.startswith(COMMENT_LINE_PREFIX):
             continue
         maybe_identifier = _first_orphaned_identifier(
-            preceding_line,
-            all_old_lines[old_start:old_end],
-            all_new_lines[new_start:new_end],
+            preceding_line, all_old_block_lines, all_new_block_lines
         )
         if maybe_identifier is not None:
             return STALE_COMMENT_DENY_TEMPLATE.format(
@@ -117,11 +161,11 @@ def _find_stale_comment_reference(
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
     """Decide whether an Edit payload orphans a comment above a changed line.
 
-    Reads the target file from disk, applies the payload's replacement to
-    rebuild the post-edit text, and scans the line diff for a kept standalone
-    comment whose named identifier the edit removes from the line below it.
-    Non-Edit tools, non-Python targets, unreadable files, and an old_string
-    absent from the file all pass.
+    Reads the target file from disk and checks the line directly above each
+    occurrence the edit rewrites for a kept standalone comment whose named
+    identifier the edit removes from the line below it. Non-Edit tools,
+    non-Python targets, unreadable files, and an old_string absent from the
+    file all pass.
 
     Args:
         payload_by_key: The PreToolUse payload with tool_name and tool_input.
@@ -156,12 +200,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
         return None
 
     is_replace_all = tool_input.get("replace_all") is True
-    new_content = (
-        old_content.replace(old_string, new_string)
-        if is_replace_all
-        else old_content.replace(old_string, new_string, 1)
+    return _find_stale_comment_reference(
+        old_content, old_string, new_string, is_replace_all, file_path
     )
-    return _find_stale_comment_reference(old_content, new_content, file_path)
 
 
 def build_deny_payload(deny_reason: str) -> dict[str, object]:
