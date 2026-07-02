@@ -31,6 +31,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_NAIVE_CAPABLE_TIMESTAMP_CONSTRUCTORS,
     ALL_RUFF_STANDALONE_CONFIG_FILENAMES,
     DATETIME_CLASS_ATTRIBUTE_NAME,
+    FROMTIMESTAMP_POSITIONAL_TIMEZONE_ARGUMENT_COUNT,
     IMPORT_BLOCK_SORT_RUFF_TIMEOUT_SECONDS,
     IMPORT_BLOCK_SORT_RULE_CODE,
     MAX_E2E_TEST_NAMING_ISSUES,
@@ -42,6 +43,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_NAIVE_DATETIME_ISSUES,
     MAX_WINDOWS_API_NONE_ISSUES,
     MINIMUM_RESUME_TASK_ENUMERATION_ITEMS,
+    NAIVE_DATETIME_FROMTIMESTAMP_CONSTRUCTOR,
     NAIVE_DATETIME_TIMEZONE_KEYWORD,
     NAIVE_DATETIME_UTCNOW_CONSTRUCTOR,
     RUFF_PYPROJECT_CONFIG_FILENAME,
@@ -632,8 +634,12 @@ def _naive_datetime_constructor_name(call_node: ast.Call) -> str | None:
     """Return the naive datetime constructor a call uses, or None when it is safe.
 
     ``fromtimestamp`` and ``utcfromtimestamp`` build a naive datetime only when
-    no ``tz=`` keyword pins the zone; ``utcnow`` is always naive. Any other call,
-    or a timestamp constructor carrying ``tz=``, is safe and returns None.
+    no timezone pins the zone; ``utcnow`` is always naive. A timezone counts as
+    supplied by a ``tz=`` keyword on either constructor, or by a second positional
+    argument to ``fromtimestamp`` — whose signature is
+    ``datetime.fromtimestamp(timestamp, tz=None)``, so
+    ``datetime.fromtimestamp(stamp, timezone.utc)`` is already aware. Any other
+    call, or a timestamp constructor carrying a timezone, is safe and returns None.
 
     Args:
         call_node: The call expression to classify.
@@ -657,6 +663,15 @@ def _naive_datetime_constructor_name(call_node: ast.Call) -> str | None:
     )
     if has_timezone_keyword:
         return None
+    accepts_positional_timezone = (
+        constructor_name == NAIVE_DATETIME_FROMTIMESTAMP_CONSTRUCTOR
+    )
+    has_positional_timezone = (
+        accepts_positional_timezone
+        and len(call_node.args) >= FROMTIMESTAMP_POSITIONAL_TIMEZONE_ARGUMENT_COUNT
+    )
+    if has_positional_timezone:
+        return None
     return constructor_name
 
 
@@ -667,9 +682,11 @@ def check_naive_datetime_construction(content: str, file_path: str) -> list[str]
     build a datetime with no timezone, and ``datetime.utcnow()`` does the same for
     the current moment. A later ``.astimezone()`` on that naive value guesses the
     local offset, so a timestamp landing in a daylight-saving fold reads back an
-    hour off. Passing ``tz=`` (for example ``tz=timezone.utc``) pins the instant
-    to an unambiguous zone before any local conversion. A plain ``datetime.now()``
-    is left alone, since it does not derive an instant from an epoch value.
+    hour off. Passing a timezone pins the instant to an unambiguous zone before any
+    local conversion — as the ``tz=`` keyword on either constructor, or as a second
+    positional argument to ``fromtimestamp`` (``datetime.fromtimestamp(stamp,
+    timezone.utc)``). A plain ``datetime.now()`` is left alone, since it does not
+    derive an instant from an epoch value.
 
     Args:
         content: The source text to inspect.
