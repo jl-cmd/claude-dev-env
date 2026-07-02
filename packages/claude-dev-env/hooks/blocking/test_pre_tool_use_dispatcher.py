@@ -638,10 +638,16 @@ def test_dispatcher_write_applies_both_groups() -> None:
 
 
 def test_dispatcher_edit_applies_both_groups() -> None:
-    """Edit tool triggers both Group A and Group B hooks through the dispatcher."""
+    """Edit triggers Group A, Group B, and the Edit-scoped entry through the
+    dispatcher.
+    """
     all_edit_entries = _applicable_entries_for_tool(EDIT_TOOL_NAME)
-    assert len(all_edit_entries) == 19, (
-        f"Edit tool must apply to all 19 hosted hooks, got {len(all_edit_entries)}"
+    all_edit_script_paths = {each_entry.script_relative_path for each_entry in all_edit_entries}
+    assert "blocking/stale_comment_reference_blocker.py" in all_edit_script_paths, (
+        "stale_comment_reference_blocker belongs in the Edit applicable set"
+    )
+    assert len(all_edit_entries) == 20, (
+        f"expected 20 Edit entries, got {len(all_edit_entries)}"
     )
 
 

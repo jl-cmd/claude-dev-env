@@ -58,7 +58,8 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
-| `state_description_blocker_constants.py` | The set of historical/comparative phrases the state-description blocker rejects |
+| `drift_comment_gate_constants.py` | Identifier pattern, comment stopwords, and denial text for the stale-comment-reference blocker |
+| `state_description_blocker_constants.py` | The set of historical/comparative phrases the state-description blocker rejects, plus the docstring-extraction and mention-span patterns for its Python docstring scan |
 | `stuttering_check_config.py` | Config for the stuttering (repeated-phrase) check |
 | `stuttering_import_binding_constants.py` | Import-binding patterns for the stuttering check |
 | `subprocess_budget_completeness_constants.py` | Required argument names for the subprocess-budget completeness check |
