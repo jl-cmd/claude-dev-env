@@ -757,6 +757,34 @@ test('the headless preamble routes waits through the Monitor tool and forbids en
   assert.match(preamble, /never end your turn to wait/i, 'expected the preamble to forbid ending a turn to await background work');
 });
 
+test('the preamble describes the Monitor wait by its real contract: a bounded until-loop consuming notifications as they arrive, rather than an in-turn synchronous return', () => {
+  const blockStart = convergeSource.indexOf('const HEADLESS_SAFETY_PREAMBLE =');
+  assert.ok(blockStart !== -1, 'expected a wait-safety preamble to exist');
+  const blockEnd = convergeSource.indexOf('\n\nlet activeRepoPath', blockStart);
+  assert.ok(blockEnd !== -1, 'expected the preamble to end before activeRepoPath');
+  const preamble = convergeSource.slice(blockStart, blockEnd);
+  assert.doesNotMatch(
+    preamble,
+    /never move a wait to a background process/i,
+    'the Monitor tool is itself a background monitor, so the preamble must avoid forbidding a wait that moves to a background process',
+  );
+  assert.doesNotMatch(
+    preamble,
+    /return to you when the condition holds/i,
+    'the Monitor tool streams notifications across turns rather than returning in-turn, so the preamble must avoid describing an in-turn synchronous return',
+  );
+  assert.match(
+    preamble,
+    /until-loop/i,
+    'expected the preamble to describe the wait as a bounded until-loop paired with the Monitor tool',
+  );
+  assert.match(
+    preamble,
+    /notifications? as they arrive/i,
+    'expected the preamble to say Monitor notifications are consumed as they arrive',
+  );
+});
+
 test('no agent prompt instructs a foreground sleep as the poll delay', () => {
   assert.doesNotMatch(
     convergeSource,
