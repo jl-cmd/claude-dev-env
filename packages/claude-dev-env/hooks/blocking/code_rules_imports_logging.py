@@ -59,6 +59,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ADVISORY_LINE_THRESHOLD_SOFT,
     ALL_CLI_FILE_PATH_MARKERS,
     ALL_IMPORT_STATEMENT_PREFIXES,
+    ALL_JAVASCRIPT_BARE_RETURN_TYPE_EXTRA_CHARACTERS,
     ALL_JAVASCRIPT_BRACKET_CLOSERS,
     ALL_JAVASCRIPT_BRACKET_OPENERS,
     ALL_JAVASCRIPT_CONTROL_FLOW_BLOCK_KEYWORDS,
@@ -1280,21 +1281,71 @@ def _return_type_annotation_colon_index(blanked_content: str, terminator_index: 
     return None
 
 
+def _is_bare_return_type_character(character: str) -> bool:
+    """Report whether ``character`` can appear in a bracket-free return-type annotation.
+
+    A bare return type — a named type (``ParseResult``), a primitive (``void``), a
+    qualified name (``Foo.Bar``), or a union of them (``A | B``) — is built from
+    letters, digits, ``_``, ``$``, ``.``, ``|``, ``&``, and the whitespace between
+    them.
+    """
+    return (
+        character.isalnum()
+        or character.isspace()
+        or character in ALL_JAVASCRIPT_BARE_RETURN_TYPE_EXTRA_CHARACTERS
+    )
+
+
+def _bare_return_type_annotation_colon_index(
+    blanked_content: str, identifier_end_index: int
+) -> int | None:
+    """Return the ``:`` index that opens a bracket-free return-type annotation.
+
+    A bare return type ends in an identifier character rather than a bracket, so the
+    scan walks backward from that last character at ``identifier_end_index`` across the
+    type's characters to the return-type ``:``. The result is None when any other
+    character is reached first, so a plain block brace is not read as a function body.
+    """
+    for each_index in range(identifier_end_index, -1, -1):
+        character = blanked_content[each_index]
+        if character == ":":
+            return each_index
+        if not _is_bare_return_type_character(character):
+            return None
+    return None
+
+
+def _return_type_annotation_colon_index_for_shape(
+    blanked_content: str, preceding_index: int
+) -> int | None:
+    """Return the return-type ``:`` index for the annotation ending at ``preceding_index``.
+
+    A return type ends either in a bracket (``}``, ``>``, ``]`` — an inline object
+    literal, a generic, or a tuple type), which balances nested brackets back to the
+    colon, or in an identifier character (a named type ``ParseResult``, a primitive
+    ``void``, a qualified or union type), which walks back across type characters to
+    the colon. The result is None when neither shape reaches a return-type colon.
+    """
+    if blanked_content[preceding_index] in ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS:
+        return _return_type_annotation_colon_index(blanked_content, preceding_index)
+    if _is_bare_return_type_character(blanked_content[preceding_index]):
+        return _bare_return_type_annotation_colon_index(blanked_content, preceding_index)
+    return None
+
+
 def _parameter_list_close_index(blanked_content: str, preceding_index: int) -> int | None:
     """Return the index of the parameter-list ``)`` a function body brace follows.
 
     A plain function body brace follows the ``)`` directly. A TypeScript body brace
-    follows a ``: <return type>`` annotation whose type ends in ``}``, ``>``, or
-    ``]`` — an inline object literal, a generic, or a tuple type — so the scan walks
-    back across the balanced annotation to the return-type ``:`` and reports the
-    ``)`` before it. The result is None when the brace opens a plain block rather
-    than a function body.
+    follows a ``: <return type>`` annotation, so the scan walks back across the
+    annotation — a bracket-terminated type (``}``, ``>``, ``]``) or a bare
+    identifier, primitive, qualified, or union type — to the return-type ``:`` and
+    reports the ``)`` before it. The result is None when the brace opens a plain
+    block rather than a function body.
     """
     if blanked_content[preceding_index] == ")":
         return preceding_index
-    if blanked_content[preceding_index] not in ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS:
-        return None
-    colon_index = _return_type_annotation_colon_index(blanked_content, preceding_index)
+    colon_index = _return_type_annotation_colon_index_for_shape(blanked_content, preceding_index)
     if colon_index is None:
         return None
     parenthesis_index = colon_index - 1
@@ -1309,11 +1360,12 @@ def _is_function_scope_opener(blanked_content: str, brace_index: int) -> bool:
     """Report whether the ``{`` at ``brace_index`` opens a function or arrow body.
 
     An arrow body follows ``=>``. A function or method body follows the parameter
-    list ``)`` — directly, or across a TypeScript ``: <return type>`` annotation
-    that ends in ``}``, ``>``, or ``]`` — whose matching ``(`` is not preceded by a
-    control-flow keyword. A control block (``if``, ``for``, ``while``, ``switch``,
-    ``catch``, ``with``) opens a plain block, not a scope, so a return inside it
-    belongs to the enclosing function.
+    list ``)`` — directly, or across a TypeScript ``: <return type>`` annotation of
+    any shape (a bracket-terminated object, generic, or tuple type, or a bare
+    identifier, primitive, qualified, or union type) — whose matching ``(`` is not
+    preceded by a control-flow keyword. A control block (``if``, ``for``, ``while``,
+    ``switch``, ``catch``, ``with``) opens a plain block, not a scope, so a return
+    inside it belongs to the enclosing function.
     """
     preceding_index = brace_index - 1
     while preceding_index >= 0 and blanked_content[preceding_index].isspace():
