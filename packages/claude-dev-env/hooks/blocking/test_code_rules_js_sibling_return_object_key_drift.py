@@ -37,6 +37,14 @@ _SHIPPED_CONVERGE_MJS = (
     _HOOK_DIRECTORY.parents[1] / "skills" / "autoconverge" / "workflow" / "converge.mjs"
 )
 
+_SHIPPED_INSTALL_MYPY_INI_MJS = (
+    _HOOK_DIRECTORY.parents[1] / "bin" / "install_mypy_ini.mjs"
+)
+
+_TYPESCRIPT_PATH = "src/example.ts"
+
+_TYPESCRIPT_JSX_PATH = "src/example.tsx"
+
 
 def _multi_workflow_source(blocker_return_body: str) -> str:
     return (
@@ -131,6 +139,43 @@ def _discriminated_union_source() -> str:
     )
 
 
+def _action_keyed_union_source() -> str:
+    return (
+        "function configureTarget(target) {\n"
+        "  if (alreadyConfigured(target)) {\n"
+        "    return { action: 'already-configured', path: target }\n"
+        "  }\n"
+        "  if (existsSync(target)) {\n"
+        "    return { action: 'skipped-existing', path: target, expectedLine: expectedPathLine }\n"
+        "  }\n"
+        "  writeFileSync(target)\n"
+        "  return { action: 'created', path: target }\n"
+        "}\n"
+    )
+
+
+def _two_typescript_functions_with_object_return_type() -> str:
+    return (
+        "function alpha(): { ok: boolean } {\n"
+        "  return { a: 1, b: 2 }\n"
+        "}\n"
+        "function beta(): { ok: boolean } {\n"
+        "  return { a: 1, b: 2, c: 3 }\n"
+        "}\n"
+    )
+
+
+def _single_typescript_function_with_drift() -> str:
+    return (
+        "function classify(state): { converged: boolean } {\n"
+        "  if (state == null) {\n"
+        "    return { converged: false, rounds: 0, blocker: 'bad state' }\n"
+        "  }\n"
+        "  return { converged: true, rounds: 5, blocker: null, deferred: [] }\n"
+        "}\n"
+    )
+
+
 def test_flags_blocker_return_that_omits_one_documented_field() -> None:
     issues = check_js_sibling_return_object_key_drift(_drifted_blocker_source(), _MJS_PATH)
     assert len(issues) == 1
@@ -155,6 +200,31 @@ def test_scopes_subset_comparison_to_a_single_function() -> None:
 def test_accepts_discriminated_union_returns() -> None:
     issues = check_js_sibling_return_object_key_drift(_discriminated_union_source(), _MJS_PATH)
     assert issues == []
+
+
+def test_accepts_subset_by_one_with_string_discriminant() -> None:
+    issues = check_js_sibling_return_object_key_drift(_action_keyed_union_source(), _MJS_PATH)
+    assert issues == []
+
+
+def test_shipped_install_mypy_ini_mjs_passes_its_own_check() -> None:
+    shipped_source = _SHIPPED_INSTALL_MYPY_INI_MJS.read_text(encoding="utf-8")
+    issues = check_js_sibling_return_object_key_drift(shipped_source, _MJS_PATH)
+    assert issues == []
+
+
+def test_typescript_object_return_type_keeps_functions_in_separate_scopes() -> None:
+    source = _two_typescript_functions_with_object_return_type()
+    assert check_js_sibling_return_object_key_drift(source, _TYPESCRIPT_PATH) == []
+    assert check_js_sibling_return_object_key_drift(source, _TYPESCRIPT_JSX_PATH) == []
+
+
+def test_typescript_object_return_type_still_flags_intra_function_drift() -> None:
+    issues = check_js_sibling_return_object_key_drift(
+        _single_typescript_function_with_drift(), _TYPESCRIPT_PATH
+    )
+    assert len(issues) == 1
+    assert "deferred" in issues[0]
 
 
 def test_skips_python_files() -> None:
