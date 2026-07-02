@@ -271,15 +271,43 @@ def check_loop_variable_naming(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _comprehension_rebinds_name(comprehension_node: ast.expr, target_name: str) -> bool:
+    """True when any generator of the comprehension binds its own target_name-named variable."""
+    generators = getattr(comprehension_node, "generators", [])
+    for each_generator in generators:
+        for each_name_node in _walk_assignment_targets(each_generator.target):
+            if each_name_node.id == target_name:
+                return True
+    return False
+
+
+def _node_reads_name(node: ast.AST, target_name: str) -> bool:
+    """True when node contains a genuine Load of target_name, honoring comprehension scope.
+
+    A comprehension that rebinds target_name in its own generators owns that name
+    inside its body, so a Load there reads the comprehension variable, not the
+    outer loop variable. Only the outermost generator's iterable is evaluated in
+    the enclosing scope, so that iterable is the sole place such a comprehension
+    can still read the outer name.
+    """
+    comprehension_node_types = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+    if isinstance(node, comprehension_node_types) and _comprehension_rebinds_name(
+        node, target_name
+    ):
+        outermost_iterable = node.generators[0].iter
+        return _node_reads_name(outermost_iterable, target_name)
+    if isinstance(node, ast.Name) and node.id == target_name and isinstance(node.ctx, ast.Load):
+        return True
+    for each_child_node in ast.iter_child_nodes(node):
+        if _node_reads_name(each_child_node, target_name):
+            return True
+    return False
+
+
 def _loop_body_references_name(loop_node: ast.For | ast.AsyncFor, target_name: str) -> bool:
     for each_statement in [*loop_node.body, *loop_node.orelse]:
-        for each_walked_node in ast.walk(each_statement):
-            if not isinstance(each_walked_node, ast.Name):
-                continue
-            if each_walked_node.id != target_name:
-                continue
-            if isinstance(each_walked_node.ctx, ast.Load):
-                return True
+        if _node_reads_name(each_statement, target_name):
+            return True
     return False
 
 
