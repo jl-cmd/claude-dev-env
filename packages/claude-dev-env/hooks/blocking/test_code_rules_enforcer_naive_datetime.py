@@ -77,6 +77,36 @@ def test_allows_fromtimestamp_with_timezone_keyword() -> None:
     assert issues == []
 
 
+def test_allows_fromtimestamp_with_positional_timezone() -> None:
+    content = (
+        "from datetime import datetime, timezone\n"
+        "def describe(stamp: float) -> str:\n"
+        "    return datetime.fromtimestamp(stamp, timezone.utc).isoformat()\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_allows_module_qualified_fromtimestamp_with_positional_timezone() -> None:
+    content = (
+        "import datetime\n"
+        "def describe(stamp: float) -> object:\n"
+        "    return datetime.datetime.fromtimestamp(stamp, datetime.timezone.utc)\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_flags_utcfromtimestamp_with_second_positional_argument() -> None:
+    content = (
+        "from datetime import datetime\n"
+        "def describe(stamp: float, other: float) -> object:\n"
+        "    return datetime.utcfromtimestamp(stamp)\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+
+
 def test_allows_plain_now() -> None:
     content = (
         "from datetime import datetime\n"
