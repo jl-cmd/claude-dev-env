@@ -99,3 +99,71 @@ def test_should_flag_underscore_loop_variable_read_inside_non_rebinding_comprehe
     assert any("_name" in each_issue for each_issue in issues), (
         f"A comprehension reading the outer loop name without rebinding it must flag, got: {issues}"
     )
+
+
+def test_should_not_flag_underscore_loop_variable_shadowed_by_lambda_parameter() -> None:
+    source = (
+        "def build(all_names: list) -> list:\n"
+        "    all_callables: list = []\n"
+        "    for _name in all_names:\n"
+        "        all_callables.append(lambda _name: _name)\n"
+        "    return all_callables\n"
+    )
+    issues = code_rules_enforcer.check_referenced_underscore_loop_variable(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"A lambda parameter shadowing the loop name owns its body, must pass, got: {issues}"
+    )
+
+
+def test_should_not_flag_underscore_loop_variable_shadowed_by_nested_def_parameter() -> None:
+    source = (
+        "def build(all_names: list) -> None:\n"
+        "    for _handler in all_names:\n"
+        "        def inner(_handler: object) -> object:\n"
+        "            return _handler\n"
+    )
+    issues = code_rules_enforcer.check_referenced_underscore_loop_variable(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        f"A nested-def parameter shadowing the loop name owns its body, must pass, got: {issues}"
+    )
+
+
+def test_should_not_flag_outer_underscore_loop_variable_shadowed_by_nested_loop() -> None:
+    source = (
+        "import sys\n"
+        "\n"
+        "def purge(first: list, second: list) -> None:\n"
+        "    for _name in first:\n"
+        "        for _name in second:\n"
+        "            del sys.modules[_name]\n"
+    )
+    issues = code_rules_enforcer.check_referenced_underscore_loop_variable(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert not any("Line 4" in each_issue for each_issue in issues), (
+        f"Outer loop whose name a nested loop rebinds is never read in the outer scope, "
+        f"got: {issues}"
+    )
+
+
+def test_should_flag_underscore_loop_variable_read_before_nested_shadowing_loop() -> None:
+    source = (
+        "import sys\n"
+        "\n"
+        "def purge(first: list, second: list) -> None:\n"
+        "    for _name in first:\n"
+        "        del sys.modules[_name]\n"
+        "        for _name in second:\n"
+        "            pass\n"
+    )
+    issues = code_rules_enforcer.check_referenced_underscore_loop_variable(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any("Line 4" in each_issue for each_issue in issues), (
+        f"The outer loop body reads its own name before the nested loop rebinds it, "
+        f"must flag, got: {issues}"
+    )

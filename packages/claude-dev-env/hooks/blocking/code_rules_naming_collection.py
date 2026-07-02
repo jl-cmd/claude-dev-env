@@ -281,14 +281,60 @@ def _comprehension_rebinds_name(comprehension_node: ast.expr, target_name: str) 
     return False
 
 
-def _node_reads_name(node: ast.AST, target_name: str) -> bool:
-    """True when node contains a genuine Load of target_name, honoring comprehension scope.
+def _function_binds_name(
+    function_node: ast.Lambda | ast.FunctionDef | ast.AsyncFunctionDef, target_name: str
+) -> bool:
+    """True when a lambda or nested def has a parameter named target_name."""
+    argument_specification = function_node.args
+    all_argument_nodes = [
+        *argument_specification.posonlyargs,
+        *argument_specification.args,
+        *argument_specification.kwonlyargs,
+    ]
+    if argument_specification.vararg is not None:
+        all_argument_nodes.append(argument_specification.vararg)
+    if argument_specification.kwarg is not None:
+        all_argument_nodes.append(argument_specification.kwarg)
+    return any(each_argument.arg == target_name for each_argument in all_argument_nodes)
 
-    A comprehension that rebinds target_name in its own generators owns that name
-    inside its body, so a Load there reads the comprehension variable, not the
-    outer loop variable. Only the outermost generator's iterable is evaluated in
-    the enclosing scope, so that iterable is the sole place such a comprehension
-    can still read the outer name.
+
+def _function_enclosing_scope_expressions(
+    function_node: ast.Lambda | ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.expr]:
+    """Return the sub-expressions a lambda or def evaluates in its enclosing scope.
+
+    Parameter defaults and decorators run before the parameters bind, so a Load of
+    the outer name there still reads the outer name; the body never does once a
+    parameter shadows it.
+    """
+    argument_specification = function_node.args
+    enclosing_expressions: list[ast.expr] = [*argument_specification.defaults]
+    enclosing_expressions.extend(
+        each_default
+        for each_default in argument_specification.kw_defaults
+        if each_default is not None
+    )
+    if isinstance(function_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        enclosing_expressions.extend(function_node.decorator_list)
+    return enclosing_expressions
+
+
+def _loop_rebinds_name(loop_node: ast.For | ast.AsyncFor, target_name: str) -> bool:
+    """True when the loop's own target rebinds target_name."""
+    return any(
+        each_name_node.id == target_name
+        for each_name_node in _walk_assignment_targets(loop_node.target)
+    )
+
+
+def _node_reads_name(node: ast.AST, target_name: str) -> bool:
+    """True when node contains a genuine Load of target_name, honoring scope shadowing.
+
+    A comprehension, a lambda, a nested def, or a nested loop that rebinds
+    target_name owns that name inside its body, so a Load there reads the inner
+    variable, not the outer loop variable. Only the parts each construct evaluates
+    in the enclosing scope can still read the outer name: a comprehension's or
+    nested loop's iterable, and a function's parameter defaults and decorators.
     """
     comprehension_node_types = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
     if isinstance(node, comprehension_node_types) and _comprehension_rebinds_name(
@@ -296,6 +342,15 @@ def _node_reads_name(node: ast.AST, target_name: str) -> bool:
     ):
         outermost_iterable = node.generators[0].iter
         return _node_reads_name(outermost_iterable, target_name)
+    if isinstance(node, (ast.Lambda, ast.FunctionDef, ast.AsyncFunctionDef)) and _function_binds_name(
+        node, target_name
+    ):
+        return any(
+            _node_reads_name(each_expression, target_name)
+            for each_expression in _function_enclosing_scope_expressions(node)
+        )
+    if isinstance(node, (ast.For, ast.AsyncFor)) and _loop_rebinds_name(node, target_name):
+        return _node_reads_name(node.iter, target_name)
     if isinstance(node, ast.Name) and node.id == target_name and isinstance(node.ctx, ast.Load):
         return True
     for each_child_node in ast.iter_child_nodes(node):
