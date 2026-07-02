@@ -2979,7 +2979,8 @@ def _outbound_pointer_issues(parsed_tree: ast.Module, file_path: str) -> list[st
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         wrapper_docstring = ast.get_docstring(each_node) or ""
-        target_stem = _pointer_target_stem(wrapper_docstring)
+        wrapper_summary = _leading_summary_line(wrapper_docstring)
+        target_stem = _pointer_target_stem(wrapper_summary)
         if not target_stem:
             continue
         delegate_path = parent_directory / (target_stem + PYTHON_MODULE_FILE_SUFFIX)
@@ -2990,9 +2991,7 @@ def _outbound_pointer_issues(parsed_tree: ast.Module, file_path: str) -> list[st
         if delegate_entry is None:
             continue
         delegate_summary = _leading_summary_line(delegate_entry[1])
-        for each_entry in _absent_entries(
-            _leading_summary_line(wrapper_docstring), delegate_summary
-        ):
+        for each_entry in _absent_entries(wrapper_summary, delegate_summary):
             issues.append(
                 f"Line {each_node.lineno}: {each_node.name}() names "
                 f"'{each_entry}' in its summary, but the summary of the "
@@ -3028,15 +3027,14 @@ def _inbound_pointer_issues(
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         wrapper_docstring = ast.get_docstring(each_node) or ""
-        if _pointer_target_stem(wrapper_docstring) != delegate_stem:
+        wrapper_summary = _leading_summary_line(wrapper_docstring)
+        if _pointer_target_stem(wrapper_summary) != delegate_stem:
             continue
         delegate_entry = all_entries_by_name.get(each_node.name)
         if delegate_entry is None:
             continue
         delegate_summary = _leading_summary_line(delegate_entry[1])
-        for each_entry in _absent_entries(
-            _leading_summary_line(wrapper_docstring), delegate_summary
-        ):
+        for each_entry in _absent_entries(wrapper_summary, delegate_summary):
             issues.append(
                 f"Line {delegate_entry[0]}: {each_node.name}() summary omits "
                 f"'{each_entry}', named by the pointing wrapper docstring in "
