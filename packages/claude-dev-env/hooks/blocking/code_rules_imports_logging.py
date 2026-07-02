@@ -1520,14 +1520,16 @@ def _return_object_literal_records(content: str) -> list[tuple[int, dict[str, st
     records: list[tuple[int, dict[str, str | None], int]] = []
     scope_restore_stack: list[int] = []
     current_scope_id = JAVASCRIPT_MODULE_SCOPE_SENTINEL
+    current_line_number = 1
     for each_index, each_character in enumerate(blanked_content):
-        if each_character == "{":
+        if each_character == "\n":
+            current_line_number += 1
+        elif each_character == "{":
             if each_index in return_brace_indices:
                 object_key_values = _top_level_object_key_values(
                     blanked_content, content, each_index
                 )
-                line_number = content.count("\n", 0, each_index) + 1
-                records.append((current_scope_id, object_key_values, line_number))
+                records.append((current_scope_id, object_key_values, current_line_number))
             scope_restore_stack.append(current_scope_id)
             if _is_function_scope_opener(blanked_content, each_index):
                 current_scope_id = each_index
@@ -1563,16 +1565,20 @@ def _single_missing_sibling_key(
     all_candidate_key_values: dict[str, str | None],
     all_scope_key_value_maps: list[dict[str, str | None]],
 ) -> str | None:
-    """Return the lone key a sibling superset adds to the candidate return.
+    """Return the lone key every sibling superset adds to the candidate return.
 
     A sibling qualifies when the candidate's key set is a proper subset of it,
     exactly one key separates them, and the two returns share no differing
     string-literal discriminant. A discriminated-union variant whose tag differs
     from its sibling is a distinct exit shape, not a drifted record, so it is
-    skipped. The first qualifying sibling's extra key is returned so the caller names
-    the omitted field, or None when no sibling qualifies.
+    skipped. When every qualifying sibling adds the same single key, that key is
+    returned so the caller names the omitted field. When qualifying siblings
+    disagree on which key the candidate omits, the scope holds distinct exit
+    shapes rather than one drifted record, so None is returned, as it is when no
+    sibling qualifies.
     """
     candidate_keys = all_candidate_key_values.keys()
+    all_missing_keys: set[str] = set()
     for each_sibling_key_values in all_scope_key_value_maps:
         sibling_keys = each_sibling_key_values.keys()
         if not candidate_keys < sibling_keys:
@@ -1581,7 +1587,9 @@ def _single_missing_sibling_key(
             continue
         extra_keys = sibling_keys - candidate_keys
         if len(extra_keys) == SIBLING_RETURN_OBJECT_EXACT_MISSING_KEY_COUNT:
-            return next(iter(extra_keys))
+            all_missing_keys.update(extra_keys)
+    if len(all_missing_keys) == SIBLING_RETURN_OBJECT_EXACT_MISSING_KEY_COUNT:
+        return next(iter(all_missing_keys))
     return None
 
 
@@ -1599,10 +1607,12 @@ def check_js_sibling_return_object_key_drift(content: str, file_path: str) -> li
     of a sibling's, missing exactly one key and carrying at least the minimum key
     count, is flagged for that one missing key. A control-flow block does not open a
     scope, so an early return inside an ``if`` block is compared with the tail
-    return of the same function. Two shapes pass: returns differing by two or more
-    keys are a distinct exit shape, and a discriminated-union variant that shares a
+    return of the same function. Three shapes pass: returns differing by two or more
+    keys are a distinct exit shape, a discriminated-union variant that shares a
     key carrying a differing string-literal tag with its sibling (``action:
     'created'`` versus ``action: 'skipped-existing'``) is a distinct variant, not a
+    drifted record, and a candidate whose qualifying sibling supersets disagree on
+    which single key it omits sits among distinct exit shapes rather than one
     drifted record. A TypeScript function whose return type is an inline object,
     generic, or tuple annotation opens its own scope, so its returns are not
     compared with an unrelated function's. This is the JS/.mjs slice of Category O

@@ -308,9 +308,27 @@ def test_accepts_subset_by_one_with_string_discriminant() -> None:
     assert issues == []
 
 
+def test_accepts_candidate_whose_supersets_disagree_on_the_missing_key() -> None:
+    source = (
+        "function classifyRun(state) {\n"
+        "  if (state == null) {\n"
+        "    return { converged: false, rounds: 0, finalSha: null }\n"
+        "  }\n"
+        "  if (state.failed) {\n"
+        "    return { converged: false, rounds: 0, finalSha: null, failureNote: state.note }\n"
+        "  }\n"
+        "  return { converged: true, rounds: state.rounds, finalSha: state.sha, "
+        "summary: state.summary }\n"
+        "}\n"
+    )
+    assert check_js_sibling_return_object_key_drift(source, _MJS_PATH) == []
+
+
 def test_shipped_install_mypy_ini_mjs_passes_its_own_check() -> None:
     shipped_source = _SHIPPED_INSTALL_MYPY_INI_MJS.read_text(encoding="utf-8")
-    issues = check_js_sibling_return_object_key_drift(shipped_source, _MJS_PATH)
+    issues = check_js_sibling_return_object_key_drift(
+        shipped_source, "bin/install_mypy_ini.mjs"
+    )
     assert issues == []
 
 
