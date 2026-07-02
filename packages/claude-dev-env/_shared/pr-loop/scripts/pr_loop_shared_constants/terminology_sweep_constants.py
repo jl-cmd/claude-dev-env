@@ -8,6 +8,8 @@ ALL_SWEEP_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset(
 
 MARKDOWN_FILE_EXTENSION: str = ".md"
 
+INLINE_CODE_SPAN_PATTERN: re.Pattern[str] = re.compile(r"`[^`]*`")
+
 SNAKE_CASE_IDENTIFIER_PATTERN: re.Pattern[str] = re.compile(
     r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b"
 )

@@ -438,3 +438,31 @@ def test_repository_environment_strips_every_git_variable(
 
     assert "GIT_DIR" not in scrubbed_environment
     assert scrubbed_environment["PRESERVED_SETTING"] == "kept"
+
+
+def test_skips_markdown_inline_code_spans() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+scale_expression_reference = 1\n"
+        "diff --git a/docs/guide.md b/docs/guide.md\n"
+        "--- a/docs/guide.md\n"
+        "+++ b/docs/guide.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+Its `scale_expression.py` evaluates the layer's `scale` prop here.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_skips_identifier_shaped_string_literals() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+icon_entry = 1\n"
+        '+MASTER_UID = "HOMESCREEN_APPICONS_APP_ICON_IMAGE"\n'
+    )
+    assert sweep_diff(diff) == []

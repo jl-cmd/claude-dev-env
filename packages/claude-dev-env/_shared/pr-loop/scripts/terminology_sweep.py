@@ -59,6 +59,7 @@ from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     DIFF_REMOVED_LINE_PREFIX,
     GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
     HYPHENATED_PROSE_TOKEN_PATTERN,
+    INLINE_CODE_SPAN_PATTERN,
     JAVASCRIPT_LINE_COMMENT_MARKER,
     JSDOC_CONTINUATION_MARKER,
     MARKDOWN_FILE_EXTENSION,
@@ -176,10 +177,11 @@ def _collect_introduced_identifiers(
 def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     """Return the prose fragments of an added line worth scanning for terms.
 
-    A Markdown line is prose in full. A code line contributes its comment tail,
-    its JSDoc continuation text, and the contents of its string literals. A
-    test module contributes its comment tail and JSDoc text only — its string
-    literals hold fixture data, not prose.
+    A Markdown line is prose with its inline-code spans removed, since a
+    backticked span names code verbatim. A code line contributes its comment
+    tail, its JSDoc continuation text, and the contents of its string
+    literals. A test module contributes its comment tail and JSDoc text only
+    — its string literals hold fixture data, not prose.
 
     Args:
         file_path: The path the added line belongs to.
@@ -189,7 +191,7 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
         The prose fragments to scan for near-miss terms.
     """
     if _file_extension(file_path) == MARKDOWN_FILE_EXTENSION:
-        return [line_text]
+        return [INLINE_CODE_SPAN_PATTERN.sub(" ", line_text)]
     if _file_extension(file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
         return []
     all_fragments: list[str] = []
@@ -240,7 +242,9 @@ def _string_literal_fragments(line_text: str) -> list[str]:
 
     Escape sequences inside a literal (``\\n``, ``\\t``) are replaced with
     spaces before the words are read, so an escape letter never glues onto a
-    neighbouring word as a phantom prose term.
+    neighbouring word as a phantom prose term. A literal left with no
+    whitespace after that replacement is an identifier-shaped value — a UID,
+    a key, a path — not prose, and contributes nothing.
     """
     all_fragments: list[str] = []
     for each_match in STRING_LITERAL_CONTENT_PATTERN.finditer(line_text):
@@ -254,6 +258,8 @@ def _string_literal_fragments(line_text: str) -> list[str]:
         )
         for each_escape in ALL_STRING_ESCAPE_SEQUENCES:
             each_content = each_content.replace(each_escape, " ")
+        if not any(each_character.isspace() for each_character in each_content):
+            continue
         all_fragments.append(each_content)
     return all_fragments
 
