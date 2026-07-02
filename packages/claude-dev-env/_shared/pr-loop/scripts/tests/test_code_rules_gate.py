@@ -64,6 +64,7 @@ def run_git_in_repository(repository_root: Path, *arguments: str) -> str:
         encoding="utf-8",
         errors="replace",
         check=True,
+        env=gate_module.repository_environment(),
     )
     return completion.stdout
 
@@ -2329,3 +2330,91 @@ def test_parse_arguments_applies_documented_defaults() -> None:
     assert parsed_arguments.repo_root is None
     assert parsed_arguments.only_under == []
     assert parsed_arguments.paths == []
+
+
+def test_staged_mode_resolves_scan_roots_from_outside_the_repository(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    package_directory = temporary_git_repository / "pkg"
+    config_directory = package_directory / "config"
+    write_file(package_directory / "__init__.py", "")
+    write_file(config_directory / "__init__.py", "")
+    write_file(
+        config_directory / "pkg_constants.py",
+        '"""Frame constants."""\n\nFRAME_COUNT: int = 9\n',
+    )
+    write_file(
+        package_directory / "consumer.py",
+        '"""Consumer of the frame constants."""\n\n'
+        "from pkg.config.pkg_constants import FRAME_COUNT\n\n"
+        "frame_total = FRAME_COUNT\n",
+    )
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        config_directory / "pkg_constants.py",
+        '"""Frame constants."""\n\nFRAME_COUNT: int = 9\nPLATE_COUNT: int = 4\n',
+    )
+    write_file(
+        package_directory / "consumer.py",
+        '"""Consumer of the frame constants."""\n\n'
+        "from pkg.config.pkg_constants import FRAME_COUNT, PLATE_COUNT\n\n"
+        "frame_total = FRAME_COUNT + PLATE_COUNT\n",
+    )
+    stage_file(temporary_git_repository, "pkg/config/pkg_constants.py")
+    stage_file(temporary_git_repository, "pkg/consumer.py")
+
+    monkeypatch.chdir(tmp_path_factory.mktemp("elsewhere"))
+    exit_code = gate_module.main(
+        ["--repo-root", str(temporary_git_repository), "--staged"]
+    )
+
+    assert exit_code == 0
+
+
+def test_paths_from_git_staged_ignores_inherited_git_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target_repository = tmp_path / "target_repository"
+    target_repository.mkdir()
+    initialize_git_repository(target_repository)
+    write_file(target_repository / "pkg" / "example_module.py", "EXAMPLE = 1\n")
+    stage_file(target_repository, "pkg/example_module.py")
+    victim_repository = tmp_path / "victim_repository"
+    victim_repository.mkdir()
+    initialize_git_repository(victim_repository)
+    monkeypatch.setenv("GIT_DIR", str(victim_repository / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(victim_repository))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(victim_repository / ".git" / "index"))
+
+    all_staged_names = [
+        each_path.name
+        for each_path in gate_module.paths_from_git_staged(target_repository)
+    ]
+
+    assert all_staged_names == ["example_module.py"]
+
+
+def test_run_staged_test_files_runs_pytest_without_git_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository_root = tmp_path / "repository_under_test"
+    repository_root.mkdir()
+    initialize_git_repository(repository_root)
+    staged_test_body = (
+        "import os\n"
+        "\n"
+        "\n"
+        "def test_environment_carries_no_git_variables() -> None:\n"
+        "    all_git_names = sorted(\n"
+        "        each_name for each_name in os.environ"
+        " if each_name.startswith('GIT_')\n"
+        "    )\n"
+        "    assert all_git_names == []\n"
+    )
+    write_file(repository_root / "test_environment_scrub.py", staged_test_body)
+    stage_file(repository_root, "test_environment_scrub.py")
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "Hostile Hook Environment")
+
+    assert gate_module.run_staged_test_files(repository_root) == 0
