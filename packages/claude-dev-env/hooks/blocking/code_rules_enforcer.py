@@ -107,6 +107,7 @@ from code_rules_imports_logging import (  # noqa: E402
     check_imports_at_top,
     check_js_resume_task_enumeration_coverage,
     check_js_returns_object_schemaless_branch,
+    check_js_sibling_return_object_key_drift,
     check_library_print,
     check_logging_fstrings,
     check_logging_printf_tokens,
@@ -518,6 +519,9 @@ def validate_content(
         )
         all_issues.extend(
             check_js_returns_object_schemaless_branch(content, file_path)
+        )
+        all_issues.extend(
+            check_js_sibling_return_object_key_drift(content, file_path)
         )
 
     if extension in ALL_CODE_EXTENSIONS:
