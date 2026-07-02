@@ -116,6 +116,11 @@ def copy_gate_script_into(repository_root: Path) -> Path:
     destination_scripts.mkdir(parents=True, exist_ok=True)
     destination_gate = destination_scripts / "code_rules_gate.py"
     destination_gate.write_text(GATE_SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
+    source_terminology_sweep = SHARED_PR_LOOP_SCRIPTS / "terminology_sweep.py"
+    destination_terminology_sweep = destination_scripts / "terminology_sweep.py"
+    destination_terminology_sweep.write_text(
+        source_terminology_sweep.read_text(encoding="utf-8"), encoding="utf-8"
+    )
     destination_config = destination_scripts / "config"
     destination_config.mkdir(parents=True, exist_ok=True)
     source_config = SHARED_PR_LOOP_SCRIPTS / "config"
