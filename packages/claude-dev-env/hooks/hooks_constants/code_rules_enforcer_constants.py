@@ -185,6 +185,14 @@ LOGGING_FSTRING_PATTERN = re.compile(
 LOGGING_PRINTF_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r"(?<!%)%[#0\- +]?[0-9.*]*[sdrixfgeEcoX](?![a-zA-Z])"
 )
+LOGGING_CALL_TOKEN_PATTERN: re.Pattern[str] = re.compile(
+    r'\b(?:log_(?:debug|info|warning|error|critical|exception)'
+    r'|(?:logger|logging|log)\.(?:debug|info|warning|error|critical|exception))'
+    r'\s*\('
+)
+ADJACENT_STRING_LITERAL_PATTERN: re.Pattern[str] = re.compile(
+    r'(?:"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\')\s+[rRbBfFuU]{0,2}["\']'
+)
 MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT = 2
 SPAWN_AGENT_WITH_JSDOC_PATTERN: re.Pattern[str] = re.compile(
     r"/\*\*(?P<jsdoc>(?:(?!\*/).)*?)\*/\s*"
