@@ -64,6 +64,7 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         "scripts/grant_project_claude_permissions.py",
         "scripts/logifix.ps1",
         "scripts/revoke_project_claude_permissions.py",
+        "scripts/stp_selection.py",
         "scripts/test_groq_bugteam.py",
         "tests/data/test_x.py",
         "tests/test_sweep_empty_dirs.py",
