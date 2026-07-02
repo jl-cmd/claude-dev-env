@@ -25,6 +25,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_ABSENT_TYPE_CHECKING_GATE_DOCSTRING_PHRASES,
     ALL_DATA_SCHEMA_CONSTANT_NAME_MARKERS,
     ALL_DATA_SCHEMA_DOCSTRING_ACKNOWLEDGEMENT_PHRASES,
+    ALL_DELEGATION_ENUMERATION_STOP_TOKENS,
     ALL_DOCSTRING_EXCLUSIVE_SCOPE_PHRASES,
     ALL_DOCSTRING_EXEMPT_DECORATOR_NAMES,
     ALL_DOCSTRING_FILE_REFERENCE_SUFFIXES,
@@ -56,6 +57,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     DOCSTRING_RUNON_SENTENCE_BOUNDARY_PATTERN,
     DOCSTRING_RUNON_SENTENCE_WORD_LIMIT,
     DOCSTRING_TRIVIAL_FUNCTION_BODY_LINE_LIMIT,
+    TOKEN_WORD_PATTERN,
     LENGTH_CONFIG_SUBDIRECTORY_NAME,
     LENGTH_GATE_PACKAGE_SCAN_FILE_LIMIT,
     MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES,
@@ -63,6 +65,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES,
     MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES,
     MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES,
+    MAX_DOCSTRING_DELEGATION_ENUMERATION_ISSUES,
     MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES,
     MAX_DOCSTRING_FIELD_RUNMODE_OUTCOME_ISSUES,
     MAX_DOCSTRING_FORMAT_ISSUES,
@@ -82,6 +85,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_MODULE_DOCSTRING_CHECK_ROSTER_ISSUES,
     MAX_MODULE_DOCSTRING_DATA_SCHEMA_SCOPE_ISSUES,
     MINIMUM_CONSTANT_FAMILY_MEMBERS_FOR_CARDINAL_CHECK,
+    MINIMUM_DELEGATION_ENUMERATION_ITEMS,
     MINIMUM_DOCSTRING_FAMILY_OVERLAP_FOR_CARDINAL_CHECK,
     MINIMUM_NAMED_LINEAR_STEPS_FOR_DISPATCH_CHECK,
     MINIMUM_NAMED_MARKS_FOR_PROSE_ENUMERATION,
@@ -90,6 +94,8 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_TOKENS_FOR_DISPATCH_CALLEE,
     MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
     MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT,
+    NEIGHBOR_SCAN_FILE_LIMIT,
+    POINTER_TO_DELEGATE_PATTERN,
     PYTHON_MODULE_FILE_SUFFIX,
     SINGLE_DICT_KEY_COUNT_FOR_PLURAL_CARDINALITY_DRIFT,
     TYPE_CHECKING_IDENTIFIER_MARKER,
@@ -2874,3 +2880,239 @@ def check_docstring_raises_unraisable_largezipfile(
         if len(issues) >= MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES:
             break
     return issues[:MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES]
+
+
+def _leading_summary_line(raw_docstring: str) -> str:
+    return raw_docstring.strip().split("\n", maxsplit=1)[0].strip()
+
+
+def _pointer_target_stem(raw_docstring: str) -> str:
+    marker_match = POINTER_TO_DELEGATE_PATTERN.search(raw_docstring)
+    return marker_match.group(1) if marker_match is not None else ""
+
+
+def _listed_entries(wrapper_summary: str) -> list[str]:
+    marker_match = POINTER_TO_DELEGATE_PATTERN.search(wrapper_summary)
+    if marker_match is None:
+        return []
+    listed_text = wrapper_summary[: marker_match.start()].strip().rstrip(";,").strip()
+    normalized_text = listed_text.replace(" and ", ", ")
+    return [
+        each_entry.strip()
+        for each_entry in normalized_text.split(",")
+        if each_entry.strip()
+    ]
+
+
+def _words_of_entry(raw_entry: str) -> list[str]:
+    return [
+        each_token.lower()
+        for each_token in TOKEN_WORD_PATTERN.findall(raw_entry)
+        if each_token.lower() not in ALL_DELEGATION_ENUMERATION_STOP_TOKENS
+    ]
+
+
+def _matches_any_word(delegate_summary: str, all_distinct_words: list[str]) -> bool:
+    lowered_summary = delegate_summary.lower()
+    return any(
+        re.search(
+            WORD_BOUNDARY_REGEX + re.escape(each_token) + WORD_BOUNDARY_REGEX,
+            lowered_summary,
+        )
+        is not None
+        for each_token in all_distinct_words
+    )
+
+
+def _absent_entries(wrapper_summary: str, delegate_summary: str) -> list[str]:
+    all_entries = _listed_entries(wrapper_summary)
+    if len(all_entries) < MINIMUM_DELEGATION_ENUMERATION_ITEMS:
+        return []
+    if "," not in delegate_summary:
+        return []
+    absent_entry_texts: list[str] = []
+    for each_entry in all_entries:
+        distinct_words = _words_of_entry(each_entry)
+        if not distinct_words:
+            continue
+        if _matches_any_word(delegate_summary, distinct_words):
+            continue
+        absent_entry_texts.append(each_entry)
+    return absent_entry_texts
+
+
+def _entries_by_function_name(parsed_tree: ast.Module) -> dict[str, tuple[int, str]]:
+    entries_by_name: dict[str, tuple[int, str]] = {}
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if each_node.name in entries_by_name:
+            continue
+        entries_by_name[each_node.name] = (
+            each_node.lineno,
+            ast.get_docstring(each_node) or "",
+        )
+    return entries_by_name
+
+
+def _source_text_or_empty(source_path: Path) -> str:
+    try:
+        return source_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
+def _parsed_module_or_none(source_text: str) -> ast.Module | None:
+    if not source_text:
+        return None
+    try:
+        return ast.parse(source_text)
+    except SyntaxError:
+        return None
+
+
+def _outbound_pointer_issues(parsed_tree: ast.Module, file_path: str) -> list[str]:
+    parent_directory = Path(file_path).parent
+    issues: list[str] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        wrapper_docstring = ast.get_docstring(each_node) or ""
+        target_stem = _pointer_target_stem(wrapper_docstring)
+        if not target_stem:
+            continue
+        delegate_path = parent_directory / (target_stem + PYTHON_MODULE_FILE_SUFFIX)
+        delegate_tree = _parsed_module_or_none(_source_text_or_empty(delegate_path))
+        if delegate_tree is None:
+            continue
+        delegate_entry = _entries_by_function_name(delegate_tree).get(each_node.name)
+        if delegate_entry is None:
+            continue
+        delegate_summary = _leading_summary_line(delegate_entry[1])
+        for each_entry in _absent_entries(
+            _leading_summary_line(wrapper_docstring), delegate_summary
+        ):
+            issues.append(
+                f"Line {each_node.lineno}: {each_node.name}() names "
+                f"'{each_entry}' in its summary, but the summary of the "
+                f"same-named function in {target_stem} omits it - align the "
+                "two summaries (Category O6 docstring-vs-implementation drift)"
+            )
+    return issues
+
+
+def _scannable_neighbor_paths(written_path: Path) -> list[Path]:
+    try:
+        all_neighbor_paths = sorted(
+            written_path.parent.glob("*" + PYTHON_MODULE_FILE_SUFFIX)
+        )
+    except OSError:
+        return []
+    return [
+        each_path
+        for each_path in all_neighbor_paths
+        if each_path.name != written_path.name
+        and not is_strict_test_file(str(each_path))
+    ]
+
+
+def _inbound_pointer_issues(
+    neighbor_tree: ast.Module,
+    neighbor_name: str,
+    delegate_stem: str,
+    all_entries_by_name: dict[str, tuple[int, str]],
+) -> list[str]:
+    issues: list[str] = []
+    for each_node in ast.walk(neighbor_tree):
+        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        wrapper_docstring = ast.get_docstring(each_node) or ""
+        if _pointer_target_stem(wrapper_docstring) != delegate_stem:
+            continue
+        delegate_entry = all_entries_by_name.get(each_node.name)
+        if delegate_entry is None:
+            continue
+        delegate_summary = _leading_summary_line(delegate_entry[1])
+        for each_entry in _absent_entries(
+            _leading_summary_line(wrapper_docstring), delegate_summary
+        ):
+            issues.append(
+                f"Line {delegate_entry[0]}: {each_node.name}() summary omits "
+                f"'{each_entry}', named by the pointing wrapper docstring in "
+                f"{neighbor_name} - reword that wrapper docstring in the same "
+                "change (Category O6 docstring-vs-implementation drift)"
+            )
+    return issues
+
+
+def _neighbor_scan_issues(parsed_tree: ast.Module, file_path: str) -> list[str]:
+    written_path = Path(file_path)
+    all_entries_by_name = _entries_by_function_name(parsed_tree)
+    if not all_entries_by_name:
+        return []
+    issues: list[str] = []
+    scanned_count = 0
+    for each_neighbor in _scannable_neighbor_paths(written_path):
+        scanned_count += 1
+        if scanned_count > NEIGHBOR_SCAN_FILE_LIMIT:
+            break
+        neighbor_source = _source_text_or_empty(each_neighbor)
+        if POINTER_TO_DELEGATE_PATTERN.search(neighbor_source) is None:
+            continue
+        neighbor_tree = _parsed_module_or_none(neighbor_source)
+        if neighbor_tree is None:
+            continue
+        issues.extend(
+            _inbound_pointer_issues(
+                neighbor_tree,
+                each_neighbor.name,
+                written_path.stem,
+                all_entries_by_name,
+            )
+        )
+    return issues
+
+
+def check_docstring_delegation_summary_enumeration_drift(
+    content: str, file_path: str
+) -> list[str]:
+    """Flag a delegating wrapper summary that its delegation target contradicts.
+
+    The drift this catches: a thin wrapper method whose docstring summary
+    enumerates the actions it stands for and points at the home of the real
+    body (``Apply App Info, Russia, review note, publication edits; full doc
+    on ``listing_edit_flow````), while the same-named function in that named
+    sibling file carries a summary enumeration that omits one of those
+    actions. An edit that moves one action out of the delegated body and
+    rewords only the delegated docstring leaves the wrapper claiming work the
+    body skips. The gate fires from both sides. On a wrapper save, it resolves
+    the named sibling file beside the saved one, finds the same-named
+    function, and compares the two summary enumerations. On a delegated-body
+    save, it scans neighboring .py files for a wrapper docstring pointing at
+    the saved stem and runs the same comparison, so the save that removes the
+    action hears about the stranded wrapper docstring. A listed action counts
+    as named when any of its distinctive words appears at a word boundary in
+    the delegated summary. The comparison binds when the wrapper enumerates
+    two or more actions and the delegated summary itself holds a comma, so a
+    plain one-purpose delegated summary never gets compared. This covers the
+    deterministic delegating-wrapper slice of Category O6
+    docstring-prose-vs-implementation drift.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions
+            and to resolve the delegated or wrapping file beside it.
+
+    Returns:
+        One issue per listed wrapper action the paired delegated summary
+        omits, capped at the module limit.
+    """
+    if is_strict_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues = _outbound_pointer_issues(parsed_tree, file_path)
+    issues.extend(_neighbor_scan_issues(parsed_tree, file_path))
+    return issues[:MAX_DOCSTRING_DELEGATION_ENUMERATION_ISSUES]
