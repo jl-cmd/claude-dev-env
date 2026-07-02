@@ -1,4 +1,4 @@
-"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, naive datetime construction, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, file-length advisory, and library-print checks."""
+"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, naive datetime construction, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, JS sibling return-object key drift, file-length advisory, and library-print checks."""
 
 import ast
 import json
@@ -38,11 +38,13 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_IMPORT_BLOCK_SORT_ISSUES,
     MAX_JS_RESUME_TASK_ENUMERATION_ISSUES,
     MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES,
+    MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES,
     MAX_LOGGING_FSTRING_ISSUES,
     MAX_LOGGING_PRINTF_TOKEN_ISSUES,
     MAX_NAIVE_DATETIME_ISSUES,
     MAX_WINDOWS_API_NONE_ISSUES,
     MINIMUM_RESUME_TASK_ENUMERATION_ITEMS,
+    MINIMUM_SIBLING_RETURN_OBJECT_KEYS,
     NAIVE_DATETIME_FROMTIMESTAMP_CONSTRUCTOR,
     NAIVE_DATETIME_TIMEZONE_KEYWORD,
     NAIVE_DATETIME_UTCFROMTIMESTAMP_CONSTRUCTOR,
@@ -50,27 +52,42 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     RUFF_PYPROJECT_CONFIG_FILENAME,
     RUFF_PYPROJECT_TOOL_TABLE_MARKER,
     RUFF_STDIN_ENCODING,
+    SIBLING_RETURN_OBJECT_EXACT_MISSING_KEY_COUNT,
+    SIBLING_RETURN_OBJECT_SINGLE_AGREED_MISSING_KEY_COUNT,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ADVISORY_LINE_THRESHOLD_HARD,
     ADVISORY_LINE_THRESHOLD_SOFT,
     ALL_CLI_FILE_PATH_MARKERS,
     ALL_IMPORT_STATEMENT_PREFIXES,
+    ALL_JAVASCRIPT_BARE_RETURN_TYPE_EXTRA_CHARACTERS,
+    ALL_JAVASCRIPT_BRACKET_CLOSERS,
+    ALL_JAVASCRIPT_BRACKET_OPENERS,
+    ALL_JAVASCRIPT_CONTROL_FLOW_BLOCK_KEYWORDS,
     ALL_JAVASCRIPT_EXTENSIONS,
+    ALL_JAVASCRIPT_IDENTIFIER_EXTRA_CHARACTERS,
+    ALL_JAVASCRIPT_PARENTHESIS_FREE_BLOCK_KEYWORDS,
     ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS,
     ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS,
+    ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS,
     ALL_JAVASCRIPT_STRING_DELIMITERS,
     ALL_PYTHON_EXTENSIONS,
+    ARROW_CONCISE_BODY_OBJECT_LITERAL_OPENING_PATTERN,
     ENUMERATION_LEADING_CONJUNCTION_PATTERN,
     ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN,
     ENUMERATION_TASK_ITEM_PATTERN,
     FUNCTION_WITH_JSDOC_PATTERN,
     HYPHENATED_TASK_ITEM_PATTERN,
+    JAVASCRIPT_ARROW_TOKEN_LENGTH,
     JAVASCRIPT_BLOCK_COMMENT_CLOSER,
     JAVASCRIPT_BLOCK_COMMENT_OPENER,
     JAVASCRIPT_LINE_COMMENT_OPENER,
+    JAVASCRIPT_MODULE_SCOPE_SENTINEL,
+    JAVASCRIPT_OBJECT_SPREAD_PREFIX,
     JAVASCRIPT_REGEX_DELIMITER,
     JAVASCRIPT_STRING_ESCAPE_CHARACTER,
+    JS_OBJECT_KEY_IDENTIFIER_PATTERN,
+    JS_OBJECT_METHOD_SHORTHAND_KEY_PATTERN,
     JSDOC_RETURNS_STRUCTURED_OBJECT_PROMISE_PATTERN,
     LOGGING_FSTRING_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
@@ -78,6 +95,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     NOT_INSIDE_TYPE_CHECKING_BLOCK,
     RESUME_TASK_ENUMERATION_PATTERN,
     RETURN_CALL_OPENING_PARENTHESIS_PATTERN,
+    RETURN_OBJECT_LITERAL_OPENING_PATTERN,
     SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN,
     SPAWN_AGENT_WITH_JSDOC_PATTERN,
     TASK_DISPATCH_NAME_PATTERN,
@@ -1225,6 +1243,504 @@ def check_js_returns_object_schemaless_branch(content: str, file_path: str) -> l
         if len(issues) >= MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES:
             break
     return issues[:MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES]
+
+
+def _matching_open_parenthesis_index(blanked_content: str, closing_index: int) -> int | None:
+    """Return the index of the ``(`` that matches the ``)`` at ``closing_index``."""
+    depth = 0
+    for each_position in range(closing_index, -1, -1):
+        character = blanked_content[each_position]
+        if character == ")":
+            depth += 1
+        elif character == "(":
+            depth -= 1
+            if depth == 0:
+                return each_position
+    return None
+
+
+def _is_return_type_opening_colon(blanked_content: str, colon_index: int) -> bool:
+    """Report whether the ``:`` at ``colon_index`` opens a return-type annotation.
+
+    A return-type colon follows the parameter-list ``)`` directly, ignoring any
+    whitespace between them. A ``:`` reached elsewhere in the type — the branch
+    separator of a TypeScript conditional type (``T extends U ? A : B``) — sits at
+    the same bracket depth as the annotation-opening colon but is not preceded by
+    ``)``, so it is not the boundary a caller stops the scan on.
+    """
+    preceding_index = colon_index - 1
+    while preceding_index >= 0 and blanked_content[preceding_index].isspace():
+        preceding_index -= 1
+    return preceding_index >= 0 and blanked_content[preceding_index] == ")"
+
+
+def _return_type_annotation_colon_index(blanked_content: str, terminator_index: int) -> int | None:
+    """Return the index of the ``:`` that opens the return-type annotation.
+
+    Scanning backward from the annotation's terminating bracket at
+    ``terminator_index``, nested ``{}``, ``[]``, ``<>``, and ``()`` are balanced so a
+    ``:`` inside the type never counts. An arrow ``=>`` inside a function-type
+    annotation (``(x: number) => void``) is depth-neutral: both characters are
+    skipped so the arrow's ``>`` never counts as a generic closer. A ``:`` reached
+    at annotation depth zero is the return-type colon only when it is preceded
+    (ignoring whitespace) by the parameter-list ``)`` — a depth-zero ``:`` that
+    fails that check is a conditional type's branch separator, so the scan keeps
+    going past it rather than stopping there. The result is None when a statement
+    boundary (``;`` at depth zero, or an opener that drops the depth below zero) or
+    the source start is reached first, so a plain block brace is not read as a
+    function body.
+    """
+    depth = 0
+    each_index = terminator_index
+    while each_index >= 0:
+        character = blanked_content[each_index]
+        if character == ">" and each_index > 0 and blanked_content[each_index - 1] == "=":
+            each_index -= JAVASCRIPT_ARROW_TOKEN_LENGTH
+            continue
+        if character in ALL_JAVASCRIPT_BRACKET_CLOSERS or character == ">":
+            depth += 1
+        elif character in ALL_JAVASCRIPT_BRACKET_OPENERS or character == "<":
+            depth -= 1
+            if depth < 0:
+                return None
+        elif depth == 0:
+            if character == ":" and _is_return_type_opening_colon(blanked_content, each_index):
+                return each_index
+            if character == ";":
+                return None
+        each_index -= 1
+    return None
+
+
+def _is_bare_return_type_character(character: str) -> bool:
+    """Report whether ``character`` can appear in a bracket-free return-type annotation.
+
+    A bare return type — a named type (``ParseResult``), a primitive (``void``), a
+    qualified name (``Foo.Bar``), or a union of them (``A | B``) — is built from
+    letters, digits, ``_``, ``$``, ``.``, ``|``, ``&``, and the whitespace between
+    them.
+    """
+    return (
+        character.isalnum()
+        or character.isspace()
+        or character in ALL_JAVASCRIPT_BARE_RETURN_TYPE_EXTRA_CHARACTERS
+    )
+
+
+def _bare_return_type_annotation_colon_index(
+    blanked_content: str, identifier_end_index: int
+) -> int | None:
+    """Return the ``:`` index that opens a bracket-free return-type annotation.
+
+    A bare return type ends in an identifier character rather than a bracket, so the
+    scan walks backward from that last character at ``identifier_end_index`` across the
+    type's characters to the return-type ``:``. A closing bracket reached mid-walk
+    marks a bracketed segment inside the annotation — a generic union member
+    (``Promise<Foo> | Bar``) or a function type (``(x: number) => void``) — so the
+    scan hands off to the bracket-balancing walk from that bracket. A ``:`` reached
+    mid-walk is the return-type colon only when it is preceded (ignoring
+    whitespace) by the parameter-list ``)``; a ``:`` that fails that check is a
+    conditional type's branch separator (``T extends U ? A : B``), so the walk
+    treats it as an ordinary bare character and keeps going past it. The result is
+    None when any other non-bare character is reached first, so a plain block brace
+    is not read as a function body.
+    """
+    for each_index in range(identifier_end_index, -1, -1):
+        character = blanked_content[each_index]
+        if character == ":":
+            if _is_return_type_opening_colon(blanked_content, each_index):
+                return each_index
+            continue
+        if character in ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS:
+            return _return_type_annotation_colon_index(blanked_content, each_index)
+        if not _is_bare_return_type_character(character):
+            return None
+    return None
+
+
+def _return_type_annotation_colon_index_for_shape(
+    blanked_content: str, preceding_index: int
+) -> int | None:
+    """Return the return-type ``:`` index for the annotation ending at ``preceding_index``.
+
+    A return type ends either in a bracket (``}``, ``>``, ``]`` — an inline object
+    literal, a generic, or a tuple type), which balances nested brackets back to the
+    colon, or in an identifier character (a named type ``ParseResult``, a primitive
+    ``void``, a qualified or union type), which walks back across type characters to
+    the colon. The result is None when neither shape reaches a return-type colon.
+    """
+    if blanked_content[preceding_index] in ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS:
+        return _return_type_annotation_colon_index(blanked_content, preceding_index)
+    if _is_bare_return_type_character(blanked_content[preceding_index]):
+        return _bare_return_type_annotation_colon_index(blanked_content, preceding_index)
+    return None
+
+
+def _parameter_list_close_index(blanked_content: str, preceding_index: int) -> int | None:
+    """Return the index of the parameter-list ``)`` a function body brace follows.
+
+    A plain function body brace follows the ``)`` directly. A TypeScript body brace
+    follows a ``: <return type>`` annotation, so the scan walks back across the
+    annotation — a bracket-terminated type (``}``, ``>``, ``]``) or a bare
+    identifier, primitive, qualified, or union type — to the return-type ``:`` and
+    reports the ``)`` before it. The result is None when the brace opens a plain
+    block rather than a function body.
+    """
+    if blanked_content[preceding_index] == ")":
+        return preceding_index
+    colon_index = _return_type_annotation_colon_index_for_shape(blanked_content, preceding_index)
+    if colon_index is None:
+        return None
+    parenthesis_index = colon_index - 1
+    while parenthesis_index >= 0 and blanked_content[parenthesis_index].isspace():
+        parenthesis_index -= 1
+    if parenthesis_index < 0 or blanked_content[parenthesis_index] != ")":
+        return None
+    return parenthesis_index
+
+
+def _bare_word_ending_at(blanked_content: str, end_index: int) -> str:
+    """Return the identifier word whose last character sits at ``end_index``."""
+    start_index = end_index
+    while start_index > 0 and (
+        blanked_content[start_index - 1].isalnum()
+        or blanked_content[start_index - 1] in ALL_JAVASCRIPT_IDENTIFIER_EXTRA_CHARACTERS
+    ):
+        start_index -= 1
+    return blanked_content[start_index : end_index + 1]
+
+
+def _is_function_scope_opener(blanked_content: str, brace_index: int) -> bool:
+    """Report whether the ``{`` at ``brace_index`` opens a function or arrow body.
+
+    An arrow body follows ``=>``. A function or method body follows the parameter
+    list ``)`` — directly, or across a TypeScript ``: <return type>`` annotation of
+    any shape (a bracket-terminated object, generic, or tuple type, or a bare
+    identifier, primitive, qualified, or union type) — whose matching ``(`` is not
+    preceded by a control-flow keyword. A control block (``if``, ``for``,
+    ``for await``, ``while``, ``switch``, ``catch``, ``with``) opens a plain block,
+    not a scope, so a return inside it belongs to the enclosing function; the
+    ``await`` token of a ``for await`` head is the word the lookback reads, so it
+    sits in the keyword set. A parenthesis-free block keyword (``else``, ``do``,
+    ``try``, ``finally``) opens a plain block the same way, without a parameter
+    list to look back across.
+    """
+    preceding_index = brace_index - 1
+    while preceding_index >= 0 and blanked_content[preceding_index].isspace():
+        preceding_index -= 1
+    if preceding_index < 1:
+        return False
+    if blanked_content[preceding_index] == ">" and blanked_content[preceding_index - 1] == "=":
+        return True
+    if blanked_content[preceding_index].isalnum():
+        preceding_word = _bare_word_ending_at(blanked_content, preceding_index)
+        if preceding_word in ALL_JAVASCRIPT_PARENTHESIS_FREE_BLOCK_KEYWORDS:
+            return False
+    parameter_close_index = _parameter_list_close_index(blanked_content, preceding_index)
+    if parameter_close_index is None:
+        return False
+    open_parenthesis_index = _matching_open_parenthesis_index(blanked_content, parameter_close_index)
+    if open_parenthesis_index is None:
+        return False
+    keyword_end_index = open_parenthesis_index - 1
+    while keyword_end_index >= 0 and blanked_content[keyword_end_index].isspace():
+        keyword_end_index -= 1
+    preceding_keyword = _bare_word_ending_at(blanked_content, keyword_end_index)
+    return preceding_keyword not in ALL_JAVASCRIPT_CONTROL_FLOW_BLOCK_KEYWORDS
+
+
+def _split_top_level_object_entry_spans(inner_content: str) -> list[tuple[int, int]]:
+    """Split object-literal inner text into ``(start, end)`` spans at depth-zero commas.
+
+    Spans index into ``inner_content`` so a caller reads each entry's key from the
+    blanked source and its value from the original source at the same offsets.
+    """
+    spans: list[tuple[int, int]] = []
+    depth = 0
+    entry_start_index = 0
+    for each_index, each_character in enumerate(inner_content):
+        if each_character in ALL_JAVASCRIPT_BRACKET_OPENERS:
+            depth += 1
+        elif each_character in ALL_JAVASCRIPT_BRACKET_CLOSERS:
+            depth -= 1
+        elif each_character == "," and depth == 0:
+            spans.append((entry_start_index, each_index))
+            entry_start_index = each_index + 1
+    spans.append((entry_start_index, len(inner_content)))
+    return spans
+
+
+def _top_level_colon_index(entry_content: str) -> int | None:
+    """Return the index of the first bracket-depth-zero ``:`` in the entry, or None."""
+    depth = 0
+    for each_index, each_character in enumerate(entry_content):
+        if each_character in ALL_JAVASCRIPT_BRACKET_OPENERS:
+            depth += 1
+        elif each_character in ALL_JAVASCRIPT_BRACKET_CLOSERS:
+            depth -= 1
+        elif each_character == ":" and depth == 0:
+            return each_index
+    return None
+
+
+def _string_literal_value_or_none(value_text: str) -> str | None:
+    """Return the string literal's content when the value is one, else None.
+
+    A discriminated-union tag is a string literal (``'created'``). Only the
+    leading literal is read — the opening quote is matched to its own closing
+    quote (backslash escapes honored) — so trailing non-code such as a comment
+    (``'created' /* legacy */``) never leaks into the content, and ``'created'``
+    and ``"created"`` carry the same content and compare equal. A value that is
+    a boolean, number, variable, call, or other expression is not a tag, so it
+    maps to None and never suppresses a drift finding for its key. An unterminated
+    literal — no closing quote reached — is malformed source, not a real tag, so it
+    also maps to None rather than the raw truncated text.
+    """
+    if not value_text or value_text[0] not in ALL_JAVASCRIPT_STRING_DELIMITERS:
+        return None
+    opening_quote = value_text[0]
+    for each_index in range(1, len(value_text)):
+        if value_text[each_index] == opening_quote and not _is_escaped(value_text, each_index):
+            return value_text[1:each_index]
+    return None
+
+
+def _matching_close_brace_index(blanked_content: str, opening_index: int) -> int | None:
+    """Return the index of the ``}`` that matches the ``{`` at ``opening_index``."""
+    depth = 0
+    for each_position in range(opening_index, len(blanked_content)):
+        character = blanked_content[each_position]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return each_position
+    return None
+
+
+def _top_level_object_key_values(
+    blanked_content: str, content: str, brace_index: int
+) -> dict[str, str | None]:
+    """Return each top-level key mapped to its string-literal value, or None.
+
+    The literal begins at the ``{`` at ``brace_index``. Entry boundaries and keys
+    come from the already-blanked ``blanked_content``, so a brace, comma, or colon
+    inside a nested object, array, call, or string never counts toward a key. Each
+    value is read from the original ``content`` at the same offsets, so a string
+    discriminant such as ``action: 'created'`` keeps its quote-stripped text; a
+    shorthand key, a method-shorthand key, and a non-string value map to None. A
+    spread entry, a computed key, and a quoted string-literal key are skipped.
+    """
+    closing_index = _matching_close_brace_index(blanked_content, brace_index)
+    if closing_index is None:
+        return {}
+    blanked_inner = blanked_content[brace_index + 1 : closing_index]
+    inner_start_index = brace_index + 1
+    key_values: dict[str, str | None] = {}
+    for each_entry_start_index, each_entry_end_index in _split_top_level_object_entry_spans(
+        blanked_inner
+    ):
+        blanked_entry = blanked_inner[each_entry_start_index:each_entry_end_index]
+        stripped_entry = blanked_entry.strip()
+        if not stripped_entry or stripped_entry.startswith(JAVASCRIPT_OBJECT_SPREAD_PREFIX):
+            continue
+        colon_index = _top_level_colon_index(blanked_entry)
+        if colon_index is None:
+            method_shorthand_match = JS_OBJECT_METHOD_SHORTHAND_KEY_PATTERN.match(
+                stripped_entry
+            )
+            if method_shorthand_match is not None:
+                key_values[method_shorthand_match.group(1)] = None
+                continue
+            if not JS_OBJECT_KEY_IDENTIFIER_PATTERN.fullmatch(stripped_entry):
+                continue
+            key_values[stripped_entry] = None
+            continue
+        candidate_key = blanked_entry[:colon_index].strip()
+        if not JS_OBJECT_KEY_IDENTIFIER_PATTERN.fullmatch(candidate_key):
+            continue
+        value_start_index = inner_start_index + each_entry_start_index + colon_index + 1
+        value_end_index = inner_start_index + each_entry_end_index
+        original_value = content[value_start_index:value_end_index].strip()
+        key_values[candidate_key] = _string_literal_value_or_none(original_value)
+    return key_values
+
+
+def _return_object_literal_records(content: str) -> list[tuple[int, dict[str, str | None], int]]:
+    """Return one record per returned ``{ ... }`` object literal in the JS source.
+
+    A record comes from an explicit ``return { ... }`` or from a concise-body
+    arrow's implicit return, ``() => ({ ... })``. Each record pairs a scope id,
+    the literal's top-level key-to-string-literal-value map, and its 1-based line
+    number. An explicit ``return { ... }`` carries the nearest enclosing function
+    or arrow body's scope id, so two such returns share a scope id when that
+    enclosing body is the same; a module-top-level return carries the module
+    sentinel. A control-flow block does not open a scope, so an early return
+    inside an ``if`` block shares its function's scope. A concise-body arrow's
+    implicit return carries its own object literal's brace index as a scope id
+    instead, since ``=> ({`` never opens a function-scope brace: the arrow's
+    return would otherwise be pooled with unrelated sibling returns in whatever
+    scope encloses the arrow, and a concise-body arrow has exactly one return, so
+    isolating it into its own scope loses no real drift detection.
+    """
+    blanked_content = _blank_non_code_regions(content)
+    explicit_return_brace_indices = {
+        each_match.end() - 1
+        for each_match in RETURN_OBJECT_LITERAL_OPENING_PATTERN.finditer(blanked_content)
+    }
+    arrow_concise_body_brace_indices = {
+        each_match.end() - 1
+        for each_match in ARROW_CONCISE_BODY_OBJECT_LITERAL_OPENING_PATTERN.finditer(
+            blanked_content
+        )
+    }
+    return_brace_indices = explicit_return_brace_indices | arrow_concise_body_brace_indices
+    records: list[tuple[int, dict[str, str | None], int]] = []
+    scope_restore_stack: list[int] = []
+    current_scope_id = JAVASCRIPT_MODULE_SCOPE_SENTINEL
+    current_line_number = 1
+    for each_index, each_character in enumerate(blanked_content):
+        if each_character == "\n":
+            current_line_number += 1
+        elif each_character == "{":
+            if each_index in return_brace_indices:
+                object_key_values = _top_level_object_key_values(
+                    blanked_content, content, each_index
+                )
+                record_scope_id = (
+                    each_index
+                    if each_index in arrow_concise_body_brace_indices
+                    else current_scope_id
+                )
+                records.append((record_scope_id, object_key_values, current_line_number))
+            scope_restore_stack.append(current_scope_id)
+            if _is_function_scope_opener(blanked_content, each_index):
+                current_scope_id = each_index
+        elif each_character == "}":
+            if scope_restore_stack:
+                current_scope_id = scope_restore_stack.pop()
+    return records
+
+
+def _shares_differing_string_discriminant(
+    all_candidate_key_values: dict[str, str | None],
+    all_sibling_key_values: dict[str, str | None],
+) -> bool:
+    """Report whether two returns share a key carrying differing string literals.
+
+    A shared key whose value is a string literal in both returns but differs between
+    them is a discriminated-union tag (``action: 'created'`` versus ``action:
+    'skipped-existing'``): the two returns are distinct variants, not one record with
+    a drifted field. A boolean or numeric status flag maps to None, so only string
+    literals count.
+    """
+    for each_shared_key in all_candidate_key_values.keys() & all_sibling_key_values.keys():
+        candidate_value = all_candidate_key_values[each_shared_key]
+        sibling_value = all_sibling_key_values[each_shared_key]
+        if candidate_value is None or sibling_value is None:
+            continue
+        if candidate_value != sibling_value:
+            return True
+    return False
+
+
+def _single_missing_sibling_key(
+    all_candidate_key_values: dict[str, str | None],
+    all_scope_key_value_maps: list[dict[str, str | None]],
+) -> str | None:
+    """Return the lone key every sibling superset adds to the candidate return.
+
+    A sibling qualifies when the candidate's key set is a proper subset of it,
+    exactly one key separates them, and the two returns share no differing
+    string-literal discriminant. A discriminated-union variant whose tag differs
+    from its sibling is a distinct exit shape, not a drifted record, so it is
+    skipped. When every
+    qualifying sibling adds the same single key, that key is returned so the caller
+    names the omitted field. When qualifying siblings disagree on which key the
+    candidate omits, the scope holds distinct exit shapes rather than one drifted
+    record, so None is returned, as it is when no sibling qualifies.
+    """
+    candidate_keys = all_candidate_key_values.keys()
+    all_missing_keys: set[str] = set()
+    for each_sibling_key_values in all_scope_key_value_maps:
+        sibling_keys = each_sibling_key_values.keys()
+        if not candidate_keys < sibling_keys:
+            continue
+        if _shares_differing_string_discriminant(all_candidate_key_values, each_sibling_key_values):
+            continue
+        extra_keys = sibling_keys - candidate_keys
+        if len(extra_keys) == SIBLING_RETURN_OBJECT_EXACT_MISSING_KEY_COUNT:
+            all_missing_keys.update(extra_keys)
+    if len(all_missing_keys) == SIBLING_RETURN_OBJECT_SINGLE_AGREED_MISSING_KEY_COUNT:
+        return next(iter(all_missing_keys))
+    return None
+
+
+def check_js_sibling_return_object_key_drift(content: str, file_path: str) -> list[str]:
+    """Flag a return object literal that omits one field a sibling return carries.
+
+    Picture two return paths of the same function or workflow body. Both yield the
+    same record, so both list the same fields — except one early return drops a
+    single field the other carries. A caller that reads that field off the result
+    gets undefined on the short path, while the documented contract and the sibling
+    return both promise it.
+
+    Within one function or module scope, the check pairs each ``return { ... }``
+    object literal, and each concise-body arrow's implicit ``() => ({ ... })``
+    return, against its siblings. A literal whose key set is a proper subset
+    of a sibling's, missing exactly one key and carrying at least the minimum key
+    count, is flagged for that one missing key. A control-flow block does not open a
+    scope, so an early return inside an ``if`` block is compared with the tail
+    return of the same function. Three shapes pass: returns differing by two or more
+    keys are a distinct exit shape, a discriminated-union variant that shares a
+    key carrying a differing string-literal tag with its sibling (``action:
+    'created'`` versus ``action: 'skipped-existing'``) is a distinct variant, not a
+    drifted record, and a candidate whose qualifying sibling supersets disagree on
+    which single key it omits sits among distinct exit shapes rather than one
+    drifted record. A TypeScript function whose return type is an inline object,
+    generic, or tuple annotation opens its own scope, so its returns are not
+    compared with an unrelated function's. This is the JS/.mjs slice of Category O
+    doc-vs-implementation drift; the Python enforcer's AST docstring checks never
+    inspect JavaScript source.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per return literal that omits a single sibling field, capped at
+        the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    if get_file_extension(file_path) not in ALL_JAVASCRIPT_EXTENSIONS:
+        return []
+    records = _return_object_literal_records(content)
+    records_by_scope: dict[int, list[tuple[dict[str, str | None], int]]] = {}
+    for each_scope_id, each_key_values, each_line_number in records:
+        records_by_scope.setdefault(each_scope_id, []).append(
+            (each_key_values, each_line_number)
+        )
+    issues: list[str] = []
+    for each_scope_records in records_by_scope.values():
+        all_scope_key_value_maps = [each_record[0] for each_record in each_scope_records]
+        for each_key_values, each_line_number in each_scope_records:
+            if len(each_key_values) < MINIMUM_SIBLING_RETURN_OBJECT_KEYS:
+                continue
+            missing_key = _single_missing_sibling_key(each_key_values, all_scope_key_value_maps)
+            if missing_key is None:
+                continue
+            issues.append(
+                f"Line {each_line_number}: this return object literal omits '{missing_key}' "
+                "that a sibling return in the same scope carries — every return path that "
+                f"yields this record carries the same keys, so a caller reading '{missing_key}' "
+                f"gets undefined on this path; add '{missing_key}' "
+                "(Category O doc-vs-implementation return-shape drift)"
+            )
+            if len(issues) >= MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES:
+                return issues
+    return issues
 
 
 def _is_cli_entry_point(file_path: str) -> bool:
