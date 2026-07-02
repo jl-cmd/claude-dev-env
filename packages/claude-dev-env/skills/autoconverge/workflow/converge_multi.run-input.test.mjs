@@ -21,6 +21,19 @@ const productionModule = new Function(
 )();
 const { normalizeMultiInput, classifyMultiInput, childRunInput } = productionModule;
 
+const AsyncFunction = async function () {}.constructor;
+const workflowBodySource = multiSource.slice(multiSource.indexOf('function normalizeMultiInput('));
+const runMultiWorkflowBody = new AsyncFunction(
+  'args',
+  'phase',
+  'log',
+  'parallel',
+  'workflow',
+  workflowBodySource,
+);
+
+function ignoreCall() {}
+
 const SCRIPT_PATH = '/abs/skills/autoconverge/workflow/converge.mjs';
 
 function validEntry(prNumber) {
@@ -123,4 +136,17 @@ test('childRunInput forwards bugbotDisabled true when the entry opts out', () =>
 
 test('childRunInput defaults bugbotDisabled to false when the entry omits it', () => {
   assert.equal(childRunInput(validEntry(398)).bugbotDisabled, false);
+});
+
+test('the malformed-input blocker return carries an empty allDeferredPrs list', async () => {
+  const blockerOutcome = await runMultiWorkflowBody(
+    'not json at all',
+    ignoreCall,
+    ignoreCall,
+    ignoreCall,
+    ignoreCall,
+  );
+  assert.notEqual(blockerOutcome.blocker, null);
+  assert.equal(blockerOutcome.prCount, 0);
+  assert.deepEqual(blockerOutcome.allDeferredPrs, []);
 });
