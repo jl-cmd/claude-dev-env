@@ -3017,12 +3017,16 @@ def _scannable_neighbor_paths(written_path: Path) -> list[Path]:
         )
     except OSError:
         return []
-    return [
-        each_path
-        for each_path in all_neighbor_paths
-        if each_path.name != written_path.name
-        and not is_strict_test_file(str(each_path))
-    ]
+    scannable_paths: list[Path] = []
+    for each_path in all_neighbor_paths:
+        if each_path.name == written_path.name:
+            continue
+        if is_strict_test_file(str(each_path)):
+            continue
+        scannable_paths.append(each_path)
+        if len(scannable_paths) >= NEIGHBOR_SCAN_FILE_LIMIT:
+            break
+    return scannable_paths
 
 
 def _inbound_pointer_issues(
@@ -3059,11 +3063,7 @@ def _neighbor_scan_issues(parsed_tree: ast.Module, file_path: str) -> list[str]:
     if not all_entries_by_name:
         return []
     issues: list[str] = []
-    scanned_count = 0
     for each_neighbor in _scannable_neighbor_paths(written_path):
-        scanned_count += 1
-        if scanned_count > NEIGHBOR_SCAN_FILE_LIMIT:
-            break
         neighbor_source = _source_text_or_empty(each_neighbor)
         if POINTER_TO_DELEGATE_PATTERN.search(neighbor_source) is None:
             continue

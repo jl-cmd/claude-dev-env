@@ -11,6 +11,7 @@ wrapper docstring pointing at it.
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -246,4 +247,46 @@ def test_should_flag_listed_action_when_the_conjunction_is_capitalized_with_unev
     assert any("App Info" in each for each in issues), (
         f"A capitalized 'And' with uneven whitespace still splits into its own "
         f"listed entry, got: {issues!r}"
+    )
+
+
+def _write_filler_neighbor_modules(directory: Path, filler_count: int) -> None:
+    for each_index in range(filler_count):
+        filler_path = directory / f"filler_module_{each_index:03d}.py"
+        filler_path.write_text("PLACEHOLDER_VALUE = 1\n", encoding="utf-8")
+
+
+def test_should_stop_scanning_neighbors_past_the_configured_limit(
+    tmp_path: Path,
+) -> None:
+    neighbor_scan_limit = sys.modules["code_rules_docstrings"].NEIGHBOR_SCAN_FILE_LIMIT
+    _write_filler_neighbor_modules(tmp_path, filler_count=neighbor_scan_limit + 5)
+    stranded_wrapper_path = tmp_path / "zzz_stranded_processor.py"
+    stranded_wrapper_path.write_text(_drifted_processor_source(), encoding="utf-8")
+    created_path = str(tmp_path / (TARGET_FLOW_STEM + ".py"))
+    issues = check_docstring_delegation_summary_enumeration_drift(
+        _target_flow_source(), created_path
+    )
+    assert issues == [], (
+        "The alphabetically-last wrapper sits past the neighbor scan limit, so "
+        f"the scan must stop before reaching it, got: {issues!r}"
+    )
+
+
+def test_should_still_flag_a_stranded_wrapper_within_the_scan_limit(
+    tmp_path: Path,
+) -> None:
+    neighbor_scan_limit = sys.modules["code_rules_docstrings"].NEIGHBOR_SCAN_FILE_LIMIT
+    stranded_wrapper_path = tmp_path / "aaa_stranded_processor.py"
+    stranded_wrapper_path.write_text(_drifted_processor_source(), encoding="utf-8")
+    _write_filler_neighbor_modules(tmp_path, filler_count=neighbor_scan_limit + 5)
+    created_path = str(tmp_path / (TARGET_FLOW_STEM + ".py"))
+    issues = check_docstring_delegation_summary_enumeration_drift(
+        _target_flow_source(), created_path
+    )
+    assert any(
+        "App Info" in each and "aaa_stranded_processor.py" in each for each in issues
+    ), (
+        "The alphabetically-first wrapper sits within the neighbor scan limit "
+        f"and stays flagged even with extra filler neighbors, got: {issues!r}"
     )
