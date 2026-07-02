@@ -797,3 +797,36 @@ test('no agent prompt instructs a foreground sleep as the poll delay', () => {
     'expected no agent prompt to instruct a foreground PowerShell Start-Sleep',
   );
 });
+
+test('the wait guidance sizes the Monitor timeout_ms above the 300s default', () => {
+  const text = preambleText();
+  assert.match(text, /timeout_ms/, 'names the timeout_ms parameter the wait rule tells the agent to set');
+  assert.match(text, /persistent/, 'offers persistent as an alternative to a sized timeout_ms');
+  assert.match(text, /300000|300 second/, 'names the 300000 default that truncates a long wait');
+  assert.match(
+    text,
+    /interval[\s\S]{0,60}attempt|interval-times-attempts/i,
+    'sizes timeout_ms to the interval-times-attempts span the step names',
+  );
+});
+
+test('the Monitor ceiling the guidance names covers the longest interval-times-attempts wait the steps prescribe', () => {
+  const cap = /(\d{7})\s*(?:ms|millisecond)/i.exec(preambleText());
+  assert.ok(cap !== null, 'the guidance names a seven-digit Monitor ceiling in milliseconds');
+  const ceiling = Number(cap[1]);
+
+  const copilot = lensPromptBody('runCopilotGate');
+  const bugbot = lensPromptBody('runBugbotLens');
+  const apart = Number(/(\d+)\s*seconds apart/.exec(copilot)[1]);
+  const polls = Number(/copilotMaxPolls:\s*(\d+)/.exec(convergeSource)[1]);
+  const seconds = Number(/every\s*(\d+)\s*seconds/.exec(bugbot)[1]);
+  const iterations = Number(/up to\s*(\d+)\s*iterations/.exec(bugbot)[1]);
+  const spans = [apart * polls * 1000, seconds * iterations * 1000];
+
+  for (const span of spans) {
+    assert.ok(
+      span <= ceiling,
+      `a ${span}ms wait span exceeds the ${ceiling}ms Monitor ceiling the guidance names`,
+    );
+  }
+});
