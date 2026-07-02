@@ -161,7 +161,8 @@ def main(all_arguments: list[str]) -> int:
         all_arguments: Argument list excluding the program name.
 
     Returns:
-        0 when the named reviewer is available to spawn, 1 when it is down.
+        0 when the named reviewer is available to spawn, the documented
+        reviewer-down exit code when it is down.
     """
     arguments = _parse_arguments(all_arguments)
     availability = evaluate_reviewer_availability(
