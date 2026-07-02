@@ -127,6 +127,7 @@ from code_rules_naming_collection import (  # noqa: E402
     check_collection_prefix,
     check_loop_variable_naming,
     check_polarity_name_contradiction,
+    check_referenced_underscore_loop_variable,
     check_stuttering_collection_prefix,
 )
 from code_rules_optional_params import (  # noqa: E402
@@ -154,6 +155,7 @@ from code_rules_shared import (  # noqa: E402
 from code_rules_string_magic import (  # noqa: E402
     check_inline_literal_collections,
     check_inline_tuple_string_magic,
+    check_join_separator_string_magic,
     check_string_literal_magic,
     check_whitespace_indentation_magic,
 )
@@ -477,9 +479,11 @@ def validate_content(
             )
         )
         all_issues.extend(check_loop_variable_naming(content, file_path))
+        all_issues.extend(check_referenced_underscore_loop_variable(content, file_path))
         all_issues.extend(check_polarity_name_contradiction(content, file_path))
         all_issues.extend(check_inline_literal_collections(content, file_path))
         all_issues.extend(check_inline_tuple_string_magic(content, file_path))
+        all_issues.extend(check_join_separator_string_magic(content, file_path))
         all_issues.extend(check_string_literal_magic(content, file_path))
         all_issues.extend(check_whitespace_indentation_magic(content, file_path))
         all_issues.extend(check_orphan_css_classes(effective_content, file_path))

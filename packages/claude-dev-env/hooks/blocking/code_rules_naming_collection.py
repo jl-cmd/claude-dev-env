@@ -271,6 +271,64 @@ def check_loop_variable_naming(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _loop_body_references_name(loop_node: ast.For | ast.AsyncFor, target_name: str) -> bool:
+    for each_statement in [*loop_node.body, *loop_node.orelse]:
+        for each_walked_node in ast.walk(each_statement):
+            if not isinstance(each_walked_node, ast.Name):
+                continue
+            if each_walked_node.id != target_name:
+                continue
+            if isinstance(each_walked_node.ctx, ast.Load):
+                return True
+    return False
+
+
+def check_referenced_underscore_loop_variable(content: str, file_path: str) -> list[str]:
+    """Flag a leading-underscore loop variable the loop body reads.
+
+    A leading underscore marks a name as a throwaway the reader can ignore, so
+    ``for _foreign_module_name in names:`` promises the body never touches it.
+    When the body then reads ``del sys.modules[_foreign_module_name]``, the
+    marker lies: the value carries meaning and earns a real name. This check
+    fires in test files too — a conftest that reuses an underscore-marked loop
+    variable is the exact shape this closes — because the misleading marker is a
+    naming smell everywhere, not a convention the test-file exemption waives.
+    Workflow-registry and migration files are exempt. A bare ``_`` target and a
+    genuinely unread ``_unused`` throwaway both pass.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per leading-underscore loop variable that its loop body reads.
+    """
+    if is_workflow_registry_file(file_path) or is_migration_file(file_path):
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, (ast.For, ast.AsyncFor)):
+            continue
+        for each_name_node in _collect_target_names(each_node.target):
+            target_name = each_name_node.id
+            if not target_name.startswith("_"):
+                continue
+            if target_name.strip("_") == "":
+                continue
+            if not _loop_body_references_name(each_node, target_name):
+                continue
+            issues.append(
+                f"Line {each_name_node.lineno}: loop variable {target_name!r} is read"
+                f" in its body - drop the leading underscore throwaway marker and"
+                f" give it a real name (CODE_RULES §5)"
+            )
+    return issues
+
+
 def _name_carries_token(name: str, token: str) -> bool:
     """True when name carries token as a whole underscore-delimited word."""
     return re.search(POLARITY_TOKEN_BOUNDARY_PATTERN % re.escape(token), name) is not None
