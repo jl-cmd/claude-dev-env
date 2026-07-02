@@ -1447,16 +1447,28 @@ def _top_level_colon_index(entry_content: str) -> int | None:
 def _string_literal_value_or_none(value_text: str) -> str | None:
     """Return the string literal's content when the value is one, else None.
 
-    A discriminated-union tag is a string literal (``'created'``). The matching
-    quote delimiters are stripped so ``'created'`` and ``"created"`` carry the same
-    content and compare equal. A value that is a boolean, number, variable, call, or
-    other expression is not a tag, so it maps to None and never suppresses a drift
-    finding for its key.
+    A discriminated-union tag is a string literal (``'created'``). Only the
+    leading literal is read — the opening quote is matched to its own closing
+    quote (backslash escapes honored) — so trailing non-code such as a comment
+    (``'created' /* legacy */``) never leaks into the content, and ``'created'``
+    and ``"created"`` carry the same content and compare equal. A value that is
+    a boolean, number, variable, call, or other expression is not a tag, so it
+    maps to None and never suppresses a drift finding for its key.
     """
     if not value_text or value_text[0] not in ALL_JAVASCRIPT_STRING_DELIMITERS:
         return None
-    if len(value_text) > 1 and value_text[-1] == value_text[0]:
-        return value_text[1:-1]
+    opening_quote = value_text[0]
+    is_escaped = False
+    for each_index in range(1, len(value_text)):
+        character = value_text[each_index]
+        if is_escaped:
+            is_escaped = False
+            continue
+        if character == "\\":
+            is_escaped = True
+            continue
+        if character == opening_quote:
+            return value_text[1:each_index]
     return value_text
 
 

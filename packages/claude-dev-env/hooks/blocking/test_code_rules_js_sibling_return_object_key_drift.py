@@ -277,6 +277,17 @@ def _mixed_quote_differing_discriminant_source() -> str:
     )
 
 
+def _trailing_comment_shared_discriminant_drift_source() -> str:
+    return (
+        "function classify(state) {\n"
+        "  if (state == null) {\n"
+        "    return { action: 'created' /* legacy tag */, rounds: 0, blocker: 'bad' }\n"
+        "  }\n"
+        "  return { action: 'created', rounds: 1, blocker: null, deferred: [] }\n"
+        "}\n"
+    )
+
+
 def test_flags_blocker_return_that_omits_one_documented_field() -> None:
     issues = check_js_sibling_return_object_key_drift(_drifted_blocker_source(), _MJS_PATH)
     assert len(issues) == 1
@@ -404,6 +415,14 @@ def test_mixed_quote_differing_discriminant_still_passes_as_union() -> None:
     assert issues == []
 
 
+def test_trailing_comment_after_shared_discriminant_does_not_suppress_drift() -> None:
+    issues = check_js_sibling_return_object_key_drift(
+        _trailing_comment_shared_discriminant_drift_source(), _MJS_PATH
+    )
+    assert len(issues) == 1
+    assert "deferred" in issues[0]
+
+
 def test_skips_python_files() -> None:
     issues = check_js_sibling_return_object_key_drift(
         _drifted_blocker_source(), "workflow/converge_multi.py"
@@ -413,5 +432,7 @@ def test_skips_python_files() -> None:
 
 def test_shipped_converge_mjs_passes_its_own_check() -> None:
     shipped_source = _SHIPPED_CONVERGE_MJS.read_text(encoding="utf-8")
-    issues = check_js_sibling_return_object_key_drift(shipped_source, _MJS_PATH)
+    issues = check_js_sibling_return_object_key_drift(
+        shipped_source, str(_SHIPPED_CONVERGE_MJS)
+    )
     assert issues == []
