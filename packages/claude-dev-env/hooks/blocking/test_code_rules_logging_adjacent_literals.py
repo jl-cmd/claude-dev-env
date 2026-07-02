@@ -98,3 +98,35 @@ def test_should_flag_adjacent_literals_in_log_call_preceded_by_other_statement()
     issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
     assert len(issues) == 1
     assert "adjacent string literals" in issues[0]
+
+
+def test_should_allow_adjacent_literal_example_inside_docstring() -> None:
+    source = (
+        'def emit_batch_result() -> None:\n'
+        '    """Example: logger.info("[Batch]" " Failed %s", job_name).\n'
+        '    """\n'
+        "    logger.info(\"[Batch] Starting %s\", job_name)\n"
+    )
+    issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_adjacent_literal_example_inside_comment() -> None:
+    source = (
+        '# example: logger.info("[Batch]" " Failed %s", job_name)\n'
+        'logger.info("[Batch] Starting %s", job_name)\n'
+    )
+    issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_still_flag_real_call_alongside_docstring_example() -> None:
+    source = (
+        'def emit_batch_result() -> None:\n'
+        '    """Example: logger.info("[Batch]" " Failed %s", job_name).\n'
+        '    """\n'
+        '    logger.info("[Batch]" " Failed %s", job_name)\n'
+    )
+    issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "adjacent string literals" in issues[0]

@@ -73,9 +73,9 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS,
     ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS,
     ALL_JAVASCRIPT_STRING_DELIMITERS,
+    ALL_LOGGING_CALL_METHOD_NAMES,
     ALL_PYTHON_EXTENSIONS,
     ARROW_CONCISE_BODY_OBJECT_LITERAL_OPENING_PATTERN,
-    BACKSLASH_ESCAPE_SEQUENCE_LENGTH,
     ENUMERATION_LEADING_CONJUNCTION_PATTERN,
     ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN,
     ENUMERATION_TASK_ITEM_PATTERN,
@@ -92,9 +92,10 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     JS_OBJECT_KEY_IDENTIFIER_PATTERN,
     JS_OBJECT_METHOD_SHORTHAND_KEY_PATTERN,
     JSDOC_RETURNS_STRUCTURED_OBJECT_PROMISE_PATTERN,
-    LOGGING_CALL_TOKEN_PATTERN,
     LOGGING_FSTRING_PATTERN,
+    LOGGING_HELPER_FUNCTION_NAME_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
+    LOGGING_RECEIVER_NAME_PATTERN,
     MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT,
     NOT_INSIDE_TYPE_CHECKING_BLOCK,
     RESUME_TASK_ENUMERATION_PATTERN,
@@ -592,52 +593,34 @@ def check_logging_printf_tokens(content: str, file_path: str) -> list[str]:
     return issues
 
 
-def _find_matching_close_paren_index(line: str, search_start_index: int) -> int:
-    """Return the index just past the closing parenthesis that balances the one before search_start_index.
+def _logging_call_receiver_name(receiver_node: ast.expr) -> str | None:
+    """Return the trailing identifier of a logging-call receiver expression, else None.
 
-    Parenthesis counting skips characters inside a quoted string so a
-    parenthesis written inside a log message argument never closes the span
-    early. When the call continues past the end of the line (a multi-line
-    call), the line's length is returned so the caller treats the rest of
-    the line as the argument list.
+    A bare name (``logger.info(...)``) returns its own identifier; an
+    attribute chain (``self.logger.info(...)``) returns the attribute
+    closest to the call. Any other receiver shape (a call, a subscript, ...)
+    returns None, since neither shape names a plain logger reference.
     """
-    open_parenthesis_depth = 1
-    each_index = search_start_index
-    open_quote_character = ""
-    while each_index < len(line):
-        each_character = line[each_index]
-        if open_quote_character:
-            if each_character == "\\":
-                each_index += BACKSLASH_ESCAPE_SEQUENCE_LENGTH
-                continue
-            if each_character == open_quote_character:
-                open_quote_character = ""
-        elif each_character in ("'", '"'):
-            open_quote_character = each_character
-        elif each_character == "(":
-            open_parenthesis_depth += 1
-        elif each_character == ")":
-            open_parenthesis_depth -= 1
-            if open_parenthesis_depth == 0:
-                return each_index
-        each_index += 1
-    return len(line)
+    if isinstance(receiver_node, ast.Name):
+        return receiver_node.id
+    if isinstance(receiver_node, ast.Attribute):
+        return receiver_node.attr
+    return None
 
 
-def _logging_call_argument_list_spans(line: str) -> list[tuple[int, int]]:
-    """Return the (start, end) slice of each logging call's argument list on a line.
-
-    A line can carry other statements beside the logging call (a
-    semicolon-separated second statement), so the adjacent-literal search
-    must stay inside the call's own parentheses rather than scanning the
-    whole line.
-    """
-    all_argument_list_spans: list[tuple[int, int]] = []
-    for each_call_match in LOGGING_CALL_TOKEN_PATTERN.finditer(line):
-        argument_list_start = each_call_match.end()
-        argument_list_end = _find_matching_close_paren_index(line, argument_list_start)
-        all_argument_list_spans.append((argument_list_start, argument_list_end))
-    return all_argument_list_spans
+def _is_logging_call_node(call_node: ast.Call) -> bool:
+    """Return True when call_node is a real logging call: a log_* helper or a logger.<method>(...) call."""
+    function_reference = call_node.func
+    if isinstance(function_reference, ast.Name):
+        return bool(LOGGING_HELPER_FUNCTION_NAME_PATTERN.match(function_reference.id))
+    if isinstance(function_reference, ast.Attribute):
+        if function_reference.attr not in ALL_LOGGING_CALL_METHOD_NAMES:
+            return False
+        receiver_name = _logging_call_receiver_name(function_reference.value)
+        return receiver_name is not None and bool(
+            LOGGING_RECEIVER_NAME_PATTERN.match(receiver_name)
+        )
+    return False
 
 
 def check_logging_adjacent_string_literals(content: str, file_path: str) -> list[str]:
@@ -646,13 +629,12 @@ def check_logging_adjacent_string_literals(content: str, file_path: str) -> list
     A log pattern written as two side-by-side literals reads as an editing
     artifact: the pieces join into one string at compile time, so the split
     adds nothing and hides the real message from a plain-text search for the
-    full pattern. The check fires when a logging call (an attribute call
-    such as a logger method, or a ``log_*`` helper) carries a closed string
-    literal followed only by whitespace and the opening quote of a second
-    literal within its own argument list. The search is scoped to the
-    call's parenthesized arguments, so a second statement on the same line
-    (for example a semicolon-separated assignment) cannot trigger a false
-    positive. A single-literal message, an explicit ``+`` join, and
+    full pattern. The check walks the parsed AST for a real logging call (an
+    attribute call such as a logger method, or a ``log_*`` helper) and runs
+    the adjacent-literal search only against that call's own source segment,
+    so text that merely looks like a logging call inside a comment,
+    docstring, or other string literal is never a real ``ast.Call`` node and
+    is left alone. A single-literal message, an explicit ``+`` join, and
     comma-separated string arguments are all left alone. Test files and
     non-Python files are exempt.
 
@@ -661,22 +643,27 @@ def check_logging_adjacent_string_literals(content: str, file_path: str) -> list
         file_path: The destination path, used to skip test files and non-Python.
 
     Returns:
-        One issue line per offending call line, capped at the configured maximum.
+        One issue line per offending call, capped at the configured maximum.
     """
     if is_test_file(file_path):
         return []
     if get_file_extension(file_path) not in ALL_PYTHON_EXTENSIONS:
         return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
     issues: list[str] = []
-    for each_line_number, each_line in enumerate(content.split("\n"), 1):
-        all_argument_list_spans = _logging_call_argument_list_spans(each_line)
-        if not any(
-            ADJACENT_STRING_LITERAL_PATTERN.search(each_line[span_start:span_end])
-            for span_start, span_end in all_argument_list_spans
-        ):
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.Call) or not _is_logging_call_node(each_node):
+            continue
+        call_source_segment = ast.get_source_segment(content, each_node)
+        if call_source_segment is None:
+            continue
+        if not ADJACENT_STRING_LITERAL_PATTERN.search(call_source_segment):
             continue
         issues.append(
-            f"Line {each_line_number}: adjacent string literals in a logging call - "
+            f"Line {each_node.lineno}: adjacent string literals in a logging call - "
             "collapse the implicit concatenation into one literal"
         )
         if len(issues) >= MAX_LOGGING_ADJACENT_LITERAL_ISSUES:
