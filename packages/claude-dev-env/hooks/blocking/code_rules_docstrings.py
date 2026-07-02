@@ -2944,15 +2944,19 @@ def _absent_entries(wrapper_summary: str, delegate_summary: str) -> list[str]:
 
 def _entries_by_function_name(parsed_tree: ast.Module) -> dict[str, tuple[int, str]]:
     entries_by_name: dict[str, tuple[int, str]] = {}
+    ambiguous_names: set[str] = set()
     for each_node in ast.walk(parsed_tree):
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if each_node.name in entries_by_name:
+            ambiguous_names.add(each_node.name)
             continue
         entries_by_name[each_node.name] = (
             each_node.lineno,
             ast.get_docstring(each_node) or "",
         )
+    for each_ambiguous_name in ambiguous_names:
+        del entries_by_name[each_ambiguous_name]
     return entries_by_name
 
 
@@ -2975,6 +2979,7 @@ def _parsed_module_or_none(source_text: str) -> ast.Module | None:
 def _outbound_pointer_issues(parsed_tree: ast.Module, file_path: str) -> list[str]:
     parent_directory = Path(file_path).parent
     issues: list[str] = []
+    delegate_entries_by_stem: dict[str, dict[str, tuple[int, str]]] = {}
     for each_node in ast.walk(parsed_tree):
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -2983,11 +2988,15 @@ def _outbound_pointer_issues(parsed_tree: ast.Module, file_path: str) -> list[st
         target_stem = _pointer_target_stem(wrapper_summary)
         if not target_stem:
             continue
-        delegate_path = parent_directory / (target_stem + PYTHON_MODULE_FILE_SUFFIX)
-        delegate_tree = _parsed_module_or_none(_source_text_or_empty(delegate_path))
-        if delegate_tree is None:
-            continue
-        delegate_entry = _entries_by_function_name(delegate_tree).get(each_node.name)
+        if target_stem not in delegate_entries_by_stem:
+            delegate_path = parent_directory / (target_stem + PYTHON_MODULE_FILE_SUFFIX)
+            delegate_tree = _parsed_module_or_none(_source_text_or_empty(delegate_path))
+            delegate_entries_by_stem[target_stem] = (
+                _entries_by_function_name(delegate_tree)
+                if delegate_tree is not None
+                else {}
+            )
+        delegate_entry = delegate_entries_by_stem[target_stem].get(each_node.name)
         if delegate_entry is None:
             continue
         delegate_summary = _leading_summary_line(delegate_entry[1])
