@@ -390,8 +390,8 @@ test('spawnStandardsFollowUp reports whether a hardening PR opened on every path
   );
   assert.match(
     body,
-    /hardeningPrOpened:\s*true/,
-    'expected the commit path to latch hardeningPrOpened once the commit step ran, so the run-once guard holds even when the committed URL does not parse',
+    /const hardeningPrOpened =\s*typeof commitResult\?\.hardeningPrUrl === 'string' && commitResult\.hardeningPrUrl\.length > 0/,
+    'expected the commit path to derive hardeningPrOpened from a non-empty hardeningPrUrl, so a PR that opened with an unparseable URL still latches the guard while an empty URL (no PR opened) leaves it clear to retry',
   );
 });
 

@@ -291,6 +291,18 @@ def test_repo_enforces_default_conventional_pr_titles_true_when_only_event_types
     assert _repo_enforces_default_conventional_pr_titles(str(repo_root))
 
 
+def test_repo_enforces_default_conventional_pr_titles_true_when_one_marker_workflow_keeps_default_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "mixed_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+    workflows_directory = repo_root / ".github" / "workflows"
+    (workflows_directory / "pr-title-default.yml").write_text(
+        _SEMANTIC_WORKFLOW_TEXT, encoding="utf-8"
+    )
+    assert _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
 def test_workflow_customizes_semantic_types_true_for_action_types_input() -> None:
     assert _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
 
@@ -426,6 +438,29 @@ def test_main_allows_custom_type_title_when_action_customizes_types(
     )
     assert exit_code == 0
     assert stdout_text == ""
+
+
+def test_main_blocks_non_conventional_title_when_one_marker_workflow_keeps_default_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "mixed_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+    workflows_directory = repo_root / ".github" / "workflows"
+    (workflows_directory / "pr-title-default.yml").write_text(
+        _SEMANTIC_WORKFLOW_TEXT, encoding="utf-8"
+    )
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    response_payload = json.loads(stdout_text)
+    decision_block = response_payload["hookSpecificOutput"]
+    assert decision_block["permissionDecision"] == "deny"
+    assert "conventional-pr-title" in decision_block["permissionDecisionReason"]
 
 
 def test_main_allows_custom_type_title_for_name_step_layout(

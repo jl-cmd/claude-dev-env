@@ -234,14 +234,17 @@ def _is_conventional_commit_title(title: str) -> bool:
 
 
 def _repo_enforces_default_conventional_pr_titles(repo_root: str) -> bool:
-    """Return whether a workflow enforces PR titles against the default type list.
+    """Return whether a marker workflow enforces PR titles against the default type list.
 
-    A repo whose semantic-pull-request action step declares a custom ``types:``
-    input accepts types this gate's default Conventional Commits list omits, so
-    the gate cannot know the repo's allowed types and returns False (fail open)
-    even though the marker is present -- the authoritative CI check on GitHub
-    still validates the title. The gate only blocks when a marker workflow
-    leaves the action's type list at its default.
+    A semantic-pull-request action step that declares a custom ``types:`` input
+    accepts types this gate's default Conventional Commits list omits, so the gate
+    cannot judge a title against that workflow's allowed types. A repo can run
+    several marker workflows at once: when any one of them leaves the action's type
+    list at its default, that workflow's CI check rejects a non-Conventional title,
+    so the gate blocks. The gate returns True when at least one marker workflow uses
+    the default type list, and False (fail open) only when every marker workflow
+    customizes its types -- the authoritative CI check on GitHub still validates the
+    title in that case.
     """
     workflows_directory = Path(repo_root) / WORKFLOWS_DIRECTORY_RELATIVE_PATH
     if not workflows_directory.is_dir():
@@ -249,8 +252,8 @@ def _repo_enforces_default_conventional_pr_titles(repo_root: str) -> bool:
     all_marker_workflow_texts = _all_semantic_marker_workflow_texts(workflows_directory)
     if not all_marker_workflow_texts:
         return False
-    return not any(
-        _workflow_customizes_semantic_types(each_workflow_text)
+    return any(
+        not _workflow_customizes_semantic_types(each_workflow_text)
         for each_workflow_text in all_marker_workflow_texts
     )
 
