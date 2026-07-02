@@ -187,7 +187,7 @@ LOGGING_PRINTF_TOKEN_PATTERN: re.Pattern[str] = re.compile(
 )
 LOGGING_CALL_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r'\b(?:log_(?:debug|info|warning|error|critical|exception)'
-    r'|(?:logger|logging|log)\.(?:debug|info|warning|error|critical|exception))'
+    r'|_?(?:logger|logging|log)\.(?:debug|info|warning|error|critical|exception))'
     r'\s*\('
 )
 ADJACENT_STRING_LITERAL_PATTERN: re.Pattern[str] = re.compile(
