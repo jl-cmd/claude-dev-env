@@ -126,7 +126,7 @@ function childRunInput(prEntry) {
 
 const multiInput = classifyMultiInput(args)
 if (multiInput.blocker) {
-  return { converged: false, prCount: 0, convergedCount: 0, results: [], blocker: multiInput.blocker }
+  return { converged: false, prCount: 0, convergedCount: 0, results: [], allDeferredPrs: [], blocker: multiInput.blocker }
 }
 const input = multiInput.input
 
