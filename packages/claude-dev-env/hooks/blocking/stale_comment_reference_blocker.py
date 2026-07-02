@@ -22,7 +22,10 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from hooks_constants.drift_comment_gate_constants import (  # noqa: E402
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+from hooks_constants.pre_tool_use_dispatcher_constants import EDIT_TOOL_NAME  # noqa: E402
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
+from hooks_constants.stale_comment_reference_blocker_constants import (  # noqa: E402
     ALL_COMMENT_STOPWORDS,
     COMMENT_IDENTIFIER_PATTERN,
     COMMENT_LINE_PREFIX,
@@ -32,9 +35,6 @@ from hooks_constants.drift_comment_gate_constants import (  # noqa: E402
     STALE_COMMENT_DENY_TEMPLATE,
     STALE_COMMENT_SYSTEM_MESSAGE,
 )
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.pre_tool_use_dispatcher_constants import EDIT_TOOL_NAME  # noqa: E402
-from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 
 
 def _first_orphaned_identifier(
