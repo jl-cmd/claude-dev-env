@@ -1,4 +1,4 @@
-"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, file-length advisory, and library-print checks."""
+"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, naive datetime construction, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, file-length advisory, and library-print checks."""
 
 import ast
 import json
@@ -28,7 +28,9 @@ from code_rules_shared import (  # noqa: E402
 from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_FORMAT_LOGGER_FUNCTION_NAMES,
     ALL_IMPORT_BLOCK_SORT_RUFF_COMMAND_PREFIX,
+    ALL_NAIVE_CAPABLE_TIMESTAMP_CONSTRUCTORS,
     ALL_RUFF_STANDALONE_CONFIG_FILENAMES,
+    DATETIME_CLASS_ATTRIBUTE_NAME,
     IMPORT_BLOCK_SORT_RUFF_TIMEOUT_SECONDS,
     IMPORT_BLOCK_SORT_RULE_CODE,
     MAX_E2E_TEST_NAMING_ISSUES,
@@ -37,8 +39,11 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES,
     MAX_LOGGING_FSTRING_ISSUES,
     MAX_LOGGING_PRINTF_TOKEN_ISSUES,
+    MAX_NAIVE_DATETIME_ISSUES,
     MAX_WINDOWS_API_NONE_ISSUES,
     MINIMUM_RESUME_TASK_ENUMERATION_ITEMS,
+    NAIVE_DATETIME_TIMEZONE_KEYWORD,
+    NAIVE_DATETIME_UTCNOW_CONSTRUCTOR,
     RUFF_PYPROJECT_CONFIG_FILENAME,
     RUFF_PYPROJECT_TOOL_TABLE_MARKER,
     RUFF_STDIN_ENCODING,
@@ -596,6 +601,103 @@ def check_windows_api_none(content: str) -> list[str]:
             issues.append(f"Line {each_line_number}: win32gui call with None - use 0 for unused int params")
 
         if len(issues) >= maximum_issues:
+            break
+
+    return issues
+
+
+def _attribute_base_is_datetime(attribute_node: ast.Attribute) -> bool:
+    """Report whether an attribute access hangs off the ``datetime`` class.
+
+    Covers both import forms: ``datetime.fromtimestamp`` (from
+    ``from datetime import datetime``) where the base is a plain name, and
+    ``datetime.datetime.fromtimestamp`` (from ``import datetime``) where the base
+    is itself a ``.datetime`` attribute access.
+
+    Args:
+        attribute_node: The attribute access whose base is examined.
+
+    Returns:
+        True when the base resolves to the ``datetime`` class, else False.
+    """
+    base_node = attribute_node.value
+    if isinstance(base_node, ast.Name):
+        return base_node.id == DATETIME_CLASS_ATTRIBUTE_NAME
+    if isinstance(base_node, ast.Attribute):
+        return base_node.attr == DATETIME_CLASS_ATTRIBUTE_NAME
+    return False
+
+
+def _naive_datetime_constructor_name(call_node: ast.Call) -> str | None:
+    """Return the naive datetime constructor a call uses, or None when it is safe.
+
+    ``fromtimestamp`` and ``utcfromtimestamp`` build a naive datetime only when
+    no ``tz=`` keyword pins the zone; ``utcnow`` is always naive. Any other call,
+    or a timestamp constructor carrying ``tz=``, is safe and returns None.
+
+    Args:
+        call_node: The call expression to classify.
+
+    Returns:
+        The constructor name when the call builds a naive datetime, else None.
+    """
+    call_function = call_node.func
+    if not isinstance(call_function, ast.Attribute):
+        return None
+    if not _attribute_base_is_datetime(call_function):
+        return None
+    constructor_name = call_function.attr
+    if constructor_name == NAIVE_DATETIME_UTCNOW_CONSTRUCTOR:
+        return constructor_name
+    if constructor_name not in ALL_NAIVE_CAPABLE_TIMESTAMP_CONSTRUCTORS:
+        return None
+    has_timezone_keyword = any(
+        each_keyword.arg == NAIVE_DATETIME_TIMEZONE_KEYWORD
+        for each_keyword in call_node.keywords
+    )
+    if has_timezone_keyword:
+        return None
+    return constructor_name
+
+
+def check_naive_datetime_construction(content: str, file_path: str) -> list[str]:
+    """Flag naive datetime constructors that invite DST-fold ambiguity.
+
+    ``datetime.fromtimestamp(epoch)`` and ``datetime.utcfromtimestamp(epoch)``
+    build a datetime with no timezone, and ``datetime.utcnow()`` does the same for
+    the current moment. A later ``.astimezone()`` on that naive value guesses the
+    local offset, so a timestamp landing in a daylight-saving fold reads back an
+    hour off. Passing ``tz=`` (for example ``tz=timezone.utc``) pins the instant
+    to an unambiguous zone before any local conversion. A plain ``datetime.now()``
+    is left alone, since it does not derive an instant from an epoch value.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per naive datetime constructor, capped at the module limit.
+    """
+    if is_test_file(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+
+    issues: list[str] = []
+    for each_node in ast.walk(parsed_tree):
+        if not isinstance(each_node, ast.Call):
+            continue
+        naive_constructor_name = _naive_datetime_constructor_name(each_node)
+        if naive_constructor_name is None:
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: naive datetime.{naive_constructor_name}() - "
+            "pass tz= (e.g. tz=timezone.utc) so the instant is unambiguous, then "
+            ".astimezone() for local display (avoids DST-fold ambiguity)"
+        )
+        if len(issues) >= MAX_NAIVE_DATETIME_ISSUES:
             break
 
     return issues
