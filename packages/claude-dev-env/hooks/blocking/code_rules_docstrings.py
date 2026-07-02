@@ -2897,7 +2897,7 @@ def _listed_entries(wrapper_summary: str) -> list[str]:
     if marker_match is None:
         return []
     listed_text = wrapper_summary[: marker_match.start()].strip().rstrip(";,").strip()
-    normalized_text = listed_text.replace(" and ", ", ")
+    normalized_text = re.sub(r"\s+and\s+", ", ", listed_text, flags=re.IGNORECASE)
     return [
         each_entry.strip()
         for each_entry in normalized_text.split(",")

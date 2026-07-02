@@ -223,3 +223,27 @@ def test_should_flag_listed_action_when_the_summary_wraps_a_physical_line(
         f"A summary wrapped onto a second physical line still names 'App Info', "
         f"got: {issues!r}"
     )
+
+
+def _drifted_processor_source_with_capitalized_and_uneven_whitespace() -> str:
+    return (
+        "class PortalProcessor:\n"
+        "    async def _refresh_store_sections(self, page: object) -> bool:\n"
+        '        """Apply App Info, Russia, review note,  And  publication'
+        " edits; full doc on ``listing_edit_flow``.\"\"\"\n"
+        "        return await _refresh_store_sections(self, page)\n"
+    )
+
+
+def test_should_flag_listed_action_when_the_conjunction_is_capitalized_with_uneven_whitespace(
+    tmp_path: Path,
+) -> None:
+    _create_target_flow(tmp_path, _target_flow_source())
+    checked_path = str(tmp_path / PROCESSOR_FILE_NAME)
+    issues = check_docstring_delegation_summary_enumeration_drift(
+        _drifted_processor_source_with_capitalized_and_uneven_whitespace(), checked_path
+    )
+    assert any("App Info" in each for each in issues), (
+        f"A capitalized 'And' with uneven whitespace still splits into its own "
+        f"listed entry, got: {issues!r}"
+    )
