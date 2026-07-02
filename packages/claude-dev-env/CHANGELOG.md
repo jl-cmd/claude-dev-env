@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.82.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.81.0...claude-dev-env-v1.82.0) (2026-07-02)
+
+
+### Features
+
+* **autoconverge:** surface deferred hardening PRs for self-closing convergence ([6d6fa0d](https://github.com/jl-cmd/claude-code-config/commit/6d6fa0d2d916c8d3b56cc7a05a58b36df647847e))
+
+
+### Bug Fixes
+
+* **autoconverge:** clarify background-wait clause and full down-result schema ([940dd91](https://github.com/jl-cmd/claude-code-config/commit/940dd91535ba977793da5f0f5670656c809d42e6))
+* **autoconverge:** describe the Monitor wait as a bounded until-loop ([66ea29f](https://github.com/jl-cmd/claude-code-config/commit/66ea29f94b3109daa5d8273ea085e9ca639d5ef9))
+* **autoconverge:** route polling waits through Monitor tool for headless harness ([2c23f49](https://github.com/jl-cmd/claude-code-config/commit/2c23f497b06218f62ca786ce6bc869cd76c2bb12))
+* **autoconverge:** size Monitor timeout_ms to the full poll wait span ([04fa92e](https://github.com/jl-cmd/claude-code-config/commit/04fa92e82d0025c2269bdd4b9cfd954ce283f1e2))
+
 ## [1.81.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.80.0...claude-dev-env-v1.81.0) (2026-07-02)
 
 
