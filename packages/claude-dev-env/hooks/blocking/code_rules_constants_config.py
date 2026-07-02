@@ -1,4 +1,9 @@
-"""Constants-outside-config checks and the file-global constant use-count check."""
+"""Constants-outside-config checks and the file-global constant use-count check.
+
+Also carries check_config_duplicate_path_anchor, which flags a config module
+that rebuilds a directory a sibling module in the same package already
+anchors from its own location.
+"""
 
 import ast
 import re
@@ -24,6 +29,9 @@ from code_rules_shared import (  # noqa: E402
     is_workflow_registry_file,
 )
 
+from hooks_constants.blocking_check_limits import (  # noqa: E402
+    MAX_CONFIG_DUPLICATE_PATH_ANCHOR_ISSUES,
+)
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_PYTHON_EXTENSIONS,
     FILE_GLOBAL_UPPER_SNAKE_PATTERN,
@@ -252,4 +260,144 @@ def check_file_global_constants_use_count(content: str, file_path: str) -> list[
                 f"Line {each_line_number}: File-global constant {each_constant_name} used by only 1 function/method - move to method scope or add a second caller"
             )
 
+    return issues
+
+
+def _references_dunder_file(node: ast.AST) -> bool:
+    """Return True when the expression tree reads ``__file__``."""
+    return any(
+        isinstance(each_node, ast.Name) and each_node.id == "__file__"
+        for each_node in ast.walk(node)
+    )
+
+
+def _file_anchor_up_count(node: ast.AST) -> Optional[int]:
+    """Return how many directory levels a ``__file__`` anchor climbs, else None.
+
+    A ``parents[N]`` subscript on a ``__file__``-rooted expression climbs
+    ``N + 1`` levels; a chain of ``.parent`` attributes climbs one level per
+    link. Any other expression returns None.
+    """
+    if isinstance(node, ast.Subscript):
+        subscripted = node.value
+        if (
+            isinstance(subscripted, ast.Attribute)
+            and subscripted.attr == "parents"
+            and isinstance(node.slice, ast.Constant)
+            and isinstance(node.slice.value, int)
+            and _references_dunder_file(subscripted.value)
+        ):
+            return node.slice.value + 1
+    parent_step_count = 0
+    current_node = node
+    while isinstance(current_node, ast.Attribute) and current_node.attr == "parent":
+        parent_step_count += 1
+        current_node = current_node.value
+    if parent_step_count and _references_dunder_file(current_node):
+        return parent_step_count
+    return None
+
+
+def _anchored_join_signature(node: ast.AST) -> Optional[tuple[int, str]]:
+    """Return (up_count, first literal segment) for an anchored ``/`` join, else None.
+
+    Flattens a left-leaning ``/`` chain, requires the left-most operand to be
+    a ``__file__`` anchor, and requires the first joined segment to be a
+    string literal.
+    """
+    if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Div):
+        return None
+    all_segments: list[str] = []
+    current_node: ast.expr = node
+    while isinstance(current_node, ast.BinOp) and isinstance(current_node.op, ast.Div):
+        right_operand = current_node.right
+        if isinstance(right_operand, ast.Constant) and isinstance(right_operand.value, str):
+            all_segments.insert(0, right_operand.value)
+        else:
+            all_segments.insert(0, "")
+        current_node = current_node.left
+    anchor_up_count = _file_anchor_up_count(current_node)
+    if anchor_up_count is None or not all_segments or not all_segments[0]:
+        return None
+    return anchor_up_count, all_segments[0]
+
+
+def _module_anchor_signatures(module_tree: ast.Module) -> dict[tuple[int, str], int]:
+    """Return line numbers keyed by anchored-join signature for top-level assignments."""
+    signatures_by_key: dict[tuple[int, str], int] = {}
+    for each_statement in module_tree.body:
+        if isinstance(each_statement, ast.Assign):
+            assigned_expression = each_statement.value
+        elif isinstance(each_statement, ast.AnnAssign) and each_statement.value is not None:
+            assigned_expression = each_statement.value
+        else:
+            continue
+        for each_node in ast.walk(assigned_expression):
+            signature = _anchored_join_signature(each_node)
+            if signature is not None:
+                signatures_by_key.setdefault(signature, each_statement.lineno)
+    return signatures_by_key
+
+
+def check_config_duplicate_path_anchor(content: str, file_path: str) -> list[str]:
+    """Flag a config module re-anchoring a path a sibling config module already builds.
+
+    Two config modules in the same ``config/`` directory that each anchor
+    ``Path(__file__)`` the same number of levels up and join the same first
+    literal segment are two sources of truth for one directory: a rename in
+    one module silently leaves the other pointing at the old folder. The
+    check fires on a config-module write whose module-level assignment joins
+    a ``__file__`` anchor (``parents[N]`` or a ``.parent`` chain) with a
+    literal segment that a sibling module in the same directory also joins at
+    the same depth. Compose one shared base constant and build the other path
+    from it. Test files, non-Python files, and modules outside a config
+    directory are exempt; an unreadable or unparseable sibling is skipped.
+
+    Args:
+        content: The Python source under validation.
+        file_path: The destination path, used to locate sibling config modules.
+
+    Returns:
+        One issue line per duplicated anchor, capped at the configured maximum.
+    """
+    if not is_config_file(file_path):
+        return []
+    if is_test_file(file_path):
+        return []
+    if get_file_extension(file_path) not in ALL_PYTHON_EXTENSIONS:
+        return []
+    try:
+        module_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    written_signatures = _module_anchor_signatures(module_tree)
+    if not written_signatures:
+        return []
+    config_directory = Path(file_path).parent
+    if not config_directory.is_dir():
+        return []
+    owner_name_by_signature: dict[tuple[int, str], str] = {}
+    written_name = Path(file_path).name
+    for each_sibling_path in sorted(config_directory.glob("*.py")):
+        if each_sibling_path.name == written_name or is_test_file(str(each_sibling_path)):
+            continue
+        try:
+            sibling_tree = ast.parse(each_sibling_path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            continue
+        for each_signature in _module_anchor_signatures(sibling_tree):
+            owner_name_by_signature.setdefault(each_signature, each_sibling_path.name)
+    issues: list[str] = []
+    for each_signature, each_line_number in sorted(written_signatures.items(), key=lambda pair: pair[1]):
+        owner_name = owner_name_by_signature.get(each_signature)
+        if owner_name is None:
+            continue
+        anchor_up_count, first_segment = each_signature
+        issues.append(
+            f"Line {each_line_number}: joins {first_segment} onto the same base, "
+            f"{anchor_up_count} levels above this directory, that {owner_name} "
+            "already builds - define the base once and compose both paths from it"
+        )
+        if len(issues) >= MAX_CONFIG_DUPLICATE_PATH_ANCHOR_ISSUES:
+            break
     return issues

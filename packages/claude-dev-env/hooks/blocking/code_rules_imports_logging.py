@@ -39,6 +39,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_JS_RESUME_TASK_ENUMERATION_ISSUES,
     MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES,
     MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES,
+    MAX_LOGGING_ADJACENT_LITERAL_ISSUES,
     MAX_LOGGING_FSTRING_ISSUES,
     MAX_LOGGING_PRINTF_TOKEN_ISSUES,
     MAX_NAIVE_DATETIME_ISSUES,
@@ -56,6 +57,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     SIBLING_RETURN_OBJECT_SINGLE_AGREED_MISSING_KEY_COUNT,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
+    ADJACENT_STRING_LITERAL_PATTERN,
     ADVISORY_LINE_THRESHOLD_HARD,
     ADVISORY_LINE_THRESHOLD_SOFT,
     ALL_CLI_FILE_PATH_MARKERS,
@@ -89,6 +91,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     JS_OBJECT_KEY_IDENTIFIER_PATTERN,
     JS_OBJECT_METHOD_SHORTHAND_KEY_PATTERN,
     JSDOC_RETURNS_STRUCTURED_OBJECT_PROMISE_PATTERN,
+    LOGGING_CALL_TOKEN_PATTERN,
     LOGGING_FSTRING_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
     MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT,
@@ -584,6 +587,45 @@ def check_logging_printf_tokens(content: str, file_path: str) -> list[str]:
             "use {} placeholders (the %-arguments are silently dropped)"
         )
         if len(issues) >= MAX_LOGGING_PRINTF_TOKEN_ISSUES:
+            break
+    return issues
+
+
+def check_logging_adjacent_string_literals(content: str, file_path: str) -> list[str]:
+    """Flag implicit adjacent string-literal concatenation on a logging call line.
+
+    A log pattern written as two side-by-side literals reads as an editing
+    artifact: the pieces join into one string at compile time, so the split
+    adds nothing and hides the real message from a plain-text search for the
+    full pattern. The check fires on a line that both invokes a logging call
+    (an attribute call such as a logger method, or a ``log_*`` helper) and
+    carries a closed string literal followed only by whitespace and the
+    opening quote of a second literal. A single-literal message, an explicit
+    ``+`` join, and comma-separated string arguments are all left alone.
+    Test files and non-Python files are exempt.
+
+    Args:
+        content: The Python source under validation.
+        file_path: The destination path, used to skip test files and non-Python.
+
+    Returns:
+        One issue line per offending call line, capped at the configured maximum.
+    """
+    if is_test_file(file_path):
+        return []
+    if get_file_extension(file_path) not in ALL_PYTHON_EXTENSIONS:
+        return []
+    issues: list[str] = []
+    for each_line_number, each_line in enumerate(content.split("\n"), 1):
+        if not LOGGING_CALL_TOKEN_PATTERN.search(each_line):
+            continue
+        if not ADJACENT_STRING_LITERAL_PATTERN.search(each_line):
+            continue
+        issues.append(
+            f"Line {each_line_number}: adjacent string literals in a logging call - "
+            "collapse the implicit concatenation into one literal"
+        )
+        if len(issues) >= MAX_LOGGING_ADJACENT_LITERAL_ISSUES:
             break
     return issues
 
