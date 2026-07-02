@@ -175,11 +175,13 @@ def test_accepts_return_the_result_prose_that_names_no_bare_flag() -> None:
 
 
 def test_flags_bare_directive_when_contract_uses_capitalized_never() -> None:
-    issues = check_js_bare_flag_return_directive(
-        _capitalized_contract_with_bare_directive_source(), _MJS_PATH
-    )
+    source = _capitalized_contract_with_bare_directive_source()
+    issues = check_js_bare_flag_return_directive(source, _MJS_PATH)
     assert len(issues) == 1
     assert "return down" in issues[0]
+    quoted_contract_phrase = "Never a bare Down flag"
+    assert quoted_contract_phrase in issues[0]
+    assert quoted_contract_phrase in source
 
 
 def test_flags_capitalized_return_directive_against_lowercase_contract() -> None:

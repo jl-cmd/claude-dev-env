@@ -1801,12 +1801,14 @@ def check_js_bare_flag_return_directive(
     if get_file_extension(file_path) not in ALL_JAVASCRIPT_EXTENSIONS:
         return []
     contract_line_numbers_by_flag: dict[str, set[int]] = {}
+    contract_matched_phrase_by_flag: dict[str, str] = {}
     for each_contract in BARE_FLAG_CONTRACT_PATTERN.finditer(content):
         folded_flag = each_contract.group("flag").casefold()
         contract_line_number = content.count("\n", 0, each_contract.start()) + 1
         contract_line_numbers_by_flag.setdefault(folded_flag, set()).add(
             contract_line_number
         )
+        contract_matched_phrase_by_flag.setdefault(folded_flag, each_contract.group(0))
     if not contract_line_numbers_by_flag:
         return []
     all_violations_in_source_order: list[tuple[set[int], str]] = []
@@ -1816,10 +1818,11 @@ def check_js_bare_flag_return_directive(
         if folded_flag not in contract_line_numbers_by_flag:
             continue
         offending_line = content.count("\n", 0, each_directive.start()) + 1
+        contract_matched_phrase = contract_matched_phrase_by_flag[folded_flag]
         message = (
             f"Line {offending_line}: 'return {forbidden_flag}: ...' repeats a bare "
             f"{forbidden_flag} status the same converge workflow forbids "
-            f"('never a bare {forbidden_flag} flag'); return the whole result object "
+            f"('{contract_matched_phrase}'); return the whole result object "
             "with every StructuredOutput field set (Category O6 docstring drift)"
         )
         violation_lines = {offending_line} | contract_line_numbers_by_flag[folded_flag]
