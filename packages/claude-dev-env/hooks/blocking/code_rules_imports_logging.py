@@ -1756,13 +1756,15 @@ def check_js_bare_flag_return_directive(content: str, file_path: str) -> list[st
     once the attempt budget runs out. That parenthetical repeats the bare flag
     the preamble rules out. A StructuredOutput run whose schema needs every
     field would reject a lone ``{down:true}``, so the shorthand drifts from the
-    contract stated a few lines above.
+    contract stated earlier in the same file.
 
-    The sweep reads the flag names the preamble rules out ("never a bare <name>
-    flag") and reports every ``return <name>: true`` or ``return <name>: false``
-    directive that repeats one of them. ``return <word>: <bool>`` never forms
-    valid JavaScript, so a match always marks agent-prompt prose rather than
-    control flow. A full ``return {sha:..., down:true, ...}`` object literal
+    The sweep reads every flag name any preamble in the file rules out ("never
+    a bare <name> flag") and reports every ``return <name>: true`` or
+    ``return <name>: false`` directive anywhere in the file that repeats one of
+    them, with no proximity or ordering check between the two.
+    ``return <word>: <bool>`` never forms valid JavaScript, so a match always
+    marks agent-prompt prose rather than control flow. A full
+    ``return {sha:..., down:true, ...}`` object literal
     stays untouched, and so does a source that states no such contract. This
     belongs to the JS/.mjs slice of Category O6 docstring-prose-versus-body
     drift, which the Python enforcer's syntax-tree checks never reach.
