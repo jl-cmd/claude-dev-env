@@ -110,6 +110,7 @@ from code_rules_imports_logging import (  # noqa: E402
     check_library_print,
     check_logging_fstrings,
     check_logging_printf_tokens,
+    check_naive_datetime_construction,
     check_windows_api_none,
 )
 from code_rules_js_conventions import (  # noqa: E402
@@ -269,6 +270,7 @@ def validate_content(
         all_issues.extend(check_logging_fstrings(content))
         all_issues.extend(check_logging_printf_tokens(content, file_path))
         all_issues.extend(check_windows_api_none(content))
+        all_issues.extend(check_naive_datetime_construction(content, file_path))
         all_issues.extend(check_magic_values(content, file_path))
         all_issues.extend(check_fstring_structural_literals(content, file_path))
         all_issues.extend(check_constants_outside_config(content, file_path))
