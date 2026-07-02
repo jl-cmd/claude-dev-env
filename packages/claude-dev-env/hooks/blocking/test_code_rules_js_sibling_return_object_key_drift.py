@@ -242,6 +242,16 @@ def _single_typescript_function_function_type_return_with_drift() -> str:
     )
 
 
+def _two_concise_body_arrows_in_one_scope_source() -> str:
+    return (
+        "function build() {\n"
+        "  const toFull = () => ({ x: 1, y: 2, z: 3 })\n"
+        "  const toPartial = () => ({ x: 1, y: 2 })\n"
+        "  return toFull()\n"
+        "}\n"
+    )
+
+
 def _for_await_drift_source() -> str:
     return (
         "async function drain(stream) {\n"
@@ -392,6 +402,13 @@ def test_typescript_function_type_return_still_flags_intra_function_drift() -> N
     )
     assert len(issues) == 1
     assert "deferred" in issues[0]
+
+
+def test_distinct_concise_body_arrows_in_one_scope_do_not_drift() -> None:
+    issues = check_js_sibling_return_object_key_drift(
+        _two_concise_body_arrows_in_one_scope_source(), _MJS_PATH
+    )
+    assert issues == []
 
 
 def test_for_await_block_shares_its_functions_scope() -> None:

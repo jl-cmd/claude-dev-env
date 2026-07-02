@@ -1530,24 +1530,31 @@ def _return_object_literal_records(content: str) -> list[tuple[int, dict[str, st
     """Return one record per returned ``{ ... }`` object literal in the JS source.
 
     A record comes from an explicit ``return { ... }`` or from a concise-body
-    arrow's implicit return, ``() => ({ ... })``. Each record pairs the enclosing
-    function-scope id, the literal's top-level key-to-string-literal-value map,
-    and its 1-based line number. Each value is the key's string literal or None.
-    Two returns share a scope id when the nearest enclosing function or arrow
-    body is the same; a module-top-level return carries the module sentinel. A
-    control-flow block does not open a scope, so an early return inside an
-    ``if`` block shares its function's scope.
+    arrow's implicit return, ``() => ({ ... })``. Each record pairs a scope id,
+    the literal's top-level key-to-string-literal-value map, and its 1-based line
+    number. An explicit ``return { ... }`` carries the nearest enclosing function
+    or arrow body's scope id, so two such returns share a scope id when that
+    enclosing body is the same; a module-top-level return carries the module
+    sentinel. A control-flow block does not open a scope, so an early return
+    inside an ``if`` block shares its function's scope. A concise-body arrow's
+    implicit return carries its own object literal's brace index as a scope id
+    instead, since ``=> ({`` never opens a function-scope brace: the arrow's
+    return would otherwise be pooled with unrelated sibling returns in whatever
+    scope encloses the arrow, and a concise-body arrow has exactly one return, so
+    isolating it into its own scope loses no real drift detection.
     """
     blanked_content = _blank_non_code_regions(content)
-    return_brace_indices = {
+    explicit_return_brace_indices = {
         each_match.end() - 1
         for each_match in RETURN_OBJECT_LITERAL_OPENING_PATTERN.finditer(blanked_content)
-    } | {
+    }
+    arrow_concise_body_brace_indices = {
         each_match.end() - 1
         for each_match in ARROW_CONCISE_BODY_OBJECT_LITERAL_OPENING_PATTERN.finditer(
             blanked_content
         )
     }
+    return_brace_indices = explicit_return_brace_indices | arrow_concise_body_brace_indices
     records: list[tuple[int, dict[str, str | None], int]] = []
     scope_restore_stack: list[int] = []
     current_scope_id = JAVASCRIPT_MODULE_SCOPE_SENTINEL
@@ -1560,7 +1567,12 @@ def _return_object_literal_records(content: str) -> list[tuple[int, dict[str, st
                 object_key_values = _top_level_object_key_values(
                     blanked_content, content, each_index
                 )
-                records.append((current_scope_id, object_key_values, current_line_number))
+                record_scope_id = (
+                    each_index
+                    if each_index in arrow_concise_body_brace_indices
+                    else current_scope_id
+                )
+                records.append((record_scope_id, object_key_values, current_line_number))
             scope_restore_stack.append(current_scope_id)
             if _is_function_scope_opener(blanked_content, each_index):
                 current_scope_id = each_index
