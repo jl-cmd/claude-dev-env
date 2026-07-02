@@ -85,3 +85,16 @@ def test_should_skip_non_python_files() -> None:
     source = 'logger.info("[Batch]" " Failed %s", job_name)\n'
     issues = enforcer.check_logging_adjacent_string_literals(source, "notes.md")
     assert issues == []
+
+
+def test_should_allow_adjacent_literals_in_second_statement_on_same_line() -> None:
+    source = 'logger.info("done"); banner = "a" "b"\n'
+    issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_flag_adjacent_literals_in_log_call_preceded_by_other_statement() -> None:
+    source = 'attempt_index = 1; logger.info("[Batch]" " Failed %s", job_name)\n'
+    issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "adjacent string literals" in issues[0]

@@ -194,6 +194,7 @@ ADJACENT_STRING_LITERAL_PATTERN: re.Pattern[str] = re.compile(
     r'(?:"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\')\s+[rRbBfFuU]{0,2}["\']'
 )
 MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT = 2
+BACKSLASH_ESCAPE_SEQUENCE_LENGTH = 2
 SPAWN_AGENT_WITH_JSDOC_PATTERN: re.Pattern[str] = re.compile(
     r"/\*\*(?P<jsdoc>(?:(?!\*/).)*?)\*/\s*"
     r"(?:async\s+)?function\s+spawn(?P<role>\w+?)Agent\s*\(",

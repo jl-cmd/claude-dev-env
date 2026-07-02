@@ -75,6 +75,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_JAVASCRIPT_STRING_DELIMITERS,
     ALL_PYTHON_EXTENSIONS,
     ARROW_CONCISE_BODY_OBJECT_LITERAL_OPENING_PATTERN,
+    BACKSLASH_ESCAPE_SEQUENCE_LENGTH,
     ENUMERATION_LEADING_CONJUNCTION_PATTERN,
     ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN,
     ENUMERATION_TASK_ITEM_PATTERN,
@@ -591,18 +592,69 @@ def check_logging_printf_tokens(content: str, file_path: str) -> list[str]:
     return issues
 
 
+def _find_matching_close_paren_index(line: str, search_start_index: int) -> int:
+    """Return the index just past the closing parenthesis that balances the one before search_start_index.
+
+    Parenthesis counting skips characters inside a quoted string so a
+    parenthesis written inside a log message argument never closes the span
+    early. When the call continues past the end of the line (a multi-line
+    call), the line's length is returned so the caller treats the rest of
+    the line as the argument list.
+    """
+    open_parenthesis_depth = 1
+    each_index = search_start_index
+    open_quote_character = ""
+    while each_index < len(line):
+        each_character = line[each_index]
+        if open_quote_character:
+            if each_character == "\\":
+                each_index += BACKSLASH_ESCAPE_SEQUENCE_LENGTH
+                continue
+            if each_character == open_quote_character:
+                open_quote_character = ""
+        elif each_character in ("'", '"'):
+            open_quote_character = each_character
+        elif each_character == "(":
+            open_parenthesis_depth += 1
+        elif each_character == ")":
+            open_parenthesis_depth -= 1
+            if open_parenthesis_depth == 0:
+                return each_index
+        each_index += 1
+    return len(line)
+
+
+def _logging_call_argument_list_spans(line: str) -> list[tuple[int, int]]:
+    """Return the (start, end) slice of each logging call's argument list on a line.
+
+    A line can carry other statements beside the logging call (a
+    semicolon-separated second statement), so the adjacent-literal search
+    must stay inside the call's own parentheses rather than scanning the
+    whole line.
+    """
+    all_argument_list_spans: list[tuple[int, int]] = []
+    for each_call_match in LOGGING_CALL_TOKEN_PATTERN.finditer(line):
+        argument_list_start = each_call_match.end()
+        argument_list_end = _find_matching_close_paren_index(line, argument_list_start)
+        all_argument_list_spans.append((argument_list_start, argument_list_end))
+    return all_argument_list_spans
+
+
 def check_logging_adjacent_string_literals(content: str, file_path: str) -> list[str]:
-    """Flag implicit adjacent string-literal concatenation on a logging call line.
+    """Flag implicit adjacent string-literal concatenation inside a logging call's arguments.
 
     A log pattern written as two side-by-side literals reads as an editing
     artifact: the pieces join into one string at compile time, so the split
     adds nothing and hides the real message from a plain-text search for the
-    full pattern. The check fires on a line that both invokes a logging call
-    (an attribute call such as a logger method, or a ``log_*`` helper) and
-    carries a closed string literal followed only by whitespace and the
-    opening quote of a second literal. A single-literal message, an explicit
-    ``+`` join, and comma-separated string arguments are all left alone.
-    Test files and non-Python files are exempt.
+    full pattern. The check fires when a logging call (an attribute call
+    such as a logger method, or a ``log_*`` helper) carries a closed string
+    literal followed only by whitespace and the opening quote of a second
+    literal within its own argument list. The search is scoped to the
+    call's parenthesized arguments, so a second statement on the same line
+    (for example a semicolon-separated assignment) cannot trigger a false
+    positive. A single-literal message, an explicit ``+`` join, and
+    comma-separated string arguments are all left alone. Test files and
+    non-Python files are exempt.
 
     Args:
         content: The Python source under validation.
@@ -617,9 +669,11 @@ def check_logging_adjacent_string_literals(content: str, file_path: str) -> list
         return []
     issues: list[str] = []
     for each_line_number, each_line in enumerate(content.split("\n"), 1):
-        if not LOGGING_CALL_TOKEN_PATTERN.search(each_line):
-            continue
-        if not ADJACENT_STRING_LITERAL_PATTERN.search(each_line):
+        all_argument_list_spans = _logging_call_argument_list_spans(each_line)
+        if not any(
+            ADJACENT_STRING_LITERAL_PATTERN.search(each_line[span_start:span_end])
+            for span_start, span_end in all_argument_list_spans
+        ):
             continue
         issues.append(
             f"Line {each_line_number}: adjacent string literals in a logging call - "
