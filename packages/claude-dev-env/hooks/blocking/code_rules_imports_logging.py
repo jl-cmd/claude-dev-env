@@ -1746,7 +1746,12 @@ def check_js_sibling_return_object_key_drift(content: str, file_path: str) -> li
     return issues
 
 
-def check_js_bare_flag_return_directive(content: str, file_path: str) -> list[str]:
+def check_js_bare_flag_return_directive(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
     """Flag a prose directive that returns a bare status flag a converge workflow rules out.
 
     Picture the converge workflow preamble. It states the whole contract: the
@@ -1761,7 +1766,10 @@ def check_js_bare_flag_return_directive(content: str, file_path: str) -> list[st
     The sweep reads every flag name any preamble in the file rules out ("never
     a bare <name> flag") and reports every ``return <name>: true`` or
     ``return <name>: false`` directive anywhere in the file that repeats one of
-    them, with no proximity or ordering check between the two.
+    them, with no proximity or ordering check between the two — the contract
+    and the directive commonly sit far apart in a converge workflow file, so
+    *content* must carry the whole file rather than an edit's changed fragment
+    for the sweep to see both halves.
     ``return <word>: <bool>`` never forms valid JavaScript, so a match always
     marks agent-prompt prose rather than control flow. A full
     ``return {sha:..., down:true, ...}`` object literal
@@ -1770,12 +1778,21 @@ def check_js_bare_flag_return_directive(content: str, file_path: str) -> list[st
     drift, which the Python enforcer's syntax-tree checks never reach.
 
     Args:
-        content: The source text to inspect.
+        content: The full file content the Write or Edit would leave on disk.
         file_path: The path the source will be written to, used for exemptions.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a
+            violation blocks only when its directive line is among the
+            changed lines.
+        defer_scope_to_caller: When True, return every violation so the
+            commit/push gate scopes by added line through its ``Line N:``
+            partitioning.
 
     Returns:
         One issue per bare-flag return directive that repeats a status flag the
-        preamble rules out, capped at the module limit.
+        preamble rules out, scoped to the changed lines unless
+        *defer_scope_to_caller* is True or *all_changed_lines* is None, capped
+        at the module limit.
     """
     if is_test_file(file_path) or is_hook_infrastructure(file_path):
         return []
@@ -1787,21 +1804,28 @@ def check_js_bare_flag_return_directive(content: str, file_path: str) -> list[st
     }
     if not forbidden_flags:
         return []
-    issues: list[str] = []
+    all_violations_in_source_order: list[tuple[range, str]] = []
     for each_directive in BARE_FLAG_RETURN_DIRECTIVE_PATTERN.finditer(content):
         forbidden_flag = each_directive.group("flag")
         if forbidden_flag.casefold() not in forbidden_flags:
             continue
         offending_line = content.count("\n", 0, each_directive.start()) + 1
-        issues.append(
+        message = (
             f"Line {offending_line}: 'return {forbidden_flag}: ...' repeats a bare "
             f"{forbidden_flag} status the same converge workflow forbids "
             f"('never a bare {forbidden_flag} flag'); return the whole result object "
             "with every StructuredOutput field set (Category O6 docstring drift)"
         )
-        if len(issues) >= MAX_JS_BARE_FLAG_RETURN_DIRECTIVE_ISSUES:
+        all_violations_in_source_order.append(
+            (range(offending_line, offending_line + 1), message)
+        )
+        if len(all_violations_in_source_order) >= MAX_JS_BARE_FLAG_RETURN_DIRECTIVE_ISSUES:
             break
-    return issues[:MAX_JS_BARE_FLAG_RETURN_DIRECTIVE_ISSUES]
+    return _scope_violations_to_changed_lines(
+        all_violations_in_source_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )[:MAX_JS_BARE_FLAG_RETURN_DIRECTIVE_ISSUES]
 
 
 def _is_cli_entry_point(file_path: str) -> bool:

@@ -525,7 +525,12 @@ def validate_content(
             check_js_sibling_return_object_key_drift(content, file_path)
         )
         all_issues.extend(
-            check_js_bare_flag_return_directive(content, file_path)
+            check_js_bare_flag_return_directive(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
         )
 
     if extension in ALL_CODE_EXTENSIONS:
