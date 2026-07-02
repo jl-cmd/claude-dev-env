@@ -209,7 +209,7 @@ async function fixerWithRecovery(head, findings, sourceLabel) {
  * Each task carries its own edit instructions.
  * @param {string} task the short task name
  * @param {object} context task-specific context
- * @returns {Promise<object|string>} the structured output, or the transcript string when a schema-less task ('hardening-commit', 'standards-resolve-threads') runs
+ * @returns {Promise<object|string>} the structured output, or the transcript string when a schema-less task ('standards-resolve-threads') runs
  */
 function runCodeEditorTask(task, context) {
   const label = `code-editor:${task}`
@@ -316,9 +316,10 @@ function runCodeEditorTask(task, context) {
       `You are the COMMIT step opening the environment-hardening PR (${context.sourceLabel}) for the change staged in ${context.hardeningRepoPath} on branch ${context.hardeningBranch}. The edit step left the hooks/rules edits in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree. Do NOT touch the PR's own branch.\n\n` +
         `Rules:\n` +
         `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Only commit and push what is already there.\n` +
-        `- In ${context.hardeningRepoPath}: make ONE commit of the staged hooks/rules change on branch ${context.hardeningBranch}, push it, then open a DRAFT PR. The PR body references the follow-up issue ${context.issueUrl || '(none)'} and states the PR hardens the environment so the deferred violation classes are blocked at Write/Edit time. Honor the gh-body-file rule: write a BOM-free temp file and pass --body-file.\n\n` +
-        `Return a one-line summary naming the hardening PR URL.`,
-      { label, phase: 'Converge', agentType: 'clean-coder' },
+        `- In ${context.hardeningRepoPath}: make ONE commit of the staged hooks/rules change on branch ${context.hardeningBranch}, push it, then open a DRAFT PR. The PR body references the follow-up issue ${context.issueUrl || '(none)'} and states the PR hardens the environment so the deferred violation classes are blocked at Write/Edit time. Honor the gh-body-file rule: write a BOM-free temp file and pass --body-file.\n` +
+        `- Title the PR as a Conventional Commit — a type prefix (feat, fix, chore, docs, refactor, perf, ci, style, test, build, revert), an optional scope in parentheses, then a colon and a short summary, e.g. "feat(hooks): block the deferred violation class". The target repo's CI validates the PR title as a semantic commit and rejects a non-conforming title.\n\n` +
+        `Return the full https URL of the DRAFT hardening PR in hardeningPrUrl (empty string when no PR was opened) and a one-line summary.`,
+      { label, phase: 'Converge', schema: HARDENING_COMMIT_SCHEMA, agentType: 'clean-coder' },
     )
   }
   if (task === 'commit-recover') {
@@ -585,6 +586,16 @@ const STANDARDS_EDIT_SCHEMA = {
     summary: { type: 'string' },
   },
   required: ['issueUrl', 'hardeningRepoPath', 'hardeningBranch', 'hardeningEdited', 'summary'],
+}
+
+const HARDENING_COMMIT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    hardeningPrUrl: { type: 'string', description: 'the full https URL of the DRAFT environment-hardening PR the commit step opened, or an empty string when no PR was opened' },
+    summary: { type: 'string' },
+  },
+  required: ['hardeningPrUrl', 'summary'],
 }
 
 /**
@@ -1441,6 +1452,25 @@ function standardsDeferralNote(findingsCount, wasHardeningPrOpened) {
 }
 
 /**
+ * Parse a GitHub pull-request URL into the owner, repo, and number a recursive
+ * converge run needs to address it.
+ *
+ * A hardening PR the commit step opens returns its URL as
+ * `https://github.com/<owner>/<repo>/pull/<number>`; this reads those three
+ * coordinates back out so the self-closing orchestrator can converge the
+ * deferred PR in turn. A blank or non-matching string yields null, so a commit
+ * step that opened no PR contributes no deferred coordinate.
+ * @param {string} prUrl the hardening PR's https URL, or an empty string
+ * @returns {{owner: string, repo: string, prNumber: number}|null} the parsed coordinates, or null when the URL does not match
+ */
+function parseDeferredPr(prUrl) {
+  if (typeof prUrl !== 'string') return null
+  const match = prUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?(?:[?#].*)?$/)
+  if (!match) return null
+  return { owner: match[1], repo: match[2], prNumber: Number(match[3]) }
+}
+
+/**
  * Defer a standards-only round: edit (clean-coder files the follow-up fix issue,
  * stages an environment-hardening hooks/rules change in the config repo's
  * working tree without committing, and resolves the PR's code-standard threads)
@@ -1455,28 +1485,30 @@ function standardsDeferralNote(findingsCount, wasHardeningPrOpened) {
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
  * @param {boolean} hasHardeningPrAlreadyOpened true when an earlier round already opened the environment-hardening PR for this run, so the verify and commit steps are skipped and no second PR opens while the edit retries the issue filing
- * @returns {Promise<object>} `{ followUpIssueFiled, issueUrl, hardeningPrOpened }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, issueUrl that filed URL (empty string when the filing failed) so a later reuse-path round can reference it when resolving its own threads, hardeningPrOpened true only when the hardening PR was opened on this call
+ * @returns {Promise<object>} `{ followUpIssueFiled, issueUrl, hardeningPrOpened, deferredPr }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, issueUrl that filed URL (empty string when the filing failed) so a later reuse-path round can reference it when resolving its own threads, hardeningPrOpened true when the hardening-commit step returned a non-empty hardeningPrUrl (a PR opened) so the run-once latch holds even when that URL does not parse into coordinates, and false when the commit step returned an empty URL (no PR opened) so a later round retries the open, and deferredPr the opened PR's `{owner, repo, prNumber}` (null when no PR was opened or the committed URL does not parse) so the self-closing orchestrator can converge it in turn
  */
 async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningPrAlreadyOpened) {
   const editResult = await runCodeEditorTask('standards-edit', { head, findings, sourceLabel })
   const followUpIssueFiled = typeof editResult?.issueUrl === 'string' && editResult.issueUrl.length > 0
   const followUpIssueUrl = followUpIssueFiled ? editResult.issueUrl : ''
   if (hasHardeningPrAlreadyOpened === true) {
-    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false }
+    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false, deferredPr: null }
   }
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
-    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false }
+    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false, deferredPr: null }
   }
   const verifyTranscript = await runVerifierTask('hardening-verify', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch,
   })
   if (!verdictPassed(verifyTranscript)) {
-    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false }
+    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false, deferredPr: null }
   }
-  await runCodeEditorTask('hardening-commit', {
+  const commitResult = await runCodeEditorTask('hardening-commit', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch, issueUrl: editResult.issueUrl,
   })
-  return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: true }
+  const deferredPr = parseDeferredPr(commitResult?.hardeningPrUrl)
+  const hardeningPrOpened = typeof commitResult?.hardeningPrUrl === 'string' && commitResult.hardeningPrUrl.length > 0
+  return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened, deferredPr }
 }
 
 /**
@@ -1529,13 +1561,13 @@ async function resolveStandardsThreadsForBatch(head, findings, sourceLabel) {
  * @param {string} head PR HEAD SHA the findings were raised against
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
- * @returns {Promise<boolean>} true when a hardening PR was opened for this run
+ * @returns {Promise<object>} `{ hardeningPrOpened, deferredPr }` — hardeningPrOpened true when a hardening PR was opened for this run, and deferredPr the opened PR's `{owner, repo, prNumber}` when this call opened it (null otherwise) so the self-closing orchestrator can converge it in turn
  */
 async function openStandardsFollowUpOnce(head, findings, sourceLabel) {
   if (!shouldOpenStandardsFollowUp(hasStandardsFollowUpFiled)) {
     log(`Standards deferral (${sourceLabel}): reusing the follow-up fix issue already filed for this run rather than filing a duplicate; environment-hardening PR ${wasStandardsHardeningPrOpened ? 'was opened for this run' : 'was not opened for this run'}`)
     await resolveStandardsThreadsForBatch(head, findings, sourceLabel)
-    return wasStandardsHardeningPrOpened
+    return { hardeningPrOpened: wasStandardsHardeningPrOpened, deferredPr: null }
   }
   const standardsOutcome = await spawnStandardsFollowUp(head, findings, sourceLabel, wasStandardsHardeningPrOpened)
   hasStandardsFollowUpFiled = standardsOutcome?.followUpIssueFiled === true
@@ -1543,7 +1575,7 @@ async function openStandardsFollowUpOnce(head, findings, sourceLabel) {
     standardsFollowUpIssueUrl = standardsOutcome.issueUrl
   }
   wasStandardsHardeningPrOpened = wasStandardsHardeningPrOpened || standardsOutcome?.hardeningPrOpened === true
-  return wasStandardsHardeningPrOpened
+  return { hardeningPrOpened: wasStandardsHardeningPrOpened, deferredPr: standardsOutcome?.deferredPr ?? null }
 }
 
 let phase = 'CONVERGE'
@@ -1559,6 +1591,7 @@ let hasStandardsFollowUpFiled = false
 let wasStandardsHardeningPrOpened = false
 let standardsFollowUpIssueUrl = ''
 let reuseNote = null
+const deferredPrs = []
 
 const preflightHead = await runGitTask('resolve-head')
 if (isResolvedHeadUsable(preflightHead?.sha)) {
@@ -1611,8 +1644,9 @@ while (iterations < CONFIG.maxIterations) {
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
-      const wasHardeningPrOpened = await openStandardsFollowUpOnce(head, findings, 'converge-round')
-      standardsNote = standardsDeferralNote(findings.length, wasHardeningPrOpened)
+      const standardsOutcome = await openStandardsFollowUpOnce(head, findings, 'converge-round')
+      standardsNote = standardsDeferralNote(findings.length, standardsOutcome.hardeningPrOpened)
+      if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
       const auditResult = await runGeneralUtilityTask('post-clean-audit', { head })
       if (!auditResult?.posted) {
         blocker = cleanAuditBlocker(head, auditResult)
@@ -1674,8 +1708,9 @@ while (iterations < CONFIG.maxIterations) {
     if (copilotOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
-        const wasHardeningPrOpened = await openStandardsFollowUpOnce(head, copilotOutcome.findings, 'copilot')
-        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, wasHardeningPrOpened)
+        const standardsOutcome = await openStandardsFollowUpOnce(head, copilotOutcome.findings, 'copilot')
+        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, standardsOutcome.hardeningPrOpened)
+        if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
         copilotDown = false
         copilotNote = null
         phase = 'FINALIZE'
@@ -1711,7 +1746,7 @@ while (iterations < CONFIG.maxIterations) {
       const readyResult = await runGeneralUtilityTask('mark-ready', { head, copilotDown })
       const readyOutcome = classifyReadyOutcome(readyResult)
       if (readyOutcome.converged) {
-        return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, reuseNote }
+        return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, reuseNote, deferredPrs }
       }
       blocker = readyOutcome.blocker
       break
@@ -1731,4 +1766,5 @@ return {
   standardsNote,
   copilotNote,
   reuseNote,
+  deferredPrs,
 }

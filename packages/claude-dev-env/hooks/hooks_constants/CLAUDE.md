@@ -18,6 +18,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `code_verifier_spawn_preflight_gate_constants.py` | Subagent type, merge-tree command flags, timeouts, and deny-message text for the code-verifier spawn pre-flight gate |
 | `command_dispatch_constants.py` | Command-word regex, command-key access pattern, tokenization pattern, and anchors for the unanchored command-dispatch meta-gate |
 | `convergence_branch_constants.py` | Branch and worktree naming patterns for the convergence gate |
+| `conventional_pr_title_gate_constants.py` | Bash tool name, gh executable basenames and pr create/edit subcommand tokens, title/repo flag names, semantic-title-CI workflow markers, the Conventional Commits type list and title pattern, the semantic-pull-request action `types:` input pattern, and block-message text for the conventional-PR-title gate |
 | `dead_argparse_argument_constants.py` | Patterns for detecting unused argparse arguments |
 | `dead_config_field_constants.py` | Patterns for detecting unused `*Config` / `*Selectors` dataclass fields |
 | `dead_dataclass_field_constants.py` | Patterns for detecting unused dataclass fields |

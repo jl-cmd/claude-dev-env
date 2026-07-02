@@ -376,8 +376,40 @@ test('spawnStandardsFollowUp reports whether a hardening PR opened on every path
   );
   assert.match(
     body,
-    /hardeningPrOpened:\s*true/,
-    'expected the commit path to return hardeningPrOpened:true',
+    /const hardeningPrOpened =\s*typeof commitResult\?\.hardeningPrUrl === 'string' && commitResult\.hardeningPrUrl\.length > 0/,
+    'expected the commit path to derive hardeningPrOpened from a non-empty hardeningPrUrl, so a PR that opened with an unparseable URL still latches the guard while an empty URL (no PR opened) leaves it clear to retry',
+  );
+});
+
+test('spawnStandardsFollowUp reports the deferred PR identity on every path', () => {
+  const body = lensPromptBody('spawnStandardsFollowUp');
+  const nullDeferred = body.match(/deferredPr:\s*null/g) || [];
+  assert.ok(
+    nullDeferred.length >= 2,
+    'expected both skip paths (no hardening staged, verify failed) to return deferredPr:null',
+  );
+  assert.match(
+    body,
+    /parseDeferredPr\(commitResult\?\.hardeningPrUrl\)/,
+    'expected the commit path to parse the deferred PR identity from the commit step hardeningPrUrl',
+  );
+  assert.doesNotMatch(
+    body,
+    /hardeningPrOpened:\s*deferredPr !== null/,
+    'expected the commit path to keep hardeningPrOpened separate from the parsed deferredPr so an unparseable URL still latches the guard',
+  );
+});
+
+test('the workflow return objects carry the accumulated deferredPrs list', () => {
+  const converged = convergeSource.match(/deferredPrs/g) || [];
+  assert.ok(
+    converged.length >= 4,
+    'expected deferredPrs to be declared, pushed at both deferral call sites, and returned',
+  );
+  assert.match(
+    convergeSource,
+    /if \(standardsOutcome\?\.deferredPr\) deferredPrs\.push\(standardsOutcome\.deferredPr\)/,
+    'expected each deferral call site to accumulate the deferred PR into deferredPrs',
   );
 });
 

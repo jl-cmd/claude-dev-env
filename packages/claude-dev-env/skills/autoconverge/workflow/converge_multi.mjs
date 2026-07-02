@@ -126,7 +126,7 @@ function childRunInput(prEntry) {
 
 const multiInput = classifyMultiInput(args)
 if (multiInput.blocker) {
-  return { converged: false, prCount: 0, convergedCount: 0, results: [], blocker: multiInput.blocker }
+  return { converged: false, prCount: 0, convergedCount: 0, results: [], allDeferredPrs: [], blocker: multiInput.blocker }
 }
 const input = multiInput.input
 
@@ -147,6 +147,7 @@ const childResults = await parallel(
       rounds: childOutcome && childOutcome.rounds !== undefined ? childOutcome.rounds : null,
       finalSha: childOutcome && childOutcome.finalSha !== undefined ? childOutcome.finalSha : null,
       blocker: childOutcome && childOutcome.blocker !== undefined ? childOutcome.blocker : null,
+      deferredPrs: childOutcome && Array.isArray(childOutcome.deferredPrs) ? childOutcome.deferredPrs : [],
     }
   }),
 )
@@ -161,17 +162,20 @@ const results = childResults.map((eachResult, eachIndex) =>
         rounds: null,
         finalSha: null,
         blocker: 'child run threw or was skipped before returning an outcome',
+        deferredPrs: [],
       }
     : eachResult,
 )
 
 const convergedCount = results.filter((eachResult) => eachResult.converged).length
-log(`autoconverge multi-PR done: ${convergedCount}/${results.length} PR(s) converged`)
+const allDeferredPrs = results.flatMap((eachResult) => eachResult.deferredPrs)
+log(`autoconverge multi-PR done: ${convergedCount}/${results.length} PR(s) converged, ${allDeferredPrs.length} deferred hardening PR(s) opened`)
 
 return {
   converged: convergedCount === results.length,
   prCount: results.length,
   convergedCount,
   results,
+  allDeferredPrs,
   blocker: null,
 }
