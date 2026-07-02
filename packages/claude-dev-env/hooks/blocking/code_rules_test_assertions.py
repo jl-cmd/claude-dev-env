@@ -51,6 +51,7 @@ from code_rules_shared import (  # noqa: E402
 
 from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_STALE_TEST_NAME_TARGET_ISSUES,
+    MAX_VACUOUS_CLEANUP_ASSERTION_ISSUES,
     STALE_TEST_NAME_MINIMUM_SHARED_TOKEN_COUNT,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
@@ -387,6 +388,8 @@ def check_vacuous_cleanup_assertion_tests(content: str, file_path: str) -> list[
             f" failure (e.g. monkeypatch os.replace to raise after the temp exists)"
             f" then assert the temp was removed"
         )
+        if len(issues) >= MAX_VACUOUS_CLEANUP_ASSERTION_ISSUES:
+            break
 
     return issues
 

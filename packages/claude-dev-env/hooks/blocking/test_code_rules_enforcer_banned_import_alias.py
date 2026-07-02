@@ -117,11 +117,15 @@ def test_should_flag_btn_assignment() -> None:
     )
 
 
-def test_should_not_flag_import_alias_in_test_file() -> None:
+def test_should_scope_import_alias_in_test_file_to_changed_lines() -> None:
     content = "from config import rebase_constants as rc\n"
-    issues = check_banned_identifiers(content, TEST_FILE_PATH)
-    assert issues == [], (
-        f"Test files are exempt from banned-identifier checks, got: {issues}"
+    unchanged_only = check_banned_identifiers(content, TEST_FILE_PATH, {2})
+    assert unchanged_only == [], (
+        f"A banned alias on an untouched line must not block, got: {unchanged_only}"
+    )
+    on_changed_line = check_banned_identifiers(content, TEST_FILE_PATH, {1})
+    assert any("'rc'" in each_issue for each_issue in on_changed_line), (
+        f"A newly written banned alias in a test file must flag, got: {on_changed_line}"
     )
 
 

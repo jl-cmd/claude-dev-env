@@ -15,6 +15,25 @@ The label-vs-body gap is its own failure mode independent of behavior-equivalenc
 
 ---
 
+## Binding counterexample protocol
+
+For every regex, brace or token scanner, or word-list the diff adds or edits, build at least three concrete inputs and trace each one through the pattern by hand before you call the pattern clean:
+
+- **One intended match** — an input the pattern must catch.
+- **One near-miss** — an input a quick reading would expect to catch, but the contract says the pattern must reject.
+- **One structural edge** — an input whose shape stresses the scanner: a destructured parameter, a quoted key, a nested brace, an escaped delimiter.
+
+Walk each input character by character (or token by token) and write down what the pattern returns. A pattern that returns the wrong answer on any of the three inputs is a Category P finding; cite the input that breaks it. The pattern is clean only after all three inputs return the answer the contract promises.
+
+`hooks/blocking/` is the priority surface. Its patterns gate every write, so a pattern that matches too much or too little there fires on real edits across the whole codebase.
+
+Two canonical failures show why the hand trace is binding:
+
+- **Brace scan that reads a parameter as body.** A scanner counts braces from the signature's opening `(` and treats the first balanced close as the end of the function body. A destructured parameter closes a brace inside the signature — `renderRow({ id, label })` in JavaScript, or a `{a, b}` binding in another language — so the scanner marks the body one token too early and reads the parameter list as body code.
+- **`\bschema\b` that matches a value reference.** A `\bschema\b` pattern targets a `schema` declaration, yet it also matches `schema` as the value in `{ label: schema }`, where the word is a reference, not the declaration the pattern means to find. A word boundary alone does not tell a declaration from a key or a value.
+
+---
+
 ## Sub-bucket decomposition (Category P)
 
 Decomposition is by the **kind of identifier / reference data** whose label is being audited against its body.

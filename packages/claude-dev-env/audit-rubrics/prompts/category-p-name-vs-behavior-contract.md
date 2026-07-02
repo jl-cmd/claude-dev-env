@@ -19,6 +19,20 @@ ID prefix: `find`.
 
 [INLINE each fresh identifier in context — the constant declaration with the value, the function signature with the body, the flag with every assignment / reset site, the regex source with surrounding usage.]
 
+## Binding counterexample protocol (run before every Shape B "clean" verdict)
+
+For every regex, brace or token scanner, or word-list the diff adds or edits, build at least three concrete inputs and trace each one through the pattern by hand:
+
+- One intended match the pattern must catch.
+- One near-miss the pattern must reject (hyphen vs underscore, a value reference vs a declaration, a substring of a longer word).
+- One structural edge that stresses the scanner: a destructured parameter, a quoted key, a nested brace, an escaped delimiter.
+
+Record what the pattern returns for each input. A wrong answer on any input is a Shape A finding, cited with the breaking input; a clean verdict is earned only after all three inputs return the contract's answer. `hooks/blocking/` is the priority surface — its patterns gate every write.
+
+Two canonical failures to probe for:
+- A brace scan that counts from the signature `(` and reads a destructured parameter (`renderRow({ id, label })`) as the start of the function body.
+- A `\bschema\b` pattern that matches the value in `{ label: schema }`, not just the `schema` declaration it targets.
+
 ## Sub-buckets (each requires Shape A finding OR Shape B with ≥3 adversarial probes)
 
 **P1. Boolean / flag names assert state the body keeps**

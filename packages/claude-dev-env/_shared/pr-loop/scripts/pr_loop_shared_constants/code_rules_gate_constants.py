@@ -80,3 +80,16 @@ ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX: tuple[str, ...] = (
     "--name-only",
     "-z",
 )
+
+
+ALL_PYTEST_MODULE_INVOCATION: tuple[str, ...] = (
+    "-m",
+    "pytest",
+    "-q",
+)
+
+STAGED_PYTEST_TIMEOUT_SECONDS: int = 600
+
+STAGED_TEST_FAILURE_HEADER: str = (
+    "code_rules_gate: staged test file(s) failed under pytest; commit blocked."
+)

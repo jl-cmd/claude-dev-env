@@ -23,6 +23,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_annotations_length.py` | Parameter/return annotations, function length, pytest fixture annotation requirements |
 | `code_rules_banned_identifiers.py` | Banned short names (`ctx`, `cfg`, `msg`, etc.), banned prefixes (`handle_`, `process_`, etc.) |
 | `code_rules_boolean_mustcheck.py` | Boolean naming (`is_`/`has_`/… prefixes) and must-check return values |
+| `code_rules_command_dispatch.py` | A `hooks/blocking/` command classifier matching a multi-word command regex without a start anchor or first-word tokenization |
 | `code_rules_comments.py` | No new inline comments; no deletion of existing ones |
 | `code_rules_constants_config.py` | Constants must live in `config/`; file-global constant use-count |
 | `code_rules_dead_argparse_argument.py` | Argparse arguments with no references in the same file |
@@ -33,6 +34,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_docstrings.py` | Google-style docstrings; `Args:` section matches signature; fallback-branch coverage |
 | `code_rules_duplicate_body.py` | A function body copied from a sibling module, or a helper body inlined as a block inside a larger function in the same file |
 | `code_rules_imports_logging.py` | Imports at top of file; logging format-arg style; printf tokens in `str.format`-logger messages |
+| `code_rules_js_conventions.py` | Boolean-prefix naming and banned identifiers for JavaScript/TypeScript declarations and `@param {boolean}` JSDoc, scoped to changed lines |
 | `code_rules_magic_values.py` | No magic numbers or strings in production code bodies |
 | `code_rules_mock_completeness.py` | Mock calls that skip required arguments |
 | `code_rules_naming_collection.py` | Collection names must use `all_*` prefix |

@@ -1,6 +1,6 @@
 # audit-rubrics/category_rubrics
 
-One rubric file per audit category (A–P). Each file defines what the category covers, gives concrete examples of findings, and provides the sub-bucket decomposition an audit agent uses to structure its pass.
+One rubric file per audit category (A–Q). Each file defines what the category covers, gives concrete examples of findings, and provides the sub-bucket decomposition an audit agent uses to structure its pass.
 
 ## Files
 
@@ -22,6 +22,7 @@ One rubric file per audit category (A–P). Each file defines what the category 
 | `category-n-test-name-scenario-verifier.md` | N — Test name / scenario verifier |
 | `category-o-docstring-vs-impl-drift.md` | O — Docstring vs implementation drift |
 | `category-p-name-vs-behavior-contract.md` | P — Name vs behavior contract |
+| `category-q-cross-surface-claims.md` | Q — Cross-surface claim consistency |
 
 ## Rubric structure
 

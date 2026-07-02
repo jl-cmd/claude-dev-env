@@ -11,7 +11,8 @@ Python scripts invoked at runtime by the PR-loop skills. Each script is a standa
 | `post_audit_thread.py` | Posts an audit review (APPROVE / REQUEST_CHANGES) to a draft PR via the GitHub reviews API; reads the body skeleton from `audit-reply-template.md` at runtime |
 | `grant_project_claude_permissions.py` | Writes idempotent allow-rules and `additionalDirectories` entries into `~/.claude/settings.json` so subagents can edit the project's `.claude/` tree without prompting |
 | `revoke_project_claude_permissions.py` | Removes the allow-rules and entries that `grant_project_claude_permissions.py` wrote; safe to run when no prior grant exists |
-| `code_rules_gate.py` | Pre-commit gate that runs `code_rules_enforcer` checks on staged Python files before a fix commit lands |
+| `code_rules_gate.py` | Pre-commit gate that runs `code_rules_enforcer` checks on staged Python files before a fix commit lands, and the terminology sweep over the staged diff |
+| `terminology_sweep.py` | Flags a prose term that near-misses an identifier introduced on added code lines of a unified diff (shared leading word, divergent tail) |
 | `reviews_disabled.py` | Shared helper for the `CLAUDE_REVIEWS_DISABLED` opt-out gate; parses the env-var token to find which reviewer types are suppressed |
 | `copilot_quota.py` | Copilot premium-request quota pre-check: resolves a configured GitHub account, reads its remaining `premium_interactions` quota via `gh api copilot_internal/user`, and exits 0 (run Copilot) or non-zero (skip: out of quota, API down, or no account configured) |
 | `fix_hookspath.py` | Repairs a malformed `core.hooksPath` global git config entry |

@@ -118,9 +118,39 @@ def _collect_banned_names_from_node(node: ast.AST) -> list[ast.Name]:
     return []
 
 
-def check_banned_identifiers(content: str, file_path: str) -> list[str]:
-    """Flag assignments to identifiers banned by the project Naming rules."""
-    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+def check_banned_identifiers(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    """Flag assignments to identifiers banned by the project Naming rules.
+
+    Test files are scoped rather than exempt: a banned identifier a test binds
+    is flagged only when its binding line is among the changed lines, so a
+    pre-existing ``result`` on an untouched line never blocks an edit while a
+    newly written one does. Production files scope the same way, and a new-file
+    or full-file write treats every line as changed. Hook infrastructure stays
+    exempt.
+
+    Args:
+        content: The source text to inspect — the reconstructed full file on an
+            Edit so the parse succeeds and the diff scoping is meaningful.
+        file_path: The path the source will be written to, used for exemptions.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a violation
+            blocks only when its binding line is among the changed lines.
+        defer_scope_to_caller: When True, return every violation so the
+            commit/push gate scopes by added line through its ``Line N:``
+            partitioning.
+
+    Returns:
+        One issue per banned binding, scoped to the changed lines unless
+        *defer_scope_to_caller* is True or *all_changed_lines* is None. The
+        terminal result is capped at the module limit; the deferred result is
+        uncapped so the gate can scope by added line and apply its own ceiling.
+    """
+    if is_hook_infrastructure(file_path):
         return []
 
     try:
@@ -135,15 +165,24 @@ def check_banned_identifiers(content: str, file_path: str) -> list[str]:
 
     banned_name_nodes.sort(key=lambda each_name: (each_name.lineno, each_name.col_offset))
 
-    issues: list[str] = []
+    all_violations_in_source_order: list[tuple[range, str]] = []
     for each_name in banned_name_nodes:
-        issues.append(
-            f"Line {each_name.lineno}: Banned identifier '{each_name.id}' - {BANNED_IDENTIFIER_MESSAGE_SUFFIX}"
+        message = (
+            f"Line {each_name.lineno}: Banned identifier '{each_name.id}' - "
+            f"{BANNED_IDENTIFIER_MESSAGE_SUFFIX}"
         )
-        if len(issues) >= MAX_BANNED_IDENTIFIER_ISSUES:
-            break
+        all_violations_in_source_order.append(
+            (range(each_name.lineno, each_name.lineno + 1), message)
+        )
 
-    return issues
+    scoped_issues = _scope_violations_to_changed_lines(
+        all_violations_in_source_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
+    if defer_scope_to_caller:
+        return scoped_issues
+    return scoped_issues[:MAX_BANNED_IDENTIFIER_ISSUES]
 
 
 def _identifier_word_parts(identifier: str) -> list[str]:

@@ -3,7 +3,8 @@
 Builds <context> and <scope> from CLI args; <bug_categories>,
 <rubric_reference>, and <constraints> come from the shared constants in
 skills_pr_loop_constants; <comment_posting> and <output_format> are built
-inline.
+inline. <pr_description> carries the PR body text read from --pr-body-file,
+and stays empty when that argument is absent or the file cannot be read.
 
 Usage:
   python scripts/build_audit_prompt.py --owner jl-cmd --repo claude-code-config --pr-number 422 --loop 1 --head-ref feat/branch --base-ref main --worktree-path <PATH> --run-temp-dir <PATH>
@@ -28,6 +29,38 @@ from skills_pr_loop_constants.path_resolver_constants import (
 )
 
 
+def read_pr_body_text(pr_body_file: Path | None) -> str | None:
+    """Read the PR description body from a file when given and readable.
+
+    Args:
+        pr_body_file: Path to a file holding the PR description body, or None.
+
+    Returns:
+        The file's text when the path is given and readable, otherwise None.
+    """
+    if pr_body_file is None:
+        return None
+    try:
+        return pr_body_file.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _append_pr_description(root: Element, pr_body_text: str | None) -> None:
+    """Append a <pr_description> element carrying the PR body text.
+
+    Args:
+        root: Root element the <pr_description> child is appended to.
+        pr_body_text: PR description body text, or None when unavailable.
+
+    Returns:
+        None.
+    """
+    pr_description = SubElement(root, "pr_description")
+    if pr_body_text:
+        pr_description.text = pr_body_text
+
+
 def build_audit_prompt_xml(
     *,
     owner: str,
@@ -38,6 +71,7 @@ def build_audit_prompt_xml(
     base_ref: str,
     worktree_path: Path,
     run_temp_dir: Path,
+    pr_body_text: str | None = None,
 ) -> Element:
     """Build the complete AUDIT spawn prompt XML.
 
@@ -50,6 +84,7 @@ def build_audit_prompt_xml(
         base_ref: Base branch ref.
         worktree_path: Path to the git worktree.
         run_temp_dir: Path to the run temp directory.
+        pr_body_text: PR description body text, or None when unavailable.
 
     Returns:
         Root <spawn_prompt> element.
@@ -71,6 +106,8 @@ def build_audit_prompt_xml(
         f"({head_ref} against {base_ref}) for CODE_RULES violations, "
         f"bugs, and anti-patterns. Work in {worktree_path.as_posix()}."
     )
+
+    _append_pr_description(root, pr_body_text)
 
     bug_categories = SubElement(root, "bug_categories")
     for each_category_id, each_category_label in ALL_AUDIT_CATEGORY_ENTRIES:
@@ -110,6 +147,7 @@ def emit_audit_prompt(
     base_ref: str,
     worktree_path: Path,
     run_temp_dir: Path,
+    pr_body_text: str | None = None,
 ) -> str:
     """Build and serialize the AUDIT spawn prompt to a pretty-printed XML string.
 
@@ -122,6 +160,7 @@ def emit_audit_prompt(
         base_ref: Base branch ref.
         worktree_path: Path to the git worktree.
         run_temp_dir: Path to the run temp directory.
+        pr_body_text: PR description body text, or None when unavailable.
 
     Returns:
         Pretty-printed XML string.
@@ -135,6 +174,7 @@ def emit_audit_prompt(
         base_ref=base_ref,
         worktree_path=worktree_path,
         run_temp_dir=run_temp_dir,
+        pr_body_text=pr_body_text,
     )
     return emit_pretty_xml(root)
 
@@ -157,6 +197,7 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--base-ref", required=True)
     parser.add_argument("--worktree-path", type=Path, required=True)
     parser.add_argument("--run-temp-dir", type=Path, required=True)
+    parser.add_argument("--pr-body-file", type=Path, default=None)
     return parser.parse_args(all_argv)
 
 
@@ -179,6 +220,7 @@ def main(all_arguments: list[str]) -> int:
         base_ref=arguments.base_ref,
         worktree_path=arguments.worktree_path,
         run_temp_dir=arguments.run_temp_dir,
+        pr_body_text=read_pr_body_text(arguments.pr_body_file),
     )
     sys.stdout.write(xml_output)
     return 0

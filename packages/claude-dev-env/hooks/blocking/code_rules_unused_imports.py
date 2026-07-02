@@ -19,7 +19,6 @@ from code_rules_scope_binding import (  # noqa: E402
 from code_rules_shared import (  # noqa: E402
     _build_parent_map,
     is_migration_file,
-    is_test_file,
 )
 
 from hooks_constants.unused_module_import_constants import (  # noqa: E402
@@ -149,8 +148,6 @@ def check_unused_module_level_imports(
     Edit applies). This prevents false-positive flags on imports added in the
     same Edit as their consumers.
     """
-    if is_test_file(file_path):
-        return []
     if is_migration_file(file_path):
         return []
     try:

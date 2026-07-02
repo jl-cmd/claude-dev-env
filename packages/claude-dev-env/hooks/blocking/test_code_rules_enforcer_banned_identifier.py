@@ -95,10 +95,18 @@ def test_should_not_flag_name_containing_banned_substring() -> None:
     assert issues == []
 
 
-def test_should_skip_test_files() -> None:
+def test_should_scope_test_file_banned_identifier_to_changed_lines() -> None:
+    content = "def test_thing():\n    result = compute()\n    assert result\n"
+    unchanged_only = check_banned_identifiers(content, TEST_FILE_PATH, {1, 3})
+    assert unchanged_only == []
+    on_changed_line = check_banned_identifiers(content, TEST_FILE_PATH, {2})
+    assert any("result" in each_issue for each_issue in on_changed_line)
+
+
+def test_should_flag_newly_written_test_file_banned_identifier() -> None:
     content = "def test_thing():\n    result = compute()\n    assert result\n"
     issues = check_banned_identifiers(content, TEST_FILE_PATH)
-    assert issues == []
+    assert any("'result'" in each_issue for each_issue in issues)
 
 
 def test_should_skip_hook_infrastructure() -> None:

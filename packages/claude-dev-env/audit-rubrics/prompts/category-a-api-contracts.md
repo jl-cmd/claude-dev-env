@@ -16,6 +16,7 @@ ID prefix: `find`.
 - Flag calls that omit a required parameter relying on a default that does not exist on the current branch.
 - Verify decorators (`@staticmethod`, `@classmethod`, `@property`) do not silently shift the parameter binding (e.g., `self` / `cls` insertion).
 - Confirm sync-vs-async (is the symbol `async def`?), the exact access path a caller uses (free function vs instance method via an object attribute vs import path), and that a keyword-only parameter with no default is required — omitting it raises `TypeError`.
+- When a call passes a config value as an argument, confirm the value's documented role matches the parameter's role (poll interval vs timeout vs budget). A poll interval such as `PollingIntervals.resume_check` handed to a `progress_check_timeout` parameter type-checks but carries the wrong meaning.
 
 **A2. Return-type annotation vs every code path**
 - For each annotated function, walk every code path: explicit `return X`, fall-through to implicit `None`, exception-handler exit, generator `yield` paths, async coroutine return value.

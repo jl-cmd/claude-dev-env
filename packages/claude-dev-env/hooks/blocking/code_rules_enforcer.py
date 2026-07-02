@@ -44,6 +44,9 @@ from code_rules_boolean_mustcheck import (  # noqa: E402
     check_boolean_naming,
     check_ignored_must_check_return,
 )
+from code_rules_command_dispatch import (  # noqa: E402
+    check_unanchored_command_dispatch,
+)
 from code_rules_comments import (  # noqa: E402
     check_comment_changes,
 )
@@ -108,6 +111,10 @@ from code_rules_imports_logging import (  # noqa: E402
     check_logging_fstrings,
     check_logging_printf_tokens,
     check_windows_api_none,
+)
+from code_rules_js_conventions import (  # noqa: E402
+    check_js_banned_identifiers,
+    check_js_boolean_naming,
 )
 from code_rules_magic_values import (  # noqa: E402
     check_fstring_structural_literals,
@@ -285,7 +292,14 @@ def validate_content(
             )
         )
         all_issues.extend(check_type_escape_hatches(effective_content, file_path))
-        all_issues.extend(check_banned_identifiers(content, file_path))
+        all_issues.extend(
+            check_banned_identifiers(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
         all_issues.extend(
             check_banned_noun_word_boundary(
                 effective_content,
@@ -432,7 +446,14 @@ def validate_content(
         all_issues.extend(
             check_unused_known_pytest_fixture_parameters(content, file_path)
         )
-        all_issues.extend(check_return_annotations(content, file_path))
+        all_issues.extend(
+            check_return_annotations(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
         all_issues.extend(
             check_function_length(
                 effective_content,
@@ -470,6 +491,22 @@ def validate_content(
         if not is_test_file(file_path):
             all_issues.extend(check_comment_changes(old_content, content, file_path))
         all_issues.extend(check_e2e_test_naming(content, file_path))
+        all_issues.extend(
+            check_js_boolean_naming(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
+        all_issues.extend(
+            check_js_banned_identifiers(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
         all_issues.extend(
             check_js_resume_task_enumeration_coverage(content, file_path)
         )
@@ -583,8 +620,10 @@ def _hook_infrastructure_blocking_issues(
     runs the checks that must still guard them: the cross-file duplicate-body
     check and the same-file inline-duplicate-body check, each span-scoped to the
     lines an edit touched exactly as ``validate_content`` scopes it for production
-    code; and the zero-payload alias check, whose docstring names hook modules as
-    its motivating case, run over the whole post-edit file.
+    code; the zero-payload alias check, whose docstring names hook modules as
+    its motivating case, run over the whole post-edit file; and the
+    unanchored command-dispatch check, which guards a ``hooks/blocking``
+    command classifier against matching a multi-word command as a substring.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -617,6 +656,13 @@ def _hook_infrastructure_blocking_issues(
         )
     )
     all_issues.extend(check_zero_payload_function_alias(effective_content, file_path))
+    all_issues.extend(
+        check_unanchored_command_dispatch(
+            effective_content,
+            file_path,
+            all_changed_lines,
+        )
+    )
     return all_issues
 
 

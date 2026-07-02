@@ -15,16 +15,17 @@ from pr_loop_shared_constants.code_rules_gate_constants import (  # noqa: E402
     ALL_CODE_FILE_EXTENSIONS,
     ALL_GIT_DIFF_CACHED_NAME_ONLY_NULL_TERMINATED_COMMAND,
     ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX,
+    ALL_PYTEST_MODULE_INVOCATION,
     ALL_TEST_FILENAME_GLOB_SUFFIXES,
     ALL_TEST_FILENAME_SUFFIXES,
-    EXPECTED_NON_RENAME_COLUMN_COUNT,
-    EXPECTED_RENAME_COLUMN_COUNT,
     BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX,
     BANNED_NOUN_SPAN_GROUP_INDEX,
     BANNED_NOUN_VIOLATION_PATTERN,
     DUPLICATE_BODY_DEFINITION_LINE_GROUP_INDEX,
     DUPLICATE_BODY_SPAN_GROUP_INDEX,
     DUPLICATE_BODY_VIOLATION_PATTERN,
+    EXPECTED_NON_RENAME_COLUMN_COUNT,
+    EXPECTED_RENAME_COLUMN_COUNT,
     FUNCTION_LENGTH_DEFINITION_LINE_GROUP_INDEX,
     FUNCTION_LENGTH_SPAN_GROUP_INDEX,
     FUNCTION_LENGTH_VIOLATION_PATTERN,
@@ -35,9 +36,14 @@ from pr_loop_shared_constants.code_rules_gate_constants import (  # noqa: E402
     ISOLATION_VIOLATION_PATTERN,
     MAX_VIOLATIONS_PER_CHECK,
     PYTHON_FILE_EXTENSION,
+    STAGED_PYTEST_TIMEOUT_SECONDS,
+    STAGED_TEST_FAILURE_HEADER,
     TEST_CONFTEST_FILENAME,
     TEST_FILENAME_PREFIX,
     TESTS_PATH_SEGMENT,
+)
+from pr_loop_shared_constants.preflight_constants import (  # noqa: E402
+    PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
 )
 from pr_loop_shared_constants.inline_duplicate_body_span_constants import (  # noqa: E402
     INLINE_DUPLICATE_BODY_ENCLOSING_LINE_GROUP_INDEX,
@@ -46,7 +52,10 @@ from pr_loop_shared_constants.inline_duplicate_body_span_constants import (  # n
     INLINE_DUPLICATE_BODY_HELPER_SPAN_GROUP_INDEX,
     INLINE_DUPLICATE_BODY_VIOLATION_PATTERN,
 )
-
+from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
+    TERMINOLOGY_SWEEP_GATE_HEADER,
+)
+from terminology_sweep import staged_terminology_findings  # noqa: E402
 
 ValidateContentCallable = Callable[..., list[str]]
 
@@ -768,12 +777,13 @@ def renamed_file_source_map_since(
 
     Runs `git diff --name-status -M -z merge_base..HEAD` and collects both
     paths of every rename entry (status code starting with R, e.g. `R100`).
-    Keys are destination posix paths; values are source posix paths. The
-    -z flag asks git for null-terminated, unquoted output so paths
-    containing tab or newline bytes are not misparsed by column or line
-    splitting; rename records emit three null-terminated tokens in
-    sequence (status, source, destination), other status records emit
-    two (status, path).
+    Keys are destination posix paths; values are source posix paths.
+
+    The -z flag asks git for null-terminated, unquoted output. A path
+    holding a tab or newline byte then survives column and line splitting
+    unmangled. Each rename record emits three null-terminated tokens
+    (status, source, destination). Every other status record emits two
+    (status, path).
 
     Args:
         repository_root: Repository root used as the ``git -C`` target.
@@ -1024,11 +1034,13 @@ def duplicate_body_span_range(violation_text: str) -> range | None:
     The duplicate-body message carries the copied function's definition line and
     its full body span: ``Function 'NAME' duplicates location.py::name — ...
     (duplicate body span at line X, spanning Y lines)``. The function occupies
-    lines ``X`` through ``X + Y - 1`` inclusive, so a duplicate of a sibling helper
-    is blocking only when the diff touches the copied function and advisory when an
-    unrelated edit leaves a pre-existing copy untouched — matching the span-scoped
-    PreToolUse Write/Edit behavior rather than blocking every duplicate-body
-    message unconditionally.
+    lines ``X`` through ``X + Y - 1`` inclusive.
+
+    So a duplicate of a sibling helper blocks only when the diff touches the
+    copied function. An unrelated edit that leaves a pre-existing copy
+    untouched keeps it advisory. This matches the span-scoped PreToolUse
+    Write/Edit behavior rather than blocking every duplicate-body message
+    unconditionally.
 
     Args:
         violation_text: A single violation string emitted by the enforcer.
@@ -1048,16 +1060,18 @@ def duplicate_body_span_range(violation_text: str) -> range | None:
 def inline_duplicate_body_span_lines(violation_text: str) -> frozenset[int] | None:
     """Return the union of both spans of a same-file inline-duplicate issue, or None.
 
-    The same-file inline-duplicate message names two functions that share a body —
-    the helper and the enclosing function carrying the inline copy — and the live
-    Write/Edit hook scopes the violation by the UNION of both spans, blocking when
-    an edit touches either function. So the message carries both spans: ``(inline
-    duplicate body spans: helper at line H spanning P lines, enclosing at line E
-    spanning Q lines)``. The two spans can be disjoint (an unrelated function may
-    sit between the helper and its inline copy), so this returns the union as a
-    line-number set rather than a single contiguous range — a range covering the
-    gap would wrongly block an edit confined to that intervening function, which
-    the PreToolUse path leaves unflagged.
+    The same-file inline-duplicate message names two functions that share a body:
+    the helper and the enclosing function carrying the inline copy. The live
+    Write/Edit hook scopes the violation by the union of both spans. It blocks
+    when an edit touches either function. So the message carries both spans:
+    ``(inline duplicate body spans: helper at line H spanning P lines,
+    enclosing at line E spanning Q lines)``.
+
+    The two spans can be disjoint: an unrelated function may sit between the
+    helper and its inline copy. This returns the union as a line-number set
+    rather than a single contiguous range. A range covering the gap would
+    wrongly block an edit confined to that intervening function, which the
+    PreToolUse path leaves unflagged.
 
     Args:
         violation_text: A single violation string emitted by the enforcer.
@@ -1096,10 +1110,10 @@ def enclosing_span_range(violation_text: str) -> range | None:
 
     Every diff-scoped enforcer check tags its message with an enclosing-unit
     span fragment. This dispatcher tries each span extractor from
-    ``_all_span_range_extractors`` so the gate reconstructs every scoped
-    check's span through one shared mechanism — adding a new scoped check means
-    adding one extractor to that registry rather than threading a new branch
-    through ``split_violations_by_scope``.
+    ``_all_span_range_extractors``, so the gate reconstructs every scoped
+    check's span through one shared mechanism. Adding a new scoped check
+    means adding one extractor to that registry rather than threading a new
+    branch through ``split_violations_by_scope``.
 
     Args:
         violation_text: A single violation string emitted by the enforcer.
@@ -1510,6 +1524,73 @@ def _report_partitioned_violations(
     return 0
 
 
+def _staged_test_file_paths(repository_root: Path) -> list[Path]:
+    """Return the staged Python test files that exist under a repository.
+
+    Args:
+        repository_root: The repository root whose staged index is read.
+
+    Returns:
+        The staged paths whose extension is Python, whose name matches a
+        test-file pattern, and which exist on disk.
+    """
+    all_test_paths: list[Path] = []
+    for each_path in paths_from_git_staged(repository_root):
+        if each_path.suffix != PYTHON_FILE_EXTENSION:
+            continue
+        if is_test_path(str(each_path)) and each_path.is_file():
+            all_test_paths.append(each_path)
+    return all_test_paths
+
+
+def run_staged_test_files(repository_root: Path) -> int:
+    """Run pytest over the staged test files and return the gate exit code.
+
+    Args:
+        repository_root: The repository root the staged test files belong to.
+
+    Returns:
+        0 when no test file is staged, when the staged test files collect
+        no tests (pytest's no-tests-collected exit code), or when every staged
+        test passes. pytest's non-zero exit code otherwise, which blocks the
+        commit.
+    """
+    all_test_paths = _staged_test_file_paths(repository_root)
+    if not all_test_paths:
+        return 0
+    pytest_process = subprocess.run(
+        [
+            sys.executable,
+            *ALL_PYTEST_MODULE_INVOCATION,
+            *[str(each_path) for each_path in all_test_paths],
+        ],
+        cwd=str(repository_root),
+        timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
+        check=False,
+    )
+    if pytest_process.returncode == PYTEST_NO_TESTS_COLLECTED_EXIT_CODE:
+        return 0
+    if pytest_process.returncode != 0:
+        print(STAGED_TEST_FAILURE_HEADER, file=sys.stderr)
+    return pytest_process.returncode
+
+
+def _report_terminology_findings(all_findings: list[str]) -> None:
+    """Print the terminology-sweep findings, when any, to standard error.
+
+    Args:
+        all_findings: The near-miss findings from the staged terminology sweep.
+    """
+    if not all_findings:
+        return
+    print(
+        TERMINOLOGY_SWEEP_GATE_HEADER.format(finding_count=len(all_findings)),
+        file=sys.stderr,
+    )
+    for each_finding in all_findings:
+        print(f"  {each_finding}", file=sys.stderr)
+
+
 def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
     """Parse the command-line arguments for the code-rules gate.
 
@@ -1590,6 +1671,10 @@ def main(all_arguments: list[str]) -> int:
             validate_content, file_paths, repository_root, all_added_lines_by_path=None
         )
     if arguments.staged:
+        all_terminology_findings = staged_terminology_findings(repository_root)
+        _report_terminology_findings(all_terminology_findings)
+        terminology_exit_code = 1 if all_terminology_findings else 0
+        staged_test_exit_code = run_staged_test_files(repository_root)
         staged_file_paths = paths_from_git_staged(repository_root)
         staged_file_paths = filter_paths_under_prefixes(
             staged_file_paths,
@@ -1597,17 +1682,18 @@ def main(all_arguments: list[str]) -> int:
             arguments.only_under,
         )
         if not staged_file_paths:
-            return 0
+            return terminology_exit_code or staged_test_exit_code
         staged_added_lines = added_lines_by_file_staged(
             repository_root, staged_file_paths
         )
-        return run_gate(
+        gate_exit_code = run_gate(
             validate_content,
             staged_file_paths,
             repository_root,
             all_added_lines_by_path=staged_added_lines,
             read_staged_content_flag=True,
         )
+        return gate_exit_code or terminology_exit_code or staged_test_exit_code
     file_paths = paths_from_git_diff(repository_root, arguments.base)
     file_paths = filter_paths_under_prefixes(
         file_paths,
