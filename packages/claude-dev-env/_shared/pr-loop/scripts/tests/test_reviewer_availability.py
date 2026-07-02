@@ -81,7 +81,7 @@ def test_main_reports_copilot_available_when_quota_confirmed_available(
     )
     exit_code = reviewer_availability.main(["--reviewer", "copilot"])
     captured = capsys.readouterr()
-    assert exit_code == 0
+    assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_AVAILABLE
     assert "running Copilot" in captured.out
 
 
@@ -99,7 +99,7 @@ def test_main_reports_copilot_down_when_opted_out_via_env(
     monkeypatch.setattr(copilot_quota, "_run_gh", _fail_if_called)
     exit_code = reviewer_availability.main(["--reviewer", "copilot"])
     captured = capsys.readouterr()
-    assert exit_code == 1
+    assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_DOWN
     assert "CLAUDE_REVIEWS_DISABLED" in captured.err
 
 
@@ -114,7 +114,7 @@ def test_main_reports_copilot_down_when_out_of_quota(
     )
     exit_code = reviewer_availability.main(["--reviewer", "copilot"])
     captured = capsys.readouterr()
-    assert exit_code == 1
+    assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_DOWN
     assert "scenario A" in captured.err
 
 
@@ -127,7 +127,7 @@ def test_main_reports_copilot_down_when_quota_api_is_down(
     )
     exit_code = reviewer_availability.main(["--reviewer", "copilot"])
     captured = capsys.readouterr()
-    assert exit_code == 1
+    assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_DOWN
     assert "scenario B" in captured.err
 
 
@@ -136,7 +136,7 @@ def test_main_reports_copilot_down_when_no_account_configured(
 ) -> None:
     exit_code = reviewer_availability.main(["--reviewer", "copilot"])
     captured = capsys.readouterr()
-    assert exit_code == 1
+    assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_DOWN
     assert "scenario C" in captured.err
 
 
@@ -145,7 +145,7 @@ def test_main_reports_bugbot_available_when_not_opted_out(
 ) -> None:
     exit_code = reviewer_availability.main(["--reviewer", "bugbot"])
     captured = capsys.readouterr()
-    assert exit_code == 0
+    assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_AVAILABLE
     assert "bugbot" in captured.out
 
 
@@ -155,5 +155,5 @@ def test_main_reports_bugbot_down_when_opted_out_via_env(
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
     exit_code = reviewer_availability.main(["--reviewer", "bugbot"])
     captured = capsys.readouterr()
-    assert exit_code == 1
+    assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_DOWN
     assert "CLAUDE_REVIEWS_DISABLED" in captured.err

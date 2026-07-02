@@ -16,7 +16,9 @@ is opted out via ``CLAUDE_REVIEWS_DISABLED``. A genuine runtime outage shows
 up later as a poll timeout, not here.
 
 The exit code tells the caller what to do. Exit 0 means the reviewer is
-available and may be spawned. Any non-zero exit means skip it. Every path
+available and may be spawned. The documented down code (3) means skip it. Any
+other non-zero exit is a broken check — an interpreter crash or a usage
+error — not a down report, so a gating caller fails open on it. Every path
 prints one line: available lines go to stdout, down lines go to stderr.
 """
 
@@ -49,8 +51,8 @@ class ReviewerAvailability:
     """One reviewer-availability outcome: the exit code and the single log line.
 
     The exit code tells the caller what to do, where 0 means the reviewer may
-    be spawned and any non-zero means skip it. The CLI prints the message on
-    one line, to stdout when available and to stderr when down.
+    be spawned and the documented down code (3) means skip it. The CLI prints
+    the message on one line, to stdout when available and to stderr when down.
     """
 
     exit_code: int
