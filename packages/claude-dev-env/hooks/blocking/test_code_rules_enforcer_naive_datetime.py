@@ -107,6 +107,68 @@ def test_flags_utcfromtimestamp_with_second_positional_argument() -> None:
     assert len(issues) == 1
 
 
+def test_ignores_unrelated_datetime_attribute_chain() -> None:
+    content = (
+        "def describe(foo: object, stamp: float) -> object:\n"
+        "    return foo.datetime.fromtimestamp(stamp)\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_flags_fromtimestamp_with_none_timezone_keyword() -> None:
+    content = (
+        "from datetime import datetime\n"
+        "def describe(stamp: float) -> object:\n"
+        "    return datetime.fromtimestamp(stamp, tz=None)\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+
+
+def test_flags_fromtimestamp_with_none_positional_timezone() -> None:
+    content = (
+        "from datetime import datetime\n"
+        "def describe(stamp: float) -> object:\n"
+        "    return datetime.fromtimestamp(stamp, None)\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+
+
+def test_flags_utcfromtimestamp_even_with_timezone_keyword() -> None:
+    content = (
+        "from datetime import datetime, timezone\n"
+        "def describe(stamp: float) -> object:\n"
+        "    return datetime.utcfromtimestamp(stamp, tz=timezone.utc)\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+
+
+def test_utcnow_remediation_points_at_now_not_utcnow_tz() -> None:
+    content = (
+        "from datetime import datetime\n"
+        "def stamp() -> object:\n"
+        "    return datetime.utcnow()\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "now(tz=" in issues[0]
+
+
+def test_utcfromtimestamp_remediation_points_at_fromtimestamp() -> None:
+    content = (
+        "from datetime import datetime\n"
+        "def build(stamp: float) -> object:\n"
+        "    return datetime.utcfromtimestamp(stamp)\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "fromtimestamp(" in issues[0]
+    assert "tz=" in issues[0]
+
+
 def test_allows_plain_now() -> None:
     content = (
         "from datetime import datetime\n"
