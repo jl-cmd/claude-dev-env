@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
+import importlib.util
 
 ENFORCER_PATH = Path(__file__).resolve().parent / "code_rules_enforcer.py"
 specification = importlib.util.spec_from_file_location("code_rules_enforcer", ENFORCER_PATH)
