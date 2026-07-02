@@ -315,7 +315,7 @@ matches.
 - **Copilot gate:** request a Copilot review, poll up to the configured cap; findings
   route back into Converge. When Copilot is down or out of quota — it posts an
   out-of-usage notice (the requester hit their quota) on the HEAD, or surfaces no
-  review at all after the cap — the gate logs a notice and the run marks the PR
+  review at all after the configured cap — the gate logs a notice and the run marks the PR
   ready with the Copilot gate bypassed. `copilotNote` records the bypass.
 - **Convergence check:** `check_convergence.py` is the authoritative gate; on a
   full pass the workflow marks `draft=false`.
