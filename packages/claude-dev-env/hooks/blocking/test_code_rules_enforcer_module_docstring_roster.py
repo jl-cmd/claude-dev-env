@@ -93,6 +93,46 @@ def test_should_not_flag_module_docstring_naming_every_public_check() -> None:
     assert issues == [], f"Docstring naming every check must not flag, got: {issues!r}"
 
 
+def _registry_module_omitting_check_via_shared_tokens_only() -> str:
+    return (
+        '"""Bare string-literal magic, inline literal-collection, inline tuple '
+        'string-magic, and whitespace-indentation magic checks."""\n'
+        "\n"
+        "def check_string_literal_magic(content: str, file_path: str) -> list[str]:\n"
+        "    return []\n"
+        "\n"
+        "def check_join_separator_string_magic(content: str, file_path: str) -> list[str]:\n"
+        "    return []\n"
+        "\n"
+        "def check_inline_literal_collections(content: str, file_path: str) -> list[str]:\n"
+        "    return []\n"
+        "\n"
+        "def check_inline_tuple_string_magic(content: str, file_path: str) -> list[str]:\n"
+        "    return []\n"
+        "\n"
+        "def check_whitespace_indentation_magic(content: str, file_path: str) -> list[str]:\n"
+        "    return []\n"
+    )
+
+
+def test_should_flag_check_named_only_by_tokens_shared_with_siblings() -> None:
+    issues = check_module_docstring_names_public_checks(
+        _registry_module_omitting_check_via_shared_tokens_only(), HOOK_INFRASTRUCTURE_PATH
+    )
+    assert any("check_join_separator_string_magic" in each for each in issues), (
+        "A check whose only summary-present tokens ('string', 'magic') are shared with "
+        f"sibling checks must flag as omitted, got: {issues!r}"
+    )
+    assert not any("check_string_literal_magic" in each for each in issues), (
+        f"A check the summary names ('string-literal magic') must not flag, got: {issues!r}"
+    )
+    assert not any("check_inline_literal_collections" in each for each in issues), (
+        "A check named by a stemmed token ('collection' for 'collections') must not "
+        f"flag, got: {issues!r}"
+    )
+    assert len(issues) == 1
+
+
 def test_should_not_flag_module_with_a_single_public_check() -> None:
     source = (
         '"""Skip-decorator test-quality check."""\n'

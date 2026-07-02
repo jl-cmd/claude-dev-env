@@ -87,6 +87,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_NAMED_MARKS_FOR_PROSE_ENUMERATION,
     MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER,
     MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
+    MINIMUM_SIBLING_OCCURRENCES_FOR_SHARED_TOKEN,
     MINIMUM_TOKENS_FOR_DISPATCH_CALLEE,
     MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
     MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT,
@@ -1128,14 +1129,48 @@ def _distinctive_name_tokens(check_name: str) -> list[str]:
     ]
 
 
-def _docstring_mentions_check(docstring_text: str, check_name: str) -> bool:
+def _shared_sibling_name_tokens(all_check_names: list[str]) -> frozenset[str]:
+    token_occurrence_count: dict[str, int] = {}
+    for each_check_name in all_check_names:
+        for each_token in set(each_token.lower() for each_token in _name_tokens(each_check_name)):
+            token_occurrence_count[each_token] = token_occurrence_count.get(each_token, 0) + 1
+    return frozenset(
+        each_token
+        for each_token, each_count in token_occurrence_count.items()
+        if each_count >= MINIMUM_SIBLING_OCCURRENCES_FOR_SHARED_TOKEN
+    )
+
+
+def _module_distinctive_name_tokens(
+    check_name: str, all_shared_sibling_tokens: frozenset[str]
+) -> list[str]:
+    return [
+        each_token
+        for each_token in _distinctive_name_tokens(check_name)
+        if each_token.lower() not in all_shared_sibling_tokens
+    ]
+
+
+def _token_present_in_text(token: str, lowered_text: str) -> bool:
+    lowered_token = token.lower()
+    if lowered_token in lowered_text:
+        return True
+    return lowered_token.endswith("s") and lowered_token[:-1] in lowered_text
+
+
+def _docstring_mentions_check(
+    docstring_text: str, check_name: str, all_shared_sibling_tokens: frozenset[str]
+) -> bool:
     lowered_docstring = docstring_text.lower()
     if check_name.lower() in lowered_docstring:
         return True
-    distinctive_tokens = _distinctive_name_tokens(check_name)
-    if not distinctive_tokens:
+    distinguishing_tokens = _module_distinctive_name_tokens(check_name, all_shared_sibling_tokens)
+    if not distinguishing_tokens:
         return True
-    return any(each_token.lower() in lowered_docstring for each_token in distinctive_tokens)
+    return any(
+        _token_present_in_text(each_token, lowered_docstring)
+        for each_token in distinguishing_tokens
+    )
 
 
 def check_module_docstring_names_public_checks(content: str, file_path: str) -> list[str]:
@@ -1146,10 +1181,17 @@ def check_module_docstring_names_public_checks(content: str, file_path: str) -> 
     roster. When the module grows a public ``check_*`` entry point the summary
     never names, the enumeration under-describes the module — the
     docstring-prose-vs-implementation drift the repo flags as Category O6/O8.
-    A check counts as named when the full ``check_*`` name, or any distinctive
-    (non-generic) underscore-separated token of it, appears in the summary;
-    generic tokens (``check``, ``test``, ``tests``) do not count. A module with
-    two or more public checks and any check the summary never names is reported
+    A check counts as named when the full ``check_*`` name, or a
+    module-distinctive underscore-separated token of it, appears in the summary
+    (matched allowing a trailing-``s`` plural). A token is module-distinctive
+    when it is non-generic (generic tokens ``check``, ``test``, ``tests`` never
+    count) and it is not shared by two or more of the module's check names — a
+    token such as ``string`` or ``magic`` that recurs across sibling checks is
+    no evidence that any one check is named, so a check whose only
+    summary-present tokens are shared ones is reported. A check with no
+    module-distinctive token is treated as named, since the summary cannot single
+    it out. A module with two or more public checks and any check the summary
+    never names is reported
     so the summary names the full roster. Modules with a multi-paragraph
     docstring body are left to the audit lane, since their prose can carry the
     roster without naming each check by name. This check covers hook
@@ -1175,9 +1217,10 @@ def check_module_docstring_names_public_checks(content: str, file_path: str) -> 
     public_check_names = _module_public_check_names(parsed_tree)
     if len(public_check_names) < MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER:
         return []
+    all_shared_sibling_tokens = _shared_sibling_name_tokens(public_check_names)
     issues: list[str] = []
     for each_name in public_check_names:
-        if _docstring_mentions_check(module_docstring, each_name):
+        if _docstring_mentions_check(module_docstring, each_name, all_shared_sibling_tokens):
             continue
         issues.append(
             f"Line 1: module docstring omits public check {each_name}() — name every "
