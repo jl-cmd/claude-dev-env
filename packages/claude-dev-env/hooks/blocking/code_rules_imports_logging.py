@@ -722,7 +722,7 @@ def _naive_datetime_remediation(constructor_name: str) -> str:
     if constructor_name == NAIVE_DATETIME_UTCNOW_CONSTRUCTOR:
         return "use datetime.now(tz=timezone.utc)"
     if constructor_name == NAIVE_DATETIME_UTCFROMTIMESTAMP_CONSTRUCTOR:
-        return "use datetime.fromtimestamp(stamp, tz=timezone.utc)"
+        return "use datetime.fromtimestamp(..., tz=timezone.utc)"
     return "pass tz= (e.g. tz=timezone.utc)"
 
 
@@ -765,8 +765,8 @@ def check_naive_datetime_construction(content: str, file_path: str) -> list[str]
         remediation = _naive_datetime_remediation(naive_constructor_name)
         issues.append(
             f"Line {each_node.lineno}: naive datetime.{naive_constructor_name}() - "
-            f"{remediation} so the instant is unambiguous, then .astimezone() for "
-            "local display (avoids DST-fold ambiguity)"
+            f"{remediation} so the instant is unambiguous; call .astimezone() only "
+            "when local display is needed (avoids DST-fold ambiguity)"
         )
         if len(issues) >= MAX_NAIVE_DATETIME_ISSUES:
             break
