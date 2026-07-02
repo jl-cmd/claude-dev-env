@@ -785,6 +785,34 @@ test('the preamble describes the Monitor wait by its real contract: a bounded un
   );
 });
 
+test('the background-wait clause gives "await" an explicit object, not a dangling "await never resumes"', () => {
+  const text = preambleText();
+  assert.doesNotMatch(
+    text,
+    /end your turn to await never resumes/i,
+    'expected the background-wait clause to name what is awaited, not read as "await never resumes" with no object',
+  );
+  assert.match(
+    text,
+    /end your turn to await it/i,
+    'expected the background-wait clause to name the wait as the object of "await"',
+  );
+});
+
+test('the wait guidance names the full down-result schema, not a bare down flag', () => {
+  const text = preambleText();
+  assert.doesNotMatch(
+    text,
+    /Copilot gate, down: true\)/,
+    'expected the down signal to name the full schema, not a bare down flag that reads as a partial object',
+  );
+  assert.match(
+    text,
+    /down:true, findings:\[\]/,
+    'expected the wait guidance to name the full down-result fields',
+  );
+});
+
 test('no agent prompt instructs a foreground sleep as the poll delay', () => {
   assert.doesNotMatch(
     convergeSource,
