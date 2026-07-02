@@ -53,6 +53,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     RUFF_PYPROJECT_TOOL_TABLE_MARKER,
     RUFF_STDIN_ENCODING,
     SIBLING_RETURN_OBJECT_EXACT_MISSING_KEY_COUNT,
+    SIBLING_RETURN_OBJECT_SINGLE_AGREED_MISSING_KEY_COUNT,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ADVISORY_LINE_THRESHOLD_HARD,
@@ -1467,7 +1468,9 @@ def _string_literal_value_or_none(value_text: str) -> str | None:
     (``'created' /* legacy */``) never leaks into the content, and ``'created'``
     and ``"created"`` carry the same content and compare equal. A value that is
     a boolean, number, variable, call, or other expression is not a tag, so it
-    maps to None and never suppresses a drift finding for its key.
+    maps to None and never suppresses a drift finding for its key. An unterminated
+    literal — no closing quote reached — is malformed source, not a real tag, so it
+    also maps to None rather than the raw truncated text.
     """
     if not value_text or value_text[0] not in ALL_JAVASCRIPT_STRING_DELIMITERS:
         return None
@@ -1475,7 +1478,21 @@ def _string_literal_value_or_none(value_text: str) -> str | None:
     for each_index in range(1, len(value_text)):
         if value_text[each_index] == opening_quote and not _is_escaped(value_text, each_index):
             return value_text[1:each_index]
-    return value_text
+    return None
+
+
+def _matching_close_brace_index(blanked_content: str, opening_index: int) -> int | None:
+    """Return the index of the ``}`` that matches the ``{`` at ``opening_index``."""
+    depth = 0
+    for each_position in range(opening_index, len(blanked_content)):
+        character = blanked_content[each_position]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return each_position
+    return None
 
 
 def _top_level_object_key_values(
@@ -1484,17 +1501,17 @@ def _top_level_object_key_values(
     """Return each top-level key mapped to its string-literal value, or None.
 
     The literal begins at the ``{`` at ``brace_index``. Entry boundaries and keys
-    come from the blanked source, so a brace, comma, or colon inside a nested
-    object, array, call, or string never counts toward a key. Each value is read
-    from the original ``content`` at the same offsets, so a string discriminant such
-    as ``action: 'created'`` keeps its quote-stripped text; a shorthand key, a
-    method-shorthand key, and a non-string value map to None. A spread entry, a
-    computed key, and a quoted string-literal key are skipped.
+    come from the already-blanked ``blanked_content``, so a brace, comma, or colon
+    inside a nested object, array, call, or string never counts toward a key. Each
+    value is read from the original ``content`` at the same offsets, so a string
+    discriminant such as ``action: 'created'`` keeps its quote-stripped text; a
+    shorthand key, a method-shorthand key, and a non-string value map to None. A
+    spread entry, a computed key, and a quoted string-literal key are skipped.
     """
-    blanked_span = _balanced_brace_body(blanked_content, brace_index)
-    if blanked_span is None:
+    closing_index = _matching_close_brace_index(blanked_content, brace_index)
+    if closing_index is None:
         return {}
-    blanked_inner = blanked_span[1:-1]
+    blanked_inner = blanked_content[brace_index + 1 : closing_index]
     inner_start_index = brace_index + 1
     key_values: dict[str, str | None] = {}
     for each_entry_start_index, each_entry_end_index in _split_top_level_object_entry_spans(
@@ -1614,11 +1631,11 @@ def _single_missing_sibling_key(
     exactly one key separates them, and the two returns share no differing
     string-literal discriminant. A discriminated-union variant whose tag differs
     from its sibling is a distinct exit shape, not a drifted record, so it is
-    skipped. When every qualifying sibling adds the same single key, that key is
-    returned so the caller names the omitted field. When qualifying siblings
-    disagree on which key the candidate omits, the scope holds distinct exit
-    shapes rather than one drifted record, so None is returned, as it is when no
-    sibling qualifies.
+    skipped. When every
+    qualifying sibling adds the same single key, that key is returned so the caller
+    names the omitted field. When qualifying siblings disagree on which key the
+    candidate omits, the scope holds distinct exit shapes rather than one drifted
+    record, so None is returned, as it is when no sibling qualifies.
     """
     candidate_keys = all_candidate_key_values.keys()
     all_missing_keys: set[str] = set()
@@ -1631,7 +1648,7 @@ def _single_missing_sibling_key(
         extra_keys = sibling_keys - candidate_keys
         if len(extra_keys) == SIBLING_RETURN_OBJECT_EXACT_MISSING_KEY_COUNT:
             all_missing_keys.update(extra_keys)
-    if len(all_missing_keys) == SIBLING_RETURN_OBJECT_EXACT_MISSING_KEY_COUNT:
+    if len(all_missing_keys) == SIBLING_RETURN_OBJECT_SINGLE_AGREED_MISSING_KEY_COUNT:
         return next(iter(all_missing_keys))
     return None
 
@@ -1698,8 +1715,8 @@ def check_js_sibling_return_object_key_drift(content: str, file_path: str) -> li
                 "(Category O doc-vs-implementation return-shape drift)"
             )
             if len(issues) >= MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES:
-                return issues[:MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES]
-    return issues[:MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES]
+                return issues
+    return issues
 
 
 def _is_cli_entry_point(file_path: str) -> bool:
