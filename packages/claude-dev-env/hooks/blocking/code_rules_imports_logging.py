@@ -1259,6 +1259,21 @@ def _matching_open_parenthesis_index(blanked_content: str, closing_index: int) -
     return None
 
 
+def _is_return_type_opening_colon(blanked_content: str, colon_index: int) -> bool:
+    """Report whether the ``:`` at ``colon_index`` opens a return-type annotation.
+
+    A return-type colon follows the parameter-list ``)`` directly, ignoring any
+    whitespace between them. A ``:`` reached elsewhere in the type — the branch
+    separator of a TypeScript conditional type (``T extends U ? A : B``) — sits at
+    the same bracket depth as the annotation-opening colon but is not preceded by
+    ``)``, so it is not the boundary a caller stops the scan on.
+    """
+    preceding_index = colon_index - 1
+    while preceding_index >= 0 and blanked_content[preceding_index].isspace():
+        preceding_index -= 1
+    return preceding_index >= 0 and blanked_content[preceding_index] == ")"
+
+
 def _return_type_annotation_colon_index(blanked_content: str, terminator_index: int) -> int | None:
     """Return the index of the ``:`` that opens the return-type annotation.
 
@@ -1266,11 +1281,14 @@ def _return_type_annotation_colon_index(blanked_content: str, terminator_index: 
     ``terminator_index``, nested ``{}``, ``[]``, ``<>``, and ``()`` are balanced so a
     ``:`` inside the type never counts. An arrow ``=>`` inside a function-type
     annotation (``(x: number) => void``) is depth-neutral: both characters are
-    skipped so the arrow's ``>`` never counts as a generic closer. The first ``:``
-    reached at annotation depth zero is the return-type colon. The result is None
-    when a statement boundary (``;`` at depth zero, or an opener that drops the
-    depth below zero) or the source start is reached first, so a plain block brace
-    is not read as a function body.
+    skipped so the arrow's ``>`` never counts as a generic closer. A ``:`` reached
+    at annotation depth zero is the return-type colon only when it is preceded
+    (ignoring whitespace) by the parameter-list ``)`` — a depth-zero ``:`` that
+    fails that check is a conditional type's branch separator, so the scan keeps
+    going past it rather than stopping there. The result is None when a statement
+    boundary (``;`` at depth zero, or an opener that drops the depth below zero) or
+    the source start is reached first, so a plain block brace is not read as a
+    function body.
     """
     depth = 0
     each_index = terminator_index
@@ -1286,7 +1304,7 @@ def _return_type_annotation_colon_index(blanked_content: str, terminator_index: 
             if depth < 0:
                 return None
         elif depth == 0:
-            if character == ":":
+            if character == ":" and _is_return_type_opening_colon(blanked_content, each_index):
                 return each_index
             if character == ";":
                 return None
@@ -1319,14 +1337,20 @@ def _bare_return_type_annotation_colon_index(
     type's characters to the return-type ``:``. A closing bracket reached mid-walk
     marks a bracketed segment inside the annotation — a generic union member
     (``Promise<Foo> | Bar``) or a function type (``(x: number) => void``) — so the
-    scan hands off to the bracket-balancing walk from that bracket. The result is
+    scan hands off to the bracket-balancing walk from that bracket. A ``:`` reached
+    mid-walk is the return-type colon only when it is preceded (ignoring
+    whitespace) by the parameter-list ``)``; a ``:`` that fails that check is a
+    conditional type's branch separator (``T extends U ? A : B``), so the walk
+    treats it as an ordinary bare character and keeps going past it. The result is
     None when any other non-bare character is reached first, so a plain block brace
     is not read as a function body.
     """
     for each_index in range(identifier_end_index, -1, -1):
         character = blanked_content[each_index]
         if character == ":":
-            return each_index
+            if _is_return_type_opening_colon(blanked_content, each_index):
+                return each_index
+            continue
         if character in ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS:
             return _return_type_annotation_colon_index(blanked_content, each_index)
         if not _is_bare_return_type_character(character):

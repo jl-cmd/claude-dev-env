@@ -242,6 +242,28 @@ def _single_typescript_function_function_type_return_with_drift() -> str:
     )
 
 
+def _two_typescript_functions_with_conditional_return_type() -> str:
+    return (
+        "function alpha(state: T): T extends U ? A : B {\n"
+        "  return { a: 1, b: 2 }\n"
+        "}\n"
+        "function beta(state: T): T extends U ? A : B {\n"
+        "  return { a: 1, b: 2, c: 3 }\n"
+        "}\n"
+    )
+
+
+def _single_typescript_function_conditional_return_type_with_drift() -> str:
+    return (
+        "function classify(state: T): T extends U ? A : B {\n"
+        "  if (state == null) {\n"
+        "    return { converged: false, rounds: 0, blocker: 'bad state' }\n"
+        "  }\n"
+        "  return { converged: true, rounds: 5, blocker: null, deferred: [] }\n"
+        "}\n"
+    )
+
+
 def _two_concise_body_arrows_in_one_scope_source() -> str:
     return (
         "function build() {\n"
@@ -399,6 +421,19 @@ def test_typescript_mixed_union_return_keeps_functions_in_separate_scopes() -> N
 def test_typescript_function_type_return_still_flags_intra_function_drift() -> None:
     issues = check_js_sibling_return_object_key_drift(
         _single_typescript_function_function_type_return_with_drift(), _TYPESCRIPT_PATH
+    )
+    assert len(issues) == 1
+    assert "deferred" in issues[0]
+
+
+def test_typescript_conditional_return_type_keeps_functions_in_separate_scopes() -> None:
+    source = _two_typescript_functions_with_conditional_return_type()
+    assert check_js_sibling_return_object_key_drift(source, _TYPESCRIPT_PATH) == []
+
+
+def test_typescript_conditional_return_type_still_flags_intra_function_drift() -> None:
+    issues = check_js_sibling_return_object_key_drift(
+        _single_typescript_function_conditional_return_type_with_drift(), _TYPESCRIPT_PATH
     )
     assert len(issues) == 1
     assert "deferred" in issues[0]
