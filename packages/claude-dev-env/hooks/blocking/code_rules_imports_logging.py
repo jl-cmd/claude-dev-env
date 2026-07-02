@@ -65,11 +65,13 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_JAVASCRIPT_CONTROL_FLOW_BLOCK_KEYWORDS,
     ALL_JAVASCRIPT_EXTENSIONS,
     ALL_JAVASCRIPT_IDENTIFIER_EXTRA_CHARACTERS,
+    ALL_JAVASCRIPT_PARENTHESIS_FREE_BLOCK_KEYWORDS,
     ALL_JAVASCRIPT_REGEX_PRECEDING_CHARACTERS,
     ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS,
     ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS,
     ALL_JAVASCRIPT_STRING_DELIMITERS,
     ALL_PYTHON_EXTENSIONS,
+    ARROW_CONCISE_BODY_OBJECT_LITERAL_OPENING_PATTERN,
     ENUMERATION_LEADING_CONJUNCTION_PATTERN,
     ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN,
     ENUMERATION_TASK_ITEM_PATTERN,
@@ -84,6 +86,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     JAVASCRIPT_REGEX_DELIMITER,
     JAVASCRIPT_STRING_ESCAPE_CHARACTER,
     JS_OBJECT_KEY_IDENTIFIER_PATTERN,
+    JS_OBJECT_METHOD_SHORTHAND_KEY_PATTERN,
     JSDOC_RETURNS_STRUCTURED_OBJECT_PROMISE_PATTERN,
     LOGGING_FSTRING_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
@@ -1371,6 +1374,17 @@ def _parameter_list_close_index(blanked_content: str, preceding_index: int) -> i
     return parenthesis_index
 
 
+def _bare_word_ending_at(blanked_content: str, end_index: int) -> str:
+    """Return the identifier word whose last character sits at ``end_index``."""
+    start_index = end_index
+    while start_index > 0 and (
+        blanked_content[start_index - 1].isalnum()
+        or blanked_content[start_index - 1] in ALL_JAVASCRIPT_IDENTIFIER_EXTRA_CHARACTERS
+    ):
+        start_index -= 1
+    return blanked_content[start_index : end_index + 1]
+
+
 def _is_function_scope_opener(blanked_content: str, brace_index: int) -> bool:
     """Report whether the ``{`` at ``brace_index`` opens a function or arrow body.
 
@@ -1382,7 +1396,9 @@ def _is_function_scope_opener(blanked_content: str, brace_index: int) -> bool:
     ``for await``, ``while``, ``switch``, ``catch``, ``with``) opens a plain block,
     not a scope, so a return inside it belongs to the enclosing function; the
     ``await`` token of a ``for await`` head is the word the lookback reads, so it
-    sits in the keyword set.
+    sits in the keyword set. A parenthesis-free block keyword (``else``, ``do``,
+    ``try``, ``finally``) opens a plain block the same way, without a parameter
+    list to look back across.
     """
     preceding_index = brace_index - 1
     while preceding_index >= 0 and blanked_content[preceding_index].isspace():
@@ -1391,6 +1407,10 @@ def _is_function_scope_opener(blanked_content: str, brace_index: int) -> bool:
         return False
     if blanked_content[preceding_index] == ">" and blanked_content[preceding_index - 1] == "=":
         return True
+    if blanked_content[preceding_index].isalnum():
+        preceding_word = _bare_word_ending_at(blanked_content, preceding_index)
+        if preceding_word in ALL_JAVASCRIPT_PARENTHESIS_FREE_BLOCK_KEYWORDS:
+            return False
     parameter_close_index = _parameter_list_close_index(blanked_content, preceding_index)
     if parameter_close_index is None:
         return False
@@ -1400,13 +1420,7 @@ def _is_function_scope_opener(blanked_content: str, brace_index: int) -> bool:
     keyword_end_index = open_parenthesis_index - 1
     while keyword_end_index >= 0 and blanked_content[keyword_end_index].isspace():
         keyword_end_index -= 1
-    keyword_start_index = keyword_end_index + 1
-    while keyword_start_index > 0 and (
-        blanked_content[keyword_start_index - 1].isalnum()
-        or blanked_content[keyword_start_index - 1] in ALL_JAVASCRIPT_IDENTIFIER_EXTRA_CHARACTERS
-    ):
-        keyword_start_index -= 1
-    preceding_keyword = blanked_content[keyword_start_index : keyword_end_index + 1]
+    preceding_keyword = _bare_word_ending_at(blanked_content, keyword_end_index)
     return preceding_keyword not in ALL_JAVASCRIPT_CONTROL_FLOW_BLOCK_KEYWORDS
 
 
@@ -1458,16 +1472,8 @@ def _string_literal_value_or_none(value_text: str) -> str | None:
     if not value_text or value_text[0] not in ALL_JAVASCRIPT_STRING_DELIMITERS:
         return None
     opening_quote = value_text[0]
-    is_escaped = False
     for each_index in range(1, len(value_text)):
-        character = value_text[each_index]
-        if is_escaped:
-            is_escaped = False
-            continue
-        if character == "\\":
-            is_escaped = True
-            continue
-        if character == opening_quote:
+        if value_text[each_index] == opening_quote and not _is_escaped(value_text, each_index):
             return value_text[1:each_index]
     return value_text
 
@@ -1481,9 +1487,9 @@ def _top_level_object_key_values(
     come from the blanked source, so a brace, comma, or colon inside a nested
     object, array, call, or string never counts toward a key. Each value is read
     from the original ``content`` at the same offsets, so a string discriminant such
-    as ``action: 'created'`` keeps its quote-stripped text; a shorthand key and a
-    non-string value map to None. A spread entry, a computed key, and a quoted
-    string-literal key are skipped.
+    as ``action: 'created'`` keeps its quote-stripped text; a shorthand key, a
+    method-shorthand key, and a non-string value map to None. A spread entry, a
+    computed key, and a quoted string-literal key are skipped.
     """
     blanked_span = _balanced_brace_body(blanked_content, brace_index)
     if blanked_span is None:
@@ -1499,13 +1505,19 @@ def _top_level_object_key_values(
         if not stripped_entry or stripped_entry.startswith(JAVASCRIPT_OBJECT_SPREAD_PREFIX):
             continue
         colon_index = _top_level_colon_index(blanked_entry)
-        candidate_key = (
-            blanked_entry if colon_index is None else blanked_entry[:colon_index]
-        ).strip()
-        if not JS_OBJECT_KEY_IDENTIFIER_PATTERN.fullmatch(candidate_key):
-            continue
         if colon_index is None:
-            key_values[candidate_key] = None
+            method_shorthand_match = JS_OBJECT_METHOD_SHORTHAND_KEY_PATTERN.match(
+                stripped_entry
+            )
+            if method_shorthand_match is not None:
+                key_values[method_shorthand_match.group(1)] = None
+                continue
+            if not JS_OBJECT_KEY_IDENTIFIER_PATTERN.fullmatch(stripped_entry):
+                continue
+            key_values[stripped_entry] = None
+            continue
+        candidate_key = blanked_entry[:colon_index].strip()
+        if not JS_OBJECT_KEY_IDENTIFIER_PATTERN.fullmatch(candidate_key):
             continue
         value_start_index = inner_start_index + each_entry_start_index + colon_index + 1
         value_end_index = inner_start_index + each_entry_end_index
@@ -1515,19 +1527,26 @@ def _top_level_object_key_values(
 
 
 def _return_object_literal_records(content: str) -> list[tuple[int, dict[str, str | None], int]]:
-    """Return one record per ``return { ... }`` object literal in the JS source.
+    """Return one record per returned ``{ ... }`` object literal in the JS source.
 
-    Each record pairs the enclosing function-scope id, the literal's top-level
-    key-to-string-literal-value map, and its 1-based line number. Each value is the
-    key's string literal or None. Two returns share a scope id when the nearest
-    enclosing function or arrow body is the same; a module-top-level return carries
-    the module sentinel. A control-flow block does not open a scope, so an early
-    return inside an ``if`` block shares its function's scope.
+    A record comes from an explicit ``return { ... }`` or from a concise-body
+    arrow's implicit return, ``() => ({ ... })``. Each record pairs the enclosing
+    function-scope id, the literal's top-level key-to-string-literal-value map,
+    and its 1-based line number. Each value is the key's string literal or None.
+    Two returns share a scope id when the nearest enclosing function or arrow
+    body is the same; a module-top-level return carries the module sentinel. A
+    control-flow block does not open a scope, so an early return inside an
+    ``if`` block shares its function's scope.
     """
     blanked_content = _blank_non_code_regions(content)
     return_brace_indices = {
         each_match.end() - 1
         for each_match in RETURN_OBJECT_LITERAL_OPENING_PATTERN.finditer(blanked_content)
+    } | {
+        each_match.end() - 1
+        for each_match in ARROW_CONCISE_BODY_OBJECT_LITERAL_OPENING_PATTERN.finditer(
+            blanked_content
+        )
     }
     records: list[tuple[int, dict[str, str | None], int]] = []
     scope_restore_stack: list[int] = []
@@ -1615,7 +1634,8 @@ def check_js_sibling_return_object_key_drift(content: str, file_path: str) -> li
     return both promise it.
 
     Within one function or module scope, the check pairs each ``return { ... }``
-    object literal against its siblings. A literal whose key set is a proper subset
+    object literal, and each concise-body arrow's implicit ``() => ({ ... })``
+    return, against its siblings. A literal whose key set is a proper subset
     of a sibling's, missing exactly one key and carrying at least the minimum key
     count, is flagged for that one missing key. A control-flow block does not open a
     scope, so an early return inside an ``if`` block is compared with the tail
