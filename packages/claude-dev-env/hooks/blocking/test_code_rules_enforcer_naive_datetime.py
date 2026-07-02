@@ -169,6 +169,30 @@ def test_utcfromtimestamp_remediation_points_at_fromtimestamp() -> None:
     assert "tz=" in issues[0]
 
 
+def test_utcfromtimestamp_remediation_uses_generic_placeholder() -> None:
+    content = (
+        "from datetime import datetime\n"
+        "def build(epoch_seconds: float) -> object:\n"
+        "    return datetime.utcfromtimestamp(epoch_seconds)\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "..., tz=" in issues[0]
+    assert "stamp, tz=" not in issues[0]
+
+
+def test_remediation_does_not_mandate_astimezone() -> None:
+    content = (
+        "from datetime import datetime\n"
+        "def stamp() -> object:\n"
+        "    return datetime.utcnow()\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "then .astimezone()" not in issues[0]
+    assert "only when local display" in issues[0]
+
+
 def test_allows_plain_now() -> None:
     content = (
         "from datetime import datetime\n"
