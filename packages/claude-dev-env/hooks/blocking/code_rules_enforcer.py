@@ -75,6 +75,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_args_match_signature,
     check_docstring_args_single_line_scope_vs_span,
     check_docstring_cardinal_count_matches_constant_family,
+    check_docstring_delegation_summary_enumeration_drift,
     check_docstring_documents_unreferenced_parameter,
     check_docstring_fallback_branch_coverage,
     check_docstring_field_runmode_outcome,
@@ -388,6 +389,11 @@ def validate_content(
         )
         all_issues.extend(
             check_docstring_args_single_line_scope_vs_span(effective_content, file_path)
+        )
+        all_issues.extend(
+            check_docstring_delegation_summary_enumeration_drift(
+                effective_content, file_path
+            )
         )
         all_issues.extend(
             check_boolean_naming(

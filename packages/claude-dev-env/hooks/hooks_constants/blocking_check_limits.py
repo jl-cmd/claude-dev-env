@@ -290,6 +290,30 @@ ALL_TEST_INDICATING_ENVIRONMENT_VARIABLE_NAMES: frozenset[str] = frozenset(
     }
 )
 
+MAX_DOCSTRING_DELEGATION_ENUMERATION_ISSUES: int = 5
+MINIMUM_DELEGATION_ENUMERATION_ITEMS: int = 2
+NEIGHBOR_SCAN_FILE_LIMIT: int = 40
+POINTER_TO_DELEGATE_PATTERN: re.Pattern[str] = re.compile(
+    r"full doc(?:umentation)?\s+on\s+`{1,2}([A-Za-z_][A-Za-z0-9_]*)`{1,2}",
+    re.IGNORECASE,
+)
+TOKEN_WORD_PATTERN: re.Pattern[str] = re.compile(r"[A-Za-z][A-Za-z0-9]{2,}")
+ALL_DELEGATION_ENUMERATION_STOP_TOKENS: frozenset[str] = frozenset(
+    {
+        "the",
+        "and",
+        "then",
+        "edit",
+        "edits",
+        "apply",
+        "applies",
+        "run",
+        "runs",
+        "step",
+        "steps",
+    }
+)
+
 MAX_MODULE_DOCSTRING_DATA_SCHEMA_SCOPE_ISSUES: int = 1
 MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT: int = 6
 ALL_USER_FACING_TEXT_SCOPE_DOCSTRING_PHRASES: tuple[str, ...] = (
