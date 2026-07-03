@@ -152,10 +152,10 @@ round records nothing resumable and replays dirty.
 ## Teardown (on workflow completion)
 
 1. **When `converged` is true — build and publish the closing report.**
-   Skip this entire step (report, gist, comment, Chrome open) when the workflow
-   returned a non-null `blocker`. Per-round live-dashboard refresh is out of scope
-   here; this step builds the one-shot closing report and the seam (marker comment +
-   gist URL) a future live-dashboard reuses.
+   Skip this entire step (report, artifact publish, comment, Chrome open) when the
+   workflow returned a non-null `blocker`. Per-round live-dashboard refresh is out of
+   scope here; this step builds the one-shot closing report and the seam (marker
+   comment + artifact URL) a future live-dashboard reuses.
 
    a. **Resolve a seed journal path.** Glob
       `~/.claude/projects/**/workflows/wf_<runId>.json` (where `runId` is the run id
@@ -214,9 +214,10 @@ round records nothing resumable and replays dirty.
       GitHub MCP `add_issue_comment` tool (body as a structured parameter, no
       `--body` flag).
 
-   g. **Open the report in Chrome.**
+   g. **Open the published report in Chrome.** Use the artifact URL captured in
+      step e.
       ```
-      Start-Process chrome -ArgumentList '--new-window', '<report path>'
+      Start-Process chrome -ArgumentList '--new-window', '<artifact URL>'
       ```
       Tolerate a missing Chrome without aborting the rest of teardown.
 

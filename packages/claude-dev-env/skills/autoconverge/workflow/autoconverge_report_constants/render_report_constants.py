@@ -154,7 +154,7 @@ Write so a non-programmer understands every line. The reader has never seen the 
 
 Return strictly a JSON object with keys prProblem, prFix, problemScenes, fixScenes, verdictLine, and issueClasses."""
 
-HTML_HEAD_TEMPLATE = """\
+HTML_TITLE_AND_STYLE_TEMPLATE = """\
 <title>PR #{pr_number} Convergence Summary</title>
 {style_block}"""
 

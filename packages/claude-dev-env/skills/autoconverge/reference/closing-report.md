@@ -75,7 +75,7 @@ After rendering, the main session:
 
 1. **Publishes the HTML with the Artifact tool.** Loads the `artifact-design` skill first, then calls `Artifact` with `file_path` set to the rendered report, `favicon` set to the fixed autoconverge favicon `✅` (kept stable across every autoconverge report), and `description` naming the PR. Captures the returned URL.
 2. **Posts one idempotent PR comment** marked with `<!-- autoconverge-report -->`. If a comment with that marker already exists on the PR, it is edited in place; otherwise a new comment is created. The body leads with the artifact URL, then the one-sentence `verdictLine`, then the plain Problem and Fix sentences (`prProblem`, `prFix`), then the issue-class list — one bullet per class as `plainName (×count, status)` — and closes with the full finding list (`file:line — P# — title`) inside a collapsed `<details>` block. Write the body to a BOM-free temp file and pass `--body-file` to `gh issue comment` (never `--body`), or use the GitHub MCP `add_issue_comment` tool.
-3. **Opens the report** with `Start-Process chrome -ArgumentList '--new-window', '<report path>'`. A missing Chrome does not abort teardown.
+3. **Opens the published report** with `Start-Process chrome -ArgumentList '--new-window', '<artifact URL>'`, using the artifact URL captured in step 1. A missing Chrome does not abort teardown.
 
 ## Live-dashboard seam
 

@@ -17,7 +17,7 @@ from autoconverge_report_constants.render_report_constants import (
     DEFAULT_FINDING_CATEGORY,
     DEFAULT_FINDING_SEVERITY,
     DEFAULT_ISSUE_ICON,
-    HTML_HEAD_TEMPLATE,
+    HTML_TITLE_AND_STYLE_TEMPLATE,
     HTML_STYLE_BLOCK,
     ISO_DATE_LENGTH,
     ISSUE_CLASS_FIELD_AFTER_LINES,
@@ -900,7 +900,7 @@ def render_report_html(
     final_sha_short = pr_metadata.final_sha[:short_sha_length]
     round_count = pr_metadata.round_count
 
-    title_and_style_html = HTML_HEAD_TEMPLATE.format(
+    title_and_style_html = HTML_TITLE_AND_STYLE_TEMPLATE.format(
         pr_number=pr_number,
         style_block=HTML_STYLE_BLOCK,
     )
