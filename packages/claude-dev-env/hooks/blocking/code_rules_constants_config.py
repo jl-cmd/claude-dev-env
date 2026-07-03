@@ -339,6 +339,30 @@ def _module_anchor_signatures(module_tree: ast.Module) -> dict[tuple[int, str], 
     return signatures_by_key
 
 
+def _config_anchor_check_applies(file_path: str) -> bool:
+    """Return whether the duplicate-path-anchor check should inspect this file."""
+    return (
+        is_config_file(file_path)
+        and not is_test_file(file_path)
+        and get_file_extension(file_path) in ALL_PYTHON_EXTENSIONS
+    )
+
+
+def _sibling_anchor_owner_names(config_directory: Path, written_name: str) -> dict[tuple[int, str], str]:
+    """Return the sibling config module name that first builds each anchor signature."""
+    owner_name_by_signature: dict[tuple[int, str], str] = {}
+    for each_sibling_path in sorted(config_directory.glob("*.py")):
+        if each_sibling_path.name == written_name or is_test_file(str(each_sibling_path)):
+            continue
+        try:
+            sibling_tree = ast.parse(each_sibling_path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            continue
+        for each_signature in _module_anchor_signatures(sibling_tree):
+            owner_name_by_signature.setdefault(each_signature, each_sibling_path.name)
+    return owner_name_by_signature
+
+
 def check_config_duplicate_path_anchor(content: str, file_path: str) -> list[str]:
     """Flag a config module re-anchoring a path a sibling config module already builds.
 
@@ -360,11 +384,7 @@ def check_config_duplicate_path_anchor(content: str, file_path: str) -> list[str
     Returns:
         One issue line per duplicated anchor, capped at the configured maximum.
     """
-    if not is_config_file(file_path):
-        return []
-    if is_test_file(file_path):
-        return []
-    if get_file_extension(file_path) not in ALL_PYTHON_EXTENSIONS:
+    if not _config_anchor_check_applies(file_path):
         return []
     try:
         module_tree = ast.parse(content)
@@ -376,17 +396,7 @@ def check_config_duplicate_path_anchor(content: str, file_path: str) -> list[str
     config_directory = Path(file_path).parent
     if not config_directory.is_dir():
         return []
-    owner_name_by_signature: dict[tuple[int, str], str] = {}
-    written_name = Path(file_path).name
-    for each_sibling_path in sorted(config_directory.glob("*.py")):
-        if each_sibling_path.name == written_name or is_test_file(str(each_sibling_path)):
-            continue
-        try:
-            sibling_tree = ast.parse(each_sibling_path.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError, UnicodeDecodeError):
-            continue
-        for each_signature in _module_anchor_signatures(sibling_tree):
-            owner_name_by_signature.setdefault(each_signature, each_sibling_path.name)
+    owner_name_by_signature = _sibling_anchor_owner_names(config_directory, Path(file_path).name)
     issues: list[str] = []
     for each_signature, each_line_number in sorted(written_signatures.items(), key=lambda pair: pair[1]):
         owner_name = owner_name_by_signature.get(each_signature)
