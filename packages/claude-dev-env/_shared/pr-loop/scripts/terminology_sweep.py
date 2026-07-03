@@ -197,12 +197,9 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
 
     A Markdown line is prose in full. A JavaScript or TypeScript line contributes
     its comment tail, its JSDoc continuation text, and the contents of its string
-    literals. A Python line contributes no prose: production Python forbids
-    inline comments, so a ``#`` on a Python line
-    is string content — a markdown template, a regex, an f-string — not a comment,
-    and a module's own strings and docstrings near-miss its own identifiers by
-    design rather than by drift. A Python file is scanned for identifiers, never
-    for prose.
+    literals. A Python line contributes no prose: to avoid flagging a module's own
+    vocabulary as drift, the sweep ignores Python comments, docstrings, and string
+    literals and scans Python files for identifiers only.
 
     Args:
         file_path: The path the added line belongs to.
