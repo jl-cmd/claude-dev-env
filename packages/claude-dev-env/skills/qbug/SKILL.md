@@ -3,7 +3,7 @@ name: qbug
 description: >-
   Required baseline review for every new PR. Runs the /bugteam audit → fix →
   commit → push cycle via one clean-coder subagent (not a full team), looping
-  until convergence or stuck. Uses the same CODE_RULES gate, A–N category
+  until convergence or stuck. Uses the same CODE_RULES gate, A–P category
   rubric, and per-loop PR review shape as /bugteam — without TeamCreate,
   teammates, per-loop clean-room, or a loop cap. Invoke /bugteam instead for
   larger PRs that need per-loop bias isolation or a hard loop cap. Triggers:
@@ -21,7 +21,7 @@ Shared artifacts with /bugteam are referenced below by path, using the `${CLAUDE
 
 - Pre-flight script: `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/preflight.py`
 - Code-rules gate script: `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`
-- Bug category rubric A–N: [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md#audit-spawn-prompt-xml-bugfind-teammate)
+- Bug category rubric A–P: [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md#audit-spawn-prompt-xml-bugfind-teammate)
 - **Audit contract** (finding schema, proof-of-absence, adversarial pass, Haiku secondary, post-fix self-audit, diagnostics JSON): [`_shared/pr-loop/audit-contract.md`](../../_shared/pr-loop/audit-contract.md)
 - PR comment lifecycle shape: [`bugteam/SKILL.md`](../bugteam/SKILL.md#audit-posting)
 
@@ -31,12 +31,15 @@ Shared artifacts with /bugteam are referenced below by path, using the `${CLAUDE
 
 Refusals — first match wins; respond with the quoted line exactly and stop:
 
-- **Disabled via environment.** When `CLAUDE_REVIEWS_DISABLED` contains the
-  token `bugteam` (comma-separated, case-insensitive, whitespace-tolerant):
-  `/qbug is disabled via CLAUDE_REVIEWS_DISABLED.` `/qbug` is the bugteam
+- **Disabled via environment.** When `CLAUDE_REVIEWS_DISABLED` carries the
+  token `bugteam`:
+  `/qbug is disabled via CLAUDE_REVIEWS_DISABLED.` Run the check via
+  `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugteam`
+  (exit 0 = disabled). `/qbug` is the bugteam
   baseline review and shares the `bugteam` token with `/bugteam`; the shared
   pre-flight script also exits 7 in this case so any caller invoking it
-  directly halts on the same signal.
+  directly halts on the same signal. The gate semantics live in the
+  `reviewer-gates` skill (`../reviewer-gates/SKILL.md`).
 - **No PR or upstream diff.** `No PR or upstream diff. /qbug needs a target.`
 - **Dirty tree.** `Uncommitted changes detected. Stash, commit, or revert before /qbug.`
 - **Missing subagent.** Before Step 2, confirm `clean-coder` exists. Else: `Required subagent type clean-coder not installed. /qbug needs clean-coder available.`
@@ -72,9 +75,7 @@ Pre-flight checks (in order):
 
 ## Step 1: Resolve PR scope (lead)
 
-1. Call `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` via the lead's available MCP tools (`N` comes from the parent skill's PR context, or fall back to `search_issues` MCP with the current branch name to recover the PR number). Extract `number`, `baseRefName`, `headRefName`, `url` from the response.
-2. Else `git merge-base HEAD origin/<default>` then `git diff <merge-base>...HEAD`
-3. Else refuse per § When this skill applies.
+Apply the `pr-scope-resolve` skill (`../pr-scope-resolve/SKILL.md`) with caller `qbug`. When no target exists, refuse per § When this skill applies with the sub-skill's canonical line.
 
 Capture: `owner/repo`, `baseRefName`, `headRefName`, PR `number`, `url`, `starting_sha = git rev-parse HEAD`.
 
@@ -116,7 +117,7 @@ Agent(
   subagent_type="code-quality-agent",
   model="haiku",
   description="qbug Haiku secondary audit for PR <number>",
-  prompt="<audit-only prompt: read the PR diff, apply A-N categories from <categories_file>, return structured findings. No FIX, no git add, no git commit, no git push.>",
+  prompt="<audit-only prompt: read the PR diff, apply A–P categories from <categories_file>, return structured findings. No FIX, no git add, no git commit, no git push.>",
   run_in_background=False
 )
 ```
@@ -187,7 +188,7 @@ The subagent receives this prompt and loops internally — the lead does not re-
 
        - Read the patch file.
        - Audit only added/modified lines. Read <categories_file> for the
-         A–N category definitions; investigate each category explicitly.
+         A–P category definitions; investigate each category explicitly.
        - Follow the shared audit contract at
          $HOME/.claude/_shared/pr-loop/audit-contract.md. Per category:
          produce either a Shape A structured finding or a Shape B
@@ -204,87 +205,20 @@ The subagent receives this prompt and loops internally — the lead does not re-
        <qbug_temp_dir>/loop-<loop_count>-audit.json per the contract's
        persistence schema.
 
-       Post ONE review per loop via `post_audit_thread.py`. Before
-       serializing, partition the merged findings into anchored (line
-       appears in the captured diff) and unanchored (line is not in the
-       diff) buckets. Only anchored findings are written to
-       `<qbug_temp_dir>/loop-<loop_count>-findings.json` — the GitHub
-       reviews API rejects the entire POST if any inline comment in
-       `comments[]` targets a line not in the diff at `--commit`, so a
-       single unanchored entry breaks the whole review. Unanchored
-       findings surface in the loop's user-facing summary rather than
-       as inline anchored comments. The JSON root is a list of objects
-       shaped `{path, line, side, severity, description, fix_summary}`.
-       For each anchored finding, map `file` → `path`; split the
-       finding's `failure_mode` at the literal `Fix:` heading so the
-       failure narrative becomes `description` and the suffix beginning
-       at `Fix:` (including the trailing `Validation:` clause) becomes
-       `fix_summary` (the `failure_mode` field carries the full
-       audit-to-fix handoff per
-       [`agents/code-quality-agent.md`](../../agents/code-quality-agent.md)).
-       When a finding's `failure_mode` omits the `Fix:` heading, write
-       the full text to BOTH `description` and `fix_summary`. Set
-       `side="RIGHT"` for every entry. Zero anchored findings → write
-       `[]` and pass `--state CLEAN`; one or more anchored findings →
-       pass `--state DIRTY` with the full list.
+       Post ONE review per loop. Read
+       $HOME/.claude/skills/post-audit-findings/SKILL.md and apply it
+       with `--skill qbug`. That skill owns the findings-JSON mapping,
+       the anchored-only serialization, the CLEAN/DIRTY decision, the
+       self-PR reviewer toggle, and the exit codes. qbug-specific
+       persistence: write the anchored findings JSON to
+       `<qbug_temp_dir>/loop-<loop_count>-findings.json` and pass that
+       path as `--findings-json`. Unanchored findings surface in the
+       loop's user-facing summary rather than as inline anchored
+       comments.
 
-       **Self-PR auto-toggle.** GitHub rejects both `APPROVE` and
-       `REQUEST_CHANGES` reviews with HTTP 422 when the authenticated
-       identity matches the PR author ("Cannot approve/request changes
-       on your own pull request"). `post_audit_thread.py` detects this
-       case via `gh api user` + `gh api repos/<o>/<r>/pulls/<n>` and
-       auto-resolves an alternate gh account's token for the reviews
-       POST — the active `gh auth` account is not mutated; only the
-       bearer token sent on the request changes. After the POST the
-       active account is still whoever it was before, so no "swap back"
-       step is needed.
-
-       Configuration:
-
-       - `GH_TOKEN` / `GITHUB_TOKEN` env vars take precedence over the
-         toggle. Set them when you need to pin a specific reviewer
-         identity by token rather than by account login.
-       - `BUGTEAM_REVIEWER_ACCOUNT` env var names which authenticated
-         alternate to prefer when a toggle is needed (for example,
-         `BUGTEAM_REVIEWER_ACCOUNT=jl-cmd`). The env var name is shared
-         across every skill that invokes `post_audit_thread.py`. When
-         unset, the script falls back to the first alternate account
-         `gh auth status` reports.
-       - The named alternate must be logged in (`gh auth login -h
-         github.com -u <login>`) before the audit skill runs. The
-         script exits 1 with a pointing-at-`gh auth login` message
-         when self-PR is detected and no usable alternate is
-         authenticated.
-
-       ```
-       python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" \
-         --skill qbug \
-         --owner <owner> \
-         --repo <repo> \
-         --pr-number <pr_number> \
-         --commit <head_sha> \
-         --state <CLEAN|DIRTY> \
-         --findings-json <qbug_temp_dir>/loop-<loop_count>-findings.json
-       ```
-
-       The script POSTs a single review with `event=APPROVE` on CLEAN
-       (the request event; GitHub stores it as `state=APPROVED`; empty
-       `comments[]`, body documents "no findings") or
-       `event=REQUEST_CHANGES` on DIRTY (one inline anchored comment per
-       finding; each becomes its own resolvable thread on the PR). It
-       handles retries internally (1s / 4s / 16s backoff across four
-       attempts). Exit 0 emits the new review's `html_url` to stdout;
-       extract the numeric review id from the URL's
-       `#pullrequestreview-<id>` suffix (the trailing URL fragment of
-       `html_url`, the part after `#`). Then harvest child-comment URLs **and PR review
-       thread node ids** via
-       `pull_request_read(method="get_review_comments",
-       owner=<owner>, repo=<repo>, pullNumber=<pr_number>)` filtered to
-       that review id. The same response carries each
-       comment's PR review thread node id (e.g. `PRRT_kwDOxxx`) — match
-       children to findings in the order they appear in the findings
-       JSON. Each `loop_comment_index[finding_id]` entry must carry
-       `finding_comment_id` (numeric, used by
+       On exit 0, harvest ids per that skill's "Harvest ids for the fix
+       loop" section: each `loop_comment_index[finding_id]` entry must
+       carry `finding_comment_id` (numeric, used by
        `add_reply_to_pull_request_comment`), `finding_comment_url`, and
        `thread_node_id` (`PRRT_kwDOxxx`, used by `resolve_thread`) so
        the FIX step can reply against the comment and resolve the
@@ -331,54 +265,21 @@ The subagent receives this prompt and loops internally — the lead does not re-
        Write <qbug_temp_dir>/loop-<loop_count>-diagnostics.json per the
        contract's diagnostics schema (all eight keys required).
 
-       For each finding, atomically (a) post the fix reply and
-       (b) call `resolve_thread`. The two calls form one logical action
-       per thread — do not yield to the lead between them, and do not
-       batch all replies before any resolves.
-
-       (a) Reply via
-       `add_reply_to_pull_request_comment(commentId=<loop_comment_index[finding_id].finding_comment_id>,
-       body=<reply_body>, owner=<owner>, repo=<repo>,
-       pullNumber=<pr_number>)`. The reply body uses the unified template
-       at [`../../_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md).
-       Skeleton (identical across all paths):
-
-       ```
-       **Claude finished @<reviewer>'s task** —— <status_line>
-
-       ---
-       ### <action_heading> ✅
-
-       <1–2 paragraph plain-language explanation>
-
-       **`<file>:<line>`:**
-       - <bullet describing change or rationale>
-       - <bullet describing change or rationale>
-
-       <closing paragraph>
-       ```
-
-       Per-path `<status_line>` / `<action_heading>`:
-       - `status=fixed`: `Fixed in <short_sha>` (first 7 chars) /
-         finding-specific action verb (e.g.,
-         `Replaced Any with concrete type`).
-       - `status=could_not_address`: `Could not address this loop` /
-         one-line reason text.
-       - `status=hook_blocked`: `Hook blocked the fix commit` /
-         one-line hook summary.
-
+       For each finding, read
+       $HOME/.claude/skills/pr-fix-protocol/SKILL.md and apply its
+       reply-and-resolve unit: atomically (a) post the fix reply via
+       `add_reply_to_pull_request_comment` against
+       `loop_comment_index[finding_id].finding_comment_id`, using the
+       body template at
+       $HOME/.claude/_shared/pr-loop/audit-reply-template.md, then
+       (b) call `pull_request_review_write(method="resolve_thread",
+       threadId=<loop_comment_index[finding_id].thread_node_id>)` for
+       the same thread. Per-path `<status_line>`:
+       - `status=fixed`: `Fixed in <short_sha>` (first 7 chars).
+       - `status=could_not_address`: `Could not address this loop`.
+       - `status=hook_blocked`: `Hook blocked the fix commit`.
        Body text is passed directly as string parameters — no temp
        files, no jq, no shell pipes.
-
-       (b) Immediately call
-       `pull_request_review_write(method="resolve_thread",
-       threadId=<loop_comment_index[finding_id].thread_node_id>,
-       owner=<owner>, repo=<repo>, pullNumber=<pr_number>)` for the
-       same thread (this is the PR review thread node ID —
-       `PRRT_kwDOxxx` — distinct from the numeric comment ID; the
-       AUDIT step captures it at audit time when calling
-       `get_review_comments` and stores it on each
-       `loop_comment_index` entry alongside `finding_comment_id`).
 
        Update state: last_action="fixed". Append
        `<N> fix: <short_sha> — <fixed>/<could_not_address>/<hook_blocked>`
@@ -444,7 +345,7 @@ Delete the resolved `<qbug_temp_dir>` tree and any `.qbug-*.md` temp files in th
 - **No loop cap.** Cycle runs until `converged`, `stuck`, or `error`. User can interrupt.
 - **Code rules gate before every AUDIT.** Same `validate_content` logic as /bugteam.
 - **One commit per FIX action.** Linear branch, fast-forward push only.
-- **Categories A–N.** Same rubric as [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md).
+- **Categories A–P.** Same rubric as [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md).
 - **One review per loop.** Anchored findings as `comments[]`; unanchored findings surface in the calling skill's user-facing output (chat reply to the user) rather than in the PR review body.
 - **PR description rewrite on every exit**, same as /bugteam Step 4.5.
 - **Temp file cleanup on every exit path.**
