@@ -24,7 +24,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `dead_dataclass_field_constants.py` | Patterns for detecting unused dataclass fields |
 | `dead_module_constant_constants.py` | Patterns for detecting unexported `UPPER_SNAKE` constants in `*_constants.py` modules |
 | `destructive_command_segment_constants.py` | The list of destructive shell command patterns the blocker matches |
-| `doc_gist_auto_publish_constants.py` | Sentinel marker and URL patterns for the doc-gist auto-publish hook |
 | `docstring_rule_gate_count_blocker_constants.py` | Target rule basename, spelled-out-number lookup, count-clause and `check_*` validator patterns, and block-message text for the docstring-rule gate-count staleness blocker |
 | `duplicate_function_body_constants.py` | Hashing and comparison config for the duplicate-body check |
 | `duplicate_rmtree_helper_blocker_constants.py` | Sanctioned Windows-safe rmtree helper names, the definition pattern, and the exempt-path set for the duplicate-rmtree-helper blocker |
@@ -34,10 +33,8 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
 | `hook_log_extractor_constants.py` | Neon table name, offset state file path, timeouts, and outcome-type mapping for the hook-log extractor |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
-| `html_companion_constants.py` | Blocked URL schemes and other config for the `.md`-to-`.html` companion hook |
 | `inline_tuple_string_magic_constants.py` | Patterns for detecting magic strings in inline tuple literals |
 | `js_conventions_constants.py` | Banned identifier set, boolean-prefix pattern, and declaration/JSDoc patterns for the JavaScript convention checks |
-| `md_to_html_blocker_constants.py` | Path exemptions and trigger patterns for the markdown-to-html blocker |
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |

@@ -19,7 +19,6 @@ ALL_EXEMPT_PATH_FRAGMENTS: tuple[str, ...] = (
     "windows_safe_rmtree.py",
     "windows_filesystem.py",
     "session_env_cleanup.py",
-    "_md_to_html_blocker_test_support.py",
     "teardown_worktrees.py",
 )
 
