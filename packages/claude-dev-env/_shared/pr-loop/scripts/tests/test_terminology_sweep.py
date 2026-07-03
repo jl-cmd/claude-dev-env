@@ -191,7 +191,7 @@ def test_does_not_flag_y_to_ies_plural_variant() -> None:
     assert sweep_diff(diff) == []
 
 
-def test_still_flags_non_plural_divergent_tail() -> None:
+def test_does_not_flag_spaced_prose_sharing_identifier_prefix() -> None:
     diff = (
         "diff --git a/api/quota.py b/api/quota.py\n"
         "--- a/api/quota.py\n"
@@ -204,9 +204,19 @@ def test_still_flags_non_plural_divergent_tail() -> None:
         "@@ -0,0 +1,1 @@\n"
         "+The premium request budget gates the run.\n"
     )
-    findings = sweep_diff(diff)
-    assert len(findings) == 1
-    assert "premium request" in findings[0]
+    assert sweep_diff(diff) == []
+
+
+def test_does_not_flag_ordinary_sentence_sharing_loop_variable_prefix() -> None:
+    diff = (
+        "diff --git a/api/scan.py b/api/scan.py\n"
+        "--- a/api/scan.py\n"
+        "+++ b/api/scan.py\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+each_node = walk(tree)\n"
+        '+DESCRIPTION = "Each attempt polls the review endpoint once."\n'
+    )
+    assert sweep_diff(diff) == []
 
 
 def test_flags_near_miss_inside_code_comment() -> None:

@@ -24,8 +24,6 @@ HYPHENATED_PROSE_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)+\b"
 )
 
-PROSE_WORD_PATTERN: re.Pattern[str] = re.compile(r"[A-Za-z][A-Za-z0-9]*")
-
 STRING_LITERAL_CONTENT_PATTERN: re.Pattern[str] = re.compile(
     r"\"([^\"]*)\"|'([^']*)'|`([^`]*)`"
 )
