@@ -36,7 +36,6 @@ from block_main_commit import (  # noqa: E402
     resolve_directory,
 )
 from precommit_code_rules_gate import (  # noqa: E402
-    is_git_commit_invocation,
     resolve_repository_root,
 )
 
@@ -55,12 +54,12 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_TRACKED_UNSTAGED_FILES_COMMAND,
     COMMIT_ALL_SHORT_FLAG_LETTER,
     COMMIT_SUBCOMMAND_TOKEN,
-    GIT_EXECUTABLE_TOKEN,
     DENY_FILE_BULLET_LINE_SEPARATOR,
     DENY_FILE_BULLET_PREFIX,
     DENY_PATHSPEC_SEPARATOR,
     GIT_DIFF_OUTPUT_ENCODING,
     GIT_DIFF_TIMEOUT_SECONDS,
+    GIT_EXECUTABLE_TOKEN,
     LONG_FLAG_PREFIX,
     PARTIAL_COMMIT_BYPASS_MARKER,
     SESSION_EDIT_DENY_TEMPLATE,
@@ -249,6 +248,31 @@ def _stages_paths_before_commit(bash_command: str) -> bool:
     )
 
 
+def _invokes_git_commit(bash_command: str) -> bool:
+    """Return whether the command runs a real ``git commit`` subcommand.
+
+    A benign command can name the phrase ``git commit`` as plain text, as in
+    ``grep -rn "git commit" .``. This check tokenizes the command, splits it at
+    each shell separator, and confirms one segment invokes ``git`` with a
+    ``commit`` subcommand.
+
+    Args:
+        bash_command: The Bash tool command string.
+
+    Returns:
+        True when a command segment runs ``git commit``; False when the command
+        will not tokenize or names ``commit`` only as text.
+    """
+    try:
+        all_tokens = shlex.split(bash_command, posix=True)
+    except ValueError:
+        return False
+    return any(
+        _git_subcommand(each_segment) == COMMIT_SUBCOMMAND_TOKEN
+        for each_segment in _split_into_command_segments(all_tokens)
+    )
+
+
 def _commit_bypasses_stage_check(bash_command: str) -> bool:
     """Return whether the commit intentionally opts out of the stage check.
 
@@ -420,7 +444,7 @@ def main() -> None:
     bash_command = tool_input.get("command", "")
     if not isinstance(bash_command, str) or not bash_command:
         sys.exit(0)
-    if not is_git_commit_invocation(bash_command):
+    if not _invokes_git_commit(bash_command):
         sys.exit(0)
     if _commit_bypasses_stage_check(bash_command):
         sys.exit(0)
