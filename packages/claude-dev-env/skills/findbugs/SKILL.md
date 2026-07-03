@@ -22,21 +22,21 @@ If the current branch has no associated PR and no diff against the default branc
 
 First match wins; respond with the quoted line exactly and stop:
 
-- **Disabled via environment.** When `CLAUDE_REVIEWS_DISABLED` contains the
-  token `bugteam` (comma-separated, case-insensitive, whitespace-tolerant):
-  `/findbugs is disabled via CLAUDE_REVIEWS_DISABLED.` `/findbugs` is a PR
-  bug-audit skill in the same family as `/bugteam` and `/qbug`, so the
-  shared `bugteam` token disables all three.
+- **Disabled via environment.** When `CLAUDE_REVIEWS_DISABLED` carries the
+  token `bugteam`:
+  `/findbugs is disabled via CLAUDE_REVIEWS_DISABLED.` Run the check via
+  `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugteam`
+  (exit 0 = disabled). `/findbugs` is a PR bug-audit skill in the same family
+  as `/bugteam` and `/qbug`, so the shared `bugteam` token disables all three.
+  The gate semantics live in the `reviewer-gates` skill (`../reviewer-gates/SKILL.md`).
 
 ## The Process
 
 ### Step 1: Resolve PR scope
 
-Determine the audit target in this order:
+Apply the `pr-scope-resolve` skill (`../pr-scope-resolve/SKILL.md`) with caller `findbugs`. Findbugs consumes the resolved `owner`, `repo`, `number`, `head_ref`, `base_ref`, and `url`; when no PR exists, the ladder's merge-base rung sets the audit scope. When no target exists, respond exactly with the sub-skill's canonical refusal line and stop:
 
-1. **Open PR for current branch.** Call `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` for the current branch (`N` comes from the parent skill's context, or fall back to `search_issues` MCP with the current branch name to recover the PR number). If a PR exists, capture its number, base ref, head ref, and URL.
-2. **No PR but a remote default branch exists.** Diff against the default branch's merge-base: `git merge-base HEAD origin/<default>` then `git diff <merge-base>...HEAD`. Treat this as the audit scope.
-3. **Neither.** Respond exactly: `No PR or upstream diff found. Push the branch or open a PR first.` and stop.
+`No PR or upstream diff. /findbugs needs a target.`
 
 ### Step 2: Capture the full PR diff
 
@@ -141,81 +141,18 @@ returns findings without posting them as inline comments is invisible
 to the gate. Findbugs remains read-only on code — the review post is
 the only side effect.
 
-**Self-PR auto-toggle.** GitHub rejects both `APPROVE` and
-`REQUEST_CHANGES` reviews with HTTP 422 when the authenticated identity
-matches the PR author ("Cannot approve/request changes on your own pull
-request"). `post_audit_thread.py` detects this case via `gh api user` +
-`gh api repos/<o>/<r>/pulls/<n>` and auto-resolves an alternate gh
-account's token for the reviews POST — the active `gh auth` account is
-not mutated; only the bearer token sent on the request changes. After
-the POST the active account is still whoever it was before, so no
-"swap back" step is needed.
-
-Configuration:
-
-- `GH_TOKEN` / `GITHUB_TOKEN` env vars take precedence over the toggle.
-  Set them when you need to pin a specific reviewer identity by token
-  rather than by account login.
-- `BUGTEAM_REVIEWER_ACCOUNT` env var names which authenticated alternate
-  to prefer when a toggle is needed (for example,
-  `BUGTEAM_REVIEWER_ACCOUNT=jl-cmd`). The env var name is shared across
-  every skill that invokes `post_audit_thread.py`. When unset, the
-  script falls back to the first alternate account `gh auth status`
-  reports.
-- The named alternate must be logged in (`gh auth login -h github.com -u
-  <login>`) before the audit skill runs. The script exits 1 with a
-  pointing-at-`gh auth login` message when self-PR is detected and no
-  usable alternate is authenticated.
-
-After the agent (and Haiku secondary) return and the merge is complete,
-serialize the merged findings to a JSON file and call
-`post_audit_thread.py`:
-
-```
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" \
-  --skill findbugs \
-  --owner <owner> \
-  --repo <repo> \
-  --pr-number <N> \
-  --commit <head_sha> \
-  --state <CLEAN|DIRTY> \
-  --findings-json <path>
-```
-
-The findings JSON root is a list of objects shaped
-`{path, line, side, severity, description, fix_summary}`. Before
-serializing, partition the merged findings into anchored (line appears
-in the captured diff) and unanchored (line is not in the diff) buckets.
-Only anchored findings are serialized to the JSON — the GitHub reviews
-API rejects the entire POST if any inline comment in `comments[]`
-targets a line not in the diff at `--commit`, so a single unanchored
-entry breaks the whole review. Unanchored findings are surfaced via
-Step 5's user-facing output rather than as inline anchored comments.
-For each anchored finding, map `file` → `path`; split the finding's
-`failure_mode` at the literal `Fix:` heading so the failure narrative
-becomes `description` and the suffix beginning at `Fix:` (including
-the trailing `Validation:` clause) becomes `fix_summary` (the
-`failure_mode` field carries the full audit-to-fix handoff per
-[`agents/code-quality-agent.md`](../../agents/code-quality-agent.md)).
-When a finding's `failure_mode` omits the `Fix:` heading, write the
-full text to BOTH `description` and `fix_summary`. Set `side="RIGHT"`
-for every entry. Zero anchored findings → `--state CLEAN` with the
-findings file holding an empty array (`[]`); one or more anchored
-findings → `--state DIRTY` with the full list. CLEAN posts an APPROVE review (the
-request event; GitHub stores it as `state=APPROVED`) with a "no
-findings" summary; DIRTY posts a REQUEST_CHANGES review with one inline
-anchored comment per finding (each becomes its own resolvable thread on
-the PR).
-
 Capture `<head_sha>` once at the start of Step 4 via `git rev-parse
 HEAD` in the worktree the diff was scoped against.
 
-Exit codes: `0` on success (emits the new review's `html_url` to
-stdout, surface alongside the totals in Step 5); `1` on user input
-error; `2` on retry exhaustion (1s / 4s / 16s backoff across four
-attempts). On exit 2, tell the user the review post failed and that
-the unresolved-thread gate will not see this audit pass; do not retry
-silently.
+After the agent (and Haiku secondary) return and the merge is complete,
+apply the `post-audit-findings` skill (`../post-audit-findings/SKILL.md`)
+with `--skill findbugs`. That skill owns the findings-JSON mapping, the
+anchored-only serialization (unanchored findings surface via Step 5's
+user-facing output), the CLEAN/DIRTY decision, the self-PR reviewer
+toggle, and the exit codes. On exit 0, surface the emitted review
+`html_url` alongside the totals in Step 5. On exit 2, tell the user the
+review post failed and that the unresolved-thread gate will not see this
+audit pass; do not retry silently.
 
 ### Step 5: Surface findings, then clean up
 
@@ -287,7 +224,7 @@ Claude: [resolves PR #42 from current branch, fetches full diff, spawns code-qua
 
 <example>
 User: `/findbugs`
-Claude: `No PR or upstream diff found. Push the branch or open a PR first.`
+Claude: `No PR or upstream diff. /findbugs needs a target.`
 </example>
 
 <example>

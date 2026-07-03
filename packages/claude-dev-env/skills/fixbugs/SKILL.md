@@ -47,11 +47,9 @@ If the filtered set is empty, refuse per the refusal cases above.
 
 ### Step 2: Re-resolve PR scope
 
-Re-establish the same PR target `/findbugs` used:
+Apply the `pr-scope-resolve` skill (`../pr-scope-resolve/SKILL.md`) with caller `fixbugs` to resolve the same PR target `/findbugs` used — the fixes stay scoped to the files the `/findbugs` findings from Step 1 name. When no target exists, respond with the sub-skill's canonical refusal line and stop:
 
-1. `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` for the current branch (`N` comes from the parent skill's PR context, or fall back to `search_issues` MCP with the current branch name to recover the PR number).
-2. Fall back to `git merge-base HEAD origin/<default>` then `git diff <merge-base>...HEAD`.
-3. Neither → respond `No PR or upstream diff. Cannot scope fixes.` and stop.
+`No PR or upstream diff. /fixbugs needs a target.`
 
 Capture: `<owner>/<repo>`, head branch, base branch, PR number, PR URL.
 

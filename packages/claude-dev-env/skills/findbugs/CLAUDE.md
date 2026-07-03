@@ -4,13 +4,13 @@ Audits the current branch's pull request for bugs by spawning the `code-quality-
 
 ## Purpose
 
-Read-only. The skill resolves PR scope, writes the diff to a scoped temp file, and spawns two `code-quality-agent` instances (primary sonnet + secondary haiku) with a self-contained, context-free prompt covering all A–P audit categories. After both return it merges findings (de-dup, max-wins severity), posts one audit review to the PR via `post_audit_thread.py` (APPROVE on clean, REQUEST_CHANGES with inline anchored comments on dirty), and reports totals and cleared categories to the user.
+Read-only. The skill resolves PR scope via the `pr-scope-resolve` skill, writes the diff to a scoped temp file, and spawns two `code-quality-agent` instances (primary sonnet + secondary haiku) with a self-contained, context-free prompt covering all A–P audit categories. After both return it merges findings (de-dup, max-wins severity), posts one audit review to the PR via the `post-audit-findings` skill (APPROVE on clean, REQUEST_CHANGES with inline anchored comments on dirty), and reports totals and cleared categories to the user.
 
 ## Key file
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Five-step process: resolve scope, capture diff to a scoped temp path, spawn agents (clean-room prompt XML), post audit review via `post_audit_thread.py`, surface findings and offer `/fixbugs`. Includes refusals, output format, and the anchored-vs-unanchored finding split. |
+| `SKILL.md` | Five-step process: resolve scope (`pr-scope-resolve` skill), capture diff to a scoped temp path, spawn agents (clean-room prompt XML), post audit review (`post-audit-findings` skill), surface findings and offer `/fixbugs`. Includes refusals and the output format. |
 
 ## Constraints
 
