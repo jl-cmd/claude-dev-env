@@ -7,8 +7,9 @@ silently. This hook prevents that by remembering every file the session
 touches. After each Write, Edit, or MultiEdit it appends the edited file's
 resolved absolute path to a per-session JSON file in the system temp directory,
 which the stage gate reads at commit time. Concurrent invocations — the case
-parallel Write or Edit calls in one turn produce — serialize on a per-session
-lock file, so no edited path is lost to a read-then-write race.
+parallel Write or Edit calls in one turn produce — serialize on a best-effort
+per-session lock file. When the lock cannot be acquired within the timeout, the
+write proceeds without it rather than stalling the edit that triggered the hook.
 
 The hook never blocks a tool call. A non-edit tool, a malformed payload, a
 missing file path, or a failed write each returns quietly, so a logging problem
@@ -148,6 +149,8 @@ def _hold_edit_file_lock(edit_file: Path) -> Iterator[None]:
     Two PostToolUse invocations run concurrently when Claude issues parallel
     Write or Edit calls in one turn. Serializing the read-then-write on a shared
     lock file keeps each invocation's appended path from overwriting another's.
+    The lock is best-effort: when it cannot be acquired within the timeout, the
+    write proceeds without it rather than stalling the edit.
 
     Args:
         edit_file: This session's tracker file path.
@@ -169,8 +172,9 @@ def _hold_edit_file_lock(edit_file: Path) -> Iterator[None]:
 def _record_edited_path(session_id: str, resolved_file_path: str) -> None:
     """Append one edited path to this session's tracker file when it is new.
 
-    The read of the recorded paths and the write back run under a per-session
-    lock, so parallel invocations never drop one another's appended path.
+    The read of the recorded paths and the write back run under a best-effort
+    per-session lock, so parallel invocations do not drop one another's appended
+    path while the lock holds.
 
     Args:
         session_id: Raw ``session_id`` from the hook payload.
