@@ -297,16 +297,13 @@ def docstring_line_numbers(content: str) -> set[int]:
         return set()
     all_docstring_line_numbers: set[int] = set()
     for each_node in ast.walk(parsed_tree):
-        if (
-            isinstance(each_node, ast.Expr)
-            and isinstance(each_node.value, ast.Constant)
-            and isinstance(each_node.value.value, str)
-        ):
-            end_line_number = each_node.end_lineno
-            if end_line_number is None:
-                continue
-            for each_line_number in range(each_node.lineno, end_line_number + 1):
-                all_docstring_line_numbers.add(each_line_number)
+        if not (isinstance(each_node, ast.Expr) and _statement_is_docstring(each_node)):
+            continue
+        end_line_number = each_node.end_lineno
+        if end_line_number is None:
+            continue
+        for each_line_number in range(each_node.lineno, end_line_number + 1):
+            all_docstring_line_numbers.add(each_line_number)
     return all_docstring_line_numbers
 
 
