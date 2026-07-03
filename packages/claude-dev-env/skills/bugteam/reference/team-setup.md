@@ -64,11 +64,12 @@ This is the **first** action of every `/bugteam` invocation, before any subagent
 
 ## Step 1 — Resolve PR scope (detail)
 
-Same resolution path as `/findbugs`:
-
-1. Call `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` to fetch PR metadata; capture `number`, `headRefName`, `baseRefName`, and `url` from the response. Falls back to the merge-base diff path when no PR exists.
-2. Fall back to `git merge-base HEAD origin/<default>` then `git diff <merge-base>...HEAD`.
-3. Neither → refuse per refusal cases in `SKILL.md`.
+Apply the `pr-scope-resolve` skill
+([../../pr-scope-resolve/SKILL.md](../../pr-scope-resolve/SKILL.md)) with
+caller `bugteam`. Its resolution ladder hands back `owner`, `repo`, `number`,
+`head_ref`, `base_ref`, `url`, and `head_sha`; when no PR and no upstream
+diff exist, respond exactly `No PR or upstream diff. /bugteam needs a
+target.` and stop.
 
 Capture `<owner>/<repo>`, head branch, base branch, PR number, PR URL. This scope persists across every loop — `/bugteam` runs to completion from the single up-front confirmation.
 
