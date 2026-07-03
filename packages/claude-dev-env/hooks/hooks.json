@@ -272,6 +272,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/session_end_cleanup.py",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/session_edit_tracker_cleanup.py",
+            "timeout": 10
           }
         ]
       }

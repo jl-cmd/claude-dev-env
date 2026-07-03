@@ -1,10 +1,13 @@
-"""Behavior tests for the session_edit_tracker_cleanup SessionStart hook.
+"""Behavior tests for the session_edit_tracker_cleanup hook.
 
-At session start the cleanup deletes the current session's own session-edit
-file and prunes stale session-edit files left behind by crashed sessions. These
-tests redirect ``tempfile.gettempdir`` to a temporary directory, seed it with
-fresh, stale, and currentsession files, run the hook's ``main`` through a
-SessionStart payload, and confirm which files survive.
+The cleanup deletes only the running session's own session-edit file, and only
+on a fresh startup (SessionStart with a ``startup`` source) or a session end. A
+SessionStart that continues the same conversation — a compact or a resume —
+keeps the in-flight tracker. A peer session's file is always left alone,
+regardless of its age. These tests redirect ``tempfile.gettempdir`` to a
+temporary directory, seed it with the current session's file and peer-session
+files, run the hook's ``main`` through a lifecycle payload, and confirm which
+files survive.
 """
 
 from __future__ import annotations
@@ -77,11 +80,21 @@ def _session_start_payload(session_id: str) -> str:
     return json.dumps({"session_id": session_id, "source": "startup"})
 
 
-def test_should_remove_stale_edit_file(redirected_temp_directory: pathlib.Path) -> None:
-    stale_file = _seed_edit_file(redirected_temp_directory, "crashed-session")
-    _age_file(stale_file, SESSION_EDIT_FILE_STALE_AGE_SECONDS + 60)
+def _session_continuation_payload(session_id: str, source: str) -> str:
+    return json.dumps({"session_id": session_id, "source": source})
+
+
+def _session_end_payload(session_id: str) -> str:
+    return json.dumps({"session_id": session_id, "hook_event_name": "SessionEnd"})
+
+
+def test_main_keeps_other_session_stale_tracker(
+    redirected_temp_directory: pathlib.Path,
+) -> None:
+    other_session_file = _seed_edit_file(redirected_temp_directory, "idle-live-session")
+    _age_file(other_session_file, SESSION_EDIT_FILE_STALE_AGE_SECONDS + 60)
     _run_main_with_stdin(_session_start_payload("currentsession"))
-    assert not stale_file.exists()
+    assert other_session_file.exists()
 
 
 def test_should_keep_fresh_edit_file(redirected_temp_directory: pathlib.Path) -> None:
@@ -95,6 +108,34 @@ def test_should_remove_current_session_edit_file(
 ) -> None:
     current_file = _seed_edit_file(redirected_temp_directory, "currentsession")
     _run_main_with_stdin(_session_start_payload("currentsession"))
+    assert not current_file.exists()
+
+
+def test_main_removes_current_session_stale_tracker(
+    redirected_temp_directory: pathlib.Path,
+) -> None:
+    current_file = _seed_edit_file(redirected_temp_directory, "currentsession")
+    _age_file(current_file, SESSION_EDIT_FILE_STALE_AGE_SECONDS + 60)
+    _run_main_with_stdin(_session_start_payload("currentsession"))
+    assert not current_file.exists()
+
+
+@pytest.mark.parametrize("continuation_source", ["compact", "resume"])
+def test_should_keep_current_session_tracker_on_continuation(
+    redirected_temp_directory: pathlib.Path, continuation_source: str
+) -> None:
+    current_file = _seed_edit_file(redirected_temp_directory, "currentsession")
+    _run_main_with_stdin(
+        _session_continuation_payload("currentsession", continuation_source)
+    )
+    assert current_file.exists()
+
+
+def test_should_remove_current_session_tracker_on_session_end(
+    redirected_temp_directory: pathlib.Path,
+) -> None:
+    current_file = _seed_edit_file(redirected_temp_directory, "currentsession")
+    _run_main_with_stdin(_session_end_payload("currentsession"))
     assert not current_file.exists()
 
 
