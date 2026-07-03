@@ -75,7 +75,7 @@ Cursor Bugbot signals through CI check runs, not always through a posted review.
    `... check_bugbot_ci.py --check-active --owner <O> --repo <R> --sha <current_head>`
    - Exit 0 — Bugbot is already queued on this commit. Skip posting; wait for completion (callers schedule their own wakeup).
    - Exit 1 — continue.
-3. **Trigger.** Post exactly `bugbot run` as an issue comment (`add_issue_comment`) — no `@cursor[bot]` mention, no other text. `bugbot run` is empirically the only re-trigger Cursor Bugbot recognizes; every other phrasing silently no-ops. Wait 8 seconds.
+3. **Trigger.** Post exactly `bugbot run` as an issue comment (`add_issue_comment`) — no `@cursor[bot]` mention, no other text. `bugbot run` is empirically the only re-trigger Cursor Bugbot recognizes; every other phrasing silently no-ops. Wait 8 seconds with an in-turn Monitor delay, never a foreground `sleep` (blocked in headless runs).
 4. **Acknowledge check.**
    `... check_bugbot_ci.py --owner <O> --repo <R> --sha <current_head>`
    - Exit 0 — a check run is present: record `bugbot_acknowledged_at = <now, ISO 8601>`; the caller polls on its own cadence.
