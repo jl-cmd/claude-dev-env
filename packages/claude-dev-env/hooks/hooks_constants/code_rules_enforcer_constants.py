@@ -185,7 +185,18 @@ LOGGING_FSTRING_PATTERN = re.compile(
 LOGGING_PRINTF_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r"(?<!%)%[#0\- +]?[0-9.*]*[sdrixfgeEcoX](?![a-zA-Z])"
 )
+ADJACENT_STRING_LITERAL_PATTERN: re.Pattern[str] = re.compile(
+    r'(?<!["\'])[rRbBfFuU]{0,2}(?:"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\')'
+    r'\s*[rRbBfFuU]{0,2}(?:"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\')(?!["\'])'
+)
 MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT = 2
+ALL_LOGGING_CALL_METHOD_NAMES: frozenset[str] = frozenset(
+    {"debug", "info", "warning", "error", "critical", "exception"}
+)
+LOGGING_HELPER_FUNCTION_NAME_PATTERN: re.Pattern[str] = re.compile(
+    r"^log_(?:debug|info|warning|error|critical|exception)$"
+)
+LOGGING_RECEIVER_NAME_PATTERN: re.Pattern[str] = re.compile(r"^_?(?:logger|logging|log)$")
 SPAWN_AGENT_WITH_JSDOC_PATTERN: re.Pattern[str] = re.compile(
     r"/\*\*(?P<jsdoc>(?:(?!\*/).)*?)\*/\s*"
     r"(?:async\s+)?function\s+spawn(?P<role>\w+?)Agent\s*\(",

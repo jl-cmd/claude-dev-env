@@ -40,6 +40,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_JS_RESUME_TASK_ENUMERATION_ISSUES,
     MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES,
     MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES,
+    MAX_LOGGING_ADJACENT_LITERAL_ISSUES,
     MAX_LOGGING_FSTRING_ISSUES,
     MAX_LOGGING_PRINTF_TOKEN_ISSUES,
     MAX_NAIVE_DATETIME_ISSUES,
@@ -57,6 +58,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     SIBLING_RETURN_OBJECT_SINGLE_AGREED_MISSING_KEY_COUNT,
 )
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
+    ADJACENT_STRING_LITERAL_PATTERN,
     ADVISORY_LINE_THRESHOLD_HARD,
     ADVISORY_LINE_THRESHOLD_SOFT,
     ALL_CLI_FILE_PATH_MARKERS,
@@ -72,6 +74,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_JAVASCRIPT_REGEX_PRECEDING_KEYWORDS,
     ALL_JAVASCRIPT_RETURN_TYPE_TERMINATORS,
     ALL_JAVASCRIPT_STRING_DELIMITERS,
+    ALL_LOGGING_CALL_METHOD_NAMES,
     ALL_PYTHON_EXTENSIONS,
     ARROW_CONCISE_BODY_OBJECT_LITERAL_OPENING_PATTERN,
     BARE_FLAG_CONTRACT_PATTERN,
@@ -93,7 +96,9 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     JS_OBJECT_METHOD_SHORTHAND_KEY_PATTERN,
     JSDOC_RETURNS_STRUCTURED_OBJECT_PROMISE_PATTERN,
     LOGGING_FSTRING_PATTERN,
+    LOGGING_HELPER_FUNCTION_NAME_PATTERN,
     LOGGING_PRINTF_TOKEN_PATTERN,
+    LOGGING_RECEIVER_NAME_PATTERN,
     MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT,
     NOT_INSIDE_TYPE_CHECKING_BLOCK,
     RESUME_TASK_ENUMERATION_PATTERN,
@@ -587,6 +592,84 @@ def check_logging_printf_tokens(content: str, file_path: str) -> list[str]:
             "use {} placeholders (the %-arguments are silently dropped)"
         )
         if len(issues) >= MAX_LOGGING_PRINTF_TOKEN_ISSUES:
+            break
+    return issues
+
+
+def _logging_call_receiver_name(receiver_node: ast.expr) -> str | None:
+    """Return the trailing identifier of a logging-call receiver expression, else None.
+
+    A bare name (``logger.info(...)``) returns its own identifier; an
+    attribute chain (``self.logger.info(...)``) returns the attribute
+    closest to the call. Any other receiver shape (a call, a subscript, ...)
+    returns None, since neither shape names a plain logger reference.
+    """
+    if isinstance(receiver_node, ast.Name):
+        return receiver_node.id
+    if isinstance(receiver_node, ast.Attribute):
+        return receiver_node.attr
+    return None
+
+
+def _is_logging_call_node(call_node: ast.Call) -> bool:
+    """Return True when call_node is a real logging call: a log_* helper or a logger.<method>(...) call."""
+    function_reference = call_node.func
+    if isinstance(function_reference, ast.Name):
+        return bool(LOGGING_HELPER_FUNCTION_NAME_PATTERN.match(function_reference.id))
+    if isinstance(function_reference, ast.Attribute):
+        if function_reference.attr not in ALL_LOGGING_CALL_METHOD_NAMES:
+            return False
+        receiver_name = _logging_call_receiver_name(function_reference.value)
+        return receiver_name is not None and bool(
+            LOGGING_RECEIVER_NAME_PATTERN.match(receiver_name)
+        )
+    return False
+
+
+def check_logging_adjacent_string_literals(content: str, file_path: str) -> list[str]:
+    """Flag implicit adjacent string-literal concatenation inside a logging call's arguments.
+
+    A log pattern written as two side-by-side literals reads as an editing
+    artifact: the pieces join into one string at compile time, so the split
+    adds nothing and hides the real message from a plain-text search for the
+    full pattern. The check walks the parsed AST for a real logging call (an
+    attribute call such as a logger method, or a ``log_*`` helper) and runs
+    the adjacent-literal search only against that call's own source segment,
+    so text that merely looks like a logging call inside a comment,
+    docstring, or other string literal is never a real ``ast.Call`` node and
+    is left alone. A single-literal message, an explicit ``+`` join, and
+    comma-separated string arguments are all left alone. Test files and
+    non-Python files are exempt.
+
+    Args:
+        content: The Python source under validation.
+        file_path: The destination path, used to skip test files and non-Python.
+
+    Returns:
+        One issue line per offending call, capped at the configured maximum.
+    """
+    if is_test_file(file_path):
+        return []
+    if get_file_extension(file_path) not in ALL_PYTHON_EXTENSIONS:
+        return []
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.Call) or not _is_logging_call_node(each_node):
+            continue
+        call_source_segment = ast.get_source_segment(content, each_node)
+        if call_source_segment is None:
+            continue
+        if not ADJACENT_STRING_LITERAL_PATTERN.search(call_source_segment):
+            continue
+        issues.append(
+            f"Line {each_node.lineno}: adjacent string literals in a logging call - "
+            "collapse the implicit concatenation into one literal"
+        )
+        if len(issues) >= MAX_LOGGING_ADJACENT_LITERAL_ISSUES:
             break
     return issues
 

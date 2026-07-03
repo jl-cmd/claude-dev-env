@@ -51,6 +51,7 @@ from code_rules_comments import (  # noqa: E402
     check_comment_changes,
 )
 from code_rules_constants_config import (  # noqa: E402
+    check_config_duplicate_path_anchor,
     check_constants_outside_config,
     check_constants_outside_config_advisory,
     check_file_global_constants_use_count,
@@ -111,6 +112,7 @@ from code_rules_imports_logging import (  # noqa: E402
     check_js_returns_object_schemaless_branch,
     check_js_sibling_return_object_key_drift,
     check_library_print,
+    check_logging_adjacent_string_literals,
     check_logging_fstrings,
     check_logging_printf_tokens,
     check_naive_datetime_construction,
@@ -274,11 +276,13 @@ def validate_content(
         )
         all_issues.extend(check_logging_fstrings(content))
         all_issues.extend(check_logging_printf_tokens(content, file_path))
+        all_issues.extend(check_logging_adjacent_string_literals(content, file_path))
         all_issues.extend(check_windows_api_none(content))
         all_issues.extend(check_naive_datetime_construction(content, file_path))
         all_issues.extend(check_magic_values(content, file_path))
         all_issues.extend(check_fstring_structural_literals(content, file_path))
         all_issues.extend(check_constants_outside_config(content, file_path))
+        all_issues.extend(check_config_duplicate_path_anchor(content, file_path))
         all_issues.extend(check_constants_outside_config_advisory(content, file_path))
         all_issues.extend(check_file_global_constants_use_count(content, file_path))
         all_issues.extend(
