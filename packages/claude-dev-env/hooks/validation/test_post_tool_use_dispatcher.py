@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -92,6 +93,26 @@ def _resolve_extra_arguments(each_entry: PostHostedHookEntry) -> list[str]:
     return resolved_arguments
 
 
+def _environment_without_git_hook_variables() -> dict[str, str]:
+    """Return the process environment with git's hook-scoped variables removed.
+
+    Git exports variables such as GIT_DIR and GIT_INDEX_FILE to hook
+    processes. When this suite runs under a git hook (the pre-commit gate
+    replays staged test files), those variables leak into the hook
+    subprocesses and point their project discovery at the wrong checkout.
+    Stripping them restores the cwd-based discovery the hooks use in
+    production.
+
+    Returns:
+        A copy of the environment without any GIT_-prefixed variable.
+    """
+    return {
+        each_name: each_value
+        for each_name, each_value in os.environ.items()
+        if not each_name.startswith("GIT_")
+    }
+
+
 def _run_hook_subprocess(
     each_entry: PostHostedHookEntry, payload_text: str
 ) -> subprocess.CompletedProcess[str]:
@@ -113,6 +134,7 @@ def _run_hook_subprocess(
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_environment_without_git_hook_variables(),
     )
 
 
@@ -132,6 +154,7 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_environment_without_git_hook_variables(),
     )
 
 
@@ -296,7 +319,7 @@ def test_dispatcher_harness_timeout_clears_summed_hosted_hook_budgets() -> None:
         "PostToolUse dispatcher harness timeout "
         f"({harness_timeout_seconds}s) must exceed the summed worst-case internal "
         f"budgets of the hosted hooks ({summed_internal_seconds}s), or a slow "
-        "type-check run starves the formatter and doc-gist publisher."
+        "type-check run starves the formatter."
     )
 
 
@@ -308,7 +331,7 @@ def test_clean_edit_of_plain_text_allows() -> None:
 
 
 def test_clean_write_of_nonexistent_path_allows() -> None:
-    """Dispatcher allows a Write whose path does not exist (mypy and doc-gist skip)."""
+    """Dispatcher allows a Write whose path does not exist (mypy skips)."""
     missing_path = str(_VALIDATION_DIR / "does_not_exist_dispatcher_probe.txt")
     payload_text = _write_payload(missing_path, "hello world\n")
     _assert_dispatcher_matches_individual_hooks(payload_text)
@@ -559,12 +582,12 @@ def test_block_path_emits_single_parseable_json_object_on_stdout() -> None:
     )
     try:
         payload_text = _write_payload(str(type_error_file), type_error_file.read_text())
-        direct_block, _direct_reason = _parse_block_decision(
-            _run_hook_subprocess(ALL_POST_HOSTED_HOOK_ENTRIES[0], payload_text)
-        )
+        completed_direct = _run_hook_subprocess(ALL_POST_HOSTED_HOOK_ENTRIES[0], payload_text)
+        direct_block, _direct_reason = _parse_block_decision(completed_direct)
         assert direct_block, (
             "Precondition failed: mypy_validator did not block a real type error directly. "
-            "Is mypy installed and the file inside the git project?"
+            "Is mypy installed and the file inside the git project?\n"
+            f"stdout: {completed_direct.stdout!r}\nstderr: {completed_direct.stderr!r}"
         )
 
         dispatcher_result = _run_dispatcher(payload_text)
