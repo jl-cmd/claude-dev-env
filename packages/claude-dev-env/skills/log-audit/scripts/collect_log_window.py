@@ -184,7 +184,7 @@ def main() -> int:
     parser.add_argument("--log-path", type=str, default=None)
     parsed_arguments = parser.parse_args()
     log_path = (
-        Path(parsed_arguments.log_path)
+        Path(parsed_arguments.log_path).expanduser().resolve()
         if parsed_arguments.log_path is not None
         else _default_log_path()
     )

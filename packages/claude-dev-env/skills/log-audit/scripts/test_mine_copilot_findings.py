@@ -55,8 +55,10 @@ class TestClusterDefects:
 
     def test_caps_the_number_of_example_bodies(self) -> None:
         comments = [
-            ReviewerComment(each, "cursor[bot]", f"missing type hint number {each}")
-            for each in range(10)
+            ReviewerComment(
+                each_index, "cursor[bot]", f"missing type hint number {each_index}"
+            )
+            for each_index in range(10)
         ]
         clusters = cluster_defects(comments)
         assert clusters[0].count == 10
