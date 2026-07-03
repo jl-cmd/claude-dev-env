@@ -8,7 +8,7 @@ Reference documents for the `pr-converge` skill. These files define the per-tick
 |---|---|
 | `per-tick.md` | Step-by-step procedure for one tick (resolve HEAD, run BUGBOT, CODE_REVIEW, BUGTEAM, COPILOT_WAIT phases, schedule next wakeup) |
 | `convergence-gates.md` | Six gates that must all pass before the PR is marked ready for review |
-| `fix-protocol.md` | How to apply fixes: TDD first, one commit per fix round, reply to each finding inline |
+| `fix-protocol.md` | pr-converge deltas on the `pr-fix-protocol` skill: multi-PR teammate obligations and the same-tick bugbot re-trigger rule |
 | `ground-rules.md` | Non-negotiable constraints for the convergence loop |
 | `stop-conditions.md` | Conditions that end the loop without convergence (cap reached, stuck, user stop) |
 | `state-schema.md` | Fields in `pr-converge-state.json` and their meanings |
