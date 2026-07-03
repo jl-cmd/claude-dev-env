@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -94,6 +95,28 @@ def parse_log_line(raw_line: str) -> LogRecord | None:
     )
 
 
+def _records_within_window(
+    all_lines: Iterable[str], window_start: datetime
+) -> list[LogRecord]:
+    """Parse each line and keep the records at or after the window start.
+
+    Args:
+        all_lines: The hook-block-log lines to parse, in file order.
+        window_start: The earliest timestamp a kept record may carry.
+
+    Returns:
+        The in-window records in the order their lines appear.
+    """
+    kept_records: list[LogRecord] = []
+    for each_line in all_lines:
+        parsed_record = parse_log_line(each_line)
+        if parsed_record is None:
+            continue
+        if parsed_record.timestamp >= window_start:
+            kept_records.append(parsed_record)
+    return kept_records
+
+
 def collect_records(log_text: str, window_start: datetime) -> list[LogRecord]:
     """Parse log text and keep records at or after the window start.
 
@@ -104,14 +127,7 @@ def collect_records(log_text: str, window_start: datetime) -> list[LogRecord]:
     Returns:
         The in-window records in the order they appear in the log.
     """
-    kept_records: list[LogRecord] = []
-    for each_line in log_text.splitlines():
-        parsed_record = parse_log_line(each_line)
-        if parsed_record is None:
-            continue
-        if parsed_record.timestamp >= window_start:
-            kept_records.append(parsed_record)
-    return kept_records
+    return _records_within_window(log_text.splitlines(), window_start)
 
 
 def read_log_window(
@@ -127,12 +143,12 @@ def read_log_window(
     Returns:
         The in-window records, or an empty list when the log file is absent.
     """
+    window_start = now - timedelta(hours=window_hours)
     try:
-        log_text = log_path.read_text(encoding="utf-8")
+        with log_path.open(encoding="utf-8") as log_file:
+            return _records_within_window(log_file, window_start)
     except FileNotFoundError:
         return []
-    window_start = now - timedelta(hours=window_hours)
-    return collect_records(log_text, window_start)
 
 
 def _default_log_path() -> Path:
