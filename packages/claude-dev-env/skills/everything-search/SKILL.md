@@ -11,6 +11,12 @@ Search files instantly on Windows using the Everything command-line interface (e
 
 **Announce at start:** "I'm using the everything-search skill to find files."
 
+## Hard limits
+
+- **The Everything HTTP server stays off.** Never start, install, or restart it. `es.exe` reads the desktop app's live index directly and needs no server.
+- **Scope every search.** Pass a project path, an `ext:`/`dm:`/`size:` filter, or a name pattern. A bare whole-drive scan or a network-share sweep is out of bounds.
+- **Fall back on failure.** When `es.exe` fails or returns nothing, use `Glob` for name and path patterns or `Grep` for file contents, and report the outage.
+
 ## Instructions
 
 ### Command Syntax

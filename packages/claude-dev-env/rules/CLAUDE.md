@@ -28,6 +28,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `no-historical-clutter.md` | Documentation describes current state only; no historical or transitional language |
 | `no-inline-destructive-literals.md` | No destructive-command literals in Bash tool command strings, even as data |
 | `env-var-table-code-drift.md` | Every env-var summary table row in a `.md` file names a code file whose source references the variable |
+| `es-exe-file-search.md` | File search on Windows routes through the `es.exe` CLI with a scoped query; the Everything HTTP server stays off |
 | `orphan-css-class.md` | Every `class="..."` attribute in Python-generated markup has a matching selector in the `<style>` block |
 | `package-inventory-stale-entry.md` | A new production code file added to a directory carries an entry in that directory's `README.md`/`CLAUDE.md` file inventory |
 | `paired-test-coverage.md` | A public function omitted by a module's established paired test suite must get a behavioral test |
