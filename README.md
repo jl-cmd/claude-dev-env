@@ -206,6 +206,7 @@ Slash commands for common workflows.
 | `findbugs` | Single-shot clean-room code-quality audit on the current PR diff (zero conversation context, returns P0/P1/P2 findings with file:line evidence) |
 | `fixbugs` | Recover the most recent `/findbugs` findings, package them as a goal, and hand off to `/agent-prompt` to spawn a background sonnet clean-coder fix agent |
 | `bugteam` | Autonomous audit-and-fix loop using Claude Code's agent teams feature (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and v2.1.32+); fresh teammates per loop, 10-loop cap, scoped permission grant/revoke wrapping the cycle |
+| `reviewer-gates` | Availability gates for PR-loop reviewers: CLAUDE_REVIEWS_DISABLED opt-out parse, once-per-run Copilot quota pre-check, and the Cursor Bugbot trigger/acknowledge/CI-detect flow |
 
 ### Hooks
 
