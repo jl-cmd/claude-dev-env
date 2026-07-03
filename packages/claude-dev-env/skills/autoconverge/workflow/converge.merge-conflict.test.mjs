@@ -39,7 +39,7 @@ test('the git agent handles merge-conflict checks with a Monitor-based poll', ()
     /do not edit, commit, push, or rebase|read only/i,
     'expected the git agent merge check to be read-only',
   );
-  assert.match(gitBody, /MERGE_CONFLICT_SCHEMA/, 'expected the git agent to return MERGE_CONFLICT_SCHEMA');
+  assert.match(gitBody, /PREFLIGHT_GIT_SCHEMA/, 'expected the git agent to return PREFLIGHT_GIT_SCHEMA');
   assert.match(gitBody, /Monitor tool/, 'expected a Monitor-based poll delay, not a foreground sleep');
 });
 
@@ -53,30 +53,37 @@ test('runCodeEditorTask conflict-edit path rebases onto origin/main and makes no
   );
 });
 
-test('resolveMergeConflicts runs check -> edit -> verify -> commit and gates the push on the verdict', () => {
+test('resolveMergeConflicts runs edit -> verify -> commit and gates the push on the verdict', () => {
   const body = functionBody('resolveMergeConflicts');
-  const checkIndex = body.indexOf("runGitTask('check-merge-conflicts'");
   const editIndex = body.indexOf("runCodeEditorTask('conflict-edit'");
   const verifyIndex = body.indexOf('runVerifierTask(');
   const commitIndex = body.indexOf('commitWithRecovery(');
-  assert.notEqual(checkIndex, -1, 'expected the conflict check to run');
   assert.notEqual(editIndex, -1, 'expected the edit step to run');
   assert.notEqual(verifyIndex, -1, 'expected the verify step to run');
   assert.notEqual(commitIndex, -1, 'expected the commit step to run');
   assert.ok(
-    checkIndex < editIndex && editIndex < verifyIndex && verifyIndex < commitIndex,
-    'expected the order check -> edit -> verify -> commit',
+    editIndex < verifyIndex && verifyIndex < commitIndex,
+    'expected the order edit -> verify -> commit',
   );
   assert.match(body, /verdictPassed\(/, 'expected the verifier verdict to gate the force-push');
+  assert.doesNotMatch(
+    body,
+    /runGitTask\(/,
+    'expected the conflict decision to come from the merged preflight-git probe, with no mergeability agent spawned here',
+  );
 });
 
-test('resolveMergeConflicts rebases only when the check reports a conflict', () => {
+test('resolveMergeConflicts rebases only when the caller-supplied preflight decision reports a conflict', () => {
   const body = functionBody('resolveMergeConflicts');
-  assert.match(body, /isMergeConflicting\(/, 'expected the orchestrator to branch on the conflict decision');
   assert.match(
     body,
-    /if \(!isMergeConflicting\([^)]*\)\) return head/,
+    /if \(!isConflicting\) return head/,
     'expected a clean PR to return the unchanged HEAD without rebasing',
+  );
+  assert.match(
+    convergeSource,
+    /resolveMergeConflicts\(preflight\.sha, isMergeConflicting\(preflight\)\)/,
+    'expected the call site to derive the conflict decision from the merged preflight-git result',
   );
 });
 

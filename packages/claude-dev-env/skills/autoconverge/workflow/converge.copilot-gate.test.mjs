@@ -73,7 +73,7 @@ test('Copilot findings route to a fix when Copilot is reachable and not down', (
 
 test('COPILOT_SCHEMA carries a required down field', () => {
   const schemaStart = convergeSource.indexOf('const COPILOT_SCHEMA =');
-  const schemaEnd = convergeSource.indexOf('const HEAD_SCHEMA =');
+  const schemaEnd = convergeSource.indexOf('const REVIEWER_AVAILABILITY_SCHEMA =');
   assert.notEqual(schemaStart, -1, 'expected COPILOT_SCHEMA to exist');
   const schemaSource = convergeSource.slice(schemaStart, schemaEnd);
   assert.match(schemaSource, /down:\s*\{\s*type:\s*'boolean'/);

@@ -79,38 +79,32 @@ const convergeAgent = (prompt, options) =>
   agent(`${HEADLESS_SAFETY_PREAMBLE}${worktreeDirective(activeRepoPath)}${prompt}`, options)
 
 /**
- * Spawn a fresh git-utility Explore agent for a specific task. 'resolve-head'
- * prints the PR HEAD SHA, 'prefetch-main' fetches origin main so the review
- * lenses diff against an up-to-date base, and any other task reports whether the
- * branch has merge conflicts. The agent never edits code.
- * @param {string} task the short task name
- * @param {string} head optional HEAD SHA for conflict checks
- * @returns {Promise<object|string>} the structured output, or the transcript string when the 'prefetch-main' resume runs schema-less
+ * Spawn a fresh git-utility Explore agent for a specific task. The one task,
+ * 'preflight-git', bundles the three mechanical git reads into a single agent
+ * startup: it prints the PR HEAD SHA, fetches origin main so the review lenses
+ * diff against an up-to-date base, and polls GitHub mergeability, returning
+ * {sha, conflicting, fetched} in one structured result. The agent never edits
+ * code, so it runs on the cheapest model at low effort.
+ * @param {string} task the short task name ('preflight-git')
+ * @returns {Promise<object>} the structured PREFLIGHT_GIT_SCHEMA output
  */
-function runGitTask(task, head) {
-  if (task === 'resolve-head') {
-    return convergeAgent(
-      `Print the current HEAD SHA of ${prCoordinates}. Run exactly:\n` +
-        `gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
-        `Return the full 40-character SHA in the sha field. Do not modify any files.`,
-      { label: 'git-utility', phase: 'Converge', schema: HEAD_SCHEMA, agentType: 'Explore' },
-    )
-  }
-  if (task === 'prefetch-main') {
-    return convergeAgent(
-      `Refresh the base ref for ${prCoordinates} so the parallel review lenses can diff against an up-to-date origin/main without each running its own fetch. Run exactly:\n` +
-        `git fetch origin main\n` +
-        `Do not edit, commit, push, rebase, or modify any files — fetch only.`,
-      { label: 'git-utility', phase: 'Converge', agentType: 'Explore' },
-    )
+function runGitTask(task) {
+  if (task !== 'preflight-git') {
+    throw new Error(`runGitTask has no handler for task ${task}`)
   }
   return convergeAgent(
-    `Report whether ${prCoordinates} (HEAD ${head}) has merge conflicts with its base branch. Do not edit, commit, push, or rebase — read only.\n\n` +
-      `GitHub computes mergeability asynchronously, so .mergeable is null right after a push until it finishes. Poll until it resolves: run\n` +
+    `Run three read-only git preflight steps for ${prCoordinates}. Do not edit, commit, push, rebase, or modify any files — read only.\n\n` +
+      `STEP 1 — resolve HEAD. Print the current PR HEAD SHA. Run exactly:\n` +
+      `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
+      `Return the full 40-character SHA in the sha field.\n\n` +
+      `STEP 2 — refresh the base ref so the parallel review lenses can diff against an up-to-date origin/main without each running its own fetch. Run exactly:\n` +
+      `   git fetch origin main\n` +
+      `Return fetched:true when the fetch completed, fetched:false when it failed.\n\n` +
+      `STEP 3 — report whether the PR has merge conflicts with its base branch. GitHub computes mergeability asynchronously, so .mergeable is null right after a push until it finishes. Poll until it resolves: run\n` +
       `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq '{mergeable: .mergeable, state: .mergeable_state}'\n` +
-      `up to 5 times, 5 seconds apart (wait each 5-second interval inside this turn with the Monitor tool, per the WAITS AND POLLS rule above), stopping as soon as mergeable is true or false.\n\n` +
+      `up to 5 times, 5 seconds apart (wait each 5-second interval inside this turn with the Monitor tool, per the WAITS AND POLLS rule above), stopping as soon as mergeable is true or false.\n` +
       `Return conflicting:true when mergeable is false or state is "dirty" (the branch conflicts with the base). Return conflicting:false when mergeable is true, or when mergeable stays null after the full poll budget — mergeability is unknown, so let the bug checks proceed rather than rebase on a guess.`,
-    { label: 'git-utility', phase: 'Converge', schema: MERGE_CONFLICT_SCHEMA, agentType: 'Explore' },
+    { label: 'git-utility', phase: 'Converge', schema: PREFLIGHT_GIT_SCHEMA, agentType: 'Explore', model: 'haiku', effort: 'low' },
   )
 }
 
@@ -558,11 +552,18 @@ const REVIEWER_AVAILABILITY_SCHEMA = {
   required: ['copilot', 'bugbot'],
 }
 
-const HEAD_SCHEMA = {
+const PREFLIGHT_GIT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  properties: { sha: { type: 'string' } },
-  required: ['sha'],
+  properties: {
+    sha: { type: 'string', description: 'the full 40-character PR HEAD SHA' },
+    conflicting: {
+      type: 'boolean',
+      description: 'true only when GitHub reports the PR branch conflicts with its base (mergeable:false or mergeable_state:dirty); false when it merges cleanly or mergeability could not be computed',
+    },
+    fetched: { type: 'boolean', description: 'true when git fetch origin main completed successfully' },
+  },
+  required: ['sha', 'conflicting', 'fetched'],
 }
 
 const FIX_SCHEMA = {
@@ -600,18 +601,6 @@ const REPAIR_EDIT_SCHEMA = {
     summary: { type: 'string' },
   },
   required: ['edited', 'rebased', 'resolvedWithoutCommit', 'summary'],
-}
-
-const MERGE_CONFLICT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    conflicting: {
-      type: 'boolean',
-      description: 'true only when GitHub reports the PR branch conflicts with its base (mergeable:false or mergeable_state:dirty); false when it merges cleanly or mergeability could not be computed',
-    },
-  },
-  required: ['conflicting'],
 }
 
 const CONFLICT_EDIT_SCHEMA = {
@@ -1003,10 +992,10 @@ function commitNeedsCodeRecovery(commitResult) {
 
 /**
  * Decide whether a resolved HEAD SHA is safe to spawn lenses against. A dead
- * resolve-head agent or a malformed result yields a falsy SHA; spawning lenses
+ * preflight-git agent or a malformed result yields a falsy SHA; spawning lenses
  * against it interpolates the literal string 'HEAD undefined' into their prompts
  * and produces a spurious clean verdict on a non-existent commit.
- * @param {string|null|undefined} resolvedHead the SHA from the git-utility 'resolve-head' task
+ * @param {string|null|undefined} resolvedHead the SHA from the git-utility 'preflight-git' task
  * @returns {boolean} true only when the SHA is a non-empty string
  */
 function isResolvedHeadUsable(resolvedHead) {
@@ -1014,12 +1003,12 @@ function isResolvedHeadUsable(resolvedHead) {
 }
 
 /**
- * Decide whether the pre-flight merge-conflict check found the PR branch in
- * conflict with its base. A dead check agent (null/undefined result) reports
+ * Decide whether the pre-flight mergeability probe found the PR branch in
+ * conflict with its base. A dead preflight agent (null/undefined result) reports
  * not-conflicting so the run proceeds straight to the bug checks rather than
- * force-pushing a rebase on a verdict that does not exist — a transient check
+ * force-pushing a rebase on a verdict that does not exist — a transient probe
  * failure must never trigger a destructive rebase.
- * @param {object|null|undefined} mergeState the git-utility 'check-merge-conflicts' task result
+ * @param {object|null|undefined} mergeState the git-utility 'preflight-git' task result carrying the conflicting field
  * @returns {boolean} true only when the check reported conflicting:true
  */
 function isMergeConflicting(mergeState) {
@@ -1432,20 +1421,22 @@ async function repairConvergence(head, failures) {
 
 /**
  * Pre-flight conflict resolution: when the PR branch conflicts with its base,
- * rebase it clean before the bug checks run — check (Explore probes mergeability)
- * -> edit (clean-coder rebases and resolves, no push) -> verify (code-verifier
- * binds a verdict to the rebased tree) -> commit (clean-coder force-with-lease
- * pushes). Returns the post-rebase HEAD so the first converge round runs its
- * lenses on the conflict-free diff. A non-conflicting PR, a rebase the edit step
- * declined, or a failed verdict returns the unchanged HEAD so the run proceeds to
- * the bug checks unchanged. A mid-run conflict (origin/main advancing later) is
- * still caught by the FINALIZE convergence repair, which also rebases.
+ * rebase it clean before the bug checks run — edit (clean-coder rebases and
+ * resolves, no push) -> verify (code-verifier binds a verdict to the rebased
+ * tree) -> commit (clean-coder force-with-lease pushes). The conflict decision
+ * comes from the merged 'preflight-git' probe the caller already ran, so this
+ * function spawns no mergeability agent of its own. Returns the post-rebase
+ * HEAD so the first converge round runs its lenses on the conflict-free diff.
+ * A non-conflicting PR, a rebase the edit step declined, or a failed verdict
+ * returns the unchanged HEAD so the run proceeds to the bug checks unchanged.
+ * A mid-run conflict (origin/main advancing later) is still caught by the
+ * FINALIZE convergence repair, which also rebases.
  * @param {string} head PR HEAD SHA before any rebase
+ * @param {boolean} isConflicting the isMergeConflicting decision over the preflight-git result
  * @returns {Promise<string>} the HEAD SHA after a successful rebase push, or the unchanged head
  */
-async function resolveMergeConflicts(head) {
-  const mergeState = await runGitTask('check-merge-conflicts', head)
-  if (!isMergeConflicting(mergeState)) return head
+async function resolveMergeConflicts(head, isConflicting) {
+  if (!isConflicting) return head
   log(`Pre-flight: ${prCoordinates} conflicts with origin/main — rebasing clean before the bug checks`)
   const editResult = await runCodeEditorTask('conflict-edit', { head })
   if (editResult?.rebased !== true) return head
@@ -1655,24 +1646,24 @@ let reuseNote = null
 let reviewerAvailability = null
 const deferredPrs = []
 
-const preflightHead = await runGitTask('resolve-head')
-if (isResolvedHeadUsable(preflightHead?.sha)) {
-  await resolveMergeConflicts(preflightHead.sha)
+const preflight = await runGitTask('preflight-git')
+if (isResolvedHeadUsable(preflight?.sha)) {
+  head = await resolveMergeConflicts(preflight.sha, isMergeConflicting(preflight))
 }
 
 log('Reuse pass: scanning the full diff for certain, behaviorally identical, autonomously implementable reuse improvements before convergence')
-const reuseHeadResult = await runGitTask('resolve-head')
-const reuseHead = reuseHeadResult?.sha
-if (isResolvedHeadUsable(reuseHead)) {
-  await runGitTask('prefetch-main')
-  const reuse = await runReuseAuditPass(reuseHead)
+if (isResolvedHeadUsable(head)) {
+  const reuse = await runReuseAuditPass(head)
   const reuseFindings = reuse?.findings || []
   if (reuseFindings.length > 0) {
     log(`Reuse pass: ${reuseFindings.length} qualifying reuse improvement(s) — applying before convergence`)
-    const reuseFix = await applyFixes(reuseHead, reuseFindings, 'reuse-pass')
+    const reuseFix = await applyFixes(head, reuseFindings, 'reuse-pass')
     reuseNote = reuseFix?.pushed === true
       ? `${reuseFindings.length} reuse improvement(s) applied before convergence (${reuseFix.newSha?.slice(0, SHA_COMPARISON_PREFIX_LENGTH)})`
       : `${reuseFindings.length} reuse improvement(s) identified before convergence but not landed — the code-review lens re-surfaces any that remain`
+    if (reuseFix?.pushed === true) {
+      head = isResolvedHeadUsable(reuseFix.newSha) ? reuseFix.newSha : null
+    }
   } else {
     log('Reuse pass: no reuse case cleared all three criteria — proceeding to convergence')
   }
@@ -1684,13 +1675,14 @@ while (iterations < CONFIG.maxIterations) {
   iterations += 1
   if (phase === 'CONVERGE') {
     rounds += 1
-    const headResult = await runGitTask('resolve-head')
-    head = headResult?.sha
     if (!isResolvedHeadUsable(head)) {
-      log(`Round ${rounds}: resolve-head agent returned no SHA — retrying without spawning lenses`)
+      const refreshedPreflight = await runGitTask('preflight-git')
+      head = isResolvedHeadUsable(refreshedPreflight?.sha) ? refreshedPreflight.sha : null
+    }
+    if (!isResolvedHeadUsable(head)) {
+      log(`Round ${rounds}: preflight-git agent returned no SHA — retrying without spawning lenses`)
       continue
     }
-    await runGitTask('prefetch-main')
     reviewerAvailability = await runReviewerAvailabilityCheck()
     const isBugbotDownPreSpawn = resolveReviewerDown(reviewerAvailability?.bugbot, input.bugbotDisabled || false)
     log(`Round ${rounds}: parallel Bugbot + code-review + bug-audit on ${head?.slice(0, 7)}`)
@@ -1730,6 +1722,7 @@ while (iterations < CONFIG.maxIterations) {
           : `fix lens landed no push for ${findings.length} finding(s) on HEAD ${head}`
         break
       }
+      head = null
       continue
     }
     if (!roundOutcome.roundClean) {
@@ -1790,6 +1783,7 @@ while (iterations < CONFIG.maxIterations) {
           : `copilot fix lens landed no push for ${copilotOutcome.findings.length} finding(s) on HEAD ${head}`
         break
       }
+      head = null
       phase = 'CONVERGE'
       continue
     }
@@ -1817,6 +1811,7 @@ while (iterations < CONFIG.maxIterations) {
     }
     log(`Convergence check failed: ${convergenceOutcome.failures.join('; ')} — repairing then re-converging`)
     await repairConvergence(head, convergenceOutcome.failures)
+    head = null
     phase = 'CONVERGE'
     continue
   }
