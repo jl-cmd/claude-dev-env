@@ -10,7 +10,7 @@ Each loop: a `code-quality-agent` (fresh context, all A–P audit categories) pr
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Hub — pre-flight call, refusals, audit-posting protocol, progress checklist, and situation-to-reference table. Read this first. |
+| `SKILL.md` | Hub — pre-flight call, refusals, the audit-posting step (applies the `post-audit-findings` skill), progress checklist, and situation-to-reference table. Read this first. |
 | `PROMPTS.md` | Spawn XML, A–P category bindings, outcome XML schemas. |
 | `CONSTRAINTS.md` | Invariants — what the loop must never violate. |
 | `EXAMPLES.md` | Exit scenarios: converged, cap-reached, stuck, refusal, mixed-outcome. |
