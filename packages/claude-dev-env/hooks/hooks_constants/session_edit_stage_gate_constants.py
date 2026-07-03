@@ -5,8 +5,10 @@ Shared by the PostToolUse tracker
 (``hooks/blocking/session_edit_stage_gate.py``), and the SessionStart cleanup
 (``hooks/session/session_edit_tracker_cleanup.py``): the per-session tracker
 filename shape and JSON payload key, the session-id sanitize pattern, the
-edit-tool name set, the tracker stale-age threshold, the git-diff command, the
-commit-flag escapes the gate honors, and the deny-message template.
+SessionStart source key and the fresh-startup source value the cleanup keys its
+deletion on, the edit-tool name set, the tracker stale-age threshold, the
+git-diff command and its output encoding, the commit-flag escapes the gate
+honors, and the deny-message template.
 """
 
 from __future__ import annotations
@@ -19,6 +21,9 @@ ALL_EDITED_FILE_PATHS_KEY: str = "all_edited_file_paths"
 STATE_FILE_DEFAULT_SESSION_ID: str = "default"
 SESSION_ID_UNSAFE_CHARACTERS_PATTERN: re.Pattern[str] = re.compile(r"[^A-Za-z0-9_-]")
 
+SESSION_START_SOURCE_PAYLOAD_KEY: str = "source"
+SESSION_START_SOURCE_FRESH_STARTUP: str = "startup"
+
 ALL_TRACKED_EDIT_TOOL_NAMES: tuple[str, ...] = ("Write", "Edit", "MultiEdit")
 
 STATE_FILE_ATOMIC_WRITE_SUFFIX: str = ".tmp"
@@ -27,7 +32,14 @@ STATE_FILE_JSON_INDENT_SPACES: int = 2
 SESSION_EDIT_FILE_STALE_AGE_SECONDS: int = 1800
 
 GIT_DIFF_TIMEOUT_SECONDS: int = 5
-ALL_TRACKED_UNSTAGED_FILES_COMMAND: tuple[str, ...] = ("git", "diff", "--name-only")
+GIT_DIFF_OUTPUT_ENCODING: str = "utf-8"
+ALL_TRACKED_UNSTAGED_FILES_COMMAND: tuple[str, ...] = (
+    "git",
+    "-c",
+    "core.quotePath=false",
+    "diff",
+    "--name-only",
+)
 
 PARTIAL_COMMIT_BYPASS_MARKER: str = "# partial-commit"
 COMMIT_SUBCOMMAND_TOKEN: str = "commit"

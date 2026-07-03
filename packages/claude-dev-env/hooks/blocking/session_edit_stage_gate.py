@@ -53,6 +53,7 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     COMMIT_ALL_SHORT_FLAG_LETTER,
     COMMIT_SUBCOMMAND_TOKEN,
     DENY_FILE_BULLET_PREFIX,
+    GIT_DIFF_OUTPUT_ENCODING,
     GIT_DIFF_TIMEOUT_SECONDS,
     LONG_FLAG_PREFIX,
     PARTIAL_COMMIT_BYPASS_MARKER,
@@ -109,12 +110,41 @@ def _is_all_flag_token(token: str) -> bool:
     return COMMIT_ALL_SHORT_FLAG_LETTER in token[1:]
 
 
+def _has_trailing_bypass_comment(bash_command: str) -> bool:
+    """Return whether the command carries the bypass marker as a real comment.
+
+    The ``# partial-commit`` marker opts out only as a trailing shell comment
+    the author adds on purpose, so its ``#`` and ``partial-commit`` parts sit
+    as adjacent unquoted tokens. The same text inside a quoted commit message
+    (``git commit -m "fix # partial-commit"``) tokenizes into one quoted token,
+    so it does not match and the gate still runs.
+
+    Args:
+        bash_command: The Bash tool command string.
+
+    Returns:
+        True when the marker appears as a trailing shell comment; False when
+        it appears only inside a quoted argument or the command will not
+        tokenize.
+    """
+    marker_tokens = PARTIAL_COMMIT_BYPASS_MARKER.split()
+    try:
+        all_tokens = shlex.split(bash_command, posix=True)
+    except ValueError:
+        return False
+    marker_length = len(marker_tokens)
+    for each_start_index in range(len(all_tokens) - marker_length + 1):
+        if all_tokens[each_start_index : each_start_index + marker_length] == marker_tokens:
+            return True
+    return False
+
+
 def _commit_bypasses_stage_check(bash_command: str) -> bool:
     """Return whether the commit intentionally opts out of the stage check.
 
-    A ``# partial-commit`` marker, a ``-a``/``--all`` flag, and a pathspec
-    argument (a ``--`` separator or a bare positional path) each mark a
-    deliberate partial commit that the gate leaves alone.
+    A ``# partial-commit`` trailing comment, a ``-a``/``--all`` flag, and a
+    pathspec argument (a ``--`` separator or a bare positional path) each mark
+    a deliberate partial commit that the gate leaves alone.
 
     Args:
         bash_command: The Bash tool command string.
@@ -122,7 +152,7 @@ def _commit_bypasses_stage_check(bash_command: str) -> bool:
     Returns:
         True when the commit opts out of the stage check; False otherwise.
     """
-    if PARTIAL_COMMIT_BYPASS_MARKER in bash_command:
+    if _has_trailing_bypass_comment(bash_command):
         return True
     should_skip_next_value = False
     for each_token in _commit_argument_tokens(bash_command):
@@ -198,6 +228,7 @@ def _tracked_unstaged_paths(repository_root: Path) -> dict[str, str] | None:
             list(ALL_TRACKED_UNSTAGED_FILES_COMMAND),
             check=False, capture_output=True,
             text=True,
+            encoding=GIT_DIFF_OUTPUT_ENCODING,
             timeout=GIT_DIFF_TIMEOUT_SECONDS,
             cwd=str(repository_root),
         )
