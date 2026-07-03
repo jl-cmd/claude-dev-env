@@ -168,7 +168,7 @@ class PostDispatcherDecision:
         all_block_reasons: All block reasons from blocking hooks, in run order.
         all_non_block_stdout: Stdout from hooks that did not emit a block
             decision, concatenated in run order. Preserved so informational
-            output (such as the doc-gist htmlpreview URL) reaches the harness
+            output (such as an auto-formatter notice) reaches the harness
             on both the allow and block paths.
     """
 
