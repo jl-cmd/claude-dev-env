@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.85.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.84.0...claude-dev-env-v1.85.0) (2026-07-03)
+
+
+### Features
+
+* **pr-loop:** write durable handoff state at every converge checkpoint ([23c351a](https://github.com/jl-cmd/claude-code-config/commit/23c351a94f55de6b03a64bf377909232fff5912b))
+
+
+### Bug Fixes
+
+* apply Copilot review findings ([bbe26b0](https://github.com/jl-cmd/claude-code-config/commit/bbe26b098265da23ad8ae6ce42eef8303dafc722))
+* **hooks:** resolve deferred code-standard findings ([b1eb4d1](https://github.com/jl-cmd/claude-code-config/commit/b1eb4d137b41f7db6f1c32d154c2f86a053937ef))
+* **pr-loop:** apply bugteam audit findings ([e8b188d](https://github.com/jl-cmd/claude-code-config/commit/e8b188de6b022559d9dd8554d4816dd06bf29bdd))
+* **pr-loop:** correct terminology_sweep docstring on test-file scope ([e67b7a1](https://github.com/jl-cmd/claude-code-config/commit/e67b7a107b04231cf0460b93e4677cb4644e2962))
+
+
+### Documentation
+
+* resolve deferred doc/docstring drift findings ([c1706eb](https://github.com/jl-cmd/claude-code-config/commit/c1706ebb2490416bf63db20151a07cab97ef7dca))
+
 ## [1.84.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.83.0...claude-dev-env-v1.84.0) (2026-07-03)
 
 
