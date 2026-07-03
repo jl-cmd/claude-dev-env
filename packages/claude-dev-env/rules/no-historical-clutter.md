@@ -8,9 +8,13 @@ paths: **/*
 
 **Hook enforcement:** `state-description-blocker` (PreToolUse on Write|Edit) blocks historical/comparative language automatically. See `hooks.json` for registration.
 
+Coverage spans `.md` prose, code comments, and Python module/class/function docstrings; a phrase wrapped in double quotes or backticks inside a docstring counts as a mention and is skipped.
+
 ## Rule
 
 Never reference removed implementations, old defaults, prior behaviors, or how something `"used to be"` when updating documentation. The current state is all that matters.
+
+A module or function docstring carries the same describe-current-state-only contract as a `.md` file.
 
 ## Examples of prohibited patterns
 

@@ -90,6 +90,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `send_user_file_open_locally_blocker.py` | PreToolUse (SendUserFile) | A desk-side file attach (`SendUserFile` with `status` not `proactive`); points to opening the file locally via `Show-Asset.ps1` |
 | `sensitive_file_protector.py` | PreToolUse (Write/Edit) | Writes to sensitive credential or config files |
 | `session_handoff_blocker.py` | Stop | Responses suggesting a new session mid-task |
+| `stale_comment_reference_blocker.py` | PreToolUse (Edit) | An Edit that rewrites a Python code line while keeping the standalone comment directly above it, when that comment names an identifier the rewrite removes from the line |
 | `state_description_blocker.py` | PreToolUse (Write/Edit) | Historical/comparative language in documentation |
 | `subprocess_budget_completeness.py` | PreToolUse | Subprocess calls missing required budget arguments |
 | `tdd_enforcer.py` | PreToolUse (Write/Edit) | Production code written without a matching failing test |

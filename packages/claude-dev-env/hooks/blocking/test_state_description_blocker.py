@@ -633,6 +633,141 @@ def test_handles_non_string_tool_name():
     assert result.stdout == ""
 
 
+def test_detects_used_to_in_python_module_docstring() -> None:
+    """A module docstring carrying a transitional phrase counts as
+    documentation and is denied.
+    """
+    written_source = (
+        '"""Both paths used to pad with a flat sleep on every export."""\n'
+        "\n"
+        "RETRY_BUDGET = 5\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "tests/test_exports.py",
+            "content": written_source,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "used to" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_detects_previously_in_python_function_docstring() -> None:
+    """A function docstring carrying a transitional phrase is denied.
+    """
+    written_source = (
+        "def load_configuration() -> None:\n"
+        '    """Previously configured via an environment variable."""\n'
+        "    raise ValueError\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "src/configuration.py",
+            "content": written_source,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "previously" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_ignores_transitional_phrase_in_regular_python_string() -> None:
+    """A plain string literal counts as data rather than documentation and
+    passes.
+    """
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "src/messages.py",
+            "content": 'PADDING_NOTE = "used to pad with a flat sleep"\n',
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_ignores_quoted_mention_inside_python_docstring() -> None:
+    """A docstring quoting a phrase as a mention in double quotes passes.
+    """
+    written_source = (
+        '"""Blocks docstrings carrying phrases like "used to" in their prose."""\n'
+        "\n"
+        "RETRY_BUDGET = 3\n"
+    )
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "src/scanner.py",
+            "content": written_source,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_detects_docstring_at_start_of_unparseable_edit_fragment() -> None:
+    """An Edit fragment opening with a docstring is scanned even when
+    parsing fails.
+    """
+    fragment = '"""The runner used to sleep between exports."""\n    continue\n'
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": "src/exports.py",
+            "old_string": "placeholder",
+            "new_string": fragment,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "used to" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_detects_docstring_after_def_header_in_unparseable_fragment() -> None:
+    """A triple-quoted block directly under a def header counts as a
+    docstring in a fragment.
+    """
+    fragment = (
+        "    def render_summary(self) -> None:\n"
+        '        """No longer writes the summary sheet."""\n'
+    )
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": "src/reporting.py",
+            "old_string": "placeholder",
+            "new_string": fragment,
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "no longer" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_ignores_assigned_triple_quoted_string_in_unparseable_fragment() -> None:
+    """A triple-quoted block assigned to a name counts as data rather than
+    a docstring in a fragment.
+    """
+    fragment = 'FIXTURE_TEXT = """used to pad with a flat sleep"""\n    continue\n'
+    result = _run_hook(
+        "Edit",
+        {
+            "file_path": "src/fixtures.py",
+            "old_string": "placeholder",
+            "new_string": fragment,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
 def test_native_dispatch_path_logs_the_block(tmp_path: Path) -> None:
     """A deny routed through the dispatcher's native path logs one record.
 
