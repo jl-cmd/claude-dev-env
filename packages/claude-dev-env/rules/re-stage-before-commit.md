@@ -23,7 +23,7 @@ A missing tracker file or any git failure allows the commit, so the gate never b
 ## Companion hooks
 
 - `session_file_edit_tracker` (PostToolUse) records the resolved absolute path of each Write, Edit, and MultiEdit into the per-session tracker file.
-- `session_edit_tracker_cleanup` (SessionStart) deletes the running session's own tracker file. A tracker is read only by the session that wrote it, so a file a crashed session leaves behind is inert and no peer session touches it.
+- `session_edit_tracker_cleanup` (SessionStart, SessionEnd) deletes the running session's own tracker file: at a fresh SessionStart so a new session begins with an empty record, and at SessionEnd so a clean exit leaves nothing behind. A tracker is read only by the session that wrote it, so a file a crashed session leaves behind is inert and no peer session touches it.
 
 ## Why
 

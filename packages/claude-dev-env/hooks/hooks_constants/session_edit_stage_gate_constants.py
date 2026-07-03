@@ -8,7 +8,10 @@ filename shape and JSON payload key, the session-id sanitize pattern, the
 SessionStart source key and the fresh-startup source value the cleanup keys its
 deletion on, the edit-tool name set, the per-session lock filename suffix and
 the lock-acquire timing, the git-diff command and its output encoding, the
-commit-flag escapes the gate honors, and the deny-message template.
+commit-flag escapes the gate honors, the git executable token, the staging
+subcommand tokens and git global value-option tokens that mark a pre-commit
+``git add``/``git stage`` segment as staging the commit, and the deny-message
+template.
 """
 
 from __future__ import annotations
@@ -45,6 +48,11 @@ ALL_TRACKED_UNSTAGED_FILES_COMMAND: tuple[str, ...] = (
 
 PARTIAL_COMMIT_BYPASS_MARKER: str = "# partial-commit"
 COMMIT_SUBCOMMAND_TOKEN: str = "commit"
+GIT_EXECUTABLE_TOKEN: str = "git"
+ALL_STAGING_SUBCOMMAND_TOKENS: frozenset[str] = frozenset({"add", "stage"})
+ALL_GIT_GLOBAL_VALUE_OPTION_TOKENS: frozenset[str] = frozenset(
+    {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+)
 SHORT_FLAG_PREFIX: str = "-"
 LONG_FLAG_PREFIX: str = "--"
 COMMIT_ALL_SHORT_FLAG_LETTER: str = "a"
