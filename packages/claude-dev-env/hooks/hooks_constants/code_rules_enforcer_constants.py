@@ -186,7 +186,7 @@ LOGGING_PRINTF_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r"(?<!%)%[#0\- +]?[0-9.*]*[sdrixfgeEcoX](?![a-zA-Z])"
 )
 ADJACENT_STRING_LITERAL_PATTERN: re.Pattern[str] = re.compile(
-    r'(?:"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\')\s*[rRbBfFuU]{0,2}["\']'
+    r'[rRbBfFuU]{0,2}(?:"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\')\s*[rRbBfFuU]{0,2}["\']'
 )
 MINIMUM_FORMAT_LOGGER_ARGUMENT_COUNT = 2
 ALL_LOGGING_CALL_METHOD_NAMES: frozenset[str] = frozenset(
