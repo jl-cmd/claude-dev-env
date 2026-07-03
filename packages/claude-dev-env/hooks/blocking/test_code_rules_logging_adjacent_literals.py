@@ -72,6 +72,24 @@ def test_should_flag_zero_whitespace_adjacent_literals_with_prefixed_first_liter
     assert "adjacent string literals" in issues[0]
 
 
+def test_should_allow_single_triple_double_quoted_literal_log_call() -> None:
+    source = 'log_info("""message""")\n'
+    issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_single_triple_single_quoted_literal_log_call() -> None:
+    source = "log_debug('''message''')\n"
+    issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_allow_prefixed_triple_quoted_literal_log_call() -> None:
+    source = 'log_info(r"""message""")\n'
+    issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
 def test_should_allow_single_literal_log_call() -> None:
     source = 'logger.info("[Batch] Starting %s (row %d)", job_name, attempt_index)\n'
     issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
