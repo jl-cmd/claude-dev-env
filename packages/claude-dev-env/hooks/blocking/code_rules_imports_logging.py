@@ -1,4 +1,4 @@
-"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, naive datetime construction, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, JS sibling return-object key drift, file-length advisory, and library-print checks."""
+"""Imports-at-top, import-block-sorted, logging f-string, logging printf-token, win32gui None, naive datetime construction, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, JS sibling return-object key drift, JS bare-flag return-directive, file-length advisory, and library-print checks."""
 
 import ast
 import json
@@ -36,6 +36,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     IMPORT_BLOCK_SORT_RULE_CODE,
     MAX_E2E_TEST_NAMING_ISSUES,
     MAX_IMPORT_BLOCK_SORT_ISSUES,
+    MAX_JS_BARE_FLAG_RETURN_DIRECTIVE_ISSUES,
     MAX_JS_RESUME_TASK_ENUMERATION_ISSUES,
     MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES,
     MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES,
@@ -73,6 +74,8 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_JAVASCRIPT_STRING_DELIMITERS,
     ALL_PYTHON_EXTENSIONS,
     ARROW_CONCISE_BODY_OBJECT_LITERAL_OPENING_PATTERN,
+    BARE_FLAG_CONTRACT_PATTERN,
+    BARE_FLAG_RETURN_DIRECTIVE_PATTERN,
     ENUMERATION_LEADING_CONJUNCTION_PATTERN,
     ENUMERATION_LIST_ITEM_SEPARATOR_PATTERN,
     ENUMERATION_TASK_ITEM_PATTERN,
@@ -1741,6 +1744,97 @@ def check_js_sibling_return_object_key_drift(content: str, file_path: str) -> li
             if len(issues) >= MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES:
                 return issues
     return issues
+
+
+def check_js_bare_flag_return_directive(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    """Flag a prose directive that returns a bare status flag a converge workflow rules out.
+
+    Picture the converge workflow preamble. It states the whole contract: the
+    Copilot gate time-out value must be the full down result
+    ``{sha, clean:false, down:true, findings:[]}``, and it adds "never a bare
+    down flag". A later poll step then tells the agent to "return down: true"
+    once the attempt budget runs out. That parenthetical repeats the bare flag
+    the preamble rules out. A StructuredOutput run whose schema needs every
+    field would reject a lone ``{down:true}``, so the shorthand drifts from the
+    contract stated earlier in the same file.
+
+    The sweep reads every flag name any preamble in the file rules out ("never
+    a bare <name> flag") and reports every ``return <name>: true`` or
+    ``return <name>: false`` directive anywhere in the file that repeats one of
+    them, with no proximity or ordering check between the two — the contract
+    and the directive commonly sit far apart in a converge workflow file, so
+    *content* must carry the whole file rather than an edit's changed fragment
+    for the sweep to see both halves.
+    ``return <word>: <bool>`` never forms the full-result object literal the
+    contract requires — whether it lands in agent-prompt prose, a comment, or
+    accidental code, the shape itself is never a compliant return. A full
+    ``return {sha:..., down:true, ...}`` object literal
+    stays untouched, and so does a source that states no such contract. This
+    belongs to the JS/.mjs slice of Category O6 docstring-prose-versus-body
+    drift, which the Python enforcer's syntax-tree checks never reach.
+
+    Args:
+        content: The full file content the Write or Edit would leave on disk.
+        file_path: The path the source will be written to, used for exemptions.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a
+            violation blocks when its directive line or any of its contract's
+            "never a bare <name> flag" lines are among the changed lines, so
+            editing either half of the contradiction trips the gate.
+        defer_scope_to_caller: When True, return every violation so the
+            commit/push gate scopes by added line through its ``Line N:``
+            partitioning.
+
+    Returns:
+        One issue per bare-flag return directive that repeats a status flag the
+        preamble rules out, scoped to the changed lines unless
+        *defer_scope_to_caller* is True or *all_changed_lines* is None, capped
+        at the module limit.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    if get_file_extension(file_path) not in ALL_JAVASCRIPT_EXTENSIONS:
+        return []
+    contract_line_numbers_by_flag: dict[str, set[int]] = {}
+    contract_matched_phrase_by_flag: dict[str, str] = {}
+    for each_contract in BARE_FLAG_CONTRACT_PATTERN.finditer(content):
+        folded_flag = each_contract.group("flag").casefold()
+        contract_line_number = content.count("\n", 0, each_contract.start()) + 1
+        contract_line_numbers_by_flag.setdefault(folded_flag, set()).add(
+            contract_line_number
+        )
+        contract_matched_phrase_by_flag.setdefault(folded_flag, each_contract.group(0))
+    if not contract_line_numbers_by_flag:
+        return []
+    all_violations_in_source_order: list[tuple[set[int], str]] = []
+    for each_directive in BARE_FLAG_RETURN_DIRECTIVE_PATTERN.finditer(content):
+        forbidden_flag = each_directive.group("flag")
+        folded_flag = forbidden_flag.casefold()
+        if folded_flag not in contract_line_numbers_by_flag:
+            continue
+        offending_line = content.count("\n", 0, each_directive.start()) + 1
+        contract_matched_phrase = contract_matched_phrase_by_flag[folded_flag]
+        message = (
+            f"Line {offending_line}: 'return {forbidden_flag}: ...' repeats a bare "
+            f"{forbidden_flag} status the same converge workflow forbids "
+            f"('{contract_matched_phrase}'); return the whole result object "
+            "with every StructuredOutput field set (Category O6 docstring drift)"
+        )
+        violation_lines = {offending_line} | contract_line_numbers_by_flag[folded_flag]
+        all_violations_in_source_order.append((violation_lines, message))
+    scoped_issues = _scope_violations_to_changed_lines(
+        all_violations_in_source_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
+    if defer_scope_to_caller:
+        return scoped_issues
+    return scoped_issues[:MAX_JS_BARE_FLAG_RETURN_DIRECTIVE_ISSUES]
 
 
 def _is_cli_entry_point(file_path: str) -> bool:
