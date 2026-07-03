@@ -67,6 +67,8 @@ ALL_COMMIT_VALUE_OPTION_TOKENS: frozenset[str] = frozenset(
 ALL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset({"&&", "||", ";", "|", "&"})
 
 DENY_FILE_BULLET_PREFIX: str = "  - "
+DENY_FILE_BULLET_LINE_SEPARATOR: str = "\n"
+DENY_PATHSPEC_SEPARATOR: str = " "
 SESSION_EDIT_DENY_TEMPLATE: str = (
     "BLOCKED: these files were edited this session and are tracked but left "
     "unstaged, so this commit would drop them:\n{file_list}\n"

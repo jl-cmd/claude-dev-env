@@ -52,7 +52,9 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_TRACKED_UNSTAGED_FILES_COMMAND,
     COMMIT_ALL_SHORT_FLAG_LETTER,
     COMMIT_SUBCOMMAND_TOKEN,
+    DENY_FILE_BULLET_LINE_SEPARATOR,
     DENY_FILE_BULLET_PREFIX,
+    DENY_PATHSPEC_SEPARATOR,
     GIT_DIFF_OUTPUT_ENCODING,
     GIT_DIFF_TIMEOUT_SECONDS,
     LONG_FLAG_PREFIX,
@@ -277,11 +279,11 @@ def _build_denial(all_offending_paths: list[str]) -> dict:
     Returns:
         The hookSpecificOutput deny mapping for the PreToolUse protocol.
     """
-    file_list = "\n".join(
+    file_list = DENY_FILE_BULLET_LINE_SEPARATOR.join(
         f"{DENY_FILE_BULLET_PREFIX}{each_path}"
         for each_path in all_offending_paths
     )
-    space_joined_paths = " ".join(all_offending_paths)
+    space_joined_paths = DENY_PATHSPEC_SEPARATOR.join(all_offending_paths)
     denial_reason = SESSION_EDIT_DENY_TEMPLATE.format(
         file_list=file_list,
         space_joined_paths=space_joined_paths,
