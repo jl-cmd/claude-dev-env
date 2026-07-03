@@ -355,6 +355,24 @@ def test_is_trust_entry_rejects_cross_project_path_suffix_collision() -> None:
     )
 
 
+def test_is_valid_project_root_shared_by_grant_and_revoke_modules(
+    tmp_path: Path,
+) -> None:
+    """Grant and revoke import the same helper, so both agree on the marker contract."""
+    grant_module = _load_grant_module()
+    revoke_module = _load_revoke_module()
+    git_marker_project_root = tmp_path / "git_project"
+    (git_marker_project_root / ".git").mkdir(parents=True)
+    claude_marker_project_root = tmp_path / "claude_project"
+    (claude_marker_project_root / ".claude").mkdir(parents=True)
+    bare_directory = tmp_path / "no_marker"
+    bare_directory.mkdir()
+    for each_module in (grant_module, revoke_module):
+        assert each_module.is_valid_project_root(git_marker_project_root) is True
+        assert each_module.is_valid_project_root(claude_marker_project_root) is True
+        assert each_module.is_valid_project_root(bare_directory) is False
+
+
 def test_second_grant_is_idempotent_when_no_other_settings_changed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
