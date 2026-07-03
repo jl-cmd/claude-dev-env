@@ -242,6 +242,20 @@ def test_flags_near_miss_inside_code_comment() -> None:
     assert "premium-request" in findings[0]
 
 
+def test_flags_near_miss_inside_code_string_literal() -> None:
+    diff = (
+        "diff --git a/api/quota.mjs b/api/quota.mjs\n"
+        "--- a/api/quota.mjs\n"
+        "+++ b/api/quota.mjs\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+const premium_interactions = 5\n"
+        '+throw new Error("the premium-request budget")\n'
+    )
+    findings = sweep_diff(diff)
+    assert len(findings) == 1
+    assert "premium-request" in findings[0]
+
+
 def test_does_not_flag_prose_inside_code_string_literal() -> None:
     diff = (
         "diff --git a/api/quota.py b/api/quota.py\n"
@@ -276,6 +290,25 @@ def test_does_not_flag_prose_in_test_file() -> None:
         "+// the premium-request path resets the counter\n"
     )
     assert sweep_diff(diff) == []
+
+
+def test_flags_prose_in_test_named_markdown_doc() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+premium_interactions = 5\n"
+        "diff --git a/docs/test_plan.md b/docs/test_plan.md\n"
+        "--- a/docs/test_plan.md\n"
+        "+++ b/docs/test_plan.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+The premium-request budget gates the run.\n"
+    )
+    findings = sweep_diff(diff)
+    assert len(findings) == 1
+    assert "premium-request" in findings[0]
+    assert "test_plan.md" in findings[0]
 
 
 def test_no_findings_when_no_multiword_identifier_introduced() -> None:
