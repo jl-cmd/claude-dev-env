@@ -15,8 +15,9 @@ who searches one never finds the other.
 Only hyphenated prose is a candidate, since a hyphen marks a deliberate compound
 while a spaced word run is ordinary prose. Markdown scans in full; a JavaScript
 or TypeScript line contributes its comments and string literals; a Python file
-and every test code file contribute identifiers only. Each near-miss prints one
-``file:line`` finding and the run exits non-zero, so a commit gate blocks on it.
+contributes identifiers only; a test code file is skipped whole. Each near-miss
+prints one ``file:line`` finding and the run exits non-zero, so a commit gate
+blocks on it.
 """
 
 import argparse
