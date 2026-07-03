@@ -2618,6 +2618,7 @@ def _docstring_narrative_partition(docstring_text: str) -> tuple[list[str], bool
                 break
             if has_indented_body:
                 has_illustration = True
+                prose_lines.append(stripped_line)
                 line_index = probe_index
                 continue
         if stripped_line:
