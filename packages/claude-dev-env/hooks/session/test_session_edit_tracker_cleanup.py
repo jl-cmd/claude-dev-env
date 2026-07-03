@@ -44,6 +44,7 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_EDITED_FILE_PATHS_KEY,
     SESSION_EDIT_FILE_PREFIX,
     SESSION_EDIT_FILE_SUFFIX,
+    STATE_FILE_DEFAULT_SESSION_ID,
 )
 
 AGED_TRACKER_FILE_SECONDS = 1860
@@ -146,3 +147,11 @@ def test_should_exit_zero_on_malformed_stdin(
     fresh_file = _seed_edit_file(redirected_temp_directory, "other-live-session")
     _run_main_with_stdin("not valid json {{{")
     assert fresh_file.exists()
+
+
+def test_malformed_stdin_keeps_default_session_tracker(
+    redirected_temp_directory: pathlib.Path,
+) -> None:
+    default_file = _seed_edit_file(redirected_temp_directory, STATE_FILE_DEFAULT_SESSION_ID)
+    _run_main_with_stdin("not valid json {{{")
+    assert default_file.exists()
