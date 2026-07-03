@@ -8,7 +8,7 @@ Bugteam-specific utilities (preflight, fix_hookspath, grant, revoke) live in
 the skill-local [`scripts/`](../scripts/) directory. Shared utilities remain in
 [`_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/) (run, do not paste
 into context). Utility scripts are **executed**, not loaded as primary context
-([`sources.md`](sources.md) § Progressive disclosure and utility scripts).
+([`sources.md`](../sources.md) § Progressive disclosure and utility scripts).
 
 ```bash
 python "${CLAUDE_SKILL_DIR}/scripts/bugteam_preflight.py"
