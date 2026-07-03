@@ -51,6 +51,13 @@ def test_should_flag_adjacent_single_quoted_literals() -> None:
     assert len(issues) == 1
 
 
+def test_should_flag_zero_whitespace_adjacent_literals() -> None:
+    source = 'log_info("[Batch]""Failed %s", job_name)\n'
+    issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "adjacent string literals" in issues[0]
+
+
 def test_should_allow_single_literal_log_call() -> None:
     source = 'logger.info("[Batch] Starting %s (row %d)", job_name, attempt_index)\n'
     issues = enforcer.check_logging_adjacent_string_literals(source, PRODUCTION_FILE_PATH)
