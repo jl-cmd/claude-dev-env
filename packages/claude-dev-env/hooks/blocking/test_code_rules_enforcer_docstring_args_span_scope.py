@@ -100,6 +100,8 @@ def test_flags_single_line_scope_against_stepped_range_span_body() -> None:
     )
     issues = check_docstring_args_single_line_scope_vs_span(content, PRODUCTION_FILE_PATH)
     assert len(issues) == 1
+    assert "check_import_block_sorted" in issues[0]
+    assert "all_changed_lines" in issues[0]
 
 
 def test_flags_the_line_is_among_phrasing() -> None:
