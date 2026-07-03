@@ -77,7 +77,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `hedging_language_blocker.py` | Stop | Responses with hedging words (`likely`, `probably`, `appears to`) |
 | `hook_prose_detector_consistency.py` | PreToolUse (Write/Edit) | Hook docstrings/messages that claim a trigger the detector cannot fire on |
 | `intent_only_ending_blocker.py` | Stop | Responses that end on a plan or intent without doing the work |
-| `md_to_html_blocker.py` | PreToolUse (Write/Edit) | Writing `.md` files when an `.html` companion is required |
 | `open_questions_in_plans_blocker.py` | PreToolUse (Write/Edit) | Plan documents with unresolved open questions |
 | `package_inventory_stale_blocker.py` | PreToolUse (Write) | A new production code file created in a directory whose `README.md`/`CLAUDE.md` inventory (or a parent skill's `SKILL.md` Layout table mapping the `scripts/` subdirectory) names two or more sibling files but no entry for the new file |
 | `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose |
@@ -107,8 +106,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | File | Role |
 |---|---|
 | `_gh_body_arg_utils.py` | Parsing helpers for `gh_body_arg_blocker.py` |
-| `_md_to_html_blocker_test_support.py` | Test fixtures shared across `md_to_html_blocker` tests |
-| `md_path_exemptions.py` | Path exemption logic for `md_to_html_blocker.py` |
 | `pr_description_body_audit.py` | Body audit logic for `pr_description_enforcer.py` |
 | `pr_description_command_parser.py` | `gh` command parsing for `pr_description_enforcer.py` |
 | `pr_description_pr_number.py` | PR number extraction logic |
@@ -119,4 +116,3 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 
 - Tests live beside each hook as `test_<hookname>.py` or `test_<hookname>_<suffix>.py`. Run with `python -m pytest <test_file>`.
 - Tunable constants live in `hooks_constants/<hook_name>_constants.py`; the verified-commit family uses `blocking/config/verified_commit_constants.py`.
-- `conftest.py` gives shared pytest fixtures for the blocking test suite.

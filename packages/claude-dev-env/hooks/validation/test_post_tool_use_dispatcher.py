@@ -5,11 +5,11 @@ hook as its own subprocess (the production path), records each hook's block
 decision, computes the expected aggregate, then runs the dispatcher on the same
 payload and asserts an equal block-or-allow decision and the union of reasons.
 
-Three focused tests pin the side-effecting behavior the dispatcher must not
+Two focused tests pin the side-effecting behavior the dispatcher must not
 change: the formatter formats only on a Write of a file git does not yet track
-and never blocks; the type-checker still blocks on a real type error when run
-through the dispatcher; and non-block stdout from side-effect hooks (such as
-the doc-gist htmlpreview URL) survives on both the allow and block paths.
+and never blocks; and the type-checker still blocks on a real type error when
+run through the dispatcher. Two more tests pin that non-block stdout from a
+side-effect hook survives on both the allow and block paths.
 
 Crash and early-exit tests exercise the aggregator directly: an early hook
 crash before mypy does not drop mypy's block, a non-blocking hook crash leaves
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,9 +34,6 @@ _VALIDATION_DIR_STR = str(Path(__file__).resolve().parent)
 if _VALIDATION_DIR_STR not in sys.path:
     sys.path.insert(0, _VALIDATION_DIR_STR)
 
-from hooks_constants.doc_gist_auto_publish_constants import (  # noqa: E402, I001
-    HOOK_SUBPROCESS_TIMEOUT_SECONDS as DOC_GIST_TIMEOUT_SECONDS,
-)
 from hooks_constants.post_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_POST_HOSTED_HOOK_ENTRIES,
     BLOCK_DECISION,
@@ -95,6 +93,26 @@ def _resolve_extra_arguments(each_entry: PostHostedHookEntry) -> list[str]:
     return resolved_arguments
 
 
+def _environment_without_git_hook_variables() -> dict[str, str]:
+    """Return the process environment with git's hook-scoped variables removed.
+
+    Git exports variables such as GIT_DIR and GIT_INDEX_FILE to hook
+    processes. When this suite runs under a git hook (the pre-commit gate
+    replays staged test files), those variables leak into the hook
+    subprocesses and point their project discovery at the wrong checkout.
+    Stripping them restores the cwd-based discovery the hooks use in
+    production.
+
+    Returns:
+        A copy of the environment without any GIT_-prefixed variable.
+    """
+    return {
+        each_name: each_value
+        for each_name, each_value in os.environ.items()
+        if not each_name.startswith("GIT_")
+    }
+
+
 def _run_hook_subprocess(
     each_entry: PostHostedHookEntry, payload_text: str
 ) -> subprocess.CompletedProcess[str]:
@@ -116,6 +134,7 @@ def _run_hook_subprocess(
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_environment_without_git_hook_variables(),
     )
 
 
@@ -135,6 +154,7 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_environment_without_git_hook_variables(),
     )
 
 
@@ -267,10 +287,10 @@ def _post_tool_use_dispatcher_harness_timeout_seconds() -> int:
 def _hosted_hooks_worst_case_internal_seconds() -> int:
     """Return the summed worst-case internal subprocess budget of the hosted hooks.
 
-    The three hosted hooks run sequentially in one dispatcher process. The
-    type-checker, the formatter (its slower JS path), and the doc-gist publisher
-    each carry their own internal subprocess timeout; their sum is the dispatcher
-    process's worst-case runtime when each hook runs to its own ceiling.
+    The hosted hooks run sequentially in one dispatcher process. The
+    type-checker and the formatter (its slower JS path) each carry their own
+    internal subprocess timeout; their sum is the dispatcher process's
+    worst-case runtime when each hook runs to its own ceiling.
 
     Returns:
         The summed worst-case internal subprocess seconds across the hosted hooks.
@@ -281,21 +301,17 @@ def _hosted_hooks_worst_case_internal_seconds() -> int:
         auto_formatter.PYTHON_FORMAT_TIMEOUT_SECONDS,
         auto_formatter.JS_FORMAT_TIMEOUT_SECONDS,
     )
-    return (
-        mypy_validator.MYPY_TIMEOUT_SECONDS
-        + slowest_formatter_seconds
-        + DOC_GIST_TIMEOUT_SECONDS
-    )
+    return mypy_validator.MYPY_TIMEOUT_SECONDS + slowest_formatter_seconds
 
 
 def test_dispatcher_harness_timeout_clears_summed_hosted_hook_budgets() -> None:
     """The dispatcher harness timeout exceeds the summed worst-case hosted-hook budget.
 
-    The three hosted hooks run sequentially under one harness timeout. When the
+    The hosted hooks run sequentially under one harness timeout. When the
     harness timeout does not clear their summed worst-case internal budgets, a
     near-full slow type-check run consumes the budget and the harness kills the
-    dispatcher before the formatter and doc-gist publisher get their turn. The
-    harness timeout must exceed the sum so every hosted hook runs to completion.
+    dispatcher before the formatter gets its turn. The harness timeout must
+    exceed the sum so every hosted hook runs to completion.
     """
     harness_timeout_seconds = _post_tool_use_dispatcher_harness_timeout_seconds()
     summed_internal_seconds = _hosted_hooks_worst_case_internal_seconds()
@@ -303,7 +319,7 @@ def test_dispatcher_harness_timeout_clears_summed_hosted_hook_budgets() -> None:
         "PostToolUse dispatcher harness timeout "
         f"({harness_timeout_seconds}s) must exceed the summed worst-case internal "
         f"budgets of the hosted hooks ({summed_internal_seconds}s), or a slow "
-        "type-check run starves the formatter and doc-gist publisher."
+        "type-check run starves the formatter."
     )
 
 
@@ -315,14 +331,14 @@ def test_clean_edit_of_plain_text_allows() -> None:
 
 
 def test_clean_write_of_nonexistent_path_allows() -> None:
-    """Dispatcher allows a Write whose path does not exist (mypy and doc-gist skip)."""
+    """Dispatcher allows a Write whose path does not exist (mypy skips)."""
     missing_path = str(_VALIDATION_DIR / "does_not_exist_dispatcher_probe.txt")
     payload_text = _write_payload(missing_path, "hello world\n")
     _assert_dispatcher_matches_individual_hooks(payload_text)
 
 
-def test_edit_of_non_html_skips_doc_gist_allows() -> None:
-    """Dispatcher allows an Edit of an existing non-HTML file with no sentinel."""
+def test_edit_of_non_html_allows() -> None:
+    """Dispatcher allows an Edit of an existing non-HTML file."""
     existing_path = str(Path(__file__).resolve())
     payload_text = _edit_payload(existing_path, "old", "new")
     _assert_dispatcher_matches_individual_hooks(payload_text)
@@ -433,10 +449,10 @@ def test_formatter_formats_only_untracked_write_and_never_blocks(tmp_path: Path)
 def test_non_block_stdout_preserved_in_aggregator_allow_path() -> None:
     """Aggregator preserves non-block hook stdout on the allow path.
 
-    A side-effect hook (such as doc_gist_auto_publish) writes informational
-    text to stdout without emitting a block decision. The aggregator must carry
-    that text into all_non_block_stdout so the dispatcher can write it to the
-    real stdout on the allow path.
+    A side-effect hook writes informational text to stdout without emitting a
+    block decision. The aggregator must carry that text into
+    all_non_block_stdout so the dispatcher can write it to the real stdout on
+    the allow path.
     """
     informational_text = "https://htmlpreview.github.io/?https://gist.github.com/abc/123"
     all_results = [
@@ -459,7 +475,7 @@ def test_non_block_stdout_preserved_in_aggregator_allow_path() -> None:
 def test_non_block_stdout_preserved_in_aggregator_block_path() -> None:
     """Aggregator preserves non-block hook stdout even when another hook blocks.
 
-    When mypy_validator blocks and doc_gist_auto_publish wrote informational
+    When mypy_validator blocks and a side-effect hook wrote informational
     text, both the block reason and the informational text survive in the
     aggregated decision so _emit_block_decision can forward both to stdout.
     """
@@ -512,9 +528,9 @@ def test_early_hook_crash_does_not_drop_later_blocking_hook_block() -> None:
 def test_non_blocking_hook_crash_leaves_decision_allow() -> None:
     """A crash in a non-blocking hook does not change an allow to a block.
 
-    A side-effect hook such as auto_formatter or doc_gist_auto_publish carries
-    is_blocking=False. Its crash must not surface a blocking signal — the
-    aggregated decision stays allow.
+    A side-effect hook such as auto_formatter carries is_blocking=False. Its
+    crash must not surface a blocking signal — the aggregated decision stays
+    allow.
     """
     all_results = [
         PostHostedHookResult(captured_stdout="", did_crash=True, is_blocking=False),
@@ -566,12 +582,12 @@ def test_block_path_emits_single_parseable_json_object_on_stdout() -> None:
     )
     try:
         payload_text = _write_payload(str(type_error_file), type_error_file.read_text())
-        direct_block, _direct_reason = _parse_block_decision(
-            _run_hook_subprocess(ALL_POST_HOSTED_HOOK_ENTRIES[0], payload_text)
-        )
+        completed_direct = _run_hook_subprocess(ALL_POST_HOSTED_HOOK_ENTRIES[0], payload_text)
+        direct_block, _direct_reason = _parse_block_decision(completed_direct)
         assert direct_block, (
             "Precondition failed: mypy_validator did not block a real type error directly. "
-            "Is mypy installed and the file inside the git project?"
+            "Is mypy installed and the file inside the git project?\n"
+            f"stdout: {completed_direct.stdout!r}\nstderr: {completed_direct.stderr!r}"
         )
 
         dispatcher_result = _run_dispatcher(payload_text)

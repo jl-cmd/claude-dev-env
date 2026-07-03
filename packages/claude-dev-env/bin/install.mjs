@@ -294,10 +294,13 @@ function backupClaudeHubBeforeOverwrite(destPath, incomingPath) {
 }
 
 /**
- * Hook script paths that were folded into the PreToolUse dispatcher in Stage 1.
- * These entries no longer appear in hooks.json but must still be recognized as
- * managed so a reinstall from an older settings shape prunes them and they do
- * not double-run alongside the dispatcher.
+ * PreToolUse hook script paths the installer manages even though hooks.json
+ * carries no standalone entry for them. Most were folded into the PreToolUse
+ * dispatcher in Stage 1; md_to_html_blocker is a retired hook with no script on
+ * disk. Each path stays in this set so a reinstall from an older settings shape
+ * prunes its standalone entry — a folded hook would otherwise double-run
+ * alongside the dispatcher, and the retired hook's entry would point at a
+ * missing script.
  */
 export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/write_existing_file_blocker.py',
@@ -316,18 +319,23 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/pytest_testpaths_orphan_blocker.py',
     'blocking/open_questions_in_plans_blocker.py',
     'blocking/plain_language_blocker.py',
+    'blocking/md_to_html_blocker.py',
 ]);
 
 /**
- * Hook script paths that were folded into the PostToolUse dispatcher. These
- * after-write hooks no longer appear in hooks.json but must still be recognized
- * as managed so a reinstall from an older settings shape prunes them and they do
- * not double-run alongside the PostToolUse dispatcher.
+ * After-write hook script paths the installer manages even though hooks.json
+ * carries no standalone entry for them. mypy_validator and auto_formatter run
+ * hosted inside the PostToolUse dispatcher; doc_gist_auto_publish and
+ * md_to_html_companion are retired hooks with no script on disk. Each path stays
+ * in this set so a reinstall from an older settings shape prunes its standalone
+ * entry — a hosted hook would otherwise double-run alongside the dispatcher, and
+ * a retired hook's entry would point at a missing script.
  */
 export const POST_FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'validation/mypy_validator.py',
     'workflow/auto_formatter.py',
     'workflow/doc_gist_auto_publish.py',
+    'workflow/md_to_html_companion.py',
 ]);
 
 /**
