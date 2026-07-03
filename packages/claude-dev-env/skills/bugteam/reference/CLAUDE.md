@@ -10,7 +10,6 @@ Expanded workflow detail for the `bugteam` skill. Load a file from this director
 | `team-setup.md` | Permissions grant, PR scope resolution, run name, temp dir, and loop state. |
 | `audit-and-teammates.md` | Pre-audit CODE_RULES gate, full cycle numbering, AUDIT and FIX action detail. |
 | `github-pr-reviews.md` | Per-loop review posting, `jq`+`gh api` payloads, inline anchors, fallbacks, REST endpoints. |
-| `teardown-publish-permissions.md` | Teardown steps, PR description rewrite via `pr-description-writer`, permission revoke, final report. |
 | `design-rationale.md` | Why clean-room subagents, when `/bugteam` applies, refusal reasons. |
 | `copilot-gap-analysis.md` | Historical gap analysis (reference only). |
 

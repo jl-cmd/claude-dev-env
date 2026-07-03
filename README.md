@@ -210,6 +210,7 @@ Slash commands for common workflows.
 | `pr-scope-resolve` | Resolves a PR-loop skill's audit/fix target (owner, repo, number, refs, head SHA) through one MCP-first ladder with a single canonical refusal line |
 | `pr-fix-protocol` | Applies reviewer findings as verified fixes and drives unresolved threads to zero: executor choice, the shared 13-step fix sequence, atomic reply-and-resolve, and post-push state resets |
 | `post-audit-findings` | Publishes an audit pass as one GitHub PR review via post_audit_thread.py: findings-JSON mapping, anchored/unanchored partition, self-PR reviewer toggle, and thread-id harvest for the fix loop |
+| `pr-loop-lifecycle` | Opens and closes a PR-loop run: permission grant with auto-mode escalation, worktree preflight, then teardown, PR description rewrite, always-run revoke, and the final report |
 
 ### Hooks
 
