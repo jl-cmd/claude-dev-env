@@ -7,10 +7,11 @@ finds the other.
 
 This sweep reads a unified diff and collects every multi-word identifier added
 on code lines. Then it scans each added prose line — a Markdown line in full, or
-a comment in a JavaScript or TypeScript file. A Python file contributes
-identifiers only. Its docstrings, strings, and comments go unscanned, since they
-name the module's own identifiers by design, not by drift. Test files are
-skipped whole. It flags a hyphenated variant that shares an identifier's
+a comment or string literal in a JavaScript or TypeScript file. A Python file
+contributes identifiers only. Its docstrings, strings, and comments go
+unscanned, since they name the module's own identifiers by design, not by drift.
+Test code files are skipped whole. It flags a hyphenated variant that shares an
+identifier's
 leading word but diverges in the tail. Each near-miss prints as one
 ``file:line`` finding, and the run exits non-zero when any finding remains, so a
 commit gate can block on it.
@@ -71,6 +72,7 @@ from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     PYTHON_COMMENT_MARKER,
     PYTHON_FILE_EXTENSION,
     SNAKE_CASE_IDENTIFIER_PATTERN,
+    STRING_LITERAL_CONTENT_PATTERN,
     TERMINOLOGY_FINDING_TEMPLATE,
     TERMINOLOGY_SWEEP_DESCRIPTION,
     TEST_DIRECTORY_PATH_SEGMENT,
@@ -132,18 +134,23 @@ def _file_extension(file_path: str) -> str:
 
 
 def _is_test_file(file_path: str) -> bool:
-    """Return True when the diff path is a test file the sweep should skip.
+    """Return True when the diff path is a test code file the sweep should skip.
 
-    A test file's prose is scaffolding: its docstrings and string fixtures name
-    the identifiers under test on purpose, so scanning it only adds noise.
+    A test code file's prose is scaffolding: its docstrings and string fixtures
+    name the identifiers under test on purpose, so scanning it only adds noise. A
+    Markdown or other non-code file is prose worth scanning whatever its name, so
+    a ``test_plan.md`` design doc is scanned rather than skipped.
 
     Args:
         file_path: The repository-relative diff path.
 
     Returns:
-        True for a path under a ``tests`` directory, a ``test_`` prefixed file,
-        or a file whose name carries a ``_test.``/``.test.``/``.spec.`` marker.
+        True for a code file under a ``tests`` directory, a ``test_`` prefixed
+        code file, or a code file whose name carries a
+        ``_test.``/``.test.``/``.spec.`` marker. False for any non-code file.
     """
+    if _file_extension(file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+        return False
     normalized_path = file_path.replace("\\", "/").lower()
     if TEST_DIRECTORY_PATH_SEGMENT in f"/{normalized_path}":
         return True
@@ -207,7 +214,8 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     """Return the prose fragments of an added line worth scanning for terms.
 
     A Markdown line is prose in full. A JavaScript or TypeScript line contributes
-    its comment tail and its JSDoc continuation text. A Python line contributes no
+    its comment tail, its JSDoc continuation text, and the contents of its string
+    literals. A Python line contributes no
     prose: production Python forbids inline comments, so a ``#`` on a Python line
     is string content — a markdown template, a regex, an f-string — not a comment,
     and a module's own strings and docstrings near-miss its own identifiers by
@@ -233,6 +241,7 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     if stripped_line.startswith(JSDOC_CONTINUATION_MARKER):
         all_fragments.append(stripped_line)
     all_fragments.extend(_comment_fragments(line_text))
+    all_fragments.extend(_string_literal_fragments(line_text))
     return all_fragments
 
 
@@ -249,6 +258,22 @@ def _comment_fragments(line_text: str) -> list[str]:
         all_fragments.append(
             line_text[javascript_marker_index + len(JAVASCRIPT_LINE_COMMENT_MARKER) :]
         )
+    return all_fragments
+
+
+def _string_literal_fragments(line_text: str) -> list[str]:
+    """Return the contents of every quoted string literal on a code line."""
+    all_fragments: list[str] = []
+    for each_match in STRING_LITERAL_CONTENT_PATTERN.finditer(line_text):
+        each_content = next(
+            (
+                each_group
+                for each_group in each_match.groups()
+                if each_group is not None
+            ),
+            "",
+        )
+        all_fragments.append(each_content)
     return all_fragments
 
 

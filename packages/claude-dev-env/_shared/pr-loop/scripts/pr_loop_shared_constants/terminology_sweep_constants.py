@@ -26,6 +26,10 @@ HYPHENATED_PROSE_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)+\b"
 )
 
+STRING_LITERAL_CONTENT_PATTERN: re.Pattern[str] = re.compile(
+    r"\"([^\"]*)\"|'([^']*)'|`([^`]*)`"
+)
+
 TEST_DIRECTORY_PATH_SEGMENT: str = "/tests/"
 
 TEST_FILE_NAME_PREFIX: str = "test_"
