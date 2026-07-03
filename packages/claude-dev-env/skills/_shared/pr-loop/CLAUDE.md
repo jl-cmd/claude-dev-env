@@ -21,6 +21,7 @@ Shared infrastructure for the PR audit-fix loop used by `bugteam` and `pr-conver
 | `packages/claude-dev-env/skills/_shared/pr-loop/scripts/write_fix_outcomes.py` | Writes the per-loop fix outcome XML into the workspace. |
 | `packages/claude-dev-env/skills/_shared/pr-loop/scripts/preflight_worktree.py` | Verifies the working directory is a healthy worktree for the target PR's repo. |
 | `packages/claude-dev-env/skills/_shared/pr-loop/scripts/teardown_worktrees.py` | Removes loop worktrees on clean exit. |
+| `packages/claude-dev-env/skills/_shared/pr-loop/scripts/write_handoff.py` | Writes durable resume-handoff files under `~/.claude/runtime/pr-loop/<run-name>/` at each converge checkpoint. |
 | `packages/claude-dev-env/skills/_shared/pr-loop/scripts/_path_resolver.py` | Resolves workspace and worktree paths from PR metadata. |
 | `packages/claude-dev-env/skills/_shared/pr-loop/scripts/_cli_utils.py` | Shared CLI argument parsing helpers. |
 | `packages/claude-dev-env/skills/_shared/pr-loop/scripts/_xml_utils.py` | XML serialization helpers. |

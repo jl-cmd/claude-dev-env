@@ -115,6 +115,19 @@ and `false` when it exits 0; on `true` the workflow skips the Copilot gate with
 no agent spawned. The workflow runs in the background and notifies this session
 on completion. Watch live progress with `/workflows`.
 
+The moment the `Workflow` call returns its run id, write the durable handoff so a
+fresh session can resume the same run:
+
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/write_handoff.py" \
+  --pr-number <N> --head-ref <branch> --phase workflow \
+  --resume-command "Workflow({scriptPath, resumeFromRunId: '<runId>'})" \
+  --run-id <runId>
+```
+
+Write it again when the result lands, so the handoff carries the final run id and
+names the teardown phase the fresh session picks up from.
+
 The workflow returns
 `{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, reuseNote, deferredPrs }`.
 `deferredPrs` is the list of draft environment-hardening PRs the standards-deferral
@@ -134,7 +147,27 @@ returns `blocker: "budget"` with the run id; resume with
 the journal. Never start a round the budget cannot finish: a half-run
 round records nothing resumable and replays dirty.
 
+On a `blocker: "budget"` return, write the durable handoff with the run id and the
+`Workflow({scriptPath, resumeFromRunId})` resume command before stopping, so a
+fresh session resumes the paced run without the stopped session's transcript.
+
 ## Teardown (on workflow completion)
+
+Teardown runs as an ordered checkpoint list. After each checkpoint finishes,
+re-write the durable handoff with `--phase teardown`, the run id, and the
+checkpoints done so far, so a fresh session that resumes reads `handoff.json`
+`completed_steps` and skips the checkpoints already done:
+
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/write_handoff.py" \
+  --pr-number <N> --head-ref <branch> --phase teardown \
+  --resume-command "/autoconverge <PR URL>" \
+  --run-id <runId> \
+  --completed-steps "<checkpoints done so far>"
+```
+
+The checkpoints run in this order: `report`, `close`. Write the
+handoff after each one finishes.
 
 1. **When `converged` is true — build and publish the closing report.**
    Skip this entire step (report, artifact publish, comment, Chrome open) when the
@@ -204,14 +237,18 @@ round records nothing resumable and replays dirty.
       ```
       Start-Process chrome -ArgumentList '--new-window', '<artifact URL>'
       ```
-      Tolerate a missing Chrome without aborting the rest of teardown.
+      Skip a missing Chrome without aborting the rest of teardown.
+
+   After the report is published, write the handoff with
+   `--completed-steps "report"`.
 
 2. **Close the run.** Apply the `pr-loop-lifecycle` skill's Close section
    (`../pr-loop-lifecycle/SKILL.md`): when `converged` is true, rewrite the PR
    description and clean the working tree — see
    [`pr-loop-lifecycle/reference/teardown-publish-permissions.md` § Clean working tree and § Publish the final PR description](../pr-loop-lifecycle/reference/teardown-publish-permissions.md);
    the workflow already marked the PR ready. The permission revoke always runs,
-   including on a blocker exit.
+   including on a blocker exit. Write the handoff with
+   `--completed-steps "report,close"`.
 
 3. **Print the final report:**
 
@@ -385,7 +422,9 @@ top-level `converged` is true only when every PR converged.
 
 Run the single-PR [Teardown](#teardown-on-workflow-completion) once per entry in
 `results`, using that PR's `owner`, `repo`, `prNumber`, and `finalSha`, and its
-own worktree as the working directory. Build and publish a PR's closing report
+own worktree as the working directory. Write one durable handoff per PR entry —
+each with that PR's own `--pr-number` — so a fresh session can resume any PR on
+its own. Build and publish a PR's closing report
 only for a PR whose `converged` is true; for a PR that returned a blocker, skip
 its report and carry the blocker into the final summary. Revoke project
 permissions once per repository after every PR's teardown. Then print one summary
