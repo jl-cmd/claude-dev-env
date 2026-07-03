@@ -9,7 +9,6 @@ Python package of named constants imported by the bugteam scripts. Each module h
 | `bugteam_preflight_constants.py` | `bugteam_preflight.py` — env var name, hooks path suffix, exit codes, ignore dirs, argument tuples, config filenames. |
 | `bugteam_code_rules_gate_constants.py` | `bugteam_code_rules_gate.py` — gate-related path and exit-code constants. |
 | `bugteam_fix_hookspath_constants.py` | `bugteam_fix_hookspath.py` — canonical hooks path, remediation message strings. |
-| `claude_permissions_common_constants.py` | `_bugteam_permissions_common.py` — settings JSON keys, glob patterns for the grant/revoke scripts. |
 | `probe_code_rules_enforcer_check_constants.py` | `probe_code_rules_enforcer_check.py` — enforcer module path and function name constants. |
 | `reflow_skill_md_constants.py` | `reflow_skill_md.py` — line-length and formatting constants. |
 | `windows_safe_rmtree_constants.py` | `windows_safe_rmtree.py` — retry count and wait constants. |

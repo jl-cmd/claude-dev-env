@@ -2,10 +2,11 @@
 name: copilot-review
 description: >-
   Spawns a background subagent that babysits the GitHub Copilot reviewer on the current
-  PR: each ~5-min tick it fetches the latest copilot-pull-request-reviewer[bot] review,
-  fixes unaddressed findings against HEAD (commit, push, inline replies), re-requests
-  review, and exits on convergence. Triggers: '/copilot-review', 'watch copilot',
-  'babysit copilot review', 'keep re-requesting copilot'.
+  PR: each ~6-min tick it fetches the latest copilot-pull-request-reviewer[bot] review,
+  fixes unaddressed findings against HEAD (commit, push, inline replies, thread
+  resolution), re-requests review, and exits on convergence. Triggers:
+  '/copilot-review', 'watch copilot', 'babysit copilot review', 'keep re-requesting
+  copilot'.
 ---
 
 # Copilot Review
@@ -20,19 +21,17 @@ The user is on a PR branch, wants Copilot (the GitHub Copilot reviewer bot) to k
 
 ### Step 0: Opt-out check
 
-Before any other work, inspect the `CLAUDE_REVIEWS_DISABLED` environment
-variable. Treat the value as a comma-separated list of skill tokens
-(case-insensitive, whitespace-tolerant). When the parsed list contains
-`copilot`, respond with the literal line `/copilot-review is disabled via
-CLAUDE_REVIEWS_DISABLED.` and stop — do not spawn the subagent, do not call
-the Copilot reviewer API, do not run any other step of this skill.
+Before any other work, run:
 
-PowerShell probe (Windows):
-
-```pwsh
-$disabled = ($env:CLAUDE_REVIEWS_DISABLED -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() })
-if ($disabled -contains 'copilot') { '/copilot-review is disabled via CLAUDE_REVIEWS_DISABLED.' }
+```bash
+python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer copilot
 ```
+
+Exit 0 — Copilot reviews are disabled: respond with the literal line
+`/copilot-review is disabled via CLAUDE_REVIEWS_DISABLED.` and stop — do not
+spawn the subagent, do not call the Copilot reviewer API, do not run any
+other step of this skill. Exit 1 — continue. Gate semantics live in the
+`reviewer-gates` skill ([../reviewer-gates/SKILL.md](../reviewer-gates/SKILL.md)).
 
 ### Step 1: Gather PR context
 
@@ -74,25 +73,27 @@ Pass this verbatim to the subagent (substituting the bracketed values):
 > 2. Fetch latest Copilot review via `pull_request_read(method="get_reviews", pullNumber=[NUMBER], owner="[OWNER]", repo="[REPO]")`.
 >    Capture `commit_id`, `state`, `submitted_at`, `id`.
 > 3. Decide the branch:
->    - **No review exists:** re-request (step 4), schedule next wakeup, return.
->    - **Latest review's `commit_id` != current HEAD:** re-request (step 4), schedule next wakeup, return.
->    - **Latest review's `commit_id` == current HEAD with unresolved inline findings:** TDD-fix them, push, reply inline on each thread, re-request (step 4), schedule next wakeup, return.
+>    - **No review exists:** increment `no_review_count` (see escalation rule below), re-request (step 4), schedule next wakeup, return.
+>    - **Latest review's `commit_id` != current HEAD:** increment `no_review_count`, re-request (step 4), schedule next wakeup, return.
+>    - **Latest review's `commit_id` == current HEAD with unresolved inline findings:** reset `no_review_count` to 0, TDD-fix them, push, reply inline on each thread, resolve each addressed thread, re-request (step 4), schedule next wakeup, return.
 >    - **Latest review's `commit_id` == current HEAD and clean:** report convergence to the parent with a one-sentence summary and terminate. The loop is done; skip the ScheduleWakeup call.
+>
+>    **Escalation rule:** `no_review_count` starts at 0, counts consecutive ticks where no Copilot review exists at the current HEAD, and resets to 0 on every push and every review sighted at HEAD. When it reaches 3, Copilot is not delivering reviews — report the stall to the parent with the count and the last request timestamp, then terminate without scheduling another wakeup.
 > 4. Re-request Copilot via `request_copilot_review(owner="[OWNER]", repo="[REPO]", pullNumber=[NUMBER])`.
 >    The reviewer ID **must** be `copilot-pull-request-reviewer[bot]` with the `[bot]` suffix — empirically verified: `Copilot`, `copilot`, and `github-copilot` all return `requested_reviewers: []` with no error, silently no-op.
 > 5. Schedule the next wakeup with `ScheduleWakeup`:
->    - `delaySeconds: 300`
+>    - `delaySeconds: 360`
 >    - `reason`: one short sentence on what you are waiting for.
 >    - `prompt`: the literal sentinel `<<autonomous-loop-dynamic>>` so the next firing re-enters these instructions.
 >
 > **Fix protocol** (step 3, third branch):
 >
+> - Read `$HOME/.claude/skills/pr-fix-protocol/SKILL.md` and apply it — it carries the shared fix sequence, the reply-and-resolve unit, and the unresolved-thread sweep.
 > - Read each referenced file:line.
 > - Write a failing test first when the finding has behavior to test. For pure doc or comment nits that have no behavior, go straight to the fix.
-> - Implement the fix.
 > - Stage the fix and create one new commit on the existing branch: `git add <files> && git commit -m "fix(review): ..."`.
 > - Push the new commit: `git push origin [BRANCH]`.
-> - Reply inline on each comment thread with `add_reply_to_pull_request_comment(owner="[OWNER]", repo="[REPO]", pullNumber=[NUMBER], body="...", commentId=<comment_id>)`, referencing the new commit SHA.
+> - Reply inline via `add_reply_to_pull_request_comment(owner="[OWNER]", repo="[REPO]", pullNumber=[NUMBER], body="...", commentId=<comment_id>)`, referencing the new commit SHA; then resolve each addressed thread via `pull_request_review_write(method="resolve_thread", pullNumber=[NUMBER], owner="[OWNER]", repo="[REPO]", threadId="<PRRT id>")`, harvesting the `PRRT_…` id from `pull_request_read(method="get_review_comments", ...)`. Reply first, then resolve — atomic per thread, per the protocol.
 >
 > When a pre-push, pre-commit, or other hook rejects the change, solve it. Read the hook's error message, diagnose the root cause in the code or test, and fix that. Then rerun the commit or push. Hooks exist to catch real problems; treat each rejection as new evidence to act on.
 >
@@ -101,8 +102,9 @@ Pass this verbatim to the subagent (substituting the bracketed values):
 > - Convergence (clean review against HEAD): report one-sentence summary to parent and terminate.
 > - Blocker you have exhausted fix attempts on (API auth failure persists, CI regression whose root cause falls outside this PR, a hook you have investigated and cannot resolve in one commit): report the specific blocker and its diagnosis to the parent, then terminate without scheduling another wakeup.
 > - Parent sends `TaskStop`: terminate immediately.
+> - `no_review_count` reaches 3 (escalation rule above): report the stall and terminate.
 >
-> **Safety cap:** after 20 ticks without convergence, stop and report. That many rounds means something structural is wrong with the loop.
+> **Safety cap:** after 20 ticks without convergence, stop and report. This is the total-tick runaway guard, distinct from the 3-consecutive-no-review escalation; that many rounds means something structural is wrong with the loop.
 
 ### Step 4: Report back to the user
 
@@ -142,7 +144,7 @@ Subagent: [re-requests review, schedules next wakeup, returns]
 
 <example>
 Subagent tick fires, Copilot has 2 unaddressed inline findings on HEAD.
-Subagent: [TDD-fixes both, one commit, pushes, replies inline on both threads, re-requests review, schedules next wakeup]
+Subagent: [TDD-fixes both, one commit, pushes, replies inline on both threads, resolves both threads, re-requests review, schedules next wakeup]
 </example>
 
 <example>

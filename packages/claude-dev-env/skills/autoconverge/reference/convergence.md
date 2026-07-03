@@ -55,24 +55,25 @@ tracks CONVERGE passes only and is never the cap.
    - **Code-review lens** — a correctness-focused review pass (`code-quality-agent`)
      that reports findings without editing.
    - **Bug-audit lens** — the bug-audit (`code-quality-agent`) applying the
-     shared A–P rubric from `bugteam/reference/audit-contract.md`, reporting
+     shared A–P rubric from `_shared/pr-loop/audit-contract.md`, reporting
      findings without editing.
 3. Dedup findings across the three lenses by file, line, and title. A collision
    keeps the most severe duplicate's severity (P0 > P1 > P2), unions the detail
    text, and collects every distinct bot thread id so the fix lens resolves all
    colliding threads.
-4. **Any findings** → one `clean-coder` applies every fix in a single test-first
-   commit, pushes, then replies to and resolves each finding that carries a
-   GitHub review thread. Before its turn ends, the edit step dry-runs the
-   CODE_RULES commit gate (`code_rules_gate.py --staged`) over its staged
+4. **Any findings** → one `clean-coder` applies every fix per the
+   `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`): a single
+   test-first commit, a push, then a reply and resolve on each finding that
+   carries a GitHub review thread. Before its turn ends, the edit step dry-runs
+   the CODE_RULES commit gate (`code_rules_gate.py --staged`) over its staged
    changes and keeps fixing until that gate would accept the commit, so the
-   later commit step never hits a gate rejection. A round progresses when the fix lens lands a push that
-   moves HEAD, or when every finding was already addressed so no code change is
-   needed yet each finding thread is still resolved (the fix lens reports
-   `resolvedWithoutCommit` and the run re-converges on the unchanged HEAD). A
-   round whose fix lens reports neither a moved-HEAD push nor a full
-   thread-resolution ends the run with a fix-stalled blocker. The next round
-   re-verifies on the current HEAD.
+   later commit step never hits a gate rejection. A round progresses when the
+   fix lens lands a push that moves HEAD, or when every finding was already
+   addressed so no code change is needed yet each finding thread is still
+   resolved (the fix lens reports `resolvedWithoutCommit` and the run
+   re-converges on the unchanged HEAD). A round whose fix lens reports neither
+   a moved-HEAD push nor a full thread-resolution ends the run with a
+   fix-stalled blocker. The next round re-verifies on the current HEAD.
 5. **Zero findings on a stable HEAD** → post the CLEAN bugteam audit artifact
    for that HEAD, then move to the Copilot gate.
 
@@ -112,9 +113,10 @@ the current HEAD:
 4. The Copilot review on HEAD is clean or approved (bypassed when Copilot is down
    or out of quota this run).
 5. Zero unresolved bot review threads anywhere on the PR — counting Cursor,
-   Claude, and Copilot authored threads where `isResolved` is false (`isOutdated`
-   threads are excluded by the gate, but the fix lens still verifies and resolves
-   them during the round).
+   Claude, and Copilot authored threads. The filter is purely
+   `isResolved == false`; `isOutdated` is informational, and the fix lens
+   verifies each outdated thread against current HEAD like any other (the
+   `pr-fix-protocol` skill's unresolved-thread sweep).
 6. The PR is mergeable (`mergeable` true and `mergeable_state` clean).
 7. No requested reviewers are still pending (bypassed when Copilot is down or out
    of quota this run).

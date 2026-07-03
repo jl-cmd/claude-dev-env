@@ -83,31 +83,16 @@ PR's owner.
    example, `claude-code-config` while the PR lives in `llm-settings`) or in no
    git checkout at all cannot continue.
 
-4. **Grant project permissions.**
-   `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
+4. **Grant project permissions.** Apply the `pr-loop-lifecycle` skill's Open
+   section (`../pr-loop-lifecycle/SKILL.md`) — the grant command
+   (`grant_project_claude_permissions.py`) and the auto-mode `AskUserQuestion`
+   escalation for a blocked grant both live there.
 
-   In auto-mode the classifier blocks this grant as an unrequested change to the
-   permission allowlist: the `/autoconverge` invocation alone does not meet its
-   bar for an explicitly requested permission change. When it is blocked, keep
-   the run alive — surface the grant to the user through `AskUserQuestion` with
-   the exact command and ask them to approve it or run it themselves with the `!`
-   prefix:
-   `! python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`.
-   Continue once the grant lands. A user who wants future runs to skip this
-   prompt can add a standing Bash permission allow-rule for that script in their
-   settings.
-
-5. **Copilot quota pre-check.** Before the `Workflow` call, run once:
-   `python "$HOME/.claude/_shared/pr-loop/scripts/copilot_quota.py"`
-   It reads the account's remaining Copilot premium-request quota via
-   `gh api copilot_internal/user` and prints one line — log that line. Exit 0
-   means Copilot has quota to run, so pass `copilotDisabled: false`. Any non-zero
-   exit means skip Copilot for this run — the account is out of quota, the quota
-   API or account access is down, or no account is set — so pass
-   `copilotDisabled: true`; the workflow then skips the Copilot gate with no agent
-   spawned. The account comes from the `COPILOT_QUOTA_ACCOUNT` environment
-   variable or a git-ignored `.env` file, and the no-account line names the exact
-   `.env` path and key to set.
+5. **Copilot quota pre-check.** Before the `Workflow` call, apply the
+   `reviewer-gates` skill's Copilot quota gate (`../reviewer-gates/SKILL.md`)
+   once. Exit 0 maps to `copilotDisabled: false` in the Workflow call; any
+   non-zero exit maps to `copilotDisabled: true`, and the workflow then skips
+   the Copilot gate with no agent spawned.
 
 ## Run the workflow
 
@@ -221,15 +206,14 @@ round records nothing resumable and replays dirty.
       ```
       Tolerate a missing Chrome without aborting the rest of teardown.
 
-2. **When `converged` is true:** rewrite the PR description and clean the
-   working tree — see
-   [`bugteam/reference/teardown-publish-permissions.md` § Step 4 and § Step 4.5](../bugteam/reference/teardown-publish-permissions.md).
-   The workflow already marked the PR ready.
+2. **Close the run.** Apply the `pr-loop-lifecycle` skill's Close section
+   (`../pr-loop-lifecycle/SKILL.md`): when `converged` is true, rewrite the PR
+   description and clean the working tree — see
+   [`pr-loop-lifecycle/reference/teardown-publish-permissions.md` § Clean working tree and § Publish the final PR description](../pr-loop-lifecycle/reference/teardown-publish-permissions.md);
+   the workflow already marked the PR ready. The permission revoke always runs,
+   including on a blocker exit.
 
-3. **Always revoke project permissions** (including on a blocker exit):
-   `python "$HOME/.claude/skills/bugteam/scripts/revoke_project_claude_permissions.py"`
-
-4. **Print the final report:**
+3. **Print the final report:**
 
    ```
    /autoconverge exit: <converged | blocked>
@@ -300,13 +284,14 @@ matches.
 
 - **Converge:** `parallel([Bugbot lens, code-review lens, bug-audit lens])` on
   the current HEAD, full `origin/main...HEAD` diff. Dedup findings; one
-  `clean-coder` applies all fixes in a single commit, pushes, replies to and
-  resolves any bot threads; re-verify next round on the new HEAD. Every edit
-  step ends with a pre-commit gate check: before its turn ends, the fixer
-  dry-runs the CODE_RULES commit gate (`code_rules_gate.py --staged`) and keeps
-  fixing until that gate would accept the commit — it makes no commit itself.
-  When all three are clean on a stable HEAD, post the CLEAN bugteam audit
-  artifact.
+  `clean-coder` applies the round's fixes per the `pr-fix-protocol` skill
+  (`../pr-fix-protocol/SKILL.md`) — fix, reply, resolve — landing every fix in
+  one commit per round, which the workflow journal records; re-verify next
+  round on the new HEAD. Every edit step ends with a pre-commit gate check:
+  before its turn ends, the fixer dry-runs the CODE_RULES commit gate
+  (`code_rules_gate.py --staged`) and keeps fixing until that gate would accept
+  the commit — it makes no commit itself. When all three are clean on a stable
+  HEAD, post the CLEAN bugteam audit artifact.
   A round whose findings are ALL code-standard violations (pure CODE_RULES/style,
   no behavioral impact) passes for convergence purposes: the workflow files a
   follow-up issue listing the findings, opens a draft environment-hardening PR

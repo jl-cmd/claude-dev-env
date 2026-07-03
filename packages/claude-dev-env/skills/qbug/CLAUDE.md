@@ -6,13 +6,13 @@ Quick baseline PR audit: one clean-coder subagent loops audit → fix → commit
 
 ## Purpose
 
-`/qbug` is the required baseline review for every new PR. It runs the same A–N bug category rubric and CODE_RULES gate as `/bugteam` but with a single persistent subagent (no TeamCreate, no per-loop clean-room, no loop cap). Escalate to `/bugteam` when bias isolation across loops matters.
+`/qbug` is the required baseline review for every new PR. It runs the same A–P bug category rubric and CODE_RULES gate as `/bugteam` but with a single persistent subagent (no TeamCreate, no per-loop clean-room, no loop cap). Escalate to `/bugteam` when bias isolation across loops matters.
 
 ## Key files
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | The complete skill — four steps (pre-flight, resolve PR scope, spawn subagent cycle, final report). Self-contained with full subagent XML prompt inline. |
+| `SKILL.md` | The complete skill — four steps (pre-flight, resolve PR scope via the `pr-scope-resolve` skill, spawn subagent cycle, final report). The subagent XML prompt is inline and points the embedded agent at the `post-audit-findings` and `pr-fix-protocol` skills for review posting and reply/resolve mechanics. |
 
 ## Shared artifacts (referenced by path, not copied)
 
@@ -25,7 +25,7 @@ The skill references shared scripts from `../_shared/pr-loop/scripts/`:
 | `post_audit_thread.py` | Posts one GitHub review per loop (APPROVE or REQUEST_CHANGES) |
 | `audit-reply-template.md` | Unified reply body shape for resolved threads |
 
-Bug category rubric A–N lives at `../bugteam/PROMPTS.md`. Audit contract (finding schema, proof-of-absence, Haiku secondary, self-audit) lives at `../bugteam/reference/audit-contract.md`.
+Bug category rubric A–P lives at `../bugteam/PROMPTS.md`. Audit contract (finding schema, proof-of-absence, Haiku secondary, self-audit) lives at `../../_shared/pr-loop/audit-contract.md`.
 
 ## Subagent structure
 
@@ -37,4 +37,4 @@ Bug category rubric A–N lives at `../bugteam/PROMPTS.md`. Audit contract (find
 
 - The lead resolves the temp directory via Python's `tempfile.gettempdir()` and passes the absolute path to the subagent.
 - Each loop: one `code_rules_gate.py` pre-audit, one GitHub review posted, one commit on fix.
-- Self-PR toggle: `post_audit_thread.py` detects author-equals-reviewer and switches to an alternate `gh` account automatically.
+- Self-PR toggle, findings-JSON mapping, and anchored-only serialization live in the `post-audit-findings` skill; reply-and-resolve mechanics live in the `pr-fix-protocol` skill.

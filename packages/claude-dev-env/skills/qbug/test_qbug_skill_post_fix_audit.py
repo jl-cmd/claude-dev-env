@@ -76,7 +76,7 @@ def test_should_require_loop_n_diagnostics_json() -> None:
 
 def test_contract_should_require_all_eight_source_keys_in_diagnostics() -> None:
     contract_path = (
-        Path(__file__).parent.parent / "bugteam" / "reference" / "audit-contract.md"
+        Path(__file__).parents[2] / "_shared" / "pr-loop" / "audit-contract.md"
     )
     contract_text = contract_path.read_text(encoding="utf-8")
     required_keys = [
