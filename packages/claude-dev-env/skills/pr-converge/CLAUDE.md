@@ -27,3 +27,4 @@ Drives a draft PR to convergence by looping Cursor Bugbot, a code-review pass, a
 - The pre-flight gate requires `EnterWorktree` before any file read or API call, and confirms `ScheduleWakeup` is in the tool list.
 - All findings and PR reports state verified facts only — no hedging language.
 - The GitHub MCP (`pull_request_read`, `pull_request_review_write`) is the primary path for PR inspection; `gh api` is the fallback.
+- The tick delegates shared mechanics to five sibling sub-skills: `reviewer-gates` (opt-out, Copilot quota, Bugbot trigger), `pr-scope-resolve` (target resolution), `pr-fix-protocol` (fix sequence + unresolved-thread sweep), `post-audit-findings` (audit posting), and `pr-loop-lifecycle` (run open/close).
