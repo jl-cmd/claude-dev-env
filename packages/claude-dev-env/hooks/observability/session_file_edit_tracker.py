@@ -6,7 +6,9 @@ never made it in — it was edited but never staged, and the commit dropped it
 silently. This hook prevents that by remembering every file the session
 touches. After each Write, Edit, or MultiEdit it appends the edited file's
 resolved absolute path to a per-session JSON file in the system temp directory,
-which the stage gate reads at commit time.
+which the stage gate reads at commit time. Concurrent invocations — the case
+parallel Write or Edit calls in one turn produce — serialize on a per-session
+lock file, so no edited path is lost to a read-then-write race.
 
 The hook never blocks a tool call. A non-edit tool, a malformed payload, a
 missing file path, or a failed write each returns quietly, so a logging problem
@@ -15,10 +17,13 @@ never interrupts the edit that triggered it.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
 import tempfile
+import time
+from collections.abc import Iterator
 from pathlib import Path
 
 _hooks_dir = str(Path(__file__).resolve().parent.parent)
@@ -31,8 +36,11 @@ from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
 from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_EDITED_FILE_PATHS_KEY,
     ALL_TRACKED_EDIT_TOOL_NAMES,
+    LOCK_ACQUIRE_RETRY_SECONDS,
+    LOCK_ACQUIRE_TIMEOUT_SECONDS,
     SESSION_EDIT_FILE_PREFIX,
     SESSION_EDIT_FILE_SUFFIX,
+    SESSION_EDIT_LOCK_FILE_SUFFIX,
     SESSION_ID_UNSAFE_CHARACTERS_PATTERN,
     STATE_FILE_ATOMIC_WRITE_SUFFIX,
     STATE_FILE_DEFAULT_SESSION_ID,
@@ -112,22 +120,72 @@ def _atomic_write_edit_file(edit_file: Path, all_edited_file_paths: list[str]) -
         raise
 
 
+def _acquire_edit_file_lock(lock_file: Path) -> int | None:
+    """Grab an exclusive per-session lock, spinning until it frees or times out.
+
+    Args:
+        lock_file: Path to this session's lock file.
+
+    Returns:
+        An open file descriptor for the held lock, or None when the lock stayed
+        held past the acquire timeout so the caller proceeds without it rather
+        than stalling the edit that triggered the hook.
+    """
+    lock_acquire_deadline = time.monotonic() + LOCK_ACQUIRE_TIMEOUT_SECONDS
+    while True:
+        try:
+            return os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            if time.monotonic() >= lock_acquire_deadline:
+                return None
+            time.sleep(LOCK_ACQUIRE_RETRY_SECONDS)
+
+
+@contextlib.contextmanager
+def _hold_edit_file_lock(edit_file: Path) -> Iterator[None]:
+    """Hold the per-session lock across one read-modify-write of the tracker.
+
+    Two PostToolUse invocations run concurrently when Claude issues parallel
+    Write or Edit calls in one turn. Serializing the read-then-write on a shared
+    lock file keeps each invocation's appended path from overwriting another's.
+
+    Args:
+        edit_file: This session's tracker file path.
+
+    Yields:
+        Control to the caller while the lock is held.
+    """
+    lock_file = edit_file.with_name(edit_file.name + SESSION_EDIT_LOCK_FILE_SUFFIX)
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    lock_descriptor = _acquire_edit_file_lock(lock_file)
+    try:
+        yield
+    finally:
+        if lock_descriptor is not None:
+            os.close(lock_descriptor)
+            lock_file.unlink(missing_ok=True)
+
+
 def _record_edited_path(session_id: str, resolved_file_path: str) -> None:
     """Append one edited path to this session's tracker file when it is new.
+
+    The read of the recorded paths and the write back run under a per-session
+    lock, so parallel invocations never drop one another's appended path.
 
     Args:
         session_id: Raw ``session_id`` from the hook payload.
         resolved_file_path: The resolved absolute path of the edited file.
     """
     edit_file = _session_edit_file_path(session_id)
-    recorded_paths = _read_recorded_paths(edit_file)
-    if resolved_file_path in recorded_paths:
-        return
-    recorded_paths.append(resolved_file_path)
-    try:
-        _atomic_write_edit_file(edit_file, recorded_paths)
-    except OSError:
-        return
+    with _hold_edit_file_lock(edit_file):
+        recorded_paths = _read_recorded_paths(edit_file)
+        if resolved_file_path in recorded_paths:
+            return
+        recorded_paths.append(resolved_file_path)
+        try:
+            _atomic_write_edit_file(edit_file, recorded_paths)
+        except OSError:
+            return
 
 
 def main() -> None:
