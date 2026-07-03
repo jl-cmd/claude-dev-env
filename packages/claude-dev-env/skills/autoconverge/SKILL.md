@@ -84,7 +84,7 @@ PR's owner.
    git checkout at all cannot continue.
 
 4. **Grant project permissions.**
-   `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
+   `python "$HOME/.claude/_shared/pr-loop/scripts/grant_project_claude_permissions.py"`
 
    In auto-mode the classifier blocks this grant as an unrequested change to the
    permission allowlist: the `/autoconverge` invocation alone does not meet its
@@ -92,7 +92,7 @@ PR's owner.
    the run alive — surface the grant to the user through `AskUserQuestion` with
    the exact command and ask them to approve it or run it themselves with the `!`
    prefix:
-   `! python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`.
+   `! python "$HOME/.claude/_shared/pr-loop/scripts/grant_project_claude_permissions.py"`.
    Continue once the grant lands. A user who wants future runs to skip this
    prompt can add a standing Bash permission allow-rule for that script in their
    settings.
@@ -194,16 +194,21 @@ round records nothing resumable and replays dirty.
       Use the `combinedJournal`, `finalSha`, and `roundCount` from step b. Capture the
       output path from stdout.
 
-   e. **Publish via the Artifact tool.** Load the `artifact-design` skill first, then
-      call `Artifact` with `file_path` set to the report path from step d, `favicon`
-      set to the fixed autoconverge favicon `✅` (keep this favicon stable across
-      every autoconverge report — never swap it per run), and `description` set to
-      a one-sentence subtitle naming the PR. Capture the returned URL.
+   e. **Publish as a secret gist** by reusing `doc-gist` (do not reimplement gist
+      creation):
+      ```
+      python "$HOME/.claude/skills/doc-gist/scripts/gist_upload.py" \
+        --input "<html path>" \
+        --no-open \
+        --description "autoconverge report PR #<n>"
+      ```
+      Capture the htmlpreview URL from stdout. The gist is secret by default; pass
+      no public flag.
 
    f. **Post one idempotent PR comment.** List the PR's issue comments; if one
       carries the marker `<!-- autoconverge-report -->`, edit it in place, otherwise
       create a new one. The body begins with `<!-- autoconverge-report -->`, then
-      the artifact URL, then a plain-language summary that mirrors the report:
+      the htmlpreview link, then a plain-language summary that mirrors the report:
       lead with the one-sentence `verdictLine`; then the plain Problem and Fix
       sentences (`prProblem`, `prFix`); then the issue-class list — one bullet per
       class as `plainName (×count, status)`. Place the raw finding list as
@@ -222,11 +227,11 @@ round records nothing resumable and replays dirty.
 
 2. **When `converged` is true:** rewrite the PR description and clean the
    working tree — see
-   [`bugteam/reference/teardown-publish-permissions.md` § Step 4 and § Step 4.5](../bugteam/reference/teardown-publish-permissions.md).
+   [`pr-loop-lifecycle/reference/teardown-publish-permissions.md` § Clean working tree and § Publish the final PR description](../pr-loop-lifecycle/reference/teardown-publish-permissions.md).
    The workflow already marked the PR ready.
 
 3. **Always revoke project permissions** (including on a blocker exit):
-   `python "$HOME/.claude/skills/bugteam/scripts/revoke_project_claude_permissions.py"`
+   `python "$HOME/.claude/_shared/pr-loop/scripts/revoke_project_claude_permissions.py"`
 
 4. **Print the final report:**
 

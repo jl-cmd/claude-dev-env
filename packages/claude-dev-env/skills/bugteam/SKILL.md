@@ -145,7 +145,7 @@ end-to-end mental model before starting Step 0.
 | FIX action and verify-push semantics | [reference/audit-and-teammates.md](reference/audit-and-teammates.md) |
 | Posting the end-of-pass audit review via `post_audit_thread.py` (APPROVE on CLEAN — the request event; GitHub stores it as `state=APPROVED` — REQUEST_CHANGES with inline anchored comments on DIRTY) | [§ Audit posting](#audit-posting) |
 | Posting per-finding fix replies via GitHub MCP `add_reply_to_pull_request_comment` (rendered with the unified template at [`_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md)) | [reference/github-pr-reviews.md](reference/github-pr-reviews.md) |
-| Teardown, PR description rewrite via `pr-description-writer`, permission revoke, final report | [reference/teardown-publish-permissions.md](reference/teardown-publish-permissions.md) |
+| Teardown, PR description rewrite via `pr-description-writer`, permission revoke, final report | [../pr-loop-lifecycle/reference/teardown-publish-permissions.md](../pr-loop-lifecycle/reference/teardown-publish-permissions.md) |
 | Spawn-prompt XML, A–P category bindings, outcome XML schemas | [PROMPTS.md](PROMPTS.md) |
 | Per-category audit content (sub-buckets, decision criteria, ready-to-send Variant C templates) | `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/` |
 | Invariants and design rationale | [CONSTRAINTS.md](CONSTRAINTS.md), [reference/design-rationale.md](reference/design-rationale.md) |

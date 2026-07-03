@@ -177,7 +177,7 @@ full diff before recording `code_review_clean_at` or treating the bugteam
 round as converged. This rule holds every tick, every loop, every PR.
 
 - [ ] **Step 0: Grant project permissions**
-      `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
+      `python "$HOME/.claude/_shared/pr-loop/scripts/grant_project_claude_permissions.py"`
 
 - [ ] **Step 1: Resolve PR scope + PR worktree**
       Capture owner, repo, number, head SHA, branch. Resolve the **PR
@@ -270,7 +270,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 
 - [ ] **Step 6: BUGTEAM — run, decide, fix, reply, resolve**
       See: [`reference/per-tick.md` § Step 2 BUGTEAM](reference/per-tick.md);
-      [`../../bugteam/SKILL.md`](../../bugteam/SKILL.md)
+      [`../bugteam/SKILL.md`](../bugteam/SKILL.md)
 
       Pre-condition: `code_review_clean_at == current_head`.
 
@@ -393,13 +393,13 @@ round as converged. This rule holds every tick, every loop, every PR.
             schedule 360s wakeup → return to Step 7a next tick
 
 - [ ] **Step 8: Clean working tree**
-      See: [`bugteam/reference/teardown-publish-permissions.md` § Step 4](../../bugteam/reference/teardown-publish-permissions.md)
+      See: [`pr-loop-lifecycle/reference/teardown-publish-permissions.md` § Clean working tree](../pr-loop-lifecycle/reference/teardown-publish-permissions.md)
 
 - [ ] **Step 9: Rewrite PR description**
-      See: [`bugteam/reference/teardown-publish-permissions.md` § Step 4.5](../../bugteam/reference/teardown-publish-permissions.md)
+      See: [`pr-loop-lifecycle/reference/teardown-publish-permissions.md` § Publish the final PR description](../pr-loop-lifecycle/reference/teardown-publish-permissions.md)
 
 - [ ] **Step 10: Revoke project permissions**
-      `python "$HOME/.claude/skills/bugteam/scripts/revoke_project_claude_permissions.py"`
+      `python "$HOME/.claude/_shared/pr-loop/scripts/revoke_project_claude_permissions.py"`
 
 - [ ] **Step 11: Print final report**
       Print this block verbatim — no paraphrase, no extra commentary:

@@ -8,7 +8,7 @@ Expanded material that used to live inline in `SKILL.md`. Load a file when the o
 | [`team-setup.md`](team-setup.md) | Permissions grant (`CLAUDE_SKILL_DIR`), PR scope, run name / temp dir / loop state |
 | [`github-pr-reviews.md`](github-pr-reviews.md) | Per-loop reviews, `jq` + `gh api` payloads, anchors, fallbacks, REST endpoints |
 | [`audit-and-teammates.md`](audit-and-teammates.md) | Pre-audit gate, full cycle numbering, AUDIT and FIX actions |
-| [`teardown-publish-permissions.md`](teardown-publish-permissions.md) | Utility scripts note, teardown, PR description rewrite, revoke, final report |
+| [`../../pr-loop-lifecycle/reference/teardown-publish-permissions.md`](../../pr-loop-lifecycle/reference/teardown-publish-permissions.md) | Utility scripts note, teardown, PR description rewrite, revoke, final report |
 
 Canonical documentation quotes: [`../sources.md`](../sources.md).
 
