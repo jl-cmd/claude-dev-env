@@ -1,4 +1,4 @@
-"""Bare string-literal magic, inline literal-collection, inline tuple string-magic, and whitespace-indentation magic checks."""
+"""Bare string-literal magic, join-separator string magic, inline literal-collection, inline tuple string-magic, and whitespace-indentation magic checks."""
 
 import ast
 import re

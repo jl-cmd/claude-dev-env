@@ -1,4 +1,4 @@
-"""Unused module-level import check and its import-range and type-checking-gate helpers."""
+"""Unused module-level import check and its import-range helpers."""
 
 import ast
 import sys
@@ -143,7 +143,7 @@ def check_unused_module_level_imports(
 
     When ``full_file_content`` is provided, ``content`` is treated as an Edit
     fragment containing the imports being added or replaced, while the
-    ``__all__`` / ``TYPE_CHECKING`` gate detection and reference scanning run
+    ``__all__`` gate detection and reference scanning run
     against ``full_file_content`` (the post-edit file as it will look once the
     Edit applies). This prevents false-positive flags on imports added in the
     same Edit as their consumers.

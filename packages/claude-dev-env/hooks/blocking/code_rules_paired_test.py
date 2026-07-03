@@ -164,8 +164,9 @@ def _stem_matched_test_path(module_path: Path) -> Path | None:
 
     Returns:
         The path of the first existing ``test_<stem>.py`` or ``<stem>_test.py``
-        file — beside the module or under an ancestor ``tests`` directory — or
-        None when the module has no dedicated test file.
+        file beside the module, or ``test_<stem>.py`` under an ancestor
+        ``tests`` directory — or None when the module has no dedicated test
+        file.
     """
     module_directory = module_path.parent
     module_stem = module_path.stem

@@ -434,7 +434,7 @@ def _contradicting_polarity_pair(target_name: str, called_name: str) -> tuple[st
 
 
 def check_polarity_name_contradiction(content: str, file_path: str) -> list[str]:
-    """Flag a boolean assignment whose target and callee assert opposite polarity.
+    """Flag an assignment whose target and callee assert opposite polarity.
 
     ::
 
@@ -445,8 +445,10 @@ def check_polarity_name_contradiction(content: str, file_path: str) -> list[str]
         flag: is_inside_allowed = _point_hits_any_forbidden(...)
 
     The target token and the callee token contradict each other, so the reader
-    cannot tell which name states the truth. Rename the callee to a neutral form
-    the two names agree on at every call site.
+    cannot tell which name states the truth. Any single-name assignment from a
+    call is inspected — collections and counts included, not only booleans.
+    Rename the callee to a neutral form the two names agree on at every call
+    site.
     """
     if is_test_file(file_path):
         return []
