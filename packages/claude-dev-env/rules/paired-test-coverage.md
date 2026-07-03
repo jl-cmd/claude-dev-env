@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/*.py"
+---
+
 # Public-Function Paired-Test Coverage
 
 **When this applies:** Either side of a paired module/test pair, so the check fires whichever file the write touches:

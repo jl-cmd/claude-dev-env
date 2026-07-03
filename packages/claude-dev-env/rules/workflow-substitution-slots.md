@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/*.workflow.js"
+---
+
 # Workflow Substitution Slot Rule
 
 In a `.workflow.js` agent-prompt template, every per-call or per-iteration value an agent must fill in is marked with the angle-bracket convention — `<plate.svg>`, `<object.svg>`, `<glow_hex>`, `cand_<i>`. A bare token such as `cand_i` reads as a fixed literal, so an agent can create one literal directory named `cand_i` and overwrite it across every iteration of a loop, collapsing an N-iteration gate into a single run.
