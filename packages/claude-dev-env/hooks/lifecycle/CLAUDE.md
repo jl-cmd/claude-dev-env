@@ -7,7 +7,7 @@ Hooks that run at session or config-change boundaries rather than on individual 
 | File | Event | What it does |
 |---|---|---|
 | `config_change_guard.py` | PostToolUse (Write/Edit on `settings.json`) | Counts hooks in the edited `settings.json` and logs any change to `~/.claude/cache/config-change-audit.log`; alerts when the hook count drops below the last known value |
-| `pr_converge_bugteam_skill_tracker.py` | PostToolUse | Tracks which bugteam skill runs have completed within a pr-converge loop, so the enforcer can verify parallel execution |
+| `pr_converge_bugteam_skill_tracker.py` | PreToolUse (Skill) | Tracks which bugteam skill runs have completed within a pr-converge loop, so the enforcer can verify parallel execution |
 | `session_end_cleanup.py` | SessionEnd | Purges stale cache entries from `~/.claude/cache/` (entries older than the configured threshold) and old backup files |
 | `test_config_change_guard.py` | — | Tests for `config_change_guard.py` |
 | `test_pr_converge_bugteam_skill_tracker.py` | — | Tests for `pr_converge_bugteam_skill_tracker.py` |
