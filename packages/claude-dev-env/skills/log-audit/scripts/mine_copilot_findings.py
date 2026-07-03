@@ -30,9 +30,14 @@ from log_audit_constants.mine_copilot_findings_constants import (  # noqa: E402
     KEYWORDS_BY_DEFECT_CLASS,
     MAX_EXAMPLES_PER_CLUSTER,
     PROPOSAL_BY_DEFECT_CLASS,
-    PULLS_COMMENTS_ENDPOINT_TEMPLATE,
+    PULL_COMMENTS_ENDPOINT_TEMPLATE,
     RECENT_PULL_COUNT,
+    RECENT_PULLS_ENDPOINT_TEMPLATE,
 )
+
+
+class GithubCommandError(RuntimeError):
+    """Raised when a gh api call fails or returns output that is not JSON."""
 
 
 @dataclass(frozen=True)
@@ -164,53 +169,66 @@ def _reviewer_comment_from_payload(payload: object) -> ReviewerComment | None:
     return ReviewerComment(pull_number=pull_number, author=login, body=body)
 
 
-def _run_gh_pulls_comments(repo: str) -> list[object]:
-    """Fetch every pull-request review comment in the repo through gh."""
-    completed_process = subprocess.run(
-        [
-            "gh",
-            "api",
-            PULLS_COMMENTS_ENDPOINT_TEMPLATE.format(repo=repo),
-            "--paginate",
-            "--slurp",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
+def _run_gh_json(endpoint: str) -> object:
+    """Run one gh api call for an endpoint and return its parsed JSON payload."""
+    try:
+        completed_process = subprocess.run(
+            ["gh", "api", endpoint],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError as missing_gh_error:
+        raise GithubCommandError(
+            "gh command not found; install the GitHub CLI to mine reviewer comments"
+        ) from missing_gh_error
+    except subprocess.CalledProcessError as gh_failure_error:
+        raise GithubCommandError(
+            f"gh api {endpoint} failed: {gh_failure_error.stderr.strip()}"
+        ) from gh_failure_error
+    try:
+        return json.loads(completed_process.stdout)
+    except json.JSONDecodeError as decode_error:
+        raise GithubCommandError(
+            f"gh api {endpoint} returned output that is not JSON"
+        ) from decode_error
+
+
+def _fetch_recent_pull_numbers(repo: str, pull_count: int) -> list[int]:
+    """Fetch the most recently updated pull numbers, capped at pull_count."""
+    pulls_payload = _run_gh_json(
+        RECENT_PULLS_ENDPOINT_TEMPLATE.format(repo=repo, pull_count=pull_count)
     )
-    pages = json.loads(completed_process.stdout)
-    flattened_comments: list[object] = []
-    if isinstance(pages, list):
-        for each_page in pages:
-            if isinstance(each_page, list):
-                flattened_comments.extend(each_page)
-    return flattened_comments
+    recent_pull_numbers: list[int] = []
+    if isinstance(pulls_payload, list):
+        for each_pull in pulls_payload:
+            if isinstance(each_pull, dict):
+                pull_number = each_pull.get("number")
+                if isinstance(pull_number, int):
+                    recent_pull_numbers.append(pull_number)
+    return recent_pull_numbers
 
 
-def _limit_to_recent_pulls(
-    all_comments: list[ReviewerComment], pull_count: int
-) -> list[ReviewerComment]:
-    """Keep only comments on the most recent pull numbers."""
-    recent_pull_numbers = sorted(
-        {each_comment.pull_number for each_comment in all_comments}, reverse=True
-    )[:pull_count]
-    allowed_pull_numbers = set(recent_pull_numbers)
-    return [
-        each_comment
-        for each_comment in all_comments
-        if each_comment.pull_number in allowed_pull_numbers
-    ]
+def _fetch_pull_comments(repo: str, pull_number: int) -> list[object]:
+    """Fetch one pull request's review comments through gh."""
+    comments_payload = _run_gh_json(
+        PULL_COMMENTS_ENDPOINT_TEMPLATE.format(repo=repo, pull_number=pull_number)
+    )
+    if isinstance(comments_payload, list):
+        return list(comments_payload)
+    return []
 
 
 def _fetch_reviewer_comments(repo: str) -> list[ReviewerComment]:
-    """Fetch and filter recent reviewer-bot comments for the repo."""
-    raw_comments = _run_gh_pulls_comments(repo)
+    """Fetch reviewer-bot comments from the repo's most recent pull requests."""
+    recent_pull_numbers = _fetch_recent_pull_numbers(repo, RECENT_PULL_COUNT)
     reviewer_comments: list[ReviewerComment] = []
-    for each_payload in raw_comments:
-        parsed_comment = _reviewer_comment_from_payload(each_payload)
-        if parsed_comment is not None:
-            reviewer_comments.append(parsed_comment)
-    return _limit_to_recent_pulls(reviewer_comments, RECENT_PULL_COUNT)
+    for each_pull_number in recent_pull_numbers:
+        for each_payload in _fetch_pull_comments(repo, each_pull_number):
+            parsed_comment = _reviewer_comment_from_payload(each_payload)
+            if parsed_comment is not None:
+                reviewer_comments.append(parsed_comment)
+    return reviewer_comments
 
 
 def main() -> int:
@@ -224,7 +242,11 @@ def main() -> int:
     )
     parser.add_argument("--repo", required=True)
     parsed_arguments = parser.parse_args()
-    comments = _fetch_reviewer_comments(parsed_arguments.repo)
+    try:
+        comments = _fetch_reviewer_comments(parsed_arguments.repo)
+    except GithubCommandError as gh_error:
+        print(str(gh_error), file=sys.stderr)
+        return 1
     clusters = cluster_defects(comments)
     for each_cluster in clusters:
         proposal = proposal_for_defect_class(each_cluster.defect_class)

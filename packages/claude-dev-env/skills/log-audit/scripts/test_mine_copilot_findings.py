@@ -9,6 +9,8 @@ if _script_directory not in sys.path:
 
 from mine_copilot_findings import (  # noqa: E402
     ReviewerComment,
+    _pull_number_from_url,
+    _reviewer_comment_from_payload,
     classify_defect,
     cluster_defects,
     proposal_for_defect_class,
@@ -65,3 +67,48 @@ class TestProposalForDefectClass:
         proposal = proposal_for_defect_class("broad-except")
         assert proposal.defect_class == "broad-except"
         assert proposal.proposal == PROPOSAL_BY_DEFECT_CLASS["broad-except"]
+
+
+class TestPullNumberFromUrl:
+    def test_reads_the_trailing_pull_number(self) -> None:
+        url = "https://api.github.com/repos/owner/name/pulls/867"
+        assert _pull_number_from_url(url) == 867
+
+    def test_returns_none_when_the_last_segment_is_not_a_number(self) -> None:
+        assert _pull_number_from_url("https://api.github.com/repos/owner/name") is None
+
+
+class TestReviewerCommentFromPayload:
+    def test_builds_a_comment_from_a_reviewer_bot_payload(self) -> None:
+        payload = {
+            "user": {"login": "cursor[bot]"},
+            "body": "missing type hint",
+            "pull_request_url": "https://api.github.com/repos/owner/name/pulls/12",
+        }
+        parsed_comment = _reviewer_comment_from_payload(payload)
+        assert parsed_comment == ReviewerComment(
+            pull_number=12, author="cursor[bot]", body="missing type hint"
+        )
+
+    def test_skips_a_comment_from_a_non_reviewer_login(self) -> None:
+        payload = {
+            "user": {"login": "some-human"},
+            "body": "looks good",
+            "pull_request_url": "https://api.github.com/repos/owner/name/pulls/12",
+        }
+        assert _reviewer_comment_from_payload(payload) is None
+
+    def test_skips_a_payload_that_is_not_a_dict(self) -> None:
+        assert _reviewer_comment_from_payload("not a payload") is None
+
+    def test_skips_a_payload_missing_the_pull_request_url(self) -> None:
+        payload = {"user": {"login": "cursor[bot]"}, "body": "missing type hint"}
+        assert _reviewer_comment_from_payload(payload) is None
+
+    def test_skips_a_payload_whose_url_has_no_numeric_pull_number(self) -> None:
+        payload = {
+            "user": {"login": "cursor[bot]"},
+            "body": "missing type hint",
+            "pull_request_url": "https://api.github.com/repos/owner/name/pulls",
+        }
+        assert _reviewer_comment_from_payload(payload) is None

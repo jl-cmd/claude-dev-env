@@ -9,6 +9,7 @@ Covers:
 
 import importlib.util
 import inspect
+import os
 import subprocess
 import sys
 import unittest.mock
@@ -91,6 +92,13 @@ def write_file(file_path: Path, content: str) -> None:
 
 def stage_file(repository_root: Path, relative_path: str) -> None:
     run_git_in_repository(repository_root, "add", "--", relative_path)
+
+
+@pytest.fixture(autouse=True)
+def isolated_git_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for each_variable_name in list(os.environ):
+        if each_variable_name.startswith("GIT_"):
+            monkeypatch.delenv(each_variable_name, raising=False)
 
 
 @pytest.fixture()
@@ -317,6 +325,35 @@ def test_main_staged_mode_exits_zero_when_nothing_staged(
     monkeypatch.chdir(temporary_git_repository)
     exit_code = gate_module.main(["--staged"])
 
+    assert exit_code == 0
+
+
+def test_main_staged_mode_passes_when_only_terminology_findings_exist(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "quota.py", "first_count = 1\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        temporary_git_repository / "quota.py",
+        "first_count = 1\npremium_interactions = 1\n",
+    )
+    write_file(
+        temporary_git_repository / "README.md",
+        "The premium-request budget gates the run.\n",
+    )
+    stage_file(temporary_git_repository, "quota.py")
+    stage_file(temporary_git_repository, "README.md")
+
+    monkeypatch.chdir(temporary_git_repository)
+    terminology_findings = gate_module.staged_terminology_findings(
+        temporary_git_repository
+    )
+    exit_code = gate_module.main(["--staged"])
+
+    assert any(
+        "premium-request" in each_finding for each_finding in terminology_findings
+    )
     assert exit_code == 0
 
 

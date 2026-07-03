@@ -1,7 +1,8 @@
 """Constants for the mine_copilot_findings script.
 
 ALL_REVIEWER_BOT_LOGINS: the GitHub logins whose review comments count as defects.
-PULLS_COMMENTS_ENDPOINT_TEMPLATE: the gh api path for a repo's pull-request comments.
+RECENT_PULLS_ENDPOINT_TEMPLATE: the gh api path for a repo's most recent pulls.
+PULL_COMMENTS_ENDPOINT_TEMPLATE: the gh api path for one pull request's comments.
 RECENT_PULL_COUNT: how many recent pull requests a mining run reads.
 MAX_EXAMPLES_PER_CLUSTER: example comment bodies kept per defect class.
 KEYWORDS_BY_DEFECT_CLASS: lowercased substrings that sort a comment into a defect class.
@@ -9,7 +10,12 @@ PROPOSAL_BY_DEFECT_CLASS: the concrete skill-definition edit proposed for each c
 """
 
 ALL_REVIEWER_BOT_LOGINS = ("copilot-pull-request-reviewer[bot]", "cursor[bot]")
-PULLS_COMMENTS_ENDPOINT_TEMPLATE = "repos/{repo}/pulls/comments"
+RECENT_PULLS_ENDPOINT_TEMPLATE = (
+    "repos/{repo}/pulls?state=all&sort=updated&direction=desc&per_page={pull_count}"
+)
+PULL_COMMENTS_ENDPOINT_TEMPLATE = (
+    "repos/{repo}/pulls/{pull_number}/comments?per_page=100"
+)
 RECENT_PULL_COUNT = 20
 MAX_EXAMPLES_PER_CLUSTER = 3
 KEYWORDS_BY_DEFECT_CLASS = {
