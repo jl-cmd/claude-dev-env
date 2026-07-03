@@ -119,7 +119,7 @@ The XML prompt skeleton:
 </constraints>
 
 <output_format>
-  Follow the shared audit contract at ../bugteam/reference/audit-contract.md:
+  Follow the shared audit contract at $HOME/.claude/_shared/pr-loop/audit-contract.md:
 
   - Severity: P0 = will not run / data corruption; P1 = regression or silent
     failure; P2 = dead code, minor smell.

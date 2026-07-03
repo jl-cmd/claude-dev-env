@@ -26,7 +26,7 @@ const CONFIG = {
   copilotMaxPolls: 8,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
-  bugteamRubric: '$HOME/.claude/skills/bugteam/reference/audit-contract.md',
+  bugteamRubric: '$HOME/.claude/_shared/pr-loop/audit-contract.md',
 }
 
 const REVIEWER_GATE_SENTINEL = 'CLAUDE_REVIEWER_GATE=autoconverge '
