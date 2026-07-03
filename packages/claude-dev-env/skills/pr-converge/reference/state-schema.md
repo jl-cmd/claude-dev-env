@@ -79,6 +79,21 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
   The enforcer requires this value to equal the current `tick_count` so a
   Skill invocation from a prior tick cannot wave through clean-coder
   audit-shaped Agent spawns on a later tick at the same HEAD.
+- `agents_session_id`: string or `null`, init `null`. The session id that
+  spawned the persistent per-step agents recorded in `persistent_agents`.
+  On tick entry, compare it to the current session id: when they differ,
+  clear `persistent_agents` to `{}` and stamp this field with the current
+  session id. `ScheduleWakeup` re-enters the same session, so a mismatch
+  means a fresh-session manual resume — the stored agent ids point at dead
+  agents and must not be reused.
+- `persistent_agents`: object, init `{}`. Map of step-key →
+  `{agent_id, created_tick, last_used_tick}` for the persistent per-step
+  agents the loop resumes across ticks. Exactly three step keys:
+  `fix_executor` (the clean-coder that applies findings in Step 4 dirty,
+  Step 6 findings, gates (a)/(d), and Step 7a), `thread_sweep`, and
+  `copilot_watch`. `agent_id` is the id the `Agent` tool returned at spawn;
+  `created_tick` is the `tick_count` at spawn; `last_used_tick` is bumped
+  on every `SendMessage` resume.
 
 Single-PR tick begins by reading `$CLAUDE_JOB_DIR/pr-converge-state.json`
 if it exists and ends by writing the updated state back to that same file
