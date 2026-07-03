@@ -47,6 +47,7 @@ from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
 from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_COMMAND_SEPARATOR_TOKENS,
     ALL_COMMIT_ALL_FLAGS,
+    ALL_COMMIT_VALUE_OPTION_SHORT_LETTERS,
     ALL_COMMIT_VALUE_OPTION_TOKENS,
     ALL_EDITED_FILE_PATHS_KEY,
     ALL_TRACKED_UNSTAGED_FILES_COMMAND,
@@ -96,12 +97,19 @@ def _commit_argument_tokens(bash_command: str) -> list[str]:
 def _is_all_flag_token(token: str) -> bool:
     """Return whether *token* is a ``-a``/``--all`` flag or a cluster holding ``a``.
 
+    A short-flag cluster is read left to right. The scan stops at the first
+    value-taking option letter (``m``/``F``/``C``/``c``), whose remainder is
+    that option's argument rather than more clustered flags — so
+    ``git commit -m"add feature"`` tokenizes to ``-madd feature`` and does not
+    count as an ``-a`` cluster even though its message carries an ``a``.
+
     Args:
         token: One argument token of a git commit invocation.
 
     Returns:
         True for ``-a``, ``--all``, or a combined short cluster such as
-        ``-am`` that carries the ``a`` letter; False otherwise.
+        ``-am`` that carries the ``a`` letter before any value-taking option;
+        False otherwise.
     """
     if token in ALL_COMMIT_ALL_FLAGS:
         return True
@@ -109,7 +117,12 @@ def _is_all_flag_token(token: str) -> bool:
         return False
     if not token.startswith(SHORT_FLAG_PREFIX):
         return False
-    return COMMIT_ALL_SHORT_FLAG_LETTER in token[1:]
+    for each_letter in token[1:]:
+        if each_letter == COMMIT_ALL_SHORT_FLAG_LETTER:
+            return True
+        if each_letter in ALL_COMMIT_VALUE_OPTION_SHORT_LETTERS:
+            return False
+    return False
 
 
 def _has_trailing_bypass_comment(bash_command: str) -> bool:

@@ -43,9 +43,10 @@ hook_spec.loader.exec_module(hook_module)
 from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_EDITED_FILE_PATHS_KEY,
     SESSION_EDIT_FILE_PREFIX,
-    SESSION_EDIT_FILE_STALE_AGE_SECONDS,
     SESSION_EDIT_FILE_SUFFIX,
 )
+
+AGED_TRACKER_FILE_SECONDS = 1860
 
 
 def _run_main_with_stdin(input_text: str) -> None:
@@ -92,7 +93,7 @@ def test_main_keeps_other_session_stale_tracker(
     redirected_temp_directory: pathlib.Path,
 ) -> None:
     other_session_file = _seed_edit_file(redirected_temp_directory, "idle-live-session")
-    _age_file(other_session_file, SESSION_EDIT_FILE_STALE_AGE_SECONDS + 60)
+    _age_file(other_session_file, AGED_TRACKER_FILE_SECONDS)
     _run_main_with_stdin(_session_start_payload("currentsession"))
     assert other_session_file.exists()
 
@@ -115,7 +116,7 @@ def test_main_removes_current_session_stale_tracker(
     redirected_temp_directory: pathlib.Path,
 ) -> None:
     current_file = _seed_edit_file(redirected_temp_directory, "currentsession")
-    _age_file(current_file, SESSION_EDIT_FILE_STALE_AGE_SECONDS + 60)
+    _age_file(current_file, AGED_TRACKER_FILE_SECONDS)
     _run_main_with_stdin(_session_start_payload("currentsession"))
     assert not current_file.exists()
 
