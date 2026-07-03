@@ -1,4 +1,4 @@
-"""Imports-at-top, import-block-sorted, logging f-string, win32gui None, naive datetime construction, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, JS sibling return-object key drift, JS bare-flag return-directive, file-length advisory, and library-print checks."""
+"""Imports-at-top, import-block-sorted, logging fstring, logging printf-token, win32gui None, naive datetime construction, E2E spec naming, JS resume-task enumeration coverage, JS returns-object schema-less branch, JS sibling return-object key drift, JS bare-flag return-directive, file-length advisory, and library-print checks."""
 
 import ast
 import json
