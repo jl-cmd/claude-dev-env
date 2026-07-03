@@ -49,6 +49,7 @@ ALL_TRACKED_UNSTAGED_FILES_COMMAND: tuple[str, ...] = (
 PARTIAL_COMMIT_BYPASS_MARKER: str = "# partial-commit"
 COMMIT_SUBCOMMAND_TOKEN: str = "commit"
 GIT_EXECUTABLE_TOKEN: str = "git"
+ENV_ASSIGNMENT_PREFIX_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 ALL_STAGING_SUBCOMMAND_TOKENS: frozenset[str] = frozenset({"add", "stage"})
 ALL_GIT_GLOBAL_VALUE_OPTION_TOKENS: frozenset[str] = frozenset(
     {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}

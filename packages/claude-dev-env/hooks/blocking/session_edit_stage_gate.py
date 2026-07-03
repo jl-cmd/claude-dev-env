@@ -57,6 +57,7 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     DENY_FILE_BULLET_LINE_SEPARATOR,
     DENY_FILE_BULLET_PREFIX,
     DENY_PATHSPEC_SEPARATOR,
+    ENV_ASSIGNMENT_PREFIX_PATTERN,
     GIT_DIFF_OUTPUT_ENCODING,
     GIT_DIFF_TIMEOUT_SECONDS,
     GIT_EXECUTABLE_TOKEN,
@@ -183,25 +184,49 @@ def _split_into_command_segments(all_tokens: list[str]) -> list[list[str]]:
     return all_segments
 
 
+def _command_token_index(all_segment_tokens: list[str]) -> int | None:
+    """Return the index of a segment's command word, past any env assignments.
+
+    A segment may open with ``NAME=value`` assignments before the command it
+    runs, as in ``GIT_DIR=x git commit``. This skips those leading assignments
+    and returns the first real command token, so ``git`` is read as the command
+    only when it holds that position — not when it rides as an argument to
+    another command (``echo git commit``).
+
+    Args:
+        all_segment_tokens: One command segment's tokens.
+
+    Returns:
+        The index of the first non-assignment token, or None for an empty
+        segment or one that is only assignments.
+    """
+    for each_offset, each_token in enumerate(all_segment_tokens):
+        if ENV_ASSIGNMENT_PREFIX_PATTERN.match(each_token):
+            continue
+        return each_offset
+    return None
+
+
 def _git_subcommand_index(all_segment_tokens: list[str]) -> int | None:
     """Return the index of a segment's git subcommand, skipping global options.
 
-    A leading ``git`` may carry global options before its subcommand, and
-    ``-C``/``-c``/``--git-dir`` and their siblings each take a value — so
-    ``git -C path add file`` resolves the ``add`` token, not ``path``.
+    The segment runs ``git`` as its command word — past any leading
+    ``NAME=value`` assignments — and ``git`` may carry global options before its
+    subcommand: ``-C``/``-c``/``--git-dir`` and their siblings each take a
+    value, so ``git -C path add file`` resolves the ``add`` token, not ``path``.
 
     Args:
         all_segment_tokens: One command segment's tokens.
 
     Returns:
         The index of the subcommand token following ``git`` and its global
-        options, or None when the segment invokes no ``git`` subcommand.
+        options, or None when the segment does not run ``git`` as its command.
     """
-    if GIT_EXECUTABLE_TOKEN not in all_segment_tokens:
+    command_index = _command_token_index(all_segment_tokens)
+    if command_index is None or all_segment_tokens[command_index] != GIT_EXECUTABLE_TOKEN:
         return None
-    git_index = all_segment_tokens.index(GIT_EXECUTABLE_TOKEN)
     should_skip_next_value = False
-    for each_offset in range(git_index + 1, len(all_segment_tokens)):
+    for each_offset in range(command_index + 1, len(all_segment_tokens)):
         each_token = all_segment_tokens[each_offset]
         if should_skip_next_value:
             should_skip_next_value = False

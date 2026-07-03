@@ -14,6 +14,7 @@ The gate steps aside for a commit that skips staged files on purpose:
 
 - **`-a` / `--all`** — the commit already takes every tracked change, so nothing is dropped.
 - **A pathspec** — `git commit -- <paths>` or `git commit <paths>` commits only the named paths on purpose.
+- **A preceding `git add` / `git stage`** — `git add <paths> && git commit …` stages the files in its own segment before the commit runs, so they are staged by the time the commit records the index.
 - **`# partial-commit`** — add this marker to the command to commit the staged set on purpose and leave the rest.
 
 A `--amend` does not step the gate aside: an amend records the staged snapshot too, so an unstaged session edit is dropped the same way a plain commit drops it.
