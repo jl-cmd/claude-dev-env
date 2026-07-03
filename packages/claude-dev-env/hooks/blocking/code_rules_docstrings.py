@@ -2942,26 +2942,26 @@ def _absent_entries(wrapper_summary: str, delegate_summary: str) -> list[str]:
     return absent_entry_texts
 
 
-def _top_level_defs_and_methods(
+def _top_level_definitions_and_methods(
     parsed_tree: ast.Module,
 ) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
-    all_defs: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    all_definitions_and_methods: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
     for each_node in parsed_tree.body:
         if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            all_defs.append(each_node)
+            all_definitions_and_methods.append(each_node)
         elif isinstance(each_node, ast.ClassDef):
-            all_defs.extend(
+            all_definitions_and_methods.extend(
                 each_member
                 for each_member in each_node.body
                 if isinstance(each_member, (ast.FunctionDef, ast.AsyncFunctionDef))
             )
-    return all_defs
+    return all_definitions_and_methods
 
 
 def _entries_by_function_name(parsed_tree: ast.Module) -> dict[str, tuple[int, str]]:
     entries_by_name: dict[str, tuple[int, str]] = {}
     ambiguous_names: set[str] = set()
-    for each_definition in _top_level_defs_and_methods(parsed_tree):
+    for each_definition in _top_level_definitions_and_methods(parsed_tree):
         if each_definition.name in entries_by_name:
             ambiguous_names.add(each_definition.name)
             continue
@@ -2994,7 +2994,7 @@ def _outbound_pointer_issues(parsed_tree: ast.Module, file_path: str) -> list[st
     parent_directory = Path(file_path).parent
     issues: list[str] = []
     delegate_entries_by_stem: dict[str, dict[str, tuple[int, str]]] = {}
-    for each_node in _top_level_defs_and_methods(parsed_tree):
+    for each_node in _top_level_definitions_and_methods(parsed_tree):
         wrapper_docstring = ast.get_docstring(each_node) or ""
         wrapper_summary = _leading_summary_line(wrapper_docstring)
         target_stem = _pointer_target_stem(wrapper_summary)
@@ -3048,7 +3048,7 @@ def _inbound_pointer_issues(
     all_entries_by_name: dict[str, tuple[int, str]],
 ) -> list[str]:
     issues: list[str] = []
-    for each_node in _top_level_defs_and_methods(neighbor_tree):
+    for each_node in _top_level_definitions_and_methods(neighbor_tree):
         wrapper_docstring = ast.get_docstring(each_node) or ""
         wrapper_summary = _leading_summary_line(wrapper_docstring)
         if _pointer_target_stem(wrapper_summary) != delegate_stem:
