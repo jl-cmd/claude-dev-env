@@ -115,30 +115,33 @@ Before any coding task, call the `initial_instructions` tool to load the Serena 
 
 ### Tool hierarchy for code navigation
 1. **Serena** — symbol-level navigation (declarations, references, implementations, rename)
-2. **Everything** (`everything_search`) — file-system search by name/path/extension
+2. **es.exe** — file-system search by name/path/extension/size/date (Everything CLI)
 3. **Grep/Glob** — content and pattern matching
 
-## Everything Search (MCP Tool)
+## Everything Search (es.exe CLI)
 
-This machine has **Everything (voidtools)** running with an HTTP server on port 54321.
-The `everything_search` MCP tool is available in every session.
+Search files by name, path, extension, size, or date with the Everything command-line tool `es.exe`. It reads the same live index the desktop app keeps, so results return instantly.
 
-### Use Everything for file-system searches
-Use `everything_search` for finding files by name, path, extension, size, or date. For content searches, use Grep — Everything's `content:` search is a fallback when Grep returns nothing.
+### Invocation and scope tokens
+Run `es.exe` with a scoped query — a project path, an `ext:`/`dm:`/`size:` filter, or a name pattern. The `es_exe_path_rewriter` hook resolves a `{project-name}` placeholder or a bare registry key from `~/.claude/project-paths.json` into its quoted absolute path before the command runs (it allows and rewrites, never blocks).
+
+### Hard limits
+- Scope every search. A bare whole-drive scan or a network-share sweep is out of bounds.
 
 ### Fallback order
-1. **Everything** (`everything_search`) — file-system search by name/path/extension/size/date, and content search
-2. **Grep** — complex regex content searches if Everything's `content:` returns nothing
-3. **Glob** — precise relative-path pattern matching within the current project
+1. **es.exe** — file-system search by name/path/extension/size/date
+2. **Debug** — try to find out why es.exe isn't working, and then prompt user for next-steps if you can't self-heal.
+3. **Grep** — file-content search (Grep owns content)
+4. **Glob** — relative-path pattern matching within the current project
 
 ### Search syntax quick reference
-- `ext:py` — find by extension (multiple: `ext:ts;js`)
+- `ext:py` — find by extension (multiple: `ext:ts | ext:js`)
 - `path:src\components` — match against full path
-- `count:10` — limit number of results to 10
 - `*.config.*` — wildcards
 - `size:>10mb` — size filter
 - `dm:today` / `dm:thisweek` — date modified filter
-- `content:keyword` — search inside file contents
-- `parent:node_modules package.json` — match parent folder
+- `-n 50` — limit results; `-sort dm` — sort by date modified
 - `foo bar` — AND, `foo | bar` — OR, `!foo` — NOT
 - `"exact phrase"` — literal match
+
+Full operator reference: `skills/everything-search/SKILL.md`.

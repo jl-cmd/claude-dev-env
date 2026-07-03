@@ -11,6 +11,11 @@ Search files instantly on Windows using the Everything command-line interface (e
 
 **Announce at start:** "I'm using the everything-search skill to find files."
 
+## Hard limits
+
+- **Scope every search.** Pass a project path, an `ext:`/`dm:`/`size:` filter, or a name pattern. A bare whole-drive scan or a network-share sweep is out of bounds.
+- **Fall back on failure.** When `es.exe` fails or returns nothing, try to start it. if that doesn't work, prompt the user to decide next steps: grep, debug further, etc.
+
 ## Instructions
 
 ### Command Syntax
