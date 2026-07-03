@@ -1,3 +1,13 @@
+---
+paths:
+  - "**/*.py"
+  - "**/*.mjs"
+  - "**/*.js"
+  - "**/*.ts"
+  - "**/*.ps1"
+  - "**/*.sh"
+---
+
 # New Production File Absent From Its Package Inventory
 
 **When this applies:** Any Write that creates a new production code file (`.py`, `.mjs`, `.js`, `.ts`, `.ps1`, `.sh`) in a directory whose sibling `README.md` or `CLAUDE.md` already names two or more of the directory's files in backticks, or in a skill's `scripts/` subdirectory whose parent `SKILL.md` Layout table already names two or more of those scripts.
