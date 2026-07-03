@@ -172,3 +172,30 @@ def test_main_writes_handoff_and_prints_dir(
         (tmp_path / "bugteam-pr-4" / "handoff.json").read_text(encoding="utf-8")
     )
     assert payload["completed_steps"] == ["preflight", "audit"]
+
+
+def test_main_returns_one_on_non_utf8_state_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """main exits 1 rather than crashing when --state-file holds non-UTF-8 bytes."""
+    _point_base_dir_at(monkeypatch, tmp_path)
+    bad_state = tmp_path / "loop-state.json"
+    bad_state.write_bytes(b"\xff\xfe not valid utf-8")
+    exit_code = write_handoff.main(
+        [
+            "--pr-number",
+            "4",
+            "--head-ref",
+            "feat/branch",
+            "--phase",
+            "teardown",
+            "--resume-command",
+            "claude --resume /autoconverge",
+            "--state-file",
+            str(bad_state),
+        ]
+    )
+    assert exit_code == 1
+    assert "write_handoff failed" in capsys.readouterr().err
