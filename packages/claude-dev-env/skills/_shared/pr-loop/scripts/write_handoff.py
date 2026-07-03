@@ -1,17 +1,18 @@
 """Write durable resume-handoff files for a pr-loop run.
 
-A converge loop that stops mid-run — a paused tick, a budget cutoff, a killed
-session — leaves the next session with no pointer to where it was. This writer
-drops that pointer in a durable place the OS temp sweep cannot purge: the run's
-own directory under ``~/.claude/runtime/pr-loop/<run-name>/``. It records the
-exact command to resume with, the phase the run reached, the steps already done,
-and a copy of the loop state, so a fresh session picks up without re-deriving any
-of it.
+A converge loop can stop mid-run: a paused tick, a budget cutoff, a killed
+session. The next session then has no pointer to where the run was. This writer
+drops that pointer somewhere the OS temp sweep cannot purge.
 
-Usage:
-  python scripts/write_handoff.py --pr-number 4 --head-ref feat/branch \
-      --phase tick --resume-command "claude --resume /pr-converge" \
-      [--state-file <PATH>] [--run-id <ID>] [--completed-steps a,b,c] [--note <TEXT>]
+::
+
+    write_handoff.py --pr-number <N> --head-ref <branch> --phase tick
+        --resume-command "claude --resume /pr-converge" [--state-file <PATH>]
+    writes:  ~/.claude/runtime/pr-loop/<run-name>/handoff.json + HANDOFF.md
+    plus:    state-copy.json  (only when --state-file is given)
+
+It records the resume command, the phase reached, the steps already done, and a
+copy of the loop state, so a fresh session picks up without re-deriving it.
 """
 
 from __future__ import annotations
@@ -27,8 +28,8 @@ _self_dir = Path(__file__).resolve().parent
 if str(_self_dir) not in sys.path:
     sys.path.insert(0, str(_self_dir))
 
-from _path_resolver import build_run_name
-from skills_pr_loop_constants.handoff_constants import (
+from _path_resolver import build_run_name  # noqa: E402
+from skills_pr_loop_constants.handoff_constants import (  # noqa: E402
     ATOMIC_STAGING_SUFFIX,
     COMPLETED_STEPS_SEPARATOR,
     DEFAULT_NEXT_STEP_LINE,

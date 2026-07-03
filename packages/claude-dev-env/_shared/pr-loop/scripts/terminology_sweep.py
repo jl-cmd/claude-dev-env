@@ -1,41 +1,22 @@
-"""Flag prose terms that near-miss an identifier a diff introduces.
+"""Flag a prose term that near-misses a code identifier a diff introduces.
 
-Picture a change that adds an API field named ``premium_interactions``. On the
-same branch, the docs call it the ``premium-request`` budget. The code and the
-prose now name one thing two ways. A reader who searches for one term never
-finds the other.
+A change adds the field ``premium_interactions`` while the same branch's docs
+call it the ``premium-request`` budget: two names for one thing, and a reader
+who searches one never finds the other.
 
-This sweep reads a unified diff and collects every multi-word identifier added
-on code lines. Then it scans each added prose line — a Markdown line in full, or
-a comment or string literal in a JavaScript or TypeScript file. A Python file
-contributes identifiers only. Its docstrings, strings, and comments go
-unscanned, since they name the module's own identifiers by design, not by drift.
-Test code files are skipped whole. It flags a hyphenated variant that shares an
-identifier's
-leading word but diverges in the tail. Each near-miss prints as one
-``file:line`` finding, and the run exits non-zero when any finding remains, so a
-commit gate can block on it.
+::
 
-Only hyphenated terms are candidates. A hyphen marks a deliberate compound —
-the author bound the words into one term — so a divergent tail there is a real
-naming drift. A bare spaced word run is ordinary prose: windowing every
-sentence that starts with an identifier's first word ("each attempt", "file
-exists") floods a vocabulary-dense change with false findings and gives the
-gate nothing actionable.
+    code adds:  premium_interactions          (the identifier)
+    prose adds: "the premium-request budget"   (a hyphenated term)
+    flag: premium-request  vs  premium_interactions   -- shared first token, tail diverges
+    ok:   premium-interactions                 -- exact hyphen form, no drift
+    ok:   read-only,  test files               -- English compound or plural, not drift
 
-A shared leading token alone is too weak a signal: ordinary English compounds
-such as ``read-only`` and ``data-driven`` collide with unrelated identifiers
-(``read_config``, ``data_source``) and would block a commit falsely. To keep the
-grounding case (``premium-request`` against ``premium_interactions``) firing
-while sparing those compounds, a candidate whose final token is a common English
-compound tail word (``only``, ``driven``, ``safe``, and the rest listed in
-``ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS``) is treated as ordinary prose, not a
-near-miss.
-
-Ordinary singular/plural prose is spared the same way. A candidate that differs
-from an identifier only by a singular/plural form of one or more tokens
-(``test files`` against ``test_file``, ``retry policies`` against
-``retry_policy``) is treated as the same term, not a near-miss.
+Only hyphenated prose is a candidate, since a hyphen marks a deliberate compound
+while a spaced word run is ordinary prose. Markdown scans in full; a JavaScript
+or TypeScript line contributes its comments and string literals; a Python file
+and every test code file contribute identifiers only. Each near-miss prints one
+``file:line`` finding and the run exits non-zero, so a commit gate blocks on it.
 """
 
 import argparse
@@ -215,8 +196,8 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
 
     A Markdown line is prose in full. A JavaScript or TypeScript line contributes
     its comment tail, its JSDoc continuation text, and the contents of its string
-    literals. A Python line contributes no
-    prose: production Python forbids inline comments, so a ``#`` on a Python line
+    literals. A Python line contributes no prose: production Python forbids
+    inline comments, so a ``#`` on a Python line
     is string content — a markdown template, a regex, an f-string — not a comment,
     and a module's own strings and docstrings near-miss its own identifiers by
     design rather than by drift. A Python file is scanned for identifiers, never

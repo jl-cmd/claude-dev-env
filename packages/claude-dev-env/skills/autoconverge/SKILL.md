@@ -169,6 +169,10 @@ python "$HOME/.claude/skills/_shared/pr-loop/scripts/write_handoff.py" \
 The checkpoints run in this order: `report`, `close`. Write the
 handoff after each one finishes.
 
+On teardown entry, when `~/.claude/runtime/pr-loop/bugteam-pr-<N>/handoff.json`
+exists, read its `completed_steps` and skip any checkpoint the list already
+names, so a resumed run performs only the checkpoints left.
+
 1. **When `converged` is true — build and publish the closing report.**
    Skip this entire step (report, artifact publish, comment, Chrome open) when the
    workflow returned a non-null `blocker`. Per-round live-dashboard refresh is out of
