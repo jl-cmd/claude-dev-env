@@ -325,3 +325,61 @@ def test_should_not_let_a_nested_duplicate_name_hide_the_top_level_entry(
         "A nested helper sharing the top-level function's name must not "
         f"delete the top-level entry from comparison, got: {issues!r}"
     )
+
+
+def _processor_source_with_nested_pointer_wrapper() -> str:
+    return (
+        "class PortalProcessor:\n"
+        "    async def _refresh_store_sections(self, page: object) -> bool:\n"
+        '        """Drive one theme end to end."""\n'
+        "        return True\n"
+        "\n"
+        "    def _run_nested_helper(self) -> bool:\n"
+        "        async def _refresh_store_sections() -> bool:\n"
+        '            """Apply App Info, Russia, review note, publication'
+        ' edits; full doc on ``listing_edit_flow``.\"\"\"\n'
+        "            return True\n"
+        "        return True\n"
+    )
+
+
+def test_should_not_flag_a_nested_wrapper_pointing_at_a_delegate(
+    tmp_path: Path,
+) -> None:
+    _create_target_flow(tmp_path, _target_flow_source())
+    checked_path = str(tmp_path / PROCESSOR_FILE_NAME)
+    issues = check_docstring_delegation_summary_enumeration_drift(
+        _processor_source_with_nested_pointer_wrapper(), checked_path
+    )
+    assert issues == [], (
+        "A function-local wrapper is not a top-level function or class "
+        f"method, so it must never be compared, got: {issues!r}"
+    )
+
+
+def _neighbor_source_with_nested_pointer_wrapper() -> str:
+    return (
+        "def _run_nested_helper() -> bool:\n"
+        "    async def _refresh_store_sections() -> bool:\n"
+        '        """Apply App Info, Russia, review note, publication edits;'
+        ' full doc on ``listing_edit_flow``.\"\"\"\n'
+        "        return True\n"
+        "    return True\n"
+    )
+
+
+def test_should_not_flag_a_nested_neighbor_wrapper_as_a_stranded_caller(
+    tmp_path: Path,
+) -> None:
+    neighbor_path = tmp_path / "portal_helpers.py"
+    neighbor_path.write_text(
+        _neighbor_source_with_nested_pointer_wrapper(), encoding="utf-8"
+    )
+    created_path = str(tmp_path / (TARGET_FLOW_STEM + ".py"))
+    issues = check_docstring_delegation_summary_enumeration_drift(
+        _target_flow_source(), created_path
+    )
+    assert issues == [], (
+        "A function-local wrapper in a neighbor module is not a pointing "
+        f"caller, so it must never be treated as stranded, got: {issues!r}"
+    )
