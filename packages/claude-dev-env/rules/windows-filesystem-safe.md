@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/*.py"
+  - "**/*.mjs"
+  - "**/*.js"
+  - "**/*.ts"
+---
+
 # Windows Filesystem Safety
 
 Never call `shutil.rmtree` with `ignore_errors=True` — Windows `ReadOnly` files (e.g. `.git/objects/pack/`) raise `PermissionError`, the flag swallows it, and the tree silently stays on disk. Use an `onexc` (Python >= 3.12) / `onerror` handler that runs `os.chmod(target_path, stat.S_IWRITE)` then retries the removal function the failure interrupted.

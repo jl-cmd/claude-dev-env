@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/*.md"
+---
+
 # Env-Var Summary Table Names a Code File That Reads the Variable
 
 **When this applies:** Any Write, Edit, or MultiEdit to a markdown (`.md`) file that carries an environment-variable summary table — a markdown table whose rows pair a `` `VARIABLE` `` name with the `` `code/file.py` `` that reads it.

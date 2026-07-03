@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/*.py"
+---
+
 # Orphan CSS Class in Generated Markup
 
 **When this applies:** Any Write or Edit to a production `.py` file that builds HTML by emitting `class="..."` attributes inside string literals and pairs them with a `<style>` block — in the same file or in a companion module beside it.
