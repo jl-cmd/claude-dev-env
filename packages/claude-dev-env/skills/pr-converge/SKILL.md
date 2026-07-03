@@ -86,7 +86,39 @@ so the next tick resumes with accurate state.
 Fields: `phase`, `tick_count`, `bugbot_clean_at`, `code_review_clean_at`,
 `bugteam_clean_at`, `copilot_clean_at`, `current_head`,
 `bugbot_acknowledged_at`, `bugbot_down`, `copilot_down`,
-`bugteam_skill_invoked_at_head`, `bugteam_skill_invoked_at_tick`.
+`bugteam_skill_invoked_at_head`, `bugteam_skill_invoked_at_tick`,
+`agents_session_id`, `persistent_agents`.
+
+## Persistent per-step agents
+
+Three step-scoped agents persist across ticks so their context carries
+forward: `fix_executor`, `thread_sweep`, and `copilot_watch`, recorded in
+the `persistent_agents` map
+([`reference/state-schema.md`](reference/state-schema.md)).
+
+- **Resume:** read `persistent_agents.<key>`. When an entry exists,
+  `SendMessage` to the stored `agent_id` with a tick payload that restates
+  the PR scope, `current_head`, the PR worktree path, this tick's findings
+  or threads, and the report-back contract. Bump `last_used_tick`, then
+  await completion.
+- **First spawn:** `Agent(subagent_type: "clean-coder", name:
+  "prc-fix-<PR#>")` — the `name` makes the agent a persistent teammate
+  that idles awaiting messages. Record `{agent_id, created_tick,
+  last_used_tick}` under the step key. Keep the spawn prompt fix-shaped,
+  never audit-shaped: the `pr_converge_bugteam_enforcer` hook blocks
+  audit-shaped clean-coder spawns during the BUGTEAM phase.
+- **Stale or dead id:** on a `SendMessage` failure, or no acknowledgment
+  within one bounded wait, drop the map entry, spawn a fresh named agent,
+  record it, and continue the tick. Never abort a tick on a stale id;
+  never retry the same dead id.
+- **Fresh every round (never persisted):** the Step 5 `/code-review --fix`
+  pass and the Step 6 bugteam audit (unbiased eyes each round; the
+  enforcer needs the formal Skill call), and every `code-verifier` — a
+  named code-verifier never fires `SubagentStop`, so no verdict mints (see
+  the named-`code-verifier` entry in the Gotchas list below).
+- **Shutdown:** at loop end (convergence or a stop condition), send each
+  persistent agent a shutdown request and clear `persistent_agents` before
+  the `pr-loop-lifecycle` Close.
 
 ## Gotchas
 
