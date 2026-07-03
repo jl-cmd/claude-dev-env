@@ -24,6 +24,7 @@ ALL_CONFIG_DIRECTORY_NAMES = frozenset(
         "bugteam_scripts_constants",
         "doc_gist_scripts_constants",
         "implement_scripts_constants",
+        "log_audit_constants",
         "dev_env_scripts_constants",
     }
 )
