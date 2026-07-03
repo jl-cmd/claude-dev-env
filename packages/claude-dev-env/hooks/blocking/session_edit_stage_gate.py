@@ -50,9 +50,12 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_COMMIT_VALUE_OPTION_SHORT_LETTERS,
     ALL_COMMIT_VALUE_OPTION_TOKENS,
     ALL_EDITED_FILE_PATHS_KEY,
+    ALL_GIT_GLOBAL_VALUE_OPTION_TOKENS,
+    ALL_STAGING_SUBCOMMAND_TOKENS,
     ALL_TRACKED_UNSTAGED_FILES_COMMAND,
     COMMIT_ALL_SHORT_FLAG_LETTER,
     COMMIT_SUBCOMMAND_TOKEN,
+    GIT_EXECUTABLE_TOKEN,
     DENY_FILE_BULLET_LINE_SEPARATOR,
     DENY_FILE_BULLET_PREFIX,
     DENY_PATHSPEC_SEPARATOR,
@@ -154,12 +157,105 @@ def _has_trailing_bypass_comment(bash_command: str) -> bool:
     return False
 
 
+def _split_into_command_segments(all_tokens: list[str]) -> list[list[str]]:
+    """Split a token list into segments at each shell command separator.
+
+    Args:
+        all_tokens: The tokens of the whole Bash command.
+
+    Returns:
+        One token list per command segment, in command order. A ``&&``, ``||``,
+        ``;``, ``|``, or ``&`` separator ends the current segment and starts the
+        next.
+    """
+    all_segments: list[list[str]] = []
+    current_segment: list[str] = []
+    for each_token in all_tokens:
+        if each_token in ALL_COMMAND_SEPARATOR_TOKENS:
+            all_segments.append(current_segment)
+            current_segment = []
+            continue
+        current_segment.append(each_token)
+    all_segments.append(current_segment)
+    return all_segments
+
+
+def _git_subcommand(all_segment_tokens: list[str]) -> str | None:
+    """Return the git subcommand of a segment, skipping git's global options.
+
+    A leading ``git`` may carry global options before its subcommand, and
+    ``-C``/``-c``/``--git-dir`` and their siblings each take a value — so
+    ``git -C path add file`` resolves to the ``add`` subcommand, not ``path``.
+
+    Args:
+        all_segment_tokens: One command segment's tokens.
+
+    Returns:
+        The subcommand token following ``git`` and its global options, or None
+        when the segment invokes no ``git`` subcommand.
+    """
+    if GIT_EXECUTABLE_TOKEN not in all_segment_tokens:
+        return None
+    git_index = all_segment_tokens.index(GIT_EXECUTABLE_TOKEN)
+    should_skip_next_value = False
+    for each_token in all_segment_tokens[git_index + 1 :]:
+        if should_skip_next_value:
+            should_skip_next_value = False
+            continue
+        if each_token in ALL_GIT_GLOBAL_VALUE_OPTION_TOKENS:
+            should_skip_next_value = True
+            continue
+        if each_token.startswith(SHORT_FLAG_PREFIX):
+            continue
+        return each_token
+    return None
+
+
+def _stages_paths_before_commit(bash_command: str) -> bool:
+    """Return whether a ``git add``/``git stage`` segment precedes the commit.
+
+    The common ``git add widget.py && git commit -m update`` idiom stages the
+    edited file in its own segment right before the commit, so the file is
+    staged by the time the commit runs even though it reads as unstaged when the
+    gate inspects the index. A staging segment that runs after the commit
+    segment stages nothing for that commit and does not count.
+
+    Args:
+        bash_command: The Bash tool command string.
+
+    Returns:
+        True when a ``git add`` or ``git stage`` segment runs before the commit
+        segment; False when the command will not tokenize or holds no such
+        segment.
+    """
+    try:
+        all_tokens = shlex.split(bash_command, posix=True)
+    except ValueError:
+        return False
+    all_segments = _split_into_command_segments(all_tokens)
+    commit_segment_index = next(
+        (
+            each_index
+            for each_index, each_segment in enumerate(all_segments)
+            if _git_subcommand(each_segment) == COMMIT_SUBCOMMAND_TOKEN
+        ),
+        None,
+    )
+    if commit_segment_index is None:
+        return False
+    return any(
+        _git_subcommand(each_segment) in ALL_STAGING_SUBCOMMAND_TOKENS
+        for each_segment in all_segments[:commit_segment_index]
+    )
+
+
 def _commit_bypasses_stage_check(bash_command: str) -> bool:
     """Return whether the commit intentionally opts out of the stage check.
 
-    A ``# partial-commit`` trailing comment, a ``-a``/``--all`` flag, and a
-    pathspec argument (a ``--`` separator or a bare positional path) each mark
-    a deliberate partial commit that the gate leaves alone.
+    A ``# partial-commit`` trailing comment, a ``-a``/``--all`` flag, a pathspec
+    argument (a ``--`` separator or a bare positional path), and a preceding
+    ``git add``/``git stage`` segment in the same compound command each mark a
+    deliberate partial commit that the gate leaves alone.
 
     Args:
         bash_command: The Bash tool command string.
@@ -168,6 +264,8 @@ def _commit_bypasses_stage_check(bash_command: str) -> bool:
         True when the commit opts out of the stage check; False otherwise.
     """
     if _has_trailing_bypass_comment(bash_command):
+        return True
+    if _stages_paths_before_commit(bash_command):
         return True
     should_skip_next_value = False
     for each_token in _commit_argument_tokens(bash_command):

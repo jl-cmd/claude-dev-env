@@ -201,6 +201,53 @@ def test_allows_clustered_all_and_message_flags(tmp_path: Path) -> None:
     assert completed_hook.stdout.strip() == ""
 
 
+def test_allows_commit_when_add_stages_in_same_command(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "git add widget.py && git commit -m update",
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout.strip() == ""
+
+
+def test_allows_commit_when_git_dash_c_add_stages_in_same_command(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        f'git -C "{repository_root}" add widget.py && git commit -m update',
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout.strip() == ""
+
+
+def test_denies_commit_when_add_runs_after_commit_segment(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "git commit -m update ; git add widget.py",
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    denial = parse_denial(completed_hook.stdout)
+    assert denial["permissionDecision"] == "deny"
+    assert "widget.py" in denial["permissionDecisionReason"]
+
+
 def test_allows_pathspec_commit(tmp_path: Path) -> None:
     repository_root, temp_directory, home_directory = _make_directories(tmp_path)
     tracked_file = prepare_repository_with_unstaged_edit(repository_root)
