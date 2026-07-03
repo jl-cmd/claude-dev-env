@@ -160,6 +160,47 @@ def test_allows_commit_all_flag(tmp_path: Path) -> None:
     assert completed_hook.stdout.strip() == ""
 
 
+def test_denies_commit_with_no_space_message_containing_letter_a(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        'git commit -m"add feature"',
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    denial = parse_denial(completed_hook.stdout)
+    assert denial["permissionDecision"] == "deny"
+    assert "widget.py" in denial["permissionDecisionReason"]
+
+
+def test_denies_commit_with_no_space_message_option_form(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "git commit -mupdate", _SESSION_ID, repository_root, temp_directory, home_directory
+    )
+    assert completed_hook.returncode == 0
+    denial = parse_denial(completed_hook.stdout)
+    assert denial["permissionDecision"] == "deny"
+    assert "widget.py" in denial["permissionDecisionReason"]
+
+
+def test_allows_clustered_all_and_message_flags(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "git commit -am update", _SESSION_ID, repository_root, temp_directory, home_directory
+    )
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout.strip() == ""
+
+
 def test_allows_pathspec_commit(tmp_path: Path) -> None:
     repository_root, temp_directory, home_directory = _make_directories(tmp_path)
     tracked_file = prepare_repository_with_unstaged_edit(repository_root)
