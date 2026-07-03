@@ -1,30 +1,22 @@
-"""Flag prose terms that near-miss an identifier a diff introduces.
+"""Flag a prose term that names a code identifier a hair differently.
 
-Picture a change that adds an API field named ``premium_interactions``. On the
-same branch, the docs call it the ``premium-request`` budget. The code and the
-prose now name one thing two ways. A reader who searches for one term never
-finds the other.
+A change adds the field ``premium_interactions`` while the same branch's docs
+call it the ``premium-request`` budget: one thing, two names, and a reader who
+searches one never finds the other.
 
-This sweep reads a unified diff and collects every multi-word identifier added
-on code lines. Then it scans each added prose line — a Markdown line, or a
-comment, docstring, or string inside a code file. It flags a hyphen or space
-variant that shares an identifier's leading word but diverges in the tail. Each
-near-miss prints as one ``file:line`` finding, and the run exits non-zero when
-any finding remains, so a commit gate can block on it.
+::
 
-A shared leading token alone is too weak a signal: ordinary English compounds
-such as ``read-only`` and ``data-driven`` collide with unrelated identifiers
-(``read_config``, ``data_source``) and would block a commit falsely. To keep the
-grounding case (``premium-request`` against ``premium_interactions``) firing
-while sparing those compounds, a candidate whose final token is a common English
-compound tail word (``only``, ``driven``, ``safe``, and the rest listed in
-``ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS``) is treated as ordinary prose, not a
-near-miss.
+    code adds:  premium_interactions            the identifier
+    prose adds: the premium-request budget       a hyphenated term
+    flag: premium-request  vs  premium_interactions  -- shared first word, tail diverges
+    ok:   premium-interactions                   -- exact hyphen form, agrees
+    ok:   read-only,  test files,  to a file     -- English compound, plural, or stopword
 
-Ordinary singular/plural prose is spared the same way. A candidate that differs
-from an identifier only by a singular/plural form of one or more tokens
-(``test files`` against ``test_file``, ``retry policies`` against
-``retry_policy``) is treated as the same term, not a near-miss.
+The sweep reads a unified diff, collects the multi-word identifiers added on
+code lines, and scans each added prose line for a hyphen or space variant that
+shares an identifier's leading word but diverges after it. It spares ordinary
+prose: English compound tails, singular/plural forms, stopword windows, and
+words that are themselves tokens of another introduced identifier.
 """
 
 import argparse
@@ -42,7 +34,11 @@ from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX,
     ALL_PROSE_STOPWORD_TOKENS,
     ALL_STRING_ESCAPE_SEQUENCES,
+    ALL_TEST_FILE_NAME_INFIX_MARKERS,
     GIT_BASE_TREE_REVISION,
+    IDENTIFIER_TOKEN_SEPARATOR,
+    PROSE_WINDOW_WORD_SEPARATOR,
+    TEST_DIRECTORY_PATH_SEGMENT,
     TEST_FILE_PREFIX,
     TEST_FILE_SUFFIX,
     ALL_DIFF_FILE_PATH_STRIP_PREFIXES,
@@ -205,20 +201,43 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
 
 
 def _is_test_file(file_path: str) -> bool:
-    """Return whether a diff path names a test module.
+    """Return whether a diff path names a test code module.
 
     A test module's string literals hold fixture data — embedded diffs,
     generated source, file trees — not documentation prose, so the sweep
-    reads only its comments and JSDoc lines.
+    reads only its comments and JSDoc lines. A ``quota.test.mjs``, a
+    ``layout.spec.ts``, and a ``tests/fixtures.py`` are all test modules, so
+    every one of these paths counts::
+
+        tests/fixtures.py        -- under a tests/ directory
+        api/test_quota.py        -- test_ prefixed stem
+        api/quota_test.py        -- _test suffixed stem
+        api/quota.test.mjs       -- .test. name marker
+        api/layout.spec.ts       -- .spec. name marker
+
+    A non-code path (a Markdown design doc) is prose worth scanning whatever
+    its name, so it is never a test module here.
 
     Args:
         file_path: The diff path of the added line's file.
 
     Returns:
-        True for a ``test_*`` or ``*_test`` module, False otherwise.
+        True for a code file under a ``tests`` directory, or one whose name
+        carries a ``test_`` prefix, a ``_test`` suffix, or a
+        ``_test.``/``.test.``/``.spec.`` marker. False for any other path.
     """
-    stem = Path(file_path).stem
-    return stem.startswith(TEST_FILE_PREFIX) or stem.endswith(TEST_FILE_SUFFIX)
+    if _file_extension(file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+        return False
+    normalized_path = file_path.replace("\\", "/").lower()
+    if TEST_DIRECTORY_PATH_SEGMENT in f"/{normalized_path}":
+        return True
+    basename = normalized_path.rsplit("/", 1)[-1]
+    stem = Path(normalized_path).stem
+    if stem.startswith(TEST_FILE_PREFIX) or stem.endswith(TEST_FILE_SUFFIX):
+        return True
+    return any(
+        each_marker in basename for each_marker in ALL_TEST_FILE_NAME_INFIX_MARKERS
+    )
 
 
 def _comment_fragments(line_text: str) -> list[str]:
@@ -299,7 +318,8 @@ def _spaced_candidates(
         for each_identifier in identifiers_by_first_token.get(each_word, []):
             window = tuple(all_words[each_index : each_index + len(each_identifier)])
             if len(window) == len(each_identifier):
-                all_candidates.append((" ".join(window), window))
+                display = PROSE_WINDOW_WORD_SEPARATOR.join(window)
+                all_candidates.append((display, window))
     return all_candidates
 
 
@@ -381,9 +401,7 @@ def _near_miss_identifier(
         return None
     if candidate_tuple[-1] in ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS:
         return None
-    if any(
-        each_word in ALL_PROSE_STOPWORD_TOKENS for each_word in candidate_tuple
-    ):
+    if any(each_word in ALL_PROSE_STOPWORD_TOKENS for each_word in candidate_tuple):
         return None
     for each_identifier in identifiers_by_first_token.get(candidate_tuple[0], []):
         if len(each_identifier) != len(candidate_tuple):
@@ -448,7 +466,7 @@ def _findings_for_line(
                     file_path=file_path,
                     line_number=line_number,
                     candidate=each_display,
-                    identifier="_".join(matched_identifier),
+                    identifier=IDENTIFIER_TOKEN_SEPARATOR.join(matched_identifier),
                 )
             )
     return all_findings
@@ -473,9 +491,7 @@ def sweep_diff(
     all_added_lines = _parse_added_lines(diff_text)
     all_identifier_tuples, _ = _collect_introduced_identifiers(all_added_lines)
     all_identifier_tokens = frozenset(
-        each_token
-        for each_tuple in all_identifier_tuples
-        for each_token in each_tuple
+        each_token for each_tuple in all_identifier_tuples for each_token in each_tuple
     )
     introduced_tuples = frozenset(
         each_tuple

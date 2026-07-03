@@ -1,7 +1,6 @@
 """Behavioral tests for the commit-time terminology sweep."""
 
 import importlib.util
-import os
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -26,19 +25,7 @@ main = sweep_module.main
 parse_added_lines = sweep_module._parse_added_lines
 
 
-def _hermetic_git_environment() -> dict[str, str]:
-    """Return the process environment with every GIT_ variable removed.
-
-    A caller such as a commit gate can run this suite with GIT_DIR or
-    GIT_WORK_TREE exported. A fixture git command inheriting those would
-    escape its temporary directory and touch the caller's repository, so
-    every fixture subprocess uses this scrubbed environment instead.
-    """
-    return {
-        each_key: each_value
-        for each_key, each_value in os.environ.items()
-        if not each_key.startswith("GIT_")
-    }
+_hermetic_git_environment = sweep_module.repository_environment
 
 
 def _init_git_repository(repository_path: Path) -> None:
@@ -48,12 +35,12 @@ def _init_git_repository(repository_path: Path) -> None:
         ["git", "config", "user.name", "Test"],
     ):
         subprocess.run(
-        each_command,
-        cwd=repository_path,
-        check=True,
-        capture_output=True,
-        env=_hermetic_git_environment(),
-    )
+            each_command,
+            cwd=repository_path,
+            check=True,
+            capture_output=True,
+            env=_hermetic_git_environment(),
+        )
 
 
 CODE_AND_PROSE_DIFF = (
@@ -281,9 +268,7 @@ def test_main_exits_zero_when_clean(tmp_path: Path) -> None:
 
 def test_staged_terminology_findings_flags_staged_prose(tmp_path: Path) -> None:
     _init_git_repository(tmp_path)
-    (tmp_path / "quota.py").write_text(
-        "premium_interactions = 5\n", encoding="utf-8"
-    )
+    (tmp_path / "quota.py").write_text("premium_interactions = 5\n", encoding="utf-8")
     (tmp_path / "README.md").write_text(
         "The premium-request budget gates the run.\n", encoding="utf-8"
     )
@@ -325,7 +310,8 @@ def test_parse_added_lines_counts_pre_increment_content_as_added_line() -> None:
     all_added_lines = parse_added_lines(diff_with_pre_increment)
 
     assert [
-        (each_line_number, each_text) for _, each_line_number, each_text in all_added_lines
+        (each_line_number, each_text)
+        for _, each_line_number, each_text in all_added_lines
     ] == [
         (1, "++counter;"),
         (2, "let first_total = read_first_value();"),
@@ -464,5 +450,37 @@ def test_skips_identifier_shaped_string_literals() -> None:
         "@@ -0,0 +1,2 @@\n"
         "+icon_entry = 1\n"
         '+MASTER_UID = "HOMESCREEN_APPICONS_APP_ICON_IMAGE"\n'
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_skips_string_literal_fragments_in_dot_test_named_files() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+premium_interactions = 5\n"
+        "diff --git a/api/quota.test.mjs b/api/quota.test.mjs\n"
+        "--- a/api/quota.test.mjs\n"
+        "+++ b/api/quota.test.mjs\n"
+        "@@ -0,0 +1,1 @@\n"
+        '+const fixture_line = "the premium-request budget gates the run"\n'
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_skips_string_literal_fragments_in_tests_directory_files() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+premium_interactions = 5\n"
+        "diff --git a/tests/fixtures.py b/tests/fixtures.py\n"
+        "--- a/tests/fixtures.py\n"
+        "+++ b/tests/fixtures.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        '+sample_line = "the premium-request budget gates the run"\n'
     )
     assert sweep_diff(diff) == []
