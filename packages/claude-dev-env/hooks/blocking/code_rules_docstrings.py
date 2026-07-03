@@ -87,6 +87,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MINIMUM_NAMED_MARKS_FOR_PROSE_ENUMERATION,
     MINIMUM_PUBLIC_CHECKS_FOR_MODULE_DOCSTRING_ROSTER,
     MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH,
+    MINIMUM_RANGE_ARGS_FOR_SPAN,
     MINIMUM_SIBLING_OCCURRENCES_FOR_SHARED_TOKEN,
     MINIMUM_TOKENS_FOR_DISPATCH_CALLEE,
     MINIMUM_TUPLE_MEMBERS_FOR_DOCSTRING_ENUMERATION,
@@ -2464,12 +2465,12 @@ def _argument_prose_scopes_a_single_line(argument_prose: str) -> bool:
     )
 
 
-def _call_node_builds_two_argument_range(call_node: ast.Call) -> bool:
+def _call_node_builds_explicit_start_range(call_node: ast.Call) -> bool:
     callee = call_node.func
     return (
         isinstance(callee, ast.Name)
         and callee.id == "range"
-        and len(call_node.args) >= MINIMUM_TOKENS_FOR_DISPATCH_CALLEE
+        and len(call_node.args) >= MINIMUM_RANGE_ARGS_FOR_SPAN
     )
 
 
@@ -2481,7 +2482,7 @@ def _function_body_scopes_a_span_by_intersection(
     for each_node in ast.walk(function_node):
         if not isinstance(each_node, ast.Call):
             continue
-        if _call_node_builds_two_argument_range(each_node):
+        if _call_node_builds_explicit_start_range(each_node):
             builds_range_span = True
         if _call_callee_name(each_node) in ALL_DOCSTRING_SPAN_RANGE_BODY_CALLEE_NAMES:
             calls_span_scoper = True
@@ -2501,11 +2502,12 @@ def check_docstring_args_single_line_scope_vs_span(content: str, file_path: str)
     is the deterministic slice of Category O6 docstring-vs-implementation drift
     for an Args single-line scope claim disagreeing with a span-intersection body.
 
-    An entry is left alone when its prose says "any line of" / "any line in" its
-    span, since that wording matches the span body. The body is judged a
-    span-intersection scoper only when it both builds a two-argument ``range(...)``
-    and calls a known span scoper, so a body that scopes by a single line never
-    trips the check. Hook infrastructure is in scope here — the import-sort gate
+    An entry is left alone when its prose says "any line of" / "any line in" /
+    "any of its lines" / "any span line" about its span, since that wording
+    matches the span body. The body is judged a span-intersection scoper only
+    when it both builds an explicit-start ``range(...)`` (two or more
+    arguments) and calls a known span scoper, so a body that scopes by a
+    single line never trips the check. Hook infrastructure is in scope here — the import-sort gate
     that carries this drift class is itself a hook — and test files are exempt.
 
     Args:
