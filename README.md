@@ -208,6 +208,7 @@ Slash commands for common workflows.
 | `bugteam` | Autonomous audit-and-fix loop using Claude Code's agent teams feature (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and v2.1.32+); fresh teammates per loop, 10-loop cap, scoped permission grant/revoke wrapping the cycle |
 | `reviewer-gates` | Availability gates for PR-loop reviewers: CLAUDE_REVIEWS_DISABLED opt-out parse, once-per-run Copilot quota pre-check, and the Cursor Bugbot trigger/acknowledge/CI-detect flow |
 | `pr-scope-resolve` | Resolves a PR-loop skill's audit/fix target (owner, repo, number, refs, head SHA) through one MCP-first ladder with a single canonical refusal line |
+| `pr-fix-protocol` | Applies reviewer findings as verified fixes and drives unresolved threads to zero: executor choice, the shared 13-step fix sequence, atomic reply-and-resolve, and post-push state resets |
 
 ### Hooks
 
