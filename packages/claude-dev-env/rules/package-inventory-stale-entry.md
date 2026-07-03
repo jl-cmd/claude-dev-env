@@ -10,7 +10,7 @@ paths:
 
 # New Production File Absent From Its Package Inventory
 
-**When this applies:** Any Write that creates a new production code file (`.py`, `.mjs`, `.js`, `.ts`, `.ps1`, `.sh`) in a directory whose sibling `README.md` or `CLAUDE.md` already names two or more of the directory's files in backticks, or in a skill's `scripts/` subdirectory whose parent `SKILL.md` Layout table already names two or more of those scripts.
+**When this applies:** Any Write that creates a new production code file (`.py`, `.mjs`, `.js`, `.ts`, `.ps1`, `.sh`) in a directory whose sibling `README.md` or `CLAUDE.md` already names two or more of the directory's files in backticks, in a directory whose own `SKILL.md` names two or more of the directory's files, or in a skill's `scripts/` subdirectory whose parent `SKILL.md` Layout table already names two or more of those scripts.
 
 ## Rule
 
