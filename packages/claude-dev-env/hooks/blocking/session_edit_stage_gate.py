@@ -305,20 +305,26 @@ def _staging_segment_covers_all_paths(all_segment_tokens: list[str]) -> bool:
 
     ``git add -A``/``--all``/``-u``/``--update`` and ``git add .``/``git add :/``
     each stage the whole working tree, so any file the session edited is staged
-    by the time the commit runs.
+    by the time the commit runs. A ``--`` ends option parsing: every token after
+    it is a path, so ``git add -- -A`` stages a file named ``-A`` and is not a
+    stage-all form.
 
     Args:
         all_segment_tokens: One ``git add``/``git stage`` segment's tokens.
 
     Returns:
-        True when the segment carries a stage-all flag or a stage-all pathspec;
-        False otherwise.
+        True when the segment carries a stage-all flag before any ``--`` or a
+        stage-all pathspec; False otherwise.
     """
     subcommand_index = _git_subcommand_index(all_segment_tokens)
     if subcommand_index is None:
         return False
+    has_seen_end_of_options = False
     for each_token in all_segment_tokens[subcommand_index + 1 :]:
-        if each_token in ALL_STAGE_ALL_ADD_FLAG_TOKENS:
+        if not has_seen_end_of_options and each_token == LONG_FLAG_PREFIX:
+            has_seen_end_of_options = True
+            continue
+        if not has_seen_end_of_options and each_token in ALL_STAGE_ALL_ADD_FLAG_TOKENS:
             return True
         if each_token in ALL_STAGE_ALL_ADD_PATHSPEC_TOKENS:
             return True
@@ -345,44 +351,60 @@ def _staged_positional_path_tokens(all_staging_segments: list[list[str]]) -> lis
 
     A specific-path ``git add README.md`` names the paths it stages as
     positional tokens after the subcommand, so only those paths are staged by
-    the time the commit runs. Flag tokens (``--``, ``-A``) are not paths.
+    the time the commit runs. A ``--`` ends option parsing: before it, a
+    ``-``-prefixed token is a flag; after it, every token is a path, so
+    ``git add -- -weird.py`` stages the file ``-weird.py``.
 
     Args:
         all_staging_segments: The staging segments that run before the commit.
 
     Returns:
-        Every non-flag token following the staging subcommand, across all
-        segments, in command order.
+        Every path token following the staging subcommand, across all segments,
+        in command order.
     """
     all_path_tokens: list[str] = []
     for each_segment in all_staging_segments:
         subcommand_index = _git_subcommand_index(each_segment)
         if subcommand_index is None:
             continue
+        has_seen_end_of_options = False
         for each_token in each_segment[subcommand_index + 1 :]:
-            if each_token.startswith(SHORT_FLAG_PREFIX):
+            if not has_seen_end_of_options and each_token == LONG_FLAG_PREFIX:
+                has_seen_end_of_options = True
+                continue
+            if not has_seen_end_of_options and each_token.startswith(SHORT_FLAG_PREFIX):
                 continue
             all_path_tokens.append(each_token)
     return all_path_tokens
 
 
 def _staged_path_keys(
-    all_staging_segments: list[list[str]], repository_root: Path
+    all_staging_segments: list[list[str]],
+    working_directory: str | None,
+    repository_root: Path,
 ) -> set[str]:
     """Return the case-folded resolved keys the specific-path staging segments stage.
 
+    A ``git add`` path token is relative to the command's working directory, so
+    it resolves against ``working_directory`` when that is known and against the
+    repository root otherwise.
+
     Args:
         all_staging_segments: The staging segments that run before the commit.
-        repository_root: Repository root the positional path tokens resolve against.
+        working_directory: The command's resolved git working directory, or None
+            when the command runs in the hook's own working directory.
+        repository_root: Repository root used as the base when no working
+            directory is known.
 
     Returns:
         The case-folded resolved absolute paths of every specific staged path
         token, matching the key shape used for session-edited and unstaged paths.
     """
+    base_directory = Path(working_directory) if working_directory is not None else repository_root
     staged_keys: set[str] = set()
     for each_token in _staged_positional_path_tokens(all_staging_segments):
         try:
-            resolved_key = str((repository_root / each_token).resolve()).casefold()
+            resolved_key = str((base_directory / each_token).resolve()).casefold()
         except OSError:
             continue
         staged_keys.add(resolved_key)
@@ -608,7 +630,9 @@ def main() -> None:
     repository_relative_by_key = _tracked_unstaged_paths(repository_root)
     if repository_relative_by_key is None:
         sys.exit(0)
-    staged_path_keys = _staged_path_keys(preceding_staging_segments, repository_root)
+    staged_path_keys = _staged_path_keys(
+        preceding_staging_segments, working_directory, repository_root
+    )
     offending_paths = _offending_repository_relative_paths(
         session_edited_keys, repository_relative_by_key, staged_path_keys
     )

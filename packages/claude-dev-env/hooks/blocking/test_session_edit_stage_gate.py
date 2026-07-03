@@ -329,6 +329,47 @@ def test_allows_commit_when_stage_all_add_precedes(tmp_path: Path) -> None:
     assert completed_hook.stdout.strip() == ""
 
 
+def test_allows_commit_when_dash_named_path_staged_after_end_of_options(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    initialize_repository(repository_root)
+    tracked_file = repository_root / "-weird.py"
+    tracked_file.write_text("x = 1\n", encoding="utf-8")
+    run_git(repository_root, "add", "--", "-weird.py")
+    run_git(repository_root, "commit", "-m", "add weird")
+    tracked_file.write_text("x = 2\n", encoding="utf-8")
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "git add -- -weird.py && git commit -m update",
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout.strip() == ""
+
+
+def test_denies_when_dash_a_filename_staged_after_end_of_options(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    dash_a_file = repository_root / "-A"
+    dash_a_file.write_text("a\n", encoding="utf-8")
+    run_git(repository_root, "add", "--", "-A")
+    run_git(repository_root, "commit", "-m", "add dash-a file")
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "git add -- -A && git commit -m update",
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    denial = parse_denial(completed_hook.stdout)
+    assert denial["permissionDecision"] == "deny"
+    assert "widget.py" in denial["permissionDecisionReason"]
+
+
 def test_denies_commit_when_add_runs_after_commit_segment(tmp_path: Path) -> None:
     repository_root, temp_directory, home_directory = _make_directories(tmp_path)
     tracked_file = prepare_repository_with_unstaged_edit(repository_root)
