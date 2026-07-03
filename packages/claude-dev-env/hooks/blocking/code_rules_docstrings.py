@@ -2747,7 +2747,7 @@ def check_docstring_prose_wall_without_illustration(content: str, file_path: str
         A calm voyage versus a halted one::                  ok: a worked example
             a lone vessel -- halted -> marked mid-voyage
 
-    Past the sentence limit with no ``::`` listing and no ``>>>`` doctest, this
+    Past the prose-line limit with no ``::`` listing and no ``>>>`` doctest, this
     fires. A narrative that shows a worked example, or one at the limit, passes.
 
     Args:
