@@ -6,11 +6,14 @@ prose now name one thing two ways. A reader who searches for one term never
 finds the other.
 
 This sweep reads a unified diff and collects every multi-word identifier added
-on code lines. Then it scans each added prose line — a Markdown line, or a
-comment, docstring, or string inside a code file. It flags a hyphenated term
-that shares an identifier's leading word but diverges in the tail. Each
-near-miss prints as one ``file:line`` finding, and the run exits non-zero when
-any finding remains, so a commit gate can block on it.
+on code lines. Then it scans each added prose line — a Markdown line in full, or
+a comment in a JavaScript or TypeScript file. A Python file contributes
+identifiers only. Its docstrings, strings, and comments go unscanned, since they
+name the module's own identifiers by design, not by drift. Test files are
+skipped whole. It flags a hyphenated variant that shares an identifier's
+leading word but diverges in the tail. Each near-miss prints as one
+``file:line`` finding, and the run exits non-zero when any finding remains, so a
+commit gate can block on it.
 
 Only hyphenated terms are candidates. A hyphen marks a deliberate compound —
 the author bound the words into one term — so a divergent tail there is a real
@@ -35,6 +38,7 @@ from an identifier only by a singular/plural form of one or more tokens
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -48,6 +52,7 @@ from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     ALL_DIFF_FILE_PATH_STRIP_PREFIXES,
     ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND,
     ALL_SWEEP_CODE_FILE_EXTENSIONS,
+    ALL_TEST_FILE_NAME_INFIX_MARKERS,
     CAMEL_CASE_IDENTIFIER_PATTERN,
     CAMEL_CASE_WORD_PATTERN,
     DIFF_ADDED_LINE_PREFIX,
@@ -64,10 +69,12 @@ from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     MARKDOWN_FILE_EXTENSION,
     MINIMUM_IDENTIFIER_TOKEN_COUNT,
     PYTHON_COMMENT_MARKER,
+    PYTHON_FILE_EXTENSION,
     SNAKE_CASE_IDENTIFIER_PATTERN,
-    STRING_LITERAL_CONTENT_PATTERN,
     TERMINOLOGY_FINDING_TEMPLATE,
     TERMINOLOGY_SWEEP_DESCRIPTION,
+    TEST_DIRECTORY_PATH_SEGMENT,
+    TEST_FILE_NAME_PREFIX,
 )
 
 IdentifierTuple = tuple[str, ...]
@@ -124,6 +131,30 @@ def _file_extension(file_path: str) -> str:
     return Path(file_path).suffix.lower()
 
 
+def _is_test_file(file_path: str) -> bool:
+    """Return True when the diff path is a test file the sweep should skip.
+
+    A test file's prose is scaffolding: its docstrings and string fixtures name
+    the identifiers under test on purpose, so scanning it only adds noise.
+
+    Args:
+        file_path: The repository-relative diff path.
+
+    Returns:
+        True for a path under a ``tests`` directory, a ``test_`` prefixed file,
+        or a file whose name carries a ``_test.``/``.test.``/``.spec.`` marker.
+    """
+    normalized_path = file_path.replace("\\", "/").lower()
+    if TEST_DIRECTORY_PATH_SEGMENT in f"/{normalized_path}":
+        return True
+    basename = normalized_path.rsplit("/", 1)[-1]
+    if basename.startswith(TEST_FILE_NAME_PREFIX):
+        return True
+    return any(
+        each_marker in basename for each_marker in ALL_TEST_FILE_NAME_INFIX_MARKERS
+    )
+
+
 def _identifier_token_tuple(identifier: str) -> IdentifierTuple:
     """Return the lowercase word tokens of a snake_case or camelCase identifier."""
     if "_" in identifier:
@@ -175,8 +206,13 @@ def _collect_introduced_identifiers(
 def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     """Return the prose fragments of an added line worth scanning for terms.
 
-    A Markdown line is prose in full. A code line contributes its comment tail,
-    its JSDoc continuation text, and the contents of its string literals.
+    A Markdown line is prose in full. A JavaScript or TypeScript line contributes
+    its comment tail and its JSDoc continuation text. A Python line contributes no
+    prose: production Python forbids inline comments, so a ``#`` on a Python line
+    is string content — a markdown template, a regex, an f-string — not a comment,
+    and a module's own strings and docstrings near-miss its own identifiers by
+    design rather than by drift. A Python file is scanned for identifiers, never
+    for prose.
 
     Args:
         file_path: The path the added line belongs to.
@@ -185,16 +221,18 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     Returns:
         The prose fragments to scan for near-miss terms.
     """
-    if _file_extension(file_path) == MARKDOWN_FILE_EXTENSION:
+    extension = _file_extension(file_path)
+    if extension == MARKDOWN_FILE_EXTENSION:
         return [line_text]
-    if _file_extension(file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+    if extension not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+        return []
+    if extension == PYTHON_FILE_EXTENSION:
         return []
     all_fragments: list[str] = []
     stripped_line = line_text.strip()
     if stripped_line.startswith(JSDOC_CONTINUATION_MARKER):
         all_fragments.append(stripped_line)
     all_fragments.extend(_comment_fragments(line_text))
-    all_fragments.extend(_string_literal_fragments(line_text))
     return all_fragments
 
 
@@ -211,22 +249,6 @@ def _comment_fragments(line_text: str) -> list[str]:
         all_fragments.append(
             line_text[javascript_marker_index + len(JAVASCRIPT_LINE_COMMENT_MARKER) :]
         )
-    return all_fragments
-
-
-def _string_literal_fragments(line_text: str) -> list[str]:
-    """Return the contents of every quoted string literal on a code line."""
-    all_fragments: list[str] = []
-    for each_match in STRING_LITERAL_CONTENT_PATTERN.finditer(line_text):
-        each_content = next(
-            (
-                each_group
-                for each_group in each_match.groups()
-                if each_group is not None
-            ),
-            "",
-        )
-        all_fragments.append(each_content)
     return all_fragments
 
 
@@ -352,7 +374,11 @@ def sweep_diff(diff_text: str) -> list[str]:
     Returns:
         One finding string per near-miss term on an added prose line.
     """
-    all_added_lines = _parse_added_lines(diff_text)
+    all_added_lines = [
+        each_added_line
+        for each_added_line in _parse_added_lines(diff_text)
+        if not _is_test_file(each_added_line[0])
+    ]
     all_identifier_tuples, identifiers_by_first_token = _collect_introduced_identifiers(
         all_added_lines
     )
@@ -370,6 +396,21 @@ def sweep_diff(diff_text: str) -> list[str]:
             )
         )
     return all_findings
+
+
+def _git_environment() -> dict[str, str]:
+    """Return the process environment with every GIT_ variable removed.
+
+    A git commit hook runs this sweep with GIT_INDEX_FILE pointed at the commit
+    index. Stripping every GIT_ variable makes ``git diff --cached`` read the
+    repository's own index, so the sweep sees the staged diff of the repository
+    it was handed rather than an ambient override.
+    """
+    return {
+        each_key: each_setting
+        for each_key, each_setting in os.environ.items()
+        if not each_key.startswith("GIT_")
+    }
 
 
 def staged_terminology_findings(repository_root: Path) -> list[str]:
@@ -391,6 +432,7 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
         errors="replace",
         timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
         check=False,
+        env=_git_environment(),
     )
     if diff_process.returncode != 0:
         return []
