@@ -43,6 +43,15 @@ working directory routes into the PR's repo for local work and returns to
 the session worktree before teardown. See
 [`reference/per-tick.md` § Step 1.5](reference/per-tick.md).
 
+## Resume from a prior run
+
+Before Step 0, check
+`~/.claude/runtime/pr-loop/bugteam-pr-<PR number>/handoff.json`. When
+`$CLAUDE_JOB_DIR/pr-converge-state.json` is absent but that handoff exists, seed
+`phase`, `tick_count`, and the clean-at SHAs from the run's `state-copy.json`, so
+a fresh session continues where the last one stopped rather than restarting at
+BUGBOT.
+
 ## Copilot quota pre-check (start of run)
 
 On the first tick, apply the `reviewer-gates` skill's Copilot quota gate
@@ -61,7 +70,8 @@ Before starting any tick, estimate whether the remaining session/usage
 budget covers one full clean tick (worst case: a BUGBOT fetch + a
 full-diff CODE_REVIEW + a fix commit + replies). If it does not, do not
 start the tick. Stop at the current tick boundary: write updated state to
-`$CLAUDE_JOB_DIR/pr-converge-state.json`, then report the exact resume
+`$CLAUDE_JOB_DIR/pr-converge-state.json`, write the durable handoff (see
+[State persistence](#state-persistence)), then report the exact resume
 command (`/pr-converge <PR URL>`) and the persisted `phase`/`tick_count`.
 A tick cut off mid-flight poisons the resume state — clean SHAs recorded
 against work that never landed — so an unstarted tick is always cheaper
@@ -82,6 +92,22 @@ Single-PR mode persists loop state to `$CLAUDE_JOB_DIR/pr-converge-state.json`.
 On tick entry, read this file if it exists to restore phase, tick_count, and
 clean-at SHAs. On tick exit, write updated state before calling ScheduleWakeup
 so the next tick resumes with accurate state.
+
+After the state write and before ScheduleWakeup, write the durable handoff so a
+fresh session in a new job can resume this run:
+
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/write_handoff.py" \
+  --pr-number <N> --head-ref <branch> --phase <phase> \
+  --resume-command "/pr-converge <PR URL>" \
+  --state-file "$CLAUDE_JOB_DIR/pr-converge-state.json" \
+  --completed-steps "<clean phases this run>"
+```
+
+It writes `handoff.json`, `HANDOFF.md`, and `state-copy.json` under
+`~/.claude/runtime/pr-loop/<run-name>/`. The job-dir state stays the source of
+truth for a resumed tick; the handoff copy is the pointer a fresh session reads
+when `$CLAUDE_JOB_DIR` is gone.
 
 Fields: `phase`, `tick_count`, `bugbot_clean_at`, `code_review_clean_at`,
 `bugteam_clean_at`, `copilot_clean_at`, `current_head`,
