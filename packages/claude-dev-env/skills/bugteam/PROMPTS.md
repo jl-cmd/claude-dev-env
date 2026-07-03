@@ -278,7 +278,7 @@ cd into `<worktree_path>` before any git or file operation.
     [ ] git add + commit
     [ ] git push
     [ ] Per finding: atomically post the unified-template reply, then call resolve_thread (no yield between them)
-    [ ] Publish fix summary via /doc-gist, capture URL
+    [ ] Publish fix summary via the Artifact tool, capture URL
     [ ] Append fix summary URL to parent review via add_reply_to_pull_request_comment
     [ ] Write fix outcomes XML
   </self_audit_checklist>
@@ -343,14 +343,15 @@ cd into `<worktree_path>` before any git or file operation.
      `loop_comment_index` entry alongside `finding_comment_id`, see
      [reference/obstacles/fix-resolve-thread.md](reference/obstacles/fix-resolve-thread.md)).
 
-  9. Publish the fix summary gist via `/doc-gist`. Pass the fix report
-     (what was fixed, what was skipped, what was left unaddressed) as the
-     gist body. Capture the returned gist URL.
+  9. Write the fix summary (what was fixed, what was skipped, what was left
+     unaddressed) to a self-contained HTML file, load the `artifact-design`
+     skill, then publish it with the `Artifact` tool. Capture the returned
+     URL.
 
-  10. Append the fix summary gist URL (from step 9) to the parent review
+  10. Append the fix summary URL (from step 9) to the parent review
       via `add_reply_to_pull_request_comment(commentId=<id>, body=...,
       owner=<O>, repo=<R>, pullNumber=<N>)`. The body carries the
-      gist URL plus a one-line summary of fixes applied this loop.
+      artifact URL plus a one-line summary of fixes applied this loop.
 
   11. Write `.bugteam-pr<N>-loop<L>.fix-outcomes.xml` inside
       `<worktree_path>` (schema below) and return its path.

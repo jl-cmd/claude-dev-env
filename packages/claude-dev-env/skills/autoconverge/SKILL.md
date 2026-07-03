@@ -194,21 +194,16 @@ round records nothing resumable and replays dirty.
       Use the `combinedJournal`, `finalSha`, and `roundCount` from step b. Capture the
       output path from stdout.
 
-   e. **Publish as a secret gist** by reusing `doc-gist` (do not reimplement gist
-      creation):
-      ```
-      python "$HOME/.claude/skills/doc-gist/scripts/gist_upload.py" \
-        --input "<html path>" \
-        --no-open \
-        --description "autoconverge report PR #<n>"
-      ```
-      Capture the htmlpreview URL from stdout. The gist is secret by default; pass
-      no public flag.
+   e. **Publish via the Artifact tool.** Load the `artifact-design` skill first, then
+      call `Artifact` with `file_path` set to the report path from step d, `favicon`
+      set to the fixed autoconverge favicon `✅` (keep this favicon stable across
+      every autoconverge report — never swap it per run), and `description` set to
+      a one-sentence subtitle naming the PR. Capture the returned URL.
 
    f. **Post one idempotent PR comment.** List the PR's issue comments; if one
       carries the marker `<!-- autoconverge-report -->`, edit it in place, otherwise
       create a new one. The body begins with `<!-- autoconverge-report -->`, then
-      the htmlpreview link, then a plain-language summary that mirrors the report:
+      the artifact URL, then a plain-language summary that mirrors the report:
       lead with the one-sentence `verdictLine`; then the plain Problem and Fix
       sentences (`prProblem`, `prFix`); then the issue-class list — one bullet per
       class as `plainName (×count, status)`. Place the raw finding list as
