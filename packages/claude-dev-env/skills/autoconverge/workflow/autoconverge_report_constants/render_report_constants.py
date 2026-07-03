@@ -154,16 +154,9 @@ Write so a non-programmer understands every line. The reader has never seen the 
 
 Return strictly a JSON object with keys prProblem, prFix, problemScenes, fixScenes, verdictLine, and issueClasses."""
 
-HTML_DOCTYPE = "<!DOCTYPE html>"
-
-HTML_HEAD_TEMPLATE = """\
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+HTML_TITLE_AND_STYLE_TEMPLATE = """\
 <title>PR #{pr_number} Convergence Summary</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-{style_block}
-</head>"""
+{style_block}"""
 
 HTML_STYLE_BLOCK = """\
 <style>

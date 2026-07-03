@@ -1,6 +1,6 @@
 # Closing Report
 
-When an autoconverge run converges (the workflow returns `converged: true`), the main session generates a convergence insights HTML report and publishes it as a secret gist with an idempotent PR comment linking to it.
+When an autoconverge run converges (the workflow returns `converged: true`), the main session generates a convergence insights HTML report and publishes it with the `Artifact` tool, with an idempotent PR comment linking to it.
 
 ## Data source
 
@@ -73,14 +73,14 @@ Counting is deterministic: `generated_date` comes from the journal `timestamp`, 
 
 After rendering, the main session:
 
-1. **Uploads the HTML as a secret gist** using `doc-gist/scripts/gist_upload.py --no-open`. Captures the htmlpreview URL from stdout.
-2. **Posts one idempotent PR comment** marked with `<!-- autoconverge-report -->`. If a comment with that marker already exists on the PR, it is edited in place; otherwise a new comment is created. The body leads with the gist URL, then the one-sentence `verdictLine`, then the plain Problem and Fix sentences (`prProblem`, `prFix`), then the issue-class list — one bullet per class as `plainName (×count, status)` — and closes with the full finding list (`file:line — P# — title`) inside a collapsed `<details>` block. Write the body to a BOM-free temp file and pass `--body-file` to `gh issue comment` (never `--body`), or use the GitHub MCP `add_issue_comment` tool.
-3. **Opens the report** with `Start-Process chrome -ArgumentList '--new-window', '<report path>'`. A missing Chrome does not abort teardown.
+1. **Publishes the HTML with the Artifact tool.** Loads the `artifact-design` skill first, then calls `Artifact` with `file_path` set to the rendered report, `favicon` set to the fixed autoconverge favicon `✅` (kept stable across every autoconverge report), and `description` naming the PR. Captures the returned URL.
+2. **Posts one idempotent PR comment** marked with `<!-- autoconverge-report -->`. If a comment with that marker already exists on the PR, it is edited in place; otherwise a new comment is created. The body leads with the artifact URL, then the one-sentence `verdictLine`, then the plain Problem and Fix sentences (`prProblem`, `prFix`), then the issue-class list — one bullet per class as `plainName (×count, status)` — and closes with the full finding list (`file:line — P# — title`) inside a collapsed `<details>` block. Write the body to a BOM-free temp file and pass `--body-file` to `gh issue comment` (never `--body`), or use the GitHub MCP `add_issue_comment` tool.
+3. **Opens the published report** with `Start-Process chrome -ArgumentList '--new-window', '<artifact URL>'`, using the artifact URL captured in step 1. A missing Chrome does not abort teardown.
 
 ## Live-dashboard seam
 
-The marker comment and gist together form a seam for future per-round dashboard refreshes: a live-dashboard step re-renders with the same `render_report_html` function (pure, no side effects), runs `gh gist edit` on the same gist, and edits the same marker comment. That per-round refresh path is out of scope here; this document describes the one-shot closing report only.
+The marker comment and artifact together form a seam for future per-round dashboard refreshes: a live-dashboard step re-renders with the same `render_report_html` function (pure, no side effects), calls `Artifact` again on the same `file_path` to redeploy to the same URL, and edits the same marker comment. That per-round refresh path is out of scope here; this document describes the one-shot closing report only.
 
 ## Scope
 
-The closing report runs only when `converged === true`. On a blocker exit (`blocker: "budget"` or similar), the report, gist, comment, and Chrome open are all skipped.
+The closing report runs only when `converged === true`. On a blocker exit (`blocker: "budget"` or similar), the report, artifact publish, comment, and Chrome open are all skipped.
