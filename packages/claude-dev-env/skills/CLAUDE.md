@@ -42,7 +42,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `research-mode` — activates anti-hallucination discipline for a session
 - `recall` — retrieves facts from memory files
 - `remember` — saves a decision, gotcha, or architectural choice to the Obsidian vault
-- `everything-search` — file-system search via the Everything MCP tool
+- `everything-search` — file-system search via the Everything `es.exe` CLI
 - `caveman` — trims noise from a draft artifact
 
 **Session and workflow management**
