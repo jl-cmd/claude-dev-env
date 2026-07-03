@@ -10,11 +10,11 @@ each real hook script through its production ``__main__`` stdin path over a
 corpus that pins those fail-soft edges plus a representative allow payload, so a
 conversion that changes any decision is caught.
 
-The deterministic deny payloads for the two Write/Edit blockers whose triggers
-need no filesystem or state setup (``md_to_html_blocker``,
-``open_questions_in_plans_blocker``) are exercised here too; each remaining
-hook's full deny coverage stays in its own suite, which also drives the real
-``main()`` and so re-proves the decision after the parser swap.
+The deterministic deny payload for the Write/Edit blocker whose trigger
+needs no filesystem or state setup (``open_questions_in_plans_blocker``) is
+exercised here too; each remaining hook's full deny coverage stays in its own
+suite, which also drives the real ``main()`` and so re-proves the decision
+after the parser swap.
 """
 
 import json
@@ -28,7 +28,6 @@ import pytest
 _BLOCKING_DIRECTORY = Path(__file__).resolve().parent
 
 ALL_CONVERTED_HOOK_FILENAMES = (
-    "md_to_html_blocker.py",
     "open_questions_in_plans_blocker.py",
     "claude_md_orphan_file_blocker.py",
     "pr_converge_bugteam_enforcer.py",
@@ -81,30 +80,6 @@ def test_fail_soft_payload_exits_zero_with_no_decision(hook_filename: str, stdin
     assert _decision_from_stdout(completed) is None, (
         f"{hook_filename} must emit no decision on fail-soft stdin; got stdout {completed.stdout!r}"
     )
-
-
-def test_md_to_html_blocker_still_denies_relative_markdown_write() -> None:
-    payload = json.dumps(
-        {
-            "tool_name": "Write",
-            "tool_input": {"file_path": "notes/topic.md", "content": "# Topic"},
-        }
-    )
-    completed = _run_hook_script("md_to_html_blocker.py", payload)
-    assert completed.returncode == 0
-    assert _decision_from_stdout(completed) == "deny"
-
-
-def test_md_to_html_blocker_still_allows_non_markdown_write() -> None:
-    payload = json.dumps(
-        {
-            "tool_name": "Write",
-            "tool_input": {"file_path": "notes/topic.txt", "content": "plain"},
-        }
-    )
-    completed = _run_hook_script("md_to_html_blocker.py", payload)
-    assert completed.returncode == 0
-    assert _decision_from_stdout(completed) is None
 
 
 def test_open_questions_blocker_still_denies_plan_with_open_questions(
