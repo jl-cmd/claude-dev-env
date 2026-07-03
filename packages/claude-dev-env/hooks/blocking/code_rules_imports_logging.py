@@ -1770,9 +1770,9 @@ def check_js_bare_flag_return_directive(
     and the directive commonly sit far apart in a converge workflow file, so
     *content* must carry the whole file rather than an edit's changed fragment
     for the sweep to see both halves.
-    ``return <word>: <bool>`` never forms the full-object return directive the
-    contract requires, so a match always marks agent-prompt prose rather than
-    a compliant control-flow return. A full
+    ``return <word>: <bool>`` never forms the full-result object literal the
+    contract requires — whether it lands in agent-prompt prose, a comment, or
+    accidental code, the shape itself is never a compliant return. A full
     ``return {sha:..., down:true, ...}`` object literal
     stays untouched, and so does a source that states no such contract. This
     belongs to the JS/.mjs slice of Category O6 docstring-prose-versus-body
