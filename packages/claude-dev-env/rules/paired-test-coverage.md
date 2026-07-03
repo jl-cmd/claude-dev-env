@@ -23,7 +23,7 @@ Two complementary checks in `code_rules_paired_test.py` (both dispatched from `c
 `check_public_function_missing_paired_test` runs on a production Python write or edit and flags a public function when all of these hold:
 
 1. The target is production code — not a test module, hook infrastructure, config module, migration, workflow registry, or `__init__.py`.
-2. A stem-matched test file (`test_<stem>.py` or `<stem>_test.py`) exists for the module.
+2. A stem-matched test file exists for the module — `test_<stem>.py` or `<stem>_test.py` beside the module, or `test_<stem>.py` under an ancestor `tests/` directory.
 3. That suite already exercises the module — referencing at least one public function the module defines, or referencing one of its private (underscore-prefixed) helper functions by name — the signature of a maintained per-module suite rather than a placeholder or unrelated test file.
 4. The public function is referenced by no test file in the directory that holds the stem-matched test.
 

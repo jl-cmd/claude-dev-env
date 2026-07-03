@@ -22,7 +22,7 @@ The `env_var_table_code_drift_blocker.py` hook runs on every Write, Edit, and Mu
 3. Resolves the named code file under the repository root (the nearest `.git`-bearing ancestor of the markdown file) and reads its source.
 4. Blocks the write when the file resolves yet its source never references the variable name. For an Edit, drift the file already held on an untouched row is excluded, so only drift the edit introduces is reported.
 
-The check stays quiet for a row whose code file resolves nowhere under the repository root (it cannot prove the drift), a row whose second cell holds no code-file path, a table row inside a fenced code block, and any test file.
+The check stays quiet for a row whose code file resolves nowhere under the repository root (it cannot prove the drift), a row whose second cell holds no code-file path, and a table row inside a fenced code block.
 
 ## Why this is a hook, not a lint pass
 
