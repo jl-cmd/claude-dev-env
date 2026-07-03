@@ -436,6 +436,8 @@ This default is overridden by explicit user instruction such as "refactor this e
 
 Docstrings on functions, methods, classes, and modules are encouraged for public APIs. The self-documenting-names gate inspects inline `#` and block `#` comments only; docstrings are exempt from that gate.
 
+Write a behavior-illustrating docstring in the diagram-first shape: one summary line, then a `::` literal block or a doctest that shows a concrete input and its marked outcome (with `ok:` / `flag:` contrast lines where a pass-and-fail pair helps), then a couple of short neutral prose lines, then the `Args:` / `Returns:` sections. Two hooks back this: `check_docstring_runon_sentence` flags a run-on prose wall, and `check_docstring_prose_wall_without_illustration` flags a narrative that runs long with no diagram. See `../rules/plain-illustrative-docstrings.md` for the shape and a worked example.
+
 ## Audit Awareness
 
 Code clean-coder writes will be audited later against the A–P bug categories from `code-quality-agent`. The hooks listed in this file enforce the Category J slice at write time, but A–I and K–P surface only in audit. For each category's full rubric, sub-bucket decomposition, and concrete checks, see `../audit-rubrics/category_rubrics/` (relative to this agent file). While generating code, anticipate the full A–P surface so the first write clears every audit category.
