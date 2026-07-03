@@ -6,9 +6,7 @@
 
 `es.exe` (the Everything command-line tool) is the file-search tool. Every search carries a scope: a project path or registry token, an `ext:` filter, a `dm:` date filter, a `size:` filter, or a name pattern. A bare whole-drive scan or a network-share sweep is out of bounds — narrow the search to what you need.
 
-Never start, install, or restart the Everything HTTP server. The CLI reads the same index the desktop app keeps; it needs no server.
-
-When `es.exe` fails or returns nothing, fall back to `Glob` (name and path patterns) or `Grep` (file contents), and report the outage so the reader knows the index was unavailable.
+When `es.exe` fails or returns nothing, try to self heal. If self-healing fails, prompt user with askuserquestion with an analysis, plus next steps questions. ie: fall back to `Glob` (name and path patterns) or `Grep` (file contents), and report the outage so the reader knows the index was unavailable.
 
 ## Registry tokens
 
