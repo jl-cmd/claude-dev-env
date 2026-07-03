@@ -103,6 +103,7 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
         choices=[
             CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN,
             CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
+            CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
         ],
         help="Reviewer token to test against CLAUDE_REVIEWS_DISABLED",
     )
@@ -122,6 +123,7 @@ def main(all_arguments: list[str]) -> int:
     disabled_checker_by_reviewer = {
         CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN: is_bugbot_disabled_via_env,
         CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN: is_bugteam_disabled_via_env,
+        CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN: is_copilot_disabled_via_env,
     }
     return 0 if disabled_checker_by_reviewer[arguments.reviewer]() else 1
 
