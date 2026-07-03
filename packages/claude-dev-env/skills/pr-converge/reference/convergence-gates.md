@@ -35,22 +35,21 @@ Decide (four branches; match first whose predicate holds):
 
 - **`classification == "dirty"` with non-empty inline comments matching
   `pull_request_review_id`:** Fix protocol input (same shape as bugbot
-  dirty). Spawn Agent (subagent_type: clean-coder) to implement → push → reply inline on each thread via
-  `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py` → Step 3 in same tick (see
-  [Single-PR fix workflow](fix-protocol.md#single-pr-fix-workflow) for
-  full contract).
+  dirty). Apply the `pr-fix-protocol` skill
+  (`../../pr-fix-protocol/SKILL.md`) → Step 3 in same tick.
   Reset `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase =
   BUGBOT`, schedule next wakeup, return. Full back-to-back-clean cycle
   plus all six gates must hold again on new HEAD.
 - **`classification == "dirty"` with empty inline comments matching
   `pull_request_review_id`:** Copilot posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
-  threads). Parse body for actionable findings. Spawn Agent (subagent_type: clean-coder) to implement → push → post
-  top-level review reply via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py` citing new HEAD SHA → Step 3 in same tick.
-  Reset
+  threads). Parse body for actionable findings. Apply the
+  `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`), whose reply
+  step for body-only findings posts a top-level review reply citing the
+  new HEAD SHA → Step 3 in same tick. Reset
   `bugbot_clean_at = null` AND
   `copilot_clean_at = null`, `phase = BUGBOT`, Step 3 on new HEAD,
-  schedule next wakeup, return. Convergence requires full
+  schedule next wakeup, return. Convergence needs full
   back-to-back-clean on new HEAD.
 - **`classification == "clean"` (state `APPROVED`):** Set
   `copilot_clean_at = current_head`. Record evidence: "Copilot APPROVED at <SHA>".
@@ -77,14 +76,15 @@ Decide (four branches; match first whose predicate holds):
 
 - **`classification == "dirty"` with non-empty inline comments matching
   `pull_request_review_id`:** Treat identically to gate (a) dirty+inline
-  path — spawn Agent (subagent_type: clean-coder) to fix → push → reply inline on each thread. Reset
+  path — apply the `pr-fix-protocol` skill
+  (`../../pr-fix-protocol/SKILL.md`). Reset
   `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = BUGBOT`,
   schedule next wakeup, return.
 - **`classification == "dirty"` with empty inline comments matching
   `pull_request_review_id`:** Claude posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
-  threads). Treat identically to gate (a) dirty+body path — spawn Agent
-  (subagent_type: clean-coder) to implement → push → post top-level review reply via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py`. Reset
+  threads). Treat identically to gate (a) dirty+body path — apply the
+  `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`). Reset
   `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = BUGBOT`,
   schedule next wakeup, return.
 - **`classification == "clean"` (state `APPROVED`):** Record evidence:
@@ -176,19 +176,16 @@ pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_
   → count
 ```
 
-When you address an unresolved thread, you still need its author and
-anchor commit so you can decide how to fix it — but the gate doesn't
-filter on those fields.
+This count is the `pr-fix-protocol` unresolved-thread sweep
+(`../../pr-fix-protocol/SKILL.md`).
 
 Decide:
 
 - **Zero unresolved threads:** Record evidence:
   "0 unresolved threads across PR at <SHA>". Continue to gate (f).
-- **One or more unresolved threads:** Do **not** mark ready. For each
-  unresolved thread, verify the concern against current HEAD. If still
-  applies, apply Fix protocol (test → fix → push → reply → resolve). If
-  no longer applies (e.g. code already changed), reply-with-note
-  explaining why and resolve. Push if any code changed → reset
+- **One or more unresolved threads:** Do **not** mark ready. Apply the
+  `pr-fix-protocol` skill's unresolved-thread sweep
+  (`../../pr-fix-protocol/SKILL.md`). Push if any code changed → reset
   `bugbot_clean_at = null` AND `copilot_clean_at = null`,
   `phase = BUGBOT`, schedule next wakeup, return. If only resolutions
   (no code changes), re-check this gate without resetting.

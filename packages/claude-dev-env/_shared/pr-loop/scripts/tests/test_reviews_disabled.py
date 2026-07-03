@@ -120,3 +120,17 @@ def test_cli_main_supports_bugteam_reviewer(
 ) -> None:
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
     assert reviews_disabled.main(["--reviewer", "bugteam"]) == 0
+
+
+def test_cli_main_supports_copilot_reviewer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "copilot")
+    assert reviews_disabled.main(["--reviewer", "copilot"]) == 0
+
+
+def test_cli_main_returns_one_for_copilot_when_only_bugbot_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    assert reviews_disabled.main(["--reviewer", "copilot"]) == 1

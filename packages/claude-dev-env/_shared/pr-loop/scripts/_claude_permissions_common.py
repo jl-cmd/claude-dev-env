@@ -299,9 +299,11 @@ def write_atomically_with_mode(
 
     Raises:
         OSError: When os.open or os.fdopen fails. The raw file descriptor
-            is closed before re-raising so the descriptor does not leak.
+            is closed and the on-disk temporary file is unlinked before
+            re-raising so neither the descriptor nor the file leaks.
         MemoryError: When os.fdopen runs out of buffer memory; the file
-            descriptor is closed before re-raising.
+            descriptor is closed and the temporary file is unlinked
+            before re-raising.
     """
     file_descriptor = os.open(
         str(temporary_path),
@@ -312,6 +314,10 @@ def write_atomically_with_mode(
         writer = os.fdopen(file_descriptor, "w", encoding=TEXT_FILE_ENCODING)
     except (OSError, MemoryError):
         os.close(file_descriptor)
+        try:
+            os.unlink(str(temporary_path))
+        except OSError:
+            pass
         raise
     with writer:
         writer.write(serialized_content)
@@ -321,7 +327,8 @@ def save_settings(settings_path: Path, all_settings: dict[str, object]) -> None:
     """Write settings to a JSON file atomically with permission preservation.
 
     Creates a temporary sibling file, writes content, then atomically
-    replaces the target. Cleans up the temporary file in a finally block.
+    replaces the target. Cleans up the temporary file in a finally block,
+    printing a warning to stderr when that cleanup unlink fails.
 
     Args:
         settings_path: Path to the target settings JSON file.
@@ -352,8 +359,12 @@ def save_settings(settings_path: Path, all_settings: dict[str, object]) -> None:
         if temporary_path.exists():
             try:
                 temporary_path.unlink()
-            except OSError:
-                pass
+            except OSError as unlink_error:
+                print(
+                    f"Warning: could not remove temp file {temporary_path}: "
+                    f"{type(unlink_error).__name__}: {unlink_error}",
+                    file=sys.stderr,
+                )
 
 
 def append_if_missing(all_target_list: list[object], new_value: str) -> bool:

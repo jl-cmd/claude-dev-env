@@ -1,6 +1,6 @@
 """Tests verifying the shared audit contract and qbug's reference to it.
 
-The contract lives in bugteam/reference/audit-contract.md and is the single
+The contract lives in _shared/pr-loop/audit-contract.md and is the single
 source of truth for finding schema, proof-of-absence shape, adversarial pass,
 Haiku secondary, and de-dup/merge rules. qbug/SKILL.md must reference it.
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 
 SKILL_FILE_PATH = Path(__file__).parent / "SKILL.md"
 CONTRACT_FILE_PATH = (
-    Path(__file__).parent.parent / "bugteam" / "reference" / "audit-contract.md"
+    Path(__file__).parents[2] / "_shared" / "pr-loop" / "audit-contract.md"
 )
 CATEGORY_E_RUBRIC_FILE_PATH = (
     Path(__file__).parent.parent.parent

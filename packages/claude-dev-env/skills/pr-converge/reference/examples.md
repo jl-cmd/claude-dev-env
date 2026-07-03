@@ -54,9 +54,8 @@ sufficient. Runs `convergence-gates.md` gates in order:
     Next tick: re-run gate (a) fetch → Copilot `APPROVED` at `current_head`
     → set `copilot_clean_at = current_head`, record evidence: "Copilot
     APPROVED at <SHA>", set `phase = BUGTEAM`, re-validate gates (b) and (c).
-  Gate (e): `pull_request_read(method="get_review_comments")` → count
-    threads where `is_resolved == false` (no author/commit/outdated
-    filter) → zero across PR → record evidence.
+  Gate (e): the `pr-fix-protocol` unresolved-thread sweep
+    (`../../pr-fix-protocol/SKILL.md`) → zero across PR → record evidence.
   Gate (f): all six gates pass → `update_pull_request(pullNumber=NUMBER,
     owner=OWNER, repo=REPO, draft=false)`.
 Reports "PR #N converged: bugbot CLEAN at <SHA>, bugteam CLEAN at <SHA>,
@@ -100,8 +99,9 @@ Copilot review `state: APPROVED` at `current_head`. Claude: [re-runs
 gate (a) fetch → APPROVED → sets `copilot_clean_at = current_head`,
 records evidence: "Copilot APPROVED at <SHA>", sets `phase = BUGTEAM`;
 re-validates gates (b) Claude absent and (c) mergeability clean,
-records evidence for both; gate (e) zero unresolved threads passes
-trivially, record evidence: "0 unresolved threads across PR at <SHA>";
+records evidence for both; gate (e) — the `pr-fix-protocol`
+unresolved-thread sweep — passes trivially, record evidence:
+"0 unresolved threads across PR at <SHA>";
 runs `update_pull_request(pullNumber=NUMBER,
 owner=OWNER, repo=REPO, draft=false)`; reports "PR #N converged: bugbot CLEAN
 at <SHA>, bugteam CLEAN at <SHA>, mergeable_state clean, copilot CLEAN at

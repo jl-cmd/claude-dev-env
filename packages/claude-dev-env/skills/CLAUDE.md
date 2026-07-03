@@ -35,6 +35,11 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `pr-consistency-audit` — cross-file consistency check on a PR diff
 - `copilot-review` — requests and polls a GitHub Copilot review
 - `findbugs` / `fixbugs` — find bugs then fix them in separate passes
+- `reviewer-gates` — availability gates for external reviewers (opt-out parse, Copilot quota, Bugbot trigger/detect)
+- `pr-scope-resolve` — one resolution ladder for a PR-loop skill's audit/fix target
+- `pr-fix-protocol` — fix, reply, and resolve reviewer findings; the unresolved-thread sweep
+- `post-audit-findings` — publishes an audit pass as one GitHub PR review
+- `pr-loop-lifecycle` — opens and closes a PR-loop run (grant, teardown, PR description, revoke, report)
 - `code` — strict-mode code generation session
 
 **Research and discovery**

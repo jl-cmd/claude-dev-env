@@ -45,23 +45,15 @@ the session worktree before teardown. See
 
 ## Copilot quota pre-check (start of run)
 
-On the first tick, before Step 4, run the Copilot quota pre-check once:
-`python "$HOME/.claude/_shared/pr-loop/scripts/copilot_quota.py"`. It reads the
-account's remaining Copilot premium-request quota via `gh api
-copilot_internal/user` and prints one line — log that line. Exit 0 means Copilot
-has quota, so leave `copilot_down` false. Any non-zero exit means skip Copilot
-for the whole run — the account is out of quota, the quota API or account access
-is down, or no account is set — so set `copilot_down = true` in
-`pr-converge-state.json`. The account comes from the `COPILOT_QUOTA_ACCOUNT`
-environment variable or a git-ignored `.env` file, and the no-account line names
-the exact `.env` path and key to set.
-
-Run the pre-check once, not per tick. Every tick reads `copilot_down` from
-state. When `copilot_down` is true, skip the Copilot gate outright — no fetch,
-no request, no poll, no agent — and export `CLAUDE_REVIEWS_DISABLED="copilot"`
-in that tick's shell before the convergence check, so `check_convergence.py`
-bypasses the Copilot review gate and the pending-requested-reviews gate and the
-run still marks ready on the remaining signals.
+On the first tick, apply the `reviewer-gates` skill's Copilot quota gate
+(`../reviewer-gates/SKILL.md` § Gate 2) — once per run, never per tick. The
+flag lives in `pr-converge-state.json` as `copilot_down`, and every tick reads
+it. While `copilot_down` is true, the tick skips all Copilot work — no fetch,
+no request, no poll, no agent — and exports
+`CLAUDE_REVIEWS_DISABLED="copilot"` in that tick's shell before
+`check_convergence.py`, so the check bypasses the Copilot review gate and the
+pending-requested-reviews gate and the run still marks ready on the remaining
+signals.
 
 ## Budget-aware tick boundaries
 
@@ -94,7 +86,39 @@ so the next tick resumes with accurate state.
 Fields: `phase`, `tick_count`, `bugbot_clean_at`, `code_review_clean_at`,
 `bugteam_clean_at`, `copilot_clean_at`, `current_head`,
 `bugbot_acknowledged_at`, `bugbot_down`, `copilot_down`,
-`bugteam_skill_invoked_at_head`, `bugteam_skill_invoked_at_tick`.
+`bugteam_skill_invoked_at_head`, `bugteam_skill_invoked_at_tick`,
+`agents_session_id`, `persistent_agents`.
+
+## Persistent per-step agents
+
+Three step-scoped agents persist across ticks so their context carries
+forward: `fix_executor`, `thread_sweep`, and `copilot_watch`, recorded in
+the `persistent_agents` map
+([`reference/state-schema.md`](reference/state-schema.md)).
+
+- **Resume:** read `persistent_agents.<key>`. When an entry exists,
+  `SendMessage` to the stored `agent_id` with a tick payload that restates
+  the PR scope, `current_head`, the PR worktree path, this tick's findings
+  or threads, and the report-back contract. Bump `last_used_tick`, then
+  await completion.
+- **First spawn:** `Agent(subagent_type: "clean-coder", name:
+  "prc-fix-<PR#>")` — the `name` makes the agent a persistent teammate
+  that idles awaiting messages. Record `{agent_id, created_tick,
+  last_used_tick}` under the step key. Keep the spawn prompt fix-shaped,
+  never audit-shaped: the `pr_converge_bugteam_enforcer` hook blocks
+  audit-shaped clean-coder spawns during the BUGTEAM phase.
+- **Stale or dead id:** on a `SendMessage` failure, or no acknowledgment
+  within one bounded wait, drop the map entry, spawn a fresh named agent,
+  record it, and continue the tick. Never abort a tick on a stale id;
+  never retry the same dead id.
+- **Fresh every round (never persisted):** the Step 5 `/code-review --fix`
+  pass and the Step 6 bugteam audit (unbiased eyes each round; the
+  enforcer needs the formal Skill call), and every `code-verifier` — a
+  named code-verifier never fires `SubagentStop`, so no verdict mints (see
+  the named-`code-verifier` entry in the Gotchas list below).
+- **Shutdown:** at loop end (convergence or a stop condition), send each
+  persistent agent a shutdown request and clear `persistent_agents` before
+  the `pr-loop-lifecycle` Close.
 
 ## Gotchas
 
@@ -159,13 +183,9 @@ script invocations, decision criteria. Every "return to Step N" means the next
 tick starts fresh from that step.
 
 **Hard gate: do not advance from any step while ANY unresolved review
-thread exists on the PR.** The thread-count filter is purely
-`is_resolved == false` — author, commit anchor, and `is_outdated` are
-all irrelevant. After every fix, reply to each finding comment and
-resolve the thread via `pull_request_review_write(method="resolve_thread")`.
-For each unresolved thread, verify the concern against current HEAD;
-either fix-and-resolve, or reply-with-note-and-resolve when the concern
-no longer applies.
+thread exists on the PR.** The sweep semantics and per-thread handling live
+in the `pr-fix-protocol` skill's unresolved-thread sweep
+(`../pr-fix-protocol/SKILL.md`).
 
 **Full-PR-diff rule: every CODE-REVIEW round (Step 5) and every BUGTEAM
 round (Step 6) covers the FULL `origin/main...HEAD` diff — every file
@@ -176,11 +196,13 @@ against a partial diff is not a valid clean. Re-run the round against the
 full diff before recording `code_review_clean_at` or treating the bugteam
 round as converged. This rule holds every tick, every loop, every PR.
 
-- [ ] **Step 0: Grant project permissions**
-      `python "$HOME/.claude/skills/bugteam/scripts/grant_project_claude_permissions.py"`
+- [ ] **Step 0: Open the run**
+      Apply the `pr-loop-lifecycle` skill's Open section
+      (`../pr-loop-lifecycle/SKILL.md`): permission grant + worktree preflight.
 
 - [ ] **Step 1: Resolve PR scope + PR worktree**
-      Capture owner, repo, number, head SHA, branch. Resolve the **PR
+      Apply the `pr-scope-resolve` skill (`../pr-scope-resolve/SKILL.md`)
+      with caller `pr-converge`. Resolve the **PR
       worktree** — the local checkout every local step this tick targets:
       the `EnterWorktree` checkout when the PR shares the session's repo,
       else a checkout of the PR's repo that the working directory routes
@@ -205,6 +227,8 @@ round as converged. This rule holds every tick, every loop, every PR.
       See: [`reference/per-tick.md` § Step 2 BUGBOT + Step 3](reference/per-tick.md)
 
       - [ ] **Opt-out gate (runs first, every BUGBOT entry).**
+            Gate semantics live in the `reviewer-gates` skill
+            (`../reviewer-gates/SKILL.md` § Gate 1).
             `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
             - [ ] Exit 0 (`CLAUDE_REVIEWS_DISABLED` lists `bugbot`) → set `bugbot_down = true`, `phase = CODE_REVIEW`, advance to Step 5 (bypass). Cursor Bugbot is skipped for the entire run.
             - [ ] Exit 1 → continue below.
@@ -212,9 +236,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       Fetch bugbot reviews + inline comments on `current_head`.
 
       - [ ] **dirty** (findings on `current_head`) →
-            - [ ] Fix each finding (spawn `clean-coder`)
-            - [ ] Reply to each finding comment via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py`
-            - [ ] Resolve each addressed thread via `pull_request_review_write(method="resolve_thread")`
+            - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to this tick's findings
             - [ ] Push → return to Step 4
       - [ ] **clean** (no findings on `current_head`) →
             - [ ] Count ALL unresolved threads on PR (`is_resolved == false`) → zero? advance; >0? fix + resolve first
@@ -222,14 +244,12 @@ round as converged. This rule holds every tick, every loop, every PR.
             - [ ] `phase = CODE_REVIEW`
             - [ ] Advance to Step 5
       - [ ] **no review yet / commit_id mismatch** →
-            - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --check-clean --sha <current_head>`
-            - [ ] Exit 0 (bugbot CI completed with success/neutral conclusion and no review = silent pass) → `bugbot_clean_at = current_head` → `phase = CODE_REVIEW` → advance to Step 5
-            - [ ] Exit 1 (not a silent pass) or Exit 2 (gh CLI error — silent pass not confirmable) → Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --check-active --sha <current_head>`
-            - [ ] Exit 0 (already queued) → schedule 360s wakeup → return to Step 4 next tick
-            - [ ] Exit 1 → post exactly `bugbot run` via `add_issue_comment` (no `@cursor[bot]` mention, no other text), wait 8s
-            - [ ] Run `python ~/.claude/skills/pr-converge/scripts/check_bugbot_ci.py --owner <O> --repo <R> --sha <current_head>`
-            - [ ] Exit non-zero → `bugbot_down = true` → `phase = CODE_REVIEW` → advance to Step 5 (bypass)
-            - [ ] Exit 0 → record `bugbot_acknowledged_at`, schedule 360s wakeup → return to Step 4
+            Apply the `reviewer-gates` skill's Bugbot flow
+            (`../reviewer-gates/SKILL.md` § Gate 3) against `current_head`,
+            then map its outcomes:
+            - [ ] Silent pass → `bugbot_clean_at = current_head` → `phase = CODE_REVIEW` → advance to Step 5
+            - [ ] Already queued, or trigger acknowledged → schedule 360s wakeup → return to Step 4 next tick
+            - [ ] Bugbot down → `bugbot_down = true` → `phase = CODE_REVIEW` → advance to Step 5 (bypass)
 - [ ] **Step 5: CODE-REVIEW — run, fix, reset, advance**
       See: [`reference/per-tick.md` § Step 2 CODE_REVIEW](reference/per-tick.md)
 
@@ -264,13 +284,13 @@ round as converged. This rule holds every tick, every loop, every PR.
             - [ ] Re-trigger bugbot (Step 4 "no review yet" checklist)
             - [ ] `phase = BUGBOT` → schedule 360s wakeup → return to Step 4
       - [ ] **clean** (no changes applied) →
-            - [ ] Count ALL unresolved threads on PR (`is_resolved == false`) → zero? advance; >0? fix + resolve first
+            - [ ] Zero unresolved threads per the `pr-fix-protocol` sweep (`../pr-fix-protocol/SKILL.md`) → advance; else fix + resolve first (same skill)
             - [ ] `code_review_clean_at = current_head`
             - [ ] `phase = BUGTEAM` → advance to Step 6
 
 - [ ] **Step 6: BUGTEAM — run, decide, fix, reply, resolve**
       See: [`reference/per-tick.md` § Step 2 BUGTEAM](reference/per-tick.md);
-      [`../../bugteam/SKILL.md`](../../bugteam/SKILL.md)
+      [`../bugteam/SKILL.md`](../bugteam/SKILL.md)
 
       Pre-condition: `code_review_clean_at == current_head`.
 
@@ -300,9 +320,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] **converged + `bugbot_clean_at ≠ current_head`** →
             `phase = BUGBOT` → schedule 360s wakeup → return to Step 4
       - [ ] **findings without committed fixes** →
-            - [ ] Fix each finding (spawn `clean-coder`)
-            - [ ] Reply to each finding comment via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py`
-            - [ ] Resolve each addressed thread via `pull_request_review_write(method="resolve_thread")`
+            - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to the findings
             - [ ] Push → `phase = BUGBOT` → return to Step 4
 
 - [ ] **Step 7: Convergence gates**
@@ -317,15 +335,13 @@ round as converged. This rule holds every tick, every loop, every PR.
             pull_request_read(method="get_review_comments")
               → filter threads where is_resolved == false
             ```
-      - [ ] Any unresolved? → For each: verify concern against current HEAD;
-            if still applies → Fix (spawn `clean-coder`) → reply → resolve;
-            if no longer applies → reply-with-note → resolve. Push if any code changed → return to Step 4
+      - [ ] Any unresolved? → apply the `pr-fix-protocol` skill's unresolved-thread sweep (`../pr-fix-protocol/SKILL.md`). Push if any code changed → return to Step 4
       - [ ] When `copilot_down == true` (start-of-run quota pre-check), skip the Copilot fetch below — no request, no poll, no agent — and continue to gate (b); the Copilot gate is bypassed for the whole run.
       - [ ] Fetch Copilot review on `current_head` (top-level review state — uses get_reviews, identifies by reviewer):
             ```
             python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
             ```
-      - [ ] dirty → Fix (spawn `clean-coder`) → reply → resolve threads → push → return to Step 4
+      - [ ] dirty → apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) → push → return to Step 4
       - [ ] clean (no findings) → `copilot_clean_at = current_head` → gate (b)
       - [ ] no review yet → gate (b)
 
@@ -357,10 +373,7 @@ round as converged. This rule holds every tick, every loop, every PR.
         → count threads where is_resolved == false
       ```
       - [ ] zero unresolved → gate (e)
-      - [ ] unresolved → For each: verify against HEAD;
-            still applies → Fix (spawn `clean-coder`) → reply → resolve;
-            no longer applies → reply-with-note → resolve.
-            Push if code changed → return to Step 4
+      - [ ] unresolved → apply the `pr-fix-protocol` skill's unresolved-thread sweep (`../pr-fix-protocol/SKILL.md`). Push if code changed → return to Step 4
 
       **(e) Mark ready**
       - [ ] When `copilot_down == true`, export `CLAUDE_REVIEWS_DISABLED="copilot"` in this tick's shell before the check below, so it bypasses the Copilot review gate and the pending-requested-reviews gate.
@@ -384,22 +397,22 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] **clean (no findings)** →
             `copilot_clean_at = current_head` → return to Step 7 (re-validate gates b, d, e)
       - [ ] **dirty (findings present)** →
-            - [ ] Fix each finding (spawn `clean-coder`)
-            - [ ] Reply to each finding comment via `python ~/.claude/skills/pr-converge/scripts/post_fix_reply.py`
-            - [ ] Resolve each addressed thread via `pull_request_review_write(method="resolve_thread")`
+            - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to the findings
             - [ ] Push → `phase = BUGBOT` → return to Step 4
       - [ ] **no review yet** →
             increment `copilot_wait_count` → ≥ 3 = hard blocker → stop
             schedule 360s wakeup → return to Step 7a next tick
 
 - [ ] **Step 8: Clean working tree**
-      See: [`bugteam/reference/teardown-publish-permissions.md` § Step 4](../../bugteam/reference/teardown-publish-permissions.md)
+      `pr-loop-lifecycle` Close (`../pr-loop-lifecycle/SKILL.md`).
+      See: [`pr-loop-lifecycle/reference/teardown-publish-permissions.md` § Clean working tree](../pr-loop-lifecycle/reference/teardown-publish-permissions.md)
 
 - [ ] **Step 9: Rewrite PR description**
-      See: [`bugteam/reference/teardown-publish-permissions.md` § Step 4.5](../../bugteam/reference/teardown-publish-permissions.md)
+      `pr-loop-lifecycle` Close.
+      See: [`pr-loop-lifecycle/reference/teardown-publish-permissions.md` § Publish the final PR description](../pr-loop-lifecycle/reference/teardown-publish-permissions.md)
 
-- [ ] **Step 10: Revoke project permissions**
-      `python "$HOME/.claude/skills/bugteam/scripts/revoke_project_claude_permissions.py"`
+- [ ] **Step 10: Revoke project permissions (always)**
+      `pr-loop-lifecycle` Close (`../pr-loop-lifecycle/SKILL.md` § Close).
 
 - [ ] **Step 11: Print final report**
       Print this block verbatim — no paraphrase, no extra commentary:

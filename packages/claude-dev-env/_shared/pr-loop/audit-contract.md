@@ -8,7 +8,8 @@ Shared output schema and audit-loop contract used by `/bugteam`, `/qbug`, `/find
 - Adversarial second pass
 - Haiku secondary auditor
 - Post-fix self-audit
-- Persistence (loop-N-audit.json, loop-N-diagnostics.json)
+- De-dup and merge
+- Persistence (loop-<L>-audit.json, loop-<L>-diagnostics.json)
 
 ## Finding schema
 
@@ -18,7 +19,7 @@ Each finding an audit produces MUST be one of exactly two shapes.
 
 ```json
 {
-  "id": "loop<N>-<K>",
+  "id": "loop<L>-<K>",
   "file": "path/relative/to/repo/root.py",
   "line": 123,
   "category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P",
@@ -29,7 +30,7 @@ Each finding an audit produces MUST be one of exactly two shapes.
 }
 ```
 
-`id` is `loop<N>-<K>` where `N` is the loop counter (1-based) and `K` is the 1-based index within the loop. For `/findbugs` which runs once, use `find<K>`.
+`id` is `loop<L>-<K>` where `L` is the loop counter (1-based) and `K` is the 1-based index within the loop. For `/findbugs` which runs once, use `find<K>`.
 
 ### Shape B — structured proof-of-absence
 
@@ -98,16 +99,16 @@ For single-subagent skills (`/qbug`, `/findbugs`) the LEAD spawns two `Agent()` 
 
 Both audit the same diff. The secondary returns findings to the LEAD only — never posted to the PR.
 
-Merge rules:
+Merge rules — applied whenever the LEAD combines findings from multiple sources (primary auditor, Haiku secondary auditor, adversarial pass):
 
-- **De-dup key**: `(file, line, category)`.
-- **Severity conflict**: max wins (P0 > P1 > P2).
-- **Unique-to-Haiku findings**: added to the primary set with Haiku's severity and source annotation.
+- **De-dup key**: `(file, line, category)`. Two findings sharing the same `(file, line, category)` tuple are the same finding and collapse into one entry.
+- **Severity conflict**: max wins (`P0 > P1 > P2`). When sources disagree on severity for the same de-dup key, the merged entry keeps the highest severity.
+- **Unique-to-secondary findings**: added to the merged set with the secondary's severity and source annotation.
 - **Unique-to-primary findings**: kept as-is.
-- **Zero Haiku findings**: primary set trusted; proceed.
-- **Malformed or non-parseable Haiku output**: lead trusts the primary set, logs the event in `loop-<N>-diagnostics.json` under `haiku_findings` as `[{"parse_error": "<message>"}]`.
+- **Zero secondary findings**: the primary set is trusted and the audit moves on.
+- **Malformed or non-parseable secondary output**: lead trusts the primary set and logs the event in `loop-<L>-diagnostics.json` under `haiku_findings` as `[{"parse_error": "<message>"}]`.
 
-For multi-subagent skills (`/bugteam`) the parallel-auditors pattern in [`audit-and-teammates.md`](audit-and-teammates.md) already provides cross-model coverage via the three variant teammates.
+For `/bugteam`, the single audit agent provides per-category coverage by walking all A–P rubrics in one invocation.
 
 ## Post-fix self-audit
 
@@ -128,11 +129,22 @@ Sequence:
 
 `converged` exit condition: `primary_audit_clean AND post_fix_audit_clean` for the committing loop.
 
+## De-dup and merge
+
+Findings from primary, adversarial, Haiku secondary, and post-fix passes are merged into a single deduped finding list before persistence.
+
+- **De-dup key:** `(file, line, category)`. Two findings sharing the same `(file, line, category)` tuple collapse into a single deduped entry.
+- **Severity conflict resolution:** `max wins`. When merged findings disagree on severity, the deduped entry carries the highest severity (`P0 > P1 > P2`).
+- **Excerpt and failure_mode:** the deduped entry inherits these fields from the highest-severity contributing finding. Ties keep the first observed contributor.
+- **`evidence_files`:** the deduped entry carries the union of every contributor's `evidence_files`, deduplicated and sorted.
+
+The merged list lands in `loop-<L>-diagnostics.json` under both `merged` (one entry per contributing finding) and `deduped` (one entry per unique `(file, line, category)` tuple).
+
 ## Persistence
 
 Every audit loop writes two JSON files under the skill's scoped temp directory (resolved via `tempfile.gettempdir()`):
 
-### `loop-<N>-audit.json`
+### `loop-<L>-audit.json`
 
 ```json
 {
@@ -142,7 +154,7 @@ Every audit loop writes two JSON files under the skill's scoped temp directory (
 }
 ```
 
-### `loop-<N>-diagnostics.json`
+### `loop-<L>-diagnostics.json`
 
 ```json
 {

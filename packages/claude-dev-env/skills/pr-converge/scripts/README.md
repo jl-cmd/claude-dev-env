@@ -79,15 +79,13 @@ non-empty body → dirty.
 
 ### Inline comment threads: `pull_request_read(method="get_review_comments")`
 
-Fetch via MCP. The convergence gate filters ONLY on resolution state:
+Fetch via MCP:
 
     pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
       → filter threads where `is_resolved == false`
 
-The fields `comment.author`, `comment.commit.oid`, and `is_outdated`
-remain useful for **deciding how to address** each unresolved thread
-(re-fix? reply-with-note?), but they do not exclude a thread from the
-count.
+Sweep semantics and per-thread handling live in the `pr-fix-protocol`
+skill's unresolved-thread sweep (`../../pr-fix-protocol/SKILL.md`).
 
 ### Request Copilot review: `gh api` REST endpoint
 
