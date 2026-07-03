@@ -718,12 +718,13 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
 };
 
 
-test('FOLDED_HOOK_RELATIVE_PATHS contains all 16 hooks removed from hooks.json', () => {
-    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 16);
+test('FOLDED_HOOK_RELATIVE_PATHS contains all 16 hooks removed from hooks.json plus the retired md_to_html_blocker', () => {
+    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 17);
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/write_existing_file_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/plain_language_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/pytest_testpaths_orphan_blocker.py'));
+    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/md_to_html_blocker.py'));
 });
 
 
@@ -746,16 +747,25 @@ test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher host
         'blocking/open_questions_in_plans_blocker.py',
         'blocking/plain_language_blocker.py',
     ];
+    const retiredHooks = [
+        'blocking/md_to_html_blocker.py',
+    ];
     for (const hostedPath of dispatcherHostedHooks) {
         assert.ok(
             FOLDED_HOOK_RELATIVE_PATHS.has(hostedPath),
             `dispatcher-hosted hook ${hostedPath} must be in FOLDED_HOOK_RELATIVE_PATHS so a reinstall prunes its stale standalone entry and it does not double-run`
         );
     }
+    for (const retiredPath of retiredHooks) {
+        assert.ok(
+            FOLDED_HOOK_RELATIVE_PATHS.has(retiredPath),
+            `retired hook ${retiredPath} must be in FOLDED_HOOK_RELATIVE_PATHS so a reinstall prunes its stale standalone entry pointing at a script no longer on disk`
+        );
+    }
     assert.equal(
         FOLDED_HOOK_RELATIVE_PATHS.size,
-        dispatcherHostedHooks.length,
-        'FOLDED_HOOK_RELATIVE_PATHS must hold exactly the dispatcher-hosted hooks, no more, no fewer'
+        dispatcherHostedHooks.length + retiredHooks.length,
+        'FOLDED_HOOK_RELATIVE_PATHS must hold exactly the dispatcher-hosted hooks plus the retired hooks, no more, no fewer'
     );
 });
 
@@ -887,11 +897,12 @@ const OLD_POST_FOLDED_HOOKS_SETTINGS = {
 };
 
 
-test('POST_FOLDED_HOOK_RELATIVE_PATHS contains the three after-write hooks folded into the PostToolUse dispatcher', () => {
-    assert.equal(POST_FOLDED_HOOK_RELATIVE_PATHS.size, 3);
+test('POST_FOLDED_HOOK_RELATIVE_PATHS contains the after-write hooks and the retired md_to_html_companion', () => {
+    assert.equal(POST_FOLDED_HOOK_RELATIVE_PATHS.size, 4);
     assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('validation/mypy_validator.py'));
     assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('workflow/auto_formatter.py'));
     assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('workflow/doc_gist_auto_publish.py'));
+    assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('workflow/md_to_html_companion.py'));
 });
 
 
