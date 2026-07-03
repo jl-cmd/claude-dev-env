@@ -50,6 +50,8 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_COMMIT_VALUE_OPTION_TOKENS,
     ALL_EDITED_FILE_PATHS_KEY,
     ALL_GIT_GLOBAL_VALUE_OPTION_TOKENS,
+    ALL_STAGE_ALL_ADD_FLAG_TOKENS,
+    ALL_STAGE_ALL_ADD_PATHSPEC_TOKENS,
     ALL_STAGING_SUBCOMMAND_TOKENS,
     ALL_TRACKED_UNSTAGED_FILES_COMMAND,
     COMMIT_ALL_SHORT_FLAG_LETTER,
@@ -136,18 +138,18 @@ def _has_trailing_bypass_comment(bash_command: str) -> bool:
     """Return whether the command carries the bypass marker as a real comment.
 
     The ``# partial-commit`` marker opts out only as a trailing shell comment
-    the author adds on purpose, so its ``#`` and ``partial-commit`` parts sit
-    as adjacent unquoted tokens. The same text inside a quoted commit message
-    (``git commit -m "fix # partial-commit"``) tokenizes into one quoted token,
-    so it does not match and the gate still runs.
+    the author adds on purpose, so its ``#`` and ``partial-commit`` parts are
+    the final tokens of the command. The same text earlier in the command — a
+    quoted commit message (``git commit -m "fix # partial-commit"``) or an
+    earlier ``echo # partial-commit`` segment — does not match, so the gate
+    still runs.
 
     Args:
         bash_command: The Bash tool command string.
 
     Returns:
-        True when the marker appears as a trailing shell comment; False when
-        it appears only inside a quoted argument or the command will not
-        tokenize.
+        True when the marker is the final tokens of the command; False when it
+        appears earlier or the command will not tokenize.
     """
     marker_tokens = PARTIAL_COMMIT_BYPASS_MARKER.split()
     try:
@@ -155,10 +157,9 @@ def _has_trailing_bypass_comment(bash_command: str) -> bool:
     except ValueError:
         return False
     marker_length = len(marker_tokens)
-    for each_start_index in range(len(all_tokens) - marker_length + 1):
-        if all_tokens[each_start_index : each_start_index + marker_length] == marker_tokens:
-            return True
-    return False
+    if marker_length > len(all_tokens):
+        return False
+    return all_tokens[-marker_length:] == marker_tokens
 
 
 def _split_into_command_segments(all_tokens: list[str]) -> list[list[str]]:
@@ -260,27 +261,27 @@ def _git_subcommand(all_segment_tokens: list[str]) -> str | None:
     return all_segment_tokens[subcommand_index]
 
 
-def _stages_paths_before_commit(bash_command: str) -> bool:
-    """Return whether a ``git add``/``git stage`` segment precedes the commit.
+def _preceding_staging_segments(bash_command: str) -> list[list[str]]:
+    """Return the ``git add``/``git stage`` segments that run before the commit.
 
-    The common ``git add widget.py && git commit -m update`` idiom stages the
-    edited file in its own segment right before the commit, so the file is
-    staged by the time the commit runs even though it reads as unstaged when the
-    gate inspects the index. A staging segment that runs after the commit
-    segment stages nothing for that commit and does not count.
+    The common ``git add widget.py && git commit -m update`` idiom stages a file
+    in its own segment right before the commit, so the file is staged by the
+    time the commit runs even though it reads as unstaged when the gate inspects
+    the index. A staging segment that runs after the commit segment stages
+    nothing for that commit and is left out.
 
     Args:
         bash_command: The Bash tool command string.
 
     Returns:
-        True when a ``git add`` or ``git stage`` segment runs before the commit
-        segment; False when the command will not tokenize or holds no such
-        segment.
+        The staging segments (each a token list) that run before the commit
+        segment, in command order. Empty when the command will not tokenize,
+        runs no commit, or has no such preceding segment.
     """
     try:
         all_tokens = shlex.split(bash_command, posix=True)
     except ValueError:
-        return False
+        return []
     all_segments = _split_into_command_segments(all_tokens)
     commit_segment_index = next(
         (
@@ -291,11 +292,101 @@ def _stages_paths_before_commit(bash_command: str) -> bool:
         None,
     )
     if commit_segment_index is None:
-        return False
-    return any(
-        _git_subcommand(each_segment) in ALL_STAGING_SUBCOMMAND_TOKENS
+        return []
+    return [
+        each_segment
         for each_segment in all_segments[:commit_segment_index]
+        if _git_subcommand(each_segment) in ALL_STAGING_SUBCOMMAND_TOKENS
+    ]
+
+
+def _staging_segment_covers_all_paths(all_segment_tokens: list[str]) -> bool:
+    """Return whether one staging segment stages every path (a stage-all form).
+
+    ``git add -A``/``--all``/``-u``/``--update`` and ``git add .``/``git add :/``
+    each stage the whole working tree, so any file the session edited is staged
+    by the time the commit runs.
+
+    Args:
+        all_segment_tokens: One ``git add``/``git stage`` segment's tokens.
+
+    Returns:
+        True when the segment carries a stage-all flag or a stage-all pathspec;
+        False otherwise.
+    """
+    subcommand_index = _git_subcommand_index(all_segment_tokens)
+    if subcommand_index is None:
+        return False
+    for each_token in all_segment_tokens[subcommand_index + 1 :]:
+        if each_token in ALL_STAGE_ALL_ADD_FLAG_TOKENS:
+            return True
+        if each_token in ALL_STAGE_ALL_ADD_PATHSPEC_TOKENS:
+            return True
+    return False
+
+
+def _staging_covers_all_paths(all_staging_segments: list[list[str]]) -> bool:
+    """Return whether any preceding staging segment stages every path.
+
+    Args:
+        all_staging_segments: The staging segments that run before the commit.
+
+    Returns:
+        True when one of the segments is a stage-all form; False otherwise.
+    """
+    return any(
+        _staging_segment_covers_all_paths(each_segment)
+        for each_segment in all_staging_segments
     )
+
+
+def _staged_positional_path_tokens(all_staging_segments: list[list[str]]) -> list[str]:
+    """Return the positional path tokens of the specific-path staging segments.
+
+    A specific-path ``git add README.md`` names the paths it stages as
+    positional tokens after the subcommand, so only those paths are staged by
+    the time the commit runs. Flag tokens (``--``, ``-A``) are not paths.
+
+    Args:
+        all_staging_segments: The staging segments that run before the commit.
+
+    Returns:
+        Every non-flag token following the staging subcommand, across all
+        segments, in command order.
+    """
+    all_path_tokens: list[str] = []
+    for each_segment in all_staging_segments:
+        subcommand_index = _git_subcommand_index(each_segment)
+        if subcommand_index is None:
+            continue
+        for each_token in each_segment[subcommand_index + 1 :]:
+            if each_token.startswith(SHORT_FLAG_PREFIX):
+                continue
+            all_path_tokens.append(each_token)
+    return all_path_tokens
+
+
+def _staged_path_keys(
+    all_staging_segments: list[list[str]], repository_root: Path
+) -> set[str]:
+    """Return the case-folded resolved keys the specific-path staging segments stage.
+
+    Args:
+        all_staging_segments: The staging segments that run before the commit.
+        repository_root: Repository root the positional path tokens resolve against.
+
+    Returns:
+        The case-folded resolved absolute paths of every specific staged path
+        token, matching the key shape used for session-edited and unstaged paths.
+    """
+    staged_keys: set[str] = set()
+    for each_token in _staged_positional_path_tokens(all_staging_segments):
+        try:
+            resolved_key = str((repository_root / each_token).resolve()).casefold()
+        except OSError:
+            continue
+        staged_keys.add(resolved_key)
+    return staged_keys
 
 
 def _invokes_git_commit(bash_command: str) -> bool:
@@ -326,9 +417,8 @@ def _invokes_git_commit(bash_command: str) -> bool:
 def _commit_bypasses_stage_check(bash_command: str) -> bool:
     """Return whether the commit intentionally opts out of the stage check.
 
-    A ``# partial-commit`` trailing comment, a ``-a``/``--all`` flag, a pathspec
-    argument (a ``--`` separator or a bare positional path), and a preceding
-    ``git add``/``git stage`` segment in the same compound command each mark a
+    A ``# partial-commit`` trailing comment, a ``-a``/``--all`` flag, and a
+    pathspec argument (a ``--`` separator or a bare positional path) each mark a
     deliberate partial commit that the gate leaves alone.
 
     Args:
@@ -338,8 +428,6 @@ def _commit_bypasses_stage_check(bash_command: str) -> bool:
         True when the commit opts out of the stage check; False otherwise.
     """
     if _has_trailing_bypass_comment(bash_command):
-        return True
-    if _stages_paths_before_commit(bash_command):
         return True
     should_skip_next_value = False
     for each_token in _commit_argument_tokens(bash_command):
@@ -434,7 +522,9 @@ def _tracked_unstaged_paths(repository_root: Path) -> dict[str, str] | None:
 
 
 def _offending_repository_relative_paths(
-    all_session_edited_keys: set[str], all_unstaged_paths_by_key: dict[str, str]
+    all_session_edited_keys: set[str],
+    all_unstaged_paths_by_key: dict[str, str],
+    all_staged_path_keys: set[str],
 ) -> list[str]:
     """Return the tracked-unstaged files this session edited, repository-relative.
 
@@ -442,14 +532,18 @@ def _offending_repository_relative_paths(
         all_session_edited_keys: Case-folded resolved paths this session edited.
         all_unstaged_paths_by_key: Tracked-unstaged files keyed by their
             case-folded resolved path.
+        all_staged_path_keys: Case-folded resolved paths a preceding specific
+            ``git add`` already staged, excluded from the result.
 
     Returns:
-        The sorted repository-relative paths present in both sets.
+        The sorted repository-relative paths this session edited that remain
+        unstaged and were not staged by a preceding specific ``git add``.
     """
     all_offending_paths = [
         repository_relative_path
         for absolute_key, repository_relative_path in all_unstaged_paths_by_key.items()
         if absolute_key in all_session_edited_keys
+        and absolute_key not in all_staged_path_keys
     ]
     return sorted(all_offending_paths)
 
@@ -468,7 +562,9 @@ def _build_denial(all_offending_paths: list[str]) -> dict:
         f"{DENY_FILE_BULLET_PREFIX}{each_path}"
         for each_path in all_offending_paths
     )
-    space_joined_paths = DENY_PATHSPEC_SEPARATOR.join(all_offending_paths)
+    space_joined_paths = DENY_PATHSPEC_SEPARATOR.join(
+        shlex.quote(each_path) for each_path in all_offending_paths
+    )
     denial_reason = SESSION_EDIT_DENY_TEMPLATE.format(
         file_list=file_list,
         space_joined_paths=space_joined_paths,
@@ -506,11 +602,15 @@ def main() -> None:
     repository_root = resolve_repository_root(working_directory)
     if repository_root is None:
         sys.exit(0)
+    preceding_staging_segments = _preceding_staging_segments(bash_command)
+    if _staging_covers_all_paths(preceding_staging_segments):
+        sys.exit(0)
     repository_relative_by_key = _tracked_unstaged_paths(repository_root)
     if repository_relative_by_key is None:
         sys.exit(0)
+    staged_path_keys = _staged_path_keys(preceding_staging_segments, repository_root)
     offending_paths = _offending_repository_relative_paths(
-        session_edited_keys, repository_relative_by_key
+        session_edited_keys, repository_relative_by_key, staged_path_keys
     )
     if not offending_paths:
         sys.exit(0)

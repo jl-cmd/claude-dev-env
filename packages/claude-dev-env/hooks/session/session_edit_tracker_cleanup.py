@@ -101,11 +101,13 @@ def main() -> None:
     Reads the session-lifecycle payload from stdin for the session id and
     deletes that session's tracker file from the system temp directory, unless
     the payload is a SessionStart that continues the same conversation (a
-    compact or a resume), which keeps the in-flight tracker. Exits zero on
-    every branch, including a malformed or empty payload, so the session is
-    never blocked.
+    compact or a resume), which keeps the in-flight tracker. A malformed or
+    empty payload is a no-op that deletes nothing. Exits zero on every branch,
+    so the session is never blocked.
     """
-    payload_by_field = read_hook_input_dictionary_from_stdin() or {}
+    payload_by_field = read_hook_input_dictionary_from_stdin()
+    if payload_by_field is None:
+        return
     if not _is_tracker_deletion_lifecycle_event(payload_by_field):
         return
     session_id = str(payload_by_field.get("session_id") or "")

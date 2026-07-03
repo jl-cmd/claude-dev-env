@@ -9,9 +9,9 @@ SessionStart source key and the fresh-startup source value the cleanup keys its
 deletion on, the edit-tool name set, the per-session lock filename suffix and
 the lock-acquire timing, the git-diff command and its output encoding, the
 commit-flag escapes the gate honors, the git executable token, the staging
-subcommand tokens and git global value-option tokens that mark a pre-commit
-``git add``/``git stage`` segment as staging the commit, and the deny-message
-template.
+subcommand tokens, the git global value-option tokens, and the stage-all add
+flag and pathspec tokens that mark a pre-commit ``git add``/``git stage``
+segment as staging the commit, and the deny-message template.
 """
 
 from __future__ import annotations
@@ -51,6 +51,8 @@ COMMIT_SUBCOMMAND_TOKEN: str = "commit"
 GIT_EXECUTABLE_TOKEN: str = "git"
 ENV_ASSIGNMENT_PREFIX_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 ALL_STAGING_SUBCOMMAND_TOKENS: frozenset[str] = frozenset({"add", "stage"})
+ALL_STAGE_ALL_ADD_FLAG_TOKENS: frozenset[str] = frozenset({"-A", "--all", "-u", "--update"})
+ALL_STAGE_ALL_ADD_PATHSPEC_TOKENS: frozenset[str] = frozenset({".", ":/"})
 ALL_GIT_GLOBAL_VALUE_OPTION_TOKENS: frozenset[str] = frozenset(
     {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
 )
@@ -84,7 +86,7 @@ DENY_PATHSPEC_SEPARATOR: str = " "
 SESSION_EDIT_DENY_TEMPLATE: str = (
     "BLOCKED: these files were edited this session and are tracked but left "
     "unstaged, so this commit would drop them:\n{file_list}\n"
-    "Stage them with `git add {space_joined_paths}`, or run `git commit -a` to "
+    "Stage them with `git add -- {space_joined_paths}`, or run `git commit -a` to "
     "include every tracked change, or add `{bypass_marker}` to the command to "
     "commit without them on purpose."
 )

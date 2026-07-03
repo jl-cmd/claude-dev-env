@@ -293,6 +293,42 @@ def test_allows_commit_when_git_dash_c_add_stages_in_same_command(tmp_path: Path
     assert completed_hook.stdout.strip() == ""
 
 
+def test_denies_commit_when_specific_add_leaves_session_edit_unstaged(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    readme_file = repository_root / "README.md"
+    readme_file.write_text("readme\n", encoding="utf-8")
+    run_git(repository_root, "add", "README.md")
+    run_git(repository_root, "commit", "-m", "add readme")
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "git add README.md && git commit -m update",
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    denial = parse_denial(completed_hook.stdout)
+    assert denial["permissionDecision"] == "deny"
+    assert "widget.py" in denial["permissionDecisionReason"]
+
+
+def test_allows_commit_when_stage_all_add_precedes(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "git add -A && git commit -m update",
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout.strip() == ""
+
+
 def test_denies_commit_when_add_runs_after_commit_segment(tmp_path: Path) -> None:
     repository_root, temp_directory, home_directory = _make_directories(tmp_path)
     tracked_file = prepare_repository_with_unstaged_edit(repository_root)
@@ -338,6 +374,23 @@ def test_allows_partial_commit_marker(tmp_path: Path) -> None:
     )
     assert completed_hook.returncode == 0
     assert completed_hook.stdout.strip() == ""
+
+
+def test_denies_when_marker_not_trailing(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "echo # partial-commit && git commit -m update",
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    denial = parse_denial(completed_hook.stdout)
+    assert denial["permissionDecision"] == "deny"
+    assert "widget.py" in denial["permissionDecisionReason"]
 
 
 def test_denies_when_marker_only_inside_commit_message(tmp_path: Path) -> None:
