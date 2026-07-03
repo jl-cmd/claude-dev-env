@@ -295,7 +295,7 @@ def main(all_arguments: list[str]) -> int:
     arguments = parse_arguments(all_arguments)
     try:
         handoff_dir = _write_handoff_from_arguments(arguments)
-    except OSError as read_or_write_error:
+    except (OSError, UnicodeDecodeError) as read_or_write_error:
         print(f"write_handoff failed: {read_or_write_error}", file=sys.stderr)
         return 1
     print(handoff_dir.as_posix())
