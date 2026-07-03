@@ -36,6 +36,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `plain-illustrative-docstrings.md` | Public docstring narrative reads plainly and shows behavior with a diagram block (a `::` example or a doctest), painting a concrete scene a general developer follows on first read; a run-on backstop hook, a prose-wall backstop hook, and Category O9 audit enforce it |
 | `plain-language.md` | Everyday words, short active sentences, lead with the answer |
 | `prompt-workflow-context-controls.md` | Keep prompt-workflow instruction layers small and stable; load heavy skills on demand |
+| `re-stage-before-commit.md` | Stage the files edited this session before `git commit`; the session edit stage gate denies a commit that leaves a tracked session edit unstaged, with `-a`, a pathspec, and `# partial-commit` as escapes |
 | `research-mode.md` | Three anti-hallucination constraints: say "I don't know", verify with citations, quote for factual grounding |
 | `right-sized-engineering.md` | Simple over clever; functions over classes; concrete over abstract |
 | `self-contained-docs.md` | Every document is fully self-contained; no references to the conversation that produced it |
