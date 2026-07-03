@@ -28,6 +28,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `no-historical-clutter.md` | Documentation describes current state only; no historical or transitional language |
 | `no-inline-destructive-literals.md` | No destructive-command literals in Bash tool command strings, even as data |
 | `env-var-table-code-drift.md` | Every env-var summary table row in a `.md` file names a code file whose source references the variable |
+| `es-exe-file-search.md` | File search on Windows routes through the `es.exe` CLI with a scoped query; the Everything HTTP server stays off |
 | `orphan-css-class.md` | Every `class="..."` attribute in Python-generated markup has a matching selector in the `<style>` block |
 | `package-inventory-stale-entry.md` | A new production code file added to a directory carries an entry in that directory's `README.md`/`CLAUDE.md` file inventory |
 | `paired-test-coverage.md` | A public function omitted by a module's established paired test suite must get a behavioral test |
@@ -42,8 +43,10 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `tdd.md` | Test-driven development: red → green → refactor, no production code before a failing test |
 | `testing.md` | Test quality and infrastructure standards |
 | `vault-context.md` | Search Obsidian vault for prior sessions and decisions before substantive project work |
-| `verify-before-asking.md` | Answer questions by inspecting files or running tools before asking the user |
+| `verify-before-asking.md` | Answer questions by inspecting files or running tools before asking; recalled facts expire until re-checked this session |
+| `verify-runtime-state.md` | A "component is fine / not at fault" verdict rests on a live probe this session, never code reading or prior-session memory |
 | `windows-filesystem-safe.md` | Use safe `rmtree` patterns on Windows; `mkdirSync` with `recursive: true` on possibly-existing paths |
+| `workers-done-before-complete.md` | A task reaches `completed` only when every spawned worker has finished and its results are merged into run state |
 | `workflow-substitution-slots.md` | Per-iteration values in `.workflow.js` templates use angle-bracket slots |
 
 ## Hook enforcement
