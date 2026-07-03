@@ -8,6 +8,8 @@ ALL_SWEEP_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset(
 
 MARKDOWN_FILE_EXTENSION: str = ".md"
 
+PYTHON_FILE_EXTENSION: str = ".py"
+
 SNAKE_CASE_IDENTIFIER_PATTERN: re.Pattern[str] = re.compile(
     r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b"
 )
@@ -24,9 +26,11 @@ HYPHENATED_PROSE_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)+\b"
 )
 
-STRING_LITERAL_CONTENT_PATTERN: re.Pattern[str] = re.compile(
-    r"\"([^\"]*)\"|'([^']*)'|`([^`]*)`"
-)
+TEST_DIRECTORY_PATH_SEGMENT: str = "/tests/"
+
+TEST_FILE_NAME_PREFIX: str = "test_"
+
+ALL_TEST_FILE_NAME_INFIX_MARKERS: tuple[str, ...] = ("_test.", ".test.", ".spec.")
 
 DIFF_FILE_HEADER_PREFIX: str = "+++ "
 
