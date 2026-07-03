@@ -244,3 +244,11 @@ ALL_STRING_ESCAPE_SEQUENCES: tuple[str, ...] = (
 TEST_FILE_PREFIX: str = "test_"
 
 TEST_FILE_SUFFIX: str = "_test"
+
+TEST_DIRECTORY_PATH_SEGMENT: str = "/tests/"
+
+ALL_TEST_FILE_NAME_INFIX_MARKERS: tuple[str, ...] = ("_test.", ".test.", ".spec.")
+
+PROSE_WINDOW_WORD_SEPARATOR: str = " "
+
+IDENTIFIER_TOKEN_SEPARATOR: str = "_"
