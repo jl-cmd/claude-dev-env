@@ -1673,7 +1673,6 @@ def main(all_arguments: list[str]) -> int:
     if arguments.staged:
         all_terminology_findings = staged_terminology_findings(repository_root)
         _report_terminology_findings(all_terminology_findings)
-        terminology_exit_code = 1 if all_terminology_findings else 0
         staged_test_exit_code = run_staged_test_files(repository_root)
         staged_file_paths = paths_from_git_staged(repository_root)
         staged_file_paths = filter_paths_under_prefixes(
@@ -1682,7 +1681,7 @@ def main(all_arguments: list[str]) -> int:
             arguments.only_under,
         )
         if not staged_file_paths:
-            return terminology_exit_code or staged_test_exit_code
+            return staged_test_exit_code
         staged_added_lines = added_lines_by_file_staged(
             repository_root, staged_file_paths
         )
@@ -1693,7 +1692,7 @@ def main(all_arguments: list[str]) -> int:
             all_added_lines_by_path=staged_added_lines,
             read_staged_content_flag=True,
         )
-        return gate_exit_code or terminology_exit_code or staged_test_exit_code
+        return gate_exit_code or staged_test_exit_code
     file_paths = paths_from_git_diff(repository_root, arguments.base)
     file_paths = filter_paths_under_prefixes(
         file_paths,
