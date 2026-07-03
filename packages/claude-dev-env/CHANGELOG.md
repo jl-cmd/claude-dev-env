@@ -1,5 +1,106 @@
 # Changelog
 
+## [1.83.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.82.0...claude-dev-env-v1.83.0) (2026-07-03)
+
+
+### Features
+
+* **autoconverge:** gate reviewer spawns on shared availability check ([4e43eeb](https://github.com/jl-cmd/claude-code-config/commit/4e43eeb587b5aa1d63553d865f7575103ad1cf09))
+* **autoconverge:** gate reviewer spawns on shared availability check ([e632832](https://github.com/jl-cmd/claude-code-config/commit/e632832a5a6878d07c020768f8c4428f3114aecb))
+* block JS bare-flag return directive that contradicts a converge result contract ([d331e27](https://github.com/jl-cmd/claude-code-config/commit/d331e27acf741bfd581f4f6fdae7edaa450cd1d9))
+* block JS bare-flag return directive that contradicts a converge result contract ([2e1183a](https://github.com/jl-cmd/claude-code-config/commit/2e1183a8879c00df2857f1194202121aadc0ec97))
+* **hooks:** block adjacent log literals and duplicate config path anchors ([6402212](https://github.com/jl-cmd/claude-code-config/commit/6402212c00937f34edae91f55a7ce3b1b6ef0eeb))
+* **hooks:** block adjacent log literals and duplicate config path anchors at Write/Edit ([3922bc8](https://github.com/jl-cmd/claude-code-config/commit/3922bc875796d4eb5f6ab0e2fc2608c723d3b04f))
+* **hooks:** block JS return object omitting a sibling return's key ([e8fb417](https://github.com/jl-cmd/claude-code-config/commit/e8fb417b867657e1f285a1ed679a33ee481622c4))
+* **hooks:** block JS return object omitting a sibling return's key ([0b9fadf](https://github.com/jl-cmd/claude-code-config/commit/0b9fadf43403feeec6464e252270cba34a95fa87))
+* **hooks:** block naive datetime construction at Write/Edit time ([82d3e95](https://github.com/jl-cmd/claude-code-config/commit/82d3e95c50d5a37e89d7ed68ca798817ff9b602c))
+* **hooks:** block naive datetime construction at Write/Edit time ([92f1136](https://github.com/jl-cmd/claude-code-config/commit/92f1136ec546f6d430a91b5272e686fd9b6be03f))
+* **hooks:** block referenced-underscore loop vars and join separator magic ([4bbcb5a](https://github.com/jl-cmd/claude-code-config/commit/4bbcb5a7aba839d2c55f917fde5639e762e75e4b))
+* **hooks:** block referenced-underscore loop vars and join separator magic ([85a01c1](https://github.com/jl-cmd/claude-code-config/commit/85a01c10a58b0b9150359aeed4f5111e6060735b))
+* **hooks:** block stale-comment-reference and historical-clutter drift at Write/Edit time ([6fb52c2](https://github.com/jl-cmd/claude-code-config/commit/6fb52c28bb76e7127f5ee46affe8e05d556707bc))
+* **hooks:** block stale-comment-reference and historical-clutter drift at Write/Edit time ([6d2d6a4](https://github.com/jl-cmd/claude-code-config/commit/6d2d6a4c238f9e72ddfa7181fca886386d4ddb5a))
+* **hooks:** gate docstring delegation-summary enumeration drift ([98000bb](https://github.com/jl-cmd/claude-code-config/commit/98000bb55b0ae70c0c038c535b5b630a5a7c167f))
+* **hooks:** gate docstring delegation-summary enumeration drift ([da2d1c9](https://github.com/jl-cmd/claude-code-config/commit/da2d1c97dbb7f99672a7e307efc07db809560908))
+* **rules:** add runtime-state, stale-assumption, and worker-completion lesson rules ([3cffcbb](https://github.com/jl-cmd/claude-code-config/commit/3cffcbba645fcbe3c28c205d97b6f8edf1648d3b))
+* **rules:** add runtime-state, stale-assumption, and worker-completion lesson rules ([d0d4eec](https://github.com/jl-cmd/claude-code-config/commit/d0d4eec8f66a3238752bdf34772003b572e5a8e8))
+
+
+### Bug Fixes
+
+* address Copilot review findings ([6262f2f](https://github.com/jl-cmd/claude-code-config/commit/6262f2fce08cb1064ca53b5e4be496904880893b))
+* address Copilot review findings ([fcf07f4](https://github.com/jl-cmd/claude-code-config/commit/fcf07f439190fef1c265897969504e83dec357d2))
+* apply code-review findings ([796b2cc](https://github.com/jl-cmd/claude-code-config/commit/796b2cc6625cb55f56770beff7979b22b3abdd5c))
+* apply code-review findings ([7f9cd95](https://github.com/jl-cmd/claude-code-config/commit/7f9cd959fa3130e93f30167e082c135e4fbbe99d))
+* correct sibling return-object drift check bugs found in review ([01a1ff4](https://github.com/jl-cmd/claude-code-config/commit/01a1ff4e36510440b612b1198ea226e864cb4b21))
+* guard return-type colon on TS conditional types ([1dbfadc](https://github.com/jl-cmd/claude-code-config/commit/1dbfadca5254d8bd3baa4991d6794c108530445f))
+* harden JS sibling-return-object-key-drift detection ([9b670eb](https://github.com/jl-cmd/claude-code-config/commit/9b670eb1f3f14b6a5c32baa8c4b7cf2b9b876a42))
+* **hooks:** address converge-round review findings on JS return key drift ([6a9c688](https://github.com/jl-cmd/claude-code-config/commit/6a9c6883f0714b89b78878152c317f535a47fa4a))
+* **hooks:** apply bare-flag directive cap after diff-scoping ([e9a69ba](https://github.com/jl-cmd/claude-code-config/commit/e9a69ba756506990e3264e320fab39bc3a570d69))
+* **hooks:** avoid false negatives and redundant reads in delegation-summary gate ([9effb5d](https://github.com/jl-cmd/claude-code-config/commit/9effb5d71ee50d45f962ca20e0651b92a429a9db))
+* **hooks:** case-insensitive bare-flag directive matching (copilot) ([4f755a2](https://github.com/jl-cmd/claude-code-config/commit/4f755a22c0302d071c5eaae3937c9e1252e0b029))
+* **hooks:** correct off-by-one label in duplicate-path-anchor message ([72d7a8f](https://github.com/jl-cmd/claude-code-config/commit/72d7a8fd29517c352e7b7690892c969bfe752345))
+* **hooks:** detect adjacent-literal logging calls via AST, not raw-line regex ([04c480b](https://github.com/jl-cmd/claude-code-config/commit/04c480baa0d7386431d61ee2bf1ada5562ce3951))
+* **hooks:** exclude triple-quoted strings from adjacent-literal check ([797f057](https://github.com/jl-cmd/claude-code-config/commit/797f0571bbf4ef85ce0d15bca937a5d05c75628d))
+* **hooks:** fix mismatched backticks in delegation-drift docstring example ([fb372c7](https://github.com/jl-cmd/claude-code-config/commit/fb372c7eaf037cbfc8ae97cdd3f3d03c9971553d))
+* **hooks:** fix wrapped-summary false negative in delegation drift gate ([3c74482](https://github.com/jl-cmd/claude-code-config/commit/3c74482c9b1014802d61eb36b8fc690aa74ca10e))
+* **hooks:** flag zero-whitespace adjacent string literals in log calls ([8612736](https://github.com/jl-cmd/claude-code-config/commit/8612736bd4e34eaf57828b4326be6ced36ddff3b))
+* **hooks:** handle bare and union TS return types in JS return key drift ([621b524](https://github.com/jl-cmd/claude-code-config/commit/621b5249b6a9fcac62c8c7bfc470b9a762f515e8))
+* **hooks:** ignore sibling-shared tokens in module-docstring roster check ([bf3afef](https://github.com/jl-cmd/claude-code-config/commit/bf3afef2c673fe3d1470eba257c153c5db34122a))
+* **hooks:** ignore sibling-shared tokens in module-docstring roster check ([8b2bb8e](https://github.com/jl-cmd/claude-code-config/commit/8b2bb8ec13d607f50c4fa1ee3e59371d4a863c04))
+* **hooks:** isolate concise-body arrow return object literals into their own scope ([bc5f2e8](https://github.com/jl-cmd/claude-code-config/commit/bc5f2e82dfc57b318d307d4fd7fce7baef98d800))
+* **hooks:** localize stale-comment diff to old_string/new_string ([eedc47e](https://github.com/jl-cmd/claude-code-config/commit/eedc47e9ef857a1d6d2efc83140ac68d312bf9ca))
+* **hooks:** match prefixed first literal in adjacent-literal check ([c70e922](https://github.com/jl-cmd/claude-code-config/commit/c70e9223f284f8cf286b68433fdf270f7d343731))
+* **hooks:** match underscore-prefixed loggers in adjacent-literal check ([973f281](https://github.com/jl-cmd/claude-code-config/commit/973f2814b995a7c454a3e9a218e39fa93bce509b))
+* **hooks:** quote the contract's own text in bare-flag message ([78552d5](https://github.com/jl-cmd/claude-code-config/commit/78552d592bbc10991b9ecdf970bf1d1b73bfccfa))
+* **hooks:** robust conjunction normalization + doc wording/backtick fixes (copilot) ([9742f00](https://github.com/jl-cmd/claude-code-config/commit/9742f00e11f7d7001cf18dcaa6fda252b1c599d7))
+* **hooks:** scan full file for JS bare-flag directive check ([97443e3](https://github.com/jl-cmd/claude-code-config/commit/97443e3a54f902e234690d83ddc8be39de4b45d8))
+* **hooks:** scan only top-level defs for delegation-drift wrappers ([ad13214](https://github.com/jl-cmd/claude-code-config/commit/ad13214ac1e933f5c0148244efd2def8dd2db602))
+* **hooks:** scope adjacent-literal logging check to call argument list ([dc4b26f](https://github.com/jl-cmd/claude-code-config/commit/dc4b26f2bbc59dea6ce37eba2139e1f1806d98d6))
+* **hooks:** scope bare-flag directive to contract lines too ([9b25197](https://github.com/jl-cmd/claude-code-config/commit/9b25197b1693bff122e0e17fd0204eac7c049819))
+* **hooks:** scope delegation-drift entry collection to top-level defs ([2850d45](https://github.com/jl-cmd/claude-code-config/commit/2850d452d73e33293f1ff59d50c4f911bf22530c))
+* **hooks:** scope delegation-pointer resolution to the summary line ([68f46a2](https://github.com/jl-cmd/claude-code-config/commit/68f46a29a00ab3f2dc6a96f9e4ebbf7fb73445c3))
+* **hooks:** scope TS return types and skip union tags in JS return key drift ([f7bc5e3](https://github.com/jl-cmd/claude-code-config/commit/f7bc5e30c5712c92ee135e3b407cf0dc35ddb744))
+* **hooks:** sort TOKEN_WORD_PATTERN import alphabetically ([87af7b3](https://github.com/jl-cmd/claude-code-config/commit/87af7b38bac3aa7e7aba94fc6257f9b5062fd9f6))
+* **hooks:** use standard "f-string" wording in module docstring ([d6c04fd](https://github.com/jl-cmd/claude-code-config/commit/d6c04fda1d2297e59c8786f789f0eb86b1747af1))
+* **pr-loop:** narrow terminology sweep to hyphenated candidates ([be3c6ca](https://github.com/jl-cmd/claude-code-config/commit/be3c6cad3e85ee60ac86eb77aeeb00831e5ee3a8))
+* **pr-loop:** narrow terminology sweep to hyphenated candidates ([4264504](https://github.com/jl-cmd/claude-code-config/commit/42645040582d0771e73d2dbda44d74363f67a394)), closes [#845](https://github.com/jl-cmd/claude-code-config/issues/845)
+
+
+### Documentation
+
+* enumerate check_js_bare_flag_return_directive in O6 rule doc ([67ff479](https://github.com/jl-cmd/claude-code-config/commit/67ff4793909c13845983282a694c234d30dc31cd))
+* **everything-search:** route file search through the es.exe CLI ([897831e](https://github.com/jl-cmd/claude-code-config/commit/897831ef1b6d121c77ec45e1695413d56bf0ba93))
+* **everything-search:** route file search through the es.exe CLI ([cf2e20c](https://github.com/jl-cmd/claude-code-config/commit/cf2e20cb2b9e4a4a7051465732c89a55cc1ac649))
+* **hooks:** drop absolute prompt-prose claim in bare-flag docstring ([7a79fc0](https://github.com/jl-cmd/claude-code-config/commit/7a79fc000eead2a8a97056f0b365bc8d8dc307d3))
+* **hooks:** name logging fstring and printf-token checks in roster ([92d4802](https://github.com/jl-cmd/claude-code-config/commit/92d48023e83a0855ab40c0d4908da3c15a542063))
+* **hooks:** scope bare-flag directive docstring to file-wide match ([4ac79ea](https://github.com/jl-cmd/claude-code-config/commit/4ac79eaa7667fd66fbd7f06b7ec98c5b0816075f))
+* **rules:** align gate-validator enumeration count with registered gates ([4c80fb4](https://github.com/jl-cmd/claude-code-config/commit/4c80fb41bbeab9221f9817c433acbbd3c477a2d6))
+* **rules:** scope JS bare-flag bullet to the return-flag shape ([846fcc4](https://github.com/jl-cmd/claude-code-config/commit/846fcc497778b8be31a39fbd71b1383fdbdf2a53))
+
+
+### Maintenance
+
+* scope hook-enforced file-type rules with paths frontmatter ([0967c9b](https://github.com/jl-cmd/claude-code-config/commit/0967c9b7555c4a6f955253dc1efe54187fe0e1d5))
+
+
+### Refactoring
+
+* **hooks:** rename defs helper to full-word identifiers ([4e5c658](https://github.com/jl-cmd/claude-code-config/commit/4e5c6586d4900b66b356c1a065044683d65081a5))
+* **hooks:** rename drift-comment constants to match served hook ([dadabc5](https://github.com/jl-cmd/claude-code-config/commit/dadabc5a72b5e32c18441735f7dd29facdb1ed70))
+* **hooks:** split config anchor check to clear PLR0911/PLR0912 ([79e2bfb](https://github.com/jl-cmd/claude-code-config/commit/79e2bfbf067069f9417cac998bc8654c4c775859))
+
+
+### Performance
+
+* **hooks:** cap delegation-drift neighbor scan before filtering ([a5a672e](https://github.com/jl-cmd/claude-code-config/commit/a5a672ea1904e3e98209891e0bdfdb9c222c72dc))
+
+
+### Tests
+
+* **hooks:** cover false-branch bare flag return directive ([088dfb7](https://github.com/jl-cmd/claude-code-config/commit/088dfb722b2c180c193761db8505a568a9d9bc69))
+* **hooks:** register [#849](https://github.com/jl-cmd/claude-code-config/issues/849) checks in cap-meta pending-review list ([2697da3](https://github.com/jl-cmd/claude-code-config/commit/2697da37bdbcc32f6834cc7d2cd336ca2a9ec3cd))
+* **hooks:** register [#849](https://github.com/jl-cmd/claude-code-config/issues/849) checks in cap-meta pending-review list ([8347d36](https://github.com/jl-cmd/claude-code-config/commit/8347d36c2db5f8095ecfdea2f6b4fe65ec765df1))
+
 ## [1.82.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.81.0...claude-dev-env-v1.82.0) (2026-07-02)
 
 
