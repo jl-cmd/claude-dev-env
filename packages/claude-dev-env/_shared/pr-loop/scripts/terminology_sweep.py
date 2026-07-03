@@ -7,10 +7,17 @@ finds the other.
 
 This sweep reads a unified diff and collects every multi-word identifier added
 on code lines. Then it scans each added prose line — a Markdown line, or a
-comment, docstring, or string inside a code file. It flags a hyphen or space
-variant that shares an identifier's leading word but diverges in the tail. Each
+comment, docstring, or string inside a code file. It flags a hyphenated term
+that shares an identifier's leading word but diverges in the tail. Each
 near-miss prints as one ``file:line`` finding, and the run exits non-zero when
 any finding remains, so a commit gate can block on it.
+
+Only hyphenated terms are candidates. A hyphen marks a deliberate compound —
+the author bound the words into one term — so a divergent tail there is a real
+naming drift. A bare spaced word run is ordinary prose: windowing every
+sentence that starts with an identifier's first word ("each attempt", "file
+exists") floods a vocabulary-dense change with false findings and gives the
+gate nothing actionable.
 
 A shared leading token alone is too weak a signal: ordinary English compounds
 such as ``read-only`` and ``data-driven`` collide with unrelated identifiers
@@ -56,7 +63,6 @@ from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     JSDOC_CONTINUATION_MARKER,
     MARKDOWN_FILE_EXTENSION,
     MINIMUM_IDENTIFIER_TOKEN_COUNT,
-    PROSE_WORD_PATTERN,
     PYTHON_COMMENT_MARKER,
     SNAKE_CASE_IDENTIFIER_PATTERN,
     STRING_LITERAL_CONTENT_PATTERN,
@@ -234,35 +240,6 @@ def _hyphenated_candidates(fragment: str) -> list[tuple[str, IdentifierTuple]]:
     return all_candidates
 
 
-def _spaced_candidates(
-    fragment: str,
-    identifiers_by_first_token: dict[str, list[IdentifierTuple]],
-) -> list[tuple[str, IdentifierTuple]]:
-    """Return spaced word windows whose first word matches an identifier prefix.
-
-    Only a window anchored at a known identifier prefix and sized to one of that
-    prefix's identifiers is returned, which bounds the windows to the shapes the
-    near-miss check can act on.
-
-    Args:
-        fragment: The prose fragment to scan.
-        identifiers_by_first_token: Identifier tuples grouped by leading token.
-
-    Returns:
-        ``(display, token_tuple)`` pairs for each candidate window.
-    """
-    all_words = [
-        each_word.lower() for each_word in PROSE_WORD_PATTERN.findall(fragment)
-    ]
-    all_candidates: list[tuple[str, IdentifierTuple]] = []
-    for each_index, each_word in enumerate(all_words):
-        for each_identifier in identifiers_by_first_token.get(each_word, []):
-            window = tuple(all_words[each_index : each_index + len(each_identifier)])
-            if len(window) == len(each_identifier):
-                all_candidates.append((" ".join(window), window))
-    return all_candidates
-
-
 def _tokens_are_plural_variants(first_word: str, second_word: str) -> bool:
     """Return whether two words are singular/plural forms of one word.
 
@@ -348,7 +325,6 @@ def _findings_for_line(
     reported_tuples: set[IdentifierTuple] = set()
     for each_fragment in _prose_fragments(file_path, line_text):
         all_candidates = _hyphenated_candidates(each_fragment)
-        all_candidates += _spaced_candidates(each_fragment, identifiers_by_first_token)
         for each_display, each_tuple in all_candidates:
             matched_identifier = _near_miss_identifier(
                 each_tuple, all_identifier_tuples, identifiers_by_first_token
