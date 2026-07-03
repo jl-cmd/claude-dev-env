@@ -75,6 +75,35 @@ def test_flags_anchor_line_scope_against_span_intersection_body() -> None:
     assert "all_changed_lines" in issues[0]
 
 
+def test_flags_single_line_scope_against_stepped_range_span_body() -> None:
+    content = (
+        "def check_import_block_sorted(\n"
+        "    content: str, file_path: str, all_changed_lines: set[int] | None\n"
+        ") -> list[str]:\n"
+        '    """Flag an unsorted import block scoped to the changed lines.\n'
+        "\n"
+        "    Args:\n"
+        "        content: The full file content the write would leave on disk.\n"
+        "        file_path: The destination path used to gate by extension.\n"
+        "        all_changed_lines: Post-edit line numbers, or None. When provided,\n"
+        "            a finding blocks only when its block-anchor line is among the\n"
+        "            changed lines.\n"
+        "\n"
+        "    Returns:\n"
+        "        One issue string per detected finding.\n"
+        '    """\n'
+        "    span_range = range(line_number, block_end_line_number + 1, 1)\n"
+        "    all_violations.append((span_range, message))\n"
+        "    return _scope_violations_to_changed_lines(\n"
+        "        all_violations, all_changed_lines, defer_scope_to_caller\n"
+        "    )\n"
+    )
+    issues = check_docstring_args_single_line_scope_vs_span(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "check_import_block_sorted" in issues[0]
+    assert "all_changed_lines" in issues[0]
+
+
 def test_flags_the_line_is_among_phrasing() -> None:
     content = (
         "def check_block(\n"

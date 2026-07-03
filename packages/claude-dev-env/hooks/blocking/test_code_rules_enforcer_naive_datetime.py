@@ -181,6 +181,30 @@ def test_utcfromtimestamp_remediation_uses_generic_placeholder() -> None:
     assert "stamp, tz=" not in issues[0]
 
 
+def test_utcnow_remediation_is_import_agnostic() -> None:
+    content = (
+        "import datetime\n"
+        "def stamp() -> object:\n"
+        "    return datetime.datetime.utcnow()\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "use datetime.now(" not in issues[0]
+    assert "on the same datetime class" in issues[0]
+
+
+def test_utcfromtimestamp_remediation_is_import_agnostic() -> None:
+    content = (
+        "import datetime\n"
+        "def build(stamp: float) -> object:\n"
+        "    return datetime.datetime.utcfromtimestamp(stamp)\n"
+    )
+    issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
+    assert len(issues) == 1
+    assert "use datetime.fromtimestamp(" not in issues[0]
+    assert "on the same datetime class" in issues[0]
+
+
 def test_remediation_does_not_mandate_astimezone() -> None:
     content = (
         "from datetime import datetime\n"
