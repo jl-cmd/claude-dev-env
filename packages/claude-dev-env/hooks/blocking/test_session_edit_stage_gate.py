@@ -175,6 +175,21 @@ def test_allows_non_commit_command_containing_git_commit_substring(tmp_path: Pat
     assert completed_hook.stdout.strip() == ""
 
 
+def test_allows_all_flag_commit_after_bare_commit_token_segment(tmp_path: Path) -> None:
+    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    tracked_file = prepare_repository_with_unstaged_edit(repository_root)
+    write_session_edits(temp_directory, _SESSION_ID, [tracked_file.resolve()])
+    completed_hook = run_hook(
+        "echo commit && git commit -a -m update",
+        _SESSION_ID,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout.strip() == ""
+
+
 def test_denies_commit_with_no_space_message_containing_letter_a(tmp_path: Path) -> None:
     repository_root, temp_directory, home_directory = _make_directories(tmp_path)
     tracked_file = prepare_repository_with_unstaged_edit(repository_root)

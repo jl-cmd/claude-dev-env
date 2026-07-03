@@ -72,28 +72,32 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
 
 
 def _commit_argument_tokens(bash_command: str) -> list[str]:
-    """Return the tokens that follow ``commit`` up to the next command separator.
+    """Return the tokens that follow the ``commit`` subcommand of its segment.
+
+    The command is split into shell segments. The segment whose git subcommand
+    is ``commit`` supplies its post-subcommand tokens, so a bare ``commit``
+    token in an earlier segment (``echo commit && git commit -a``) never stands
+    in for the real commit's arguments.
 
     Args:
         bash_command: The Bash tool command string.
 
     Returns:
         The argument tokens of the git commit invocation. Empty when the
-        command cannot be tokenized or holds no ``commit`` token.
+        command cannot be tokenized or runs no ``git commit`` segment.
     """
     try:
         all_tokens = shlex.split(bash_command, posix=True)
     except ValueError:
         return []
-    if COMMIT_SUBCOMMAND_TOKEN not in all_tokens:
-        return []
-    commit_index = all_tokens.index(COMMIT_SUBCOMMAND_TOKEN)
-    argument_tokens: list[str] = []
-    for each_token in all_tokens[commit_index + 1 :]:
-        if each_token in ALL_COMMAND_SEPARATOR_TOKENS:
-            break
-        argument_tokens.append(each_token)
-    return argument_tokens
+    for each_segment in _split_into_command_segments(all_tokens):
+        subcommand_index = _git_subcommand_index(each_segment)
+        if subcommand_index is None:
+            continue
+        if each_segment[subcommand_index] != COMMIT_SUBCOMMAND_TOKEN:
+            continue
+        return each_segment[subcommand_index + 1 :]
+    return []
 
 
 def _is_all_flag_token(token: str) -> bool:
@@ -179,6 +183,38 @@ def _split_into_command_segments(all_tokens: list[str]) -> list[list[str]]:
     return all_segments
 
 
+def _git_subcommand_index(all_segment_tokens: list[str]) -> int | None:
+    """Return the index of a segment's git subcommand, skipping global options.
+
+    A leading ``git`` may carry global options before its subcommand, and
+    ``-C``/``-c``/``--git-dir`` and their siblings each take a value — so
+    ``git -C path add file`` resolves the ``add`` token, not ``path``.
+
+    Args:
+        all_segment_tokens: One command segment's tokens.
+
+    Returns:
+        The index of the subcommand token following ``git`` and its global
+        options, or None when the segment invokes no ``git`` subcommand.
+    """
+    if GIT_EXECUTABLE_TOKEN not in all_segment_tokens:
+        return None
+    git_index = all_segment_tokens.index(GIT_EXECUTABLE_TOKEN)
+    should_skip_next_value = False
+    for each_offset in range(git_index + 1, len(all_segment_tokens)):
+        each_token = all_segment_tokens[each_offset]
+        if should_skip_next_value:
+            should_skip_next_value = False
+            continue
+        if each_token in ALL_GIT_GLOBAL_VALUE_OPTION_TOKENS:
+            should_skip_next_value = True
+            continue
+        if each_token.startswith(SHORT_FLAG_PREFIX):
+            continue
+        return each_offset
+    return None
+
+
 def _git_subcommand(all_segment_tokens: list[str]) -> str | None:
     """Return the git subcommand of a segment, skipping git's global options.
 
@@ -193,21 +229,10 @@ def _git_subcommand(all_segment_tokens: list[str]) -> str | None:
         The subcommand token following ``git`` and its global options, or None
         when the segment invokes no ``git`` subcommand.
     """
-    if GIT_EXECUTABLE_TOKEN not in all_segment_tokens:
+    subcommand_index = _git_subcommand_index(all_segment_tokens)
+    if subcommand_index is None:
         return None
-    git_index = all_segment_tokens.index(GIT_EXECUTABLE_TOKEN)
-    should_skip_next_value = False
-    for each_token in all_segment_tokens[git_index + 1 :]:
-        if should_skip_next_value:
-            should_skip_next_value = False
-            continue
-        if each_token in ALL_GIT_GLOBAL_VALUE_OPTION_TOKENS:
-            should_skip_next_value = True
-            continue
-        if each_token.startswith(SHORT_FLAG_PREFIX):
-            continue
-        return each_token
-    return None
+    return all_segment_tokens[subcommand_index]
 
 
 def _stages_paths_before_commit(bash_command: str) -> bool:
