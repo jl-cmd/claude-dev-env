@@ -2603,7 +2603,7 @@ def _docstring_narrative_partition(docstring_text: str) -> tuple[list[str], bool
         if stripped_line.endswith("::"):
             opener_indent = len(raw_line) - len(raw_line.lstrip())
             probe_index = line_index + 1
-            block_holds_content = False
+            has_indented_body = False
             while probe_index < total_lines:
                 probe_raw = all_lines[probe_index]
                 probe_stripped = probe_raw.strip()
@@ -2612,11 +2612,11 @@ def _docstring_narrative_partition(docstring_text: str) -> tuple[list[str], bool
                     continue
                 probe_indent = len(probe_raw) - len(probe_raw.lstrip())
                 if probe_indent > opener_indent:
-                    block_holds_content = True
+                    has_indented_body = True
                     probe_index += 1
                     continue
                 break
-            if block_holds_content:
+            if has_indented_body:
                 has_illustration = True
                 line_index = probe_index
                 continue
