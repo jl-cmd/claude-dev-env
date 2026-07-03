@@ -177,6 +177,39 @@ def test_advisory_should_flag_outer_constants_after_nested_def() -> None:
     )
 
 
+def test_scan_function_body_constants_skips_docstring_contrast_line() -> None:
+    source = (
+        "def demo(label):\n"
+        '    """Flag a boolean assignment whose target and callee clash.\n'
+        "\n"
+        "    ::\n"
+        "\n"
+        "        FLAG: ready = make_stale(...)\n"
+        '    """\n'
+        "    return label\n"
+    )
+    advisory_issues = code_rules_enforcer._scan_function_body_constants(source)
+    assert advisory_issues == [], (
+        f"Expected no function-local constant issue on an illustrative row, got: {advisory_issues}"
+    )
+
+
+def test_scan_function_body_constants_still_flags_real_function_body_constant() -> None:
+    source = (
+        "def demo(label):\n"
+        '    """Flag a boolean assignment whose target and callee clash.\n'
+        "\n"
+        "        FLAG: ready = make_stale(...)\n"
+        '    """\n'
+        "    SOME_CONST = 3\n"
+        "    return SOME_CONST\n"
+    )
+    advisory_issues = code_rules_enforcer._scan_function_body_constants(source)
+    assert any("SOME_CONST" in issue for issue in advisory_issues), (
+        f"Expected the real function-body constant SOME_CONST to stay flagged, got: {advisory_issues}"
+    )
+
+
 def test_check_constants_outside_config_flags_annotated_assignment() -> None:
     source = "TEXT_FILE_ENCODING: str = 'utf-8'\n"
     issues = code_rules_enforcer.check_constants_outside_config(

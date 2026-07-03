@@ -273,6 +273,40 @@ def is_migration_file(file_path: str) -> bool:
     return any(pattern.replace("\\", "/") in path_lower for pattern in ALL_MIGRATION_PATH_PATTERNS)
 
 
+def docstring_line_numbers(content: str) -> set[int]:
+    """Return every source line that sits inside a string-literal statement.
+
+    A diagram-first docstring often draws its point across several lines, and
+    those lines can hold a bare number (a row marker) or a contrast row
+    (``flag: is_ok = do_thing(...)``). Those are prose, not code, so a
+    line-based lint check that reads them as literals fires a false positive.
+    This walks the parsed source and collects the line numbers spanned by every
+    string-literal expression statement — module, class, and function
+    docstrings, plus any bare string statement — so those checks can skip them.
+    Unparseable source yields an empty set.
+
+    Args:
+        content: The Python source to scan.
+
+    Returns:
+        The 1-indexed line numbers that fall inside a string-literal statement.
+    """
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return set()
+    all_docstring_line_numbers: set[int] = set()
+    for each_node in ast.walk(parsed_tree):
+        if not (isinstance(each_node, ast.Expr) and _statement_is_docstring(each_node)):
+            continue
+        end_line_number = each_node.end_lineno
+        if end_line_number is None:
+            continue
+        for each_line_number in range(each_node.lineno, end_line_number + 1):
+            all_docstring_line_numbers.add(each_line_number)
+    return all_docstring_line_numbers
+
+
 def _build_parent_map(module_tree: ast.Module) -> dict[int, ast.AST]:
     """Map child node id() to its parent node for ancestor walking."""
     parent_by_child_id: dict[int, ast.AST] = {}

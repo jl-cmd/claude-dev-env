@@ -87,6 +87,7 @@ from code_rules_docstrings import (  # noqa: E402
     check_docstring_no_consumer_claim,
     check_docstring_no_inline_literal_claim,
     check_docstring_no_network_claim_with_metadata_access,
+    check_docstring_prose_wall_without_illustration,
     check_docstring_punctuation_mark_enumeration_coverage,
     check_docstring_raises_unraisable_largezipfile,
     check_docstring_returns_plural_cardinality,
@@ -351,6 +352,9 @@ def validate_content(
             check_class_docstring_names_public_methods(effective_content, file_path)
         )
         all_issues.extend(check_docstring_runon_sentence(effective_content, file_path))
+        all_issues.extend(
+            check_docstring_prose_wall_without_illustration(effective_content, file_path)
+        )
         all_issues.extend(
             check_module_docstring_names_public_checks(effective_content, file_path)
         )
