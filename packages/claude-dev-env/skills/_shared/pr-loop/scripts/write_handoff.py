@@ -83,7 +83,9 @@ def _write_text_atomic(target_path: Path, text: str) -> None:
         text: Full file contents to write.
     """
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    staging_path = target_path.with_name(target_path.name + ATOMIC_STAGING_SUFFIX)
+    staging_path = target_path.with_name(
+        f"{target_path.name}{ATOMIC_STAGING_SUFFIX}.{os.getpid()}"
+    )
     staging_path.write_text(text, encoding="utf-8")
     os.replace(staging_path, target_path)
 
