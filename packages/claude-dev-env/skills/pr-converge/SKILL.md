@@ -270,7 +270,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 
 - [ ] **Step 6: BUGTEAM — run, decide, fix, reply, resolve**
       See: [`reference/per-tick.md` § Step 2 BUGTEAM](reference/per-tick.md);
-      [`../../bugteam/SKILL.md`](../../bugteam/SKILL.md)
+      [`../bugteam/SKILL.md`](../bugteam/SKILL.md)
 
       Pre-condition: `code_review_clean_at == current_head`.
 
@@ -393,10 +393,10 @@ round as converged. This rule holds every tick, every loop, every PR.
             schedule 360s wakeup → return to Step 7a next tick
 
 - [ ] **Step 8: Clean working tree**
-      See: [`bugteam/reference/teardown-publish-permissions.md` § Step 4](../../bugteam/reference/teardown-publish-permissions.md)
+      See: [`bugteam/reference/teardown-publish-permissions.md` § Step 4](../bugteam/reference/teardown-publish-permissions.md)
 
 - [ ] **Step 9: Rewrite PR description**
-      See: [`bugteam/reference/teardown-publish-permissions.md` § Step 4.5](../../bugteam/reference/teardown-publish-permissions.md)
+      See: [`bugteam/reference/teardown-publish-permissions.md` § Step 4.5](../bugteam/reference/teardown-publish-permissions.md)
 
 - [ ] **Step 10: Revoke project permissions**
       `python "$HOME/.claude/skills/bugteam/scripts/revoke_project_claude_permissions.py"`
