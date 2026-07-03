@@ -17,6 +17,7 @@ from code_rules_path_utils import (  # noqa: E402
 )
 from code_rules_shared import (  # noqa: E402
     _extract_fstring_literal_parts,
+    docstring_line_numbers,
     is_test_file,
 )
 
@@ -156,6 +157,7 @@ def check_magic_values(content: str, file_path: str) -> list[str]:
 
     issues = []
     lines = content.split("\n")
+    all_docstring_line_numbers = docstring_line_numbers(content)
     is_inside_function = False
 
     number_pattern = re.compile(r"(?<![.\w])(\d+\.?\d*)(?![.\w])")
@@ -165,6 +167,9 @@ def check_magic_values(content: str, file_path: str) -> list[str]:
         stripped = each_line.strip()
 
         if not stripped:
+            continue
+
+        if each_line_number in all_docstring_line_numbers:
             continue
 
         if re.match(r"^(async\s+)?def\s+\w+", stripped):

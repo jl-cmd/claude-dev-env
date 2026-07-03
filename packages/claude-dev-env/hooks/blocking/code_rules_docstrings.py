@@ -53,6 +53,8 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     ALL_ZIPFILE_WRITE_MODE_VALUES,
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
     DOCSTRING_LARGE_ZIP_FILE_EXCEPTION_NAME,
+    DOCSTRING_NARRATIVE_LINE_JOIN_SEPARATOR,
+    DOCSTRING_NARRATIVE_PROSE_LINE_LIMIT,
     DOCSTRING_REFERENCE_MARKER_WINDOW,
     DOCSTRING_RUNON_SENTENCE_BOUNDARY_PATTERN,
     DOCSTRING_RUNON_SENTENCE_WORD_LIMIT,
@@ -72,6 +74,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_DOCSTRING_MARK_GLYPH_ENUMERATION_ISSUES,
     MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES,
     MAX_DOCSTRING_NO_NETWORK_CLAIM_ISSUES,
+    MAX_DOCSTRING_PROSE_WALL_ISSUES,
     MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES,
     MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES,
     MAX_DOCSTRING_RUNON_SENTENCE_ISSUES,
@@ -2562,14 +2565,70 @@ def _is_narrative_cut_header(stripped_line: str) -> bool:
     )
 
 
-def _docstring_narrative_text(docstring_text: str) -> str:
-    narrative_lines: list[str] = []
-    for each_line in docstring_text.splitlines():
-        stripped_line = each_line.strip()
+def _docstring_narrative_partition(docstring_text: str) -> tuple[list[str], bool]:
+    """Split a docstring narrative into its prose lines and whether it shows an example.
+
+    Walk the narrative up to the first ``Args:``/``Returns:`` cut header and sort
+    every line into one of two buckets::
+
+        Render the report so the reader sees how it ended.   <- prose line
+        A finished run versus an interrupted one::           <- prose line (opener)
+            theme_42 -- interrupted -> marked in-flight       -- indented example body
+            OK:   a clean run reads differently in the log    -- indented example body
+        The reader reads the final outcome at a glance.      <- prose line
+
+    A ``>>>`` doctest region and a ``::`` block with an indented body both count as
+    an illustration, so their lines never join the prose bucket. The caller reads
+    the prose count to size the wall and the flag to know whether an example is present.
+    """
+    prose_lines: list[str] = []
+    has_illustration = False
+    all_lines = docstring_text.splitlines()
+    total_lines = len(all_lines)
+    line_index = 0
+    while line_index < total_lines:
+        raw_line = all_lines[line_index]
+        stripped_line = raw_line.strip()
         if _is_narrative_cut_header(stripped_line):
             break
-        narrative_lines.append(stripped_line)
-    return " ".join(narrative_lines)
+        if stripped_line.startswith(">>>"):
+            has_illustration = True
+            line_index += 1
+            while line_index < total_lines:
+                inner_stripped = all_lines[line_index].strip()
+                if not inner_stripped or _is_narrative_cut_header(inner_stripped):
+                    break
+                line_index += 1
+            continue
+        if stripped_line.endswith("::"):
+            opener_indent = len(raw_line) - len(raw_line.lstrip())
+            probe_index = line_index + 1
+            block_holds_content = False
+            while probe_index < total_lines:
+                probe_raw = all_lines[probe_index]
+                probe_stripped = probe_raw.strip()
+                if not probe_stripped:
+                    probe_index += 1
+                    continue
+                probe_indent = len(probe_raw) - len(probe_raw.lstrip())
+                if probe_indent > opener_indent:
+                    block_holds_content = True
+                    probe_index += 1
+                    continue
+                break
+            if block_holds_content:
+                has_illustration = True
+                line_index = probe_index
+                continue
+        if stripped_line:
+            prose_lines.append(stripped_line)
+        line_index += 1
+    return prose_lines, has_illustration
+
+
+def _docstring_narrative_text(docstring_text: str) -> str:
+    prose_lines, _has_illustration = _docstring_narrative_partition(docstring_text)
+    return DOCSTRING_NARRATIVE_LINE_JOIN_SEPARATOR.join(prose_lines)
 
 
 def _sentence_word_count(sentence_text: str) -> int:
@@ -2673,6 +2732,58 @@ def check_docstring_runon_sentence(content: str, file_path: str) -> list[str]:
         if len(issues) >= MAX_DOCSTRING_RUNON_SENTENCE_ISSUES:
             break
     return issues[:MAX_DOCSTRING_RUNON_SENTENCE_ISSUES]
+
+
+def check_docstring_prose_wall_without_illustration(content: str, file_path: str) -> list[str]:
+    """Flag a summary that tells for many sentences and shows nothing.
+
+    A reader trusts the opening to paint a scene. A run of short sentences with
+    no worked example leaves the reader piecing that scene together alone::
+
+        A calm voyage ends well for every vessel.            <- one more line
+        A halted voyage marks the vessel it neared.          <- and another
+        ... more like these, no worked example ...           flag: a wall, no scene
+        A calm voyage versus a halted one::                  ok: a worked example
+            a lone vessel -- halted -> marked mid-voyage
+
+    Past the sentence limit with no ``::`` listing and no ``>>>`` doctest, this
+    fires. A narrative that shows a worked example, or one at the limit, passes.
+
+    Args:
+        content: The source text to inspect.
+        file_path: The path the source will be written to, used for exemptions.
+
+    Returns:
+        One issue per summary that runs a wall of sentences with no worked
+        example, capped at the issue limit for the rule.
+    """
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return []
+    try:
+        parsed_tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    issues: list[str] = []
+    for each_line_number, each_label, each_docstring in _documentable_docstring_targets(
+        parsed_tree
+    ):
+        prose_lines, has_illustration = _docstring_narrative_partition(each_docstring)
+        if has_illustration:
+            continue
+        prose_line_count = len(prose_lines)
+        if prose_line_count <= DOCSTRING_NARRATIVE_PROSE_LINE_LIMIT:
+            continue
+        issues.append(
+            "{}: {} summary runs {} sentences with no worked example - show, "
+            "don't tell: swap the wall for a '::' listing (a sample input, an "
+            "annotated outcome, ok/flag contrast rows) and keep the narrative to "
+            "a few short sentences (plain-illustrative-docstrings)".format(
+                each_line_number, each_label, prose_line_count
+            )
+        )
+        if len(issues) >= MAX_DOCSTRING_PROSE_WALL_ISSUES:
+            break
+    return issues[:MAX_DOCSTRING_PROSE_WALL_ISSUES]
 
 
 def _raises_section_text(docstring_text: str) -> str:

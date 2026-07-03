@@ -23,6 +23,7 @@ from code_rules_path_utils import (  # noqa: E402
 )
 from code_rules_shared import (  # noqa: E402
     _build_parent_map,
+    docstring_line_numbers,
     get_file_extension,
     is_migration_file,
     is_test_file,
@@ -110,6 +111,7 @@ def _scan_function_body_constants(content: str) -> list[str]:
     """
     advisory_issues: list[str] = []
     lines = content.split("\n")
+    all_docstring_line_numbers = docstring_line_numbers(content)
     function_indent_stack: list[int] = []
     constant_pattern = re.compile(r"^([A-Z][A-Z0-9_]{2,})(?:\s*:\s*[^=]+)?\s*=\s*[^=]")
 
@@ -117,6 +119,9 @@ def _scan_function_body_constants(content: str) -> list[str]:
         stripped = each_line.strip()
 
         if not stripped:
+            continue
+
+        if each_line_number in all_docstring_line_numbers:
             continue
 
         indent = len(each_line) - len(each_line.lstrip())
