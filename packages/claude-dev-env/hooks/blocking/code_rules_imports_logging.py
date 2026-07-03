@@ -814,9 +814,9 @@ def _naive_datetime_remediation(constructor_name: str) -> str:
     """Return the fix guidance for a specific naive datetime constructor.
 
     ``utcnow`` and ``utcfromtimestamp`` accept no ``tz`` argument, so each points
-    at its aware replacement (``datetime.now(tz=...)`` and
-    ``datetime.fromtimestamp(..., tz=...)``); ``fromtimestamp`` keeps its shape and
-    only needs a ``tz=`` argument.
+    at its aware replacement (``now(tz=...)`` and ``fromtimestamp(..., tz=...)``
+    on the same datetime class, whichever import form the call used);
+    ``fromtimestamp`` keeps its shape and only needs a ``tz=`` argument.
 
     Args:
         constructor_name: The naive constructor the call used.
@@ -825,9 +825,12 @@ def _naive_datetime_remediation(constructor_name: str) -> str:
         The remediation clause to embed in the emitted issue.
     """
     if constructor_name == NAIVE_DATETIME_UTCNOW_CONSTRUCTOR:
-        return "use datetime.now(tz=timezone.utc)"
+        return "replace utcnow() with now(tz=timezone.utc) on the same datetime class"
     if constructor_name == NAIVE_DATETIME_UTCFROMTIMESTAMP_CONSTRUCTOR:
-        return "use datetime.fromtimestamp(..., tz=timezone.utc)"
+        return (
+            "replace utcfromtimestamp(...) with fromtimestamp(..., tz=timezone.utc) "
+            "on the same datetime class"
+        )
     return "pass tz= (e.g. tz=timezone.utc)"
 
 

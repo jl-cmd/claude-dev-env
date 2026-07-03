@@ -45,11 +45,11 @@ from hooks_constants.claude_md_orphan_file_blocker_constants import (  # noqa: E
     SEPARATOR_CELL_PATTERN,
     TABLE_ROW_PATTERN,
 )
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
     apply_edits,
     edits_for_tool,
 )
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
