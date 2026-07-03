@@ -55,7 +55,7 @@ tracks CONVERGE passes only and is never the cap.
    - **Code-review lens** — a correctness-focused review pass (`code-quality-agent`)
      that reports findings without editing.
    - **Bug-audit lens** — the bug-audit (`code-quality-agent`) applying the
-     shared A–P rubric from `bugteam/reference/audit-contract.md`, reporting
+     shared A–P rubric from `_shared/pr-loop/audit-contract.md`, reporting
      findings without editing.
 3. Dedup findings across the three lenses by file, line, and title. A collision
    keeps the most severe duplicate's severity (P0 > P1 > P2), unions the detail

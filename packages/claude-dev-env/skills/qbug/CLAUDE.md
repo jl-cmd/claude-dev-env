@@ -25,7 +25,7 @@ The skill references shared scripts from `../_shared/pr-loop/scripts/`:
 | `post_audit_thread.py` | Posts one GitHub review per loop (APPROVE or REQUEST_CHANGES) |
 | `audit-reply-template.md` | Unified reply body shape for resolved threads |
 
-Bug category rubric A–N lives at `../bugteam/PROMPTS.md`. Audit contract (finding schema, proof-of-absence, Haiku secondary, self-audit) lives at `../bugteam/reference/audit-contract.md`.
+Bug category rubric A–N lives at `../bugteam/PROMPTS.md`. Audit contract (finding schema, proof-of-absence, Haiku secondary, self-audit) lives at `../../_shared/pr-loop/audit-contract.md`.
 
 ## Subagent structure
 

@@ -149,7 +149,7 @@ end-to-end mental model before starting Step 0.
 | Spawn-prompt XML, A–P category bindings, outcome XML schemas | [PROMPTS.md](PROMPTS.md) |
 | Per-category audit content (sub-buckets, decision criteria, ready-to-send Variant C templates) | `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/` |
 | Invariants and design rationale | [CONSTRAINTS.md](CONSTRAINTS.md), [reference/design-rationale.md](reference/design-rationale.md) |
-| Audit-contract finding shape (Shape A / B), Haiku secondary, post-fix self-audit | [reference/audit-contract.md](reference/audit-contract.md) |
+| Audit-contract finding shape (Shape A / B), Haiku secondary, post-fix self-audit | [../../_shared/pr-loop/audit-contract.md](../../_shared/pr-loop/audit-contract.md) |
 | Exit-scenario examples (converged, cap-reached, stuck, refusal, mixed-outcome) | [EXAMPLES.md](EXAMPLES.md) |
 | Doc URLs and verbatim quotes | [sources.md](sources.md) |
 | Historical Copilot gap analysis (superseded) | [reference/copilot-gap-analysis.md](reference/copilot-gap-analysis.md) |

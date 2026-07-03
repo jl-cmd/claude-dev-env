@@ -22,7 +22,7 @@ Shared artifacts with /bugteam are referenced below by path, using the `${CLAUDE
 - Pre-flight script: `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/preflight.py`
 - Code-rules gate script: `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`
 - Bug category rubric A–N: [`bugteam/PROMPTS.md`](../bugteam/PROMPTS.md#audit-spawn-prompt-xml-bugfind-teammate)
-- **Audit contract** (finding schema, proof-of-absence, adversarial pass, Haiku secondary, post-fix self-audit, diagnostics JSON): [`bugteam/reference/audit-contract.md`](../bugteam/reference/audit-contract.md)
+- **Audit contract** (finding schema, proof-of-absence, adversarial pass, Haiku secondary, post-fix self-audit, diagnostics JSON): [`_shared/pr-loop/audit-contract.md`](../../_shared/pr-loop/audit-contract.md)
 - PR comment lifecycle shape: [`bugteam/SKILL.md`](../bugteam/SKILL.md#audit-posting)
 
 ## When this skill applies
@@ -189,9 +189,10 @@ The subagent receives this prompt and loops internally — the lead does not re-
        - Audit only added/modified lines. Read <categories_file> for the
          A–N category definitions; investigate each category explicitly.
        - Follow the shared audit contract at
-         bugteam/reference/audit-contract.md. Per category: produce
-         either a Shape A structured finding or a Shape B structured
-         proof-of-absence. Bare "verified clean" labels are REJECTED.
+         $HOME/.claude/_shared/pr-loop/audit-contract.md. Per category:
+         produce either a Shape A structured finding or a Shape B
+         structured proof-of-absence. Bare "verified clean" labels are
+         REJECTED.
        - Run the contract's adversarial second pass after the primary
          finding list.
        - The LEAD spawns the Haiku secondary auditor in parallel with
@@ -313,7 +314,7 @@ The subagent receives this prompt and loops internally — the lead does not re-
        for every modified file.
 
        Post-fix self-audit: follow the contract's post-fix self-audit
-       sequence at bugteam/reference/audit-contract.md. Paranoid mode
+       sequence at $HOME/.claude/_shared/pr-loop/audit-contract.md. Paranoid mode
        (Haiku secondary in parallel), internal iteration cap = 3, exit
        "stuck: post-fix audit not converging" after 3 rounds with fresh
        findings. Only when gate_findings empty AND post_fix_findings
