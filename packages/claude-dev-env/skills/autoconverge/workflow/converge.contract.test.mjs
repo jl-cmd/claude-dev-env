@@ -44,26 +44,37 @@ test('bug-audit lens prompt no longer instructs a per-lens git fetch', () => {
   assert.doesNotMatch(lensPromptBody('runAuditLens'), /git fetch origin main/);
 });
 
-test('a single round-level prefetch step fetches origin/main before the parallel lenses', () => {
-  assert.ok(convergeSource.includes("runGitTask('prefetch-main')"));
-  const prefetchCallIndex = convergeSource.indexOf("runGitTask('prefetch-main')");
+test('the merged preflight-git task fetches origin/main once before the parallel lenses', () => {
+  assert.ok(convergeSource.includes("runGitTask('preflight-git')"));
+  const preflightCallIndex = convergeSource.indexOf("runGitTask('preflight-git')");
   const parallelLensIndex = convergeSource.indexOf('const lenses = await parallel(');
-  assert.notEqual(prefetchCallIndex, -1, 'expected prefetch to be invoked');
+  assert.notEqual(preflightCallIndex, -1, 'expected the merged preflight to be invoked');
   assert.notEqual(parallelLensIndex, -1, 'expected the parallel lens block to exist');
   assert.ok(
-    prefetchCallIndex < parallelLensIndex,
-    'expected the round prefetch to run before the parallel lenses spawn',
+    preflightCallIndex < parallelLensIndex,
+    'expected the merged preflight to run before the parallel lenses spawn',
   );
+  const gitTaskBody = functionSource('runGitTask');
+  assert.match(gitTaskBody, /git fetch origin main/, 'expected the merged task to carry the base-ref fetch');
+  assert.match(gitTaskBody, /--jq \.head\.sha/, 'expected the merged task to resolve the PR HEAD SHA');
+  assert.match(gitTaskBody, /PREFLIGHT_GIT_SCHEMA/, 'expected the merged task to return the {sha, conflicting, fetched} schema');
+});
+
+test('the merged preflight-git agent runs on haiku at low effort', () => {
+  const gitTaskBody = functionSource('runGitTask');
+  assert.match(gitTaskBody, /model: 'haiku'/, 'expected the git-utility agent to run on the cheapest model');
+  assert.match(gitTaskBody, /effort: 'low'/, 'expected the git-utility agent to run at low effort');
 });
 
 test('the CONVERGE round spawns a single shared reviewer-availability probe before the parallel lenses', () => {
-  const prefetchCallIndex = convergeSource.indexOf("runGitTask('prefetch-main')");
+  const convergeBranchStart = convergeSource.indexOf("if (phase === 'CONVERGE')");
+  const refreshCallIndex = convergeSource.indexOf("runGitTask('preflight-git')", convergeBranchStart);
   const probeCallIndex = convergeSource.indexOf('reviewerAvailability = await runReviewerAvailabilityCheck()');
   const parallelLensIndex = convergeSource.indexOf('const lenses = await parallel(');
   assert.notEqual(probeCallIndex, -1, 'expected the CONVERGE round to spawn the shared reviewer-availability probe');
   assert.ok(
-    prefetchCallIndex < probeCallIndex && probeCallIndex < parallelLensIndex,
-    'expected the probe to run after the round prefetch and before the parallel lenses spawn',
+    refreshCallIndex < probeCallIndex && probeCallIndex < parallelLensIndex,
+    'expected the probe to run after the round head refresh and before the parallel lenses spawn',
   );
   const probeBody = functionSource('runReviewerAvailabilityCheck');
   assert.match(probeBody, /reviewer_availability\.py/);
@@ -247,11 +258,38 @@ test('the COPILOT fix branch does not re-assign head from the fix before re-conv
   );
 });
 
-test('the CONVERGE branch re-resolves HEAD from GitHub on every entry', () => {
+test('the CONVERGE branch refreshes HEAD via the merged preflight-git task only when the threaded head is invalidated', () => {
   const convergeBranchStart = convergeSource.indexOf("if (phase === 'CONVERGE')");
   assert.notEqual(convergeBranchStart, -1, 'expected the CONVERGE branch to exist');
-  const headResolveCallIndex = convergeSource.indexOf("runGitTask('resolve-head')", convergeBranchStart);
-  assert.notEqual(headResolveCallIndex, -1, 'expected CONVERGE to re-resolve HEAD via runGitTask');
+  const invalidGuardIndex = convergeSource.indexOf('if (!isResolvedHeadUsable(head))', convergeBranchStart);
+  const headRefreshCallIndex = convergeSource.indexOf("runGitTask('preflight-git')", convergeBranchStart);
+  assert.notEqual(invalidGuardIndex, -1, 'expected CONVERGE to gate the refresh on an invalidated head');
+  assert.notEqual(headRefreshCallIndex, -1, 'expected CONVERGE to refresh HEAD via the merged preflight-git task');
+  assert.ok(
+    invalidGuardIndex < headRefreshCallIndex,
+    'expected the invalidated-head guard to precede the merged refresh so a valid threaded head spawns no git agent',
+  );
+});
+
+test('each fix push and the convergence repair invalidate the threaded head so the next CONVERGE entry refreshes it', () => {
+  const invalidationMatches = convergeSource.match(/^ +head = null$/gm) || [];
+  assert.equal(
+    invalidationMatches.length,
+    3,
+    'expected head invalidation after the CONVERGE fix push, the COPILOT fix push, and the convergence repair',
+  );
+});
+
+test('the preflight consumes the head returned by resolveMergeConflicts without an immediate re-resolve', () => {
+  const consumedHeadIndex = convergeSource.indexOf('head = await resolveMergeConflicts(');
+  assert.notEqual(consumedHeadIndex, -1, 'expected the post-rebase head from resolveMergeConflicts to be captured');
+  const whileLoopIndex = convergeSource.indexOf('while (iterations < CONFIG.maxIterations)');
+  const betweenPreflightAndLoop = convergeSource.slice(consumedHeadIndex, whileLoopIndex);
+  assert.doesNotMatch(
+    betweenPreflightAndLoop,
+    /runGitTask\(/,
+    'expected the reuse pass to reuse the threaded head with no git-utility agent spawn',
+  );
 });
 
 test('fix edit prompt resolves threads by PRRT thread node id looked up from the comment databaseId', () => {
@@ -553,7 +591,7 @@ test('the reuse pass applies its findings through applyFixes, not the standards-
   const reuseBlock = convergeSource.slice(reuseCallIndex, loopIndex);
   assert.match(
     reuseBlock,
-    /applyFixes\(reuseHead, reuseFindings, 'reuse-pass'\)/,
+    /applyFixes\(head, reuseFindings, 'reuse-pass'\)/,
     'expected the reuse pass to apply its findings via applyFixes',
   );
   assert.doesNotMatch(

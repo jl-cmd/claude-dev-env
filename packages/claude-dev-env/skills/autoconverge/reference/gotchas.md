@@ -21,9 +21,12 @@ fails in a new way.
 - **Fetch origin/main once before the parallel lenses.** The code-review and
   bug-audit lenses both diff against `origin/main`. Concurrent `git fetch` calls
   contend on the worktree `.git` lock and fail intermittently, so the workflow
-  runs a single serial `git fetch origin main` (the `prefetch-main` step) at the
-  start of each round and the parallel lenses run no git fetch of their own —
-  they diff against the already-current ref.
+  runs a single serial `git fetch origin main` inside the merged `preflight-git`
+  step — the one git-utility agent that also resolves the PR HEAD SHA and probes
+  mergeability — and the parallel lenses run no git fetch of their own; they
+  diff against the already-current ref. The workflow threads the resolved HEAD
+  through the rounds and re-runs `preflight-git` only after a push or rebase
+  invalidates it, so a round on an unchanged HEAD spawns no git agent at all.
 
 - **The CLEAN bugteam artifact is HEAD-specific.** `check_convergence.py` reads
   the bugteam review on the current HEAD. Any push moves HEAD and invalidates a
