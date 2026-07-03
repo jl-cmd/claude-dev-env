@@ -36,7 +36,7 @@ from log_audit_constants.mine_copilot_findings_constants import (  # noqa: E402
 )
 
 
-class GithubCommandError(RuntimeError):
+class GitHubCommandError(RuntimeError):
     """Raised when a gh api call fails or returns output that is not JSON."""
 
 
@@ -205,7 +205,7 @@ def _run_gh_json(endpoint: str, *, should_paginate: bool = False) -> object:
         is True, otherwise the single response parsed as-is.
 
     Raises:
-        GithubCommandError: When gh is not installed, the gh api call fails, or
+        GitHubCommandError: When gh is not installed, the gh api call fails, or
             its output is not JSON.
     """
     gh_command = ["gh", "api", endpoint]
@@ -219,17 +219,17 @@ def _run_gh_json(endpoint: str, *, should_paginate: bool = False) -> object:
             check=True,
         )
     except FileNotFoundError as missing_gh_error:
-        raise GithubCommandError(
+        raise GitHubCommandError(
             "gh command not found; install the GitHub CLI to mine reviewer comments"
         ) from missing_gh_error
     except subprocess.CalledProcessError as gh_failure_error:
-        raise GithubCommandError(
+        raise GitHubCommandError(
             f"gh api {endpoint} failed: {gh_failure_error.stderr.strip()}"
         ) from gh_failure_error
     try:
         parsed_payload = json.loads(completed_process.stdout)
     except json.JSONDecodeError as decode_error:
-        raise GithubCommandError(
+        raise GitHubCommandError(
             f"gh api {endpoint} returned output that is not JSON"
         ) from decode_error
     if should_paginate:
@@ -288,7 +288,7 @@ def main() -> int:
     parsed_arguments = parser.parse_args()
     try:
         comments = _fetch_reviewer_comments(parsed_arguments.repo)
-    except GithubCommandError as gh_error:
+    except GitHubCommandError as gh_error:
         print(str(gh_error), file=sys.stderr)
         return 1
     clusters = cluster_defects(comments)
