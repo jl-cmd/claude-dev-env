@@ -18,12 +18,35 @@ from code_rules_enforcer import (  # noqa: E402
 )
 from code_rules_shared import (  # noqa: E402
     changed_line_numbers,
+    docstring_line_numbers,
 )
 
 code_rules_enforcer = SimpleNamespace(
     changed_line_numbers=changed_line_numbers,
+    docstring_line_numbers=docstring_line_numbers,
     prior_and_post_edit_content=prior_and_post_edit_content,
 )
+
+
+def test_docstring_line_numbers_spans_a_multi_line_function_docstring() -> None:
+    source = (
+        "def describe():\n"
+        '    """First row.\n'
+        "\n"
+        "    Third row.\n"
+        '    """\n'
+        "    return 1\n"
+    )
+    assert code_rules_enforcer.docstring_line_numbers(source) == {2, 3, 4, 5}
+
+
+def test_docstring_line_numbers_excludes_real_code_lines() -> None:
+    source = "def compute():\n    counter = 41\n    return counter\n"
+    assert code_rules_enforcer.docstring_line_numbers(source) == set()
+
+
+def test_docstring_line_numbers_returns_empty_set_on_syntax_error() -> None:
+    assert code_rules_enforcer.docstring_line_numbers("def broken(:\n") == set()
 
 
 def test_readable_prior_yields_consistent_prior_and_reconstruction(tmp_path) -> None:
