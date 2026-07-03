@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/*.py"
+---
+
 # Plain, Illustrative Docstrings
 
 **When this applies:** Any Write or Edit to a public function, method, class, or module docstring whose narrative prose — the summary and description before the first `Args:` / `Returns:` / `Raises:` / `Yields:` section — says what the code is for or how it behaves. The standard governs the prose a reader meets first, not the structured `Args:` / `Returns:` entries below it.

@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/CLAUDE.md"
+---
+
 # Orphan File Reference in a Per-Directory CLAUDE.md
 
 **When this applies:** Any Write, Edit, or MultiEdit to a file named `CLAUDE.md` that lists files in a markdown table whose first column names each file in backticks, or that shows run commands invoking those files inside fenced code blocks.

@@ -1,5 +1,12 @@
 ---
-paths: **/*
+paths:
+  - "**/*.md"
+  - "**/*.py"
+  - "**/*.mjs"
+  - "**/*.js"
+  - "**/*.ts"
+  - "**/*.ps1"
+  - "**/*.sh"
 ---
 
 # No Historical Clutter in Documentation or Comments

@@ -1,3 +1,9 @@
+---
+paths:
+  - "**/*.py"
+  - "**/*.md"
+---
+
 # Docstring Prose Matches Implementation
 
 **When this applies:** Any Write or Edit to a public function, method, class, or module whose docstring prose makes an enumerable claim about behavior — a list of inputs the code handles, the conditions it treats as a match, the cases it skips, or the order of its steps. It applies equally to a skill's companion `SKILL.md` (or any sibling `.md`) that describes a producer the skill's `scripts/` carry out: a doc sentence that claims a produced artifact's ordering or content is the prose this rule governs, and it tracks the producer function's own docstring and body.
