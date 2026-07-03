@@ -126,15 +126,13 @@ Search files by name, path, extension, size, or date with the Everything command
 Run `es.exe` with a scoped query — a project path, an `ext:`/`dm:`/`size:` filter, or a name pattern. The `es_exe_path_rewriter` hook resolves a `{project-name}` placeholder or a bare registry key from `~/.claude/project-paths.json` into its quoted absolute path before the command runs (it allows and rewrites, never blocks).
 
 ### Hard limits
-- Keep the Everything HTTP server off — never start, install, or restart it. The CLI needs no server.
 - Scope every search. A bare whole-drive scan or a network-share sweep is out of bounds.
 
 ### Fallback order
 1. **es.exe** — file-system search by name/path/extension/size/date
-2. **Grep** — file-content search (Grep owns content)
-3. **Glob** — relative-path pattern matching within the current project
-
-When `es.exe` fails or returns nothing, fall back to `Glob`/`Grep` and report the outage.
+2. **Debug** — try to find out why es.exe isn't working, and then prompt user for next-steps if you can't self-heal.
+3. **Grep** — file-content search (Grep owns content)
+4. **Glob** — relative-path pattern matching within the current project
 
 ### Search syntax quick reference
 - `ext:py` — find by extension (multiple: `ext:ts | ext:js`)
