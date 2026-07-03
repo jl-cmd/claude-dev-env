@@ -4,7 +4,7 @@ Spawns a background subagent that polls the GitHub Copilot reviewer on the curre
 
 ## Purpose
 
-The main session gathers PR context (number, HEAD SHA, owner/repo, branch), spawns a self-terminating background subagent with a fully filled-in prompt, and returns control at once. The subagent loops on a 5-minute `ScheduleWakeup` cadence: fetch Copilot's latest review, TDD-fix any inline findings, push a commit, reply inline, re-request review. It stops on convergence, a persistent blocker, `TaskStop`, or after 20 ticks.
+The main session gathers PR context (number, HEAD SHA, owner/repo, branch), spawns a self-terminating background subagent with a fully filled-in prompt, and returns control at once. The subagent loops on a 6-minute `ScheduleWakeup` cadence: fetch Copilot's latest review, TDD-fix any inline findings, push a commit, reply inline, resolve each addressed thread, re-request review. It stops on convergence, a persistent blocker, `TaskStop`, three consecutive ticks with no Copilot review at the current HEAD, or after 20 ticks.
 
 ## Key file
 
