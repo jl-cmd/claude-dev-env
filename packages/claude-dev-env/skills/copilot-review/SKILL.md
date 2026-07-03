@@ -21,19 +21,17 @@ The user is on a PR branch, wants Copilot (the GitHub Copilot reviewer bot) to k
 
 ### Step 0: Opt-out check
 
-Before any other work, inspect the `CLAUDE_REVIEWS_DISABLED` environment
-variable. Treat the value as a comma-separated list of skill tokens
-(case-insensitive, whitespace-tolerant). When the parsed list contains
-`copilot`, respond with the literal line `/copilot-review is disabled via
-CLAUDE_REVIEWS_DISABLED.` and stop — do not spawn the subagent, do not call
-the Copilot reviewer API, do not run any other step of this skill.
+Before any other work, run:
 
-PowerShell probe (Windows):
-
-```pwsh
-$disabled = ($env:CLAUDE_REVIEWS_DISABLED -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() })
-if ($disabled -contains 'copilot') { '/copilot-review is disabled via CLAUDE_REVIEWS_DISABLED.' }
+```bash
+python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer copilot
 ```
+
+Exit 0 — Copilot reviews are disabled: respond with the literal line
+`/copilot-review is disabled via CLAUDE_REVIEWS_DISABLED.` and stop — do not
+spawn the subagent, do not call the Copilot reviewer API, do not run any
+other step of this skill. Exit 1 — continue. Gate semantics live in the
+`reviewer-gates` skill ([../reviewer-gates/SKILL.md](../reviewer-gates/SKILL.md)).
 
 ### Step 1: Gather PR context
 
@@ -90,13 +88,12 @@ Pass this verbatim to the subagent (substituting the bracketed values):
 >
 > **Fix protocol** (step 3, third branch):
 >
+> - Read `$HOME/.claude/skills/pr-fix-protocol/SKILL.md` and apply it — it carries the shared fix sequence, the reply-and-resolve unit, and the unresolved-thread sweep.
 > - Read each referenced file:line.
 > - Write a failing test first when the finding has behavior to test. For pure doc or comment nits that have no behavior, go straight to the fix.
-> - Implement the fix.
 > - Stage the fix and create one new commit on the existing branch: `git add <files> && git commit -m "fix(review): ..."`.
 > - Push the new commit: `git push origin [BRANCH]`.
-> - Reply inline on each comment thread with `add_reply_to_pull_request_comment(owner="[OWNER]", repo="[REPO]", pullNumber=[NUMBER], body="...", commentId=<comment_id>)`, referencing the new commit SHA.
-> - Resolve each addressed thread: harvest its thread node id (the `PRRT_…` value) from `pull_request_read(method="get_review_comments", pullNumber=[NUMBER], owner="[OWNER]", repo="[REPO]")`, then call `pull_request_review_write(method="resolve_thread", pullNumber=[NUMBER], owner="[OWNER]", repo="[REPO]", threadId="<PRRT id>")`. Reply first, then resolve — a resolved thread with no reply reads as dismissed, and an unresolved thread stalls any convergence gate that counts `is_resolved == false` threads on the PR.
+> - Reply inline via `add_reply_to_pull_request_comment(owner="[OWNER]", repo="[REPO]", pullNumber=[NUMBER], body="...", commentId=<comment_id>)`, referencing the new commit SHA; then resolve each addressed thread via `pull_request_review_write(method="resolve_thread", pullNumber=[NUMBER], owner="[OWNER]", repo="[REPO]", threadId="<PRRT id>")`, harvesting the `PRRT_…` id from `pull_request_read(method="get_review_comments", ...)`. Reply first, then resolve — atomic per thread, per the protocol.
 >
 > When a pre-push, pre-commit, or other hook rejects the change, solve it. Read the hook's error message, diagnose the root cause in the code or test, and fix that. Then rerun the commit or push. Hooks exist to catch real problems; treat each rejection as new evidence to act on.
 >
