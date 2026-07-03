@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: blocks Write/Edit containing historical/comparative language in comments and .md files.
+"""PreToolUse hook: blocks Write/Edit containing historical/comparative language in comments, Python docstrings, and .md files.
 
 Enforces the "describe current state only" rule — no "instead of", "previously",
-"now uses", or similar transitional framing. Comments and documentation should
-describe what IS, not what WAS or what CHANGED.
+"now uses", or similar transitional framing. Comments, docstrings, and
+documentation should describe what IS, not what WAS or what CHANGED. Inside a
+docstring, a phrase wrapped in double quotes or backticks is a mention rather
+than a use, so quoted spans are stripped before the scan.
 """
 
+import ast
 import json
 import os
 import sys
@@ -23,11 +26,15 @@ from hooks_constants.state_description_blocker_constants import (  # noqa: E402
     ALL_BLOCK_COMMENT_ONLY_EXTENSIONS,
     ALL_COMMENT_BEARING_EXTENSIONS,
     ALL_COMMENT_TRANSITION_PATTERNS,
+    ALL_DEFINITION_HEADER_PREFIXES,
     ALL_HASH_AND_SLASH_EXTENSIONS,
     ALL_HASH_ONLY_EXTENSIONS,
     ALL_MARKDOWN_EXTENSIONS,
     CODE_FENCE_PATTERN,
+    DOUBLE_QUOTED_SPAN_PATTERN,
     INLINE_CODE_PATTERN,
+    PYTHON_EXTENSION,
+    TRIPLE_QUOTED_BLOCK_PATTERN,
 )
 
 
@@ -131,17 +138,101 @@ def _find_inline_comment_start(stripped: str, all_markers: tuple[str, ...]) -> i
     return best_position
 
 
+def _extract_parsed_docstrings(tree: ast.Module) -> list[str]:
+    """Collect the module, class, and function docstrings from a parsed tree.
+
+    Args:
+        tree: The parsed module tree to walk.
+
+    Returns:
+        Every docstring found on the module and its class/function definitions.
+    """
+    all_found_docstrings: list[str] = []
+    for each_node in ast.walk(tree):
+        if not isinstance(
+            each_node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
+            continue
+        maybe_docstring = ast.get_docstring(each_node, clean=False)
+        if maybe_docstring:
+            all_found_docstrings.append(maybe_docstring)
+    return all_found_docstrings
+
+
+def _extract_fragment_docstrings(text: str) -> list[str]:
+    """Collect docstring-positioned triple-quoted blocks from an unparseable fragment.
+
+    A triple-quoted block counts as a docstring when it opens the fragment
+    (only whitespace before it) or when the nearest preceding non-blank line is
+    a def/class header ending in a colon. A block assigned to a name or sitting
+    elsewhere in the fragment is data and is skipped.
+
+    Args:
+        text: The Python source fragment that failed to parse.
+
+    Returns:
+        The body text of each docstring-positioned triple-quoted block.
+    """
+    all_found_docstrings: list[str] = []
+    for each_match in TRIPLE_QUOTED_BLOCK_PATTERN.finditer(text):
+        body = each_match.group(1) if each_match.group(1) is not None else each_match.group(2)
+        leading_text = text[: each_match.start()]
+        if not leading_text.strip():
+            all_found_docstrings.append(body)
+            continue
+        if leading_text.rpartition("\n")[2].strip():
+            continue
+        all_preceding_lines = [
+            each_line for each_line in leading_text.splitlines() if each_line.strip()
+        ]
+        last_preceding_line = all_preceding_lines[-1].strip()
+        if last_preceding_line.startswith(
+            ALL_DEFINITION_HEADER_PREFIXES
+        ) and last_preceding_line.endswith(":"):
+            all_found_docstrings.append(body)
+    return all_found_docstrings
+
+
+def _extract_python_docstring_text(text: str) -> str:
+    """Return the scannable docstring prose from Python source.
+
+    Parses the source when valid, or falls back to the docstring-positioned
+    triple-quoted blocks of a mid-edit fragment. Double-quoted and backticked
+    spans inside each docstring are mentions rather than uses, so both are
+    stripped from the returned prose.
+
+    Args:
+        text: The Python source or fragment under scan.
+
+    Returns:
+        The docstring prose joined into one scannable string.
+    """
+    try:
+        all_found_docstrings = _extract_parsed_docstrings(ast.parse(text))
+    except (SyntaxError, ValueError):
+        all_found_docstrings = _extract_fragment_docstrings(text)
+    all_docstring_prose = [
+        DOUBLE_QUOTED_SPAN_PATTERN.sub("", INLINE_CODE_PATTERN.sub("", each_docstring))
+        for each_docstring in all_found_docstrings
+    ]
+    return "\n".join(all_docstring_prose)
+
+
 def find_violations(text: str, file_path: str) -> list[str]:
     """Return all violated patterns found in text for the given file.
 
-    For .md files, scans the entire text. For code files, scans only comment lines.
+    For .md files, scans the entire text. For code files, scans comment lines,
+    and for Python files also scans module/class/function docstrings.
     Returns a list of matched pattern source strings.
     """
+    extension = _get_file_extension(file_path)
     if is_markdown_file(file_path):
         scan_text = text
     elif is_comment_bearing_file(file_path):
-        all_comment_lines = _extract_comment_lines(text, _get_file_extension(file_path))
+        all_comment_lines = _extract_comment_lines(text, extension)
         scan_text = "\n".join(all_comment_lines)
+        if extension == PYTHON_EXTENSION:
+            scan_text = "\n".join([scan_text, _extract_python_docstring_text(text)])
     else:
         return []
 

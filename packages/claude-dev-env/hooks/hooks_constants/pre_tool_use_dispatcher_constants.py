@@ -106,6 +106,10 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         native_module_name=STATE_DESCRIPTION_BLOCKER_MODULE_NAME,
     ),
     HostedHookEntry(
+        script_relative_path="blocking/stale_comment_reference_blocker.py",
+        applicable_tool_names=frozenset({EDIT_TOOL_NAME}),
+    ),
+    HostedHookEntry(
         script_relative_path="blocking/subprocess_budget_completeness.py",
         applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
     ),

@@ -41,6 +41,14 @@ ALL_COMMENT_TRANSITION_PATTERNS: list[Pattern[str]] = [
 
 CODE_FENCE_PATTERN: Pattern[str] = compile(r"```[\s\S]*?```")
 INLINE_CODE_PATTERN: Pattern[str] = compile(r"``[^`]+``|`[^`]+`")
+DOUBLE_QUOTED_SPAN_PATTERN: Pattern[str] = compile(r'"[^"\n]*"')
+TRIPLE_QUOTED_BLOCK_PATTERN: Pattern[str] = compile(
+    r'"""([\s\S]*?)"""|\'\'\'([\s\S]*?)\'\'\''
+)
+
+PYTHON_EXTENSION: str = ".py"
+
+ALL_DEFINITION_HEADER_PREFIXES: tuple[str, ...] = ("def ", "async def ", "class ")
 
 ALL_MARKDOWN_EXTENSIONS: frozenset[str] = frozenset(
     {".md", ".mdx", ".markdown", ".rmd"}
