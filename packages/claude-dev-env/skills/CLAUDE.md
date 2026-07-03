@@ -64,3 +64,4 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `skill-builder` — complete skill-building lifecycle
 - `doc-gist` — uploads an HTML file as a secret gist
 - `auditing-claude-config` — audits a Claude Code setup for context-budget waste and produces a migration table with savings
+- `log-audit` — background agent that audits this repo's own logs for recurring errors and timing regressions and files grouped fixes
