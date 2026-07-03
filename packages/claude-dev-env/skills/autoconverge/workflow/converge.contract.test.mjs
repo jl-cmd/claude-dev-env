@@ -271,12 +271,48 @@ test('the CONVERGE branch refreshes HEAD via the merged preflight-git task only 
   );
 });
 
-test('each fix push and the convergence repair invalidate the threaded head so the next CONVERGE entry refreshes it', () => {
+test('each fix push, each lens-retry, and the convergence repair invalidate the threaded head so the next CONVERGE entry refreshes it', () => {
   const invalidationMatches = convergeSource.match(/^ +head = null$/gm) || [];
   assert.equal(
     invalidationMatches.length,
-    3,
-    'expected head invalidation after the CONVERGE fix push, the COPILOT fix push, and the convergence repair',
+    5,
+    'expected head invalidation after the CONVERGE fix push, the COPILOT fix push, the convergence repair, the all-lenses-dead retry, and the not-clean-no-findings retry',
+  );
+});
+
+function convergeRetryBranch(guardMarker) {
+  const guardIndex = convergeSource.indexOf(guardMarker);
+  assert.notEqual(guardIndex, -1, `expected the ${guardMarker} retry branch to exist`);
+  const continueIndex = convergeSource.indexOf('continue', guardIndex);
+  assert.notEqual(continueIndex, -1, `expected a continue statement to close the ${guardMarker} branch`);
+  return convergeSource.slice(guardIndex, continueIndex + 'continue'.length);
+}
+
+test('the all-lenses-dead retry invalidates the threaded head so the next round re-fetches origin/main before spawning lenses', () => {
+  const branch = convergeRetryBranch('if (roundOutcome.allLensesDead) {');
+  const headNullIndex = branch.indexOf('head = null');
+  assert.notEqual(
+    headNullIndex,
+    -1,
+    'expected the all-lenses-dead retry to null head so the next round re-enters preflight-git — otherwise the lenses are told origin/main was fetched this round when no fetch ran',
+  );
+  assert.ok(
+    headNullIndex < branch.indexOf('continue'),
+    'expected head to be invalidated before the retry continues to the next round',
+  );
+});
+
+test('the not-clean-no-findings retry invalidates the threaded head so the next round re-fetches origin/main before spawning lenses', () => {
+  const branch = convergeRetryBranch('if (!roundOutcome.roundClean) {');
+  const headNullIndex = branch.indexOf('head = null');
+  assert.notEqual(
+    headNullIndex,
+    -1,
+    'expected the not-clean-no-findings retry to null head so the next round re-enters preflight-git — otherwise the lenses are told origin/main was fetched this round when no fetch ran',
+  );
+  assert.ok(
+    headNullIndex < branch.indexOf('continue'),
+    'expected head to be invalidated before the retry continues to the next round',
   );
 });
 

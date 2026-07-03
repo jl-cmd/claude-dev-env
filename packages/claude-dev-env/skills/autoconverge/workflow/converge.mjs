@@ -1695,6 +1695,7 @@ while (iterations < CONFIG.maxIterations) {
     const roundOutcome = resolveRoundOutcome(lenses)
     if (roundOutcome.allLensesDead) {
       log(`Round ${rounds}: every lens agent died — retrying without posting a clean artifact`)
+      head = null
       continue
     }
     const findings = roundOutcome.findings
@@ -1727,6 +1728,7 @@ while (iterations < CONFIG.maxIterations) {
     }
     if (!roundOutcome.roundClean) {
       log(`Round ${rounds}: a lens reported not-clean with no findings on ${head?.slice(0, 7)} — re-converging without a clean artifact`)
+      head = null
       continue
     }
     log(`Round ${rounds}: all lenses clean on ${head?.slice(0, 7)} — posting clean audit artifact`)
