@@ -2775,12 +2775,10 @@ def check_docstring_prose_wall_without_illustration(content: str, file_path: str
         if prose_line_count <= DOCSTRING_NARRATIVE_PROSE_LINE_LIMIT:
             continue
         issues.append(
-            "{}: {} summary runs {} sentences with no worked example - show, "
-            "don't tell: swap the wall for a '::' listing (a sample input, an "
-            "annotated outcome, ok/flag contrast rows) and keep the narrative to "
-            "a few short sentences (plain-illustrative-docstrings)".format(
-                each_line_number, each_label, prose_line_count
-            )
+            f"Line {each_line_number}: {each_label} summary runs {prose_line_count} "
+            "narrative lines with no worked example - show, don't tell: swap the wall for a "
+            "'::' listing (a sample input, an annotated outcome, ok/flag contrast rows) and "
+            "keep the narrative to a few short lines (plain-illustrative-docstrings)"
         )
         if len(issues) >= MAX_DOCSTRING_PROSE_WALL_ISSUES:
             break
