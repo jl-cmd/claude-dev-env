@@ -1,5 +1,68 @@
 # Changelog
 
+## [1.84.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.83.0...claude-dev-env-v1.84.0) (2026-07-03)
+
+
+### Features
+
+* **hooks:** gate prose-wall docstrings behind an illustrative block ([417cbaf](https://github.com/jl-cmd/claude-code-config/commit/417cbaff73a80ca8f15279310f03303e4420cbfc))
+* **hooks:** gate prose-wall docstrings behind an illustrative block ([d86453c](https://github.com/jl-cmd/claude-code-config/commit/d86453c07755d5345185d9d67e896afbbb8bbcb4))
+* **pr-converge:** resume persistent per-step agents across ticks ([fa6319c](https://github.com/jl-cmd/claude-code-config/commit/fa6319c9baa0b0bd2774cda14b96cfbab07d045e))
+* **skills:** add log-audit skill ([a2e2edf](https://github.com/jl-cmd/claude-code-config/commit/a2e2edf69ea06fdc45962384925073ea3a70f403))
+* **skills:** add log-audit skill ([1c4405b](https://github.com/jl-cmd/claude-code-config/commit/1c4405b7ab86dd977133188f2acfe5764f178837))
+* **skills:** add post-audit-findings sub-skill ([e5bbddb](https://github.com/jl-cmd/claude-code-config/commit/e5bbddb0ad8a4ce1be929f85a913e597433df51d))
+* **skills:** add pr-fix-protocol sub-skill ([e843b8b](https://github.com/jl-cmd/claude-code-config/commit/e843b8b0764d3e57b2e48578ff4cab4063518422))
+* **skills:** add pr-loop-lifecycle sub-skill ([af3ef9a](https://github.com/jl-cmd/claude-code-config/commit/af3ef9a1e724e2aca684700daf09fe80545e1920))
+* **skills:** add pr-scope-resolve sub-skill ([38e5ca9](https://github.com/jl-cmd/claude-code-config/commit/38e5ca9ba760ae3056af58230d295d1600b577e0))
+* **skills:** add reviewer-gates sub-skill ([cf7614e](https://github.com/jl-cmd/claude-code-config/commit/cf7614ebedf7cb9a5598c092fd1db2bb7bb3f878))
+
+
+### Bug Fixes
+
+* **autoconverge:** re-fetch origin/main on CONVERGE retry rounds ([ff6e1cd](https://github.com/jl-cmd/claude-code-config/commit/ff6e1cdc80eae04334ef64b17a52ebe42b4eeb6a))
+* **docs:** correct workflow hooks intro after companion-hook removal ([59d9600](https://github.com/jl-cmd/claude-code-config/commit/59d96002b8eb5809a2d3e689ef9b34f41d788fe8))
+* **docs:** make retained doc-gist and session-log docs consistent with removed hooks ([85935f2](https://github.com/jl-cmd/claude-code-config/commit/85935f20df274551b648d08627a9c8c5be4ed9c3))
+* **hooks:** remove HTML-generation hooks in favor of the Artifact tool ([6c676c3](https://github.com/jl-cmd/claude-code-config/commit/6c676c35bf2f7830b15d4a81ef6546f997d2d5ba))
+* **hooks:** remove HTML-generation hooks in favor of the Artifact tool ([a83e1f0](https://github.com/jl-cmd/claude-code-config/commit/a83e1f0748cb0f309cfc7a4d0b57786880166087))
+* **install:** prune retired md-to-html hook entries on reinstall ([03900bf](https://github.com/jl-cmd/claude-code-config/commit/03900bf28c2e851472071428a98f867d850f5fc2))
+* **pr-loop:** demote terminology sweep from blocking to advisory ([0a1ba43](https://github.com/jl-cmd/claude-code-config/commit/0a1ba437b0dc44c02786ad062b5ac17cfac645fb))
+* **skills:** address Copilot review on log-audit mining ([e2d4940](https://github.com/jl-cmd/claude-code-config/commit/e2d4940763e756cc6d5a3827011272e3e7d33606))
+* **skills:** align autoconverge report docs and constants with the Artifact publish flow ([b5ef05e](https://github.com/jl-cmd/claude-code-config/commit/b5ef05ee5031d5f6f5b6b498b21c514b4f4f8ae1))
+* **skills:** harden log-audit inputs and paths ([392478d](https://github.com/jl-cmd/claude-code-config/commit/392478de19b925ce306bf0da036fea6ad69ea16b))
+* **skills:** paginate reviewer fetch and stream the log window ([8042b3f](https://github.com/jl-cmd/claude-code-config/commit/8042b3f71b04ef28e9fb09788362633d162e1667))
+* **skills:** remove doc-gist skill, publish via the Artifact tool ([c5bec51](https://github.com/jl-cmd/claude-code-config/commit/c5bec519793eaf303dcec6dc83f9951daeecce42))
+* **skills:** spell the GitHub error class consistently ([91544ef](https://github.com/jl-cmd/claude-code-config/commit/91544ef59683e69b245045e7adff579fc00fd793))
+
+
+### Documentation
+
+* **pr-scope-resolve,reviewer-gates:** address Copilot review ([43f5ec2](https://github.com/jl-cmd/claude-code-config/commit/43f5ec24ec198b9a68ed3314b16cb3768dfdbb46))
+* **rules:** establish diagram-first docstrings as the house standard ([e8e4fed](https://github.com/jl-cmd/claude-code-config/commit/e8e4fedb996c84fb8ede93784473d8c30002d6a0))
+* **rules:** establish diagram-first docstrings as the house standard ([c92310f](https://github.com/jl-cmd/claude-code-config/commit/c92310f03600f40debfd40a0960b427685b18046))
+
+
+### Refactoring
+
+* apply code-review cleanups to docstring illustration gate ([7f4b34d](https://github.com/jl-cmd/claude-code-config/commit/7f4b34d08ba56b6f3804d5ad8a82d16be6ec27c1))
+* **autoconverge:** defer prose to pr-loop sub-skills ([e4c9d8e](https://github.com/jl-cmd/claude-code-config/commit/e4c9d8ee7833cba51a9acd696d5dc58f87d07675))
+* **bugteam:** adopt shared permission scripts ([e821784](https://github.com/jl-cmd/claude-code-config/commit/e82178403c724456528d5ccc3b38db3e21c74d7d))
+* **bugteam:** delegate audit posting, scope, and lifecycle to sub-skills ([8704eec](https://github.com/jl-cmd/claude-code-config/commit/8704eec9cad2a86ffa4876a1bb4bcd82f33a3ffb))
+* **copilot-review,monitor-open-prs:** delegate reviewer gates and fix protocol ([878336f](https://github.com/jl-cmd/claude-code-config/commit/878336f5879c7f3d9aabb369239a76327317d2f3))
+* **findbugs,fixbugs:** delegate scope, gates, and audit posting to sub-skills ([2ca4c03](https://github.com/jl-cmd/claude-code-config/commit/2ca4c03d1f3d204508c59b0b4078773787051270))
+* **pr-converge:** delegate shared procedures to sub-skills ([2cd1325](https://github.com/jl-cmd/claude-code-config/commit/2cd1325d57f509298d493ddb6969d29dfc8e1156))
+* **qbug:** delegate to pr-loop sub-skills ([ff99b17](https://github.com/jl-cmd/claude-code-config/commit/ff99b17dbcd905472ab6d55b6179f3741ea87566))
+* **skills:** extract pr-loop sub-skills and consolidate shared infrastructure ([b3d36e4](https://github.com/jl-cmd/claude-code-config/commit/b3d36e47f5fee34733d8905e0243e9736a24818c))
+
+
+### Performance
+
+* **autoconverge:** reuse git state across preflight and rounds ([dceede0](https://github.com/jl-cmd/claude-code-config/commit/dceede0deb96c9da7a79022631f398a7215ef9b7))
+
+
+### Tests
+
+* **skills:** add markdown link-integrity check for the skills tree ([d0db04c](https://github.com/jl-cmd/claude-code-config/commit/d0db04c2f713fb3e8f4e85e6fdf995e57c3c47e5))
+
 ## [1.83.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.82.0...claude-dev-env-v1.83.0) (2026-07-03)
 
 
