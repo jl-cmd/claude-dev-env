@@ -16,6 +16,8 @@ import json
 import pathlib
 import sys
 import tempfile
+import threading
+import time
 from typing import Any
 from unittest import mock
 
@@ -43,6 +45,8 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
 )
 
 _SESSION_ID = "sessionabc123"
+_CONCURRENT_EDIT_COUNT = 5
+_CONCURRENT_READ_DELAY_SECONDS = 0.05
 
 
 def _run_main_with_stdin(input_text: str) -> None:
@@ -130,6 +134,37 @@ def test_should_sanitize_unsafe_session_id_in_filename(
     _run_main_with_stdin(_write_payload("Write", edited_file, unsafe_session_id))
     sanitized_file = _edit_file_path(redirected_temp_directory, "abc")
     assert sanitized_file.exists()
+
+
+def test_should_record_every_path_under_concurrent_edits(
+    redirected_temp_directory: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    concurrent_session_id = "concurrentsession"
+    real_read_recorded_paths = hook_module._read_recorded_paths
+
+    def slow_read_recorded_paths(edit_file: pathlib.Path) -> list[str]:
+        recorded_before_delay = real_read_recorded_paths(edit_file)
+        time.sleep(_CONCURRENT_READ_DELAY_SECONDS)
+        return recorded_before_delay
+
+    monkeypatch.setattr(hook_module, "_read_recorded_paths", slow_read_recorded_paths)
+    all_edited_paths = [
+        str((redirected_temp_directory / f"module_{each_index}.py").resolve())
+        for each_index in range(_CONCURRENT_EDIT_COUNT)
+    ]
+    all_threads = [
+        threading.Thread(
+            target=hook_module._record_edited_path,
+            args=(concurrent_session_id, each_path),
+        )
+        for each_path in all_edited_paths
+    ]
+    for each_thread in all_threads:
+        each_thread.start()
+    for each_thread in all_threads:
+        each_thread.join()
+    recorded = _read_recorded_paths(redirected_temp_directory, concurrent_session_id)
+    assert sorted(recorded) == sorted(all_edited_paths)
 
 
 def test_should_exit_zero_on_malformed_stdin(

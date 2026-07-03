@@ -6,9 +6,9 @@ Shared by the PostToolUse tracker
 (``hooks/session/session_edit_tracker_cleanup.py``): the per-session tracker
 filename shape and JSON payload key, the session-id sanitize pattern, the
 SessionStart source key and the fresh-startup source value the cleanup keys its
-deletion on, the edit-tool name set, the git-diff command and its output
-encoding, the commit-flag escapes the gate honors, and the deny-message
-template.
+deletion on, the edit-tool name set, the per-session lock filename suffix and
+the lock-acquire timing, the git-diff command and its output encoding, the
+commit-flag escapes the gate honors, and the deny-message template.
 """
 
 from __future__ import annotations
@@ -28,6 +28,10 @@ ALL_TRACKED_EDIT_TOOL_NAMES: tuple[str, ...] = ("Write", "Edit", "MultiEdit")
 
 STATE_FILE_ATOMIC_WRITE_SUFFIX: str = ".tmp"
 STATE_FILE_JSON_INDENT_SPACES: int = 2
+
+SESSION_EDIT_LOCK_FILE_SUFFIX: str = ".lock"
+LOCK_ACQUIRE_TIMEOUT_SECONDS: float = 5.0
+LOCK_ACQUIRE_RETRY_SECONDS: float = 0.01
 
 GIT_DIFF_TIMEOUT_SECONDS: int = 5
 GIT_DIFF_OUTPUT_ENCODING: str = "utf-8"
