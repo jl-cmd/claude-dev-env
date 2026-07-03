@@ -2994,9 +2994,7 @@ def _outbound_pointer_issues(parsed_tree: ast.Module, file_path: str) -> list[st
     parent_directory = Path(file_path).parent
     issues: list[str] = []
     delegate_entries_by_stem: dict[str, dict[str, tuple[int, str]]] = {}
-    for each_node in ast.walk(parsed_tree):
-        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
+    for each_node in _top_level_defs_and_methods(parsed_tree):
         wrapper_docstring = ast.get_docstring(each_node) or ""
         wrapper_summary = _leading_summary_line(wrapper_docstring)
         target_stem = _pointer_target_stem(wrapper_summary)
@@ -3050,9 +3048,7 @@ def _inbound_pointer_issues(
     all_entries_by_name: dict[str, tuple[int, str]],
 ) -> list[str]:
     issues: list[str] = []
-    for each_node in ast.walk(neighbor_tree):
-        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
+    for each_node in _top_level_defs_and_methods(neighbor_tree):
         wrapper_docstring = ast.get_docstring(each_node) or ""
         wrapper_summary = _leading_summary_line(wrapper_docstring)
         if _pointer_target_stem(wrapper_summary) != delegate_stem:
