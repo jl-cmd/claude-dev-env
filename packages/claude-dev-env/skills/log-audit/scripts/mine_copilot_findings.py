@@ -169,11 +169,51 @@ def _reviewer_comment_from_payload(payload: object) -> ReviewerComment | None:
     return ReviewerComment(pull_number=pull_number, author=login, body=body)
 
 
-def _run_gh_json(endpoint: str) -> object:
-    """Run one gh api call for an endpoint and return its parsed JSON payload."""
+def _flatten_pages(slurped_payload: object) -> list[object]:
+    """Flatten the per-page arrays a gh --slurp response holds into one list.
+
+    Args:
+        slurped_payload: The parsed output of a ``gh api --paginate --slurp``
+            call: a list whose entries are the individual page responses.
+
+    Returns:
+        Every entry across the pages in page order. A page that is itself a list
+        contributes its entries; any other page contributes itself.
+    """
+    flattened_entries: list[object] = []
+    if isinstance(slurped_payload, list):
+        for each_page in slurped_payload:
+            if isinstance(each_page, list):
+                flattened_entries.extend(each_page)
+            else:
+                flattened_entries.append(each_page)
+    return flattened_entries
+
+
+def _run_gh_json(endpoint: str, *, should_paginate: bool = False) -> object:
+    """Run one gh api call for an endpoint and return its parsed JSON payload.
+
+    Args:
+        endpoint: The gh api endpoint path to request.
+        should_paginate: When True, follow pagination with ``--paginate
+            --slurp`` and flatten the per-page arrays into one list, so a list
+            endpoint with more than one page returns every entry rather than
+            only the first page.
+
+    Returns:
+        The parsed JSON payload: the flattened entry list when should_paginate
+        is True, otherwise the single response parsed as-is.
+
+    Raises:
+        GithubCommandError: When gh is not installed, the gh api call fails, or
+            its output is not JSON.
+    """
+    gh_command = ["gh", "api", endpoint]
+    if should_paginate:
+        gh_command += ["--paginate", "--slurp"]
     try:
         completed_process = subprocess.run(
-            ["gh", "api", endpoint],
+            gh_command,
             capture_output=True,
             text=True,
             check=True,
@@ -187,11 +227,14 @@ def _run_gh_json(endpoint: str) -> object:
             f"gh api {endpoint} failed: {gh_failure_error.stderr.strip()}"
         ) from gh_failure_error
     try:
-        return json.loads(completed_process.stdout)
+        parsed_payload = json.loads(completed_process.stdout)
     except json.JSONDecodeError as decode_error:
         raise GithubCommandError(
             f"gh api {endpoint} returned output that is not JSON"
         ) from decode_error
+    if should_paginate:
+        return _flatten_pages(parsed_payload)
+    return parsed_payload
 
 
 def _fetch_recent_pull_numbers(repo: str, pull_count: int) -> list[int]:
@@ -212,7 +255,8 @@ def _fetch_recent_pull_numbers(repo: str, pull_count: int) -> list[int]:
 def _fetch_pull_comments(repo: str, pull_number: int) -> list[object]:
     """Fetch one pull request's review comments through gh."""
     comments_payload = _run_gh_json(
-        PULL_COMMENTS_ENDPOINT_TEMPLATE.format(repo=repo, pull_number=pull_number)
+        PULL_COMMENTS_ENDPOINT_TEMPLATE.format(repo=repo, pull_number=pull_number),
+        should_paginate=True,
     )
     if isinstance(comments_payload, list):
         return list(comments_payload)

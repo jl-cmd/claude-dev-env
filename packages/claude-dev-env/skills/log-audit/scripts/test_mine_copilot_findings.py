@@ -9,6 +9,7 @@ if _script_directory not in sys.path:
 
 from mine_copilot_findings import (  # noqa: E402
     ReviewerComment,
+    _flatten_pages,
     _pull_number_from_url,
     _reviewer_comment_from_payload,
     classify_defect,
@@ -112,3 +113,12 @@ class TestReviewerCommentFromPayload:
             "pull_request_url": "https://api.github.com/repos/owner/name/pulls",
         }
         assert _reviewer_comment_from_payload(payload) is None
+
+
+class TestFlattenPages:
+    def test_flattens_multiple_pages_into_one_list(self) -> None:
+        slurped_payload = [[{"id": 1}, {"id": 2}], [{"id": 3}]]
+        assert _flatten_pages(slurped_payload) == [{"id": 1}, {"id": 2}, {"id": 3}]
+
+    def test_returns_empty_list_for_a_non_list_payload(self) -> None:
+        assert _flatten_pages({"message": "not a list"}) == []
