@@ -252,6 +252,33 @@ def test_should_flag_spaced_double_hyphen_joiner() -> None:
     assert len(issues) == 1
 
 
+def _diagram_first_literal_block() -> str:
+    return (
+        "def emit_tally() -> None:\n"
+        '    """Post the voyage tally so the reader sees how the run ended.\n'
+        "\n"
+        "    A calm voyage versus a halted one::\n"
+        "\n"
+        "        vessel 42 -- halted -> marked mid-voyage while it sailed\n"
+        "        calm — every vessel it carried shows a clean recorded outcome\n"
+        "        OK:   a calm run and a sunk run read differently in the log\n"
+        "        FLAG: a sunk run looks identical to a calm finished run here\n"
+        "    The reader reads the final outcome at a glance.\n"
+        '    """\n'
+        "    return None\n"
+    )
+
+
+def test_should_not_flag_diagram_first_literal_block() -> None:
+    issues = check_docstring_runon_sentence(
+        _diagram_first_literal_block(), PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        "A '::' listing's arrow, em-dash, and OK/FLAG rows sit outside the "
+        f"narrative and must not inflate the run-on count, got: {issues!r}"
+    )
+
+
 def test_docstring_names_every_inspected_section_header() -> None:
     docstring = code_rules_enforcer.check_docstring_runon_sentence.__doc__
     assert docstring is not None
