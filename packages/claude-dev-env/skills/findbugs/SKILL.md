@@ -102,6 +102,8 @@ The XML prompt skeleton:
   L. Behavior-equivalence for refactors
   M. Producer/consumer cardinality vs collection-type contract
   N. Test-name scenario verifier
+  O. Docstring / fixture-prose vs implementation drift
+  P. Name / regex / word-list vs behavior-contract precision
 
   The category list above is a summary. The binding definition of each
   category is its rubric file under $HOME/.claude/audit-rubrics/category_rubrics/
