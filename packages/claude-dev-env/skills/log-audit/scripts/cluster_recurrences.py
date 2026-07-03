@@ -125,7 +125,8 @@ def recency_weight(record_timestamp: datetime, now: datetime) -> float:
         A weight near one for a fresh record, falling toward zero as it ages.
     """
     age_hours = (now - record_timestamp).total_seconds() / SECONDS_PER_HOUR
-    return RECENCY_DECAY_BASE ** (age_hours / RECENCY_HALF_LIFE_HOURS)
+    non_negative_age_hours = max(age_hours, 0.0)
+    return RECENCY_DECAY_BASE ** (non_negative_age_hours / RECENCY_HALF_LIFE_HOURS)
 
 
 def rank_signature_clusters(
@@ -229,13 +230,25 @@ def main() -> int:
     """Read records on stdin and print ranked signature clusters.
 
     Returns:
-        The process exit code; zero on success.
+        The process exit code; zero on success, one when stdin is not a JSON
+        list of well-formed records.
     """
-    records_payload = json.load(sys.stdin)
-    records = [
-        _record_from_json_dict(each_record_fields)
-        for each_record_fields in records_payload
-    ]
+    try:
+        records_payload = json.load(sys.stdin)
+    except json.JSONDecodeError as decode_error:
+        print(f"cluster_recurrences: stdin is not valid JSON: {decode_error}", file=sys.stderr)
+        return 1
+    if not isinstance(records_payload, list):
+        print("cluster_recurrences: stdin JSON must be a list of records", file=sys.stderr)
+        return 1
+    try:
+        records = [
+            _record_from_json_dict(each_record_fields)
+            for each_record_fields in records_payload
+        ]
+    except (KeyError, TypeError, ValueError) as record_error:
+        print(f"cluster_recurrences: malformed record in stdin: {record_error}", file=sys.stderr)
+        return 1
     clusters = rank_signature_clusters(records, datetime.now())
     for each_cluster in clusters:
         print(

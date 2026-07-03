@@ -1,8 +1,11 @@
 """Tests for cluster_recurrences — signature grouping and timing regressions."""
 
+import io
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 _script_directory = str(Path(__file__).resolve().parent)
 if _script_directory not in sys.path:
@@ -11,6 +14,7 @@ if _script_directory not in sys.path:
 from cluster_recurrences import (  # noqa: E402
     TimingSample,
     detect_timing_regressions,
+    main,
     normalize_signature,
     recency_weight,
     rank_signature_clusters,
@@ -58,6 +62,12 @@ class TestRecencyWeight:
         weight = recency_weight(one_half_life_ago, now)
         assert abs(weight - 0.5) < 0.001
 
+    def test_a_future_record_is_clamped_to_at_most_one(self) -> None:
+        now = datetime(2026, 7, 3, 12, 0, 0)
+        one_hour_ahead = now + timedelta(hours=1)
+        weight = recency_weight(one_hour_ahead, now)
+        assert abs(weight - 1.0) < 0.001
+
 
 class TestRankSignatureClusters:
     def test_the_most_frequent_recent_signature_ranks_first(self) -> None:
@@ -101,8 +111,8 @@ class TestDetectTimingRegressions:
     def test_ignores_a_steady_operation(self) -> None:
         base = datetime(2026, 7, 3, 0, 0, 0)
         samples = [
-            TimingSample("steady", base + timedelta(minutes=each), 100.0)
-            for each in range(6)
+            TimingSample("steady", base + timedelta(minutes=each_minute_offset), 100.0)
+            for each_minute_offset in range(6)
         ]
         assert detect_timing_regressions(samples) == []
 
@@ -113,3 +123,38 @@ class TestDetectTimingRegressions:
             TimingSample("sparse", base + timedelta(minutes=2), 900.0),
         ]
         assert detect_timing_regressions(samples) == []
+
+
+class TestMain:
+    def test_rejects_non_json_stdin(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        monkeypatch.setattr(sys, "stdin", io.StringIO("not json"))
+        exit_code = main()
+        captured = capsys.readouterr()
+        assert exit_code == 1
+        assert "not valid JSON" in captured.err
+
+    def test_rejects_a_non_list_payload(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        monkeypatch.setattr(sys, "stdin", io.StringIO('{"not": "a list"}'))
+        exit_code = main()
+        captured = capsys.readouterr()
+        assert exit_code == 1
+        assert "must be a list" in captured.err
+
+    def test_rejects_a_malformed_record(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        monkeypatch.setattr(sys, "stdin", io.StringIO('[{"missing": "fields"}]'))
+        exit_code = main()
+        captured = capsys.readouterr()
+        assert exit_code == 1
+        assert "malformed record" in captured.err
