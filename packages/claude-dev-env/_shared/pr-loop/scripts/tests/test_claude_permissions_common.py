@@ -160,6 +160,24 @@ def test_path_contains_glob_metacharacters_local_tuple_uses_all_collection_prefi
     )
 
 
+def test_is_valid_project_root_detects_git_marker(tmp_path: Path) -> None:
+    git_project_root = tmp_path / "git_project"
+    (git_project_root / ".git").mkdir(parents=True)
+    assert common.is_valid_project_root(git_project_root) is True
+
+
+def test_is_valid_project_root_detects_claude_marker(tmp_path: Path) -> None:
+    claude_project_root = tmp_path / "claude_project"
+    (claude_project_root / ".claude").mkdir(parents=True)
+    assert common.is_valid_project_root(claude_project_root) is True
+
+
+def test_is_valid_project_root_rejects_unmarked_directory(tmp_path: Path) -> None:
+    unmarked_directory = tmp_path / "no_marker"
+    unmarked_directory.mkdir()
+    assert common.is_valid_project_root(unmarked_directory) is False
+
+
 def test_is_valid_project_root_uses_extracted_directory_marker_constants() -> None:
     """is_valid_project_root must reference extracted constants, not inline string literals."""
     source_text = inspect.getsource(common.is_valid_project_root)
