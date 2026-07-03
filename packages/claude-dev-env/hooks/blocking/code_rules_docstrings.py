@@ -2019,13 +2019,14 @@ def _documentable_docstrings_with_line(parsed_tree: ast.Module) -> list[tuple[in
 def check_docstring_cardinal_count_matches_constant_family(
     content: str, file_path: str
 ) -> list[str]:
-    """Flag a docstring cardinal count that under-names a referenced constant family.
+    """Flag a docstring cardinal count that differs from a referenced constant family.
 
     The drift this catches: a docstring states a cardinal count of an outcome
     family (``Covers the four outcome branches: ...``) and enumerates that
-    family's members in prose, while the module references more members of the
-    same ``UPPER_SNAKE`` constant family than the count names. The prose
-    under-describes the code — a reader trusts the count and the enumeration to
+    family's members in prose, while the module references a member set of the
+    same ``UPPER_SNAKE`` constant family whose size differs from the stated
+    count — above it and below it both trip. The prose
+    misdescribes the code — a reader trusts the count and the enumeration to
     be the full set, but the module imports and exercises an outcome the summary
     omits. The check binds only when the docstring states a cardinal beside an
     outcome noun, names two or more members of one referenced family, leaves at
@@ -2038,7 +2039,8 @@ def check_docstring_cardinal_count_matches_constant_family(
 
     Args:
         content: The source text to inspect.
-        file_path: The path the source will be written to, used for exemptions.
+        file_path: Accepted for the uniform check interface; the body does not
+            read it.
 
     Returns:
         One issue per docstring whose cardinal count and enumeration omit a

@@ -244,7 +244,8 @@ def check_import_block_sorted(
             give ruff the filename it needs for config discovery.
         all_changed_lines: Post-edit line numbers the current edit touched, or
             None to treat the whole file as in scope. When provided, a finding
-            blocks only when its block-anchor line is among the changed lines.
+            blocks only when any line of its block span is among the changed
+            lines.
         defer_scope_to_caller: When True, return every finding so the commit/push
             gate's ``Line N:`` partitioning scopes by added line.
 
