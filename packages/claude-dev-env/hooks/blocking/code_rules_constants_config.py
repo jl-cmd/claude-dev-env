@@ -395,7 +395,7 @@ def check_config_duplicate_path_anchor(content: str, file_path: str) -> list[str
         anchor_up_count, first_segment = each_signature
         issues.append(
             f"Line {each_line_number}: joins {first_segment} onto the same base, "
-            f"{anchor_up_count} levels above this directory, that {owner_name} "
+            f"{anchor_up_count} levels above this file, that {owner_name} "
             "already builds - define the base once and compose both paths from it"
         )
         if len(issues) >= MAX_CONFIG_DUPLICATE_PATH_ANCHOR_ISSUES:
