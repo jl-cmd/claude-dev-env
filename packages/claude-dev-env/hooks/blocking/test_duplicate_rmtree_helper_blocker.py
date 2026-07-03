@@ -142,12 +142,6 @@ def test_path_exempts_existing_session_env_cleanup_definition_site() -> None:
     assert path_is_exempt("packages/claude-dev-env/hooks/session/session_env_cleanup.py")
 
 
-def test_path_exempts_existing_md_to_html_test_support_definition_site() -> None:
-    assert path_is_exempt(
-        "packages/claude-dev-env/hooks/blocking/_md_to_html_blocker_test_support.py"
-    )
-
-
 def test_path_exempts_existing_teardown_worktrees_definition_site() -> None:
     assert path_is_exempt(
         "packages/claude-dev-env/skills/_shared/pr-loop/scripts/teardown_worktrees.py"

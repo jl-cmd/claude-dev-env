@@ -62,9 +62,4 @@ ALL_POST_HOSTED_HOOK_ENTRIES: tuple[PostHostedHookEntry, ...] = (
         script_relative_path="workflow/auto_formatter.py",
         is_blocking=False,
     ),
-    PostHostedHookEntry(
-        script_relative_path="workflow/doc_gist_auto_publish.py",
-        extra_argument_relative_paths=(PLUGIN_ROOT_PLACEHOLDER,),
-        is_blocking=False,
-    ),
 )
