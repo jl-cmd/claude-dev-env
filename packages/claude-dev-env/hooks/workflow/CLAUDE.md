@@ -1,6 +1,6 @@
 # hooks/workflow
 
-PostToolUse hooks that trigger side-effects after Claude writes a file. They do not block writes; they produce companion artifacts automatically.
+PostToolUse hooks that run after Claude writes a file. They do not block the write; they run follow-up side effects — reformatting the written file and resetting the investigation tracker.
 
 ## Key files
 
