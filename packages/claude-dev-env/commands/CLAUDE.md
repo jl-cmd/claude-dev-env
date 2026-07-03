@@ -7,7 +7,6 @@ Slash-command definitions installed into `~/.claude/commands/` by `bin/install.m
 | File | Command | What it does |
 |---|---|---|
 | `commit.md` | `/commit` | Commits and pushes changes to GitHub |
-| `doc-gist.md` | `/doc-gist` | Uploads an HTML file as a secret gist and opens the htmlpreview URL |
 | `docupdate.md` | `/docupdate` | Updates documentation to match current code state |
 | `hook-log-extract.md` | `/hook-log-extract` | Extracts and formats hook log entries for a session |
 | `hook-log-init.md` | `/hook-log-init` | Initializes the Neon Postgres schema that backs the hook-log extractor (one-time per machine) |

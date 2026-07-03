@@ -1,44 +1,30 @@
 ---
 name: session-log
 description: >-
-  Log a session report by handing the HTML authorship to doc-gist (which designs fresh per session and auto-publishes via the `<!-- @publish-as-gist -->` marker hook), then track vault context, extract unrecorded decisions, tidy the project's session folder, and output a /rename command. Use when the user says /session-log, journal this session, log this work, session report, or any variation of "summarize/log/record this session". Also triggers on "save session", "capture session", or "document what we did".
+  Log a session report by composing a self-contained HTML page and publishing it with the Artifact tool, then track vault context, extract unrecorded decisions, tidy the project's session folder, and output a /rename command. Use when the user says /session-log, journal this session, log this work, session report, or any variation of "summarize/log/record this session". Also triggers on "save session", "capture session", or "document what we did".
 ---
 
 # Session Log
 
 ## Overview
 
-The HTML artifact is doc-gist's job end-to-end. Session-log owns everything around it: where the file lives in the vault, what number it gets, the frontmatter metadata contract, post-write vault tracking, decision extraction, project-folder hygiene, and the closing `/rename` hand-off.
+Session-log composes the HTML report and publishes it directly with the `Artifact` tool. The skill owns the whole flow: where the file lives in the vault, what number it gets, the frontmatter metadata contract, HTML composition and publishing, post-write vault tracking, decision extraction, project-folder hygiene, and the closing `/rename` hand-off.
 
 **Announce at start:** "I'm logging this session."
 
-## Why this skill delegates HTML to doc-gist
+## Why this report is designed fresh per session
 
-Sessions come in many shapes — convergence loops, feature builds, research dives, incidents, refactors, decisions. A single h2-emoji-list template forces every session into the same form regardless of fit, and the artifact reads as a process log rather than a substance log. Doc-gist's principle: *"design fresh per request, drawing on a gallery of 20 HTML shape patterns."* Each session report gets the shape that fits the session.
-
-The gallery lives at `~/.claude/skills/doc-gist/references/examples/`. Patterns that usually fit session reports:
-
-| Session character | Gallery shape to study |
-|---|---|
-| Feature build / PR ships | `17-pr-writeup.html` |
-| Incident, debugging arc, convergence loop | `12-incident-report.html` |
-| Status update / weekly progress | `11-status-report.html` |
-| Implementation plan or decision record | `16-implementation-plan.html` |
-| Exploration of multiple approaches | `01-exploration-code-approaches.html` |
-| Code-explainer with module map | `04-code-understanding.html` |
-
-The session designer reads the matching gallery file, then designs the report in that shape. **Adapt, do not copy.**
+Sessions come in many shapes — convergence loops, feature builds, research dives, incidents, refactors, decisions. A single h2-emoji-list template forces every session into the same form regardless of fit, and the artifact reads as a process log rather than a substance log. Load the `artifact-design` skill before composing any page content — it calibrates the design investment and shape to the session's character: a feature build reads naturally as a PR writeup, an incident or convergence loop as a timeline, a status update as a progress summary, a plan or decision as a decision record, an exploration as a multi-approach walkthrough.
 
 ## Gotchas
 
-- **Doc-gist's auto-publish hook fires on Write/Edit of any HTML containing `<!-- @publish-as-gist -->`.** Session-log composes the HTML with the marker so auto-publish runs by default — sessions are intended for sharing with collaborators. The hook prints the gist + preview URLs to tool output; capture both.
-- **`gh` must be authenticated.** Auto-publish runs `gh gist create`. If `gh` is unauthenticated, `gh gist create` writes its error message; `gist_upload.py` surfaces it from stderr when present and falls back to stdout when stderr is empty (so the error always appears somewhere in the tool result). The hook exits 0 (does not block the Write). Look at the full tool result, then surface the error to the user; the local vault HTML is still the canonical artifact, so the remaining steps still run.
-- **Vault paths sit outside `.claude/`.** Headless vault paths (e.g., `$OBSIDIAN_VAULT_PATH`) resolve outside the project tree. The `md_to_html_blocker` PreToolUse hook blocks `.md` writes unless the path is exempt — exemptions include any path containing `/.claude/` and README/CHANGELOG files at repo root. Session reports use HTML, which the hook ignores entirely.
+- **Load the `artifact-design` skill before writing page content.** The `Artifact` tool needs this step first — it is not optional polish.
+- **The `Artifact` tool wraps the file in a document skeleton at publish time.** It adds `<!doctype html>…<head>…</head><body>` around whatever the file holds — write page content only (a `<title>`, a `<style>` block, and the body markup). Do not include `<!DOCTYPE>`, `<html>`, `<head>`, or `<body>` tags in the file itself.
+- **The `Artifact` tool redeploys to the same URL only within the current run.** Editing the session's HTML file in a later step of this same skill run and calling `Artifact` again does not mint a new URL — it updates the same published page in place. A fresh session has no memory of an artifact's URL from an earlier run, so republishing a session report written in a prior session always mints a new URL (there is no other way to target the old one without the user supplying it).
+- **Vault paths sit outside `.claude/`.** Headless vault paths (e.g., `$OBSIDIAN_VAULT_PATH`) resolve outside the project tree. Session reports use HTML regardless of vault location — the Artifact tool needs a written file to publish.
 - **Sessions describe current state by convention.** The state_description_blocker hook does not scan .html, but the rule at `~/.claude/rules/no-historical-clutter.md` applies as a writing standard — skip historical and comparative language when composing the report; the rule file lists the full trigger set.
 - **`write_existing_file_blocker` rejects Write on existing paths.** Use Write only when creating a fresh session report; use Edit for the vault-context append in step 3.
-- **Each Write/Edit of the marked HTML creates a fresh gist with a new ID.** `gist_upload.py` calls `gh gist create` with no lookup of any prior gist. Step 3 performs two Edits and Step 5's tidy may Edit the current session a third time — each Edit produces a different gist URL than its predecessor. Quote the URLs from the FINAL publish (the most recent auto-publish run for the session being created — the second Step-3 Edit when Step 5 does not touch the current session, or the Step 5 Edit when it does) to the user; never embed a URL inside the HTML that a later Edit then re-publishes.
 - **Obsidian frontmatter index is HTML-blind.** Obsidian's native YAML-frontmatter parser reads only `.md` files. HTML files do not appear in Obsidian's frontmatter index. Search by content still works; search by `type: session-report` does not.
-- **Auto-published gists carry the default `gist_upload.py` description (`HTML artifact`), not a session-specific title.** The auto-publish hook invokes `gist_upload.py` with only `--input` and `--no-open` — it has no session-title context to pass as `--description`. Browsing or sharing gists, operators see "HTML artifact" rather than `Session [N] — [Title] — session-log — [Project]`. Workaround: after the canonical Edit completes, edit the existing gist's description in place with `gh gist edit <gist-id> --desc "Session [N] — [Title] — session-log — [Project]"` (this updates the existing gist's metadata; no new gist ID is created) if a meaningful title matters for that share. The HTML frontmatter inside the file remains the authoritative session metadata regardless of the gist's external description.
 
 ## Backend Detection (run before Step 1)
 
@@ -87,27 +73,25 @@ tags: [session, [project-tag], [topic-tags]]
 
 Every session report carries this metadata block verbatim so vault search and the tidy step in step 5 work. **Initial values for Step 2's Write:** substitute concrete values for every placeholder — for `session_id`, write the value read from `CLAUDE_CODE_SESSION_ID` in step 1 (or `unknown` when the variable is unset); for `vault_context_retrieved`, write the literal value `false` (the safe default before Step 3's vault-MCP-tool scan completes). Step 3 then Edits `vault_context_retrieved` to `true` if any of the three vault MCP tools fired this session.
 
-## Step 2: Compose the HTML via doc-gist's shape principles
+## Step 2: Compose and Publish the HTML via the Artifact Tool
 
-Design the artifact for **this session's character**, drawing on the doc-gist gallery patterns listed above. The report must answer for a cold reader, from the H2 headers alone, three questions: *what shipped*, *why it matters*, *what impact it had*. Process narration (commit-by-commit walks, agent gotchas, retry counts) belongs at the end, not in the opening sections.
+Load the `artifact-design` skill before writing any content. Design the artifact for **this session's character** — a feature build reads naturally as a PR writeup, an incident or convergence loop as a timeline, a status update as a progress summary, a plan or decision as a decision record, an exploration as a multi-approach walkthrough. The report must answer for a cold reader, from the section headers alone, three questions: *what shipped*, *why it matters*, *what impact it had*. Process narration (commit-by-commit walks, agent gotchas, retry counts) belongs at the end, not in the opening sections.
 
-**Required somewhere in the HTML (commonly in `<head>`):** the auto-publish marker.
+**Required as the first content line:** the frontmatter HTML comment from step 1.
 
-```html
-<!-- @publish-as-gist -->
-```
+**Required somewhere in the content:** a `<title>` element naming the session — it names the browser tab and the artifact gallery entry.
 
-The marker triggers the PostToolUse hook after Write or Edit — the hook scans the entire HTML for the literal sentinel string and uploads the file to a secret gist, then prints the gist + preview URLs to your tool output. The marker must be the literal comment text exactly; whitespace inside breaks it.
+**Required as the first content section (after the frontmatter comment):** an opening "What this session shipped" paragraph + bullets — written so a reader with zero prior context understands the outcome. For continuation sessions (where the substantive work landed in a prior session), recap the parent session's outcome briefly so the report stands alone.
 
-**Required at the top of `<body>`:** the frontmatter HTML comment from step 1.
+**Required: self-contained, responsive, theme-aware HTML.** Inline all CSS in a `<style>` block and all JS inline; embed any images as data URIs — the `Artifact` tool's content security policy blocks external CDN scripts, stylesheets, fonts, and network requests. Use relative units so the layout holds at any width, and support both light and dark via `prefers-color-scheme` (or `:root[data-theme]` overrides).
 
-**Required as the first content section:** an opening "What this session shipped" paragraph + bullets — written so a reader with zero prior context understands the outcome. For continuation sessions (where the substantive work landed in a prior session), recap the parent session's outcome briefly so the report stands alone.
+**No document wrapper tags.** The `Artifact` tool wraps the file content in a `<!doctype html>…<head>…</head><body>` skeleton at publish time — write the `<title>`, `<style>`, and body markup directly, with no `<!DOCTYPE>`, `<html>`, `<head>`, or `<body>` tags of your own.
 
-**Required: self-contained HTML.** Embed all styles in a `<style>` block inside `<head>` (inline `style="..."` attributes are also fine if preferred); no `./relative/paths` to local assets. Doc-gist's transport sends a single HTML file with no neighbors, so any relative-path reference (CSS, JS, images) cannot resolve and the asset will be missing from the preview. Absolute external URLs (CDN-hosted assets, image hotlinks) work but add an external dependency the report should not need — design the report to stand alone with no external dependencies.
+Beyond those requirements, design the shape that fits the session — the `artifact-design` skill's guidance covers typography, palette, and layout choices.
 
-Beyond those four requirements, design the shape that fits. A convergence loop session reads naturally as an incident timeline (`12-incident-report.html`); a feature build reads as a PR writeup (`17-pr-writeup.html`); a research session reads as a feature explainer (`14-research-feature-explainer.html`). Read the matching gallery entry for typography, palette, spatial idioms — adapt, do not copy.
+**Write the file** via the Write tool to the vault path. Create the project directory via `mkdir -p` if it does not exist.
 
-**Write the file** via the Write tool to the vault path. Create the project directory via `mkdir -p` if it does not exist. The auto-publish hook fires after the Write completes and prints a gist + preview URL pair to tool output (the bare preview URL on stdout; both labeled `Gist: <url>` and `Preview: <url>` lines on stderr — both streams appear in the agent's tool-result). Step 3 performs **two Edit calls** and each one re-fires the hook with a fresh URL pair — only the URL pair from the second (final) Step-3 Edit is canonical for the just-created session (the step-2 pair and the first step-3 pair are orphaned the moment the next Edit lands). Always quote the URL pair from the **most recent auto-publish run for the session being created**. Note: Step 5's tidy audits every `.html` file in the project folder including the just-created session, so if Step 5's frontmatter auto-fix touches the current session, the Step 5 republish URL pair becomes the new canonical pair for that session (re-quote it to the user with a "Session republished — new preview: <url>" line). The second Step-3 Edit's URL pair stays canonical only when Step 5 does not touch the current session.
+**Publish the file** by calling the `Artifact` tool with `file_path` set to the vault path just written, `favicon` set to the fixed session-log favicon `📓` — this favicon stays the same across every session-log report so the series reads as one consistent collection; never swap it per session — and `description` set to a one-sentence subtitle summarizing the session. Capture the returned URL: it is the canonical URL for this session report, and it stays the same across every later `Artifact` call on this same `file_path` within the current run (steps 3 and 5 redeploy to it rather than minting a new one).
 
 **If the Write fails**, output the HTML content in the conversation so the user can copy it manually. Before emitting the HTML to chat, resolve the `vault_context_retrieved` placeholder to `true` or `false` based on the same vault-MCP-tool scan that Step 3 would have run, and include the matching vault-context `<li>` line (Retrieved or Not retrieved) so the emitted HTML is a valid copy-paste artifact with complete frontmatter. Skip Step 3 and continue at step 4.
 
@@ -121,10 +105,10 @@ Review the conversation history for any use of these vault MCP tools (look only 
 - `mcp__obsidian__read_note`
 - `mcp__obsidian__read_multiple_notes`
 
-Edit the vault HTML via two Edit calls (each Edit re-fires the auto-publish hook and creates a fresh gist; **the URL pair from the second/final Edit is canonical** — the first Edit's URLs are orphaned the moment the second Edit lands):
+Edit the vault HTML via two Edit calls:
 
 1. Set the frontmatter `vault_context_retrieved` field to `true` when any of the three tools fired this session, `false` otherwise.
-2. Append one fact — vault-context status — into whatever section the report designer placed for notes / metadata / references. If the report has no such section, append a fresh `<h2>Notes</h2>` block before `</body>`:
+2. Append one fact — vault-context status — into whatever section the report designer placed for notes / metadata / references. If the report has no such section, append a fresh `<h2>Notes</h2>` block at the end of the content:
 
 ```html
 <h2>Notes</h2>
@@ -137,7 +121,7 @@ Edit the vault HTML via two Edit calls (each Edit re-fires the auto-publish hook
 
 If the report already has a notes / references section, use Edit to insert one matching child element at the end of that section. The element shape mirrors whatever the section already uses: an extra `<li>` before the closing `</ul>` for a list, an extra `<dt>Vault context</dt><dd>…</dd>` pair before the closing `</dl>` for a description list, an extra `<p><strong>Vault context:</strong> …</p>` before the section's closing tag for a paragraph-based section. Pick the form that matches the surrounding markup.
 
-The gist URL stays out of the HTML body on purpose: each Edit re-fires the auto-publish hook and produces a brand-new gist ID, so any URL embedded in the file becomes stale the instant the next Edit lands. The canonical gist + preview URL is the pair from **the most recent auto-publish run that touched the current session report** — typically the second (final) Step-3 Edit, but the Step 5 Edit takes over as canonical when Step 5's frontmatter auto-fix edits the current session (re-quote the Step 5 pair with a "Session [N] republished — new preview: <url>" line per the Step 2 guidance at line 107). Quote whichever pair is most recent when announcing the report.
+After both Edits land, call the `Artifact` tool again with the same `file_path` and the same `favicon` used in step 2 to redeploy the updated content. This updates the URL captured in step 2 in place; no new URL is minted.
 
 ## Step 4: Decision Extraction
 
@@ -160,7 +144,7 @@ Scope: the current project's session folder only.
    - Missing frontmatter fields that can be inferred (e.g., `blocked: false` when status is `completed`; `vault_context_retrieved: false` when the field is absent, since the field defaults to false in pre-existing sessions)
    - `type` field set to a wrong value (correct to `session-report`)
 
-   Each Edit on a marked HTML file re-fires doc-gist's auto-publish hook and produces a fresh gist + preview URL pair in the agent's tool output (the bare preview URL on stdout; both labeled `Gist: <url>` and `Preview: <url>` lines on stderr) — the prior gist URL becomes orphaned. Surface a `Session [N] republished — new preview: <url>` line per Edit so the user can update any prior shares.
+   When the Edit touches the session report created in this run, call `Artifact` again with the same `file_path` and `favicon` from step 2 to redeploy — the URL captured in step 2 stays unchanged. When the Edit touches an older session report published in a prior run, call `Artifact` on that `file_path` with no `url` argument, since this skill keeps no record of that file's earlier URL — this publishes the older report at a new URL. Surface a `Session [N] republished at a new URL: <url>` line so the user can update any prior shares.
 4. **Report issues that need user input:**
    - Files with wrong naming convention (propose new name)
    - Stale statuses (propose update to `completed` or ask)
@@ -190,14 +174,13 @@ The primary outcome comes from the session title resolved in step 1.
 
 - [ ] Backend detected and announced
 - [ ] Session number resolved from `[N]. *.html` and `[N]. *.md` files (both parsed to preserve sequence across the format migration)
-- [ ] HTML composed via doc-gist's shape principles (gallery-anchored)
-- [ ] `<!-- @publish-as-gist -->` marker present somewhere in the HTML
-- [ ] Frontmatter HTML comment present at top of `<body>`
+- [ ] `artifact-design` skill loaded before composing page content
+- [ ] HTML composed for this session's character (no document wrapper tags; self-contained, responsive, theme-aware)
+- [ ] Frontmatter HTML comment present as the first content line
 - [ ] `session_id` frontmatter field set from `CLAUDE_CODE_SESSION_ID` (the authoring agent's own session), or `unknown` when the variable is unset
 - [ ] Opening section answers "what shipped / why / impact" for a cold reader
-- [ ] Self-contained HTML (no relative-path asset refs; avoid external dependencies)
-- [ ] Auto-publish URLs captured from step 2 and step 3 (or HTML emitted to chat when step 2 Write failed)
-- [ ] Vault-context line appended via Edit (step 3); URL pair from the most recent auto-publish run for the current session quoted to the user (typically the final Step-3 Edit, but the Step 5 republish takes over when Step 5 edits the current session)
+- [ ] Published via the `Artifact` tool with the fixed favicon `📓`; URL captured (or HTML emitted to chat when step 2 Write failed)
+- [ ] Vault-context line appended via Edit (step 3); `Artifact` redeployed on the same URL
 - [ ] Decision extraction surfaced any unrecorded items
 - [ ] Session tidy reported anomalies or stayed silent
 - [ ] `/rename` command copied to clipboard via `pwsh Set-Clipboard`

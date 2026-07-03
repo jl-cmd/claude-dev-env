@@ -152,10 +152,10 @@ round records nothing resumable and replays dirty.
 ## Teardown (on workflow completion)
 
 1. **When `converged` is true — build and publish the closing report.**
-   Skip this entire step (report, gist, comment, Chrome open) when the workflow
-   returned a non-null `blocker`. Per-round live-dashboard refresh is out of scope
-   here; this step builds the one-shot closing report and the seam (marker comment +
-   gist URL) a future live-dashboard reuses.
+   Skip this entire step (report, artifact publish, comment, Chrome open) when the
+   workflow returned a non-null `blocker`. Per-round live-dashboard refresh is out of
+   scope here; this step builds the one-shot closing report and the seam (marker
+   comment + artifact URL) a future live-dashboard reuses.
 
    a. **Resolve a seed journal path.** Glob
       `~/.claude/projects/**/workflows/wf_<runId>.json` (where `runId` is the run id
@@ -194,21 +194,16 @@ round records nothing resumable and replays dirty.
       Use the `combinedJournal`, `finalSha`, and `roundCount` from step b. Capture the
       output path from stdout.
 
-   e. **Publish as a secret gist** by reusing `doc-gist` (do not reimplement gist
-      creation):
-      ```
-      python "$HOME/.claude/skills/doc-gist/scripts/gist_upload.py" \
-        --input "<html path>" \
-        --no-open \
-        --description "autoconverge report PR #<n>"
-      ```
-      Capture the htmlpreview URL from stdout. The gist is secret by default; pass
-      no public flag.
+   e. **Publish via the Artifact tool.** Load the `artifact-design` skill first, then
+      call `Artifact` with `file_path` set to the report path from step d, `favicon`
+      set to the fixed autoconverge favicon `✅` (keep this favicon stable across
+      every autoconverge report — never swap it per run), and `description` set to
+      a one-sentence subtitle naming the PR. Capture the returned URL.
 
    f. **Post one idempotent PR comment.** List the PR's issue comments; if one
       carries the marker `<!-- autoconverge-report -->`, edit it in place, otherwise
       create a new one. The body begins with `<!-- autoconverge-report -->`, then
-      the htmlpreview link, then a plain-language summary that mirrors the report:
+      the artifact URL, then a plain-language summary that mirrors the report:
       lead with the one-sentence `verdictLine`; then the plain Problem and Fix
       sentences (`prProblem`, `prFix`); then the issue-class list — one bullet per
       class as `plainName (×count, status)`. Place the raw finding list as
@@ -219,9 +214,10 @@ round records nothing resumable and replays dirty.
       GitHub MCP `add_issue_comment` tool (body as a structured parameter, no
       `--body` flag).
 
-   g. **Open the report in Chrome.**
+   g. **Open the published report in Chrome.** Use the artifact URL captured in
+      step e.
       ```
-      Start-Process chrome -ArgumentList '--new-window', '<report path>'
+      Start-Process chrome -ArgumentList '--new-window', '<artifact URL>'
       ```
       Tolerate a missing Chrome without aborting the rest of teardown.
 

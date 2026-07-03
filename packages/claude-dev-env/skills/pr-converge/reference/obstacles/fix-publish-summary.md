@@ -1,6 +1,6 @@
 # Publish fix summary
 
-Publish fix summary HTML via /doc-gist with commit SHA and per-fix descriptions
+Publish fix summary HTML via the Artifact tool with commit SHA and per-fix descriptions
 
 ## Self-population
 
