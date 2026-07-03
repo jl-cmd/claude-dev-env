@@ -138,6 +138,8 @@ def load_config(config_path: str) -> AppConfig:
     """
 ```
 
+For a public function whose behavior needs a picture, lead the narrative with a diagram: one summary line, then a `::` literal block or a doctest showing a concrete input and its marked outcome, then a couple of short prose lines, then the `Args:` / `Returns:` sections. See `../../rules/plain-illustrative-docstrings.md` for the shape and a worked example.
+
 ### 13. Build infrastructure
 
 The project under development must contain:

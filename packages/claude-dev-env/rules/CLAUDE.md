@@ -32,7 +32,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `package-inventory-stale-entry.md` | A new production code file added to a directory carries an entry in that directory's `README.md`/`CLAUDE.md` file inventory |
 | `paired-test-coverage.md` | A public function omitted by a module's established paired test suite must get a behavioral test |
 | `parallel-tools.md` | Make all independent tool calls in a single response |
-| `plain-illustrative-docstrings.md` | Public docstring narrative reads plainly and paints a concrete scene a general developer follows on first read; a run-on backstop hook plus Category O9 audit enforce it |
+| `plain-illustrative-docstrings.md` | Public docstring narrative reads plainly and shows behavior with a diagram block (a `::` example or a doctest), painting a concrete scene a general developer follows on first read; a run-on backstop hook, a prose-wall backstop hook, and Category O9 audit enforce it |
 | `plain-language.md` | Everyday words, short active sentences, lead with the answer |
 | `prompt-workflow-context-controls.md` | Keep prompt-workflow instruction layers small and stable; load heavy skills on demand |
 | `research-mode.md` | Three anti-hallucination constraints: say "I don't know", verify with citations, quote for factual grounding |
