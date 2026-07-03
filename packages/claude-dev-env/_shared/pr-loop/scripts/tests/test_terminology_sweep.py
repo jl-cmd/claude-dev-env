@@ -23,13 +23,22 @@ main = sweep_module.main
 parse_added_lines = sweep_module._parse_added_lines
 
 
+_git_environment = sweep_module._git_environment
+
+
 def _init_git_repository(repository_path: Path) -> None:
     for each_command in (
         ["git", "init"],
         ["git", "config", "user.email", "test@example.com"],
         ["git", "config", "user.name", "Test"],
     ):
-        subprocess.run(each_command, cwd=repository_path, check=True, capture_output=True)
+        subprocess.run(
+            each_command,
+            cwd=repository_path,
+            check=True,
+            capture_output=True,
+            env=_git_environment(),
+        )
 
 
 CODE_AND_PROSE_DIFF = (
@@ -221,16 +230,85 @@ def test_does_not_flag_ordinary_sentence_sharing_loop_variable_prefix() -> None:
 
 def test_flags_near_miss_inside_code_comment() -> None:
     diff = (
+        "diff --git a/api/quota.mjs b/api/quota.mjs\n"
+        "--- a/api/quota.mjs\n"
+        "+++ b/api/quota.mjs\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+const premium_interactions = 5\n"
+        "+// the premium-request path resets the counter\n"
+    )
+    findings = sweep_diff(diff)
+    assert len(findings) == 1
+    assert "premium-request" in findings[0]
+
+
+def test_flags_near_miss_inside_code_string_literal() -> None:
+    diff = (
+        "diff --git a/api/quota.mjs b/api/quota.mjs\n"
+        "--- a/api/quota.mjs\n"
+        "+++ b/api/quota.mjs\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+const premium_interactions = 5\n"
+        '+throw new Error("the premium-request budget")\n'
+    )
+    findings = sweep_diff(diff)
+    assert len(findings) == 1
+    assert "premium-request" in findings[0]
+
+
+def test_does_not_flag_prose_inside_code_string_literal() -> None:
+    diff = (
         "diff --git a/api/quota.py b/api/quota.py\n"
         "--- a/api/quota.py\n"
         "+++ b/api/quota.py\n"
         "@@ -0,0 +1,2 @@\n"
         "+premium_interactions = 5\n"
-        "+# the premium-request path resets the counter\n"
+        '+message = "the premium-request budget"\n'
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_does_not_flag_prose_inside_code_docstring() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+premium_interactions = 5\n"
+        '+    """Gate the run on the premium-request budget."""\n'
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_does_not_flag_prose_in_test_file() -> None:
+    diff = (
+        "diff --git a/api/quota.test.mjs b/api/quota.test.mjs\n"
+        "--- a/api/quota.test.mjs\n"
+        "+++ b/api/quota.test.mjs\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+const premium_interactions = 5\n"
+        "+// the premium-request path resets the counter\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_flags_prose_in_test_named_markdown_doc() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+premium_interactions = 5\n"
+        "diff --git a/docs/test_plan.md b/docs/test_plan.md\n"
+        "--- a/docs/test_plan.md\n"
+        "+++ b/docs/test_plan.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+The premium-request budget gates the run.\n"
     )
     findings = sweep_diff(diff)
     assert len(findings) == 1
     assert "premium-request" in findings[0]
+    assert "test_plan.md" in findings[0]
 
 
 def test_no_findings_when_no_multiword_identifier_introduced() -> None:
@@ -273,7 +351,13 @@ def test_staged_terminology_findings_flags_staged_prose(tmp_path: Path) -> None:
     (tmp_path / "README.md").write_text(
         "The premium-request budget gates the run.\n", encoding="utf-8"
     )
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "add", "-A"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        env=_git_environment(),
+    )
     findings = staged_terminology_findings(tmp_path)
     assert any("premium-request" in each_finding for each_finding in findings)
 
@@ -281,7 +365,13 @@ def test_staged_terminology_findings_flags_staged_prose(tmp_path: Path) -> None:
 def test_staged_terminology_findings_empty_when_clean(tmp_path: Path) -> None:
     _init_git_repository(tmp_path)
     (tmp_path / "README.md").write_text("Nothing notable here.\n", encoding="utf-8")
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "add", "-A"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        env=_git_environment(),
+    )
     assert staged_terminology_findings(tmp_path) == []
 
 

@@ -100,3 +100,15 @@ if it exists and ends by writing the updated state back to that same file
 before scheduling the next wakeup. Multi-PR mode additionally coordinates
 across PRs via `<TMPDIR>/pr-converge-<session_id>/state.json` per
 `multi-pr-orchestration.md` §What orchestrator does per tick.
+
+## Handoff files
+
+Each tick also writes a durable handoff under
+`~/.claude/runtime/pr-loop/<run-name>/` via
+`skills/_shared/pr-loop/scripts/write_handoff.py`: `handoff.json` (resume
+command, phase, tick, and state path), `HANDOFF.md` (a prompt a fresh session
+reads), and `state-copy.json` (a copy of the job-dir state). `$CLAUDE_JOB_DIR`
+can be cleaned between sessions; this directory under the user home is not, so it
+holds the pointer a new job needs. Live job-dir state wins for a resumed tick. A
+fresh session reads the handoff copy only when `$CLAUDE_JOB_DIR` state is gone,
+seeding phase, tick, and SHAs from `state-copy.json`.
