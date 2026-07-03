@@ -290,3 +290,38 @@ def test_should_still_flag_a_stranded_wrapper_within_the_scan_limit(
         "The alphabetically-first wrapper sits within the neighbor scan limit "
         f"and stays flagged even with extra filler neighbors, got: {issues!r}"
     )
+
+
+def _target_flow_source_with_nested_duplicate_name() -> str:
+    return (
+        "async def _refresh_store_sections(processor: object, page: object) -> bool:\n"
+        '    """Apply Russia uncheck, review note, and Publication edits.\n'
+        "\n"
+        "    The App Info edit runs earlier in the binary phase and never\n"
+        "    repeats here.\n"
+        '    """\n'
+        "    return True\n"
+        "\n"
+        "\n"
+        "def _outer_helper() -> bool:\n"
+        "    def _refresh_store_sections() -> bool:\n"
+        '        """A same-named nested helper that must not shadow the'
+        ' top-level entry."""\n'
+        "        return True\n"
+        "\n"
+        "    return _refresh_store_sections()\n"
+    )
+
+
+def test_should_not_let_a_nested_duplicate_name_hide_the_top_level_entry(
+    tmp_path: Path,
+) -> None:
+    _create_target_flow(tmp_path, _target_flow_source_with_nested_duplicate_name())
+    checked_path = str(tmp_path / PROCESSOR_FILE_NAME)
+    issues = check_docstring_delegation_summary_enumeration_drift(
+        _drifted_processor_source(), checked_path
+    )
+    assert any("App Info" in each for each in issues), (
+        "A nested helper sharing the top-level function's name must not "
+        f"delete the top-level entry from comparison, got: {issues!r}"
+    )

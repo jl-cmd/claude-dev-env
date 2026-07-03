@@ -2942,18 +2942,32 @@ def _absent_entries(wrapper_summary: str, delegate_summary: str) -> list[str]:
     return absent_entry_texts
 
 
+def _top_level_defs_and_methods(
+    parsed_tree: ast.Module,
+) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    all_defs: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for each_node in parsed_tree.body:
+        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            all_defs.append(each_node)
+        elif isinstance(each_node, ast.ClassDef):
+            all_defs.extend(
+                each_member
+                for each_member in each_node.body
+                if isinstance(each_member, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+    return all_defs
+
+
 def _entries_by_function_name(parsed_tree: ast.Module) -> dict[str, tuple[int, str]]:
     entries_by_name: dict[str, tuple[int, str]] = {}
     ambiguous_names: set[str] = set()
-    for each_node in ast.walk(parsed_tree):
-        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    for each_definition in _top_level_defs_and_methods(parsed_tree):
+        if each_definition.name in entries_by_name:
+            ambiguous_names.add(each_definition.name)
             continue
-        if each_node.name in entries_by_name:
-            ambiguous_names.add(each_node.name)
-            continue
-        entries_by_name[each_node.name] = (
-            each_node.lineno,
-            ast.get_docstring(each_node) or "",
+        entries_by_name[each_definition.name] = (
+            each_definition.lineno,
+            ast.get_docstring(each_definition) or "",
         )
     for each_ambiguous_name in ambiguous_names:
         del entries_by_name[each_ambiguous_name]
