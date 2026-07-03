@@ -17,7 +17,6 @@ from autoconverge_report_constants.render_report_constants import (
     DEFAULT_FINDING_CATEGORY,
     DEFAULT_FINDING_SEVERITY,
     DEFAULT_ISSUE_ICON,
-    HTML_DOCTYPE,
     HTML_HEAD_TEMPLATE,
     HTML_STYLE_BLOCK,
     ISO_DATE_LENGTH,
@@ -890,7 +889,9 @@ def render_report_html(
         generated_date: ISO date string derived from the journal timestamp.
 
     Returns:
-        A complete HTML document string.
+        A page-content HTML string (a title, a style block, and the body
+        markup) with no surrounding <!DOCTYPE>, <html>, <head>, or <body>
+        tags, ready for the Artifact tool to wrap and publish.
     """
     short_sha_length = SHORT_SHA_LENGTH
     pr_number = pr_metadata.number
@@ -899,7 +900,7 @@ def render_report_html(
     final_sha_short = pr_metadata.final_sha[:short_sha_length]
     round_count = pr_metadata.round_count
 
-    head_html = HTML_HEAD_TEMPLATE.format(
+    title_and_style_html = HTML_HEAD_TEMPLATE.format(
         pr_number=pr_number,
         style_block=HTML_STYLE_BLOCK,
     )
@@ -933,15 +934,10 @@ def render_report_html(
     )
 
     return (
-        f"{HTML_DOCTYPE}\n"
-        f"<html lang='en'>\n"
-        f"{head_html}\n"
-        f"<body>\n"
+        f"{title_and_style_html}\n"
         f'<div class="container">\n'
         f"{body_content}\n"
-        f"</div>\n"
-        f"</body>\n"
-        f"</html>"
+        f"</div>"
     )
 
 
