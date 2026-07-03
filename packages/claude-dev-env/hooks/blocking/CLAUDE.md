@@ -88,6 +88,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `reviewer_spawn_gate.py` | PreToolUse (Bash) | A sentinel-marked autoconverge reviewer-spawn command (Copilot review request, Bugbot rerun comment) run while `reviewer_availability.py` reports that reviewer down or out of quota |
 | `send_user_file_open_locally_blocker.py` | PreToolUse (SendUserFile) | A desk-side file attach (`SendUserFile` with `status` not `proactive`); points to opening the file locally via `Show-Asset.ps1` |
 | `sensitive_file_protector.py` | PreToolUse (Write/Edit) | Writes to sensitive credential or config files |
+| `session_edit_stage_gate.py` | PreToolUse (Bash) | A `git commit` that would drop files edited this session because they are tracked but left unstaged |
 | `session_handoff_blocker.py` | Stop | Responses suggesting a new session mid-task |
 | `stale_comment_reference_blocker.py` | PreToolUse (Edit) | An Edit that rewrites a Python code line while keeping the standalone comment directly above it, when that comment names an identifier the rewrite removes from the line |
 | `state_description_blocker.py` | PreToolUse (Write/Edit) | Historical/comparative language in documentation |

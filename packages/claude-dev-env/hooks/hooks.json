@@ -77,6 +77,11 @@
           },
           {
             "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/session_edit_stage_gate.py",
+            "timeout": 15
+          },
+          {
+            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pr_description_enforcer.py",
             "timeout": 10
           },
@@ -206,6 +211,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/gh_pr_author_session_cleanup.py",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/session_edit_tracker_cleanup.py",
+            "timeout": 10
           }
         ]
       }
@@ -262,6 +272,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/session_end_cleanup.py",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/session_edit_tracker_cleanup.py",
+            "timeout": 10
           }
         ]
       }
@@ -286,6 +301,16 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validation/post_tool_use_dispatcher.py",
             "timeout": 180
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/observability/session_file_edit_tracker.py",
+            "timeout": 10
           }
         ]
       },
