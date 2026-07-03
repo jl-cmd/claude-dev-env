@@ -209,6 +209,7 @@ Slash commands for common workflows.
 | `reviewer-gates` | Availability gates for PR-loop reviewers: CLAUDE_REVIEWS_DISABLED opt-out parse, once-per-run Copilot quota pre-check, and the Cursor Bugbot trigger/acknowledge/CI-detect flow |
 | `pr-scope-resolve` | Resolves a PR-loop skill's audit/fix target (owner, repo, number, refs, head SHA) through one MCP-first ladder with a single canonical refusal line |
 | `pr-fix-protocol` | Applies reviewer findings as verified fixes and drives unresolved threads to zero: executor choice, the shared 13-step fix sequence, atomic reply-and-resolve, and post-push state resets |
+| `post-audit-findings` | Publishes an audit pass as one GitHub PR review via post_audit_thread.py: findings-JSON mapping, anchored/unanchored partition, self-PR reviewer toggle, and thread-id harvest for the fix loop |
 
 ### Hooks
 
