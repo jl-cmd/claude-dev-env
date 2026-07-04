@@ -1,23 +1,22 @@
-"""Flag a prose term that near-misses a code identifier a diff introduces.
+"""Flag a prose term that names a code identifier a hair differently.
 
 A change adds the field ``premium_interactions`` while the same branch's docs
-call it the ``premium-request`` budget: two names for one thing, and a reader
-who searches one never finds the other.
+call it the ``premium-request`` budget: one thing, two names, and a reader who
+searches one never finds the other.
 
 ::
 
-    code adds:  premium_interactions          (the identifier)
-    prose adds: "the premium-request budget"   (a hyphenated term)
-    flag: premium-request  vs  premium_interactions   -- shared first token, tail diverges
-    ok:   premium-interactions                 -- exact hyphen form, no drift
-    ok:   read-only,  test files               -- English compound or plural, not drift
+    code adds:  premium_interactions            the identifier
+    prose adds: the premium-request budget       a hyphenated term
+    flag: premium-request  vs  premium_interactions  -- shared first word, tail diverges
+    ok:   premium-interactions                   -- exact hyphen form, agrees
+    ok:   read-only,  test files,  to a file     -- English compound, plural, or stopword
 
-Only hyphenated prose is a candidate, since a hyphen marks a deliberate compound
-while a spaced word run is ordinary prose. Markdown scans in full; a JavaScript
-or TypeScript line contributes its comments and string literals; a Python file
-contributes identifiers only; a test code file is skipped whole. Each near-miss
-prints one ``file:line`` finding and the run exits non-zero, so a commit gate
-blocks on it.
+The sweep reads a unified diff, collects the multi-word identifiers added on
+code lines, and scans each added prose line for a hyphen or space variant that
+shares an identifier's leading word but diverges after it. It spares ordinary
+prose: English compound tails, singular/plural forms, stopword windows, and
+words that are themselves tokens of another introduced identifier.
 """
 
 import argparse
@@ -32,10 +31,19 @@ if parent_directory not in sys.path:
 
 from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS,
+    ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX,
+    ALL_PROSE_STOPWORD_TOKENS,
+    ALL_STRING_ESCAPE_SEQUENCES,
+    ALL_TEST_FILE_NAME_INFIX_MARKERS,
+    GIT_BASE_TREE_REVISION,
+    IDENTIFIER_TOKEN_SEPARATOR,
+    PROSE_WINDOW_WORD_SEPARATOR,
+    TEST_DIRECTORY_PATH_SEGMENT,
+    TEST_FILE_PREFIX,
+    TEST_FILE_SUFFIX,
     ALL_DIFF_FILE_PATH_STRIP_PREFIXES,
     ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND,
     ALL_SWEEP_CODE_FILE_EXTENSIONS,
-    ALL_TEST_FILE_NAME_INFIX_MARKERS,
     CAMEL_CASE_IDENTIFIER_PATTERN,
     CAMEL_CASE_WORD_PATTERN,
     DIFF_ADDED_LINE_PREFIX,
@@ -47,18 +55,17 @@ from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     DIFF_REMOVED_LINE_PREFIX,
     GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
     HYPHENATED_PROSE_TOKEN_PATTERN,
+    INLINE_CODE_SPAN_PATTERN,
     JAVASCRIPT_LINE_COMMENT_MARKER,
     JSDOC_CONTINUATION_MARKER,
     MARKDOWN_FILE_EXTENSION,
     MINIMUM_IDENTIFIER_TOKEN_COUNT,
+    PROSE_WORD_PATTERN,
     PYTHON_COMMENT_MARKER,
-    PYTHON_FILE_EXTENSION,
     SNAKE_CASE_IDENTIFIER_PATTERN,
     STRING_LITERAL_CONTENT_PATTERN,
     TERMINOLOGY_FINDING_TEMPLATE,
     TERMINOLOGY_SWEEP_DESCRIPTION,
-    TEST_DIRECTORY_PATH_SEGMENT,
-    TEST_FILE_NAME_PREFIX,
 )
 
 IdentifierTuple = tuple[str, ...]
@@ -115,35 +122,6 @@ def _file_extension(file_path: str) -> str:
     return Path(file_path).suffix.lower()
 
 
-def _is_test_file(file_path: str) -> bool:
-    """Return True when the diff path is a test code file the sweep should skip.
-
-    A test code file's prose is scaffolding: its docstrings and string fixtures
-    name the identifiers under test on purpose, so scanning it only adds noise. A
-    Markdown or other non-code file is prose worth scanning whatever its name, so
-    a ``test_plan.md`` design doc is scanned rather than skipped.
-
-    Args:
-        file_path: The repository-relative diff path.
-
-    Returns:
-        True for a code file under a ``tests`` directory, a ``test_`` prefixed
-        code file, or a code file whose name carries a
-        ``_test.``/``.test.``/``.spec.`` marker. False for any non-code file.
-    """
-    if _file_extension(file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
-        return False
-    normalized_path = file_path.replace("\\", "/").lower()
-    if TEST_DIRECTORY_PATH_SEGMENT in f"/{normalized_path}":
-        return True
-    basename = normalized_path.rsplit("/", 1)[-1]
-    if basename.startswith(TEST_FILE_NAME_PREFIX):
-        return True
-    return any(
-        each_marker in basename for each_marker in ALL_TEST_FILE_NAME_INFIX_MARKERS
-    )
-
-
 def _identifier_token_tuple(identifier: str) -> IdentifierTuple:
     """Return the lowercase word tokens of a snake_case or camelCase identifier."""
     if "_" in identifier:
@@ -171,35 +149,30 @@ def _identifier_tuples_in_text(code_text: str) -> list[IdentifierTuple]:
 
 def _collect_introduced_identifiers(
     all_added_lines: list[tuple[str, int, str]],
-) -> tuple[frozenset[IdentifierTuple], dict[str, list[IdentifierTuple]]]:
+) -> frozenset[IdentifierTuple]:
     """Return the identifier tuples introduced on added code lines.
 
     Args:
         all_added_lines: Added-line triples from :func:`_parse_added_lines`.
 
     Returns:
-        A ``(all_identifier_tuples, identifiers_by_first_token)`` pair. The map
-        groups the tuples by their leading token so the near-miss check reaches
-        every candidate for a given prefix without rescanning the whole set.
+        Every multi-word identifier tuple appearing on an added code line.
     """
     all_identifier_tuples: set[IdentifierTuple] = set()
     for each_file_path, _, each_text in all_added_lines:
         if _file_extension(each_file_path) in ALL_SWEEP_CODE_FILE_EXTENSIONS:
             all_identifier_tuples.update(_identifier_tuples_in_text(each_text))
-    identifiers_by_first_token: dict[str, list[IdentifierTuple]] = {}
-    for each_tuple in all_identifier_tuples:
-        identifiers_by_first_token.setdefault(each_tuple[0], []).append(each_tuple)
-    return frozenset(all_identifier_tuples), identifiers_by_first_token
+    return frozenset(all_identifier_tuples)
 
 
 def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     """Return the prose fragments of an added line worth scanning for terms.
 
-    A Markdown line is prose in full. A JavaScript or TypeScript line contributes
-    its comment tail, its JSDoc continuation text, and the contents of its string
-    literals. A Python line contributes no prose: to avoid flagging a module's own
-    vocabulary as drift, the sweep ignores Python comments, docstrings, and string
-    literals and scans Python files for identifiers only.
+    A Markdown line is prose with its inline-code spans removed, since a
+    backticked span names code verbatim. A code line contributes its comment
+    tail, its JSDoc continuation text, and the contents of its string
+    literals. A test module contributes its comment tail and JSDoc text only
+    — its string literals hold fixture data, not prose.
 
     Args:
         file_path: The path the added line belongs to.
@@ -210,18 +183,57 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     """
     extension = _file_extension(file_path)
     if extension == MARKDOWN_FILE_EXTENSION:
-        return [line_text]
+        return [INLINE_CODE_SPAN_PATTERN.sub(" ", line_text)]
     if extension not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
-        return []
-    if extension == PYTHON_FILE_EXTENSION:
         return []
     all_fragments: list[str] = []
     stripped_line = line_text.strip()
     if stripped_line.startswith(JSDOC_CONTINUATION_MARKER):
         all_fragments.append(stripped_line)
     all_fragments.extend(_comment_fragments(line_text))
-    all_fragments.extend(_string_literal_fragments(line_text))
+    if not _is_test_file(file_path):
+        all_fragments.extend(_string_literal_fragments(line_text))
     return all_fragments
+
+
+def _is_test_file(file_path: str) -> bool:
+    """Return whether a diff path names a test code module.
+
+    A test module's string literals hold fixture data — embedded diffs,
+    generated source, file trees — not documentation prose, so the sweep
+    reads only its comments and JSDoc lines. A ``quota.test.mjs``, a
+    ``layout.spec.ts``, and a ``fixtures.py`` under a tests directory are all
+    test modules, so every one of these paths counts::
+
+        tests/fixtures.py        -- under a tests/ directory
+        api/test_quota.py        -- test_ prefixed stem
+        api/quota_test.py        -- _test suffixed stem
+        api/quota.test.mjs       -- .test. name marker
+        api/layout.spec.ts       -- .spec. name marker
+
+    A non-code path (a Markdown design doc) is prose worth scanning whatever
+    its name, so it is never a test module here.
+
+    Args:
+        file_path: The diff path of the added line's file.
+
+    Returns:
+        True for a code file under a ``tests`` directory, or one whose name
+        carries a ``test_`` prefix, a ``_test`` suffix, or a
+        ``_test.``/``.test.``/``.spec.`` marker. False for any other path.
+    """
+    if _file_extension(file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+        return False
+    normalized_path = file_path.replace("\\", "/").lower()
+    if TEST_DIRECTORY_PATH_SEGMENT in f"/{normalized_path}":
+        return True
+    basename = normalized_path.rsplit("/", 1)[-1]
+    stem = Path(normalized_path).stem
+    if stem.startswith(TEST_FILE_PREFIX) or stem.endswith(TEST_FILE_SUFFIX):
+        return True
+    return any(
+        each_marker in basename for each_marker in ALL_TEST_FILE_NAME_INFIX_MARKERS
+    )
 
 
 def _comment_fragments(line_text: str) -> list[str]:
@@ -241,7 +253,14 @@ def _comment_fragments(line_text: str) -> list[str]:
 
 
 def _string_literal_fragments(line_text: str) -> list[str]:
-    """Return the contents of every quoted string literal on a code line."""
+    """Return the contents of every quoted string literal on a code line.
+
+    Escape sequences inside a literal (``\\n``, ``\\t``) are replaced with
+    spaces before the words are read, so an escape letter never glues onto a
+    neighbouring word as a phantom prose term. A literal left with no
+    whitespace after that replacement is an identifier-shaped value — a UID,
+    a key, a path — not prose, and contributes nothing.
+    """
     all_fragments: list[str] = []
     for each_match in STRING_LITERAL_CONTENT_PATTERN.finditer(line_text):
         each_content = next(
@@ -252,6 +271,10 @@ def _string_literal_fragments(line_text: str) -> list[str]:
             ),
             "",
         )
+        for each_escape in ALL_STRING_ESCAPE_SEQUENCES:
+            each_content = each_content.replace(each_escape, " ")
+        if not any(each_character.isspace() for each_character in each_content):
+            continue
         all_fragments.append(each_content)
     return all_fragments
 
@@ -263,6 +286,36 @@ def _hyphenated_candidates(fragment: str) -> list[tuple[str, IdentifierTuple]]:
         display = each_match.group(0)
         token_tuple = tuple(each_word.lower() for each_word in display.split("-"))
         all_candidates.append((display, token_tuple))
+    return all_candidates
+
+
+def _spaced_candidates(
+    fragment: str,
+    identifiers_by_first_token: dict[str, list[IdentifierTuple]],
+) -> list[tuple[str, IdentifierTuple]]:
+    """Return spaced word windows whose first word matches an identifier prefix.
+
+    Only a window anchored at a known identifier prefix and sized to one of that
+    prefix's identifiers is returned, which bounds the windows to the shapes the
+    near-miss check can act on.
+
+    Args:
+        fragment: The prose fragment to scan.
+        identifiers_by_first_token: Identifier tuples grouped by leading token.
+
+    Returns:
+        ``(display, token_tuple)`` pairs for each candidate window.
+    """
+    all_words = [
+        each_word.lower() for each_word in PROSE_WORD_PATTERN.findall(fragment)
+    ]
+    all_candidates: list[tuple[str, IdentifierTuple]] = []
+    for each_index, each_word in enumerate(all_words):
+        for each_identifier in identifiers_by_first_token.get(each_word, []):
+            window = tuple(all_words[each_index : each_index + len(each_identifier)])
+            if len(window) == len(each_identifier):
+                display = PROSE_WINDOW_WORD_SEPARATOR.join(window)
+                all_candidates.append((display, window))
     return all_candidates
 
 
@@ -292,10 +345,41 @@ def _tuples_match_ignoring_plural(
     )
 
 
+def _word_is_identifier_vocabulary(
+    prose_word: str, all_identifier_tokens: frozenset[str]
+) -> bool:
+    """Return whether a prose word is a token of any introduced identifier.
+
+    A singular/plural form of an identifier token counts as the same word,
+    so ``uids`` matches an identifier token ``uid``.
+
+    Args:
+        prose_word: The lowercase prose word to look up.
+        all_identifier_tokens: Every token of every introduced identifier.
+
+    Returns:
+        True when the word, or a plural variant of it, is a known token.
+    """
+    if prose_word in all_identifier_tokens:
+        return True
+    if prose_word.endswith("y") and prose_word[:-1] + "ies" in all_identifier_tokens:
+        return True
+    if prose_word + "s" in all_identifier_tokens or prose_word + "es" in all_identifier_tokens:
+        return True
+    if prose_word.endswith("s") and prose_word[:-1] in all_identifier_tokens:
+        return True
+    if prose_word.endswith("es") and prose_word[:-2] in all_identifier_tokens:
+        return True
+    if prose_word.endswith("ies") and prose_word[:-3] + "y" in all_identifier_tokens:
+        return True
+    return False
+
+
 def _near_miss_identifier(
     candidate_tuple: IdentifierTuple,
     all_identifier_tuples: frozenset[IdentifierTuple],
     identifiers_by_first_token: dict[str, list[IdentifierTuple]],
+    all_identifier_tokens: frozenset[str],
 ) -> IdentifierTuple | None:
     """Return an identifier the candidate near-misses, or None when it does not.
 
@@ -303,19 +387,26 @@ def _near_miss_identifier(
         candidate_tuple: The prose term's lowercase token tuple.
         all_identifier_tuples: Every introduced identifier tuple.
         identifiers_by_first_token: Identifier tuples grouped by leading token.
+        all_identifier_tokens: Every token of every identifier on added code
+            lines, used to spare prose built from real code vocabulary.
 
     Returns:
-        The first identifier sharing the candidate's leading token and length but
-        differing in a later token, or None when the candidate matches an
-        identifier exactly, shares no prefix, ends in a common English compound
-        tail word (``read-only``, ``data-driven``), or differs from the
+        The first identifier sharing the candidate's leading token and length
+        but differing in a later token. None marks the candidate ordinary
+        prose instead, on any of these grounds: it matches an identifier
+        exactly; it shares no prefix with one; it ends in a common English
+        compound tail word (``read-only``, ``data-driven``); it contains an
+        English stopword (``to a``, ``each image``); it differs from the
         identifier only by a singular/plural form of one or more tokens
-        (``test files`` against ``test_file``) — each of which marks the
-        candidate ordinary prose rather than a near-miss of the identifier.
+        (``test files`` against ``test_file``); or every diverging word is
+        itself a token of some introduced identifier (``target box`` when
+        ``box_height`` is also in the diff).
     """
     if not candidate_tuple or candidate_tuple in all_identifier_tuples:
         return None
     if candidate_tuple[-1] in ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS:
+        return None
+    if any(each_word in ALL_PROSE_STOPWORD_TOKENS for each_word in candidate_tuple):
         return None
     for each_identifier in identifiers_by_first_token.get(candidate_tuple[0], []):
         if len(each_identifier) != len(candidate_tuple):
@@ -323,6 +414,16 @@ def _near_miss_identifier(
         if each_identifier == candidate_tuple:
             continue
         if _tuples_match_ignoring_plural(each_identifier, candidate_tuple):
+            continue
+        diverging_words = [
+            each_word
+            for each_word, each_token in zip(candidate_tuple, each_identifier)
+            if not _tokens_are_plural_variants(each_word, each_token)
+        ]
+        if all(
+            _word_is_identifier_vocabulary(each_word, all_identifier_tokens)
+            for each_word in diverging_words
+        ):
             continue
         return each_identifier
     return None
@@ -334,6 +435,7 @@ def _findings_for_line(
     line_text: str,
     all_identifier_tuples: frozenset[IdentifierTuple],
     identifiers_by_first_token: dict[str, list[IdentifierTuple]],
+    all_identifier_tokens: frozenset[str],
 ) -> list[str]:
     """Return the near-miss findings for one added line.
 
@@ -343,6 +445,8 @@ def _findings_for_line(
         line_text: The added line's text without its diff marker.
         all_identifier_tuples: Every introduced identifier tuple.
         identifiers_by_first_token: Identifier tuples grouped by leading token.
+        all_identifier_tokens: Every token of every identifier on added code
+            lines, used to spare prose built from real code vocabulary.
 
     Returns:
         One finding string per distinct near-miss term on the line.
@@ -351,9 +455,13 @@ def _findings_for_line(
     reported_tuples: set[IdentifierTuple] = set()
     for each_fragment in _prose_fragments(file_path, line_text):
         all_candidates = _hyphenated_candidates(each_fragment)
+        all_candidates += _spaced_candidates(each_fragment, identifiers_by_first_token)
         for each_display, each_tuple in all_candidates:
             matched_identifier = _near_miss_identifier(
-                each_tuple, all_identifier_tuples, identifiers_by_first_token
+                each_tuple,
+                all_identifier_tuples,
+                identifiers_by_first_token,
+                all_identifier_tokens,
             )
             if matched_identifier is None or each_tuple in reported_tuples:
                 continue
@@ -363,31 +471,43 @@ def _findings_for_line(
                     file_path=file_path,
                     line_number=line_number,
                     candidate=each_display,
-                    identifier="_".join(matched_identifier),
+                    identifier=IDENTIFIER_TOKEN_SEPARATOR.join(matched_identifier),
                 )
             )
     return all_findings
 
 
-def sweep_diff(diff_text: str) -> list[str]:
+def sweep_diff(
+    diff_text: str,
+    all_preexisting_identifier_tuples: frozenset[IdentifierTuple] = frozenset(),
+) -> list[str]:
     """Return every terminology near-miss finding for a unified diff.
 
     Args:
         diff_text: The unified-diff text to sweep.
+        all_preexisting_identifier_tuples: Token tuples of added-line identifiers
+            the base tree already names. A pre-existing identifier is not one
+            the diff introduces, so no prose is flagged against it. Its
+            tokens still count as code vocabulary.
 
     Returns:
         One finding string per near-miss term on an added prose line.
     """
-    all_added_lines = [
-        each_added_line
-        for each_added_line in _parse_added_lines(diff_text)
-        if not _is_test_file(each_added_line[0])
-    ]
-    all_identifier_tuples, identifiers_by_first_token = _collect_introduced_identifiers(
-        all_added_lines
+    all_added_lines = _parse_added_lines(diff_text)
+    all_identifier_tuples = _collect_introduced_identifiers(all_added_lines)
+    all_identifier_tokens = frozenset(
+        each_token for each_tuple in all_identifier_tuples for each_token in each_tuple
     )
-    if not all_identifier_tuples:
+    introduced_tuples = frozenset(
+        each_tuple
+        for each_tuple in all_identifier_tuples
+        if each_tuple not in all_preexisting_identifier_tuples
+    )
+    if not introduced_tuples:
         return []
+    introduced_by_first_token: dict[str, list[IdentifierTuple]] = {}
+    for each_tuple in introduced_tuples:
+        introduced_by_first_token.setdefault(each_tuple[0], []).append(each_tuple)
     all_findings: list[str] = []
     for each_file_path, each_line_number, each_text in all_added_lines:
         all_findings.extend(
@@ -395,20 +515,25 @@ def sweep_diff(diff_text: str) -> list[str]:
                 each_file_path,
                 each_line_number,
                 each_text,
-                all_identifier_tuples,
-                identifiers_by_first_token,
+                introduced_tuples,
+                introduced_by_first_token,
+                all_identifier_tokens,
             )
         )
     return all_findings
 
 
-def _git_environment() -> dict[str, str]:
+def repository_environment() -> dict[str, str]:
     """Return the process environment with every GIT_ variable removed.
 
-    A git commit hook runs this sweep with GIT_INDEX_FILE pointed at the commit
-    index. Stripping every GIT_ variable makes ``git diff --cached`` read the
-    repository's own index, so the sweep sees the staged diff of the repository
-    it was handed rather than an ambient override.
+    The sweep and the commit gate name their repository through an explicit
+    root argument. An inherited GIT_DIR or GIT_WORK_TREE would override
+    that root and point git at a different repository, so each spawned
+    subprocess runs with a scrubbed environment.
+
+    Returns:
+        A copy of ``os.environ`` without any variable whose name starts
+        with ``GIT_``.
     """
     return {
         each_key: each_setting
@@ -417,8 +542,74 @@ def _git_environment() -> dict[str, str]:
     }
 
 
+def _identifier_names_on_added_code_lines(diff_text: str) -> frozenset[str]:
+    """Return every multi-word identifier name on the diff's added code lines.
+
+    Args:
+        diff_text: The unified-diff text to scan.
+
+    Returns:
+        The distinct snake_case and camelCase names of two or more tokens.
+    """
+    all_names: set[str] = set()
+    for each_file_path, _, each_text in _parse_added_lines(diff_text):
+        if _file_extension(each_file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+            continue
+        all_found_names = SNAKE_CASE_IDENTIFIER_PATTERN.findall(each_text)
+        all_found_names += CAMEL_CASE_IDENTIFIER_PATTERN.findall(each_text)
+        for each_name in all_found_names:
+            token_tuple = _identifier_token_tuple(each_name)
+            if len(token_tuple) >= MINIMUM_IDENTIFIER_TOKEN_COUNT:
+                all_names.add(each_name)
+    return frozenset(all_names)
+
+
+def _base_tree_names(
+    repository_root: Path, all_names: frozenset[str]
+) -> frozenset[str]:
+    """Return the names the repository's base tree already contains.
+
+    Each name is looked up as a whole word in the base revision's tree. A
+    repository with no commits yet, or a lookup that git cannot run, reports
+    the name as absent, so the sweep then treats it as newly introduced —
+    the behaviour the sweep has with no base-tree check at all.
+
+    Args:
+        repository_root: The repository root the lookups run in.
+        all_names: The identifier names to look up.
+
+    Returns:
+        The subset of names present in the base tree.
+    """
+    all_present_names: set[str] = set()
+    for each_name in sorted(all_names):
+        try:
+            grep_process = subprocess.run(
+                [
+                    *ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX,
+                    each_name,
+                    GIT_BASE_TREE_REVISION,
+                ],
+                cwd=str(repository_root),
+                capture_output=True,
+                text=True,
+                timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
+                check=False,
+                env=repository_environment(),
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            continue
+        if grep_process.returncode == 0:
+            all_present_names.add(each_name)
+    return frozenset(all_present_names)
+
+
 def staged_terminology_findings(repository_root: Path) -> list[str]:
     """Return terminology near-miss findings for a repository's staged diff.
+
+    An identifier the base tree already names is not one the staged diff
+    introduces, so no prose is flagged against it — only genuinely new
+    identifiers are swept.
 
     Args:
         repository_root: The repository root the staged diff is read from.
@@ -436,11 +627,16 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
         errors="replace",
         timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
         check=False,
-        env=_git_environment(),
+        env=repository_environment(),
     )
     if diff_process.returncode != 0:
         return []
-    return sweep_diff(diff_process.stdout)
+    all_added_names = _identifier_names_on_added_code_lines(diff_process.stdout)
+    preexisting_tuples = frozenset(
+        _identifier_token_tuple(each_name)
+        for each_name in _base_tree_names(repository_root, all_added_names)
+    )
+    return sweep_diff(diff_process.stdout, preexisting_tuples)
 
 
 def _read_diff_text(diff_file_path: str | None) -> str:
