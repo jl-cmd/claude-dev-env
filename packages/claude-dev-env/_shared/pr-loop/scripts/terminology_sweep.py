@@ -202,8 +202,8 @@ def _is_test_file(file_path: str) -> bool:
     A test module's string literals hold fixture data — embedded diffs,
     generated source, file trees — not documentation prose, so the sweep
     reads only its comments and JSDoc lines. A ``quota.test.mjs``, a
-    ``layout.spec.ts``, and a ``tests/fixtures.py`` are all test modules, so
-    every one of these paths counts::
+    ``layout.spec.ts``, and a ``fixtures.py`` under a tests directory are all
+    test modules, so every one of these paths counts::
 
         tests/fixtures.py        -- under a tests/ directory
         api/test_quota.py        -- test_ prefixed stem
