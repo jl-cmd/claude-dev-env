@@ -55,7 +55,10 @@ from pr_loop_shared_constants.inline_duplicate_body_span_constants import (  # n
 from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     TERMINOLOGY_SWEEP_GATE_HEADER,
 )
-from terminology_sweep import staged_terminology_findings  # noqa: E402
+from terminology_sweep import (  # noqa: E402
+    repository_environment,
+    staged_terminology_findings,
+)
 
 ValidateContentCallable = Callable[..., list[str]]
 
@@ -176,6 +179,7 @@ def resolve_merge_base(repository_root: Path, base_reference: str) -> str:
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=repository_environment(),
     )
     if merge_result.returncode != 0:
         print(
@@ -249,6 +253,7 @@ def paths_from_git_staged(repository_root: Path) -> list[Path]:
         cwd=str(repository_root),
         capture_output=True,
         check=False,
+        env=repository_environment(),
     )
     if name_result.returncode != 0:
         stderr_text = name_result.stderr.decode("utf-8", errors="replace")
@@ -299,6 +304,7 @@ def staged_file_line_count(
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=repository_environment(),
     )
     if show_result.returncode != 0:
         print(
@@ -339,6 +345,7 @@ def is_staged_file_newly_added(
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=repository_environment(),
     )
     if status_result.returncode != 0:
         print(
@@ -379,6 +386,7 @@ def added_lines_for_staged_file(
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=repository_environment(),
     )
     if diff_result.returncode != 0:
         print(
@@ -451,6 +459,7 @@ def paths_from_git_diff(repository_root: Path, base_reference: str) -> list[Path
         cwd=str(repository_root),
         capture_output=True,
         check=False,
+        env=repository_environment(),
     )
     if name_result.returncode != 0:
         stderr_text = name_result.stderr.decode("utf-8", errors="replace")
@@ -696,6 +705,7 @@ def is_file_new_at_base(
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=repository_environment(),
     )
     return cat_result.returncode != 0
 
@@ -733,6 +743,7 @@ def added_lines_for_file(
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=repository_environment(),
     )
     if diff_result.returncode != 0:
         print(
@@ -801,6 +812,7 @@ def renamed_file_source_map_since(
         cwd=str(repository_root),
         capture_output=True,
         check=False,
+        env=repository_environment(),
     )
     if name_status_result.returncode != 0:
         stderr_text = name_status_result.stderr.decode("utf-8", errors="replace")
@@ -875,6 +887,7 @@ def added_lines_for_renamed_file(
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=repository_environment(),
     )
     if diff_result.returncode != 0:
         print(
@@ -1229,6 +1242,7 @@ def read_prior_committed_content(
         encoding="utf-8",
         errors="replace",
         check=False,
+        env=repository_environment(),
     )
     if show_result.returncode != 0:
         return ""
@@ -1254,6 +1268,7 @@ def read_staged_content(
         cwd=str(repository_root),
         capture_output=True,
         check=False,
+        env=repository_environment(),
     )
     if git_show_process.returncode != 0:
         return None
@@ -1281,6 +1296,7 @@ def staged_blob_exists(
         cwd=str(repository_root),
         capture_output=True,
         check=False,
+        env=repository_environment(),
     )
     return git_cat_file_process.returncode == 0
 
@@ -1567,6 +1583,7 @@ def run_staged_test_files(repository_root: Path) -> int:
         cwd=str(repository_root),
         timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
         check=False,
+        env=repository_environment(),
     )
     if pytest_process.returncode == PYTEST_NO_TESTS_COLLECTED_EXIT_CODE:
         return 0

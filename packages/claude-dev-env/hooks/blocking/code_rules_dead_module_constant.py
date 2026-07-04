@@ -501,12 +501,15 @@ def check_dead_module_constants(
 
     Returns:
         One violation message per dead module-level constant, capped at the
-        configured maximum. Returns an empty list when the file is exempt, no
-        constant is in scope (none defined, or none exported when ``__all__`` is
-        declared), the scan exceeds the file cap, or a SyntaxError prevents
-        parsing.
+        configured maximum. Returns an empty list when the file is exempt, the
+        path is relative (the scan root cannot be resolved against a known
+        base, so the check cannot prove a constant dead), no constant is in
+        scope (none defined, or none exported when ``__all__`` is declared),
+        the scan exceeds the file cap, or a SyntaxError prevents parsing.
     """
     if _module_is_exempt_from_constant_check(file_path):
+        return []
+    if not Path(file_path).is_absolute():
         return []
     effective_content = content if full_file_content is None else full_file_content
     try:

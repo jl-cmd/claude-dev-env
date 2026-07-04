@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 
 def _load_sweep_module() -> ModuleType:
     module_path = Path(__file__).parent.parent / "terminology_sweep.py"
@@ -23,7 +25,7 @@ main = sweep_module.main
 parse_added_lines = sweep_module._parse_added_lines
 
 
-_git_environment = sweep_module._git_environment
+_hermetic_git_environment = sweep_module.repository_environment
 
 
 def _init_git_repository(repository_path: Path) -> None:
@@ -37,7 +39,7 @@ def _init_git_repository(repository_path: Path) -> None:
             cwd=repository_path,
             check=True,
             capture_output=True,
-            env=_git_environment(),
+            env=_hermetic_git_environment(),
         )
 
 
@@ -200,7 +202,7 @@ def test_does_not_flag_y_to_ies_plural_variant() -> None:
     assert sweep_diff(diff) == []
 
 
-def test_does_not_flag_spaced_prose_sharing_identifier_prefix() -> None:
+def test_still_flags_non_plural_divergent_tail() -> None:
     diff = (
         "diff --git a/api/quota.py b/api/quota.py\n"
         "--- a/api/quota.py\n"
@@ -213,102 +215,23 @@ def test_does_not_flag_spaced_prose_sharing_identifier_prefix() -> None:
         "@@ -0,0 +1,1 @@\n"
         "+The premium request budget gates the run.\n"
     )
-    assert sweep_diff(diff) == []
-
-
-def test_does_not_flag_ordinary_sentence_sharing_loop_variable_prefix() -> None:
-    diff = (
-        "diff --git a/api/scan.py b/api/scan.py\n"
-        "--- a/api/scan.py\n"
-        "+++ b/api/scan.py\n"
-        "@@ -0,0 +1,2 @@\n"
-        "+each_node = walk(tree)\n"
-        '+DESCRIPTION = "Each attempt polls the review endpoint once."\n'
-    )
-    assert sweep_diff(diff) == []
+    findings = sweep_diff(diff)
+    assert len(findings) == 1
+    assert "premium request" in findings[0]
 
 
 def test_flags_near_miss_inside_code_comment() -> None:
     diff = (
-        "diff --git a/api/quota.mjs b/api/quota.mjs\n"
-        "--- a/api/quota.mjs\n"
-        "+++ b/api/quota.mjs\n"
-        "@@ -0,0 +1,2 @@\n"
-        "+const premium_interactions = 5\n"
-        "+// the premium-request path resets the counter\n"
-    )
-    findings = sweep_diff(diff)
-    assert len(findings) == 1
-    assert "premium-request" in findings[0]
-
-
-def test_flags_near_miss_inside_code_string_literal() -> None:
-    diff = (
-        "diff --git a/api/quota.mjs b/api/quota.mjs\n"
-        "--- a/api/quota.mjs\n"
-        "+++ b/api/quota.mjs\n"
-        "@@ -0,0 +1,2 @@\n"
-        "+const premium_interactions = 5\n"
-        '+throw new Error("the premium-request budget")\n'
-    )
-    findings = sweep_diff(diff)
-    assert len(findings) == 1
-    assert "premium-request" in findings[0]
-
-
-def test_does_not_flag_prose_inside_code_string_literal() -> None:
-    diff = (
         "diff --git a/api/quota.py b/api/quota.py\n"
         "--- a/api/quota.py\n"
         "+++ b/api/quota.py\n"
         "@@ -0,0 +1,2 @@\n"
         "+premium_interactions = 5\n"
-        '+message = "the premium-request budget"\n'
-    )
-    assert sweep_diff(diff) == []
-
-
-def test_does_not_flag_prose_inside_code_docstring() -> None:
-    diff = (
-        "diff --git a/api/quota.py b/api/quota.py\n"
-        "--- a/api/quota.py\n"
-        "+++ b/api/quota.py\n"
-        "@@ -0,0 +1,2 @@\n"
-        "+premium_interactions = 5\n"
-        '+    """Gate the run on the premium-request budget."""\n'
-    )
-    assert sweep_diff(diff) == []
-
-
-def test_does_not_flag_prose_in_test_file() -> None:
-    diff = (
-        "diff --git a/api/quota.test.mjs b/api/quota.test.mjs\n"
-        "--- a/api/quota.test.mjs\n"
-        "+++ b/api/quota.test.mjs\n"
-        "@@ -0,0 +1,2 @@\n"
-        "+const premium_interactions = 5\n"
-        "+// the premium-request path resets the counter\n"
-    )
-    assert sweep_diff(diff) == []
-
-
-def test_flags_prose_in_test_named_markdown_doc() -> None:
-    diff = (
-        "diff --git a/api/quota.py b/api/quota.py\n"
-        "--- a/api/quota.py\n"
-        "+++ b/api/quota.py\n"
-        "@@ -0,0 +1,1 @@\n"
-        "+premium_interactions = 5\n"
-        "diff --git a/docs/test_plan.md b/docs/test_plan.md\n"
-        "--- a/docs/test_plan.md\n"
-        "+++ b/docs/test_plan.md\n"
-        "@@ -0,0 +1,1 @@\n"
-        "+The premium-request budget gates the run.\n"
+        "+# the premium-request path resets the counter\n"
     )
     findings = sweep_diff(diff)
     assert len(findings) == 1
     assert "premium-request" in findings[0]
-    assert "test_plan.md" in findings[0]
 
 
 def test_no_findings_when_no_multiword_identifier_introduced() -> None:
@@ -345,9 +268,7 @@ def test_main_exits_zero_when_clean(tmp_path: Path) -> None:
 
 def test_staged_terminology_findings_flags_staged_prose(tmp_path: Path) -> None:
     _init_git_repository(tmp_path)
-    (tmp_path / "quota.py").write_text(
-        "premium_interactions = 5\n", encoding="utf-8"
-    )
+    (tmp_path / "quota.py").write_text("premium_interactions = 5\n", encoding="utf-8")
     (tmp_path / "README.md").write_text(
         "The premium-request budget gates the run.\n", encoding="utf-8"
     )
@@ -356,7 +277,7 @@ def test_staged_terminology_findings_flags_staged_prose(tmp_path: Path) -> None:
         cwd=tmp_path,
         check=True,
         capture_output=True,
-        env=_git_environment(),
+        env=_hermetic_git_environment(),
     )
     findings = staged_terminology_findings(tmp_path)
     assert any("premium-request" in each_finding for each_finding in findings)
@@ -370,7 +291,7 @@ def test_staged_terminology_findings_empty_when_clean(tmp_path: Path) -> None:
         cwd=tmp_path,
         check=True,
         capture_output=True,
-        env=_git_environment(),
+        env=_hermetic_git_environment(),
     )
     assert staged_terminology_findings(tmp_path) == []
 
@@ -389,9 +310,177 @@ def test_parse_added_lines_counts_pre_increment_content_as_added_line() -> None:
     all_added_lines = parse_added_lines(diff_with_pre_increment)
 
     assert [
-        (each_line_number, each_text) for _, each_line_number, each_text in all_added_lines
+        (each_line_number, each_text)
+        for _, each_line_number, each_text in all_added_lines
     ] == [
         (1, "++counter;"),
         (2, "let first_total = read_first_value();"),
         (3, "let second_total = read_second_value();"),
     ]
+
+
+def test_does_not_flag_window_containing_a_stopword() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+to_path = destination\n"
+        "diff --git a/docs/README.md b/docs/README.md\n"
+        "--- a/docs/README.md\n"
+        "+++ b/docs/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+Writes the report to a fresh location.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_does_not_flag_tail_word_that_is_identifier_vocabulary() -> None:
+    diff = (
+        "diff --git a/api/layout.py b/api/layout.py\n"
+        "--- a/api/layout.py\n"
+        "+++ b/api/layout.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+target_width = box_height\n"
+        "diff --git a/docs/README.md b/docs/README.md\n"
+        "--- a/docs/README.md\n"
+        "+++ b/docs/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+Scale the art until it covers the target box.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_staged_skips_identifier_already_in_base_tree(tmp_path: Path) -> None:
+    _init_git_repository(tmp_path)
+    (tmp_path / "api.py").write_text("box_height = 4\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        env=_hermetic_git_environment(),
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "base"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        env=_hermetic_git_environment(),
+    )
+    all_api_lines = ("box_height = 4", "box_frame_total = box_height")
+    (tmp_path / "api.py").write_text(chr(10).join(all_api_lines), encoding="utf-8")
+    (tmp_path / "README.md").write_text(
+        "The box is read from the capture.", encoding="utf-8"
+    )
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        env=_hermetic_git_environment(),
+    )
+    assert staged_terminology_findings(tmp_path) == []
+
+
+def test_does_not_flag_escape_sequence_letter_as_prose() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+box_frame_total = 5\n"
+        '+content = "box_height = 4\\nbox_frame_total = 5\\n"\n'
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_skips_string_literal_fragments_in_test_files() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+premium_interactions = 5\n"
+        "diff --git a/tests/test_quota.py b/tests/test_quota.py\n"
+        "--- a/tests/test_quota.py\n"
+        "+++ b/tests/test_quota.py\n"
+        "@@ -0,0 +1,2 @@\n"
+        '+fixture_text = "the premium-request budget gates the run"\n'
+        "+# the premium-request path resets the counter\n"
+    )
+    findings = sweep_diff(diff)
+    assert len(findings) == 1
+    assert "test_quota.py:2" in findings[0]
+
+
+def test_repository_environment_strips_every_git_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GIT_DIR", "hostile-git-dir")
+    monkeypatch.setenv("PRESERVED_SETTING", "kept")
+
+    scrubbed_environment = sweep_module.repository_environment()
+
+    assert "GIT_DIR" not in scrubbed_environment
+    assert scrubbed_environment["PRESERVED_SETTING"] == "kept"
+
+
+def test_skips_markdown_inline_code_spans() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+scale_expression_reference = 1\n"
+        "diff --git a/docs/guide.md b/docs/guide.md\n"
+        "--- a/docs/guide.md\n"
+        "+++ b/docs/guide.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+Its `scale_expression.py` evaluates the layer's `scale` prop here.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_skips_identifier_shaped_string_literals() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+icon_entry = 1\n"
+        '+MASTER_UID = "HOMESCREEN_APPICONS_APP_ICON_IMAGE"\n'
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_skips_string_literal_fragments_in_dot_test_named_files() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+premium_interactions = 5\n"
+        "diff --git a/api/quota.test.mjs b/api/quota.test.mjs\n"
+        "--- a/api/quota.test.mjs\n"
+        "+++ b/api/quota.test.mjs\n"
+        "@@ -0,0 +1,1 @@\n"
+        '+const fixture_line = "the premium-request budget gates the run"\n'
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_skips_string_literal_fragments_in_tests_directory_files() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+premium_interactions = 5\n"
+        "diff --git a/tests/fixtures.py b/tests/fixtures.py\n"
+        "--- a/tests/fixtures.py\n"
+        "+++ b/tests/fixtures.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        '+sample_line = "the premium-request budget gates the run"\n'
+    )
+    assert sweep_diff(diff) == []

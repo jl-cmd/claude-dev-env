@@ -8,7 +8,7 @@ ALL_SWEEP_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset(
 
 MARKDOWN_FILE_EXTENSION: str = ".md"
 
-PYTHON_FILE_EXTENSION: str = ".py"
+INLINE_CODE_SPAN_PATTERN: re.Pattern[str] = re.compile(r"`[^`]*`")
 
 SNAKE_CASE_IDENTIFIER_PATTERN: re.Pattern[str] = re.compile(
     r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b"
@@ -26,15 +26,11 @@ HYPHENATED_PROSE_TOKEN_PATTERN: re.Pattern[str] = re.compile(
     r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)+\b"
 )
 
+PROSE_WORD_PATTERN: re.Pattern[str] = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+
 STRING_LITERAL_CONTENT_PATTERN: re.Pattern[str] = re.compile(
     r"\"([^\"]*)\"|'([^']*)'|`([^`]*)`"
 )
-
-TEST_DIRECTORY_PATH_SEGMENT: str = "/tests/"
-
-TEST_FILE_NAME_PREFIX: str = "test_"
-
-ALL_TEST_FILE_NAME_INFIX_MARKERS: tuple[str, ...] = ("_test.", ".test.", ".spec.")
 
 DIFF_FILE_HEADER_PREFIX: str = "+++ "
 
@@ -117,3 +113,142 @@ TERMINOLOGY_SWEEP_GATE_HEADER: str = (
     "terminology_sweep: {finding_count} cross-surface terminology near-miss(es) "
     "on staged prose:"
 )
+
+ALL_PROSE_STOPWORD_TOKENS: frozenset[str] = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "to",
+        "of",
+        "in",
+        "on",
+        "at",
+        "by",
+        "as",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        "each",
+        "every",
+        "any",
+        "all",
+        "both",
+        "few",
+        "many",
+        "some",
+        "such",
+        "and",
+        "or",
+        "nor",
+        "but",
+        "if",
+        "then",
+        "than",
+        "so",
+        "not",
+        "no",
+        "with",
+        "for",
+        "from",
+        "into",
+        "onto",
+        "over",
+        "under",
+        "up",
+        "down",
+        "out",
+        "off",
+        "own",
+        "same",
+        "just",
+        "still",
+        "yet",
+        "ever",
+        "never",
+        "now",
+        "here",
+        "there",
+        "where",
+        "when",
+        "how",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "whose",
+        "why",
+        "we",
+        "you",
+        "they",
+        "he",
+        "she",
+        "i",
+        "me",
+        "my",
+        "your",
+        "their",
+        "our",
+        "his",
+        "her",
+        "them",
+        "us",
+        "do",
+        "does",
+        "did",
+        "done",
+        "has",
+        "have",
+        "had",
+        "having",
+        "can",
+        "could",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "should",
+        "will",
+        "would",
+        "s",
+    }
+)
+
+ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX: tuple[str, ...] = (
+    "git",
+    "grep",
+    "--quiet",
+    "--word-regexp",
+    "--fixed-strings",
+)
+
+GIT_BASE_TREE_REVISION: str = "HEAD"
+
+ALL_STRING_ESCAPE_SEQUENCES: tuple[str, ...] = (
+    "\\n",
+    "\\t",
+    "\\r",
+    "\\\\",
+)
+
+TEST_FILE_PREFIX: str = "test_"
+
+TEST_FILE_SUFFIX: str = "_test"
+
+TEST_DIRECTORY_PATH_SEGMENT: str = "/tests/"
+
+ALL_TEST_FILE_NAME_INFIX_MARKERS: tuple[str, ...] = ("_test.", ".test.", ".spec.")
+
+PROSE_WINDOW_WORD_SEPARATOR: str = " "
+
+IDENTIFIER_TOKEN_SEPARATOR: str = "_"
