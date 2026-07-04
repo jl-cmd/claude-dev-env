@@ -186,9 +186,10 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     Returns:
         The prose fragments to scan for near-miss terms.
     """
-    if _file_extension(file_path) == MARKDOWN_FILE_EXTENSION:
+    extension = _file_extension(file_path)
+    if extension == MARKDOWN_FILE_EXTENSION:
         return [INLINE_CODE_SPAN_PATTERN.sub(" ", line_text)]
-    if _file_extension(file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+    if extension not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
         return []
     all_fragments: list[str] = []
     stripped_line = line_text.strip()
