@@ -149,25 +149,20 @@ def _identifier_tuples_in_text(code_text: str) -> list[IdentifierTuple]:
 
 def _collect_introduced_identifiers(
     all_added_lines: list[tuple[str, int, str]],
-) -> tuple[frozenset[IdentifierTuple], dict[str, list[IdentifierTuple]]]:
+) -> frozenset[IdentifierTuple]:
     """Return the identifier tuples introduced on added code lines.
 
     Args:
         all_added_lines: Added-line triples from :func:`_parse_added_lines`.
 
     Returns:
-        A ``(all_identifier_tuples, identifiers_by_first_token)`` pair. The map
-        groups the tuples by their leading token so the near-miss check reaches
-        every candidate for a given prefix without rescanning the whole set.
+        Every multi-word identifier tuple appearing on an added code line.
     """
     all_identifier_tuples: set[IdentifierTuple] = set()
     for each_file_path, _, each_text in all_added_lines:
         if _file_extension(each_file_path) in ALL_SWEEP_CODE_FILE_EXTENSIONS:
             all_identifier_tuples.update(_identifier_tuples_in_text(each_text))
-    identifiers_by_first_token: dict[str, list[IdentifierTuple]] = {}
-    for each_tuple in all_identifier_tuples:
-        identifiers_by_first_token.setdefault(each_tuple[0], []).append(each_tuple)
-    return frozenset(all_identifier_tuples), identifiers_by_first_token
+    return frozenset(all_identifier_tuples)
 
 
 def _prose_fragments(file_path: str, line_text: str) -> list[str]:
@@ -490,7 +485,7 @@ def sweep_diff(
         One finding string per near-miss term on an added prose line.
     """
     all_added_lines = _parse_added_lines(diff_text)
-    all_identifier_tuples, _ = _collect_introduced_identifiers(all_added_lines)
+    all_identifier_tuples = _collect_introduced_identifiers(all_added_lines)
     all_identifier_tokens = frozenset(
         each_token for each_tuple in all_identifier_tuples for each_token in each_tuple
     )
