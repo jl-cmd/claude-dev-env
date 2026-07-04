@@ -360,10 +360,19 @@ def _word_is_identifier_vocabulary(
     Returns:
         True when the word, or a plural variant of it, is a known token.
     """
-    return any(
-        _tokens_are_plural_variants(prose_word, each_token)
-        for each_token in all_identifier_tokens
-    )
+    if prose_word in all_identifier_tokens:
+        return True
+    if prose_word.endswith("y") and prose_word[:-1] + "ies" in all_identifier_tokens:
+        return True
+    if prose_word + "s" in all_identifier_tokens or prose_word + "es" in all_identifier_tokens:
+        return True
+    if prose_word.endswith("s") and prose_word[:-1] in all_identifier_tokens:
+        return True
+    if prose_word.endswith("es") and prose_word[:-2] in all_identifier_tokens:
+        return True
+    if prose_word.endswith("ies") and prose_word[:-3] + "y" in all_identifier_tokens:
+        return True
+    return False
 
 
 def _near_miss_identifier(
