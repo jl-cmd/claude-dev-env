@@ -2,9 +2,9 @@
 """SessionStart hook — start a task-list maintenance loop for the session.
 
 At session start this hook emits an ``additionalContext`` directive asking Claude
-to keep the session's task list current on a 10-minute cadence, starting the loop
-skill when one is not already running. The hook writes nothing and runs no tools
-itself. Claude reads the directive and invokes the loop skill.
+to keep the session's task list current on a 10-minute cadence, starting the
+``/loop`` skill when one is not already running. The hook writes nothing and runs
+no tools itself. Claude reads the directive and invokes the ``/loop`` skill.
 """
 
 from __future__ import annotations

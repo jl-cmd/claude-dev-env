@@ -41,9 +41,9 @@ class TestSessionDirective:
         emitted = json.loads(_run_main())
         assert "10-minute" in emitted["additionalContext"]
 
-    def test_directive_directs_starting_the_loop_skill(self) -> None:
+    def test_directive_names_the_loop_command(self) -> None:
         emitted = json.loads(_run_main())
-        assert "loop skill" in emitted["additionalContext"]
+        assert "/loop 10m" in emitted["additionalContext"]
 
     def test_directive_is_idempotent_about_an_existing_loop(self) -> None:
         emitted = json.loads(_run_main())
