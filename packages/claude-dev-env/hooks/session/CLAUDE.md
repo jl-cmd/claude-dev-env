@@ -1,6 +1,6 @@
 # hooks/session
 
-SessionStart and SessionEnd hooks for per-session setup and cleanup: removing stale directories at startup, pruning plugin data at shutdown, detecting unregistered repositories, and starting the session's task-list maintenance loop.
+SessionStart and SessionEnd hooks for per-session setup and cleanup: removing stale session and plugin-data directories at startup, detecting unregistered repositories, starting the session's task-list maintenance loop, and clearing PR-author swap state at shutdown.
 
 ## Key files
 
@@ -9,7 +9,7 @@ SessionStart and SessionEnd hooks for per-session setup and cleanup: removing st
 | `session_env_cleanup.py` | SessionStart | Removes the current session's pre-existing `~/.claude/session-env/<session_id>/` directory and prunes sibling entries older than the stale-age threshold. Prevents `EEXIST` errors from non-recursive `mkdir` calls in the Bash tool on Windows. |
 | `gh_pr_author_session_cleanup.py` | SessionEnd | Clears any PR-author swap state left over from the current session |
 | `session_edit_tracker_cleanup.py` | SessionStart, SessionEnd | Deletes the tracker file for the running Claude Code conversation from the system temp directory — at start for a clean slate and at end for a clean exit. A tracker is read only by the conversation that wrote it, so a live idle tracker is kept while a peer cleans up |
-| `plugin_data_dir_cleanup.py` | SessionEnd | Prunes stale plugin data directories |
+| `plugin_data_dir_cleanup.py` | SessionStart | Removes empty plugin data directories at startup to prevent `EEXIST` when Claude Code recreates them |
 | `untracked_repo_detector.py` | SessionStart | Detects when the session cwd is inside a git repository that is not registered in `~/.claude/project-paths.json` and logs a warning |
 | `task_list_loop_starter.py` | SessionStart | Emits an `additionalContext` directive telling Claude to keep the task list current on a 10-minute cadence, starting the `/loop` skill when one is not already running. Writes nothing and runs no tools itself. |
 | `test_gh_pr_author_session_cleanup.py` | — | Tests for `gh_pr_author_session_cleanup.py` |
