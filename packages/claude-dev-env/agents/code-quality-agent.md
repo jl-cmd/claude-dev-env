@@ -1,7 +1,7 @@
 ---
 name: code-quality-agent
 description: Use this agent for comprehensive code quality reviews across multiple files.
-model: inherit
+model: opus
 color: red
 ---
 
