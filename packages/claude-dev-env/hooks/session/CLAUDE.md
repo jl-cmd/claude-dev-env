@@ -1,6 +1,6 @@
 # hooks/session
 
-SessionStart and SessionEnd hooks that manage per-session resources: cleaning up stale directories at startup and pruning plugin data at shutdown.
+SessionStart and SessionEnd hooks for per-session setup and cleanup: removing stale directories at startup, pruning plugin data at shutdown, detecting unregistered repositories, and starting the session's task-list maintenance loop.
 
 ## Key files
 
@@ -11,10 +11,12 @@ SessionStart and SessionEnd hooks that manage per-session resources: cleaning up
 | `session_edit_tracker_cleanup.py` | SessionStart, SessionEnd | Deletes the tracker file for the running Claude Code conversation from the system temp directory — at start for a clean slate and at end for a clean exit. A tracker is read only by the conversation that wrote it, so a live idle tracker is kept while a peer cleans up |
 | `plugin_data_dir_cleanup.py` | SessionEnd | Prunes stale plugin data directories |
 | `untracked_repo_detector.py` | SessionStart | Detects when the session cwd is inside a git repository that is not registered in `~/.claude/project-paths.json` and logs a warning |
+| `task_list_loop_starter.py` | SessionStart | Emits an `additionalContext` directive telling Claude to keep the task list current on a 10-minute cadence, starting the loop skill when one is not already running. Writes nothing and runs no tools itself. |
 | `test_gh_pr_author_session_cleanup.py` | — | Tests for `gh_pr_author_session_cleanup.py` |
 | `test_session_edit_tracker_cleanup.py` | — | Tests for `session_edit_tracker_cleanup.py` |
 | `test_session_env_cleanup.py` | — | Tests for `session_env_cleanup.py` |
 | `test_untracked_repo_detector.py` | — | Tests for `untracked_repo_detector.py` |
+| `test_task_list_loop_starter.py` | — | Tests for `task_list_loop_starter.py` |
 
 ## Conventions
 

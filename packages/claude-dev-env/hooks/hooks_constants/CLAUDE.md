@@ -62,6 +62,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `stuttering_import_binding_constants.py` | Import-binding patterns for the stuttering check |
 | `subprocess_budget_completeness_constants.py` | Required argument names for the subprocess-budget completeness check |
 | `sys_path_insert_constants.py` | Patterns for detecting unguarded `sys.path.insert` calls |
+| `task_list_loop_starter_constants.py` | The one-line task-list instruction and the full session-start directive text for the task-list loop starter hook |
 | `text_stripping.py` | `strip_code_and_quotes()` — shared helper that removes fenced code blocks, inline code, and blockquotes from prose, imported by the Stop-hook prose blockers |
 | `unused_module_import_constants.py` | Patterns for detecting unused module-level imports |
 | `windows_rmtree_blocker_constants.py` | The unsafe `shutil.rmtree` pattern and the safe replacement pattern |
