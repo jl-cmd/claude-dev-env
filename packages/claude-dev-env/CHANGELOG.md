@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.86.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.85.0...claude-dev-env-v1.86.0) (2026-07-05)
+
+
+### Features
+
+* **hooks:** add SessionStart hook that starts a task-list maintenance loop ([f31f5aa](https://github.com/jl-cmd/claude-code-config/commit/f31f5aa7cb8c88181e6f5cd94f96016af7dfaba0))
+* **hooks:** add SessionStart hook that starts a task-list maintenance loop ([cf268e3](https://github.com/jl-cmd/claude-code-config/commit/cf268e3b8f17770e4dd72dcecc42aae0fc5f94c5))
+* **hooks:** gate git commit on staged session-edited files ([b60162a](https://github.com/jl-cmd/claude-code-config/commit/b60162abd222bf31e1d5729d39464772abe47a23))
+
+
+### Bug Fixes
+
+* apply code-review findings ([986e1bd](https://github.com/jl-cmd/claude-code-config/commit/986e1bda2d78320dc177c9d6c28c27fd42f31787))
+* apply second-round Copilot findings for session edit stage gate ([7881191](https://github.com/jl-cmd/claude-code-config/commit/7881191d584280ea13710abc44917147b0228689))
+* bind file extension once in _prose_fragments ([5d21af5](https://github.com/jl-cmd/claude-code-config/commit/5d21af547db588515f929667600f006834eacdcb))
+* **commit-gate:** precise terminology sweep, hermetic gate subprocesses, relative-path constant guard ([7e880e5](https://github.com/jl-cmd/claude-code-config/commit/7e880e5a425d0b341ceae1e262eab7aa505d8c73))
+* **commit-gate:** sweep skips inline-code spans and identifier-shaped literals ([461c131](https://github.com/jl-cmd/claude-code-config/commit/461c1312d84998f9972f8394c4f87d2da07ac247))
+* **commit-gate:** terminology sweep precision and subprocess isolation ([a5f15a8](https://github.com/jl-cmd/claude-code-config/commit/a5f15a8c83a665ddf1ab389ddc51f3218b4fff6f))
+* drop unused grouping map from _collect_introduced_identifiers ([00bd483](https://github.com/jl-cmd/claude-code-config/commit/00bd48396ffa67592412010b1806b03597919731))
+* honor git add end-of-options and resolve staged paths by cwd ([ebd6926](https://github.com/jl-cmd/claude-code-config/commit/ebd69264c2e21f9fa3b1110108dcb1e9e2f0c093))
+* **hooks:** name the built-in /loop command in the task-list directive ([ec8f704](https://github.com/jl-cmd/claude-code-config/commit/ec8f704be38af44ac3f020244debb1bbd96cf661))
+* keep _is_test_file docstring example off a real repo path ([ca66f15](https://github.com/jl-cmd/claude-code-config/commit/ca66f1542d7ec0f2f29bc191ddda8b55d9352c95))
+
+
+### Documentation
+
+* **hooks:** fix plugin_data_dir_cleanup event label in session inventory ([82cda2f](https://github.com/jl-cmd/claude-code-config/commit/82cda2f52a29563b68f5ba63e69086614e730da5))
+
 ## [1.85.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.84.0...claude-dev-env-v1.85.0) (2026-07-03)
 
 
