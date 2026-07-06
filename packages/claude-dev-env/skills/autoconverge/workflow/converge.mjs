@@ -300,10 +300,11 @@ function runCodeEditorTask(task, context) {
     const threadIds = context.findings
       .flatMap((each) => collectFindingThreadIds(each))
       .filter((each) => typeof each === 'number')
+    const issueReference = standardsIssueReference(context.issueUrl)
     return convergeAgent(
-      `You are the THREAD-RESOLUTION step for a code-standard-only round on ${prCoordinates}, HEAD ${context.head} (${context.sourceLabel}). This run already filed the deferred-fix follow-up issue ${context.issueUrl}, so this batch's code-standard findings defer to that same issue. Make NO code edits, NO commit, and NO push — only reply to and resolve the review threads this batch carries.\n\n` +
+      `You are the THREAD-RESOLUTION step for a code-standard-only round on ${prCoordinates}, HEAD ${context.head} (${context.sourceLabel}). This run already filed the deferred-fix ${issueReference}, so this batch's code-standard findings defer to that same issue. Make NO code edits, NO commit, and NO push — only reply to and resolve the review threads this batch carries.\n\n` +
         `Findings:\n${findingsBlock}\n\n` +
-        `For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue ${context.issueUrl}." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
+        `For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to ${issueReference}." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
         `Return a one-line summary naming the threads you resolved.`,
       { label, phase: 'Converge', agentType: 'clean-coder' },
     )
@@ -1021,6 +1022,27 @@ function classifyStandardsDeferral(standardsDeferral) {
     return { disposition: 'hardening-pr', issueUrl: '', wasIssueFiled: false }
   }
   return { disposition: 'untracked', issueUrl: '', wasIssueFiled: false }
+}
+
+/**
+ * Word the follow-up fix issue reference that a deferral reply posts to a public
+ * review thread, so a filing whose canonical URL is unavailable still reads
+ * truthfully instead of leaving a dangling "issue ." with no reference. A canonical
+ * URL names it directly; an empty URL (the issue-filed-no-link state) matches the
+ * deferral surfaces' wording that a verifiable link is unavailable.
+ *
+ * ::
+ *
+ *   standardsIssueReference('https://github.com/o/r/issues/7') -> 'follow-up issue https://github.com/o/r/issues/7'
+ *   standardsIssueReference('') -> 'follow-up fix issue (filed, but a verifiable link is unavailable)'
+ *
+ * @param {string} issueUrl the canonical follow-up issue URL, or an empty string when unavailable
+ * @returns {string} the reference clause for the deferral reply
+ */
+function standardsIssueReference(issueUrl) {
+  return issueUrl
+    ? `follow-up issue ${issueUrl}`
+    : 'follow-up fix issue (filed, but a verifiable link is unavailable)'
 }
 
 /**
@@ -1885,7 +1907,7 @@ function parseDeferredPr(prUrl) {
  */
 async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningPrAlreadyOpened, deferredReviewerFlags) {
   const editResult = await runCodeEditorTask('standards-edit', { head, findings, sourceLabel })
-  const followUpIssueFiled = typeof editResult?.issueUrl === 'string' && editResult.issueUrl.length > 0
+  const followUpIssueFiled = typeof editResult?.issueUrl === 'string' && editResult.issueUrl.trim().length > 0
   const followUpIssueUrl = canonicalizeIssueUrl(editResult?.issueUrl)
   if (hasHardeningPrAlreadyOpened === true) {
     return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false, deferredPr: null }
@@ -2049,7 +2071,7 @@ while (iterations < CONFIG.maxIterations) {
     bugbotDown = lenses[0] == null ? true : resolveReviewerDown(lenses[0], input.bugbotDisabled || false)
     const roundOutcome = resolveRoundOutcome(lenses)
     if (roundOutcome.allLensesDead) {
-      if (registerNoLensRound(noLensRoundCausesFor(nameLensResults(lenses)))) {
+      if (registerNoLensRound(['a review lens agent died'])) {
         blocker = noLensRoundsBlocker()
         break
       }
