@@ -476,10 +476,10 @@ and `jl-cmd/claude-code-config` for rules and skills both appear):
 2. **Converge the generation.** Launch `workflow/converge_multi.mjs` with one
    entry per checked-out deferred PR, exactly as the
    [multi-PR launch](#launch-the-multi-pr-workflow) describes. Each child run
-   re-checks Copilot and Bugbot availability every round through the workflow's own
-   pre-spawn probe, so a reviewer that is down or out of quota is never spawned in any
-   generation; the `copilotDisabled`/`bugbotDisabled` flags each deferred PR carries
-   seed that check for the first round.
+   checks Copilot and Bugbot availability through the workflow's own preflight-git
+   probe, carried across rounds, so a reviewer that is down or out of quota is never
+   spawned in any generation; the `copilotDisabled`/`bugbotDisabled` flags each
+   deferred PR carries seed that check for the first round.
 3. **Tear down.** Run the [multi-PR teardown](#multi-pr-teardown-on-workflow-completion)
    over the generation's `results`, and revoke project permissions once per
    repository.
