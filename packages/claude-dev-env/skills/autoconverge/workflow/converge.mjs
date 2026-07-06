@@ -23,7 +23,7 @@ export const meta = {
 
 const CONFIG = {
   maxIterations: 20,
-  maxConsecutiveZeroRanRounds: 3,
+  maxConsecutiveNoLensRounds: 3,
   copilotMaxPolls: 8,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
@@ -746,7 +746,7 @@ const CLEAN_AUDIT_SCHEMA = {
 const SEVERITY_RANK = { P0: 0, P1: 1, P2: 2 }
 const SHA_COMPARISON_PREFIX_LENGTH = 7
 const LENS_NAMES = ['Cursor Bugbot', 'code-review', 'bug-audit']
-const GITHUB_ISSUE_URL_PATTERN = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+\/?(?:[?#].*)?$/
+const GITHUB_ISSUE_URL_PATTERN = /^(https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+)\/?(?:[?#].*)?$/
 
 /**
  * Dedup findings across lenses by file + line + lowercased title, reconciling
@@ -969,28 +969,30 @@ function describeNotRunLens(lensEntry) {
  * Classify the standards-deferral state into one of four dispositions, the single
  * source of truth both the run report and the CLEAN post word from so they never
  * contradict each other for identical state. The agent-returned issue URL is
- * trimmed and validated against a strict GitHub-issue shape before it counts as a
- * verifiable link; a genuinely filed issue whose URL fails that shape is still
- * "filed" (never "untracked"), and a run that filed no issue but opened the
- * environment-hardening PR credits that PR.
+ * trimmed and matched against a GitHub-issue shape that tolerates a trailing slash,
+ * query, or fragment; a match returns only the CANONICAL issues URL (owner, repo,
+ * and number — never the agent-controlled trailing text), so nothing beyond that
+ * canonical string can reach the prompt or report. A genuinely filed issue whose
+ * URL fails the shape is still "filed" (never "untracked"), and a run that filed no
+ * issue but opened the environment-hardening PR credits that PR.
  *
  * ::
  *
  *   {issueFiled: true, issueUrl: 'https://github.com/o/r/issues/7'} -> issue-filed
- *   {issueFiled: true, issueUrl: '…/issues/7#c'}                    -> issue-filed-no-link
+ *   {issueFiled: true, issueUrl: '…/pull/7'}                       -> issue-filed-no-link
  *   {issueFiled: false, hardeningPrOpened: true}                    -> hardening-pr
  *   {issueFiled: false, hardeningPrOpened: false}                   -> untracked
  *
  * @param {{issueFiled?: boolean, issueUrl?: string, hardeningPrOpened?: boolean}|null|undefined} standardsDeferral the follow-up fix issue and hardening-PR state
- * @returns {{disposition: string, issueUrl: string}} the disposition token and the validated URL when present
+ * @returns {{disposition: string, issueUrl: string}} the disposition token and the canonical issues URL when present
  */
 function classifyStandardsDeferral(standardsDeferral) {
   const trimmedIssueUrl =
     typeof standardsDeferral?.issueUrl === 'string' ? standardsDeferral.issueUrl.trim() : ''
-  const isValidIssueUrl = GITHUB_ISSUE_URL_PATTERN.test(trimmedIssueUrl)
+  const issueUrlMatch = trimmedIssueUrl.match(GITHUB_ISSUE_URL_PATTERN)
   const wasIssueFiled = standardsDeferral?.issueFiled === true
-  if (wasIssueFiled && isValidIssueUrl) {
-    return { disposition: 'issue-filed', issueUrl: trimmedIssueUrl }
+  if (wasIssueFiled && issueUrlMatch) {
+    return { disposition: 'issue-filed', issueUrl: issueUrlMatch[1] }
   }
   if (wasIssueFiled) {
     return { disposition: 'issue-filed-no-link', issueUrl: '' }
@@ -1713,6 +1715,51 @@ function shouldOpenStandardsFollowUp(hasAlreadyFiled) {
 }
 
 /**
+ * Register a round in which no review lens reviewed the HEAD — a preflight that
+ * resolved no SHA, every lens agent dead, or every lens down/disabled — and report
+ * whether the consecutive-no-lens cap is now reached. Each such round records its
+ * cause so the stop blocker names only the causes that actually occurred, and any
+ * round where a lens did review resets the run of consecutive no-lens rounds
+ * (resetNoLensRounds), so the "for N consecutive round(s)" claim holds by
+ * construction across interleaved retries.
+ *
+ * ::
+ *
+ *   registerNoLensRound('every review lens agent died')  -> false  (1st of a run)
+ *   registerNoLensRound('every review lens was down or disabled') -> false (2nd)
+ *   registerNoLensRound('every review lens agent died')  -> true   (3rd hits the cap)
+ *
+ * @param {string} cause the human-facing cause clause for this no-lens round
+ * @returns {boolean} true when the run of consecutive no-lens rounds has reached CONFIG.maxConsecutiveNoLensRounds
+ */
+function registerNoLensRound(cause) {
+  noLensRoundCauses.add(cause)
+  consecutiveNoLensRounds += 1
+  return consecutiveNoLensRounds >= CONFIG.maxConsecutiveNoLensRounds
+}
+
+/**
+ * Clear the run of consecutive no-lens rounds and the recorded causes, called on
+ * any round where at least one lens reviewed the HEAD so the counter only ever
+ * reflects a genuinely consecutive run of no-lens rounds.
+ * @returns {void}
+ */
+function resetNoLensRounds() {
+  consecutiveNoLensRounds = 0
+  noLensRoundCauses.clear()
+}
+
+/**
+ * Build the stop blocker for a run of consecutive no-lens rounds, naming the count
+ * and only the causes that actually occurred so the message claims nothing false.
+ * @returns {string} the blocker message
+ */
+function noLensRoundsBlocker() {
+  const causesSummary = Array.from(noLensRoundCauses).join('; ')
+  return `no review lens reviewed the PR HEAD for ${consecutiveNoLensRounds} consecutive round(s) — ${causesSummary}; no grounded CLEAN audit can be posted, so stopping rather than looping to the iteration cap`
+}
+
+/**
  * Build the standards-deferral note for the closing report from the same shared
  * clauses the CLEAN post words from, so the report and the post never disagree
  * about where the fix work went or whether a hardening PR opened. The report adds
@@ -1867,13 +1914,13 @@ async function resolveStandardsThreadsForBatch(head, findings, sourceLabel) {
  * @param {Array<object>} findings deduped code-standard-only findings
  * @param {string} sourceLabel short description of where the findings came from
  * @param {{copilotDisabled: boolean, bugbotDisabled: boolean}} deferredReviewerFlags this run's latest resolved reviewer-down state, carried onto the deferred PR so a later generation converging it seeds the known-unavailable state instead of re-learning it
- * @returns {Promise<object>} `{ hardeningPrOpened, deferredPr }` — hardeningPrOpened true when a hardening PR was opened for this run, and deferredPr the opened PR's `{owner, repo, prNumber, copilotDisabled, bugbotDisabled}` when this call opened it (null otherwise) so the self-closing orchestrator can converge it in turn
+ * @returns {Promise<object>} `{ deferredPr }` — deferredPr the opened PR's `{owner, repo, prNumber, copilotDisabled, bugbotDisabled}` when this call opened it (null otherwise) so the self-closing orchestrator can converge it in turn. The run's hardening-PR state is read from the wasStandardsHardeningPrOpened global (via buildStandardsDeferral), not returned here.
  */
 async function openStandardsFollowUpOnce(head, findings, sourceLabel, deferredReviewerFlags) {
   if (!shouldOpenStandardsFollowUp(hasStandardsFollowUpFiled)) {
     log(`Standards deferral (${sourceLabel}): reusing the follow-up fix issue already filed for this run rather than filing a duplicate; environment-hardening PR ${wasStandardsHardeningPrOpened ? 'was opened for this run' : 'was not opened for this run'}`)
     await resolveStandardsThreadsForBatch(head, findings, sourceLabel)
-    return { hardeningPrOpened: wasStandardsHardeningPrOpened, deferredPr: null }
+    return { deferredPr: null }
   }
   const standardsOutcome = await spawnStandardsFollowUp(head, findings, sourceLabel, wasStandardsHardeningPrOpened, deferredReviewerFlags)
   hasStandardsFollowUpFiled = standardsOutcome?.followUpIssueFiled === true
@@ -1881,14 +1928,15 @@ async function openStandardsFollowUpOnce(head, findings, sourceLabel, deferredRe
     standardsFollowUpIssueUrl = standardsOutcome.issueUrl
   }
   wasStandardsHardeningPrOpened = wasStandardsHardeningPrOpened || standardsOutcome?.hardeningPrOpened === true
-  return { hardeningPrOpened: wasStandardsHardeningPrOpened, deferredPr: standardsOutcome?.deferredPr ?? null }
+  return { deferredPr: standardsOutcome?.deferredPr ?? null }
 }
 
 let phase = 'CONVERGE'
 let head = null
 let rounds = 0
 let iterations = 0
-let consecutiveZeroRanRounds = 0
+let consecutiveNoLensRounds = 0
+const noLensRoundCauses = new Set()
 let blocker = null
 let bugbotDown = input.bugbotDisabled || false
 let copilotDown = input.copilotDisabled || false
@@ -1935,6 +1983,10 @@ while (iterations < CONFIG.maxIterations) {
       head = isResolvedHeadUsable(refreshedPreflight?.sha) ? refreshedPreflight.sha : null
     }
     if (!isResolvedHeadUsable(head)) {
+      if (registerNoLensRound('no PR HEAD could be resolved (the preflight-git agent returned no SHA)')) {
+        blocker = noLensRoundsBlocker()
+        break
+      }
       log(`Round ${rounds}: preflight-git agent returned no SHA — retrying without spawning lenses`)
       continue
     }
@@ -1949,13 +2001,17 @@ while (iterations < CONFIG.maxIterations) {
     bugbotDown = lenses[0] == null ? true : resolveReviewerDown(lenses[0], input.bugbotDisabled || false)
     const roundOutcome = resolveRoundOutcome(lenses)
     if (roundOutcome.allLensesDead) {
+      if (registerNoLensRound('every review lens agent died')) {
+        blocker = noLensRoundsBlocker()
+        break
+      }
       log(`Round ${rounds}: every lens agent died — retrying without posting a clean artifact`)
       head = null
       continue
     }
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
-      consecutiveZeroRanRounds = 0
+      resetNoLensRounds()
       const namedLenses = nameLensResults(lenses)
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
       const standardsOutcome = await openStandardsFollowUpOnce(head, findings, 'converge-round', { copilotDisabled: copilotDown, bugbotDisabled: bugbotDown })
@@ -1976,7 +2032,7 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     if (findings.length > 0) {
-      consecutiveZeroRanRounds = 0
+      resetNoLensRounds()
       log(`Round ${rounds}: ${findings.length} finding(s) — applying fixes`)
       const fixResult = await applyFixes(head, findings, 'converge-round')
       const hadThreadBearingFinding = findings.some((each) => collectFindingThreadIds(each).length > 0)
@@ -1991,6 +2047,7 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     if (!roundOutcome.roundClean) {
+      resetNoLensRounds()
       log(`Round ${rounds}: a lens reported not-clean with no findings on ${head?.slice(0, 7)} — re-converging without a clean artifact`)
       head = null
       continue
@@ -2002,9 +2059,8 @@ while (iterations < CONFIG.maxIterations) {
       deferredStandardsFindings: [],
     })
     if (auditResult?.noLensRan) {
-      consecutiveZeroRanRounds += 1
-      if (consecutiveZeroRanRounds >= CONFIG.maxConsecutiveZeroRanRounds) {
-        blocker = `no audit lens ran on HEAD ${head} for ${consecutiveZeroRanRounds} consecutive round(s) — every review lens was down, disabled, or its agent died, so no grounded CLEAN audit can be posted; stopping rather than looping to the iteration cap`
+      if (registerNoLensRound('every review lens was down or disabled')) {
+        blocker = noLensRoundsBlocker()
         break
       }
       log(`Round ${rounds}: no audit lens ran on ${head?.slice(0, 7)} — re-converging without posting a clean artifact`)
@@ -2015,7 +2071,7 @@ while (iterations < CONFIG.maxIterations) {
       blocker = cleanAuditBlocker(head, auditResult)
       break
     }
-    consecutiveZeroRanRounds = 0
+    resetNoLensRounds()
     phase = 'COPILOT'
     continue
   }

@@ -400,10 +400,15 @@ test('openStandardsFollowUpOnce gates spawnStandardsFollowUp behind the run-once
     /wasStandardsHardeningPrOpened = wasStandardsHardeningPrOpened \|\| standardsOutcome\?\.hardeningPrOpened === true/,
     'expected the hardening guard to latch the moment a hardening PR opens and stay latched across rounds so a later issue-filing retry never re-opens it',
   );
+  assert.doesNotMatch(
+    onceBody,
+    /return \{ hardeningPrOpened/,
+    'expected the helper to drop the dead hardeningPrOpened return field — the run report reads the wasStandardsHardeningPrOpened global via buildStandardsDeferral',
+  );
   assert.match(
     onceBody,
-    /hardeningPrOpened: wasStandardsHardeningPrOpened/,
-    'expected the helper to return the cached hardening outcome as hardeningPrOpened',
+    /return \{ deferredPr/,
+    'expected the helper to return only deferredPr, the field its call sites actually read',
   );
 });
 
@@ -534,8 +539,8 @@ test('a second standards-only round never re-opens a hardening PR after the firs
     1,
     'expected the hardening PR to be committed exactly once even when the follow-up issue filing must retry on the second round',
   );
-  assert.equal(firstRoundHardeningPr.hardeningPrOpened, true, 'expected the first round to open the hardening PR');
-  assert.equal(secondRoundHardeningPr.hardeningPrOpened, true, 'expected the second round to report the hardening PR as opened for this run');
+  assert.notEqual(firstRoundHardeningPr.deferredPr, null, 'expected the first round to open the hardening PR and yield a deferred PR coordinate');
+  assert.equal(secondRoundHardeningPr.deferredPr, null, 'expected the second round to re-open nothing, contributing no deferred coordinate');
   assert.equal(
     runtime.guards().wasStandardsHardeningPrOpened,
     true,
@@ -568,9 +573,8 @@ test('a hardening-commit that opens a PR but returns an unparseable URL still la
     1,
     'expected the non-empty-URL commit to latch the guard so a second round opens no duplicate hardening PR',
   );
-  assert.equal(firstRoundHardeningPr.hardeningPrOpened, true, 'expected a non-empty (though unparseable) URL to report the hardening PR as opened');
   assert.equal(firstRoundHardeningPr.deferredPr, null, 'expected the unparseable URL to contribute no deferred coordinate');
-  assert.equal(secondRoundHardeningPr.hardeningPrOpened, true, 'expected the second round to report the hardening PR as opened for this run');
+  assert.equal(secondRoundHardeningPr.deferredPr, null, 'expected the second round to re-open nothing, contributing no deferred coordinate');
   assert.equal(
     runtime.guards().wasStandardsHardeningPrOpened,
     true,
@@ -598,8 +602,8 @@ test('a hardening-commit that opens no PR (empty hardeningPrUrl) leaves the run-
     2,
     'expected the empty-URL commit (no PR opened) to leave the guard clear so a later round retries the open',
   );
-  assert.equal(firstRoundHardeningPr.hardeningPrOpened, false, 'expected an empty URL to report no hardening PR opened');
-  assert.equal(secondRoundHardeningPr.hardeningPrOpened, false, 'expected the retry round to still report no hardening PR opened');
+  assert.equal(firstRoundHardeningPr.deferredPr, null, 'expected no PR opened to contribute no deferred coordinate');
+  assert.equal(secondRoundHardeningPr.deferredPr, null, 'expected the retry round to still open no PR, contributing no deferred coordinate');
   assert.equal(
     runtime.guards().wasStandardsHardeningPrOpened,
     false,
