@@ -90,8 +90,10 @@ const convergeAgent = (prompt, options) =>
  * 'preflight-git', bundles the mechanical git reads and the reviewer-availability
  * probe into a single agent startup: it prints the PR HEAD SHA, fetches origin
  * main so the review lenses diff against an up-to-date base, polls GitHub
- * mergeability, and runs the shared reviewer_availability.py CLI for Copilot and
- * Bugbot, returning {sha, conflicting, fetched, copilot, bugbot} in one
+ * mergeability, runs the shared reviewer_availability.py CLI for Copilot and
+ * Bugbot, and enumerates the origin/main...HEAD diff so the review lenses reuse
+ * one changed-file list rather than each re-deriving it, returning
+ * {sha, conflicting, fetched, changedFiles, diffstat, copilot, bugbot} in one
  * structured result. The reviewer availability rides this same preflight so the
  * round's first git-utility spawn carries the pre-spawn reviewer decision without
  * a separate agent. The agent never edits code, so it runs on the cheapest model
@@ -104,7 +106,7 @@ function runGitTask(task) {
     throw new Error(`runGitTask has no handler for task ${task}`)
   }
   return convergeAgent(
-    `Run four read-only preflight steps for ${prCoordinates}. Do not edit, commit, push, rebase, or modify any files — read only.\n\n` +
+    `Run five read-only preflight steps for ${prCoordinates}. Do not edit, commit, push, rebase, or modify any files — read only.\n\n` +
       `STEP 1 — resolve HEAD. Print the current PR HEAD SHA. Run exactly:\n` +
       `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
       `Return the full 40-character SHA in the sha field.\n\n` +
@@ -123,7 +125,7 @@ function runGitTask(task) {
       `   git diff --name-status origin/main...HEAD\n` +
       `   git diff --stat origin/main...HEAD\n` +
       `Return the first command's output verbatim in changedFiles and the second's in diffstat (both strings; an empty string when a command produced no output).`,
-    { label: 'git-utility', phase: 'Converge', schema: PREFLIGHT_GIT_SCHEMA, agentType: 'Explore', model: 'haiku', effort: 'low' },
+    { label: 'git-utility', phase: 'Converge', schema: PREFLIGHT_GIT_SCHEMA, agentType: 'Explore', ...TIERS.haikuLow },
   )
 }
 
@@ -2086,7 +2088,7 @@ while (iterations < CONFIG.maxIterations) {
   iterations += 1
   if (phase === 'CONVERGE') {
     rounds += 1
-    if (!isResolvedHeadUsable(head)) {
+    if (!isResolvedHeadUsable(head) || reviewerAvailability?.sha !== head) {
       const refreshedPreflight = await runGitTask('preflight-git')
       reviewerAvailability = refreshedPreflight
       head = isResolvedHeadUsable(refreshedPreflight?.sha) ? refreshedPreflight.sha : null
