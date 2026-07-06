@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.86.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.86.0...claude-dev-env-v1.86.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* **autoconverge:** relay lens provenance in the post-clean-audit prompt ([ca47e82](https://github.com/jl-cmd/claude-code-config/commit/ca47e82b63f54d5590c5b5e492e8e33f4043e6d3))
+
+
+### Refactoring
+
+* **autoconverge:** fold reviewer-availability probe into preflight-git ([5da48eb](https://github.com/jl-cmd/claude-code-config/commit/5da48ebf46f71993bd846adf04001369b01b0f2e))
+* **autoconverge:** fold reviewer-availability probe into preflight-git ([9d3cbd8](https://github.com/jl-cmd/claude-code-config/commit/9d3cbd8cad4ddc32e7896aaa7c3920acf59a5c35))
+
 ## [1.86.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.85.0...claude-dev-env-v1.86.0) (2026-07-05)
 
 
