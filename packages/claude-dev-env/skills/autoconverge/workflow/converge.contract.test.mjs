@@ -36,6 +36,14 @@ function functionSource(functionName) {
   return convergeSource.slice(functionStart, functionEnd);
 }
 
+function docstringBefore(functionName) {
+  const functionStart = convergeSource.indexOf(`function ${functionName}(`);
+  assert.notEqual(functionStart, -1, `expected ${functionName} to exist`);
+  const docStart = convergeSource.lastIndexOf('/**', functionStart);
+  assert.notEqual(docStart, -1, `expected a JSDoc block before ${functionName}`);
+  return convergeSource.slice(docStart, functionStart);
+}
+
 test('code-review lens prompt no longer instructs a per-lens git fetch', () => {
   assert.doesNotMatch(lensPromptBody('runCodeReviewLens'), /git fetch origin main/);
 });
@@ -60,10 +68,36 @@ test('the merged preflight-git task fetches origin/main once before the parallel
   assert.match(gitTaskBody, /PREFLIGHT_GIT_SCHEMA/, 'expected the merged task to return the {sha, conflicting, fetched, copilot, bugbot} schema');
 });
 
-test('the merged preflight-git agent runs on haiku at low effort', () => {
+test('the merged preflight-git agent spreads the haikuLow tier', () => {
   const gitTaskBody = functionSource('runGitTask');
-  assert.match(gitTaskBody, /model: 'haiku'/, 'expected the git-utility agent to run on the cheapest model');
-  assert.match(gitTaskBody, /effort: 'low'/, 'expected the git-utility agent to run at low effort');
+  assert.match(
+    gitTaskBody,
+    /\.\.\.TIERS\.haikuLow/,
+    'expected the git-utility agent to spread the single-sourced haikuLow tier rather than inline model/effort literals',
+  );
+  assert.doesNotMatch(
+    gitTaskBody,
+    /model: 'haiku', effort: 'low'/,
+    'expected no inline haikuLow literals duplicating the TIERS definition',
+  );
+});
+
+test('the preflight-git prompt states the correct number of read-only steps it enumerates', () => {
+  const body = functionSource('runGitTask');
+  assert.match(
+    body,
+    /Run five read-only preflight steps/,
+    'expected the stated step count to match the five enumerated STEP blocks',
+  );
+  assert.match(body, /STEP 5 —/, 'expected the fifth step to be enumerated');
+  assert.doesNotMatch(body, /Run four read-only preflight steps/);
+});
+
+test('the runGitTask docstring names the diff enumeration and its changedFiles/diffstat return fields', () => {
+  const doc = docstringBefore('runGitTask');
+  assert.match(doc, /diff|changed-file|enumerat/i, 'expected the docstring to name the diff enumeration operation');
+  assert.match(doc, /changedFiles/, 'expected the docstring return shape to name changedFiles');
+  assert.match(doc, /diffstat/, 'expected the docstring return shape to name diffstat');
 });
 
 test('the reviewer-availability probe rides the merged preflight-git spawn, not a separate agent', () => {
@@ -263,13 +297,26 @@ test('the COPILOT fix branch does not re-assign head from the fix before re-conv
 test('the CONVERGE branch refreshes HEAD via the merged preflight-git task only when the threaded head is invalidated', () => {
   const convergeBranchStart = convergeSource.indexOf("if (phase === 'CONVERGE')");
   assert.notEqual(convergeBranchStart, -1, 'expected the CONVERGE branch to exist');
-  const invalidGuardIndex = convergeSource.indexOf('if (!isResolvedHeadUsable(head))', convergeBranchStart);
+  const invalidGuardIndex = convergeSource.indexOf('if (!isResolvedHeadUsable(head)', convergeBranchStart);
   const headRefreshCallIndex = convergeSource.indexOf("runGitTask('preflight-git')", convergeBranchStart);
   assert.notEqual(invalidGuardIndex, -1, 'expected CONVERGE to gate the refresh on an invalidated head');
   assert.notEqual(headRefreshCallIndex, -1, 'expected CONVERGE to refresh HEAD via the merged preflight-git task');
   assert.ok(
     invalidGuardIndex < headRefreshCallIndex,
     'expected the invalidated-head guard to precede the merged refresh so a valid threaded head spawns no git agent',
+  );
+});
+
+test('the CONVERGE branch refreshes preflight when the availability enumeration was computed against a different SHA than the head under review', () => {
+  const convergeBranchStart = convergeSource.indexOf("if (phase === 'CONVERGE')");
+  assert.notEqual(convergeBranchStart, -1, 'expected the CONVERGE branch to exist');
+  const guardIndex = convergeSource.indexOf('if (!isResolvedHeadUsable(head)', convergeBranchStart);
+  assert.notEqual(guardIndex, -1, 'expected the refresh guard to exist');
+  const guardLine = convergeSource.slice(guardIndex, convergeSource.indexOf('\n', guardIndex));
+  assert.match(
+    guardLine,
+    /reviewerAvailability\?\.sha !== head/,
+    'expected the refresh guard to fire when the reviewerAvailability changed-file enumeration was computed against a SHA other than the current head, so a rebase or reuse push that advances HEAD before round 1 hands the lenses the diff for the head they actually review',
   );
 });
 
