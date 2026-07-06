@@ -57,7 +57,7 @@ test('the merged preflight-git task fetches origin/main once before the parallel
   const gitTaskBody = functionSource('runGitTask');
   assert.match(gitTaskBody, /git fetch origin main/, 'expected the merged task to carry the base-ref fetch');
   assert.match(gitTaskBody, /--jq \.head\.sha/, 'expected the merged task to resolve the PR HEAD SHA');
-  assert.match(gitTaskBody, /PREFLIGHT_GIT_SCHEMA/, 'expected the merged task to return the {sha, conflicting, fetched} schema');
+  assert.match(gitTaskBody, /PREFLIGHT_GIT_SCHEMA/, 'expected the merged task to return the {sha, conflicting, fetched, copilot, bugbot} schema');
 });
 
 test('the merged preflight-git agent runs on haiku at low effort', () => {
@@ -66,21 +66,23 @@ test('the merged preflight-git agent runs on haiku at low effort', () => {
   assert.match(gitTaskBody, /effort: 'low'/, 'expected the git-utility agent to run at low effort');
 });
 
-test('the CONVERGE round spawns a single shared reviewer-availability probe before the parallel lenses', () => {
-  const convergeBranchStart = convergeSource.indexOf("if (phase === 'CONVERGE')");
-  const refreshCallIndex = convergeSource.indexOf("runGitTask('preflight-git')", convergeBranchStart);
-  const probeCallIndex = convergeSource.indexOf('reviewerAvailability = await runReviewerAvailabilityCheck()');
-  const parallelLensIndex = convergeSource.indexOf('const lenses = await parallel(');
-  assert.notEqual(probeCallIndex, -1, 'expected the CONVERGE round to spawn the shared reviewer-availability probe');
-  assert.ok(
-    refreshCallIndex < probeCallIndex && probeCallIndex < parallelLensIndex,
-    'expected the probe to run after the round head refresh and before the parallel lenses spawn',
+test('the reviewer-availability probe rides the merged preflight-git spawn, not a separate agent', () => {
+  assert.equal(
+    convergeSource.indexOf('runReviewerAvailabilityCheck'),
+    -1,
+    'expected no separate reviewer-availability agent — the probe rides the preflight-git git-utility spawn',
   );
-  const probeBody = functionSource('runReviewerAvailabilityCheck');
-  assert.match(probeBody, /reviewer_availability\.py/);
-  assert.match(probeBody, /--reviewer copilot/);
-  assert.match(probeBody, /--reviewer bugbot/);
-  assert.match(probeBody, /schema:\s*REVIEWER_AVAILABILITY_SCHEMA/);
+  const gitTaskBody = functionSource('runGitTask');
+  assert.match(gitTaskBody, /reviewer_availability\.py/, 'expected the merged preflight to run the reviewer-availability probe');
+  assert.match(gitTaskBody, /--reviewer copilot/);
+  assert.match(gitTaskBody, /--reviewer bugbot/);
+  const preflightAssignIndex = convergeSource.indexOf('reviewerAvailability = preflight');
+  const parallelLensIndex = convergeSource.indexOf('const lenses = await parallel(');
+  assert.notEqual(preflightAssignIndex, -1, 'expected reviewerAvailability to be read from the preflight-git result');
+  assert.ok(
+    preflightAssignIndex < parallelLensIndex,
+    'expected reviewer availability to be carried from preflight before the parallel lenses spawn',
+  );
 });
 
 test('the Bugbot lens is not spawned pre-spawn when the shared gate reports Bugbot down', () => {
