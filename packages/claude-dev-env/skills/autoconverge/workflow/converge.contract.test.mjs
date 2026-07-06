@@ -275,8 +275,8 @@ test('each fix push, each lens-retry, and the convergence repair invalidate the 
   const invalidationMatches = convergeSource.match(/^ +head = null$/gm) || [];
   assert.equal(
     invalidationMatches.length,
-    5,
-    'expected head invalidation after the CONVERGE fix push, the COPILOT fix push, the convergence repair, the all-lenses-dead retry, and the not-clean-no-findings retry',
+    7,
+    'expected head invalidation after the CONVERGE fix push, the COPILOT fix push, the convergence repair, the all-lenses-dead retry, the not-clean-no-findings retry, and the two no-lens-ran clean-audit refusals',
   );
 });
 
@@ -565,8 +565,8 @@ test('the standards-deferral note names the hardening PR only when one opened', 
   );
   assert.match(
     noteBody,
-    /no environment-hardening PR/i,
-    'expected the skip branch to state no hardening PR was opened',
+    /remain untracked/,
+    'expected an untracked branch that makes no hardening-PR claim',
   );
 });
 
