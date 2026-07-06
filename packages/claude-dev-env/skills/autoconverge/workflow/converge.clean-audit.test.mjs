@@ -76,7 +76,7 @@ function buildRunGeneralUtilityTask(convergeAgentStub) {
 
 const CONVERGED_HEAD = 'abcdef0123456789abcdef0123456789abcdef01';
 
-test('cleanAuditBlocker names the denial reason, the HEAD, and the permission-rule unblock path only', () => {
+test('cleanAuditBlocker names the reason, the HEAD, and grounded recovery for both permission and non-permission failures without any compose-by-hand language', () => {
   const message = cleanAuditBlocker(CONVERGED_HEAD, {
     posted: false,
     reviewUrl: '',
@@ -86,7 +86,11 @@ test('cleanAuditBlocker names the denial reason, the HEAD, and the permission-ru
   assert.match(message, /post_audit_thread\.py/);
   assert.match(message, new RegExp(CONVERGED_HEAD));
   assert.match(message, /can never pass without it/);
+  assert.match(message, /permission rule/);
+  assert.match(message, /gh auth|network|script error/);
+  assert.match(message, /re-run/);
   assert.doesNotMatch(message, /by hand/i);
+  assert.doesNotMatch(message, /compose/i);
 });
 
 test('cleanAuditBlocker falls back to a no-result reason when the post agent died', () => {
@@ -116,12 +120,22 @@ test('nameLensResults classifies a not-spawned stub, a dead agent, and a ran len
   assert.deepEqual(allLensNames, ['Cursor Bugbot', 'code-review', 'bug-audit']);
 });
 
-test('nameLensResults distinguishes an agent-reported-down lens from a not-spawned stub', () => {
-  const agentReportedDown = { sha: 'a', clean: true, down: true, findings: [] };
+test('nameLensResults tags a down lens reported-down only with zero findings, and ran when it produced findings', () => {
+  const downNoFindings = { sha: 'a', clean: true, down: true, findings: [] };
   const ranReport = { sha: 'a', clean: true, down: false, findings: [] };
-  const namedLenses = nameLensResults([agentReportedDown, ranReport, ranReport]);
-  assert.equal(namedLenses[0].status, 'reported-down');
-  assert.equal(namedLenses[0].report, null);
+  const reportedDown = nameLensResults([downNoFindings, ranReport, ranReport]);
+  assert.equal(reportedDown[0].status, 'reported-down');
+  assert.equal(reportedDown[0].report, null);
+
+  const downWithFindings = {
+    sha: 'a',
+    clean: false,
+    down: true,
+    findings: [{ file: 'x.py', line: 1, severity: 'P2', category: 'code-standard', title: 't', detail: 'd', replyToCommentId: null }],
+  };
+  const finding = nameLensResults([downWithFindings, ranReport, ranReport]);
+  assert.equal(finding[0].status, 'ran');
+  assert.equal(finding[0].report, downWithFindings);
 });
 
 test('describeNotRunLens words each not-run status without claiming a review or asserting a poll or timeout', () => {
@@ -161,19 +175,33 @@ test('runGeneralUtilityTask refuses to post when no lens ran, flags noLensRan, a
   assert.equal(spawnCount, 0);
 });
 
-test('both post-clean-audit call sites retry on noLensRan rather than blocking the run', () => {
+test('the standards-only branch guards the zero-ran case before any GitHub side effect', () => {
   const standardsBranch = convergeSource.slice(
     convergeSource.indexOf('if (isStandardsOnlyRound(findings)) {'),
     convergeSource.indexOf('if (findings.length > 0) {'),
   );
-  assert.match(standardsBranch, /if \(auditResult\?\.noLensRan\)/);
+  const guardIndex = standardsBranch.search(/=== 0/);
+  const filingIndex = standardsBranch.indexOf('openStandardsFollowUpOnce');
+  const noteIndex = standardsBranch.indexOf('standardsNote =');
+  const deferredPushIndex = standardsBranch.indexOf('deferredPrs.push');
+  assert.notEqual(guardIndex, -1, 'expected a zero-ran guard in the standards-only branch');
+  assert.ok(guardIndex < filingIndex, 'expected the zero-ran guard before openStandardsFollowUpOnce');
+  assert.ok(guardIndex < noteIndex, 'expected the zero-ran guard before standardsNote is set');
+  assert.ok(guardIndex < deferredPushIndex, 'expected the zero-ran guard before deferredPrs.push');
+  assert.match(standardsBranch, /logNoLensRanRetry\(/);
+});
+
+test('both zero-ran retry sites call the shared logNoLensRanRetry helper then null head and continue', () => {
   const allCleanBranch = convergeSource.slice(
     convergeSource.indexOf('all lenses clean on'),
     convergeSource.indexOf("if (phase === 'COPILOT') {"),
   );
   assert.match(allCleanBranch, /if \(auditResult\?\.noLensRan\)/);
-  const noLensRanCount = (convergeSource.match(/if \(auditResult\?\.noLensRan\) \{[\s\S]*?head = null[\s\S]*?continue/g) || []).length;
-  assert.equal(noLensRanCount, 2);
+  assert.match(allCleanBranch, /logNoLensRanRetry\(/);
+  const retryCallCount = (convergeSource.match(/logNoLensRanRetry\(/g) || []).length;
+  assert.equal(retryCallCount, 3, 'expected one helper definition call and two call sites');
+  const helperBody = functionBody('logNoLensRanRetry');
+  assert.match(helperBody, /no audit lens ran/);
 });
 
 test('runGeneralUtilityTask spawns the posting agent when at least one lens ran', async () => {
@@ -224,16 +252,25 @@ test('serializeOneLineJson escapes U+2028 and U+2029 so a line-separator in lens
   assert.deepEqual(JSON.parse(serialized), lensReport);
 });
 
-test('the post-clean-audit prompt serializes both fenced payloads one-line via serializeOneLineJson', () => {
+test('the post-clean-audit prompt has one LENS DATA fence and no separate DEFERRED FINDINGS fence', () => {
   const body = functionBody('runGeneralUtilityTask');
   assert.match(body, /BEGIN LENS DATA/);
   assert.match(body, /END LENS DATA/);
-  assert.match(body, /BEGIN DEFERRED FINDINGS/);
-  assert.match(body, /END DEFERRED FINDINGS/);
+  assert.doesNotMatch(body, /BEGIN DEFERRED FINDINGS/);
+  assert.doesNotMatch(body, /END DEFERRED FINDINGS/);
   assert.match(body, /serializeOneLineJson\(ranLenses\)/);
-  assert.match(body, /serializeOneLineJson\(\s*context\.deferredStandardsFindings/);
   assert.match(body, /one line of JSON/);
   assert.doesNotMatch(body, /JSON\.stringify\(ranLenses, null, 2\)/);
+});
+
+test('the deferred-standards prose references the lens reports by count and disposition, quoting no lens-authored text', () => {
+  const body = functionBody('runGeneralUtilityTask');
+  assert.match(body, /deferredStandardsFindings\.length/);
+  assert.match(body, /visible in the lens reports above/);
+  assert.match(body, /describeStandardsDeferral\(context\.standardsDeferral\)/);
+  assert.doesNotMatch(body, /serializeOneLineJson\(\s*context\.deferredStandardsFindings/);
+  assert.doesNotMatch(body, /eachFinding\.title/);
+  assert.doesNotMatch(body, /eachFinding\.file/);
 });
 
 test('the post-clean-audit prompt frames the fenced data as evidence the agent must not put into the posted content', () => {
@@ -304,6 +341,24 @@ test('describeStandardsDeferral credits the environment-hardening PR when no fix
   assert.match(describeStandardsDeferral(null), /did not land/);
 });
 
+test('standardsDeferralNote directs verifying both artifacts when the fix issue filed and the hardening PR also opened', () => {
+  const bothLanded = standardsDeferralNote(3, {
+    issueFiled: true,
+    issueUrl: 'https://github.com/o/r/issues/7',
+    hardeningPrOpened: true,
+  });
+  assert.match(bothLanded, /environment-hardening PR/);
+  assert.match(bothLanded, /verify both land/);
+
+  const issueOnly = standardsDeferralNote(3, {
+    issueFiled: true,
+    issueUrl: 'https://github.com/o/r/issues/7',
+    hardeningPrOpened: false,
+  });
+  assert.match(issueOnly, /verify it lands/);
+  assert.doesNotMatch(issueOnly, /verify both land/);
+});
+
 test('classifyStandardsDeferral is the single source both the run report and the CLEAN post agree on', () => {
   const states = [
     { issueFiled: true, issueUrl: 'https://github.com/o/r/issues/7', hardeningPrOpened: false },
@@ -363,7 +418,8 @@ test('the standards-only call site relays lens provenance, the deferred standard
     convergeSource.indexOf('if (isStandardsOnlyRound(findings)) {'),
     convergeSource.indexOf('if (findings.length > 0) {'),
   );
-  assert.match(branch, /lensResults: nameLensResults\(lenses\)/);
+  assert.match(branch, /const namedLenses = nameLensResults\(lenses\)/);
+  assert.match(branch, /lensResults: namedLenses/);
   assert.match(branch, /deferredStandardsFindings: findings/);
   assert.match(branch, /const standardsDeferral = buildStandardsDeferral\(standardsOutcome\)/);
   assert.match(branch, /standardsDeferralNote\(findings\.length, standardsDeferral\)/);
