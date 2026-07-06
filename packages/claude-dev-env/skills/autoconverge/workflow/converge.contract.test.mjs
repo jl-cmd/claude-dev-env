@@ -275,8 +275,8 @@ test('each fix push, each lens-retry, and the convergence repair invalidate the 
   const invalidationMatches = convergeSource.match(/^ +head = null$/gm) || [];
   assert.equal(
     invalidationMatches.length,
-    7,
-    'expected head invalidation after the CONVERGE fix push, the COPILOT fix push, the convergence repair, the all-lenses-dead retry, the not-clean-no-findings retry, and the two no-lens-ran clean-audit refusals',
+    6,
+    'expected head invalidation after the CONVERGE fix push, the COPILOT fix push, the convergence repair, the all-lenses-dead retry, the not-clean-no-findings retry, and the all-clean no-lens-ran clean-audit refusal',
   );
 });
 
@@ -556,17 +556,23 @@ test('the workflow return objects carry the accumulated deferredPrs list', () =>
   );
 });
 
-test('the standards-deferral note names the hardening PR only when one opened', () => {
-  const noteBody = lensPromptBody('standardsDeferralNote');
+test('the standards-deferral surfaces disclose the hardening-PR state unconditionally, present or absent', () => {
+  const clauseBody = functionSource('standardsHardeningClause');
   assert.match(
-    noteBody,
+    clauseBody,
     /environment-hardening PR/,
     'expected the opened-PR branch to name the hardening PR',
   );
   assert.match(
-    noteBody,
+    clauseBody,
+    /no environment-hardening PR/i,
+    'expected the absent-PR branch to disclose that no hardening PR was opened',
+  );
+  const coreBody = functionSource('standardsDeferralCore');
+  assert.match(
+    coreBody,
     /remain untracked/,
-    'expected an untracked branch that makes no hardening-PR claim',
+    'expected an untracked core that makes no hardening-PR claim',
   );
 });
 

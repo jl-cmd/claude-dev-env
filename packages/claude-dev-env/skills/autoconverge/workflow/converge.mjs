@@ -23,6 +23,7 @@ export const meta = {
 
 const CONFIG = {
   maxIterations: 20,
+  maxConsecutiveZeroRanRounds: 3,
   copilotMaxPolls: 8,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
@@ -457,7 +458,7 @@ function runGeneralUtilityTask(task, context) {
         : ''
     const deferredStandardsNote =
       context.deferredStandardsFindings.length > 0
-        ? `The ${context.deferredStandardsFindings.length} code-standard-only finding(s) visible in the lens reports above were excluded from this CLEAN post and ${describeStandardsDeferral(context.standardsDeferral)}.\n\n`
+        ? `The ${context.deferredStandardsFindings.length} unique code-standard finding(s) after de-duplication across the lens reports above were excluded from this CLEAN post and ${describeStandardsDeferral(context.standardsDeferral)}.\n\n`
         : ''
     return convergeAgent(
       `Transcribe a completed audit result to the PR thread for ${prCoordinates} at commit ${context.head}. You are relaying results that ${ranCount} audit lens(es) already produced on this HEAD earlier in this run — you are not judging the code yourself or clearing a merge gate.\n\n` +
@@ -745,7 +746,7 @@ const CLEAN_AUDIT_SCHEMA = {
 const SEVERITY_RANK = { P0: 0, P1: 1, P2: 2 }
 const SHA_COMPARISON_PREFIX_LENGTH = 7
 const LENS_NAMES = ['Cursor Bugbot', 'code-review', 'bug-audit']
-const GITHUB_ISSUE_URL_PATTERN = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+$/
+const GITHUB_ISSUE_URL_PATTERN = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+\/?(?:[?#].*)?$/
 
 /**
  * Dedup findings across lenses by file + line + lowercased title, reconciling
@@ -1001,32 +1002,71 @@ function classifyStandardsDeferral(standardsDeferral) {
 }
 
 /**
- * Word the standards-deferral disposition for the CLEAN post prompt, relaying
- * where the deferred code-standard findings went from the shared classification so
- * it agrees with the run report and never claims a deferral that did not land.
+ * Word where the deferred code-standard findings' FIX WORK went, from the shared
+ * classification, so both surfaces relay the same fix-tracking truth. This is the
+ * single per-disposition phrase both describeStandardsDeferral (the CLEAN post) and
+ * standardsDeferralNote (the run report) compose around, so a wording change lands
+ * on both surfaces at once. It speaks only to the follow-up fix issue: a filed
+ * issue tracks the fix, an unfiled one leaves the findings untracked. The
+ * environment-hardening PR carries hooks/rules hardening, never the fix work, so it
+ * is disclosed separately by standardsHardeningClause rather than folded in here.
  *
  * ::
  *
- *   describeStandardsDeferral({issueFiled: true, issueUrl: 'https://github.com/o/r/issues/7'})
- *   -> 'deferred to a follow-up fix issue: https://github.com/o/r/issues/7'
- *   describeStandardsDeferral({issueFiled: true, issueUrl: 'https://github.com/o/r/issues/7#c'})
- *   -> 'deferred to a follow-up fix issue (filed, but a verifiable link is unavailable)'
+ *   standardsDeferralCore({issueFiled: true, issueUrl: 'https://github.com/o/r/issues/7'})
+ *   -> 'deferred to a follow-up fix issue (https://github.com/o/r/issues/7)'
+ *   standardsDeferralCore({issueFiled: false, hardeningPrOpened: true})
+ *   -> 'not tracked by a follow-up fix issue — the filing did not land, so these findings remain untracked'
+ *
+ * @param {{issueFiled?: boolean, issueUrl?: string, hardeningPrOpened?: boolean}|null|undefined} standardsDeferral the follow-up fix issue and hardening-PR state
+ * @returns {string} the fix-tracking clause shared by both deferral surfaces
+ */
+function standardsDeferralCore(standardsDeferral) {
+  const classification = classifyStandardsDeferral(standardsDeferral)
+  if (classification.disposition === 'issue-filed') {
+    return `deferred to a follow-up fix issue (${classification.issueUrl})`
+  }
+  if (classification.disposition === 'issue-filed-no-link') {
+    return 'deferred to a follow-up fix issue (filed, but a verifiable link is unavailable)'
+  }
+  return 'not tracked by a follow-up fix issue — the filing did not land, so these findings remain untracked'
+}
+
+/**
+ * Disclose whether the run opened an environment-hardening PR, on every
+ * disposition, so neither surface goes silent about a missing hardening PR and
+ * neither lets an opened one masquerade as tracking the fix work. The hardening PR
+ * blocks the violation classes going forward; it never carries the deferred fix.
+ *
+ * ::
+ *
+ *   standardsHardeningClause({hardeningPrOpened: true})  -> 'an environment-hardening PR opened for this run, but it hardens hooks/rules only and does not carry the deferred fix work'
+ *   standardsHardeningClause({hardeningPrOpened: false}) -> 'no environment-hardening PR was opened for this run'
+ *
+ * @param {{hardeningPrOpened?: boolean}|null|undefined} standardsDeferral the hardening-PR state
+ * @returns {string} the hardening-PR disclosure clause shared by both deferral surfaces
+ */
+function standardsHardeningClause(standardsDeferral) {
+  return standardsDeferral?.hardeningPrOpened === true
+    ? 'an environment-hardening PR opened for this run, but it hardens hooks/rules only and does not carry the deferred fix work'
+    : 'no environment-hardening PR was opened for this run'
+}
+
+/**
+ * Word the standards-deferral disposition for the CLEAN post prompt from the two
+ * shared clauses, so it relays the same fix-tracking and hardening-PR truth the run
+ * report does and never claims a deferral that did not land.
+ *
+ * ::
+ *
+ *   describeStandardsDeferral({issueFiled: true, issueUrl: 'https://github.com/o/r/issues/7', hardeningPrOpened: false})
+ *   -> 'deferred to a follow-up fix issue (https://github.com/o/r/issues/7); no environment-hardening PR was opened for this run'
  *
  * @param {{issueFiled?: boolean, issueUrl?: string, hardeningPrOpened?: boolean}|null|undefined} standardsDeferral the follow-up fix issue and hardening-PR state
  * @returns {string} the disposition clause for the deferred-standards note
  */
 function describeStandardsDeferral(standardsDeferral) {
-  const classification = classifyStandardsDeferral(standardsDeferral)
-  if (classification.disposition === 'issue-filed') {
-    return `deferred to a follow-up fix issue: ${classification.issueUrl}`
-  }
-  if (classification.disposition === 'issue-filed-no-link') {
-    return 'deferred to a follow-up fix issue (filed, but a verifiable link is unavailable)'
-  }
-  if (classification.disposition === 'hardening-pr') {
-    return 'carried by the environment-hardening PR opened for this run'
-  }
-  return 'the deferral filing did not land — these findings remain untracked'
+  return `${standardsDeferralCore(standardsDeferral)}; ${standardsHardeningClause(standardsDeferral)}`
 }
 
 /**
@@ -1515,10 +1555,10 @@ async function applyFixes(head, findings, sourceLabel) {
  * Blocker message for a CLEAN bugteam audit that did not land. The convergence
  * gate's bugteam-review check can never pass without this review, so a blocked
  * post stops the run with an actionable message rather than re-converging until
- * the iteration cap. This fires only after the round's lenses genuinely verified
- * the HEAD clean (the zero-lens-ran case retries before ever reaching here), so
- * re-issuing the run's own grounded post is legitimate recovery. Handles a dead
- * post agent (a null result) as not posted.
+ * the iteration cap. This fires only after the round already produced its grounded
+ * audit outcome for this HEAD — all lenses clean, or code-standard-only findings
+ * deferred — so re-issuing the run's own grounded post is legitimate recovery.
+ * Handles a dead post agent (a null result) as not posted.
  * @param {string} head converged PR HEAD SHA
  * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from the post-clean-audit task, or null when the agent died
  * @returns {string} the blocker message naming the post failure and the unblock path
@@ -1529,7 +1569,7 @@ function cleanAuditBlocker(head, auditResult) {
     `clean-audit post blocked: the CLEAN bugteam review could not be posted on HEAD ${head} (${reason}) — ` +
     `the convergence gate's bugteam-review check can never pass without it, so the run stops rather than re-converge to the iteration cap. ` +
     `To unblock: when the reason is a permission denial, allow post_audit_thread.py for this run with a Bash permission rule and re-run. ` +
-    `For any other failure (gh auth expiry, network, a script error), diagnose the printed reason, then re-run the exact post_audit_thread.py --state CLEAN command for HEAD ${head} with the run's own empty findings file — the lenses already verified this HEAD clean, so this re-issues the run's own grounded CLEAN post, not a new review.`
+    `For any other failure (gh auth expiry, network, a script error), diagnose the printed reason, then re-run the exact post_audit_thread.py --state CLEAN command for HEAD ${head} with the run's own empty findings file — this re-issues the run's own grounded post for this HEAD, not a new review.`
   )
 }
 
@@ -1674,59 +1714,41 @@ function shouldOpenStandardsFollowUp(hasAlreadyFiled) {
 
 /**
  * Build the standards-deferral note for the closing report from the same shared
- * classification the CLEAN post words from, so the report and the post never
- * disagree about where the deferred findings went. The report adds its own
- * surface framing: a "verify it lands" nudge, and a secondary note when a filed
- * issue and the environment-hardening PR both landed this run.
+ * clauses the CLEAN post words from, so the report and the post never disagree
+ * about where the fix work went or whether a hardening PR opened. The report adds
+ * its own surface framing: a "verify it lands" nudge on a filed fix issue, widened
+ * to "verify both land" when the environment-hardening PR also opened this run.
  * @param {number} findingsCount count of deferred code-standard findings
  * @param {{issueFiled?: boolean, issueUrl?: string, hardeningPrOpened?: boolean}|null|undefined} standardsDeferral the follow-up fix issue and hardening-PR state
  * @returns {string} the human-facing deferral note
  */
 function standardsDeferralNote(findingsCount, standardsDeferral) {
   const classification = classifyStandardsDeferral(standardsDeferral)
-  const base = `${findingsCount} code-standard finding(s)`
-  const alsoHardening =
-    standardsDeferral?.hardeningPrOpened === true && classification.disposition !== 'hardening-pr'
-  const verifyNudge = alsoHardening
-    ? ' plus an environment-hardening PR — verify both land'
-    : ' — verify it lands'
-  if (classification.disposition === 'issue-filed') {
-    return `${base} deferred to a follow-up fix issue (${classification.issueUrl})${verifyNudge}`
-  }
-  if (classification.disposition === 'issue-filed-no-link') {
-    return `${base} deferred to a follow-up fix issue (filed, but a verifiable link is unavailable)${verifyNudge}`
-  }
-  if (classification.disposition === 'hardening-pr') {
-    return `${base} carried by the environment-hardening PR opened for this run — verify it lands`
-  }
-  return `${base} — the deferral filing did not land; these findings remain untracked`
+  const wasIssueFiled =
+    classification.disposition === 'issue-filed' || classification.disposition === 'issue-filed-no-link'
+  const wasHardeningPrOpened = standardsDeferral?.hardeningPrOpened === true
+  const verifyNudge = wasIssueFiled
+    ? wasHardeningPrOpened
+      ? ' — verify both land'
+      : ' — verify it lands'
+    : ''
+  return `${findingsCount} code-standard finding(s) ${standardsDeferralCore(standardsDeferral)}${verifyNudge}; ${standardsHardeningClause(standardsDeferral)}`
 }
 
 /**
  * Build the standards-deferral state the CLEAN post and the run report both word
- * from, reading this run's latched follow-up fix issue state and the round's
- * hardening-PR outcome.
- * @param {object|null|undefined} standardsOutcome the openStandardsFollowUpOnce result for this round
+ * from, reading this run's latched follow-up fix issue state and hardening-PR
+ * outcome directly from the run globals. openStandardsFollowUpOnce latches
+ * wasStandardsHardeningPrOpened before it returns, so the round's hardening-PR
+ * outcome is already the value of that global by the time this reads it.
  * @returns {{issueFiled: boolean, issueUrl: string, hardeningPrOpened: boolean}} the deferral state
  */
-function buildStandardsDeferral(standardsOutcome) {
+function buildStandardsDeferral() {
   return {
     issueFiled: hasStandardsFollowUpFiled,
     issueUrl: standardsFollowUpIssueUrl,
-    hardeningPrOpened: standardsOutcome?.hardeningPrOpened === true,
+    hardeningPrOpened: wasStandardsHardeningPrOpened,
   }
-}
-
-/**
- * Log the shared no-lens-ran retry notice for a round that reached a clean-audit
- * post with no lens having actually reviewed the HEAD. The caller nulls head and
- * continues so the next round re-fetches origin/main and re-spawns the lenses.
- * @param {number} rounds the current round number
- * @param {string|null} head the round's HEAD SHA
- * @returns {void}
- */
-function logNoLensRanRetry(rounds, head) {
-  log(`Round ${rounds}: no audit lens ran on ${head?.slice(0, 7)} — re-converging without posting a clean artifact`)
 }
 
 /**
@@ -1866,6 +1888,7 @@ let phase = 'CONVERGE'
 let head = null
 let rounds = 0
 let iterations = 0
+let consecutiveZeroRanRounds = 0
 let blocker = null
 let bugbotDown = input.bugbotDisabled || false
 let copilotDown = input.copilotDisabled || false
@@ -1932,16 +1955,11 @@ while (iterations < CONFIG.maxIterations) {
     }
     const findings = roundOutcome.findings
     if (isStandardsOnlyRound(findings)) {
+      consecutiveZeroRanRounds = 0
       const namedLenses = nameLensResults(lenses)
-      const ranLensCount = namedLenses.filter((eachEntry) => eachEntry.status === 'ran').length
-      if (ranLensCount === 0) {
-        logNoLensRanRetry(rounds, head)
-        head = null
-        continue
-      }
       log(`Round ${rounds}: ${findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the round as passed`)
       const standardsOutcome = await openStandardsFollowUpOnce(head, findings, 'converge-round', { copilotDisabled: copilotDown, bugbotDisabled: bugbotDown })
-      const standardsDeferral = buildStandardsDeferral(standardsOutcome)
+      const standardsDeferral = buildStandardsDeferral()
       standardsNote = standardsDeferralNote(findings.length, standardsDeferral)
       if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
       const auditResult = await runGeneralUtilityTask('post-clean-audit', {
@@ -1958,6 +1976,7 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     if (findings.length > 0) {
+      consecutiveZeroRanRounds = 0
       log(`Round ${rounds}: ${findings.length} finding(s) — applying fixes`)
       const fixResult = await applyFixes(head, findings, 'converge-round')
       const hadThreadBearingFinding = findings.some((each) => collectFindingThreadIds(each).length > 0)
@@ -1983,7 +2002,12 @@ while (iterations < CONFIG.maxIterations) {
       deferredStandardsFindings: [],
     })
     if (auditResult?.noLensRan) {
-      logNoLensRanRetry(rounds, head)
+      consecutiveZeroRanRounds += 1
+      if (consecutiveZeroRanRounds >= CONFIG.maxConsecutiveZeroRanRounds) {
+        blocker = `no audit lens ran on HEAD ${head} for ${consecutiveZeroRanRounds} consecutive round(s) — every review lens was down, disabled, or its agent died, so no grounded CLEAN audit can be posted; stopping rather than looping to the iteration cap`
+        break
+      }
+      log(`Round ${rounds}: no audit lens ran on ${head?.slice(0, 7)} — re-converging without posting a clean artifact`)
       head = null
       continue
     }
@@ -1991,6 +2015,7 @@ while (iterations < CONFIG.maxIterations) {
       blocker = cleanAuditBlocker(head, auditResult)
       break
     }
+    consecutiveZeroRanRounds = 0
     phase = 'COPILOT'
     continue
   }
@@ -2022,7 +2047,7 @@ while (iterations < CONFIG.maxIterations) {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
         log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
         const standardsOutcome = await openStandardsFollowUpOnce(head, copilotOutcome.findings, 'copilot', { copilotDisabled: copilotDown, bugbotDisabled: bugbotDown })
-        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, buildStandardsDeferral(standardsOutcome))
+        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, buildStandardsDeferral())
         if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
         copilotDown = false
         copilotNote = null
