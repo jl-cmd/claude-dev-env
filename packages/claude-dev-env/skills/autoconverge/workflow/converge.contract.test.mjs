@@ -36,6 +36,14 @@ function functionSource(functionName) {
   return convergeSource.slice(functionStart, functionEnd);
 }
 
+function docstringBefore(functionName) {
+  const functionStart = convergeSource.indexOf(`function ${functionName}(`);
+  assert.notEqual(functionStart, -1, `expected ${functionName} to exist`);
+  const docStart = convergeSource.lastIndexOf('/**', functionStart);
+  assert.notEqual(docStart, -1, `expected a JSDoc block before ${functionName}`);
+  return convergeSource.slice(docStart, functionStart);
+}
+
 test('code-review lens prompt no longer instructs a per-lens git fetch', () => {
   assert.doesNotMatch(lensPromptBody('runCodeReviewLens'), /git fetch origin main/);
 });
@@ -60,10 +68,36 @@ test('the merged preflight-git task fetches origin/main once before the parallel
   assert.match(gitTaskBody, /PREFLIGHT_GIT_SCHEMA/, 'expected the merged task to return the {sha, conflicting, fetched, copilot, bugbot} schema');
 });
 
-test('the merged preflight-git agent runs on haiku at low effort', () => {
+test('the merged preflight-git agent spreads the haikuLow tier', () => {
   const gitTaskBody = functionSource('runGitTask');
-  assert.match(gitTaskBody, /model: 'haiku'/, 'expected the git-utility agent to run on the cheapest model');
-  assert.match(gitTaskBody, /effort: 'low'/, 'expected the git-utility agent to run at low effort');
+  assert.match(
+    gitTaskBody,
+    /\.\.\.TIERS\.haikuLow/,
+    'expected the git-utility agent to spread the single-sourced haikuLow tier rather than inline model/effort literals',
+  );
+  assert.doesNotMatch(
+    gitTaskBody,
+    /model: 'haiku', effort: 'low'/,
+    'expected no inline haikuLow literals duplicating the TIERS definition',
+  );
+});
+
+test('the preflight-git prompt states the correct number of read-only steps it enumerates', () => {
+  const body = functionSource('runGitTask');
+  assert.match(
+    body,
+    /Run five read-only preflight steps/,
+    'expected the stated step count to match the five enumerated STEP blocks',
+  );
+  assert.match(body, /STEP 5 —/, 'expected the fifth step to be enumerated');
+  assert.doesNotMatch(body, /Run four read-only preflight steps/);
+});
+
+test('the runGitTask docstring names the diff enumeration and its changedFiles/diffstat return fields', () => {
+  const doc = docstringBefore('runGitTask');
+  assert.match(doc, /diff|changed-file|enumerat/i, 'expected the docstring to name the diff enumeration operation');
+  assert.match(doc, /changedFiles/, 'expected the docstring return shape to name changedFiles');
+  assert.match(doc, /diffstat/, 'expected the docstring return shape to name diffstat');
 });
 
 test('the reviewer-availability probe rides the merged preflight-git spawn, not a separate agent', () => {
@@ -98,7 +132,7 @@ test('the Bugbot lens is not spawned pre-spawn when the shared gate reports Bugb
   const lensArray = convergeSource.slice(parallelLensIndex, lensArrayEnd);
   assert.match(
     lensArray,
-    /isBugbotDownPreSpawn \? Promise\.resolve\(\{ sha: head, clean: true, down: true, notSpawned: true, findings: \[\] \}\) : runBugbotLens\(head\)/,
+    /isBugbotDownPreSpawn \? Promise\.resolve\(\{ sha: head, clean: true, down: true, notSpawned: true, findings: \[\] \}\) : runBugbotLens\(head, reviewerAvailability\)/,
     'expected the Bugbot lens slot to substitute a resolved down placeholder instead of spawning runBugbotLens when isBugbotDownPreSpawn is true',
   );
 });
@@ -263,13 +297,26 @@ test('the COPILOT fix branch does not re-assign head from the fix before re-conv
 test('the CONVERGE branch refreshes HEAD via the merged preflight-git task only when the threaded head is invalidated', () => {
   const convergeBranchStart = convergeSource.indexOf("if (phase === 'CONVERGE')");
   assert.notEqual(convergeBranchStart, -1, 'expected the CONVERGE branch to exist');
-  const invalidGuardIndex = convergeSource.indexOf('if (!isResolvedHeadUsable(head))', convergeBranchStart);
+  const invalidGuardIndex = convergeSource.indexOf('if (!isResolvedHeadUsable(head)', convergeBranchStart);
   const headRefreshCallIndex = convergeSource.indexOf("runGitTask('preflight-git')", convergeBranchStart);
   assert.notEqual(invalidGuardIndex, -1, 'expected CONVERGE to gate the refresh on an invalidated head');
   assert.notEqual(headRefreshCallIndex, -1, 'expected CONVERGE to refresh HEAD via the merged preflight-git task');
   assert.ok(
     invalidGuardIndex < headRefreshCallIndex,
     'expected the invalidated-head guard to precede the merged refresh so a valid threaded head spawns no git agent',
+  );
+});
+
+test('the CONVERGE branch refreshes preflight when the availability enumeration was computed against a different SHA than the head under review', () => {
+  const convergeBranchStart = convergeSource.indexOf("if (phase === 'CONVERGE')");
+  assert.notEqual(convergeBranchStart, -1, 'expected the CONVERGE branch to exist');
+  const guardIndex = convergeSource.indexOf('if (!isResolvedHeadUsable(head)', convergeBranchStart);
+  assert.notEqual(guardIndex, -1, 'expected the refresh guard to exist');
+  const guardLine = convergeSource.slice(guardIndex, convergeSource.indexOf('\n', guardIndex));
+  assert.match(
+    guardLine,
+    /reviewerAvailability\?\.sha !== head/,
+    'expected the refresh guard to fire when the reviewerAvailability changed-file enumeration was computed against a SHA other than the current head, so a rebase or reuse push that advances HEAD before round 1 hands the lenses the diff for the head they actually review',
   );
 });
 
@@ -830,8 +877,18 @@ for (const { name, isAsync } of taskDispatchers) {
   });
 }
 
-test('runGeneralUtilityTask only handles the two tasks it is called with', () => {
+test('runGeneralUtilityTask only handles the post-clean-audit task it is called with', () => {
   const generalBody = functionSource('runGeneralUtilityTask');
+  assert.match(
+    generalBody,
+    /task === 'post-clean-audit'/,
+    'expected runGeneralUtilityTask to handle the post-clean-audit task',
+  );
+  assert.doesNotMatch(
+    generalBody,
+    /task === 'mark-ready'/,
+    'the mark-ready step is merged into the FINALIZE convergence check (runConvergenceCheck), so its branch must be removed here',
+  );
   assert.doesNotMatch(
     generalBody,
     /task === 'bugbot-lens'/,
@@ -1040,4 +1097,117 @@ test('the Monitor ceiling the guidance names covers the longest interval-times-a
       `a ${span}ms wait span exceeds the ${ceiling}ms Monitor ceiling the guidance names`,
     );
   }
+});
+
+function optionsLineForLabel(label) {
+  const labelIndex = convergeSource.indexOf(`label: '${label}'`);
+  assert.notEqual(labelIndex, -1, `expected an agent options object labeled ${label}`);
+  const lineStart = convergeSource.lastIndexOf('\n', labelIndex);
+  const lineEnd = convergeSource.indexOf('\n', labelIndex);
+  return convergeSource.slice(lineStart, lineEnd);
+}
+
+test('the TIERS map defines the opus/sonnet/haiku model-effort tiers', () => {
+  assert.match(convergeSource, /opusMedium:\s*\{ model: 'opus', effort: 'medium' \}/);
+  assert.match(convergeSource, /sonnetMedium:\s*\{ model: 'sonnet', effort: 'medium' \}/);
+  assert.match(convergeSource, /haikuLow:\s*\{ model: 'haiku', effort: 'low' \}/);
+});
+
+test('every convergeAgent spawn options object carries a model and effort tier', () => {
+  const optionObjects = convergeSource.match(/\{ label[^\n]*\}/g) || [];
+  assert.ok(
+    optionObjects.length >= 20,
+    `expected to find the per-spawn options objects, found ${optionObjects.length}`,
+  );
+  for (const optionObject of optionObjects) {
+    const hasTier = optionObject.includes('...TIERS.');
+    const hasInlineModelEffort = /model:\s*'/.test(optionObject) && /effort:\s*'/.test(optionObject);
+    assert.ok(
+      hasTier || hasInlineModelEffort,
+      `expected the spawn options to carry a model and effort tier: ${optionObject}`,
+    );
+  }
+});
+
+test('the four review lenses run on the opusMedium tier', () => {
+  for (const label of ['lens:bugbot', 'lens:code-review', 'lens:bug-audit', 'lens:reuse']) {
+    assert.match(
+      optionsLineForLabel(label),
+      /\.\.\.TIERS\.opusMedium/,
+      `expected ${label} to run on the opusMedium tier`,
+    );
+  }
+});
+
+test('the copilot gate runs on the haikuLow tier', () => {
+  assert.match(optionsLineForLabel('copilot-gate'), /\.\.\.TIERS\.haikuLow/);
+});
+
+test('the merged finalize convergence check runs on the haikuLow tier', () => {
+  assert.match(functionSource('runConvergenceCheck'), /\.\.\.TIERS\.haikuLow/);
+});
+
+test('the preflight-git task returns the changed-file list and diffstat for the lenses', () => {
+  const body = functionSource('runGitTask');
+  assert.match(body, /git diff --name-status origin\/main\.\.\.HEAD/);
+  assert.match(body, /git diff --stat origin\/main\.\.\.HEAD/);
+  assert.match(body, /changedFiles/);
+  assert.match(body, /diffstat/);
+  const schemaStart = convergeSource.indexOf('const PREFLIGHT_GIT_SCHEMA =');
+  const schemaEnd = convergeSource.indexOf('\n}', schemaStart);
+  const schema = convergeSource.slice(schemaStart, schemaEnd);
+  assert.match(schema, /changedFiles:/);
+  assert.match(schema, /diffstat:/);
+  assert.match(schema, /required:[^\n]*'changedFiles'[^\n]*'diffstat'/);
+});
+
+test('each per-round lens and the reuse lens inject the preflight changed-file context', () => {
+  for (const builder of ['runBugbotLens', 'runCodeReviewLens', 'runAuditLens', 'runReuseAuditPass']) {
+    assert.match(
+      lensPromptBody(builder),
+      /renderLensDiffContext\(preflightResult\)/,
+      `expected ${builder} to inject the changed-file context from the preflight result`,
+    );
+  }
+});
+
+test('renderLensDiffContext reuses the changed-file list when present and falls back to self-enumeration otherwise', () => {
+  const renderLensDiffContext = new Function(
+    `${functionSource('renderLensDiffContext')}\nreturn renderLensDiffContext;`,
+  )();
+  const withList = renderLensDiffContext({ changedFiles: 'M\ta.py', diffstat: ' a.py | 2 +-' });
+  assert.match(withList, /Changed files/);
+  assert.match(withList, /a\.py/);
+  const fallback = renderLensDiffContext(null);
+  assert.match(fallback, /git diff --name-only/, 'expected a missing file list to fall back to self-enumeration');
+});
+
+test('the merged FINALIZE check runs check_convergence then marks the PR ready on pass in one agent', () => {
+  const body = functionSource('runConvergenceCheck');
+  assert.match(body, /check_convergence\.py/, 'expected the merged check to run check_convergence.py');
+  assert.match(body, /gh pr ready/, 'expected the merged check to mark the PR ready on the passing path');
+  assert.match(body, /schema: FINALIZE_SCHEMA/, 'expected the merged check to return the {pass, failures, ready} schema');
+  assert.match(body, /context\.copilotDown/, 'expected the merged check to carry the copilotDown opt-out context');
+});
+
+test('FINALIZE_SCHEMA carries pass, failures, and ready', () => {
+  const schemaStart = convergeSource.indexOf('const FINALIZE_SCHEMA =');
+  assert.notEqual(schemaStart, -1, 'expected FINALIZE_SCHEMA to exist');
+  const schema = convergeSource.slice(schemaStart, convergeSource.indexOf('\n}', schemaStart));
+  for (const field of ['pass', 'failures', 'ready']) {
+    assert.match(schema, new RegExp(`${field}:`), `expected FINALIZE_SCHEMA to carry ${field}`);
+  }
+});
+
+test('the FINALIZE phase drives the merged check and reads ready from its result without a separate mark-ready spawn', () => {
+  const finalizeStart = convergeSource.indexOf("if (phase === 'FINALIZE') {");
+  assert.notEqual(finalizeStart, -1, 'expected a FINALIZE phase block');
+  const finalizeBody = convergeSource.slice(finalizeStart, finalizeStart + 1000);
+  assert.match(finalizeBody, /runConvergenceCheck\(\{ head, bugbotDown, copilotDown \}\)/);
+  assert.match(finalizeBody, /classifyReadyOutcome\(finalizeResult\)/);
+  assert.doesNotMatch(
+    finalizeBody,
+    /runGeneralUtilityTask\('mark-ready'/,
+    'the separate mark-ready spawn is merged into the FINALIZE convergence check',
+  );
 });

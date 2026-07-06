@@ -46,9 +46,14 @@ tracks CONVERGE passes only and is never the cap.
 
 **CONVERGE** (one round = one parallel sweep):
 
-1. Resolve the current PR HEAD SHA.
+1. Resolve the current PR HEAD SHA. The same preflight step also fetches
+   `origin/main` once for the round and enumerates the diff — the
+   `git diff --name-status origin/main...HEAD` changed-file list and the
+   `git diff --stat` diffstat — and carries both into the round.
 2. Run three lenses in parallel on that HEAD, each over the full
-   `origin/main...HEAD` diff:
+   `origin/main...HEAD` diff. Each lens receives the preflight's changed-file
+   list and diffstat and reads only the files it needs from that list rather than
+   re-deriving the diff; each lens forms its own review judgment.
    - **Bugbot lens** — drive Cursor Bugbot to a verdict on HEAD (trigger and
      poll its CI check run when needed) and return its findings, or mark itself
      down when Bugbot is opted out or unreachable.
@@ -89,9 +94,24 @@ tracks CONVERGE passes only and is never the cap.
 
 **Convergence check**:
 
-- Run `check_convergence.py`. A full pass marks the PR ready (`draft=false`) and
-  ends the run. A failure returns to CONVERGE so the next round addresses the
-  failing gate.
+- One agent runs `check_convergence.py` and, on a full pass, marks the PR ready
+  (`draft=false`) in the same turn, ending the run. A failure returns to CONVERGE
+  so the next round addresses the failing gate; the repair path re-runs this same
+  check, and only a passing check marks the PR ready.
+
+## Model tiers
+
+Each spawned agent runs on the model and effort its role needs, so the run spends
+the strongest model only where judgment is dense:
+
+- **opus / medium** — the review lenses (Bugbot, code-review, bug-audit, reuse)
+  and the code-editing steps that fix findings (fix-edit, conflict-edit,
+  repair-edit, standards-edit).
+- **sonnet / medium** — the verify steps, the commit steps, and the recovery
+  edits that clear a commit-gate or verdict rejection.
+- **haiku / low** — the mechanical steps: the preflight git-and-availability
+  probe, the Copilot gate, the CLEAN-audit post, and the convergence check that
+  marks the PR ready.
 
 ## Full-diff rule
 

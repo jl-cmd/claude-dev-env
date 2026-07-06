@@ -250,35 +250,35 @@ test('the COPILOT phase recomputes copilotDown from each gate outcome via resolv
   );
 });
 
-test('markReady receives copilotDown so it can opt the unflagged hook out of the Copilot gate', () => {
+test('the merged FINALIZE check receives copilotDown so its mark-ready step can opt the unflagged hook out of the Copilot gate', () => {
   const finalizeStart = convergeSource.indexOf("if (phase === 'FINALIZE') {");
   assert.notEqual(finalizeStart, -1, 'expected a FINALIZE phase block');
-  const markReadyCall = convergeSource.indexOf("'mark-ready'", finalizeStart);
-  assert.notEqual(markReadyCall, -1, 'expected the FINALIZE phase to route mark-ready through the general-utility agent');
-  const callSlice = convergeSource.slice(markReadyCall - 20, markReadyCall + 60);
+  const checkCall = convergeSource.indexOf('runConvergenceCheck(', finalizeStart);
+  assert.notEqual(checkCall, -1, 'expected the FINALIZE phase to route the merged convergence check');
+  const callSlice = convergeSource.slice(checkCall, checkCall + 60);
   assert.match(
     callSlice,
     /copilotDown/,
-    'expected mark-ready context to include copilotDown so the agent can opt the unflagged hook out of the Copilot gate',
+    'expected the merged check context to include copilotDown so its mark-ready step can opt the unflagged hook out of the Copilot gate',
   );
 });
 
-test('the mark-ready task in runGeneralUtilityTask opts the unflagged convergence hook out of Copilot when copilotDown', () => {
-  const markReadyBody = functionBody('runGeneralUtilityTask');
+test('the merged FINALIZE check opts the unflagged convergence hook out of Copilot when copilotDown before gh pr ready', () => {
+  const checkBody = functionBody('runConvergenceCheck');
   assert.match(
-    markReadyBody,
+    checkBody,
     /context\.copilotDown/,
-    'expected the mark-ready task to branch on copilotDown',
+    'expected the merged check to branch on copilotDown',
   );
   assert.match(
-    markReadyBody,
+    checkBody,
     /CLAUDE_REVIEWS_DISABLED/,
-    'expected the mark-ready prompt to set CLAUDE_REVIEWS_DISABLED so the unflagged hook re-derives the Copilot bypass',
+    'expected the merged check prompt to set CLAUDE_REVIEWS_DISABLED so the unflagged hook re-derives the Copilot bypass',
   );
   assert.match(
-    markReadyBody,
+    checkBody,
     /copilot/,
-    'expected the mark-ready opt-out to name the copilot token',
+    'expected the merged check opt-out to name the copilot token',
   );
 });
 
