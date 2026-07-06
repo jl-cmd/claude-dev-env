@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.87.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.86.1...claude-dev-env-v1.87.0) (2026-07-06)
+
+
+### Features
+
+* **autoconverge:** tier agent models and slim lens input to cut token spend ([0e6d029](https://github.com/jl-cmd/claude-code-config/commit/0e6d0296302e2606f6e9d165352999dfe97029f7))
+* **autoconverge:** tier agent models and slim lens input to cut token spend ([b36a16c](https://github.com/jl-cmd/claude-code-config/commit/b36a16c21a2e2603dbe4a4a9646fd88c3d484720))
+
+
+### Bug Fixes
+
+* refresh preflight when reviewer availability SHA is stale and spread haikuLow tier ([dab1dd6](https://github.com/jl-cmd/claude-code-config/commit/dab1dd66ac992f34cbfdaecaff93e7a39db30726))
+
 ## [1.86.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.86.0...claude-dev-env-v1.86.1) (2026-07-06)
 
 
