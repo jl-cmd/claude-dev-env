@@ -32,6 +32,12 @@ const CONFIG = {
 
 const REVIEWER_GATE_SENTINEL = 'CLAUDE_REVIEWER_GATE=autoconverge '
 
+const TIERS = {
+  opusMedium: { model: 'opus', effort: 'medium' },
+  sonnetMedium: { model: 'sonnet', effort: 'medium' },
+  haikuLow: { model: 'haiku', effort: 'low' },
+}
+
 const HEADLESS_SAFETY_PREAMBLE =
   'HEADLESS RUN — you run unattended: no human can answer a permission or confirmation prompt, and any such prompt stalls the entire convergence run. The destructive_command_blocker hook matches dangerous patterns (rm -rf, git reset --hard, dd, mkfs, chmod -R, fork bombs) as raw text anywhere in a Bash command, with no quote-awareness — so a destructive string stalls you even when it is only data you never execute. Therefore:\n' +
   '- Never place a destructive-command literal inside a Bash command — not in echo, not in a heredoc, and not as an argument to python -c, node -e, or awk. To exercise or verify destructive_command_blocker (or any hook) behavior, run the committed test suite, e.g. python -m pytest <test_file>, which passes the command strings as in-language data rather than as a shell command.\n' +
@@ -112,7 +118,11 @@ function runGitTask(task) {
       `STEP 4 — check whether GitHub Copilot and Cursor Bugbot are available to review this PR, before either reviewer's own agent is spawned. Run exactly:\n` +
       `   python "${CONFIG.prLoopScripts}/reviewer_availability.py" --reviewer copilot\n` +
       `   python "${CONFIG.prLoopScripts}/reviewer_availability.py" --reviewer bugbot\n` +
-      `Each run exits 0 when that reviewer is available and non-zero when it is down, and prints one line naming the reason (stdout when available, stderr when down) — capture that line. In the copilot and bugbot fields, report down as whether that reviewer's run exited non-zero and reason as its printed line.`,
+      `Each run exits 0 when that reviewer is available and non-zero when it is down, and prints one line naming the reason (stdout when available, stderr when down) — capture that line. In the copilot and bugbot fields, report down as whether that reviewer's run exited non-zero and reason as its printed line.\n\n` +
+      `STEP 5 — enumerate the diff against the refreshed base so the parallel review lenses reuse this file list rather than each re-deriving the diff. Run exactly:\n` +
+      `   git diff --name-status origin/main...HEAD\n` +
+      `   git diff --stat origin/main...HEAD\n` +
+      `Return the first command's output verbatim in changedFiles and the second's in diffstat (both strings; an empty string when a command produced no output).`,
     { label: 'git-utility', phase: 'Converge', schema: PREFLIGHT_GIT_SCHEMA, agentType: 'Explore', model: 'haiku', effort: 'low' },
   )
 }
@@ -138,7 +148,7 @@ function runFixerTask(task, context) {
         `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
         `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
         `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
-      { label, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder' },
+      { label, phase: 'Converge', schema: FIX_SCHEMA, agentType: 'clean-coder', ...TIERS.sonnetMedium },
     )
   }
   if (task === 'commit-recover') {
@@ -152,7 +162,7 @@ function runFixerTask(task, context) {
         `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
         `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
+      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', ...TIERS.sonnetMedium },
     )
   }
   const objection = context.objection || VERIFY_OBJECTION_FALLBACK
@@ -166,7 +176,7 @@ function runFixerTask(task, context) {
       `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
       `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.` +
       PRE_COMMIT_GATE_STEP,
-    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
+    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', ...TIERS.sonnetMedium },
   )
 }
 
@@ -237,7 +247,7 @@ function runCodeEditorTask(task, context) {
         `- When every finding was already addressed so no code change was needed — yet you still resolved each GitHub review thread above: edited=false, resolvedWithoutCommit=true. Only set this when every thread that carries a comment id is resolved; otherwise the round is treated as stalled.\n` +
         `Always include a one-line summary.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
+      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', ...TIERS.opusMedium },
     )
   }
   if (task === 'conflict-edit') {
@@ -248,7 +258,7 @@ function runCodeEditorTask(task, context) {
         `- Rebase the branch onto origin/main and resolve every conflict so the tree is clean and conflict-free: git fetch origin main; git rebase origin/main; resolve each conflict, preserving the intent of both the PR's change and the incoming base change. A rebase creates local commits, which is fine.\n` +
         `- Do NOT push and do NOT force-push — the commit step force-pushes after the verify step binds a verdict. Pushing here would change the surface the verifier binds to.\n\n` +
         `Return rebased=true with a one-line summary when you rebased onto origin/main and resolved the conflicts; rebased=false with a summary when the branch did not actually need a rebase or you could not complete it.`,
-      { label, phase: 'Converge', schema: CONFLICT_EDIT_SCHEMA, agentType: 'clean-coder' },
+      { label, phase: 'Converge', schema: CONFLICT_EDIT_SCHEMA, agentType: 'clean-coder', ...TIERS.opusMedium },
     )
   }
   if (task === 'repair-edit') {
@@ -268,7 +278,7 @@ function runCodeEditorTask(task, context) {
         `- resolvedWithoutCommit=true only when you addressed the gates with neither a code change nor a rebase (bot threads resolved only), so there is nothing for the commit step to push.\n` +
         `Always include a one-line summary.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Finalize', schema: REPAIR_EDIT_SCHEMA, agentType: 'clean-coder' },
+      { label, phase: 'Finalize', schema: REPAIR_EDIT_SCHEMA, agentType: 'clean-coder', ...TIERS.opusMedium },
     )
   }
   if (task === 'repair-commit') {
@@ -284,7 +294,7 @@ function runCodeEditorTask(task, context) {
         `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
         `- When a commit-time hook or gate (for example code_rules_gate, the CODE_RULES commit gate) rejects the commit because the fix needs a code change: keep the no-edit rule, return newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=true, blockerDetail=<the verbatim hook message naming the file and rule>, and a summary. A recovery fixer runs after you to clear it.\n` +
         `- On a transient or non-code failure (auth, network, a non-fast-forward, a lock): newSha=${context.head}, pushed=false, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a summary naming the failure.`,
-      { label, phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder' },
+      { label, phase: 'Finalize', schema: FIX_SCHEMA, agentType: 'clean-coder', ...TIERS.sonnetMedium },
     )
   }
   if (task === 'standards-edit') {
@@ -300,7 +310,7 @@ function runCodeEditorTask(task, context) {
         `3. For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue <url>." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
         `Return the issue URL in issueUrl (empty string when it could not be filed), the hardening checkout path and branch, hardeningEdited, and a one-line summary.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Converge', schema: STANDARDS_EDIT_SCHEMA, agentType: 'clean-coder' },
+      { label, phase: 'Converge', schema: STANDARDS_EDIT_SCHEMA, agentType: 'clean-coder', ...TIERS.opusMedium },
     )
   }
   if (task === 'standards-resolve-threads') {
@@ -314,7 +324,7 @@ function runCodeEditorTask(task, context) {
         `Findings:\n${findingsBlock}\n\n` +
         `For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to ${issueReference}." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
         `Return a one-line summary naming the threads you resolved.`,
-      { label, phase: 'Converge', agentType: 'clean-coder' },
+      { label, phase: 'Converge', agentType: 'clean-coder', ...TIERS.sonnetMedium },
     )
   }
   if (task === 'hardening-commit') {
@@ -325,7 +335,7 @@ function runCodeEditorTask(task, context) {
         `- In ${context.hardeningRepoPath}: make ONE commit of the staged hooks/rules change on branch ${context.hardeningBranch}, push it, then open a DRAFT PR. The PR body references the follow-up issue ${context.issueUrl || '(none)'} and states the PR hardens the environment so the deferred violation classes are blocked at Write/Edit time. Honor the gh-body-file rule: write a BOM-free temp file and pass --body-file.\n` +
         `- Title the PR as a Conventional Commit — a type prefix (feat, fix, chore, docs, refactor, perf, ci, style, test, build, revert), an optional scope in parentheses, then a colon and a short summary, e.g. "feat(hooks): block the deferred violation class". The target repo's CI validates the PR title as a semantic commit and rejects a non-conforming title.\n\n` +
         `Return the full https URL of the DRAFT hardening PR in hardeningPrUrl (empty string when no PR was opened) and a one-line summary.`,
-      { label, phase: 'Converge', schema: HARDENING_COMMIT_SCHEMA, agentType: 'clean-coder' },
+      { label, phase: 'Converge', schema: HARDENING_COMMIT_SCHEMA, agentType: 'clean-coder', ...TIERS.sonnetMedium },
     )
   }
   if (task === 'commit-recover') {
@@ -339,7 +349,7 @@ function runCodeEditorTask(task, context) {
         `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
         `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.` +
         PRE_COMMIT_GATE_STEP,
-      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
+      { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', ...TIERS.sonnetMedium },
     )
   }
   // verify-recover
@@ -354,7 +364,7 @@ function runCodeEditorTask(task, context) {
       `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
       `Return values: edited=true with a one-line summary when you changed code to address the objections; edited=false, resolvedWithoutCommit=false when the objections cannot be cleared with a code change.` +
       PRE_COMMIT_GATE_STEP,
-    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder' },
+    { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', ...TIERS.sonnetMedium },
   )
 }
 
@@ -377,7 +387,7 @@ function runVerifierTask(task, context) {
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
         `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
         `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
-      { label, phase: 'Converge', agentType: 'code-verifier' },
+      { label, phase: 'Converge', agentType: 'code-verifier', ...TIERS.sonnetMedium },
     )
   }
   if (task === 'repair-verify') {
@@ -391,7 +401,7 @@ function runVerifierTask(task, context) {
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
         `2. Verify the working tree against origin/main: any bot-thread code fix is correct test-first per CODE_RULES, and a rebase (if any) left a clean, conflict-free tree. Read the diff (git diff origin/main) and run the relevant tests and named gates.\n` +
         `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
-      { label, phase: 'Finalize', agentType: 'code-verifier' },
+      { label, phase: 'Finalize', agentType: 'code-verifier', ...TIERS.sonnetMedium },
     )
   }
   return convergeAgent(
@@ -410,7 +420,7 @@ function runVerifierTask(task, context) {
       `      {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
       "      ```\n" +
       `      When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`,
-    { label, phase: 'Converge', agentType: 'code-verifier' },
+    { label, phase: 'Converge', agentType: 'code-verifier', ...TIERS.sonnetMedium },
   )
 }
 
@@ -435,11 +445,10 @@ function serializeOneLineJson(valueToSerialize) {
 }
 
 /**
- * Spawn a fresh general-utility general-purpose agent for one of its two
- * administrative tasks: 'post-clean-audit' posts the terminal CLEAN bugteam
- * review, and 'mark-ready' marks the PR ready and confirms it left draft state.
- * The agent edits no code.
- * @param {'post-clean-audit'|'mark-ready'} task the short task name
+ * Spawn a fresh general-utility general-purpose agent for its administrative task:
+ * 'post-clean-audit' posts the terminal CLEAN bugteam review. The agent edits no
+ * code.
+ * @param {'post-clean-audit'} task the short task name
  * @param {object} context task-specific context
  * @returns {Promise<object>} the task result
  */
@@ -480,41 +489,44 @@ function runGeneralUtilityTask(task, context) {
         `python "${CONFIG.prLoopScripts}/post_audit_thread.py" --skill bugteam --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --commit ${context.head} --state CLEAN --findings-json <temp-file>\n` +
         `Run the script with --help first if any flag name differs. This posts the APPROVE review body that check_convergence.py reads for the bugteam gate. Do not edit code, commit, or push.\n\n` +
         `Report whether the review landed. When the script prints a review URL, return {posted:true, reviewUrl:<that URL>, reason:""}. When the script is denied (a permission prompt or auto-mode-classifier block), errors, or prints anything other than a review URL, return {posted:false, reviewUrl:"", reason:<the denial message or error as one line>}. Do not retry a denied post.`,
-      { label, phase: 'Converge', schema: CLEAN_AUDIT_SCHEMA, agentType: 'general-purpose' },
-    )
-  }
-  if (task === 'mark-ready') {
-    const copilotOptOut = context.copilotDown
-      ? `0. Copilot is down this run, so opt the independent mark-ready blocker hook out of the Copilot gate before step 1. Export the token in the same shell session as step 1 so the hook's convergence re-check inherits it:\n   bash: export CLAUDE_REVIEWS_DISABLED="copilot"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "copilot")\n`
-      : ''
-    return convergeAgent(
-      `All convergence gates pass for ${prCoordinates} on HEAD ${context.head}. Mark the PR ready, then confirm it left draft state. Do not edit code.\n\n` +
-        copilotOptOut +
-        `1. Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
-        `2. Re-query the draft state: gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .draft\n` +
-        `Return {ready:true} only when step 2 prints false (the PR is no longer a draft). If step 1 errors or step 2 still prints true, return {ready:false}.`,
-      { label, phase: 'Finalize', schema: READY_SCHEMA, agentType: 'general-purpose' },
+      { label, phase: 'Converge', schema: CLEAN_AUDIT_SCHEMA, agentType: 'general-purpose', ...TIERS.haikuLow },
     )
   }
   throw new Error(`runGeneralUtilityTask: unknown task ${task}`)
 }
 
 /**
- * Spawn a fresh convergence-check Explore agent for the convergence check.
- * @param {object} context carries bugbotDown and copilotDown
- * @returns {Promise<object>} CONVERGENCE_SCHEMA result
+ * Spawn a fresh convergence-check general-utility agent that runs the convergence
+ * gate and, when it passes, marks the PR ready in the same turn — one agent doing
+ * check_convergence.py and (on exit 0) gh pr ready rather than a separate
+ * check-then-mark pair. A failing check returns its FAIL lines with ready:false so
+ * the FINALIZE loop routes to the repair path, which loops back and re-runs this
+ * same combined check; only the passing path ever attempts gh pr ready. The agent
+ * edits no code, so it runs on the cheapest model at low effort.
+ * @param {object} context carries head, bugbotDown, and copilotDown
+ * @returns {Promise<object>} FINALIZE_SCHEMA result
  */
 function runConvergenceCheck(context) {
-  const label = 'check-convergence'
+  const label = 'finalize-check'
   const bugbotDownFlag = context.bugbotDown ? ' --bugbot-down' : ''
   const copilotDownFlag = context.copilotDown ? ' --copilot-down' : ''
+  const copilotOptOut = context.copilotDown
+    ? `   Copilot is down this run, so before gh pr ready export the token in this same shell session so the independent mark-ready blocker hook's convergence re-check inherits it:\n      bash: export CLAUDE_REVIEWS_DISABLED="copilot"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "copilot")\n`
+    : ''
   return convergeAgent(
-    `Run the convergence gate for ${prCoordinates} and report the result. Do not edit code.\n\n` +
-      `Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}\n\n` +
-      `Exit 0 -> every gate passed: return {pass:true, failures:[]}.\n` +
-      `Exit 1 -> return {pass:false, failures:[<each printed FAIL line verbatim>]}.\n` +
-      `Exit 2 -> retry once; if it still errors, return {pass:false, failures:["check_convergence gh error"]}.`,
-    { label, phase: 'Finalize', schema: CONVERGENCE_SCHEMA, agentType: 'Explore' },
+    `Run the convergence gate for ${prCoordinates} on HEAD ${context.head} and, only when every gate passes, mark the PR ready. Do not edit code.\n\n` +
+      `1. Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}\n` +
+      `   Exit 0 -> every gate passed: set pass:true, failures:[].\n` +
+      `   Exit 1 -> set pass:false and failures to each printed FAIL line verbatim.\n` +
+      `   Exit 2 -> retry once; if it still errors, set pass:false, failures:["check_convergence gh error"].\n\n` +
+      `2. Only when step 1 set pass:true, mark the PR ready and confirm it left draft state:\n` +
+      copilotOptOut +
+      `   Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
+      `   Re-query the draft state: gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .draft\n` +
+      `   Set ready:true only when the re-query prints false (the PR is no longer a draft); set ready:false when gh pr ready errors or the re-query still prints true.\n` +
+      `   When step 1 set pass:false, do NOT run gh pr ready — set ready:false.\n\n` +
+      `Return strictly the schema {pass, failures, ready}.`,
+    { label, phase: 'Finalize', schema: FINALIZE_SCHEMA, agentType: 'general-purpose', ...TIERS.haikuLow },
   )
 }
 
@@ -599,10 +611,12 @@ const PREFLIGHT_GIT_SCHEMA = {
       description: 'true only when GitHub reports the PR branch conflicts with its base (mergeable:false or mergeable_state:dirty); false when it merges cleanly or mergeability could not be computed',
     },
     fetched: { type: 'boolean', description: 'true when git fetch origin main completed successfully' },
+    changedFiles: { type: 'string', description: 'git diff --name-status origin/main...HEAD output — the changed-file list the review lenses reuse instead of re-deriving the diff' },
+    diffstat: { type: 'string', description: 'git diff --stat origin/main...HEAD output' },
     copilot: REVIEWER_AVAILABILITY_SCHEMA.properties.copilot,
     bugbot: REVIEWER_AVAILABILITY_SCHEMA.properties.bugbot,
   },
-  required: ['sha', 'conflicting', 'fetched', 'copilot', 'bugbot'],
+  required: ['sha', 'conflicting', 'fetched', 'changedFiles', 'diffstat', 'copilot', 'bugbot'],
 }
 
 const FIX_SCHEMA = {
@@ -703,23 +717,15 @@ function buildVerdictFenceSteps(prOwner, prRepo, prNumber) {
   )
 }
 
-const CONVERGENCE_SCHEMA = {
+const FINALIZE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
     pass: { type: 'boolean', description: 'true only when check_convergence.py exits 0' },
     failures: { type: 'array', items: { type: 'string' }, description: 'FAIL lines from check_convergence.py when pass is false' },
+    ready: { type: 'boolean', description: 'true only when the convergence check passed and gh pr ready confirmed the PR left draft state (isDraft false); false on any failing check or a mark-ready that did not clear draft' },
   },
-  required: ['pass', 'failures'],
-}
-
-const READY_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    ready: { type: 'boolean', description: 'true only when isDraft is confirmed false after gh pr ready' },
-  },
-  required: ['ready'],
+  required: ['pass', 'failures', 'ready'],
 }
 
 const CLEAN_AUDIT_SCHEMA = {
@@ -1281,7 +1287,7 @@ function isMergeConflicting(mergeState) {
  * agent (null result) or a ready:false report means `gh pr ready` did not land
  * (auth or token drift, a transient gh failure), so the PR is still a draft and
  * the run must surface a blocker rather than claim success.
- * @param {object|null|undefined} readyResult the READY_SCHEMA result, or null on agent failure
+ * @param {object|null|undefined} readyResult the FINALIZE_SCHEMA result carrying the ready field, or null on agent failure
  * @returns {{converged: boolean, blocker: string|null}} convergence decision
  */
 function classifyReadyOutcome(readyResult) {
@@ -1406,15 +1412,49 @@ activeRepoPath = typeof input.repoPath === 'string' && input.repoPath ? input.re
 const prCoordinates = `owner=${input.owner} repo=${input.repo} PR #${input.prNumber} (https://github.com/${input.owner}/${input.repo}/pull/${input.prNumber})`
 
 /**
+ * Render the changed-file context a review lens reuses instead of re-deriving the
+ * origin/main...HEAD diff itself. The preflight-git task already enumerated the
+ * diff once for the round, so a lens reads the file list and diffstat below and
+ * opens only the files it needs; its review judgment stays its own. A preflight
+ * result missing the file list — a dead preflight agent, or a round that resolved
+ * HEAD before the enumeration ran — falls back to instructing the lens to
+ * enumerate the diff itself.
+ *
+ * ::
+ *
+ *   renderLensDiffContext({changedFiles: 'M\ta.py', diffstat: ' a.py | 2 +-'})
+ *   -> a block quoting the file list and diffstat
+ *   renderLensDiffContext(null) -> the enumerate-it-yourself fallback
+ *
+ * @param {{changedFiles?: string, diffstat?: string}|null|undefined} preflightResult the preflight-git result carrying changedFiles and diffstat
+ * @returns {string} the diff-context block to inject into a lens prompt
+ */
+function renderLensDiffContext(preflightResult) {
+  const changedFiles = typeof preflightResult?.changedFiles === 'string' ? preflightResult.changedFiles.trim() : ''
+  const diffstat = typeof preflightResult?.diffstat === 'string' ? preflightResult.diffstat.trim() : ''
+  if (changedFiles.length === 0) {
+    return `The workflow already fetched origin/main this round, so do NOT run git fetch; run git diff --name-only origin/main...HEAD to enumerate the changed files, then read the complete diff of each.\n\n`
+  }
+  const diffstatBlock = diffstat.length > 0 ? `Diffstat (git diff --stat origin/main...HEAD):\n${diffstat}\n\n` : ''
+  return (
+    `The workflow already enumerated the origin/main...HEAD diff this round; use the changed-file list and diffstat below rather than re-deriving the diff, and read only the files you need. Your review judgment stays independent.\n\n` +
+    `Changed files (git diff --name-status origin/main...HEAD):\n${changedFiles}\n\n` +
+    diffstatBlock
+  )
+}
+
+/**
  * Bugbot lens: ensure Cursor Bugbot has rendered a verdict on the given HEAD,
  * triggering and polling its CI check run when needed, and return its findings.
  * @param {string} head PR HEAD SHA to evaluate
+ * @param {object|null|undefined} preflightResult the preflight-git result carrying the changed-file list and diffstat for this round
  * @returns {Promise<object>} LENS_SCHEMA result
  */
-function runBugbotLens(head) {
+function runBugbotLens(head, preflightResult) {
   return convergeAgent(
     `You are the Cursor Bugbot lens for ${prCoordinates}, HEAD ${head}. Cursor Bugbot participates this run.\n\n` +
       `Goal: return Bugbot's verdict on HEAD ${head}. Do not edit code, commit, or push. You may post the literal trigger comment described below.\n\n` +
+      renderLensDiffContext(preflightResult) +
       `Procedure (use the existing scripts; each step below shows the exact flags that script accepts):\n` +
       `1. Opt-out: python "${CONFIG.prLoopScripts}/reviews_disabled.py" --reviewer bugbot. Exit 0 means disabled -> return {sha, clean:true, down:true, findings:[]}.\n` +
       `2. Silent pass: python "${CONFIG.sharedScripts}/check_bugbot_ci.py" --owner ${input.owner} --repo ${input.repo} --sha ${head} --check-clean. Exit 0 means the CI check completed clean with no review -> return clean with no findings.\n` +
@@ -1427,7 +1467,7 @@ function runBugbotLens(head) {
       `4. No review yet on HEAD: check_bugbot_ci.py --check-active. If active (exit 0), poll: repeat check_bugbot_ci.py --check-clean / --check-active every 60 seconds (wait each 60-second interval inside this turn with the Monitor tool, per the WAITS AND POLLS rule above) for up to 25 iterations, then re-fetch the review. If not active (exit 1), post the literal comment "bugbot run" (no @mention, no other text) via ${REVIEWER_GATE_SENTINEL}python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --body "bugbot run", wait 8 seconds inside this turn with the Monitor tool (per the WAITS AND POLLS rule above), then poll as above.\n` +
       `5. If after the full poll budget Bugbot has neither a check run nor a review on HEAD -> return {sha:${'`'}${head}${'`'}, clean:true, down:true, findings:[]} (treat as down).\n\n` +
       `Scope is the whole PR; you are only reading Bugbot's own output here. For each finding set category: 'code-standard' when it is a pure CODE_RULES/style violation (naming, comments, type hints, magic values, structure) with no behavioral impact; 'bug' otherwise. Return strictly the schema.`,
-    { label: 'lens:bugbot', phase: 'Converge', schema: LENS_SCHEMA },
+    { label: 'lens:bugbot', phase: 'Converge', schema: LENS_SCHEMA, ...TIERS.opusMedium },
   )
 }
 
@@ -1435,15 +1475,17 @@ function runBugbotLens(head) {
  * Code-review lens: a full-diff /code-review-style pass that reports findings
  * without applying any fix.
  * @param {string} head PR HEAD SHA to evaluate
+ * @param {object|null|undefined} preflightResult the preflight-git result carrying the changed-file list and diffstat for this round
  * @returns {Promise<object>} LENS_SCHEMA result
  */
-function runCodeReviewLens(head) {
+function runCodeReviewLens(head, preflightResult) {
   return convergeAgent(
     `You are the code-review lens for ${prCoordinates}, HEAD ${head}.\n\n` +
-      `Review the FULL origin/main...HEAD diff — every file the PR touches. Do NOT delta-scope to recent commits or to a single file. The workflow already fetched origin/main this round, so do NOT run git fetch; run git diff --name-only origin/main...HEAD to enumerate the changed files, then review the complete diff of each.\n\n` +
+      `Review the FULL origin/main...HEAD diff — every file the PR touches. Do NOT delta-scope to recent commits or to a single file.\n\n` +
+      renderLensDiffContext(preflightResult) +
       `Apply correctness-focused review: real bugs, broken logic, incorrect error handling, data-loss or security risks, contract mismatches, and reuse/simplification problems. Report only defensible findings with concrete file:line evidence.\n\n` +
       `Do NOT edit, commit, or push — reporting only. Return strictly the schema: clean=true with empty findings when the diff is sound, otherwise one entry per finding (severity P0/P1/P2; category 'code-standard' for pure CODE_RULES/style violations with no behavioral impact, 'bug' otherwise; replyToCommentId=null since these are not yet GitHub threads). Set sha=${'`'}${head}${'`'}, down=false.`,
-    { label: 'lens:code-review', phase: 'Converge', schema: LENS_SCHEMA, agentType: 'code-quality-agent' },
+    { label: 'lens:code-review', phase: 'Converge', schema: LENS_SCHEMA, agentType: 'code-quality-agent', ...TIERS.opusMedium },
   )
 }
 
@@ -1451,15 +1493,17 @@ function runCodeReviewLens(head) {
  * Bug-audit lens: the bugteam-class second-opinion audit over the full diff,
  * applying the shared A–P audit rubric. Reports findings without fixing.
  * @param {string} head PR HEAD SHA to evaluate
+ * @param {object|null|undefined} preflightResult the preflight-git result carrying the changed-file list and diffstat for this round
  * @returns {Promise<object>} LENS_SCHEMA result
  */
-function runAuditLens(head) {
+function runAuditLens(head, preflightResult) {
   return convergeAgent(
     `You are the second-opinion bug-audit lens for ${prCoordinates}, HEAD ${head}.\n\n` +
-      `Read the audit rubric at ${CONFIG.bugteamRubric} and apply its categories (A through P) against the FULL origin/main...HEAD diff — every file the PR touches, never a delta cut. The workflow already fetched origin/main this round, so do NOT run git fetch; run git diff --name-only origin/main...HEAD first to enumerate scope.\n\n` +
+      `Read the audit rubric at ${CONFIG.bugteamRubric} and apply its categories (A through P) against the FULL origin/main...HEAD diff — every file the PR touches, never a delta cut.\n\n` +
+      renderLensDiffContext(preflightResult) +
       `This is a clean-room audit: assume nothing from other lenses. Report only findings backed by concrete file:line evidence. Do NOT edit, commit, or push.\n\n` +
       `Return strictly the schema: clean=true with empty findings when the diff passes every category, otherwise one entry per finding (severity P0/P1/P2; category 'code-standard' for pure CODE_RULES/style violations with no behavioral impact, 'bug' otherwise; replyToCommentId=null). Set sha=${'`'}${head}${'`'}, down=false.`,
-    { label: 'lens:bug-audit', phase: 'Converge', schema: LENS_SCHEMA, agentType: 'code-quality-agent' },
+    { label: 'lens:bug-audit', phase: 'Converge', schema: LENS_SCHEMA, agentType: 'code-quality-agent', ...TIERS.opusMedium },
   )
 }
 
@@ -1471,18 +1515,21 @@ function runAuditLens(head) {
  * reuse pass routes the qualifying findings through applyFixes so they are
  * implemented in one commit before the convergence rounds begin.
  * @param {string} head PR HEAD SHA to evaluate
+ * @param {object|null|undefined} preflightResult the preflight-git result carrying the changed-file list and diffstat for this round
  * @returns {Promise<object>} LENS_SCHEMA result carrying the qualifying reuse findings
  */
-function runReuseAuditPass(head) {
+function runReuseAuditPass(head, preflightResult) {
   return convergeAgent(
     `You are the REUSE lens for ${prCoordinates}, HEAD ${head}. This pass runs once before convergence to find where the PR re-implements behavior the codebase already provides.\n\n` +
-      `Review the FULL origin/main...HEAD diff — every file the PR touches. Do NOT delta-scope to recent commits or a single file. The workflow already fetched origin/main, so do NOT run git fetch; run git diff --name-only origin/main...HEAD to enumerate the changed files, then read the complete diff of each. For every new function, helper, constant, type, or block of logic the PR introduces, search the repository (Serena symbol search, grep, and the project's config/ and shared/ modules) for an existing equivalent that already provides the same behavior.\n\n` +
+      `Review the FULL origin/main...HEAD diff — every file the PR touches. Do NOT delta-scope to recent commits or a single file.\n\n` +
+      renderLensDiffContext(preflightResult) +
+      `For every new function, helper, constant, type, or block of logic the PR introduces, search the repository (Serena symbol search, grep, and the project's config/ and shared/ modules) for an existing equivalent that already provides the same behavior.\n\n` +
       `Report a reuse finding ONLY when ALL THREE criteria hold — when any one is in doubt, omit the finding:\n` +
       `  A. CERTAIN: an existing symbol or module unquestionably covers the new code's behavior, and you can cite it at file:line.\n` +
       `  B. BEHAVIORALLY IDENTICAL: replacing the new code with the existing one changes no observable behavior — same inputs, outputs, side effects, and error handling.\n` +
       `  C. AUTONOMOUSLY IMPLEMENTABLE: the replacement is a mechanical edit (import and call the existing symbol, delete the duplicate) that needs no product decision, no API the existing code lacks, and no human judgment.\n\n` +
       `Do NOT edit, commit, or push — report only; a separate fix step applies what you return. Return strictly the schema: clean=true with empty findings when no reuse case clears all three criteria, otherwise one entry per qualifying reuse improvement. For each: file and line of the duplicate in the PR; severity P2; category 'code-standard'; title naming the existing symbol to reuse; detail giving the existing symbol's file:line and the exact mechanical replacement; replyToCommentId=null. Set sha=${'`'}${head}${'`'}, down=false.`,
-    { label: 'lens:reuse', phase: 'Reuse', schema: LENS_SCHEMA, agentType: 'code-quality-agent' },
+    { label: 'lens:reuse', phase: 'Reuse', schema: LENS_SCHEMA, agentType: 'code-quality-agent', ...TIERS.opusMedium },
   )
 }
 
@@ -1629,7 +1676,7 @@ function runCopilotGate(head) {
       `   - Copilot findings on HEAD -> return them (each with its inline comment id in replyToCommentId; category 'code-standard' for pure CODE_RULES/style violations with no behavioral impact, 'bug' otherwise), clean:false, down:false.\n` +
       `   - No review after ${CONFIG.copilotMaxPolls} attempts -> Copilot is down for this run (unreachable, or silently out of quota with no notice): return {sha:${'`'}${head}${'`'}, clean:false, down:true, findings:[]}.\n\n` +
       `Return strictly the schema.`,
-    { label: 'copilot-gate', phase: 'Copilot gate', schema: COPILOT_SCHEMA },
+    { label: 'copilot-gate', phase: 'Copilot gate', schema: COPILOT_SCHEMA, ...TIERS.haikuLow },
   )
 }
 
@@ -2017,7 +2064,7 @@ if (isResolvedHeadUsable(preflight?.sha)) {
 
 log('Reuse pass: scanning the full diff for certain, behaviorally identical, autonomously implementable reuse improvements before convergence')
 if (isResolvedHeadUsable(head)) {
-  const reuse = await runReuseAuditPass(head)
+  const reuse = await runReuseAuditPass(head, preflight)
   const reuseFindings = reuse?.findings || []
   if (reuseFindings.length > 0) {
     log(`Reuse pass: ${reuseFindings.length} qualifying reuse improvement(s) — applying before convergence`)
@@ -2055,9 +2102,9 @@ while (iterations < CONFIG.maxIterations) {
     const isBugbotDownPreSpawn = resolveReviewerDown(reviewerAvailability?.bugbot, input.bugbotDisabled || false)
     log(`Round ${rounds}: parallel Bugbot + code-review + bug-audit on ${head?.slice(0, 7)}`)
     const lenses = await parallel([
-      () => (isBugbotDownPreSpawn ? Promise.resolve({ sha: head, clean: true, down: true, notSpawned: true, findings: [] }) : runBugbotLens(head)),
-      () => runCodeReviewLens(head),
-      () => runAuditLens(head),
+      () => (isBugbotDownPreSpawn ? Promise.resolve({ sha: head, clean: true, down: true, notSpawned: true, findings: [] }) : runBugbotLens(head, reviewerAvailability)),
+      () => runCodeReviewLens(head, reviewerAvailability),
+      () => runAuditLens(head, reviewerAvailability),
     ])
     bugbotDown = lenses[0] == null ? true : resolveReviewerDown(lenses[0], input.bugbotDisabled || false)
     const roundOutcome = resolveRoundOutcome(lenses)
@@ -2193,15 +2240,14 @@ while (iterations < CONFIG.maxIterations) {
   }
 
   if (phase === 'FINALIZE') {
-    const convergence = await runConvergenceCheck({ bugbotDown, copilotDown })
-    const convergenceOutcome = classifyConvergenceOutcome(convergence)
+    const finalizeResult = await runConvergenceCheck({ head, bugbotDown, copilotDown })
+    const convergenceOutcome = classifyConvergenceOutcome(finalizeResult)
     if (convergenceOutcome.kind === 'retry') {
       log('Convergence check agent died or returned no FAIL lines — re-running the check on the same HEAD')
       continue
     }
     if (convergenceOutcome.kind === 'ready') {
-      const readyResult = await runGeneralUtilityTask('mark-ready', { head, copilotDown })
-      const readyOutcome = classifyReadyOutcome(readyResult)
+      const readyOutcome = classifyReadyOutcome(finalizeResult)
       if (readyOutcome.converged) {
         return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, reuseNote, deferredPrs }
       }

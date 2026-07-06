@@ -324,7 +324,10 @@ out of a Bash command string entirely and independent of which auto-allow path
 matches.
 
 - **Converge:** `parallel([Bugbot lens, code-review lens, bug-audit lens])` on
-  the current HEAD, full `origin/main...HEAD` diff. Dedup findings; one
+  the current HEAD, full `origin/main...HEAD` diff. The preflight step fetches
+  `origin/main` once for the round and enumerates the diff (changed-file list plus
+  diffstat); each lens receives that list and reads only the files it needs rather
+  than re-deriving the diff, forming its own review judgment. Dedup findings; one
   `clean-coder` applies the round's fixes per the `pr-fix-protocol` skill
   (`../pr-fix-protocol/SKILL.md`) — fix, reply, resolve — landing every fix in
   one commit per round, which the workflow journal records; re-verify next
@@ -344,8 +347,12 @@ matches.
   out-of-usage notice (the requester hit their quota) on the HEAD, or surfaces no
   review at all after the configured cap — the gate logs a notice and the run marks the PR
   ready with the Copilot gate bypassed. `copilotNote` records the bypass.
-- **Convergence check:** `check_convergence.py` is the authoritative gate; on a
-  full pass the workflow marks `draft=false`.
+- **Convergence check:** `check_convergence.py` is the authoritative gate; one
+  agent runs it and, on a full pass, marks `draft=false` in the same turn. Each
+  spawned agent runs on the model tier its role needs — opus/medium for the review
+  lenses and the code-editing fix steps, sonnet/medium for the verify, commit, and
+  recovery steps, haiku/low for the mechanical probes (preflight, Copilot gate,
+  CLEAN-audit post, convergence check).
 
 ## Multiple PRs
 
