@@ -522,6 +522,34 @@ test('parseDeferredPr rejects a deep-linked pull path so a non-canonical URL par
   assert.equal(parseDeferredPr('https://github.com/owner/repo/pull/7/files'), null);
 });
 
+test('a whitespace-only filed issue URL does not latch the follow-up as filed, so the filing stays eligible to retry', async () => {
+  const recordedCalls = [];
+  const whitespaceIssueEdit = {
+    issueUrl: '   ',
+    hardeningEdited: false,
+    hardeningRepoPath: '',
+    hardeningBranch: '',
+  };
+  const runtime = loadStandardsFollowUpRuntime(recordedCalls, whitespaceIssueEdit);
+
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'converge-round', { copilotDisabled: false, bugbotDisabled: false });
+
+  assert.equal(
+    runtime.guards().hasStandardsFollowUpFiled,
+    false,
+    'expected a whitespace-only issue URL to leave the follow-up unfiled so a later round retries the filing',
+  );
+  assert.equal(runtime.guards().standardsFollowUpIssueUrl, '', 'expected no issue URL latched for an unfiled follow-up');
+
+  const secondRoundEditCalls = recordedCalls.filter((call) => call.task === 'standards-edit').length;
+  await runtime.openStandardsFollowUpOnce('sha1', [{ file: 'a.py', line: 1 }], 'copilot', { copilotDisabled: false, bugbotDisabled: false });
+  const afterSecondRoundEditCalls = recordedCalls.filter((call) => call.task === 'standards-edit').length;
+  assert.ok(
+    afterSecondRoundEditCalls > secondRoundEditCalls,
+    'expected the second round to re-run the standards-edit filing rather than skip it as already filed',
+  );
+});
+
 test('an injection-shaped filed issue URL is canonicalized at the source before it can reach any downstream agent context', async () => {
   const recordedCalls = [];
   const injectionIssueUrl =

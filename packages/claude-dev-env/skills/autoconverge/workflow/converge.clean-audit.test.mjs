@@ -214,7 +214,7 @@ test('every no-lens-reviewed round registers one shared counter and every lens-r
     convergeSource.indexOf('if (roundOutcome.allLensesDead) {'),
     convergeSource.indexOf('const findings = roundOutcome.findings'),
   );
-  assert.match(deadBranch, /registerNoLensRound\(noLensRoundCausesFor\(nameLensResults\(lenses\)\)\)/);
+  assert.match(deadBranch, /registerNoLensRound\(\['a review lens agent died'\]\)/, 'expected the all-lenses-dead branch to pass its constant cause directly, not a derived one');
   assert.match(deadBranch, /blocker = noLensRoundsBlocker\(\)/);
   const notCleanBranch = convergeSource.slice(
     convergeSource.indexOf('if (!roundOutcome.roundClean) {'),
@@ -388,6 +388,26 @@ test('describeStandardsDeferral tolerates a filed issue URL with a trailing slas
     assert.match(disposition, new RegExp(canonicalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.doesNotMatch(disposition, /\?foo=bar|issuecomment/, 'expected the agent-controlled suffix to be stripped');
   }
+});
+
+test('standardsIssueReference names the URL when present and states no verifiable link when empty, never a dangling reference', () => {
+  const reference = new Function(`${functionBody('standardsIssueReference')}\n return standardsIssueReference;`)();
+  assert.equal(reference('https://github.com/o/r/issues/7'), 'follow-up issue https://github.com/o/r/issues/7');
+  const noLinkReference = reference('');
+  assert.match(noLinkReference, /verifiable link is unavailable/);
+  const emptyReplyBody = `Code-standard-only finding — deferred to ${noLinkReference}.`;
+  assert.doesNotMatch(emptyReplyBody, /follow-up issue \./, 'expected no dangling "follow-up issue ." with no reference');
+  assert.doesNotMatch(emptyReplyBody, /issue\s+\./, 'expected no empty issue reference in the posted reply body');
+});
+
+test('the standards-resolve-threads prompt words its issue reference through standardsIssueReference, never a bare context.issueUrl', () => {
+  const body = functionBody('runCodeEditorTask');
+  const resolveBlock = body.slice(
+    body.indexOf("task === 'standards-resolve-threads'"),
+    body.indexOf("task === 'hardening-commit'"),
+  );
+  assert.match(resolveBlock, /standardsIssueReference\(context\.issueUrl\)/);
+  assert.doesNotMatch(resolveBlock, /follow-up issue \$\{context\.issueUrl\}/, 'expected no bare context.issueUrl interpolation without the no-link fallback');
 });
 
 test('an injection-shaped issue URL suffix validates but only the canonical URL reaches the composed post and report', () => {
