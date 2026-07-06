@@ -96,7 +96,7 @@ test('the Bugbot lens is not spawned pre-spawn when the shared gate reports Bugb
   const lensArray = convergeSource.slice(parallelLensIndex, lensArrayEnd);
   assert.match(
     lensArray,
-    /isBugbotDownPreSpawn \? Promise\.resolve\(\{ sha: head, clean: true, down: true, findings: \[\] \}\) : runBugbotLens\(head\)/,
+    /isBugbotDownPreSpawn \? Promise\.resolve\(\{ sha: head, clean: true, down: true, notSpawned: true, findings: \[\] \}\) : runBugbotLens\(head\)/,
     'expected the Bugbot lens slot to substitute a resolved down placeholder instead of spawning runBugbotLens when isBugbotDownPreSpawn is true',
   );
 });
