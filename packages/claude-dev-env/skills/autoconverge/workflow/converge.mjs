@@ -80,11 +80,15 @@ const convergeAgent = (prompt, options) =>
 
 /**
  * Spawn a fresh git-utility Explore agent for a specific task. The one task,
- * 'preflight-git', bundles the three mechanical git reads into a single agent
- * startup: it prints the PR HEAD SHA, fetches origin main so the review lenses
- * diff against an up-to-date base, and polls GitHub mergeability, returning
- * {sha, conflicting, fetched} in one structured result. The agent never edits
- * code, so it runs on the cheapest model at low effort.
+ * 'preflight-git', bundles the mechanical git reads and the reviewer-availability
+ * probe into a single agent startup: it prints the PR HEAD SHA, fetches origin
+ * main so the review lenses diff against an up-to-date base, polls GitHub
+ * mergeability, and runs the shared reviewer_availability.py CLI for Copilot and
+ * Bugbot, returning {sha, conflicting, fetched, copilot, bugbot} in one
+ * structured result. The reviewer availability rides this same preflight so the
+ * round's first git-utility spawn carries the pre-spawn reviewer decision without
+ * a separate agent. The agent never edits code, so it runs on the cheapest model
+ * at low effort.
  * @param {string} task the short task name ('preflight-git')
  * @returns {Promise<object>} the structured PREFLIGHT_GIT_SCHEMA output
  */
@@ -93,7 +97,7 @@ function runGitTask(task) {
     throw new Error(`runGitTask has no handler for task ${task}`)
   }
   return convergeAgent(
-    `Run three read-only git preflight steps for ${prCoordinates}. Do not edit, commit, push, rebase, or modify any files — read only.\n\n` +
+    `Run four read-only preflight steps for ${prCoordinates}. Do not edit, commit, push, rebase, or modify any files — read only.\n\n` +
       `STEP 1 — resolve HEAD. Print the current PR HEAD SHA. Run exactly:\n` +
       `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .head.sha\n` +
       `Return the full 40-character SHA in the sha field.\n\n` +
@@ -103,7 +107,11 @@ function runGitTask(task) {
       `STEP 3 — report whether the PR has merge conflicts with its base branch. GitHub computes mergeability asynchronously, so .mergeable is null right after a push until it finishes. Poll until it resolves: run\n` +
       `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq '{mergeable: .mergeable, state: .mergeable_state}'\n` +
       `up to 5 times, 5 seconds apart (wait each 5-second interval inside this turn with the Monitor tool, per the WAITS AND POLLS rule above), stopping as soon as mergeable is true or false.\n` +
-      `Return conflicting:true when mergeable is false or state is "dirty" (the branch conflicts with the base). Return conflicting:false when mergeable is true, or when mergeable stays null after the full poll budget — mergeability is unknown, so let the bug checks proceed rather than rebase on a guess.`,
+      `Return conflicting:true when mergeable is false or state is "dirty" (the branch conflicts with the base). Return conflicting:false when mergeable is true, or when mergeable stays null after the full poll budget — mergeability is unknown, so let the bug checks proceed rather than rebase on a guess.\n\n` +
+      `STEP 4 — check whether GitHub Copilot and Cursor Bugbot are available to review this PR, before either reviewer's own agent is spawned. Run exactly:\n` +
+      `   python "${CONFIG.prLoopScripts}/reviewer_availability.py" --reviewer copilot\n` +
+      `   python "${CONFIG.prLoopScripts}/reviewer_availability.py" --reviewer bugbot\n` +
+      `Each run exits 0 when that reviewer is available and non-zero when it is down, and prints one line naming the reason (stdout when available, stderr when down) — capture that line. In the copilot and bugbot fields, report down as whether that reviewer's run exited non-zero and reason as its printed line.`,
     { label: 'git-utility', phase: 'Converge', schema: PREFLIGHT_GIT_SCHEMA, agentType: 'Explore', model: 'haiku', effort: 'low' },
   )
 }
@@ -460,27 +468,6 @@ function runConvergenceCheck(context) {
   )
 }
 
-/**
- * Spawn a single reviewer-availability Explore agent once per CONVERGE round,
- * before either reviewer's own agent is spawned. It runs the shared
- * reviewer_availability.py CLI for both Copilot and Bugbot and reports each
- * one's down state and reason, so resolveReviewerDown can decide whether to
- * spawn the Bugbot lens and the Copilot gate without depending on an
- * externally pre-set input flag.
- * @returns {Promise<object>} REVIEWER_AVAILABILITY_SCHEMA result
- */
-function runReviewerAvailabilityCheck() {
-  return convergeAgent(
-    `Check whether GitHub Copilot and Cursor Bugbot are available to review ${prCoordinates} this round, before either reviewer's agent is spawned. Do not edit code, commit, or push.\n\n` +
-      `Run exactly:\n` +
-      `python "${CONFIG.prLoopScripts}/reviewer_availability.py" --reviewer copilot\n` +
-      `python "${CONFIG.prLoopScripts}/reviewer_availability.py" --reviewer bugbot\n` +
-      `Each run exits 0 when that reviewer is available and non-zero when it is down, and prints one line naming the reason (stdout when available, stderr when down) — capture that line.\n\n` +
-      `Return strictly the schema: copilot.down and bugbot.down report whether that reviewer's run exited non-zero, and copilot.reason / bugbot.reason carry its printed line.`,
-    { label: 'reviewer-availability', phase: 'Converge', schema: REVIEWER_AVAILABILITY_SCHEMA, agentType: 'Explore' },
-  )
-}
-
 const PRE_COMMIT_GATE_STEP =
   `\n\nFINAL STEP — pre-commit gate check (do NOT commit): before your turn ends, prove your working-tree changes CAN be committed by dry-running the CODE_RULES commit gate that gates git commit (precommit_code_rules_gate). From inside the checkout that holds your changes, resolve its root with git rev-parse --show-toplevel, stage your changes with git add -A, then run exactly:\n` +
   `   python "${CONFIG.prLoopScripts}/code_rules_gate.py" --repo-root "<that root>" --staged\n` +
@@ -562,8 +549,10 @@ const PREFLIGHT_GIT_SCHEMA = {
       description: 'true only when GitHub reports the PR branch conflicts with its base (mergeable:false or mergeable_state:dirty); false when it merges cleanly or mergeability could not be computed',
     },
     fetched: { type: 'boolean', description: 'true when git fetch origin main completed successfully' },
+    copilot: REVIEWER_AVAILABILITY_SCHEMA.properties.copilot,
+    bugbot: REVIEWER_AVAILABILITY_SCHEMA.properties.bugbot,
   },
-  required: ['sha', 'conflicting', 'fetched'],
+  required: ['sha', 'conflicting', 'fetched', 'copilot', 'bugbot'],
 }
 
 const FIX_SCHEMA = {
@@ -792,8 +781,9 @@ function isMoreSevere(candidateSeverity, currentSeverity) {
  * run's own disable flag always wins, so a deferred PR seeded with
  * copilotDisabled or bugbotDisabled skips the reviewer without a probe.
  * Otherwise the decision comes from the carried entry's down field, read from
- * the round-start availability probe for a pre-spawn decision. A missing entry
- * (a dead probe agent, or no result yet) reads as available rather than down,
+ * the preflight-git probe carried across rounds for a pre-spawn decision. A
+ * missing entry (a dead preflight-git agent, or no result yet) reads as
+ * available rather than down,
  * so an outage in the probe itself never wedges convergence — the reviewer's
  * own runtime detection still runs and can report down on its own. This
  * fail-open null handling suits a pre-spawn decision; a caller computing a
@@ -1647,6 +1637,7 @@ let reviewerAvailability = null
 const deferredPrs = []
 
 const preflight = await runGitTask('preflight-git')
+reviewerAvailability = preflight
 if (isResolvedHeadUsable(preflight?.sha)) {
   head = await resolveMergeConflicts(preflight.sha, isMergeConflicting(preflight))
 }
@@ -1677,13 +1668,13 @@ while (iterations < CONFIG.maxIterations) {
     rounds += 1
     if (!isResolvedHeadUsable(head)) {
       const refreshedPreflight = await runGitTask('preflight-git')
+      reviewerAvailability = refreshedPreflight
       head = isResolvedHeadUsable(refreshedPreflight?.sha) ? refreshedPreflight.sha : null
     }
     if (!isResolvedHeadUsable(head)) {
       log(`Round ${rounds}: preflight-git agent returned no SHA — retrying without spawning lenses`)
       continue
     }
-    reviewerAvailability = await runReviewerAvailabilityCheck()
     const isBugbotDownPreSpawn = resolveReviewerDown(reviewerAvailability?.bugbot, input.bugbotDisabled || false)
     log(`Round ${rounds}: parallel Bugbot + code-review + bug-audit on ${head?.slice(0, 7)}`)
     const lenses = await parallel([
