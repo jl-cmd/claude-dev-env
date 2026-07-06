@@ -36,8 +36,22 @@ skill still runs teardown (revoke permissions, final report).
   denied, errors, or its agent dies). The convergence gate's bugteam-review
   check can never pass without that CLEAN review, so the run stops rather than
   re-converge to the iteration cap. The `blocker` names the post failure and the
-  HEAD. Unblock by allowing `post_audit_thread.py` with a Bash permission rule,
-  or post the CLEAN review by hand, then re-run.
+  HEAD. Unblock a permission denial by allowing `post_audit_thread.py` with a
+  Bash permission rule. Unblock any other failure by creating a fresh temporary
+  file whose exact content is an empty JSON array (`[]`) and re-running the run's
+  own `post_audit_thread.py --skill bugteam --state CLEAN` command for the
+  lens-verified HEAD with that file as `--findings-json`; then re-run the
+  workflow. A CLEAN post carries an empty findings array by construction, so this
+  re-issues the run's own command for the outcome the lenses already established
+  for that HEAD.
+- **No review lens reviewed HEAD** — a round can end with no lens having reviewed
+  the HEAD three ways: the preflight resolves no SHA, every lens agent dies, or
+  every lens is down or disabled. A single such round retries on the next round.
+  Three consecutive no-lens-reviewed rounds (any mix of the three causes) reach
+  `CONFIG.maxConsecutiveNoLensRounds` and stop the run with a `blocker` that names
+  the consecutive count and only the causes that actually occurred, rather than
+  looping to the iteration cap. Any round in which at least one lens reviews the
+  HEAD resets the consecutive count.
 
 ## Not a blocker (the run continues)
 
@@ -58,10 +72,12 @@ skill still runs teardown (revoke permissions, final report).
   Bugbot lens (null result) counts as down for that HEAD, so the convergence
   check runs with `--bugbot-down` rather than demanding a Bugbot verdict the
   dead agent never produced.
-- **Every lens agent dies** — when all three parallel lenses return null in the
-  same round, the round is a failure, not a clean: the workflow posts no CLEAN
-  bugteam artifact and does not advance to the Copilot gate. It re-resolves HEAD
-  and retries on the next round, still bounded by the iteration cap.
+- **Every lens agent dies (a single round)** — when all three parallel lenses
+  return null in the same round, the round is a failure, not a clean: the
+  workflow posts no CLEAN bugteam artifact and does not advance to the Copilot
+  gate. It re-resolves HEAD and retries on the next round. This is a
+  no-lens-reviewed round, so consecutive occurrences are bounded by the
+  no-review-lens cap in the blockers above, not just the iteration cap.
 
 ## User stop
 

@@ -98,7 +98,7 @@ test('the Bugbot lens is not spawned pre-spawn when the shared gate reports Bugb
   const lensArray = convergeSource.slice(parallelLensIndex, lensArrayEnd);
   assert.match(
     lensArray,
-    /isBugbotDownPreSpawn \? Promise\.resolve\(\{ sha: head, clean: true, down: true, findings: \[\] \}\) : runBugbotLens\(head\)/,
+    /isBugbotDownPreSpawn \? Promise\.resolve\(\{ sha: head, clean: true, down: true, notSpawned: true, findings: \[\] \}\) : runBugbotLens\(head\)/,
     'expected the Bugbot lens slot to substitute a resolved down placeholder instead of spawning runBugbotLens when isBugbotDownPreSpawn is true',
   );
 });
@@ -277,8 +277,8 @@ test('each fix push, each lens-retry, and the convergence repair invalidate the 
   const invalidationMatches = convergeSource.match(/^ +head = null$/gm) || [];
   assert.equal(
     invalidationMatches.length,
-    5,
-    'expected head invalidation after the CONVERGE fix push, the COPILOT fix push, the convergence repair, the all-lenses-dead retry, and the not-clean-no-findings retry',
+    6,
+    'expected head invalidation after the CONVERGE fix push, the COPILOT fix push, the convergence repair, the all-lenses-dead retry, the not-clean-no-findings retry, and the all-clean no-lens-ran clean-audit refusal',
   );
 });
 
@@ -558,17 +558,23 @@ test('the workflow return objects carry the accumulated deferredPrs list', () =>
   );
 });
 
-test('the standards-deferral note names the hardening PR only when one opened', () => {
-  const noteBody = lensPromptBody('standardsDeferralNote');
+test('the standards-deferral surfaces disclose the hardening-PR state unconditionally, present or absent', () => {
+  const clauseBody = functionSource('standardsHardeningClause');
   assert.match(
-    noteBody,
+    clauseBody,
     /environment-hardening PR/,
     'expected the opened-PR branch to name the hardening PR',
   );
   assert.match(
-    noteBody,
+    clauseBody,
     /no environment-hardening PR/i,
-    'expected the skip branch to state no hardening PR was opened',
+    'expected the absent-PR branch to disclose that no hardening PR was opened',
+  );
+  const coreBody = functionSource('standardsDeferralCore');
+  assert.match(
+    coreBody,
+    /remain untracked/,
+    'expected an untracked core that makes no hardening-PR claim',
   );
 });
 
