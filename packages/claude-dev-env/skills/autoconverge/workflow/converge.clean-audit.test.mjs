@@ -31,6 +31,7 @@ const provenanceModule = new Function(
   `const LENS_NAMES = ${moduleConstantSource('LENS_NAMES')};\n` +
     `const GITHUB_ISSUE_URL_PATTERN = ${moduleConstantSource('GITHUB_ISSUE_URL_PATTERN')};\n` +
     `${functionBody('nameLensResults')}\n` +
+    `${functionBody('canonicalizeIssueUrl')}\n` +
     `${functionBody('classifyStandardsDeferral')}\n` +
     `${functionBody('standardsDeferralCore')}\n` +
     `${functionBody('standardsHardeningClause')}\n` +
@@ -38,7 +39,7 @@ const provenanceModule = new Function(
     `${functionBody('standardsDeferralNote')}\n` +
     `${functionBody('describeNotRunLens')}\n` +
     `${functionBody('serializeOneLineJson')}\n` +
-    'return { nameLensResults, classifyStandardsDeferral, standardsDeferralCore, standardsHardeningClause, describeStandardsDeferral, standardsDeferralNote, describeNotRunLens, serializeOneLineJson };',
+    'return { nameLensResults, canonicalizeIssueUrl, classifyStandardsDeferral, standardsDeferralCore, standardsHardeningClause, describeStandardsDeferral, standardsDeferralNote, describeNotRunLens, serializeOneLineJson };',
 )();
 
 const {
@@ -91,6 +92,8 @@ test('cleanAuditBlocker names the reason, the HEAD, and grounded recovery for bo
   assert.match(message, /permission rule/);
   assert.match(message, /gh auth|network|script error/);
   assert.match(message, /re-run/);
+  assert.match(message, /empty JSON array/, 'expected a self-contained recovery that creates a fresh empty findings file');
+  assert.doesNotMatch(message, /the run's own empty findings file/, 'expected no reference to a findings file that may never have been created');
   assert.doesNotMatch(message, /by hand/i);
   assert.doesNotMatch(message, /compose/i);
 });
@@ -194,7 +197,7 @@ test('the all-clean zero-ran retry is inlined, registers a no-lens round, and th
     convergeSource.indexOf("if (phase === 'COPILOT') {"),
   );
   assert.match(allCleanBranch, /if \(auditResult\?\.noLensRan\)/);
-  assert.match(allCleanBranch, /registerNoLensRound\('every review lens was down or disabled'\)/);
+  assert.match(allCleanBranch, /registerNoLensRound\(noLensRoundCausesFor\(allCleanNamedLenses\)\)/);
   assert.match(allCleanBranch, /blocker = noLensRoundsBlocker\(\)/);
   assert.match(allCleanBranch, /no audit lens ran on/);
   assert.match(allCleanBranch, /resetNoLensRounds\(\)/);
@@ -211,7 +214,7 @@ test('every no-lens-reviewed round registers one shared counter and every lens-r
     convergeSource.indexOf('if (roundOutcome.allLensesDead) {'),
     convergeSource.indexOf('const findings = roundOutcome.findings'),
   );
-  assert.match(deadBranch, /registerNoLensRound\('every review lens agent died'\)/);
+  assert.match(deadBranch, /registerNoLensRound\(noLensRoundCausesFor\(nameLensResults\(lenses\)\)\)/);
   assert.match(deadBranch, /blocker = noLensRoundsBlocker\(\)/);
   const notCleanBranch = convergeSource.slice(
     convergeSource.indexOf('if (!roundOutcome.roundClean) {'),
@@ -226,11 +229,30 @@ test('noLensRoundsBlocker names only the causes that occurred and the consecutiv
     'noLensRoundCauses',
     `${functionBody('noLensRoundsBlocker')}\n return noLensRoundsBlocker;`,
   );
-  const causes = new Set(['every review lens agent died']);
+  const causes = new Set(['a review lens agent died']);
   const message = blockerModule(2, causes)();
   assert.match(message, /2 consecutive round\(s\)/);
-  assert.match(message, /every review lens agent died/);
+  assert.match(message, /a review lens agent died/);
   assert.doesNotMatch(message, /down or disabled/, 'expected the blocker to omit a cause that never occurred');
+});
+
+test('noLensRoundCausesFor derives the actual causes and a mixed round names both, a pure-down round only down', () => {
+  const causesFor = new Function(`${functionBody('noLensRoundCausesFor')}\n return noLensRoundCausesFor;`)();
+  const mixedRound = nameLensResults([
+    { sha: 'a', clean: true, down: true, notSpawned: true, findings: [] },
+    null,
+    { sha: 'a', clean: true, down: true, findings: [] },
+  ]);
+  const mixedCauses = causesFor(mixedRound);
+  assert.ok(mixedCauses.includes('a review lens agent died'), 'expected the dead code-review agent to contribute the agent-died cause');
+  assert.ok(mixedCauses.includes('a review lens was down or disabled'), 'expected the down/not-spawned lenses to contribute the down cause');
+
+  const pureDownRound = nameLensResults([
+    { sha: 'a', clean: true, down: true, notSpawned: true, findings: [] },
+    { sha: 'a', clean: true, down: true, findings: [] },
+    { sha: 'a', clean: true, down: true, findings: [] },
+  ]);
+  assert.deepEqual(causesFor(pureDownRound), ['a review lens was down or disabled']);
 });
 
 test('runGeneralUtilityTask spawns the posting agent when at least one lens ran', async () => {
@@ -448,6 +470,19 @@ test('classifyStandardsDeferral is the single source both the run report and the
   assert.match(convergeSource, /function standardsDeferralNote[\s\S]*?classifyStandardsDeferral/);
 });
 
+test('standardsDeferralNote classifies once and threads the result, never recomputing or duplicating disposition literals', () => {
+  const noteBody = functionBody('standardsDeferralNote');
+  assert.equal(
+    (noteBody.match(/classifyStandardsDeferral\(/g) || []).length,
+    1,
+    'expected the note to classify exactly once',
+  );
+  assert.match(noteBody, /standardsDeferralCore\(standardsDeferral, classification\)/, 'expected the note to thread its classification into the core clause');
+  assert.match(noteBody, /classification\.wasIssueFiled/, 'expected wasIssueFiled to come from the classification object');
+  assert.doesNotMatch(noteBody, /'issue-filed'|'issue-filed-no-link'/, 'expected no disposition string literals duplicated from the classifier');
+  assert.match(functionBody('standardsDeferralCore'), /classification = classifyStandardsDeferral\(standardsDeferral\)/, 'expected the core clause to accept a precomputed classification, defaulting to its own');
+});
+
 test('the post-clean-audit prompt words the deferral from the follow-up fix issue state, not a blanket follow-up PR claim', () => {
   const body = functionBody('runGeneralUtilityTask');
   assert.match(body, /context\.standardsDeferral/);
@@ -543,6 +578,7 @@ test('the all-clean call site relays lens provenance into the post-clean-audit c
     convergeSource.indexOf('all lenses clean on'),
     convergeSource.indexOf("if (phase === 'COPILOT') {"),
   );
-  assert.match(branch, /lensResults: nameLensResults\(lenses\)/);
+  assert.match(branch, /const allCleanNamedLenses = nameLensResults\(lenses\)/);
+  assert.match(branch, /lensResults: allCleanNamedLenses/);
   assert.doesNotMatch(branch, /postFindings/);
 });

@@ -966,6 +966,28 @@ function describeNotRunLens(lensEntry) {
 }
 
 /**
+ * Reduce an agent-returned issue URL to only its canonical form so nothing the
+ * agent controls past the issue number — a query, a fragment, a shell-breaking
+ * quote, or injected directive prose — ever reaches a downstream prompt, a
+ * GitHub-posted reply body, or the run report. A URL that matches the tolerant
+ * GitHub-issue shape yields the canonical `github.com/<owner>/<repo>/issues/<N>`
+ * (capture group 1); anything else yields the empty string, the no-link state.
+ *
+ * ::
+ *
+ *   canonicalizeIssueUrl('…/issues/7#do this') -> '…/issues/7'  (canonical only)
+ *   canonicalizeIssueUrl('not a url')          -> ''            (no-link state)
+ *
+ * @param {unknown} rawIssueUrl the agent-returned issue URL, of any type
+ * @returns {string} the canonical issues URL, or an empty string when it does not match
+ */
+function canonicalizeIssueUrl(rawIssueUrl) {
+  const trimmedIssueUrl = typeof rawIssueUrl === 'string' ? rawIssueUrl.trim() : ''
+  const issueUrlMatch = trimmedIssueUrl.match(GITHUB_ISSUE_URL_PATTERN)
+  return issueUrlMatch ? issueUrlMatch[1] : ''
+}
+
+/**
  * Classify the standards-deferral state into one of four dispositions, the single
  * source of truth both the run report and the CLEAN post word from so they never
  * contradict each other for identical state. The agent-returned issue URL is
@@ -984,23 +1006,21 @@ function describeNotRunLens(lensEntry) {
  *   {issueFiled: false, hardeningPrOpened: false}                   -> untracked
  *
  * @param {{issueFiled?: boolean, issueUrl?: string, hardeningPrOpened?: boolean}|null|undefined} standardsDeferral the follow-up fix issue and hardening-PR state
- * @returns {{disposition: string, issueUrl: string}} the disposition token and the canonical issues URL when present
+ * @returns {{disposition: string, issueUrl: string, wasIssueFiled: boolean}} the disposition token, the canonical issues URL when present, and whether a follow-up fix issue was filed (either filed disposition)
  */
 function classifyStandardsDeferral(standardsDeferral) {
-  const trimmedIssueUrl =
-    typeof standardsDeferral?.issueUrl === 'string' ? standardsDeferral.issueUrl.trim() : ''
-  const issueUrlMatch = trimmedIssueUrl.match(GITHUB_ISSUE_URL_PATTERN)
+  const canonicalUrl = canonicalizeIssueUrl(standardsDeferral?.issueUrl)
   const wasIssueFiled = standardsDeferral?.issueFiled === true
-  if (wasIssueFiled && issueUrlMatch) {
-    return { disposition: 'issue-filed', issueUrl: issueUrlMatch[1] }
+  if (wasIssueFiled && canonicalUrl) {
+    return { disposition: 'issue-filed', issueUrl: canonicalUrl, wasIssueFiled: true }
   }
   if (wasIssueFiled) {
-    return { disposition: 'issue-filed-no-link', issueUrl: '' }
+    return { disposition: 'issue-filed-no-link', issueUrl: '', wasIssueFiled: true }
   }
   if (standardsDeferral?.hardeningPrOpened === true) {
-    return { disposition: 'hardening-pr', issueUrl: '' }
+    return { disposition: 'hardening-pr', issueUrl: '', wasIssueFiled: false }
   }
-  return { disposition: 'untracked', issueUrl: '' }
+  return { disposition: 'untracked', issueUrl: '', wasIssueFiled: false }
 }
 
 /**
@@ -1021,10 +1041,10 @@ function classifyStandardsDeferral(standardsDeferral) {
  *   -> 'not tracked by a follow-up fix issue — the filing did not land, so these findings remain untracked'
  *
  * @param {{issueFiled?: boolean, issueUrl?: string, hardeningPrOpened?: boolean}|null|undefined} standardsDeferral the follow-up fix issue and hardening-PR state
+ * @param {{disposition: string, issueUrl: string, wasIssueFiled: boolean}} classification the precomputed classification, so a caller that already classified the state (standardsDeferralNote) does not classify it twice; defaults to classifying standardsDeferral here for callers that have not
  * @returns {string} the fix-tracking clause shared by both deferral surfaces
  */
-function standardsDeferralCore(standardsDeferral) {
-  const classification = classifyStandardsDeferral(standardsDeferral)
+function standardsDeferralCore(standardsDeferral, classification = classifyStandardsDeferral(standardsDeferral)) {
   if (classification.disposition === 'issue-filed') {
     return `deferred to a follow-up fix issue (${classification.issueUrl})`
   }
@@ -1571,7 +1591,7 @@ function cleanAuditBlocker(head, auditResult) {
     `clean-audit post blocked: the CLEAN bugteam review could not be posted on HEAD ${head} (${reason}) — ` +
     `the convergence gate's bugteam-review check can never pass without it, so the run stops rather than re-converge to the iteration cap. ` +
     `To unblock: when the reason is a permission denial, allow post_audit_thread.py for this run with a Bash permission rule and re-run. ` +
-    `For any other failure (gh auth expiry, network, a script error), diagnose the printed reason, then re-run the exact post_audit_thread.py --state CLEAN command for HEAD ${head} with the run's own empty findings file — this re-issues the run's own grounded post for this HEAD, not a new review.`
+    `For any other failure (gh auth expiry, network, a script error), diagnose the printed reason, then re-issue the run's own grounded post: create a fresh temporary file whose exact content is an empty JSON array ([]) and re-run post_audit_thread.py --skill bugteam --state CLEAN for this lens-verified HEAD ${head} with that file as --findings-json. A CLEAN post carries an empty findings array by construction, so this re-runs the run's own command for the outcome the lenses already established for this HEAD, not a newly authored review.`
   )
 }
 
@@ -1715,25 +1735,55 @@ function shouldOpenStandardsFollowUp(hasAlreadyFiled) {
 }
 
 /**
- * Register a round in which no review lens reviewed the HEAD — a preflight that
- * resolved no SHA, every lens agent dead, or every lens down/disabled — and report
- * whether the consecutive-no-lens cap is now reached. Each such round records its
- * cause so the stop blocker names only the causes that actually occurred, and any
- * round where a lens did review resets the run of consecutive no-lens rounds
- * (resetNoLensRounds), so the "for N consecutive round(s)" claim holds by
- * construction across interleaved retries.
+ * Derive the human-facing cause clauses for a no-lens round from the round's own
+ * lens statuses, so the stop blocker names only what actually happened: a dead
+ * (null-result) lens contributes the agent-died cause, and a down or never-spawned
+ * lens contributes the down/disabled cause. A round mixing a dead agent and a
+ * down/disabled lens yields both clauses.
  *
  * ::
  *
- *   registerNoLensRound('every review lens agent died')  -> false  (1st of a run)
- *   registerNoLensRound('every review lens was down or disabled') -> false (2nd)
- *   registerNoLensRound('every review lens agent died')  -> true   (3rd hits the cap)
+ *   noLensRoundCausesFor([{status: 'dead'}, {status: 'down'}, {status: 'reported-down'}])
+ *   -> ['a review lens agent died', 'a review lens was down or disabled']
  *
- * @param {string} cause the human-facing cause clause for this no-lens round
+ * @param {Array<{status: string}>} namedLenses the round's per-lens provenance entries
+ * @returns {Array<string>} the distinct cause clauses that occurred this round
+ */
+function noLensRoundCausesFor(namedLenses) {
+  const roundCauses = new Set()
+  for (const eachLens of namedLenses) {
+    if (eachLens.status === 'dead') {
+      roundCauses.add('a review lens agent died')
+    } else if (eachLens.status === 'down' || eachLens.status === 'reported-down') {
+      roundCauses.add('a review lens was down or disabled')
+    }
+  }
+  return Array.from(roundCauses)
+}
+
+/**
+ * Register a round in which no review lens reviewed the HEAD — a preflight that
+ * resolved no SHA, every lens agent dead, or every lens down/disabled — and report
+ * whether the consecutive-no-lens cap is now reached. Each such round records the
+ * cause(s) that actually occurred so the stop blocker names only those, and any
+ * round where a lens did review resets the run of consecutive no-lens rounds
+ * (resetNoLensRounds), so the "for N consecutive round(s)" claim holds by
+ * construction across interleaved retries. A round counts once no matter how many
+ * causes it carries.
+ *
+ * ::
+ *
+ *   registerNoLensRound(['a review lens agent died'])                                  -> false (1st of a run)
+ *   registerNoLensRound(['a review lens agent died', 'a review lens was down or disabled']) -> false (2nd, both causes)
+ *   registerNoLensRound(['a review lens was down or disabled'])                         -> true  (3rd hits the cap)
+ *
+ * @param {Array<string>} roundCauses the cause clause(s) for this one no-lens round
  * @returns {boolean} true when the run of consecutive no-lens rounds has reached CONFIG.maxConsecutiveNoLensRounds
  */
-function registerNoLensRound(cause) {
-  noLensRoundCauses.add(cause)
+function registerNoLensRound(roundCauses) {
+  for (const eachCause of roundCauses) {
+    noLensRoundCauses.add(eachCause)
+  }
   consecutiveNoLensRounds += 1
   return consecutiveNoLensRounds >= CONFIG.maxConsecutiveNoLensRounds
 }
@@ -1771,15 +1821,13 @@ function noLensRoundsBlocker() {
  */
 function standardsDeferralNote(findingsCount, standardsDeferral) {
   const classification = classifyStandardsDeferral(standardsDeferral)
-  const wasIssueFiled =
-    classification.disposition === 'issue-filed' || classification.disposition === 'issue-filed-no-link'
   const wasHardeningPrOpened = standardsDeferral?.hardeningPrOpened === true
-  const verifyNudge = wasIssueFiled
+  const verifyNudge = classification.wasIssueFiled
     ? wasHardeningPrOpened
       ? ' — verify both land'
       : ' — verify it lands'
     : ''
-  return `${findingsCount} code-standard finding(s) ${standardsDeferralCore(standardsDeferral)}${verifyNudge}; ${standardsHardeningClause(standardsDeferral)}`
+  return `${findingsCount} code-standard finding(s) ${standardsDeferralCore(standardsDeferral, classification)}${verifyNudge}; ${standardsHardeningClause(standardsDeferral)}`
 }
 
 /**
@@ -1833,12 +1881,12 @@ function parseDeferredPr(prUrl) {
  * @param {string} sourceLabel short description of where the findings came from
  * @param {boolean} hasHardeningPrAlreadyOpened true when an earlier round already opened the environment-hardening PR for this run, so the verify and commit steps are skipped and no second PR opens while the edit retries the issue filing
  * @param {{copilotDisabled: boolean, bugbotDisabled: boolean}} deferredReviewerFlags this run's latest resolved reviewer-down state, carried onto the deferred PR so a later generation converging it seeds the known-unavailable state instead of re-learning it
- * @returns {Promise<object>} `{ followUpIssueFiled, issueUrl, hardeningPrOpened, deferredPr }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, issueUrl that filed URL (empty string when the filing failed) so a later reuse-path round can reference it when resolving its own threads, hardeningPrOpened true when the hardening-commit step returned a non-empty hardeningPrUrl (a PR opened) so the run-once latch holds even when that URL does not parse into coordinates, and false when the commit step returned an empty URL (no PR opened) so a later round retries the open, and deferredPr the opened PR's `{owner, repo, prNumber, copilotDisabled, bugbotDisabled}` (null when no PR was opened or the committed URL does not parse) so the self-closing orchestrator can converge it in turn
+ * @returns {Promise<object>} `{ followUpIssueFiled, issueUrl, hardeningPrOpened, deferredPr }` — followUpIssueFiled true when the standards-edit step returned a non-empty issue URL, issueUrl the CANONICAL filed URL (empty string when the filing failed or the returned URL is not a canonical GitHub issues URL) so every downstream consumer — the reuse-path thread-resolution prompt, its post_fix_reply.py --body, and the hardening-commit prompt — receives only canonical-or-empty and never agent-controlled trailing text, hardeningPrOpened true when the hardening-commit step returned a non-empty hardeningPrUrl (a PR opened) so the run-once latch holds even when that URL does not parse into coordinates, and false when the commit step returned an empty URL (no PR opened) so a later round retries the open, and deferredPr the opened PR's `{owner, repo, prNumber, copilotDisabled, bugbotDisabled}` (null when no PR was opened or the committed URL does not parse) so the self-closing orchestrator can converge it in turn
  */
 async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningPrAlreadyOpened, deferredReviewerFlags) {
   const editResult = await runCodeEditorTask('standards-edit', { head, findings, sourceLabel })
   const followUpIssueFiled = typeof editResult?.issueUrl === 'string' && editResult.issueUrl.length > 0
-  const followUpIssueUrl = followUpIssueFiled ? editResult.issueUrl : ''
+  const followUpIssueUrl = canonicalizeIssueUrl(editResult?.issueUrl)
   if (hasHardeningPrAlreadyOpened === true) {
     return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false, deferredPr: null }
   }
@@ -1852,7 +1900,7 @@ async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningP
     return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false, deferredPr: null }
   }
   const commitResult = await runCodeEditorTask('hardening-commit', {
-    head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch, issueUrl: editResult.issueUrl,
+    head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch, issueUrl: followUpIssueUrl,
   })
   const parsedDeferredPr = parseDeferredPr(commitResult?.hardeningPrUrl)
   const deferredPr =
@@ -1983,7 +2031,7 @@ while (iterations < CONFIG.maxIterations) {
       head = isResolvedHeadUsable(refreshedPreflight?.sha) ? refreshedPreflight.sha : null
     }
     if (!isResolvedHeadUsable(head)) {
-      if (registerNoLensRound('no PR HEAD could be resolved (the preflight-git agent returned no SHA)')) {
+      if (registerNoLensRound(['no PR HEAD could be resolved (the preflight-git agent returned no SHA)'])) {
         blocker = noLensRoundsBlocker()
         break
       }
@@ -2001,7 +2049,7 @@ while (iterations < CONFIG.maxIterations) {
     bugbotDown = lenses[0] == null ? true : resolveReviewerDown(lenses[0], input.bugbotDisabled || false)
     const roundOutcome = resolveRoundOutcome(lenses)
     if (roundOutcome.allLensesDead) {
-      if (registerNoLensRound('every review lens agent died')) {
+      if (registerNoLensRound(noLensRoundCausesFor(nameLensResults(lenses)))) {
         blocker = noLensRoundsBlocker()
         break
       }
@@ -2053,13 +2101,14 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     log(`Round ${rounds}: all lenses clean on ${head?.slice(0, 7)} — posting clean audit artifact`)
+    const allCleanNamedLenses = nameLensResults(lenses)
     const auditResult = await runGeneralUtilityTask('post-clean-audit', {
       head,
-      lensResults: nameLensResults(lenses),
+      lensResults: allCleanNamedLenses,
       deferredStandardsFindings: [],
     })
     if (auditResult?.noLensRan) {
-      if (registerNoLensRound('every review lens was down or disabled')) {
+      if (registerNoLensRound(noLensRoundCausesFor(allCleanNamedLenses))) {
         blocker = noLensRoundsBlocker()
         break
       }
