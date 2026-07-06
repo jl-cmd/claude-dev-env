@@ -416,9 +416,24 @@ function runVerifierTask(task, context) {
 function runGeneralUtilityTask(task, context) {
   const label = `general-utility:${task}`
   if (task === 'post-clean-audit') {
+    const lensResultsJson = JSON.stringify(context.lensResults, null, 2)
+    const postFindingsJson = JSON.stringify(context.postFindings)
+    const lensCount = context.lensResults.length
+    const lensRoster = context.lensResults.map((eachEntry) => eachEntry.lens).join(', ')
+    const deferredStandardsNote =
+      context.deferredStandardsFindings.length > 0
+        ? `Those lenses additionally raised ${context.deferredStandardsFindings.length} code-standard-only finding(s) this round, which the workflow deferred to a follow-up PR and excluded from this CLEAN post: ` +
+          context.deferredStandardsFindings
+            .map((eachFinding) => `"${eachFinding.title}" (${eachFinding.file})`)
+            .join('; ') +
+          '.\n\n'
+        : ''
     return convergeAgent(
-      `Post a CLEAN bugteam audit review on ${prCoordinates} at commit ${context.head}. All review lenses are clean on this HEAD.\n\n` +
-        `Write an empty findings file: create a temp file containing exactly [] (an empty JSON array). Then run:\n` +
+      `Transcribe a completed audit result to the PR thread for ${prCoordinates} at commit ${context.head}. You are relaying results that ${lensCount} audit lenses already produced on this HEAD earlier in this run — you are not judging the code yourself or clearing a merge gate.\n\n` +
+        `The ${lensCount} audit lenses that ran on HEAD ${context.head} this round were: ${lensRoster}. Their verbatim results, exactly as each lens returned them, are:\n${lensResultsJson}\n\n` +
+        deferredStandardsNote +
+        `The findings file for the CLEAN post is the aggregated blocking findings across those lens results, serialized here from the run's own state:\n${postFindingsJson}\n` +
+        `Create a temp file whose exact content is that JSON, then run:\n` +
         `python "${CONFIG.prLoopScripts}/post_audit_thread.py" --skill bugteam --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --commit ${context.head} --state CLEAN --findings-json <temp-file>\n` +
         `Run the script with --help first if any flag name differs. This posts the APPROVE review body that check_convergence.py reads for the bugteam gate. Do not edit code, commit, or push.\n\n` +
         `Report whether the review landed. When the script prints a review URL, return {posted:true, reviewUrl:<that URL>, reason:""}. When the script is denied (a permission prompt or auto-mode-classifier block), errors, or prints anything other than a review URL, return {posted:false, reviewUrl:"", reason:<the denial message or error as one line>}. Do not retry a denied post.`,
@@ -696,6 +711,7 @@ const CLEAN_AUDIT_SCHEMA = {
 
 const SEVERITY_RANK = { P0: 0, P1: 1, P2: 2 }
 const SHA_COMPARISON_PREFIX_LENGTH = 7
+const LENS_NAMES = ['Cursor Bugbot', 'code-review', 'bug-audit']
 
 /**
  * Dedup findings across lenses by file + line + lowercased title, reconciling
@@ -841,6 +857,30 @@ function resolveRoundOutcome(lensResults) {
   const everyLensClean = liveLenses.every(lensCallsHeadClean)
   const roundClean = !allLensesDead && everyLensClean && findings.length === 0
   return { allLensesDead, findings, roundClean }
+}
+
+/**
+ * Pair each positional lens result with the name of the lens that produced it,
+ * so the post-clean-audit prompt can name which audit lenses ran and quote their
+ * verbatim results as provenance. A null report marks a lens whose agent died
+ * this round.
+ *
+ * ::
+ *
+ *   nameLensResults([bugbotReport, null, auditReport])
+ *   -> [{lens: 'Cursor Bugbot', report: bugbotReport},
+ *       {lens: 'code-review', report: null},
+ *       {lens: 'bug-audit', report: auditReport}]
+ *
+ * The order matches the parallel([bugbot, code-review, bug-audit]) spawn order.
+ * @param {Array<object|null>} lensResults the positional lens results for the round
+ * @returns {Array<object>} one {lens, report} entry per lens position
+ */
+function nameLensResults(lensResults) {
+  return LENS_NAMES.map((eachLensName, eachIndex) => ({
+    lens: eachLensName,
+    report: lensResults[eachIndex] ?? null,
+  }))
 }
 
 /**
@@ -1704,7 +1744,12 @@ while (iterations < CONFIG.maxIterations) {
       const standardsOutcome = await openStandardsFollowUpOnce(head, findings, 'converge-round', { copilotDisabled: copilotDown, bugbotDisabled: bugbotDown })
       standardsNote = standardsDeferralNote(findings.length, standardsOutcome.hardeningPrOpened)
       if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
-      const auditResult = await runGeneralUtilityTask('post-clean-audit', { head })
+      const auditResult = await runGeneralUtilityTask('post-clean-audit', {
+        head,
+        lensResults: nameLensResults(lenses),
+        postFindings: [],
+        deferredStandardsFindings: findings,
+      })
       if (!auditResult?.posted) {
         blocker = cleanAuditBlocker(head, auditResult)
         break
@@ -1732,7 +1777,12 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     log(`Round ${rounds}: all lenses clean on ${head?.slice(0, 7)} — posting clean audit artifact`)
-    const auditResult = await runGeneralUtilityTask('post-clean-audit', { head })
+    const auditResult = await runGeneralUtilityTask('post-clean-audit', {
+      head,
+      lensResults: nameLensResults(lenses),
+      postFindings: findings,
+      deferredStandardsFindings: [],
+    })
     if (!auditResult?.posted) {
       blocker = cleanAuditBlocker(head, auditResult)
       break
