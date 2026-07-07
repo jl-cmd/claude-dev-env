@@ -197,6 +197,8 @@ Slash commands for common workflows.
 | Skill | Purpose |
 |-------|---------|
 | `pr-review-responder` | Systematic PR review response: fetch comments, checklist, fix, reply, commit |
+| `advisor` | Runs a task in executor-advisor mode: the session drives end to end and consults the tool-less `code-advisor` agent (plan/correction/stop) at hard decisions, capping consultations and reusing warm agents before spawning new ones |
+| `advisor-refresh` | Sub-skill fired by the `/advisor` loop about every 20 minutes to re-assert the executor-advisor discipline mid-run |
 | `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |
 | `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |

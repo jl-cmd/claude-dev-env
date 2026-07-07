@@ -26,6 +26,8 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `implement` — structured implementation from an existing plan packet
 - `bdd-protocol` — BDD depth: Example Mapping, scenario quality, outside-in layout
 - `verified-build` — build + test loop that gates on a verifier verdict
+- `advisor` — runs a task in executor-advisor mode: the session drives end to end and consults the tool-less `code-advisor` agent at hard decisions
+- `advisor-refresh` — sub-skill fired by the `/advisor` loop to re-assert the executor-advisor discipline mid-run
 
 **PR review and convergence**
 - `autoconverge` — autonomous single-run workflow that drives a PR to ready
