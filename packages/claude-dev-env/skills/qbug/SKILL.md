@@ -326,7 +326,7 @@ comment body via `INLINE_COMMENT_BODY_TEMPLATE`):
 
 ## Step 3: PR description refresh (lead)
 
-Delegate body composition to the `pr-description-writer` agent (the mandatory-pr-description hook requires it). Feed the agent the final PR diff and the original body. Apply via `update_pull_request(pullNumber=<number>, owner=<owner>, repo=<repo>, body=<new_body>)`.
+Compose the body directly against `docs/PR_DESCRIPTION_GUIDE.md` — no agent spawn — from the final PR diff and the original body. Apply via `update_pull_request(pullNumber=<number>, owner=<owner>, repo=<repo>, body=<new_body>)`.
 
 On error exit paths: best-effort; log the failure in the final report and continue.
 

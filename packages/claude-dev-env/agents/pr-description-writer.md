@@ -1,6 +1,6 @@
 ---
 name: pr-description-writer
-description: "MANDATORY agent for PR descriptions and PR comments. Enforced by the `pr_description_enforcer` PreToolUse hook on `gh pr create`, `gh pr edit`, and `gh pr comment`. Authors bodies in one of three Anthropic-derived shapes (Trivial / Standard / Heavy) so PRs match merged-PR style in `anthropics/claude-code`, `anthropics/claude-code-action`, and `anthropics/claude-code-sdk-python`."
+description: "Optional agent for PR descriptions and PR comments. Authors bodies in one of three Anthropic-derived shapes (Trivial / Standard / Heavy) so PRs match merged-PR style in `anthropics/claude-code`, `anthropics/claude-code-action`, and `anthropics/claude-code-sdk-python`, and pass the `pr_description_enforcer` PreToolUse hook's body audit on `gh pr create`, `gh pr edit`, and `gh pr comment`."
 tools: Read,Grep,Glob,Bash
 model: haiku
 ---
