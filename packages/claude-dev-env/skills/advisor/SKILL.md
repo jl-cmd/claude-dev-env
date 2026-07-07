@@ -53,23 +53,7 @@ per task) — the same guard the API's `max_uses` gives a tool.
 - **Consultations past the cap signal a scoping problem.** When five
   consultations do not clear the blocker, the task needs re-scoping or a
   hand-off to the user — not a sixth round of advice.
-- **A `ScheduleWakeup` delay above 300 seconds costs one prompt-cache miss.**
-  1200 seconds (20 minutes) is chosen for that reason: one miss per refresh,
-  a deliberate trade for the discipline the loop enforces.
-- **No lever compacts or clears a subagent's context.** The tool inventory
-  carries no subagent compaction or context-clear tool. Harness-side
-  summarization of a long subagent conversation runs on its own and answers to
-  no caller. So a task switch that wants a clean context calls for a fresh
-  spawn, and "compaction" is not an available move — never tell an agent to
-  compact.
 
-## When this applies
-
-Invoke this skill once at the start of a task you want run in
-executor-advisor mode: `/advisor`. The session then operates as the
-advisor-orchestrator described above for the rest of that task. The
-`/advisor-refresh` sub-skill fires on the loop this skill starts and restates
-the discipline mid-run; a person never invokes `/advisor-refresh` by hand.
 
 ## Process
 
@@ -89,7 +73,7 @@ the discipline mid-run; a person never invokes `/advisor-refresh` by hand.
 3. **Orchestrate the task.** Hold the plan and the user conversation. Spawn or
    resume executor subagents (for example `clean-coder`) to do every code edit
    and every build or test run, and keep driving while they work. Your own
-   tool use stays orchestration and light verification reads.
+   tool use stays orchestration and light verification reads. Keep your task list updated religiously.
 
 4. **Executors consult at a hard decision.** Each executor's spawn prompt tells
    it to stop and message you — with the task, what it tried, and the exact
@@ -139,10 +123,6 @@ the discipline mid-run; a person never invokes `/advisor-refresh` by hand.
   Prefer that path every time an existing agent holds relevant context.
 - **Spawn a fresh agent only when** no existing agent holds relevant context,
   or a genuine task switch needs a clean context.
-- **A task switch is the only "clear."** No tool compacts or clears a
-  subagent's context on demand. So the way to get a clean context for a new
-  task is a fresh spawn; compaction is not a lever you hold — never instruct an
-  agent to compact.
 - **Name the agent to resume.** When you answer with a PLAN and a warm agent
   fits, say which agent to resume and where.
 
