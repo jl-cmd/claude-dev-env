@@ -5,7 +5,7 @@ description: >-
   auto-mode AskUserQuestion escalation when the classifier blocks it),
   worktree preflight and cwd routing, then the ordered close — conditional
   TeamDelete for team callers, worktree teardown, working-tree clean, PR
-  description rewrite via pr-description-writer, the always-run permission
+  description rewrite composed by the lead, the always-run permission
   revoke, and the caller-parameterized final report. Invoked by PR-loop
   orchestrators (bugteam, pr-converge, autoconverge, qbug) at run start and
   run end, including error exits; not for general git cleanup or permission
@@ -48,7 +48,7 @@ Run these in order from the lead session on EVERY exit — converged, cap reache
    ```
    Tolerates already-removed worktrees and missing directories; removal is Windows-safe per `~/.claude/rules/windows-filesystem-safe.md`.
 3. **Clean the working tree.** Return to the session worktree, remove run-scoped scratch files, and leave `git status` clean of run artifacts.
-4. **Rewrite the PR description.** Follow [`reference/teardown-publish-permissions.md` § Publish the final PR description](reference/teardown-publish-permissions.md): capture the cumulative diff and original body, brief the `pr-description-writer` agent, publish via `update_pull_request`, remove the scratch files. On failure, report it and continue — the revoke still runs.
+4. **Rewrite the PR description.** Follow [`reference/teardown-publish-permissions.md` § Publish the final PR description](reference/teardown-publish-permissions.md): capture the cumulative diff and original body, compose the new body directly against `docs/PR_DESCRIPTION_GUIDE.md`, publish via `update_pull_request`, remove the scratch files. On failure, report it and continue — the revoke still runs.
 5. **Revoke project permissions (always):**
    `python "$HOME/.claude/_shared/pr-loop/scripts/revoke_project_claude_permissions.py"`
    Non-negotiable, including on error exits: leaving the grant in place lets future sessions inherit elevated `.claude/**` access without an explicit opt-in. Run revoke even when earlier close steps partially failed; log cleanup errors separately.

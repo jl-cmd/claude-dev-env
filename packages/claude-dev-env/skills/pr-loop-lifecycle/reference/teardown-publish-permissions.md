@@ -35,26 +35,13 @@ When the run exits (any reason), run these steps in order from **this** session 
 
 After teardown and before permission revoke, the lead rewrites the PR body to the PR's **final cumulative state** — what the change delivers, not the loop's process. This is the **only** PR-write the lead performs (audit and fix comments stay with the agents that produced them).
 
-The lead delegates body text to the `pr-description-writer` agent so the global mandatory-pr-description-writer hook accepts the `gh pr edit` that follows. The lead does **not** compose the body inline.
-
-`pr-description-writer` comes from the global git-workflow rule in `claude-code-config`. Invoke with `Agent`:
-
-```
-Agent(
-  subagent_type="pr-description-writer",
-  mode="bypassPermissions",
-  description="Rewrite PR <number> body from cumulative diff",
-  prompt="<brief from steps below>"
-)
-```
-
-If that subagent is missing, fall back to `general-purpose` with the same brief — the hook treats agent-authored bodies the same. If neither exists, log a warning and skip this step.
+The lead composes the body text directly against `docs/PR_DESCRIPTION_GUIDE.md` — no agent spawn — so the body passes the `pr_description_enforcer` hook's style audit on the `gh pr edit` that follows.
 
 **Steps:**
 
 1. Capture cumulative diff: `pull_request_read(method="get_diff", pullNumber=N, owner=O, repo=R)` → write the response text to `.<caller>-final.diff` using the `Write` tool.
 2. Capture original body: `pull_request_read(method="get", pullNumber=N, owner=O, repo=R)` → extract `.body` from the response, write it to `.<caller>-original-body.md` using the `Write` tool.
-3. Agent brief:
+3. Compose the new body from those inputs:
    - **Inputs:** diff path, original body path, head branch, base branch.
    - **Constraint:** describe what the PR delivers from the cumulative diff — behavior, user-visible effect, merge rationale. Process metadata (loops, fix counts, findings) stays in review comments.
    - **Preservation rule:** if the original body has manually curated sections (linked issues, screenshots, test plan, "Risk Assessment", etc.), preserve them verbatim and only rewrite narrative around them.
@@ -63,7 +50,7 @@ If that subagent is missing, fall back to `general-purpose` with the same brief 
 5. Publish the new body: `update_pull_request(pullNumber=N, owner=O, repo=R, body=<contents of .<caller>-final-body.md>)`.
 6. Remove `.<caller>-final.diff`, `.<caller>-original-body.md`, `.<caller>-final-body.md`.
 
-If this step fails (agent error, hook block, network), report in the final report and continue to the revoke. The original PR body remains; commits and comments are unaffected.
+If this step fails (hook block, network), report in the final report and continue to the revoke. The original PR body remains; commits and comments are unaffected.
 
 ## Revoke project permissions (mandatory, always)
 

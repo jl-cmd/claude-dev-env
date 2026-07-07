@@ -178,7 +178,7 @@ def main() -> None:
         pr_guide_reference = f" @{PR_GUIDE_PATH}" if os.path.exists(PR_GUIDE_PATH) else ""
         denial_reason = (
             f"BLOCKED: [PR_DESCRIPTION] {violation_list}. "
-            f"Use the pr-description-writer agent to author the body in Anthropic claude-code style. "
+            f"Rewrite the body yourself in Anthropic claude-code style. "
             f"Guide:{pr_guide_reference}"
         )
         denial_payload = {
