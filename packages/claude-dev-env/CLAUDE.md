@@ -21,6 +21,10 @@ Every Markdown file I write or edit describes the system's **current** state onl
 Full banned-pattern set + enforcement: `~/.claude/rules/no-historical-clutter.md` (hook `state-description-blocker`) and `~/.claude/rules/self-contained-docs.md`.
 
 ## GOTCHAS
+ALWAYS base new worktrees off of UPSTREAM origin main. Assume local is out of date.
+
+ALWAYS start each session with a /loop 15m populate or update the task list based on remaining todos.
+
 When making code changes, make sure you are working in the proper worktree path for the task at hand.
 
 ## Choosing Edit vs Write
