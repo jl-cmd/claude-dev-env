@@ -65,6 +65,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `task_list_loop_starter_constants.py` | The one-line task-list instruction and the full session-start directive text for the task-list loop starter hook |
 | `text_stripping.py` | `strip_code_and_quotes()` — shared helper that removes fenced code blocks, inline code, and blockquotes from prose, imported by the Stop-hook prose blockers |
 | `unused_module_import_constants.py` | Patterns for detecting unused module-level imports |
+| `volatile_path_in_post_blocker_constants.py` | Volatile path markers, affected `gh` post subcommands, MCP body param names, and the corrective message for the volatile-path post blocker |
 | `windows_rmtree_blocker_constants.py` | The unsafe `shutil.rmtree` pattern and the safe replacement pattern |
 | `workflow_substitution_slot_blocker_constants.py` | Per-iteration token patterns for the workflow-slot blocker |
 

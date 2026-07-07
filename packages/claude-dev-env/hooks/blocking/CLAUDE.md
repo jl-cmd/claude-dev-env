@@ -98,6 +98,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `verified_commit_gate.py` | PreToolUse (Bash/PowerShell) | `git commit`/`git push` without a passing verifier verdict |
 | `verified_commit_message_accuracy_blocker.py` | PreToolUse | Commit messages that misstate what the diff has |
 | `verifier_verdict_minter.py` | SubagentStop | Mints a passing verdict file when a `code-verifier` agent finishes cleanly |
+| `volatile_path_in_post_blocker.py` | PreToolUse (Bash/MCP GitHub) | `gh` post commands and GitHub MCP post tools whose body references a volatile path (job scratch dir, worktree, or system temp) that outlives the durable post |
 | `windows_rmtree_blocker.py` | PreToolUse (Write/Edit) | `shutil.rmtree` with `ignore_errors=True` on Windows |
 | `workflow_substitution_slot_blocker.py` | PreToolUse (Write/Edit) | Workflow templates with bare per-iteration tokens missing angle-bracket slots |
 | `write_existing_file_blocker.py` | PreToolUse (Write) | Write to a path where a file already exists |
