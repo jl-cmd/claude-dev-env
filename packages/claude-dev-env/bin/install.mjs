@@ -147,7 +147,6 @@ const INSTALL_GROUPS = {
     core: {
         description: 'Development standards, hooks, agents, commands',
         skills: [
-            'advisor', 'advisor-refresh',
             'anthropic-plan', 'everything-search',
             'pr-review-responder',
             'recall', 'remember', 'task-build', 'verified-build'
