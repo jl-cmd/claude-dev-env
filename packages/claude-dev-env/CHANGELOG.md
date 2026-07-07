@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.88.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.87.0...claude-dev-env-v1.88.0) (2026-07-07)
+
+
+### Features
+
+* **skills:** add advisor and advisor-refresh skills ([81140e5](https://github.com/jl-cmd/claude-code-config/commit/81140e50cdd8a8bbefef987d1c3a8f616d5cde19))
+* **skills:** add advisor and advisor-refresh skills ([805b0d6](https://github.com/jl-cmd/claude-code-config/commit/805b0d66e3402c9fe0ffa81f2ba505db64fcd2eb))
+
+
+### Bug Fixes
+
+* **hooks:** drop the forced pr-description-writer agent spawn ([7fa0af7](https://github.com/jl-cmd/claude-code-config/commit/7fa0af7d1453831356f83e84b09180603763606c))
+* **hooks:** drop the pr-description-writer agent requirement ([00a82d3](https://github.com/jl-cmd/claude-code-config/commit/00a82d355da83f1e526d47e38d157742b09b46b5))
+* **skills:** adapt advisor skill to advisor-lite session model ([8d5a0aa](https://github.com/jl-cmd/claude-code-config/commit/8d5a0aa4555b3333715952f3536e1c7f620c5c2a))
+
 ## [1.87.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.86.1...claude-dev-env-v1.87.0) (2026-07-06)
 
 
