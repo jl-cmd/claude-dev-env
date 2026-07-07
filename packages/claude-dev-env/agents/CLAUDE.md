@@ -16,7 +16,7 @@ Agent definition files installed into `~/.claude/agents/` by `bin/install.mjs`. 
 | `docs-agent.md` | Docs Agent | Documentation authoring and maintenance |
 | `git-commit-crafter.md` | Git Commit Crafter | Stages changes, writes conventional commit messages, creates commits |
 | `plan-packet-validator.md` | Plan Packet Validator | Fresh-context validator for workflow-generated plan packets under `docs/plans/` |
-| `pr-description-writer.md` | PR Description Writer | Authors PR descriptions in Anthropic-style shapes; required by the `pr_description_enforcer` hook |
+| `pr-description-writer.md` | PR Description Writer | Authors PR descriptions in Anthropic-style shapes that pass the `pr_description_enforcer` hook's body audit |
 
 ## Format
 
