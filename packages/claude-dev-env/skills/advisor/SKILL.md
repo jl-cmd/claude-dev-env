@@ -94,7 +94,7 @@ available.
 | Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` |
 | PR descriptions | `pr-description-writer` | `sonnet`, with file-list grounding check |
 | Fan-out searches and checklist verification reads | `Explore` | `haiku`; use `sonnet` when judgment-heavy |
-| Escalated blockers, plan-level design, and advisor signals | `code-advisor` or this session | Fable only |
+| Escalated blockers, plan-level design, and advisor signals | `code-advisor` or this session | Fable preferred; opus if fable is unavailable. |
 
 Routing rules:
 
