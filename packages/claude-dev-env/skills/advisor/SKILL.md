@@ -2,16 +2,16 @@
 name: advisor
 description: >-
   Turns the session into the advisor-orchestrator — the user's sole interface,
-  which spawns and resumes executor subagents (clean-coder and the like) to do
-  all the code editing and every build or test run. When an executor hits a
-  blocker it consults the advisor, which replies with one of three brief
-  signals — a plan, a correction, or a stop. The advisor orchestrates and
-  advises but never edits code or runs tests itself. Caps consultations per
-  task (default 5), reuses warm agents before spawning new ones, and
-  re-asserts the discipline every 20 minutes through the /advisor-refresh
+  which routes execution through workflow-backed agent spawns with the required
+  agent type and model for each work category. Executors do the code editing,
+  verification, script driving, PR descriptions, and searches; the advisor
+  answers blockers with one of three brief signals — a plan, a correction, or
+  a stop. The advisor never edits code or runs tests itself. Caps consultations
+  per task (default 5), reuses warm workflow agents before spawning new ones,
+  and re-asserts the discipline every 20 minutes through the /advisor-refresh
   loop. Adapts Anthropic's advisor strategy to Claude Code. Triggers:
   '/advisor', 'advisor strategy', 'run with an advisor', 'executor-advisor
-  mode'.
+  mode', 'advisor enforcement', 'agent routing'.
 ---
 
 # Advisor Strategy
@@ -47,6 +47,12 @@ per task) — the same guard the API's `max_uses` gives a tool.
   itself, the pairing breaks and the executor's warm context is wasted. Hand
   every code edit and every build or test run to an executor; keep the
   advisor's own tool use to orchestration and light verification reads.
+- **Flat ad hoc spawns bypass routing.** Every execution task goes through a
+  workflow-backed spawn or workflow resume so the required agent type, model,
+  prompt packet, and sidecar metadata stay attached to the work.
+- **Wrong agent or model is an enforcement failure.** If a task category maps
+  to `clean-coder` on `opus`, a `general-purpose` Sonnet spawn is not a cost
+  optimization; it is the wrong executor for the contract.
 - **Resuming an unnamed background agent needs its agentId.** A background
   spawn returns an `agentId` (format `a...-...`); keep it so `SendMessage` can
   reach that agent later. A named agent is reachable by name.
@@ -70,10 +76,40 @@ per task) — the same guard the API's `max_uses` gives a tool.
    enforcement surface: each firing re-asserts the discipline while the run is
    in flight.
 
-3. **Orchestrate the task.** Hold the plan and the user conversation. Spawn or
-   resume executor subagents (for example `clean-coder`) to do every code edit
-   and every build or test run, and keep driving while they work. Your own
-   tool use stays orchestration and light verification reads. Keep your task list updated religiously.
+3. **Orchestrate the task.** Hold the plan and the user conversation. Execute
+   workflow-backed spawns or resumes using the routing table below, and keep
+   driving while they work. Your own tool use stays orchestration and light
+   verification reads. Keep your task list updated religiously.
+
+## Workflow Agent Routing
+
+Every delegated task runs through a workflow-backed agent invocation. Do not
+spawn a flat subagent directly when a workflow invocation or workflow resume is
+available.
+
+| Work | Agent type | Model |
+|---|---|---|
+| Feature, bug, and refactor coding | `clean-coder` | `opus` |
+| Verification passes | `code-verifier` | `opus` |
+| Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` |
+| PR descriptions | `pr-description-writer` | `sonnet`, with file-list grounding check |
+| Fan-out searches and checklist verification reads | `Explore` | `haiku`; use `sonnet` when judgment-heavy |
+| Escalated blockers, plan-level design, and advisor signals | `code-advisor` or this session | Fable preferred; opus if fable is unavailable. |
+
+Routing rules:
+
+- Use a workflow invocation or resume for each row above. The workflow prompt
+  must name the selected agent type, model, work category, task scope, and
+  expected output.
+- Resume a warm workflow agent before creating a new workflow run when the warm
+  agent holds the relevant context.
+- `clean-coder` owns code edits. `code-verifier` owns verification. The same
+  workflow agent never grades work it wrote.
+- PR-description workflows include the actual changed-file list in the prompt
+  and verify the final body against that file list before posting or returning
+  it.
+- Exploration workflows return file paths, line numbers, and direct evidence;
+  they do not write code or mutate repo state.
 
 4. **Executors consult at a hard decision.** Each executor's spawn prompt tells
    it to stop and message you — with the task, what it tried, and the exact
@@ -110,17 +146,17 @@ per task) — the same guard the API's `max_uses` gives a tool.
    every retry, so the server treats the retries as one request.
    ```
 
-   For a decision the advisor itself cannot settle, it may spawn the tool-less
-   `code-advisor` agent for a second opinion — an optional escalation, not a
-   required step.
+   For a decision the advisor itself cannot settle, it may use a workflow
+   escalation to the tool-less `code-advisor` agent for a second opinion — an
+   optional escalation, not a required step.
 
 ## Agent reuse (non-negotiable)
 
 - **Resume before you spawn, always.** A warm agent carries its context and
   cached tokens; a fresh spawn starts cold and pays to rebuild both.
-  `SendMessage` with an agent's name or `agentId` resumes a running or a
-  completed agent with its context intact — verified live in this environment.
-  Prefer that path every time an existing agent holds relevant context.
+  Resume the existing workflow agent by name or `agentId` when it holds
+  relevant context. Prefer that path every time an existing workflow agent
+  matches the routing table.
 - **Spawn a fresh agent only when** no existing agent holds relevant context,
   or a genuine task switch needs a clean context.
 - **Name the agent to resume.** When you answer with a PLAN and a warm agent
@@ -132,6 +168,18 @@ per task) — the same guard the API's `max_uses` gives a tool.
   loop.
 - The advisor orchestrates and advises but never edits code or runs a build or
   test itself — executors do that.
+- Delegated execution uses workflow-backed agent invocations and follows the
+  Workflow Agent Routing table exactly.
 - Consultations are capped at five per task by default. At the cap, re-scope
   or hand off; do not keep answering.
 - Reuse a warm agent over a cold spawn whenever one holds relevant context.
+
+## File Index
+
+| File | Purpose |
+|---|---|
+| `SKILL.md` | Advisor strategy, workflow routing contract, consultation protocol, reuse rules, and constraints. |
+
+## Folder Map
+
+- `SKILL.md` — complete advisor workflow instructions.
