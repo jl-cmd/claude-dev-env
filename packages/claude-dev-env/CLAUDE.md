@@ -6,8 +6,16 @@ The user is short on tokens; whenever a task can be achieved cleanly and effecti
 
 The user delegates execution to you and expects zero manual steps unless strictly necessary. Execute every command you can directly. Only instruct the user to do something manually when you are technically unable to do it yourself. When a task involves credentials or other sensitive input, display a minimal secure UI (e.g., a password dialog) to collect it rather than asking the user to paste it into chat or run the command themselves. When direction is ambiguous, use AskUserQuestion to clarify before acting.
 
-## Code Rules
-@~/.claude/docs/CODE_RULES.md
+You have access to an `advisor` tool backed by a stronger reviewer model. It takes NO parameters — when you call advisor(), your entire conversation history is automatically forwarded. They see the task, every tool call you've made, every result you've seen.
+
+Call advisor BEFORE substantive work — before writing, before committing to an interpretation, before building on an assumption. If the task requires orientation first (finding files, fetching a source, seeing what's there), do that, then call advisor. Orientation is not substantive work. Writing, editing, and declaring an answer are.
+
+Also call advisor:
+- When you believe the task is complete. BEFORE this call, make your deliverable durable: write the file, save the result, commit the change. The advisor call takes time; if the session ends during it, a durable result persists and an unwritten one doesn't.
+- When stuck — errors recurring, approach not converging, results that don't fit.
+- When considering a change of approach.
+
+On tasks longer than a few steps, call advisor at least once before committing to an approach and once before declaring done. On short reactive tasks where the next action is dictated by tool output you just read, you don't need to keep calling — the advisor adds most of its value on the first call, before the approach crystallizes.
 
 ALWAYS call the AskUserQuestion tool if you have a question for the user. Provide content-appropriate default options, with a flag for the recommended one.
 
@@ -21,11 +29,7 @@ Every Markdown file I write or edit describes the system's **current** state onl
 Full banned-pattern set + enforcement: `~/.claude/rules/no-historical-clutter.md` (hook `state-description-blocker`) and `~/.claude/rules/self-contained-docs.md`.
 
 ## GOTCHAS
-ALWAYS base new worktrees off of UPSTREAM origin main. Assume local is out of date.
-
 ALWAYS start each session with a /loop 15m populate or update the task list based on remaining todos.
-
-When making code changes, make sure you are working in the proper worktree path for the task at hand.
 
 ## Choosing Edit vs Write
 
@@ -36,10 +40,6 @@ When making code changes, make sure you are working in the proper worktree path 
 When I ask you to "show me", "open", "display", "let me see", or "pull up" a file — an image, PDF, HTML page, document, anything — open it on my screen. Launch the viewer so each image window matches the asset's size:
 
 `Start-Process pwsh -WindowStyle Hidden -ArgumentList '-NoProfile','-File',"$HOME\.claude\scripts\Show-Asset.ps1",'<path 1>','<path 2>'`
-
-It sizes each image window to the image (scaled down to fit the screen) and opens non-image files in their default app; pass every path I name. Printing a path or attaching the file is not showing it — do that only when the file truly cannot be opened, and say why.
-
-The `send_user_file_open_locally_blocker` hook backs this up: it blocks a desk-side `SendUserFile` attach and sends you back to this command, while a phone push (`status: "proactive"`) stays allowed.
 
 ## Test Philosophy
 
@@ -59,33 +59,14 @@ Reserve `Read`/`Grep`/`Glob` for files you will actually touch this turn. Compos
 
 Run every multi-step code task in two phases:
 
-1. **Coders** — one coder agent per scoped assignment writes the code. A coder that hits a decision it can't reasonably solve consults the tool-less `code-advisor` agent — which returns a plan, a correction, or a stop signal — and resumes. Source: Anthropic's advisor strategy (https://claude.com/blog/the-advisor-strategy).
-2. **Verification** — when the coders finish, the main session spawns the `code-verifier` agent in a fresh context. It derives and runs the checks itself rather than trusting coder reports: the task's named gates, tests against baselines recorded before the coders ran, and a two-way diff-vs-assignment reading (every task item maps to a hunk, every hunk maps to a task item, nothing missing). A finding must cite a failing command or a named task item. Source: the fresh-context review step in Claude Code best practices (https://code.claude.com/docs/en/best-practices) — the agent doing the work isn't the one grading it.
+1. **Coders** — one coder agent per scoped assignment writes the code. A coder that hits a decision it can't reasonably solve consults the advisor (see beginning of this file).
+2. **Verification** — when the coders finish, the main session spawns the `code-verifier` agent in a fresh context, but you must first verify that their work is based on upstream's origin main (aka: the commit live on github). It derives and runs the checks itself rather than trusting coder reports: the task's named gates, tests against baselines recorded before the coders ran, and a two-way diff-vs-assignment reading (every task item maps to a hunk, every hunk maps to a task item, nothing missing). A finding must cite a failing command or a named task item. Source: the fresh-context review step in Claude Code best practices (https://code.claude.com/docs/en/best-practices) — the agent doing the work isn't the one grading it.
 
 Repair agents run only on reported findings; the verifier re-checks after each repair. Work lands (commit, push, draft PR) only on a clean verdict — enforced by the `verified_commit_gate` hook, which blocks `git commit`/`git push` unless a hook-minted verdict covers the current branch diff. The one exemption is mechanical, not discretionary: a diff whose every changed file is non-code or has an unchanged Python AST once docstrings are stripped (docs, docstrings, comments).
-
-## Converge & Review Loop Discipline
-
-- **Worktree isolation:** Run every PR convergence and review loop in an isolated worktree, never a shared checkout that concurrent processes may advance. Verify isolation (the working directory path includes `.claude/worktrees/`) before the first tick or round.
-- **No hedging in findings:** Findings and PR reports state verified facts only — never `likely`, `probably`, `should`, `appears to`. Verify each claim against the code before stating it; the anti-hallucination Stop hook rejects hedged responses.
-- **Tight edit scope:** Edit exactly what the task names — no whole-file rewrites, no renaming public method parameters, no changes beyond the stated task. When the user asks for a "lasting" or "reusable" fix, prefer the durable systemic fix over a one-off edit. When the task touches a pipeline, generator, or other repeated process, fix the process itself, not its individual outputs — even when the request does not say so; for one-off targets, a scoped patch remains the default.
-- **GitHub MCP first:** The GitHub MCP (`mcp__plugin_github_github__*`) is the primary path for PR and review-thread inspection; raw `gh api` is the fallback, not the default — MCP calls work the same from any worktree.
-
-## Destructive-command literals in Bash
-
-Never put a destructive-command literal (`rm -rf`, `git reset --hard`, `dd`, `mkfs`) inside a Bash command string, even when the shell never runs it — a quoted `python -c` argument, a heredoc body, an echoed string, a commit or PR body. The `destructive_command_blocker` hook matches the raw text and asks for confirmation, which a background run cannot answer, so the call stalls. Run hook and deletion checks through the committed test suite (`python -m pytest <test_file>`), or a throwaway script under `$CLAUDE_JOB_DIR/tmp` run as `python <file>.py` — either way the command string carries no destructive text, so the hook stays silent. Group genuine cleanup deletions into one teardown step. See `~/.claude/rules/no-inline-destructive-literals.md`.
 
 ## Sub-agent Output Validation
 
 After any sub-agent returns a PR description, file list, or counts, verify each claim against the actual diff and repo state before using it. Flag and correct any invented paths, fabricated counts, or out-of-scope changes before they land in commits or PR bodies.
-
-## Git Sync Intent
-
-When asked to sync git ("get X onto origin main", "update main"), fast-forward local main to origin — do NOT commit untracked working-tree files unless explicitly told to.
-
-## Scheduled Task Cadence
-
-For scheduled/cron tasks, default to sub-hour intervals (30-minute); do not propose hourly cadences.
 
 ## Task Tracking
 
