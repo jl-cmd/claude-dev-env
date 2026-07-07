@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.88.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.88.0...claude-dev-env-v1.88.1) (2026-07-07)
+
+
+### Bug Fixes
+
+* **advisor:** Enforce workflow routing in advisor skill ([6bf6260](https://github.com/jl-cmd/claude-code-config/commit/6bf6260645a47daf0ad3a0090e8126ab49e3ed6f))
+
 ## [1.88.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.87.0...claude-dev-env-v1.88.0) (2026-07-07)
 
 
