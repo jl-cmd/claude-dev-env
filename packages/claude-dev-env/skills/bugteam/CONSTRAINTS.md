@@ -12,7 +12,7 @@
 - **Clean-room audits, every loop.** Each bugfind subagent's spawn prompt contains only the PR scope, audit rubric, and the current loop number. Prior loop history stays in the lead.
 - **Targeted fixes.** Each fix subagent sees ONLY the most recent audit's findings. Prior loops are invisible to the fix subagent.
 - **Fix subagent receives the latest audit as its input contract.** Each loop's fix run operates on the current audit's output and only that.
-- **Lead owns the final PR description rewrite only** (Step 4.5), via the `pr-description-writer` agent.
+- **Lead owns the final PR description rewrite only** (Step 4.5), composed directly against `docs/PR_DESCRIPTION_GUIDE.md`.
 
 ## Why this design
 
