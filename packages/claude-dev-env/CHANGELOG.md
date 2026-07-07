@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.89.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.88.1...claude-dev-env-v1.89.0) (2026-07-07)
+
+
+### Features
+
+* remove advisor and advisor-refresh skills ([0865b17](https://github.com/jl-cmd/claude-code-config/commit/0865b1710727d3aa07bb01c4462828d929938d43))
+* remove advisor and advisor-refresh skills ([22c8a9f](https://github.com/jl-cmd/claude-code-config/commit/22c8a9f76d583116e46a28158f92b0f87c8ad5f8))
+
+
+### Performance
+
+* **agents:** pin code-verifier to sonnet at medium effort ([978318a](https://github.com/jl-cmd/claude-code-config/commit/978318a4179e96631543931b69c9a848403811d2))
+* **agents:** pin code-verifier to sonnet at medium effort ([6709e64](https://github.com/jl-cmd/claude-code-config/commit/6709e64ab7d3650e838724c75eafa086e5fb24eb))
+
 ## [1.88.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.88.0...claude-dev-env-v1.88.1) (2026-07-07)
 
 
