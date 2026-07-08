@@ -38,6 +38,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `js_conventions_constants.py` | Banned identifier set, boolean-prefix pattern, and declaration/JSDoc patterns for the JavaScript convention checks |
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
+| `nas_ssh_binary_enforcer_constants.py` | Bash tool name, the NAS address pattern, ssh-family basenames, OpenSSH binary path suffixes, launcher-wrapper set, shell control-operator tokens and split pattern, leading-assignment and duration patterns, the batch-mode pattern, and the two deny messages for the NAS ssh binary enforcer |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |
 | `orphan_css_class_constants.py` | Scan radius and selector patterns for the orphan-CSS-class check |
 | `package_inventory_stale_blocker_constants.py` | Inventory document names, production code extensions, backtick token pattern, smallest inventory size, exempt names, scan budget, and block-message text for the package-inventory stale-entry blocker |

@@ -78,6 +78,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `hook_prose_detector_consistency.py` | PreToolUse (Write/Edit) | Hook docstrings/messages that claim a trigger the detector cannot fire on |
 | `intent_only_ending_blocker.py` | Stop | Responses that end on a plan or intent without doing the work |
 | `open_questions_in_plans_blocker.py` | PreToolUse (Write/Edit) | Plan documents with unresolved open questions |
+| `nas_ssh_binary_enforcer.py` | PreToolUse (Bash) | A bare `ssh`/`scp`/`sftp` command word targeting the NAS at `192.168.1.100` (Git Bash's MSYS ssh stalls on an interactive password prompt), or the full `System32/OpenSSH` binary to that host without `-o BatchMode=yes` |
 | `package_inventory_stale_blocker.py` | PreToolUse (Write) | A new production code file created in a directory whose `README.md`/`CLAUDE.md` inventory (or a parent skill's `SKILL.md` Layout table mapping the `scripts/` subdirectory) names two or more sibling files but no entry for the new file |
 | `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose |
 | `pr_converge_bugteam_enforcer.py` | PreToolUse | Enforces that bugteam runs in parallel with bugbot in pr-converge loops |
