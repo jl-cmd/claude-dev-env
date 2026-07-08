@@ -40,6 +40,73 @@ def compute_total() -> int:
     return result
 '''
 
+WIDGET_MODULE_BASE_SOURCE = '''"""Arithmetic helpers used by the precommit gate worktree tests."""
+
+
+def add_one(number: int) -> int:
+    """Return *number* plus one.
+
+    Args:
+        number: The integer to increment.
+
+    Returns:
+        The incremented integer.
+    """
+    return number + 1
+'''
+
+WIDGET_MODULE_EXPANDED_SOURCE = '''"""Arithmetic helpers used by the precommit gate worktree tests."""
+
+
+def add_one(number: int) -> int:
+    """Return *number* plus one.
+
+    Args:
+        number: The integer to increment.
+
+    Returns:
+        The incremented integer.
+    """
+    return number + 1
+
+
+def subtract_one(number: int) -> int:
+    """Return *number* minus one.
+
+    Args:
+        number: The integer to decrement.
+
+    Returns:
+        The decremented integer.
+    """
+    return number - 1
+'''
+
+WIDGET_TEST_BASE_SOURCE = '''"""Behavior tests for the widget arithmetic helpers."""
+
+from widget import add_one
+
+
+def test_add_one_increments() -> None:
+    """add_one returns its argument plus one."""
+    assert add_one(1) == 2
+'''
+
+WIDGET_TEST_EXPANDED_SOURCE = '''"""Behavior tests for the widget arithmetic helpers."""
+
+from widget import add_one, subtract_one
+
+
+def test_add_one_increments() -> None:
+    """add_one returns its argument plus one."""
+    assert add_one(1) == 2
+
+
+def test_subtract_one_decrements() -> None:
+    """subtract_one returns its argument minus one."""
+    assert subtract_one(2) == 1
+'''
+
 
 def run_git(repository_root: Path, *git_arguments: str) -> None:
     subprocess.run(
@@ -122,5 +189,27 @@ def test_commit_with_no_staged_python_files_is_allowed(tmp_path: Path) -> None:
     initialize_repository(tmp_path)
     stage_file(tmp_path, "notes.md", "# Notes\n")
     completed_hook = run_hook("git commit -m docs", tmp_path)
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout.strip() == ""
+
+
+def test_worktree_commit_reads_worktree_paired_tests_not_sibling_checkout(
+    tmp_path: Path,
+) -> None:
+    main_checkout = tmp_path / "main_checkout"
+    main_checkout.mkdir()
+    initialize_repository(main_checkout)
+    (main_checkout / "widget.py").write_text(WIDGET_MODULE_BASE_SOURCE, encoding="utf-8")
+    (main_checkout / "test_widget.py").write_text(WIDGET_TEST_BASE_SOURCE, encoding="utf-8")
+    run_git(main_checkout, "add", "widget.py", "test_widget.py")
+    run_git(main_checkout, "commit", "-m", "base")
+    worktree_root = tmp_path / "sibling_worktree"
+    run_git(main_checkout, "worktree", "add", str(worktree_root), "-b", "feature")
+    stage_file(worktree_root, "widget.py", WIDGET_MODULE_EXPANDED_SOURCE)
+    stage_file(worktree_root, "test_widget.py", WIDGET_TEST_EXPANDED_SOURCE)
+    quoted_worktree = str(worktree_root)
+    completed_hook = run_hook(
+        f'git -C "{quoted_worktree}" commit -m expand', main_checkout
+    )
     assert completed_hook.returncode == 0
     assert completed_hook.stdout.strip() == ""
