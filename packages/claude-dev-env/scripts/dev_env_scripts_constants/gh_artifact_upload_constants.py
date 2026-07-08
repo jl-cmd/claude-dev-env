@@ -27,10 +27,14 @@ ASSET_NAME_TIMESTAMP_FORMAT: str = "%Y%m%d_%H%M%S"
 ASSET_NAME_TEMPLATE: str = "{timestamp}_{basename}"
 """Template joining the timestamp prefix and the source file basename."""
 
-ASSET_DOWNLOAD_URL_TEMPLATE: str = (
-    "https://github.com/{repo}/releases/download/{tag}/{asset_name}"
-)
-"""Template for a release asset's permanent download URL."""
+RELEASE_ASSETS_JSON_KEY: str = "assets"
+"""``gh release view --json`` field holding the release's asset list."""
+
+ASSET_URL_JSON_KEY: str = "url"
+"""Asset field carrying the browser download URL GitHub serves."""
+
+ASSET_CREATED_AT_JSON_KEY: str = "createdAt"
+"""Asset field carrying the ISO 8601 creation timestamp."""
 
 NOTES_FILE_SUFFIX: str = ".md"
 """Suffix for the temporary release-notes file."""

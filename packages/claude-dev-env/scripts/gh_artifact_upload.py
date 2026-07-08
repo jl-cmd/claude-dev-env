@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import json
 import shutil
 import subprocess
 import sys
@@ -30,11 +31,13 @@ from dev_env_scripts_constants.gh_artifact_upload_constants import (
     ARTIFACTS_RELEASE_NOTES,
     ARTIFACTS_RELEASE_TAG,
     ARTIFACTS_RELEASE_TITLE,
-    ASSET_DOWNLOAD_URL_TEMPLATE,
+    ASSET_CREATED_AT_JSON_KEY,
     ASSET_NAME_TEMPLATE,
     ASSET_NAME_TIMESTAMP_FORMAT,
+    ASSET_URL_JSON_KEY,
     GH_BINARY_NAME,
     NOTES_FILE_SUFFIX,
+    RELEASE_ASSETS_JSON_KEY,
     UTF8_ENCODING,
 )
 
@@ -126,19 +129,66 @@ def timestamped_asset_name(file_path: str) -> str:
     )
 
 
-def build_asset_url(repository: str, asset_name: str) -> str:
-    """Return the permanent download URL for an uploaded asset.
+def _uploaded_asset_download_url(repository: str) -> str:
+    """Read the just-uploaded asset's real download URL back from GitHub.
+
+    ::
+
+        upload "My Report.png" -> GitHub stores "..._My.Report.png"
+        read-back -> the URL GitHub serves for that sanitized name
+
+    GitHub sanitizes an asset filename on upload: spaces and other characters
+    become periods. The stored name, and so the download URL, can differ from
+    the local name. Reading the release back returns the URL GitHub actually
+    serves for the most recently created asset, which is the one just uploaded.
 
     Args:
         repository: The ``owner/repo`` slug.
-        asset_name: The uploaded asset's name.
 
     Returns:
-        The stable release-download URL for the asset.
+        The browser download URL of the newest artifacts-release asset.
+
+    Raises:
+        ArtifactUploadError: When the read-back fails, the response cannot be
+            parsed, or no asset carries a download URL.
     """
-    return ASSET_DOWNLOAD_URL_TEMPLATE.format(
-        repo=repository, tag=ARTIFACTS_RELEASE_TAG, asset_name=asset_name
+    completion = _run_gh(
+        [
+            "release",
+            "view",
+            ARTIFACTS_RELEASE_TAG,
+            "--repo",
+            repository,
+            "--json",
+            RELEASE_ASSETS_JSON_KEY,
+        ]
     )
+    if completion.returncode != 0:
+        raise ArtifactUploadError(completion.stderr.strip())
+    try:
+        parsed_release = json.loads(completion.stdout)
+    except json.JSONDecodeError as decode_error:
+        raise ArtifactUploadError(f"could not read release assets: {decode_error}")
+    all_assets = (
+        parsed_release.get(RELEASE_ASSETS_JSON_KEY, [])
+        if isinstance(parsed_release, dict)
+        else []
+    )
+    all_dated_assets = [
+        each_asset
+        for each_asset in all_assets
+        if isinstance(each_asset, dict) and each_asset.get(ASSET_CREATED_AT_JSON_KEY)
+    ]
+    if not all_dated_assets:
+        raise ArtifactUploadError("uploaded asset not found on read-back")
+    newest_asset = max(
+        all_dated_assets,
+        key=lambda each_asset: each_asset[ASSET_CREATED_AT_JSON_KEY],
+    )
+    asset_url = newest_asset.get(ASSET_URL_JSON_KEY)
+    if not isinstance(asset_url, str) or not asset_url:
+        raise ArtifactUploadError("uploaded asset carries no download URL on read-back")
+    return asset_url
 
 
 def upload_artifact(file_path: str, repository: str) -> str:
@@ -174,7 +224,7 @@ def upload_artifact(file_path: str, repository: str) -> str:
         )
     if completion.returncode != 0:
         raise ArtifactUploadError(completion.stderr.strip())
-    return build_asset_url(repository, asset_name)
+    return _uploaded_asset_download_url(repository)
 
 
 def main() -> int:
