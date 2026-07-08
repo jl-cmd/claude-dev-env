@@ -193,7 +193,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/enter_worktree_origin_prefetch.py",
-            "timeout": 20
+            "timeout": 25
           }
         ]
       }
