@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.90.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.89.0...claude-dev-env-v1.90.0) (2026-07-08)
+
+
+### Features
+
+* block durable GitHub posts that reference volatile scratch paths ([5dd592a](https://github.com/jl-cmd/claude-code-config/commit/5dd592a4edaa61d83f8c99c6defcb989f1dd162d))
+* block durable GitHub posts that reference volatile scratch paths ([786586b](https://github.com/jl-cmd/claude-code-config/commit/786586b094323f949cf4e935cd1c3ac81b8dcae4))
+* fetch origin default branch before EnterWorktree creates a worktree ([df2c4e7](https://github.com/jl-cmd/claude-code-config/commit/df2c4e72f95e4e5b2aa5783aee6db5fa282dfd1d))
+* fetch origin default branch before EnterWorktree creates a worktree ([47e8fe4](https://github.com/jl-cmd/claude-code-config/commit/47e8fe4fe2dd6dcb47abb172f786d74c41ad5c92))
+
+
+### Bug Fixes
+
+* give the EnterWorktree prefetch hook harness-timeout margin ([92e5b3d](https://github.com/jl-cmd/claude-code-config/commit/92e5b3daf3a98cf0bd7564e3f499790bf08ada69))
+* Partition staged tests by owning pytest-config root in the commit gate ([25a5405](https://github.com/jl-cmd/claude-code-config/commit/25a5405ce172846e5d0c5da567e64284cb8511c8))
+
 ## [1.89.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.88.1...claude-dev-env-v1.89.0) (2026-07-07)
 
 
