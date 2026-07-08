@@ -1,8 +1,8 @@
 ---
 name: team-advisor
 description: >-
-  Turns the session into the advisor-orchestrator — the user's sole interface,
-  running on Fable 5 (`claude-fable-5`), the coordinator-tier model, to plan
+  Turns the session into the advisor-orchestrator — the user's sole interface,[SCRUBBED]
+  to plan
   and delegate while workflow-backed agent spawns do the token-heavy
   execution with the required agent type and model for each work category.
   Executors do the code editing, verification, script driving, PR
@@ -14,7 +14,7 @@ description: >-
   Anthropic's coordinator pattern (plan big, execute small) to Claude Code.
   Triggers: '/team-advisor', 'team advisor strategy', 'run with a team
   advisor', 'executor-advisor mode', 'team advisor enforcement', 'agent
-  routing', 'fable orchestrator'.
+  routing', 'orchestrate'.
 ---
 
 # Team Advisor Strategy
@@ -25,30 +25,20 @@ A frontier model plans and synthesizes while cheap workers do the
 token-heavy reading and doing — Anthropic's coordinator pattern, source:
 https://github.com/anthropics/claude-cookbooks/blob/main/managed_agents/CMA_plan_big_execute_small.ipynb
 ("Coordinator pattern: big models for planning, small models for
-execution"). On the cookbook's own measured run, a Fable-5 coordinator
-delegating to Sonnet-5 workers came out roughly 2.5x cheaper and 3x faster
+execution"). On the cookbook's own measured run, a coordinator
+delegating to Sonnet-5 workers came out cheaper and faster
 than a solo frontier agent held to the same verification rigor, with
 84-98% of the team's input tokens billed at the worker rate.
 
 Claude Code has no `multiagent` coordinator field or Managed-Agents-style
 `create_agent`/`send_to_agent` primitives; this skill reaches the same
 shape with the tools Claude Code already has. Under this skill the session
-is the advisor-orchestrator, and it runs on **Fable 5** (`claude-fable-5`)
-— switch to it with `/model claude-fable-5` (or the `/model` picker)
-before you start orchestrating if the session opened on a different
-model. In Claude Code the user always talks to the session and never to a
+is the advisor-orchestrator. In Claude Code the user always talks to the session and never to a
 subagent, so the session is the user's sole interface: all user-facing
 communication flows through it. It spawns and resumes executor subagents
 — `clean-coder` and the like — and those executors do every bit of the
 execution: the code edits, the build runs, the test runs. The advisor
 drives the plan and answers the executors when they get stuck.
-
-This is the advisor-lite shape: the cookbook's pure coordinator keeps
-itself tool-less and hidden from the user, but Claude Code routes every
-user message through the session, so the advisor here stays the user's
-interface while keeping execution out of its own hands. Consultations are
-capped (default 5 per task) — the same guard the API's `max_uses` gives a
-tool.
 
 ## Gotchas
 
@@ -72,18 +62,11 @@ tool.
 - **Consultations past the cap signal a scoping problem.** When five
   consultations do not clear the blocker, the task needs re-scoping or a
   hand-off to the user — not a sixth round of advice.
-- **Fable 5 unavailable.** If the session can't switch to `claude-fable-5`
-  (older Claude Code build, no access), fall back to Opus for the
-  orchestrator role and say so — do not silently orchestrate on a lesser
-  model without noting the substitution.
 
 
 ## Process
 
-1. **Model check, then invocation guard (once per session).** Confirm the
-   session is running Fable 5 (`claude-fable-5`); if not, switch with
-   `/model claude-fable-5` before anything else (see Gotchas for the
-   fallback). Then check whether the refresh loop is already running this
+1. **Check whether the refresh loop is already running this
    session. If it is, skip straight to orchestration — do not schedule a
    second loop.
 
@@ -186,7 +169,6 @@ Routing rules:
 
 - One `/team-advisor` per session; the invocation guard blocks a second
   reminder loop.
-- The orchestrator runs on Fable 5; check and switch at the start of every invocation per Process step 1.
 - The advisor orchestrates and advises but never edits code or runs a build or
   test itself — executors do that.
 - Delegated execution uses workflow-backed agent invocations and follows the
