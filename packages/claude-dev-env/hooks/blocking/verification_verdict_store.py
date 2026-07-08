@@ -30,9 +30,11 @@ from config.verified_commit_constants import (
     AGENT_META_TYPE_KEY,
     AGENT_TRANSCRIPT_GLOB,
     BRANCH_REFERENCE_PREFIX,
+    BRANCH_REMOTE_CONFIG_KEY_TEMPLATE,
     BRANCH_WORKTREE_ABSENT_MESSAGE,
     CLAUDE_HOME_DIRECTORY_NAME,
     CONFTEST_FILE_NAME,
+    DETACHED_HEAD_LABEL,
     DOCS_ONLY_EXTENSIONS,
     ALL_FALLBACK_BASE_REFERENCES,
     EMPTY_SURFACE_GUARD_MESSAGE,
@@ -122,13 +124,65 @@ def _tracked_upstream_reference(repo_root: str) -> str | None:
     )
 
 
+def _head_branch_name(repo_root: str) -> str | None:
+    """Read the short name of the branch HEAD points at.
+
+    Args:
+        repo_root: The repository top-level directory.
+
+    Returns:
+        The short branch name, or None when HEAD is detached or git fails.
+    """
+    branch_name = run_git(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
+    if not branch_name or branch_name == DETACHED_HEAD_LABEL:
+        return None
+    return branch_name
+
+
+def _upstream_is_own_remote_counterpart(repo_root: str, tracked_upstream: str) -> bool:
+    """Decide whether HEAD's upstream is the current branch's own remote ref.
+
+    ::
+
+        branch feature  tracks origin/feature   -> True   (own counterpart)
+        branch feature  tracks origin/develop   -> False  (different branch)
+
+    A branch tracking its own remote counterpart makes the merge base against
+    that ref resolve to the branch tip itself, masking the branch's real state
+    versus the default branch — so the caller ranks that ref below the
+    default-branch fallbacks.
+
+    Args:
+        repo_root: The repository top-level directory.
+        tracked_upstream: HEAD's configured upstream tracking reference.
+
+    Returns:
+        True when the upstream names ``<remote>/<current-branch>``; False when
+        it names a different branch, HEAD is detached, or git fails.
+    """
+    branch_name = _head_branch_name(repo_root)
+    if branch_name is None:
+        return False
+    configured_remote = run_git(
+        repo_root, "config", BRANCH_REMOTE_CONFIG_KEY_TEMPLATE.format(branch_name=branch_name)
+    )
+    if not configured_remote:
+        return False
+    return tracked_upstream == f"{configured_remote}/{branch_name}"
+
+
 def candidate_base_references(repo_root: str) -> tuple[str, ...]:
     """Collect the upstream references to probe for the merge base, in order.
 
-    Probes ``origin/HEAD`` first, then HEAD's configured upstream tracking
-    reference (so a non-standard default branch like ``origin/develop`` is
-    found regardless of its name), then the fixed ``origin/main`` /
-    ``origin/master`` fallbacks for checkouts with no tracking ref set.
+    Probes ``origin/HEAD`` first, then a tracked upstream that names a
+    different branch (so a differently-named default like ``origin/develop`` is
+    found), then the fixed ``origin/main`` / ``origin/master`` fallbacks. A
+    tracked upstream that is the current branch's own remote counterpart
+    (``origin/<current-branch>``) ranks last, below the fallbacks: on a PR
+    branch whose fork carries ``origin/main`` the merge base comes from
+    ``origin/main`` rather than the branch's stale pushed ref, while a repo
+    whose default branch is the tracked branch itself (no ``origin/main`` or
+    ``origin/master`` present) still falls through to that own-counterpart ref.
 
     Args:
         repo_root: The repository top-level directory.
@@ -138,10 +192,18 @@ def candidate_base_references(repo_root: str) -> tuple[str, ...]:
     """
     upstream_head = run_git(repo_root, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
     tracked_upstream = _tracked_upstream_reference(repo_root)
+    high_priority_upstream: tuple[str, ...] = ()
+    demoted_upstream: tuple[str, ...] = ()
+    if tracked_upstream:
+        if _upstream_is_own_remote_counterpart(repo_root, tracked_upstream):
+            demoted_upstream = (tracked_upstream,)
+        else:
+            high_priority_upstream = (tracked_upstream,)
     ordered_references = (
         ((upstream_head,) if upstream_head else ())
-        + ((tracked_upstream,) if tracked_upstream else ())
+        + high_priority_upstream
         + ALL_FALLBACK_BASE_REFERENCES
+        + demoted_upstream
     )
     return tuple(dict.fromkeys(ordered_references))
 

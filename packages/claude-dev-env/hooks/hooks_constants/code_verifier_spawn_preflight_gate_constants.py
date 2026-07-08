@@ -26,6 +26,9 @@ MERGE_TREE_CONFLICT_EXIT_CODE: int = 1
 MERGE_TREE_CLEAN_EXIT_CODE: int = 0
 MERGE_TREE_TIMEOUT_SECONDS: int = 30
 
+ALL_MERGE_HEAD_PROBE_FLAGS: tuple[str, ...] = ("rev-parse", "--verify", "--quiet", "MERGE_HEAD")
+ALL_UNMERGED_PATHS_DIFF_FLAGS: tuple[str, ...] = ("diff", "--name-only", "--diff-filter=U")
+
 ALL_NAME_ONLY_WORKTREE_DIFF_FLAGS: tuple[str, ...] = (
     "-c",
     "core.quotePath=false",
