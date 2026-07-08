@@ -1,0 +1,8 @@
+{
+  "chain": [
+    { "command": "claude", "extra_args": [] },
+    { "command": "claude-ev", "extra_args": [] },
+    { "command": "claude-editor", "extra_args": [] },
+    { "command": "claude-mel", "extra_args": [] }
+  ]
+}
