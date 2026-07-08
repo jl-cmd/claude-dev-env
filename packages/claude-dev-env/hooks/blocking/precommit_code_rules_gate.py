@@ -122,7 +122,10 @@ def run_staged_gate(repository_root: Path) -> tuple[int, str]:
     """Run the shared code_rules_gate engine in staged mode.
 
     Args:
-        repository_root: Repository root passed to the gate's --repo-root.
+        repository_root: Repository root passed to the gate's --repo-root
+            and used as the gate subprocess working directory, so relative
+            paths the gate's checks resolve land in the committing worktree
+            rather than the hook's own working directory.
 
     Returns:
         Tuple of the gate exit code and its stderr report. A missing gate
@@ -147,6 +150,7 @@ def run_staged_gate(repository_root: Path) -> tuple[int, str]:
             encoding="utf-8",
             errors="replace",
             timeout=GATE_TIMEOUT_SECONDS,
+            cwd=str(repository_root),
         )
     except subprocess.TimeoutExpired:
         return 1, (
