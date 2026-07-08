@@ -2519,6 +2519,23 @@ def test_resolve_owning_test_root_falls_back_to_repository_root(
     assert resolved_root == tmp_path.resolve()
 
 
+def test_resolve_owning_test_root_skips_pyproject_without_pytest_section(
+    tmp_path: Path,
+) -> None:
+    outer_root = tmp_path / "outer"
+    write_file(
+        outer_root / "pyproject.toml",
+        "[tool.pytest.ini_options]\ntestpaths = ['tests']\n",
+    )
+    write_file(outer_root / "inner" / "pyproject.toml", "[project]\nname = 'inner'\n")
+    test_path = outer_root / "inner" / "test_behavior.py"
+    write_file(test_path, "def test_behavior() -> None:\n    assert True\n")
+
+    resolved_root = gate_module._resolve_owning_test_root(test_path, tmp_path)
+
+    assert resolved_root == outer_root.resolve()
+
+
 def test_group_staged_tests_by_root_shares_a_session_for_same_root(
     tmp_path: Path,
 ) -> None:
