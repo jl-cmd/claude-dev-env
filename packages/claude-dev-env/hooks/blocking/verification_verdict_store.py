@@ -25,6 +25,12 @@ blocking_directory = str(Path(__file__).resolve().parent)
 if blocking_directory not in sys.path:
     sys.path.insert(0, blocking_directory)
 
+from verified_commit_config_bootstrap import (  # noqa: E402
+    register_verified_commit_constants,
+)
+
+register_verified_commit_constants()
+
 from config.verified_commit_constants import (
     AGENT_META_SIDECAR_SUFFIX,
     AGENT_META_TYPE_KEY,

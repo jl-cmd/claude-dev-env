@@ -10,6 +10,7 @@ import json
 import pathlib
 import subprocess
 import sys
+from typing import Callable
 
 import pytest
 
@@ -785,3 +786,13 @@ def test_manifest_hash_for_branch_cli_returns_nonzero_when_branch_absent(
     )
     assert completed_process.returncode != 0
     assert completed_process.stdout.strip() == ""
+
+
+def test_store_imports_under_foreign_config_shadow(
+    run_under_config_shadow: Callable[[str], subprocess.CompletedProcess[str]],
+) -> None:
+    completed_probe = run_under_config_shadow(
+        "import verification_verdict_store\nprint('IMPORT_OK')\n"
+    )
+    assert completed_probe.returncode == 0, completed_probe.stderr
+    assert "IMPORT_OK" in completed_probe.stdout

@@ -736,6 +736,10 @@ def test_hook_subprocess_imports_real_config_when_parent_holds_shadowing_config(
         real_blocking_directory / "verdict_directory_write_blocker.py",
         staged_blocking_directory / "verdict_directory_write_blocker.py",
     )
+    shutil.copy(
+        real_blocking_directory / "verified_commit_config_bootstrap.py",
+        staged_blocking_directory / "verified_commit_config_bootstrap.py",
+    )
     shutil.copytree(
         real_blocking_directory / "config",
         staged_blocking_directory / "config",

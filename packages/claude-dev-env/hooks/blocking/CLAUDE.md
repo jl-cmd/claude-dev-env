@@ -113,6 +113,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `pr_description_pr_number.py` | PR number extraction logic |
 | `pr_description_readability.py` | Readability checks on PR description bodies |
 | `verification_verdict_store.py` | Reads and writes verdict files under `~/.claude/verification/` |
+| `verified_commit_config_bootstrap.py` | Binds `config.verified_commit_constants` to the sibling `config/` file by explicit location, so the gate family resolves its constants regardless of a foreign `config` package's `sys.path` order |
 
 ## Conventions
 

@@ -41,6 +41,12 @@ hooks_directory = str(Path(__file__).resolve().parent.parent)
 if hooks_directory not in sys.path:
     sys.path.append(hooks_directory)
 
+from verified_commit_config_bootstrap import (  # noqa: E402
+    register_verified_commit_constants,
+)
+
+register_verified_commit_constants()
+
 from config.verified_commit_constants import (  # noqa: E402
     ALL_GATED_TOOL_NAMES,
     ALL_VERDICT_PATH_SEGMENT_BODIES,

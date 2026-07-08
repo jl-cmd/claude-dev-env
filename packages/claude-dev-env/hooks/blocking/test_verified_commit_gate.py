@@ -12,6 +12,7 @@ import os
 import pathlib
 import subprocess
 import sys
+from typing import Callable
 
 import pytest
 
@@ -568,3 +569,13 @@ def test_minted_verdict_from_other_worktree_with_wrong_hash_denies(
     deny_reason = deny_reason_for_directory(str(work_dir), str(transcript_path))
     assert deny_reason is not None
     assert "VERIFIED_COMMIT_GATE" in deny_reason
+
+
+def test_gate_imports_under_foreign_config_shadow(
+    run_under_config_shadow: Callable[[str], subprocess.CompletedProcess[str]],
+) -> None:
+    completed_probe = run_under_config_shadow(
+        "import verified_commit_gate\nprint('IMPORT_OK')\n"
+    )
+    assert completed_probe.returncode == 0, completed_probe.stderr
+    assert "IMPORT_OK" in completed_probe.stdout
