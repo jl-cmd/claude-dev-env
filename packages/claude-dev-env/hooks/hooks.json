@@ -88,7 +88,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pr_description_enforcer.py",
-            "timeout": 10
+            "timeout": 30
           },
           {
             "type": "command",

@@ -47,6 +47,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pr_converge_bugteam_enforcer_constants.py` | State keys and timing config for the bugteam-parallel enforcer |
 | `pr_converge_bugteam_enforcer_state.py` | State-file helpers for the bugteam enforcer |
 | `pr_description_enforcer_constants.py` | PR-description shape rules and command patterns |
+| `pr_description_proof_of_work_constants.py` | Proof-part detection patterns, gh command tokens, and corrective messages for the proof-of-work comment audit |
 | `pre_tool_use_stdin.py` | `read_hook_input_dictionary_from_stdin()` — shared stdin parser for PreToolUse hooks |
 | `precommit_code_rules_gate_constants.py` | Scope argument and exit-code constants for the precommit gate |
 | `project_paths_reader.py` | Loads `~/.claude/project-paths.json` — the per-user project-path registry |
