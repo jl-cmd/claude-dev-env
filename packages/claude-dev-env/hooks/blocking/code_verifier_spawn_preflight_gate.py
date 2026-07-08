@@ -43,9 +43,11 @@ from verification_verdict_store import (  # noqa: E402
 )
 
 from hooks_constants.code_verifier_spawn_preflight_gate_constants import (  # noqa: E402
+    ALL_MERGE_HEAD_PROBE_FLAGS,
     ALL_MERGE_TREE_COMMAND_FLAGS,
     ALL_NAME_ONLY_WORKTREE_DIFF_FLAGS,
     ALL_UNIFIED_ZERO_DIFF_FLAGS,
+    ALL_UNMERGED_PATHS_DIFF_FLAGS,
     CODE_RULES_SECTION_HEADER,
     CODE_VERIFIER_SUBAGENT_TYPE,
     DENY_REASON_LEAD,
@@ -145,8 +147,48 @@ def _run_trial_merge(repo_root: str, base_ref: str) -> tuple[int, str] | None:
     return completed_process.returncode, completed_process.stdout
 
 
+def _merge_in_progress(repo_root: str) -> bool:
+    """Decide whether an unfinished merge is recorded in the work tree.
+
+    Args:
+        repo_root: The repository top-level directory.
+
+    Returns:
+        True when ``MERGE_HEAD`` resolves — a merge is started but not yet
+        committed; False when no merge is in progress or git fails.
+    """
+    return run_git(repo_root, *ALL_MERGE_HEAD_PROBE_FLAGS) is not None
+
+
+def _staged_merge_conflicts(repo_root: str) -> list[str] | None:
+    """Return the unmerged paths of an in-progress merge from the index.
+
+    A merge whose conflicts are fully resolved and staged leaves zero unmerged
+    index entries, so the resolved state is committable and this returns an
+    empty list. A merge with conflicts still open returns those paths, so the
+    caller keeps denying until the resolution is staged.
+
+    Args:
+        repo_root: The repository top-level directory.
+
+    Returns:
+        The still-unmerged paths (empty when the resolution is fully staged),
+        or None when git fails — the caller fails OPEN on None.
+    """
+    unmerged_text = run_git(repo_root, *ALL_UNMERGED_PATHS_DIFF_FLAGS)
+    if unmerged_text is None:
+        return None
+    return [each_line for each_line in unmerged_text.splitlines() if each_line]
+
+
 def _conflicting_files(repo_root: str, base_ref: str) -> list[str] | None:
     """Return the files that conflict when HEAD trial-merges against the base.
+
+    While a merge is in progress the branch tip has not yet recorded the
+    resolution, so the trial-merge of the base against HEAD would re-report
+    conflicts the staged index already fixed. In that state the index is the
+    authority: an empty unmerged set is a committable resolution, and any
+    remaining unmerged path is a live conflict.
 
     Args:
         repo_root: The repository top-level directory.
@@ -158,6 +200,8 @@ def _conflicting_files(repo_root: str, base_ref: str) -> list[str] | None:
         timeout, or an exit code that is neither clean nor conflict) — the
         caller fails OPEN on None.
     """
+    if _merge_in_progress(repo_root):
+        return _staged_merge_conflicts(repo_root)
     merge_outcome = _run_trial_merge(repo_root, base_ref)
     if merge_outcome is None:
         return None

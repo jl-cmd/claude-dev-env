@@ -287,6 +287,37 @@ def make_conflict_repository(tmp_path: Path) -> Path:
     return repository_root
 
 
+def make_stale_self_upstream_conflict_repository(tmp_path: Path) -> Path:
+    repository_root = make_conflict_repository(tmp_path)
+    feature_sha = run_git(repository_root, "rev-parse", "HEAD")
+    run_git(repository_root, "remote", "add", "origin", str(repository_root))
+    run_git(repository_root, "update-ref", "refs/remotes/origin/feature", feature_sha)
+    run_git(repository_root, "config", "branch.feature.remote", "origin")
+    run_git(repository_root, "config", "branch.feature.merge", "refs/heads/feature")
+    return repository_root
+
+
+def make_merge_in_progress_repository(tmp_path: Path) -> Path:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    base_sha = commit_file(repository_root, "shared.py", SHARED_BASE_SOURCE, "add shared")
+    run_git(repository_root, "update-ref", "refs/remotes/origin/main", base_sha)
+    run_git(repository_root, "checkout", "-b", "feature")
+    commit_file(repository_root, "shared.py", SHARED_FEATURE_SOURCE, "feature edit")
+    advance_origin_main_divergent(repository_root, base_sha, "shared.py", SHARED_DIVERGENT_SOURCE)
+    return repository_root
+
+
+def start_conflicting_merge(repository_root: Path) -> None:
+    subprocess.run(
+        ["git", "-C", str(repository_root), "merge", "--no-edit", "origin/main"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_non_code_verifier_agent_is_no_op(tmp_path: Path) -> None:
     repository_root = make_conflict_repository(tmp_path)
     write_working_tree_file(repository_root, "violator.py", VIOLATING_MODULE_SOURCE)
@@ -471,6 +502,46 @@ def test_conflict_and_violation_single_deny_names_both(tmp_path: Path) -> None:
     assert "shared.py" in reason
     assert "CODE_RULES violations on changed lines:" in reason
     assert "violator.py" in reason
+
+
+def test_stale_self_upstream_still_judges_default_branch(tmp_path: Path) -> None:
+    repository_root = make_stale_self_upstream_conflict_repository(tmp_path)
+    tracked_upstream = run_git(
+        repository_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"
+    )
+    assert tracked_upstream == "origin/feature", "fixture must track the branch's own remote ref"
+    payload = write_agent_payload("code-verifier", "verify the change", repository_root)
+    result = run_hook(payload, repository_root)
+    assert not is_allow(result)
+    reason = deny_reason(result)
+    assert "shared.py" in reason
+    assert "Merge conflicts vs" in reason
+
+
+def test_staged_resolved_merge_allows(tmp_path: Path) -> None:
+    repository_root = make_merge_in_progress_repository(tmp_path)
+    start_conflicting_merge(repository_root)
+    write_working_tree_file(repository_root, "shared.py", SHARED_FEATURE_SOURCE)
+    run_git(repository_root, "add", "shared.py")
+    remaining_unmerged = run_git(repository_root, "diff", "--name-only", "--diff-filter=U")
+    assert remaining_unmerged == "", "the staged resolution must clear every unmerged index entry"
+    merge_head_sha = run_git(repository_root, "rev-parse", "--verify", "--quiet", "MERGE_HEAD")
+    assert merge_head_sha, "a merge must still be in progress so MERGE_HEAD is present"
+    payload = write_agent_payload("code-verifier", "verify the change", repository_root)
+    result = run_hook(payload, repository_root)
+    assert is_allow(result)
+
+
+def test_unresolved_merge_keeps_denying(tmp_path: Path) -> None:
+    repository_root = make_merge_in_progress_repository(tmp_path)
+    start_conflicting_merge(repository_root)
+    remaining_unmerged = run_git(repository_root, "diff", "--name-only", "--diff-filter=U")
+    assert "shared.py" in remaining_unmerged, "the merge must leave shared.py unmerged"
+    payload = write_agent_payload("code-verifier", "verify the change", repository_root)
+    result = run_hook(payload, repository_root)
+    assert not is_allow(result)
+    reason = deny_reason(result)
+    assert "shared.py" in reason
 
 
 def test_hook_imports_real_config_when_parent_holds_shadowing_config(

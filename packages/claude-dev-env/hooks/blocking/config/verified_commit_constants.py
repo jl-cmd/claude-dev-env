@@ -86,6 +86,8 @@ TEST_FILE_SUFFIX = "_test.py"
 CONFTEST_FILE_NAME = "conftest.py"
 MINIMUM_STATUS_FIELD_COUNT = 2
 ALL_FALLBACK_BASE_REFERENCES = ("origin/main", "origin/master")
+DETACHED_HEAD_LABEL = "HEAD"
+BRANCH_REMOTE_CONFIG_KEY_TEMPLATE = "branch.{branch_name}.remote"
 ALL_TOOLING_STATE_PREFIXES = (
     ".claude/verification/",
     ".claude/worktrees/",
