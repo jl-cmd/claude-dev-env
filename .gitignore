@@ -35,6 +35,10 @@ data/prompts/.draft-prompt.xml
 project-paths.json
 **/project-paths.json
 
+# Per-machine claude fallback chain; lives in ~/.claude/ and must never land in the repo
+claude-chain.json
+**/claude-chain.json
+
 # Local environment variables for packages/claude-dev-env/
 packages/claude-dev-env/.env
 .claude/scheduled_tasks.lock
