@@ -93,3 +93,29 @@ STAGED_PYTEST_TIMEOUT_SECONDS: int = 600
 STAGED_TEST_FAILURE_HEADER: str = (
     "code_rules_gate: staged test file(s) failed under pytest; commit blocked."
 )
+
+PYTEST_INI_FILENAME: str = "pytest.ini"
+
+PYPROJECT_TOML_FILENAME: str = "pyproject.toml"
+
+SETUP_CFG_FILENAME: str = "setup.cfg"
+
+TOX_INI_FILENAME: str = "tox.ini"
+
+PYPROJECT_PYTEST_CONFIG_SECTION: str = "[tool.pytest.ini_options]"
+
+SETUP_CFG_PYTEST_CONFIG_SECTION: str = "[tool:pytest]"
+
+TOX_INI_PYTEST_CONFIG_SECTION: str = "[pytest]"
+
+ALL_PYTEST_CONFIG_FILE_SECTIONS: tuple[tuple[str, str | None], ...] = (
+    (PYTEST_INI_FILENAME, None),
+    (PYPROJECT_TOML_FILENAME, PYPROJECT_PYTEST_CONFIG_SECTION),
+    (SETUP_CFG_FILENAME, SETUP_CFG_PYTEST_CONFIG_SECTION),
+    (TOX_INI_FILENAME, TOX_INI_PYTEST_CONFIG_SECTION),
+)
+
+STAGED_TEST_GROUP_FAILURE_MESSAGE: str = (
+    "code_rules_gate: staged test group rooted at {group_root} "
+    "failed under pytest; commit blocked."
+)
