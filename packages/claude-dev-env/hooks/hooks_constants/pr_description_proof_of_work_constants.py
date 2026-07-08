@@ -12,7 +12,7 @@ import re
 
 ALL_PROOF_HEADING_KEYWORDS: tuple[str, ...] = ("proof", "verification")
 
-PR_READY_COMMAND_MARKER: str = "gh pr ready"
+PR_READY_INVOCATION_PATTERN: re.Pattern[str] = re.compile(r"(?:^|[;&|])\s*gh\s+pr\s+ready\b")
 PR_READY_UNDO_FLAG: str = "--undo"
 
 GH_EXECUTABLE: str = "gh"
@@ -105,7 +105,7 @@ __all__ = [
     "PR_COMMENTS_API_PATH_TEMPLATE",
     "PR_DIFF_NAME_ONLY_FLAG",
     "PR_NUMBER_JSON_FIELD",
-    "PR_READY_COMMAND_MARKER",
     "PR_READY_GATE_MESSAGE_TEMPLATE",
+    "PR_READY_INVOCATION_PATTERN",
     "PR_READY_UNDO_FLAG",
 ]

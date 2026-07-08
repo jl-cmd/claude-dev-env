@@ -50,8 +50,8 @@ from hooks_constants.pr_description_proof_of_work_constants import (  # noqa: E4
     PR_COMMENTS_API_PATH_TEMPLATE,
     PR_DIFF_NAME_ONLY_FLAG,
     PR_NUMBER_JSON_FIELD,
-    PR_READY_COMMAND_MARKER,
     PR_READY_GATE_MESSAGE_TEMPLATE,
+    PR_READY_INVOCATION_PATTERN,
     PR_READY_UNDO_FLAG,
     PROOF_PART_COMMAND_MESSAGE,
     PROOF_PART_HONEST_GAPS_MESSAGE,
@@ -73,9 +73,12 @@ def is_pr_ready_command(command: str) -> bool:
     Returns:
         True for a ``gh pr ready`` command without ``--undo``; False for
         every other command, including the undo form that returns a PR to
-        draft.
+        draft and any command that only mentions the phrase ``gh pr ready``
+        inside a quoted argument or commit message.
     """
-    return PR_READY_COMMAND_MARKER in command and PR_READY_UNDO_FLAG not in command
+    if PR_READY_UNDO_FLAG in command:
+        return False
+    return PR_READY_INVOCATION_PATTERN.search(command) is not None
 
 
 def is_proof_shaped_body(body: str) -> bool:

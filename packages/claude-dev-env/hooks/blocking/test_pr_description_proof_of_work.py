@@ -86,6 +86,20 @@ def test_is_pr_ready_command_skips_undo() -> None:
     assert not is_pr_ready_command("gh pr ready 123 --undo")
 
 
+def test_is_pr_ready_command_matches_after_shell_operator() -> None:
+    assert is_pr_ready_command("git fetch && gh pr ready 5")
+
+
+def test_is_pr_ready_command_ignores_phrase_inside_commit_message() -> None:
+    assert not is_pr_ready_command(
+        'git commit -m "block gh pr ready without a proof comment"'
+    )
+
+
+def test_is_pr_ready_command_ignores_phrase_inside_search_argument() -> None:
+    assert not is_pr_ready_command('grep -r "gh pr ready" packages/')
+
+
 def test_audit_passes_complete_proof_on_non_visual_change(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fake_gh(monkeypatch, [], ["src/parser.py"], "+ plain code line")
     assert audit_proof_comment_body(PASSING_PROOF_COMMENT_BODY, 123) == []
