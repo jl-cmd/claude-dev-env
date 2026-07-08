@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
 if _BLOCKING_DIRECTORY not in sys.path:
@@ -119,11 +121,15 @@ def test_check_comment_changes_skips_removal_when_old_python_un_parseable() -> N
     assert issues == []
 
 
-def test_check_comment_changes_still_detects_removal_on_parseable_python() -> None:
+def test_check_comment_changes_advises_without_blocking_on_removal_on_parseable_python(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     old_content = 'x = 1  # existing comment\n'
     new_content = 'x = 1\n'
     issues = code_rules_enforcer.check_comment_changes(old_content, new_content, "foo.py")
-    assert any("Existing comment removed" in each_issue for each_issue in issues)
+    assert not any("Existing comment removed" in each_issue for each_issue in issues)
+    captured = capsys.readouterr()
+    assert "[CODE_RULES advisory] Existing comment removed" in captured.err
 
 
 def test_python_check_should_exempt_directive_without_space_after_hash() -> None:

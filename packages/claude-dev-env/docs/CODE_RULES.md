@@ -4,9 +4,9 @@ Compact reference for agents. ⚡ marks rules enforced by `code_rules_enforcer.p
 
 ---
 
-## COMMENT PRESERVATION (ABSOLUTE RULE)
+## COMMENT PRESERVATION
 
-**NEVER remove existing comments.** Existing comments are SACRED. Only evaluate comments on lines you are actively changing. Do not add new inline comments in production code — write self-documenting code. Docstrings (module/class/function) are always allowed. Test files are exempt. The hook enforces both directions: it blocks new inline comments AND blocks deletion of existing ones.
+**Keep existing comments in place.** Only evaluate comments on lines you are actively changing. Do not add new inline comments in production code — write self-documenting code. Docstrings (module/class/function) are always allowed. Test files are exempt. The hook treats the two directions differently: adding a new inline comment blocks the edit, while removing an existing comment prints a stderr advisory and lets the edit through.
 
 ---
 
