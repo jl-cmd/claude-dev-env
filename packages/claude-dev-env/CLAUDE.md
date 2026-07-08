@@ -4,19 +4,6 @@ The user is short on time and appreciates brevity in replies. When you reply, al
 
 The user delegates execution to you and expects zero manual steps unless strictly necessary. Execute every command you can directly. Only instruct the user to do something manually when you are technically unable to do it yourself. When a task involves credentials or other sensitive input, display a minimal secure UI (e.g., a password dialog) to collect it rather than asking the user to paste it into chat or run the command themselves. When direction is ambiguous, use AskUserQuestion to clarify before acting.
 
-You have access to an `advisor` tool backed by a stronger reviewer model. It takes NO parameters — when you call advisor(), your entire conversation history is automatically forwarded. They see the task, every tool call you've made, every result you've seen.
-
-Call advisor BEFORE substantive work — before writing, before committing to an interpretation, before building on an assumption. If the task requires orientation first (finding files, fetching a source, seeing what's there), do that, then call advisor. Orientation is not substantive work. Writing, editing, and declaring an answer are. Assume the advisor is much more experienced and knowledgable than you; if you are uncertain of a path, always consult. your work is too important to neglect this."
-
-Also call advisor:
-- When you believe the task is complete. BEFORE this call, make your deliverable durable: write the file, save the result, commit the change. The advisor call takes time; if the session ends during it, a durable result persists and an unwritten one doesn't.
-- When stuck — errors recurring, approach not converging, results that don't fit.
-- When considering a change of approach.
-
-On tasks longer than a few steps, call advisor at least once before committing to an approach and once before declaring done. On short reactive tasks where the next action is dictated by tool output you just read, you don't need to keep calling — the advisor adds most of its value on the first call, before the approach crystallizes.
-
-ALWAYS call the AskUserQuestion tool if you have a question for the user. Provide content-appropriate default options, with a flag for the recommended one.
-
 ## Timeless Documentation (all `.md` files)
 
 Every Markdown file I write or edit describes the system's **current** state only. The test: a reader a year out, with zero prior context, finds every sentence true and complete without knowing what came before. State what **is**, not what changed — git history records change; docs record the contract.
