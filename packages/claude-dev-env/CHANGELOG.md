@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.91.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.90.0...claude-dev-env-v1.91.0) (2026-07-08)
+
+
+### Features
+
+* restore advisor skills as team-advisor with Fable 5 orchestrator ([d9d3edc](https://github.com/jl-cmd/claude-code-config/commit/d9d3edc7f1287a42ccf02fdd144ed47e80ce2800))
+* restore advisor skills as team-advisor with Fable 5 orchestrator ([d121442](https://github.com/jl-cmd/claude-code-config/commit/d1214427a13b80b687f78908eb12d7dda7d408cb))
+* **scripts:** add claude chain runner with usage-limit fallback ([11b827c](https://github.com/jl-cmd/claude-code-config/commit/11b827c409597ff3809c5510f7580509a6eabd17))
+* **scripts:** add claude chain runner with usage-limit fallback ([06a9522](https://github.com/jl-cmd/claude-code-config/commit/06a9522ade42c3f4a1fd1ab72c8e2a6d41536389))
+
+
+### Bug Fixes
+
+* **agents:** drop unrecognized effort key that broke code-verifier spawns ([a12ad5e](https://github.com/jl-cmd/claude-code-config/commit/a12ad5e36a6849bb81a8d5f4836fdef9c9ad2bdc))
+* **agents:** drop unrecognized effort key that broke code-verifier spawns ([3a4ae20](https://github.com/jl-cmd/claude-code-config/commit/3a4ae201d6ff6d0bc00a85116f49f7927a5dfd46)), closes [#903](https://github.com/jl-cmd/claude-code-config/issues/903)
+* **hooks:** make comment-removal check advisory instead of blocking ([93eefde](https://github.com/jl-cmd/claude-code-config/commit/93eefde2af9ccdb2e586fcc1ae96d5031fa80896))
+* **hooks:** make comment-removal check advisory instead of blocking ([fafef90](https://github.com/jl-cmd/claude-code-config/commit/fafef9020f8535466909a9ce6ac3e9de8ab90f6e))
+* Judge local resolved state in the code-verifier spawn preflight gate ([f36339d](https://github.com/jl-cmd/claude-code-config/commit/f36339d1963bb8631de0d1a7793b9aac6e256f57))
+* Run the staged code-rules gate from the committing worktree ([e2e4139](https://github.com/jl-cmd/claude-code-config/commit/e2e4139c39817b9c04d0040b8c8744e6a3c5318a))
+
 ## [1.90.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.89.0...claude-dev-env-v1.90.0) (2026-07-08)
 
 
