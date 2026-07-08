@@ -60,7 +60,7 @@ def test_upload_artifact_returns_permanent_url(
     assert asset_url.endswith("_contact_sheet.png")
 
 
-def test_upload_artifact_uploads_with_clobber_and_tag(
+def test_upload_artifact_uploads_to_tag_without_clobber(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source_file = tmp_path / "out.png"
@@ -74,7 +74,7 @@ def test_upload_artifact_uploads_with_clobber_and_tag(
 
     upload_call = next(call for call in recorded_calls if "upload" in call)
     assert "artifacts" in upload_call
-    assert "--clobber" in upload_call
+    assert "--clobber" not in upload_call
 
 
 def test_upload_artifact_creates_release_when_absent(

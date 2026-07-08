@@ -6,7 +6,9 @@ job scratch directory or worktree, because that scratch is cleaned soon after
 the run while the post lives forever. Binary artifacts belong in a permanent
 place instead. This tool ensures the repo has a prerelease tagged ``artifacts``,
 uploads the given file under a timestamped asset name, and prints the permanent
-download URL a post can safely link.
+download URL a post can safely link. The timestamped name keeps each upload a
+distinct asset. An upload never overwrites an earlier one. A same-name collision
+fails loudly instead of replacing the bytes an existing URL already serves.
 
 Usage::
 
@@ -168,7 +170,6 @@ def upload_artifact(file_path: str, repository: str) -> str:
                 str(staged_asset_path),
                 "--repo",
                 repository,
-                "--clobber",
             ]
         )
     if completion.returncode != 0:
