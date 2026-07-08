@@ -17,6 +17,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `conservative-action.md` | Research and recommend when intent is ambiguous; act only on explicit request |
 | `context7.md` | Use Context7 MCP to fetch current library docs; always prefer live docs over built-in knowledge |
 | `docstring-prose-matches-implementation.md` | Prose enumerations in docstrings cover every behavior the body applies |
+| `durable-post-artifacts.md` | GitHub post bodies never reference volatile scratch paths; text embeds inline and binary artifacts upload to the `artifacts` release with the permanent URL linked |
 | `explore-thoroughly.md` | Read relevant files and map existing patterns before proposing a change |
 | `file-global-constants.md` | File-global constants need at least two same-file references; otherwise move value to `config/` |
 | `gh-body-file.md` | Use `--body-file` with a temp file for all `gh` commands carrying markdown body content |
