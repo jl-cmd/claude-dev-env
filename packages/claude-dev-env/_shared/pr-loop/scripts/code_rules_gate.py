@@ -15,6 +15,7 @@ from pr_loop_shared_constants.code_rules_gate_constants import (  # noqa: E402
     ALL_CODE_FILE_EXTENSIONS,
     ALL_GIT_DIFF_CACHED_NAME_ONLY_NULL_TERMINATED_COMMAND,
     ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX,
+    ALL_PYTEST_CONFIG_FILE_SECTIONS,
     ALL_PYTEST_MODULE_INVOCATION,
     ALL_TEST_FILENAME_GLOB_SUFFIXES,
     ALL_TEST_FILENAME_SUFFIXES,
@@ -38,6 +39,7 @@ from pr_loop_shared_constants.code_rules_gate_constants import (  # noqa: E402
     PYTHON_FILE_EXTENSION,
     STAGED_PYTEST_TIMEOUT_SECONDS,
     STAGED_TEST_FAILURE_HEADER,
+    STAGED_TEST_GROUP_FAILURE_MESSAGE,
     TEST_CONFTEST_FILENAME,
     TEST_FILENAME_PREFIX,
     TESTS_PATH_SEGMENT,
@@ -1559,37 +1561,127 @@ def _staged_test_file_paths(repository_root: Path) -> list[Path]:
     return all_test_paths
 
 
-def run_staged_test_files(repository_root: Path) -> int:
-    """Run pytest over the staged test files and return the gate exit code.
+def _directory_holds_pytest_config(directory: Path) -> bool:
+    """Return True when *directory* holds a recognized pytest configuration file."""
+    for each_filename, each_required_section in ALL_PYTEST_CONFIG_FILE_SECTIONS:
+        config_path = directory / each_filename
+        if not config_path.is_file():
+            continue
+        if each_required_section is None:
+            return True
+        try:
+            config_text = config_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if each_required_section in config_text:
+            return True
+    return False
+
+
+def _resolve_owning_test_root(test_file_path: Path, repository_root: Path) -> Path:
+    """Return the nearest ancestor of *test_file_path* that owns a pytest config.
+
+    Walks up from the test file to the first directory holding a pytest config,
+    stopping at *repository_root*, which is the fallback when none is found.
 
     Args:
-        repository_root: The repository root the staged test files belong to.
+        test_file_path: The staged test file to resolve a root for.
+        repository_root: The repository root that bounds the upward walk.
 
     Returns:
-        0 when no test file is staged, when the staged test files collect
-        no tests (pytest's no-tests-collected exit code), or when every staged
-        test passes. pytest's non-zero exit code otherwise, which blocks the
-        commit.
+        The resolved owning test root directory.
     """
-    all_test_paths = _staged_test_file_paths(repository_root)
-    if not all_test_paths:
-        return 0
+    resolved_repository_root = repository_root.resolve()
+    for each_ancestor in test_file_path.resolve().parents:
+        if _directory_holds_pytest_config(each_ancestor):
+            return each_ancestor
+        if each_ancestor == resolved_repository_root:
+            return resolved_repository_root
+    return resolved_repository_root
+
+
+def _group_staged_tests_by_root(
+    all_test_paths: list[Path],
+    repository_root: Path,
+) -> dict[Path, list[Path]]:
+    """Group *all_test_paths* by their owning pytest-config root.
+
+    Args:
+        all_test_paths: The staged test files to partition.
+        repository_root: The repository root that bounds each upward walk.
+
+    Returns:
+        A mapping from owning test root to the staged test files under it.
+    """
+    tests_by_root: dict[Path, list[Path]] = {}
+    for each_test_path in all_test_paths:
+        owning_root = _resolve_owning_test_root(each_test_path, repository_root)
+        tests_by_root.setdefault(owning_root, []).append(each_test_path)
+    return tests_by_root
+
+
+def _run_pytest_for_group(group_root: Path, all_group_test_paths: list[Path]) -> int:
+    """Run pytest over one group's test files with the working directory at its root.
+
+    Args:
+        group_root: The owning test root used as the pytest working directory.
+        all_group_test_paths: The staged test files that share *group_root*.
+
+    Returns:
+        0 when the group's tests pass or collect nothing; pytest's non-zero
+        exit code otherwise.
+    """
     pytest_process = subprocess.run(
         [
             sys.executable,
             *ALL_PYTEST_MODULE_INVOCATION,
-            *[str(each_path) for each_path in all_test_paths],
+            *[str(each_path) for each_path in all_group_test_paths],
         ],
-        cwd=str(repository_root),
+        cwd=str(group_root),
         timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
         check=False,
         env=repository_environment(),
     )
     if pytest_process.returncode == PYTEST_NO_TESTS_COLLECTED_EXIT_CODE:
         return 0
-    if pytest_process.returncode != 0:
-        print(STAGED_TEST_FAILURE_HEADER, file=sys.stderr)
     return pytest_process.returncode
+
+
+def run_staged_test_files(repository_root: Path) -> int:
+    """Run pytest over the staged test files and return the gate exit code.
+
+    Groups the staged test files by their owning pytest-config root and runs one
+    pytest session per group with the working directory at that root, so two
+    packages that expose a same-named top-level package never share one session
+    and shadow each other's imports.
+
+    Args:
+        repository_root: The repository root the staged test files belong to.
+
+    Returns:
+        0 when no test file is staged, when every group collects no tests, or
+        when every group passes. The first failing group's non-zero pytest exit
+        code otherwise, which blocks the commit.
+    """
+    all_test_paths = _staged_test_file_paths(repository_root)
+    if not all_test_paths:
+        return 0
+    tests_by_root = _group_staged_tests_by_root(all_test_paths, repository_root)
+    first_failing_exit_code = 0
+    for each_group_root in sorted(tests_by_root):
+        group_exit_code = _run_pytest_for_group(
+            each_group_root, tests_by_root[each_group_root]
+        )
+        if group_exit_code != 0:
+            print(
+                STAGED_TEST_GROUP_FAILURE_MESSAGE.format(group_root=each_group_root),
+                file=sys.stderr,
+            )
+            if first_failing_exit_code == 0:
+                first_failing_exit_code = group_exit_code
+    if first_failing_exit_code != 0:
+        print(STAGED_TEST_FAILURE_HEADER, file=sys.stderr)
+    return first_failing_exit_code
 
 
 def _report_terminology_findings(all_findings: list[str]) -> None:

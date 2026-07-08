@@ -2418,3 +2418,163 @@ def test_run_staged_test_files_runs_pytest_without_git_environment(
     monkeypatch.setenv("GIT_AUTHOR_NAME", "Hostile Hook Environment")
 
     assert gate_module.run_staged_test_files(repository_root) == 0
+
+
+def _build_shadowing_skill(
+    repository_root: Path,
+    skill_name: str,
+    module_name: str,
+) -> Path:
+    skill_directory = repository_root / skill_name
+    write_file(skill_directory / "pytest.ini", "[pytest]\n")
+    write_file(skill_directory / "scripts" / "__init__.py", "")
+    write_file(
+        skill_directory / "scripts" / f"{module_name}.py",
+        f"{module_name}_marker = 1\n",
+    )
+    test_relative_path = f"{skill_name}/test_{module_name}.py"
+    write_file(
+        repository_root / test_relative_path,
+        f"from scripts.{module_name} import {module_name}_marker\n"
+        "\n"
+        "\n"
+        f"def test_{module_name}_marker_is_one() -> None:\n"
+        f"    assert {module_name}_marker == 1\n",
+    )
+    stage_file(repository_root, test_relative_path)
+    return repository_root / test_relative_path
+
+
+def test_run_staged_test_files_passes_when_same_named_package_would_shadow(
+    temporary_git_repository: Path,
+) -> None:
+    """Two skill roots each own a top-level ``scripts`` package. One combined
+    pytest session binds ``scripts`` to whichever imports first and the other
+    skill's ``from scripts.<module>`` then raises ImportError. Per-root sessions
+    keep each ``scripts`` isolated, so the gate passes."""
+    first_test_path = _build_shadowing_skill(
+        temporary_git_repository, "skill_alpha", "widget"
+    )
+    second_test_path = _build_shadowing_skill(
+        temporary_git_repository, "skill_beta", "gadget"
+    )
+
+    combined_session = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", str(first_test_path), str(second_test_path)],
+        cwd=str(temporary_git_repository),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    assert combined_session.returncode != 0, (
+        "one combined pytest session must fail on the same-named scripts package "
+        "shadow; if it does not, the shadow scenario is not being reproduced"
+    )
+
+    assert gate_module.run_staged_test_files(temporary_git_repository) == 0, (
+        "per-root pytest sessions must keep each scripts package isolated so both "
+        "staged suites pass"
+    )
+
+
+def test_resolve_owning_test_root_returns_pyproject_config_directory(
+    tmp_path: Path,
+) -> None:
+    package_root = tmp_path / "package_root"
+    write_file(
+        package_root / "pyproject.toml",
+        "[tool.pytest.ini_options]\ntestpaths = ['tests']\n",
+    )
+    test_path = package_root / "tests" / "test_behavior.py"
+    write_file(test_path, "def test_behavior() -> None:\n    assert True\n")
+
+    resolved_root = gate_module._resolve_owning_test_root(test_path, tmp_path)
+
+    assert resolved_root == package_root.resolve()
+
+
+def test_resolve_owning_test_root_returns_pytest_ini_directory(
+    tmp_path: Path,
+) -> None:
+    package_root = tmp_path / "package_root"
+    write_file(package_root / "pytest.ini", "[pytest]\n")
+    test_path = package_root / "suite" / "test_behavior.py"
+    write_file(test_path, "def test_behavior() -> None:\n    assert True\n")
+
+    resolved_root = gate_module._resolve_owning_test_root(test_path, tmp_path)
+
+    assert resolved_root == package_root.resolve()
+
+
+def test_resolve_owning_test_root_falls_back_to_repository_root(
+    tmp_path: Path,
+) -> None:
+    test_path = tmp_path / "nested" / "deeper" / "test_behavior.py"
+    write_file(test_path, "def test_behavior() -> None:\n    assert True\n")
+
+    resolved_root = gate_module._resolve_owning_test_root(test_path, tmp_path)
+
+    assert resolved_root == tmp_path.resolve()
+
+
+def test_resolve_owning_test_root_skips_pyproject_without_pytest_section(
+    tmp_path: Path,
+) -> None:
+    outer_root = tmp_path / "outer"
+    write_file(
+        outer_root / "pyproject.toml",
+        "[tool.pytest.ini_options]\ntestpaths = ['tests']\n",
+    )
+    write_file(outer_root / "inner" / "pyproject.toml", "[project]\nname = 'inner'\n")
+    test_path = outer_root / "inner" / "test_behavior.py"
+    write_file(test_path, "def test_behavior() -> None:\n    assert True\n")
+
+    resolved_root = gate_module._resolve_owning_test_root(test_path, tmp_path)
+
+    assert resolved_root == outer_root.resolve()
+
+
+def test_group_staged_tests_by_root_shares_a_session_for_same_root(
+    tmp_path: Path,
+) -> None:
+    package_root = tmp_path / "package_root"
+    write_file(package_root / "pytest.ini", "[pytest]\n")
+    first_test_path = package_root / "tests" / "test_first.py"
+    second_test_path = package_root / "tests" / "test_second.py"
+    write_file(first_test_path, "def test_first() -> None:\n    assert True\n")
+    write_file(second_test_path, "def test_second() -> None:\n    assert True\n")
+
+    tests_by_root = gate_module._group_staged_tests_by_root(
+        [first_test_path, second_test_path], tmp_path
+    )
+
+    assert set(tests_by_root) == {package_root.resolve()}
+    assert sorted(tests_by_root[package_root.resolve()]) == sorted(
+        [first_test_path, second_test_path]
+    )
+
+
+def test_run_staged_test_files_fails_when_one_group_fails(
+    temporary_git_repository: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    write_file(temporary_git_repository / "passing_skill" / "pytest.ini", "[pytest]\n")
+    write_file(
+        temporary_git_repository / "passing_skill" / "test_pass.py",
+        "def test_pass() -> None:\n    assert True\n",
+    )
+    stage_file(temporary_git_repository, "passing_skill/test_pass.py")
+    write_file(temporary_git_repository / "failing_skill" / "pytest.ini", "[pytest]\n")
+    write_file(
+        temporary_git_repository / "failing_skill" / "test_fail.py",
+        "def test_fail() -> None:\n    assert False\n",
+    )
+    stage_file(temporary_git_repository, "failing_skill/test_fail.py")
+
+    exit_code = gate_module.run_staged_test_files(temporary_git_repository)
+
+    assert exit_code != 0
+    captured_error = capsys.readouterr().err
+    assert "failing_skill" in captured_error
