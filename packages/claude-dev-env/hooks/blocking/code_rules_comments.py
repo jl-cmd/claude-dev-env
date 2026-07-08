@@ -147,7 +147,7 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
 
     Inline comments (after code on same line): BLOCK when added.
     Standalone comment lines: NUDGE (print advisory) when added.
-    Existing comments being removed: BLOCK (comment preservation principle).
+    Existing comments being removed: NUDGE (print advisory) — comment preservation is advisory.
 
     When the file is Python and either *old_content* or *new_content* cannot
     be tokenized (common for mid-edit Edit fragments), the comparison is
@@ -188,7 +188,7 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
         code_was_removed = new_line_count < old_line_count - len(removed_comments)
         if not code_was_removed:
             sample = next(iter(removed_comments))
-            issues.append(f"Existing comment removed: {sample[:60]} - NEVER delete existing comments")
+            print(f"[CODE_RULES advisory] Existing comment removed: {sample[:60]} - comment preservation is advisory", file=sys.stderr)
 
     return issues
 

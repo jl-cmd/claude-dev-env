@@ -159,7 +159,7 @@ Use logging for application and runtime output. `print()` is allowed when stdout
 
 ### Comment preservation
 
-Existing comments on lines that remain otherwise unchanged stay exactly as you found them. The hook enforces both directions: the gate fires on a new inline `#` or `//` in production code, and the gate also fires when an existing comment disappears from a line you touched. New code self-documents via names; new docstrings on functions, methods, classes, and modules remain allowed.
+Existing comments on lines you leave otherwise unchanged stay exactly as you found them. The hook treats the two directions differently: the gate fires and blocks the edit on a new inline `#` or `//` in production code, while an existing comment disappearing from a line you touched prints a stderr advisory and lets the edit through. New code self-documents via names; new docstrings on functions, methods, classes, and modules stay allowed.
 
 ### Centralized configuration
 
@@ -338,7 +338,7 @@ These gates are checked by `code_rules_enforcer.py`. Satisfying each gate lets y
 | Rule | What this rule looks for |
 |------|--------------------------|
 | Self-documenting names only | New `#` or `//` in production code (shebangs, `# type:`, `# noqa`, eslint-directives, docstrings exempt) |
-| Comment preservation | Removal of existing comments on lines that remain otherwise unchanged |
+| Comment preservation | Advisory — removal of existing comments on lines you leave otherwise unchanged prints a stderr advisory and does not block |
 | Imports at top | `import` statements placed inside function bodies |
 | Logging format | `log_*(f"...")` — replace with `log_*("...", arg)` |
 | File length | Advisory at 400 lines (soft), strong nudge at 1000 — emitted to stderr; the write proceeds |

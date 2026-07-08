@@ -69,7 +69,7 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 **J8. New inline comments**
 - Every `#` or `//` comment line **added** by this diff in production code — flag, except for exempt markers (shebangs, `# type:`, `# noqa`, `# pylint:`, `# pragma:`, `// @ts-`, `// eslint-`, `// prettier-`, `/// `).
 - Module/function/class docstrings are always allowed.
-- Existing comments are NEVER removed (Comment Preservation rule); if the diff removes an existing comment, that is a separate violation outside J8 (also blocked by the hook).
+- Existing comments are NEVER removed (Comment Preservation rule); if the diff removes an existing comment, that is a separate violation outside J8 (the hook emits a stderr advisory for it rather than blocking).
 - Test files are exempt.
 - Adversarial probes: (a) is there any `# type:` or marker comment that is actually inert prose rather than a real type-checker / linter directive? (b) is any docstring carrying inline-comment content (line-level explanations rather than module/function description)? (c) does any newly-added blank line between code stanzas function as a comment substitute, suggesting the author wanted to add a comment but couldn't?
 

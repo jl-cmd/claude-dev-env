@@ -68,7 +68,7 @@ _merged_mapping_key_order = (
 )
 
 _code_standards_section_order = (
-    "COMMENT PRESERVATION (ABSOLUTE RULE)",
+    "COMMENT PRESERVATION",
     "CORE PRINCIPLES",
     "⚡ HOOK-ENFORCED RULES",
     "3. REUSE CONSTANTS / 4. CONFIG LOCATIONS",

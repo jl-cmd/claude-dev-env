@@ -24,7 +24,7 @@
 | J5 | Abbreviations | `ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `elem`, `val`, `tmp`, `str`, `num`, `arr`, `obj`, `fn`, `cb`, `req`, `res`. (Loop counters `i`/`j`/`k` and `e` for exceptions are exempt.) |
 | J6 | Vague names | `result`, `data`, `output`, `response`, `value`, `item`, `temp`, `info`, `stuff`, `thing`. Vague prefixes: `handle`, `process`, `manage`, `do`. |
 | J7 | Type hints | Missing type annotation on a parameter or return; presence of `Any` or `# type: ignore`. |
-| J8 | New inline comments | New `#` or `//` comments in production code added by this diff. (Existing comments are NEVER removed — Comment Preservation rule.) |
+| J8 | New inline comments | New `#` or `//` comments in production code added by this diff. (Removing an existing comment is a Comment Preservation concern the hook flags with a stderr advisory rather than a block.) |
 | J9 | Logging format | `log_*(f"...")` rather than `log_*("...", arg)`. |
 | J10 | Imports inside functions | `import` statements placed inside function bodies. |
 | J11 | sys.path.insert dedup | `sys.path.insert(0, X)` must be guarded by `if X not in sys.path:` (test files exempt). |
