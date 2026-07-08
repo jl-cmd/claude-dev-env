@@ -15,7 +15,9 @@ found by skipping ``VAR=value`` assignments and launcher wrappers (``timeout``,
 ``nohup``, ``nice``, ``stdbuf``, ``setsid``, ``env``) with their flags and duration
 arguments. A segment is evaluated only when its leading program's basename is
 ``ssh``/``scp``/``sftp`` (with or without a ``.exe`` suffix) AND a token in that same
-segment holds the NAS address ``192.168.1.100`` as a whole-address match.
+segment holds the NAS address ``192.168.1.100`` as a connection host — bare,
+``user@host``, or a ``host:path`` target. The address inside a remote-command
+argument or a remote path component on another host does not count.
 
 An evaluated segment is DENIED with the binary-swap message when its leading program
 is a bare ssh-family word rather than a path ending in ``OpenSSH/ssh.exe`` (or
@@ -49,7 +51,7 @@ from hooks_constants.nas_ssh_binary_enforcer_constants import (  # noqa: E402
     LAUNCHER_DURATION_PATTERN,
     LEADING_ASSIGNMENT_PATTERN,
     MISSING_BATCH_MODE_MESSAGE,
-    NAS_ADDRESS_PATTERN,
+    NAS_HOST_TOKEN_PATTERN,
 )
 
 
@@ -100,7 +102,7 @@ def _effective_leading_program(all_segment_tokens: list[str]) -> str | None:
 
 
 def _segment_references_nas(all_segment_tokens: list[str]) -> bool:
-    return any(NAS_ADDRESS_PATTERN.search(each_token) for each_token in all_segment_tokens)
+    return any(NAS_HOST_TOKEN_PATTERN.search(each_token) for each_token in all_segment_tokens)
 
 
 def _segment_carries_batch_mode(all_segment_tokens: list[str]) -> bool:

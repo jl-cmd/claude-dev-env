@@ -144,6 +144,18 @@ def test_nas_ip_in_different_segment_than_ssh_is_allowed() -> None:
     assert _find_nas_ssh_violation('echo 192.168.1.100 && ssh -p 22 jon@example.com "id"') is None
 
 
+def test_ssh_to_other_host_with_nas_ip_in_remote_command_is_allowed() -> None:
+    assert (
+        _find_nas_ssh_violation('ssh -p 22 jon@example.com "ping -c1 192.168.1.100"') is None
+    )
+
+
+def test_scp_to_other_host_with_nas_ip_in_remote_path_is_allowed() -> None:
+    assert (
+        _find_nas_ssh_violation("scp -P 22 f.txt jon@example.com:/backup/192.168.1.100/") is None
+    )
+
+
 def test_similar_ip_prefix_is_not_matched() -> None:
     assert _find_nas_ssh_violation('ssh -p 22 jon@192.168.1.1000 "id"') is None
 
