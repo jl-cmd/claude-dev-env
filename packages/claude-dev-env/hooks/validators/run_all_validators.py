@@ -375,9 +375,9 @@ def run_comment_checks(files: List[Path]) -> ValidatorResult:
     """Comment preservation is enforced by code_rules_enforcer hook.
 
     The hook compares old vs new content to block NEW comments and
-    block DELETION of existing comments. This standalone validator
-    is disabled because it flags ALL comments in existing files,
-    which forces agents to remove them to pass validation.
+    print a stderr advisory when an existing comment is removed. This
+    standalone validator is disabled because it flags ALL comments in
+    existing files, which forces agents to remove them to pass validation.
     """
     return ValidatorResult(
         name="No Comments",

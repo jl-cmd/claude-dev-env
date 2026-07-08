@@ -116,8 +116,9 @@
   - Search config/ before defining any constant; import existing constants before creating new ones
   - UPPER_SNAKE names belong in config/ only
 
-  Comments — preservation is absolute:
-  - Every comment on an untouched line stays untouched
+  Comments — preservation, add-time blocking:
+  - Keep every comment on an untouched line untouched; removing one prints a stderr advisory and lets the edit through
+  - Adding a new inline comment in production code blocks the edit
   - Express new explanations through self-documenting names
   - Docstrings on new files, methods, and classes are permitted
 
