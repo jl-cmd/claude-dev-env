@@ -19,12 +19,12 @@ if _hooks_directory not in sys.path:
 
 from hooks_constants.pii_prevention_constants import (  # noqa: E402
     ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES,
-    ALL_LICENSE_BASENAME_PREFIXES,
+    ALL_EXACT_LEGAL_NOTICE_BASENAMES,
     ALL_PLACEHOLDER_HOME_USERNAMES,
     ALL_RFC1918_NETWORK_CIDRS,
     ALL_SAFE_EMAIL_DOMAINS,
     ALL_SECRET_PATTERNS,
-    ALL_SELF_MODULE_BASENAMES,
+    ALL_SELF_MODULE_PATH_SUFFIXES,
     ALL_SOURCE_TEST_FILE_SUFFIXES,
     ANGLE_BRACKET_PLACEHOLDER_PATTERN,
     CATEGORY_EMAIL,
@@ -83,8 +83,11 @@ def is_path_exempt_from_pii_scan(file_path: str) -> bool:
     normalized_path = file_path.replace("\\", "/").lower()
     basename = os.path.basename(file_path)
     basename_lower = basename.lower()
-    if basename in ALL_SELF_MODULE_BASENAMES:
-        return True
+    for each_suffix in ALL_SELF_MODULE_PATH_SUFFIXES:
+        if normalized_path.endswith(each_suffix) or normalized_path.endswith(
+            each_suffix.lstrip("/")
+        ):
+            return True
     if basename_lower == CONFTEST_BASENAME:
         return True
     if basename_lower.endswith(PYTHON_SOURCE_FILE_SUFFIX) and (
@@ -100,9 +103,8 @@ def is_path_exempt_from_pii_scan(file_path: str) -> bool:
         SPEC_BASENAME_MARKER in basename_lower or TEST_BASENAME_MARKER in basename_lower
     ):
         return True
-    for each_prefix in ALL_LICENSE_BASENAME_PREFIXES:
-        if basename.upper().startswith(each_prefix):
-            return True
+    if basename_lower in ALL_EXACT_LEGAL_NOTICE_BASENAMES:
+        return True
     return False
 
 

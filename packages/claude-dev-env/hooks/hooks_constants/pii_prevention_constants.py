@@ -31,6 +31,26 @@ ALL_SELF_MODULE_BASENAMES: frozenset[str] = frozenset(
 
 ALL_LICENSE_BASENAME_PREFIXES: tuple[str, ...] = ("LICENSE", "COPYING", "NOTICE")
 
+ALL_EXACT_LEGAL_NOTICE_BASENAMES: frozenset[str] = frozenset(
+    {
+        "license",
+        "license.md",
+        "license.txt",
+        "copying",
+        "copying.md",
+        "copying.txt",
+        "notice",
+        "notice.md",
+        "notice.txt",
+    }
+)
+
+ALL_SELF_MODULE_PATH_SUFFIXES: tuple[str, ...] = (
+    "/hooks/blocking/pii_prevention_blocker.py",
+    "/hooks/blocking/pii_scanner.py",
+    "/hooks/hooks_constants/pii_prevention_constants.py",
+)
+
 PYTHON_SOURCE_FILE_SUFFIX: str = ".py"
 CONFTEST_BASENAME: str = "conftest.py"
 TEST_MODULE_BASENAME_PREFIX: str = "test_"

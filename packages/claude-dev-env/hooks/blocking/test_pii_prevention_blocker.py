@@ -125,6 +125,51 @@ def test_write_with_empty_path_still_scans_content() -> None:
     assert "email" in deny_reason
 
 
+def test_write_to_basename_only_self_module_name_is_not_exempt() -> None:
+    deny_reason = evaluate_write_edit_payload(
+        "Write",
+        {
+            "file_path": "vendor/pii_scanner.py",
+            "content": f"Reach me at {SYNTHETIC_REAL_EMAIL}",
+        },
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_write_to_license_prefix_filename_is_not_exempt() -> None:
+    deny_reason = evaluate_write_edit_payload(
+        "Write",
+        {
+            "file_path": "LICENSE_leak.env",
+            "content": f"Reach me at {SYNTHETIC_REAL_EMAIL}",
+        },
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_gh_body_file_fails_closed_when_unreadable(tmp_path: Path) -> None:
+    missing_body_file = tmp_path / "missing_pr_body.md"
+    command = f'gh pr comment 12 --body-file "{missing_body_file}"'
+    deny_reason = evaluate_bash_command(command, working_directory=str(tmp_path))
+    assert deny_reason is not None
+    assert "body-file" in deny_reason
+
+
+def test_gh_body_file_reads_relative_path_from_working_directory(
+    tmp_path: Path,
+) -> None:
+    body_file = tmp_path / "pr.md"
+    body_file.write_text(f"Reach me at {SYNTHETIC_REAL_EMAIL}\n", encoding="utf-8")
+    deny_reason = evaluate_bash_command(
+        "gh pr comment 12 --body-file pr.md",
+        working_directory=str(tmp_path),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
 def test_gh_post_body_with_secret_is_denied() -> None:
     command = (
         f'gh pr comment 12 --body "auth material {SYNTHETIC_GITHUB_TOKEN}"'

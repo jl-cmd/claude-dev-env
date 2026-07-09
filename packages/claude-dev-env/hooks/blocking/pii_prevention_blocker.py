@@ -35,7 +35,7 @@ from precommit_code_rules_gate import (  # noqa: E402
     resolve_repository_root,
 )
 from volatile_path_in_post_blocker import (  # noqa: E402
-    extract_gh_post_body_texts,
+    extract_gh_post_body_texts_for_privacy_gate,
     extract_mcp_body_texts,
 )
 
@@ -299,7 +299,13 @@ def evaluate_bash_command(
     Returns:
         Deny reason text, or None when the command is clean or out of scope.
     """
-    all_post_bodies = extract_gh_post_body_texts(bash_command)
+    all_post_bodies, body_file_failure_reason = (
+        extract_gh_post_body_texts_for_privacy_gate(
+            bash_command, working_directory=working_directory
+        )
+    )
+    if body_file_failure_reason is not None:
+        return body_file_failure_reason
     post_deny_reason = evaluate_post_body_texts(all_post_bodies)
     if post_deny_reason is not None:
         return post_deny_reason

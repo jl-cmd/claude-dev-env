@@ -220,11 +220,14 @@ def _collect_body_flag_values(
     return all_inline_bodies, all_body_file_paths
 
 
-def _read_body_file(body_file_path: str) -> str | None:
+def _read_body_file(
+    body_file_path: str, working_directory: str | None = None
+) -> str | None:
     """Return the contents of a body-file path, or None when it cannot be read.
 
     Args:
         body_file_path: The path given to ``--body-file``/``-F``.
+        working_directory: Optional base directory for relative body-file paths.
 
     Returns:
         The file text, or None for an unresolvable shell value (such as ``-`` for
@@ -232,21 +235,28 @@ def _read_body_file(body_file_path: str) -> str | None:
     """
     if is_unresolvable_shell_value(body_file_path):
         return None
+    resolved_path = Path(body_file_path)
+    if not resolved_path.is_absolute() and working_directory:
+        resolved_path = Path(working_directory) / body_file_path
     try:
-        return Path(body_file_path).read_text(encoding=BODY_FILE_ENCODING)
+        return resolved_path.read_text(encoding=BODY_FILE_ENCODING)
     except OSError:
         return None
 
 
-def extract_gh_post_body_texts(command: str) -> list[str]:
+def extract_gh_post_body_texts(
+    command: str, working_directory: str | None = None
+) -> list[str]:
     """Return every post body text an affected ``gh`` command would send.
 
     Non-post ``gh`` commands and unparseable command lines yield an empty list.
     Body-file contents are read from disk so the embedded text is scanned rather
-    than the file path.
+    than the file path. Relative body-file paths resolve against
+    *working_directory* when provided.
 
     Args:
         command: The raw Bash tool command string.
+        working_directory: Optional base directory for relative body-file paths.
 
     Returns:
         Inline ``--body`` strings plus the contents of each readable body-file.
@@ -265,10 +275,49 @@ def extract_gh_post_body_texts(command: str) -> list[str]:
     )
     all_body_texts = list(all_inline_bodies)
     for each_path in all_body_file_paths:
-        file_text = _read_body_file(each_path)
+        file_text = _read_body_file(each_path, working_directory=working_directory)
         if file_text is not None:
             all_body_texts.append(file_text)
     return all_body_texts
+
+
+def extract_gh_post_body_texts_for_privacy_gate(
+    command: str, working_directory: str | None = None
+) -> tuple[list[str], str | None]:
+    """Like ``extract_gh_post_body_texts``, but fail-closed on unreadable body-files.
+
+    Args:
+        command: The raw Bash tool command string.
+        working_directory: Optional base directory for relative body-file paths.
+
+    Returns:
+        ``(all_body_texts, None)`` when every declared body-file was read (or
+        none were declared), else ``([], deny_reason)`` when a body-file flag is
+        present but its contents could not be loaded for scanning.
+    """
+    logical_line = get_logical_first_line(command)
+    if not logical_line:
+        return [], None
+    try:
+        all_command_tokens = shlex.split(logical_line, posix=False)
+    except ValueError:
+        return [], None
+    if not _tokens_name_gh_post_command(all_command_tokens):
+        return [], None
+    all_inline_bodies, all_body_file_paths = _collect_body_flag_values(
+        all_command_tokens
+    )
+    all_body_texts = list(all_inline_bodies)
+    for each_path in all_body_file_paths:
+        file_text = _read_body_file(each_path, working_directory=working_directory)
+        if file_text is None:
+            return [], (
+                "BLOCKED [pii_prevention_blocker]: durable post uses --body-file "
+                f"but '{each_path}' could not be read for PII scanning. Use an "
+                "absolute path, ensure the file exists, or pass --body text."
+            )
+        all_body_texts.append(file_text)
+    return all_body_texts, None
 
 
 def extract_mcp_body_texts(all_tool_input: dict[str, object]) -> list[str]:

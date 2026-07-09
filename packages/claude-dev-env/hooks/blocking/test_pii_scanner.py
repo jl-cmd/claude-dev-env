@@ -90,8 +90,13 @@ def test_clean_prose_returns_no_findings() -> None:
 def test_path_exemptions_for_tests_license_and_self_modules() -> None:
     assert is_path_exempt_from_pii_scan("packages/hooks/blocking/test_pii_scanner.py")
     assert is_path_exempt_from_pii_scan("LICENSE")
+    assert is_path_exempt_from_pii_scan("LICENSE.md")
     assert is_path_exempt_from_pii_scan("hooks/blocking/pii_scanner.py")
-    assert is_path_exempt_from_pii_scan("hooks/hooks_constants/pii_prevention_constants.py")
+    assert is_path_exempt_from_pii_scan(
+        "packages/claude-dev-env/hooks/hooks_constants/pii_prevention_constants.py"
+    )
+    assert not is_path_exempt_from_pii_scan("vendor/pii_scanner.py")
+    assert not is_path_exempt_from_pii_scan("LICENSE_leak.env")
     assert not is_path_exempt_from_pii_scan("src/app/settings.md")
     assert not is_path_exempt_from_pii_scan("test_notes.md")
     assert not is_path_exempt_from_pii_scan("test_secrets.env")
