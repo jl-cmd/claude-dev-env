@@ -58,8 +58,9 @@ session drives the plan and routes hard decisions to the shared session-advisor.
 ## Process
 
 1. **Check whether the refresh loop is already running this
-   session.** If it is, skip straight to step 3 — do not schedule a
-   second loop.
+   session.** If it is, do not schedule a second loop. Reuse any live
+   shared session-advisor (run step 3 only when none exists yet), then
+   skip straight to step 4.
 
 2. **Register the discipline reminder.** By default, schedule it with
    `ScheduleWakeup` at `delaySeconds: 1200`, prompt `/orchestrator-refresh`,

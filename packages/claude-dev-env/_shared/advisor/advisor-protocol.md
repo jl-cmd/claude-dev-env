@@ -85,7 +85,7 @@ Treat the reply as a serious second opinion: a CORRECTION — whether it names a
 
 This paragraph is self-contained — the executor receives only this text, not the rest of this document, so it carries everything it needs on its own:
 
-> A shared session advisor named `<name>` is reachable via SendMessage. Consult it before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, and when the same failure repeats. Open each consult with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts. Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer. After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it. Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take. On STOP, or if the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions to the session that owns the advisor.
+> A shared session advisor named `<name>` is reachable via SendMessage. Consult it before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered. Open each consult with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts. Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer. After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it. Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take. On STOP, or if the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions to the session that owns the advisor.
 
 ## Lifecycle ownership
 
@@ -102,7 +102,7 @@ Fall back to the CLI when any of these holds, rather than on judgment call:
 - `SendMessage` to the shared advisor errors, or draws no reply within the bound in `ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS` (120) in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py`, and a re-spawn also fails.
 - The running session is itself a subagent barred from spawning further agents.
 
-Map the resolved floor tier to its CLI / Agent model alias before the first call — the CLI's `--model` flag and the Agent tool's `model:` field take the short aliases below, not free-form ladder prose. Source of truth: `ALL_CLI_MODEL_ID_BY_TIER` and `resolve_cli_model_id(tier)` in the same constants package / `tier_model_ids.py` helper:
+Map `selected_tier` when one exists (the warm agent already bound above the floor, or at it); map the floor tier only when the walk exhausted with `selected_tier=null`. Resolve that tier to its CLI / Agent model alias before the first call — the CLI's `--model` flag and the Agent tool's `model:` field take the short aliases below, not free-form ladder prose. Source of truth: `ALL_CLI_MODEL_ID_BY_TIER` and `resolve_cli_model_id(tier)` in the same constants package / `tier_model_ids.py` helper:
 
 | Ladder tier (Title Case) | CLI / Agent `model` alias |
 |---|---|
