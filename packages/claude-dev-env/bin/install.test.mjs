@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -18,6 +18,9 @@ import {
     managedHookScriptRelativePaths,
     managedHookScriptRelativePathsFromSourceRoots,
     commandReferencesManagedHook,
+    expandHomeDirectoryTokens,
+    expandHomeDirectoryTokensInSettings,
+    homeDirectoryFromPluginRoot,
     mergeHooksIntoSettings,
     pruneManagedHooksFromSettings,
 } from './install.mjs';
@@ -236,6 +239,117 @@ test('interpreterCommandFromPath quotes an interpreter path that contains a spac
         interpreterCommandFromPath('C:\\Program Files\\Python313\\python.exe'),
         '"C:/Program Files/Python313/python.exe"',
     );
+});
+
+
+test('expandHomeDirectoryTokens expands $HOME, ${HOME}, and ~/', () => {
+    assert.equal(
+        expandHomeDirectoryTokens(
+            'python $HOME/.claude/hooks/session/fix_worktree_hookspath.py',
+            'C:\\Users\\x',
+        ),
+        'python C:/Users/x/.claude/hooks/session/fix_worktree_hookspath.py',
+    );
+    assert.equal(
+        expandHomeDirectoryTokens('python ${HOME}/.claude/hooks/a.py', '/home/x'),
+        'python /home/x/.claude/hooks/a.py',
+    );
+    assert.equal(
+        expandHomeDirectoryTokens('python ~/.claude/hooks/a.py', '/home/x'),
+        'python /home/x/.claude/hooks/a.py',
+    );
+    assert.equal(
+        expandHomeDirectoryTokens('echo $HOMEPATH', 'C:/Users/x'),
+        'echo $HOMEPATH',
+    );
+});
+
+
+test('homeDirectoryFromPluginRoot strips the .claude leaf', () => {
+    assert.equal(homeDirectoryFromPluginRoot('C:/Users/x/.claude'), dirname('C:/Users/x/.claude'));
+    assert.equal(homeDirectoryFromPluginRoot('/home/x/.claude'), '/home/x');
+});
+
+
+test('expandHomeDirectoryTokensInSettings rewrites hooks and statusLine', () => {
+    const settings = {
+        hooks: {
+            SessionStart: [
+                {
+                    matcher: '',
+                    hooks: [
+                        {
+                            type: 'command',
+                            command: 'python $HOME/.claude/hooks/session/fix_worktree_hookspath.py',
+                        },
+                    ],
+                },
+            ],
+        },
+        statusLine: {
+            type: 'command',
+            command: 'python "$HOME/.claude/statusline-command.py"',
+        },
+    };
+    expandHomeDirectoryTokensInSettings(settings, 'C:/Users/x');
+    assert.equal(
+        settings.hooks.SessionStart[0].hooks[0].command,
+        'python C:/Users/x/.claude/hooks/session/fix_worktree_hookspath.py',
+    );
+    assert.equal(
+        settings.statusLine.command,
+        'python "C:/Users/x/.claude/statusline-command.py"',
+    );
+});
+
+
+test('mergeHooksIntoSettings expands residual $HOME in preserved user hooks', () => {
+    const hooksConfig = {
+        hooks: {
+            SessionStart: [
+                {
+                    matcher: '',
+                    hooks: [
+                        {
+                            type: 'command',
+                            command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/session_env_cleanup.py',
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+    const settings = {
+        hooks: {
+            SessionStart: [
+                {
+                    matcher: '',
+                    hooks: [
+                        {
+                            type: 'command',
+                            command: 'python $HOME/.claude/hooks/session/fix_worktree_hookspath.py',
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/x/.claude', 'C:/Python313/python.exe');
+    const allCommands = settings.hooks.SessionStart[0].hooks.map(eachHook => eachHook.command);
+    assert.ok(
+        allCommands.includes(
+            'python C:/Users/x/.claude/hooks/session/fix_worktree_hookspath.py',
+        ),
+    );
+    assert.ok(
+        allCommands.includes(
+            'C:/Python313/python.exe C:/Users/x/.claude/hooks/session/session_env_cleanup.py',
+        ),
+    );
+    for (const eachCommand of allCommands) {
+        assert.equal(eachCommand.includes('$HOME'), false);
+        assert.equal(eachCommand.includes('${HOME}'), false);
+    }
 });
 
 
