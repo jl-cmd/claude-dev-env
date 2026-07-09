@@ -174,6 +174,40 @@ def test_a_crashed_hook_contributes_no_decision() -> None:
     assert isinstance(aggregated, BashDispatcherDecision)
 
 
+def test_deny_preserves_system_message_and_suppress_output() -> None:
+    """A silent-deny shape carries systemMessage and suppressOutput through aggregation."""
+    silent_deny = json.dumps(
+        {
+            "hookSpecificOutput": {
+                "permissionDecision": "deny",
+                "permissionDecisionReason": "GH-REDIRECT GATE: duplicate blocked",
+            },
+            "suppressOutput": True,
+            "systemMessage": "[gh-gate] blocked redirected gh pr create",
+        }
+    )
+    aggregated = aggregate_bash_hook_results([_run(silent_deny)])
+    assert aggregated.decision == "deny"
+    assert aggregated.should_suppress_output is True
+    assert aggregated.all_system_messages == ["[gh-gate] blocked redirected gh pr create"]
+    assert "GH-REDIRECT GATE" in aggregated.reasons[0]
+
+
+def test_additional_context_is_collected_from_deciding_hooks() -> None:
+    """additionalContext from hosted hooks is retained for the emitted payload."""
+    deny_with_context = json.dumps(
+        {
+            "hookSpecificOutput": {
+                "permissionDecision": "deny",
+                "permissionDecisionReason": "blocked",
+                "additionalContext": "see docs/runbook.md",
+            }
+        }
+    )
+    aggregated = aggregate_bash_hook_results([_run(deny_with_context)])
+    assert aggregated.all_additional_context == ["see docs/runbook.md"]
+
+
 def test_powershell_selects_only_the_verified_commit_pair() -> None:
     """Selecting for PowerShell yields the two shared hooks in registration order."""
     powershell_paths = [
