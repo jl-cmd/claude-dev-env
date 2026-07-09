@@ -14,8 +14,9 @@ Recorded while continuing the remediation started in session
 
 | Item | Decision | Change |
 |---|---|---|
-| Test fixtures using real Windows username path `C:/Users/jon/...` | **Scrub** | Replaced with `C:/Users/example/...` across hooks/tests/docs examples. |
+| Test fixtures using real Windows username path `C:/Users/jon/...` (and `/home/jon`, `Users/jonlo`) | **Scrub** | Replaced with `C:/Users/example/...` / `/home/example/...` across hooks/tests/installer fixtures and local settings allowlist. |
 | `docs/records/ai-rules-fleet-rollout/merge-and-sync-all.sh` personal-repo inventory | **Redact** | Removed hardcoded private repo name list; script now exits with a pointer to runtime enumeration. |
+| `docs/records/ai-rules-fleet-rollout/propagate-sync-fix.sh` personal-repo inventory | **Redact** | Same treatment as `merge-and-sync-all.sh`; hardcoded `jl-cmd/*` and `JonEcho/*` target list removed. |
 
 ## Deferred follow-ups
 
