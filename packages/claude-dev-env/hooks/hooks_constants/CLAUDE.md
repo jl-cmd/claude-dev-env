@@ -46,6 +46,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `package_inventory_stale_blocker_constants.py` | Inventory document names, production code extensions, backtick token pattern, smallest inventory size, exempt names, scan budget, and block-message text for the package-inventory stale-entry blocker |
 | `paired_test_coverage_constants.py` | Test-directory name, stem-test filename affixes, test-file globs, exempt public-function names, scan budget, coverage threshold, and guidance text for the public-function paired-test coverage check |
 | `path_rewriter_constants.py` | Path rewriting patterns for the Everything-search path rewriter |
+| `pii_prevention_constants.py` | Patterns, allowlists, path exemptions, and deny-message text for `pii_prevention_blocker` |
 | `plain_language_blocker_constants.py` | The list of heavy words and their everyday replacements |
 | `pr_converge_bugteam_enforcer_constants.py` | State keys and timing config for the bugteam-parallel enforcer |
 | `pr_converge_bugteam_enforcer_state.py` | State-file helpers for the bugteam enforcer |
