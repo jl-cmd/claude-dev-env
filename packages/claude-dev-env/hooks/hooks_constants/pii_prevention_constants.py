@@ -47,6 +47,7 @@ ALL_SAFE_EMAIL_DOMAINS: frozenset[str] = frozenset(
 
 ALL_PLACEHOLDER_HOME_USERNAMES: frozenset[str] = frozenset(
     {
+        "example",
         "user",
         "username",
         "your-user",
@@ -69,7 +70,12 @@ ALL_PLACEHOLDER_HOME_USERNAMES: frozenset[str] = frozenset(
     }
 )
 
-ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES: frozenset[str] = frozenset()
+# Product residual: NAS host documented in nas-ssh-invocation rule/hook.
+ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES: frozenset[str] = frozenset(
+    {
+        "192.168.1.100",
+    }
+)
 
 MAXIMUM_FINDINGS_PER_SCAN: int = 12
 MAXIMUM_STAGED_FILE_BYTES: int = 1_000_000
@@ -82,12 +88,6 @@ ALL_STAGED_FILES_COMMAND: tuple[str, ...] = (
     "--cached",
     "--name-only",
     "--diff-filter=ACMR",
-)
-
-ALL_GIT_REPOSITORY_ROOT_COMMAND: tuple[str, ...] = (
-    "git",
-    "rev-parse",
-    "--show-toplevel",
 )
 
 ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX: tuple[str, ...] = ("git", "show")
@@ -131,11 +131,11 @@ PEM_PRIVATE_KEY_HEADER_PATTERN: re.Pattern[str] = re.compile(
 
 HOME_PATH_PATTERN: re.Pattern[str] = HARDCODED_USER_PATH_PATTERN
 
-HOME_PATH_USERNAME_CAPTURE_PATTERN: re.Pattern[str] = re.compile(
-    r"(?:"
-    r"[A-Za-z]:[\\/](?i:users)[\\/]([^\\/]+)"
-    r"|(?<![A-Za-z:])/Users/([^/]+)"
-    r"|/home/([^/]+))"
+ALL_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    GITHUB_TOKEN_PATTERN,
+    GITHUB_FINE_GRAINED_TOKEN_PATTERN,
+    AWS_ACCESS_KEY_PATTERN,
+    PEM_PRIVATE_KEY_HEADER_PATTERN,
 )
 
 ANGLE_BRACKET_PLACEHOLDER_PATTERN: re.Pattern[str] = re.compile(r"^<[^>]+>$")
@@ -146,9 +146,9 @@ CORRECTIVE_MESSAGE_HEADER: str = (
 )
 
 CORRECTIVE_MESSAGE_FOOTER: str = (
-    "Remediate: replace with placeholders (user@example.com, C:/Users/<you>/), "
+    "Remediate: replace with placeholders (user@example.com, C:/Users/example/), "
     "move secrets to an env or secret store, and run the privacy-hygiene skill "
-    "for a full sweep. Add an intentional LAN address to "
+    "for a full sweep. Add intentional LAN hosts to "
     "ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES in hooks_constants when tooling must "
     "keep a host such as a NAS."
 )

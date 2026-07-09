@@ -23,8 +23,8 @@ Find and remove personal data and high-confidence secrets before they land in gi
 | Category | Blocked examples | Allowed residual |
 |---|---|---|
 | Email | `person@company.io` | `user@example.com`, `user@example.org`, `user@example.net` |
-| Home path | `C:/Users/realname/...`, `/Users/realname/...`, `/home/realname/...` | `C:/Users/<you>/...`, `/Users/user/...`, placeholder names |
-| LAN address | `10.x`, `172.16–31.x`, `192.168.x` | Public addresses; entries in `ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES` |
+| Home path | `C:/Users/realname/...`, `/Users/realname/...`, `/home/realname/...` | `C:/Users/example/...`, `C:/Users/<you>/...`, `/Users/alice/...` |
+| LAN address | Unlisted `10.x` / `172.16–31.x` / `192.168.x` | Public addresses; product NAS `192.168.1.100`; other entries in `ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES` |
 | Secret | `ghp_…`, `github_pat_…`, `AKIA…`, PEM private-key headers | Public keys, redacted `***`, env var names without values |
 
 Surfaces:
@@ -86,7 +86,8 @@ Review each hit. Ignore:
 - LICENSE copyright lines naming a legal person or org that owns the work
 - Intentional public maintainer identity published on purpose
 - Example domains reserved for documentation (`example.com` and siblings)
-- Placeholder home users (`user`, `alice`, `<you>`, `YOUR_USER`)
+- Placeholder home users (`example`, `user`, `alice`, `<you>`, `YOUR_USER`)
+- Product NAS host `192.168.1.100` (allowlisted for the NAS SSH rule/hook)
 - Public addresses and docs that name private ranges without a live host (still prefer hostnames)
 
 ## Enable on any machine / public repository
@@ -102,7 +103,7 @@ Hooks register via `hooks/hooks.json` into `~/.claude/settings.json`. Once insta
 
 ## Open knobs
 
-- **NAS / LAN allowlist:** LAN addresses are blocked by default. If a host must remain in tooling config, add it to `ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES` in `hooks/hooks_constants/pii_prevention_constants.py` and document why.
+- **NAS / LAN allowlist:** Unlisted private IPs are blocked. `192.168.1.100` is allowlisted for the NAS SSH enforcer. Add further hosts to `ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES` only when tooling requires them.
 - **Public maintainer identity:** when a real email or name is intentional product surface, keep it and note that in the PR body so reviewers do not treat it as a leak.
 
 ## What this skill does not do

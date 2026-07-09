@@ -117,12 +117,11 @@ def _collect_write_edit_texts(
 
 
 def _first_findings_in_texts(all_texts: list[str]) -> list[PiiFinding]:
-    all_findings: list[PiiFinding] = []
     for each_text in all_texts:
-        all_findings.extend(scan_text_for_pii(each_text))
+        all_findings = scan_text_for_pii(each_text)
         if all_findings:
             return all_findings
-    return all_findings
+    return []
 
 
 def evaluate_write_edit_payload(

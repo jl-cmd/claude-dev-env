@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import ipaddress
 import os
-import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,24 +22,20 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     ALL_LICENSE_BASENAME_PREFIXES,
     ALL_PLACEHOLDER_HOME_USERNAMES,
     ALL_SAFE_EMAIL_DOMAINS,
+    ALL_SECRET_PATTERNS,
     ALL_SELF_MODULE_BASENAMES,
     ANGLE_BRACKET_PLACEHOLDER_PATTERN,
-    AWS_ACCESS_KEY_PATTERN,
     CATEGORY_EMAIL,
     CATEGORY_HOME_PATH,
     CATEGORY_PRIVATE_IP,
     CATEGORY_SECRET,
     EMAIL_PATTERN,
-    GITHUB_FINE_GRAINED_TOKEN_PATTERN,
-    GITHUB_TOKEN_PATTERN,
     HOME_PATH_PATTERN,
-    HOME_PATH_USERNAME_CAPTURE_PATTERN,
     IPV4_PATTERN,
     IPV4_VERSION_NUMBER,
     MAXIMUM_FINDINGS_PER_SCAN,
     MAXIMUM_OFFENDING_PREVIEW_LENGTH,
     MINIMUM_ENV_STYLE_USERNAME_LENGTH,
-    PEM_PRIVATE_KEY_HEADER_PATTERN,
 )
 
 
@@ -61,9 +57,9 @@ class PiiFinding:
 def is_path_exempt_from_pii_scan(file_path: str) -> bool:
     """Return whether *file_path* must never be scanned for PII.
 
-    Exemptions cover test files (which hold synthetic fixtures), this scanner
-    family itself (pattern source text), and license/copyright notice files
-    that intentionally name legal identity.
+    Exemptions cover test files (synthetic fixtures), this scanner family
+    (pattern source text), and license/copyright notice files that
+    intentionally name legal identity.
 
     Args:
         file_path: Absolute or relative path of the file under review.
@@ -99,8 +95,12 @@ def _build_preview(matched_text: str) -> str:
     return matched_text[: maximum_preview_length - 3] + "..."
 
 
-def _email_domain(email_address: str) -> str:
-    return email_address.rsplit("@", 1)[-1].lower()
+def _finding(category: str, matched_text: str) -> PiiFinding:
+    return PiiFinding(
+        category=category,
+        matched_text=matched_text,
+        preview=_build_preview(matched_text),
+    )
 
 
 def _is_safe_email_domain(domain_name: str) -> bool:
@@ -112,13 +112,22 @@ def _is_safe_email_domain(domain_name: str) -> bool:
     )
 
 
-def _home_username_from_match(matched_path: str) -> str | None:
-    capture = HOME_PATH_USERNAME_CAPTURE_PATTERN.search(matched_path)
-    if capture is None:
-        return None
-    for each_group in capture.groups():
-        if each_group:
-            return each_group
+def _is_safe_example_email(email_address: str) -> bool:
+    domain_name = email_address.rsplit("@", 1)[-1].lower()
+    return _is_safe_email_domain(domain_name)
+
+
+def _username_from_home_path(matched_path: str) -> str | None:
+    """Extract the home username segment from a matched home-path string."""
+    normalized_path = matched_path.replace("\\", "/")
+    lowered_path = normalized_path.lower()
+    for each_marker in ("/users/", "/home/"):
+        marker_index = lowered_path.find(each_marker)
+        if marker_index < 0:
+            continue
+        remainder = normalized_path[marker_index + len(each_marker) :]
+        username = remainder.split("/", 1)[0]
+        return username or None
     return None
 
 
@@ -141,72 +150,34 @@ def _is_private_ipv4_address(address_text: str) -> bool:
         parsed_address = ipaddress.ip_address(address_text)
     except ValueError:
         return False
-    ipv4_version_number = IPV4_VERSION_NUMBER
-    if parsed_address.version != ipv4_version_number:
+    if parsed_address.version != IPV4_VERSION_NUMBER:
         return False
     return bool(parsed_address.is_private)
 
 
-def _append_finding(
-    all_findings: list[PiiFinding],
-    category: str,
-    matched_text: str,
-    all_seen_keys: set[tuple[str, str]],
-) -> bool:
-    category_and_match = (category, matched_text)
-    if category_and_match in all_seen_keys:
-        return len(all_findings) >= MAXIMUM_FINDINGS_PER_SCAN
-    all_seen_keys.add(category_and_match)
-    all_findings.append(
-        PiiFinding(
-            category=category,
-            matched_text=matched_text,
-            preview=_build_preview(matched_text),
-        )
-    )
-    return len(all_findings) >= MAXIMUM_FINDINGS_PER_SCAN
-
-
-def _scan_emails(
-    text: str,
-    all_findings: list[PiiFinding],
-    all_seen_keys: set[tuple[str, str]],
-) -> bool:
+def _find_emails(text: str) -> list[PiiFinding]:
+    all_findings: list[PiiFinding] = []
     for each_match in EMAIL_PATTERN.finditer(text):
         email_address = each_match.group(1)
         if _is_safe_example_email(email_address):
             continue
-        if _append_finding(all_findings, CATEGORY_EMAIL, email_address, all_seen_keys):
-            return True
-    return False
+        all_findings.append(_finding(CATEGORY_EMAIL, email_address))
+    return all_findings
 
 
-def _is_safe_example_email(email_address: str) -> bool:
-    return _is_safe_email_domain(_email_domain(email_address))
-
-
-def _scan_home_paths(
-    text: str,
-    all_findings: list[PiiFinding],
-    all_seen_keys: set[tuple[str, str]],
-) -> bool:
+def _find_home_paths(text: str) -> list[PiiFinding]:
+    all_findings: list[PiiFinding] = []
     for each_match in HOME_PATH_PATTERN.finditer(text):
         matched_path = each_match.group(0)
-        username = _home_username_from_match(matched_path)
+        username = _username_from_home_path(matched_path)
         if username is not None and _is_placeholder_home_username(username):
             continue
-        if _append_finding(
-            all_findings, CATEGORY_HOME_PATH, matched_path, all_seen_keys
-        ):
-            return True
-    return False
+        all_findings.append(_finding(CATEGORY_HOME_PATH, matched_path))
+    return all_findings
 
 
-def _scan_private_ips(
-    text: str,
-    all_findings: list[PiiFinding],
-    all_seen_keys: set[tuple[str, str]],
-) -> bool:
+def _find_private_ips(text: str) -> list[PiiFinding]:
+    all_findings: list[PiiFinding] = []
     allowlisted_addresses = ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES
     for each_match in IPV4_PATTERN.finditer(text):
         address_text = each_match.group(1)
@@ -214,65 +185,59 @@ def _scan_private_ips(
             continue
         if not _is_private_ipv4_address(address_text):
             continue
-        if _append_finding(
-            all_findings, CATEGORY_PRIVATE_IP, address_text, all_seen_keys
-        ):
-            return True
-    return False
+        all_findings.append(_finding(CATEGORY_PRIVATE_IP, address_text))
+    return all_findings
 
 
-def _scan_secrets(
-    text: str,
-    all_findings: list[PiiFinding],
-    all_seen_keys: set[tuple[str, str]],
-) -> bool:
-    all_secret_patterns: tuple[re.Pattern[str], ...] = (
-        GITHUB_TOKEN_PATTERN,
-        GITHUB_FINE_GRAINED_TOKEN_PATTERN,
-        AWS_ACCESS_KEY_PATTERN,
-        PEM_PRIVATE_KEY_HEADER_PATTERN,
-    )
-    for each_pattern in all_secret_patterns:
+def _find_secrets(text: str) -> list[PiiFinding]:
+    all_findings: list[PiiFinding] = []
+    for each_pattern in ALL_SECRET_PATTERNS:
         for each_match in each_pattern.finditer(text):
-            matched_secret = each_match.group(0)
-            if _append_finding(
-                all_findings, CATEGORY_SECRET, matched_secret, all_seen_keys
-            ):
-                return True
-    return False
+            all_findings.append(_finding(CATEGORY_SECRET, each_match.group(0)))
+    return all_findings
 
 
 def scan_text_for_pii(text: str) -> list[PiiFinding]:
     """Return high-confidence PII and secret findings in *text*.
 
-    Safe residual examples (``user@example.com``, placeholder home users,
-    allowlisted private IPs) are omitted. Findings are capped so deny messages
-    stay readable.
+    Safe residual examples (``user@example.com``, placeholder home users such
+    as ``example``/``alice``, allowlisted private IPs) are omitted. Findings
+    are capped so deny messages stay readable.
 
     ::
 
         ok:   "contact user@example.com"           -> []
+        ok:   r"C:\\Users\\example\\notes.txt"     -> []
         flag: "contact person@company.io"          -> [email]
         flag: r"C:\\Users\\realname\\notes.txt"    -> [home-path]
-        flag: "NAS at 192.168.1.50"                 -> [private-ip]
+        flag: "NAS at 10.0.0.5"                    -> [private-ip]
         flag: "ghp_" + ("x" * 36)                  -> [secret]
 
     Args:
         text: Arbitrary text that would be written, posted, or committed.
 
     Returns:
-        Zero or more findings in first-seen order.
+        Zero or more findings in first-seen order, deduplicated by
+        (category, matched_text), capped at ``MAXIMUM_FINDINGS_PER_SCAN``.
     """
     if not text:
         return []
+    all_category_finders: tuple[Callable[[str], list[PiiFinding]], ...] = (
+        _find_emails,
+        _find_home_paths,
+        _find_private_ips,
+        _find_secrets,
+    )
     all_findings: list[PiiFinding] = []
     all_seen_keys: set[tuple[str, str]] = set()
-    if _scan_emails(text, all_findings, all_seen_keys):
-        return all_findings
-    if _scan_home_paths(text, all_findings, all_seen_keys):
-        return all_findings
-    if _scan_private_ips(text, all_findings, all_seen_keys):
-        return all_findings
-    if _scan_secrets(text, all_findings, all_seen_keys):
-        return all_findings
+    maximum_findings_per_scan = MAXIMUM_FINDINGS_PER_SCAN
+    for each_finder in all_category_finders:
+        for each_finding in each_finder(text):
+            category_and_match = (each_finding.category, each_finding.matched_text)
+            if category_and_match in all_seen_keys:
+                continue
+            all_seen_keys.add(category_and_match)
+            all_findings.append(each_finding)
+            if len(all_findings) >= maximum_findings_per_scan:
+                return all_findings
     return all_findings

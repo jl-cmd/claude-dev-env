@@ -43,6 +43,11 @@ def test_flags_home_path_and_allows_placeholder_user() -> None:
     assert all_placeholder_hits == []
 
 
+def test_allows_hygiene_placeholder_username_example() -> None:
+    assert scan_text_for_pii(r"path is C:\Users\example\notes.txt") == []
+    assert scan_text_for_pii("path is C:/Users/example/.claude/hooks") == []
+
+
 def test_flags_unix_home_path() -> None:
     all_unix_hits = scan_text_for_pii(
         "config lives in /Users/fixture_real_user/.config"
@@ -56,6 +61,10 @@ def test_flags_private_ip_and_allows_public_ip() -> None:
     assert any(each.category == "private-ip" for each in all_lan_hits)
     assert all_lan_hits[0].matched_text == SYNTHETIC_PRIVATE_IP
     assert all_dns_hits == []
+
+
+def test_allows_product_nas_private_ip() -> None:
+    assert scan_text_for_pii("ssh -p 9222 jon@192.168.1.100 uptime") == []
 
 
 def test_flags_github_token_aws_key_and_pem_header() -> None:
