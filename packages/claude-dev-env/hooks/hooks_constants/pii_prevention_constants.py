@@ -153,3 +153,19 @@ CORRECTIVE_MESSAGE_FOOTER: str = (
 )
 
 FINDING_LINE_TEMPLATE: str = "  [{category}] {preview}"
+
+STAGED_LIST_FAILURE_REASON: str = (
+    "BLOCKED [pii_prevention_blocker]: could not list staged files for PII scan "
+    "(git diff --cached failed). Refuse commit until the index is readable."
+)
+
+STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE: str = (
+    "BLOCKED [pii_prevention_blocker]: staged file '{relative_path}' could not be "
+    "scanned for PII ({reason}). Refuse commit, shrink the blob, or keep binary "
+    "assets free of embedded secrets."
+)
+
+STAGED_BLOB_REASON_GIT_SHOW_FAILED: str = "git show of staged blob failed"
+STAGED_BLOB_REASON_OVERSIZED: str = "blob exceeds MAXIMUM_STAGED_FILE_BYTES"
+STAGED_BLOB_REASON_NULL_BYTES: str = "blob contains null bytes (binary/unscannable)"
+STAGED_BLOB_REASON_DECODE_FAILED: str = "blob is not valid UTF-8 text"

@@ -155,6 +155,7 @@ const INSTALL_GROUPS = {
             'orchestrator', 'orchestrator-refresh', 'team-advisor',
             'anthropic-plan', 'everything-search',
             'pr-review-responder',
+            'privacy-hygiene',
             'recall', 'remember', 'task-build', 'verified-build'
         ],
         includeDirectories: CORE_INCLUDE_DIRECTORIES,

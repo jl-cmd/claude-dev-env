@@ -59,6 +59,12 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     MULTI_EDIT_TOOL_NAME,
     NULL_BYTE_MARKER,
     STAGED_BLOB_PREFIX,
+    STAGED_BLOB_REASON_DECODE_FAILED,
+    STAGED_BLOB_REASON_GIT_SHOW_FAILED,
+    STAGED_BLOB_REASON_NULL_BYTES,
+    STAGED_BLOB_REASON_OVERSIZED,
+    STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE,
+    STAGED_LIST_FAILURE_REASON,
     WRITE_TOOL_NAME,
 )
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
@@ -161,14 +167,17 @@ def evaluate_post_body_texts(all_body_texts: list[str]) -> str | None:
     return build_deny_reason(all_findings, "durable GitHub post body")
 
 
-def list_staged_file_paths(repository_root: Path) -> list[str]:
-    """List repository-relative paths of staged non-deleted files.
+def list_staged_file_paths(
+    repository_root: Path,
+) -> tuple[list[str] | None, str | None]:
+    """List staged non-deleted paths, or report a list failure.
 
     Args:
         repository_root: Repository root used as the git working directory.
 
     Returns:
-        Relative paths of staged add/copy/modify/rename files.
+        ``(paths, None)`` on success, or ``(None, deny_reason)`` when the
+        staged list cannot be read (fail-closed for commit gating).
     """
     try:
         completed_process = subprocess.run(
@@ -179,27 +188,29 @@ def list_staged_file_paths(repository_root: Path) -> list[str]:
             cwd=str(repository_root),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return []
+        return None, STAGED_LIST_FAILURE_REASON
     if completed_process.returncode != 0:
-        return []
-    return [
+        return None, STAGED_LIST_FAILURE_REASON
+    all_paths = [
         each_line.strip()
         for each_line in completed_process.stdout.splitlines()
         if each_line.strip()
     ]
+    return all_paths, None
 
 
 def read_staged_file_text(
     repository_root: Path, relative_path: str
-) -> str | None:
-    """Return staged blob text for *relative_path*, or None when unreadable.
+) -> tuple[str | None, str | None]:
+    """Return staged blob text, or report why the blob is unscannable.
 
     Args:
         repository_root: Repository root for the git show working directory.
         relative_path: Repository-relative path of the staged file.
 
     Returns:
-        Decoded staged content, or None for binary/missing/oversized blobs.
+        ``(text, None)`` when the blob is scannable UTF-8 text, or
+        ``(None, deny_reason)`` when the blob cannot be scanned (fail-closed).
     """
     staged_blob_reference = STAGED_BLOB_PREFIX + relative_path
     try:
@@ -210,37 +221,65 @@ def read_staged_file_text(
             cwd=str(repository_root),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return None
+        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
+            relative_path=relative_path,
+            reason=STAGED_BLOB_REASON_GIT_SHOW_FAILED,
+        )
     if completed_process.returncode != 0:
-        return None
+        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
+            relative_path=relative_path,
+            reason=STAGED_BLOB_REASON_GIT_SHOW_FAILED,
+        )
     raw_bytes = completed_process.stdout
     if len(raw_bytes) > MAXIMUM_STAGED_FILE_BYTES:
-        return None
+        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
+            relative_path=relative_path,
+            reason=STAGED_BLOB_REASON_OVERSIZED,
+        )
     if NULL_BYTE_MARKER in raw_bytes:
-        return None
+        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
+            relative_path=relative_path,
+            reason=STAGED_BLOB_REASON_NULL_BYTES,
+        )
     try:
-        return raw_bytes.decode(BODY_FILE_ENCODING)
+        return raw_bytes.decode(BODY_FILE_ENCODING), None
     except UnicodeDecodeError:
-        return None
+        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
+            relative_path=relative_path,
+            reason=STAGED_BLOB_REASON_DECODE_FAILED,
+        )
 
 
 def evaluate_staged_commit(
     repository_root: Path,
 ) -> str | None:
-    """Return a deny reason when staged content carries PII.
+    """Return a deny reason when staged content carries PII or is unscannable.
+
+    Fail-closed: git list/show failures and unscannable blobs deny the commit
+    rather than treating unread content as clean.
 
     Args:
         repository_root: Repository whose index is about to be committed.
 
     Returns:
-        Deny reason text, or None when staged content is clean.
+        Deny reason text, or None when every scannable staged path is clean.
     """
-    for each_relative_path in list_staged_file_paths(repository_root):
+    all_relative_paths, list_failure_reason = list_staged_file_paths(repository_root)
+    if list_failure_reason is not None or all_relative_paths is None:
+        return list_failure_reason or STAGED_LIST_FAILURE_REASON
+    for each_relative_path in all_relative_paths:
         if is_path_exempt_from_pii_scan(each_relative_path):
             continue
-        staged_text = read_staged_file_text(repository_root, each_relative_path)
+        staged_text, unscannable_reason = read_staged_file_text(
+            repository_root, each_relative_path
+        )
+        if unscannable_reason is not None:
+            return unscannable_reason
         if staged_text is None:
-            continue
+            return STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
+                relative_path=each_relative_path,
+                reason=STAGED_BLOB_REASON_GIT_SHOW_FAILED,
+            )
         all_findings = scan_text_for_pii(staged_text)
         if all_findings:
             gate_surface = f"staged commit ({each_relative_path})"

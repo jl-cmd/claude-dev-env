@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _HOOK_DIR = Path(__file__).parent
 _HOOKS_DIR = _HOOK_DIR.parent
 if str(_HOOK_DIR) not in sys.path:
@@ -22,9 +24,11 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402
     ALL_HOSTED_HOOK_ENTRIES,
     ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
 )
+import pii_prevention_blocker as blocker_module  # noqa: E402
 from pii_prevention_blocker import (  # noqa: E402
     evaluate,
     evaluate_bash_command,
+    evaluate_staged_commit,
     evaluate_write_edit_payload,
 )
 
@@ -241,6 +245,40 @@ def test_staged_commit_with_clean_content_is_allowed(tmp_path: Path) -> None:
         working_directory=str(repository_root),
     )
     assert deny_reason is None
+
+
+def test_staged_commit_fails_closed_when_git_list_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        blocker_module,
+        "list_staged_file_paths",
+        lambda _repository_root: (None, "BLOCKED list failure"),
+    )
+    deny_reason = evaluate_staged_commit(tmp_path)
+    assert deny_reason == "BLOCKED list failure"
+
+
+def test_staged_commit_fails_closed_when_blob_unscannable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        blocker_module,
+        "list_staged_file_paths",
+        lambda _repository_root: (["binary.bin"], None),
+    )
+    monkeypatch.setattr(
+        blocker_module,
+        "read_staged_file_text",
+        lambda _repository_root, relative_path: (
+            None,
+            f"BLOCKED unscannable {relative_path}",
+        ),
+    )
+    deny_reason = evaluate_staged_commit(tmp_path)
+    assert deny_reason is not None
+    assert "unscannable" in deny_reason
+    assert "binary.bin" in deny_reason
 
 
 def test_dispatcher_roster_hosts_pii_blocker() -> None:
