@@ -15,14 +15,24 @@ One warm, addressable advisor available at the strongest model tier the session 
 
 ## Follow the shared protocol
 
+**Detect the host profile first** (Host profiles in
+[`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
+— e.g. `ADVISOR_HOST_PROFILE` or `GROK_BUILD`). Do not start a model-floor
+walk until the host is known.
+
 This session is the shared advisor's sole consumer, so its model floor is
 simply this session's own tier — no routing table to take a max against.
-Follow [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
-for the model-floor walk, the warm-up spawn and charter, the consult format
-and cadence, drift-respawn, and the CLI fallback — using
-`team-advisor-agent` as the name and this session as the only consumer (skip
-the "who you are and your assignment" opener in each consult; a
-single-consumer session doesn't need it).
+
+**Claude host:** follow the shared protocol for the model-floor walk, the
+warm-up spawn and charter, the consult format and cadence, drift-respawn, and
+the CLI fallback — using `team-advisor-agent` as the name and this session as
+the only consumer (skip the "who you are and your assignment" opener in each
+consult; a single-consumer session doesn't need it).
+
+**Grok host:** use the self-as-advisor path in the shared protocol: this
+session answers ENDORSE / CORRECTION / PLAN / STOP itself. Do not spawn a
+Claude `session-advisor` subagent and do not walk the Claude multi-tier
+ladder.
 
 ## Constraints
 

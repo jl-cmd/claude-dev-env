@@ -6,7 +6,7 @@ from data, not inferred from a transcript.
 
 ::
 
-    run = ModelTierRun(
+    ladder_walk = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=["Fable", "Opus"],
         attempts=[
@@ -15,9 +15,17 @@ from data, not inferred from a transcript.
         ],
         selected_tier="Opus",
     )
-    validate_model_tier_run(run)     # ok: returns None, raises nothing
+    validate_model_tier_run(ladder_walk)  # ok: returns None, raises nothing
 
-A run whose selected_tier is not the first spawned tier fails.
+    self_bind = ModelTierRun(
+        own_tier="Grok",
+        candidate_tiers=["Grok"],
+        attempts=[{"tier": "Grok", "result": "self"}],
+        selected_tier="Grok",
+    )
+    validate_model_tier_run(self_bind)  # ok: host self-as-advisor bind
+
+A run whose selected_tier is not the first successful bind fails.
 On any broken invariant, validate_model_tier_run raises ModelTierRunError.
 
 CLI::
@@ -32,7 +40,14 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from advisor_scripts_constants.model_tier_run_validator_constants import (
+_scripts_directory = str(Path(__file__).resolve().parent)
+_config_directory = str(Path(__file__).resolve().parent / "config")
+if _config_directory not in sys.path:
+    sys.path.insert(0, _config_directory)
+if _scripts_directory not in sys.path:
+    sys.path.insert(0, _scripts_directory)
+
+from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
     ALL_MODEL_TIERS,
     ATTEMPT_ORDER_MISMATCH_MESSAGE,
     ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE,
@@ -42,15 +57,18 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (
     CLI_SUCCESS_EXIT_CODE,
     CLI_USAGE_MESSAGE,
     CLI_VALIDATION_FAILURE_EXIT_CODE,
+    GROK_MODEL_TIER,
     INCOMPLETE_FALLBACK_WALK_MESSAGE,
     MISSING_FALLBACK_REASON_MESSAGE,
     SELECTED_TIER_MISMATCH_MESSAGE,
     SELECTED_TIER_NOT_NULL_MESSAGE,
+    SELF_BIND_SUCCESS_TOKEN,
     SPAWN_OUTCOME_KEY,
     SPAWN_SUCCESS_TOKEN,
     TIER_KEY,
     UNKNOWN_OWN_TIER_MESSAGE,
 )
+from tier_model_ids import canonical_tier_name  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -66,17 +84,10 @@ class ModelTierRunError(ValueError):
     """Raised when a model-tier spawn-walk log violates an invariant."""
 
 
-def _canonical_tier_name(tier_name: str) -> str | None:
-    tier_by_lower_name = {
-        each_tier.lower(): each_tier for each_tier in ALL_MODEL_TIERS
-    }
-    return tier_by_lower_name.get(tier_name.lower())
-
-
 def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:
     all_canonical_tiers: list[str] = []
     for each_tier_name in all_tier_names:
-        maybe_canonical_tier = _canonical_tier_name(each_tier_name)
+        maybe_canonical_tier = canonical_tier_name(each_tier_name)
         if maybe_canonical_tier is None:
             return None
         all_canonical_tiers.append(maybe_canonical_tier)
@@ -84,20 +95,36 @@ def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:
 
 
 def _expected_candidate_tiers(own_tier: str) -> list[str]:
-    maybe_canonical_own_tier = _canonical_tier_name(own_tier)
+    maybe_canonical_own_tier = canonical_tier_name(own_tier)
     if maybe_canonical_own_tier is None:
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
+    if maybe_canonical_own_tier == GROK_MODEL_TIER:
+        return [GROK_MODEL_TIER]
     floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
     return list(ALL_MODEL_TIERS[: floor_index + 1])
+
+
+def _is_successful_attempt_outcome(
+    canonical_tier: str,
+    outcome_token: str,
+) -> bool:
+    if canonical_tier == GROK_MODEL_TIER:
+        return outcome_token == SELF_BIND_SUCCESS_TOKEN
+    return outcome_token == SPAWN_SUCCESS_TOKEN
 
 
 def validate_model_tier_run(run: ModelTierRun) -> None:
     """Check that a spawn-walk log satisfies every ladder invariant.
 
-    The candidate tiers must equal the ladder slice down to the floor. The
-    recorded tries must walk that slice in order. Early stop is allowed only
-    when a spawn succeeds. When selected_tier is null, every candidate tier
-    must have been attempted and a fallback_reason must be present.
+    ::
+
+        validate_model_tier_run(ladder_walk)  # ok: multi-tier ladder walk
+        validate_model_tier_run(self_bind)    # ok: single-tier self-bind
+        validate_model_tier_run(broken_log)   # flag: ModelTierRunError
+
+    Candidate tiers must match the floor slice (or ``["Grok"]`` alone). Tries
+    walk that slice in order; early stop only after ``spawned`` or ``self``.
+    A null selected_tier requires a full walk plus fallback_reason.
 
     Args:
         run: The structured spawn-walk log to check.
@@ -136,20 +163,23 @@ def _validate_selected_tier(
     all_attempted_tiers: list[str],
     all_expected_candidates: list[str],
 ) -> None:
-    all_spawned_tiers = [
+    all_bound_tiers = [
         each_tier
         for each_tier, each_attempt in zip(
             all_attempted_tiers, run.attempts, strict=True
         )
-        if each_attempt[SPAWN_OUTCOME_KEY] == SPAWN_SUCCESS_TOKEN
+        if _is_successful_attempt_outcome(
+            canonical_tier=each_tier,
+            outcome_token=each_attempt[SPAWN_OUTCOME_KEY],
+        )
     ]
-    if all_spawned_tiers:
+    if all_bound_tiers:
         maybe_canonical_selected = (
-            _canonical_tier_name(run.selected_tier)
+            canonical_tier_name(run.selected_tier)
             if run.selected_tier is not None
             else None
         )
-        if maybe_canonical_selected != all_spawned_tiers[0]:
+        if maybe_canonical_selected != all_bound_tiers[0]:
             raise ModelTierRunError(SELECTED_TIER_MISMATCH_MESSAGE)
         return
     if run.selected_tier is not None:

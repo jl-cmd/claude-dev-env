@@ -26,9 +26,9 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `implement` — structured implementation from an existing plan packet
 - `bdd-protocol` — BDD depth: Example Mapping, scenario quality, outside-in layout
 - `verified-build` — build + test loop that gates on a verifier verdict
-- `orchestrator` — turns the session into the advisor-orchestrator: it spawns executor subagents to do the code edits and test runs; a shared session-advisor answers hard decisions with endorse, correction, plan, or stop
-- `orchestrator-refresh` — sub-skill fired by the `/orchestrator` loop to re-assert the shared-advisor discipline mid-run
-- `team-advisor` — keeps one background agent warm at the strongest model tier the session can reach and consults it for a second opinion before a big decision, at completion, when stuck, or when reconsidering the approach
+- `orchestrator` — turns the session into the advisor-orchestrator: it spawns executor subagents to do the code edits and test runs; hard decisions go to a shared advisor (Claude warm `session-advisor` via SendMessage; Grok self-as-advisor on the orchestrating session)
+- `orchestrator-refresh` — sub-skill fired by the `/orchestrator` loop to re-assert the host-matched shared-advisor discipline mid-run (Claude SendMessage; Grok self-as-advisor, no Agent spawn)
+- `team-advisor` — binds one advisor at the strongest reachable tier (Claude warm agent; Grok self-as-advisor) and consults it for a second opinion before a big decision, at completion, when stuck, or when reconsidering the approach
 
 **PR review and convergence**
 - `autoconverge` — autonomous single-run workflow that drives a PR to ready
