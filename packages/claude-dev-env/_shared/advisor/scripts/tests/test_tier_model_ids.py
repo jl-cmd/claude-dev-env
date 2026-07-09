@@ -28,6 +28,9 @@ tier_model_ids = _load_tier_model_ids_module()
 resolve_cli_model_id = tier_model_ids.resolve_cli_model_id
 canonical_tier_name = tier_model_ids.canonical_tier_name
 detect_host_profile = tier_model_ids.detect_host_profile
+constants_root = Path(__file__).parent.parent / "config"
+if str(constants_root) not in sys.path:
+    sys.path.insert(0, str(constants_root))
 
 from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
     ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS,
