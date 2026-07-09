@@ -6,6 +6,7 @@ Exit code 0 = all checks pass, 1 = violations found.
 # pragma: no-tdd-gate
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -26,6 +27,15 @@ from .ruff_integration import check_ruff_available, run_ruff_check
 VALIDATORS_DIR = Path(__file__).parent
 hooks_dir = VALIDATORS_DIR.parent
 package_name = VALIDATORS_DIR.name
+
+_hooks_directory_on_path = str(hooks_dir.resolve())
+if _hooks_directory_on_path not in sys.path:
+    sys.path.insert(0, _hooks_directory_on_path)
+
+from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
+    apply_edits,
+    edits_for_tool,
+)
 
 
 def _windows_non_unc_working_directory_string(
@@ -99,8 +109,19 @@ def invoke_validator_module(module_stem: str, forwarded_file_paths: List[str]) -
 
 def run_validators_entrypoint_subprocess(
     extra_arguments: List[str],
+    stdin_text: Optional[str] = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run ``python -m validators.run_all_validators`` with a Windows-safe cwd."""
+    """Run ``python -m validators.run_all_validators`` with a Windows-safe cwd.
+
+    Args:
+        extra_arguments: Argument vector appended after the module name.
+        stdin_text: Text replayed as the subprocess stdin, or None to leave
+            stdin empty. The PreToolUse gate mode reads its payload from stdin,
+            so a caller exercising ``--pre-tool-use`` passes the payload here.
+
+    Returns:
+        The completed subprocess carrying its captured stdout and stderr.
+    """
     working_directory_string, environment = (
         _hooks_subprocess_working_directory_and_environment()
     )
@@ -111,6 +132,7 @@ def run_validators_entrypoint_subprocess(
         text=True,
         cwd=working_directory_string,
         env=environment,
+        input=stdin_text,
     )
 
 
@@ -658,6 +680,188 @@ def get_changed_files() -> List[Path]:
     return [Path(f) for f in files if f]
 
 
+def _read_target_file_content(file_path: str) -> Optional[str]:
+    """Return the on-disk content of *file_path*, or None when it cannot be read."""
+    try:
+        with open(file_path, "r", encoding="utf-8") as readable_file:
+            return readable_file.read()
+    except (FileNotFoundError, OSError, UnicodeDecodeError):
+        return None
+
+
+def reconstruct_proposed_content(
+    tool_name: str, tool_input: Dict[str, object]
+) -> Optional[str]:
+    """Return the post-edit content one Write, Edit, or MultiEdit payload leaves on disk.
+
+    ::
+
+        Write     -> tool_input["content"] verbatim
+        Edit      -> existing file, each old_string rewritten to new_string
+        MultiEdit -> existing file, each edit applied in order
+
+    The Edit and MultiEdit reconstruction reuses the shared applier so this gate
+    judges the same post-edit content the standalone blockers judge.
+
+    Args:
+        tool_name: The intercepted tool — Write, Edit, or MultiEdit.
+        tool_input: The tool's input payload.
+
+    Returns:
+        The proposed post-edit content, or None when the payload carries no
+        readable target for an edit or no string content for a write.
+    """
+    if tool_name == "Write":
+        written_content = tool_input.get("content", "")
+        return written_content if isinstance(written_content, str) else None
+    file_path = tool_input.get("file_path", "")
+    if not isinstance(file_path, str) or not file_path:
+        return None
+    existing_content = _read_target_file_content(file_path)
+    if existing_content is None:
+        return None
+    return apply_edits(existing_content, edits_for_tool(tool_name, dict(tool_input)))
+
+
+def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
+    """Run every validator scoped to individual files against *all_files*.
+
+    Excludes the branch-scoped File Structure and Git validators, which grade
+    the whole project rather than a single proposed file.
+
+    Args:
+        all_files: The files under validation — a single reconstructed file in
+            gate mode.
+
+    Returns:
+        One ValidatorResult per file-scoped validator, in run order.
+    """
+    return [
+        run_python_style_checks(all_files),
+        run_test_safety_checks(all_files),
+        run_react_checks(all_files),
+        run_ruff_checks(all_files),
+        run_mypy_checks(all_files),
+        run_abbreviation_checks(all_files),
+        run_pr_reference_checks(all_files),
+        run_magic_value_checks(all_files),
+        run_useless_test_checks(all_files),
+        run_security_checks(all_files),
+        run_code_quality_checks(all_files),
+        run_python_antipattern_checks(all_files),
+        run_todo_checks(all_files),
+        run_type_safety_checks(all_files),
+    ]
+
+
+def validate_proposed_file(
+    file_path: str, proposed_content: str
+) -> List[ValidatorResult]:
+    """Validate *proposed_content* as if written to *file_path*.
+
+    Writes the content to a temporary file that carries the target's basename so
+    suffix-based and test-name-based validator filtering matches the real path,
+    then runs the file-scoped validators against it.
+
+    Args:
+        file_path: The destination path the write or edit targets.
+        proposed_content: The reconstructed post-edit content of that file.
+
+    Returns:
+        One ValidatorResult per file-scoped validator.
+    """
+    base_name = Path(file_path).name
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        temporary_file = Path(temporary_directory) / base_name
+        temporary_file.write_text(proposed_content, encoding="utf-8")
+        return run_file_scoped_validators([temporary_file])
+
+
+def _proposed_content_deny_reason(failed_results: List[ValidatorResult]) -> str:
+    """Compose the deny reason naming each failing validator and its output.
+
+    Args:
+        failed_results: The validator results that did not pass.
+
+    Returns:
+        The composed ``permissionDecisionReason`` text.
+    """
+    violation_summaries = [
+        f"{each_result.name} (checks {each_result.checks}): {each_result.output.strip()}"
+        for each_result in failed_results
+    ]
+    deny_reason_item_separator = " | "
+    joined_summaries = deny_reason_item_separator.join(violation_summaries)
+    return (
+        f"BLOCKED: [validators] {len(failed_results)} "
+        f"validator(s) failed: {joined_summaries}"
+    )
+
+
+def _emit_pre_tool_use_deny(deny_reason: str) -> None:
+    """Write one PreToolUse deny JSON payload carrying *deny_reason* to stdout."""
+    deny_payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": deny_reason,
+        }
+    }
+    sys.stdout.write(json.dumps(deny_payload) + "\n")
+    sys.stdout.flush()
+
+
+def _evaluate_pre_tool_use_payload() -> None:
+    """Read the PreToolUse payload from stdin and deny a violating file write.
+
+    Reconstructs the proposed post-edit content of the one target file and runs
+    the file-scoped validators against it. Emits a deny decision naming each
+    failing validator when any fires; writes nothing for a clean file, an
+    unparseable payload, or a payload no validator covers.
+    """
+    pre_tool_use_payload = json.load(sys.stdin)
+    if not isinstance(pre_tool_use_payload, dict):
+        return
+    tool_name = pre_tool_use_payload.get("tool_name", "")
+    tool_input = pre_tool_use_payload.get("tool_input", {})
+    if not isinstance(tool_name, str) or not isinstance(tool_input, dict):
+        return
+    file_path = tool_input.get("file_path", "")
+    if not isinstance(file_path, str) or not file_path:
+        return
+    proposed_content = reconstruct_proposed_content(tool_name, tool_input)
+    if not proposed_content:
+        return
+    all_results = validate_proposed_file(file_path, proposed_content)
+    failed_results = [
+        each_result
+        for each_result in all_results
+        if not each_result.passed and not each_result.skipped
+    ]
+    if failed_results:
+        _emit_pre_tool_use_deny(_proposed_content_deny_reason(failed_results))
+
+
+def run_pre_tool_use_gate() -> int:
+    """Run the PreToolUse gate, never crashing the tool call on an internal error.
+
+    A hook that raises is rendered by the harness as a tool malfunction, so an
+    unexpected failure here logs to stderr and returns 0 rather than propagating.
+
+    Returns:
+        Always 0 — the gate signals a block through the deny payload, not an
+        exit code.
+    """
+    try:
+        _evaluate_pre_tool_use_payload()
+    except json.JSONDecodeError:
+        return 0
+    except Exception as error:
+        sys.stderr.write(f"[run_all_validators] pre-tool-use gate error: {error}\n")
+        sys.stderr.flush()
+    return 0
+
+
 def main() -> int:
     """Run all validators and report results."""
     parser = argparse.ArgumentParser(description="Run pre-push validators")
@@ -687,7 +891,15 @@ def main() -> int:
         default=2,
         help="Lines of context around violations",
     )
+    parser.add_argument(
+        "--pre-tool-use",
+        action="store_true",
+        help="Run as a PreToolUse gate on the single proposed file write from stdin",
+    )
     args = parser.parse_args()
+
+    if args.pre_tool_use:
+        return run_pre_tool_use_gate()
 
     if args.health:
         health = get_system_health()
