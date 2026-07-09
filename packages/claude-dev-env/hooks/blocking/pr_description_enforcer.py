@@ -1,10 +1,11 @@
-"""PreToolUse hook gating gh pr create/edit/comment body content.
+"""PreToolUse hook gating gh pr create/edit/comment bodies and gh pr ready.
 
-Reads a PreToolUse JSON payload on stdin, recognises the body-carrying
-gh pr create/edit/comment Bash invocations, audits the PR body against the
-Anthropic claude-code style rules, and denies the command when the body fails.
-Readability-management CLI flags short-circuit the stdin path to adjust the
-persisted readability state.
+Reads a PreToolUse JSON payload on stdin, audits body-carrying gh pr
+create/edit/comment invocations against the Anthropic claude-code style
+rules plus the proof-of-work audit for proof-shaped comment bodies, and
+denies gh pr ready while the PR carries no passing proof comment.
+Readability-management CLI flags short-circuit the stdin path to adjust
+the persisted readability state.
 """
 
 import json
@@ -31,6 +32,12 @@ from blocking.pr_description_command_parser import (  # noqa: E402
 from blocking.pr_description_pr_number import (  # noqa: E402
     _command_carries_body_flag,
     _extract_pr_number_from_command,
+)
+from blocking.pr_description_proof_of_work import (  # noqa: E402
+    audit_proof_comment_body,
+    evaluate_pr_ready_gate,
+    is_pr_ready_command,
+    is_proof_shaped_body,
 )
 from blocking.pr_description_readability import (  # noqa: E402
     _build_readability_escape_hatch_message,
@@ -131,6 +138,28 @@ def validate_pr_body(body: str, pr_number: int | None = None) -> list[str]:
     return violations
 
 
+def _emit_denial(denial_reason: str) -> None:
+    """Print the PreToolUse deny payload for a violation and log the block.
+
+    Args:
+        denial_reason: The permissionDecisionReason text for the deny payload.
+    """
+    denial_payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": denial_reason,
+        }
+    }
+    log_hook_block(
+        calling_hook_name="pr_description_enforcer.py",
+        hook_event="PreToolUse",
+        block_reason=denial_reason,
+    )
+    print(json.dumps(denial_payload))
+    sys.stdout.flush()
+
+
 def main() -> None:
     for each_argv_token in sys.argv[1:]:
         if each_argv_token in ALL_READABILITY_CLI_FLAG_TOKENS:
@@ -154,6 +183,12 @@ def main() -> None:
     if not command:
         sys.exit(0)
 
+    if is_pr_ready_command(command):
+        ready_denial_reason = evaluate_pr_ready_gate(command)
+        if ready_denial_reason is not None:
+            _emit_denial(ready_denial_reason)
+        sys.exit(0)
+
     has_any_body_flag = _command_carries_body_flag(command)
     is_pr_create = "gh pr create" in command and has_any_body_flag
     is_pr_edit = "gh pr edit" in command and has_any_body_flag
@@ -173,28 +208,17 @@ def main() -> None:
 
     violations = validate_pr_body(body, pr_number=extracted_pr_number)
 
+    if is_pr_comment and is_proof_shaped_body(body):
+        violations.extend(audit_proof_comment_body(body, extracted_pr_number))
+
     if violations:
         violation_list = "; ".join(violations)
         pr_guide_reference = f" @{PR_GUIDE_PATH}" if os.path.exists(PR_GUIDE_PATH) else ""
-        denial_reason = (
+        _emit_denial(
             f"BLOCKED: [PR_DESCRIPTION] {violation_list}. "
             f"Rewrite the body yourself in Anthropic claude-code style. "
             f"Guide:{pr_guide_reference}"
         )
-        denial_payload = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": denial_reason,
-            }
-        }
-        log_hook_block(
-            calling_hook_name="pr_description_enforcer.py",
-            hook_event="PreToolUse",
-            block_reason=denial_reason,
-        )
-        print(json.dumps(denial_payload))
-        sys.stdout.flush()
 
     sys.exit(0)
 

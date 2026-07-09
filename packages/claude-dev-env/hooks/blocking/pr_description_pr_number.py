@@ -2,7 +2,8 @@
 
 Reports whether a captured shell command carries any body or body-file flag,
 and extracts the positional PR number (bare integer or GitHub PR URL) from a
-gh pr edit/comment command while skipping value-taking flags and their values.
+gh pr edit/comment/ready command while skipping value-taking flags and their
+values.
 """
 
 import re
@@ -29,6 +30,7 @@ from blocking._gh_body_arg_utils import (  # noqa: E402
     strip_surrounding_quotes,
 )
 from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
+    ALL_PR_NUMBER_BEARING_GH_PR_SUBCOMMANDS,
     GH_PR_COMMAND_MIN_TOKEN_COUNT,
 )
 
@@ -59,7 +61,7 @@ def _resolve_positional_pr_number(token: str) -> int | None:
 
 
 def _extract_pr_number_from_command(command: str) -> int | None:
-    """Return the PR number positional argument from a `gh pr edit|comment` command.
+    """Return the PR number positional argument from a `gh pr edit|comment|ready` command.
 
     Skips value-taking non-body flags (and their value tokens) so that ``--repo owner/r``
     pairs do not consume the trailing PR number. Accepts both a bare integer literal
@@ -83,7 +85,7 @@ def _extract_pr_number_from_command(command: str) -> int | None:
     if all_tokens[0] != "gh" or all_tokens[1] != "pr":
         return None
     subcommand_token = all_tokens[2]
-    if subcommand_token not in {"edit", "comment"}:
+    if subcommand_token not in ALL_PR_NUMBER_BEARING_GH_PR_SUBCOMMANDS:
         return None
     all_value_taking_bare_flags: frozenset[str] = (
         non_body_value_flags | all_body_flags | {body_file_flag, body_file_short_flag}
