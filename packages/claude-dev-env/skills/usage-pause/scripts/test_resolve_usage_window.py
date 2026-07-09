@@ -270,3 +270,9 @@ class TestCommandLine:
         assert completed.returncode == 2
         resolved_payload = json.loads(completed.stdout)
         assert "error" in resolved_payload
+
+    def should_reject_invalid_now_with_error_payload(self) -> None:
+        completed = self.run_resolver("--override", "74m", "--now", "not-a-time")
+        assert completed.returncode == 2
+        resolved_payload = json.loads(completed.stdout)
+        assert "error" in resolved_payload

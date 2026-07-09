@@ -401,11 +401,13 @@ def main() -> int:
     """
     logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT, stream=sys.stderr)
     arguments = _parse_arguments()
-    now = (
-        datetime.fromisoformat(arguments.now).astimezone()
-        if arguments.now
-        else datetime.now().astimezone()
-    )
+    if arguments.now:
+        try:
+            now = datetime.fromisoformat(arguments.now).astimezone()
+        except ValueError as now_error:
+            return _emit_error(f"cannot read --now time {arguments.now!r}: {now_error}")
+    else:
+        now = datetime.now().astimezone()
     if arguments.override:
         try:
             reset_at = parse_manual_override(arguments.override, now)
