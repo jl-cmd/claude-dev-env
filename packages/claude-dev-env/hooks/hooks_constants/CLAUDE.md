@@ -9,6 +9,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `__init__.py` | Package marker (`# pragma: no-tdd-gate`) |
 | `any_type_config.py` | Config for the `Any`-type escape-hatch check |
 | `banned_identifiers_constants.py` | The set of banned short identifiers and banned function-name prefixes |
+| `bash_pre_tool_use_dispatcher_constants.py` | Permission outcomes, tool-name sets, and the ordered hosted-hook roster for the Bash PreToolUse dispatcher (also covers PowerShell-shared gates) |
 | `blocking_check_limits.py` | Max issue counts and preview lengths for blocking hooks |
 | `bot_mention_comment_blocker_constants.py` | Patterns for detecting bot @-mentions in PR comments |
 | `claude_md_orphan_file_blocker_constants.py` | Table patterns, file extensions, scan budget, and block-message text for the CLAUDE.md orphan-file blocker |
@@ -34,6 +35,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
 | `hook_log_extractor_constants.py` | Neon table name, offset state file path, timeouts, and outcome-type mapping for the hook-log extractor |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
+| `hosted_hook_runner.py` | `run_hook_capturing_output()` — shared runner that runs one dispatcher-hosted hook in-process via runpy and returns its captured stdout and crash flag |
 | `inline_tuple_string_magic_constants.py` | Patterns for detecting magic strings in inline tuple literals |
 | `js_conventions_constants.py` | Banned identifier set, boolean-prefix pattern, and declaration/JSDoc patterns for the JavaScript convention checks |
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
@@ -61,6 +63,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
 | `stale_comment_reference_blocker_constants.py` | Identifier pattern, comment stopwords, and denial text for the stale-comment-reference blocker |
 | `state_description_blocker_constants.py` | The set of historical/comparative phrases the state-description blocker rejects, plus the docstring-extraction and mention-span patterns for its Python docstring scan |
+| `stop_dispatcher_constants.py` | Ordered hosted-hook roster and Stop block payload field names for the Stop-chain dispatcher |
 | `stuttering_check_config.py` | Config for the stuttering (repeated-phrase) check |
 | `stuttering_import_binding_constants.py` | Import-binding patterns for the stuttering check |
 | `subprocess_budget_completeness_constants.py` | Required argument names for the subprocess-budget completeness check |
@@ -77,4 +80,5 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 - Every file in this package is a pure constants module — no side effects, no I/O.
 - Hooks import from this package with `from hooks_constants.<module> import <CONSTANT>`.
 - Tests for these modules live beside them as `test_<module>.py`. Run with `python -m pytest hooks_constants/test_<name>.py`.
-- `dynamic_stderr_handler.py`, `pre_tool_use_stdin.py`, `multi_edit_reconstruction.py`, and `text_stripping.py` are utility modules (not pure constants) but live here because they are shared across many hooks.
+- `dynamic_stderr_handler.py`, `pre_tool_use_stdin.py`, `multi_edit_reconstruction.py`, `hosted_hook_runner.py`, and `text_stripping.py` are utility modules (not pure constants) but live here because they are shared across many hooks.
+
