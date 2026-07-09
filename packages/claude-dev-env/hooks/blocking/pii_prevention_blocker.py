@@ -48,7 +48,9 @@ from hooks_constants.multi_edit_reconstruction import edits_for_tool  # noqa: E4
 from hooks_constants.pii_prevention_constants import (  # noqa: E402
     ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS,
     ALL_GIT_BINARY_BASENAMES,
+    ALL_LEADING_SKIPPABLE_COMMAND_TOKENS,
     ALL_SHELL_COMMAND_SEPARATOR_TOKENS,
+    ALL_SHELL_INTERPRETER_BASENAMES,
     ALL_SHELL_QUOTE_CHARACTERS,
     ALL_SHELL_TOOL_NAMES,
     ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX,
@@ -73,6 +75,7 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     NULL_BYTE_MARKER,
     POWERSHELL_CALL_OPERATOR,
     REPOSITORY_ROOT_UNRESOLVED_REASON,
+    SHELL_INLINE_COMMAND_FLAG,
     STAGED_BLOB_PREFIX,
     STAGED_BLOB_REASON_DECODE_FAILED,
     STAGED_BLOB_REASON_GIT_SHOW_FAILED,
@@ -306,10 +309,25 @@ def _strip_token_edge_quotes(token_text: str) -> str:
     return token_text.strip("\"'")
 
 
-def _token_is_git_binary(token_text: str) -> bool:
+def _token_basename_lower(token_text: str) -> str:
     stripped_token = _strip_token_edge_quotes(token_text)
-    final_segment = re.split(r"[\\/]", stripped_token)[-1].lower()
-    return final_segment in ALL_GIT_BINARY_BASENAMES
+    return re.split(r"[\\/]", stripped_token)[-1].lower()
+
+
+def _token_is_git_binary(token_text: str) -> bool:
+    return _token_basename_lower(token_text) in ALL_GIT_BINARY_BASENAMES
+
+
+def _token_is_shell_interpreter(token_text: str) -> bool:
+    return _token_basename_lower(token_text) in ALL_SHELL_INTERPRETER_BASENAMES
+
+
+def _token_is_skippable_prefix(token_text: str) -> bool:
+    if ENVIRONMENT_ASSIGNMENT_PATTERN.match(token_text):
+        return True
+    if token_text == POWERSHELL_CALL_OPERATOR:
+        return True
+    return _token_basename_lower(token_text) in ALL_LEADING_SKIPPABLE_COMMAND_TOKENS
 
 
 def _following_tokens_invoke_commit(all_following_tokens: list[str]) -> bool:
@@ -387,41 +405,68 @@ def _all_command_segments(shell_command: str) -> list[list[str]]:
     return all_segments
 
 
+def _skip_leading_noop_tokens(all_segment_tokens: list[str]) -> int:
+    token_index = 0
+    while token_index < len(all_segment_tokens) and _token_is_skippable_prefix(
+        all_segment_tokens[token_index]
+    ):
+        token_index += 1
+    return token_index
+
+
+def _interpreter_inline_command_invokes_commit(
+    all_following_tokens: list[str],
+) -> bool:
+    token_index = 0
+    while token_index < len(all_following_tokens):
+        if all_following_tokens[token_index] == SHELL_INLINE_COMMAND_FLAG:
+            argument_index = token_index + 1
+            if argument_index >= len(all_following_tokens):
+                return False
+            return is_git_commit_shell_command(all_following_tokens[argument_index])
+        token_index += 1
+    return False
+
+
+def _segment_invokes_git_commit(all_segment_tokens: list[str]) -> bool:
+    command_index = _skip_leading_noop_tokens(all_segment_tokens)
+    if command_index >= len(all_segment_tokens):
+        return False
+    all_following_tokens = all_segment_tokens[command_index + 1 :]
+    if _token_is_shell_interpreter(all_segment_tokens[command_index]):
+        return _interpreter_inline_command_invokes_commit(all_following_tokens)
+    if not _token_is_git_binary(all_segment_tokens[command_index]):
+        return False
+    return _following_tokens_invoke_commit(all_following_tokens)
+
+
 def is_git_commit_shell_command(shell_command: str) -> bool:
     """Report whether *shell_command* invokes git commit (token-aware).
 
-    Detects ``git commit``, Windows ``git.exe commit``, path-prefixed binaries,
-    and forms with global flags before the subcommand (``git --no-verify
-    commit``, ``git -c commit.gpgsign=false commit``, ``git -C path commit``).
-    Splits the command at unquoted separators (``&&``, ``||``, ``;``, ``|``)
-    and newlines, so a commit chained after another command is detected.
-    Does not treat prose mentions inside other programs as commits.
+    Each segment is read past its leading noise to the real command word::
+
+        sudo git commit -m x   ->  skip the wrapper, match git then commit
+        time git commit        ->  skip the wrapper, match git then commit
+        then git commit -m x   ->  skip the keyword, match git then commit
+        bash -c "git commit"   ->  unwrap the inline argument, then match
+
+    Skipped leading tokens: env-assignments, a PowerShell call operator, shell
+    keywords (then, do, else, elif), and wrapper commands (sudo, env, time,
+    nice, xargs, command, stdbuf). Segments split on unquoted control
+    separators and newlines, and the git binary may be path-prefixed and carry
+    global flags (no-verify, config, and working-directory) before its
+    subcommand.
 
     Args:
         shell_command: Bash or PowerShell tool command string.
 
     Returns:
-        True when a command segment invokes git with a ``commit`` subcommand.
+        True when a command segment invokes git with a commit subcommand.
     """
     if not shell_command or not shell_command.strip():
         return False
-    environment_assignment_pattern = ENVIRONMENT_ASSIGNMENT_PATTERN
-    powershell_call_operator = POWERSHELL_CALL_OPERATOR
     for each_segment in _all_command_segments(shell_command):
-        token_index = 0
-        while token_index < len(each_segment) and environment_assignment_pattern.match(
-            each_segment[token_index]
-        ):
-            token_index += 1
-        if token_index < len(each_segment) and each_segment[token_index] == (
-            powershell_call_operator
-        ):
-            token_index += 1
-        if token_index >= len(each_segment):
-            continue
-        if not _token_is_git_binary(each_segment[token_index]):
-            continue
-        if _following_tokens_invoke_commit(each_segment[token_index + 1 :]):
+        if _segment_invokes_git_commit(each_segment):
             return True
     return False
 

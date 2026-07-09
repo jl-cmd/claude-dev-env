@@ -516,3 +516,41 @@ def test_glued_semicolon_commit_scans_staged_pii(tmp_path: Path) -> None:
     )
     assert deny_reason is not None
     assert "email" in deny_reason
+
+
+def test_is_git_commit_shell_command_detects_shell_keyword_wrapped_commits() -> None:
+    assert is_git_commit_shell_command("if true; then git commit -m x; fi")
+    assert is_git_commit_shell_command("for f in a b; do git commit -m x; done")
+    assert is_git_commit_shell_command("bash -c 'git commit -m x'")
+    assert is_git_commit_shell_command('sh -c "git commit -m x"')
+
+
+def test_is_git_commit_shell_command_detects_wrapper_prefixed_commits() -> None:
+    assert is_git_commit_shell_command("time git commit -m x")
+    assert is_git_commit_shell_command("sudo git commit -m x")
+    assert is_git_commit_shell_command("env GIT_AUTHOR_NAME=a git commit")
+    assert is_git_commit_shell_command("nice git commit -m y")
+    assert not is_git_commit_shell_command("sudo cat notes.md")
+
+
+def test_wrapper_prefixed_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "env GIT_AUTHOR_NAME=a git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
+def test_shell_keyword_wrapped_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "time git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason

@@ -29,6 +29,19 @@ GIT_OPTION_WITH_VALUE_STEP: int = 2
 ALL_SHELL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset(
     {"&&", "||", ";", "|"}
 )
+ALL_SHELL_KEYWORD_TOKENS: frozenset[str] = frozenset(
+    {"then", "do", "else", "elif"}
+)
+ALL_COMMAND_WRAPPER_TOKENS: frozenset[str] = frozenset(
+    {"sudo", "env", "time", "nice", "xargs", "command", "stdbuf"}
+)
+ALL_LEADING_SKIPPABLE_COMMAND_TOKENS: frozenset[str] = (
+    ALL_SHELL_KEYWORD_TOKENS | ALL_COMMAND_WRAPPER_TOKENS
+)
+ALL_SHELL_INTERPRETER_BASENAMES: frozenset[str] = frozenset(
+    {"bash", "sh", "bash.exe", "sh.exe"}
+)
+SHELL_INLINE_COMMAND_FLAG: str = "-c"
 ALL_SHELL_QUOTE_CHARACTERS: frozenset[str] = frozenset({'"', "'"})
 ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS: frozenset[str] = frozenset({"\n", "\r"})
 POWERSHELL_CALL_OPERATOR: str = "&"
