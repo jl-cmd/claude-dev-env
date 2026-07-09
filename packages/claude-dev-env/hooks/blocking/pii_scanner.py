@@ -118,7 +118,12 @@ def is_path_exempt_from_pii_scan(file_path: str) -> bool:
 
 
 def _redact_sensitive_preview(matched_text: str) -> str:
-    """Return a log-safe preview that never re-leaks a secret or email body."""
+    """Return a preview that redacts the middle of a secret or email body.
+
+    A short match collapses to a fixed placeholder. A longer match keeps a
+    bounded prefix and suffix around an ellipsis, so the preview reveals at
+    most a few leading and trailing characters rather than the whole body.
+    """
     if len(matched_text) < MINIMUM_LENGTH_FOR_PARTIAL_REDACTION:
         return REDACTED_SHORT_PREVIEW
     prefix_length = REDACTED_PREVIEW_PREFIX_LENGTH

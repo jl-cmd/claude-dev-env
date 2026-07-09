@@ -372,6 +372,7 @@ def _split_shell_command_segments(all_tokens: list[str]) -> list[list[str]]:
 def _tokenize_shell_command(shell_command_piece: str) -> list[str]:
     lexer = shlex.shlex(shell_command_piece, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
+    lexer.escape = ""
     try:
         return list(lexer)
     except ValueError:
