@@ -21,7 +21,7 @@ import json
 import pathlib
 import subprocess
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:
