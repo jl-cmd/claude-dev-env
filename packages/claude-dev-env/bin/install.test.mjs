@@ -266,6 +266,60 @@ test('expandHomeDirectoryTokens expands $HOME, ${HOME}, and ~/', () => {
 });
 
 
+test('expandHomeDirectoryTokens inserts dollar characters in home paths literally', () => {
+    const homeWithReplaceMetacharacters = 'C:/Users/$&evil$1';
+    assert.equal(
+        expandHomeDirectoryTokens('python $HOME/.claude/a.py', homeWithReplaceMetacharacters),
+        'python C:/Users/$&evil$1/.claude/a.py',
+    );
+    assert.equal(
+        expandHomeDirectoryTokens('python ${HOME}/.claude/a.py', homeWithReplaceMetacharacters),
+        'python C:/Users/$&evil$1/.claude/a.py',
+    );
+    assert.equal(
+        expandHomeDirectoryTokens('python ~/.claude/a.py', homeWithReplaceMetacharacters),
+        'python C:/Users/$&evil$1/.claude/a.py',
+    );
+});
+
+
+test('expandHomeDirectoryTokens expands ${HOME} before $HOME so braces stay intact', () => {
+    assert.equal(
+        expandHomeDirectoryTokens('python ${HOME}/.claude/a.py', '/home/x'),
+        'python /home/x/.claude/a.py',
+    );
+});
+
+
+test('expandHomeDirectoryTokens strips trailing slashes from the home directory', () => {
+    assert.equal(
+        expandHomeDirectoryTokens('python $HOME/.claude/a.py', 'C:/Users/x/'),
+        'python C:/Users/x/.claude/a.py',
+    );
+});
+
+
+test('expandHomeDirectoryTokensInSettings skips non-array hook event values', () => {
+    const settings = {
+        hooks: {
+            SessionStart: 'not-an-array',
+            PreToolUse: [
+                {
+                    matcher: 'Write',
+                    hooks: [{ type: 'command', command: 'python $HOME/.claude/hooks/a.py' }],
+                },
+            ],
+        },
+    };
+    expandHomeDirectoryTokensInSettings(settings, 'C:/Users/x');
+    assert.equal(settings.hooks.SessionStart, 'not-an-array');
+    assert.equal(
+        settings.hooks.PreToolUse[0].hooks[0].command,
+        'python C:/Users/x/.claude/hooks/a.py',
+    );
+});
+
+
 test('expandHomeDirectoryTokensInSettings rewrites hooks and statusLine', () => {
     const settings = {
         hooks: {

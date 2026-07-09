@@ -10,16 +10,33 @@
  * Expands $HOME, ${HOME}, and ~/ in a command string to an absolute home directory
  * using forward slashes.
  *
+ * Replacement uses split/join and function replacers so a home path that contains
+ * `$` (for example `$&` or `$1`) is inserted literally and is never treated as a
+ * String.prototype.replace special pattern.
+ *
+ * ::
+ *
+ *     expandHomeDirectoryTokens('python $HOME/a.py', 'C:\\Users\\x')
+ *     # -> 'python C:/Users/x/a.py'
+ *
+ *     expandHomeDirectoryTokens('python $HOME/a.py', 'C:/Users/$&evil')
+ *     # -> 'python C:/Users/$&evil/a.py'  (literal dollars, not regex rewrite)
+ *
  * @param {string} commandString Hook or statusLine command text.
  * @param {string} homeDirectory Absolute home directory (any path separators).
  * @returns {string} Command with home tokens expanded.
  */
 export function expandHomeDirectoryTokens(commandString, homeDirectory) {
     const normalizedHome = homeDirectory.replace(/\\/g, '/').replace(/\/+$/, '');
-    let expandedCommand = commandString;
-    expandedCommand = expandedCommand.replaceAll('${HOME}', normalizedHome);
-    expandedCommand = expandedCommand.replace(/(?<![A-Za-z0-9_])\$HOME\b/g, normalizedHome);
-    expandedCommand = expandedCommand.replace(/(^|[\s"'=])~\//g, `$1${normalizedHome}/`);
+    let expandedCommand = commandString.split('${HOME}').join(normalizedHome);
+    expandedCommand = expandedCommand.replace(
+        /(?<![A-Za-z0-9_])\$HOME\b/g,
+        () => normalizedHome,
+    );
+    expandedCommand = expandedCommand.replace(
+        /(^|[\s"'=])~\//g,
+        (_fullMatch, boundary) => `${boundary}${normalizedHome}/`,
+    );
     return expandedCommand;
 }
 
@@ -35,8 +52,9 @@ export function expandHomeDirectoryTokens(commandString, homeDirectory) {
 export function expandHomeDirectoryTokensInSettings(settings, homeDirectory) {
     if (settings.hooks) {
         for (const matcherGroups of Object.values(settings.hooks)) {
+            if (!Array.isArray(matcherGroups)) continue;
             for (const eachGroup of matcherGroups) {
-                if (!eachGroup.hooks) continue;
+                if (!eachGroup || !Array.isArray(eachGroup.hooks)) continue;
                 for (const eachHook of eachGroup.hooks) {
                     if (typeof eachHook.command === 'string') {
                         eachHook.command = expandHomeDirectoryTokens(
