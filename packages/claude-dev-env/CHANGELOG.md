@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.92.1](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.92.0...claude-dev-env-v1.92.1) (2026-07-09)
+
+
+### Documentation
+
+* trim always-loaded instruction files to pointers ([8690276](https://github.com/jl-cmd/claude-code-config/commit/8690276718ee7c55627c6390e7fe4d5661325798))
+* trim always-loaded instruction files to pointers ([0a7de3f](https://github.com/jl-cmd/claude-code-config/commit/0a7de3f93b80b696d66d1d195c621c272abbddda))
+
+
+### Maintenance
+
+* normalize the orchestrator skill files to LF ([ab9604d](https://github.com/jl-cmd/claude-code-config/commit/ab9604dd8c913ed7889fef86899ea065eabc38e2))
+
+
+### Refactoring
+
+* rename team-advisor skill to orchestrator ([de4d3dd](https://github.com/jl-cmd/claude-code-config/commit/de4d3dd9ed28a6fbf509fbf40cffb4b6afcbe082))
+* rename team-advisor skill to orchestrator ([f91f4c6](https://github.com/jl-cmd/claude-code-config/commit/f91f4c6f9245c637d56c17fd0c114c278e9e2f97))
+
 ## [1.92.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.91.0...claude-dev-env-v1.92.0) (2026-07-09)
 
 
