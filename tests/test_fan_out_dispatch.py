@@ -75,56 +75,67 @@ class TestIsTargetRepo:
 
 
 class TestBuildSummaryTable:
-    def should_include_header_row(self) -> None:
-        table = fan_out_dispatch.build_summary_table({}, {}, {})
+    def should_include_metric_count_header_row(self) -> None:
+        table = fan_out_dispatch.build_summary_table({}, {})
 
-        assert "| Repo |" in table
-        assert "| Dispatch Status |" in table
-        assert "| Listener Conclusion |" in table
+        assert "| Metric | Count |" in table
+        assert "|--------|-------|" in table
 
-    def should_list_each_repo_in_its_own_row(self) -> None:
+    def should_report_counts_without_repo_names(self) -> None:
         dispatch_status_by_repo = {
             "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
-            "JonEcho/beta": "opted-out",
+            "JonEcho/beta": fan_out_dispatch.DISPATCH_STATUS_OPTED_OUT,
         }
 
-        table = fan_out_dispatch.build_summary_table(dispatch_status_by_repo, {}, {})
+        table = fan_out_dispatch.build_summary_table(dispatch_status_by_repo, {})
 
-        assert "JonEcho/alpha" in table
-        assert "JonEcho/beta" in table
+        assert "JonEcho/alpha" not in table
+        assert "JonEcho/beta" not in table
+        assert "| Targets considered | 2 |" in table
+        assert "| Dispatch succeeded | 1 |" in table
+        assert "| Dispatch opted out | 1 |" in table
 
-    def should_show_listener_conclusion_alongside_dispatch_status(self) -> None:
-        dispatch_status_by_repo = {"JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED}
-        conclusion_by_repo = {"JonEcho/alpha": "success"}
+    def should_count_listener_conclusions_by_status(self) -> None:
+        dispatch_status_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+            "JonEcho/beta": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+        }
+        conclusion_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.LISTENER_CONCLUSION_SUCCESS,
+            "JonEcho/beta": fan_out_dispatch.LISTENER_CONCLUSION_FAILURE,
+        }
 
         table = fan_out_dispatch.build_summary_table(
-            dispatch_status_by_repo, conclusion_by_repo, {}
+            dispatch_status_by_repo, conclusion_by_repo
         )
 
-        assert "success" in table
+        assert "| Listener success | 1 |" in table
+        assert "| Listener failure | 1 |" in table
+        assert "JonEcho/alpha" not in table
+        assert "JonEcho/beta" not in table
 
-    def should_show_notes_when_provided(self) -> None:
-        dispatch_status_by_repo = {"JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED}
-        notes_by_repo = {"JonEcho/alpha": "drift or sync error"}
+    def should_count_dispatch_failures(self) -> None:
+        dispatch_status_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_FAILED,
+        }
 
-        table = fan_out_dispatch.build_summary_table(
-            dispatch_status_by_repo, {}, notes_by_repo
-        )
+        table = fan_out_dispatch.build_summary_table(dispatch_status_by_repo, {})
 
-        assert "drift or sync error" in table
+        assert "| Dispatch failed | 1 |" in table
 
 
 class TestBuildStaleSection:
     def should_return_empty_string_when_no_stale_repos(self) -> None:
         assert fan_out_dispatch.build_stale_section([]) == ""
 
-    def should_list_each_stale_repo(self) -> None:
+    def should_report_stale_count_without_repo_names(self) -> None:
         stale_repos = ["JonEcho/old-project", "jl-cmd/abandoned"]
 
         section = fan_out_dispatch.build_stale_section(stale_repos)
 
-        assert "JonEcho/old-project" in section
-        assert "jl-cmd/abandoned" in section
+        assert "2 target repo(s)" in section
+        assert "JonEcho/old-project" not in section
+        assert "jl-cmd/abandoned" not in section
 
     def should_include_stale_section_heading(self) -> None:
         section = fan_out_dispatch.build_stale_section(["JonEcho/some-repo"])

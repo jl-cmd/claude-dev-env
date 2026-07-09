@@ -14,6 +14,7 @@ strings in one place rather than scattered across multiple scripts.
 |------|------|
 | `__init__.py` | Package marker; makes `config` resolve as a Python package rather than a flat module. |
 | `sync_ai_rules_paths.py` | Defines the source and destination path strings for the AI rules sync: `SOURCE_FILE_PATH`, `BUGBOT_DESTINATION_PATH`, `AGENTS_DESTINATION_PATH`, `DESTINATION_PATHS`, and `BUGBOT_ONLY_DESTINATION_PATHS`. |
+| `constants.py` | Metric labels, workflow notice templates, and summary-table strings for `scripts/fan_out_dispatch.py`. |
 
 ## Usage
 

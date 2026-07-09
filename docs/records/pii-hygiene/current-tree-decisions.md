@@ -21,7 +21,7 @@ Recorded while continuing the remediation started in session
 
 | Item | Decision | Notes |
 |---|---|---|
-| `scripts/fan_out_dispatch.py` Actions logging | **Defer** | Job logs and step summary still print private target repo names. Count-only redaction tracked in issue #948 (code-rules gate friction on that file). |
+| `scripts/fan_out_dispatch.py` workflow output | **Redacted** | Step summary is Metric/Count rows only; notices never print owner or repository full names (issue #948). |
 
 ## Still blocked on owner decision
 
