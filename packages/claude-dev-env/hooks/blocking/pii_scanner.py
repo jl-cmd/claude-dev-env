@@ -81,12 +81,15 @@ def is_path_exempt_from_pii_scan(file_path: str) -> bool:
     if not file_path:
         return False
     normalized_path = file_path.replace("\\", "/").lower()
+    path_for_suffix_match = (
+        normalized_path
+        if normalized_path.startswith("/")
+        else f"/{normalized_path}"
+    )
     basename = os.path.basename(file_path)
     basename_lower = basename.lower()
     for each_suffix in ALL_SELF_MODULE_PATH_SUFFIXES:
-        if normalized_path.endswith(each_suffix) or normalized_path.endswith(
-            each_suffix.lstrip("/")
-        ):
+        if path_for_suffix_match.endswith(each_suffix):
             return True
     if basename_lower == CONFTEST_BASENAME:
         return True

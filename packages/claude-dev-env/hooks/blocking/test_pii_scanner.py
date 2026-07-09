@@ -96,6 +96,8 @@ def test_path_exemptions_for_tests_license_and_self_modules() -> None:
         "packages/claude-dev-env/hooks/hooks_constants/pii_prevention_constants.py"
     )
     assert not is_path_exempt_from_pii_scan("vendor/pii_scanner.py")
+    assert not is_path_exempt_from_pii_scan("not_hooks/blocking/pii_scanner.py")
+    assert not is_path_exempt_from_pii_scan("xhooks/blocking/pii_scanner.py")
     assert not is_path_exempt_from_pii_scan("LICENSE_leak.env")
     assert not is_path_exempt_from_pii_scan("src/app/settings.md")
     assert not is_path_exempt_from_pii_scan("test_notes.md")
