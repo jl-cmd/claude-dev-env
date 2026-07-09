@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.92.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.91.0...claude-dev-env-v1.92.0) (2026-07-09)
+
+
+### Features
+
+* add the /usage-pause skill with an OAuth usage-window resolver ([fd6274d](https://github.com/jl-cmd/claude-code-config/commit/fd6274d361c740f79961cff2809dcb7822737ce7))
+* Enforce proof-of-work comments on PRs ([21e1b52](https://github.com/jl-cmd/claude-code-config/commit/21e1b52a9e02bfcedb862f6bd191070cfb02b896))
+* **hooks:** add PreToolUse gate mode to run_all_validators ([b7eff19](https://github.com/jl-cmd/claude-code-config/commit/b7eff19b7ae25fb4b75e4ba81f727ef2515d0cbf))
+* **hooks:** block bare ssh to the NAS, require Windows OpenSSH + BatchMode ([6882c4a](https://github.com/jl-cmd/claude-code-config/commit/6882c4abb3339cf1b5676bfda2c29e51ca5aee84))
+
+
+### Bug Fixes
+
+* **hooks:** bind verified-commit constants by file location ([94e8ebc](https://github.com/jl-cmd/claude-code-config/commit/94e8ebc4f77fae10128569bef50327c452e8b93d))
+
 ## [1.91.0](https://github.com/jl-cmd/claude-code-config/compare/claude-dev-env-v1.90.0...claude-dev-env-v1.91.0) (2026-07-08)
 
 
