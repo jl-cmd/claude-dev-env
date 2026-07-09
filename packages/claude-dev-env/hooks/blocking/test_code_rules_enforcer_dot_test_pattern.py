@@ -47,7 +47,7 @@ def test_is_hook_infrastructure_should_recognize_packages_claude_dev_env_hooks_v
 
 
 def test_is_hook_infrastructure_should_still_recognize_dot_claude_hooks():
-    assert enforcer.is_hook_infrastructure("C:/Users/jon/.claude/hooks/blocking/foo.py") is True
+    assert enforcer.is_hook_infrastructure("C:/Users/example/.claude/hooks/blocking/foo.py") is True
     assert enforcer.is_hook_infrastructure("/home/user/.claude/hooks/blocking/foo.py") is True
 
 

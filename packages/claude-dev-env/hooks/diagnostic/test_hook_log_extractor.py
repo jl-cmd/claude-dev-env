@@ -46,7 +46,7 @@ def _make_success_line(
     hook_name: str = "PreToolUse:Bash",
     hook_event: str = "PreToolUse",
     tool_use_id: str = "toolu_001",
-    command: str = "python C:/Users/jon/.claude/hooks/blocking/destructive_command_blocker.py",
+    command: str = "python C:/Users/example/.claude/hooks/blocking/destructive_command_blocker.py",
     stdout: str = "ok\n",
     stderr: str = "",
     exit_code: int = 0,
@@ -82,7 +82,7 @@ def _make_blocking_line(
     hook_event: str = "PreToolUse",
     tool_use_id: str = "toolu_002",
     blocking_message: str = "blocked for reason",
-    command: str = "python C:/Users/jon/.claude/hooks/blocking/block_main_commit.py",
+    command: str = "python C:/Users/example/.claude/hooks/blocking/block_main_commit.py",
     timestamp: str = "2026-04-24T13:32:54.293Z",
     cwd: str = "Y:\\Projects\\repo",
     git_branch: str = "main",
@@ -166,12 +166,12 @@ def _make_additional_context_line(
     sorted(KNOWN_HOOK_CATEGORIES),
 )
 def test_derive_category_accepts_each_known_category(expected_category: str) -> None:
-    script_path = f"python C:/Users/jon/.claude/hooks/{expected_category}/some_hook.py"
+    script_path = f"python C:/Users/example/.claude/hooks/{expected_category}/some_hook.py"
     assert hook_log_extractor.derive_category(script_path) == expected_category
 
 
 def test_derive_category_returns_uncategorized_for_unknown_parent() -> None:
-    script_path = "python C:/Users/jon/.claude/hooks/unheard_of_bucket/some_hook.py"
+    script_path = "python C:/Users/example/.claude/hooks/unheard_of_bucket/some_hook.py"
     assert (
         hook_log_extractor.derive_category(script_path) == HOOK_CATEGORY_UNCATEGORIZED
     )
@@ -183,7 +183,7 @@ def test_derive_category_returns_uncategorized_for_empty_path() -> None:
 
 
 def test_derive_category_handles_windows_backslash_paths() -> None:
-    script_path = "python C:\\Users\\jon\\.claude\\hooks\\blocking\\destructive_command_blocker.py"
+    script_path = "python C:\\Users\\example\\.claude\\hooks\\blocking\\destructive_command_blocker.py"
     assert hook_log_extractor.derive_category(script_path) == "blocking"
 
 
@@ -259,12 +259,12 @@ def test_derive_outcome_raises_on_unknown_type() -> None:
 
 def test_extract_script_path_from_success_record() -> None:
     record_json = _make_success_line(
-        command="python C:/Users/jon/.claude/hooks/blocking/foo.py",
+        command="python C:/Users/example/.claude/hooks/blocking/foo.py",
     )
     parsed = json.loads(record_json)
     assert (
         hook_log_extractor.extract_script_path(parsed["attachment"])
-        == "C:/Users/jon/.claude/hooks/blocking/foo.py"
+        == "C:/Users/example/.claude/hooks/blocking/foo.py"
     )
 
 

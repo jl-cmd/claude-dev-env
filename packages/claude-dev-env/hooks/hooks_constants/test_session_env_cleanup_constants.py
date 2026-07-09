@@ -41,7 +41,7 @@ class TestSessionIdPatternRejects:
         assert SESSION_ID_PATTERN.match("etc/passwd") is None
 
     def test_rejects_back_slash(self) -> None:
-        assert SESSION_ID_PATTERN.match("Users\\jon") is None
+        assert SESSION_ID_PATTERN.match("Users\\example") is None
 
     def test_rejects_parent_traversal(self) -> None:
         assert SESSION_ID_PATTERN.match("..") is None

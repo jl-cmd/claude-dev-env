@@ -89,7 +89,7 @@ class TestExclusionFilter:
         assert filtered == []
 
     def test_drops_path_with_dot_cache_segment(self) -> None:
-        all_candidates = ["C:\\Users\\jon\\.cache\\build"]
+        all_candidates = ["C:\\Users\\example\\.cache\\build"]
         filtered = setup.apply_exclusion_filter(all_candidates)
         assert filtered == []
 

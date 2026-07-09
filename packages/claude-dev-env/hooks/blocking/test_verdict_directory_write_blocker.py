@@ -78,7 +78,7 @@ def test_powershell_out_file_into_verdict_directory_is_flagged() -> None:
 def test_backslash_verdict_path_is_flagged() -> None:
     assert (
         references_verdict_directory(
-            "echo forged > C:\\Users\\jon\\.claude\\verification\\abc.json"
+            "echo forged > C:\\Users\\example\\.claude\\verification\\abc.json"
         )
         is True
     )

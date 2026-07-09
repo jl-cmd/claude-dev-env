@@ -13,9 +13,9 @@ from hooks_constants.hardcoded_user_path_constants import HARDCODED_USER_PATH_PA
 
 
 def test_pattern_matches_windows_user_home() -> None:
-    match = HARDCODED_USER_PATH_PATTERN.search("C:/Users/jon/notes")
+    match = HARDCODED_USER_PATH_PATTERN.search("C:/Users/example/notes")
     assert match is not None
-    assert match.group(0) == "C:/Users/jon"
+    assert match.group(0) == "C:/Users/example"
 
 
 def test_pattern_matches_macos_user_home() -> None:

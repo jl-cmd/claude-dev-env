@@ -28,7 +28,7 @@
 | J9 | Logging format | `log_*(f"...")` rather than `log_*("...", arg)`. |
 | J10 | Imports inside functions | `import` statements placed inside function bodies. |
 | J11 | sys.path.insert dedup | `sys.path.insert(0, X)` must be guarded by `if X not in sys.path:` (test files exempt). |
-| J12 | Hardcoded user paths | String literals naming a specific user's home directory (`C:/Users/jon/...`, `/Users/alice/...`, `/home/bob/...`). Use `pathlib.Path.home()`. |
+| J12 | Hardcoded user paths | String literals naming a specific user's home directory (`C:/Users/example/...`, `/Users/alice/...`, `/home/bob/...`). Use `pathlib.Path.home()`. |
 
 The write-time hook (`code_rules_enforcer.py`) exempts test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, paths under `/tests/`) from most Category J sub-buckets, and skips the naming, logging, annotation, and unused-import rules on `.mjs` / `.js` files. J11 (`sys.path.insert`) always applies. Read the next section for the sub-buckets this audit applies more widely than the hook.
 
