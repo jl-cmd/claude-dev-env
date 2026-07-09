@@ -12,8 +12,6 @@ paths:
 
 > **Reference:** TEST_QUALITY.md - Load when writing or reviewing tests.
 
-@~/.claude/docs/TEST_QUALITY.md
-
 ## Complete Mocks for Testability
 
 **Mocks must include all fields the component actually uses.**

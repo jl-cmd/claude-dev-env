@@ -6,15 +6,7 @@ The user delegates execution to you and expects zero manual steps unless strictl
 
 ## Timeless Documentation (all `.md` files)
 
-Every Markdown file I write or edit describes the system's **current** state only. The test: a reader a year out, with zero prior context, finds every sentence true and complete without knowing what came before. State what **is**, not what changed — git history records change; docs record the contract.
-
-- No historical/transitional language (`previously`, `now uses`, `instead of`, `migrated from`, `used to`, `no longer`, `as of`, `originally`, version-transition narration).
-- No references to the conversation that produced the doc (`as discussed`, `Option A`, `after Round 3`).
-
-Full banned-pattern set + enforcement: `~/.claude/rules/no-historical-clutter.md` (hook `state-description-blocker`) and `~/.claude/rules/self-contained-docs.md`.
-
-## GOTCHAS
-ALWAYS start each session with a /loop 15m populate or update the task list based on remaining todos.
+Docs describe the current state only. Full rule set and enforcement: `~/.claude/rules/no-historical-clutter.md` (hook `state-description-blocker`) and `~/.claude/rules/self-contained-docs.md`.
 
 ## Choosing Edit vs Write
 
@@ -63,8 +55,6 @@ When changing how skills, rules, or hooks install or sync in this repo (for exam
 
 ## Additional Non-overlapping Rules
 
-- **task_scope:** Match every action to what was explicitly requested. When intent is ambiguous, research official docs and present options via AskUserQuestion before making any changes. Proceed with edits only on explicit instruction.
-- **confirm_implementation_forks:** When two or more viable paths would satisfy the goal and the choice changes the deliverable — its scope, completeness, deferred work, dependencies, or a hard-to-reverse contract — stop and ask which path via AskUserQuestion before implementing. A path that defers work or leaves a placeholder creating a follow-up task is itself a fork to surface, not a default to take silently. Phrase the question in plain language with only the detail needed to decide. See [`confirm-implementation-forks`](rules/confirm-implementation-forks.md).
 - **disambiguate_overloaded_terms:** When a word in the request has two different technical meanings — "conflict" (git-merge versus functional/behavioral), "sync" (fast-forward versus commit), and the like — confirm which one is meant via AskUserQuestion before analyzing or acting.
 
 ## Serena (Code Intelligence MCP)
@@ -87,31 +77,3 @@ Before any coding task, call the `initial_instructions` tool to load the Serena 
 1. **Serena** — symbol-level navigation (declarations, references, implementations, rename)
 2. **es.exe** — file-system search by name/path/extension/size/date (Everything CLI)
 3. **Grep/Glob** — content and pattern matching
-
-## Everything Search (es.exe CLI)
-
-Search files by name, path, extension, size, or date with the Everything command-line tool `es.exe`. It reads the same live index the desktop app keeps, so results return instantly.
-
-### Invocation and scope tokens
-Run `es.exe` with a scoped query — a project path, an `ext:`/`dm:`/`size:` filter, or a name pattern. The `es_exe_path_rewriter` hook resolves a `{project-name}` placeholder or a bare registry key from `~/.claude/project-paths.json` into its quoted absolute path before the command runs (it allows and rewrites, never blocks).
-
-### Hard limits
-- Scope every search. A bare whole-drive scan or a network-share sweep is out of bounds.
-
-### Fallback order
-1. **es.exe** — file-system search by name/path/extension/size/date
-2. **Debug** — try to find out why es.exe isn't working, and then prompt user for next-steps if you can't self-heal.
-3. **Grep** — file-content search (Grep owns content)
-4. **Glob** — relative-path pattern matching within the current project
-
-### Search syntax quick reference
-- `ext:py` — find by extension (multiple: `ext:ts | ext:js`)
-- `path:src\components` — match against full path
-- `*.config.*` — wildcards
-- `size:>10mb` — size filter
-- `dm:today` / `dm:thisweek` — date modified filter
-- `-n 50` — limit results; `-sort dm` — sort by date modified
-- `foo bar` — AND, `foo | bar` — OR, `!foo` — NOT
-- `"exact phrase"` — literal match
-
-Full operator reference: `skills/everything-search/SKILL.md`.
