@@ -39,9 +39,23 @@ ALL_LEADING_SKIPPABLE_COMMAND_TOKENS: frozenset[str] = (
     ALL_SHELL_KEYWORD_TOKENS | ALL_COMMAND_WRAPPER_TOKENS
 )
 ALL_SHELL_INTERPRETER_BASENAMES: frozenset[str] = frozenset(
-    {"bash", "sh", "bash.exe", "sh.exe"}
+    {
+        "bash",
+        "sh",
+        "bash.exe",
+        "sh.exe",
+        "pwsh",
+        "pwsh.exe",
+        "powershell",
+        "powershell.exe",
+    }
 )
 SHELL_INLINE_COMMAND_FLAG: str = "-c"
+POWERSHELL_INLINE_COMMAND_FLAG: str = "-command"
+INLINE_COMMAND_FLAG_CLUSTER_SUFFIX: str = "c"
+SINGLE_DASH_OPTION_PREFIX: str = "-"
+DOUBLE_DASH_OPTION_PREFIX: str = "--"
+OPTION_ATTACHED_VALUE_MARKER: str = "="
 ALL_SHELL_QUOTE_CHARACTERS: frozenset[str] = frozenset({'"', "'"})
 ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS: frozenset[str] = frozenset({"\n", "\r"})
 POWERSHELL_CALL_OPERATOR: str = "&"

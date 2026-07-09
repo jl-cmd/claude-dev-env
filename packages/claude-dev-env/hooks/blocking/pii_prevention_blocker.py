@@ -60,6 +60,7 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     BODY_FILE_ENCODING,
     CORRECTIVE_MESSAGE_FOOTER,
     CORRECTIVE_MESSAGE_HEADER,
+    DOUBLE_DASH_OPTION_PREFIX,
     EDIT_TOOL_NAME,
     ENVIRONMENT_ASSIGNMENT_PATTERN,
     FINDING_LINE_TEMPLATE,
@@ -67,15 +68,19 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     GIT_COMMIT_SUBCOMMAND,
     GIT_OPTION_WITH_VALUE_STEP,
     HOOK_SCRIPT_BASENAME,
+    INLINE_COMMAND_FLAG_CLUSTER_SUFFIX,
     LINE_CONTINUATION_PATTERN,
     MAXIMUM_STAGED_FILE_BYTES,
     MCP_GITHUB_TOOL_PREFIX,
     MESSAGE_LINE_SEPARATOR,
     MULTI_EDIT_TOOL_NAME,
     NULL_BYTE_MARKER,
+    OPTION_ATTACHED_VALUE_MARKER,
     POWERSHELL_CALL_OPERATOR,
+    POWERSHELL_INLINE_COMMAND_FLAG,
     REPOSITORY_ROOT_UNRESOLVED_REASON,
     SHELL_INLINE_COMMAND_FLAG,
+    SINGLE_DASH_OPTION_PREFIX,
     STAGED_BLOB_PREFIX,
     STAGED_BLOB_REASON_DECODE_FAILED,
     STAGED_BLOB_REASON_GIT_SHOW_FAILED,
@@ -405,13 +410,59 @@ def _all_command_segments(shell_command: str) -> list[list[str]]:
     return all_segments
 
 
+def _token_is_command_option(token_text: str) -> bool:
+    stripped_token = _strip_token_edge_quotes(token_text)
+    return stripped_token.startswith(SINGLE_DASH_OPTION_PREFIX)
+
+
+def _wrapper_option_consumes_next_value(
+    option_token: str, all_segment_tokens: list[str], value_index: int
+) -> bool:
+    if value_index >= len(all_segment_tokens):
+        return False
+    stripped_option = _strip_token_edge_quotes(option_token)
+    if stripped_option.startswith(DOUBLE_DASH_OPTION_PREFIX):
+        return False
+    if OPTION_ATTACHED_VALUE_MARKER in stripped_option:
+        return False
+    value_token = all_segment_tokens[value_index]
+    if _token_is_command_option(value_token):
+        return False
+    if _token_is_git_binary(value_token):
+        return False
+    return not _token_is_shell_interpreter(value_token)
+
+
 def _skip_leading_noop_tokens(all_segment_tokens: list[str]) -> int:
     token_index = 0
-    while token_index < len(all_segment_tokens) and _token_is_skippable_prefix(
-        all_segment_tokens[token_index]
-    ):
+    has_skipped_prefix = False
+    while token_index < len(all_segment_tokens):
+        each_token = all_segment_tokens[token_index]
+        if _token_is_skippable_prefix(each_token):
+            has_skipped_prefix = True
+            token_index += 1
+            continue
+        if not (has_skipped_prefix and _token_is_command_option(each_token)):
+            break
         token_index += 1
+        if _wrapper_option_consumes_next_value(
+            each_token, all_segment_tokens, token_index
+        ):
+            token_index += 1
     return token_index
+
+
+def _token_is_interpreter_inline_command_flag(token_text: str) -> bool:
+    if not token_text.startswith(SINGLE_DASH_OPTION_PREFIX):
+        return False
+    if token_text.startswith(DOUBLE_DASH_OPTION_PREFIX):
+        return False
+    lowered_token = token_text.lower()
+    if lowered_token == SHELL_INLINE_COMMAND_FLAG:
+        return True
+    if lowered_token == POWERSHELL_INLINE_COMMAND_FLAG:
+        return True
+    return lowered_token.endswith(INLINE_COMMAND_FLAG_CLUSTER_SUFFIX)
 
 
 def _interpreter_inline_command_invokes_commit(
@@ -419,7 +470,8 @@ def _interpreter_inline_command_invokes_commit(
 ) -> bool:
     token_index = 0
     while token_index < len(all_following_tokens):
-        if all_following_tokens[token_index] == SHELL_INLINE_COMMAND_FLAG:
+        each_token = all_following_tokens[token_index]
+        if _token_is_interpreter_inline_command_flag(each_token):
             argument_index = token_index + 1
             if argument_index >= len(all_following_tokens):
                 return False
@@ -445,17 +497,21 @@ def is_git_commit_shell_command(shell_command: str) -> bool:
 
     Each segment is read past its leading noise to the real command word::
 
-        sudo git commit -m x   ->  skip the wrapper, match git then commit
-        time git commit        ->  skip the wrapper, match git then commit
-        then git commit -m x   ->  skip the keyword, match git then commit
-        bash -c "git commit"   ->  unwrap the inline argument, then match
+        sudo git commit -m x        ->  skip the wrapper, then match commit
+        nice -n 10 git commit       ->  skip the wrapper and its flag value
+        then git commit -m x        ->  skip the keyword, then match commit
+        bash -lc "git commit"       ->  unwrap the combined inline flag
+        pwsh -Command "git commit"  ->  unwrap the PowerShell inline argument
 
     Skipped leading tokens: env-assignments, a PowerShell call operator, shell
     keywords (then, do, else, elif), and wrapper commands (sudo, env, time,
-    nice, xargs, command, stdbuf). Segments split on unquoted control
-    separators and newlines, and the git binary may be path-prefixed and carry
-    global flags (no-verify, config, and working-directory) before its
-    subcommand.
+    nice, xargs, command, stdbuf) together with each wrapper's own option
+    flags and their values. Segments split on unquoted control separators and
+    newlines, and the git binary may be path-prefixed and carry global flags
+    (no-verify, config, and working-directory) before its subcommand. A shell
+    interpreter (bash, sh, pwsh, powershell) is unwrapped at its inline-command
+    flag: bash and sh take an isolated ``-c`` or a combined cluster (``-lc``),
+    and PowerShell takes ``-Command`` or ``-c``.
 
     Args:
         shell_command: Bash or PowerShell tool command string.
