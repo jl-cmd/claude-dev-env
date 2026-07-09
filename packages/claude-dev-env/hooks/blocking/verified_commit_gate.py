@@ -42,6 +42,12 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from verified_commit_config_bootstrap import (  # noqa: E402
+    register_verified_commit_constants,
+)
+
+register_verified_commit_constants()
+
 from config.verified_commit_constants import (
     ALL_GIT_BINARY_NAMES,
     CORRECTIVE_MESSAGE,

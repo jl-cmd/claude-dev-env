@@ -21,6 +21,7 @@ import json
 import pathlib
 import subprocess
 import sys
+from collections.abc import Callable
 
 _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:
@@ -389,3 +390,13 @@ def test_attested_manifest_hash_binds_over_cwd_surface(tmp_path: pathlib.Path) -
     finally:
         if verdict_path is not None and verdict_path.exists():
             verdict_path.unlink()
+
+
+def test_minter_imports_under_foreign_config_shadow(
+    run_under_config_shadow: Callable[[str], subprocess.CompletedProcess[str]],
+) -> None:
+    completed_probe = run_under_config_shadow(
+        "import verifier_verdict_minter\nprint('IMPORT_OK')\n"
+    )
+    assert completed_probe.returncode == 0, completed_probe.stderr
+    assert "IMPORT_OK" in completed_probe.stdout
