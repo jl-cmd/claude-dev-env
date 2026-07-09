@@ -485,3 +485,34 @@ def test_powershell_tool_commit_with_staged_email_is_denied(tmp_path: Path) -> N
     assert deny_reason is not None
     assert "email" in deny_reason
     assert SYNTHETIC_REAL_EMAIL not in deny_reason
+def test_is_git_commit_shell_command_detects_glued_and_newline_separators() -> None:
+    assert is_git_commit_shell_command("git add .;git commit -m x")
+    assert is_git_commit_shell_command("cd repo&&git commit -m x")
+    assert is_git_commit_shell_command("git add notes.md\ngit commit -m update")
+    assert is_git_commit_shell_command("git status\ngit commit -m x")
+    assert not is_git_commit_shell_command(
+        "gh pr comment 1 --body 'notes\ngit commit -m x'"
+    )
+
+
+def test_newline_separated_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "git add notes.md\ngit commit -m update",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert "staged commit" in deny_reason
+
+
+def test_glued_semicolon_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "git add notes.md;git commit -m update",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason

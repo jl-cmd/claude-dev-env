@@ -46,8 +46,10 @@ from volatile_path_in_post_blocker import (  # noqa: E402
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import edits_for_tool  # noqa: E402
 from hooks_constants.pii_prevention_constants import (  # noqa: E402
+    ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS,
     ALL_GIT_BINARY_BASENAMES,
     ALL_SHELL_COMMAND_SEPARATOR_TOKENS,
+    ALL_SHELL_QUOTE_CHARACTERS,
     ALL_SHELL_TOOL_NAMES,
     ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX,
     ALL_STAGED_FILES_COMMAND,
@@ -344,12 +346,45 @@ def _split_shell_command_segments(all_tokens: list[str]) -> list[list[str]]:
     return all_segments
 
 
-def _tokenize_shell_command(shell_command: str) -> list[str]:
-    collapsed_command = LINE_CONTINUATION_PATTERN.sub("", shell_command)
+def _tokenize_shell_command(shell_command_piece: str) -> list[str]:
+    lexer = shlex.shlex(shell_command_piece, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
     try:
-        return shlex.split(collapsed_command, posix=True)
+        return list(lexer)
     except ValueError:
-        return collapsed_command.split()
+        return shell_command_piece.split()
+
+
+def _split_on_unquoted_newlines(shell_command: str) -> list[str]:
+    all_pieces: list[str] = []
+    current_characters: list[str] = []
+    active_quote_character = ""
+    for each_character in shell_command:
+        if active_quote_character:
+            if each_character == active_quote_character:
+                active_quote_character = ""
+            current_characters.append(each_character)
+            continue
+        if each_character in ALL_SHELL_QUOTE_CHARACTERS:
+            active_quote_character = each_character
+            current_characters.append(each_character)
+            continue
+        if each_character in ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS:
+            all_pieces.append("".join(current_characters))
+            current_characters = []
+            continue
+        current_characters.append(each_character)
+    all_pieces.append("".join(current_characters))
+    return all_pieces
+
+
+def _all_command_segments(shell_command: str) -> list[list[str]]:
+    collapsed_command = LINE_CONTINUATION_PATTERN.sub("", shell_command)
+    all_segments: list[list[str]] = []
+    for each_piece in _split_on_unquoted_newlines(collapsed_command):
+        piece_tokens = _tokenize_shell_command(each_piece)
+        all_segments.extend(_split_shell_command_segments(piece_tokens))
+    return all_segments
 
 
 def is_git_commit_shell_command(shell_command: str) -> bool:
@@ -358,6 +393,8 @@ def is_git_commit_shell_command(shell_command: str) -> bool:
     Detects ``git commit``, Windows ``git.exe commit``, path-prefixed binaries,
     and forms with global flags before the subcommand (``git --no-verify
     commit``, ``git -c commit.gpgsign=false commit``, ``git -C path commit``).
+    Splits the command at unquoted separators (``&&``, ``||``, ``;``, ``|``)
+    and newlines, so a commit chained after another command is detected.
     Does not treat prose mentions inside other programs as commits.
 
     Args:
@@ -368,12 +405,9 @@ def is_git_commit_shell_command(shell_command: str) -> bool:
     """
     if not shell_command or not shell_command.strip():
         return False
-    all_tokens = _tokenize_shell_command(shell_command)
-    if not all_tokens:
-        return False
     environment_assignment_pattern = ENVIRONMENT_ASSIGNMENT_PATTERN
     powershell_call_operator = POWERSHELL_CALL_OPERATOR
-    for each_segment in _split_shell_command_segments(all_tokens):
+    for each_segment in _all_command_segments(shell_command):
         token_index = 0
         while token_index < len(each_segment) and environment_assignment_pattern.match(
             each_segment[token_index]

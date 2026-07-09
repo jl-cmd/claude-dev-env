@@ -29,6 +29,8 @@ GIT_OPTION_WITH_VALUE_STEP: int = 2
 ALL_SHELL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset(
     {"&&", "||", ";", "|"}
 )
+ALL_SHELL_QUOTE_CHARACTERS: frozenset[str] = frozenset({'"', "'"})
+ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS: frozenset[str] = frozenset({"\n", "\r"})
 POWERSHELL_CALL_OPERATOR: str = "&"
 ENVIRONMENT_ASSIGNMENT_PATTERN: re.Pattern[str] = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*="
@@ -105,6 +107,13 @@ ALL_PLACEHOLDER_HOME_USERNAMES: frozenset[str] = frozenset(
         "dave",
         "placeholder",
         "path",
+        "me",
+        "someone",
+        "default",
+        "admin",
+        "runner",
+        "container",
+        "ubuntu",
     }
 )
 
@@ -152,9 +161,15 @@ ALL_REDACTED_PREVIEW_CATEGORIES: frozenset[str] = frozenset(
 )
 REDACTED_PREVIEW_PREFIX_LENGTH: int = 4
 REDACTED_PREVIEW_SUFFIX_LENGTH: int = 4
+REDACTED_PREVIEW_REVEALED_LENGTH: int = (
+    REDACTED_PREVIEW_PREFIX_LENGTH + REDACTED_PREVIEW_SUFFIX_LENGTH
+)
+REDACTED_PREVIEW_MINIMUM_HIDDEN_LENGTH: int = REDACTED_PREVIEW_REVEALED_LENGTH
 REDACTED_PREVIEW_ELLIPSIS: str = "…"
 REDACTED_SHORT_PREVIEW: str = "[redacted]"
-MINIMUM_LENGTH_FOR_PARTIAL_REDACTION: int = 9
+MINIMUM_LENGTH_FOR_PARTIAL_REDACTION: int = (
+    REDACTED_PREVIEW_REVEALED_LENGTH + REDACTED_PREVIEW_MINIMUM_HIDDEN_LENGTH
+)
 
 EMAIL_PATTERN: re.Pattern[str] = re.compile(
     r"(?i)\b([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})\b"

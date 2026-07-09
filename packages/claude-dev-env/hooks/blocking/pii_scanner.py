@@ -131,9 +131,11 @@ def _redact_sensitive_preview(matched_text: str) -> str:
 
 
 def _build_preview(matched_text: str, category: str) -> str:
-    """Build a deny-message preview, redacting secret and email matches."""
+    """Build a deny-message preview, redacting secret, email, and home-path matches."""
     if category in ALL_REDACTED_PREVIEW_CATEGORIES:
         return _redact_sensitive_preview(matched_text)
+    if category == CATEGORY_HOME_PATH:
+        return _redact_home_path_username(matched_text)
     maximum_preview_length = MAXIMUM_OFFENDING_PREVIEW_LENGTH
     if len(matched_text) <= maximum_preview_length:
         return matched_text
@@ -174,6 +176,21 @@ def _username_from_home_path(matched_path: str) -> str | None:
         username = remainder.split("/", 1)[0]
         return username or None
     return None
+
+
+def _redact_home_path_username(matched_text: str) -> str:
+    """Redact only the username segment of a home path, keeping its shape."""
+    username = _username_from_home_path(matched_text)
+    if not username:
+        return matched_text
+    username_index = matched_text.find(username)
+    if username_index < 0:
+        return matched_text
+    return (
+        matched_text[:username_index]
+        + REDACTED_SHORT_PREVIEW
+        + matched_text[username_index + len(username) :]
+    )
 
 
 def _is_placeholder_home_username(username: str) -> bool:

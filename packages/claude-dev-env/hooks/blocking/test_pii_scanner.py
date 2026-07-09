@@ -97,13 +97,36 @@ def test_secret_and_email_previews_are_redacted() -> None:
     assert "…" in email_finding.preview
 
 
-def test_flags_common_cloud_home_usernames() -> None:
-    all_ubuntu_hits = scan_text_for_pii(r"C:\Users\ubuntu\notes.txt")
-    all_admin_hits = scan_text_for_pii(r"C:\Users\admin\notes.txt")
-    all_runner_hits = scan_text_for_pii("/home/runner/work/repo")
-    assert any(each.category == "home-path" for each in all_ubuntu_hits)
-    assert any(each.category == "home-path" for each in all_admin_hits)
-    assert any(each.category == "home-path" for each in all_runner_hits)
+def test_allows_common_cloud_and_system_home_usernames() -> None:
+    assert scan_text_for_pii(r"C:\Users\ubuntu\notes.txt") == []
+    assert scan_text_for_pii(r"C:\Users\admin\notes.txt") == []
+    assert scan_text_for_pii("/home/runner/work/repo") == []
+    assert scan_text_for_pii("/home/container/app") == []
+
+
+def test_flags_genuine_human_home_username() -> None:
+    all_human_hits = scan_text_for_pii(r"C:\Users\johnsmith\notes.txt")
+    assert any(each.category == "home-path" for each in all_human_hits)
+
+
+def test_short_nonsafe_email_preview_is_fully_redacted() -> None:
+    all_email_hits = scan_text_for_pii("reach owner@acme.io")
+    email_finding = next(
+        each for each in all_email_hits if each.category == "email"
+    )
+    assert email_finding.matched_text == "owner@acme.io"
+    assert email_finding.preview == "[redacted]"
+    assert "owner" not in email_finding.preview
+
+
+def test_home_path_preview_redacts_only_the_username() -> None:
+    all_home_hits = scan_text_for_pii(r"path is C:\Users\johnsmith\secret.txt")
+    home_finding = next(
+        each for each in all_home_hits if each.category == "home-path"
+    )
+    assert "johnsmith" not in home_finding.preview
+    assert "[redacted]" in home_finding.preview
+    assert "Users" in home_finding.preview
 
 
 def test_clean_prose_returns_no_findings() -> None:
