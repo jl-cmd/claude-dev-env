@@ -236,3 +236,67 @@ def test_cli_rejects_incomplete_fallback_log(tmp_path: Path) -> None:
 
 def test_cli_missing_path_returns_usage_exit_code() -> None:
     assert main([]) == 2
+
+
+def test_grok_host_single_tier_self_bind_passes() -> None:
+    run = ModelTierRun(
+        own_tier="Grok",
+        candidate_tiers=["Grok"],
+        attempts=[{"tier": "Grok", "result": "self"}],
+        selected_tier="Grok",
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_grok_host_lowercase_self_bind_passes() -> None:
+    run = ModelTierRun(
+        own_tier="grok",
+        candidate_tiers=["grok"],
+        attempts=[{"tier": "grok", "result": "self"}],
+        selected_tier="grok",
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_grok_host_multi_tier_candidate_list_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Grok",
+        candidate_tiers=["Fable", "Opus", "Grok"],
+        attempts=[{"tier": "Grok", "result": "self"}],
+        selected_tier="Grok",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
+
+
+def test_grok_host_spawned_token_is_not_self_bind_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Grok",
+        candidate_tiers=["Grok"],
+        attempts=[{"tier": "Grok", "result": "spawned"}],
+        selected_tier="Grok",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
+
+
+def test_grok_host_selected_tier_mismatch_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Grok",
+        candidate_tiers=["Grok"],
+        attempts=[{"tier": "Grok", "result": "self"}],
+        selected_tier="Opus",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
+
+
+def test_claude_host_self_token_is_not_spawn_success_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[{"tier": "Fable", "result": "self"}],
+        selected_tier="Fable",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)

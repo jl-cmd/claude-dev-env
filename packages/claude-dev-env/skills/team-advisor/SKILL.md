@@ -24,6 +24,12 @@ and cadence, drift-respawn, and the CLI fallback — using
 the "who you are and your assignment" opener in each consult; a
 single-consumer session doesn't need it).
 
+**Grok host:** when the host profile is Grok (see Host profiles in the
+shared protocol — e.g. `GROK_BUILD=1` or `ADVISOR_HOST_PROFILE=Grok`), use
+the self-as-advisor path: this session answers ENDORSE / CORRECTION / PLAN /
+STOP itself. Do not spawn a Claude `session-advisor` subagent and do not walk
+the Claude multi-tier ladder.
+
 ## Constraints
 
 - One `team-advisor-agent` per session, owned by this session for its whole

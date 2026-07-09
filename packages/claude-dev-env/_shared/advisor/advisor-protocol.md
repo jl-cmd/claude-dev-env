@@ -10,7 +10,7 @@ The advisor's model tier must be at or above the highest tier of any consumer th
 
 Ladder, strongest first (canonical Title Case names: `Fable`, `Opus`, `Sonnet`, `Haiku`; the validator accepts any letter case and normalizes to Title Case): Fable, Opus, Sonnet, Haiku. Read the floor tier — the lower bound only — then try the warm-agent spawn top-down from Fable, stopping at the floor tier — never spawn below it. Each walk attempt sets the Agent tool `model:` field to the short alias for that attempt's candidate tier (`resolve_cli_model_id(candidate_tier)` — for example `opus`, not Title Case `Opus`). The warm agent is created at `selected_tier` (the first ladder tier that actually spawned), which may sit above the floor. If even the floor tier's spawn fails, move to the CLI fallback below rather than spawning below the floor.
 
-Emit a structured spawn-walk log so it can be checked mechanically rather than inferred from a transcript. Record: `own_tier` (the floor tier read at the top of this section), `candidate_tiers` (the ladder slice down to that floor), `attempts` (one `{tier, result}` entry appended as each spawn try happens, `result` one of `spawned` or a failure reason such as `unavailable`), and `selected_tier` (the tier of the first `spawned` entry, or `null` paired with a `fallback_reason` string when none spawned and the CLI fallback took over). Write the log as JSON with those field names to a path the session controls — typically `<job-temp-dir>/model-tier-run.json` (or the OS temp directory when no job directory exists). Check it with:
+Emit a structured spawn-walk log so it can be checked mechanically rather than inferred from a transcript. Record: `own_tier` (the floor tier read at the top of this section), `candidate_tiers` (the ladder slice down to that floor), `attempts` (one `{tier, result}` entry appended as each spawn try happens, `result` one of `spawned` for a Claude Agent spawn, `self` for a Grok host self-bind, or a failure reason such as `unavailable`), and `selected_tier` (the tier of the first successful bind — first `spawned` or `self` entry — or `null` paired with a `fallback_reason` string when none bound and the CLI fallback took over). Write the log as JSON with those field names to a path the session controls — typically `<job-temp-dir>/model-tier-run.json` (or the OS temp directory when no job directory exists). Check it with:
 
 ```
 python "$HOME/.claude/_shared/advisor/scripts/model_tier_run_validator.py" <path-to-model-tier-run.json>
@@ -18,9 +18,37 @@ python "$HOME/.claude/_shared/advisor/scripts/model_tier_run_validator.py" <path
 
 Exit code `0` means every invariant holds; `1` means a ladder invariant failed; `2` means the path or JSON was unusable. The same checks are available in-process via `validate_model_tier_run(run)`.
 
+## Host profiles
+
+Detect the host profile **before** any model-floor walk. Source of truth for names and detection: `HOST_PROFILE_CLAUDE`, `HOST_PROFILE_GROK`, `ALL_HOST_PROFILES`, and `detect_host_profile(...)` in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py` and `tier_model_ids.py`.
+
+Detection order:
+
+1. `ADVISOR_HOST_PROFILE=Grok` or `=Claude` (explicit override; any letter case).
+2. `GROK_BUILD=1` (or `true` / `yes` / `on`) — Grok Build / xAI harness.
+3. Default: Claude.
+
+### Claude host
+
+Use the Model floor ladder above (Fable → Opus → Sonnet → Haiku). Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent. When every candidate down to the floor fails, take the CLI Claude-chain fallback below.
+
+### Grok host
+
+Grok Build / xAI has exactly one model tier. Do **not** walk the Claude ladder and do **not** require a `claude` binary.
+
+1. Detect host profile first (this section).
+2. Set `own_tier = Grok`, `candidate_tiers = ["Grok"]`, one attempt only, `selected_tier = Grok`.
+3. **Self-as-advisor:** skip the Agent-tool spawn of `session-advisor`. The orchestrating Grok session *is* the advisor — the same process answers ENDORSE / CORRECTION / PLAN / STOP. Executors (when any) still report blockers to the orchestrating session; that session answers with the four signals inline (or via its own same-session consult loop). There is no SendMessage-to-another-Claude-agent path on a pure Grok host.
+4. Record the single attempt as `{tier: "Grok", result: "self"}` — the `self` token marks a self-bind so logs stay honest (not a separate spawn).
+5. CLI Claude-chain fallback does **not** apply on a pure Grok host.
+
+Resolve the Grok alias with `resolve_cli_model_id("Grok")` → `grok` when a model field is required.
+
 ## Warm-up (once per session)
 
-The consuming skill's session walks the candidate tiers top-down. For each attempt, spawn with:
+On a Grok host, skip this section — follow **Host profiles → Grok host** (self-as-advisor; no Agent spawn walk).
+
+On a Claude host, the consuming skill's session walks the candidate tiers top-down. For each attempt, spawn with:
 - `subagent_type: session-advisor` (see [`agents/session-advisor.md`](../../agents/session-advisor.md) for the full signal contract).
 - `model`: the short alias for that attempt's candidate tier via `resolve_cli_model_id` (or the alias table under Fallback) — for example `opus`, not Title Case `Opus`. The floor is only the lower bound of the walk; the walk still tries stronger tiers first.
 - `name`: a name the session and every consumer will use to reach it (e.g. `team-advisor-agent`).
@@ -67,6 +95,8 @@ The session that spawns the shared advisor owns its whole lifecycle — spawn, d
 
 ## Fallback: the CLI chain
 
+This section applies on a **Claude host** only. On a pure Grok host, skip it — there is no Claude binary chain and the session is already the advisor (see **Host profiles**).
+
 Fall back to the CLI when any of these holds, rather than on judgment call:
 - The Agent-tool spawn errors at every candidate tier down to the floor — the tool itself, not just the top tier, is unavailable.
 - `SendMessage` to the shared advisor errors, or draws no reply within the bound in `ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS` (120) in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py`, and a re-spawn also fails.
@@ -80,6 +110,7 @@ Map the resolved floor tier to its CLI / Agent model alias before the first call
 | Opus | `opus` |
 | Sonnet | `sonnet` |
 | Haiku | `haiku` |
+| Grok (Grok host only; not part of the Claude walk) | `grok` |
 
 Resolve in code with `python -c "from tier_model_ids import resolve_cli_model_id; print(resolve_cli_model_id('Opus'))"` from `$HOME/.claude/_shared/advisor/scripts/` (any letter case accepted; unknown tiers raise `ValueError`). Use `python "$HOME/.claude/scripts/claude_chain_runner.py" -- -p --model <model alias> --output-format json` in place of the Agent-tool spawn. The chain runner walks the fallback chain configured at `~/.claude/claude-chain.json` (typically `claude` then `claude-ev`), so a usage-limited primary account still gets served. Write the charter or the consult brief to a temporary file under the job's own temporary directory (or the OS temp directory when no job directory exists) and pipe it in, rather than passing either as an inline argument, and drop that file once the consult completes.
 

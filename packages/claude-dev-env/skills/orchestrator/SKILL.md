@@ -70,17 +70,20 @@ session drives the plan and routes hard decisions to the shared session-advisor.
    enforcement surface: each firing re-asserts the discipline while the run is
    in flight.
 
-3. **Spawn the shared session-advisor before any executor.** Follow the
-   Warm-up procedure in
-   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
-   Compute the model floor as the max of the orchestrating session's own tier
-   and the highest model in the Workflow Agent Routing table below (today:
-   max(Sonnet, Opus) = Opus). Paste the Advisor block from that same doc, with
-   the resolved agent name filled in, into every executor's spawn prompt —
-   every row in the routing table is a consumer of the shared advisor, not just
-   this session. The orchestrating session owns the shared advisor's lifecycle
-   end to end (spawn, drift-respawn per the shared doc, shutdown at task end);
-   executors only ever send it messages.
+3. **Bind the shared advisor before any executor.** On a **Claude host**,
+   follow the Warm-up procedure in
+   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
+   (Agent spawn of `session-advisor`). Compute the model floor as the max of
+   the orchestrating session's own tier and the highest model in the Workflow
+   Agent Routing table below (today: max(Sonnet, Opus) = Opus). On a **Grok
+   host**, skip that spawn — use the protocol's self-as-advisor path (this
+   session *is* the advisor; single tier `Grok`, attempt result `self`). Paste
+   the Advisor block from that same doc, with the resolved agent name filled
+   in, into every executor's spawn prompt — every row in the routing table is a
+   consumer of the shared advisor, not just this session. The orchestrating
+   session owns the shared advisor's lifecycle end to end (spawn or self-bind,
+   drift-respawn per the shared doc, shutdown at task end); executors only ever
+   send it messages (or report to this session on Grok).
 
 4. **Orchestrate the task.** Hold the plan and the user conversation. Execute
    workflow-backed spawns or resumes using the routing table below, and keep
