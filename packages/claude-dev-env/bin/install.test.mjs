@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import {
     collectPackageSourceConflicts,
     CONTENT_DIRECTORIES,
+    CORE_INCLUDE_DIRECTORIES,
     FOLDED_HOOK_RELATIVE_PATHS,
     POST_FOLDED_HOOK_RELATIVE_PATHS,
     pythonCandidatesForPlatform,
@@ -146,6 +147,18 @@ test('CONTENT_DIRECTORIES includes _shared so installer copies _shared/pr-loop/ 
     assert.ok(
         CONTENT_DIRECTORIES.includes('_shared'),
         '_shared must be in CONTENT_DIRECTORIES so the installer copies _shared/pr-loop/ alongside skills/',
+    );
+});
+
+
+test('core includeDirectories ships _shared and scripts for advisor protocol and CLI fallback', () => {
+    assert.ok(
+        CORE_INCLUDE_DIRECTORIES.includes('_shared'),
+        '_shared must ship with --only core so advisor-protocol.md lands for team-advisor/orchestrator',
+    );
+    assert.ok(
+        CORE_INCLUDE_DIRECTORIES.includes('scripts'),
+        'scripts must ship with --only core so claude_chain_runner.py is available for advisor CLI fallback',
     );
 });
 

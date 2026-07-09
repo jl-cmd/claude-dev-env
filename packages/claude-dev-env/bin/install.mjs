@@ -18,6 +18,10 @@ const packageRequire = createRequire(import.meta.url);
 
 export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
 
+export const CORE_INCLUDE_DIRECTORIES = [
+    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
+];
+
 export function collectPackageSourceConflicts(packageDirectory) {
     const gitConflictStatusCodes = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
     const porcelainStatusLineMinLength = 4;
@@ -152,7 +156,7 @@ const INSTALL_GROUPS = {
             'pr-review-responder',
             'recall', 'remember', 'task-build', 'verified-build'
         ],
-        includeDirectories: ['rules', 'docs', 'commands', 'agents', 'audit-rubrics'],
+        includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,
     },
     journal: {

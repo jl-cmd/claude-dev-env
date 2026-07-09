@@ -1,6 +1,7 @@
 """Behavioral tests for the model-tier spawn-walk log validator."""
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -9,7 +10,10 @@ import pytest
 
 
 def _load_validator_module() -> ModuleType:
-    module_path = Path(__file__).parent.parent / "model_tier_run_validator.py"
+    scripts_root = Path(__file__).parent.parent
+    constants_root = scripts_root / "config"
+    sys.path.insert(0, str(constants_root))
+    module_path = scripts_root / "model_tier_run_validator.py"
     specification = importlib.util.spec_from_file_location(
         "model_tier_run_validator", module_path
     )
@@ -25,6 +29,10 @@ model_tier_run_validator = _load_validator_module()
 ModelTierRun = model_tier_run_validator.ModelTierRun
 ModelTierRunError = model_tier_run_validator.ModelTierRunError
 validate_model_tier_run = model_tier_run_validator.validate_model_tier_run
+main = model_tier_run_validator.main
+load_model_tier_run_from_json_path = (
+    model_tier_run_validator.load_model_tier_run_from_json_path
+)
 
 
 def test_clean_single_spawn_at_top_of_slice_passes() -> None:
@@ -152,3 +160,79 @@ def test_unknown_own_tier_raises() -> None:
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
+
+
+def test_empty_attempts_with_null_selected_tier_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[],
+        selected_tier=None,
+        fallback_reason="skipped straight to CLI fallback",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
+
+
+def test_incomplete_fallback_walk_before_floor_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[{"tier": "Fable", "result": "unavailable"}],
+        selected_tier=None,
+        fallback_reason="stopped after Fable without trying Opus",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
+
+
+def test_lowercase_own_tier_and_candidates_pass() -> None:
+    run = ModelTierRun(
+        own_tier="opus",
+        candidate_tiers=["fable", "opus"],
+        attempts=[
+            {"tier": "fable", "result": "unavailable"},
+            {"tier": "opus", "result": "spawned"},
+        ],
+        selected_tier="opus",
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_cli_validates_json_log_file(tmp_path: Path) -> None:
+    log_path = tmp_path / "model-tier-run.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "own_tier": "Opus",
+                "candidate_tiers": ["Fable", "Opus"],
+                "attempts": [{"tier": "Fable", "result": "spawned"}],
+                "selected_tier": "Fable",
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main([str(log_path)]) == 0
+    loaded_run = load_model_tier_run_from_json_path(from_path=log_path)
+    assert loaded_run.selected_tier == "Fable"
+
+
+def test_cli_rejects_incomplete_fallback_log(tmp_path: Path) -> None:
+    log_path = tmp_path / "incomplete-walk.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "own_tier": "Opus",
+                "candidate_tiers": ["Fable", "Opus"],
+                "attempts": [{"tier": "Fable", "result": "unavailable"}],
+                "selected_tier": None,
+                "fallback_reason": "incomplete",
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main([str(log_path)]) == 1
+
+
+def test_cli_missing_path_returns_usage_exit_code() -> None:
+    assert main([]) == 2

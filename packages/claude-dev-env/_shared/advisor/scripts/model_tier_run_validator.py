@@ -19,17 +19,30 @@ from data, not inferred from a transcript.
 
 A run whose selected_tier is not the first spawned tier fails.
 On any broken invariant, validate_model_tier_run raises ModelTierRunError.
+
+CLI::
+
+    python model_tier_run_validator.py path/to/spawn-walk-log.json
 """
 
 from __future__ import annotations
 
+import json
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from advisor_scripts_constants.model_tier_run_validator_constants import (
     ALL_MODEL_TIERS,
     ATTEMPT_ORDER_MISMATCH_MESSAGE,
     ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE,
     CANDIDATE_TIERS_MISMATCH_MESSAGE,
+    CLI_INVALID_JSON_EXIT_CODE,
+    CLI_MISSING_PATH_EXIT_CODE,
+    CLI_SUCCESS_EXIT_CODE,
+    CLI_USAGE_MESSAGE,
+    CLI_VALIDATION_FAILURE_EXIT_CODE,
+    INCOMPLETE_FALLBACK_WALK_MESSAGE,
     MISSING_FALLBACK_REASON_MESSAGE,
     SELECTED_TIER_MISMATCH_MESSAGE,
     SELECTED_TIER_NOT_NULL_MESSAGE,
@@ -53,10 +66,28 @@ class ModelTierRunError(ValueError):
     """Raised when a model-tier spawn-walk log violates an invariant."""
 
 
+def _canonical_tier_name(tier_name: str) -> str | None:
+    tier_by_lower_name = {
+        each_tier.lower(): each_tier for each_tier in ALL_MODEL_TIERS
+    }
+    return tier_by_lower_name.get(tier_name.lower())
+
+
+def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:
+    all_canonical_tiers: list[str] = []
+    for each_tier_name in all_tier_names:
+        maybe_canonical_tier = _canonical_tier_name(each_tier_name)
+        if maybe_canonical_tier is None:
+            return None
+        all_canonical_tiers.append(maybe_canonical_tier)
+    return all_canonical_tiers
+
+
 def _expected_candidate_tiers(own_tier: str) -> list[str]:
-    if own_tier not in ALL_MODEL_TIERS:
+    maybe_canonical_own_tier = _canonical_tier_name(own_tier)
+    if maybe_canonical_own_tier is None:
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
-    floor_index = ALL_MODEL_TIERS.index(own_tier)
+    floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
     return list(ALL_MODEL_TIERS[: floor_index + 1])
 
 
@@ -64,8 +95,9 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
     """Check that a spawn-walk log satisfies every ladder invariant.
 
     The candidate tiers must equal the ladder slice down to the floor. The
-    recorded tries must walk that slice in order. The selected tier must be
-    the first tier that spawned, or null with a fallback reason when none did.
+    recorded tries must walk that slice in order. Early stop is allowed only
+    when a spawn succeeds. When selected_tier is null, every candidate tier
+    must have been attempted and a fallback_reason must be present.
 
     Args:
         run: The structured spawn-walk log to check.
@@ -76,28 +108,109 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
     Raises:
         ModelTierRunError: When any invariant is violated.
     """
-    expected_candidates = _expected_candidate_tiers(run.own_tier)
-    if run.candidate_tiers != expected_candidates:
+    all_expected_candidates = _expected_candidate_tiers(run.own_tier)
+    maybe_canonical_candidates = _canonical_tier_list(run.candidate_tiers)
+    if maybe_canonical_candidates != all_expected_candidates:
         raise ModelTierRunError(CANDIDATE_TIERS_MISMATCH_MESSAGE)
-    attempted_tiers = [each_attempt[TIER_KEY] for each_attempt in run.attempts]
-    if any(each_tier not in expected_candidates for each_tier in attempted_tiers):
+    maybe_attempted_tiers = _canonical_tier_list(
+        [each_attempt[TIER_KEY] for each_attempt in run.attempts]
+    )
+    if maybe_attempted_tiers is None:
         raise ModelTierRunError(ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE)
-    if attempted_tiers != expected_candidates[: len(attempted_tiers)]:
+    all_attempted_tiers = maybe_attempted_tiers
+    if any(
+        each_tier not in all_expected_candidates for each_tier in all_attempted_tiers
+    ):
+        raise ModelTierRunError(ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE)
+    if all_attempted_tiers != all_expected_candidates[: len(all_attempted_tiers)]:
         raise ModelTierRunError(ATTEMPT_ORDER_MISMATCH_MESSAGE)
-    _validate_selected_tier(run)
+    _validate_selected_tier(
+        run=run,
+        all_attempted_tiers=all_attempted_tiers,
+        all_expected_candidates=all_expected_candidates,
+    )
 
 
-def _validate_selected_tier(run: ModelTierRun) -> None:
+def _validate_selected_tier(
+    run: ModelTierRun,
+    all_attempted_tiers: list[str],
+    all_expected_candidates: list[str],
+) -> None:
     all_spawned_tiers = [
-        each_attempt[TIER_KEY]
-        for each_attempt in run.attempts
+        each_tier
+        for each_tier, each_attempt in zip(
+            all_attempted_tiers, run.attempts, strict=True
+        )
         if each_attempt[SPAWN_OUTCOME_KEY] == SPAWN_SUCCESS_TOKEN
     ]
     if all_spawned_tiers:
-        if run.selected_tier != all_spawned_tiers[0]:
+        maybe_canonical_selected = (
+            _canonical_tier_name(run.selected_tier)
+            if run.selected_tier is not None
+            else None
+        )
+        if maybe_canonical_selected != all_spawned_tiers[0]:
             raise ModelTierRunError(SELECTED_TIER_MISMATCH_MESSAGE)
         return
     if run.selected_tier is not None:
         raise ModelTierRunError(SELECTED_TIER_NOT_NULL_MESSAGE)
+    if not all_attempted_tiers or all_attempted_tiers != all_expected_candidates:
+        raise ModelTierRunError(INCOMPLETE_FALLBACK_WALK_MESSAGE)
     if not run.fallback_reason:
         raise ModelTierRunError(MISSING_FALLBACK_REASON_MESSAGE)
+
+
+def load_model_tier_run_from_json_path(from_path: Path) -> ModelTierRun:
+    """Load a ModelTierRun from a JSON spawn-walk log file.
+
+    Args:
+        from_path: Path to a JSON object with ModelTierRun fields.
+
+    Returns:
+        The parsed ModelTierRun.
+
+    Raises:
+        OSError: When the file cannot be read.
+        json.JSONDecodeError: When the file is not valid JSON.
+        KeyError: When a required field is missing.
+        TypeError: When a field has the wrong shape.
+    """
+    parsed_payload = json.loads(from_path.read_text(encoding="utf-8"))
+    return ModelTierRun(
+        own_tier=parsed_payload["own_tier"],
+        candidate_tiers=list(parsed_payload["candidate_tiers"]),
+        attempts=list(parsed_payload["attempts"]),
+        selected_tier=parsed_payload.get("selected_tier"),
+        fallback_reason=parsed_payload.get("fallback_reason"),
+    )
+
+
+def main(all_cli_arguments: list[str]) -> int:
+    """Validate a spawn-walk log JSON file from the command line.
+
+    Args:
+        all_cli_arguments: Argument list without the program name.
+
+    Returns:
+        ``0`` when the log is valid, ``1`` when an invariant fails, ``2`` when
+        the path or JSON was unusable.
+    """
+    if len(all_cli_arguments) != 1:
+        print(CLI_USAGE_MESSAGE, file=sys.stderr)
+        return CLI_MISSING_PATH_EXIT_CODE
+    log_path = Path(all_cli_arguments[0])
+    try:
+        model_tier_run = load_model_tier_run_from_json_path(from_path=log_path)
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as load_error:
+        print(str(load_error), file=sys.stderr)
+        return CLI_INVALID_JSON_EXIT_CODE
+    try:
+        validate_model_tier_run(model_tier_run)
+    except ModelTierRunError as validation_error:
+        print(str(validation_error), file=sys.stderr)
+        return CLI_VALIDATION_FAILURE_EXIT_CODE
+    return CLI_SUCCESS_EXIT_CODE
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

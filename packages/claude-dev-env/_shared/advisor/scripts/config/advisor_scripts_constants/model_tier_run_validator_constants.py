@@ -31,3 +31,13 @@ SELECTED_TIER_NOT_NULL_MESSAGE: str = (
 MISSING_FALLBACK_REASON_MESSAGE: str = (
     "fallback_reason is required when no spawn try succeeded"
 )
+INCOMPLETE_FALLBACK_WALK_MESSAGE: str = (
+    "selected_tier is null but attempts did not exhaust every candidate tier"
+)
+CLI_USAGE_MESSAGE: str = (
+    "usage: model_tier_run_validator.py <spawn-walk-log.json>"
+)
+CLI_MISSING_PATH_EXIT_CODE: int = 2
+CLI_INVALID_JSON_EXIT_CODE: int = 2
+CLI_VALIDATION_FAILURE_EXIT_CODE: int = 1
+CLI_SUCCESS_EXIT_CODE: int = 0

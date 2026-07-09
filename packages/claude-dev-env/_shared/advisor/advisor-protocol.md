@@ -8,19 +8,27 @@ The advisor's model tier must be at or above the highest tier of any consumer th
 - `team-advisor`: the sole consumer is the calling session itself, so the floor is just that session's own tier.
 - `orchestrator`: the consumer set is the orchestrating session plus every tier named in its routing table, so the floor is the max of those.
 
-Ladder, strongest first: Fable, Opus, Sonnet, Haiku. Read the floor tier, then try the warm-agent spawn top-down from Fable, stopping at the floor tier — never spawn below it. If even the floor tier's spawn fails, move to the CLI fallback below rather than spawning below the floor.
+Ladder, strongest first (canonical Title Case names: `Fable`, `Opus`, `Sonnet`, `Haiku`; the validator accepts any letter case and normalizes to Title Case): Fable, Opus, Sonnet, Haiku. Read the floor tier — the lower bound only — then try the warm-agent spawn top-down from Fable, stopping at the floor tier — never spawn below it. Each walk attempt sets `model` to that attempt's candidate tier. The warm agent is created at `selected_tier` (the first tier that actually spawned), which may sit above the floor. If even the floor tier's spawn fails, move to the CLI fallback below rather than spawning below the floor.
 
-Emit a structured spawn-walk log so it can be checked mechanically rather than inferred from a transcript. Record: `own_tier` (the floor tier read at the top of this section), `candidate_tiers` (the ladder slice down to that floor), `attempts` (one `{tier, result}` entry appended as each spawn try happens, `result` one of `spawned` or a failure reason such as `unavailable`), and `selected_tier` (the tier of the first `spawned` entry, or `null` paired with a `fallback_reason` string when none spawned and the CLI fallback took over). Persist this log where the [`model_tier_run_validator.py`](scripts/model_tier_run_validator.py) script can read it back and check these invariants mechanically.
+Emit a structured spawn-walk log so it can be checked mechanically rather than inferred from a transcript. Record: `own_tier` (the floor tier read at the top of this section), `candidate_tiers` (the ladder slice down to that floor), `attempts` (one `{tier, result}` entry appended as each spawn try happens, `result` one of `spawned` or a failure reason such as `unavailable`), and `selected_tier` (the tier of the first `spawned` entry, or `null` paired with a `fallback_reason` string when none spawned and the CLI fallback took over). Write the log as JSON with those field names to a path the session controls — typically `<job-temp-dir>/model-tier-run.json` (or the OS temp directory when no job directory exists). Check it with:
+
+```
+python "$HOME/.claude/_shared/advisor/scripts/model_tier_run_validator.py" <path-to-model-tier-run.json>
+```
+
+Exit code `0` means every invariant holds; `1` means a ladder invariant failed; `2` means the path or JSON was unusable. The same checks are available in-process via `validate_model_tier_run(run)`.
 
 ## Warm-up (once per session)
 
-The consuming skill's session spawns one named background agent:
+The consuming skill's session walks the candidate tiers top-down. For each attempt, spawn with:
 - `subagent_type: session-advisor` (see [`agents/session-advisor.md`](../../agents/session-advisor.md) for the full signal contract).
-- `model`: the resolved floor tier.
+- `model`: that attempt's candidate tier (not the floor — the floor is only the lower bound of the walk).
 - `name`: a name the session and every consumer will use to reach it (e.g. `team-advisor-agent`).
 - `run_in_background: true`.
 
-Charter (the spawn prompt): the agent's role — standing reviewer, never edits files or runs commands, only answers — the repo path, and the session's current goal in two or three sentences. State plainly:
+Stop at the first successful spawn. That attempt's tier is `selected_tier`; the warm agent lives at that tier for the rest of the session. If every candidate down to the floor fails, take the CLI fallback below.
+
+Charter (the spawn prompt): the agent's role — standing reviewer, never edits files or runs commands, only answers via SendMessage — the repo path, and the session's current goal in two or three sentences. State plainly:
 - Every consult carries: who is asking (name and assignment), what changed since their last consult, the live decision or question, and any load-bearing paths or excerpts.
 - Reply via SendMessage to whoever sent the consult, by name — never route a reply through the spawning session or "main." Many different consumers may reach this one agent; each reply goes back to its own sender.
 - Treat each consult on its own terms, keyed to the sender's stated assignment. Different consumers' consults will interleave in this one transcript — don't blend context across consumers unless a consult explicitly asks for that.
