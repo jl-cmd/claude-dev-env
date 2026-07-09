@@ -1,11 +1,11 @@
 ---
 name: orchestrator
 description: >-
-  Advisor-orchestrator mode: plan and delegate while spawned agents execute;
-  answer each blocker with a plan, a correction, or a stop. Triggers:
-  '/orchestrator', 'orchestrator strategy', 'run with an orchestrator',
-  'executor-advisor mode', 'orchestrator enforcement', 'agent routing',
-  'orchestrate'.
+  Advisor-orchestrator mode: plan and delegate while workflow-backed agents
+  execute; a shared session-advisor answers hard decisions with endorse,
+  correction, plan, or stop. Triggers: '/orchestrator', 'orchestrator
+  strategy', 'run with an orchestrator', 'executor-advisor mode',
+  'orchestrator enforcement', 'agent routing', 'orchestrate'.
 ---
 
 # Orchestrator Strategy
@@ -28,8 +28,8 @@ is the advisor-orchestrator. In Claude Code the user always talks to the session
 subagent, so the session is the user's sole interface: all user-facing
 communication flows through it. It spawns and resumes executor subagents
 — `clean-coder` and the like — and those executors do every bit of the
-execution: the code edits, the build runs, the test runs. The advisor
-drives the plan and answers the executors when they get stuck.
+execution: the code edits, the build runs, the test runs. The orchestrating
+session drives the plan and routes hard decisions to the shared session-advisor.
 
 ## Gotchas
 
@@ -50,9 +50,9 @@ drives the plan and answers the executors when they get stuck.
 - **Resuming an unnamed background agent needs its agentId.** A background
   spawn returns an `agentId` (format `a...-...`); keep it so `SendMessage` can
   reach that agent later. A named agent is reachable by name.
-- **Consultations past the cap signal a scoping problem.** When five
-  consultations do not clear the blocker, the task needs re-scoping or a
-  hand-off to the user — not a sixth round of advice.
+- **Only the orchestrating session owns the shared advisor's lifecycle.** An
+  executor that finds the advisor unreachable reports that upward; it never
+  spawns a replacement itself.
 
 
 ## Process
@@ -84,11 +84,10 @@ available.
 | Work | Agent type | Model |
 |---|---|---|
 | Feature, bug, and refactor coding | `clean-coder` | `opus` |
-| Verification passes | `code-verifier` | `opus` |
+| Verification passes | `code-verifier` | `sonnet` |
 | Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` |
 | PR descriptions | `pr-description-writer` | `sonnet`, with file-list grounding check |
 | Fan-out searches and checklist verification reads | `Explore` | `haiku`; use `sonnet` when judgment-heavy |
-| Escalated blockers needing a second opinion beyond the orchestrator's own judgment | `code-advisor` | Fable preferred (matches the orchestrating session); opus if Fable is unavailable. |
 
 Routing rules:
 
@@ -105,44 +104,41 @@ Routing rules:
 - Exploration workflows return file paths, line numbers, and direct evidence;
   they do not write code or mutate repo state.
 
+## Shared advisor
+
+Spawn one shared `session-advisor` agent per orchestrated session, following
+the Warm-up procedure in
+[`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
+Compute the model floor as the max of the orchestrating session's own tier and
+the highest tier named in the Workflow Agent Routing table above (today:
+max(sonnet, opus) = opus).
+
+Paste the Advisor block from that same doc, with the resolved agent name filled
+in, into every executor's spawn prompt — every row in the routing table above
+is a consumer of the shared advisor, not just this session. The orchestrating
+session's own hard decisions (see Process step 4 below) go to this same shared
+advisor via SendMessage.
+
+The orchestrating session owns the shared advisor's lifecycle end to end
+(spawn, drift-respawn per the shared doc, shutdown at task end); executors only
+ever send it messages.
+
 4. **Executors consult at a hard decision.** Each executor's spawn prompt tells
-   it to stop and message you — with the task, what it tried, and the exact
-   blocker (plus any short code excerpt that helps) — when one of these holds:
+   it to stop and consult the shared advisor (see Shared advisor section above)
+   — with the task, what it tried, and the exact blocker (plus any short code
+   excerpt that helps) — when one of these holds:
    - It has tried the same problem twice or more and it still fails.
    - A decision changes the deliverable's scope or a contract that is hard to
      reverse.
    - Two constraints conflict and it cannot satisfy both.
    - It is unsure whether to stop or keep going.
 
-5. **Answer with one signal.** On a consultation, reply with exactly one
-   signal, brief (about 400 to 700 tokens):
-   - **PLAN** — a different approach, as concrete ordered steps the executor
-     can run. When a warm agent fits the plan, name which one to resume.
-   - **CORRECTION** — the executor's approach is right, one thing is wrong;
-     name the wrong step and the fix.
-   - **STOP** — no path satisfies the task as assigned; say why so it can be
-     reported upward.
-   The executor resumes the moment your reply lands.
-
-   A worked consultation:
-
-   ```
-   Executor → advisor
-   Task: add a retry to the upload client.
-   Tried: wrapped upload() in a three-attempt loop; the second attempt
-   double-posts.
-   Blocker: the server takes no idempotency key, so a retry after a timeout
-   creates a duplicate record.
-
-   Advisor → executor
-   CORRECTION — the retry loop is right; the missing piece is a stable request
-   id. Generate one client-side on the first attempt and send the same id on
-   every retry, so the server treats the retries as one request.
-   ```
-
-   For a decision the advisor itself cannot settle, it may use a workflow
-   escalation to the tool-less `code-advisor` agent for a second opinion — an
-   optional escalation, not a required step.
+5. **The shared advisor answers.** Every consult — from an executor or from
+   this session's own hard decisions — goes to the shared advisor and gets back
+   one of its four signals. See `agents/session-advisor.md` for what each signal
+   means and
+   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
+   for the consult format.
 
 ## Agent reuse (non-negotiable)
 
@@ -153,8 +149,8 @@ Routing rules:
   matches the routing table.
 - **Spawn a fresh agent only when** no existing agent holds relevant context,
   or a genuine task switch needs a clean context.
-- **Name the agent to resume.** When you answer with a PLAN and a warm agent
-  fits, say which agent to resume and where.
+- **Name the agent to resume.** When a PLAN fits a warm agent, name which
+  agent to resume and where.
 
 ## Constraints
 
@@ -164,8 +160,10 @@ Routing rules:
   test itself — executors do that.
 - Delegated execution uses workflow-backed agent invocations and follows the
   Workflow Agent Routing table exactly.
-- Consultations are capped at five per task by default. At the cap, re-scope
-  or hand off; do not keep answering.
+- One shared session-advisor per orchestrated session, owned by the
+  orchestrating session (see
+  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md))
+  — executors consult it, they never spawn or respawn it.
 - Reuse a warm agent over a cold spawn whenever one holds relevant context.
 
 ## File Index

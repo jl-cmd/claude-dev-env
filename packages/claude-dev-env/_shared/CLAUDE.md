@@ -1,12 +1,13 @@
 # _shared
 
-Cross-cutting runtime assets shared by multiple PR-loop skills (`bugteam`, `pr-converge`, `findbugs`, `fixbugs`). Files here are installed into `~/.claude/_shared/` by `bin/install.mjs` alongside the skill directories that import them.
+Cross-cutting runtime assets shared by multiple skills. The PR-loop skills (`bugteam`, `pr-converge`, `findbugs`, `fixbugs`) are one such cluster; other clusters live here too. Files here are installed into `~/.claude/_shared/` by `bin/install.mjs` alongside the skill directories that import them.
 
 ## Contents
 
 | Entry | Description |
 |---|---|
 | `pr-loop/` | Docs, scripts, and constants for the PR-loop workflow suite |
+| `advisor/` | Warm-advisor spawn-and-consult protocol for `team-advisor` and `orchestrator` |
 
 ## Install path
 
