@@ -1,4 +1,4 @@
-"""Named string constants for the AI rules fan-out dispatcher summaries."""
+"""String constants for the AI rules fan-out dispatcher: summary-table labels and row templates, GitHub Actions annotation templates, and environment-variable names."""
 
 SUMMARY_TABLE_HEADER_ROW = "| Metric | Count |"
 SUMMARY_TABLE_SEPARATOR_ROW = "|--------|-------|"
@@ -11,6 +11,7 @@ METRIC_LISTENER_SUCCESS = "Listener success"
 METRIC_LISTENER_FAILURE = "Listener failure"
 METRIC_LISTENER_PENDING = "Listener pending"
 METRIC_LISTENER_POLL_ERROR = "Listener poll_error"
+METRIC_LISTENER_OTHER = "Listener other"
 ENV_JONECHO_TOKEN = "JONECHO_TOKEN"
 ENV_JLCMD_TOKEN = "JLCMD_TOKEN"
 ENV_SOURCE_SHA = "SOURCE_SHA"
@@ -26,7 +27,7 @@ ACTIONS_NO_TOKEN_FOR_OWNER = (
 ACTIONS_EXCLUDED_REPO_COUNT = (
     "::notice::Excluded %s repositories from targets"
 )
-ACTIONS_MALFORMED_REPO_ENTRY = "::debug::Skipping malformed repo entry"
+ACTIONS_MALFORMED_REPO_ENTRY = "::warning::Skipped %s malformed repo entries"
 ACTIONS_NO_TOKEN_FOR_TARGET = (
     "::warning::No installation token available for a target owner; skipping a repo"
 )

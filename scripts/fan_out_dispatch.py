@@ -25,7 +25,6 @@ def _ensure_repo_root_on_sys_path() -> None:
         sys.path.remove(repo_root)
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
-    sys.modules.pop("config", None)
 
 
 _ensure_repo_root_on_sys_path()
@@ -50,6 +49,7 @@ from config.constants import (
     METRIC_DISPATCH_SUCCEEDED,
     METRIC_LISTENER_FAILURE,
     METRIC_LISTENER_MISSING,
+    METRIC_LISTENER_OTHER,
     METRIC_LISTENER_PENDING,
     METRIC_LISTENER_POLL_ERROR,
     METRIC_LISTENER_SUCCESS,
@@ -369,9 +369,8 @@ def _count_repos_with_status(
     )
 
 
-def _build_summary_metric_rows(
+def _build_dispatch_metric_rows(
     all_dispatch_status_by_repo: dict[str, str],
-    all_conclusion_by_repo: dict[str, str],
 ) -> list[tuple[str, int]]:
     return [
         (METRIC_TARGETS_CONSIDERED, len(all_dispatch_status_by_repo)),
@@ -393,6 +392,13 @@ def _build_summary_metric_rows(
                 all_dispatch_status_by_repo, DISPATCH_STATUS_OPTED_OUT
             ),
         ),
+    ]
+
+
+def _build_enumerated_listener_rows(
+    all_conclusion_by_repo: dict[str, str],
+) -> list[tuple[str, int]]:
+    return [
         (
             METRIC_LISTENER_SUCCESS,
             _count_repos_with_status(
@@ -424,6 +430,20 @@ def _build_summary_metric_rows(
             ),
         ),
     ]
+
+
+def _build_summary_metric_rows(
+    all_dispatch_status_by_repo: dict[str, str],
+    all_conclusion_by_repo: dict[str, str],
+) -> list[tuple[str, int]]:
+    dispatch_metric_rows = _build_dispatch_metric_rows(all_dispatch_status_by_repo)
+    enumerated_listener_rows = _build_enumerated_listener_rows(all_conclusion_by_repo)
+    enumerated_listener_total = sum(
+        each_count for _, each_count in enumerated_listener_rows
+    )
+    other_listener_count = len(all_conclusion_by_repo) - enumerated_listener_total
+    listener_other_row = [(METRIC_LISTENER_OTHER, other_listener_count)]
+    return dispatch_metric_rows + enumerated_listener_rows + listener_other_row
 
 
 def build_summary_table(
@@ -507,12 +527,13 @@ def _dispatch_to_targets(
 ) -> tuple[dict[str, str], list[tuple[str, str, str]]]:
     dispatch_status_by_repo: dict[str, str] = {}
     all_dispatched_repos: list[tuple[str, str, str]] = []
+    malformed_repo_count = 0
     for each_repo in all_target_repos:
         owner = (each_repo.get("owner") or {}).get("login")
         repo_name = each_repo.get("name")
         full_repo_name = each_repo.get("full_name")
         if not owner or not repo_name or not full_repo_name:
-            dispatch_logger.debug(ACTIONS_MALFORMED_REPO_ENTRY)
+            malformed_repo_count += 1
             continue
         token = token_by_owner.get(owner)
         if token is None:
@@ -531,6 +552,8 @@ def _dispatch_to_targets(
             dispatch_status_by_repo[full_repo_name] = DISPATCH_STATUS_FAILED
             dispatch_logger.warning(ACTIONS_DISPATCH_FAILED)
         time.sleep(DISPATCH_RATE_LIMIT_SLEEP_SECONDS)
+    if malformed_repo_count > 0:
+        dispatch_logger.warning(ACTIONS_MALFORMED_REPO_ENTRY, malformed_repo_count)
     return dispatch_status_by_repo, all_dispatched_repos
 
 

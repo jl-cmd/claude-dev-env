@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
+import config
 import fan_out_dispatch
 
 
@@ -412,22 +413,17 @@ class TestPollListenerRetriesUntilWorkflowRunAppears:
 class TestScriptEntrypointImportPath:
     def should_load_config_when_run_as_python_script_with_empty_pythonpath(
         self,
+        tmp_path: Path,
     ) -> None:
         repo_root = Path(__file__).resolve().parent.parent
         script_path = repo_root / "scripts" / "fan_out_dispatch.py"
         env = os.environ.copy()
         env["PYTHONPATH"] = ""
+        env["JONECHO_TOKEN"] = ""
+        env["JLCMD_TOKEN"] = ""
         completed = subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                (
-                    "import runpy; "
-                    f"runpy.run_path({str(script_path)!r}, run_name='not_main'); "
-                    "print('IMPORT_OK')"
-                ),
-            ],
-            cwd=str(repo_root),
+            [sys.executable, str(script_path)],
+            cwd=str(tmp_path),
             env=env,
             capture_output=True,
             text=True,
@@ -435,4 +431,74 @@ class TestScriptEntrypointImportPath:
         )
 
         assert completed.returncode == 0, completed.stderr
-        assert "IMPORT_OK" in completed.stdout
+
+
+class TestImportKeepsAlreadyLoadedConfig:
+    def should_leave_an_already_imported_config_module_in_sys_modules(self) -> None:
+        fan_out_dispatch._ensure_repo_root_on_sys_path()
+
+        assert sys.modules.get("config") is config
+
+
+class TestSummaryCountsConclusionsOutsideEnumeratedSet:
+    def should_count_conclusions_outside_the_enumerated_status_set(self) -> None:
+        dispatch_status_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+            "JonEcho/beta": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+        }
+        conclusion_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.LISTENER_CONCLUSION_SUCCESS,
+            "JonEcho/beta": "cancelled",
+        }
+
+        table = fan_out_dispatch.build_summary_table(
+            dispatch_status_by_repo, conclusion_by_repo
+        )
+
+        assert "| Listener other | 1 |" in table
+
+    def should_reconcile_listener_counts_with_dispatched_repo_total(self) -> None:
+        dispatch_status_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+            "JonEcho/beta": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+        }
+        conclusion_by_repo = {
+            "JonEcho/alpha": "timed_out",
+            "JonEcho/beta": "cancelled",
+        }
+
+        metric_rows = fan_out_dispatch._build_summary_metric_rows(
+            dispatch_status_by_repo, conclusion_by_repo
+        )
+        listener_counts = [
+            each_count
+            for each_label, each_count in metric_rows
+            if each_label.startswith("Listener")
+        ]
+
+        assert sum(listener_counts) == len(conclusion_by_repo)
+
+
+class TestMalformedRepoEntriesAreReported:
+    def should_warn_with_a_count_when_a_target_entry_is_malformed(self) -> None:
+        all_target_repos = [
+            {"owner": {"login": "JonEcho"}},
+        ]
+        token_by_owner = {"JonEcho": FAKE_TOKEN}
+
+        with patch.object(
+            fan_out_dispatch.dispatch_logger, "warning"
+        ) as mock_warning:
+            fan_out_dispatch._dispatch_to_targets(
+                all_target_repos, token_by_owner, {}
+            )
+
+        malformed_warnings = [
+            each_call
+            for each_call in mock_warning.call_args_list
+            if each_call.args
+            and each_call.args[0] == fan_out_dispatch.ACTIONS_MALFORMED_REPO_ENTRY
+        ]
+
+        assert malformed_warnings
+        assert malformed_warnings[0].args[1] == 1
