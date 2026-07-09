@@ -1,8 +1,10 @@
-"""Constants for the model-tier-run validator.
+"""Constants for the model-tier-run validator and CLI / Agent alias map.
 
-Groups: the model tier ladder (strongest first), the CLI model-ID map, the
-SendMessage reply wait bound, the spawn-log dict keys, the token that marks a
-successful spawn, and the validation error-message strings.
+Groups: the model tier ladder (strongest first), the CLI / Agent short-alias
+map (stable names such as ``opus``, not dated full model IDs like
+``claude-opus-4-…``), the SendMessage reply wait bound, the spawn-log dict
+keys, the token that marks a successful spawn, and the validation
+error-message strings.
 """
 
 from __future__ import annotations

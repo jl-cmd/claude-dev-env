@@ -12,7 +12,7 @@ Warm-advisor spawn-and-consult protocol shared by `team-advisor` and `orchestrat
 
 | Entry | Description |
 |---|---|
-| `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks), `tier_model_ids.py` (`resolve_cli_model_id`), and `advisor_scripts_constants` under `scripts/config/` (ladder, CLI model-ID map, SendMessage wait bound) |
+| `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks), `tier_model_ids.py` (`resolve_cli_model_id` / short CLI/Agent aliases), and `advisor_scripts_constants` under `scripts/config/` (ladder, short-alias map, SendMessage wait bound) |
 
 ## Breaking-change rule
 

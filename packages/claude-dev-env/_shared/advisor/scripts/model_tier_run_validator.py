@@ -32,7 +32,14 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from advisor_scripts_constants.model_tier_run_validator_constants import (
+_scripts_directory = str(Path(__file__).resolve().parent)
+_config_directory = str(Path(__file__).resolve().parent / "config")
+if _config_directory not in sys.path:
+    sys.path.insert(0, _config_directory)
+if _scripts_directory not in sys.path:
+    sys.path.insert(0, _scripts_directory)
+
+from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
     ALL_MODEL_TIERS,
     ATTEMPT_ORDER_MISMATCH_MESSAGE,
     ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE,
@@ -51,6 +58,7 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (
     TIER_KEY,
     UNKNOWN_OWN_TIER_MESSAGE,
 )
+from tier_model_ids import canonical_tier_name  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -66,17 +74,10 @@ class ModelTierRunError(ValueError):
     """Raised when a model-tier spawn-walk log violates an invariant."""
 
 
-def _canonical_tier_name(tier_name: str) -> str | None:
-    tier_by_lower_name = {
-        each_tier.lower(): each_tier for each_tier in ALL_MODEL_TIERS
-    }
-    return tier_by_lower_name.get(tier_name.lower())
-
-
 def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:
     all_canonical_tiers: list[str] = []
     for each_tier_name in all_tier_names:
-        maybe_canonical_tier = _canonical_tier_name(each_tier_name)
+        maybe_canonical_tier = canonical_tier_name(each_tier_name)
         if maybe_canonical_tier is None:
             return None
         all_canonical_tiers.append(maybe_canonical_tier)
@@ -84,7 +85,7 @@ def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:
 
 
 def _expected_candidate_tiers(own_tier: str) -> list[str]:
-    maybe_canonical_own_tier = _canonical_tier_name(own_tier)
+    maybe_canonical_own_tier = canonical_tier_name(own_tier)
     if maybe_canonical_own_tier is None:
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
     floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
@@ -145,7 +146,7 @@ def _validate_selected_tier(
     ]
     if all_spawned_tiers:
         maybe_canonical_selected = (
-            _canonical_tier_name(run.selected_tier)
+            canonical_tier_name(run.selected_tier)
             if run.selected_tier is not None
             else None
         )

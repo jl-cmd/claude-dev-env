@@ -8,7 +8,7 @@ The advisor's model tier must be at or above the highest tier of any consumer th
 - `team-advisor`: the sole consumer is the calling session itself, so the floor is just that session's own tier.
 - `orchestrator`: the consumer set is the orchestrating session plus every tier named in its routing table, so the floor is the max of those.
 
-Ladder, strongest first (canonical Title Case names: `Fable`, `Opus`, `Sonnet`, `Haiku`; the validator accepts any letter case and normalizes to Title Case): Fable, Opus, Sonnet, Haiku. Read the floor tier — the lower bound only — then try the warm-agent spawn top-down from Fable, stopping at the floor tier — never spawn below it. Each walk attempt sets `model` to that attempt's candidate tier. The warm agent is created at `selected_tier` (the first tier that actually spawned), which may sit above the floor. If even the floor tier's spawn fails, move to the CLI fallback below rather than spawning below the floor.
+Ladder, strongest first (canonical Title Case names: `Fable`, `Opus`, `Sonnet`, `Haiku`; the validator accepts any letter case and normalizes to Title Case): Fable, Opus, Sonnet, Haiku. Read the floor tier — the lower bound only — then try the warm-agent spawn top-down from Fable, stopping at the floor tier — never spawn below it. Each walk attempt sets the Agent tool `model:` field to the short alias for that attempt's candidate tier (`resolve_cli_model_id(candidate_tier)` — for example `opus`, not Title Case `Opus`). The warm agent is created at `selected_tier` (the first ladder tier that actually spawned), which may sit above the floor. If even the floor tier's spawn fails, move to the CLI fallback below rather than spawning below the floor.
 
 Emit a structured spawn-walk log so it can be checked mechanically rather than inferred from a transcript. Record: `own_tier` (the floor tier read at the top of this section), `candidate_tiers` (the ladder slice down to that floor), `attempts` (one `{tier, result}` entry appended as each spawn try happens, `result` one of `spawned` or a failure reason such as `unavailable`), and `selected_tier` (the tier of the first `spawned` entry, or `null` paired with a `fallback_reason` string when none spawned and the CLI fallback took over). Write the log as JSON with those field names to a path the session controls — typically `<job-temp-dir>/model-tier-run.json` (or the OS temp directory when no job directory exists). Check it with:
 
@@ -22,7 +22,7 @@ Exit code `0` means every invariant holds; `1` means a ladder invariant failed; 
 
 The consuming skill's session walks the candidate tiers top-down. For each attempt, spawn with:
 - `subagent_type: session-advisor` (see [`agents/session-advisor.md`](../../agents/session-advisor.md) for the full signal contract).
-- `model`: that attempt's candidate tier (not the floor — the floor is only the lower bound of the walk).
+- `model`: the short alias for that attempt's candidate tier via `resolve_cli_model_id` (or the alias table under Fallback) — for example `opus`, not Title Case `Opus`. The floor is only the lower bound of the walk; the walk still tries stronger tiers first.
 - `name`: a name the session and every consumer will use to reach it (e.g. `team-advisor-agent`).
 - `run_in_background: true`.
 
@@ -69,7 +69,7 @@ The session that spawns the shared advisor owns its whole lifecycle — spawn, d
 
 Fall back to the CLI when any of these holds, rather than on judgment call:
 - The Agent-tool spawn errors at every candidate tier down to the floor — the tool itself, not just the top tier, is unavailable.
-- `SendMessage` to the shared advisor errors, or draws no reply within **120 seconds** (`ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS` in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py`), and a re-spawn also fails.
+- `SendMessage` to the shared advisor errors, or draws no reply within the bound in `ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS` (120) in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py`, and a re-spawn also fails.
 - The running session is itself a subagent barred from spawning further agents.
 
 Map the resolved floor tier to its CLI / Agent model alias before the first call — the CLI's `--model` flag and the Agent tool's `model:` field take the short aliases below, not free-form ladder prose. Source of truth: `ALL_CLI_MODEL_ID_BY_TIER` and `resolve_cli_model_id(tier)` in the same constants package / `tier_model_ids.py` helper:
