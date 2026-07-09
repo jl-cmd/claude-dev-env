@@ -15,7 +15,20 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from typing import Optional
+
+
+def _ensure_repo_root_on_sys_path() -> None:
+    repo_root = str(Path(__file__).resolve().parents[1])
+    if repo_root in sys.path:
+        sys.path.remove(repo_root)
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    sys.modules.pop("config", None)
+
+
+_ensure_repo_root_on_sys_path()
 
 from config.constants import (
     ACTIONS_DISPATCH_FAILED,

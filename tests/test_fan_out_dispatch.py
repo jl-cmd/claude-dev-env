@@ -1,6 +1,7 @@
 """Specifications for the fan-out dispatch script's pure filtering and formatting logic."""
 
 import os
+import subprocess
 import sys
 import urllib.error
 from datetime import datetime, timedelta, timezone
@@ -406,3 +407,32 @@ class TestPollListenerRetriesUntilWorkflowRunAppears:
                 )
 
         assert conclusion == "success"
+
+
+class TestScriptEntrypointImportPath:
+    def should_load_config_when_run_as_python_script_with_empty_pythonpath(
+        self,
+    ) -> None:
+        repo_root = Path(__file__).resolve().parent.parent
+        script_path = repo_root / "scripts" / "fan_out_dispatch.py"
+        env = os.environ.copy()
+        env["PYTHONPATH"] = ""
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import runpy; "
+                    f"runpy.run_path({str(script_path)!r}, run_name='not_main'); "
+                    "print('IMPORT_OK')"
+                ),
+            ],
+            cwd=str(repo_root),
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert completed.returncode == 0, completed.stderr
+        assert "IMPORT_OK" in completed.stdout
