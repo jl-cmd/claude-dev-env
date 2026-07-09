@@ -69,10 +69,19 @@ The session that spawns the shared advisor owns its whole lifecycle — spawn, d
 
 Fall back to the CLI when any of these holds, rather than on judgment call:
 - The Agent-tool spawn errors at every candidate tier down to the floor — the tool itself, not just the top tier, is unavailable.
-- `SendMessage` to the shared advisor errors, or draws no reply within a bounded wait, and a re-spawn also fails.
+- `SendMessage` to the shared advisor errors, or draws no reply within **120 seconds** (`ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS` in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py`), and a re-spawn also fails.
 - The running session is itself a subagent barred from spawning further agents.
 
-Map the resolved floor tier to its exact current model ID before the first call — the CLI's `--model` flag takes a real model identifier, not a ladder tier name. Use `python "$HOME/.claude/scripts/claude_chain_runner.py" -- -p --model <model ID> --output-format json` in place of the Agent-tool spawn. The chain runner walks the fallback chain configured at `~/.claude/claude-chain.json` (typically `claude` then `claude-ev`), so a usage-limited primary account still gets served. Write the charter or the consult brief to a temporary file under the job's own temporary directory (or the OS temp directory when no job directory exists) and pipe it in, rather than passing either as an inline argument, and drop that file once the consult completes.
+Map the resolved floor tier to its CLI / Agent model alias before the first call — the CLI's `--model` flag and the Agent tool's `model:` field take the short aliases below, not free-form ladder prose. Source of truth: `ALL_CLI_MODEL_ID_BY_TIER` and `resolve_cli_model_id(tier)` in the same constants package / `tier_model_ids.py` helper:
+
+| Ladder tier (Title Case) | CLI / Agent `model` alias |
+|---|---|
+| Fable | `fable` |
+| Opus | `opus` |
+| Sonnet | `sonnet` |
+| Haiku | `haiku` |
+
+Resolve in code with `python -c "from tier_model_ids import resolve_cli_model_id; print(resolve_cli_model_id('Opus'))"` from `$HOME/.claude/_shared/advisor/scripts/` (any letter case accepted; unknown tiers raise `ValueError`). Use `python "$HOME/.claude/scripts/claude_chain_runner.py" -- -p --model <model alias> --output-format json` in place of the Agent-tool spawn. The chain runner walks the fallback chain configured at `~/.claude/claude-chain.json` (typically `claude` then `claude-ev`), so a usage-limited primary account still gets served. Write the charter or the consult brief to a temporary file under the job's own temporary directory (or the OS temp directory when no job directory exists) and pipe it in, rather than passing either as an inline argument, and drop that file once the consult completes.
 
 Read the `session_id` out of the first call's JSON response and pass it to `-p --resume <session_id> --output-format json` on every later consult — `-p` stays on the resume call too, since it is still a non-interactive invocation. A usage-limit failover to the next binary in the chain does not carry the `session_id` forward: a session store belongs to the binary and account that minted it, so a `--resume` against the new binary can fail. Treat that failure as starting over, not as an error to retry — resend the charter plus a compact recap of the consults since the last one, capture the new `session_id` the fresh call returns, and continue the fallback path from there.
 

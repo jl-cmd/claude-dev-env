@@ -1,18 +1,29 @@
 """Constants for the model-tier-run validator.
 
-Groups: the model tier ladder (strongest first), the spawn-log dict keys, the
-token that marks a successful spawn, and the validation error-message strings.
+Groups: the model tier ladder (strongest first), the CLI model-ID map, the
+SendMessage reply wait bound, the spawn-log dict keys, the token that marks a
+successful spawn, and the validation error-message strings.
 """
 
 from __future__ import annotations
 
 ALL_MODEL_TIERS: tuple[str, ...] = ("Fable", "Opus", "Sonnet", "Haiku")
 
+ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS: int = 120
+
+ALL_CLI_MODEL_ID_BY_TIER: dict[str, str] = {
+    "Fable": "fable",
+    "Opus": "opus",
+    "Sonnet": "sonnet",
+    "Haiku": "haiku",
+}
+
 TIER_KEY: str = "tier"
 SPAWN_OUTCOME_KEY: str = "result"
 SPAWN_SUCCESS_TOKEN: str = "spawned"
 
 UNKNOWN_OWN_TIER_MESSAGE: str = "own_tier is not a known model tier"
+UNKNOWN_LADDER_NAME_ERROR: str = "ladder name is not a known model tier: {!r}"
 CANDIDATE_TIERS_MISMATCH_MESSAGE: str = (
     "candidate_tiers does not match the ladder slice down to own_tier"
 )
