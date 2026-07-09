@@ -112,16 +112,26 @@ def test_detect_host_profile_defaults_to_claude() -> None:
     assert detect_host_profile(setting_by_name={}) == HOST_PROFILE_CLAUDE
 
 
-def test_detect_host_profile_reads_grok_build_flag() -> None:
+@pytest.mark.parametrize(
+    "truthy_value",
+    ["1", "true", "TRUE", "yes", "YES", "on", "On"],
+)
+def test_detect_host_profile_reads_grok_build_truthy_values(
+    truthy_value: str,
+) -> None:
     assert (
-        detect_host_profile(setting_by_name={"GROK_BUILD": "1"}) == HOST_PROFILE_GROK
-    )
-    assert (
-        detect_host_profile(setting_by_name={"GROK_BUILD": "true"})
+        detect_host_profile(setting_by_name={"GROK_BUILD": truthy_value})
         == HOST_PROFILE_GROK
     )
+
+
+def test_detect_host_profile_reads_grok_build_flag() -> None:
     assert (
         detect_host_profile(setting_by_name={"GROK_BUILD": "0"})
+        == HOST_PROFILE_CLAUDE
+    )
+    assert (
+        detect_host_profile(setting_by_name={"GROK_BUILD": "false"})
         == HOST_PROFILE_CLAUDE
     )
 

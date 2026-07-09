@@ -1,8 +1,39 @@
 # Advisor Protocol
 
-Shared spawn-once, consult-by-message protocol for a warm advisor agent. Two skills depend on this: `team-advisor` (spawns the advisor for its own consulting session) and `orchestrator` (spawns the same advisor and lets its own routed executor subagents consult it too). Executor spawn prompts are a third consumer, via the copy-paste Advisor block below.
+Shared spawn-once, consult-by-message protocol for a warm advisor. Two skills depend on this: `team-advisor` (binds the advisor for its own consulting session) and `orchestrator` (binds the same advisor and lets its own routed executor subagents consult it too). Executor spawn prompts are a third consumer, via the host-matched Advisor block below.
+
+**First step of every bind:** detect the host profile (next section). Do not walk the model-floor ladder, spawn `session-advisor`, or open the CLI fallback until the host is known. On Grok, skip straight to **Host profiles → Grok host**. On Claude, continue with **Model floor** and the rest of this document.
+
+## Host profiles
+
+Detect the host profile **before** any model-floor walk. Source of truth for names and detection: `HOST_PROFILE_CLAUDE`, `HOST_PROFILE_GROK`, `ALL_HOST_PROFILES`, and `detect_host_profile(...)` in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py` and `tier_model_ids.py`.
+
+Detection order:
+
+1. `ADVISOR_HOST_PROFILE=Grok` or `=Claude` (explicit override; any letter case).
+2. `GROK_BUILD=1` (or `true` / `yes` / `on`) — Grok Build / xAI harness.
+3. Default: Claude.
+
+### Claude host
+
+Use the **Model floor** ladder below (Fable → Opus → Sonnet → Haiku). Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent. When every candidate down to the floor fails, take the CLI Claude-chain fallback. Paste the **Claude host** Advisor block into every executor spawn prompt.
+
+### Grok host
+
+Grok Build / xAI has exactly one model tier. Do **not** walk the Claude ladder and do **not** require a `claude` binary.
+
+1. Detect host profile first (this section).
+2. Set `own_tier = Grok`, `candidate_tiers = ["Grok"]`, one attempt only, `selected_tier = Grok`.
+3. **Self-as-advisor:** skip the Agent-tool spawn of `session-advisor`. The orchestrating Grok session *is* the advisor — the same process answers ENDORSE / CORRECTION / PLAN / STOP. Executors (when any) report blockers to the orchestrating session; that session answers with the four signals inline (or via its own same-session consult loop). There is no SendMessage-to-another-Claude-agent path on a pure Grok host.
+4. Record the single attempt as `{tier: "Grok", result: "self"}` — the `self` token marks a self-bind so logs stay honest (not a separate spawn).
+5. CLI Claude-chain fallback does **not** apply on a pure Grok host.
+6. Paste the **Grok host** Advisor block into every executor spawn prompt — never the Claude SendMessage block.
+
+Resolve the Grok alias with `resolve_cli_model_id("Grok")` → `grok` when a model field is required.
 
 ## Model floor
+
+**Claude host only.** On a Grok host, skip this section entirely — follow **Host profiles → Grok host**.
 
 The advisor's model tier must be at or above the highest tier of any consumer that will reach it. Each consuming skill supplies its own consumer set when computing the floor:
 - `team-advisor`: the sole consumer is the calling session itself, so the floor is just that session's own tier.
@@ -18,31 +49,7 @@ python "$HOME/.claude/_shared/advisor/scripts/model_tier_run_validator.py" <path
 
 Exit code `0` means every invariant holds; `1` means a ladder invariant failed; `2` means the path or JSON was unusable. The same checks are available in-process via `validate_model_tier_run(run)`.
 
-## Host profiles
-
-Detect the host profile **before** any model-floor walk. Source of truth for names and detection: `HOST_PROFILE_CLAUDE`, `HOST_PROFILE_GROK`, `ALL_HOST_PROFILES`, and `detect_host_profile(...)` in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py` and `tier_model_ids.py`.
-
-Detection order:
-
-1. `ADVISOR_HOST_PROFILE=Grok` or `=Claude` (explicit override; any letter case).
-2. `GROK_BUILD=1` (or `true` / `yes` / `on`) — Grok Build / xAI harness.
-3. Default: Claude.
-
-### Claude host
-
-Use the Model floor ladder above (Fable → Opus → Sonnet → Haiku). Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent. When every candidate down to the floor fails, take the CLI Claude-chain fallback below.
-
-### Grok host
-
-Grok Build / xAI has exactly one model tier. Do **not** walk the Claude ladder and do **not** require a `claude` binary.
-
-1. Detect host profile first (this section).
-2. Set `own_tier = Grok`, `candidate_tiers = ["Grok"]`, one attempt only, `selected_tier = Grok`.
-3. **Self-as-advisor:** skip the Agent-tool spawn of `session-advisor`. The orchestrating Grok session *is* the advisor — the same process answers ENDORSE / CORRECTION / PLAN / STOP. Executors (when any) still report blockers to the orchestrating session; that session answers with the four signals inline (or via its own same-session consult loop). There is no SendMessage-to-another-Claude-agent path on a pure Grok host.
-4. Record the single attempt as `{tier: "Grok", result: "self"}` — the `self` token marks a self-bind so logs stay honest (not a separate spawn).
-5. CLI Claude-chain fallback does **not** apply on a pure Grok host.
-
-Resolve the Grok alias with `resolve_cli_model_id("Grok")` → `grok` when a model field is required.
+The validator checks ladder shape only (candidate slice, attempt order, success-token rules per tier). On a pure Grok host the protocol forbids CLI fallback after a failed self-bind; a log with `own_tier=Grok`, exhausted attempts, and `selected_tier=null` may still pass the structural validator — treat that as a host-policy violation outside the ladder checker.
 
 ## Warm-up (once per session)
 
@@ -79,19 +86,33 @@ Each consult carries, in order: who you are and your assignment (only needed on 
 
 **Report-back rule.** After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it.
 
-Treat the reply as a serious second opinion: a CORRECTION — whether it names a wrong step or a risk worth closing — is something to address before treating the plan or the work as done. A STOP, or a consult that finds the advisor unreachable, is reported up rather than retried — team-advisor's sole consumer is the session itself, so it reports to the user; orchestrator's executors report to the orchestrating session, which decides. When the advisor becomes unreachable, report that to the session that owns its lifecycle (see below); that session alone decides whether to respawn.
+Treat the reply as a serious second opinion: a CORRECTION — whether it names a wrong step or a risk worth closing — is something to address before treating the plan or the work as done. A STOP, or a consult that finds the advisor unreachable, is reported up rather than retried — team-advisor's sole consumer is the session itself, so it reports to the user; orchestrator's executors report to the orchestrating session, which decides. When the advisor becomes unreachable, report that to the session that owns its lifecycle (see below); that session alone decides whether to respawn (Claude) or re-charter itself (Grok).
 
-## Advisor block — copy verbatim into every executor spawn prompt
+## Advisor block — paste the host-matched block into every executor spawn prompt
 
-This paragraph is self-contained — the executor receives only this text, not the rest of this document, so it carries everything it needs on its own:
+Each paragraph is self-contained — the executor receives only this text, not the rest of this document, so it carries everything it needs on its own. Paste **exactly one** block, chosen by host profile.
+
+### Claude host (SendMessage to warm advisor)
 
 > A shared session advisor named `<name>` is reachable via SendMessage. Consult it before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered. Open each consult with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts. Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer. After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it. Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take. On STOP, or if the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions to the session that owns the advisor.
 
+### Grok host (self-as-advisor; report to orchestrating session)
+
+> The orchestrating session is the shared advisor for this run — there is no separate `session-advisor` agent and no SendMessage path to one. Report blockers and hard decisions to the **orchestrating session** (the session that assigned you) before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered. Open each report with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts. Re-raise something already answered only when you have new evidence to attach — the result of trying prior advice, fresh output, or a changed constraint; otherwise act on the standing answer. After a CORRECTION or PLAN, your next report on that topic opens with what happened when you followed it. The orchestrating session answers with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take. On STOP, or if the orchestrating session is unreachable, stop work and surface that upward; do not spawn a `session-advisor` agent yourself.
+
 ## Lifecycle ownership
+
+### Claude host
 
 The session that spawns the shared advisor owns its whole lifecycle — spawn, drift-respawn, and shutdown. Every other consumer (executors, or any other consulting session) only ever sends it messages; none of them spawn, respawn, or shut it down themselves. One shared advisor exists per orchestrated session, owned by the session that spawned it.
 
 **Re-spawn on drift.** If a reply shows the agent working from a stale picture, or the session pivots to an unrelated task, the owning session ends that agent and spawns a fresh one with a new charter, rather than forcing the old context to stretch across two different jobs.
+
+### Grok host
+
+The orchestrating session owns the self-as-advisor role for the whole run. There is no Agent spawn to end or respawn.
+
+**Re-charter on drift.** If the session's own answers show a stale picture, or the task pivots, re-state the self-as-advisor charter in-session (goal, four-signal contract, executor report path) and log another `{tier: "Grok", result: "self"}` bind only when a fresh structural log is needed. Executors keep reporting to the orchestrating session; they never spawn a replacement advisor.
 
 ## Fallback: the CLI chain
 
