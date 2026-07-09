@@ -1,6 +1,10 @@
 ---
 name: rebase
-description: Rebase a branch onto its base ref with the verification gates needed to catch logically broken results before pushing. Use when the user invokes `/rebase`, says "rebase this branch", "PR has merge conflicts", "rebase onto main", or asks for a force-push to update a remote branch's history. Critical for stacked PRs where the base merged via squash, and for any rebase that includes deletions or renames.
+description: >-
+  Rebases a branch onto its base ref with the verification gates that catch
+  logically broken results before pushing. Use when the user invokes `/rebase`,
+  says 'rebase this branch', 'PR has merge conflicts', or 'rebase onto main', or
+  asks for a force-push to update a remote branch's history.
 ---
 
 # /rebase

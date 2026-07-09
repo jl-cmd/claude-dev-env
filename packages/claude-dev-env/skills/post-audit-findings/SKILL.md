@@ -1,15 +1,11 @@
 ---
 name: post-audit-findings
 description: >-
-  Publishes an audit pass as one GitHub PR review via the shared
-  post_audit_thread.py: maps audit findings to the {path, line, side,
-  severity, description, fix_summary} JSON shape (splitting failure_mode at
-  the literal `Fix:` heading), partitions anchored vs unanchored findings so
-  one bad anchor cannot reject the whole POST, handles the self-PR reviewer
-  toggle via BUGTEAM_REVIEWER_ACCOUNT, and harvests finding comment ids and
-  PRRT thread node ids for the fix loop. Invoked by audit skills (bugteam,
-  qbug, findbugs) after each audit pass, CLEAN or DIRTY; not for ad-hoc PR
-  comments or review replies.
+  Publishes an audit pass as a GitHub PR review through post_audit_thread.py:
+  maps findings to the review-comment JSON shape, splits anchored from
+  unanchored, and collects the comment and thread ids for the fix loop. Invoked
+  by audit skills (bugteam, qbug, findbugs) after each pass; not for ad-hoc
+  comments.
 ---
 
 # Post Audit Findings

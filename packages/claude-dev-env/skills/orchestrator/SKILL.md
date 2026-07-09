@@ -1,20 +1,11 @@
 ---
 name: orchestrator
 description: >-
-  Turns the session into the advisor-orchestrator — the user's sole interface,
-  to plan
-  and delegate while workflow-backed agent spawns do the token-heavy
-  execution with the required agent type and model for each work category.
-  Executors do the code editing, verification, script driving, PR
-  descriptions, and searches; the advisor answers blockers with one of three
-  brief signals — a plan, a correction, or a stop. The advisor never edits
-  code or runs tests itself. Caps consultations per task (default 5), reuses
-  warm workflow agents before spawning new ones, and re-asserts the
-  discipline every 20 minutes through the /orchestrator-refresh loop. Adapts
-  Anthropic's coordinator pattern (plan big, execute small) to Claude Code.
-  Triggers: '/orchestrator', 'orchestrator strategy', 'run with an
-  orchestrator', 'executor-advisor mode', 'orchestrator enforcement', 'agent
-  routing', 'orchestrate'.
+  Advisor-orchestrator mode: plan and delegate while spawned agents execute;
+  answer each blocker with a plan, a correction, or a stop. Triggers:
+  '/orchestrator', 'orchestrator strategy', 'run with an orchestrator',
+  'executor-advisor mode', 'orchestrator enforcement', 'agent routing',
+  'orchestrate'.
 ---
 
 # Orchestrator Strategy

@@ -1,12 +1,10 @@
 ---
 name: copilot-review
 description: >-
-  Spawns a background subagent that babysits the GitHub Copilot reviewer on the current
-  PR: each ~6-min tick it fetches the latest copilot-pull-request-reviewer[bot] review,
-  fixes unaddressed findings against HEAD (commit, push, inline replies, thread
-  resolution), re-requests review, and exits on convergence. Triggers:
-  '/copilot-review', 'watch copilot', 'babysit copilot review', 'keep re-requesting
-  copilot'.
+  Spawns a background subagent that babysits the GitHub Copilot reviewer on the
+  current PR: each tick it fixes unaddressed findings against HEAD, re-requests
+  review, and exits on convergence. Triggers: '/copilot-review', 'watch
+  copilot', 'babysit copilot review', 'keep re-requesting copilot'.
 ---
 
 # Copilot Review

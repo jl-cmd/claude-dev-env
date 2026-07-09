@@ -1,6 +1,10 @@
 ---
 name: update
-description: Fast-forwards a local git repository's main branch to a remote's main, after confirming both the local repo path and the source remote through AskUserQuestion. Fetches the chosen remote, checks that the move is a true fast-forward (never a force, never a merge commit), and updates main whether or not main is the checked-out branch. When main is not the checked-out branch, it then offers to switch the checkout to main so the update reaches the files on disk. Use when the user says "/update", "update main", "fast-forward main", "sync main from origin", "pull latest main into <path>", or "bring main up to date". Triggers on "/update", "update main", "fast-forward main", "sync main".
+description: >-
+  Fast-forwards a local repository's main branch to a remote's main after
+  confirming the repo path and source remote through AskUserQuestion. Use when
+  the user says '/update', 'update main', 'fast-forward main', 'sync main from
+  origin', 'pull latest main into <path>', or 'bring main up to date'.
 ---
 
 # update

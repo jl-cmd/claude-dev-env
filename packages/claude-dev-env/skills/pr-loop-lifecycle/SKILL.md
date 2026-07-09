@@ -1,15 +1,11 @@
 ---
 name: pr-loop-lifecycle
 description: >-
-  Opens and closes a PR-loop run: the .claude/** permission grant (with the
-  auto-mode AskUserQuestion escalation when the classifier blocks it),
-  worktree preflight and cwd routing, then the ordered close — conditional
-  TeamDelete for team callers, worktree teardown, working-tree clean, PR
-  description rewrite composed by the lead, the always-run permission
-  revoke, and the caller-parameterized final report. Invoked by PR-loop
-  orchestrators (bugteam, pr-converge, autoconverge, qbug) at run start and
-  run end, including error exits; not for general git cleanup or permission
-  management outside a PR loop.
+  Opens and closes a PR-loop run: the .claude/** permission grant, worktree
+  preflight, and cwd routing at the start; teardown, permission revoke, and
+  final report at the end. Invoked by PR-loop orchestrators (bugteam,
+  pr-converge, autoconverge, qbug); not for general git cleanup outside a PR
+  loop.
 ---
 
 # PR Loop Lifecycle

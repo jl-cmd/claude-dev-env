@@ -1,7 +1,10 @@
 ---
 name: session-log
 description: >-
-  Log a session report by composing a self-contained HTML page and publishing it with the Artifact tool, then track vault context, extract unrecorded decisions, tidy the project's session folder, and output a /rename command. Use when the user says /session-log, journal this session, log this work, session report, or any variation of "summarize/log/record this session". Also triggers on "save session", "capture session", or "document what we did".
+  Logs a session report as an HTML page, tracks vault context, extracts
+  decisions, and outputs a /rename command. Use for /session-log, 'journal this
+  session', 'log this work', 'session report', 'summarize/log/record this
+  session', 'save session', 'capture session', or 'document what we did'.
 ---
 
 # Session Log

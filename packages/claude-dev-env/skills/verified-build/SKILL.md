@@ -1,15 +1,10 @@
 ---
 name: verified-build
 description: >-
-  Runs a code task through the two-phase verified workflow: scoped coder
-  agents write the changes (consulting the tool-less code-advisor when
-  stuck on a decision), then a fresh-context code-verifier agent re-derives
-  and runs every check itself. The verifier's fenced verdict is minted by
-  the verifier_verdict_minter hook and unlocks the verified_commit_gate for
-  git commit/push. Use for feature implementations, refactors, and bug
-  fixes that land behind verification. Triggers: 'verified build', 'run
-  this verified', 'two-phase build', 'build and verify', 'verified
-  implementation'.
+  Two-phase verified workflow: scoped coder agents write the changes, then a
+  fresh-context code-verifier re-runs every check. Use for implementations,
+  refactors, and bug fixes. Triggers: 'verified build', 'run this verified',
+  'two-phase build', 'build and verify', 'verified implementation'.
 ---
 
 # Verified Build

@@ -1,13 +1,11 @@
 ---
 name: autoconverge
 description: >-
-  Drives one draft PR to convergence in a single autonomous workflow run.
-  Each round runs Cursor Bugbot, a code-review pass, and a bug-audit in
-  parallel on the same HEAD, dedups findings, applies every fix in one
-  commit, re-verifies, then clears a Copilot wait-gate and a closing
-  convergence check before marking the PR ready. Use when the user says
-  '/autoconverge', 'autoconverge this PR', 'converge this PR in one run',
-  'run the converge workflow', or 'drive the PR to ready autonomously'.
+  Drives one draft PR to convergence in one autonomous run: parallel Bugbot,
+  code review, and bug audit on one HEAD, all fixes in one commit, then ready.
+  Use when the user says '/autoconverge', 'autoconverge this PR', 'converge this
+  PR in one run', 'run the converge workflow', or 'drive the PR to ready
+  autonomously'.
 ---
 
 # Autoconverge

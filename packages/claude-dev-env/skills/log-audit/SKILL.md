@@ -1,12 +1,10 @@
 ---
 name: log-audit
 description: >-
-  Watches this repo's own logs for patterns worth acting on. Use for /log-audit,
-  "audit the logs", "what keeps failing", or "what's getting slower". Reads the
-  hook block log and the diagnostic extractor pipeline, clusters recurring errors
-  and timing regressions, opens a grouped fix PR or a tracked optimization issue
-  per real finding, and mines the defects Copilot and Bugbot keep catching into
-  skill-edit proposals. Runs as a background agent that resumes after a restart.
+  Watches this repo's own logs for patterns worth acting on: clusters recurring
+  errors and timing regressions, then opens a grouped fix PR or a tracked
+  optimization issue per real finding. Use for /log-audit, 'audit the logs',
+  'what keeps failing', or 'what's getting slower'.
 ---
 
 # log-audit
