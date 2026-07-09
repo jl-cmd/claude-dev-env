@@ -9,5 +9,5 @@ log_info() { echo "[INFO] $*" >&2; }
 log_warn() { echo "[WARN] $*" >&2; }
 
 log_info "This record script no longer ships a hardcoded personal-repo list."
-log_info "Use scripts/fan_out_dispatch.py (count-only logs) or a local private inventory."
+log_info "Use scripts/fan_out_dispatch.py or a local private inventory at run time."
 exit 0

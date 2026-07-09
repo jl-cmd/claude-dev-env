@@ -16,7 +16,12 @@ Recorded while continuing the remediation started in session
 |---|---|---|
 | Test fixtures using real Windows username path `C:/Users/jon/...` | **Scrub** | Replaced with `C:/Users/example/...` across hooks/tests/docs examples. |
 | `docs/records/ai-rules-fleet-rollout/merge-and-sync-all.sh` personal-repo inventory | **Redact** | Removed hardcoded private repo name list; script now exits with a pointer to runtime enumeration. |
-| `scripts/fan_out_dispatch.py` Actions logging | **Redact** | Job log and step summary now use count-only summaries; private target repo names are not printed (issue #948). |
+
+## Deferred follow-ups
+
+| Item | Decision | Notes |
+|---|---|---|
+| `scripts/fan_out_dispatch.py` Actions logging | **Defer** | Job logs and step summary still print private target repo names. Count-only redaction tracked in issue #948 (code-rules gate friction on that file). |
 
 ## Still blocked on owner decision
 

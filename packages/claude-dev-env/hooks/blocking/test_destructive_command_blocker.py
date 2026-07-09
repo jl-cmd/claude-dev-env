@@ -14,14 +14,12 @@ GH_REDIRECT_ACTIVE_ENV_VAR = "CLAUDE_GH_REDIRECT_ACTIVE"
 GH_REDIRECT_ACTIVE_VALUE = "1"
 
 
-
 def _windows_style_system_temporary_root() -> str:
-    return tempfile.gettempdir().replace('/', '\\')
+    return tempfile.gettempdir().replace("/", "\\")
 
 
 def _posix_style_system_temporary_root() -> str:
-    return tempfile.gettempdir().replace('\\', '/')
-
+    return tempfile.gettempdir().replace("\\", "/")
 
 
 def _run_hook(
