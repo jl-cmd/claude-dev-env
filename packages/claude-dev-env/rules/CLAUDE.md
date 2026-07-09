@@ -25,6 +25,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images |
 | `hook-prose-matches-detector.md` | Hook prose descriptions match what the hook actually detects |
 | `long-horizon-autonomy.md` | Autonomous-run behaviors: act on what you have, do not end on a promise, delegate and keep working |
+| `nas-ssh-invocation.md` | Reach the NAS at `192.168.1.100` through the `System32/OpenSSH` binary with `-o BatchMode=yes`; bare `ssh`/`scp`/`sftp` stalls on an interactive password prompt |
 | `no-cross-skill-duplicate-helpers.md` | No duplicating shared helpers across skills; use `_shared/` |
 | `no-historical-clutter.md` | Documentation describes current state only; no historical or transitional language |
 | `no-inline-destructive-literals.md` | No destructive-command literals in Bash tool command strings, even as data |
