@@ -343,8 +343,7 @@ def is_listener_stale(
 
 
 def write_step_summary(text: str) -> None:
-    env_github_step_summary = ENV_GITHUB_STEP_SUMMARY
-    summary_file_path = os.environ.get(env_github_step_summary)
+    summary_file_path = os.environ.get(ENV_GITHUB_STEP_SUMMARY)
     if summary_file_path:
         with open(summary_file_path, "a", encoding="utf-8") as summary_file:
             summary_file.write(text + "\n")
@@ -444,39 +443,33 @@ def build_summary_table(
     all_dispatch_status_by_repo: dict[str, str],
     all_conclusion_by_repo: dict[str, str],
 ) -> str:
-    summary_table_header_row = SUMMARY_TABLE_HEADER_ROW
-    summary_table_separator_row = SUMMARY_TABLE_SEPARATOR_ROW
-    summary_metric_row_template = SUMMARY_METRIC_ROW_TEMPLATE
-    summary_table_row_join = SUMMARY_TABLE_ROW_JOIN
     all_metric_rows = _build_summary_metric_rows(
         all_dispatch_status_by_repo, all_conclusion_by_repo
     )
-    all_table_rows = [summary_table_header_row, summary_table_separator_row]
+    all_table_rows = [SUMMARY_TABLE_HEADER_ROW, SUMMARY_TABLE_SEPARATOR_ROW]
     for each_metric, each_count in all_metric_rows:
         all_table_rows.append(
-            summary_metric_row_template % (each_metric, each_count)
+            SUMMARY_METRIC_ROW_TEMPLATE % (each_metric, each_count)
         )
-    return summary_table_row_join.join(all_table_rows)
+    return SUMMARY_TABLE_ROW_JOIN.join(all_table_rows)
 
 
 def build_stale_section(all_stale_repos: list[str]) -> str:
     if not all_stale_repos:
         return ""
     stale_repo_count = len(all_stale_repos)
-    stale_section_heading = STALE_SECTION_HEADING
     stale_section_body = STALE_SECTION_BODY % (
         stale_repo_count,
         STALE_LISTENER_THRESHOLD_DAYS,
     )
     return (
-        f"\n\n{stale_section_heading}\n\n"
+        f"\n\n{STALE_SECTION_HEADING}\n\n"
         f"{stale_section_body}"
     )
 
 
 def resolve_source_commit_from_environment() -> str:
-    env_source_commit = ENV_SOURCE_COMMIT
-    return os.environ.get(env_source_commit) or UNKNOWN_COMMIT_PLACEHOLDER
+    return os.environ.get(ENV_SOURCE_COMMIT) or UNKNOWN_COMMIT_PLACEHOLDER
 
 
 def _build_dispatch_payload(
@@ -576,13 +569,10 @@ def _poll_dispatched_listeners(
 
 
 def main() -> int:
-    env_jonecho_token = ENV_JONECHO_TOKEN
-    env_jlcmd_token = ENV_JLCMD_TOKEN
-    env_source_sha = ENV_SOURCE_SHA
-    jonecho_token = os.environ.get(env_jonecho_token, "")
-    jlcmd_token = os.environ.get(env_jlcmd_token, "")
+    jonecho_token = os.environ.get(ENV_JONECHO_TOKEN, "")
+    jlcmd_token = os.environ.get(ENV_JLCMD_TOKEN, "")
     source_commit = resolve_source_commit_from_environment()
-    source_sha = os.environ.get(env_source_sha, "")
+    source_sha = os.environ.get(ENV_SOURCE_SHA, "")
     dispatched_at = datetime.now(timezone.utc).isoformat()
     all_dispatch_payload = _build_dispatch_payload(
         source_commit, source_sha, dispatched_at
