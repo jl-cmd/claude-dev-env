@@ -58,6 +58,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `session-tidy` — tidies the session folder
 - `bg-agent` — launches a background agent
 - `task-build` — gathers open tasks
+- `privacy-hygiene` — full-repo personal-data and secret sweep plus remediation guide
 - `update` — updates the dev-env package
 - `gh-paginate` — safe `gh api` pagination patterns
 - `fresh-branch` — creates a clean branch off main

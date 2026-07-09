@@ -14,7 +14,7 @@ Python hook scripts wired into Claude Code's lifecycle via `settings.json`. Each
 | `diagnostic/queries/` | Parameterized SQL queries for inspecting blocked commands |
 | `git-hooks/` | Native git hooks (`pre-commit`, `pre-push`, `post-commit`) installed via the git-hooks path |
 | `git-hooks/git_hooks_constants/` | Shared constants for the git-hook scripts |
-| `hooks_constants/` | Shared constant modules imported by multiple hooks across this tree |
+| `hooks_constants/` | Shared constant modules imported by multiple hooks across this tree (includes `pii_prevention_constants.py` for personal-data and secret scan patterns) |
 | `lifecycle/` | Hooks that run at session or config-change boundaries |
 | `observability/` | PostToolUse hooks that record agent behavior for diagnostics |
 | `session/` | SessionStart and SessionEnd hooks for per-session cleanup |

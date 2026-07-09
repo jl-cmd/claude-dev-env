@@ -27,6 +27,7 @@ _EXPECTED_BASH_ORDER = (
     "blocking/gh_body_arg_blocker.py",
     "blocking/nas_ssh_binary_enforcer.py",
     "blocking/volatile_path_in_post_blocker.py",
+    "blocking/pii_prevention_blocker.py",
     "blocking/conventional_pr_title_gate.py",
     "blocking/reviewer_spawn_gate.py",
     "blocking/block_main_commit.py",

@@ -64,6 +64,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/volatile_path_in_post_blocker.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pii_prevention_blocker.py",
+            "timeout": 20
           }
         ]
       },

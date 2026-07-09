@@ -20,9 +20,12 @@ from pathlib import Path
 
 import pytest
 
-_HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
-if _HOOKS_DIR not in sys.path:
-    sys.path.insert(0, _HOOKS_DIR)
+_BLOCKING_DIR = Path(__file__).resolve().parent
+_HOOKS_ROOT = _BLOCKING_DIR.parent
+if str(_BLOCKING_DIR) not in sys.path:
+    sys.path.insert(0, str(_BLOCKING_DIR))
+if str(_HOOKS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_HOOKS_ROOT))
 
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_HOSTED_HOOK_ENTRIES,
@@ -41,8 +44,6 @@ from pre_tool_use_dispatcher import (  # noqa: E402, I001
     run_hosted_hook,
 )
 
-_BLOCKING_DIR = Path(__file__).resolve().parent
-_HOOKS_ROOT = _BLOCKING_DIR.parent
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
 
 _TEMP_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.txt")
@@ -632,8 +633,8 @@ def test_dispatcher_write_applies_both_groups() -> None:
     assert "blocking/plain_language_blocker.py" in all_write_script_paths, (
         "plain_language_blocker (Group B) must be in Write applicable set"
     )
-    assert len(all_write_entries) == 19, (
-        f"Write tool must apply to all 19 hosted hooks, got {len(all_write_entries)}"
+    assert len(all_write_entries) == 20, (
+        f"Write tool must apply to all 20 hosted hooks, got {len(all_write_entries)}"
     )
 
 
@@ -646,16 +647,16 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     assert "blocking/stale_comment_reference_blocker.py" in all_edit_script_paths, (
         "stale_comment_reference_blocker belongs in the Edit applicable set"
     )
-    assert len(all_edit_entries) == 20, (
-        f"expected 20 Edit entries, got {len(all_edit_entries)}"
+    assert len(all_edit_entries) == 21, (
+        f"expected 21 Edit entries, got {len(all_edit_entries)}"
     )
 
 
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit tool triggers only Group B (8 hooks), not Group A."""
+    """MultiEdit tool triggers only Group B (9 hooks), not Group A."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 8, (
-        f"MultiEdit tool must apply to exactly 8 Group-B hooks, got {len(all_multi_edit_entries)}"
+    assert len(all_multi_edit_entries) == 9, (
+        f"MultiEdit tool must apply to exactly 9 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 
@@ -666,7 +667,7 @@ def test_proceed_after_run_all_validators_removal_allows() -> None:
     it was never a PreToolUse hook and never hosted by the PreToolUse dispatcher.
     A Python Write payload that run_all_validators would have flagged (mypy errors, for
     instance) still produces ALLOW from the PreToolUse dispatcher because the PreToolUse
-    dispatcher covers only its 18 hosted blocking hooks — none of which includes the
+    dispatcher covers only its 21 hosted blocking hooks — none of which includes the
     validators runner.
     """
     python_content_with_type_error = (
