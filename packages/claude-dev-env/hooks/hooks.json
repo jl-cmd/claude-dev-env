@@ -43,7 +43,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/bash_pre_tool_use_dispatcher.py",
-            "timeout": 180
+            "timeout": 400
           }
         ]
       },
@@ -167,7 +167,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/stop_dispatcher.py",
-            "timeout": 60
+            "timeout": 90
           }
         ]
       }

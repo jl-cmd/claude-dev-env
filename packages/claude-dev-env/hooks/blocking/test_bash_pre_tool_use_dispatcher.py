@@ -15,6 +15,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
 _BLOCKING_DIR = Path(__file__).resolve().parent
 if _HOOKS_DIR not in sys.path:
@@ -25,7 +27,9 @@ if _blocking_dir_text not in sys.path:
 
 from bash_pre_tool_use_dispatcher import (  # noqa: E402
     BashDispatcherDecision,
+    _emit_decision,
     aggregate_bash_hook_results,
+    dispatch,
     select_applicable_entries,
 )
 from hooks_constants.bash_pre_tool_use_dispatcher_constants import (  # noqa: E402
@@ -232,3 +236,58 @@ def test_dispatcher_imports_standalone_with_only_blocking_on_the_path() -> None:
     )
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.strip() == "ok"
+
+
+def test_emit_decision_re_emits_silent_deny_fields(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """_emit_decision writes systemMessage, suppressOutput, and additionalContext."""
+    silent_deny = BashDispatcherDecision(
+        decision="deny",
+        reasons=["GH-REDIRECT GATE: duplicate blocked"],
+        all_system_messages=["[gh-gate] blocked redirected gh pr create"],
+        all_additional_context=["see docs/runbook.md"],
+        should_suppress_output=True,
+    )
+    _emit_decision(silent_deny)
+    captured = capsys.readouterr()
+    emitted_payload = json.loads(captured.out.strip())
+    hook_specific = emitted_payload["hookSpecificOutput"]
+    assert hook_specific["permissionDecision"] == "deny"
+    assert "GH-REDIRECT GATE" in hook_specific["permissionDecisionReason"]
+    assert hook_specific["additionalContext"] == "see docs/runbook.md"
+    assert emitted_payload["systemMessage"] == "[gh-gate] blocked redirected gh pr create"
+    assert emitted_payload["suppressOutput"] is True
+
+
+def test_dispatch_emits_deny_immediately_and_skips_later_hooks(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A mid-chain deny emits at once and does not invoke later hosted hooks."""
+    all_call_paths: list[str] = []
+
+    def _fake_run_hook(script_path: str, payload_text: str) -> HostedHookRun:
+        del payload_text
+        all_call_paths.append(script_path)
+        script_name = Path(script_path).name
+        if script_name == "destructive_command_blocker.py":
+            return HostedHookRun(
+                captured_stdout=_decision_json("deny", "blocked early"),
+                did_crash=False,
+            )
+        if script_name == "precommit_code_rules_gate.py":
+            raise AssertionError("later hooks must not run after an early deny")
+        return HostedHookRun(captured_stdout="", did_crash=False)
+
+    monkeypatch.setattr(
+        "bash_pre_tool_use_dispatcher.run_hook_capturing_output",
+        _fake_run_hook,
+    )
+    dispatch(_bash_payload("rm -rf /"), BASH_TOOL_NAME)
+    captured = capsys.readouterr()
+    decision, reason = _decision_from_stdout(captured.out)
+    assert decision == "deny"
+    assert "blocked early" in reason
+    assert any(path.endswith("destructive_command_blocker.py") for path in all_call_paths)
+    assert not any(path.endswith("precommit_code_rules_gate.py") for path in all_call_paths)
