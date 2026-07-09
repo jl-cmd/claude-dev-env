@@ -20,6 +20,7 @@ packages = [
     "log_audit_constants",
     "usage_pause_constants",
     "dev_env_scripts_constants",
+    "advisor_scripts_constants",
 ]
 
 [tool.setuptools.package-dir]
@@ -34,3 +35,4 @@ implement_scripts_constants = "skills/implement/scripts/implement_scripts_consta
 log_audit_constants = "skills/log-audit/scripts/log_audit_constants"
 usage_pause_constants = "skills/usage-pause/scripts/usage_pause_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
+advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"

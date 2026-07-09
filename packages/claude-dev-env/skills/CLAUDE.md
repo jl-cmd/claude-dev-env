@@ -17,7 +17,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 
 ## Shared support code
 
-`_shared/` — support code used by more than one skill. It holds `pr-loop/`, which provides prompt templates and Python helper scripts shared between `bugteam` and `pr-converge`.
+`_shared/` — support code used by more than one skill. It holds `pr-loop/`, which provides prompt templates and Python helper scripts shared across the PR-loop skills, and `advisor/`, which provides the shared warm-advisor protocol used by `team-advisor` and `orchestrator`.
 
 ## Skill groups
 
@@ -26,8 +26,9 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `implement` — structured implementation from an existing plan packet
 - `bdd-protocol` — BDD depth: Example Mapping, scenario quality, outside-in layout
 - `verified-build` — build + test loop that gates on a verifier verdict
-- `orchestrator` — turns the session into the advisor-orchestrator: it spawns executor subagents to do the code edits and test runs, and answers a blocked executor with a plan, correction, or stop
-- `orchestrator-refresh` — sub-skill fired by the `/orchestrator` loop to re-assert the executor-advisor discipline mid-run
+- `orchestrator` — turns the session into the advisor-orchestrator: it spawns executor subagents to do the code edits and test runs; a shared session-advisor answers hard decisions with endorse, correction, plan, or stop
+- `orchestrator-refresh` — sub-skill fired by the `/orchestrator` loop to re-assert the shared-advisor discipline mid-run
+- `team-advisor` — keeps one background agent warm at the strongest model tier the session can reach and consults it for a second opinion before a big decision, at completion, when stuck, or when reconsidering the approach
 
 **PR review and convergence**
 - `autoconverge` — autonomous single-run workflow that drives a PR to ready
