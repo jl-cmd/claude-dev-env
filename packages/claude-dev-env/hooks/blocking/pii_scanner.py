@@ -21,6 +21,7 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES,
     ALL_LICENSE_BASENAME_PREFIXES,
     ALL_PLACEHOLDER_HOME_USERNAMES,
+    ALL_RFC1918_NETWORK_CIDRS,
     ALL_SAFE_EMAIL_DOMAINS,
     ALL_SECRET_PATTERNS,
     ALL_SELF_MODULE_BASENAMES,
@@ -163,13 +164,17 @@ def _is_placeholder_home_username(username: str) -> bool:
 
 
 def _is_private_ipv4_address(address_text: str) -> bool:
+    """Return True only for RFC1918 LAN addresses (not loopback/link-local/etc.)."""
     try:
         parsed_address = ipaddress.ip_address(address_text)
     except ValueError:
         return False
     if parsed_address.version != IPV4_VERSION_NUMBER:
         return False
-    return bool(parsed_address.is_private)
+    for each_cidr in ALL_RFC1918_NETWORK_CIDRS:
+        if parsed_address in ipaddress.ip_network(each_cidr, strict=False):
+            return True
+    return False
 
 
 def _find_emails(text: str) -> list[PiiFinding]:

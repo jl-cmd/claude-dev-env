@@ -115,6 +115,12 @@ MESSAGE_LINE_SEPARATOR: str = "\n"
 MINIMUM_ENV_STYLE_USERNAME_LENGTH: int = 3
 IPV4_VERSION_NUMBER: int = 4
 
+ALL_RFC1918_NETWORK_CIDRS: tuple[str, ...] = (
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+)
+
 CATEGORY_EMAIL: str = "email"
 CATEGORY_HOME_PATH: str = "home-path"
 CATEGORY_PRIVATE_IP: str = "private-ip"

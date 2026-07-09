@@ -63,6 +63,12 @@ def test_flags_private_ip_and_allows_public_ip() -> None:
     assert all_dns_hits == []
 
 
+def test_allows_loopback_unspecified_and_link_local_addresses() -> None:
+    assert scan_text_for_pii("http://127.0.0.1:8080/health") == []
+    assert scan_text_for_pii("Listen on 0.0.0.0:8000") == []
+    assert scan_text_for_pii("peer 169.254.10.20") == []
+
+
 def test_allows_product_nas_private_ip() -> None:
     assert scan_text_for_pii("ssh -p 9222 jon@192.168.1.100 uptime") == []
 
