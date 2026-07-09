@@ -231,7 +231,7 @@ test('isWindowsStorePythonStub flags the Microsoft Store WindowsApps alias paths
         true,
     );
     assert.equal(
-        isWindowsStorePythonStub('C:/Users/jon/AppData/Local/Microsoft/WindowsApps/python.exe'),
+        isWindowsStorePythonStub('C:/Users/example/AppData/Local/Microsoft/WindowsApps/python.exe'),
         true,
     );
 });
@@ -550,14 +550,14 @@ test('commandReferencesManagedHook matches managed scripts written with $HOME, ~
     assert.ok(commandReferencesManagedHook('python $HOME/.claude/hooks/notification/attention_needed_notify.py', managedPaths));
     assert.ok(commandReferencesManagedHook('python ~/.claude/hooks/notification/attention_needed_notify.py', managedPaths));
     assert.ok(commandReferencesManagedHook('python ${HOME}/.claude/hooks/notification/attention_needed_notify.py', managedPaths));
-    assert.ok(commandReferencesManagedHook('py -3 C:/Users/jonlo/.claude/hooks/notification/attention_needed_notify.py', managedPaths));
-    assert.ok(commandReferencesManagedHook('python /Users/jon/.claude/hooks/notification/attention_needed_notify.py', managedPaths));
+    assert.ok(commandReferencesManagedHook('py -3 C:/Users/example/.claude/hooks/notification/attention_needed_notify.py', managedPaths));
+    assert.ok(commandReferencesManagedHook('python /Users/example/.claude/hooks/notification/attention_needed_notify.py', managedPaths));
 });
 
 
 test('commandReferencesManagedHook matches Windows backslash paths', () => {
     const managedPaths = new Set(['blocking/hedging_language_blocker.py']);
-    assert.ok(commandReferencesManagedHook('py -3 C:\\Users\\jonlo\\.claude\\hooks\\blocking\\hedging_language_blocker.py', managedPaths));
+    assert.ok(commandReferencesManagedHook('py -3 C:\\Users\\example\\.claude\\hooks\\blocking\\hedging_language_blocker.py', managedPaths));
 });
 
 
@@ -590,7 +590,7 @@ test('commandReferencesManagedHook matches a managed script followed by a whites
 test('commandReferencesManagedHook matches the rewritten inline validators-runner hook that carries no script tail', () => {
     const managedPaths = new Set(['blocking/code_rules_enforcer.py']);
     const rewrittenInlineCommand =
-        "py -3 -c \"import sys; sys.path.insert(0, r'C:/Users/jonlo/.claude/hooks'); from validators.run_all_validators import main; sys.exit(main())\"";
+        "py -3 -c \"import sys; sys.path.insert(0, r'C:/Users/example/.claude/hooks'); from validators.run_all_validators import main; sys.exit(main())\"";
     assert.ok(commandReferencesManagedHook(rewrittenInlineCommand, managedPaths));
 });
 
@@ -638,7 +638,7 @@ test('mergeHooksIntoSettings is idempotent for the inline -c validators hook acr
         },
     };
     const settings = {};
-    const pluginRootDir = 'C:/Users/jonlo/.claude';
+    const pluginRootDir = 'C:/Users/example/.claude';
 
     mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, 'py -3');
     mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, 'py -3');
@@ -675,8 +675,8 @@ test('mergeHooksIntoSettings preserves user hooks in a managed matcher group acr
         },
     };
 
-    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/jonlo/.claude', 'py -3');
-    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/jonlo/.claude', 'py -3');
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/example/.claude', 'py -3');
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/example/.claude', 'py -3');
 
     const writeEditGroup = settings.hooks.PreToolUse.find(group => group.matcher === 'Write|Edit');
     const userHookSurvivors = writeEditGroup.hooks.filter(hook => hook.command === userHookCommand);
@@ -716,7 +716,7 @@ test('pruneManagedHooksFromSettings removes managed hooks in every home-path and
                     hooks: [
                         { command: 'python $HOME/.claude/hooks/notification/attention_needed_notify.py', timeout: 15 },
                         { command: 'python ${HOME}/.claude/hooks/notification/attention_needed_notify.py', timeout: 15 },
-                        { command: 'py -3 C:\\Users\\jonlo\\.claude\\hooks\\notification\\attention_needed_notify.py', timeout: 15 },
+                        { command: 'py -3 C:\\Users\\example\\.claude\\hooks\\notification\\attention_needed_notify.py', timeout: 15 },
                         { command: userHookCommand, timeout: 5 },
                     ],
                 },
@@ -813,7 +813,7 @@ test('purge set sourced from package hooks.json prunes standalone managed script
                     {
                         matcher: 'Write|Edit',
                         hooks: [
-                            { command: 'py -3 C:\\Users\\jonlo\\.claude\\hooks\\blocking\\code_rules_enforcer.py', timeout: 30 },
+                            { command: 'py -3 C:\\Users\\example\\.claude\\hooks\\blocking\\code_rules_enforcer.py', timeout: 30 },
                             { command: userHookCommand, timeout: 5 },
                         ],
                     },

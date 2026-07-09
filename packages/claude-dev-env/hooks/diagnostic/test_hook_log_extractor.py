@@ -188,7 +188,7 @@ def test_derive_category_handles_windows_backslash_paths() -> None:
 
 
 def test_derive_category_strips_python_launcher_prefix() -> None:
-    script_path = "python3 /home/jon/.claude/hooks/session/code_rules_reminder.py"
+    script_path = "python3 /home/example/.claude/hooks/session/code_rules_reminder.py"
     assert hook_log_extractor.derive_category(script_path) == "session"
 
 
@@ -270,12 +270,12 @@ def test_extract_script_path_from_success_record() -> None:
 
 def test_extract_script_path_from_blocking_record() -> None:
     record_json = _make_blocking_line(
-        command="python3 /home/jon/.claude/hooks/blocking/bar.py",
+        command="python3 /home/example/.claude/hooks/blocking/bar.py",
     )
     parsed = json.loads(record_json)
     assert (
         hook_log_extractor.extract_script_path(parsed["attachment"])
-        == "/home/jon/.claude/hooks/blocking/bar.py"
+        == "/home/example/.claude/hooks/blocking/bar.py"
     )
 
 
