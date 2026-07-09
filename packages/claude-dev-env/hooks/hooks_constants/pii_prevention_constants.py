@@ -31,6 +31,23 @@ ALL_SELF_MODULE_BASENAMES: frozenset[str] = frozenset(
 
 ALL_LICENSE_BASENAME_PREFIXES: tuple[str, ...] = ("LICENSE", "COPYING", "NOTICE")
 
+PYTHON_SOURCE_FILE_SUFFIX: str = ".py"
+CONFTEST_BASENAME: str = "conftest.py"
+TEST_MODULE_BASENAME_PREFIX: str = "test_"
+TEST_MODULE_BASENAME_SUFFIX: str = "_test.py"
+TESTS_PATH_SEGMENT: str = "/tests/"
+TESTS_PATH_PREFIX: str = "tests/"
+SPEC_BASENAME_MARKER: str = ".spec."
+TEST_BASENAME_MARKER: str = ".test."
+ALL_SOURCE_TEST_FILE_SUFFIXES: tuple[str, ...] = (
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+)
 ALL_SAFE_EMAIL_DOMAINS: frozenset[str] = frozenset(
     {
         "example.com",

@@ -87,3 +87,11 @@ def test_path_exemptions_for_tests_license_and_self_modules() -> None:
     assert is_path_exempt_from_pii_scan("hooks/blocking/pii_scanner.py")
     assert is_path_exempt_from_pii_scan("hooks/hooks_constants/pii_prevention_constants.py")
     assert not is_path_exempt_from_pii_scan("src/app/settings.md")
+    assert not is_path_exempt_from_pii_scan("test_notes.md")
+    assert not is_path_exempt_from_pii_scan("test_secrets.env")
+    assert not is_path_exempt_from_pii_scan("")
+
+
+def test_empty_path_still_scans_payload_text() -> None:
+    all_hits = scan_text_for_pii(f"contact {SYNTHETIC_REAL_EMAIL}")
+    assert any(each.category == "email" for each in all_hits)

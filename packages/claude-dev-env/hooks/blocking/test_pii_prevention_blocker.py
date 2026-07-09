@@ -101,6 +101,30 @@ def test_write_to_test_file_is_exempt() -> None:
     assert deny_reason is None
 
 
+def test_write_to_test_prefixed_markdown_is_not_exempt() -> None:
+    deny_reason = evaluate_write_edit_payload(
+        "Write",
+        {
+            "file_path": "test_notes.md",
+            "content": f"Reach me at {SYNTHETIC_REAL_EMAIL}",
+        },
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_write_with_empty_path_still_scans_content() -> None:
+    deny_reason = evaluate_write_edit_payload(
+        "Write",
+        {
+            "file_path": "",
+            "content": f"Reach me at {SYNTHETIC_REAL_EMAIL}",
+        },
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
 def test_gh_post_body_with_secret_is_denied() -> None:
     command = (
         f'gh pr comment 12 --body "auth material {SYNTHETIC_GITHUB_TOKEN}"'

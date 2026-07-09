@@ -24,11 +24,13 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     ALL_SAFE_EMAIL_DOMAINS,
     ALL_SECRET_PATTERNS,
     ALL_SELF_MODULE_BASENAMES,
+    ALL_SOURCE_TEST_FILE_SUFFIXES,
     ANGLE_BRACKET_PLACEHOLDER_PATTERN,
     CATEGORY_EMAIL,
     CATEGORY_HOME_PATH,
     CATEGORY_PRIVATE_IP,
     CATEGORY_SECRET,
+    CONFTEST_BASENAME,
     EMAIL_PATTERN,
     HOME_PATH_PATTERN,
     IPV4_PATTERN,
@@ -36,6 +38,13 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     MAXIMUM_FINDINGS_PER_SCAN,
     MAXIMUM_OFFENDING_PREVIEW_LENGTH,
     MINIMUM_ENV_STYLE_USERNAME_LENGTH,
+    PYTHON_SOURCE_FILE_SUFFIX,
+    SPEC_BASENAME_MARKER,
+    TEST_BASENAME_MARKER,
+    TEST_MODULE_BASENAME_PREFIX,
+    TEST_MODULE_BASENAME_SUFFIX,
+    TESTS_PATH_PREFIX,
+    TESTS_PATH_SEGMENT,
 )
 
 
@@ -57,9 +66,10 @@ class PiiFinding:
 def is_path_exempt_from_pii_scan(file_path: str) -> bool:
     """Return whether *file_path* must never be scanned for PII.
 
-    Exemptions cover test files (synthetic fixtures), this scanner family
-    (pattern source text), and license/copyright notice files that
-    intentionally name legal identity.
+    Exemptions cover Python test modules (synthetic fixtures), this scanner
+    family (pattern source text), and license/copyright notice files that
+    intentionally name legal identity. Empty paths are **not** exempt — callers
+    must still scan payload text when no real path is supplied.
 
     Args:
         file_path: Absolute or relative path of the file under review.
@@ -68,19 +78,26 @@ def is_path_exempt_from_pii_scan(file_path: str) -> bool:
         True when the path is out of scope for PII scanning.
     """
     if not file_path:
-        return True
+        return False
     normalized_path = file_path.replace("\\", "/").lower()
     basename = os.path.basename(file_path)
     basename_lower = basename.lower()
     if basename in ALL_SELF_MODULE_BASENAMES:
         return True
-    if basename_lower.startswith("test_") or basename_lower.endswith("_test.py"):
+    if basename_lower == CONFTEST_BASENAME:
         return True
-    if "/tests/" in normalized_path or normalized_path.startswith("tests/"):
+    if basename_lower.endswith(PYTHON_SOURCE_FILE_SUFFIX) and (
+        basename_lower.startswith(TEST_MODULE_BASENAME_PREFIX)
+        or basename_lower.endswith(TEST_MODULE_BASENAME_SUFFIX)
+    ):
         return True
-    if ".spec." in basename_lower or ".test." in basename_lower:
+    if TESTS_PATH_SEGMENT in normalized_path or normalized_path.startswith(
+        TESTS_PATH_PREFIX
+    ):
         return True
-    if basename_lower == "conftest.py":
+    if basename_lower.endswith(ALL_SOURCE_TEST_FILE_SUFFIXES) and (
+        SPEC_BASENAME_MARKER in basename_lower or TEST_BASENAME_MARKER in basename_lower
+    ):
         return True
     for each_prefix in ALL_LICENSE_BASENAME_PREFIXES:
         if basename.upper().startswith(each_prefix):
