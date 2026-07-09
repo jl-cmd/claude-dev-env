@@ -21,6 +21,7 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES,
     ALL_EXACT_LEGAL_NOTICE_BASENAMES,
     ALL_PLACEHOLDER_HOME_USERNAMES,
+    ALL_REDACTED_PREVIEW_CATEGORIES,
     ALL_RFC1918_NETWORK_CIDRS,
     ALL_SAFE_EMAIL_DOMAINS,
     ALL_SECRET_PATTERNS,
@@ -39,7 +40,12 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     MAXIMUM_FINDINGS_PER_SCAN,
     MAXIMUM_OFFENDING_PREVIEW_LENGTH,
     MINIMUM_ENV_STYLE_USERNAME_LENGTH,
+    MINIMUM_LENGTH_FOR_PARTIAL_REDACTION,
     PYTHON_SOURCE_FILE_SUFFIX,
+    REDACTED_PREVIEW_ELLIPSIS,
+    REDACTED_PREVIEW_PREFIX_LENGTH,
+    REDACTED_PREVIEW_SUFFIX_LENGTH,
+    REDACTED_SHORT_PREVIEW,
     SPEC_BASENAME_MARKER,
     TEST_BASENAME_MARKER,
     TEST_MODULE_BASENAME_PREFIX,
@@ -111,7 +117,23 @@ def is_path_exempt_from_pii_scan(file_path: str) -> bool:
     return False
 
 
-def _build_preview(matched_text: str) -> str:
+def _redact_sensitive_preview(matched_text: str) -> str:
+    """Return a log-safe preview that never re-leaks a secret or email body."""
+    if len(matched_text) < MINIMUM_LENGTH_FOR_PARTIAL_REDACTION:
+        return REDACTED_SHORT_PREVIEW
+    prefix_length = REDACTED_PREVIEW_PREFIX_LENGTH
+    suffix_length = REDACTED_PREVIEW_SUFFIX_LENGTH
+    return (
+        matched_text[:prefix_length]
+        + REDACTED_PREVIEW_ELLIPSIS
+        + matched_text[-suffix_length:]
+    )
+
+
+def _build_preview(matched_text: str, category: str) -> str:
+    """Build a deny-message preview, redacting secret and email matches."""
+    if category in ALL_REDACTED_PREVIEW_CATEGORIES:
+        return _redact_sensitive_preview(matched_text)
     maximum_preview_length = MAXIMUM_OFFENDING_PREVIEW_LENGTH
     if len(matched_text) <= maximum_preview_length:
         return matched_text
@@ -122,7 +144,7 @@ def _finding(category: str, matched_text: str) -> PiiFinding:
     return PiiFinding(
         category=category,
         matched_text=matched_text,
-        preview=_build_preview(matched_text),
+        preview=_build_preview(matched_text, category),
     )
 
 

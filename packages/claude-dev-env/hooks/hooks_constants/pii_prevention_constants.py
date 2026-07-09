@@ -7,6 +7,7 @@ import re
 from hooks_constants.hardcoded_user_path_constants import HARDCODED_USER_PATH_PATTERN
 
 BASH_TOOL_NAME: str = "Bash"
+POWERSHELL_TOOL_NAME: str = "PowerShell"
 WRITE_TOOL_NAME: str = "Write"
 EDIT_TOOL_NAME: str = "Edit"
 MULTI_EDIT_TOOL_NAME: str = "MultiEdit"
@@ -14,6 +15,25 @@ MULTI_EDIT_TOOL_NAME: str = "MultiEdit"
 ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES: frozenset[str] = frozenset(
     {WRITE_TOOL_NAME, EDIT_TOOL_NAME, MULTI_EDIT_TOOL_NAME}
 )
+
+ALL_SHELL_TOOL_NAMES: frozenset[str] = frozenset(
+    {BASH_TOOL_NAME, POWERSHELL_TOOL_NAME}
+)
+
+ALL_GIT_BINARY_BASENAMES: frozenset[str] = frozenset({"git", "git.exe"})
+GIT_COMMIT_SUBCOMMAND: str = "commit"
+ALL_VALUE_TAKING_GIT_OPTIONS: frozenset[str] = frozenset(
+    {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
+)
+GIT_OPTION_WITH_VALUE_STEP: int = 2
+ALL_SHELL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset(
+    {"&&", "||", ";", "|"}
+)
+POWERSHELL_CALL_OPERATOR: str = "&"
+ENVIRONMENT_ASSIGNMENT_PATTERN: re.Pattern[str] = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_]*="
+)
+LINE_CONTINUATION_PATTERN: re.Pattern[str] = re.compile(r"\\\r?\n")
 
 MCP_GITHUB_TOOL_PREFIX: str = "mcp__plugin_github_github__"
 
@@ -78,20 +98,13 @@ ALL_PLACEHOLDER_HOME_USERNAMES: frozenset[str] = frozenset(
         "your-user",
         "your_user",
         "you",
-        "me",
         "name",
         "alice",
         "bob",
         "carol",
         "dave",
-        "runner",
-        "container",
-        "ubuntu",
-        "admin",
-        "default",
         "placeholder",
         "path",
-        "someone",
     }
 )
 
@@ -133,6 +146,15 @@ CATEGORY_EMAIL: str = "email"
 CATEGORY_HOME_PATH: str = "home-path"
 CATEGORY_PRIVATE_IP: str = "private-ip"
 CATEGORY_SECRET: str = "secret"
+
+ALL_REDACTED_PREVIEW_CATEGORIES: frozenset[str] = frozenset(
+    {CATEGORY_EMAIL, CATEGORY_SECRET}
+)
+REDACTED_PREVIEW_PREFIX_LENGTH: int = 4
+REDACTED_PREVIEW_SUFFIX_LENGTH: int = 4
+REDACTED_PREVIEW_ELLIPSIS: str = "…"
+REDACTED_SHORT_PREVIEW: str = "[redacted]"
+MINIMUM_LENGTH_FOR_PARTIAL_REDACTION: int = 9
 
 EMAIL_PATTERN: re.Pattern[str] = re.compile(
     r"(?i)\b([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})\b"
@@ -188,6 +210,12 @@ FINDING_LINE_TEMPLATE: str = "  [{category}] {preview}"
 STAGED_LIST_FAILURE_REASON: str = (
     "BLOCKED [pii_prevention_blocker]: could not list staged files for PII scan "
     "(git diff --cached failed). Refuse commit until the index is readable."
+)
+
+REPOSITORY_ROOT_UNRESOLVED_REASON: str = (
+    "BLOCKED [pii_prevention_blocker]: could not resolve the git repository root "
+    "for a commit command (not a git work tree, git missing, or bad -C path). "
+    "Refuse commit until the repository root is resolvable."
 )
 
 STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE: str = (

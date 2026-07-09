@@ -43,6 +43,7 @@ _EXPECTED_BASH_ORDER = (
 )
 
 _POWERSHELL_APPLICABLE = (
+    "blocking/pii_prevention_blocker.py",
     "blocking/verified_commit_gate.py",
     "blocking/verdict_directory_write_blocker.py",
 )
@@ -62,8 +63,8 @@ def test_every_hook_applies_to_the_bash_tool() -> None:
         assert BASH_TOOL_NAME in each_entry.applicable_tool_names
 
 
-def test_only_the_verified_commit_pair_applies_to_powershell() -> None:
-    """Only the verified-commit gate and verdict-directory blocker run on PowerShell."""
+def test_powershell_applicable_hooks_include_pii_and_verified_commit_pair() -> None:
+    """PowerShell runs the PII gate plus the verified-commit pair."""
     powershell_hooks = tuple(
         each_entry.script_relative_path
         for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES

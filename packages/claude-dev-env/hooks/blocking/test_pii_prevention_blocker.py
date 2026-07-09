@@ -17,8 +17,8 @@ if str(_HOOKS_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOKS_DIR))
 
 from hooks_constants.bash_pre_tool_use_dispatcher_constants import (  # noqa: E402
+    ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
     ALL_BASH_HOSTED_HOOK_ENTRIES,
-    ALL_BASH_ONLY_TOOL_NAMES,
 )
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402
     ALL_HOSTED_HOOK_ENTRIES,
@@ -30,6 +30,7 @@ from pii_prevention_blocker import (  # noqa: E402
     evaluate_bash_command,
     evaluate_staged_commit,
     evaluate_write_edit_payload,
+    is_git_commit_shell_command,
 )
 
 HOOK_PATH = _HOOK_DIR / "pii_prevention_blocker.py"
@@ -63,7 +64,7 @@ def test_write_with_real_email_is_denied() -> None:
     )
     assert deny_reason is not None
     assert "email" in deny_reason
-    assert SYNTHETIC_REAL_EMAIL in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
 
 
 def test_write_with_example_email_is_allowed() -> None:
@@ -177,6 +178,7 @@ def test_gh_post_body_with_secret_is_denied() -> None:
     deny_reason = evaluate_bash_command(command, working_directory=None)
     assert deny_reason is not None
     assert "secret" in deny_reason
+    assert SYNTHETIC_GITHUB_TOKEN not in deny_reason
 
 
 def test_gh_post_clean_body_is_allowed() -> None:
@@ -213,6 +215,7 @@ def test_subprocess_hook_denies_write_with_token() -> None:
     reason = payload_out["hookSpecificOutput"]["permissionDecisionReason"]
     assert decision == "deny"
     assert "secret" in reason
+    assert SYNTHETIC_GITHUB_TOKEN not in reason
 
 
 def test_subprocess_hook_allows_clean_write() -> None:
@@ -365,4 +368,120 @@ def test_dispatcher_roster_hosts_pii_blocker() -> None:
         if each_entry.script_relative_path == "blocking/pii_prevention_blocker.py"
     ]
     assert len(matching_bash_entries) == 1
-    assert matching_bash_entries[0].applicable_tool_names == ALL_BASH_ONLY_TOOL_NAMES
+    assert (
+        matching_bash_entries[0].applicable_tool_names
+        == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+    )
+
+
+def test_is_git_commit_shell_command_covers_windows_and_flag_forms() -> None:
+    assert is_git_commit_shell_command("git commit -m test")
+    assert is_git_commit_shell_command("git.exe commit -m test")
+    assert is_git_commit_shell_command("git --no-verify commit -m test")
+    assert is_git_commit_shell_command("git -c commit.gpgsign=false commit -m x")
+    assert is_git_commit_shell_command('git -C "C:/repo" commit -m x')
+    assert is_git_commit_shell_command(r'& "C:\Program Files\Git\cmd\git.exe" commit -m x')
+    assert not is_git_commit_shell_command("git status")
+    assert not is_git_commit_shell_command("git log --grep commit")
+    assert not is_git_commit_shell_command('echo "please git commit"')
+    assert not is_git_commit_shell_command("gh pr comment 1 --body 'git commit'")
+
+
+def _init_repo_with_staged_email(repository_root: Path) -> None:
+    repository_root.mkdir()
+    subprocess.run(
+        ["git", "init"],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "dev@example.com"],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Fixture Dev"],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    tracked_file = repository_root / "notes.md"
+    tracked_file.write_text(
+        f"owner email {SYNTHETIC_REAL_EMAIL}\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", "notes.md"],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_git_exe_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "git.exe commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
+def test_git_config_flag_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "git -c commit.gpgsign=false commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_git_no_verify_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "git --no-verify commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_repository_root_unresolved_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(blocker_module, "resolve_repository_root", lambda _cwd: None)
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(Path.cwd()),
+    )
+    assert deny_reason is not None
+    assert "repository root" in deny_reason
+
+
+def test_powershell_tool_commit_with_staged_email_is_denied(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate(
+        {
+            "tool_name": "PowerShell",
+            "tool_input": {
+                "command": "git commit -m test",
+                "working_directory": str(repository_root),
+            },
+        }
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason

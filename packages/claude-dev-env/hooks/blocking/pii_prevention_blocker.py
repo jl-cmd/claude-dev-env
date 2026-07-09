@@ -4,8 +4,11 @@
 Surfaces guarded:
 
 - Write / Edit / MultiEdit — new content about to land on disk
-- Bash ``gh`` post subcommands and GitHub MCP post tools — durable bodies
-- Bash ``git commit`` — staged file contents about to become history
+- Bash / PowerShell ``gh`` post subcommands and GitHub MCP post tools — durable
+  bodies
+- Bash / PowerShell ``git commit`` (including ``git.exe`` and flag forms) —
+  staged file contents about to become history. Commit message bodies are out
+  of scope; only staged blob text is scanned.
 
 Detection reuses the pure scanners in ``pii_scanner`` and the post-body
 extraction helpers already used by ``volatile_path_in_post_blocker``.
@@ -14,6 +17,8 @@ extraction helpers already used by ``volatile_path_in_post_blocker``.
 from __future__ import annotations
 
 import json
+import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -31,7 +36,6 @@ from block_main_commit import (  # noqa: E402
 )
 from pii_scanner import PiiFinding, is_path_exempt_from_pii_scan, scan_text_for_pii  # noqa: E402
 from precommit_code_rules_gate import (  # noqa: E402
-    is_git_commit_invocation,
     resolve_repository_root,
 )
 from volatile_path_in_post_blocker import (  # noqa: E402
@@ -42,22 +46,31 @@ from volatile_path_in_post_blocker import (  # noqa: E402
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import edits_for_tool  # noqa: E402
 from hooks_constants.pii_prevention_constants import (  # noqa: E402
+    ALL_GIT_BINARY_BASENAMES,
+    ALL_SHELL_COMMAND_SEPARATOR_TOKENS,
+    ALL_SHELL_TOOL_NAMES,
     ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX,
     ALL_STAGED_FILES_COMMAND,
+    ALL_VALUE_TAKING_GIT_OPTIONS,
     ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    BASH_TOOL_NAME,
     BODY_FILE_ENCODING,
     CORRECTIVE_MESSAGE_FOOTER,
     CORRECTIVE_MESSAGE_HEADER,
     EDIT_TOOL_NAME,
+    ENVIRONMENT_ASSIGNMENT_PATTERN,
     FINDING_LINE_TEMPLATE,
     GIT_COMMAND_TIMEOUT_SECONDS,
+    GIT_COMMIT_SUBCOMMAND,
+    GIT_OPTION_WITH_VALUE_STEP,
     HOOK_SCRIPT_BASENAME,
+    LINE_CONTINUATION_PATTERN,
     MAXIMUM_STAGED_FILE_BYTES,
     MCP_GITHUB_TOOL_PREFIX,
     MESSAGE_LINE_SEPARATOR,
     MULTI_EDIT_TOOL_NAME,
     NULL_BYTE_MARKER,
+    POWERSHELL_CALL_OPERATOR,
+    REPOSITORY_ROOT_UNRESOLVED_REASON,
     STAGED_BLOB_PREFIX,
     STAGED_BLOB_REASON_DECODE_FAILED,
     STAGED_BLOB_REASON_GIT_SHOW_FAILED,
@@ -287,13 +300,105 @@ def evaluate_staged_commit(
     return None
 
 
+def _strip_token_edge_quotes(token_text: str) -> str:
+    return token_text.strip("\"'")
+
+
+def _token_is_git_binary(token_text: str) -> bool:
+    stripped_token = _strip_token_edge_quotes(token_text)
+    final_segment = re.split(r"[\\/]", stripped_token)[-1].lower()
+    return final_segment in ALL_GIT_BINARY_BASENAMES
+
+
+def _following_tokens_invoke_commit(all_following_tokens: list[str]) -> bool:
+    token_index = 0
+    option_with_value_step = GIT_OPTION_WITH_VALUE_STEP
+    while token_index < len(all_following_tokens):
+        each_token = _strip_token_edge_quotes(all_following_tokens[token_index])
+        option_name = each_token
+        has_attached_value = False
+        if each_token.startswith("--") and "=" in each_token:
+            option_name, _, _attached_value = each_token.partition("=")
+            has_attached_value = True
+        if option_name in ALL_VALUE_TAKING_GIT_OPTIONS:
+            if has_attached_value:
+                token_index += 1
+            else:
+                token_index += option_with_value_step
+            continue
+        if each_token.startswith("-"):
+            token_index += 1
+            continue
+        return each_token.lower() == GIT_COMMIT_SUBCOMMAND
+    return False
+
+
+def _split_shell_command_segments(all_tokens: list[str]) -> list[list[str]]:
+    all_segments: list[list[str]] = [[]]
+    shell_separators = ALL_SHELL_COMMAND_SEPARATOR_TOKENS
+    for each_token in all_tokens:
+        if each_token in shell_separators:
+            all_segments.append([])
+            continue
+        all_segments[-1].append(each_token)
+    return all_segments
+
+
+def _tokenize_shell_command(shell_command: str) -> list[str]:
+    collapsed_command = LINE_CONTINUATION_PATTERN.sub("", shell_command)
+    try:
+        return shlex.split(collapsed_command, posix=True)
+    except ValueError:
+        return collapsed_command.split()
+
+
+def is_git_commit_shell_command(shell_command: str) -> bool:
+    """Report whether *shell_command* invokes git commit (token-aware).
+
+    Detects ``git commit``, Windows ``git.exe commit``, path-prefixed binaries,
+    and forms with global flags before the subcommand (``git --no-verify
+    commit``, ``git -c commit.gpgsign=false commit``, ``git -C path commit``).
+    Does not treat prose mentions inside other programs as commits.
+
+    Args:
+        shell_command: Bash or PowerShell tool command string.
+
+    Returns:
+        True when a command segment invokes git with a ``commit`` subcommand.
+    """
+    if not shell_command or not shell_command.strip():
+        return False
+    all_tokens = _tokenize_shell_command(shell_command)
+    if not all_tokens:
+        return False
+    environment_assignment_pattern = ENVIRONMENT_ASSIGNMENT_PATTERN
+    powershell_call_operator = POWERSHELL_CALL_OPERATOR
+    for each_segment in _split_shell_command_segments(all_tokens):
+        token_index = 0
+        while token_index < len(each_segment) and environment_assignment_pattern.match(
+            each_segment[token_index]
+        ):
+            token_index += 1
+        if token_index < len(each_segment) and each_segment[token_index] == (
+            powershell_call_operator
+        ):
+            token_index += 1
+        if token_index >= len(each_segment):
+            continue
+        if not _token_is_git_binary(each_segment[token_index]):
+            continue
+        if _following_tokens_invoke_commit(each_segment[token_index + 1 :]):
+            return True
+    return False
+
+
 def evaluate_bash_command(
     bash_command: str, working_directory: str | None
 ) -> str | None:
-    """Return a deny reason for a Bash gh post or git commit with PII.
+    """Return a deny reason for a shell gh post or git commit with PII.
 
     Args:
-        bash_command: The Bash tool command string.
+        bash_command: The Bash or PowerShell tool command string.
         working_directory: Directory git should run in, or None for process CWD.
 
     Returns:
@@ -309,13 +414,13 @@ def evaluate_bash_command(
     post_deny_reason = evaluate_post_body_texts(all_post_bodies)
     if post_deny_reason is not None:
         return post_deny_reason
-    if not is_git_commit_invocation(bash_command):
+    if not is_git_commit_shell_command(bash_command):
         return None
     command_directory = extract_git_working_directory(bash_command)
     resolved_directory = resolve_directory(command_directory) or working_directory
     repository_root = resolve_repository_root(resolved_directory)
     if repository_root is None:
-        return None
+        return REPOSITORY_ROOT_UNRESOLVED_REASON
     return evaluate_staged_commit(repository_root)
 
 
@@ -336,7 +441,7 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     if tool_name in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
         return evaluate_write_edit_payload(tool_name, all_tool_input)
 
-    if tool_name == BASH_TOOL_NAME:
+    if tool_name in ALL_SHELL_TOOL_NAMES:
         command_value = all_tool_input.get("command", "")
         if not isinstance(command_value, str) or not command_value:
             return None
@@ -346,6 +451,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
             if isinstance(working_directory_value, str)
             else None
         )
+        if working_directory is None:
+            cwd_value = payload_by_key.get("cwd")
+            working_directory = cwd_value if isinstance(cwd_value, str) else None
         return evaluate_bash_command(
             command_value, working_directory=working_directory
         )

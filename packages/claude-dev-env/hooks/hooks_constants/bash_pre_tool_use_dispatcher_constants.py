@@ -58,7 +58,9 @@ ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     BashHostedHookEntry("blocking/gh_body_arg_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/nas_ssh_binary_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/volatile_path_in_post_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/pii_prevention_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
+    BashHostedHookEntry(
+        "blocking/pii_prevention_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+    ),
     BashHostedHookEntry("blocking/conventional_pr_title_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/reviewer_spawn_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/block_main_commit.py", ALL_BASH_ONLY_TOOL_NAMES),

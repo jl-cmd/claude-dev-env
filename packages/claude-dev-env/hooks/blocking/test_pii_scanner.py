@@ -82,6 +82,30 @@ def test_flags_github_token_aws_key_and_pem_header() -> None:
     assert any(each.category == "secret" for each in all_pem_hits)
 
 
+def test_secret_and_email_previews_are_redacted() -> None:
+    all_secret_hits = scan_text_for_pii(f"export TOKEN={SYNTHETIC_GITHUB_TOKEN}")
+    all_email_hits = scan_text_for_pii(f"contact {SYNTHETIC_REAL_EMAIL}")
+    secret_finding = next(
+        each for each in all_secret_hits if each.category == "secret"
+    )
+    email_finding = next(each for each in all_email_hits if each.category == "email")
+    assert secret_finding.matched_text == SYNTHETIC_GITHUB_TOKEN
+    assert SYNTHETIC_GITHUB_TOKEN not in secret_finding.preview
+    assert "…" in secret_finding.preview
+    assert email_finding.matched_text == SYNTHETIC_REAL_EMAIL
+    assert SYNTHETIC_REAL_EMAIL not in email_finding.preview
+    assert "…" in email_finding.preview
+
+
+def test_flags_common_cloud_home_usernames() -> None:
+    all_ubuntu_hits = scan_text_for_pii(r"C:\Users\ubuntu\notes.txt")
+    all_admin_hits = scan_text_for_pii(r"C:\Users\admin\notes.txt")
+    all_runner_hits = scan_text_for_pii("/home/runner/work/repo")
+    assert any(each.category == "home-path" for each in all_ubuntu_hits)
+    assert any(each.category == "home-path" for each in all_admin_hits)
+    assert any(each.category == "home-path" for each in all_runner_hits)
+
+
 def test_clean_prose_returns_no_findings() -> None:
     prose = "Ship the fix. Use user@example.com in docs. Path is C:/Users/<you>/."
     assert scan_text_for_pii(prose) == []
