@@ -197,8 +197,8 @@ Slash commands for common workflows.
 | Skill | Purpose |
 |-------|---------|
 | `pr-review-responder` | Systematic PR review response: fetch comments, checklist, fix, reply, commit |
-| `orchestrator` | Turns the session into the advisor-orchestrator (the user's sole interface): it spawns executor subagents to do all code edits and test runs, and answers a blocked executor with a plan, correction, or stop; caps consultations and reuses warm agents before spawning new ones |
-| `orchestrator-refresh` | Sub-skill fired by the `/orchestrator` loop about every 20 minutes to re-assert the executor-advisor discipline mid-run |
+| `orchestrator` | Turns the session into the advisor-orchestrator (the user's sole interface): it spawns executor subagents to do all code edits and test runs; a shared session-advisor answers hard decisions for the session and every executor with endorse, correction, plan, or stop; reuses warm agents before spawning new ones |
+| `orchestrator-refresh` | Sub-skill fired by the `/orchestrator` loop about every 20 minutes to re-assert the shared-advisor discipline mid-run |
 | `team-advisor` | Keeps one background agent warm at the strongest model tier the session can reach and consults it for a second opinion before a big decision, at completion, when stuck, or when reconsidering the approach; falls back to the CLI chain when a background agent cannot be spawned or resumed |
 | `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |
 | `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
