@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { installAllGitHooks } from './git_hooks_installer.mjs';
 import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
+import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -507,12 +508,15 @@ function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePath
  * pruning every prior managed hook (standalone script or inline validators
  * runner) from each event's existing matcher groups before appending the freshly
  * rewritten copies so repeated merges stay idempotent and a managed hook moved to
- * a new matcher group does not double-run. User-authored hooks are preserved
- * untouched.
+ * a new matcher group does not double-run. User-authored hooks are preserved as
+ * entries, but residual $HOME / ${HOME} / ~/ tokens in every hook and statusLine
+ * command are expanded to absolute home paths so hosts that require referenced
+ * env vars at load time (Grok on Windows) can execute them.
  *
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.
- * @param {string} pluginRootDir Directory ${CLAUDE_PLUGIN_ROOT} resolves to.
+ * @param {string} pluginRootDir Directory ${CLAUDE_PLUGIN_ROOT} resolves to
+ *   (the installer's `~/.claude` root; home is its parent directory).
  * @param {string} pythonCommand Interpreter command that replaces python3.
  * @returns {number} Count of matcher groups merged.
  */
@@ -548,6 +552,7 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
             groupCount++;
         }
     }
+    expandHomeDirectoryTokensInSettings(settings, dirname(pluginRootDir));
     return groupCount;
 }
 
