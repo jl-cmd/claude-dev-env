@@ -415,6 +415,40 @@ test('mergeHooksIntoSettings expands residual $HOME in preserved user hooks', ()
 });
 
 
+test('mergeHooksIntoSettings inserts dollar characters in plugin root and interpreter literally', () => {
+    const pluginRootWithReplaceMetacharacters = 'C:/Users/$&evil$1/.claude';
+    const pythonWithReplaceMetacharacters = 'C:/Users/$&evil$1/Python/python.exe';
+    const hooksConfig = {
+        hooks: {
+            SessionStart: [
+                {
+                    matcher: '',
+                    hooks: [
+                        {
+                            type: 'command',
+                            command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/session_env_cleanup.py',
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+    const settings = {};
+    mergeHooksIntoSettings(
+        settings,
+        hooksConfig,
+        pluginRootWithReplaceMetacharacters,
+        pythonWithReplaceMetacharacters,
+    );
+    const rewrittenCommand = settings.hooks.SessionStart[0].hooks[0].command;
+    assert.equal(
+        rewrittenCommand,
+        'C:/Users/$&evil$1/Python/python.exe C:/Users/$&evil$1/.claude/hooks/session/session_env_cleanup.py',
+    );
+    assert.equal(rewrittenCommand.includes('${CLAUDE_PLUGIN_ROOT}'), false);
+});
+
+
 test('mergeHooksIntoSettings substitutes a quoted absolute interpreter path for the python3 prefix', () => {
     const hooksConfig = {
         hooks: {

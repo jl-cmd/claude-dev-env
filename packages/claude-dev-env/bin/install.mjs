@@ -527,6 +527,7 @@ function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePath
  */
 export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pythonCommand) {
     const managedHookRelativePaths = managedHookScriptRelativePaths(hooksConfig);
+    const pluginRootForward = pluginRootDir.replace(/\\/g, '/');
     if (!settings.hooks) settings.hooks = {};
     let groupCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(hooksConfig.hooks)) {
@@ -535,8 +536,11 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
         for (const sourceGroup of matcherGroups) {
             const rewrittenHooks = sourceGroup.hooks.map(hook => {
                 let command = hook.command;
-                command = command.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootDir.replace(/\\/g, '/'));
-                command = command.replace(/^python3\b/, pythonCommand);
+                command = command.replace(
+                    /\$\{CLAUDE_PLUGIN_ROOT\}/g,
+                    () => pluginRootForward,
+                );
+                command = command.replace(/^python3\b/, () => pythonCommand);
                 return { ...hook, command };
             });
             const existingIndex = settings.hooks[eventType].findIndex(
