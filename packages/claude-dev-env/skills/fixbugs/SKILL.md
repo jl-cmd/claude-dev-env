@@ -1,13 +1,10 @@
 ---
 name: fixbugs
 description: >-
-  Fixes the bugs surfaced by the most recent /findbugs invocation by handing
-  the findings to /agent-prompt, which authors a structured XML prompt and
-  spawns a background sonnet implementer (via /agent-prompt) to apply every fix in one
-  commit on the existing branch. Default scope: all severities. Optional
-  argument filters by severity (e.g. /fixbugs P0, /fixbugs P0+P1).
-  Triggers: '/fixbugs', 'fix all the bugs', 'apply the audit fixes',
-  'implement the findbugs results'.
+  Fixes the bugs from the latest /findbugs run by handing them to /agent-prompt,
+  which spawns a background agent to apply every fix in one commit. An optional
+  argument filters by severity (e.g. /fixbugs P0). Triggers: '/fixbugs', 'fix
+  all the bugs', 'apply the audit fixes', 'apply the findbugs results'.
 ---
 
 # Fixbugs

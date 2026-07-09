@@ -1,14 +1,10 @@
 ---
 name: qbug
 description: >-
-  Required baseline review for every new PR. Runs the /bugteam audit → fix →
-  commit → push cycle via one clean-coder subagent (not a full team), looping
-  until convergence or stuck. Uses the same CODE_RULES gate, A–P category
-  rubric, and per-loop PR review shape as /bugteam — without TeamCreate,
-  teammates, per-loop clean-room, or a loop cap. Invoke /bugteam instead for
-  larger PRs that need per-loop bias isolation or a hard loop cap. Triggers:
-  '/qbug', 'quick bug audit', 'solo bug audit', 'baseline PR review',
-  'bugteam without a team'.
+  Required baseline review for every new PR: runs the /bugteam audit, fix,
+  commit, and push cycle through one clean-coder subagent (not a full team),
+  looping until convergence or stuck. Triggers: '/qbug', 'quick bug audit',
+  'solo bug audit', 'baseline PR review', 'bugteam without a team'.
 ---
 
 # qbug

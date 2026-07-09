@@ -1,12 +1,9 @@
 ---
 name: skill-builder
 description: >-
-  Orchestrates the complete skill-building lifecycle using best-practice-driven
-  development. Routes through type classification, folder scaffolding, skill
-  writing (via skill-writer), self-audit against a 38-point checklist, and
-  iterative refinement from real usage observations. Use when creating new
-  skills, improving existing skills, or optimizing skill descriptions.
-  Triggers: 'build a skill', 'new skill workflow', 'improve this skill',
+  Runs the skill-building lifecycle: type classification, scaffolding, writing
+  through skill-writer, self-audit against a checklist, and refinement from real
+  usage. Triggers: 'build a skill', 'new skill workflow', 'improve this skill',
   'optimize skill description', 'skill development lifecycle'.
 ---
 

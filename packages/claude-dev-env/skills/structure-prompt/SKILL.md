@@ -1,11 +1,10 @@
 ---
 name: structure-prompt
 description: >-
-  Restructure a user-provided prompt: order blocks, replace persona framing with task
-  constraints, enforce per-category dispositions, expand placeholder tokens via the
-  sibling rubric or AskUserQuestion, add file:line citations, mark the canonical
-  sub-bucket, sharpen adversarial-pass phrasing. Triggers: /structure-prompt, "optimize
-  this prompt", "minimally invasive edit" to a prompt artifact, "tighten this prompt".
+  Restructures a user-provided prompt: orders blocks, swaps persona framing for
+  task constraints, expands placeholder tokens, and adds file:line citations.
+  Triggers: /structure-prompt, 'optimize this prompt', 'minimally invasive edit'
+  to a prompt artifact, or 'tighten this prompt'.
 ---
 
 # structure-prompt

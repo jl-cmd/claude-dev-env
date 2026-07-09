@@ -1,11 +1,10 @@
 ---
 name: bdd-protocol
 description: >-
-  On-demand BDD depth aligned with jl-cmd/claude-code-config#82: Example Mapping (Smart &
-  Molak §6.4), scenario quality and anti-patterns (§7.6), solo minimal BDD, outside-in test
-  layout. Use when expanding `<behavior_protocol>` in the system prompt, writing executable
-  specifications, or when the user asks for discovery, "the one where" examples, or BDD
-  scenario quality. Triggers: bdd-protocol, Example Mapping, BDD anti-patterns, §7.6.
+  On-demand BDD depth: Example Mapping, scenario quality and anti-patterns, solo
+  minimal BDD, and outside-in test layout. Use when expanding `<behavior_protocol>`,
+  writing executable specifications, or giving 'the one where' examples.
+  Triggers: bdd-protocol, Example Mapping, BDD anti-patterns, §7.6.
 ---
 @~/.claude/skills/bdd-protocol/references/example-mapping.md
 @~/.claude/skills/bdd-protocol/references/anti-patterns.md

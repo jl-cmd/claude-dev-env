@@ -2,12 +2,9 @@
 name: pr-scope-resolve
 description: >-
   Resolves the audit/fix target for a PR-loop skill: owner, repo, PR number,
-  head ref, base ref, PR URL, and starting head SHA — via
-  pull_request_read(method="get"), a search_pull_requests branch fallback, then a
-  git merge-base upstream-diff fallback, ending in the canonical refusal line
-  when no target exists. Invoked by PR-loop orchestrators (pr-converge,
-  bugteam, qbug, findbugs, fixbugs) as their first step; not for general git
-  questions or branch management.
+  head and base refs, PR URL, and head SHA, with a canonical refusal when no
+  target exists. Invoked by PR-loop orchestrators (pr-converge, bugteam, qbug,
+  findbugs, fixbugs) first; not for general git questions.
 ---
 
 # PR Scope Resolve

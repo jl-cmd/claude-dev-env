@@ -1,14 +1,10 @@
 ---
 name: pr-converge
 description: >-
-  Drives the current PR to convergence by looping Cursor Bugbot, a
-  code-review pass, a second-opinion bug audit, and Copilot — applying
-  TDD fixes, posting inline replies, and re-triggering reviewers each
-  tick until all reviewers are clean on the same HEAD. Use when the user
-  says
-  '/pr-converge', 'drive PR to convergence', 'loop bugbot and bugteam',
-  'babysit bugbot and bugteam', 'until both are clean', or 'converge this
-  PR'.
+  Loops Cursor Bugbot, a code review, a bug audit, and Copilot on the current
+  PR, applying TDD fixes until all are clean on one HEAD. Use when the user says
+  '/pr-converge', 'drive PR to convergence', 'loop bugbot and bugteam', 'babysit
+  bugbot and bugteam', 'until both are clean', or 'converge this PR'.
 ---
 
 # PR Converge

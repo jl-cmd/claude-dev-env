@@ -1,7 +1,11 @@
 ---
 name: pr-consistency-audit
 description: >-
-  Audits a PR for cross-file inconsistencies. Finds wrong argument names, missing required args, references to files or scripts that do not exist, stale feature remnants, docstring-vs-implementation mismatches, placeholder text, cross-file contradictions, parameter naming convention violations, and cross-platform bugs. Use when the user says "audit this PR", "find inconsistencies", "cross-reference docs against scripts", "check for stale references", "PR consistency audit".
+  Audits a PR for cross-file inconsistencies: wrong arguments, missing files or
+  scripts, stale remnants, docstring mismatches, and cross-platform bugs. Use
+  when the user says 'audit this PR', 'find inconsistencies', 'cross-reference
+  docs against scripts', 'check for stale references', or 'PR consistency
+  audit'.
 ---
 
 # PR Consistency Audit

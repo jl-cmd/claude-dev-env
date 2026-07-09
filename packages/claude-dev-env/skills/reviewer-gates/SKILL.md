@@ -1,16 +1,10 @@
 ---
 name: reviewer-gates
 description: >-
-  Runs the availability gates a PR-loop orchestrator checks before engaging an
-  external reviewer: the CLAUDE_REVIEWS_DISABLED opt-out parse (bugbot,
-  bugteam, and copilot tokens via reviews_disabled.py), the once-per-run
-  Copilot premium-quota pre-check (copilot_quota.py with copilot_down
-  semantics), and the Cursor Bugbot trigger/acknowledge/CI-detect flow
-  (check_bugbot_ci.py with the literal `bugbot run` comment). Invoked by
-  PR-loop orchestrators — pr-converge, autoconverge, bugteam, qbug, findbugs,
-  copilot-review, monitor-open-prs — at run start and at each reviewer
-  engagement point. Not a general code-review skill; it decides whether a
-  reviewer runs, never what the reviewer finds.
+  Runs the availability gates a PR-loop orchestrator checks before it starts an
+  external reviewer: the CLAUDE_REVIEWS_DISABLED opt-out, the once-per-run
+  Copilot quota pre-check, and the Cursor Bugbot trigger, acknowledge, and
+  CI-detect flow. Decides whether a reviewer runs, never what it finds.
 ---
 
 # Reviewer Gates

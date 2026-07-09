@@ -2,14 +2,9 @@
 name: pr-fix-protocol
 description: >-
   Applies reviewer findings to a PR as verified fixes and drives unresolved
-  review threads to zero: executor choice (clean-coder spawn or multi-PR
-  teammate with a worktree-path handoff), the shared 13-step fix sequence
-  (TDD, one commit, fast-forward push), an atomic reply-and-resolve per
-  thread, the unresolved-thread sweep hard gate (is_resolved == false is the
-  only filter), and post-push state resets. Invoked by PR-loop orchestrators
-  (pr-converge, autoconverge, bugteam, qbug, copilot-review) whenever a
-  reviewer reports findings or unresolved threads exist; not for ad-hoc "fix
-  this bug" requests outside a PR review loop.
+  review threads to zero. Invoked by PR-loop orchestrators (pr-converge,
+  autoconverge, bugteam, qbug, copilot-review) when a reviewer reports
+  findings; not for ad-hoc 'fix this bug' requests outside a PR loop.
 ---
 
 # PR Fix Protocol
