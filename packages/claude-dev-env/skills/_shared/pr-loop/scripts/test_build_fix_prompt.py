@@ -40,10 +40,33 @@ def test_context_worktree_path_renders_with_forward_slashes(tmp_path: Path) -> N
         loop=1,
         head_ref="feat/branch",
         base_ref="main",
-        worktree_path=Path("C:/Users/jon/AppData/Local/Temp/bugteam-pr-376/worktree"),
+        worktree_path=Path("C:/Users/example/AppData/Local/Temp/bugteam-pr-376/worktree"),
         findings_json_path=findings_json_path,
     )
     context = root.find("context")
     assert context is not None
     worktree_text = context.findtext("worktree_path")
-    assert worktree_text == "C:/Users/jon/AppData/Local/Temp/bugteam-pr-376/worktree"
+    assert worktree_text == "C:/Users/example/AppData/Local/Temp/bugteam-pr-376/worktree"
+
+
+def test_emit_fix_prompt_returns_xml_string_with_worktree_path(tmp_path: Path) -> None:
+    findings_json_path = tmp_path / "findings.json"
+    findings_json_path.write_text(
+        json.dumps([{"severity": "P1", "file": "a.py", "line": 1}]),
+        encoding="utf-8",
+    )
+    worktree_path = Path("C:/Users/example/AppData/Local/Temp/bugteam-pr-376/worktree")
+    xml_text = build_fix_prompt.emit_fix_prompt(
+        owner="jl-cmd",
+        repo="claude-code-config",
+        pr_number=376,
+        loop=1,
+        head_ref="feat/branch",
+        base_ref="main",
+        worktree_path=worktree_path,
+        findings_json_path=findings_json_path,
+    )
+    assert isinstance(xml_text, str)
+    assert "C:/Users/example/AppData/Local/Temp/bugteam-pr-376/worktree" in xml_text
+    assert 'role="fix"' in xml_text
+    assert "<spawn_prompt" in xml_text

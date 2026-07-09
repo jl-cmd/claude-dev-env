@@ -52,7 +52,7 @@ def test_should_flag_windows_user_path_with_forward_slashes() -> None:
 
 
 def test_should_flag_windows_user_path_when_users_segment_is_not_title_case() -> None:
-    source = 'def find() -> str:\n    return "c:/users/jon/notes.md"\n'
+    source = 'def find() -> str:\n    return "c:/users/example/notes.md"\n'
     issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
     assert any("users" in each_issue.lower() for each_issue in issues), (
         f"Expected Windows user path flagged (case-insensitive Users segment), got: {issues}"
@@ -60,7 +60,7 @@ def test_should_flag_windows_user_path_when_users_segment_is_not_title_case() ->
 
 
 def test_should_flag_windows_user_path_with_backslashes() -> None:
-    source = 'def find() -> str:\n    return "C:\\\\Users\\\\jon\\\\notes.md"\n'
+    source = 'def find() -> str:\n    return "C:\\\\Users\\\\example\\\\notes.md"\n'
     issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
     assert any("Users" in each_issue for each_issue in issues), (
         f"Expected Windows backslash user path flagged, got: {issues}"

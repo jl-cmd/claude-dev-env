@@ -68,20 +68,20 @@ def test_context_and_scope_render_paths_with_forward_slashes() -> None:
         loop=1,
         head_ref="feat/branch",
         base_ref="main",
-        worktree_path=Path("C:/Users/jon/AppData/Local/Temp/bugteam-pr-376/worktree"),
-        run_temp_dir=Path("C:/Users/jon/AppData/Local/Temp/bugteam-pr-376"),
+        worktree_path=Path("C:/Users/example/AppData/Local/Temp/bugteam-pr-376/worktree"),
+        run_temp_dir=Path("C:/Users/example/AppData/Local/Temp/bugteam-pr-376"),
     )
     context = root.find("context")
     assert context is not None
     worktree_text = context.findtext("worktree_path")
     run_temp_text = context.findtext("run_temp_dir")
-    assert worktree_text == "C:/Users/jon/AppData/Local/Temp/bugteam-pr-376/worktree"
-    assert run_temp_text == "C:/Users/jon/AppData/Local/Temp/bugteam-pr-376"
+    assert worktree_text == "C:/Users/example/AppData/Local/Temp/bugteam-pr-376/worktree"
+    assert run_temp_text == "C:/Users/example/AppData/Local/Temp/bugteam-pr-376"
     scope = root.find("scope")
     assert scope is not None
     assert scope.text is not None
     assert "\\" not in scope.text
-    assert "C:/Users/jon/AppData/Local/Temp/bugteam-pr-376/worktree" in scope.text
+    assert "C:/Users/example/AppData/Local/Temp/bugteam-pr-376/worktree" in scope.text
 
 
 def test_bug_categories_carry_ids_a_through_q_in_order() -> None:

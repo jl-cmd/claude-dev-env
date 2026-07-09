@@ -336,7 +336,7 @@ def test_is_trust_entry_rejects_cross_project_path_suffix_collision() -> None:
     short_project_path = "/projects/foo"
     trust_prefix = "Trusted local workspace:"
     longer_unrelated_path_entry = (
-        "Trusted local workspace: /Users/jon/projects/foo/.claude/** unrelated path"
+        "Trusted local workspace: /Users/example/projects/foo/.claude/** unrelated path"
     )
     assert (
         common_module.is_trust_entry_for_project(
