@@ -138,7 +138,7 @@ def test_no_false_positive_body_as_title_value() -> None:
 def test_no_false_positive_windows_path_in_body_file() -> None:
     """Unquoted Windows path with backslashes in --body-file must be approved without token corruption."""
     assert not _uses_body_string_arg(
-        r'gh pr create --title "T" --body-file C:\Users\jon\tmp\body.md'
+        r'gh pr create --title "T" --body-file C:\Users\example\tmp\body.md'
     )
 
 
@@ -222,7 +222,7 @@ def test_blocks_body_file_followed_by_body_string() -> None:
 
 
 def test_blocks_windows_path_with_trailing_backslash_continuation() -> None:
-    """C1: prior line ending in `C:\\Users\\jon\\` must still continue lines.
+    """C1: prior line ending in `C:\\Users\\example\\` must still continue lines.
 
     Naive `count("\\\\") % 2 == 1` mis-classifies this (count=4, even -> no
     continuation) and misses --body on the next line. Counting only the
@@ -230,7 +230,7 @@ def test_blocks_windows_path_with_trailing_backslash_continuation() -> None:
     backslash as a continuation marker.
     """
     command = (
-        'gh pr create --title C:\\Users\\jon\\ \\\n'
+        'gh pr create --title C:\\Users\\example\\ \\\n'
         '  --body "real body text"\n'
     )
     assert _uses_body_string_arg(command)

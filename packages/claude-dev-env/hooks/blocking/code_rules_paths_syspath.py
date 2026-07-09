@@ -40,7 +40,7 @@ from hooks_constants.sys_path_insert_constants import (  # noqa: E402
 def check_hardcoded_user_paths(content: str, file_path: str) -> list[str]:
     """Flag string literals naming a specific user's home directory.
 
-    Catches non-portable paths like `C:/Users/jon/...`, `/Users/alice/...`,
+    Catches non-portable paths like `C:/Users/example/...`, `/Users/alice/...`,
     and `/home/bob/...` that surface in production code.
     Test files, config/ files, workflow registry files, migration files,
     and hook infrastructure files are exempt. Hook infrastructure exemption

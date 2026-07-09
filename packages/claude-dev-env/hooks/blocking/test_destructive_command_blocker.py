@@ -14,6 +14,14 @@ GH_REDIRECT_ACTIVE_ENV_VAR = "CLAUDE_GH_REDIRECT_ACTIVE"
 GH_REDIRECT_ACTIVE_VALUE = "1"
 
 
+def _windows_style_system_temporary_root() -> str:
+    return tempfile.gettempdir().replace("/", "\\")
+
+
+def _posix_style_system_temporary_root() -> str:
+    return tempfile.gettempdir().replace("\\", "/")
+
+
 def _run_hook(
     payload: dict,
     gh_redirect_active: bool = True,
@@ -298,7 +306,8 @@ def test_rm_rf_allowed_when_leading_cd_into_ephemeral_subdirectory_unquoted() ->
 
 def test_rm_rf_allowed_when_leading_cd_into_windows_temp_worktree_subdirectory() -> None:
     windows_style_temp_worktree = (
-        r"C:\Users\jon\AppData\Local\Temp\bugteam-pr-58-20260424071040\pr-58\worktree"
+        _windows_style_system_temporary_root()
+        + r"\bugteam-pr-58-20260424071040\pr-58\worktree"
     )
     payload = _make_bash_payload(
         f'cd "{windows_style_temp_worktree}" && rm -rf .bugteam-tmp'
@@ -563,7 +572,9 @@ def test_rm_rf_asks_when_leading_cd_target_is_relative_path() -> None:
 
 def test_rm_rf_allowed_for_chat_observed_bugteam_backslash_worktree_scratch_cleanup() -> None:
     payload = _make_bash_payload(
-        r'cd "C:\Users\jon\AppData\Local\Temp\bugteam-pr-58-20260424071040\pr-58\worktree" && rm -rf .bugteam-tmp'
+        'cd "'
+        + _windows_style_system_temporary_root()
+        + r'\bugteam-pr-58-20260424071040\pr-58\worktree" && rm -rf .bugteam-tmp'
     )
 
     result = _run_rm_hook(payload)
@@ -574,7 +585,9 @@ def test_rm_rf_allowed_for_chat_observed_bugteam_backslash_worktree_scratch_clea
 
 def test_rm_rf_allowed_for_chat_observed_bugteam_forward_slash_worktree_scratch_cleanup() -> None:
     payload = _make_bash_payload(
-        'cd "C:/Users/jon/AppData/Local/Temp/bugteam-pr-58-20260424071040/pr-58/worktree" && rm -rf .bugteam-tmp'
+        'cd "'
+        + _posix_style_system_temporary_root()
+        + '/bugteam-pr-58-20260424071040/pr-58/worktree" && rm -rf .bugteam-tmp'
     )
 
     result = _run_rm_hook(payload)
@@ -585,7 +598,9 @@ def test_rm_rf_allowed_for_chat_observed_bugteam_forward_slash_worktree_scratch_
 
 def test_rm_rf_allowed_for_chat_observed_bugfix_reply_scratch_file_cleanup() -> None:
     payload = _make_bash_payload(
-        'cd "C:/Users/jon/AppData/Local/Temp/bugteam-pr-58-20260424071040/pr-58/worktree" && rm -rf tmp_reply_loop1-1.md'
+        'cd "'
+        + _posix_style_system_temporary_root()
+        + '/bugteam-pr-58-20260424071040/pr-58/worktree" && rm -rf tmp_reply_loop1-1.md'
     )
 
     result = _run_rm_hook(payload)
@@ -596,7 +611,9 @@ def test_rm_rf_allowed_for_chat_observed_bugfix_reply_scratch_file_cleanup() -> 
 
 def test_rm_rf_allowed_for_chat_observed_bugfind_multiple_scratch_files_cleanup() -> None:
     payload = _make_bash_payload(
-        'cd "C:/Users/jon/AppData/Local/Temp/bugteam-pr-58-20260424071040/pr-256/worktree" && rm -rf tmp_review_body.md tmp_finding_1.md'
+        'cd "'
+        + _posix_style_system_temporary_root()
+        + '/bugteam-pr-58-20260424071040/pr-256/worktree" && rm -rf tmp_review_body.md tmp_finding_1.md'
     )
 
     result = _run_rm_hook(payload)
@@ -610,7 +627,8 @@ def test_rm_rf_allowed_via_tool_input_cwd_pointing_at_chat_observed_bugteam_work
         "tool_name": "Bash",
         "tool_input": {
             "command": "rm -rf .bugteam-tmp",
-            "cwd": "C:/Users/jon/AppData/Local/Temp/bugteam-pr-58-20260424071040/pr-58/worktree",
+            "cwd": _posix_style_system_temporary_root()
+            + "/bugteam-pr-58-20260424071040/pr-58/worktree",
         },
     }
 
@@ -622,7 +640,9 @@ def test_rm_rf_allowed_via_tool_input_cwd_pointing_at_chat_observed_bugteam_work
 
 def test_rm_rf_allowed_for_chat_observed_absolute_path_in_bugteam_windows_worktree_scratch() -> None:
     payload = _make_bash_payload(
-        'rm -rf "C:/Users/jon/AppData/Local/Temp/bugteam-pr-58-20260424071040/pr-58/worktree/.bugteam-tmp"'
+        'rm -rf "'
+        + _posix_style_system_temporary_root()
+        + '/bugteam-pr-58-20260424071040/pr-58/worktree/.bugteam-tmp"'
     )
 
     result = _run_rm_hook(payload)
@@ -839,7 +859,7 @@ def test_rm_rf_allowed_when_unquoted_windows_backslash_target_contains_worktrees
 
 def test_rm_rf_allowed_when_finding_example_windows_backslash_ephemeral_target() -> None:
     payload = _make_bash_payload(
-        r"rm -rf C:\Users\jon\AppData\Local\Temp\scratch"
+        "rm -rf " + _windows_style_system_temporary_root() + r"\scratch"
     )
 
     result = _run_rm_hook(payload)

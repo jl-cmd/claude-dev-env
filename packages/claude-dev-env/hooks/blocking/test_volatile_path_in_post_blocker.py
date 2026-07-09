@@ -31,7 +31,7 @@ def _body_names_volatile_path(tool_name: str, tool_input: dict[str, object]) -> 
 
 
 def test_scan_detects_job_scratch_path_backslash() -> None:
-    text = r"See C:\Users\jon\.claude-editor\jobs\95762cea\tmp\staging\contact_sheet.png"
+    text = r"See C:\Users\example\.claude-editor\jobs\95762cea\tmp\staging\contact_sheet.png"
     assert scan_text_for_volatile_marker(text) == ".claude-editor/jobs/"
 
 
@@ -46,7 +46,7 @@ def test_scan_detects_worktree_path() -> None:
 
 
 def test_scan_detects_appdata_temp_case_insensitive() -> None:
-    text = r"C:\Users\jon\AppData\Local\Temp\bugteam\worktree"
+    text = r"C:\Users\example\AppData\Local\Temp\bugteam\worktree"
     assert scan_text_for_volatile_marker(text) == "appdata/local/temp"
 
 
@@ -74,7 +74,7 @@ def test_scan_clean_body_returns_none() -> None:
 def test_gh_comment_with_job_scratch_path_is_blocked() -> None:
     command = (
         'gh pr comment 669 --body "Contact sheet at '
-        r'C:\Users\jon\.claude-editor\jobs\95762cea\tmp\staging\contact_sheet.png"'
+        r'C:\Users\example\.claude-editor\jobs\95762cea\tmp\staging\contact_sheet.png"'
     )
     assert _body_names_volatile_path("Bash", {"command": command})
 

@@ -1,6 +1,6 @@
 """Tests for hardcoded user path detection.
 
-Bot reviewers on PR #257 flagged 6+ instances of 'C:/Users/jon/' embedded
+Bot reviewers on PR #257 flagged 6+ instances of 'C:/Users/example/' embedded
 in production source code, which breaks portability across machines.
 The new rule flags any string literal in production code that names a
 specific user's home directory.
@@ -35,18 +35,18 @@ HOOK_INFRASTRUCTURE_FILE_PATH = "/repo/packages/claude-dev-env/hooks/blocking/co
 
 
 def test_should_match_user_directory_without_consuming_following_separator() -> None:
-    windows = HARDCODED_USER_PATH_PATTERN.search("C:/Users/jon/more")
+    windows = HARDCODED_USER_PATH_PATTERN.search("C:/Users/example/more")
     macos = HARDCODED_USER_PATH_PATTERN.search("/Users/bob/more")
     linux = HARDCODED_USER_PATH_PATTERN.search("/home/alice/more")
-    assert windows is not None and windows.group(0) == "C:/Users/jon"
+    assert windows is not None and windows.group(0) == "C:/Users/example"
     assert macos is not None and macos.group(0) == "/Users/bob"
     assert linux is not None and linux.group(0) == "/home/alice"
 
 
 def test_should_flag_windows_user_path_with_forward_slashes() -> None:
-    source = 'def find() -> str:\n    return "C:/Users/jon/notes.md"\n'
+    source = 'def find() -> str:\n    return "C:/Users/example/notes.md"\n'
     issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
-    assert any("C:/Users/jon" in each_issue for each_issue in issues), (
+    assert any("C:/Users/example" in each_issue for each_issue in issues), (
         f"Expected Windows user path flagged, got: {issues}"
     )
 
@@ -106,7 +106,7 @@ def test_should_not_flag_users_directory_without_specific_user() -> None:
 
 
 def test_should_skip_test_files() -> None:
-    source = 'def test_path() -> None:\n    fixture = "C:/Users/jon/scratch.txt"\n'
+    source = 'def test_path() -> None:\n    fixture = "C:/Users/example/scratch.txt"\n'
     issues = check_hardcoded_user_paths(source, TEST_FILE_PATH)
     assert issues == [], (
         f"Test files exempt — fixtures often need real paths, got: {issues}"
@@ -114,7 +114,7 @@ def test_should_skip_test_files() -> None:
 
 
 def test_should_skip_config_files() -> None:
-    source = 'DEFAULT_PATH = "C:/Users/jon/notes.md"\n'
+    source = 'DEFAULT_PATH = "C:/Users/example/notes.md"\n'
     issues = check_hardcoded_user_paths(source, CONFIG_FILE_PATH)
     assert issues == [], (
         f"Config files exempt — that is the right place for paths, got: {issues}"
@@ -122,7 +122,7 @@ def test_should_skip_config_files() -> None:
 
 
 def test_should_include_line_number_in_issue() -> None:
-    source = '\n\ndef find() -> str:\n    return "C:/Users/jon/notes.md"\n'
+    source = '\n\ndef find() -> str:\n    return "C:/Users/example/notes.md"\n'
     issues = check_hardcoded_user_paths(source, PRODUCTION_FILE_PATH)
     assert any("Line 4" in each_issue for each_issue in issues), (
         f"Expected line 4 reference, got: {issues}"
@@ -165,7 +165,7 @@ def test_should_skip_hook_infrastructure_files() -> None:
     source = (
         'HARDCODED_USER_PATH_PATTERN = "/Users/[^/]+|/home/[^/]+"\n'
         'def find() -> str:\n'
-        '    return "C:/Users/jon/notes.md"\n'
+        '    return "C:/Users/example/notes.md"\n'
     )
     issues = check_hardcoded_user_paths(source, HOOK_INFRASTRUCTURE_FILE_PATH)
     assert issues == [], (
