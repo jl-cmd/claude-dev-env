@@ -18,18 +18,6 @@ ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES: frozenset[str] = frozenset(
 MCP_GITHUB_TOOL_PREFIX: str = "mcp__plugin_github_github__"
 
 HOOK_SCRIPT_BASENAME: str = "pii_prevention_blocker.py"
-SCANNER_MODULE_BASENAME: str = "pii_scanner.py"
-CONSTANTS_MODULE_BASENAME: str = "pii_prevention_constants.py"
-
-ALL_SELF_MODULE_BASENAMES: frozenset[str] = frozenset(
-    {
-        HOOK_SCRIPT_BASENAME,
-        SCANNER_MODULE_BASENAME,
-        CONSTANTS_MODULE_BASENAME,
-    }
-)
-
-ALL_LICENSE_BASENAME_PREFIXES: tuple[str, ...] = ("LICENSE", "COPYING", "NOTICE")
 
 ALL_EXACT_LEGAL_NOTICE_BASENAMES: frozenset[str] = frozenset(
     {
