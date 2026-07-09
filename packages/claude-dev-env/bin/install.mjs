@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { installAllGitHooks } from './git_hooks_installer.mjs';
 import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
+import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -503,81 +504,19 @@ function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePath
 }
 
 /**
- * Expands $HOME, ${HOME}, and ~/ in a command string to an absolute home directory
- * using forward slashes. Hosts that require referenced env vars at hook load time
- * (for example Grok) skip the hook when HOME is unset — common on Windows — so
- * install-time expansion removes the token from settings.json commands.
- *
- * @param {string} commandString Hook or statusLine command text.
- * @param {string} homeDirectory Absolute home directory (any path separators).
- * @returns {string} Command with home tokens expanded.
- */
-export function expandHomeDirectoryTokens(commandString, homeDirectory) {
-    const normalizedHome = homeDirectory.replace(/\\/g, '/').replace(/\/+$/, '');
-    let expandedCommand = commandString;
-    expandedCommand = expandedCommand.replaceAll('${HOME}', normalizedHome);
-    expandedCommand = expandedCommand.replace(/(?<![A-Za-z0-9_])\$HOME\b/g, normalizedHome);
-    expandedCommand = expandedCommand.replace(/(^|[\s"'=])~\//g, `$1${normalizedHome}/`);
-    return expandedCommand;
-}
-
-/**
- * Expands home-directory tokens in every settings.json hook command and in the
- * optional statusLine command so residual $HOME entries from older installs
- * become absolute paths and no longer require HOME at hook load time.
- *
- * @param {object} settings The parsed settings.json object (mutated in place).
- * @param {string} homeDirectory Absolute home directory (any path separators).
- * @returns {void}
- */
-export function expandHomeDirectoryTokensInSettings(settings, homeDirectory) {
-    if (settings.hooks) {
-        for (const matcherGroups of Object.values(settings.hooks)) {
-            for (const eachGroup of matcherGroups) {
-                if (!eachGroup.hooks) continue;
-                for (const eachHook of eachGroup.hooks) {
-                    if (typeof eachHook.command === 'string') {
-                        eachHook.command = expandHomeDirectoryTokens(
-                            eachHook.command,
-                            homeDirectory,
-                        );
-                    }
-                }
-            }
-        }
-    }
-    if (settings.statusLine && typeof settings.statusLine.command === 'string') {
-        settings.statusLine.command = expandHomeDirectoryTokens(
-            settings.statusLine.command,
-            homeDirectory,
-        );
-    }
-}
-
-/**
- * Derives the user home directory from the installer's plugin root (always
- * `<home>/.claude`), independent of path separators.
- *
- * @param {string} pluginRootDir Directory ${CLAUDE_PLUGIN_ROOT} resolves to.
- * @returns {string} Absolute home directory.
- */
-export function homeDirectoryFromPluginRoot(pluginRootDir) {
-    return dirname(pluginRootDir);
-}
-
-/**
  * Merges the installer's managed hook groups into a settings object in memory,
  * pruning every prior managed hook (standalone script or inline validators
  * runner) from each event's existing matcher groups before appending the freshly
  * rewritten copies so repeated merges stay idempotent and a managed hook moved to
- * a new matcher group does not double-run. User-authored hooks are preserved
- * untouched. After the merge, every residual $HOME / ${HOME} / ~/ token in hook
- * and statusLine commands is expanded to an absolute home path so hosts that
- * require referenced env vars at load time (Grok on Windows) can execute them.
+ * a new matcher group does not double-run. User-authored hooks are preserved as
+ * entries, but residual $HOME / ${HOME} / ~/ tokens in every hook and statusLine
+ * command are expanded to absolute home paths so hosts that require referenced
+ * env vars at load time (Grok on Windows) can execute them.
  *
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.
- * @param {string} pluginRootDir Directory ${CLAUDE_PLUGIN_ROOT} resolves to.
+ * @param {string} pluginRootDir Directory ${CLAUDE_PLUGIN_ROOT} resolves to
+ *   (the installer's `~/.claude` root; home is its parent directory).
  * @param {string} pythonCommand Interpreter command that replaces python3.
  * @returns {number} Count of matcher groups merged.
  */
@@ -613,7 +552,7 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
             groupCount++;
         }
     }
-    expandHomeDirectoryTokensInSettings(settings, homeDirectoryFromPluginRoot(pluginRootDir));
+    expandHomeDirectoryTokensInSettings(settings, dirname(pluginRootDir));
     return groupCount;
 }
 

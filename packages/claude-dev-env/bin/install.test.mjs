@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -18,12 +18,13 @@ import {
     managedHookScriptRelativePaths,
     managedHookScriptRelativePathsFromSourceRoots,
     commandReferencesManagedHook,
-    expandHomeDirectoryTokens,
-    expandHomeDirectoryTokensInSettings,
-    homeDirectoryFromPluginRoot,
     mergeHooksIntoSettings,
     pruneManagedHooksFromSettings,
 } from './install.mjs';
+import {
+    expandHomeDirectoryTokens,
+    expandHomeDirectoryTokensInSettings,
+} from './expand_home_directory_tokens.mjs';
 
 
 function createTemporaryGitRepository() {
@@ -262,12 +263,6 @@ test('expandHomeDirectoryTokens expands $HOME, ${HOME}, and ~/', () => {
         expandHomeDirectoryTokens('echo $HOMEPATH', 'C:/Users/x'),
         'echo $HOMEPATH',
     );
-});
-
-
-test('homeDirectoryFromPluginRoot strips the .claude leaf', () => {
-    assert.equal(homeDirectoryFromPluginRoot('C:/Users/x/.claude'), dirname('C:/Users/x/.claude'));
-    assert.equal(homeDirectoryFromPluginRoot('/home/x/.claude'), '/home/x');
 });
 
 
