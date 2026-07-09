@@ -7,6 +7,7 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 | File | Purpose |
 |---|---|
 | `install.mjs` | Main installer: discovers install groups, copies content directories (`rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`), merges hooks into `settings.json`, installs skills, runs `git_hooks_installer.mjs` and `install_mypy_ini.mjs` |
+| `expand_home_directory_tokens.mjs` | Expands residual `$HOME` / `${HOME}` / `~/` tokens in settings.json hook and statusLine commands to absolute home paths at install time (literal-safe for homes that contain `$`) |
 | `git_hooks_installer.mjs` | Installs or updates the `pre-commit`, `pre-push`, and `post-commit` Git hooks in the user's git config; writes hook scripts that delegate to the installed Python hooks |
 | `install_mypy_ini.mjs` | Writes `~/.mypy.ini` with settings that make mypy find the hooks package and enforce strict type checking |
 | `install.test.mjs` | Tests for `install.mjs` — covers conflict detection, interpreter detection, settings merging |
