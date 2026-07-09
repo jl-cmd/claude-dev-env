@@ -30,8 +30,8 @@ from blocking._gh_body_arg_utils import (  # noqa: E402
     strip_surrounding_quotes,
 )
 from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
-    GH_PR_COMMAND_MIN_TOKEN_COUNT,
     ALL_PR_NUMBER_BEARING_GH_PR_SUBCOMMANDS,
+    GH_PR_COMMAND_MIN_TOKEN_COUNT,
 )
 
 
