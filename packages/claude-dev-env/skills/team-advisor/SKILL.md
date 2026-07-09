@@ -1,7 +1,7 @@
 ---
 name: team-advisor
 description: >-
-  Turns the session into the advisor-orchestrator — the user's sole interface,[SCRUBBED]
+  Turns the session into the advisor-orchestrator — the user's sole interface,
   to plan
   and delegate while workflow-backed agent spawns do the token-heavy
   execution with the required agent type and model for each work category.
