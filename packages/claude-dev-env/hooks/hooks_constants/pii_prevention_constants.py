@@ -70,7 +70,6 @@ ALL_PLACEHOLDER_HOME_USERNAMES: frozenset[str] = frozenset(
     }
 )
 
-# Product residual: NAS host documented in nas-ssh-invocation rule/hook.
 ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES: frozenset[str] = frozenset(
     {
         "192.168.1.100",
