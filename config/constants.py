@@ -38,6 +38,15 @@ ACTIONS_RATE_LIMITED = (
 ACTIONS_DISPATCH_HTTP_FAILED = (
     "::warning::Dispatch to a target repo failed with HTTP %s"
 )
+ACTIONS_ENUMERATION_NETWORK_ERROR = (
+    "::error::Network error during enumeration; aborting run"
+)
+ACTIONS_ENUMERATION_HTTP_FAILED = (
+    "::error::Enumeration failed with HTTP %s"
+)
+ACTIONS_ENUMERATION_RETURNED_COUNT = (
+    "::notice::Enumeration returned %s repositories"
+)
 ACTIONS_DRIFT_COUNT = (
     "::error::Drift detected or sync failed in %s target repo(s)"
 )

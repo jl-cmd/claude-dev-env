@@ -33,6 +33,9 @@ from config.constants import (
     ACTIONS_DISPATCH_FAILED,
     ACTIONS_DISPATCH_HTTP_FAILED,
     ACTIONS_DRIFT_COUNT,
+    ACTIONS_ENUMERATION_HTTP_FAILED,
+    ACTIONS_ENUMERATION_NETWORK_ERROR,
+    ACTIONS_ENUMERATION_RETURNED_COUNT,
     ACTIONS_EXCLUDED_REPO_COUNT,
     ACTIONS_MALFORMED_REPO_ENTRY,
     ACTIONS_NO_TOKEN_FOR_OWNER,
@@ -176,26 +179,17 @@ def enumerate_installation_repos(token: str) -> list[dict[str, object]]:
         )
         status_code, response_body, _ = make_github_api_request(path, token)
         if status_code == NETWORK_ERROR_STATUS_CODE:
-            print(
-                "::error::Network error during enumeration; aborting run",
-                file=sys.stderr,
-            )
+            dispatch_logger.error(ACTIONS_ENUMERATION_NETWORK_ERROR)
             break
         if status_code != HTTP_STATUS_OK or response_body is None:
-            print(
-                f"::error::Enumeration failed with HTTP {status_code}",
-                file=sys.stderr,
-            )
+            dispatch_logger.error(ACTIONS_ENUMERATION_HTTP_FAILED, status_code)
             break
         page_repos = response_body.get("repositories", [])
         all_repos.extend(page_repos)
         if len(page_repos) < REPOS_PER_PAGE:
             break
         page_number += 1
-    print(
-        f"::notice::Enumeration returned {len(all_repos)} repositories",
-        file=sys.stderr,
-    )
+    dispatch_logger.info(ACTIONS_ENUMERATION_RETURNED_COUNT, len(all_repos))
     return all_repos
 
 

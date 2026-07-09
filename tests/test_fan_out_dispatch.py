@@ -502,3 +502,89 @@ class TestMalformedRepoEntriesAreReported:
 
         assert malformed_warnings
         assert malformed_warnings[0].args[1] == 1
+
+
+class TestEnumerationLoggingRoutesThroughDispatchLogger:
+    """enumerate_installation_repos must log via dispatch_logger, not print()."""
+
+    def should_log_repository_count_through_the_dispatch_logger(self) -> None:
+        one_repo_page = {"repositories": [make_repo_fixture("JonEcho/one")]}
+        with patch.object(
+            fan_out_dispatch,
+            "make_github_api_request",
+            return_value=(fan_out_dispatch.HTTP_STATUS_OK, one_repo_page, None),
+        ):
+            with patch.object(
+                fan_out_dispatch.dispatch_logger, "info"
+            ) as mock_info:
+                all_repos = fan_out_dispatch.enumerate_installation_repos(
+                    FAKE_TOKEN
+                )
+
+        assert len(all_repos) == 1
+        count_logs = [
+            each_call
+            for each_call in mock_info.call_args_list
+            if each_call.args
+            and each_call.args[0]
+            == fan_out_dispatch.ACTIONS_ENUMERATION_RETURNED_COUNT
+        ]
+        assert count_logs
+        assert count_logs[0].args[1] == 1
+
+    def should_log_http_failure_through_the_dispatch_logger(self) -> None:
+        with patch.object(
+            fan_out_dispatch,
+            "make_github_api_request",
+            return_value=(fan_out_dispatch.HTTP_STATUS_FORBIDDEN, None, None),
+        ):
+            with patch.object(
+                fan_out_dispatch.dispatch_logger, "error"
+            ) as mock_error:
+                all_repos = fan_out_dispatch.enumerate_installation_repos(
+                    FAKE_TOKEN
+                )
+
+        assert all_repos == []
+        http_failure_logs = [
+            each_call
+            for each_call in mock_error.call_args_list
+            if each_call.args
+            and each_call.args[0]
+            == fan_out_dispatch.ACTIONS_ENUMERATION_HTTP_FAILED
+        ]
+        assert http_failure_logs
+        assert (
+            http_failure_logs[0].args[1] == fan_out_dispatch.HTTP_STATUS_FORBIDDEN
+        )
+
+    def should_log_network_error_through_the_dispatch_logger(self) -> None:
+        with patch.object(
+            fan_out_dispatch,
+            "make_github_api_request",
+            return_value=(fan_out_dispatch.NETWORK_ERROR_STATUS_CODE, None, None),
+        ):
+            with patch.object(
+                fan_out_dispatch.dispatch_logger, "error"
+            ) as mock_error:
+                all_repos = fan_out_dispatch.enumerate_installation_repos(
+                    FAKE_TOKEN
+                )
+
+        assert all_repos == []
+        network_error_logs = [
+            each_call
+            for each_call in mock_error.call_args_list
+            if each_call.args
+            and each_call.args[0]
+            == fan_out_dispatch.ACTIONS_ENUMERATION_NETWORK_ERROR
+        ]
+        assert network_error_logs
+
+    def should_not_embed_actions_annotations_in_the_module_source(self) -> None:
+        module_source = Path(fan_out_dispatch.__file__).read_text(
+            encoding="utf-8"
+        )
+        assert "::notice::Enumeration returned" not in module_source
+        assert "::error::Enumeration failed" not in module_source
+        assert "::error::Network error during enumeration" not in module_source
