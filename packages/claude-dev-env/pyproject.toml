@@ -18,6 +18,7 @@ packages = [
     "bugteam_scripts_constants",
     "implement_scripts_constants",
     "log_audit_constants",
+    "usage_pause_constants",
     "dev_env_scripts_constants",
 ]
 
@@ -31,4 +32,5 @@ pr_converge_scripts_constants = "skills/pr-converge/scripts/pr_converge_scripts_
 bugteam_scripts_constants = "skills/bugteam/scripts/bugteam_scripts_constants"
 implement_scripts_constants = "skills/implement/scripts/implement_scripts_constants"
 log_audit_constants = "skills/log-audit/scripts/log_audit_constants"
+usage_pause_constants = "skills/usage-pause/scripts/usage_pause_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"

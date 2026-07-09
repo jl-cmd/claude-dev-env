@@ -68,6 +68,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `monitor-open-prs` — polls open PRs for status
 - `pre-compact` — compact-safe session handoff
 - `qbug` — required baseline PR audit; one clean-coder subagent loops audit → fix → commit → push until clean or stuck
+- `usage-pause` — waits out the 5-hour usage window in ScheduleWakeup stages that keep agent contexts warm; probes the OAuth usage endpoint or takes a manual reset override
 - `skill-builder` — complete skill-building lifecycle
 - `auditing-claude-config` — audits a Claude Code setup for context-budget waste and produces a migration table with savings
 - `log-audit` — background agent that audits this repo's own logs for recurring errors and timing regressions and files grouped fixes
