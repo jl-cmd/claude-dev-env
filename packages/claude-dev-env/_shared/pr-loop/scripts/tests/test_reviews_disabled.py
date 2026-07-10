@@ -91,6 +91,29 @@ def test_is_bugbot_disabled_via_env_true_when_both_tokens_listed_mixed_case(
     assert reviews_disabled.is_bugteam_disabled_via_env() is True
 
 
+def test_is_bugbot_opted_out_via_env_returns_true_when_disabled_lists_bugbot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    assert reviews_disabled.is_bugbot_opted_out_via_env() is True
+
+
+def test_is_bugbot_opted_out_via_env_returns_false_when_only_enabled_lists_bugbot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "bugbot")
+    assert reviews_disabled.is_bugbot_opted_out_via_env() is False
+
+
+def test_is_bugbot_opted_out_via_env_returns_false_when_no_env_vars_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
+    assert reviews_disabled.is_bugbot_opted_out_via_env() is False
+
+
 def test_is_copilot_disabled_via_env_returns_true_when_env_lists_copilot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

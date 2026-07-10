@@ -152,15 +152,19 @@ outcome (no git work tree, or no readable origin) exits non-zero. Route on the
 
 ### `phase == BUGBOT`
 
-**Opt-out gate (runs first, before any fetch or trigger).**
+**Availability gate (runs first, before any fetch or trigger).**
 `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
 
-- Exit 0 (`CLAUDE_REVIEWS_DISABLED` lists `bugbot`) → set `bugbot_down = true`,
+- Exit 0 (Bugbot disabled for this run — the default, unless
+  `CLAUDE_REVIEWS_ENABLED` lists `bugbot`) → set `bugbot_down = true`,
   `phase = CODE_REVIEW`, continue CODE_REVIEW in the same tick; skip steps a–c below.
-- Exit 1 → proceed to step a.
+- Exit 1 (`CLAUDE_REVIEWS_ENABLED` lists `bugbot` and `CLAUDE_REVIEWS_DISABLED`
+  does not) → go to step a.
 
 Because `bugbot_down` resets on every push, this gate re-runs on every
-BUGBOT entry and keeps Cursor Bugbot skipped for the entire run.
+BUGBOT entry. Cursor Bugbot is off by default and runs only when
+`CLAUDE_REVIEWS_ENABLED` lists `bugbot`; a `bugbot` token in
+`CLAUDE_REVIEWS_DISABLED` keeps it off even then.
 
 a. Fetch Cursor Bugbot reviews newest-first, walk back until first clean:
 
@@ -360,8 +364,10 @@ BUGBOT.
 
 ## Step 3: Re-trigger bugbot
 
-- [ ] **Opt-out gate.** Enforced at BUGBOT entry (see `### phase == BUGBOT`).
-  When `CLAUDE_REVIEWS_DISABLED` lists `bugbot`, the entry gate sets
+- [ ] **Availability gate.** Enforced at BUGBOT entry (see `### phase == BUGBOT`).
+  When Bugbot is disabled for the run — the default unless
+  `CLAUDE_REVIEWS_ENABLED` lists `bugbot`, and always when
+  `CLAUDE_REVIEWS_DISABLED` lists `bugbot` — the entry gate sets
   `bugbot_down = true` and routes to BUGTEAM before any trigger flow runs,
   so the flow below is skipped.
 - [ ] Apply the `reviewer-gates` skill's Bugbot flow

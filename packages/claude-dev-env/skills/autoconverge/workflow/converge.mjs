@@ -594,7 +594,7 @@ const REVIEWER_AVAILABILITY_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        down: { type: 'boolean', description: 'true when reviewer_availability.py --reviewer bugbot exited non-zero (opted out via CLAUDE_REVIEWS_DISABLED)' },
+        down: { type: 'boolean', description: 'true when reviewer_availability.py --reviewer bugbot exited non-zero (off by default unless CLAUDE_REVIEWS_ENABLED lists bugbot, or opted out via CLAUDE_REVIEWS_DISABLED)' },
         reason: { type: 'string', description: 'the one-line reason reviewer_availability.py printed for Bugbot' },
       },
       required: ['down', 'reason'],

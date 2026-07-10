@@ -39,6 +39,7 @@ __all__ = [
     "CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME",
     "EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV",
     "is_bugbot_disabled_via_env",
+    "is_bugbot_opted_out_via_env",
     "is_bugteam_disabled_via_env",
     "is_copilot_disabled_via_env",
     "main",
@@ -99,6 +100,22 @@ def is_bugbot_disabled_via_env() -> bool:
         CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN
     )
     return is_opted_out or not is_opted_in
+
+
+def is_bugbot_opted_out_via_env() -> bool:
+    """Check whether CLAUDE_REVIEWS_DISABLED opts Cursor Bugbot out.
+
+    The opt-out forces Bugbot off even when ``CLAUDE_REVIEWS_ENABLED`` lists
+    ``bugbot``. This reports only the opt-out signal, where
+    ``is_bugbot_disabled_via_env`` also reports off for the default case in
+    which neither env var names ``bugbot``.
+
+    Returns:
+        True when ``CLAUDE_REVIEWS_DISABLED`` lists the ``bugbot`` token.
+    """
+    return _is_reviewer_listed_in_env(
+        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN
+    )
 
 
 def is_copilot_disabled_via_env() -> bool:

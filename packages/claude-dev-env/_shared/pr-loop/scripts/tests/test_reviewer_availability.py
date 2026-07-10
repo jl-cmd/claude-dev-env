@@ -147,7 +147,8 @@ def test_main_reports_bugbot_down_when_no_env_vars_set(
     exit_code = reviewer_availability.main(["--reviewer", "bugbot"])
     captured = capsys.readouterr()
     assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_DOWN
-    assert captured.err != ""
+    assert "CLAUDE_REVIEWS_ENABLED" in captured.err
+    assert "CLAUDE_REVIEWS_DISABLED" not in captured.err
 
 
 def test_main_reports_bugbot_available_when_enabled_via_env(
