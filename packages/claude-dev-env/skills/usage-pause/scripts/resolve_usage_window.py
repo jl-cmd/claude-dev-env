@@ -480,9 +480,9 @@ def main() -> int:
     access_token = resolve_access_token(credentials_path, now)
     if access_token is None:
         return _emit_error(
-            "no usable bearer token from the OAuth credential file or the session "
-            "ingress token file; give a manual reset time, "
-            "for example /usage-pause 10:20pm or /usage-pause 74m"
+            "no usable bearer token from the OAuth credential file at "
+            f"{credentials_path} or the session ingress token file; give a "
+            "manual reset time, for example /usage-pause 10:20pm or /usage-pause 74m"
         )
     try:
         usage_payload = _fetch_usage_payload(access_token)

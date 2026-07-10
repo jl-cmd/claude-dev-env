@@ -26,8 +26,6 @@ RESOLVER_PATH = SCRIPTS_DIRECTORY / "resolve_usage_window.py"
 
 
 def load_resolver_module() -> ModuleType:
-    if str(SCRIPTS_DIRECTORY) not in sys.path:
-        sys.path.insert(0, str(SCRIPTS_DIRECTORY))
     spec = importlib.util.spec_from_file_location("resolve_usage_window", RESOLVER_PATH)
     assert spec is not None
     assert spec.loader is not None
@@ -243,6 +241,9 @@ class TestReadSessionIngressToken:
         monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))
         assert resolver.read_session_ingress_token() is None
 
+    def should_pin_the_env_var_name_to_the_platform_contract(self) -> None:
+        assert INGRESS_TOKEN_FILE_ENV_VAR == "CLAUDE_SESSION_INGRESS_TOKEN_FILE"
+
 
 class TestResolveAccessToken:
     def should_use_ingress_token_when_credential_file_missing(
@@ -399,6 +400,15 @@ class TestCommandLine:
         assert completed.returncode == 2
         resolved_payload = json.loads(completed.stdout)
         assert "error" in resolved_payload
+
+    def should_name_the_checked_credentials_path_in_the_error(
+        self, tmp_path: Path
+    ) -> None:
+        missing_path = tmp_path / "absent.json"
+        completed = self.run_resolver("--credentials-path", str(missing_path))
+        assert completed.returncode == 2
+        resolved_payload = json.loads(completed.stdout)
+        assert str(missing_path) in resolved_payload["error"]
 
     def should_reject_invalid_override_with_error_payload(self) -> None:
         completed = self.run_resolver("--override", "soon")
