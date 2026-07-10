@@ -198,10 +198,12 @@ permission. Check that `APP_ID` and `APP_PRIVATE_KEY` secrets are set correctly 
 **Listener not installed**
 The dispatcher's summary counts repos that have no `sync-ai-rules.yml` workflow under
 `Listener missing`. To find which repo is missing its listener, check that target repo's
-own `sync-ai-rules` workflow runs. The full target list is the GitHub App's installation
-repositories (App settings → Install App → Repository access, or
-`gh api /installation/repositories` with an installation token). Run
-`scripts/bootstrap-listeners.sh` to install it.
+own `sync-ai-rules` workflow runs. The GitHub App's installation repositories (App
+settings → Install App → Repository access, or `gh api /installation/repositories` with
+an installation token) are the candidate list; the dispatcher drops archived repos,
+upstream forks, and repos outside the fleet owner accounts, so a repo in that list is a
+target only when none of those exclusions apply. Run `scripts/bootstrap-listeners.sh` to
+install it.
 
 **Dispatch fires but listener never runs**
 `repository_dispatch` events only trigger workflows on the default branch. Confirm the

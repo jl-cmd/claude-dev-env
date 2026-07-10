@@ -17,4 +17,4 @@ workflow instead.
 | Directory | Role |
 |-----------|------|
 | `ai-rules-fleet-rollout/` | Operator scripts from the AI rules fleet bootstrap. Has a README explaining each script's purpose and its stale status. |
-| `pii-hygiene/` | Decision log for issue #945 current-tree PII scrub (what was replaced, what stays, what is deferred). |
+| `pii-hygiene/` | Decision log for issue #945 current-tree PII scrub (what stays as-is, what changed in this branch, and what is still blocked on an owner decision). |
