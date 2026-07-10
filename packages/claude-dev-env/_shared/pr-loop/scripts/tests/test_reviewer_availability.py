@@ -67,6 +67,7 @@ def _isolate_reviewer_environment(
 ) -> None:
     monkeypatch.delenv("COPILOT_QUOTA_ACCOUNT", raising=False)
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
     monkeypatch.setattr(
         reviewer_availability, "COPILOT_QUOTA_DEFAULT_ENV_FILE_PATH", tmp_path / ".env"
     )
@@ -140,9 +141,19 @@ def test_main_reports_copilot_down_when_no_account_configured(
     assert "scenario C" in captured.err
 
 
-def test_main_reports_bugbot_available_when_not_opted_out(
+def test_main_reports_bugbot_down_when_no_env_vars_set(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    exit_code = reviewer_availability.main(["--reviewer", "bugbot"])
+    captured = capsys.readouterr()
+    assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_DOWN
+    assert captured.err != ""
+
+
+def test_main_reports_bugbot_available_when_enabled_via_env(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "bugbot")
     exit_code = reviewer_availability.main(["--reviewer", "bugbot"])
     captured = capsys.readouterr()
     assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_AVAILABLE
@@ -153,6 +164,7 @@ def test_main_reports_bugbot_down_when_opted_out_via_env(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "bugbot")
     exit_code = reviewer_availability.main(["--reviewer", "bugbot"])
     captured = capsys.readouterr()
     assert exit_code == reviewer_availability.EXIT_CODE_REVIEWER_DOWN

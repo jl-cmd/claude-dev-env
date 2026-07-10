@@ -41,7 +41,7 @@ Call `scripts/discover_open_prs.discover_open_prs(all_owners=["jl-cmd", "JonEcho
 For each discovered PR:
 
 1. Resolve the PR's repo checkout (existing worktree or fresh `git clone`).
-2. From that checkout, invoke `/bugteam --bugbot-retrigger <pr_number>`. When `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot` exits 0 (bugbot disabled), omit `--bugbot-retrigger` from the dispatched command so the bugbot leg sits out the run.
+2. From that checkout, invoke `/bugteam <pr_number>`. Include `--bugbot-retrigger` only when bugbot is enabled for the run — when `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot` exits 1. On exit 0 (bugbot disabled — the default) omit `--bugbot-retrigger` so the bugbot leg sits out the run.
 3. The `--bugbot-retrigger` flag tells bugteam to post `bugbot run` as an issue comment after every successful FIX push so Cursor's bugbot re-evaluates the new commit.
 4. Bugteam runs its own 20-loop audit/fix cycle per PR; this skill waits for each bugteam invocation to return before dispatching the next (or fanning out — see below).
 

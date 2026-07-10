@@ -1,8 +1,9 @@
-"""Configuration constants for the CLAUDE_REVIEWS_DISABLED opt-out gate."""
+"""Configuration constants for the reviewer opt-out and opt-in gates."""
 
 from __future__ import annotations
 
 CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME: str = "CLAUDE_REVIEWS_DISABLED"
+CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME: str = "CLAUDE_REVIEWS_ENABLED"
 CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR: str = ","
 CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN: str = "bugteam"
 CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN: str = "bugbot"

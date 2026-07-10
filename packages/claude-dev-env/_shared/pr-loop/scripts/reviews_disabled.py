@@ -1,8 +1,16 @@
-"""Shared helper for the CLAUDE_REVIEWS_DISABLED opt-out gate.
+"""Decide which PR reviewers run from the opt-out and opt-in env token lists.
 
-Both ``skills/bugteam/scripts/bugteam_preflight.py`` and
-``_shared/pr-loop/scripts/preflight.py`` consume this helper so the parsing
-rules and disabled-token taxonomy live in exactly one place.
+::
+
+    enabled lists bugbot, disabled empty    -> bugbot   ok:   runs
+    no lists set                            -> bugbot   flag: off (default)
+    enabled lists bugbot, disabled bugbot   -> bugbot   flag: off (opt-out wins)
+    disabled empty                          -> bugteam  ok:   runs
+    disabled lists copilot                  -> copilot  flag: off
+
+Bugbot is off by default and runs only when the enabled list names it.
+Bugteam and copilot run by default and stop only when the disabled list
+names them; both lists parse case-insensitively and tolerate whitespace.
 """
 
 from __future__ import annotations
@@ -17,6 +25,7 @@ from pr_loop_shared_constants.reviews_disabled_constants import (
     CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
     CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR,
+    CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME,
     EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV,
 )
 
@@ -27,6 +36,7 @@ __all__ = [
     "CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN",
     "CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME",
     "CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR",
+    "CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME",
     "EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV",
     "is_bugbot_disabled_via_env",
     "is_bugteam_disabled_via_env",
@@ -35,10 +45,14 @@ __all__ = [
 ]
 
 
-def _is_reviewer_disabled_via_env(reviewer_token: str) -> bool:
-    """Check whether CLAUDE_REVIEWS_DISABLED lists the given reviewer token.
+def _is_reviewer_listed_in_env(
+    environment_variable_name: str, reviewer_token: str
+) -> bool:
+    """Check whether an environment variable lists the given reviewer token.
 
     Args:
+        environment_variable_name: The environment variable to read, either
+            the reviews-disabled or the reviews-enabled variable name.
         reviewer_token: The reviewer token to look for, already lowercase
             (for example the bugteam or bugbot token constant).
 
@@ -46,16 +60,14 @@ def _is_reviewer_disabled_via_env(reviewer_token: str) -> bool:
         True when the env var contains ``reviewer_token`` as one of its
         comma-separated entries (case-insensitive, whitespace-tolerant).
     """
-    reviews_disabled_token_separator = CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR
-    disabled_reviewers_text = os.environ.get(CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, "")
-    all_disabled_tokens = frozenset(
+    reviews_token_separator = CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR
+    listed_reviewers_text = os.environ.get(environment_variable_name, "")
+    all_listed_tokens = frozenset(
         each_raw_token.strip().lower()
-        for each_raw_token in disabled_reviewers_text.split(
-            reviews_disabled_token_separator
-        )
+        for each_raw_token in listed_reviewers_text.split(reviews_token_separator)
         if each_raw_token.strip()
     )
-    return reviewer_token in all_disabled_tokens
+    return reviewer_token in all_listed_tokens
 
 
 def is_bugteam_disabled_via_env() -> bool:
@@ -64,16 +76,29 @@ def is_bugteam_disabled_via_env() -> bool:
     Returns:
         True when the env var lists the ``bugteam`` token.
     """
-    return _is_reviewer_disabled_via_env(CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN)
+    return _is_reviewer_listed_in_env(
+        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN
+    )
 
 
 def is_bugbot_disabled_via_env() -> bool:
-    """Check whether CLAUDE_REVIEWS_DISABLED opts Cursor Bugbot out.
+    """Check whether Cursor Bugbot is disabled for this run.
+
+    Cursor Bugbot is off by default. It runs only when
+    ``CLAUDE_REVIEWS_ENABLED`` lists ``bugbot``, and a ``bugbot`` token in
+    ``CLAUDE_REVIEWS_DISABLED`` forces it off even when the opt-in lists it.
 
     Returns:
-        True when the env var lists the ``bugbot`` token.
+        True when ``CLAUDE_REVIEWS_DISABLED`` lists ``bugbot`` or when
+        ``CLAUDE_REVIEWS_ENABLED`` does not list ``bugbot``.
     """
-    return _is_reviewer_disabled_via_env(CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN)
+    is_opted_out = _is_reviewer_listed_in_env(
+        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN
+    )
+    is_opted_in = _is_reviewer_listed_in_env(
+        CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN
+    )
+    return is_opted_out or not is_opted_in
 
 
 def is_copilot_disabled_via_env() -> bool:
@@ -82,7 +107,9 @@ def is_copilot_disabled_via_env() -> bool:
     Returns:
         True when the env var lists the ``copilot`` token.
     """
-    return _is_reviewer_disabled_via_env(CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN)
+    return _is_reviewer_listed_in_env(
+        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN
+    )
 
 
 def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
@@ -111,13 +138,13 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
 
 
 def main(all_arguments: list[str]) -> int:
-    """Exit 0 when the named reviewer is disabled via CLAUDE_REVIEWS_DISABLED.
+    """Exit 0 when the named reviewer is disabled for this run.
 
     Args:
         all_arguments: Argument list excluding the program name.
 
     Returns:
-        0 when the named reviewer is opted out by the env var, 1 otherwise.
+        0 when the named reviewer is disabled for this run, 1 otherwise.
     """
     arguments = parse_arguments(all_arguments)
     disabled_checker_by_reviewer = {

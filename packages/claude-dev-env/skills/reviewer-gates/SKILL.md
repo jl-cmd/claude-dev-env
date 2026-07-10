@@ -28,13 +28,15 @@ The `CLAUDE_REVIEWS_DISABLED` environment variable is a comma-separated token li
 | `bugbot` | Cursor Bugbot triggering and polling |
 | `copilot` | GitHub Copilot review requests and polling |
 
+Cursor Bugbot is off by default: it runs only when `CLAUDE_REVIEWS_ENABLED` lists `bugbot`, and a `bugbot` token in `CLAUDE_REVIEWS_DISABLED` keeps it off even when the opt-in lists it.
+
 Run the shared parser — never an inline shell parse:
 
 ```bash
 python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer <bugbot|bugteam|copilot>
 ```
 
-- **Exit 0** — the named reviewer is opted out. A skill whose whole run depends on that reviewer responds with its refusal line and stops. The template: `/<caller> is disabled via CLAUDE_REVIEWS_DISABLED.` A loop that merely includes the reviewer as one gate marks the reviewer down (`bugbot_down = true`, `copilot_down = true`) and continues on its remaining signals.
+- **Exit 0** — the named reviewer is disabled for this run (opted out, or, for Bugbot, off by default without the `CLAUDE_REVIEWS_ENABLED` opt-in). A skill whose whole run depends on that reviewer responds with its refusal line and stops. The template: `/<caller> is disabled via CLAUDE_REVIEWS_DISABLED.` A loop that merely includes the reviewer as one gate marks the reviewer down (`bugbot_down = true`, `copilot_down = true`) and continues on its remaining signals.
 - **Exit 1** — the reviewer is available; continue.
 
 ## Gate 2: Copilot quota pre-check (once per run)

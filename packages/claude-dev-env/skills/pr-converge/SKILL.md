@@ -248,11 +248,11 @@ round as converged. This rule holds every tick, every loop, every PR.
 - [ ] **Step 4: BUGBOT — fetch, decide, fix, reply, resolve**
       See: [`reference/per-tick.md` § Step 2 BUGBOT + Step 3](reference/per-tick.md)
 
-      - [ ] **Opt-out gate (runs first, every BUGBOT entry).**
+      - [ ] **Availability gate (runs first, every BUGBOT entry).**
             Gate semantics live in the `reviewer-gates` skill
-            (`../reviewer-gates/SKILL.md` § Gate 1).
+            (`../reviewer-gates/SKILL.md` § Gate 1). Cursor Bugbot is off by default and runs only when `CLAUDE_REVIEWS_ENABLED` lists `bugbot`; a `bugbot` token in `CLAUDE_REVIEWS_DISABLED` keeps it off even then.
             `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
-            - [ ] Exit 0 (`CLAUDE_REVIEWS_DISABLED` lists `bugbot`) → set `bugbot_down = true`, `phase = CODE_REVIEW`, advance to Step 5 (bypass). Cursor Bugbot is skipped for the entire run.
+            - [ ] Exit 0 (Bugbot disabled for this run — the default) → set `bugbot_down = true`, `phase = CODE_REVIEW`, advance to Step 5 (bypass). Cursor Bugbot is skipped for the entire run.
             - [ ] Exit 1 → continue below.
 
       Fetch bugbot reviews + inline comments on `current_head`.

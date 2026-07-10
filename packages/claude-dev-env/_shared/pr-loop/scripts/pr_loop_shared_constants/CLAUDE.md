@@ -14,7 +14,7 @@ Named constants for every script in `_shared/pr-loop/scripts/`. Each module owns
 | `post_audit_thread_constants.py` | `post_audit_thread.py` — HTTP status codes, retry counts, GitHub API paths |
 | `preflight_constants.py` | `preflight.py` — env-var names, git subcommands, pytest exit codes, test discovery patterns |
 | `preflight_self_heal_constants.py` | `preflight_self_heal.py` — git config keys and local-scope detection strings |
-| `reviews_disabled_constants.py` | `reviews_disabled.py` — `CLAUDE_REVIEWS_DISABLED` token taxonomy |
+| `reviews_disabled_constants.py` | `reviews_disabled.py` — `CLAUDE_REVIEWS_DISABLED` and `CLAUDE_REVIEWS_ENABLED` env-var names and token taxonomy |
 | `copilot_quota_constants.py` | `copilot_quota.py` — `COPILOT_QUOTA_ACCOUNT` env-var name, `copilot_internal/user` API path, the `premium_interactions` gating field names, the four skip/run exit codes, and the default `.env` path |
 | `terminology_sweep_constants.py` | `terminology_sweep.py` — identifier and prose-token regexes, diff-parsing prefixes, code-file extensions, test-file detection patterns, and the finding-message template |
 | `reviewer_availability_constants.py` | `reviewer_availability.py` — the available/down exit codes for the unified reviewer-availability pre-check |
