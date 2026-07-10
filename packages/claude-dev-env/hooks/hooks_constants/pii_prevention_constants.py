@@ -22,8 +22,9 @@ ALL_SHELL_TOOL_NAMES: frozenset[str] = frozenset(
 
 ALL_GIT_BINARY_BASENAMES: frozenset[str] = frozenset({"git", "git.exe"})
 GIT_COMMIT_SUBCOMMAND: str = "commit"
+GIT_WORKING_DIRECTORY_OPTION: str = "-C"
 ALL_VALUE_TAKING_GIT_OPTIONS: frozenset[str] = frozenset(
-    {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
+    {GIT_WORKING_DIRECTORY_OPTION, "-c", "--git-dir", "--work-tree", "--namespace"}
 )
 GIT_OPTION_WITH_VALUE_STEP: int = 2
 ALL_SHELL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset(
@@ -71,6 +72,7 @@ ENVIRONMENT_ASSIGNMENT_PATTERN: re.Pattern[str] = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*="
 )
 LINE_CONTINUATION_PATTERN: re.Pattern[str] = re.compile(r"\\\r?\n")
+POWERSHELL_LINE_CONTINUATION_PATTERN: re.Pattern[str] = re.compile(r"`\r?\n")
 
 MCP_GITHUB_TOOL_PREFIX: str = "mcp__plugin_github_github__"
 

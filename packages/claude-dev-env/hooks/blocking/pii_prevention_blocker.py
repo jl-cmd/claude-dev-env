@@ -68,6 +68,7 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     GIT_COMMAND_TIMEOUT_SECONDS,
     GIT_COMMIT_SUBCOMMAND,
     GIT_OPTION_WITH_VALUE_STEP,
+    GIT_WORKING_DIRECTORY_OPTION,
     HOOK_SCRIPT_BASENAME,
     INLINE_COMMAND_FLAG_CLUSTER_CHARACTER,
     INLINE_COMMAND_TOKEN_JOINER,
@@ -79,6 +80,7 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     NULL_BYTE_MARKER,
     OPTION_ATTACHED_VALUE_MARKER,
     POWERSHELL_INLINE_COMMAND_FLAG,
+    POWERSHELL_LINE_CONTINUATION_PATTERN,
     REPOSITORY_ROOT_UNRESOLVED_REASON,
     SHELL_INLINE_COMMAND_FLAG,
     SINGLE_DASH_OPTION_PREFIX,
@@ -377,14 +379,29 @@ def _split_shell_command_segments(all_tokens: list[str]) -> list[list[str]]:
     return all_segments
 
 
-def _tokenize_shell_command(shell_command_piece: str) -> list[str]:
+def _tokenize_shell_command(shell_command_piece: str) -> list[str] | None:
     lexer = shlex.shlex(shell_command_piece, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     lexer.escape = ""
     try:
         return list(lexer)
     except ValueError:
-        return shell_command_piece.split()
+        return None
+
+
+def _fallback_segments_by_physical_line(shell_command_piece: str) -> list[list[str]]:
+    all_segments: list[list[str]] = []
+    for each_physical_line in shell_command_piece.splitlines():
+        line_tokens = each_physical_line.split()
+        all_segments.extend(_split_shell_command_segments(line_tokens))
+    return all_segments
+
+
+def _segments_for_piece(shell_command_piece: str) -> list[list[str]]:
+    piece_tokens = _tokenize_shell_command(shell_command_piece)
+    if piece_tokens is None:
+        return _fallback_segments_by_physical_line(shell_command_piece)
+    return _split_shell_command_segments(piece_tokens)
 
 
 def _split_on_unquoted_newlines(shell_command: str) -> list[str]:
@@ -412,10 +429,10 @@ def _split_on_unquoted_newlines(shell_command: str) -> list[str]:
 
 def _all_command_segments(shell_command: str) -> list[list[str]]:
     collapsed_command = LINE_CONTINUATION_PATTERN.sub("", shell_command)
+    collapsed_command = POWERSHELL_LINE_CONTINUATION_PATTERN.sub("", collapsed_command)
     all_segments: list[list[str]] = []
     for each_piece in _split_on_unquoted_newlines(collapsed_command):
-        piece_tokens = _tokenize_shell_command(each_piece)
-        all_segments.extend(_split_shell_command_segments(piece_tokens))
+        all_segments.extend(_segments_for_piece(each_piece))
     return all_segments
 
 
@@ -566,6 +583,70 @@ def is_git_commit_shell_command(shell_command: str) -> bool:
     return False
 
 
+def _following_tokens_working_directory(all_following_tokens: list[str]) -> str | None:
+    token_index = 0
+    option_with_value_step = GIT_OPTION_WITH_VALUE_STEP
+    while token_index < len(all_following_tokens):
+        each_token = _strip_token_edge_quotes(all_following_tokens[token_index])
+        if each_token == GIT_WORKING_DIRECTORY_OPTION:
+            value_index = token_index + 1
+            if value_index >= len(all_following_tokens):
+                return None
+            return _strip_token_edge_quotes(all_following_tokens[value_index])
+        option_name = each_token
+        has_attached_value = False
+        if each_token.startswith("--") and "=" in each_token:
+            option_name, _, _attached_value = each_token.partition("=")
+            has_attached_value = True
+        if option_name in ALL_VALUE_TAKING_GIT_OPTIONS:
+            token_index += 1 if has_attached_value else option_with_value_step
+            continue
+        if each_token.startswith("-"):
+            token_index += 1
+            continue
+        return None
+    return None
+
+
+def _segment_git_commit_working_directory(
+    all_segment_tokens: list[str],
+) -> str | None:
+    command_index = _skip_leading_noop_tokens(all_segment_tokens)
+    if command_index >= len(all_segment_tokens):
+        return None
+    command_token = all_segment_tokens[command_index]
+    if not _token_is_git_binary(command_token):
+        return None
+    all_following_tokens = all_segment_tokens[command_index + 1 :]
+    return _following_tokens_working_directory(all_following_tokens)
+
+
+def extract_git_commit_working_directory(shell_command: str) -> str | None:
+    """Return the directory a git-commit command runs in, or None for the CWD.
+
+    Reads the ``-C`` value off the same commit-invoking segment the detector
+    matches, so every git-binary shape the detector recognizes resolves too::
+
+        git.exe -C /repoA commit -m x   ->  /repoA
+        git -C "C:/repo" commit -m x    ->  C:/repo
+        cd /repoB && git commit -m x    ->  /repoB (cd/pushd fallback)
+        git commit -m x                 ->  None   (runs in the CWD)
+
+    Args:
+        shell_command: Bash or PowerShell tool command string.
+
+    Returns:
+        The working directory the commit targets, or None when it uses the CWD.
+    """
+    for each_segment in _all_command_segments(shell_command):
+        if not _segment_invokes_git_commit(each_segment):
+            continue
+        segment_directory = _segment_git_commit_working_directory(each_segment)
+        if segment_directory is not None:
+            return segment_directory
+    return extract_git_working_directory(shell_command)
+
+
 def evaluate_bash_command(
     bash_command: str, working_directory: str | None
 ) -> str | None:
@@ -590,7 +671,7 @@ def evaluate_bash_command(
         return post_deny_reason
     if not is_git_commit_shell_command(bash_command):
         return None
-    command_directory = extract_git_working_directory(bash_command)
+    command_directory = extract_git_commit_working_directory(bash_command)
     resolved_directory = resolve_directory(command_directory) or working_directory
     repository_root = resolve_repository_root(resolved_directory)
     if repository_root is None:

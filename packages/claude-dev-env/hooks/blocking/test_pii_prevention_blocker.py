@@ -30,6 +30,7 @@ from pii_prevention_blocker import (  # noqa: E402
     evaluate_bash_command,
     evaluate_staged_commit,
     evaluate_write_edit_payload,
+    extract_git_commit_working_directory,
     is_git_commit_shell_command,
 )
 
@@ -424,6 +425,43 @@ def _init_repo_with_staged_email(repository_root: Path) -> None:
     )
 
 
+def _init_repo_with_clean_notes(repository_root: Path) -> None:
+    repository_root.mkdir()
+    subprocess.run(
+        ["git", "init"],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "dev@example.com"],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Fixture Dev"],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    tracked_file = repository_root / "notes.md"
+    tracked_file.write_text(
+        "Use user@example.com in docs only.\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", "notes.md"],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_git_exe_commit_scans_staged_pii(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     _init_repo_with_staged_email(repository_root)
@@ -728,3 +766,81 @@ def test_unquoted_powershell_command_commit_scans_staged_pii(tmp_path: Path) -> 
     assert deny_reason is not None
     assert "email" in deny_reason
     assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
+def test_is_git_commit_shell_command_detects_commit_after_apostrophe_line() -> None:
+    assert is_git_commit_shell_command("echo Don't forget\ngit commit -am x")
+    assert is_git_commit_shell_command("echo can't stop\ngit commit -am 'msg'")
+    assert is_git_commit_shell_command("printf Bob's file\ngit commit -m note")
+
+
+def test_is_git_commit_shell_command_ignores_commit_inside_quoted_body() -> None:
+    assert not is_git_commit_shell_command(
+        "gh pr comment 1 --body 'notes\ngit commit -m x'"
+    )
+
+
+def test_apostrophe_line_before_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "echo can't stop now\ngit commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
+def test_is_git_commit_shell_command_detects_powershell_backtick_continuation() -> None:
+    assert is_git_commit_shell_command("git `\n  commit -m x")
+    assert is_git_commit_shell_command("git commit `\n  -m x")
+    assert not is_git_commit_shell_command("git `\n  status")
+
+
+def test_powershell_backtick_continuation_commit_scans_staged_pii(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "git `\n  commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
+def test_extract_git_commit_working_directory_resolves_dash_c_forms() -> None:
+    assert (
+        extract_git_commit_working_directory(r"git.exe -C /repoA commit -m x")
+        == "/repoA"
+    )
+    assert (
+        extract_git_commit_working_directory(r"git -C /repoA commit -m x") == "/repoA"
+    )
+    assert (
+        extract_git_commit_working_directory(r'git -C "C:/repo" commit -m x')
+        == "C:/repo"
+    )
+    assert extract_git_commit_working_directory("git commit -m x") is None
+
+
+def test_git_exe_dash_c_commit_scans_named_repo_not_cwd(tmp_path: Path) -> None:
+    repository_with_pii = tmp_path / "repo_with_pii"
+    _init_repo_with_staged_email(repository_with_pii)
+    clean_repository = tmp_path / "clean_repo"
+    _init_repo_with_clean_notes(clean_repository)
+    cwd_only_scan = evaluate_bash_command(
+        "git.exe commit -m test",
+        working_directory=str(clean_repository),
+    )
+    assert cwd_only_scan is None
+    dash_c_scan = evaluate_bash_command(
+        f"git.exe -C {repository_with_pii} commit -m test",
+        working_directory=str(clean_repository),
+    )
+    assert dash_c_scan is not None
+    assert "email" in dash_c_scan
+    assert SYNTHETIC_REAL_EMAIL not in dash_c_scan
