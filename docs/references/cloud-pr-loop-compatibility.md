@@ -139,22 +139,22 @@ session before the first `mcp__github__*` call (Section 5).
 | Operation | Local mechanism | Cloud path |
 |---|---|---|
 | Read PR / mergeability / draft state | `gh pr view`, `gh api pulls/N` | `mcp__github__pull_request_read(method="get")` |
-| PR diff / files / commits / checks | `gh pr diff`, `gh api ...` | `pull_request_read(method="get_diff"/"get_files"/"get_commits"/"get_check_runs")` |
-| List reviews / review threads | `gh api --paginate --slurp \| jq` | `pull_request_read(method="get_reviews"/"get_review_comments")`. `get_reviews` paginates with `page` + `perPage`; `get_review_comments` paginates with `perPage` + an `after` cursor. |
+| PR diff / files / commits / checks | `gh pr diff`, `gh api ...` | `mcp__github__pull_request_read(method="get_diff"/"get_files"/"get_commits"/"get_check_runs")` |
+| List reviews / review threads | `gh api --paginate --slurp \| jq` | `mcp__github__pull_request_read(method="get_reviews"/"get_review_comments")`. `get_reviews` paginates with `page` + `perPage`; `get_review_comments` paginates with `perPage` + an `after` cursor. |
 | Post / update / close issue | `gh issue create/edit/close` | `mcp__github__issue_write(method="create"/"update")` |
 | Post issue or PR comment | `gh issue comment`, `gh pr comment` | `mcp__github__add_issue_comment` |
-| Post review with inline comments | `gh api pulls/N/reviews` POST | `pull_request_review_write(method="create")` → `add_comment_to_pending_review` per finding → `pull_request_review_write(method="submit_pending", event="COMMENT")` |
-| Reply to a review comment | `gh api pulls/N/comments/ID/replies` | `add_reply_to_pull_request_comment` (numeric `discussion_r` id) |
-| Resolve / unresolve a thread | `gh api graphql resolveReviewThread` | `pull_request_review_write(method="resolve_thread"/"unresolve_thread", threadId="PRRT_...")` |
+| Post review with inline comments | `gh api pulls/N/reviews` POST | `mcp__github__pull_request_review_write(method="create")` → `mcp__github__add_comment_to_pending_review` per finding → `mcp__github__pull_request_review_write(method="submit_pending", event="COMMENT")` |
+| Reply to a review comment | `gh api pulls/N/comments/ID/replies` | `mcp__github__add_reply_to_pull_request_comment` (numeric `discussion_r` id) |
+| Resolve / unresolve a thread | `gh api graphql resolveReviewThread` | `mcp__github__pull_request_review_write(method="resolve_thread"/"unresolve_thread", threadId="PRRT_...")` |
 | Request the Copilot reviewer | `gh api POST pulls/N/requested_reviewers` | `mcp__github__request_copilot_review`. The call completes with no output in both draft and ready states, with no in-band confirmation either way; confirm by a Copilot review landing on the PR. |
-| Mark ready / send to draft | `gh pr ready`, `gh pr ready --undo` | `update_pull_request(draft=false / draft=true)`. A probe verified both directions, with a read-back confirming the draft state each way. |
-| Create a PR | `gh pr create --draft` | `create_pull_request(draft=true)` |
-| Edit a PR body or title | `gh pr edit` | `update_pull_request(body=..., title=...)` |
-| Cross-repo PR search | `gh search prs --owner X --state open` | `search_pull_requests(query="user:X is:open")`. Always pass `perPage`: an unpaginated owner-wide search overflows the tool-result limit. |
-| Check runs on a SHA | `gh api commits/SHA/check-runs` | `pull_request_read(method="get_check_runs")`, or REST for owners with the app connected |
-| CI logs | `gh run view --log` | `actions_list` / `actions_get` / `get_job_logs` |
+| Mark ready / send to draft | `gh pr ready`, `gh pr ready --undo` | `mcp__github__update_pull_request(draft=false / draft=true)`. A probe verified both directions, with a read-back confirming the draft state each way. |
+| Create a PR | `gh pr create --draft` | `mcp__github__create_pull_request(draft=true)` |
+| Edit a PR body or title | `gh pr edit` | `mcp__github__update_pull_request(body=..., title=...)` |
+| Cross-repo PR search | `gh search prs --owner X --state open` | `mcp__github__search_pull_requests(query="user:X is:open", perPage=30)`. Always pass `perPage`: an unpaginated owner-wide search overflows the tool-result limit. |
+| Check runs on a SHA | `gh api commits/SHA/check-runs` | `mcp__github__pull_request_read(method="get_check_runs")`, or REST for owners with the app connected |
+| CI logs | `gh run view --log` | `mcp__github__actions_list` / `mcp__github__actions_get` / `mcp__github__get_job_logs` |
 | Clone another repo | `gh repo clone` | `git clone https://github.com/owner/repo` (session-scoped), or `mcp__Claude_Code_Remote__add_repo` first |
-| Copilot quota | `gh api copilot_internal/user` | None. Treat quota as unknown; call `request_copilot_review` and work out `copilot_down` from its result. |
+| Copilot quota | `gh api copilot_internal/user` | None. Treat quota as unknown; call `mcp__github__request_copilot_review` and work out `copilot_down` from its result. |
 | Second reviewer identity | `gh auth switch`, `BUGTEAM_REVIEWER_ACCOUNT` | None. One `jl-cmd` identity. `COMMENT` reviews on own PRs allowed; `APPROVE`/`REQUEST_CHANGES` on own PRs blocked. |
 | REST fallback | `gh api repos/...` | `curl -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/...` — only for owners with the app connected (`JonEcho` today). GraphQL is pinned. |
 
@@ -169,11 +169,13 @@ fallback, and hook notes.
 ### 5.1 Load MCP schemas (once per session)
 
 ```
-ToolSearch "select:mcp__github__pull_request_read,mcp__github__pull_request_review_write,mcp__github__add_comment_to_pending_review,mcp__github__add_reply_to_pull_request_comment,mcp__github__add_issue_comment,mcp__github__request_copilot_review,mcp__github__update_pull_request,mcp__github__create_pull_request,mcp__github__issue_write,mcp__github__search_pull_requests,mcp__github__get_me"
+ToolSearch "select:mcp__github__pull_request_read,mcp__github__pull_request_review_write,mcp__github__add_comment_to_pending_review,mcp__github__add_reply_to_pull_request_comment,mcp__github__add_issue_comment,mcp__github__request_copilot_review,mcp__github__update_pull_request,mcp__github__create_pull_request,mcp__github__issue_write,mcp__github__search_pull_requests,mcp__github__get_me,mcp__Claude_Code_Remote__add_repo"
 ```
 
-Run this before the first `mcp__github__*` call. A call before the schema
-loads returns `InputValidationError` (RC2).
+Run this before the first MCP tool call. A call before the schema
+loads returns `InputValidationError` (RC2). The select list mixes servers:
+the `mcp__github__*` tools plus `mcp__Claude_Code_Remote__add_repo` for
+cross-repo checkout (5.3).
 
 ### 5.2 Fix `origin/HEAD` before any push
 
@@ -197,8 +199,8 @@ origin/HEAD` (RC3). Run it once per repo per session.
   `curl -H "Authorization: Bearer $GH_TOKEN" --cacert /root/.ccr/ca-bundle.crt https://api.github.com/repos/<owner>/<repo>/...`.
 - Do not write custom `gh api graphql` queries. GraphQL is pinned to the
   PR-review set. Read review threads through
-  `pull_request_read(method="get_review_comments")` and resolve them through
-  `pull_request_review_write(method="resolve_thread", threadId="PRRT_...")`.
+  `mcp__github__pull_request_read(method="get_review_comments")` and resolve them through
+  `mcp__github__pull_request_review_write(method="resolve_thread", threadId="PRRT_...")`.
 - Clone a session-scoped repo with `git clone https://github.com/<owner>/<repo>`.
   For a repo outside session scope, ask the user, then call
   `mcp__Claude_Code_Remote__add_repo`.
@@ -226,7 +228,7 @@ origin/HEAD` (RC3). Run it once per repo per session.
 
 - Skip the `gh api copilot_internal/user` quota read. Treat Copilot quota as
   unknown.
-- Call `request_copilot_review` and read `copilot_down` from its result:
+- Call `mcp__github__request_copilot_review` and read `copilot_down` from its result:
   a rejected request means Copilot is down for this run; an accepted request
   means it is up. Say plainly in the run report when Copilot status is an
   environment limit rather than a real reviewer-down signal.
