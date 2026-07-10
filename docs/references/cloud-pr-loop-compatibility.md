@@ -258,9 +258,9 @@ does nothing in cloud (it fails open).
 
 One work item per file. Each item names the source path, the exact change,
 and an acceptance check. Run Python checks from the repo root with
-`python3`; run the script suites from
+`python3`; run the shared suite in
 `packages/claude-dev-env/_shared/pr-loop/scripts/tests/` and each skill's
-own `scripts/tests/`.
+own `scripts/test_*.py` files.
 
 ### Phase A — Unblock transport in scripts
 
@@ -276,14 +276,14 @@ already uses `urllib.request` against
 so it works through the proxy for a covered owner.
 *Acceptance:* with `GH_TOKEN` set and `BUGTEAM_REVIEWER_ACCOUNT` unset, the
 resolve path runs no `gh` subprocess;
-`python3 -m pytest _shared/pr-loop/scripts/tests/` is green.
+`python3 -m pytest packages/claude-dev-env/_shared/pr-loop/scripts/tests/` is green.
 
 **A2. `_shared/pr-loop/scripts/copilot_quota.py` — missing-binary handling in `_run_gh`.**
 Wrap `subprocess.run(["gh", *all_command_arguments], ...)` (lines 81-89) so a
 `FileNotFoundError` returns the documented skip result rather than raising.
 The caller then treats Copilot quota as unknown and skips the Copilot spawn.
 *Acceptance:* with `gh` absent, the script exits with its skip code, not a
-traceback; `python3 -m pytest _shared/pr-loop/scripts/tests/` is green.
+traceback; `python3 -m pytest packages/claude-dev-env/_shared/pr-loop/scripts/tests/` is green.
 
 **A3. New `_shared/pr-loop/scripts/github_rest.py` — shared REST transport helper.**
 A single helper that reads `GH_TOKEN`/`GITHUB_TOKEN`, sends the
@@ -294,7 +294,7 @@ import it for their REST reads. Add the file to the
 `_shared/pr-loop/scripts/CLAUDE.md` Key-scripts table in the same change.
 *Acceptance:* a helper unit test hits `https://api.github.com/user` through
 the proxy and reads a 200 with a login; `python3 -m pytest
-_shared/pr-loop/scripts/tests/` is green.
+packages/claude-dev-env/_shared/pr-loop/scripts/tests/` is green.
 
 **A4. `skills/pr-converge/scripts/check_bugbot_ci.py` — route check-runs off `gh`.**
 Change the check-runs read (line 52,
@@ -316,20 +316,19 @@ with `GH_TOKEN` set; its test file is green.
 Change the reviews read (line 52,
 `gh api ... --paginate --slurp`) to the `github_rest.py` paginated reviews
 list.
-*Acceptance:* the script reads the pending-review state in cloud and exits 0;
-its test file is green.
+*Acceptance:* the script reads the pending-review state in cloud and exits 0.
 
 **A7. `skills/pr-converge/scripts/fetch_copilot_reviews.py` — reviews list off `gh`.**
 Change the reviews read (line 48) to `github_rest.py`.
 *Acceptance:* the script returns Copilot reviews (or an empty set) in cloud
-and exits 0; its test file is green.
+and exits 0.
 
 **A8. `skills/pr-converge/scripts/post_fix_reply.py` — posts off `gh`.**
 Change the inline-reply POST (line 57) and the general-comment POST (line 98)
 to `github_rest.py`, or document the MCP path
 (`add_reply_to_pull_request_comment` and `add_issue_comment`) for callers.
 *Acceptance:* an inline reply and a general comment land on a scratch PR in
-cloud; the test file is green.
+cloud.
 
 **A9. `skills/monitor-open-prs/scripts/discover_open_prs.py` — discovery off `gh`.**
 Change the discovery argv (line 15, `gh search prs`) to a `github_rest.py`
