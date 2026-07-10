@@ -100,14 +100,14 @@ evidence (the probe or inventory line that proves it), and a fix summary
 
 - **Symptom:** A skill or prompt that hardcodes one MCP prefix breaks in the other environment. Hooks that match the local prefix do not guard cloud posts.
 - **Cause:** Local tools carry the `mcp__plugin_github_github__*` prefix; cloud tools carry `mcp__github__*`.
-- **Evidence:** The settings.json matchers for `bot_mention_comment_blocker` and the MCP branch of `volatile_path_in_post_blocker` name `mcp__plugin_github_github__.*`, which cloud tool calls do not match.
+- **Evidence:** The settings.json matcher for `bot_mention_comment_blocker` names the tool-specific `mcp__plugin_github_github__add_issue_comment`, and the MCP branch of `volatile_path_in_post_blocker` names the wildcard `mcp__plugin_github_github__.*`. Cloud tool calls carry the `mcp__github__*` prefix, which neither matcher names.
 - **Fix summary:** Phase C adds `mcp__github__.*` matchers beside the plugin-prefix ones. Phase B tells skills to name the operation and resolve the tool by `ToolSearch`, or to name both prefixes.
 
 ### RC7 — Hardcoded Windows interpreter path
 
 - **Symptom:** In cloud, the verifier can never compute `manifest_sha256`, so the verification verdict is never minted, and `verified_commit_gate` blocks every code commit.
 - **Cause:** `autoconverge/workflow/converge.mjs` hardcodes `"C:\\Python313\\python.exe"` for `verification_verdict_store.py` in two verify prompts: the `buildVerdictFenceSteps` helper and a separate inline hardening-verify prompt that repeats the verdict-fence text.
-- **Evidence:** `converge.mjs` carries the literal `"C:\\Python313\\python.exe"` at line 712 (inside `buildVerdictFenceSteps`) and at line 418 (inside the separate hardening-verify prompt). The cloud image has no such path. `Start-Process chrome`, `.ahk`, and `.ps1` operator tooling in the same file are Windows-only and stay unused in cloud.
+- **Evidence:** `converge.mjs` carries the literal `"C:\\Python313\\python.exe"` at line 712 (inside `buildVerdictFenceSteps`) and at line 418 (inside the separate hardening-verify prompt). The cloud image has no such path. `Start-Process chrome` in the autoconverge SKILL.md teardown and the `.ahk`, `.ps1`, and `.cmd` operator tooling under `skills/pr-converge/scripts/` are Windows-only and stay unused in cloud.
 - **Fix summary:** Phase A changes the fence step to a resolved interpreter (`python3` on PATH / a `sys.executable` pattern).
 
 ### RC8 — Copilot quota gap
@@ -284,7 +284,7 @@ A single helper that reads `GH_TOKEN`/`GITHUB_TOKEN`, sends the
 `Authorization: Bearer` header, trusts the proxy CA bundle
 (`/root/.ccr/ca-bundle.crt`), and returns parsed JSON with pagination. Its
 constants live in `pr_loop_shared_constants/`. The five pr-converge scripts
-and `check_bugbot_ci.py` import it for their REST reads. Add the file to the
+import it for their REST reads. Add the file to the
 `_shared/pr-loop/scripts/CLAUDE.md` Key-scripts table in the same change.
 *Acceptance:* a helper unit test hits `https://api.github.com/user` through
 the proxy and reads a 200 with a login; `python3 -m pytest
@@ -406,8 +406,10 @@ cloud alternative beside it.
 ### Phase C — Hooks parity
 
 **C1. `hooks/hooks.json` and `bin/install.mjs` — add cloud MCP matchers.**
-Add a `mcp__github__.*` matcher beside the `mcp__plugin_github_github__.*`
-matcher for `bot_mention_comment_blocker` and for the MCP branch of
+Add a `mcp__github__add_issue_comment` matcher beside the tool-specific
+`mcp__plugin_github_github__add_issue_comment` matcher for
+`bot_mention_comment_blocker`, and a `mcp__github__.*` matcher beside the
+wildcard `mcp__plugin_github_github__.*` matcher for the MCP branch of
 `volatile_path_in_post_blocker`, in `hooks/hooks.json` and in the installer's
 hook-merge step, so a cloud MCP post routes through the guard.
 *Acceptance:* a hook unit test drives the guard with a `mcp__github__*` tool
