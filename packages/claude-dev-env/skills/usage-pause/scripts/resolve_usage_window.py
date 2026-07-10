@@ -7,8 +7,9 @@
     {"source": "override", "reset_at": "2026-07-08T10:14:00-07:00",
      "seconds_until_reset": 4440, "stages_seconds": [3480, 960, 120], ...}
 
-With no ``--override``, the script reads the Claude Code OAuth access token
-from the CLI credential file and asks the OAuth usage endpoint for the
+With no ``--override``, the script resolves a bearer token: the Claude Code
+OAuth access token from the CLI credential file, or the session ingress token
+file when that credential is unavailable. It asks the OAuth usage endpoint for the
 ``five_hour`` and ``seven_day`` windows. Exit code 2 means the probe cannot
 resolve; the caller then asks the user for a manual reset time.
 """
@@ -18,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
 import sys
 import urllib.error
@@ -67,6 +69,7 @@ from usage_pause_constants.resolve_usage_window_constants import (
     RESULT_KEY_WEEKLY_NEAR_CAP,
     RESULT_KEY_WEEKLY_RESETS_AT,
     RESULT_KEY_WEEKLY_UTILIZATION,
+    SESSION_INGRESS_TOKEN_FILE_ENV_VAR,
     SEVEN_DAY_BUCKET_KEY,
     SOURCE_OVERRIDE,
     SOURCE_PROBE,
@@ -212,6 +215,8 @@ def read_oauth_access_token(credentials_path: Path, now: datetime) -> str | None
     """
     try:
         credentials_payload = json.loads(credentials_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
     except (OSError, json.JSONDecodeError):
         logger.warning("credential file unreadable at %s", credentials_path)
         return None
@@ -232,6 +237,54 @@ def read_oauth_access_token(credentials_path: Path, now: datetime) -> str | None
         logger.warning("stored access token is expired; probe unavailable")
         return None
     return access_token
+
+
+def read_session_ingress_token() -> str | None:
+    """Read the session ingress bearer token from its named file.
+
+    ::
+
+        (env var names /run/token)  ->  "<token text>"
+        (env var unset)             ->  None
+
+    Returns None when the environment variable is unset, and None with a
+    warning naming the path when the named file is unreadable or empty.
+
+    Returns:
+        The bearer token for the usage endpoint, or None when unavailable.
+    """
+    token_file_path = os.environ.get(SESSION_INGRESS_TOKEN_FILE_ENV_VAR)
+    if not token_file_path:
+        return None
+    try:
+        token_text = Path(token_file_path).read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        logger.warning("session ingress token file unreadable at %s", token_file_path)
+        return None
+    if not token_text:
+        logger.warning("session ingress token file empty at %s", token_file_path)
+        return None
+    return token_text
+
+
+def resolve_access_token(credentials_path: Path, now: datetime) -> str | None:
+    """Choose the usage-endpoint bearer token from its available sources.
+
+    ::
+
+        credential file token valid   ->  the credential token
+        credential token unavailable  ->  the session ingress token
+        neither source available      ->  None
+
+    Args:
+        credentials_path: The CLI credential file holding the OAuth section.
+        now: The current time the stored credential expiry is compared against.
+
+    Returns:
+        The bearer token for the usage endpoint, or None when no source has one.
+    """
+    credential_token = read_oauth_access_token(credentials_path, now)
+    return credential_token or read_session_ingress_token()
 
 
 def _parse_resets_at(raw_resets_at: object) -> datetime | None:
@@ -370,6 +423,30 @@ def _emit_error(message: str) -> int:
     return EXIT_CODE_PROBE_UNAVAILABLE
 
 
+def _describe_ingress_token_source() -> str:
+    """Name the session ingress token source for the no-token error.
+
+    ::
+
+        (env var holds /run/token)  ->  "the session ingress token file at /run/token"
+        (env var unset)             ->  "the session ingress token file (... unset)"
+        (env var set but empty)     ->  "the session ingress token file (... set but empty)"
+
+    The operator reads which file the ingress lookup tried, learns the
+    environment variable was never set, or learns it was set to an empty value.
+
+    Returns:
+        A clause naming the ingress token file path, the unset variable, or the
+        set-but-empty variable.
+    """
+    ingress_token_file_path = os.environ.get(SESSION_INGRESS_TOKEN_FILE_ENV_VAR)
+    if ingress_token_file_path:
+        return f"the session ingress token file at {ingress_token_file_path}"
+    if ingress_token_file_path is None:
+        return f"the session ingress token file ({SESSION_INGRESS_TOKEN_FILE_ENV_VAR} unset)"
+    return f"the session ingress token file ({SESSION_INGRESS_TOKEN_FILE_ENV_VAR} set but empty)"
+
+
 def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Resolve the 5-hour usage window reset and plan the pause stage chain.",
@@ -424,11 +501,12 @@ def main() -> int:
         if arguments.credentials_path
         else Path.home().joinpath(*ALL_CREDENTIALS_RELATIVE_PATH_PARTS)
     )
-    access_token = read_oauth_access_token(credentials_path, now)
+    access_token = resolve_access_token(credentials_path, now)
     if access_token is None:
         return _emit_error(
-            "OAuth access token unavailable or expired; give a manual reset time, "
-            "for example /usage-pause 10:20pm or /usage-pause 74m"
+            "no usable bearer token from the OAuth credential file at "
+            f"{credentials_path} or {_describe_ingress_token_source()}; give a "
+            "manual reset time, for example /usage-pause 10:20pm or /usage-pause 74m"
         )
     try:
         usage_payload = _fetch_usage_payload(access_token)
