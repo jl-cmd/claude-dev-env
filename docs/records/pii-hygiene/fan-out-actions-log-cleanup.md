@@ -17,11 +17,15 @@
 ## Safe procedure (list first; delete only after human review)
 
 ```powershell
-# 1) List and count — stop if the count is unexpected
-$all_run_ids = gh api `
+# 1) List and count every run — --paginate walks all pages to exhaustion, so
+#    runs past the first 100 are included. Stop if the count is unexpected.
+$all_run_ids = gh api --paginate `
   "repos/jl-cmd/claude-code-config/actions/workflows/fan-out-ai-rules.yml/runs?per_page=100" `
   --jq ".workflow_runs[].id"
 $all_run_ids.Count
+
+# Completeness check: compare $all_run_ids.Count against the run total the
+# Actions UI shows for this workflow. A match confirms every page was read.
 
 # 2) Write IDs for review
 $all_run_ids | Set-Content fanout-run-ids.txt

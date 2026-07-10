@@ -39,7 +39,7 @@ jl-cmd/claude-code-config
                         │  ~60s later
                         ▼
   Dispatcher reconciliation poll
-  → per-repo summary: synced / drift-failed / listener-missing / opted-out
+  → Metric | Count summary: dispatch and listener totals by status
 ```
 
 ---
@@ -72,13 +72,13 @@ No overwrite happens until a human resolves the conflict and re-runs the sync.
 Create `.github/sync-ai-rules.optout` in any repo to exclude it from the sync.
 The file content is free-form (use it to document why the repo is excluded).
 
-- The dispatcher skips opted-out repos and records them as `opted-out` in the summary.
+- The dispatcher skips opted-out repos and counts them under `opted-out` in the summary.
 - If the listener is triggered directly (e.g., via `workflow_dispatch`) while the sentinel
   exists, it exits cleanly with no changes.
 
 Deleting the listener workflow file is **not** the recommended opt-out mechanism — it is
-invisible to the dispatcher, which would then flag the repo as `listener-missing`.
-The sentinel file is auditable and appears cleanly in reconciliation summaries.
+invisible to the dispatcher, which counts the repo under `listener-missing`.
+The sentinel file is auditable and its opt-out count appears cleanly in reconciliation summaries.
 
 ---
 
@@ -114,7 +114,7 @@ Then commit and push a PR in the target repo.
 
 Preferred: create `.github/sync-ai-rules.optout`.
 Alternative: delete `.github/workflows/sync-ai-rules.yml`
-(the dispatcher will flag the repo as `listener-missing` on the next run).
+(the dispatcher counts the repo under `listener-missing` on the next run).
 
 ---
 
@@ -196,8 +196,9 @@ permission. Check that `APP_ID` and `APP_PRIVATE_KEY` secrets are set correctly 
 `jl-cmd/claude-code-config`.
 
 **Listener not installed**
-The dispatcher records `listener-missing` for repos that have no `sync-ai-rules.yml`
-workflow. Run `scripts/bootstrap-listeners.sh` to install it.
+The dispatcher's summary counts repos that have no `sync-ai-rules.yml` workflow under
+`listener-missing`. To find which repo is missing its listener, check that target repo's
+own `sync-ai-rules` workflow runs. Run `scripts/bootstrap-listeners.sh` to install it.
 
 **Dispatch fires but listener never runs**
 `repository_dispatch` events only trigger workflows on the default branch. Confirm the
