@@ -141,7 +141,7 @@ session before the first `mcp__github__*` call (Section 5).
 | Read PR / mergeability / draft state | `gh pr view`, `gh api pulls/N` | `mcp__github__pull_request_read(method="get")` |
 | PR diff / files / commits / checks | `gh pr diff`, `gh api ...` | `mcp__github__pull_request_read(method="get_diff"/"get_files"/"get_commits"/"get_check_runs")` |
 | List reviews / review threads | `gh api --paginate --slurp \| jq` | `mcp__github__pull_request_read(method="get_reviews"/"get_review_comments")`. `mcp__github__pull_request_read(method="get_reviews")` paginates with `page` + `perPage`; `mcp__github__pull_request_read(method="get_review_comments")` paginates with `perPage` + an `after` cursor. |
-| Post / update / close issue | `gh issue create/edit/close` | `mcp__github__issue_write(method="create"/"update")` |
+| Post / update / close issue | `gh issue create/edit/close` | `mcp__github__issue_write(method="create"/"update")`; close: `mcp__github__issue_write(method="update", state="closed")` |
 | Post issue or PR comment | `gh issue comment`, `gh pr comment` | `mcp__github__add_issue_comment` |
 | Post review with inline comments | `gh api pulls/N/reviews` POST | `mcp__github__pull_request_review_write(method="create")` → `mcp__github__add_comment_to_pending_review` per finding → `mcp__github__pull_request_review_write(method="submit_pending", event="COMMENT")` |
 | Reply to a review comment | `gh api pulls/N/comments/ID/replies` | `mcp__github__add_reply_to_pull_request_comment` (numeric `discussion_r` id) |
@@ -478,9 +478,9 @@ probes is `jl-cmd`; raw REST posts as `claude[bot]`.
 | `ScheduleWakeup` in the main session | cloud session | Available | verified |
 | `EnterWorktree`, `Monitor` available | cloud session | Available (`Monitor` deferred) | verified |
 | `BUGTEAM_REVIEWER_ACCOUNT`, `CLAUDE_REVIEWS_DISABLED` unset | cloud session | Both unset | verified |
-| MCP `mcp__github__issue_write(create)` on `jl-cmd/claude-code-config` | jl-cmd (MCP) | Issue #967 (id 4854507758) created | verified |
+| MCP `mcp__github__issue_write(method="create")` on `jl-cmd/claude-code-config` | jl-cmd (MCP) | Issue #967 (id 4854507758) created | verified |
 | MCP `mcp__github__add_issue_comment` on issue #967 | jl-cmd (MCP) | Comment id 4934741005 | verified |
-| MCP `mcp__github__issue_write(update, state=closed)` on #967 | jl-cmd (MCP) | Read-back state closed, `state_reason` not_planned, `closed_by` jl-cmd | verified |
+| MCP `mcp__github__issue_write(method="update", state="closed")` on #967 | jl-cmd (MCP) | Read-back state closed, `state_reason` not_planned, `closed_by` jl-cmd | verified |
 | REST issue create on `JonEcho/python-automation` | claude[bot] (REST) | HTTP 201, issue #726 (id 4854510248), author `claude[bot]` | verified |
 | REST issue comment on #726 | claude[bot] (REST) | HTTP 201, comment id 4934744457 | verified |
 | REST issue close (PATCH state=closed) on #726 | claude[bot] (REST) | HTTP 200, read-back state closed, `state_reason` completed, `closed_by` claude[bot] | verified |
