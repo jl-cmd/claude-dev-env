@@ -82,6 +82,61 @@ def test_flags_github_token_aws_key_and_pem_header() -> None:
     assert any(each.category == "secret" for each in all_pem_hits)
 
 
+def test_secret_and_email_previews_are_redacted() -> None:
+    all_secret_hits = scan_text_for_pii(f"export TOKEN={SYNTHETIC_GITHUB_TOKEN}")
+    all_email_hits = scan_text_for_pii(f"contact {SYNTHETIC_REAL_EMAIL}")
+    secret_finding = next(
+        each for each in all_secret_hits if each.category == "secret"
+    )
+    email_finding = next(each for each in all_email_hits if each.category == "email")
+    assert secret_finding.matched_text == SYNTHETIC_GITHUB_TOKEN
+    assert SYNTHETIC_GITHUB_TOKEN not in secret_finding.preview
+    assert "…" in secret_finding.preview
+    assert email_finding.matched_text == SYNTHETIC_REAL_EMAIL
+    assert SYNTHETIC_REAL_EMAIL not in email_finding.preview
+    assert "…" in email_finding.preview
+
+
+def test_allows_common_cloud_and_system_home_usernames() -> None:
+    assert scan_text_for_pii(r"C:\Users\ubuntu\notes.txt") == []
+    assert scan_text_for_pii(r"C:\Users\admin\notes.txt") == []
+    assert scan_text_for_pii("/home/runner/work/repo") == []
+    assert scan_text_for_pii("/home/container/app") == []
+
+
+def test_flags_genuine_human_home_username() -> None:
+    all_human_hits = scan_text_for_pii(r"C:\Users\johnsmith\notes.txt")
+    assert any(each.category == "home-path" for each in all_human_hits)
+
+
+def test_short_nonsafe_email_preview_is_fully_redacted() -> None:
+    all_email_hits = scan_text_for_pii("reach owner@acme.io")
+    email_finding = next(
+        each for each in all_email_hits if each.category == "email"
+    )
+    assert email_finding.matched_text == "owner@acme.io"
+    assert email_finding.preview == "[redacted]"
+    assert "owner" not in email_finding.preview
+
+
+def test_home_path_preview_redacts_only_the_username() -> None:
+    all_home_hits = scan_text_for_pii(r"path is C:\Users\johnsmith\secret.txt")
+    home_finding = next(
+        each for each in all_home_hits if each.category == "home-path"
+    )
+    assert "johnsmith" not in home_finding.preview
+    assert "[redacted]" in home_finding.preview
+    assert "Users" in home_finding.preview
+
+
+def test_home_path_preview_redacts_home_segment_when_name_repeats_earlier() -> None:
+    all_home_hits = scan_text_for_pii(r"path is C:\Users\Users\secret.txt")
+    home_finding = next(
+        each for each in all_home_hits if each.category == "home-path"
+    )
+    assert home_finding.preview == r"C:\Users\[redacted]"
+
+
 def test_clean_prose_returns_no_findings() -> None:
     prose = "Ship the fix. Use user@example.com in docs. Path is C:/Users/<you>/."
     assert scan_text_for_pii(prose) == []

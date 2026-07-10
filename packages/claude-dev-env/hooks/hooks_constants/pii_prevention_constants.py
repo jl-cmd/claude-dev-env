@@ -7,6 +7,7 @@ import re
 from hooks_constants.hardcoded_user_path_constants import HARDCODED_USER_PATH_PATTERN
 
 BASH_TOOL_NAME: str = "Bash"
+POWERSHELL_TOOL_NAME: str = "PowerShell"
 WRITE_TOOL_NAME: str = "Write"
 EDIT_TOOL_NAME: str = "Edit"
 MULTI_EDIT_TOOL_NAME: str = "MultiEdit"
@@ -14,6 +15,79 @@ MULTI_EDIT_TOOL_NAME: str = "MultiEdit"
 ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES: frozenset[str] = frozenset(
     {WRITE_TOOL_NAME, EDIT_TOOL_NAME, MULTI_EDIT_TOOL_NAME}
 )
+
+ALL_SHELL_TOOL_NAMES: frozenset[str] = frozenset(
+    {BASH_TOOL_NAME, POWERSHELL_TOOL_NAME}
+)
+
+ALL_GIT_BINARY_BASENAMES: frozenset[str] = frozenset({"git", "git.exe"})
+GIT_COMMIT_SUBCOMMAND: str = "commit"
+GIT_WORKING_DIRECTORY_OPTION: str = "-C"
+ALL_VALUE_TAKING_GIT_OPTIONS: frozenset[str] = frozenset(
+    {GIT_WORKING_DIRECTORY_OPTION, "-c", "--git-dir", "--work-tree", "--namespace"}
+)
+GIT_OPTION_WITH_VALUE_STEP: int = 2
+ALL_SHELL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset(
+    {"&&", "||", ";", "|", "&"}
+)
+ALL_SHELL_KEYWORD_TOKENS: frozenset[str] = frozenset(
+    {"then", "do", "else", "elif"}
+)
+ALL_COMMAND_WRAPPER_TOKENS: frozenset[str] = frozenset(
+    {
+        "sudo",
+        "doas",
+        "env",
+        "time",
+        "timeout",
+        "nice",
+        "ionice",
+        "chrt",
+        "xargs",
+        "command",
+        "stdbuf",
+        "nohup",
+        "setsid",
+        "flock",
+    }
+)
+ALL_LEADING_SKIPPABLE_COMMAND_TOKENS: frozenset[str] = (
+    ALL_SHELL_KEYWORD_TOKENS | ALL_COMMAND_WRAPPER_TOKENS
+)
+ALL_ONE_OPERAND_WRAPPER_TOKENS: frozenset[str] = frozenset({"timeout", "flock"})
+ALL_BASH_FAMILY_INTERPRETER_BASENAMES: frozenset[str] = frozenset(
+    {
+        "bash",
+        "sh",
+        "bash.exe",
+        "sh.exe",
+    }
+)
+ALL_POWERSHELL_INTERPRETER_BASENAMES: frozenset[str] = frozenset(
+    {
+        "pwsh",
+        "pwsh.exe",
+        "powershell",
+        "powershell.exe",
+    }
+)
+ALL_SHELL_INTERPRETER_BASENAMES: frozenset[str] = (
+    ALL_BASH_FAMILY_INTERPRETER_BASENAMES | ALL_POWERSHELL_INTERPRETER_BASENAMES
+)
+SUBSHELL_GROUP_OPEN_TOKEN: str = "("
+SHELL_INLINE_COMMAND_FLAG: str = "-c"
+POWERSHELL_INLINE_COMMAND_FLAG: str = "-command"
+INLINE_COMMAND_FLAG_CLUSTER_CHARACTER: str = "c"
+INLINE_COMMAND_TOKEN_JOINER: str = " "
+SINGLE_DASH_OPTION_PREFIX: str = "-"
+DOUBLE_DASH_OPTION_PREFIX: str = "--"
+ALL_SHELL_QUOTE_CHARACTERS: frozenset[str] = frozenset({'"', "'"})
+ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS: frozenset[str] = frozenset({"\n", "\r"})
+ENVIRONMENT_ASSIGNMENT_PATTERN: re.Pattern[str] = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_]*="
+)
+LINE_CONTINUATION_PATTERN: re.Pattern[str] = re.compile(r"\\\r?\n")
+POWERSHELL_LINE_CONTINUATION_PATTERN: re.Pattern[str] = re.compile(r"`\r?\n")
 
 MCP_GITHUB_TOOL_PREFIX: str = "mcp__plugin_github_github__"
 
@@ -78,20 +152,20 @@ ALL_PLACEHOLDER_HOME_USERNAMES: frozenset[str] = frozenset(
         "your-user",
         "your_user",
         "you",
-        "me",
         "name",
         "alice",
         "bob",
         "carol",
         "dave",
+        "placeholder",
+        "path",
+        "me",
+        "someone",
+        "default",
+        "admin",
         "runner",
         "container",
         "ubuntu",
-        "admin",
-        "default",
-        "placeholder",
-        "path",
-        "someone",
     }
 )
 
@@ -134,6 +208,21 @@ CATEGORY_HOME_PATH: str = "home-path"
 CATEGORY_PRIVATE_IP: str = "private-ip"
 CATEGORY_SECRET: str = "secret"
 
+ALL_REDACTED_PREVIEW_CATEGORIES: frozenset[str] = frozenset(
+    {CATEGORY_EMAIL, CATEGORY_SECRET}
+)
+REDACTED_PREVIEW_PREFIX_LENGTH: int = 4
+REDACTED_PREVIEW_SUFFIX_LENGTH: int = 4
+REDACTED_PREVIEW_REVEALED_LENGTH: int = (
+    REDACTED_PREVIEW_PREFIX_LENGTH + REDACTED_PREVIEW_SUFFIX_LENGTH
+)
+REDACTED_PREVIEW_MINIMUM_HIDDEN_LENGTH: int = REDACTED_PREVIEW_REVEALED_LENGTH
+REDACTED_PREVIEW_ELLIPSIS: str = "…"
+REDACTED_SHORT_PREVIEW: str = "[redacted]"
+MINIMUM_LENGTH_FOR_PARTIAL_REDACTION: int = (
+    REDACTED_PREVIEW_REVEALED_LENGTH + REDACTED_PREVIEW_MINIMUM_HIDDEN_LENGTH
+)
+
 EMAIL_PATTERN: re.Pattern[str] = re.compile(
     r"(?i)\b([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})\b"
 )
@@ -160,6 +249,8 @@ PEM_PRIVATE_KEY_HEADER_PATTERN: re.Pattern[str] = re.compile(
 )
 
 HOME_PATH_PATTERN: re.Pattern[str] = HARDCODED_USER_PATH_PATTERN
+
+ALL_HOME_DIRECTORY_PATH_MARKERS: tuple[str, ...] = ("/users/", "/home/")
 
 ALL_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     GITHUB_TOKEN_PATTERN,
@@ -188,6 +279,12 @@ FINDING_LINE_TEMPLATE: str = "  [{category}] {preview}"
 STAGED_LIST_FAILURE_REASON: str = (
     "BLOCKED [pii_prevention_blocker]: could not list staged files for PII scan "
     "(git diff --cached failed). Refuse commit until the index is readable."
+)
+
+REPOSITORY_ROOT_UNRESOLVED_REASON: str = (
+    "BLOCKED [pii_prevention_blocker]: could not resolve the git repository root "
+    "for a commit command (not a git work tree, git missing, or bad -C path). "
+    "Refuse commit until the repository root is resolvable."
 )
 
 STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE: str = (

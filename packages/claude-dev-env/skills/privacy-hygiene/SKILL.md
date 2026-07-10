@@ -30,8 +30,8 @@ Find and remove personal data and high-confidence secrets before they land in gi
 Surfaces:
 
 1. **Write / Edit / MultiEdit** — payload text about to land on disk (via PreToolUse dispatcher)
-2. **Durable posts** — `gh pr/issue create|comment|edit|review` bodies and GitHub MCP body/comment fields
-3. **git commit** — staged blob text (non-exempt paths)
+2. **Durable posts** — `gh pr/issue create|comment|edit|review` bodies and GitHub MCP body/comment fields (Bash and PowerShell)
+3. **git commit** — staged blob text (non-exempt paths) on Bash and PowerShell, including `git.exe` and flag forms (`--no-verify`, `-c`, `-C`). Commit message bodies (`-m` / `-F`) are out of scope for the automated gate
 
 ## Sweep procedure
 
@@ -111,3 +111,4 @@ Hooks register via `hooks/hooks.json` into `~/.claude/settings.json`. Once insta
 - Does not rewrite git history without explicit user approval
 - Does not rotate credentials for you
 - Does not replace the write-time hook — it complements it
+- Does not scan commit-message text (`-m` / `-F`); keep messages free of secrets yourself
