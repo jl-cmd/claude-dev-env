@@ -214,6 +214,7 @@ Slash commands for common workflows.
 | `pr-fix-protocol` | Applies reviewer findings as verified fixes and drives unresolved threads to zero: executor choice, the shared 13-step fix sequence, atomic reply-and-resolve, and post-push state resets |
 | `post-audit-findings` | Publishes an audit pass as one GitHub PR review via post_audit_thread.py: findings-JSON mapping, anchored/unanchored partition, self-PR reviewer toggle, and thread-id harvest for the fix loop |
 | `pr-loop-lifecycle` | Opens and closes a PR-loop run: permission grant with auto-mode escalation, worktree preflight, then teardown, PR description rewrite, always-run revoke, and the final report |
+| `pr-loop-cloud-transport` | Six-step transport workflow that lets any PR-loop skill run in a Claude Code cloud session with no `gh` CLI: MCP schema load, origin/HEAD fix, live-identity review rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check |
 
 ### Hooks
 

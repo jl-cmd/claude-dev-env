@@ -165,7 +165,9 @@ operation inventory of the installed skills.
 
 Paste this block at the start of any cloud PR-loop run. It sets up MCP
 schemas, the push fix, transport rules, identity rules, the Copilot
-fallback, and hook notes.
+fallback, and hook notes. The `pr-loop-cloud-transport` skill carries this
+preamble as a step-by-step workflow with a progress checklist, so a run can
+invoke the skill in place of pasting the block.
 
 ### 5.1 Load MCP schemas (once per session)
 
