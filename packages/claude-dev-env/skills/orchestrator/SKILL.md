@@ -126,7 +126,7 @@ available.
 | Feature, bug, and refactor coding | `clean-coder` | `opus` |
 | Verification passes | `code-verifier` | `sonnet` |
 | Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` |
-| PR descriptions | `pr-description-writer` | `sonnet`, with file-list grounding check |
+| PR descriptions | `pr-description-writer` | `haiku`, with file-list grounding check |
 | Fan-out searches and checklist verification reads | `Explore` | `haiku`; use `sonnet` when judgment-heavy |
 
 Routing rules:
