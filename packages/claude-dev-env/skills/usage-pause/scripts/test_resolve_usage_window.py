@@ -34,6 +34,19 @@ def local_now() -> datetime:
     return datetime(2026, 7, 8, 9, 0, 0).astimezone()
 
 
+def write_credentials(
+    target: Path, expires_at_milliseconds: int, access_token: str = "token-value"
+) -> None:
+    payload = {
+        "claudeAiOauth": {
+            "accessToken": access_token,
+            "refreshToken": "refresh-value",
+            "expiresAt": expires_at_milliseconds,
+        }
+    }
+    target.write_text(json.dumps(payload), encoding="utf-8")
+
+
 class TestParseManualOverride:
     def should_parse_clock_time_with_pm_meridiem_to_same_day(self) -> None:
         resolver = load_resolver_module()
@@ -137,22 +150,12 @@ class TestPlanWakeupStages:
 
 
 class TestReadOauthAccessToken:
-    def write_credentials(self, target: Path, expires_at_milliseconds: int) -> None:
-        payload = {
-            "claudeAiOauth": {
-                "accessToken": "token-value",
-                "refreshToken": "refresh-value",
-                "expiresAt": expires_at_milliseconds,
-            }
-        }
-        target.write_text(json.dumps(payload), encoding="utf-8")
-
     def should_return_token_when_not_expired(self, tmp_path: Path) -> None:
         resolver = load_resolver_module()
         now = local_now()
         credentials_path = tmp_path / ".credentials.json"
         future_milliseconds = int((now + timedelta(hours=1)).timestamp() * 1000)
-        self.write_credentials(credentials_path, future_milliseconds)
+        write_credentials(credentials_path, future_milliseconds)
         assert resolver.read_oauth_access_token(credentials_path, now) == "token-value"
 
     def should_return_none_when_token_expired(self, tmp_path: Path) -> None:
@@ -160,7 +163,7 @@ class TestReadOauthAccessToken:
         now = local_now()
         credentials_path = tmp_path / ".credentials.json"
         past_milliseconds = int((now - timedelta(hours=1)).timestamp() * 1000)
-        self.write_credentials(credentials_path, past_milliseconds)
+        write_credentials(credentials_path, past_milliseconds)
         assert resolver.read_oauth_access_token(credentials_path, now) is None
 
     def should_return_none_when_file_missing(self, tmp_path: Path) -> None:
@@ -202,19 +205,17 @@ class TestReadSessionIngressToken:
         monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))
         assert resolver.read_session_ingress_token() is None
 
+    def should_return_none_when_file_is_not_valid_utf8(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        token_file = tmp_path / "ingress-token"
+        token_file.write_bytes(b"\xff\xfe\x00token")
+        monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))
+        assert resolver.read_session_ingress_token() is None
+
 
 class TestResolveAccessToken:
-    def write_valid_credentials(self, target: Path, now: datetime) -> None:
-        future_milliseconds = int((now + timedelta(hours=1)).timestamp() * 1000)
-        payload = {
-            "claudeAiOauth": {
-                "accessToken": "credential-token",
-                "refreshToken": "refresh-value",
-                "expiresAt": future_milliseconds,
-            }
-        }
-        target.write_text(json.dumps(payload), encoding="utf-8")
-
     def should_use_ingress_token_when_credential_file_missing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -232,7 +233,10 @@ class TestResolveAccessToken:
         resolver = load_resolver_module()
         now = local_now()
         credentials_path = tmp_path / ".credentials.json"
-        self.write_valid_credentials(credentials_path, now)
+        future_milliseconds = int((now + timedelta(hours=1)).timestamp() * 1000)
+        write_credentials(
+            credentials_path, future_milliseconds, access_token="credential-token"
+        )
         token_file = tmp_path / "ingress-token"
         token_file.write_text("ingress-token-value", encoding="utf-8")
         monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))

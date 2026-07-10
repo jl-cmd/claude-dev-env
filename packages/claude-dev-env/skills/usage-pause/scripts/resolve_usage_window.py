@@ -256,7 +256,7 @@ def read_session_ingress_token() -> str | None:
         return None
     try:
         token_text = Path(token_file_path).read_text(encoding="utf-8").strip()
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         logger.warning("session ingress token file unreadable at %s", token_file_path)
         return None
     if not token_text:
@@ -478,7 +478,8 @@ def main() -> int:
     access_token = resolve_access_token(credentials_path, now)
     if access_token is None:
         return _emit_error(
-            "OAuth access token unavailable or expired; give a manual reset time, "
+            "no usable bearer token from the OAuth credential file or the session "
+            "ingress token file; give a manual reset time, "
             "for example /usage-pause 10:20pm or /usage-pause 74m"
         )
     try:

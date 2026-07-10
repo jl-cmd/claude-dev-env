@@ -110,7 +110,7 @@ Fill each `<slot>` at schedule time: `<remaining_stage_durations>` is the tail o
 | `SKILL.md` | This flow: resolve, weekly guard, stage chain, templates |
 | `scripts/resolve_usage_window.py` | The window resolver and stage planner CLI |
 | `scripts/test_resolve_usage_window.py` | Behavioral tests for parsing, staging, token reading, extraction, CLI |
-| `scripts/usage_pause_constants/resolve_usage_window_constants.py` | Endpoint, credential keys, stage sizing, thresholds, result keys |
+| `scripts/usage_pause_constants/resolve_usage_window_constants.py` | Endpoint, credential keys, the session ingress token env var, stage sizing, thresholds, result keys |
 
 ## Gotchas
 
