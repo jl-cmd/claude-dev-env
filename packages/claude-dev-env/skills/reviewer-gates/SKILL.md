@@ -36,7 +36,7 @@ Run the shared parser — never an inline shell parse:
 python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer <bugbot|bugteam|copilot>
 ```
 
-- **Exit 0** — the named reviewer is disabled for this run (opted out, or, for Bugbot, off by default without the `CLAUDE_REVIEWS_ENABLED` opt-in). A skill whose whole run depends on that reviewer responds with its refusal line and stops. The template: `/<caller> is disabled via CLAUDE_REVIEWS_DISABLED.` A loop that merely includes the reviewer as one gate marks the reviewer down (`bugbot_down = true`, `copilot_down = true`) and continues on its remaining signals.
+- **Exit 0** — the named reviewer is disabled for this run (opted out, or, for Bugbot, off by default without the `CLAUDE_REVIEWS_ENABLED` opt-in). A skill whose whole run depends on that reviewer responds with its refusal line and stops. A copilot- or bugteam-dependent caller names the opt-out: `/<caller> is disabled via CLAUDE_REVIEWS_DISABLED.` A Bugbot-dependent caller off by default names the opt-in the run needs: `/<caller> is disabled: Cursor Bugbot needs a `bugbot` token in CLAUDE_REVIEWS_ENABLED.` A loop that merely includes the reviewer as one gate marks the reviewer down (`bugbot_down = true`, `copilot_down = true`) and continues on its remaining signals.
 - **Exit 1** — the reviewer is available; continue.
 
 ## Gate 2: Copilot quota pre-check (once per run)

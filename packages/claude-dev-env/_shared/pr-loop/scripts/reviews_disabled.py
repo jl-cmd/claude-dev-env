@@ -130,7 +130,7 @@ def is_copilot_disabled_via_env() -> bool:
 
 
 def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
-    """Parse command-line arguments for the reviewer opt-out check.
+    """Parse command-line arguments for the reviewer opt-out and opt-in gate check.
 
     Args:
         all_argv: Argument list excluding the program name, typically
@@ -149,7 +149,7 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
             CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
             CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
         ],
-        help="Reviewer token to test against CLAUDE_REVIEWS_DISABLED",
+        help="Reviewer token to test against the CLAUDE_REVIEWS_DISABLED / CLAUDE_REVIEWS_ENABLED gates",
     )
     return parser.parse_args(all_argv)
 
