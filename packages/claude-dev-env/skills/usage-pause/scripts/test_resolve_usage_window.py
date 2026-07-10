@@ -400,14 +400,6 @@ class TestCommandLine:
         assert completed.returncode == 2
         resolved_payload = json.loads(completed.stdout)
         assert "error" in resolved_payload
-
-    def should_name_the_checked_credentials_path_in_the_error(
-        self, tmp_path: Path
-    ) -> None:
-        missing_path = tmp_path / "absent.json"
-        completed = self.run_resolver("--credentials-path", str(missing_path))
-        assert completed.returncode == 2
-        resolved_payload = json.loads(completed.stdout)
         assert str(missing_path) in resolved_payload["error"]
 
     def should_reject_invalid_override_with_error_payload(self) -> None:
