@@ -72,7 +72,7 @@ evidence (the probe or inventory line that proves it), and a fix summary
 
 - **Symptom:** The first `mcp__github__*` call in a session fails with `InputValidationError`, and no skill documents a recovery.
 - **Cause:** MCP tool schemas load on demand. A call before the schema loads is rejected.
-- **Evidence:** Verified against `mcp__github__get_me` and `pull_request_read` before a `ToolSearch` load.
+- **Evidence:** Verified against `mcp__github__get_me` and `mcp__github__pull_request_read` before a `ToolSearch` load.
 - **Fix summary:** Phase B adds a `ToolSearch` load line to the shared cloud-transport doc and to every SKILL.md that names an MCP tool.
 
 ### RC3 — `origin/HEAD` missing in cloud clones
@@ -115,14 +115,14 @@ evidence (the probe or inventory line that proves it), and a fix summary
 - **Symptom:** The Copilot quota pre-check crashes rather than returning its skip code.
 - **Cause:** `gh api copilot_internal/user` has no MCP equivalent and the internal endpoint is not served for proxy REST. `copilot_quota.py` `_run_gh` runs `subprocess.run(["gh", ...])` with no missing-binary handling, so the missing `gh` raises an uncaught `FileNotFoundError`.
 - **Evidence:** `_shared/pr-loop/scripts/copilot_quota.py` `_run_gh` (lines 63-90) has no `FileNotFoundError` guard around `subprocess.run(["gh", *all_command_arguments], ...)`. The quota read at line 169 calls `gh api copilot_internal/user`.
-- **Fix summary:** Phase A adds missing-binary handling that returns the documented skip code, so the quota gate treats Copilot status as unknown; Phase B has the caller work out `copilot_down` from what lands on the PR after `request_copilot_review`, since the request call itself confirms nothing.
+- **Fix summary:** Phase A adds missing-binary handling that returns the documented skip code, so the quota gate treats Copilot status as unknown; Phase B has the caller work out `copilot_down` from what lands on the PR after `mcp__github__request_copilot_review`, since the request call itself confirms nothing.
 
 ### RC9 — Reviewer gates weaken with no notice
 
 - **Symptom:** With `gh` absent, `copilot_down` and `bugbot_down` read as permanently true for the wrong reason, so loops converge on fewer signals and say nothing about why.
 - **Cause:** The gates read failure from a `gh` call that cannot run, rather than from a real reviewer-down signal.
 - **Evidence:** `reviewer_availability.py` gates Copilot on `evaluate_copilot_quota()`, a chain of `gh` subprocess calls (RC8). `check_bugbot_ci.py` shells to `gh api` for CI state and documents exit code 2 as `gh CLI error`.
-- **Fix summary:** Phase B gives `reviewer-gates` explicit cloud semantics — Copilot status unknown, work it out from what lands on the PR after the request; Bugbot CI read through `get_check_runs` — and surfaces the environment limit rather than a false down flag.
+- **Fix summary:** Phase B gives `reviewer-gates` explicit cloud semantics — Copilot status unknown, work it out from what lands on the PR after the request; Bugbot CI read through `mcp__github__pull_request_read(method="get_check_runs")` — and surfaces the environment limit rather than a false down flag.
 
 ### RC10 — Cross-repo checkout
 
@@ -140,7 +140,7 @@ session before the first `mcp__github__*` call (Section 5).
 |---|---|---|
 | Read PR / mergeability / draft state | `gh pr view`, `gh api pulls/N` | `mcp__github__pull_request_read(method="get")` |
 | PR diff / files / commits / checks | `gh pr diff`, `gh api ...` | `mcp__github__pull_request_read(method="get_diff"/"get_files"/"get_commits"/"get_check_runs")` |
-| List reviews / review threads | `gh api --paginate --slurp \| jq` | `mcp__github__pull_request_read(method="get_reviews"/"get_review_comments")`. `get_reviews` paginates with `page` + `perPage`; `get_review_comments` paginates with `perPage` + an `after` cursor. |
+| List reviews / review threads | `gh api --paginate --slurp \| jq` | `mcp__github__pull_request_read(method="get_reviews"/"get_review_comments")`. `mcp__github__pull_request_read(method="get_reviews")` paginates with `page` + `perPage`; `mcp__github__pull_request_read(method="get_review_comments")` paginates with `perPage` + an `after` cursor. |
 | Post / update / close issue | `gh issue create/edit/close` | `mcp__github__issue_write(method="create"/"update")` |
 | Post issue or PR comment | `gh issue comment`, `gh pr comment` | `mcp__github__add_issue_comment` |
 | Post review with inline comments | `gh api pulls/N/reviews` POST | `mcp__github__pull_request_review_write(method="create")` → `mcp__github__add_comment_to_pending_review` per finding → `mcp__github__pull_request_review_write(method="submit_pending", event="COMMENT")` |
@@ -169,7 +169,7 @@ fallback, and hook notes.
 ### 5.1 Load MCP schemas (once per session)
 
 ```
-ToolSearch "select:mcp__github__pull_request_read,mcp__github__pull_request_review_write,mcp__github__add_comment_to_pending_review,mcp__github__add_reply_to_pull_request_comment,mcp__github__add_issue_comment,mcp__github__request_copilot_review,mcp__github__update_pull_request,mcp__github__create_pull_request,mcp__github__issue_write,mcp__github__search_pull_requests,mcp__github__get_me,mcp__Claude_Code_Remote__add_repo"
+ToolSearch "select:mcp__github__pull_request_read,mcp__github__pull_request_review_write,mcp__github__add_comment_to_pending_review,mcp__github__add_reply_to_pull_request_comment,mcp__github__add_issue_comment,mcp__github__request_copilot_review,mcp__github__update_pull_request,mcp__github__create_pull_request,mcp__github__issue_write,mcp__github__search_pull_requests,mcp__github__get_me,mcp__github__actions_list,mcp__github__actions_get,mcp__github__get_job_logs,mcp__Claude_Code_Remote__add_repo"
 ```
 
 Run this before the first MCP tool call. A call before the schema
@@ -218,7 +218,7 @@ origin/HEAD` (RC3). Run it once per repo per session.
 - On a PR another account authored (for example a `JonEcho` PR when the MCP
   login is `jl-cmd`), a review of any type from the MCP login is allowed.
 - Author-keyed logic — self-PR detection and bot filtering — accounts for the
-  split: an MCP post carries the `get_me` login as author, and a REST post
+  split: an MCP post carries the `mcp__github__get_me` login as author, and a REST post
   carries `claude[bot]`. A self-PR check keys on the login that opened the PR,
   and a bot filter treats `claude[bot]` as the session's own REST author.
 - Leave `BUGTEAM_REVIEWER_ACCOUNT` unset. The account-swap path has no cloud
@@ -303,7 +303,7 @@ packages/claude-dev-env/_shared/pr-loop/scripts/tests/` is green.
 **A4. `skills/pr-converge/scripts/check_bugbot_ci.py` — route check-runs off `gh`.**
 Change the check-runs read (line 52,
 `subprocess.run(["gh","api",...,"--jq", jq_filter])`) to `github_rest.py`
-(REST check-runs for a covered owner) or `pull_request_read(method="get_check_runs")`.
+(REST check-runs for a covered owner) or `mcp__github__pull_request_read(method="get_check_runs")`.
 *Acceptance:* in a cloud session the script exits 0 or 1 with a CI verdict,
 never exit 2 (`gh CLI error`).
 
@@ -330,7 +330,7 @@ and exits 0.
 **A8. `skills/pr-converge/scripts/post_fix_reply.py` — posts off `gh`.**
 Change the inline-reply POST (line 57) and the general-comment POST (line 98)
 to `github_rest.py`, or document the MCP path
-(`add_reply_to_pull_request_comment` and `add_issue_comment`) for callers.
+(`mcp__github__add_reply_to_pull_request_comment` and `mcp__github__add_issue_comment`) for callers.
 *Acceptance:* an inline reply and a general comment land on a scratch PR in
 cloud.
 
@@ -397,11 +397,11 @@ MCP tool call; a grep for `ToolSearch` finds a hit in each.
 
 **B4. `skills/reviewer-gates/SKILL.md` — explicit cloud semantics.**
 State that in a cloud session Copilot status is unknown, so the flow calls
-`request_copilot_review` and reads `copilot_down` from what lands on the PR
+`mcp__github__request_copilot_review` and reads `copilot_down` from what lands on the PR
 afterward — the request call confirms nothing on its own — and that
-Bugbot CI state reads through `pull_request_read(method="get_check_runs")`
+Bugbot CI state reads through `mcp__github__pull_request_read(method="get_check_runs")`
 rather than `gh`.
-*Acceptance:* the SKILL.md names the Copilot path and the `get_check_runs`
+*Acceptance:* the SKILL.md names the Copilot path and the `mcp__github__pull_request_read(method="get_check_runs")`
 Bugbot read.
 
 **B5. autoconverge and pr-converge setup-needs sections — transport-availability wording.**
@@ -427,8 +427,8 @@ name and sees it fire; `python3 -m pytest` covers the new matcher.
 
 **C2. Decide MCP-side gates for PR create and edit (decision item).**
 Decide whether `conventional_pr_title_gate` and `pr_description_enforcer`
-need MCP-side equivalents that match `create_pull_request` and
-`update_pull_request`, so a cloud PR create or edit gets the same title and
+need MCP-side equivalents that match `mcp__github__create_pull_request` and
+`mcp__github__update_pull_request`, so a cloud PR create or edit gets the same title and
 body checks the `gh` path gets. Record the decision and, if yes, add the
 matchers and checks.
 *Acceptance:* a written decision; if the decision is yes, the matchers exist
@@ -477,18 +477,18 @@ probes is `jl-cmd`; raw REST posts as `claude[bot]`.
 | `ScheduleWakeup` in the main session | cloud session | Available | verified |
 | `EnterWorktree`, `Monitor` available | cloud session | Available (`Monitor` deferred) | verified |
 | `BUGTEAM_REVIEWER_ACCOUNT`, `CLAUDE_REVIEWS_DISABLED` unset | cloud session | Both unset | verified |
-| MCP `issue_write(create)` on `jl-cmd/claude-code-config` | jl-cmd (MCP) | Issue #967 (id 4854507758) created | verified |
-| MCP `add_issue_comment` on issue #967 | jl-cmd (MCP) | Comment id 4934741005 | verified |
-| MCP `issue_write(update, state=closed)` on #967 | jl-cmd (MCP) | Read-back state closed, `state_reason` not_planned, `closed_by` jl-cmd | verified |
+| MCP `mcp__github__issue_write(create)` on `jl-cmd/claude-code-config` | jl-cmd (MCP) | Issue #967 (id 4854507758) created | verified |
+| MCP `mcp__github__add_issue_comment` on issue #967 | jl-cmd (MCP) | Comment id 4934741005 | verified |
+| MCP `mcp__github__issue_write(update, state=closed)` on #967 | jl-cmd (MCP) | Read-back state closed, `state_reason` not_planned, `closed_by` jl-cmd | verified |
 | REST issue create on `JonEcho/python-automation` | claude[bot] (REST) | HTTP 201, issue #726 (id 4854510248), author `claude[bot]` | verified |
 | REST issue comment on #726 | claude[bot] (REST) | HTTP 201, comment id 4934744457 | verified |
 | REST issue close (PATCH state=closed) on #726 | claude[bot] (REST) | HTTP 200, read-back state closed, `state_reason` completed, `closed_by` claude[bot] | verified |
 | REST read or write on `jl-cmd/claude-code-config` | claude[bot] (REST) | 403 app-not-connected body; repo-scoped, so reads and writes alike refuse | verified |
-| Non-pinned GraphQL: the exact `check_convergence.py` reviewThreads query | claude[bot] (REST) | Refused, HTTP 403, pinned-set rejection body. `pull_request_read(method="get_review_comments")` returns the same data — `is_resolved` plus PRRT thread node ids — and is the working substitute. | verified |
-| Owner-wide `search_pull_requests` | jl-cmd (MCP) | `user:JonEcho is:open` 19; `user:jl-cmd is:open` 15. Always pass `perPage`: an unpaginated owner-wide search overflows the tool-result limit. | verified |
-| PR comment via `add_issue_comment` on PR 966 | jl-cmd (MCP) | Comment id 4934750050 | verified |
+| Non-pinned GraphQL: the exact `check_convergence.py` reviewThreads query | claude[bot] (REST) | Refused, HTTP 403, pinned-set rejection body. `mcp__github__pull_request_read(method="get_review_comments")` returns the same data — `is_resolved` plus PRRT thread node ids — and is the working substitute. | verified |
+| Owner-wide `mcp__github__search_pull_requests` | jl-cmd (MCP) | `user:JonEcho is:open` 19; `user:jl-cmd is:open` 15. Always pass `perPage`: an unpaginated owner-wide search overflows the tool-result limit. | verified |
+| PR comment via `mcp__github__add_issue_comment` on PR 966 | jl-cmd (MCP) | Comment id 4934750050 | verified |
 | Pending-review flow (create pending, add inline comment, send the `COMMENT` review) on own PR 966 | jl-cmd (MCP) | All three steps land; review id 4670922489; a `COMMENT` review lands on the author's own PR | verified |
-| Reply to an inline comment on PR 966 | jl-cmd (MCP) | `get_review_comments` exposes `discussion_r3558470392`; `add_reply_to_pull_request_comment(commentId=3558470392)` returns reply id 3558471545. The numeric comment id surfaces only inside the `html_url` `discussion_r` anchor of `get_review_comments` output. | verified |
+| Reply to an inline comment on PR 966 | jl-cmd (MCP) | `mcp__github__pull_request_read(method="get_review_comments")` exposes `discussion_r3558470392`; `mcp__github__add_reply_to_pull_request_comment(commentId=3558470392)` returns reply id 3558471545. The numeric comment id surfaces only inside the `html_url` `discussion_r` anchor of `mcp__github__pull_request_read(method="get_review_comments")` output. | verified |
 | Thread resolve, unresolve, re-resolve on PR 966 | jl-cmd (MCP) | All three steps land; final read-back `is_resolved=true`, thread `PRRT_kwDOR5Joe86P3NiW` | verified |
 | `mcp__github__request_copilot_review` on PR 966 | jl-cmd (MCP) | Completes with no output in both draft and ready states; no in-band confirmation either way. A landed Copilot review is the only confirming signal. | verified |
 | `mcp__github__update_pull_request(draft=false/true)` toggle on PR 966 | jl-cmd (MCP) | To ready: draft `false`, `mergeable_state` clean. Back to draft: draft `true` (read-back). | verified |
