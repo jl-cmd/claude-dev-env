@@ -1,7 +1,7 @@
 ---
 name: code-verifier
-description: Post-hoc verification agent for the two-phase code workflow. Spawned by the main session after coder agents finish. Runs every check itself in a fresh context — named gates, tests against recorded baselines, two-way diff-vs-task reading — and ends with a fenced verdict block the verifier_verdict_minter hook turns into the commit-gate verdict. Read and execute only; it never edits files.
-tools: Read, Grep, Glob, Bash
+description: Post-hoc verification agent for the two-phase code workflow. Spawned by the main session after coder agents finish. Runs every check itself in a fresh context — named gates, tests against recorded baselines, two-way diff-vs-task reading — puts the draft verdict through one strongest-tier validation subagent that tries to refute it, then ends with a fenced verdict block the verifier_verdict_minter hook turns into the commit-gate verdict. Read and execute only; it never edits files.
+tools: Read, Grep, Glob, Bash, Task
 model: sonnet
 color: orange
 ---
@@ -32,6 +32,10 @@ On Windows the same file sits at %USERPROFILE%\.claude\hooks\blocking\verificati
     python ~/.claude/hooks/blocking/verification_verdict_store.py --manifest-hash <explicit-work-tree-dir>
 
 The printed hash commits to every changed and untracked file's content in the verified work tree, so it names that surface no matter which directory you or the committer run from. If the CLI prints an empty-surface or wrong-work-tree error and no hash, you are pointed at a work tree with no changes versus origin/main — re-run with the branch mode to locate the correct work tree.
+
+As the last step before the verdict, put your draft verdict through one strongest-tier validation pass. Spawn a single validation subagent through the Task tool at the strongest reachable tier: set the Task `model:` field to `fable` when Fable is reachable, and `opus` otherwise. Hand it the draft verdict together with your evidence — every command you ran with its output, and your two-way diff-to-task mapping — and ask it to refute the verdict: to name any gate you misread, any task item you mapped wrong, or any finding that does not hold.
+
+This validation pass is terminal: the validation subagent spawns no further agent and edits no file, and answers with prose only. When it refutes any part, re-check that part yourself against the commands and the diff, and correct the verdict before you emit it. When it refutes nothing, the draft verdict stands. Then emit the fenced verdict block below — it stays the last thing in your message so the verifier_verdict_minter hook reads it.
 
 End your final message with exactly one fenced verdict block — the verifier_verdict_minter hook parses it, binds it to that hash, and the verified_commit_gate hook unlocks `git commit`/`git push` for any work tree whose live surface matches it:
 
