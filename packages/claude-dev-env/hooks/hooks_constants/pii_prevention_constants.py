@@ -34,7 +34,22 @@ ALL_SHELL_KEYWORD_TOKENS: frozenset[str] = frozenset(
     {"then", "do", "else", "elif"}
 )
 ALL_COMMAND_WRAPPER_TOKENS: frozenset[str] = frozenset(
-    {"sudo", "env", "time", "nice", "xargs", "command", "stdbuf"}
+    {
+        "sudo",
+        "doas",
+        "env",
+        "time",
+        "timeout",
+        "nice",
+        "ionice",
+        "chrt",
+        "xargs",
+        "command",
+        "stdbuf",
+        "nohup",
+        "setsid",
+        "flock",
+    }
 )
 ALL_LEADING_SKIPPABLE_COMMAND_TOKENS: frozenset[str] = (
     ALL_SHELL_KEYWORD_TOKENS | ALL_COMMAND_WRAPPER_TOKENS
@@ -65,7 +80,6 @@ INLINE_COMMAND_FLAG_CLUSTER_CHARACTER: str = "c"
 INLINE_COMMAND_TOKEN_JOINER: str = " "
 SINGLE_DASH_OPTION_PREFIX: str = "-"
 DOUBLE_DASH_OPTION_PREFIX: str = "--"
-OPTION_ATTACHED_VALUE_MARKER: str = "="
 ALL_SHELL_QUOTE_CHARACTERS: frozenset[str] = frozenset({'"', "'"})
 ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS: frozenset[str] = frozenset({"\n", "\r"})
 ENVIRONMENT_ASSIGNMENT_PATTERN: re.Pattern[str] = re.compile(
@@ -234,6 +248,8 @@ PEM_PRIVATE_KEY_HEADER_PATTERN: re.Pattern[str] = re.compile(
 )
 
 HOME_PATH_PATTERN: re.Pattern[str] = HARDCODED_USER_PATH_PATTERN
+
+ALL_HOME_DIRECTORY_PATH_MARKERS: tuple[str, ...] = ("/users/", "/home/")
 
 ALL_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     GITHUB_TOKEN_PATTERN,

@@ -78,7 +78,6 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     MESSAGE_LINE_SEPARATOR,
     MULTI_EDIT_TOOL_NAME,
     NULL_BYTE_MARKER,
-    OPTION_ATTACHED_VALUE_MARKER,
     POWERSHELL_INLINE_COMMAND_FLAG,
     POWERSHELL_LINE_CONTINUATION_PATTERN,
     REPOSITORY_ROOT_UNRESOLVED_REASON,
@@ -383,6 +382,7 @@ def _tokenize_shell_command(shell_command_piece: str) -> list[str] | None:
     lexer = shlex.shlex(shell_command_piece, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     lexer.escape = ""
+    lexer.commenters = ""
     try:
         return list(lexer)
     except ValueError:
@@ -436,48 +436,27 @@ def _all_command_segments(shell_command: str) -> list[list[str]]:
     return all_segments
 
 
-def _token_is_command_option(token_text: str) -> bool:
-    stripped_token = _strip_token_edge_quotes(token_text)
-    return stripped_token.startswith(SINGLE_DASH_OPTION_PREFIX)
-
-
-def _wrapper_option_consumes_next_value(
-    option_token: str, all_segment_tokens: list[str], value_index: int
-) -> bool:
-    if value_index >= len(all_segment_tokens):
-        return False
-    stripped_option = _strip_token_edge_quotes(option_token)
-    if stripped_option.startswith(DOUBLE_DASH_OPTION_PREFIX):
-        return False
-    if OPTION_ATTACHED_VALUE_MARKER in stripped_option:
-        return False
-    value_token = all_segment_tokens[value_index]
-    if _token_is_command_option(value_token):
-        return False
-    if _token_is_git_binary(value_token):
-        return False
-    return not _token_is_shell_interpreter(value_token)
+def _token_is_leading_skip_target(token_text: str) -> bool:
+    return _token_is_git_binary(token_text) or _token_is_shell_interpreter(token_text)
 
 
 def _skip_leading_noop_tokens(all_segment_tokens: list[str]) -> int:
     token_index = 0
-    has_skipped_prefix = False
+    has_skipped_wrapper_prefix = False
     while token_index < len(all_segment_tokens):
         each_token = all_segment_tokens[token_index]
         if _token_is_subshell_group_open(each_token):
             token_index += 1
             continue
         if _token_is_skippable_prefix(each_token):
-            has_skipped_prefix = True
+            has_skipped_wrapper_prefix = True
             token_index += 1
             continue
-        if not (has_skipped_prefix and _token_is_command_option(each_token)):
+        if not has_skipped_wrapper_prefix:
+            break
+        if _token_is_leading_skip_target(each_token):
             break
         token_index += 1
-        if _wrapper_option_consumes_next_value(
-            each_token, all_segment_tokens, token_index
-        ):
-            token_index += 1
     return token_index
 
 

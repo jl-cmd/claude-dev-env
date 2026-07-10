@@ -129,6 +129,14 @@ def test_home_path_preview_redacts_only_the_username() -> None:
     assert "Users" in home_finding.preview
 
 
+def test_home_path_preview_redacts_home_segment_when_name_repeats_earlier() -> None:
+    all_home_hits = scan_text_for_pii(r"path is C:\Users\Users\secret.txt")
+    home_finding = next(
+        each for each in all_home_hits if each.category == "home-path"
+    )
+    assert home_finding.preview == r"C:\Users\[redacted]"
+
+
 def test_clean_prose_returns_no_findings() -> None:
     prose = "Ship the fix. Use user@example.com in docs. Path is C:/Users/<you>/."
     assert scan_text_for_pii(prose) == []

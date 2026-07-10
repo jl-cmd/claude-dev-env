@@ -20,6 +20,7 @@ if _hooks_directory not in sys.path:
 from hooks_constants.pii_prevention_constants import (  # noqa: E402
     ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES,
     ALL_EXACT_LEGAL_NOTICE_BASENAMES,
+    ALL_HOME_DIRECTORY_PATH_MARKERS,
     ALL_PLACEHOLDER_HOME_USERNAMES,
     ALL_REDACTED_PREVIEW_CATEGORIES,
     ALL_RFC1918_NETWORK_CIDRS,
@@ -169,32 +170,57 @@ def _is_safe_example_email(email_address: str) -> bool:
     return _is_safe_email_domain(domain_name)
 
 
-def _username_from_home_path(matched_path: str) -> str | None:
-    """Extract the home username segment from a matched home-path string."""
+def _home_username_offset(matched_path: str) -> tuple[int, str] | None:
+    """Return the (start offset, value) of the home-username segment, or None.
+
+    The offset locates the username within *matched_path* by its home marker,
+    so a same-named directory earlier in the path never shadows the real
+    segment::
+
+        C:\\Users\\Users\\file.txt  ->  (9, "Users")   the second Users, not the first
+
+    Replacing backslashes with forward slashes preserves length, so the marker
+    offset computed on the normalized path indexes *matched_path* directly.
+
+    Args:
+        matched_path: The matched home-path substring.
+
+    Returns:
+        The username's start index and value, or None when no marker is found.
+    """
     normalized_path = matched_path.replace("\\", "/")
     lowered_path = normalized_path.lower()
-    for each_marker in ("/users/", "/home/"):
+    for each_marker in ALL_HOME_DIRECTORY_PATH_MARKERS:
         marker_index = lowered_path.find(each_marker)
         if marker_index < 0:
             continue
-        remainder = normalized_path[marker_index + len(each_marker) :]
-        username = remainder.split("/", 1)[0]
-        return username or None
+        username_start = marker_index + len(each_marker)
+        username = normalized_path[username_start:].split("/", 1)[0]
+        if not username:
+            return None
+        return username_start, username
     return None
+
+
+def _username_from_home_path(matched_path: str) -> str | None:
+    """Extract the home username segment from a matched home-path string."""
+    username_offset = _home_username_offset(matched_path)
+    if username_offset is None:
+        return None
+    _username_start, username = username_offset
+    return username
 
 
 def _redact_home_path_username(matched_text: str) -> str:
     """Redact only the username segment of a home path, keeping its shape."""
-    username = _username_from_home_path(matched_text)
-    if not username:
+    username_offset = _home_username_offset(matched_text)
+    if username_offset is None:
         return matched_text
-    username_index = matched_text.find(username)
-    if username_index < 0:
-        return matched_text
+    username_start, username = username_offset
     return (
-        matched_text[:username_index]
+        matched_text[:username_start]
         + REDACTED_SHORT_PREVIEW
-        + matched_text[username_index + len(username) :]
+        + matched_text[username_start + len(username) :]
     )
 
 
