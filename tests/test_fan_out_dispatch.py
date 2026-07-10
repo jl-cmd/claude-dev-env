@@ -1,6 +1,7 @@
 """Specifications for the fan-out dispatch script's pure filtering and formatting logic."""
 
 import os
+import subprocess
 import sys
 import urllib.error
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
+import config
 import fan_out_dispatch
 
 
@@ -75,56 +77,67 @@ class TestIsTargetRepo:
 
 
 class TestBuildSummaryTable:
-    def should_include_header_row(self) -> None:
-        table = fan_out_dispatch.build_summary_table({}, {}, {})
+    def should_include_metric_count_header_row(self) -> None:
+        table = fan_out_dispatch.build_summary_table({}, {})
 
-        assert "| Repo |" in table
-        assert "| Dispatch Status |" in table
-        assert "| Listener Conclusion |" in table
+        assert "| Metric | Count |" in table
+        assert "|--------|-------|" in table
 
-    def should_list_each_repo_in_its_own_row(self) -> None:
+    def should_report_counts_without_repo_names(self) -> None:
         dispatch_status_by_repo = {
             "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
-            "JonEcho/beta": "opted-out",
+            "JonEcho/beta": fan_out_dispatch.DISPATCH_STATUS_OPTED_OUT,
         }
 
-        table = fan_out_dispatch.build_summary_table(dispatch_status_by_repo, {}, {})
+        table = fan_out_dispatch.build_summary_table(dispatch_status_by_repo, {})
 
-        assert "JonEcho/alpha" in table
-        assert "JonEcho/beta" in table
+        assert "JonEcho/alpha" not in table
+        assert "JonEcho/beta" not in table
+        assert "| Targets considered | 2 |" in table
+        assert "| Dispatch succeeded | 1 |" in table
+        assert "| Dispatch opted out | 1 |" in table
 
-    def should_show_listener_conclusion_alongside_dispatch_status(self) -> None:
-        dispatch_status_by_repo = {"JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED}
-        conclusion_by_repo = {"JonEcho/alpha": "success"}
+    def should_count_listener_conclusions_by_status(self) -> None:
+        dispatch_status_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+            "JonEcho/beta": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+        }
+        conclusion_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.LISTENER_CONCLUSION_SUCCESS,
+            "JonEcho/beta": fan_out_dispatch.LISTENER_CONCLUSION_FAILURE,
+        }
 
         table = fan_out_dispatch.build_summary_table(
-            dispatch_status_by_repo, conclusion_by_repo, {}
+            dispatch_status_by_repo, conclusion_by_repo
         )
 
-        assert "success" in table
+        assert "| Listener success | 1 |" in table
+        assert "| Listener failure | 1 |" in table
+        assert "JonEcho/alpha" not in table
+        assert "JonEcho/beta" not in table
 
-    def should_show_notes_when_provided(self) -> None:
-        dispatch_status_by_repo = {"JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED}
-        notes_by_repo = {"JonEcho/alpha": "drift or sync error"}
+    def should_count_dispatch_failures(self) -> None:
+        dispatch_status_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_FAILED,
+        }
 
-        table = fan_out_dispatch.build_summary_table(
-            dispatch_status_by_repo, {}, notes_by_repo
-        )
+        table = fan_out_dispatch.build_summary_table(dispatch_status_by_repo, {})
 
-        assert "drift or sync error" in table
+        assert "| Dispatch failed | 1 |" in table
 
 
 class TestBuildStaleSection:
     def should_return_empty_string_when_no_stale_repos(self) -> None:
         assert fan_out_dispatch.build_stale_section([]) == ""
 
-    def should_list_each_stale_repo(self) -> None:
+    def should_report_stale_count_without_repo_names(self) -> None:
         stale_repos = ["JonEcho/old-project", "jl-cmd/abandoned"]
 
         section = fan_out_dispatch.build_stale_section(stale_repos)
 
-        assert "JonEcho/old-project" in section
-        assert "jl-cmd/abandoned" in section
+        assert "2 target repo(s)" in section
+        assert "JonEcho/old-project" not in section
+        assert "jl-cmd/abandoned" not in section
 
     def should_include_stale_section_heading(self) -> None:
         section = fan_out_dispatch.build_stale_section(["JonEcho/some-repo"])
@@ -395,3 +408,238 @@ class TestPollListenerRetriesUntilWorkflowRunAppears:
                 )
 
         assert conclusion == "success"
+
+
+class TestScriptEntrypointImportPath:
+    def should_load_config_when_run_as_python_script_with_empty_pythonpath(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        repo_root = Path(__file__).resolve().parent.parent
+        script_path = repo_root / "scripts" / "fan_out_dispatch.py"
+        env = os.environ.copy()
+        env["PYTHONPATH"] = ""
+        env["JONECHO_TOKEN"] = ""
+        env["JLCMD_TOKEN"] = ""
+        completed = subprocess.run(
+            [sys.executable, str(script_path)],
+            cwd=str(tmp_path),
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert completed.returncode == 0, completed.stderr
+
+
+class TestImportKeepsAlreadyLoadedConfig:
+    def should_leave_an_already_imported_config_module_in_sys_modules(self) -> None:
+        fan_out_dispatch._ensure_repo_root_on_sys_path()
+
+        assert sys.modules.get("config") is config
+
+
+class TestSummaryCountsConclusionsOutsideEnumeratedSet:
+    def should_count_conclusions_outside_the_enumerated_status_set(self) -> None:
+        dispatch_status_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+            "JonEcho/beta": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+        }
+        conclusion_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.LISTENER_CONCLUSION_SUCCESS,
+            "JonEcho/beta": "cancelled",
+        }
+
+        table = fan_out_dispatch.build_summary_table(
+            dispatch_status_by_repo, conclusion_by_repo
+        )
+
+        assert "| Listener other | 1 |" in table
+
+    def should_reconcile_listener_counts_with_dispatched_repo_total(self) -> None:
+        dispatch_status_by_repo = {
+            "JonEcho/alpha": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+            "JonEcho/beta": fan_out_dispatch.DISPATCH_STATUS_SUCCEEDED,
+        }
+        conclusion_by_repo = {
+            "JonEcho/alpha": "timed_out",
+            "JonEcho/beta": "cancelled",
+        }
+
+        metric_rows = fan_out_dispatch._build_summary_metric_rows(
+            dispatch_status_by_repo, conclusion_by_repo
+        )
+        listener_counts = [
+            each_count
+            for each_label, each_count in metric_rows
+            if each_label.startswith("Listener")
+        ]
+
+        assert sum(listener_counts) == len(conclusion_by_repo)
+
+
+class TestMalformedRepoEntriesAreReported:
+    def should_warn_with_a_count_when_a_target_entry_is_malformed(self) -> None:
+        all_target_repos = [
+            {"owner": {"login": "JonEcho"}},
+        ]
+        token_by_owner = {"JonEcho": FAKE_TOKEN}
+
+        with patch.object(
+            fan_out_dispatch.dispatch_logger, "warning"
+        ) as mock_warning:
+            fan_out_dispatch._dispatch_to_targets(
+                all_target_repos, token_by_owner, {}
+            )
+
+        malformed_warnings = [
+            each_call
+            for each_call in mock_warning.call_args_list
+            if each_call.args
+            and each_call.args[0] == fan_out_dispatch.ACTIONS_MALFORMED_REPO_ENTRY
+        ]
+
+        assert malformed_warnings
+        assert malformed_warnings[0].args[1] == 1
+
+
+class TestExcludedRepoCountNoticeIsGuarded:
+    def should_not_emit_the_notice_when_no_repo_is_excluded(self) -> None:
+        all_target_repos = [
+            make_repo_fixture("JonEcho/first"),
+            make_repo_fixture("jl-cmd/second"),
+        ]
+        with patch.object(
+            fan_out_dispatch,
+            "_collect_candidate_repos",
+            return_value=all_target_repos,
+        ), patch.object(
+            fan_out_dispatch, "_dispatch_to_targets", return_value=({}, [])
+        ), patch.object(
+            fan_out_dispatch, "write_step_summary"
+        ), patch.object(
+            fan_out_dispatch.dispatch_logger, "info"
+        ) as mock_info:
+            fan_out_dispatch.main()
+
+        excluded_logs = [
+            each_call
+            for each_call in mock_info.call_args_list
+            if each_call.args
+            and each_call.args[0] == fan_out_dispatch.ACTIONS_EXCLUDED_REPO_COUNT
+        ]
+        assert excluded_logs == []
+
+    def should_emit_the_notice_with_a_count_when_a_repo_is_excluded(self) -> None:
+        all_candidate_repos = [
+            make_repo_fixture("JonEcho/kept"),
+            make_repo_fixture("JonEcho/dropped", archived=True),
+        ]
+        with patch.object(
+            fan_out_dispatch,
+            "_collect_candidate_repos",
+            return_value=all_candidate_repos,
+        ), patch.object(
+            fan_out_dispatch, "_dispatch_to_targets", return_value=({}, [])
+        ), patch.object(
+            fan_out_dispatch, "write_step_summary"
+        ), patch.object(
+            fan_out_dispatch.dispatch_logger, "info"
+        ) as mock_info:
+            fan_out_dispatch.main()
+
+        excluded_logs = [
+            each_call
+            for each_call in mock_info.call_args_list
+            if each_call.args
+            and each_call.args[0] == fan_out_dispatch.ACTIONS_EXCLUDED_REPO_COUNT
+        ]
+        assert excluded_logs
+        assert excluded_logs[0].args[1] == 1
+
+
+class TestEnumerationLoggingRoutesThroughDispatchLogger:
+    """enumerate_installation_repos must log via dispatch_logger, not print()."""
+
+    def should_log_repository_count_through_the_dispatch_logger(self) -> None:
+        one_repo_page = {"repositories": [make_repo_fixture("JonEcho/one")]}
+        with patch.object(
+            fan_out_dispatch,
+            "make_github_api_request",
+            return_value=(fan_out_dispatch.HTTP_STATUS_OK, one_repo_page, None),
+        ):
+            with patch.object(
+                fan_out_dispatch.dispatch_logger, "info"
+            ) as mock_info:
+                all_repos = fan_out_dispatch.enumerate_installation_repos(
+                    FAKE_TOKEN
+                )
+
+        assert len(all_repos) == 1
+        count_logs = [
+            each_call
+            for each_call in mock_info.call_args_list
+            if each_call.args
+            and each_call.args[0]
+            == fan_out_dispatch.ACTIONS_ENUMERATION_RETURNED_COUNT
+        ]
+        assert count_logs
+        assert count_logs[0].args[1] == 1
+
+    def should_log_http_failure_through_the_dispatch_logger(self) -> None:
+        with patch.object(
+            fan_out_dispatch,
+            "make_github_api_request",
+            return_value=(fan_out_dispatch.HTTP_STATUS_FORBIDDEN, None, None),
+        ):
+            with patch.object(
+                fan_out_dispatch.dispatch_logger, "error"
+            ) as mock_error:
+                all_repos = fan_out_dispatch.enumerate_installation_repos(
+                    FAKE_TOKEN
+                )
+
+        assert all_repos == []
+        http_failure_logs = [
+            each_call
+            for each_call in mock_error.call_args_list
+            if each_call.args
+            and each_call.args[0]
+            == fan_out_dispatch.ACTIONS_ENUMERATION_HTTP_FAILED
+        ]
+        assert http_failure_logs
+        assert (
+            http_failure_logs[0].args[1] == fan_out_dispatch.HTTP_STATUS_FORBIDDEN
+        )
+
+    def should_log_network_error_through_the_dispatch_logger(self) -> None:
+        with patch.object(
+            fan_out_dispatch,
+            "make_github_api_request",
+            return_value=(fan_out_dispatch.NETWORK_ERROR_STATUS_CODE, None, None),
+        ):
+            with patch.object(
+                fan_out_dispatch.dispatch_logger, "error"
+            ) as mock_error:
+                all_repos = fan_out_dispatch.enumerate_installation_repos(
+                    FAKE_TOKEN
+                )
+
+        assert all_repos == []
+        network_error_logs = [
+            each_call
+            for each_call in mock_error.call_args_list
+            if each_call.args
+            and each_call.args[0]
+            == fan_out_dispatch.ACTIONS_ENUMERATION_NETWORK_ERROR
+        ]
+        assert network_error_logs
+
+    def should_not_embed_actions_annotations_in_the_module_source(self) -> None:
+        module_source = Path(fan_out_dispatch.__file__).read_text(
+            encoding="utf-8"
+        )
+        assert "::notice::Enumeration returned" not in module_source
+        assert "::error::Enumeration failed" not in module_source
+        assert "::error::Network error during enumeration" not in module_source

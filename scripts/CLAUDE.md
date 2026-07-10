@@ -33,6 +33,6 @@ python -m pytest tests/test_fan_out_dispatch.py
 
 ## Conventions
 
-- Keep all constants in `UPPER_SNAKE_CASE` at module scope inside the script; never inline magic values in function bodies.
+- Keep constants in `UPPER_SNAKE_CASE`; shared string and label constants live in `config/` and are imported, while the script's own constants stay at module scope. Never inline magic values in function bodies.
 - HTTP calls go through `make_github_api_request` — do not open `urllib.request` connections elsewhere in the module.
 - Scripts here do not import from `packages/claude-dev-env/`; they may import from `config/`.

@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/scripts/sync_ai_rules.py"
-      - "config/sync_ai_rules_paths.py"
+      - "config/**"
       - "scripts/fan_out_dispatch.py"
       - "tests/test_sync_ai_rules.py"
       - "tests/test_fan_out_dispatch.py"
@@ -37,4 +37,6 @@ jobs:
           git config --global user.name "CI"
 
       - name: Run sync AI rules test suite
+        env:
+          GITHUB_STEP_SUMMARY: ${{ runner.temp }}/pytest-step-summary.md
         run: python -m pytest tests/test_sync_ai_rules.py tests/test_fan_out_dispatch.py -v
