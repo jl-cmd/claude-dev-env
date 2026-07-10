@@ -5,8 +5,9 @@ Python package providing path constants for the AI rules fan-out sync system.
 ## Purpose
 
 Holds the repo-level Python configuration package. It exposes typed constants that
-the `.github/` scripts and the root `scripts/` dispatcher share, keeping all path
-strings in one place rather than scattered across multiple scripts.
+the `.github/` scripts and the root `scripts/` dispatcher share, keeping shared
+constants (paths, metric labels, message templates, environment-variable names) in one
+place rather than scattered across multiple scripts.
 
 ## Files
 
