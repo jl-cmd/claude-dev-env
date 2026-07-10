@@ -46,6 +46,7 @@ from volatile_path_in_post_blocker import (  # noqa: E402
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import edits_for_tool  # noqa: E402
 from hooks_constants.pii_prevention_constants import (  # noqa: E402
+    ALL_BASH_FAMILY_INTERPRETER_BASENAMES,
     ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS,
     ALL_GIT_BINARY_BASENAMES,
     ALL_LEADING_SKIPPABLE_COMMAND_TOKENS,
@@ -88,6 +89,7 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     STAGED_BLOB_REASON_OVERSIZED,
     STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE,
     STAGED_LIST_FAILURE_REASON,
+    SUBSHELL_GROUP_OPEN_TOKEN,
     WRITE_TOOL_NAME,
 )
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
@@ -327,6 +329,14 @@ def _token_is_shell_interpreter(token_text: str) -> bool:
     return _token_basename_lower(token_text) in ALL_SHELL_INTERPRETER_BASENAMES
 
 
+def _token_is_bash_family_interpreter(token_text: str) -> bool:
+    return _token_basename_lower(token_text) in ALL_BASH_FAMILY_INTERPRETER_BASENAMES
+
+
+def _token_is_subshell_group_open(token_text: str) -> bool:
+    return token_text == SUBSHELL_GROUP_OPEN_TOKEN
+
+
 def _token_is_skippable_prefix(token_text: str) -> bool:
     if ENVIRONMENT_ASSIGNMENT_PATTERN.match(token_text):
         return True
@@ -437,6 +447,9 @@ def _skip_leading_noop_tokens(all_segment_tokens: list[str]) -> int:
     has_skipped_prefix = False
     while token_index < len(all_segment_tokens):
         each_token = all_segment_tokens[token_index]
+        if _token_is_subshell_group_open(each_token):
+            token_index += 1
+            continue
         if _token_is_skippable_prefix(each_token):
             has_skipped_prefix = True
             token_index += 1
@@ -457,7 +470,9 @@ def _token_is_powershell_command_flag_prefix(lowered_token: str) -> bool:
     return POWERSHELL_INLINE_COMMAND_FLAG.startswith(lowered_token)
 
 
-def _token_is_interpreter_inline_command_flag(token_text: str) -> bool:
+def _token_is_interpreter_inline_command_flag(
+    token_text: str, interpreter_allows_short_flag_cluster: bool
+) -> bool:
     if not token_text.startswith(SINGLE_DASH_OPTION_PREFIX):
         return False
     if token_text.startswith(DOUBLE_DASH_OPTION_PREFIX):
@@ -467,17 +482,22 @@ def _token_is_interpreter_inline_command_flag(token_text: str) -> bool:
         return True
     if _token_is_powershell_command_flag_prefix(lowered_token):
         return True
+    if not interpreter_allows_short_flag_cluster:
+        return False
     clustered_flag_characters = lowered_token[len(SINGLE_DASH_OPTION_PREFIX) :]
     return INLINE_COMMAND_FLAG_CLUSTER_CHARACTER in clustered_flag_characters
 
 
 def _interpreter_inline_command_invokes_commit(
-    all_following_tokens: list[str],
+    interpreter_token: str, all_following_tokens: list[str]
 ) -> bool:
+    allows_short_flag_cluster = _token_is_bash_family_interpreter(interpreter_token)
     token_index = 0
     while token_index < len(all_following_tokens):
         each_token = all_following_tokens[token_index]
-        if _token_is_interpreter_inline_command_flag(each_token):
+        if _token_is_interpreter_inline_command_flag(
+            each_token, allows_short_flag_cluster
+        ):
             argument_index = token_index + 1
             if argument_index >= len(all_following_tokens):
                 return False
@@ -494,9 +514,12 @@ def _segment_invokes_git_commit(all_segment_tokens: list[str]) -> bool:
     if command_index >= len(all_segment_tokens):
         return False
     all_following_tokens = all_segment_tokens[command_index + 1 :]
-    if _token_is_shell_interpreter(all_segment_tokens[command_index]):
-        return _interpreter_inline_command_invokes_commit(all_following_tokens)
-    if not _token_is_git_binary(all_segment_tokens[command_index]):
+    command_token = all_segment_tokens[command_index]
+    if _token_is_shell_interpreter(command_token):
+        return _interpreter_inline_command_invokes_commit(
+            command_token, all_following_tokens
+        )
+    if not _token_is_git_binary(command_token):
         return False
     return _following_tokens_invoke_commit(all_following_tokens)
 
@@ -510,20 +533,24 @@ def is_git_commit_shell_command(shell_command: str) -> bool:
         nice -n 10 git commit       ->  skip the wrapper and its flag value
         then git commit -m x        ->  skip the keyword, then match commit
         build & git commit -m x     ->  split on the background operator
-        bash -cx "git commit"       ->  unwrap the combined inline flag
-        pwsh -Command git commit    ->  rejoin the unquoted inline command
+        bash -cx "git commit"                     ->  unwrap the bash cluster
+        pwsh -ExecutionPolicy Bypass -Command ... ->  skip past the pwsh flag
+        (git commit -m x)                         ->  step over the group open
 
-    Skipped leading tokens: env-assignments, shell keywords (then, do, else,
-    elif), and wrapper commands (sudo, env, time, nice, xargs, command,
-    stdbuf) together with each wrapper's own option flags and their values.
-    Segments split on unquoted control separators (including a lone ``&``
-    background operator) and newlines, and the git binary may be path-prefixed
-    and carry global flags (no-verify, config, and working-directory) before
-    its subcommand. A shell interpreter (bash, sh, pwsh, powershell) is
-    unwrapped at its inline-command flag: bash and sh take an isolated ``-c``
-    or any short-flag cluster carrying ``c`` (``-lc``, ``-cx``), and PowerShell
-    takes ``-Command`` or ``-c``. The inline command's remaining tokens rejoin
-    into one string, so an unquoted multi-token command is read whole.
+    Skipped leading tokens: a subshell-group open ``(``, env-assignments, shell
+    keywords (then, do, else, elif), and wrapper commands (sudo, env, time,
+    nice, xargs, command, stdbuf) together with each wrapper's own option flags
+    and their values. Segments split on unquoted control separators (including
+    a lone ``&`` background operator) and newlines, and the git binary may be
+    path-prefixed and carry global flags (no-verify, config, and
+    working-directory) before its subcommand. A shell interpreter is unwrapped
+    at its inline-command flag by interpreter family: bash and sh take an
+    isolated ``-c`` or any short-flag cluster carrying ``c`` (``-lc``, ``-cx``),
+    and PowerShell (pwsh, powershell) takes only ``-Command`` or ``-c``, so a
+    leading pwsh flag whose name merely contains ``c`` (``-ExecutionPolicy``,
+    ``-NonInteractive``) is stepped over until the real ``-Command`` is reached.
+    The inline command's remaining tokens rejoin into one string, so an
+    unquoted multi-token command is read whole.
 
     Args:
         shell_command: Bash or PowerShell tool command string.

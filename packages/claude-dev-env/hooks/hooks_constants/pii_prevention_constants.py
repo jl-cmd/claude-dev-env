@@ -38,18 +38,26 @@ ALL_COMMAND_WRAPPER_TOKENS: frozenset[str] = frozenset(
 ALL_LEADING_SKIPPABLE_COMMAND_TOKENS: frozenset[str] = (
     ALL_SHELL_KEYWORD_TOKENS | ALL_COMMAND_WRAPPER_TOKENS
 )
-ALL_SHELL_INTERPRETER_BASENAMES: frozenset[str] = frozenset(
+ALL_BASH_FAMILY_INTERPRETER_BASENAMES: frozenset[str] = frozenset(
     {
         "bash",
         "sh",
         "bash.exe",
         "sh.exe",
+    }
+)
+ALL_POWERSHELL_INTERPRETER_BASENAMES: frozenset[str] = frozenset(
+    {
         "pwsh",
         "pwsh.exe",
         "powershell",
         "powershell.exe",
     }
 )
+ALL_SHELL_INTERPRETER_BASENAMES: frozenset[str] = (
+    ALL_BASH_FAMILY_INTERPRETER_BASENAMES | ALL_POWERSHELL_INTERPRETER_BASENAMES
+)
+SUBSHELL_GROUP_OPEN_TOKEN: str = "("
 SHELL_INLINE_COMMAND_FLAG: str = "-c"
 POWERSHELL_INLINE_COMMAND_FLAG: str = "-command"
 INLINE_COMMAND_FLAG_CLUSTER_CHARACTER: str = "c"

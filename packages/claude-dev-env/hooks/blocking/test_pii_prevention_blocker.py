@@ -622,6 +622,54 @@ def test_is_git_commit_shell_command_detects_unquoted_powershell_command() -> No
     assert not is_git_commit_shell_command("pwsh -Command git status")
 
 
+def test_is_git_commit_shell_command_detects_powershell_preflags_before_command() -> None:
+    assert is_git_commit_shell_command(
+        'pwsh -ExecutionPolicy Bypass -Command "git commit -m x"'
+    )
+    assert is_git_commit_shell_command(
+        'pwsh -NonInteractive -Command "git commit -m x"'
+    )
+    assert is_git_commit_shell_command(
+        'powershell -ExecutionPolicy Bypass -Command "git commit -m x"'
+    )
+    assert is_git_commit_shell_command(
+        'pwsh -NoProfile -NonInteractive -Command "git commit -m x"'
+    )
+    assert not is_git_commit_shell_command(
+        'pwsh -NonInteractive -Command "git status"'
+    )
+
+
+def test_is_git_commit_shell_command_detects_subshell_grouped_commit() -> None:
+    assert is_git_commit_shell_command("(git commit -m x)")
+    assert is_git_commit_shell_command("(cd repo && git commit -m x)")
+    assert not is_git_commit_shell_command("(git status)")
+
+
+def test_powershell_preflag_command_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        'pwsh -ExecutionPolicy Bypass -Command "git commit -m test"',
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
+def test_subshell_grouped_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "(git commit -m test)",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
 def test_powershell_command_flag_commit_scans_staged_pii(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     _init_repo_with_staged_email(repository_root)
