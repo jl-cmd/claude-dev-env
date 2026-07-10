@@ -417,6 +417,22 @@ class TestCommandLine:
         resolved_payload = json.loads(completed.stdout)
         assert str(stale_ingress) in resolved_payload["error"]
 
+    def should_report_ingress_env_var_set_but_empty_in_the_error(
+        self, tmp_path: Path
+    ) -> None:
+        missing_credentials = tmp_path / "absent.json"
+        completed = self.run_resolver(
+            "--credentials-path",
+            str(missing_credentials),
+            ingress_token_file="",
+        )
+        assert completed.returncode == 2
+        resolved_payload = json.loads(completed.stdout)
+        assert (
+            f"{INGRESS_TOKEN_FILE_ENV_VAR} set but empty"
+            in resolved_payload["error"]
+        )
+
     def should_reject_invalid_override_with_error_payload(self) -> None:
         completed = self.run_resolver("--override", "soon")
         assert completed.returncode == 2

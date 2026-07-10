@@ -9,7 +9,7 @@
 
 With no ``--override``, the script resolves a bearer token: the Claude Code
 OAuth access token from the CLI credential file, or the session ingress token
-file when that credential is absent. It asks the OAuth usage endpoint for the
+file when that credential is unavailable. It asks the OAuth usage endpoint for the
 ``five_hour`` and ``seven_day`` windows. Exit code 2 means the probe cannot
 resolve; the caller then asks the user for a manual reset time.
 """
@@ -430,17 +430,21 @@ def _describe_ingress_token_source() -> str:
 
         (env var holds /run/token)  ->  "the session ingress token file at /run/token"
         (env var unset)             ->  "the session ingress token file (... unset)"
+        (env var set but empty)     ->  "the session ingress token file (... set but empty)"
 
-    The operator reads which file the ingress lookup tried, or learns the
-    environment variable was never set.
+    The operator reads which file the ingress lookup tried, learns the
+    environment variable was never set, or learns it was set to an empty value.
 
     Returns:
-        A clause naming the ingress token file path, or the unset variable.
+        A clause naming the ingress token file path, the unset variable, or the
+        set-but-empty variable.
     """
     ingress_token_file_path = os.environ.get(SESSION_INGRESS_TOKEN_FILE_ENV_VAR)
     if ingress_token_file_path:
         return f"the session ingress token file at {ingress_token_file_path}"
-    return f"the session ingress token file ({SESSION_INGRESS_TOKEN_FILE_ENV_VAR} unset)"
+    if ingress_token_file_path is None:
+        return f"the session ingress token file ({SESSION_INGRESS_TOKEN_FILE_ENV_VAR} unset)"
+    return f"the session ingress token file ({SESSION_INGRESS_TOKEN_FILE_ENV_VAR} set but empty)"
 
 
 def _parse_arguments() -> argparse.Namespace:
