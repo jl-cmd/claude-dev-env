@@ -32,6 +32,7 @@ _hooks_directory_on_path = str(hooks_dir.resolve())
 if _hooks_directory_on_path not in sys.path:
     sys.path.insert(0, _hooks_directory_on_path)
 
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
     apply_edits,
     edits_for_tool,
@@ -807,6 +808,11 @@ def _emit_pre_tool_use_deny(deny_reason: str) -> None:
             "permissionDecisionReason": deny_reason,
         }
     }
+    log_hook_block(
+        calling_hook_name="run_all_validators.py",
+        hook_event="PreToolUse",
+        block_reason=deny_reason,
+    )
     sys.stdout.write(json.dumps(deny_payload) + "\n")
     sys.stdout.flush()
 
