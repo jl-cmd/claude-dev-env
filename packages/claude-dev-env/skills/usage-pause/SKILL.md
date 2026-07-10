@@ -43,16 +43,21 @@ On exit 2 the script prints `{"error": ...}`. Ask the user for a manual reset ti
 
 ### Probe mechanism
 
-The resolver reads the Claude Code CLI's OAuth access token from `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`, honored only while its `expiresAt` sits in the future) and sends `GET https://api.anthropic.com/api/oauth/usage` with `Authorization: Bearer <token>` and `anthropic-beta: oauth-2025-04-20`. This is the same endpoint the interactive `/usage` panel reads. The response carries a `five_hour` bucket and a `seven_day` bucket, each with `utilization` (percent spent) and `resets_at`.
+The resolver gets a bearer token from one of two sources and sends `GET https://api.anthropic.com/api/oauth/usage` with `Authorization: Bearer <token>` and `anthropic-beta: oauth-2025-04-20`. This is the same endpoint the interactive `/usage` panel reads. The response carries a `five_hour` bucket and a `seven_day` bucket, each with `utilization` (percent spent) and `resets_at`.
 
-Fallbacks, in order: an expired or unreadable stored token, a failed request, or a response with no readable `five_hour` reset time all end in exit 2 — the manual-override ask above. The manual path works with no probe at all, so the skill functions even when the credential file is stale.
+Token sources, in order:
+
+- The Claude Code CLI's OAuth access token in `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`, honored only while its `expiresAt` sits in the future).
+- The session ingress token in the file named by the `CLAUDE_SESSION_INGRESS_TOKEN_FILE` environment variable, read when the credential file token is unavailable. Claude Code cloud sessions set this variable and omit the credential file.
+
+Fallbacks, in order: no usable token from either source, a failed request, or a response with no readable `five_hour` reset time all end in exit 2 — the manual-override ask above. The manual path works with no probe at all, so the skill functions even when both token sources are stale.
 
 Why this probe and not the others:
 
 - The interactive `/usage` panel shows the same data but has no scriptable output.
 - `claude -p --output-format json` spends usage to answer and its metadata reports per-call token counts, not the account window clock.
 - `anthropic-ratelimit-*` response headers cover API-key Messages traffic, not the subscription session window, and reading them also costs a request.
-- Refreshing the OAuth token from a script is out of scope: token rotation would desync the refresh token the CLI has on disk and log the CLI out. The resolver only ever reads the credential file.
+- Refreshing the OAuth token from a script is out of scope: token rotation would desync the refresh token the CLI has on disk and log the CLI out. The resolver only ever reads its token sources.
 
 ## Weekly limit guard
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timedelta
@@ -14,6 +15,7 @@ import pytest
 
 SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
 RESOLVER_PATH = SCRIPTS_DIRECTORY / "resolve_usage_window.py"
+INGRESS_TOKEN_FILE_ENV_VAR = "CLAUDE_SESSION_INGRESS_TOKEN_FILE"
 
 
 def load_resolver_module() -> ModuleType:
@@ -167,6 +169,103 @@ class TestReadOauthAccessToken:
         assert resolver.read_oauth_access_token(missing_path, local_now()) is None
 
 
+class TestReadSessionIngressToken:
+    def should_return_stripped_token_from_the_named_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        token_file = tmp_path / "ingress-token"
+        token_file.write_text("  ingress-token-value\n", encoding="utf-8")
+        monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))
+        assert resolver.read_session_ingress_token() == "ingress-token-value"
+
+    def should_return_none_when_env_var_unset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.delenv(INGRESS_TOKEN_FILE_ENV_VAR, raising=False)
+        assert resolver.read_session_ingress_token() is None
+
+    def should_return_none_when_named_file_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(tmp_path / "absent-token"))
+        assert resolver.read_session_ingress_token() is None
+
+    def should_return_none_when_file_is_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        token_file = tmp_path / "ingress-token"
+        token_file.write_text("   \n", encoding="utf-8")
+        monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))
+        assert resolver.read_session_ingress_token() is None
+
+
+class TestResolveAccessToken:
+    def write_valid_credentials(self, target: Path, now: datetime) -> None:
+        future_milliseconds = int((now + timedelta(hours=1)).timestamp() * 1000)
+        payload = {
+            "claudeAiOauth": {
+                "accessToken": "credential-token",
+                "refreshToken": "refresh-value",
+                "expiresAt": future_milliseconds,
+            }
+        }
+        target.write_text(json.dumps(payload), encoding="utf-8")
+
+    def should_use_ingress_token_when_credential_file_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        missing_credentials = tmp_path / "absent.json"
+        token_file = tmp_path / "ingress-token"
+        token_file.write_text("ingress-token-value", encoding="utf-8")
+        monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))
+        chosen_token = resolver.resolve_access_token(missing_credentials, local_now())
+        assert chosen_token == "ingress-token-value"
+
+    def should_prefer_credential_token_over_ingress_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        now = local_now()
+        credentials_path = tmp_path / ".credentials.json"
+        self.write_valid_credentials(credentials_path, now)
+        token_file = tmp_path / "ingress-token"
+        token_file.write_text("ingress-token-value", encoding="utf-8")
+        monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))
+        chosen_token = resolver.resolve_access_token(credentials_path, now)
+        assert chosen_token == "credential-token"
+
+    def should_return_none_when_ingress_file_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        missing_credentials = tmp_path / "absent.json"
+        monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(tmp_path / "absent-token"))
+        assert resolver.resolve_access_token(missing_credentials, local_now()) is None
+
+    def should_return_none_when_ingress_file_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        missing_credentials = tmp_path / "absent.json"
+        token_file = tmp_path / "ingress-token"
+        token_file.write_text("   \n", encoding="utf-8")
+        monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))
+        assert resolver.resolve_access_token(missing_credentials, local_now()) is None
+
+    def should_return_none_when_env_unset_and_no_credential_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.delenv(INGRESS_TOKEN_FILE_ENV_VAR, raising=False)
+        missing_credentials = tmp_path / "absent.json"
+        assert resolver.resolve_access_token(missing_credentials, local_now()) is None
+
+
 class TestExtractUsageWindows:
     def should_extract_session_and_weekly_buckets(self) -> None:
         resolver = load_resolver_module()
@@ -233,11 +332,14 @@ class TestBuildPausePlan:
 
 class TestCommandLine:
     def run_resolver(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        child_environment = dict(os.environ)
+        child_environment.pop(INGRESS_TOKEN_FILE_ENV_VAR, None)
         return subprocess.run(
             [sys.executable, str(RESOLVER_PATH), *arguments],
             capture_output=True,
             text=True,
             check=False,
+            env=child_environment,
         )
 
     def should_resolve_duration_override_end_to_end(self) -> None:
