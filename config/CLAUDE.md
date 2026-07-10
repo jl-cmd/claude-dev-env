@@ -1,13 +1,13 @@
 # config/
 
-Python package providing path constants for the AI rules fan-out sync system.
+Python package providing shared constants for the AI rules fan-out sync system.
 
 ## Purpose
 
-Holds the repo-level Python configuration package. It exposes typed constants that
-the `.github/` scripts and the root `scripts/` dispatcher share, keeping shared
-constants (paths, metric labels, message templates, environment-variable names) in one
-place rather than scattered across multiple scripts.
+Holds the repo-level Python configuration package. It gathers typed constants for the
+`.github/` scripts and the root `scripts/` dispatcher — paths, metric labels, message
+templates, and environment-variable names — into one package rather than scattering them
+across scripts. Each script imports only the module it needs.
 
 ## Files
 
