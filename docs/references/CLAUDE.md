@@ -13,6 +13,7 @@ edit third-party content.
 | File | Role |
 |------|------|
 | `skill-install-system.md` | Internal design doc: how skills, rules, hooks, and config travel from `packages/claude-dev-env/` to `~/.claude/` via the install pipeline. **Read this before adding a skill or changing install behavior.** |
+| `cloud-pr-loop-compatibility.md` | Zero-context runbook for running the PR-loop skill family in Claude Code cloud sessions: verified environment facts, root causes, the gh-to-MCP substitution matrix, a session preamble, a phased per-file remediation plan, a probe appendix, and account-owner actions. |
 | `anthropic-harnessing-claudes-intelligence-technique-inventory.md` | Inventory of prompting and agentic techniques from Anthropic research. |
 | `bdd in action.pdf` | BDD reference material. |
 | `Thariq on X_ _Lessons from Building Claude Code_...html` | Archived X post: lessons from building Claude Code, covering skill design. |
