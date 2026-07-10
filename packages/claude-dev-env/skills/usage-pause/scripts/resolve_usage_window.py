@@ -423,6 +423,26 @@ def _emit_error(message: str) -> int:
     return EXIT_CODE_PROBE_UNAVAILABLE
 
 
+def _describe_ingress_token_source() -> str:
+    """Name the session ingress token source for the no-token error.
+
+    ::
+
+        (env var holds /run/token)  ->  "the session ingress token file at /run/token"
+        (env var unset)             ->  "the session ingress token file (... unset)"
+
+    The operator reads which file the ingress lookup tried, or learns the
+    environment variable was never set.
+
+    Returns:
+        A clause naming the ingress token file path, or the unset variable.
+    """
+    ingress_token_file_path = os.environ.get(SESSION_INGRESS_TOKEN_FILE_ENV_VAR)
+    if ingress_token_file_path:
+        return f"the session ingress token file at {ingress_token_file_path}"
+    return f"the session ingress token file ({SESSION_INGRESS_TOKEN_FILE_ENV_VAR} unset)"
+
+
 def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Resolve the 5-hour usage window reset and plan the pause stage chain.",
@@ -481,7 +501,7 @@ def main() -> int:
     if access_token is None:
         return _emit_error(
             "no usable bearer token from the OAuth credential file at "
-            f"{credentials_path} or the session ingress token file; give a "
+            f"{credentials_path} or {_describe_ingress_token_source()}; give a "
             "manual reset time, for example /usage-pause 10:20pm or /usage-pause 74m"
         )
     try:

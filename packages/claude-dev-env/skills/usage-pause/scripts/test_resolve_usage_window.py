@@ -171,11 +171,6 @@ class TestReadOauthAccessToken:
         write_credentials(credentials_path, past_milliseconds)
         assert resolver.read_oauth_access_token(credentials_path, now) is None
 
-    def should_return_none_when_file_missing(self, tmp_path: Path) -> None:
-        resolver = load_resolver_module()
-        missing_path = tmp_path / "absent.json"
-        assert resolver.read_oauth_access_token(missing_path, local_now()) is None
-
     def should_not_warn_when_credential_file_missing(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
@@ -365,9 +360,14 @@ class TestBuildPausePlan:
 
 
 class TestCommandLine:
-    def run_resolver(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+    def run_resolver(
+        self, *arguments: str, ingress_token_file: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
         child_environment = dict(os.environ)
-        child_environment.pop(INGRESS_TOKEN_FILE_ENV_VAR, None)
+        if ingress_token_file is None:
+            child_environment.pop(INGRESS_TOKEN_FILE_ENV_VAR, None)
+        else:
+            child_environment[INGRESS_TOKEN_FILE_ENV_VAR] = ingress_token_file
         return subprocess.run(
             [sys.executable, str(RESOLVER_PATH), *arguments],
             capture_output=True,
@@ -401,6 +401,21 @@ class TestCommandLine:
         resolved_payload = json.loads(completed.stdout)
         assert "error" in resolved_payload
         assert str(missing_path) in resolved_payload["error"]
+        assert f"{INGRESS_TOKEN_FILE_ENV_VAR} unset" in resolved_payload["error"]
+
+    def should_name_the_ingress_token_path_in_the_error(
+        self, tmp_path: Path
+    ) -> None:
+        missing_credentials = tmp_path / "absent.json"
+        stale_ingress = tmp_path / "stale-ingress-token"
+        completed = self.run_resolver(
+            "--credentials-path",
+            str(missing_credentials),
+            ingress_token_file=str(stale_ingress),
+        )
+        assert completed.returncode == 2
+        resolved_payload = json.loads(completed.stdout)
+        assert str(stale_ingress) in resolved_payload["error"]
 
     def should_reject_invalid_override_with_error_payload(self) -> None:
         completed = self.run_resolver("--override", "soon")
