@@ -82,12 +82,12 @@ evidence (the probe or inventory line that proves it), and a fix summary
 - **Evidence:** A push dry-run fails before `git remote set-head origin -a` and succeeds after it. `--no-verify` also gets past the hook (avoid this routine bypass).
 - **Fix summary:** Phase D ships a session-start step that runs `git remote set-head origin -a` in each repo root.
 
-### RC4 — Single identity
+### RC4 — Single reviewer identity
 
 - **Symptom:** The self-PR reviewer toggle has no cloud form. A cloud session cannot post an `APPROVE` or `REQUEST_CHANGES` review on a PR it authored.
-- **Cause:** The cloud session holds one identity (`jl-cmd`, a GitHub App user-to-server token). `BUGTEAM_REVIEWER_ACCOUNT`, `gh auth switch`, and the account-swap helpers have no cloud equivalent. GitHub blocks `APPROVE`/`REQUEST_CHANGES` on one's own PR; `COMMENT` reviews stay allowed.
+- **Cause:** The cloud session posts reviews under one MCP identity — the MCP login (`jl-cmd` in this doc's session). `BUGTEAM_REVIEWER_ACCOUNT`, `gh auth switch`, and the account-swap helpers have no cloud equivalent, so a run cannot swap to a second reviewer account. GitHub blocks `APPROVE`/`REQUEST_CHANGES` on one's own PR; `COMMENT` reviews stay allowed.
 - **Evidence:** `post_audit_thread.py` reads `BUGTEAM_REVIEWER_ACCOUNT` (unset in cloud) and calls `gh auth status` / `gh auth token --user` (RC1). PRs a cloud session opens are authored by `jl-cmd`. A PR authored locally by `JonEcho` can carry a `jl-cmd` review normally.
-- **Fix summary:** Phase A short-circuits `post_audit_thread.py` to the env token and a single identity. `COMMENT` reviews cover self-PR runs; U3 tracks an optional second identity.
+- **Fix summary:** Phase A short-circuits `post_audit_thread.py` to the env token and a single reviewer identity. `COMMENT` reviews cover self-PR runs; U3 tracks an optional second reviewer identity.
 
 ### RC5 — Raw REST works for some owners only
 
@@ -140,7 +140,7 @@ session before the first `mcp__github__*` call (Section 5).
 |---|---|---|
 | Read PR / mergeability / draft state | `gh pr view`, `gh api pulls/N` | `mcp__github__pull_request_read(method="get")` |
 | PR diff / files / commits / checks | `gh pr diff`, `gh api ...` | `pull_request_read(method="get_diff"/"get_files"/"get_commits"/"get_check_runs")` |
-| List reviews / review threads | `gh api --paginate --slurp \| jq` | `pull_request_read(method="get_reviews"/"get_review_comments")` with `perPage` + `after` cursor pagination |
+| List reviews / review threads | `gh api --paginate --slurp \| jq` | `pull_request_read(method="get_reviews"/"get_review_comments")`. `get_reviews` paginates with `page` + `perPage`; `get_review_comments` paginates with `perPage` + an `after` cursor. |
 | Post / update / close issue | `gh issue create/edit/close` | `mcp__github__issue_write(method="create"/"update")` |
 | Post issue or PR comment | `gh issue comment`, `gh pr comment` | `mcp__github__add_issue_comment` |
 | Post review with inline comments | `gh api pulls/N/reviews` POST | `pull_request_review_write(method="create")` → `add_comment_to_pending_review` per finding → `pull_request_review_write(method="submit_pending", event="COMMENT")` |
@@ -150,7 +150,7 @@ session before the first `mcp__github__*` call (Section 5).
 | Mark ready / send to draft | `gh pr ready`, `gh pr ready --undo` | `update_pull_request(draft=false / draft=true)`. A probe verified both directions, with a read-back confirming the draft state each way. |
 | Create a PR | `gh pr create --draft` | `create_pull_request(draft=true)` |
 | Edit a PR body or title | `gh pr edit` | `update_pull_request(body=..., title=...)` |
-| Cross-repo PR search | `gh search prs --owner X --state open` | `search_pull_requests(query="user:X is:open")`. Always pass `perPage`: an unpaginated repo-scoped search overflows the tool-result limit. |
+| Cross-repo PR search | `gh search prs --owner X --state open` | `search_pull_requests(query="user:X is:open")`. Always pass `perPage`: an unpaginated owner-wide search overflows the tool-result limit. |
 | Check runs on a SHA | `gh api commits/SHA/check-runs` | `pull_request_read(method="get_check_runs")`, or REST for owners with the app connected |
 | CI logs | `gh run view --log` | `actions_list` / `actions_get` / `get_job_logs` |
 | Clone another repo | `gh repo clone` | `git clone https://github.com/owner/repo` (session-scoped), or `mcp__Claude_Code_Remote__add_repo` first |
@@ -169,7 +169,7 @@ fallback, and hook notes.
 ### 5.1 Load MCP schemas (once per session)
 
 ```
-ToolSearch "select:pull_request_read,pull_request_review_write,add_comment_to_pending_review,add_reply_to_pull_request_comment,add_issue_comment,request_copilot_review,update_pull_request,create_pull_request,issue_write,search_pull_requests,get_me"
+ToolSearch "select:mcp__github__pull_request_read,mcp__github__pull_request_review_write,mcp__github__add_comment_to_pending_review,mcp__github__add_reply_to_pull_request_comment,mcp__github__add_issue_comment,mcp__github__request_copilot_review,mcp__github__update_pull_request,mcp__github__create_pull_request,mcp__github__issue_write,mcp__github__search_pull_requests,mcp__github__get_me"
 ```
 
 Run this before the first `mcp__github__*` call. A call before the schema
@@ -480,7 +480,7 @@ probes is `jl-cmd`; raw REST posts as `claude[bot]`.
 | REST issue close (PATCH state=closed) on #726 | claude[bot] (REST) | HTTP 200, read-back state closed, `state_reason` completed, `closed_by` claude[bot] | verified |
 | REST read or write on `jl-cmd/claude-code-config` | claude[bot] (REST) | 403 app-not-connected body; repo-scoped, so reads and writes alike refuse | verified |
 | Non-pinned GraphQL: the exact `check_convergence.py` reviewThreads query | claude[bot] (REST) | Refused, HTTP 403, pinned-set rejection body. `pull_request_read(method="get_review_comments")` returns the same data — `is_resolved` plus PRRT thread node ids — and is the working substitute. | verified |
-| Owner-wide `search_pull_requests` | jl-cmd (MCP) | `user:JonEcho is:open` 19; `user:jl-cmd is:open` 15. Always pass `perPage`: an unpaginated repo-scoped search overflows the tool-result limit. | verified |
+| Owner-wide `search_pull_requests` | jl-cmd (MCP) | `user:JonEcho is:open` 19; `user:jl-cmd is:open` 15. Always pass `perPage`: an unpaginated owner-wide search overflows the tool-result limit. | verified |
 | PR comment via `add_issue_comment` on PR 966 | jl-cmd (MCP) | Comment id 4934750050 | verified |
 | Pending-review flow (create pending, add inline comment, send the `COMMENT` review) on own PR 966 | jl-cmd (MCP) | All three steps land; review id 4670922489; a `COMMENT` review lands on the author's own PR | verified |
 | Reply to an inline comment on PR 966 | jl-cmd (MCP) | `get_review_comments` exposes `discussion_r3558470392`; `add_reply_to_pull_request_comment(commentId=3558470392)` returns reply id 3558471545. The numeric comment id surfaces only inside the `html_url` `discussion_r` anchor of `get_review_comments` output. | verified |
