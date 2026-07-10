@@ -504,6 +504,61 @@ class TestMalformedRepoEntriesAreReported:
         assert malformed_warnings[0].args[1] == 1
 
 
+class TestExcludedRepoCountNoticeIsGuarded:
+    def should_not_emit_the_notice_when_no_repo_is_excluded(self) -> None:
+        all_target_repos = [
+            make_repo_fixture("JonEcho/first"),
+            make_repo_fixture("jl-cmd/second"),
+        ]
+        with patch.object(
+            fan_out_dispatch,
+            "_collect_candidate_repos",
+            return_value=all_target_repos,
+        ), patch.object(
+            fan_out_dispatch, "_dispatch_to_targets", return_value=({}, [])
+        ), patch.object(
+            fan_out_dispatch, "write_step_summary"
+        ), patch.object(
+            fan_out_dispatch.dispatch_logger, "info"
+        ) as mock_info:
+            fan_out_dispatch.main()
+
+        excluded_logs = [
+            each_call
+            for each_call in mock_info.call_args_list
+            if each_call.args
+            and each_call.args[0] == fan_out_dispatch.ACTIONS_EXCLUDED_REPO_COUNT
+        ]
+        assert excluded_logs == []
+
+    def should_emit_the_notice_with_a_count_when_a_repo_is_excluded(self) -> None:
+        all_candidate_repos = [
+            make_repo_fixture("JonEcho/kept"),
+            make_repo_fixture("JonEcho/dropped", archived=True),
+        ]
+        with patch.object(
+            fan_out_dispatch,
+            "_collect_candidate_repos",
+            return_value=all_candidate_repos,
+        ), patch.object(
+            fan_out_dispatch, "_dispatch_to_targets", return_value=({}, [])
+        ), patch.object(
+            fan_out_dispatch, "write_step_summary"
+        ), patch.object(
+            fan_out_dispatch.dispatch_logger, "info"
+        ) as mock_info:
+            fan_out_dispatch.main()
+
+        excluded_logs = [
+            each_call
+            for each_call in mock_info.call_args_list
+            if each_call.args
+            and each_call.args[0] == fan_out_dispatch.ACTIONS_EXCLUDED_REPO_COUNT
+        ]
+        assert excluded_logs
+        assert excluded_logs[0].args[1] == 1
+
+
 class TestEnumerationLoggingRoutesThroughDispatchLogger:
     """enumerate_installation_repos must log via dispatch_logger, not print()."""
 

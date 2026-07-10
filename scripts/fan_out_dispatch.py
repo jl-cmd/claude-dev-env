@@ -583,7 +583,8 @@ def main() -> int:
         each_repo for each_repo in all_candidate_repos if is_target_repo(each_repo)
     ]
     excluded_repo_count = len(all_candidate_repos) - len(all_target_repos)
-    dispatch_logger.info(ACTIONS_EXCLUDED_REPO_COUNT, excluded_repo_count)
+    if excluded_repo_count > 0:
+        dispatch_logger.info(ACTIONS_EXCLUDED_REPO_COUNT, excluded_repo_count)
     dispatch_status_by_repo, all_dispatched_repos = _dispatch_to_targets(
         all_target_repos, token_by_owner, all_dispatch_payload
     )
