@@ -56,7 +56,9 @@ tracks CONVERGE passes only and is never the cap.
    re-deriving the diff; each lens forms its own review judgment.
    - **Bugbot lens** — drive Cursor Bugbot to a verdict on HEAD (trigger and
      poll its CI check run when needed) and return its findings, or mark itself
-     down when Bugbot is opted out or unreachable.
+     down when Bugbot is off for the run — the default unless
+     `CLAUDE_REVIEWS_ENABLED` lists `bugbot` — opted out via
+     `CLAUDE_REVIEWS_DISABLED`, or unreachable.
    - **Code-review lens** — a correctness-focused review pass (`code-quality-agent`)
      that reports findings without editing.
    - **Bug-audit lens** — the bug-audit (`code-quality-agent`) applying the
@@ -126,7 +128,9 @@ every condition from GitHub and marks the PR ready only when all of these hold o
 the current HEAD:
 
 1. Bugbot CI check run is completed with a success or neutral conclusion
-   (bypassed when Bugbot is opted out or proved unreachable this run).
+   (bypassed when Bugbot is off for the run — the default unless
+   `CLAUDE_REVIEWS_ENABLED` lists `bugbot` — opted out via
+   `CLAUDE_REVIEWS_DISABLED`, or proved unreachable this run).
 2. The Bugbot review body on HEAD reports no findings (checked when a Bugbot
    review is present).
 3. A CLEAN bugteam audit review sits on HEAD.

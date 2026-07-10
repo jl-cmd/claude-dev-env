@@ -22,7 +22,7 @@ Discovers every open pull request across the `jl-cmd/*` and `JonEcho/*` owner sc
 ## Workflow summary
 
 1. Call `discover_open_prs.discover_open_prs(all_owners=["jl-cmd", "JonEcho"])` to get the full open-PR list.
-2. For each PR, invoke `/bugteam --bugbot-retrigger <pr_number>` (omit `--bugbot-retrigger` if `CLAUDE_REVIEWS_DISABLED` has `bugbot`).
+2. For each PR, invoke `/bugteam <pr_number>`; include `--bugbot-retrigger` only when bugbot is enabled (`reviews_disabled.py --reviewer bugbot` exits 1).
 3. After each bugteam run, poll for new bugbot comments on a 60s → 120s → 240s → 480s → 960s backoff. Re-invoke bugteam if new findings appear.
 4. Emit a sweep summary when all PRs exit polling.
 

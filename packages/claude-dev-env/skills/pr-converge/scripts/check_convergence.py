@@ -747,15 +747,16 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
 
 
 def _resolve_bugbot_down(bugbot_down_flag: bool) -> bool:
-    """Combine the explicit flag with the CLAUDE_REVIEWS_DISABLED env opt-out.
+    """Combine the explicit flag with the env availability gate for Bugbot.
 
     Args:
         bugbot_down_flag: Value of the ``--bugbot-down`` CLI flag.
 
     Returns:
-        True when the flag is set OR ``CLAUDE_REVIEWS_DISABLED`` lists the
-        ``bugbot`` token, so the env opt-out bypasses the bugbot gates even
-        when the caller omits the flag.
+        True when the flag is set, or when Bugbot is disabled for the run:
+        off by default unless ``CLAUDE_REVIEWS_ENABLED`` lists ``bugbot``, and
+        always when ``CLAUDE_REVIEWS_DISABLED`` lists ``bugbot``. The env gate
+        bypasses the bugbot gates even when the caller omits the flag.
     """
     return bugbot_down_flag or is_bugbot_disabled_via_env()
 

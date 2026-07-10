@@ -231,17 +231,19 @@ def should_resolve_bugbot_down_true_when_env_disables_bugbot(
     assert check_convergence._resolve_bugbot_down(False) is True
 
 
-def should_resolve_bugbot_down_false_when_flag_unset_and_env_empty(
+def should_resolve_bugbot_down_true_when_flag_unset_and_env_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
-    assert check_convergence._resolve_bugbot_down(False) is False
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
+    assert check_convergence._resolve_bugbot_down(False) is True
 
 
-def should_resolve_bugbot_down_false_when_env_disables_only_bugteam(
+def should_resolve_bugbot_down_false_when_enabled_lists_bugbot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "bugbot")
     assert check_convergence._resolve_bugbot_down(False) is False
 
 

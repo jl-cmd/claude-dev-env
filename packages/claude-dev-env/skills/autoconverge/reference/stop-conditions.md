@@ -55,8 +55,10 @@ skill still runs teardown (revoke permissions, final report).
 
 ## Not a blocker (the run continues)
 
-- **Bugbot down** — when Cursor Bugbot is opted out, or never produces a check
-  run or review after the lens poll budget, the Bugbot lens returns `down: true`.
+- **Bugbot down** — when Cursor Bugbot is off for the run (the default unless
+  `CLAUDE_REVIEWS_ENABLED` lists `bugbot`), opted out via
+  `CLAUDE_REVIEWS_DISABLED`, or never produces a check run or review after the
+  lens poll budget, the Bugbot lens returns `down: true`.
   The run continues, and the convergence check runs with `--bugbot-down` so its
   Bugbot gate is bypassed.
 - **Copilot down or out of quota** — when Copilot posts an out-of-usage notice on

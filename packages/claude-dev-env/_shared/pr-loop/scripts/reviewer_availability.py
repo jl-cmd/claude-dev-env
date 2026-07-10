@@ -11,9 +11,11 @@ Copilot counts as down in two cases: it is opted out via
 than quota available (out of quota, the quota API or account down, or no
 account configured).
 
-Bugbot carries no quota or availability API. It counts as down only when it
-is opted out via ``CLAUDE_REVIEWS_DISABLED``. A genuine runtime outage shows
-up later as a poll timeout, not here.
+Bugbot carries no quota or availability API. It is off by default and counts
+as down whenever it is disabled for the run: the default unless
+``CLAUDE_REVIEWS_ENABLED`` lists ``bugbot``, and always when
+``CLAUDE_REVIEWS_DISABLED`` lists it. A genuine runtime outage shows up later
+as a poll timeout, not here.
 
 The exit code tells the caller what to do. Exit 0 means the reviewer is
 available and may be spawned. The documented down code (3) means skip it. Any
@@ -42,8 +44,13 @@ from pr_loop_shared_constants.reviews_disabled_constants import (
     CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
+    CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME,
 )
-from reviews_disabled import is_bugbot_disabled_via_env, is_copilot_disabled_via_env
+from reviews_disabled import (
+    is_bugbot_disabled_via_env,
+    is_bugbot_opted_out_via_env,
+    is_copilot_disabled_via_env,
+)
 
 
 @dataclass(frozen=True)
@@ -84,22 +91,45 @@ def _evaluate_copilot_availability(env_file_path: Path) -> ReviewerAvailability:
     return ReviewerAvailability(EXIT_CODE_REVIEWER_AVAILABLE, quota_decision.message)
 
 
+def _bugbot_down_message() -> str:
+    """Name the cause that keeps Cursor Bugbot off for this run.
+
+    An opt-out and the off-by-default state read differently to the operator:
+    one names ``CLAUDE_REVIEWS_DISABLED``, the other points at the
+    ``CLAUDE_REVIEWS_ENABLED`` opt-in the run is missing.
+
+    Returns:
+        The opt-out message when ``CLAUDE_REVIEWS_DISABLED`` lists ``bugbot``,
+        and the off-by-default opt-in message otherwise.
+    """
+    if is_bugbot_opted_out_via_env():
+        return (
+            f"reviewer-availability: bugbot is disabled via "
+            f"{CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME} — skipping."
+        )
+    return (
+        f"reviewer-availability: bugbot is off by default — set "
+        f"{CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME}={CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN} "
+        f"to opt in — skipping."
+    )
+
+
 def _evaluate_bugbot_availability() -> ReviewerAvailability:
     """Decide whether Cursor Bugbot is available to spawn.
 
     Bugbot carries no quota or availability API, so this checks only the
-    deterministic ``CLAUDE_REVIEWS_DISABLED`` opt-out.
+    deterministic enable/disable env gate. Bugbot is off by default: it is
+    available only when ``CLAUDE_REVIEWS_ENABLED`` lists ``bugbot`` and
+    ``CLAUDE_REVIEWS_DISABLED`` does not.
 
     Returns:
-        A ReviewerAvailability that is down when Bugbot is opted out via
-        ``CLAUDE_REVIEWS_DISABLED``, and available otherwise.
+        A ReviewerAvailability that is down whenever Bugbot is disabled for
+        the run — the default unless ``CLAUDE_REVIEWS_ENABLED`` lists
+        ``bugbot``, and always when ``CLAUDE_REVIEWS_DISABLED`` lists it — and
+        available otherwise.
     """
     if is_bugbot_disabled_via_env():
-        return ReviewerAvailability(
-            EXIT_CODE_REVIEWER_DOWN,
-            f"reviewer-availability: bugbot is disabled via "
-            f"{CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME} — skipping.",
-        )
+        return ReviewerAvailability(EXIT_CODE_REVIEWER_DOWN, _bugbot_down_message())
     return ReviewerAvailability(
         EXIT_CODE_REVIEWER_AVAILABLE,
         "reviewer-availability: bugbot is available.",
