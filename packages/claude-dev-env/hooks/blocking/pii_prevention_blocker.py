@@ -352,7 +352,7 @@ def _following_tokens_invoke_commit(all_following_tokens: list[str]) -> bool:
         each_token = _strip_token_edge_quotes(all_following_tokens[token_index])
         option_name = each_token
         has_attached_value = False
-        if each_token.startswith("--") and "=" in each_token:
+        if each_token.startswith(DOUBLE_DASH_OPTION_PREFIX) and "=" in each_token:
             option_name, _, _attached_value = each_token.partition("=")
             has_attached_value = True
         if option_name in ALL_VALUE_TAKING_GIT_OPTIONS:
@@ -361,7 +361,7 @@ def _following_tokens_invoke_commit(all_following_tokens: list[str]) -> bool:
             else:
                 token_index += option_with_value_step
             continue
-        if each_token.startswith("-"):
+        if each_token.startswith(SINGLE_DASH_OPTION_PREFIX):
             token_index += 1
             continue
         return each_token.lower() == GIT_COMMIT_SUBCOMMAND
@@ -454,7 +454,18 @@ def _wrapper_leading_operand_count(token_text: str) -> int:
 def _flag_value_token_follows(all_segment_tokens: list[str], value_index: int) -> bool:
     if value_index >= len(all_segment_tokens):
         return False
-    return not _token_is_leading_skip_target(all_segment_tokens[value_index])
+    if not _token_is_leading_skip_target(all_segment_tokens[value_index]):
+        return True
+    return _later_token_is_leading_skip_target(all_segment_tokens, value_index + 1)
+
+
+def _later_token_is_leading_skip_target(
+    all_segment_tokens: list[str], search_start_index: int
+) -> bool:
+    for each_token in all_segment_tokens[search_start_index:]:
+        if _token_is_leading_skip_target(each_token):
+            return True
+    return False
 
 
 def _skip_leading_noop_tokens(all_segment_tokens: list[str]) -> int:
@@ -606,13 +617,13 @@ def _following_tokens_working_directory(all_following_tokens: list[str]) -> str 
             return _strip_token_edge_quotes(all_following_tokens[value_index])
         option_name = each_token
         has_attached_value = False
-        if each_token.startswith("--") and "=" in each_token:
+        if each_token.startswith(DOUBLE_DASH_OPTION_PREFIX) and "=" in each_token:
             option_name, _, _attached_value = each_token.partition("=")
             has_attached_value = True
         if option_name in ALL_VALUE_TAKING_GIT_OPTIONS:
             token_index += 1 if has_attached_value else option_with_value_step
             continue
-        if each_token.startswith("-"):
+        if each_token.startswith(SINGLE_DASH_OPTION_PREFIX):
             token_index += 1
             continue
         return None

@@ -648,6 +648,15 @@ def test_is_git_commit_shell_command_detects_flag_carrying_wrappers() -> None:
     assert not is_git_commit_shell_command("nice -n 10 cat notes.md")
 
 
+def test_is_git_commit_shell_command_detects_wrapper_flag_value_matching_binary() -> None:
+    assert is_git_commit_shell_command("sudo -u git git commit -m x")
+    assert is_git_commit_shell_command("sudo -u alice git commit -m x")
+    assert is_git_commit_shell_command("sudo -u sh git commit -m x")
+    assert is_git_commit_shell_command("doas -u git git commit -m x")
+    assert is_git_commit_shell_command("sudo -u git git commit")
+    assert not is_git_commit_shell_command("sudo -u git git status")
+
+
 def test_is_git_commit_shell_command_detects_argument_bearing_wrappers() -> None:
     assert is_git_commit_shell_command("timeout 30 git commit -m x")
     assert is_git_commit_shell_command("nohup git commit -m x")
