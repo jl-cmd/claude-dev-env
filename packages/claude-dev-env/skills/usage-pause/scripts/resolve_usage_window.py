@@ -215,6 +215,8 @@ def read_oauth_access_token(credentials_path: Path, now: datetime) -> str | None
     """
     try:
         credentials_payload = json.loads(credentials_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
     except (OSError, json.JSONDecodeError):
         logger.warning("credential file unreadable at %s", credentials_path)
         return None
@@ -242,8 +244,8 @@ def read_session_ingress_token() -> str | None:
 
     ::
 
-        CLAUDE_SESSION_INGRESS_TOKEN_FILE=/run/token  ->  "<token text>"
-        (variable unset)                              ->  None
+        (env var names /run/token)  ->  "<token text>"
+        (env var unset)             ->  None
 
     Returns None when the environment variable is unset, and None with a
     warning naming the path when the named file is unreadable or empty.

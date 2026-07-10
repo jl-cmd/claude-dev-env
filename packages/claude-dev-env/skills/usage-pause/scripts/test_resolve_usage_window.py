@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -14,8 +15,14 @@ from types import ModuleType
 import pytest
 
 SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPTS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIRECTORY))
+
+from usage_pause_constants.resolve_usage_window_constants import (
+    SESSION_INGRESS_TOKEN_FILE_ENV_VAR as INGRESS_TOKEN_FILE_ENV_VAR,
+)
+
 RESOLVER_PATH = SCRIPTS_DIRECTORY / "resolve_usage_window.py"
-INGRESS_TOKEN_FILE_ENV_VAR = "CLAUDE_SESSION_INGRESS_TOKEN_FILE"
 
 
 def load_resolver_module() -> ModuleType:
@@ -170,6 +177,28 @@ class TestReadOauthAccessToken:
         resolver = load_resolver_module()
         missing_path = tmp_path / "absent.json"
         assert resolver.read_oauth_access_token(missing_path, local_now()) is None
+
+    def should_not_warn_when_credential_file_missing(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        resolver = load_resolver_module()
+        missing_path = tmp_path / "absent.json"
+        with caplog.at_level(logging.WARNING):
+            assert resolver.read_oauth_access_token(missing_path, local_now()) is None
+        assert caplog.records == []
+
+    def should_warn_when_credential_file_present_but_corrupt(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        resolver = load_resolver_module()
+        credentials_path = tmp_path / ".credentials.json"
+        credentials_path.write_text("{not valid json", encoding="utf-8")
+        with caplog.at_level(logging.WARNING):
+            assert (
+                resolver.read_oauth_access_token(credentials_path, local_now())
+                is None
+            )
+        assert any("unreadable" in each_message for each_message in caplog.messages)
 
 
 class TestReadSessionIngressToken:
