@@ -14,6 +14,7 @@ GIT_DIRECTORY_NAME: str = ".git"
 MINIMUM_UPPER_SNAKE_LENGTH: int = 2
 MAX_DEAD_MODULE_CONSTANT_ISSUES: int = 25
 MAX_SCAN_ROOT_FILE_COUNT: int = 2000
+MAX_SCAN_ROOT_READ_COUNT: int = 20000
 DEAD_MODULE_CONSTANT_GUIDANCE: str = (
     "module-level constant is defined here but never imported or read by any"
     " module in the enclosing package tree - remove the constant, or reference it"

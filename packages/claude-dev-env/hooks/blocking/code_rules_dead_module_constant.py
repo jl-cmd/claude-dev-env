@@ -41,9 +41,12 @@ The scan is deliberately conservative to keep false positives near zero:
   outside any repository is
   judged on the package-tree scan alone, and the widened pass skips the package
   subtree the first pass already covered, so no file is read twice.
-- The combined file count of the package-tree and widened passes is bounded by a
-  cap, so a write under an unexpectedly large tree cannot stall the hook; a write
-  whose scan hits the cap is treated as "cannot prove dead" and flags nothing.
+- Two caps bound the widened pass: a read-attempt cap bounds how many files
+  the pass opens and reads at all while testing for the stem, and a separate
+  parse cap bounds how many of those files (the ones that do name the stem)
+  get parsed and have their names collected. Either cap bounds the pass even
+  under an unexpectedly large tree; a write whose scan hits either cap is
+  treated as "cannot prove dead" and flags nothing.
 - Test modules under the scanned tree still count as references, so a constant
   used only by a test stays live.
 """
@@ -76,6 +79,7 @@ from hooks_constants.dead_module_constant_constants import (  # noqa: E402
     GIT_DIRECTORY_NAME,
     MAX_DEAD_MODULE_CONSTANT_ISSUES,
     MAX_SCAN_ROOT_FILE_COUNT,
+    MAX_SCAN_ROOT_READ_COUNT,
     MINIMUM_UPPER_SNAKE_LENGTH,
     PYTHON_SOURCE_SUFFIX,
 )
@@ -382,15 +386,27 @@ def _collect_names_under_root(
 
     Walks every ``.py`` module under ``scan_root`` (excluding the written module
     itself, and any module under ``excluded_subtree``), applies ``extract_names``
-    to each module's text, and unions the result onto ``all_seed_names``. Reading
-    stops once the running file count exceeds the configured cap so a write under
-    an unexpectedly large tree cannot stall the hook; the boolean signals the
-    caller to treat that case as "cannot prove dead". The ``excluded_subtree``
-    skip keeps the widened repository scan from re-reading a file the
-    package-tree scan already covered. When ``required_substring`` is set, a
-    module whose text never contains that stem is skipped before it is counted
-    or parsed, so the widened pass spends cap budget only on candidate importer
-    files rather than on every module in a large repository.
+    to each module's text, and unions the result onto ``all_seed_names``. Two
+    caps bound the walk so a write under an unexpectedly large tree cannot
+    stall the hook:
+
+    ::
+
+        read_attempt_count  -> every file this call opens and reads,
+                                whether or not it turns out to be a
+                                candidate -> capped by MAX_SCAN_ROOT_READ_COUNT
+        scanned_file_count  -> only the files that pass the candidate
+                                filter and get parsed for names       -> capped
+                                by MAX_SCAN_ROOT_FILE_COUNT
+
+    Either cap tripping returns ``cap_was_hit=True``, which signals the caller
+    to treat the write as "cannot prove dead". The ``excluded_subtree`` skip
+    keeps the widened repository scan from re-reading a file the package-tree
+    scan already covered. When ``required_substring`` is set, a module whose
+    text never contains that stem is skipped after being read but before it is
+    counted toward ``scanned_file_count`` or parsed, so the parse-and-collect
+    work stays bounded to the candidate importer files even though the read
+    cap still bounds the raw disk reads across the whole tree.
 
     Args:
         scan_root: The directory tree to scan.
@@ -402,15 +418,17 @@ def _collect_names_under_root(
         extract_names: Maps one module's source text to the set of names it
             contributes — the generous reference collector for the package-tree
             pass, the stem-bound import collector for the widened pass.
-        already_scanned_count: The file count accumulated by a prior pass, so the
-            cap bounds the combined work of the package-tree and widened passes.
+        already_scanned_count: The parsed-file count accumulated by a prior
+            pass, so the parse cap bounds the combined work of the
+            package-tree and widened passes.
         excluded_subtree: A resolved directory whose ``.py`` modules are skipped,
             or None to scan every file under the root.
         required_substring: A stem a file's text must contain to count as a
             scan candidate, or None to scan every file. The widened pass passes
             the written module's filename stem so a file that never names the
-            module is skipped before it is counted or parsed, spending cap
-            budget only on the candidate importer files.
+            module is skipped before it is counted or parsed, spending parse
+            budget only on the candidate importer files, while the read cap
+            still bounds how many files get read looking for that stem.
 
     Returns:
         A (collected_names, running_count, cap_was_hit) triple. collected_names
@@ -422,6 +440,7 @@ def _collect_names_under_root(
     collected_names = set(all_seed_names)
     written_path_key = os.path.normcase(str(written_path))
     scanned_file_count = already_scanned_count
+    read_attempt_count = 0
     for each_path in scan_root.rglob("*" + PYTHON_SOURCE_SUFFIX):
         if not each_path.is_file():
             continue
@@ -430,6 +449,9 @@ def _collect_names_under_root(
             continue
         if excluded_subtree is not None and _is_under_directory(resolved_path, excluded_subtree):
             continue
+        read_attempt_count += 1
+        if read_attempt_count > MAX_SCAN_ROOT_READ_COUNT:
+            return collected_names, scanned_file_count, True
         sibling_source = _read_candidate_source(each_path, required_substring)
         if sibling_source is None:
             continue
