@@ -11,6 +11,10 @@ description: >-
 
 Delegates Copilot babysitting to a background subagent so the main session stays free. The subagent loops internally and closes itself on convergence.
 
+## Transport check (before any GitHub step)
+
+Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR scope is resolved, run `gh api repos/<owner>/<repo> --jq .permissions.push` and take `true` as the pass. When any check fails, run the `pr-loop-cloud-transport` skill first, route every `gh` operation in this skill through its substitution matrix, and carry the same routing into the subagent prompt so the spawned watcher inherits it.
+
 ## When this skill applies
 
 The user is on a PR branch, wants Copilot (the GitHub Copilot reviewer bot) to keep re-reviewing after each push, and wants findings auto-addressed between ticks — but does not want the main conversation consumed by polling.

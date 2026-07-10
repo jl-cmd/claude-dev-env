@@ -12,6 +12,10 @@ description: >-
 
 **Core principle:** A clean-room bug audit on the entire pull request. The audit agent receives the PR diff and nothing else — no chat history, no prior framing, no implicit "we already looked at this." Independence is the point.
 
+## Transport check (before any GitHub step)
+
+Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR scope is resolved, run `gh api repos/<owner>/<repo> --jq .permissions.push` and take `true` as the pass. When any check fails, run the `pr-loop-cloud-transport` skill first and route every `gh` operation in this skill through its substitution matrix.
+
 ## When this skill applies
 
 User types `/findbugs` or asks for a bug audit on the current branch's PR. Typical moment: PR is up (draft or ready), and the user wants an independent second pair of eyes before merge or before requesting human review.

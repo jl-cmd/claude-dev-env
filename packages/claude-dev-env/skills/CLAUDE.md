@@ -43,7 +43,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `pr-fix-protocol` — fix, reply, and resolve reviewer findings; the unresolved-thread sweep
 - `post-audit-findings` — publishes an audit pass as one GitHub PR review
 - `pr-loop-lifecycle` — opens and closes a PR-loop run (grant, teardown, PR description, revoke, report)
-- `pr-loop-cloud-transport` — six-step transport workflow that lets any PR-loop skill run in a cloud session with no `gh` CLI (MCP schema load, origin/HEAD fix, identity rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check)
+- `pr-loop-cloud-transport` — six-step transport workflow that lets any PR-loop skill run in a session whose `gh` CLI is absent or cannot act on the PR (MCP schema load, origin/HEAD fix, identity rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check)
 - `code` — strict-mode code generation session
 
 **Research and discovery**

@@ -1,18 +1,24 @@
 ---
 name: pr-loop-cloud-transport
-description: Runs any PR-loop skill in a Claude Code cloud session where the gh CLI is absent. A six-step transport workflow loads the GitHub MCP schemas, fixes origin/HEAD before pushes, keys review rules to the live MCP identity, routes every GitHub operation through the gh-to-MCP substitution matrix, reads Copilot status from what lands on the PR, and self-checks the posts the gh-text hooks cannot gate. Use at run start when pr-converge, autoconverge, bugteam, qbug, findbugs, fixbugs, monitor-open-prs, or copilot-review runs in a cloud session, when `command -v gh` fails, or when an MCP tool call fails with InputValidationError.
+description: Runs any PR-loop skill in a Claude Code session whose gh CLI cannot act on the PR — the binary is absent, gh auth status fails, or the active login cannot act on the PR's owner. A six-step transport workflow loads the GitHub MCP schemas, fixes origin/HEAD before pushes, keys review rules to the live MCP identity, routes every GitHub operation through the gh-to-MCP substitution matrix, reads Copilot status from what lands on the PR, and self-checks the posts the gh-text hooks cannot gate. Use at run start when pr-converge, autoconverge, bugteam, qbug, findbugs, fixbugs, monitor-open-prs, or copilot-review runs in a cloud session, when `command -v gh` or `gh auth status` fails, or when an MCP tool call fails with InputValidationError.
 ---
 
 # PR-loop cloud transport
 
-One workflow that makes a cloud session able to run the PR-loop skill family. A cloud session ships no `gh` binary and cannot fetch one, so every `gh` step in a PR-loop skill routes through the GitHub MCP tools; this skill is the setup and routing contract for that substitution. The evidence base is `docs/references/cloud-pr-loop-compatibility.md` in the source repo — every rule here traces to a live probe or the operation inventory recorded there.
+One workflow that makes a cloud session able to run the PR-loop skill family. A cloud session ships no `gh` binary and cannot fetch one, so every `gh` step in a PR-loop skill routes through the GitHub MCP tools; this skill is the setup and routing contract for that substitution. The same routing serves a session whose `gh` is present but unauthenticated, or authenticated as an account that cannot act on the PR's owner — a binary that cannot act on the PR is as unusable as a binary that is not there. The evidence base is `docs/references/cloud-pr-loop-compatibility.md` in the source repo — every rule here traces to a live probe, the operation inventory recorded there, or the auth rule the calling skills state.
 
 ## Decide the transport first
 
-Run: `command -v gh`
+Three checks, in order; the first failure routes to the cloud transport:
 
-- **`gh` found** → local session. Stop here; follow the calling skill's own steps unchanged.
-- **`gh` absent** → cloud session. Run the workflow below, then follow the calling skill's steps with every `gh` operation swapped for its cloud path.
+1. `command -v gh` — the binary exists.
+2. `gh auth status` — an active authenticated account exists; a non-zero exit fails the check.
+3. Once the PR scope is resolved (owner and repo known): `gh api repos/<owner>/<repo> --jq .permissions.push` must print `true`. The `permissions` object in that response reports the authenticated account's own rights on the repo, `push` included (live probe: the Section 7 appendix row in the runbook), so one command proves the binary, the auth, and the account's write access together. An error, a 404, or `false` fails the check.
+
+- **All three pass** → local session. Stop here; follow the calling skill's own steps unchanged.
+- **Any check fails** → cloud transport. Run the workflow below, then follow the calling skill's steps with every `gh` operation swapped for its cloud path.
+
+A read-scoped account passes checks 1 and 2 and fails check 3 — the PR-loop skills push fix commits, so `push: false` means the local path stalls at its first push while the MCP transport carries the run.
 
 ## Cloud transport workflow
 

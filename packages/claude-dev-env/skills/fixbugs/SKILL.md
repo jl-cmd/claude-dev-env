@@ -11,6 +11,10 @@ description: >-
 
 **Core principle:** A thin bridge between `/findbugs` (read-only audit) and `/agent-prompt` (structured prompt authoring + spawn). /fixbugs recovers the prior findings, packages them as a goal, and hands off. It does not author prompts itself, does not spawn agents directly, and does not run audits.
 
+## Transport check (before any GitHub step)
+
+Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR scope is resolved, run `gh api repos/<owner>/<repo> --jq .permissions.push` and take `true` as the pass. When any check fails, run the `pr-loop-cloud-transport` skill first, route every `gh` operation in this skill through its substitution matrix, and carry the same routing into the goal string handed to `/agent-prompt` so the spawned fix agent inherits it.
+
 ## When this skill applies
 
 Right after `/findbugs` returned findings on the current branch and the user wants the bugs fixed without further triage. Bare `/fixbugs` defaults to all severities (P0 + P1 + P2). Argument-filtered invocations (e.g. `/fixbugs P0`, `/fixbugs P0+P1`, `/fixbugs P0 P1`) narrow the target set.

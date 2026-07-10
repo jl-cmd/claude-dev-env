@@ -15,11 +15,16 @@ description: >-
 
 ## Contents
 
+- Transport check — gh presence and auth route the sweep local or through the cloud transport
 - When this skill applies — refusal cases and trigger conditions
 - Discovery — `scripts/discover_open_prs.py` queries via `gh search prs` across both owner scopes
 - Dispatch — `/bugteam --bugbot-retrigger <pr_numbers...>`
 - Post-convergence polling — bugbot replies and re-invocation
 - `scripts/discover_open_prs.py` — the discovery helper
+
+## Transport check (before any GitHub step)
+
+Run `command -v gh`; when it succeeds, run `gh auth status`; for each PR the sweep dispatches, `gh api repos/<owner>/<repo> --jq .permissions.push` must print `true`. When any check fails, run the `pr-loop-cloud-transport` skill first and route every `gh` operation in this skill through its substitution matrix, including the discovery query (`mcp__github__search_pull_requests` with `perPage` in place of `gh search prs`).
 
 ## When this skill applies
 
