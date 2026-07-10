@@ -33,7 +33,12 @@ The scan is deliberately conservative to keep false positives near zero:
   ``from <module> import`` whose final dotted segment equals the written
   module's filename stem, so a genuine cross-tree consumer of this constants
   module keeps the constant live while a same-named constant exported by an
-  unrelated module never masks a dead one. A module outside any repository is
+  unrelated module never masks a dead one. The widened pass reads a repository
+  file only to test whether its text names the written module's filename stem;
+  a file that never mentions the stem cannot carry such an import, so it is
+  skipped without spending scan-cap budget, keeping the widened pass bounded to
+  the handful of candidate importer files even in a large repository. A module
+  outside any repository is
   judged on the package-tree scan alone, and the widened pass skips the package
   subtree the first pass already covered, so no file is read twice.
 - The combined file count of the package-tree and widened passes is bounded by a
@@ -328,6 +333,42 @@ def _is_under_directory(candidate_path: Path, ancestor_directory: Path) -> bool:
     return True
 
 
+def _read_candidate_source(file_path: Path, required_substring: str | None) -> str | None:
+    """Return a module's text, or None when it is not a reference-scan candidate.
+
+    ::
+
+        required_substring = None                 -> read and keep every file
+        required_substring = the module stem      -> keep only files naming it
+            from pkg.foo_constants import BAR  ->  names the stem  ->  candidate
+            def unrelated() -> int: ...        ->  no stem mention ->  skipped
+
+    The widened repository pass looks only for a ``from <module> import`` whose
+    final dotted segment equals the constants module's filename stem, and such an
+    import always spells that stem in the file's text. A file whose text never
+    mentions the stem cannot carry the import, so returning None for it lets the
+    caller skip the file without spending scan-cap budget, which keeps the widened
+    pass bounded to the candidate importer files even under a large repository.
+
+    Args:
+        file_path: The ``.py`` module to read.
+        required_substring: A stem every candidate file's text must contain, or
+            None to keep every readable file (the package-tree pass keeps all).
+
+    Returns:
+        The file's text when it is readable and, when ``required_substring`` is
+        set, contains that stem; None when the file cannot be read or does not
+        name the stem.
+    """
+    try:
+        source_text = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if required_substring is not None and required_substring not in source_text:
+        return None
+    return source_text
+
+
 def _collect_names_under_root(
     scan_root: Path,
     written_path: Path,
@@ -335,6 +376,7 @@ def _collect_names_under_root(
     extract_names: Callable[[str], set[str]],
     already_scanned_count: int = 0,
     excluded_subtree: Path | None = None,
+    required_substring: str | None = None,
 ) -> tuple[set[str], int, bool]:
     """Collect referenced names under the scan root via a per-module extractor.
 
@@ -345,7 +387,10 @@ def _collect_names_under_root(
     an unexpectedly large tree cannot stall the hook; the boolean signals the
     caller to treat that case as "cannot prove dead". The ``excluded_subtree``
     skip keeps the widened repository scan from re-reading a file the
-    package-tree scan already covered.
+    package-tree scan already covered. When ``required_substring`` is set, a
+    module whose text never contains that stem is skipped before it is counted
+    or parsed, so the widened pass spends cap budget only on candidate importer
+    files rather than on every module in a large repository.
 
     Args:
         scan_root: The directory tree to scan.
@@ -361,6 +406,11 @@ def _collect_names_under_root(
             cap bounds the combined work of the package-tree and widened passes.
         excluded_subtree: A resolved directory whose ``.py`` modules are skipped,
             or None to scan every file under the root.
+        required_substring: A stem a file's text must contain to count as a
+            scan candidate, or None to scan every file. The widened pass passes
+            the written module's filename stem so a file that never names the
+            module is skipped before it is counted or parsed, spending cap
+            budget only on the candidate importer files.
 
     Returns:
         A (collected_names, running_count, cap_was_hit) triple. collected_names
@@ -380,13 +430,12 @@ def _collect_names_under_root(
             continue
         if excluded_subtree is not None and _is_under_directory(resolved_path, excluded_subtree):
             continue
+        sibling_source = _read_candidate_source(each_path, required_substring)
+        if sibling_source is None:
+            continue
         scanned_file_count += 1
         if scanned_file_count > MAX_SCAN_ROOT_FILE_COUNT:
             return collected_names, scanned_file_count, True
-        try:
-            sibling_source = each_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
         collected_names |= extract_names(sibling_source)
     return collected_names, scanned_file_count, False
 
@@ -550,6 +599,7 @@ def check_dead_module_constants(
                 collect_qualified_imports,
                 already_scanned_count=scanned_file_count,
                 excluded_subtree=scan_root,
+                required_substring=written_path.stem,
             )
             if widened_cap_was_hit:
                 return []

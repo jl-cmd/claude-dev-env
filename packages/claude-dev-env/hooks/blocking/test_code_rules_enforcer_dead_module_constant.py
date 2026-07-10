@@ -364,6 +364,57 @@ def test_returns_empty_list_at_file_cap(
     assert issues == [], f"File cap hit must return [] (cannot prove dead), got: {issues}"
 
 
+def _write_noise_modules(directory: Path, count: int) -> None:
+    directory.mkdir(parents=True)
+    for each_index in range(count):
+        (directory / f"mod_{each_index}.py").write_text(
+            "def noop() -> int:\n    return 1\n", encoding="utf-8"
+        )
+
+
+def test_dead_exported_constant_flagged_despite_many_noncandidate_siblings(
+    neutral_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("code_rules_dead_module_constant.MAX_SCAN_ROOT_FILE_COUNT", 3)
+    package_directory = neutral_root / "pkg"
+    package_directory.mkdir(parents=True)
+    constants_body = 'DEAD_EXPORTED = "x"\n__all__ = ["DEAD_EXPORTED"]\n'
+    constants_path = package_directory / "settings_constants.py"
+    constants_path.write_text(constants_body, encoding="utf-8")
+    _write_noise_modules(neutral_root / "noise", 10)
+    issues = _check(constants_body, str(constants_path))
+    assert any("DEAD_EXPORTED" in each_issue for each_issue in issues), (
+        "A dead exported constant must stay flagged when the widened scan meets "
+        f"many sibling modules that never import from this module, got: {issues}"
+    )
+
+
+def test_live_qualified_importer_found_despite_many_noncandidate_siblings(
+    neutral_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("code_rules_dead_module_constant.MAX_SCAN_ROOT_FILE_COUNT", 3)
+    package_directory = neutral_root / "pkg"
+    package_directory.mkdir(parents=True)
+    constants_body = 'LIVE_EXPORTED = "y"\n__all__ = ["LIVE_EXPORTED"]\n'
+    constants_path = package_directory / "settings_constants.py"
+    constants_path.write_text(constants_body, encoding="utf-8")
+    _write_noise_modules(neutral_root / "noise", 10)
+    consumer_directory = neutral_root / "app"
+    consumer_directory.mkdir(parents=True)
+    consumer_body = (
+        "from pkg.settings_constants import LIVE_EXPORTED\n"
+        "\n"
+        "def use() -> str:\n"
+        "    return LIVE_EXPORTED\n"
+    )
+    (consumer_directory / "consumer.py").write_text(consumer_body, encoding="utf-8")
+    issues = _check(constants_body, str(constants_path))
+    assert issues == [], (
+        "A constant imported through a qualified from-import must stay live even "
+        f"when many non-importing siblings surround it, got: {issues}"
+    )
+
+
 def test_widened_scan_reads_each_file_at_most_once(
     neutral_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
