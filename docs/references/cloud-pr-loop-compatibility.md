@@ -158,7 +158,8 @@ session before the first `mcp__github__*` call (Section 5).
 | Second reviewer identity | `gh auth switch`, `BUGTEAM_REVIEWER_ACCOUNT` | None. One `jl-cmd` identity. `COMMENT` reviews on own PRs allowed; `APPROVE`/`REQUEST_CHANGES` on own PRs blocked. |
 | REST fallback | `gh api repos/...` | `curl -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/...` — only for owners with the app connected (`JonEcho` today). GraphQL is pinned. |
 
-Every row above rests on a live probe recorded in Section 7.
+Each row above rests on a live probe recorded in Section 7 or the
+operation inventory of the installed skills.
 
 ## 5. Interim session preamble
 
