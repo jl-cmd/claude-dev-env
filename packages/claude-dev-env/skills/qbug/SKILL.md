@@ -21,6 +21,10 @@ Shared artifacts with /bugteam are referenced below by path, using the `${CLAUDE
 - **Audit contract** (finding schema, proof-of-absence, adversarial pass, Haiku secondary, post-fix self-audit, diagnostics JSON): [`_shared/pr-loop/audit-contract.md`](../../_shared/pr-loop/audit-contract.md)
 - PR comment lifecycle shape: [`bugteam/SKILL.md`](../bugteam/SKILL.md#audit-posting)
 
+## Transport check (before any GitHub step)
+
+Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR scope is resolved, run `gh api repos/<owner>/<repo> --jq .permissions.push` and take `true` as the pass. When any check fails, run the `pr-loop-cloud-transport` skill first and route every `gh` operation in this skill through its substitution matrix.
+
 ## When this skill applies
 
 `/qbug` once authorizes the full cycle (no loop cap — runs until `converged` or `stuck`; user can interrupt at any time).

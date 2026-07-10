@@ -44,6 +44,19 @@ Scan the tool list at the top of this conversation for the literal string
 aborting` and stop. The workflow also needs the `gh` CLI authenticated for the
 PR's owner.
 
+## Transport check (before any GitHub step)
+
+Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR
+scope is resolved, run `gh api repos/<owner>/<repo> --jq .permissions.push`
+and take `true` as the pass. When any check fails, run the
+`pr-loop-cloud-transport` skill first and route every `gh` operation in this
+skill through its substitution matrix. The workflow script
+(`workflow/converge.mjs`) embeds `gh` commands and gh-backed helper scripts in
+its agent prompts, so a cloud run also applies the same substitution to those
+agent prompts when it authors the launch — the transport skill covers the
+orchestrating session's own steps, and the script's agent-prompt text carries
+`gh` calls the spawned agents cannot run in a cloud session.
+
 ## Pre-flight (main session)
 
 1. **Enter a worktree.** Call `EnterWorktree` with no arguments before any

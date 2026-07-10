@@ -167,7 +167,15 @@ Paste this block at the start of any cloud PR-loop run. It sets up MCP
 schemas, the push fix, transport rules, identity rules, the Copilot
 fallback, and hook notes. The `pr-loop-cloud-transport` skill carries this
 preamble as a step-by-step workflow with a progress checklist, so a run can
-invoke the skill in place of pasting the block.
+invoke the skill in place of pasting the block. The skill's transport
+decision routes on three checks: `command -v gh`, `gh auth status`, and —
+once owner and repo are known — `gh api repos/<owner>/<repo> --jq
+.permissions.push` printing `true`. The `permissions` object in that
+response reports the authenticated account's own rights on the repo,
+`push` included (Section 7 carries the live probe row), so a
+present-but-unauthenticated `gh`, or one on an account without push
+rights to the PR's repo, takes the cloud transport the same way a
+missing binary does.
 
 ### 5.1 Load MCP schemas (once per session)
 
@@ -473,6 +481,7 @@ probes is `jl-cmd`; raw REST posts as `claude[bot]`.
 | `mcp__github__*` call before `ToolSearch` load | jl-cmd (MCP) | `InputValidationError` | verified |
 | `GET https://api.github.com/user` | claude[bot] (REST) | 200, login `jl-cmd` | verified |
 | `GET /repos/JonEcho/python-automation` | claude[bot] (REST) | 200 | verified |
+| `GET /repos/JonEcho/python-automation` viewer `permissions` object | claude[bot] (REST) | Present, with a `push` boolean (`false` for this token) | verified |
 | `GET /repos/jl-cmd/claude-code-config` | claude[bot] (REST) | 403, app-not-connected body | verified |
 | `GET /repos/cli/cli/releases/latest` | claude[bot] (REST) | 403 (out-of-scope repo) | verified |
 | `git push` dry-run before `git remote set-head origin -a` | cloud shell | Fails: `Not a valid object name origin/HEAD` | verified |

@@ -12,6 +12,14 @@ description: >-
 One tick per invocation. Bugbot ↔ code-review ↔ bugteam ↔ Copilot loop on
 a draft PR until all are clean on the same `HEAD` and mergeable.
 
+## Transport check (before any GitHub step)
+
+Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR
+scope is resolved, run `gh api repos/<owner>/<repo> --jq .permissions.push`
+and take `true` as the pass. When any check fails, run the
+`pr-loop-cloud-transport` skill first and route every `gh` operation in this
+skill through its substitution matrix.
+
 ## Pre-flight
 
 Pause and physically scan the tool list at the top of this conversation
