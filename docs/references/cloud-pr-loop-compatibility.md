@@ -106,8 +106,8 @@ evidence (the probe or inventory line that proves it), and a fix summary
 ### RC7 — Hardcoded Windows interpreter path
 
 - **Symptom:** In cloud, the verifier can never compute `manifest_sha256`, so the verification verdict is never minted, and `verified_commit_gate` blocks every code commit.
-- **Cause:** `autoconverge/workflow/converge.mjs` `buildVerdictFenceSteps` hardcodes `"C:\\Python313\\python.exe"` for `verification_verdict_store.py`.
-- **Evidence:** `converge.mjs` lines 418 and 712 both carry the literal `"C:\\Python313\\python.exe"`. The cloud image has no such path. `Start-Process chrome`, `.ahk`, and `.ps1` operator tooling in the same file are Windows-only and stay unused in cloud.
+- **Cause:** `autoconverge/workflow/converge.mjs` hardcodes `"C:\\Python313\\python.exe"` for `verification_verdict_store.py` in two verify prompts: the `buildVerdictFenceSteps` helper and a separate inline hardening-verify prompt that repeats the verdict-fence text.
+- **Evidence:** `converge.mjs` carries the literal `"C:\\Python313\\python.exe"` at line 712 (inside `buildVerdictFenceSteps`) and at line 418 (inside the separate hardening-verify prompt). The cloud image has no such path. `Start-Process chrome`, `.ahk`, and `.ps1` operator tooling in the same file are Windows-only and stay unused in cloud.
 - **Fix summary:** Phase A changes the fence step to a resolved interpreter (`python3` on PATH / a `sys.executable` pattern).
 
 ### RC8 — Copilot quota gap
@@ -171,7 +171,7 @@ fallback, and hook notes.
 ### 5.1 Load MCP schemas (once per session)
 
 ```
-ToolSearch "select:pull_request_read pull_request_review_write add_comment_to_pending_review add_reply_to_pull_request_comment add_issue_comment request_copilot_review update_pull_request create_pull_request issue_write search_pull_requests get_me"
+ToolSearch "select:pull_request_read,pull_request_review_write,add_comment_to_pending_review,add_reply_to_pull_request_comment,add_issue_comment,request_copilot_review,update_pull_request,create_pull_request,issue_write,search_pull_requests,get_me"
 ```
 
 Run this before the first `mcp__github__*` call. A call before the schema
@@ -298,7 +298,7 @@ Change the check-runs read (line 52,
 never exit 2 (`gh CLI error`).
 
 **A5. `skills/pr-converge/scripts/check_convergence.py` — three transport changes.**
-(a) check-runs read (line 50) routes through `github_rest.py`; (b) the
+(a) check-runs read (lines 212-213) routes through `github_rest.py`; (b) the
 unresolved-thread read (line 344, `gh api graphql`) routes through the REST
 review-comments list plus MCP resolve, so it drops the pinned-GraphQL
 dependency; (c) the requested-reviewers read (line 474) routes through
@@ -333,10 +333,11 @@ search, or have the SKILL.md call `mcp__github__search_pull_requests` with
 is green.
 
 **A10. `skills/autoconverge/workflow/converge.mjs` — resolved interpreter.**
-Change the two hardcoded `"C:\\Python313\\python.exe"` tokens (lines 418 and
-712) in `buildVerdictFenceSteps` to a resolved interpreter: `python3` on
-PATH, or a value the workflow reads at runtime. The verdict fence steps then
-run in cloud, so the verifier computes `manifest_sha256` and
+Change both hardcoded `"C:\\Python313\\python.exe"` tokens to a resolved
+interpreter (`python3` on PATH, or a value the workflow reads at runtime):
+line 712 inside `buildVerdictFenceSteps`, and line 418 inside the separate
+hardening-verify prompt that repeats the verdict-fence text. Both verdict
+fence steps then run in cloud, so the verifier computes `manifest_sha256` and
 `verified_commit_gate` can mint a verdict.
 *Acceptance:* `cd packages/claude-dev-env && npm test` passes the converge
 workflow tests, and the emitted fence names a portable interpreter.
@@ -358,18 +359,18 @@ Each prose `gh` step names its Section 4 cloud path and links
 
 | File | Line | gh step |
 |---|---|---|
-| `skills/pr-converge/SKILL.md` | 391 | request Copilot reviewer via `gh api POST requested_reviewers` |
+| `skills/pr-converge/SKILL.md` | 387 | request Copilot reviewer via `gh api POST requested_reviewers` |
 | `skills/pr-converge/reference/convergence-gates.md` | 137 | POST a Copilot review request |
 | `skills/pr-converge/reference/convergence-gates.md` | 142 | check for a pending Copilot review (`gh api --paginate --slurp`) |
 | `skills/pr-converge/reference/per-tick.md` | 108 | `gh repo clone` for a cross-repo PR |
 | `skills/pr-converge/reference/per-tick.md` | 329 | fetch Copilot reviews |
-| `skills/autoconverge/SKILL.md` | 58 | `gh pr view --json ...` scope read |
-| `skills/autoconverge/SKILL.md` | 61 | `gh pr ready <n> --undo` |
-| `skills/autoconverge/SKILL.md` | 71 | `gh pr checkout` |
-| `skills/autoconverge/SKILL.md` | 225 | `gh issue comment` report post |
+| `skills/autoconverge/SKILL.md` | 57 | `gh pr view --json ...` scope read |
+| `skills/autoconverge/SKILL.md` | 59 | `gh pr ready <n> --undo` |
+| `skills/autoconverge/SKILL.md` | 69 | `gh pr checkout` |
+| `skills/autoconverge/SKILL.md` | 233 | `gh issue comment` report post |
 | `skills/monitor-open-prs/SKILL.md` | 14 | `gh search prs` discovery |
 | `skills/gh-paginate/SKILL.md` | 43-76 | `gh api ... --paginate --slurp \| jq` read patterns |
-| `skills/post-audit-findings/SKILL.md` | 56, 62 | `gh api user` / `gh auth login` self-PR detection |
+| `skills/post-audit-findings/SKILL.md` | 52, 58 | `gh api user` / `gh auth login` self-PR detection |
 
 *Acceptance:* each named line carries an MCP substitution and a
 `cloud-transport.md` link; no PR-loop SKILL.md instructs a bare `gh` step
@@ -394,10 +395,10 @@ rather than `gh`.
 Bugbot read.
 
 **B5. autoconverge and pr-converge setup-needs sections — transport-availability wording.**
-Change the `autoconverge/SKILL.md` setup need (line 46, "the gh CLI
+Change the `autoconverge/SKILL.md` setup need (line 44, "the gh CLI
 authenticated for the PR's owner") to name transport availability: MCP GitHub
 tools reachable, or `gh` present locally. In `pr-converge/SKILL.md`, keep the
-`ScheduleWakeup` pre-flight (line 21) and add the transport-availability
+`ScheduleWakeup` pre-flight (line 18) and add the transport-availability
 wording to its setup-needs section.
 *Acceptance:* neither setup-needs section names `gh` as a hard need with no
 cloud alternative beside it.
