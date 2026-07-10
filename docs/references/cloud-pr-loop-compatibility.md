@@ -115,14 +115,14 @@ evidence (the probe or inventory line that proves it), and a fix summary
 - **Symptom:** The Copilot quota pre-check crashes rather than returning its skip code.
 - **Cause:** `gh api copilot_internal/user` has no MCP equivalent and the internal endpoint is not served for proxy REST. `copilot_quota.py` `_run_gh` runs `subprocess.run(["gh", ...])` with no missing-binary handling, so the missing `gh` raises an uncaught `FileNotFoundError`.
 - **Evidence:** `_shared/pr-loop/scripts/copilot_quota.py` `_run_gh` (lines 63-90) has no `FileNotFoundError` guard around `subprocess.run(["gh", *all_command_arguments], ...)`. The quota read at line 169 calls `gh api copilot_internal/user`.
-- **Fix summary:** Phase A adds missing-binary handling that returns the documented skip code, so the quota gate treats Copilot status as unknown; Phase B has the caller work out `copilot_down` from `request_copilot_review`.
+- **Fix summary:** Phase A adds missing-binary handling that returns the documented skip code, so the quota gate treats Copilot status as unknown; Phase B has the caller work out `copilot_down` from what lands on the PR after `request_copilot_review`, since the request call itself confirms nothing.
 
 ### RC9 — Reviewer gates weaken with no notice
 
 - **Symptom:** With `gh` absent, `copilot_down` and `bugbot_down` read as permanently true for the wrong reason, so loops converge on fewer signals and say nothing about why.
 - **Cause:** The gates read failure from a `gh` call that cannot run, rather than from a real reviewer-down signal.
 - **Evidence:** `reviewer_availability.py` gates Copilot on `evaluate_copilot_quota()`, a chain of `gh` subprocess calls (RC8). `check_bugbot_ci.py` shells to `gh api` for CI state and documents exit code 2 as `gh CLI error`.
-- **Fix summary:** Phase B gives `reviewer-gates` explicit cloud semantics — Copilot status unknown, work it out from the request; Bugbot CI read through `get_check_runs` — and surfaces the environment limit rather than a false down flag.
+- **Fix summary:** Phase B gives `reviewer-gates` explicit cloud semantics — Copilot status unknown, work it out from what lands on the PR after the request; Bugbot CI read through `get_check_runs` — and surfaces the environment limit rather than a false down flag.
 
 ### RC10 — Cross-repo checkout
 
@@ -154,7 +154,7 @@ session before the first `mcp__github__*` call (Section 5).
 | Check runs on a SHA | `gh api commits/SHA/check-runs` | `mcp__github__pull_request_read(method="get_check_runs")`, or REST for owners with the app connected |
 | CI logs | `gh run view --log` | `mcp__github__actions_list` / `mcp__github__actions_get` / `mcp__github__get_job_logs` |
 | Clone another repo | `gh repo clone` | `git clone https://github.com/owner/repo` (session-scoped), or `mcp__Claude_Code_Remote__add_repo` first |
-| Copilot quota | `gh api copilot_internal/user` | None. Treat quota as unknown; call `mcp__github__request_copilot_review` and work out `copilot_down` from its result. |
+| Copilot quota | `gh api copilot_internal/user` | None. Treat quota as unknown; call `mcp__github__request_copilot_review` — its silent completion confirms nothing — then read `copilot_down` from what lands on the PR: a Copilot review on the HEAD (clean or with findings) means up; an out-of-usage notice on the HEAD, or no review within the caller's poll budget, means down. |
 | Second reviewer identity | `gh auth switch`, `BUGTEAM_REVIEWER_ACCOUNT` | None. One `jl-cmd` identity. `COMMENT` reviews on own PRs allowed; `APPROVE`/`REQUEST_CHANGES` on own PRs blocked. |
 | REST fallback | `gh api repos/...` | `curl -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/...` — only for owners with the app connected (`JonEcho` today). GraphQL is pinned. |
 
@@ -228,9 +228,11 @@ origin/HEAD` (RC3). Run it once per repo per session.
 
 - Skip the `gh api copilot_internal/user` quota read. Treat Copilot quota as
   unknown.
-- Call `mcp__github__request_copilot_review` and read `copilot_down` from its result:
-  a rejected request means Copilot is down for this run; an accepted request
-  means it is up. Say plainly in the run report when Copilot status is an
+- Call `mcp__github__request_copilot_review`. Its silent completion confirms
+  nothing either way, so read `copilot_down` from what lands on the PR: a
+  Copilot review on the HEAD — clean or with findings — means Copilot is up; an
+  out-of-usage notice on the HEAD, or no review within the caller's poll budget,
+  means Copilot is down. Say plainly in the run report when Copilot status is an
   environment limit rather than a real reviewer-down signal.
 
 ### 5.6 Hook-denial notes
@@ -395,7 +397,8 @@ MCP tool call; a grep for `ToolSearch` finds a hit in each.
 
 **B4. `skills/reviewer-gates/SKILL.md` — explicit cloud semantics.**
 State that in a cloud session Copilot status is unknown, so the flow calls
-`request_copilot_review` and reads `copilot_down` from the result, and that
+`request_copilot_review` and reads `copilot_down` from what lands on the PR
+afterward — the request call confirms nothing on its own — and that
 Bugbot CI state reads through `pull_request_read(method="get_check_runs")`
 rather than `gh`.
 *Acceptance:* the SKILL.md names the Copilot path and the `get_check_runs`
