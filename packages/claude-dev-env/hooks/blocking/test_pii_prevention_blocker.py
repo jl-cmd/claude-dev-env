@@ -564,6 +564,14 @@ def test_is_git_commit_shell_command_detects_powershell_command_flag() -> None:
     assert not is_git_commit_shell_command('pwsh -NoProfile -Command "git status"')
 
 
+def test_is_git_commit_shell_command_detects_powershell_command_abbreviations() -> None:
+    assert is_git_commit_shell_command('pwsh -Com "git commit -m x"')
+    assert is_git_commit_shell_command('pwsh -Comm "git commit -m x"')
+    assert is_git_commit_shell_command('pwsh -Comma "git commit -m x"')
+    assert is_git_commit_shell_command('pwsh -Comman "git commit -m x"')
+    assert not is_git_commit_shell_command('pwsh -NoProfile "git commit -m x"')
+
+
 def test_is_git_commit_shell_command_detects_flag_carrying_wrappers() -> None:
     assert is_git_commit_shell_command("nice -n 10 git commit -m x")
     assert is_git_commit_shell_command("stdbuf -oL git commit -m x")

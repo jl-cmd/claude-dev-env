@@ -453,6 +453,12 @@ def _skip_leading_noop_tokens(all_segment_tokens: list[str]) -> int:
     return token_index
 
 
+def _token_is_powershell_command_flag_prefix(lowered_token: str) -> bool:
+    if lowered_token == SINGLE_DASH_OPTION_PREFIX:
+        return False
+    return POWERSHELL_INLINE_COMMAND_FLAG.startswith(lowered_token)
+
+
 def _token_is_interpreter_inline_command_flag(token_text: str) -> bool:
     if not token_text.startswith(SINGLE_DASH_OPTION_PREFIX):
         return False
@@ -461,7 +467,7 @@ def _token_is_interpreter_inline_command_flag(token_text: str) -> bool:
     lowered_token = token_text.lower()
     if lowered_token == SHELL_INLINE_COMMAND_FLAG:
         return True
-    if lowered_token == POWERSHELL_INLINE_COMMAND_FLAG:
+    if _token_is_powershell_command_flag_prefix(lowered_token):
         return True
     return lowered_token.endswith(INLINE_COMMAND_FLAG_CLUSTER_SUFFIX)
 
