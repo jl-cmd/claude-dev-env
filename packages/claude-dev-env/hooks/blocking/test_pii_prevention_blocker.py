@@ -590,7 +590,15 @@ def test_is_git_commit_shell_command_detects_wrapper_prefixed_commits() -> None:
     assert is_git_commit_shell_command("sudo git commit -m x")
     assert is_git_commit_shell_command("env GIT_AUTHOR_NAME=a git commit")
     assert is_git_commit_shell_command("nice git commit -m y")
+    assert is_git_commit_shell_command("nice -n 10 git commit")
+    assert is_git_commit_shell_command("timeout 30 git commit")
+    assert is_git_commit_shell_command("env FOO=bar git commit")
     assert not is_git_commit_shell_command("sudo cat notes.md")
+
+
+def test_wrapper_prefix_stops_at_intervening_command_word() -> None:
+    assert not is_git_commit_shell_command("time echo git commit")
+    assert not is_git_commit_shell_command("sudo docker run git commit")
 
 
 def test_wrapper_prefixed_commit_scans_staged_pii(tmp_path: Path) -> None:

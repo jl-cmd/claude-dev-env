@@ -54,6 +54,7 @@ ALL_COMMAND_WRAPPER_TOKENS: frozenset[str] = frozenset(
 ALL_LEADING_SKIPPABLE_COMMAND_TOKENS: frozenset[str] = (
     ALL_SHELL_KEYWORD_TOKENS | ALL_COMMAND_WRAPPER_TOKENS
 )
+ALL_ONE_OPERAND_WRAPPER_TOKENS: frozenset[str] = frozenset({"timeout", "flock"})
 ALL_BASH_FAMILY_INTERPRETER_BASENAMES: frozenset[str] = frozenset(
     {
         "bash",

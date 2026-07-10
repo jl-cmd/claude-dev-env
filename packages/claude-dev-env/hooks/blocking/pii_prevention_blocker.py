@@ -50,6 +50,7 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS,
     ALL_GIT_BINARY_BASENAMES,
     ALL_LEADING_SKIPPABLE_COMMAND_TOKENS,
+    ALL_ONE_OPERAND_WRAPPER_TOKENS,
     ALL_SHELL_COMMAND_SEPARATOR_TOKENS,
     ALL_SHELL_INTERPRETER_BASENAMES,
     ALL_SHELL_QUOTE_CHARACTERS,
@@ -440,9 +441,26 @@ def _token_is_leading_skip_target(token_text: str) -> bool:
     return _token_is_git_binary(token_text) or _token_is_shell_interpreter(token_text)
 
 
+def _token_is_wrapper_option_flag(token_text: str) -> bool:
+    return token_text.startswith(SINGLE_DASH_OPTION_PREFIX)
+
+
+def _wrapper_leading_operand_count(token_text: str) -> int:
+    if _token_basename_lower(token_text) in ALL_ONE_OPERAND_WRAPPER_TOKENS:
+        return 1
+    return 0
+
+
+def _flag_value_token_follows(all_segment_tokens: list[str], value_index: int) -> bool:
+    if value_index >= len(all_segment_tokens):
+        return False
+    return not _token_is_leading_skip_target(all_segment_tokens[value_index])
+
+
 def _skip_leading_noop_tokens(all_segment_tokens: list[str]) -> int:
     token_index = 0
     has_skipped_wrapper_prefix = False
+    pending_operand_budget = 0
     while token_index < len(all_segment_tokens):
         each_token = all_segment_tokens[token_index]
         if _token_is_subshell_group_open(each_token):
@@ -450,13 +468,23 @@ def _skip_leading_noop_tokens(all_segment_tokens: list[str]) -> int:
             continue
         if _token_is_skippable_prefix(each_token):
             has_skipped_wrapper_prefix = True
+            pending_operand_budget += _wrapper_leading_operand_count(each_token)
             token_index += 1
             continue
         if not has_skipped_wrapper_prefix:
             break
         if _token_is_leading_skip_target(each_token):
             break
-        token_index += 1
+        if _token_is_wrapper_option_flag(each_token):
+            token_index += 1
+            if _flag_value_token_follows(all_segment_tokens, token_index):
+                token_index += 1
+            continue
+        if pending_operand_budget > 0:
+            pending_operand_budget -= 1
+            token_index += 1
+            continue
+        break
     return token_index
 
 
@@ -535,8 +563,12 @@ def is_git_commit_shell_command(shell_command: str) -> bool:
 
     Skipped leading tokens: a subshell-group open ``(``, env-assignments, shell
     keywords (then, do, else, elif), and wrapper commands (sudo, env, time,
-    nice, xargs, command, stdbuf) together with each wrapper's own option flags
-    and their values. Segments split on unquoted control separators (including
+    nice, xargs, command, stdbuf) together with each wrapper's own option flags,
+    flag values, and the single leading operand that timeout and flock take
+    before their command. A non-wrapper command word between a wrapper and a
+    later git commit stops the scan, so the wrapper's own payload command is
+    read rather than the trailing git token. Segments split on unquoted control
+    separators (including
     a lone ``&`` background operator) and newlines, and the git binary may be
     path-prefixed and carry global flags (no-verify, config, and
     working-directory) before its subcommand. A shell interpreter is unwrapped
