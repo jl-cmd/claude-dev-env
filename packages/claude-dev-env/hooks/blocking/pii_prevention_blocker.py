@@ -68,7 +68,8 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     GIT_COMMIT_SUBCOMMAND,
     GIT_OPTION_WITH_VALUE_STEP,
     HOOK_SCRIPT_BASENAME,
-    INLINE_COMMAND_FLAG_CLUSTER_SUFFIX,
+    INLINE_COMMAND_FLAG_CLUSTER_CHARACTER,
+    INLINE_COMMAND_TOKEN_JOINER,
     LINE_CONTINUATION_PATTERN,
     MAXIMUM_STAGED_FILE_BYTES,
     MCP_GITHUB_TOOL_PREFIX,
@@ -76,7 +77,6 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     MULTI_EDIT_TOOL_NAME,
     NULL_BYTE_MARKER,
     OPTION_ATTACHED_VALUE_MARKER,
-    POWERSHELL_CALL_OPERATOR,
     POWERSHELL_INLINE_COMMAND_FLAG,
     REPOSITORY_ROOT_UNRESOLVED_REASON,
     SHELL_INLINE_COMMAND_FLAG,
@@ -330,8 +330,6 @@ def _token_is_shell_interpreter(token_text: str) -> bool:
 def _token_is_skippable_prefix(token_text: str) -> bool:
     if ENVIRONMENT_ASSIGNMENT_PATTERN.match(token_text):
         return True
-    if token_text == POWERSHELL_CALL_OPERATOR:
-        return True
     return _token_basename_lower(token_text) in ALL_LEADING_SKIPPABLE_COMMAND_TOKENS
 
 
@@ -469,7 +467,8 @@ def _token_is_interpreter_inline_command_flag(token_text: str) -> bool:
         return True
     if _token_is_powershell_command_flag_prefix(lowered_token):
         return True
-    return lowered_token.endswith(INLINE_COMMAND_FLAG_CLUSTER_SUFFIX)
+    clustered_flag_characters = lowered_token[len(SINGLE_DASH_OPTION_PREFIX) :]
+    return INLINE_COMMAND_FLAG_CLUSTER_CHARACTER in clustered_flag_characters
 
 
 def _interpreter_inline_command_invokes_commit(
@@ -482,7 +481,10 @@ def _interpreter_inline_command_invokes_commit(
             argument_index = token_index + 1
             if argument_index >= len(all_following_tokens):
                 return False
-            return is_git_commit_shell_command(all_following_tokens[argument_index])
+            inline_command = INLINE_COMMAND_TOKEN_JOINER.join(
+                all_following_tokens[argument_index:]
+            )
+            return is_git_commit_shell_command(inline_command)
         token_index += 1
     return False
 
@@ -507,18 +509,21 @@ def is_git_commit_shell_command(shell_command: str) -> bool:
         sudo git commit -m x        ->  skip the wrapper, then match commit
         nice -n 10 git commit       ->  skip the wrapper and its flag value
         then git commit -m x        ->  skip the keyword, then match commit
-        bash -lc "git commit"       ->  unwrap the combined inline flag
-        pwsh -Command "git commit"  ->  unwrap the PowerShell inline argument
+        build & git commit -m x     ->  split on the background operator
+        bash -cx "git commit"       ->  unwrap the combined inline flag
+        pwsh -Command git commit    ->  rejoin the unquoted inline command
 
-    Skipped leading tokens: env-assignments, a PowerShell call operator, shell
-    keywords (then, do, else, elif), and wrapper commands (sudo, env, time,
-    nice, xargs, command, stdbuf) together with each wrapper's own option
-    flags and their values. Segments split on unquoted control separators and
-    newlines, and the git binary may be path-prefixed and carry global flags
-    (no-verify, config, and working-directory) before its subcommand. A shell
-    interpreter (bash, sh, pwsh, powershell) is unwrapped at its inline-command
-    flag: bash and sh take an isolated ``-c`` or a combined cluster (``-lc``),
-    and PowerShell takes ``-Command`` or ``-c``.
+    Skipped leading tokens: env-assignments, shell keywords (then, do, else,
+    elif), and wrapper commands (sudo, env, time, nice, xargs, command,
+    stdbuf) together with each wrapper's own option flags and their values.
+    Segments split on unquoted control separators (including a lone ``&``
+    background operator) and newlines, and the git binary may be path-prefixed
+    and carry global flags (no-verify, config, and working-directory) before
+    its subcommand. A shell interpreter (bash, sh, pwsh, powershell) is
+    unwrapped at its inline-command flag: bash and sh take an isolated ``-c``
+    or any short-flag cluster carrying ``c`` (``-lc``, ``-cx``), and PowerShell
+    takes ``-Command`` or ``-c``. The inline command's remaining tokens rejoin
+    into one string, so an unquoted multi-token command is read whole.
 
     Args:
         shell_command: Bash or PowerShell tool command string.

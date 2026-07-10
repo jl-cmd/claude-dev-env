@@ -485,6 +485,8 @@ def test_powershell_tool_commit_with_staged_email_is_denied(tmp_path: Path) -> N
     assert deny_reason is not None
     assert "email" in deny_reason
     assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
 def test_is_git_commit_shell_command_detects_glued_and_newline_separators() -> None:
     assert is_git_commit_shell_command("git add .;git commit -m x")
     assert is_git_commit_shell_command("cd repo&&git commit -m x")
@@ -493,6 +495,26 @@ def test_is_git_commit_shell_command_detects_glued_and_newline_separators() -> N
     assert not is_git_commit_shell_command(
         "gh pr comment 1 --body 'notes\ngit commit -m x'"
     )
+
+
+def test_is_git_commit_shell_command_detects_backgrounded_commit() -> None:
+    assert is_git_commit_shell_command("npm run build & git commit -am wip")
+    assert is_git_commit_shell_command("sleep 1 & git commit -m x")
+    assert is_git_commit_shell_command("& git commit -m x")
+    assert is_git_commit_shell_command("git commit -m x &")
+    assert not is_git_commit_shell_command("sleep 1 & git status")
+
+
+def test_backgrounded_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "npm run build & git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
 
 
 def test_newline_separated_commit_scans_staged_pii(tmp_path: Path) -> None:
@@ -587,6 +609,19 @@ def test_is_git_commit_shell_command_detects_combined_interpreter_flags() -> Non
     assert not is_git_commit_shell_command('bash -lc "git status"')
 
 
+def test_is_git_commit_shell_command_detects_c_first_interpreter_clusters() -> None:
+    assert is_git_commit_shell_command('bash -cx "git commit -m x"')
+    assert is_git_commit_shell_command('bash -cv "git commit -m x"')
+    assert is_git_commit_shell_command("sh -cx 'git commit -m x'")
+    assert not is_git_commit_shell_command("bash -x 'git status'")
+
+
+def test_is_git_commit_shell_command_detects_unquoted_powershell_command() -> None:
+    assert is_git_commit_shell_command("pwsh -Command git commit -m x")
+    assert is_git_commit_shell_command("powershell -Command git commit -m wip")
+    assert not is_git_commit_shell_command("pwsh -Command git status")
+
+
 def test_powershell_command_flag_commit_scans_staged_pii(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     _init_repo_with_staged_email(repository_root)
@@ -616,6 +651,30 @@ def test_combined_interpreter_flag_commit_scans_staged_pii(tmp_path: Path) -> No
     _init_repo_with_staged_email(repository_root)
     deny_reason = evaluate_bash_command(
         'bash -lc "git commit -m test"',
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
+def test_c_first_interpreter_cluster_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        'bash -cx "git commit -m test"',
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+    assert SYNTHETIC_REAL_EMAIL not in deny_reason
+
+
+def test_unquoted_powershell_command_commit_scans_staged_pii(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    deny_reason = evaluate_bash_command(
+        "pwsh -Command git commit -m test",
         working_directory=str(repository_root),
     )
     assert deny_reason is not None

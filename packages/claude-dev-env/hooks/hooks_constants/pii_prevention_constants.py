@@ -27,7 +27,7 @@ ALL_VALUE_TAKING_GIT_OPTIONS: frozenset[str] = frozenset(
 )
 GIT_OPTION_WITH_VALUE_STEP: int = 2
 ALL_SHELL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset(
-    {"&&", "||", ";", "|"}
+    {"&&", "||", ";", "|", "&"}
 )
 ALL_SHELL_KEYWORD_TOKENS: frozenset[str] = frozenset(
     {"then", "do", "else", "elif"}
@@ -52,13 +52,13 @@ ALL_SHELL_INTERPRETER_BASENAMES: frozenset[str] = frozenset(
 )
 SHELL_INLINE_COMMAND_FLAG: str = "-c"
 POWERSHELL_INLINE_COMMAND_FLAG: str = "-command"
-INLINE_COMMAND_FLAG_CLUSTER_SUFFIX: str = "c"
+INLINE_COMMAND_FLAG_CLUSTER_CHARACTER: str = "c"
+INLINE_COMMAND_TOKEN_JOINER: str = " "
 SINGLE_DASH_OPTION_PREFIX: str = "-"
 DOUBLE_DASH_OPTION_PREFIX: str = "--"
 OPTION_ATTACHED_VALUE_MARKER: str = "="
 ALL_SHELL_QUOTE_CHARACTERS: frozenset[str] = frozenset({'"', "'"})
 ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS: frozenset[str] = frozenset({"\n", "\r"})
-POWERSHELL_CALL_OPERATOR: str = "&"
 ENVIRONMENT_ASSIGNMENT_PATTERN: re.Pattern[str] = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*="
 )
