@@ -1,0 +1,801 @@
+"""Verify all convergence pre-conditions for a PR before marking ready.
+
+Usage:
+  python scripts/check_convergence.py --owner <O> --repo <R> --pr-number <N>
+                                      [--bugbot-down] [--copilot-down]
+
+The bugbot check-run gate is bypassed when either ``--bugbot-down`` is
+passed OR the ``CLAUDE_REVIEWS_DISABLED`` environment variable lists the
+``bugbot`` token, so a Bugbot opt-out closes the gate without the flag.
+
+The Copilot review gate and the pending-requested-reviews gate are bypassed
+when either ``--copilot-down`` is passed OR the ``CLAUDE_REVIEWS_DISABLED``
+environment variable lists the ``copilot`` token, so a Copilot outage or
+quota exhaustion closes the broader convergence gate on the remaining
+signals without the flag.
+
+Exit codes:
+  0 — all pre-conditions met
+  1 — one or more conditions not met (FAIL lines printed to stdout)
+  2 — gh CLI error
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+_pr_converge_dir = Path(__file__).absolute().parent.parent
+if str(_pr_converge_dir) not in sys.path:
+    sys.path.insert(0, str(_pr_converge_dir))
+
+from pr_converge_skill_constants.constants import (
+    ALL_COPILOT_DIRTY_REVIEW_STATES,
+    ALL_BUGBOT_CHECK_RUN_COMPLETE_CONCLUSIONS,
+    BUGBOT_CHECK_RUN_NAME_SUBSTRING,
+    BUGBOT_DIRTY_BODY_REGEX,
+    BUGTEAM_LEGACY_CLEAN_TOKEN,
+    BUGTEAM_LEGACY_HEADER_PREFIX,
+    BUGTEAM_NEW_CLEAN_LABEL,
+    BUGTEAM_NEW_HEADER_PREFIX,
+    CHECK_RUNS_PER_PAGE,
+    CLAUDE_LOGIN_FILTER_SUBSTRING,
+    ALL_COPILOT_CLEAN_REVIEW_STATES,
+    COPILOT_LOGIN_FILTER_SUBSTRING,
+    COPILOT_REVIEWER_LOGIN,
+    CURSOR_LOGIN_FILTER_SUBSTRING,
+    EXIT_CODE_GH_ERROR,
+    GH_CHECK_RUNS_PATH_TEMPLATE,
+    GH_PR_OBJECT_PATH_TEMPLATE,
+    GH_REQUESTED_REVIEWERS_PATH_TEMPLATE,
+    GH_REVIEWS_PATH_TEMPLATE,
+    GRAPHQL_REVIEW_THREADS_PAGE_SIZE,
+    REVIEWS_PER_PAGE,
+    UNRESOLVED_THREAD_DETAIL_MAX,
+)
+
+_shared_pr_loop_scripts_dir = (
+    Path(__file__).absolute().parents[3] / "_shared" / "pr-loop" / "scripts"
+)
+if str(_shared_pr_loop_scripts_dir) not in sys.path:
+    sys.path.insert(0, str(_shared_pr_loop_scripts_dir))
+
+from reviews_disabled import (
+    is_bugbot_disabled_via_env,
+    is_copilot_disabled_via_env,
+)
+
+
+def _is_bugteam_review(review_body: str) -> bool:
+    """Return True when a review body opens with a bugteam audit header.
+
+    Args:
+        review_body: Full body text of a PR review.
+
+    Returns:
+        True when the body opens with either the new audit-template header
+        prefix or the legacy bugteam loop header prefix; False otherwise.
+        Used to identify bugteam audit reviews by body content rather than
+        by the posting user's GitHub login (the underlying ``gh`` token is
+        typically the PR-owner or reviewer identity, not ``claude[bot]``).
+    """
+    return (
+        review_body.startswith(BUGTEAM_NEW_HEADER_PREFIX)
+        or review_body.startswith(BUGTEAM_LEGACY_HEADER_PREFIX)
+    )
+
+
+def _is_clean_bugteam_review(review_body: str) -> bool:
+    """Return True when a bugteam audit review body declares a clean pass.
+
+    Args:
+        review_body: Body text of a review that has already satisfied
+            :func:`_is_bugteam_review`.
+
+    Returns:
+        True when the new-shape body's first line carries the clean state
+        label, or the legacy-shape body ends with the legacy clean token.
+        False for any other shape, including dirty audit reviews and
+        bodies that do not match the bugteam header signature.
+    """
+    if review_body.startswith(BUGTEAM_NEW_HEADER_PREFIX):
+        first_line = review_body.splitlines()[0]
+        return BUGTEAM_NEW_CLEAN_LABEL in first_line
+    if review_body.startswith(BUGTEAM_LEGACY_HEADER_PREFIX):
+        return review_body.rstrip().endswith(BUGTEAM_LEGACY_CLEAN_TOKEN)
+    return False
+
+
+def _check_bugteam_clean(
+    *, owner: str, repo: str, number: int, head_sha: str
+) -> tuple[bool, str]:
+    endpoint = GH_REVIEWS_PATH_TEMPLATE.format(owner=owner, repo=repo, number=number)
+    returncode, stdout = _gh_api_paginated(f"{endpoint}?per_page={REVIEWS_PER_PAGE}")
+    if returncode != 0:
+        return False, f"gh api error: {stdout}"
+    try:
+        raw_output = json.loads(stdout)
+    except json.JSONDecodeError:
+        return False, "gh api response not valid JSON"
+    if not isinstance(raw_output, list):
+        return False, "unexpected gh api response shape (expected list)"
+    all_pages = [p for p in raw_output if isinstance(p, list)]
+    all_flat: list[dict[str, object]] = [
+        each_entry
+        for page in all_pages
+        for each_entry in page
+        if isinstance(each_entry, dict)
+    ]
+    all_flat.sort(
+        key=lambda each_review: str(each_review.get("submitted_at", "")),
+        reverse=True,
+    )
+    for each_review in all_flat:
+        body = each_review.get("body", "")
+        if not isinstance(body, str):
+            continue
+        if not _is_bugteam_review(body):
+            continue
+        commit_id = each_review.get("commit_id", "")
+        if not isinstance(commit_id, str) or not commit_id.startswith(head_sha):
+            continue
+        review_id = each_review.get("id", "?")
+        short_commit = commit_id[:7]
+        if _is_clean_bugteam_review(body):
+            return (
+                True,
+                f"review #{review_id}, clean bugteam audit, commit: {short_commit}",
+            )
+        return (
+            False,
+            f"review #{review_id}, dirty bugteam audit, commit: {short_commit}",
+        )
+    return False, f"no bugteam review found on {head_sha[:7]}"
+
+
+def _gh_api(endpoint_path: str) -> tuple[int, str]:
+    completed_process = subprocess.run(
+        ["gh", "api", endpoint_path],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    return completed_process.returncode, completed_process.stdout
+
+
+def _gh_api_paginated(endpoint_path: str) -> tuple[int, str]:
+    completed_process = subprocess.run(
+        ["gh", "api", endpoint_path, "--paginate", "--slurp"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    return completed_process.returncode, completed_process.stdout
+
+
+def _get_pr_head_sha(*, owner: str, repo: str, number: int) -> str:
+    endpoint = GH_PR_OBJECT_PATH_TEMPLATE.format(owner=owner, repo=repo, number=number)
+    returncode, stdout = _gh_api(endpoint)
+    if returncode != 0:
+        print(f"gh api error fetching PR object: {stdout}", file=sys.stderr)
+        raise SystemExit(EXIT_CODE_GH_ERROR)
+    pr_object = json.loads(stdout)
+    head_sha: object = pr_object.get("head", {}).get("sha")
+    if not isinstance(head_sha, str):
+        raise SystemExit(EXIT_CODE_GH_ERROR)
+    return head_sha
+
+
+def _get_mergeable(*, owner: str, repo: str, number: int) -> tuple[bool, str]:
+    endpoint = GH_PR_OBJECT_PATH_TEMPLATE.format(owner=owner, repo=repo, number=number)
+    returncode, stdout = _gh_api(endpoint)
+    if returncode != 0:
+        return False, f"gh api error: {stdout}"
+    pr_object = json.loads(stdout)
+    mergeable: object = pr_object.get("mergeable")
+    mergeable_state: object = pr_object.get("mergeable_state", "unknown")
+    state_str = str(mergeable_state)
+    if mergeable is True and state_str == "clean":
+        return True, "clean"
+    return False, state_str
+
+
+def _check_bugbot(*, owner: str, repo: str, sha: str) -> tuple[bool, str]:
+    endpoint = GH_CHECK_RUNS_PATH_TEMPLATE.format(owner=owner, repo=repo, sha=sha)
+    returncode, stdout = _gh_api(f"{endpoint}?per_page={CHECK_RUNS_PER_PAGE}")
+    if returncode != 0:
+        return False, f"gh api error: {stdout}"
+    try:
+        response_body = json.loads(stdout)
+    except json.JSONDecodeError:
+        return False, "gh api response not valid JSON"
+    check_runs: list[dict[str, object]] = []
+    if isinstance(response_body, dict):
+        raw_runs = response_body.get("check_runs")
+        if isinstance(raw_runs, list):
+            check_runs = [r for r in raw_runs if isinstance(r, dict)]
+    for check_entry in check_runs:
+        each_name = check_entry.get("name", "")
+        if not isinstance(each_name, str):
+            continue
+        if BUGBOT_CHECK_RUN_NAME_SUBSTRING.lower() not in each_name.lower():
+            continue
+        conclusion = check_entry.get("conclusion", "")
+        if conclusion in ALL_BUGBOT_CHECK_RUN_COMPLETE_CONCLUSIONS:
+            check_id = check_entry.get("id", "?")
+            detail_url = check_entry.get("html_url", "")
+            details_suffix = f" ({detail_url})" if detail_url else ""
+            return True, f"check run #{check_id}, conclusion: {conclusion}{details_suffix}"
+        return False, f"check run conclusion is '{conclusion}', expected {ALL_BUGBOT_CHECK_RUN_COMPLETE_CONCLUSIONS}"
+    return False, "no bugbot check run found"
+
+
+def _check_bugbot_not_dirty(*, owner: str, repo: str, number: int, head_sha: str) -> tuple[bool, str]:
+    endpoint = GH_REVIEWS_PATH_TEMPLATE.format(owner=owner, repo=repo, number=number)
+    returncode, stdout = _gh_api_paginated(f"{endpoint}?per_page={REVIEWS_PER_PAGE}")
+    if returncode != 0:
+        return True, "bugbot reviews unavailable (non-fatal)"
+    try:
+        raw_output = json.loads(stdout)
+    except json.JSONDecodeError:
+        return True, "bugbot reviews not valid JSON (non-fatal)"
+    if not isinstance(raw_output, list):
+        return True, "no reviews"
+    all_pages = [p for p in raw_output if isinstance(p, list)]
+    all_flat: list[dict[str, object]] = [
+        each_entry
+        for page in all_pages
+        for each_entry in page
+        if isinstance(each_entry, dict)
+    ]
+    all_flat.sort(
+        key=lambda each_review: str(each_review.get("submitted_at", "")),
+        reverse=True,
+    )
+    dirty_pattern = re.compile(BUGBOT_DIRTY_BODY_REGEX, re.IGNORECASE)
+    for each_review in all_flat:
+        user_obj = each_review.get("user")
+        if not isinstance(user_obj, dict):
+            continue
+        login = user_obj.get("login", "")
+        if not isinstance(login, str):
+            continue
+        if CURSOR_LOGIN_FILTER_SUBSTRING not in login.lower():
+            continue
+        commit_id = each_review.get("commit_id", "")
+        if not isinstance(commit_id, str) or not commit_id.startswith(head_sha):
+            continue
+        body = each_review.get("body", "")
+        if isinstance(body, str) and dirty_pattern.search(body):
+            return False, "bugbot review body reports findings"
+        return True, "clean"
+    return True, "no bugbot review at HEAD"
+
+
+def _check_bot_review(
+    *,
+    owner: str,
+    repo: str,
+    number: int,
+    head_sha: str,
+    login_substring: str,
+    clean_states: tuple[str, ...],
+    dirty_states: tuple[str, ...],
+    label: str,
+) -> tuple[bool, str]:
+    endpoint = GH_REVIEWS_PATH_TEMPLATE.format(owner=owner, repo=repo, number=number)
+    returncode, stdout = _gh_api_paginated(f"{endpoint}?per_page={REVIEWS_PER_PAGE}")
+    if returncode != 0:
+        return False, f"gh api error: {stdout}"
+    try:
+        raw_output = json.loads(stdout)
+    except json.JSONDecodeError:
+        return False, "gh api response not valid JSON"
+    if not isinstance(raw_output, list):
+        return False, f"no {label} review found"
+    all_pages = [p for p in raw_output if isinstance(p, list)]
+    all_flat = [
+        each_entry
+        for page in all_pages
+        for each_entry in page
+        if isinstance(each_entry, dict)
+    ]
+    all_flat.sort(
+        key=lambda each_review: str(each_review.get("submitted_at", "")),
+        reverse=True,
+    )
+    for each_review in all_flat:
+        user_obj = each_review.get("user")
+        if not isinstance(user_obj, dict):
+            continue
+        login = user_obj.get("login", "")
+        if not isinstance(login, str):
+            continue
+        if login_substring not in login.lower():
+            continue
+        commit_id = each_review.get("commit_id", "")
+        review_state = each_review.get("state", "")
+        if not isinstance(commit_id, str) or not commit_id.startswith(head_sha):
+            continue
+        if review_state in clean_states:
+            review_id = each_review.get("id", "?")
+            return (
+                True,
+                f"review #{review_id}, state: {review_state}, commit: {commit_id[:7]}",
+            )
+        if review_state in dirty_states:
+            return (
+                False,
+                f"review state is '{review_state}' (dirty), commit: {commit_id[:7]}",
+            )
+        return False, f"review state is '{review_state}', commit: {commit_id[:7]}"
+    return False, f"no {label} review found on {head_sha[:7]}"
+
+
+def _gh_graphql(query: str, variables: dict[str, object]) -> tuple[int, str]:
+    args: list[str] = ["gh", "api", "graphql", "-f", f"query={query}"]
+    for each_key, each_value in variables.items():
+        if each_value is None:
+            continue
+        if isinstance(each_value, int):
+            args.extend(["-F", f"{each_key}={each_value}"])
+        else:
+            args.extend(["-f", f"{each_key}={each_value}"])
+    completed_process = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    return completed_process.returncode, completed_process.stdout
+
+
+def _count_unresolved_bot_threads(
+    *, owner: str, repo: str, number: int
+) -> tuple[bool, str]:
+    query = """
+query($owner: String!, $repo: String!, $number: Int!, $first: Int!, $cursor: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      reviewThreads(first: $first, after: $cursor) {
+        nodes {
+          isResolved
+          isOutdated
+          path
+          comments(first: 1) {
+            nodes {
+              author { login }
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+}
+"""
+    bot_logins = (
+        CURSOR_LOGIN_FILTER_SUBSTRING,
+        CLAUDE_LOGIN_FILTER_SUBSTRING,
+        COPILOT_LOGIN_FILTER_SUBSTRING,
+    )
+    unresolved: list[dict[str, object]] = []
+    cursor: str | None = None
+
+    while True:
+        variables: dict[str, object] = {
+            "owner": owner,
+            "repo": repo,
+            "number": number,
+            "first": GRAPHQL_REVIEW_THREADS_PAGE_SIZE,
+            "cursor": cursor,
+        }
+        returncode, stdout = _gh_graphql(query, variables)
+        if returncode != 0:
+            return False, f"gh api graphql error: {stdout}"
+        try:
+            response_body = json.loads(stdout)
+        except json.JSONDecodeError:
+            return False, "gh api graphql response not valid JSON"
+        response_data = response_body.get("data", {})
+        repository = response_data.get("repository", {}) if isinstance(response_data, dict) else {}
+        pull_request = repository.get("pullRequest", {}) if isinstance(repository, dict) else {}
+        threads = pull_request.get("reviewThreads", {}) if isinstance(pull_request, dict) else {}
+        if not isinstance(threads, dict):
+            return False, "unexpected GraphQL response shape"
+        nodes = threads.get("nodes", [])
+        if isinstance(nodes, list):
+            for each_thread in nodes:
+                if not isinstance(each_thread, dict):
+                    continue
+                if each_thread.get("isResolved") is True:
+                    continue
+                if each_thread.get("isOutdated") is True:
+                    continue
+                comments_wrapper = each_thread.get("comments", {})
+                if not isinstance(comments_wrapper, dict):
+                    continue
+                comments_nodes = comments_wrapper.get("nodes", [])
+                if not isinstance(comments_nodes, list) or not comments_nodes:
+                    continue
+                first_comment = comments_nodes[0]
+                if not isinstance(first_comment, dict):
+                    continue
+                author_wrapper = first_comment.get("author")
+                if not isinstance(author_wrapper, dict):
+                    continue
+                login = author_wrapper.get("login", "")
+                if not isinstance(login, str):
+                    continue
+                is_bot = any(bot in login.lower() for bot in bot_logins)
+                if not is_bot:
+                    continue
+                unresolved.append(each_thread)
+        page_info = threads.get("pageInfo", {})
+        if not isinstance(page_info, dict) or not page_info.get("hasNextPage"):
+            break
+        next_cursor = page_info.get("endCursor")
+        if isinstance(next_cursor, str):
+            cursor = next_cursor
+        else:
+            break
+
+    if not unresolved:
+        return True, "0 unresolved"
+    details_parts: list[str] = []
+    for each_thread in unresolved[:UNRESOLVED_THREAD_DETAIL_MAX]:
+        thread_path = each_thread.get("path", "?")
+        details_parts.append(str(thread_path))
+    detail_text = "; ".join(details_parts)
+    if len(unresolved) > UNRESOLVED_THREAD_DETAIL_MAX:
+        detail_text += f" ... and {len(unresolved) - UNRESOLVED_THREAD_DETAIL_MAX} more"
+    return False, f"{len(unresolved)} unresolved ({detail_text})"
+
+
+def _check_no_pending_reviews(
+    *, owner: str, repo: str, number: int
+) -> tuple[bool, str]:
+    endpoint = GH_REQUESTED_REVIEWERS_PATH_TEMPLATE.format(
+        owner=owner, repo=repo, number=number
+    )
+    returncode, stdout = _gh_api(endpoint)
+    if returncode != 0:
+        return False, f"gh api error: {stdout}"
+    try:
+        response_body = json.loads(stdout)
+    except json.JSONDecodeError:
+        return True, "no pending (empty response)"
+    if isinstance(response_body, dict):
+        users = response_body.get("users", [])
+    elif isinstance(response_body, list):
+        users = response_body
+    else:
+        return True, "no pending (unexpected format)"
+    if not isinstance(users, list):
+        return True, "no pending"
+    copilot_pending = []
+    for each_user in users:
+        if not isinstance(each_user, dict):
+            continue
+        login = each_user.get("login", "")
+        if isinstance(login, str) and COPILOT_REVIEWER_LOGIN.lower() in login.lower():
+            copilot_pending.append(login)
+    if copilot_pending:
+        return False, f"pending: {', '.join(copilot_pending)}"
+    return True, "no pending reviewers"
+
+
+def _bugbot_conditions(
+    *, owner: str, repo: str, number: int, head_sha: str, is_bugbot_down: bool
+) -> list[tuple[str, tuple[bool, str]]]:
+    """Build the Bugbot gate conditions, bypassed when Bugbot is down.
+
+    Args:
+        owner: GitHub repository owner login.
+        repo: GitHub repository name.
+        number: Pull request number to inspect.
+        head_sha: Current PR HEAD SHA the gates evaluate against.
+        is_bugbot_down: When True, emit a single bypassed check-run
+            condition and skip the review-body content gate entirely.
+
+    Returns:
+        The bugbot check-run condition, plus the review-body content
+        condition when the check-run gate is present and passing.
+    """
+    if is_bugbot_down:
+        return [("bugbot_clean_at == current_head", (True, "bypassed (bugbot_down)"))]
+    conditions: list[tuple[str, tuple[bool, str]]] = [
+        (
+            "bugbot_clean_at == current_head",
+            _check_bugbot(owner=owner, repo=repo, sha=head_sha),
+        )
+    ]
+    if conditions[-1][1][0]:
+        conditions.append(
+            (
+                "bugbot review body clean",
+                _check_bugbot_not_dirty(
+                    owner=owner, repo=repo, number=number, head_sha=head_sha
+                ),
+            )
+        )
+    return conditions
+
+
+def _copilot_review_condition(
+    *, owner: str, repo: str, number: int, head_sha: str, is_copilot_down: bool
+) -> tuple[str, tuple[bool, str]]:
+    """Build the Copilot review gate condition, bypassed when Copilot is down.
+
+    Args:
+        owner: GitHub repository owner login.
+        repo: GitHub repository name.
+        number: Pull request number to inspect.
+        head_sha: Current PR HEAD SHA the gate evaluates against.
+        is_copilot_down: When True, return a bypassed condition rather than
+            demanding a Copilot review that an outage or quota exhaustion
+            keeps from landing.
+
+    Returns:
+        The Copilot review gate condition for the current HEAD.
+    """
+    if is_copilot_down:
+        return ("copilot_clean_at == current_head", (True, "bypassed (copilot_down)"))
+    return (
+        "copilot_clean_at == current_head",
+        _check_bot_review(
+            owner=owner,
+            repo=repo,
+            number=number,
+            head_sha=head_sha,
+            login_substring=COPILOT_LOGIN_FILTER_SUBSTRING,
+            clean_states=ALL_COPILOT_CLEAN_REVIEW_STATES,
+            dirty_states=ALL_COPILOT_DIRTY_REVIEW_STATES,
+            label="copilot",
+        ),
+    )
+
+
+def _pending_reviews_condition(
+    *, owner: str, repo: str, number: int, is_copilot_down: bool
+) -> tuple[str, tuple[bool, str]]:
+    """Build the pending-requested-reviews condition, bypassed when Copilot is down.
+
+    Args:
+        owner: GitHub repository owner login.
+        repo: GitHub repository name.
+        number: Pull request number to inspect.
+        is_copilot_down: When True, return a bypassed condition so a Copilot
+            review request that will never land does not strand the gate.
+
+    Returns:
+        The pending-requested-reviews condition, which the gate checks for a
+        still-pending Copilot reviewer.
+    """
+    if is_copilot_down:
+        return ("no pending requested reviews", (True, "bypassed (copilot_down)"))
+    return (
+        "no pending requested reviews",
+        _check_no_pending_reviews(owner=owner, repo=repo, number=number),
+    )
+
+
+def _print_conditions(all_conditions: list[tuple[str, tuple[bool, str]]]) -> int:
+    """Print one PASS/FAIL line per condition and return the aggregate exit code.
+
+    Args:
+        all_conditions: Ordered (label, (passed, detail)) gate results.
+
+    Returns:
+        ``0`` when every condition passed, ``1`` when at least one failed.
+    """
+    is_all_passed = True
+    for each_index, (each_label, (each_passed, each_detail)) in enumerate(
+        all_conditions, start=1
+    ):
+        status = "PASS" if each_passed else "FAIL"
+        print(f"{each_index}. {each_label}: {status} — {each_detail}")
+        if not each_passed:
+            is_all_passed = False
+    print()
+    if is_all_passed:
+        print("All pre-conditions met — PR is ready to mark ready.")
+    else:
+        print("One or more pre-conditions not met — do not mark ready.")
+    return 0 if is_all_passed else 1
+
+
+def check_all(
+    *,
+    owner: str,
+    repo: str,
+    number: int,
+    is_bugbot_down: bool,
+    is_copilot_down: bool,
+) -> int:
+    """Run every convergence gate and print one PASS/FAIL line per condition.
+
+    Args:
+        owner: GitHub repository owner login.
+        repo: GitHub repository name.
+        number: Pull request number to inspect.
+        is_bugbot_down: When True, bypass both the Cursor Bugbot check-run
+            presence gate and the bugbot review-body content gate. The
+            check-run gate appears in the condition list with a
+            ``bypassed (bugbot_down)`` note; the review-body gate is
+            omitted entirely. Callers pass True when the lead has
+            declared Cursor Bugbot unreachable on the current HEAD so the
+            broader convergence gate can still close on the remaining
+            signals.
+        is_copilot_down: When True, bypass both the Copilot review gate and
+            the pending-requested-reviews gate, each shown with a
+            ``bypassed (copilot_down)`` note. Callers pass True when Copilot
+            is down or out of quota on the current HEAD so the broader
+            convergence gate can still close on the remaining signals; the
+            bypassed pending gate keeps a Copilot review request that will
+            never land from stranding the gate.
+
+    Returns:
+        ``0`` when every gate reports PASS, ``1`` when at least one gate
+        reports FAIL. Per-gate ``gh api`` transport failures surface as
+        gate FAIL lines in the printed output and contribute to the ``1``
+        exit code.
+
+    Raises:
+        SystemExit: Propagated by the initial ``_get_pr_head_sha`` call
+            with ``EXIT_CODE_GH_ERROR`` when the PR-head-SHA fetch fails
+            before any gate runs. The function does not catch this
+            exception; the caller is responsible for converting it into
+            an exit code.
+    """
+    head_sha = _get_pr_head_sha(owner=owner, repo=repo, number=number)
+    print(f"HEAD: {head_sha[:7]}\n")
+
+    conditions: list[tuple[str, tuple[bool, str]]] = []
+    conditions.extend(
+        _bugbot_conditions(
+            owner=owner,
+            repo=repo,
+            number=number,
+            head_sha=head_sha,
+            is_bugbot_down=is_bugbot_down,
+        )
+    )
+    conditions.append(
+        (
+            "bugteam_clean_at == current_head",
+            _check_bugteam_clean(
+                owner=owner, repo=repo, number=number, head_sha=head_sha
+            ),
+        )
+    )
+    conditions.append(
+        _copilot_review_condition(
+            owner=owner,
+            repo=repo,
+            number=number,
+            head_sha=head_sha,
+            is_copilot_down=is_copilot_down,
+        )
+    )
+    conditions.append(
+        (
+            "zero unresolved bot threads",
+            _count_unresolved_bot_threads(owner=owner, repo=repo, number=number),
+        )
+    )
+    conditions.append(
+        ("PR is mergeable", _get_mergeable(owner=owner, repo=repo, number=number))
+    )
+    conditions.append(
+        _pending_reviews_condition(
+            owner=owner, repo=repo, number=number, is_copilot_down=is_copilot_down
+        )
+    )
+    return _print_conditions(conditions)
+
+
+def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
+    """Parse command-line arguments for the convergence checker.
+
+    Args:
+        all_argv: Argument list excluding the program name, typically
+            ``sys.argv[1:]``.
+
+    Returns:
+        Namespace exposing ``owner``, ``repo``, ``pr_number``,
+        ``bugbot_down``, and ``copilot_down`` attributes. ``bugbot_down``
+        and ``copilot_down`` default to False so the base hook contract
+        (``--owner X --repo Y --pr-number N``) picks up the full gate set.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--owner", required=True, help="GitHub repository owner")
+    parser.add_argument("--repo", required=True, help="GitHub repository name")
+    parser.add_argument(
+        "--pr-number", required=True, type=int, help="Pull request number"
+    )
+    parser.add_argument(
+        "--bugbot-down",
+        action="store_true",
+        help=(
+            "Bypass the bugbot check-run gate (gate 1) when the lead has "
+            "declared Cursor Bugbot unreachable on the current HEAD."
+        ),
+    )
+    parser.add_argument(
+        "--copilot-down",
+        action="store_true",
+        help=(
+            "Bypass the Copilot review gate and the pending-requested-reviews "
+            "gate when Copilot is down or out of quota on the current HEAD."
+        ),
+    )
+    return parser.parse_args(all_argv)
+
+
+def _resolve_bugbot_down(bugbot_down_flag: bool) -> bool:
+    """Combine the explicit flag with the env availability gate for Bugbot.
+
+    Args:
+        bugbot_down_flag: Value of the ``--bugbot-down`` CLI flag.
+
+    Returns:
+        True when the flag is set, or when Bugbot is disabled for the run:
+        off by default unless ``CLAUDE_REVIEWS_ENABLED`` lists ``bugbot``, and
+        always when ``CLAUDE_REVIEWS_DISABLED`` lists ``bugbot``. The env gate
+        bypasses the bugbot gates even when the caller omits the flag.
+    """
+    return bugbot_down_flag or is_bugbot_disabled_via_env()
+
+
+def _resolve_copilot_down(is_copilot_down_flag: bool) -> bool:
+    """Combine the explicit flag with the CLAUDE_REVIEWS_DISABLED env opt-out.
+
+    Args:
+        is_copilot_down_flag: Value of the ``--copilot-down`` CLI flag.
+
+    Returns:
+        True when the flag is set OR ``CLAUDE_REVIEWS_DISABLED`` lists the
+        ``copilot`` token, so a Copilot outage signalled through the env var
+        bypasses the Copilot gates even when the caller omits the flag. The
+        mark-ready blocker hook re-runs this script without the flag, so the
+        env token is the only channel a genuine Copilot outage has to pass
+        that independent gate.
+    """
+    return is_copilot_down_flag or is_copilot_disabled_via_env()
+
+
+def main(all_arguments: list[str]) -> int:
+    """Run the script end-to-end against parsed CLI arguments.
+
+    Args:
+        all_arguments: Argument list excluding the program name.
+
+    Returns:
+        ``0`` on full convergence, ``1`` on one or more gate failures.
+    """
+    arguments = parse_arguments(all_arguments)
+    return check_all(
+        owner=arguments.owner,
+        repo=arguments.repo,
+        number=getattr(arguments, "pr_number"),
+        is_bugbot_down=_resolve_bugbot_down(arguments.bugbot_down),
+        is_copilot_down=_resolve_copilot_down(arguments.copilot_down),
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

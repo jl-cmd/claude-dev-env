@@ -1,0 +1,4 @@
+{
+  "github_owner_scopes": ["example-owner"],
+  "nas": { "host": "nas.example.local", "ssh_user": "operator", "ssh_port": 22 }
+}

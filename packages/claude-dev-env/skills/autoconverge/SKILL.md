@@ -1,0 +1,615 @@
+---
+name: autoconverge
+description: >-
+  Drives one draft PR to convergence in one autonomous run: a deterministic static
+  sweep, then code review, bug audit, and self-review on one HEAD, all fixes in one
+  commit, then Bugbot and Copilot as terminal confirmation gates before ready.
+  Use when the user says '/autoconverge', 'autoconverge this PR', 'converge this
+  PR in one run', 'run the converge workflow', or 'drive the PR to ready
+  autonomously'.
+---
+
+# Autoconverge
+
+One launch drives the whole loop to convergence. The `/autoconverge` skill
+resolves PR scope, enters a worktree, grants project permissions, then hands
+the loop to the **`converge.mjs` workflow**, which runs every round and every
+reviewer wait inside one background pass — no ticks, no `ScheduleWakeup`, no
+state file. State lives in the workflow's own variables; resume is handled by
+the workflow journal.
+
+`pr-converge` paces the same four-reviewer loop across `ScheduleWakeup` ticks;
+autoconverge runs it as a deterministic workflow. The two skills share the same
+helper scripts and the same convergence gate.
+
+## Run scope: one PR or several
+
+Decide the scope from how many PRs the user named, then follow that path:
+
+1. **One PR** → the single-PR run described below (`workflow/converge.mjs`): one
+   worktree, one workflow launch, one teardown.
+2. **Several PRs** → the [Multiple PRs](#multiple-prs) run
+   (`workflow/converge_multi.mjs`): one worktree per PR and a single workflow
+   launch that drives every PR's converge run in parallel, then one teardown per
+   PR.
+
+The single-PR sections (Requirements, Pre-flight, Run the workflow, Teardown)
+each describe one converge run. The Multiple PRs section reuses them once per PR
+and adds only what fanning out needs: a per-PR worktree and a per-PR teardown
+loop.
+
+## Requirements
+
+Scan the tool list at the top of this conversation for the literal string
+`Workflow`. If it is absent, report `autoconverge requires the Workflow tool;
+aborting` and stop. The workflow also needs the `gh` CLI authenticated for the
+PR's owner.
+
+## Transport check (before any GitHub step)
+
+Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR
+scope is resolved, run `gh api repos/<owner>/<repo> --jq .permissions.push`
+and take `true` as the pass. When any check fails, run the
+`pr-loop-cloud-transport` skill first and route every `gh` operation in this
+skill through its substitution matrix. The workflow script
+(`workflow/converge.mjs`) embeds `gh` commands and gh-backed helper scripts in
+its agent prompts, so a cloud run also applies the same substitution to those
+agent prompts when it authors the launch — the transport skill covers the
+orchestrating session's own steps, and the script's agent-prompt text carries
+`gh` calls the spawned agents cannot run in a cloud session.
+
+## Pre-flight (main session)
+
+1. **Enter a worktree.** Call `EnterWorktree` with no arguments before any
+   `gh`, `git`, file read, or edit. `gh`/`git` Bash calls do not auto-isolate,
+   so this is mandatory. If it fails, report and stop. A bare `EnterWorktree`
+   branches from `origin/main`; step 2 positions the worktree on the PR's head
+   ref, which the workflow needs.
+
+2. **Resolve PR scope.** When the user passed a PR URL or number, parse owner,
+   repo, and number from it. Otherwise read the current branch's PR:
+   `gh pr view --json number,headRefName,url,isDraft,baseRefName`. Capture
+   `owner`, `repo`, `prNumber`. Confirm the PR is a draft; if it is already
+   ready, mark it draft first (`gh pr ready <n> --repo <o>/<r> --undo`) so the
+   loop owns the ready transition.
+
+   **Position the worktree on the PR branch.** The workflow reviews
+   `git diff origin/main...HEAD` against this worktree's local `HEAD` and pushes
+   each fix to the PR branch, so the worktree sits on the PR's head ref at the PR
+   HEAD before the workflow launches. A worktree fresh off `origin/main` has
+   `HEAD == origin/main`, shows an empty diff, and reports a false convergence
+   with zero findings. When a local worktree already tracks the PR branch, enter
+   that one by passing its path to `EnterWorktree`; otherwise put the entered
+   worktree on the branch with `gh pr checkout <number> --repo <owner>/<repo>`
+   (or `git fetch origin <headRefName>` then `git switch <headRefName>`). Confirm
+   before launching: `git rev-parse --abbrev-ref HEAD` equals the PR's head ref
+   and local `HEAD` equals the PR head SHA.
+
+3. **Verify the worktree is the PR's repo (strict pre-flight).** Run
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <owner> --repo <repo> --mode strict`.
+   It confirms the working directory is a checkout of the PR's own repo and
+   that `git worktree` machinery is healthy, so `EnterWorktree` can create and
+   enter the branch worktree. A non-zero exit prints a `PREFLIGHT_OUTCOME` line
+   and an `ABORT` line: report that line and stop. Autoconverge runs inside the
+   PR's own repo, so a working directory rooted in a different repo (for
+   example, `claude-dev-env` while the PR lives in `llm-settings`) or in no
+   git checkout at all cannot continue.
+
+4. **Grant project permissions.** Apply the `pr-loop-lifecycle` skill's Open
+   section (`../pr-loop-lifecycle/SKILL.md`) — the grant command
+   (`grant_project_claude_permissions.py`) and the auto-mode `AskUserQuestion`
+   escalation for a blocked grant both live there.
+
+5. **Copilot quota pre-check.** Before the `Workflow` call, apply the
+   `reviewer-gates` skill's Copilot quota gate (`../reviewer-gates/SKILL.md`)
+   once. Exit 0 maps to `copilotDisabled: false` in the Workflow call; any
+   non-zero exit maps to `copilotDisabled: true`, and the workflow then skips
+   the Copilot gate with no agent spawned.
+
+## Run the workflow
+
+Call the `Workflow` tool against the colocated script:
+
+```
+Workflow({
+  scriptPath: "<this skill dir>/workflow/converge.mjs",
+  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false }
+})
+```
+
+`scriptPath` is the absolute path to `workflow/converge.mjs` inside this skill's
+own directory (on this install,
+`<home>/.claude/skills/autoconverge/workflow/converge.mjs`). Set
+`bugbotDisabled: true` only when the user has opted Cursor Bugbot out for the
+run; otherwise the workflow detects an opt-out or an unreachable Bugbot on its
+own. Set `copilotDisabled: true` when the step 5 quota pre-check exits non-zero,
+and `false` when it exits 0; on `true` the workflow skips the Copilot gate with
+no agent spawned. The workflow runs in the background and notifies this session
+on completion. Watch live progress with `/workflows`.
+
+The moment the `Workflow` call returns its run id, write the durable handoff so a
+fresh session can resume the same run:
+
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/write_handoff.py" \
+  --pr-number <N> --head-ref <branch> --phase workflow \
+  --resume-command "Workflow({scriptPath, resumeFromRunId: '<runId>'})" \
+  --run-id <runId>
+```
+
+Write it again when the result lands, so the handoff carries the final run id and
+names the teardown phase the fresh session picks up from.
+
+The workflow returns
+`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, reuseNote, deferredPrs }`,
+plus a `userReview` field on a `blocker: "user-review"` return.
+`deferredPrs` is the list of draft environment-hardening PRs the standards-deferral
+path opened this run, each as `{ owner, repo, prNumber, copilotDisabled, bugbotDisabled }`.
+The two flags carry this run's Copilot and Bugbot availability, so the next generation
+skips a reviewer that is down or out of quota without re-probing. This list is the seed the
+[self-closing loop](#self-closing-loop-converge-the-deferred-prs) converges next.
+
+## Copilot findings — two-tier triage
+
+The Copilot gate tiers each finding it surfaces. A **self-healing** finding is
+pure style, type hints, misplaced or unused imports, formatting, magic-value
+extraction, a test-only change, a doc-or-description vs code mismatch, or code
+de-duplication — a fix that cannot change observable runtime behavior for
+production callers. Self-healing findings flow into the fix round and count
+toward convergence, with no user notification.
+
+A **code-concern** finding is behavior-changing or needs a product decision:
+logic or correctness, security, data handling, error-handling semantics, or
+concurrency. Copilot tiers a finding as code-concern whenever the tier is in
+doubt. When one or more code-concern findings land, the workflow neither
+auto-fixes them nor marks the PR ready. It returns `converged: false`,
+`blocker: "user-review"`, and a `userReview` field carrying
+`{ reviewUrl, findings: [{ file, line, severity, tier, title }] }`.
+
+A background workflow cannot hold for a human, so the wait belongs to the
+orchestrating session. On a `blocker: "user-review"` return, run the
+[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) skill: send the
+ntfy notification (the finding summary plus the `reviewUrl` Copilot review link),
+then hold with a 45-minute `ScheduleWakeup` for the user's response. When the
+user answers within the window, follow their direction. When the window closes
+with no response, run normal teardown and report the code-concern findings
+un-reviewed.
+
+## Budget-aware round boundaries
+
+The workflow's `budget` API is the pacing signal: when a usage target is
+set, `converge.mjs` checks `budget.remaining()` before each round and
+stops at the round boundary when one full round (three parallel lenses +
+one fix commit + re-verify) does not fit. On a budget stop the workflow
+returns `blocker: "budget"` with the run id; resume with
+`Workflow({scriptPath, resumeFromRunId})` — completed rounds replay from
+the journal. Never start a round the budget cannot finish: a half-run
+round records nothing resumable and replays dirty.
+
+On a `blocker: "budget"` return, write the durable handoff with the run id and the
+`Workflow({scriptPath, resumeFromRunId})` resume command before stopping, so a
+fresh session resumes the paced run without the stopped session's transcript.
+
+## Teardown (on workflow completion)
+
+Teardown runs as an ordered checkpoint list. After each checkpoint finishes,
+re-write the durable handoff with `--phase teardown`, the run id, and the
+checkpoints done so far, so a fresh session that resumes reads `handoff.json`
+`completed_steps` and skips the checkpoints already done:
+
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/write_handoff.py" \
+  --pr-number <N> --head-ref <branch> --phase teardown \
+  --resume-command "/autoconverge <PR URL>" \
+  --run-id <runId> \
+  --completed-steps "<checkpoints done so far>"
+```
+
+The checkpoints run in this order: `report`, `close`. Write the
+handoff after each one finishes.
+
+On teardown entry, when `~/.claude/runtime/pr-loop/bugteam-pr-<N>/handoff.json`
+exists, read its `completed_steps` and skip any checkpoint the list already
+names, so a resumed run performs only the checkpoints left.
+
+On a `blocker: "user-review"` return, run the
+[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate before
+teardown: send the ntfy alert with the finding summary and the
+`userReview.reviewUrl` link, then hold with a 45-minute `ScheduleWakeup`. Act on
+the user's direction when it arrives inside the window; when the window closes
+with no response, fall through to normal teardown and report the
+`userReview.findings` un-reviewed. The PR stays a draft in this path — the
+workflow marked nothing ready.
+
+Before the checkpoints, when the workflow returned a non-null `copilotNote`
+(the Copilot gate was bypassed), query the PR's reviews once more for a
+`copilot-pull-request-reviewer[bot]` review on the final HEAD
+(`fetch_copilot_reviews.py`, or the GitHub MCP `pull_request_read` method
+`get_reviews`). Copilot typically posts within 10–15 minutes of a request, so
+a review can land between the bypass and teardown. When one exists and
+carries findings, mark the PR draft, route the findings through one fix
+round per the `pr-fix-protocol` skill, re-verify, push, and mark the PR
+ready again — then run the checkpoints.
+
+1. **When `converged` is true — build and publish the closing report.**
+   Skip this entire step (report, artifact publish, comment, Chrome open) when the
+   workflow returned a non-null `blocker`. Per-round live-dashboard refresh is out of
+   scope here; this step builds the one-shot closing report and the seam (marker
+   comment + artifact URL) a future live-dashboard reuses.
+
+   a. **Resolve a seed journal path.** Glob
+      `~/.claude/projects/**/workflows/wf_<runId>.json` (where `runId` is the run id
+      the `Workflow` result returned) and take the match. It seeds the merge, which
+      finds every other autoconverge journal for the same PR.
+
+   b. **Merge the PR's runs and build the summary prompt.**
+      ```
+      python "<skill>/workflow/aggregate_runs.py" \
+        --journal "<seed journal>" \
+        --pr <owner>/<repo>#<n> \
+        --work-dir "$CLAUDE_JOB_DIR/tmp/autoconverge-agg-<prNumber>" \
+        --out-prompt "$CLAUDE_JOB_DIR/tmp/autoconverge-summary-prompt-<prNumber>.txt" \
+        [--standards-note "<standardsNote>"] [--copilot-note "<copilotNote>"]
+      ```
+      It prints a JSON line with `combinedJournal`, `roundCount`, `finalSha`, and
+      `findingCount`. Pass `--standards-note`/`--copilot-note` only when the workflow
+      returned those notes.
+
+   c. **Write the summary.** Spawn a `convergence-summary` agent (a `general-purpose`
+      subagent) on the text of the prompt file from step b. The agent answers with the
+      `prProblem`/`prFix`/`problemScenes`/`fixScenes`/`verdictLine`/`issueClasses` JSON
+      object; write that object to
+      `$CLAUDE_JOB_DIR/tmp/autoconverge-summary-<prNumber>.json`.
+
+   d. **Build the report.**
+      ```
+      python "<skill>/workflow/render_report.py" \
+        --journal "<combinedJournal>" \
+        --summary-file "<summary json>" \
+        --out "$CLAUDE_JOB_DIR/tmp/autoconverge-report-<prNumber>.html" \
+        --pr <owner>/<repo>#<n> \
+        --final-sha <finalSha> \
+        --rounds <roundCount>
+      ```
+      Use the `combinedJournal`, `finalSha`, and `roundCount` from step b. Capture the
+      output path from stdout.
+
+   e. **Publish via the Artifact tool.** Load the `artifact-design` skill first, then
+      call `Artifact` with `file_path` set to the report path from step d, `favicon`
+      set to the fixed autoconverge favicon `✅` (keep this favicon stable across
+      every autoconverge report — never swap it per run), and `description` set to
+      a one-sentence subtitle naming the PR. Capture the returned URL.
+
+   f. **Post one idempotent PR comment.** List the PR's issue comments; if one
+      carries the marker `<!-- autoconverge-report -->`, edit it in place, otherwise
+      create a new one. The body begins with `<!-- autoconverge-report -->`, then
+      the artifact URL, then a plain-language summary that mirrors the report:
+      lead with the one-sentence `verdictLine`; then the plain Problem and Fix
+      sentences (`prProblem`, `prFix`); then the issue-class list — one bullet per
+      class as `plainName (×count, status)`. Place the raw finding list as
+      `file:line — P# — title` inside a collapsed
+      `<details><summary>Raw findings</summary>…</details>` block so the comment leads
+      with the human summary. Honor the gh-body-file rule: write a BOM-free temp file
+      and pass `--body-file` to `gh issue comment`/`gh issue comment edit`, or use the
+      GitHub MCP `add_issue_comment` tool (body as a structured parameter, no
+      `--body` flag).
+
+   g. **Open the published report in Chrome.** Use the artifact URL captured in
+      step e.
+      ```
+      Start-Process chrome -ArgumentList '--new-window', '<artifact URL>'
+      ```
+      Skip a missing Chrome without aborting the rest of teardown.
+
+   After the report is published, write the handoff with
+   `--completed-steps "report"`.
+
+2. **Close the run.** Apply the `pr-loop-lifecycle` skill's Close section
+   (`../pr-loop-lifecycle/SKILL.md`): when `converged` is true, rewrite the PR
+   description and clean the working tree — see
+   [`pr-loop-lifecycle/reference/teardown-publish-permissions.md` § Clean working tree and § Publish the final PR description](../pr-loop-lifecycle/reference/teardown-publish-permissions.md);
+   the workflow already marked the PR ready. The permission revoke always runs,
+   including on a blocker exit. Write the handoff with
+   `--completed-steps "report,close"`.
+
+3. **Print the final report:**
+
+   ```
+   /autoconverge exit: <converged | blocked>
+   Rounds: <N>
+   Final commit: <finalSha>
+   Blocker: <blocker>        # only when blocked
+   Standards: <standardsNote> # only when a round deferred code-standard findings
+   Copilot: <copilotNote>     # only when Copilot was down or out of quota
+   Reuse: <reuseNote>         # only when the reuse pass identified an improvement
+   ```
+
+## Reuse pass (before convergence)
+
+Before the first round, one reuse lens (`code-quality-agent`) scans the full
+`origin/main...HEAD` diff for places the PR re-implements behavior the codebase
+already provides. It reports a reuse improvement only when all three criteria
+hold, and drops any case where even one is in doubt:
+
+- **Certain** — an existing symbol or module unquestionably covers the new
+  code's behavior, cited at `file:line`.
+- **Behaviorally identical** — swapping the new code for the existing one
+  changes no observable behavior: same inputs, outputs, side effects, and error
+  handling.
+- **Autonomously implementable** — the replacement is a mechanical edit (import
+  and call the existing symbol, delete the duplicate) needing no product
+  decision and no human judgment.
+
+The reuse lens reports without editing. Qualifying improvements then run through
+the same edit → verify → commit fix flow the rounds use, so they land in one
+verified commit before convergence starts. The pass is best-effort: when no case
+clears all three criteria, the run proceeds straight to convergence, and
+`reuseNote` records what landed.
+
+## What the workflow does each round
+
+See [`reference/convergence.md`](reference/convergence.md) for the full round
+shape and the exact convergence definition, and
+[`reference/stop-conditions.md`](reference/stop-conditions.md) for every way the
+run ends short of ready. Hard-won failure lessons live in
+[`reference/gotchas.md`](reference/gotchas.md).
+
+Every agent prompt carries a headless-safety preamble: the run is unattended, so
+agents never inline a destructive-command literal (`rm -rf`, `git reset --hard`,
+`dd`) into a Bash command — the `destructive_command_blocker` hook matches those
+patterns as raw text, and a confirmation prompt no human can answer would stall
+the run. The preamble has two forms. Read-only agents — the review, verify, and
+utility spawns that edit nothing — receive a trimmed form that drops the rm-shape
+rules, since a read-only agent never runs `rm`. Edit agents — the fix and commit
+spawns — receive the full form that carries the rm-shape rules described below.
+Agents verify destructive-blocker behavior through the committed test
+suite (`python -m pytest`) and keep scratch work in the OS temp dir. The full
+preamble describes the narrowest rm auto-allow path — a standalone Bash call whose target
+resolves inside the ephemeral namespace (`/tmp`, `/temp`, the OS temp root, or the
+run worktree) — and a compound path that accepts an rm joined with benign
+reporting segments when every rm target is an absolute ephemeral path. Both of
+those paths fail closed on `$(...)` substitution and backtick subshells. The
+compound path also fails closed on any `$` in the target — including
+`$CLAUDE_JOB_DIR`. The standalone path declines a `$`-bearing target only when
+the literal path is not already under an ephemeral root, so it does not by
+itself stop a `$VAR` that expands inside an ephemeral root. A third, broad path
+matches only when the command itself declares an
+ephemeral working directory (it `cd`s into one, or runs under one): that
+cwd-scoped path resolves the target against the declared cwd, fails closed on
+`$(...)`, backticks, and unknown variables, and resolves the known temporary
+variables `TEMP`, `TMP`, `TMPDIR`, and `CLAUDE_JOB_DIR` to the OS temp root, so
+under that declared ephemeral cwd a bare `$CLAUDE_JOB_DIR/tmp/<name>` target and a
+relative target after a `cd` are auto-allowed. Even so, for any cleanup whose path
+is variable-built or whose teardown spans multiple steps, agents author a Python
+helper file and run it as `python <file>.py` — keeping every destructive literal
+out of a Bash command string entirely and independent of which auto-allow path
+matches.
+
+- **Static sweep:** each round opens with a deterministic static-sweep lens that
+  runs the CODE_RULES gate (`code_rules_gate.py --base origin/main`), `ruff`,
+  `mypy`, and stem-matched `pytest` over the changed files. Any failure routes
+  through the same fix flow and the round re-runs, so the reading lenses only ever
+  review sweep-clean code. The sweep uses local commands only, so it runs in any
+  session.
+- **Converge:** `parallel([code-review lens, bug-audit lens, self-review lens])`
+  on the current HEAD, full `origin/main...HEAD` diff. The bug-audit lens applies
+  the A-P rubric and then its adversarial second pass; the self-review lens covers
+  the doc-vs-code parity, test-assertion completeness, and PR-description-vs-diff
+  parity lanes. The preflight step fetches `origin/main` once for the round and
+  enumerates the diff (changed-file list plus diffstat); each lens receives that
+  list and reads only the files it needs rather than re-deriving the diff, forming
+  its own review judgment. Dedup findings; one `clean-coder` applies the round's
+  fixes per the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) — fix,
+  reply, resolve — landing every fix in one commit per round, which the workflow
+  journal records; re-verify next round on the new HEAD. Every edit step ends with
+  a pre-commit gate check: before its turn ends, the fixer dry-runs the CODE_RULES
+  commit gate (`code_rules_gate.py --staged`) and keeps fixing until that gate
+  would accept the commit — it makes no commit itself. When all three internal
+  lenses are clean on a stable HEAD, post the CLEAN bugteam audit artifact.
+  A round whose findings are ALL code-standard violations (pure CODE_RULES/style,
+  no behavioral impact) passes for convergence purposes: the workflow files a
+  follow-up issue listing the findings, opens a draft environment-hardening PR
+  (hooks/rules that block those violation classes at Write/Edit time), resolves
+  any bot threads with a deferral note, and reports the deferral in
+  `standardsNote`.
+- **Bugbot gate:** the terminal Cursor Bugbot confirmation gate runs once the
+  internal lenses are clean. When Bugbot is disabled or opted out for the run (the
+  default) or unreachable, the gate spawns no agent and passes straight to the
+  Copilot gate. Otherwise it fetches Bugbot's verdict on the HEAD; findings route
+  back into Converge, and a clean verdict advances to the Copilot gate.
+- **Copilot gate:** the terminal GitHub Copilot confirmation gate. Request a
+  Copilot review, poll up to the configured cap; findings route back into
+  Converge. When Copilot is down or out of quota — it posts an out-of-usage notice
+  (the requester hit their quota) on the HEAD, or surfaces no review at all after
+  the configured cap — the gate logs a notice and the run marks the PR ready with
+  the Copilot gate bypassed. `copilotNote` records the bypass.
+- **Convergence check:** `check_convergence.py` is the authoritative gate; one
+  agent runs it and, on a full pass, marks `draft=false` in the same turn. Each
+  spawned agent runs on the model tier its role needs — sonnet/medium for the
+  deterministic static sweep, opus/medium for the code-review, bug-audit,
+  self-review, reuse, and terminal Bugbot lenses and the code-editing fix steps,
+  sonnet/medium for the verify, commit, and recovery steps, and haiku/low for the
+  mechanical probes (preflight, Copilot gate, CLEAN-audit post, convergence
+  check).
+
+## Multiple PRs
+
+The multi-PR run drives several draft PRs to ready in one launch:
+`workflow/converge_multi.mjs` fans out one `converge.mjs` child run per PR with
+`parallel()`, and every child is pinned to its own PR's worktree through the
+`repoPath` it receives, so the children never share a checkout. Each child run is
+the exact single-PR convergence loop — same rounds, same reuse pass, same Copilot
+gate, same convergence check — one per PR at once. The children share the run's
+concurrency cap, so the fan-out self-throttles rather than spawning every PR's
+lenses at the same instant.
+
+### Multi-PR pre-flight (main session)
+
+`EnterWorktree` puts the session on one branch only, so the multi-PR path gives
+each PR its own checkout with `git worktree add`. For each PR the user named:
+
+1. **Resolve PR scope** as the single-PR pre-flight step 2 does: capture `owner`,
+   `repo`, `prNumber`, and `headRefName`; confirm the PR is a draft, and mark it
+   draft (`gh pr ready <n> --repo <o>/<r> --undo`) when it is already ready so the
+   loop owns the ready transition.
+2. **Create a worktree on the PR's head ref** and capture its absolute path. From
+   inside the PR's repository checkout:
+   `git worktree add <abs worktree path> <headRefName>` (run `git fetch origin
+   <headRefName>` first when the ref is not local). Put each PR's worktree under a
+   path carrying its PR number so the fan-out keeps them distinct. Confirm
+   `git -C <abs worktree path> rev-parse --abbrev-ref HEAD` equals the head ref
+   and its `HEAD` equals the PR head SHA.
+3. **Verify each worktree is the PR's repo (strict pre-flight):**
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <owner> --repo <repo> --mode strict`,
+   run with that worktree as the working directory. A non-zero exit prints a
+   `PREFLIGHT_OUTCOME` line and an `ABORT` line: report it and drop that PR from
+   the run rather than aborting every PR.
+4. **Grant project permissions once per repository** — the single-PR pre-flight
+   step 4 grant covers every worktree of the same repo, so run it one time for
+   the repo the PRs live in.
+5. **Copilot quota pre-check once for the whole run** — run the single-PR
+   pre-flight step 5 check one time:
+   `python "$HOME/.claude/_shared/pr-loop/scripts/copilot_quota.py"`. Every PR in
+   the run shares one account's Copilot premium-request quota, so one check covers
+   them all. Exit 0 sets `copilotDisabled: false` on every PR entry below; any
+   non-zero exit sets `copilotDisabled: true` on every entry, so each child skips
+   the Copilot gate with no agent spawned.
+
+### Launch the multi-PR workflow
+
+Call the `Workflow` tool against the fan-out script, passing the absolute path of
+`converge.mjs` and one entry per PR:
+
+```
+Workflow({
+  scriptPath: "<this skill dir>/workflow/converge_multi.mjs",
+  args: {
+    convergeScriptPath: "<this skill dir>/workflow/converge.mjs",
+    prs: [
+      { owner: "<O>", repo: "<R>", prNumber: <N1>, repoPath: "<abs worktree 1>", bugbotDisabled: false, copilotDisabled: false },
+      { owner: "<O>", repo: "<R>", prNumber: <N2>, repoPath: "<abs worktree 2>", bugbotDisabled: false, copilotDisabled: false }
+    ]
+  }
+})
+```
+
+`convergeScriptPath` is the absolute path to `workflow/converge.mjs` in this same
+skill directory; each `repoPath` is the absolute path of the worktree that PR is
+checked out in. The workflow runs in the background and notifies this session on
+completion; watch live progress with `/workflows`, where each PR's child run
+appears under its own group.
+
+The workflow returns
+`{ converged, prCount, convergedCount, results, allDeferredPrs, blocker }`, where
+`results` is one record per PR carrying
+`{ owner, repo, prNumber, converged, rounds, finalSha, blocker, deferredPrs }`.
+Each record's `deferredPrs` is that PR's own list of draft hardening PRs, and
+`allDeferredPrs` is every record's `deferredPrs` flattened into one list. The
+top-level `converged` is true only when every PR converged.
+
+### Multi-PR teardown (on workflow completion)
+
+Run the single-PR [Teardown](#teardown-on-workflow-completion) once per entry in
+`results`, using that PR's `owner`, `repo`, `prNumber`, and `finalSha`, and its
+own worktree as the working directory. Write one durable handoff per PR entry —
+each with that PR's own `--pr-number` — so a fresh session can resume any PR on
+its own. Build and publish a PR's closing report
+only for a PR whose `converged` is true; for a PR that returned a blocker, skip
+its report and carry the blocker into the final summary. Revoke project
+permissions once per repository after every PR's teardown. Then print one summary
+report — a line per PR as
+`#<prNumber>: <converged | blocked> — rounds <N>, final <finalSha>[, blocker <blocker>]`.
+
+## Self-closing loop: converge the deferred PRs
+
+Every run leaves work behind. When a round holds only code-standard findings, the
+standards-deferral path opens a draft environment-hardening PR and reports it in
+`deferredPrs`. That PR is itself a draft that needs to reach ready, and its own
+convergence can defer more standard findings, opening more hardening PRs. The
+self-closing loop drives that chain to the ground: after teardown, the
+orchestrator (this session, which launched the workflow) converges the deferred
+PRs, then the PRs their runs defer, and so on until a generation opens none.
+
+This loop runs by default at the end of every autoconverge run — single-PR and
+multi-PR alike. It stops only when a generation's deferred-PR list comes back
+empty.
+
+### Seed the loop
+
+Collect the first generation of deferred PRs from the run that just finished:
+
+- A single-PR run seeds from its `deferredPrs`.
+- A multi-PR run seeds from its `allDeferredPrs`.
+
+When the seed list is empty, the loop is already done — the run deferred nothing,
+so there is nothing to converge. Report that and stop.
+
+### Each generation
+
+Given a non-empty list of deferred PRs `{ owner, repo, prNumber, copilotDisabled, bugbotDisabled }`
+(a generation may span more than one repository — a hardening PR lands in whichever repo owns
+the surface that blocks the deferred class, so `JonEcho/llm-settings` for hooks
+and `jl-cmd/claude-dev-env` for rules and skills both appear):
+
+1. **Check out each deferred PR.** Run the
+   [Multi-PR pre-flight](#multi-pr-pre-flight-main-session) once per deferred PR.
+   Because a deferred PR can live in a repo the first run never touched, first
+   find a local checkout of that PR's repo; when none exists, clone it under the
+   session temp dir, then add the per-PR worktree on the PR's head ref. Drop any
+   PR whose strict pre-flight fails rather than stopping the whole generation.
+   Grant project permissions once per repository the generation spans.
+2. **Converge the generation.** Launch `workflow/converge_multi.mjs` with one
+   entry per checked-out deferred PR, exactly as the
+   [multi-PR launch](#launch-the-multi-pr-workflow) describes. Each child run
+   checks Copilot and Bugbot availability through the workflow's own preflight-git
+   probe, carried across rounds, so a reviewer that is down or out of quota is never
+   spawned in any generation; the `copilotDisabled`/`bugbotDisabled` flags each
+   deferred PR carries seed that check for the first round.
+3. **Tear down.** Run the [multi-PR teardown](#multi-pr-teardown-on-workflow-completion)
+   over the generation's `results`, and revoke project permissions once per
+   repository.
+4. **Take the next seed.** The generation's `allDeferredPrs` is the next
+   generation's seed list. When it is empty, the loop is done.
+
+Repeat from step 1 with each new seed. The depth is unbounded: the loop keeps
+opening generations until one converges every deferred PR without deferring
+anything new.
+
+### Report each generation
+
+Log one line as each generation finishes, so a watcher sees the chain close:
+
+```
+Self-closing generation <k>: <converged>/<total> deferred PR(s) converged, <new> new deferred PR(s) opened
+```
+
+When the loop ends, print a final line naming the generation count and the total
+deferred PRs converged across every generation.
+
+### Conventional titles on deferred PRs
+
+Each hardening PR the loop opens targets a repo whose CI validates the PR title
+as a Conventional Commit. The commit step's prompt directs the agent to title
+the hardening PR as a Conventional Commit — a type prefix, an optional scope,
+then a colon and a short summary — so a deferred PR carries a conforming title
+(`feat(hooks): …`, `chore(rules): …`) before it exists. That prompt is where the
+conforming title is enforced.
+
+The `conventional_pr_title_gate` hook is a best-effort backstop on that title,
+not the guarantee. It blocks a `gh pr create` with a non-conforming `--title`
+only for a repo whose semantic-pull-request workflow leaves the action's
+`types:` input at the default Conventional Commits list. For a repo that pins
+its own explicit `types:` list — which the main target repo does in
+`.github/workflows/pr-check.yml` — the hook fails open and lets the title
+through, and the CI title check on GitHub has the final say.
+
+## Folder map
+
+- `SKILL.md` — this hub.
+- `workflow/converge.mjs` — the convergence workflow script.
+- `workflow/converge_multi.mjs` — the multi-PR fan-out driver: one `converge.mjs` child run per PR in parallel, each pinned to its PR worktree via `repoPath`.
+- `workflow/aggregate_runs.py` — merges every autoconverge journal for a PR into one journal and returns its deduped findings, fix summaries, round count, and final SHA.
+- `workflow/convergence_summary.py` — builds the convergence-summary agent prompt over a PR's merged findings.
+- `workflow/render_report.py` — builds the closing convergence insights HTML report, taking the summary from `--summary-file`.
+- `workflow/autoconverge_report_constants/` — named constants for the report builder and the summary prompt.
+- `reference/` — convergence definition, stop conditions, gotchas, closing report.

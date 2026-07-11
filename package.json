@@ -1,0 +1,8 @@
+{
+    "private": true,
+    "workspaces": [
+        "packages/*"
+    ],
+    "name": "claude-dev-env-workspace",
+    "description": "Claude Code plugin ecosystem monorepo"
+}

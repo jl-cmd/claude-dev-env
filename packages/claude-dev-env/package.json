@@ -1,0 +1,42 @@
+{
+    "name": "claude-dev-env",
+    "version": "1.93.0",
+    "description": "Claude Code development standards — rules, hooks, agents, commands, and skills",
+    "type": "module",
+    "bin": {
+        "claude-dev-env": "bin/install.mjs"
+    },
+    "scripts": {
+        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\""
+    },
+    "files": [
+        "bin/",
+        "rules/",
+        "docs/",
+        "commands/",
+        "agents/",
+        "skills/",
+        "hooks/",
+        "system-prompts/",
+        "scripts/",
+        "_shared/",
+        "audit-rubrics/",
+        "CLAUDE.md"
+    ],
+    "keywords": [
+        "claude-code",
+        "plugin",
+        "cli",
+        "tdd",
+        "code-quality"
+    ],
+    "dependencies": {
+        "@jl-cmd/prompt-generator": "^1.0.0"
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/jl-cmd/claude-dev-env.git",
+        "directory": "packages/claude-dev-env"
+    }
+}

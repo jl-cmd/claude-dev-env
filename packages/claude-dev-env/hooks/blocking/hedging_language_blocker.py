@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""
+Stop hook that blocks Claude responses containing hedging language.
+
+Words like "likely", "probably", "presumably" signal unverified claims.
+When detected, Claude is forced to re-check and respond with verified facts.
+"""
+
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+from hooks_constants.messages import USER_FACING_NOTICE  # noqa: E402
+from hooks_constants.text_stripping import strip_code_and_quotes  # noqa: E402
+
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+RESEARCH_MODE_SKILL_SEARCH_PATHS = [
+    os.path.join(PLUGIN_ROOT, "skills", "research-mode", "SKILL.md"),
+    os.path.join(os.path.expanduser("~"), ".claude", "skills", "research-mode", "SKILL.md"),
+    os.path.join(os.path.expanduser("~"), ".claude", "plugins", "marketplaces", "claude-deep-research", "skills", "research-mode", "SKILL.md"),
+]
+
+HEDGING_WORDS = [
+    r"\blikely\b",
+    r"\bunlikely\b",
+    r"\bprobably\b",
+    r"\bprobable\b",
+    r"\bpresumably\b",
+    r"\bperhaps\b",
+    r"\bpossibly\b",
+    r"\bseemingly\b",
+    r"\bapparently\b",
+    r"\barguably\b",
+    r"\bsupposedly\b",
+    r"\bostensibly\b",
+    r"\bconceivably\b",
+    r"\bplausibly\b",
+]
+
+HEDGING_PHRASES = [
+    r"\bmight be\b",
+    r"\bcould be\b",
+    r"\bseems to be\b",
+    r"\bappears to be\b",
+    r"\bin all likelihood\b",
+    r"\bmore likely than not\b",
+    r"\bit.s possible that\b",
+]
+
+ALL_HEDGING_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE) for pattern in HEDGING_WORDS + HEDGING_PHRASES
+]
+
+def find_hedging_words(text: str) -> list[str]:
+    """Return all hedging words/phrases found in the text."""
+    prose_text = strip_code_and_quotes(text)
+    matched_terms = []
+
+    for pattern in ALL_HEDGING_PATTERNS:
+        all_matches = pattern.findall(prose_text)
+        for each_match in all_matches:
+            normalized_term = each_match.strip().lower()
+            if normalized_term not in matched_terms:
+                matched_terms.append(normalized_term)
+
+    return matched_terms
+
+
+def main() -> None:
+    try:
+        hook_input = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    if hook_input.get("stop_hook_active", False):
+        sys.exit(0)
+
+    assistant_message = hook_input.get("last_assistant_message", "")
+
+    if not assistant_message:
+        sys.exit(0)
+
+    found_hedging_terms = find_hedging_words(assistant_message)
+
+    if not found_hedging_terms:
+        sys.exit(0)
+
+    formatted_term_list = ", ".join(f'"{term}"' for term in found_hedging_terms)
+
+    resolved_skill_path: str | None = None
+    for each_skill_path in RESEARCH_MODE_SKILL_SEARCH_PATHS:
+        if os.path.exists(each_skill_path):
+            resolved_skill_path = each_skill_path
+            break
+
+    if resolved_skill_path is not None:
+        skill_reference = f"under the research-mode constraints defined in:\n\n{resolved_skill_path}"
+    else:
+        skill_reference = (
+            "under research-mode constraints "
+            "(no research-mode skill installed; verify with sources or prompt the user via AskUserQuestion with potential options + context)"
+        )
+
+    block_reason = (
+        f"ANTI-HALLUCINATION GUARDRAIL: Your response contains hedging language: "
+        f"{formatted_term_list}. "
+        f"These words signal unverified claims. You MUST rewrite your response "
+        f"{skill_reference}\n\n"
+        f"Do NOT simply remove the hedging word and keep the unverified claim. "
+        f"Do more research to VERIFY it with a source, or prompt the user via AskUserQuestion with some potential options + context if you are unable to find anything online.\n\n"
+        f"You MUST re-output the complete, revised response with the corrections applied."
+    )
+    block_response = {
+        "decision": "block",
+        "reason": block_reason,
+        "systemMessage": USER_FACING_NOTICE,
+        "suppressOutput": True,
+    }
+    log_hook_block(
+        calling_hook_name="hedging_language_blocker.py",
+        hook_event="Stop",
+        block_reason=block_reason,
+    )
+    print(json.dumps(block_response))
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

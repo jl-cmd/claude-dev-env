@@ -1,0 +1,226 @@
+# Convergence gates
+
+Run **only** after the terminal Bugbot gate confirms the HEAD
+(`bugbot_clean_at == current_head` OR `bugbot_down`), which runs just before
+these gates once Step 2 BUGTEAM reports `convergence (zero findings)` with no
+push during the bugteam tick. Gates run in order; first failure determines
+next-tick behavior. Mark PR ready only when all six pass.
+
+**Mandatory evidence rule:** Every gate that fetches data MUST produce a
+summary of its findings before proceeding to the next gate. Gate (f) MUST
+reference evidence from each prior gate. Skipping any gate silently is a
+hard blocker — report "gate evidence missing: <gate name>" and omit loop
+pacing. Do not mark ready with unverified gates.
+
+## (a) Copilot findings gate
+
+Fetch latest Copilot reviewer (`copilot-pull-request-reviewer[bot]`) review
+plus inline comments anchored to most recent Copilot review on
+`current_head`:
+
+```
+python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
+  → filter by `.commit_id == current_head`, sort by `.submitted_at` descending
+
+python ~/.claude/skills/pr-converge/scripts/fetch_copilot_inline_comments.py --owner <O> --repo <R> --pr-number <N> --commit <current_head>
+  → unaddressed inline threads on the latest Copilot review at current_head
+```
+
+When `copilot_down == true` (start-of-run quota pre-check), skip this gate
+entirely — no Copilot fetch, no request, no poll, no agent. Record evidence
+"Copilot bypassed (quota pre-check non-zero) at <SHA>" and continue to gate (b); the bypass
+holds for the whole run and the quota API is not re-queried per tick. Otherwise
+decide among the four branches below.
+
+Decide (four branches; match first whose predicate holds):
+
+- **`classification == "dirty"` with non-empty inline comments matching
+  `pull_request_review_id`:** Fix protocol input (same shape as bugbot
+  dirty). Apply the `pr-fix-protocol` skill
+  (`../../pr-fix-protocol/SKILL.md`) in the same tick.
+  Reset `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
+  `copilot_clean_at = null`, `phase = CODE_REVIEW`, schedule next wakeup,
+  return. Full back-to-back-clean cycle plus all six gates must hold again on
+  new HEAD.
+- **`classification == "dirty"` with empty inline comments matching
+  `pull_request_review_id`:** Copilot posted findings only in review body
+  (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
+  threads). Parse body for actionable findings. Apply the
+  `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`), whose reply
+  step for body-only findings posts a top-level review reply citing the
+  new HEAD SHA. Reset
+  `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
+  `copilot_clean_at = null`, `phase = CODE_REVIEW`,
+  schedule next wakeup, return. Convergence needs full
+  back-to-back-clean on new HEAD.
+- **`classification == "clean"` (state `APPROVED`):** Set
+  `copilot_clean_at = current_head`. Record evidence: "Copilot APPROVED at <SHA>".
+  Continue to gate (b).
+- **No Copilot review on `current_head` yet:** Record evidence: "No Copilot review at <SHA>".
+  Skip — gate (d) issues proactive request. Continue to gate (b).
+
+## (b) Claude reviewer gate
+
+Fetch latest Claude reviewer (`claude[bot]`) review plus inline comments
+anchored to most recent Claude review on `current_head`:
+
+```
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
+  → filter `.user.login` for claude (case-insensitive substring "claude")
+    AND `.commit_id == current_head`
+  → sort by `.submitted_at` descending
+
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
+  → filter threads where `is_resolved == false`
+```
+
+Decide (four branches; match first whose predicate holds):
+
+- **`classification == "dirty"` with non-empty inline comments matching
+  `pull_request_review_id`:** Treat identically to gate (a) dirty+inline
+  path — apply the `pr-fix-protocol` skill
+  (`../../pr-fix-protocol/SKILL.md`). Reset
+  `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = CODE_REVIEW`,
+  schedule next wakeup, return.
+- **`classification == "dirty"` with empty inline comments matching
+  `pull_request_review_id`:** Claude posted findings only in review body
+  (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
+  threads). Treat identically to gate (a) dirty+body path — apply the
+  `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`). Reset
+  `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = CODE_REVIEW`,
+  schedule next wakeup, return.
+- **`classification == "clean"` (state `APPROVED`):** Record evidence:
+  "Claude APPROVED at <SHA>". Continue to gate (c).
+- **No Claude review on `current_head` yet:** Record evidence:
+  "Claude absent at <SHA>". Continue to gate (c).
+
+## (c) Mergeability gate
+
+Resolve PR's mergeability state:
+
+```
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get")
+  → `.mergeable_state`, `.mergeable`
+```
+
+Persist `mergeable_state` into `merge_state_status`. Decide:
+
+- **`mergeable_state == "clean"` AND `mergeable == true`:**
+  Record evidence: "mergeable_state clean, mergeable=true at <SHA>".
+  Continue to gate (d).
+- **`mergeable_state == "dirty"` (or `mergeable == false`):** Do
+  **not** mark ready. Invoke **`rebase`** skill
+  ([`../../rebase/SKILL.md`](../../rebase/SKILL.md)) Phase 1–4 against PR's
+  base ref. After rebase + force-with-lease push, new HEAD invalidates
+  every prior clean state — reset `bugbot_clean_at = null`,
+  `code_review_clean_at = null`, `copilot_clean_at = null`,
+  `merge_state_status = null`, `phase = CODE_REVIEW`,
+  schedule next wakeup, return. Loop re-runs from
+  scratch on new HEAD.
+- **`mergeable_state` is `"blocked"`, `"behind"`, `"unknown"`, or `"unstable"` for
+  non-conflict reasons** (required checks pending/failing for "unstable",
+  branch behind base without conflicts for "behind", GitHub indeterminate
+  for "unknown"): **hard blocker** per
+  [stop-conditions.md](stop-conditions.md) — do not invent a fix. Report specific
+  `mergeable_state`, omit loop pacing.
+
+## (d) Post-convergence Copilot review request
+
+When `copilot_down == true` (start-of-run quota pre-check), skip this gate: do
+not request a Copilot review and do not enter `COPILOT_WAIT`. Export
+`CLAUDE_REVIEWS_DISABLED="copilot"` before gate (f)'s convergence check so
+`check_convergence.py` bypasses the Copilot review and pending-review gates.
+Continue to gate (e).
+
+Once gates (a), (b), and (c) all pass (Copilot clean at `current_head` *or* no
+Copilot review yet, AND Claude clean or absent at `current_head`, AND
+`mergeable_state == "clean"`), request Copilot review:
+
+```
+gh api --method POST repos/<O>/<R>/pulls/<N>/requested_reviewers \
+  -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
+```
+
+Check for an existing pending review first with
+`python ~/.claude/skills/pr-converge/scripts/check_pending_reviews.py --owner <O> --repo <R> --pr-number <N> --user copilot`.
+
+After request, set `phase = COPILOT_WAIT`, schedule next wakeup, and return.
+The COPILOT_WAIT phase prevents the agent from re-entering convergence gates
+while Copilot processes. Next tick with `phase == COPILOT_WAIT`:
+re-run the fetch from gate (a) — `python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py`
+plus MCP `get_review_comments` filtered for Copilot inline threads —
+against `current_head`. Decide:
+
+- **Copilot review present at `current_head`:**
+  - `state: APPROVED` → set `copilot_clean_at = current_head`. Record
+    evidence: "Copilot APPROVED at <SHA>". Re-validate gates (b) and (c)
+    on same tick (Claude status and mergeability may have changed while
+    waiting). Set `phase = BUGTEAM`.
+    Continue to gate (e) when (b) and (c) still pass.
+  - `state: CHANGES_REQUESTED` or `COMMENTED` with non-empty body → dirty.
+    Treat identically to gate (a) dirty path — spawn Agent (subagent_type: clean-coder) to fix,
+    reset `bugbot_clean_at = null` AND `copilot_clean_at = null`,
+    `phase = CODE_REVIEW`, schedule next wakeup, return.
+- **No Copilot review at `current_head` yet:** Record evidence: "No Copilot
+  review at <SHA> (wait count: <N>)". Increment `copilot_wait_count`
+  (init 0 on first COPILOT_WAIT entry; reset to 0 on every push and on every
+  successful Copilot review). After three consecutive empty waits
+  (`copilot_wait_count >= 3`), escalate as hard blocker — report
+  "Copilot did not surface a review on current_head after 3 wakeups"
+  and omit loop pacing. Otherwise schedule next wakeup (360s), return.
+
+## (e) Thread-resolution gate
+
+Before marking ready, count ALL unresolved review threads on the PR:
+
+```
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
+  → filter threads where `is_resolved == false`
+  → count
+```
+
+This count is the `pr-fix-protocol` unresolved-thread sweep
+(`../../pr-fix-protocol/SKILL.md`).
+
+Decide:
+
+- **Zero unresolved threads:** Record evidence:
+  "0 unresolved threads across PR at <SHA>". Continue to gate (f).
+- **One or more unresolved threads:** Do **not** mark ready. Apply the
+  `pr-fix-protocol` skill's unresolved-thread sweep
+  (`../../pr-fix-protocol/SKILL.md`). Push if any code changed → reset
+  `bugbot_clean_at = null` AND `copilot_clean_at = null`,
+  `phase = CODE_REVIEW`, schedule next wakeup, return. If only resolutions
+  (no code changes), re-check this gate without resetting.
+
+## (f) Mark ready and report
+
+**Mandatory pre-condition checklist.** Before calling `update_pull_request`,
+verify ALL seven conditions below. Three are preconditions from the main
+loop (bugbot clean, bugteam convergence, no intervening push); four are
+evidence from gates (a)–(e) above. All seven must be confirmed:
+
+- [ ] `bugbot_clean_at == current_head` (from per-tick.md Step 2 BUGBOT §c)
+- [ ] bugteam `convergence (zero findings)` at `current_head` (from per-tick.md Step 2 BUGTEAM §d)
+- [ ] `copilot_clean_at == current_head` (from gate (a) or gate (d)), or the Copilot gate bypassed for the run via `copilot_down`
+- [ ] Claude `APPROVED` or absent at `current_head` (from gate (b))
+- [ ] `mergeable_state == "clean"` AND `mergeable == true` (from gate (c))
+- [ ] Zero unresolved review threads anywhere on the PR (from gate (e))
+- [ ] No push since bugteam convergence (from per-tick.md Step 2 BUGTEAM §b)
+
+If ANY checkbox cannot be confirmed with evidence, do NOT mark ready.
+Report the specific missing condition and route through the appropriate
+fix path (BUGBOT for dirty reviews, rebase for merge conflicts, etc.).
+
+Only when ALL seven conditions are confirmed:
+
+Use the `update_pull_request` MCP tool:
+
+    update_pull_request(pullNumber=NUMBER, owner=OWNER, repo=REPO, draft=false)
+
+With `state.json`, append convergence row to
+`<TMPDIR>/pr-converge-<session_id>/converged.log` per `multi-pr-orchestration.md` §Memory; else skip.
+Report: `PR #<NUMBER> converged: bugbot CLEAN at <SHA>, bugteam CLEAN at
+<SHA>, mergeable_state clean, copilot CLEAN at <SHA>, claude <APPROVED|absent>
+at <SHA>, 0 unresolved threads across PR; marked ready for review`.
+**Omit loop pacing** per **Convergence** of active pacing workflow.

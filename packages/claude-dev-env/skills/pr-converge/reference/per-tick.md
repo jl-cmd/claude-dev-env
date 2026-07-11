@@ -1,0 +1,425 @@
+# Per-tick work
+
+Use on **draft PR**. Cursor Bugbot and `/bugteam` re-run after each push. Fix
+findings between rounds until back-to-back clean on same `HEAD`, then mark
+PR ready for review.
+
+Run every tick in parent harness session. Pacing lives in
+[`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md) (read before Step 4); see [Pacing
+workflow](#pacing-workflow).
+
+Every BUGTEAM tick runs **bugteam** — never hand-rolled substitute. Fix
+protocol per [fix-protocol.md](fix-protocol.md). Pacing stays in main session via
+`ScheduleWakeup` (pre-flight aborts when absent).
+
+## Invocation modes
+
+- **`/pr-converge`** runs one tick, then Step 4 schedules the next via
+  `ScheduleWakeup`. Omit the next wakeup only on convergence or **Stop
+  conditions**.
+
+## Pacing workflow
+
+Read [`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
+(installed copy under `$HOME/.claude/skills/pr-converge/workflows/`) before
+Step 4. The pre-flight gate guarantees `ScheduleWakeup` is invokable; the
+workflow file specifies delays, prompts, and convergence cleanup.
+
+- **`/pr-converge`** (default): loops until convergence. After each tick
+  (unless converged or stopped), run **Step 4**.
+
+## Step 1: Resolve current HEAD and PR context
+
+Read prior tick's state line from most recent assistant message (or
+initialize fields if none). Increment `tick_count` by 1 in conversation
+state line when **no** `state.json` (single-PR only). With `state.json`, do
+**not** increment here — orchestrator's per-tick bump is sole increment.
+
+```bash
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get") → `.head.sha`
+```
+
+If owner/repo/number are not yet known, extract them from the PR URL.
+If `current_head` changed since last tick, reset `bugbot_down` to `false`
+(new HEAD invalidates prior down-detection state).
+
+Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
+
+## Step 1.5: Resolve the PR worktree (cwd routing)
+
+The **PR worktree** is the local working tree of the PR's repo on its head
+branch. Every local operation this tick runs there: the CODE_REVIEW static sweep
+and `/code-review high --fix`, every `clean-coder` fix spawn, and every commit and
+push. `/code-review` and `git` both act on the repo of the current working
+directory, so the working directory must be the PR worktree before any local
+work begins. Re-resolve it every tick — a rebase or a fresh HEAD can move the
+branch tip.
+
+Classify the working directory against the PR's repo. The preflight script
+reads the current working tree's origin, parses its `<owner>/<repo>` (accepting
+the `https://github.com/<owner>/<repo>`, `git@github.com:<owner>/<repo>`, and
+`ssh://git@github.com/<owner>/<repo>` forms and dropping any trailing `.git`),
+and prints a `PREFLIGHT_OUTCOME=<same_repo|different_repo|re_rooted>` line plus a
+human-readable summary:
+
+```bash
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <owner> --repo <repo> --mode classify
+```
+
+A `same_repo` outcome exits 0 only when the worktree machinery is healthy; a
+`same_repo` outcome whose `git worktree list` probe failed exits non-zero in
+every mode. A `different_repo` outcome exits 0 in classify mode. A `re_rooted`
+outcome (no git work tree, or no readable origin) exits non-zero. Route on the
+`PREFLIGHT_OUTCOME` value:
+
+- **`PREFLIGHT_OUTCOME=same_repo`** (the working directory is a checkout of the
+  PR's repo): the `EnterWorktree`
+  pre-flight checkout is the PR worktree, and the working directory already
+  points here, so no `cd` is needed. Bring the branch to the PR head with the
+  same deterministic `checkout -B` the cross-repo case uses, after confirming
+  the tree carries no uncommitted edits — a non-empty `git status --porcelain`
+  means a prior tick left a fix mid-flight, so escalate as a hard blocker:
+  ```bash
+  git fetch origin
+  git checkout -B <branch> origin/<branch>
+  ```
+  When the script prints an `ABORT:` line whose recovery names `git worktree
+  prune`, the working tree's worktree machinery is broken and the preflight
+  exits non-zero: stop the tick, run that `git worktree prune` in the named
+  directory, and re-run rather than continuing the checkout.
+
+- **`PREFLIGHT_OUTCOME=different_repo`** (the session is rooted in another repo
+  — for example, the PR lives in `llm-settings` while the session runs from
+  `claude-dev-env`): route the working directory into a checkout of the
+  PR's repo. This is routine and automatic — never pause, and never raise it as
+  a fork (see [ground-rules.md](ground-rules.md)). `EnterWorktree` is scoped to
+  the session's own repo and cannot re-root into the PR's repo.
+
+  `<run_temp_dir>` is pr-converge's own `pr-converge-pr-<N>` directory under the
+  system temp directory — named apart from bugteam's `bugteam-pr-<N>` run dir so
+  the two never share a checkout when Step 6 runs bugteam on the same PR.
+  pr-converge fills this path by hand; it does not route through the shared
+  `_path_resolver` that bugteam uses. Reuse its `checkout` across ticks; create
+  it once when it is absent. A fresh clone honors the global `core.hooksPath`, so git-side
+  CODE_RULES enforcement covers the fix commit.
+
+  1. Clone the PR branch when the checkout is absent:
+     ```bash
+     gh repo clone <owner>/<repo> "<run_temp_dir>/checkout" -- --branch <branch>
+     ```
+  2. Bring it to the PR head. On a reused checkout, confirm it carries no
+     uncommitted edits first — a non-empty `git -C "<run_temp_dir>/checkout"
+     status --porcelain` means a prior tick left a fix mid-flight, so escalate
+     as a hard blocker rather than discard it. On a clean tree:
+     ```bash
+     git -C "<run_temp_dir>/checkout" fetch origin
+     git -C "<run_temp_dir>/checkout" checkout -B <branch> origin/<branch>
+     ```
+  3. Change into it in a standalone Bash call so the working directory persists
+     into the `/code-review` invocation that follows:
+     ```bash
+     cd "<run_temp_dir>/checkout"
+     ```
+  4. Confirm the route took before any local work:
+     ```bash
+     git rev-parse --show-toplevel
+     git rev-parse HEAD
+     ```
+     The top level reads `<run_temp_dir>/checkout` and HEAD equals
+     `current_head`.
+
+  Spawn every `clean-coder` fix worker with the PR worktree path in its prompt
+  so its edits land in the PR's repo — the same worktree-path handoff bugteam
+  gives its fix worker. The
+  GitHub API steps (BUGBOT fetch, convergence gates) and the bugteam Skill
+  invocation are URL-driven and need no local checkout.
+
+  Capture the session worktree path (the `EnterWorktree` checkout) before
+  routing away. Step 0 grant, Step 8 working-tree cleanup, and Step 10 revoke
+  read the current working directory and target the session repo, so `cd` back
+  to the session worktree before Step 8 and remove `<run_temp_dir>` there with
+  a Windows-safe recursive remove (per
+  `$HOME/.claude/rules/windows-filesystem-safe.md`).
+
+- **`PREFLIGHT_OUTCOME=re_rooted`** (the working directory is not a git work
+  tree, or its origin remote is unreadable — a resumed or background session can
+  re-root to the home directory): the tick cannot locate the PR's repo from
+  here, so neither cwd reuse nor a temp-clone route is safe. Report the printed
+  `ABORT` line as a hard blocker and stop the tick. Recover by starting the
+  session from a checkout of the PR's repo and re-running.
+
+## Step 2: Branch on `phase`
+
+The internal passes drive the code to clean first. CODE_REVIEW is the entry phase
+each tick; BUGTEAM follows; the terminal Bugbot gate confirms; then the
+convergence gates and the terminal Copilot gate run. Every fix push re-enters at
+CODE_REVIEW.
+
+### `phase == CODE_REVIEW`
+
+The entry phase of every convergence tick, re-entered after any fix push. It runs
+a deterministic static sweep, then Claude Code's built-in `/code-review high
+--fix` on the full `origin/main...HEAD` diff; `/code-review` produces no GitHub
+review artifact, so there are no code-review threads to resolve.
+
+a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
+   gates over the full `origin/main...HEAD` changed files:
+   `python "$HOME/.claude/_shared/pr-loop/scripts/code_rules_gate.py" --base origin/main`,
+   `ruff`, `mypy`, and stem-matched `pytest`. On any failure, apply the
+   `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`), commit and push,
+   reset `bugbot_clean_at = null` and `code_review_clean_at = null`, stay
+   `phase = CODE_REVIEW`, and re-run the sweep. When the sweep is clean, run
+   `/code-review` below.
+
+b. Run Claude Code's built-in `/code-review high --fix` on the FULL
+   `origin/main...HEAD` diff — every file the PR touches — via the
+   [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
+   It reviews the diff and applies its findings to the working tree.
+
+   Before running, confirm the working directory is the PR worktree resolved
+   in [Step 1.5](#step-15-resolve-the-pr-worktree-cwd-routing) — `git rev-parse
+   --show-toplevel` is that checkout and `git rev-parse HEAD` equals
+   `current_head` — with no uncommitted edits. When the session is rooted in a
+   different repo than the PR, the `cd` from Step 1.5 supplies this; the
+   persisted working directory is what `/code-review` audits. Then invoke
+   `/code-review high --fix` with no path arguments so it audits the whole branch
+   diff against `origin/main`. Do not delta-scope to commits added since the
+   prior clean SHA, do not scope to a single file, do not scope to bugbot's
+   flagged paths. A partial-scope round does not count and cannot set
+   `code_review_clean_at`. Invoke `/code-review high --fix` so the pre-catch pass
+   gets broad coverage regardless of the session's current effort.
+
+c. Decide (two branches; match first whose predicate holds):
+
+   - **`/code-review` applied fixes (working tree changed):** Commit the
+     applied fixes in one commit → push, following the `pr-fix-protocol`
+     skill's commit and push steps (`../../pr-fix-protocol/SKILL.md`). Reset
+     `bugbot_clean_at = null` AND `code_review_clean_at = null`. Stay
+     `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
+     re-enters the internal passes on the new HEAD.
+   - **Clean (no changes applied):** Set
+     `code_review_clean_at = current_head`, `phase = BUGTEAM`. Continue
+     BUGTEAM in same tick — back-to-back convergence requires code-review and
+     bugteam clean on the same HEAD before the terminal gates run.
+
+### `phase == BUGTEAM`
+
+a. Run **bugteam** on current PR.
+
+   Pass the PR URL as the sole argument so bugteam audits the FULL
+   `origin/main...HEAD` diff — every file the PR touches. Bugteam owns
+   its own discovery on the full PR diff. Do not pass a file list, a
+   path filter, a commit range, or any "just the new commits since last
+   clean" cut. A partial-scope round does not count and cannot satisfy
+   the converged-on-current-HEAD condition in step (d).
+
+   - **`Skill` invokable**: invoke bugteam
+     with `Skill`.
+
+     ```
+Skill({skill: "bugteam", args:
+"https://github.com/<OWNER>/<REPO>/pull/<NUMBER>"})
+     ```
+
+   - **`Skill` not invokable** (typical delegated teammate): worker executes
+     bugteam by reading [`../../bugteam/SKILL.md`](../../bugteam/SKILL.md). Same
+     loop and gates; only harness steps differ.
+
+b. **Re-resolve current HEAD (MANDATORY — never skip).** Bugteam may have
+pushed commits during its run. `current_head` from Step 1 is stale:
+
+   ```
+   pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get") → `.head.sha`
+   ```
+
+   Capture `new_head`. Then check the most recent commit timestamp:
+
+   ```
+   list_commits(owner=OWNER, repo=REPO, sha="<branch>")
+     → sort by `.commit.committer.date` descending → index 0 `.commit.committer.date`
+   ```
+
+   If the most recent commit timestamp is **less than 60 seconds ago**, the
+   GitHub API may not have propagated it to review endpoints yet. Do not
+   proceed with convergence-gates — schedule a 90s wakeup and return.
+   Re-resolve HEAD next tick.
+
+   If `new_head != current_head`, set `current_head = new_head`,
+   `bugbot_clean_at = null`, `bugbot_down = false`. New commits invalidate
+   bugbot's prior clean and down-detection state.
+
+c. Inspect bugteam outcome. Reports `convergence (zero findings)` or list
+of unfixed findings with file:line.
+
+d. Decide based on post-bugteam state — order matters. Check
+pushed-during-bugteam FIRST so a convergence report against a stale HEAD
+never falsely terminates:
+   - **Audit pushed this tick (`bugbot_clean_at` reset in step b):**
+     Reset `code_review_clean_at = null`, `phase = CODE_REVIEW`, schedule next
+     wakeup, return. Every fix push re-enters the internal passes on the new
+     HEAD.
+   - **Convergence AND no push:** the internal passes are clean on
+     `current_head`. `phase = BUGBOT` — route into the terminal Bugbot gate,
+     which confirms and then runs the convergence gates. Continue BUGBOT in the
+     same tick.
+   - **Findings without committed fixes:** apply the `pr-fix-protocol`
+     skill (`../../pr-fix-protocol/SKILL.md`). Reset `code_review_clean_at =
+     null`, `phase = CODE_REVIEW`, schedule next wakeup, return.
+
+### `phase == BUGBOT` (terminal gate)
+
+The terminal external confirmation gate. BUGTEAM routes here once the internal
+passes are clean; Bugbot confirms the HEAD, then the convergence gates run.
+
+**Availability gate (runs first, before any fetch or trigger).**
+`python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
+
+- Exit 0 (Bugbot disabled for this run — the default, unless
+  `CLAUDE_REVIEWS_ENABLED` lists `bugbot`) → set `bugbot_down = true`, advance to
+  the [convergence gates](convergence-gates.md) in the same tick with the Bugbot
+  gate bypassed; skip steps a–c below.
+- Exit 1 (`CLAUDE_REVIEWS_ENABLED` lists `bugbot` and `CLAUDE_REVIEWS_DISABLED`
+  does not) → go to step a.
+
+Because `bugbot_down` resets on every push, this gate re-runs on every
+BUGBOT entry. Cursor Bugbot is off by default and runs only when
+`CLAUDE_REVIEWS_ENABLED` lists `bugbot`; a `bugbot` token in
+`CLAUDE_REVIEWS_DISABLED` keeps it off even then.
+
+a. Fetch Cursor Bugbot reviews newest-first, walk back until first clean:
+
+   ```
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
+   → filter `.user.login` for cursor/bugbot, sort by `.submitted_at` descending
+   ```
+
+   Track dirty entries (review body has `BUGBOT_REVIEW` markers with finding content); Fix protocol reads them back later this tick.
+
+   Iterate from index 0 (most recent) toward older:
+
+   - Dirty review → append JSON line with `{review_id, commit_id,
+     submitted_at, body}`.
+   - Stop at first clean. Older reviews presumed addressed at that
+     checkpoint.
+   - Index 0 clean → `$dirty_reviews_path` stays empty.
+
+Capture `commit_id`, `submitted_at`, body, `classification` of index-0
+review for decisions below. When branch routes to **Fix protocol**, address
+**every** entry in `$dirty_reviews_path` — not just index 0.
+
+b. Fetch ALL unresolved inline comment threads on the PR:
+
+   ```
+pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
+   → filter threads where `is_resolved == false`
+   ```
+
+   Per-thread handling lives in the `pr-fix-protocol` skill's
+   unresolved-thread sweep (`../../pr-fix-protocol/SKILL.md`).
+
+c. Decide (four branches; match first whose predicate holds):
+   - **No bugbot review yet, OR latest review's `commit_id` ≠
+     `current_head`:** Re-trigger bugbot (Step 3), set `bugbot_clean_at =
+     null`, reset `inline_lag_streak = 0`, schedule next wakeup, return to the
+     Bugbot gate next tick.
+   - **`commit_id == current_head` AND zero unaddressed inline AND review
+     body clean:** Set `bugbot_clean_at = current_head`, reset
+     `inline_lag_streak = 0`, advance to the [convergence
+     gates](convergence-gates.md) in the same tick.
+   - **`commit_id == current_head` with unaddressed inline findings:**
+     Apply the `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`).
+     Reset `inline_lag_streak = 0`, `bugbot_clean_at = null`,
+     `code_review_clean_at = null`, `phase = CODE_REVIEW`. With `state.json`:
+     the clean-coder teammate executes the fix, writes `state.json`, goes idle;
+     the next tick re-enters CODE_REVIEW on the new HEAD. No `state.json`
+     (single-PR): the lead executes it, stays `phase = CODE_REVIEW`. Schedule
+     next wakeup, return.
+
+### `phase == COPILOT_WAIT`
+
+Post-convergence Copilot re-check. Enters after the convergence gates request a
+Copilot review. Do **not** run bugteam here — the internal code-review and
+bugteam passes already converged before this terminal gate.
+
+a. Fetch latest Copilot review at `current_head` plus unaddressed inline
+   comments:
+
+   ```
+python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
+  → filter by `.commit_id == current_head`, sort by `.submitted_at` descending
+
+python ~/.claude/skills/pr-converge/scripts/fetch_copilot_inline_comments.py --owner <O> --repo <R> --pr-number <N> --commit <current_head>
+  → unaddressed inline threads on the latest Copilot review at current_head
+   ```
+
+b. Decide (three branches; match first whose predicate holds):
+
+   - **Copilot review `state: APPROVED` at `current_head`:** Set
+     `copilot_clean_at = current_head`. Record "Copilot APPROVED". Set
+     `phase = BUGTEAM`. Continue to convergence-gates.md gate (b) in same
+     tick — back-to-back convergence requires all gates on same HEAD.
+   - **Copilot review dirty (CHANGES_REQUESTED or COMMENTED with findings)
+     at `current_head`:** Apply the `pr-fix-protocol` skill
+     (`../../pr-fix-protocol/SKILL.md`) — it covers body-only findings with
+     no inline threads. Reset
+     `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
+     `copilot_clean_at = null`. **Set `phase = CODE_REVIEW`** (NOT
+     COPILOT_WAIT) — every fix push re-enters the internal passes on the new
+     HEAD. Schedule next wakeup, return.
+   - **No Copilot review at `current_head` yet:** Increment
+     `copilot_wait_count` (init 0 on COPILOT_WAIT entry; reset to 0 on
+     every push and on every successful Copilot review). `>= 3` → hard
+     blocker per [stop-conditions.md](stop-conditions.md). Otherwise
+     schedule next wakeup (360s), return.
+
+**Non-negotiable:** After any Copilot fix push, `phase` MUST route to
+`CODE_REVIEW`. Never cycle COPILOT_WAIT → fix → COPILOT_WAIT. The
+back-to-back-clean guarantee (the internal code-review and bugteam passes both
+clean on the same HEAD before the terminal gates re-open) only holds when every
+fix commit re-enters through CODE_REVIEW.
+
+## Step 3: Re-trigger bugbot
+
+- [ ] **Availability gate.** Enforced at BUGBOT entry (see `### phase == BUGBOT`).
+  When Bugbot is disabled for the run — the default unless
+  `CLAUDE_REVIEWS_ENABLED` lists `bugbot`, and always when
+  `CLAUDE_REVIEWS_DISABLED` lists `bugbot` — the entry gate sets
+  `bugbot_down = true` and advances to the convergence gates before any trigger
+  flow runs, so the flow below is skipped.
+- [ ] Apply the `reviewer-gates` skill's Bugbot flow
+  (`../../reviewer-gates/SKILL.md` § Gate 3) against `current_head` — the
+  silent-pass pre-check, the already-queued check, the trigger comment, and
+  the acknowledge check, with their rationale. Map its outcomes:
+- [ ] Silent pass → set `bugbot_clean_at = current_head`, advance to the [convergence gates](convergence-gates.md) same tick
+- [ ] Already queued → skip posting, wait for completion, advance to Step 4
+- [ ] Trigger acknowledged (`bugbot_acknowledged_at` recorded) → advance to Step 4
+- [ ] Bugbot down → set `bugbot_down = true`, advance to the [convergence gates](convergence-gates.md) same tick
+
+## Step 4: Loop pacing
+
+**`ScheduleWakeup` field hints** (prefer [Pacing
+workflow](#pacing-workflow)):
+
+- `delaySeconds: 360` after bugbot re-trigger. Exception:
+  BUGBOT inline-lag branch uses `delaySeconds: 90` (no re-trigger;
+  awaiting GitHub inline API).
+- `reason`: short sentence on what is awaited, including `phase` and
+  `bugbot_clean_at` SHA.
+- `prompt: "/pr-converge"`.
+
+**On convergence:** apply **Convergence** section of
+`../workflows/schedule-wakeup-loop.md` (omit wakeups).
+
+## Bugteam execution
+
+**Second audit** (BUGTEAM phase) is **always** **bugteam** skill: preflight,
+CODE_RULES gate, **`code-quality-agent`** / **`clean-coder`** loop, audit
+rubric, outcome shape, Step 2 BUGTEAM §(b)–(d) contract — all in
+[`../../bugteam/SKILL.md`](../../bugteam/SKILL.md) plus `PROMPTS.md` / `EXAMPLES.md` /
+`CONSTRAINTS.md`. Do not re-spec.
+
+**pr-converge rule:** Prefer **`Skill({skill: "bugteam", args: "<PR URL or
+args>"})`** wherever registry exposes `Skill`. When `Skill` not invokable
+(typical delegated teammate), worker runs **bugteam** by loading
+`../../bugteam/SKILL.md` from the same checkout. If bugteam cannot run, cancel the
+convergence loop fully and report the issue to the user.

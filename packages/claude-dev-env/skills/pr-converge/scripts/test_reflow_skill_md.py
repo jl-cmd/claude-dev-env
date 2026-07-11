@@ -1,0 +1,131 @@
+"""Tests for reflow_skill_md.
+
+Covers:
+- wrap_long_bash_line returns unchanged when indent leaves zero/negative width
+- wrap_long_bash_fence_lines handles deeply-indented bash content safely
+- structural string literals are imported from config, not inline
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+from types import ModuleType
+
+_SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+
+
+def _load_module() -> ModuleType:
+    if str(_SCRIPTS_DIRECTORY) not in sys.path:
+        sys.path.insert(0, str(_SCRIPTS_DIRECTORY))
+    module_path = _SCRIPTS_DIRECTORY / "reflow_skill_md.py"
+    spec = importlib.util.spec_from_file_location("reflow_skill_md", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+reflow_module = _load_module()
+
+
+def test_should_preserve_pr_converge_state_json_path_in_yaml_description() -> None:
+    lines = [
+        "  Multi-PR runs persist traffic in",
+        "  `<TMPDIR>/pr-converge-<session_id>/state.json` per Multi-PR",
+        "  orchestration model.",
+        "---",
+    ]
+    all_reflowed_lines, next_index = reflow_module.reflow_yaml_description_block(lines, 0)
+    reflowed_description = " ".join(each_line.strip() for each_line in all_reflowed_lines)
+
+    assert next_index == len(lines)
+    assert "`<TMPDIR>/pr-converge-<session_id>/state.json`" in reflowed_description
+    assert "`<TMPDIR>/pr-converge-<session_id>/state.json>`" not in reflowed_description
+
+
+def test_wrap_long_bash_fence_lines_does_not_modify_deeply_indented_line() -> None:
+    """When indentation >= MAX_WIDTH, return line as-is."""
+    deep_indent = " " * 85
+    long_line = deep_indent + "echo hello world this is a long command"
+    all_input_lines = ["```bash", long_line, "```"]
+    all_result_lines = reflow_module.wrap_long_bash_fence_lines(all_input_lines)
+    assert all_result_lines == ["```bash", long_line, "```"]
+
+
+def test_wrap_long_bash_fence_lines_does_not_modify_max_width_indent_line() -> None:
+    """When indentation == MAX_WIDTH, return line as-is."""
+    deep_indent = " " * 80
+    long_line = deep_indent + "echo hello"
+    all_input_lines = ["```bash", long_line, "```"]
+    all_result_lines = reflow_module.wrap_long_bash_fence_lines(all_input_lines)
+    assert all_result_lines == ["```bash", long_line, "```"]
+
+
+def test_wrap_long_bash_fence_lines_handles_deeply_indented_bash() -> None:
+    """Full pipeline does not hang on bash fence with extreme indentation."""
+    deep_indent = " " * 90
+    all_input_lines = [
+        "```bash",
+        deep_indent + "some_command --flag value --other long argument text here",
+        "```",
+    ]
+    all_result_lines = reflow_module.wrap_long_bash_fence_lines(all_input_lines)
+    assert len(all_result_lines) == 3
+    assert all_result_lines[0] == "```bash"
+    assert all_result_lines[2] == "```"
+    assert all_result_lines[1] == all_input_lines[1]
+
+
+def test_is_new_logical_line_recognizes_fence_via_constant() -> None:
+    """Code fence detection uses the imported constant marker."""
+    assert reflow_module.is_new_logical_line("```bash") is True
+    assert reflow_module.is_new_logical_line("```") is True
+
+
+def test_reflow_merged_line_recognizes_example_tags_via_constant() -> None:
+    """Example tag detection uses imported constant markers."""
+    assert reflow_module.reflow_merged_line("<example>") == ["<example>"]
+    close_result = reflow_module.reflow_merged_line("</example>")
+    assert close_result == ["</example>"]
+
+
+def test_reflow_merged_line_recognizes_yaml_delimiter_via_constant() -> None:
+    """YAML delimiter detection uses imported constant."""
+    assert reflow_module.reflow_merged_line("---") == ["---"]
+
+
+def test_reflow_merged_line_preserves_long_markdown_reference_definition() -> None:
+    """Lines matching reference definitions survive reflow without paragraph wrapping."""
+    long_url_token = "x" * 90
+    line = f"[bugbot-ref]: https://example.com/{long_url_token}"
+    stripped_line = line.strip()
+    maximum_width = reflow_module.MAX_WIDTH
+    assert len(stripped_line) > maximum_width
+    assert reflow_module.REF_DEF_RE.match(stripped_line) is not None
+    assert reflow_module.reflow_merged_line(line) == [stripped_line]
+
+
+def test_wrap_long_bash_fence_lines_uses_continuation_marker_for_long_lines() -> None:
+    """Wrapped continuation lines use the bash continuation marker."""
+    long_line = "echo " + "word " * 20
+    all_input_lines = ["```bash", long_line, "```"]
+    all_result_lines = reflow_module.wrap_long_bash_fence_lines(all_input_lines)
+    wrapped_content = all_result_lines[1:-1]
+    assert len(wrapped_content) > 1, "Line must be long enough to wrap"
+    assert wrapped_content[-1].lstrip(), "Final segment must have content"
+    assert all(len(each) <= reflow_module.MAX_WIDTH for each in wrapped_content), (
+        "All wrapped lines must be within MAX_WIDTH"
+    )
+
+
+def test_reflow_uses_config_constant_for_continuation_marker_width() -> None:
+    """The bash continuation marker width must come from config, not inline."""
+    module_path = _SCRIPTS_DIRECTORY / "reflow_skill_md.py"
+    source = module_path.read_text(encoding="utf-8")
+    assert "BASH_CONTINUATION_MARKER_WIDTH" in source, (
+        "reflow_skill_md.py must import BASH_CONTINUATION_MARKER_WIDTH from config"
+    )
+

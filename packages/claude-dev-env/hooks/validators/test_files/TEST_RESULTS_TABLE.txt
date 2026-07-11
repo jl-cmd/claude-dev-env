@@ -1,0 +1,60 @@
+================================================================================
+REACT CLASS COMPONENT VALIDATOR - COMPREHENSIVE TEST RESULTS
+================================================================================
+
+TEST | FILE                              | EXPECTED    | ACTUAL      | STATUS
+-----|-----------------------------------|-------------|-------------|--------
+01   | 01_basic_component.tsx            | CAUGHT      | CAUGHT      | PASS ✓
+02   | 02_component_without_react.tsx    | CAUGHT      | CAUGHT      | PASS ✓
+03   | 03_pure_component.tsx             | CAUGHT      | NOT CAUGHT  | FAIL ✗ GAP1
+04   | 04_pure_component_import.tsx      | CAUGHT      | NOT CAUGHT  | FAIL ✗ GAP1
+05   | 05_typescript_generics.tsx        | CAUGHT      | CAUGHT      | PASS ✓
+06   | 06_typescript_two_generics.tsx    | CAUGHT      | CAUGHT      | PASS ✓
+07   | 07_multiline_declaration.tsx      | CAUGHT      | CAUGHT      | PASS ✓
+08   | 08_error_boundary_valid.tsx       | ALLOWED     | ALLOWED     | PASS ✓
+09   | 09_error_boundary_with_other.tsx  | CAUGHT(2nd) | NOT CAUGHT  | FAIL ✗ GAP2
+10   | 10_inheritance_chain.tsx          | CAUGHT(1st) | CAUGHT(1st) | PASS ✓*
+11   | 11_ts_file.ts                     | IGNORED     | IGNORED     | PASS ✓
+12   | 12_non_react_class.tsx            | ALLOWED     | ALLOWED     | PASS ✓
+13   | 13_functional_component.tsx       | ALLOWED     | ALLOWED     | PASS ✓
+14   | 14_indented_class.tsx             | CAUGHT      | CAUGHT      | PASS ✓
+15   | 15_getDerivedStateFromError.tsx   | ALLOWED     | ALLOWED     | PASS ✓
+16   | 16_mixed_components.tsx           | CAUGHT(2)   | CAUGHT(1)   | FAIL ✗ GAP1
+
+SUMMARY:
+--------
+Total Tests:           16
+Passes:                11 (69%)
+Failures:              5  (31%)
+Critical Gaps:         2  (GAP1, GAP2)
+
+* Test 10: Only catches base class, not child (documented limitation - GAP3)
+
+================================================================================
+GAPS IDENTIFIED:
+================================================================================
+
+GAP 1: PureComponent Not Detected (CRITICAL)
+---------------------------------------------
+Affected Tests: 03, 04, 16
+Pattern Missing: React.PureComponent, PureComponent
+Fix: Add to regex pattern
+Impact: HIGH - Common bypass route
+
+GAP 2: File-Level Error Boundary Exception (MEDIUM)
+----------------------------------------------------
+Affected Tests: 09
+Issue: Entire file skipped if error boundary found
+Fix: Class-level detection (complex)
+Impact: MEDIUM - Rare edge case
+
+GAP 3: Inheritance Chain Detection (LOW)
+-----------------------------------------
+Affected Tests: 10 (partial)
+Issue: Only direct inheritance caught
+Fix: Document limitation
+Impact: LOW - Base class caught anyway
+
+================================================================================
+RECOMMENDATION: Fix GAP 1 immediately (5-minute regex update)
+================================================================================

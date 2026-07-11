@@ -1,0 +1,25 @@
+============================= test session starts =============================
+platform -- Python X.Y.Z, pytest-X.Y.Z -- python
+cachedir: .pytest_cache
+benchmark: 5.1.0 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: hooks/validators
+plugins: anyio-4.9.0, asyncio-1.1.0, benchmark-5.1.0, cov-6.2.1, mock-3.14.1
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 88 items / 2 errors
+
+=================================== ERRORS ====================================
+___ ERROR collecting test_files/skip_decorators/test_04_skip_with_parens.py ___
+test_files\skip_decorators\test_04_skip_with_parens.py:6: in <module>
+    @skip()
+     ^^^^^^
+E   TypeError: skip() missing 1 required positional argument: 'reason'
+_____________ ERROR collecting test_files/test_async_functions.py _____________
+test_files\test_async_functions.py:11: in <module>
+    @asyncio.coroutine
+     ^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'asyncio' has no attribute 'coroutine'. Did you mean: 'coroutines'?
+=========================== short test summary info ===========================
+ERROR test_files/skip_decorators/test_04_skip_with_parens.py - TypeError: ski...
+ERROR test_files/test_async_functions.py - AttributeError: module 'asyncio' h...
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 2 errors in 0.14s ==============================

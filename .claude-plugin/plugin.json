@@ -1,0 +1,9 @@
+{
+  "name": "claude-dev-env",
+  "description": "Code standards, rules, hooks, agents, and commands for consistent Claude Code development across repos",
+  "author": {
+    "name": "jl-cmd"
+  },
+  "version": "1.0.0",
+  "license": "MIT"
+}

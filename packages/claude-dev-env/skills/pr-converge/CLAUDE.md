@@ -1,0 +1,31 @@
+# pr-converge skill
+
+Drives a draft PR to convergence by driving the internal passes to clean first — a code-review pass and a bugteam audit — then running Cursor Bugbot and Copilot as terminal confirmation gates, applying TDD fixes, posting inline replies, and re-triggering the external reviewers each tick until all are clean on the same HEAD and the PR is mergeable.
+
+**Trigger:** `/pr-converge`, "drive PR to convergence", "loop bugbot and bugteam", "babysit bugbot and bugteam", "until both are clean", "converge this PR".
+
+## Key files
+
+| File | Purpose |
+|---|---|
+| `SKILL.md` | Full tick workflow, pre-flight checks, state schema, budget-aware tick boundaries, stop conditions |
+| `pr_converge_skill_constants/constants.py` | Runtime and API constants (bot logins, review states, GH API path templates, regex patterns) |
+
+## Subdirectories
+
+| Directory | Role |
+|---|---|
+| `pr_converge_skill_constants/` | Importable constants module shared by skill scripts |
+| `reference/` | Per-tick steps, convergence gates, fix protocol, obstacle runbooks, state schema, stop conditions, examples |
+| `scripts/` | Python helpers (bugbot check, convergence check, Copilot review fetcher, fix-reply poster, reflow tool) and their tests |
+| `workflows/` | ScheduleWakeup loop pacing specification |
+
+## Conventions
+
+- Each invocation runs one tick. The next tick is scheduled via `ScheduleWakeup` unless convergence or a stop condition has been reached.
+- Loop state persists to `$CLAUDE_JOB_DIR/pr-converge-state.json` between ticks.
+- The pre-flight gate requires `EnterWorktree` before any file read or API call, and confirms `ScheduleWakeup` is in the tool list.
+- All findings and PR reports state verified facts only — no hedging language.
+- The GitHub MCP (`pull_request_read`, `pull_request_review_write`) is the primary path for PR inspection; `gh api` is the fallback.
+- Three step-scoped agents (`fix_executor`, `thread_sweep`, `copilot_watch`) persist across ticks via the `persistent_agents` map in loop state; each tick resumes them with `SendMessage` and spawns a fresh named agent when a stored id is dead.
+- The tick delegates shared mechanics to five sibling sub-skills: `reviewer-gates` (opt-out, Copilot quota, Bugbot trigger), `pr-scope-resolve` (target resolution), `pr-fix-protocol` (fix sequence + unresolved-thread sweep), `post-audit-findings` (audit posting), and `pr-loop-lifecycle` (run open/close).

@@ -1,0 +1,68 @@
+node_modules/
+package-lock.json
+
+__pycache__/
+.pytest_cache/
+
+# Logs
+*.log
+
+# Local tooling state
+.serena/
+.claude/worktrees/
+
+.planning/
+_npv/
+
+/docs/references/bdd in action.pdf
+**/bdd in action.pdf
+
+# Bugteam workflow artifacts
+.bugteam-pr*-loop*.outcomes.xml
+post_pr_replies.ps1
+
+# Eval artifacts
+eval*
+eval_*
+eval-*
+**/eval_*
+**/eval-*
+
+# Draft prompt artifacts (file-based validation loop)
+data/prompts/.draft-prompt.xml
+
+# Per-user project-path registry; lives in ~/.claude/ and must never land in the repo
+project-paths.json
+**/project-paths.json
+
+# Per-machine claude fallback chain; lives in ~/.claude/ and must never land in the repo
+claude-chain.json
+**/claude-chain.json
+
+# Private local identity (NAS values, fan-out owner scopes); the committed placeholder
+# template is config/local-identity.example.json
+config/local-identity.json
+
+# Local environment variables for packages/claude-dev-env/
+packages/claude-dev-env/.env
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+
+# Self-improve eval data artifacts
+packages/claude-dev-env/skills/self-improve-pr-converge/self-improve-eval-data/
+packages/claude-dev-env/skills/self-improve-pr-converge/scripts/self-improve-eval-data/
+**/self-improve-eval-data/*.temp-*
+
+# Local working documents — never committed per git-workflow rule
+docs/plans/
+
+# setuptools editable-install build artifacts
+*.egg-info/
+
+# Debug and test-run logs dropped in the repo root by local tooling
+debug-*.log
+pytestdebug.log
+
+# Mangled Windows temp paths created as literal filenames when an unquoted
+# backslash path passes through Git Bash (separators eaten, colon encoded)
+*AppDataLocalTemp*

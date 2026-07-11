@@ -1,0 +1,36 @@
+name: Sync AI Rules
+
+on:
+  repository_dispatch:
+    types: [sync-ai-rules]
+  workflow_dispatch:
+    inputs:
+      force_initial_overwrite:
+        description: "Force overwrite of existing non-bot-managed content"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sync AI review rules to both destinations
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SOURCE_COMMIT: ${{ github.event.client_payload.source_commit }}
+          RAW_URL: ${{ github.event.client_payload.raw_url }}
+          FORCE_INITIAL_OVERWRITE: ${{ inputs.force_initial_overwrite || 'false' }}
+        run: python .github/scripts/sync_ai_rules.py

@@ -1,0 +1,141 @@
+"""Constants for code_rules_gate.py per CODE_RULES centralized-config rule."""
+
+import re
+
+MAX_VIOLATIONS_PER_CHECK: int = 3
+EXPECTED_TUPLE_PAIR_LENGTH: int = 2
+
+FUNCTION_LENGTH_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
+    r"\(defined at line (\d+)\) is (\d+) lines"
+)
+FUNCTION_LENGTH_DEFINITION_LINE_GROUP_INDEX: int = 1
+FUNCTION_LENGTH_SPAN_GROUP_INDEX: int = 2
+
+ISOLATION_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
+    r"\(defined at line (\d+), spanning (\d+) lines\)"
+)
+ISOLATION_DEFINITION_LINE_GROUP_INDEX: int = 1
+ISOLATION_SPAN_GROUP_INDEX: int = 2
+
+BANNED_NOUN_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
+    r"\(binding span at line (\d+), spanning (\d+) lines\)"
+)
+BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX: int = 1
+BANNED_NOUN_SPAN_GROUP_INDEX: int = 2
+
+DUPLICATE_BODY_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
+    r"\(duplicate body span at line (\d+), spanning (\d+) lines\)"
+)
+DUPLICATE_BODY_DEFINITION_LINE_GROUP_INDEX: int = 1
+DUPLICATE_BODY_SPAN_GROUP_INDEX: int = 2
+
+ALL_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset(
+    {".py", ".js", ".ts", ".tsx", ".jsx"}
+)
+
+ALL_LITERAL_KEYWORD_EXEMPTIONS: frozenset[str] = frozenset(
+    {"true", "false", "none", "null"}
+)
+
+CONFIG_PATH_SEGMENT: str = "/config/"
+
+TESTS_PATH_SEGMENT: str = "/tests/"
+
+ALL_TEST_FILENAME_SUFFIXES: tuple[str, ...] = ("_test.py",)
+
+ALL_TEST_FILENAME_GLOB_SUFFIXES: tuple[str, ...] = (
+    ".test.",
+    ".spec.",
+)
+
+TEST_CONFTEST_FILENAME: str = "conftest.py"
+
+TEST_FILENAME_PREFIX: str = "test_"
+
+MINIMUM_COLUMN_NAME_LENGTH_AFTER_FIRST_CHAR: int = 2
+
+COLUMN_KEY_PATTERN_TEMPLATE: str = r"^[a-z][a-z0-9_]{{{minimum_length},}}$"
+
+GIT_NAME_STATUS_ADDED_PREFIX: str = "A"
+
+GIT_NAME_STATUS_RENAMED_PREFIX: str = "R"
+
+EXPECTED_RENAME_COLUMN_COUNT: int = 3
+
+EXPECTED_NON_RENAME_COLUMN_COUNT: int = 2
+
+PYTHON_FILE_EXTENSION: str = ".py"
+
+ALL_GIT_DIFF_CACHED_NAME_ONLY_NULL_TERMINATED_COMMAND: tuple[str, ...] = (
+    "git",
+    "diff",
+    "--cached",
+    "--name-only",
+    "-z",
+)
+
+ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX: tuple[str, ...] = (
+    "git",
+    "diff",
+    "--name-only",
+    "-z",
+)
+
+
+ALL_PYTEST_MODULE_INVOCATION: tuple[str, ...] = (
+    "-m",
+    "pytest",
+    "-q",
+)
+
+CODE_RULES_GATE_PYTHON_ENV_VAR: str = "CODE_RULES_GATE_PYTHON"
+
+CODE_RULES_GATE_PYTHONPATH_ENV_VAR: str = "CODE_RULES_GATE_PYTHONPATH"
+
+PYTHONPATH_ENV_VAR: str = "PYTHONPATH"
+
+ALL_VENV_DIRECTORY_NAMES: tuple[str, ...] = (".venv", "venv")
+
+ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS: tuple[str, ...] = ("Scripts", "python.exe")
+
+ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS: tuple[str, ...] = ("bin", "python")
+
+STAGED_PYTEST_TIMEOUT_SECONDS: int = 600
+
+MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS: int = 24000
+
+COMMAND_LINE_ARGUMENT_SEPARATOR_LENGTH: int = 1
+
+STAGED_TEST_FAILURE_HEADER: str = (
+    "code_rules_gate: staged test file(s) failed under pytest; commit blocked."
+)
+
+PYTEST_INI_FILENAME: str = "pytest.ini"
+
+PYPROJECT_TOML_FILENAME: str = "pyproject.toml"
+
+SETUP_CFG_FILENAME: str = "setup.cfg"
+
+TOX_INI_FILENAME: str = "tox.ini"
+
+PYPROJECT_PYTEST_CONFIG_SECTION: str = "[tool.pytest.ini_options]"
+
+SETUP_CFG_PYTEST_CONFIG_SECTION: str = "[tool:pytest]"
+
+TOX_INI_PYTEST_CONFIG_SECTION: str = "[pytest]"
+
+ALL_PYTEST_CONFIG_FILE_SECTIONS: tuple[tuple[str, str | None], ...] = (
+    (PYTEST_INI_FILENAME, None),
+    (PYPROJECT_TOML_FILENAME, PYPROJECT_PYTEST_CONFIG_SECTION),
+    (SETUP_CFG_FILENAME, SETUP_CFG_PYTEST_CONFIG_SECTION),
+    (TOX_INI_FILENAME, TOX_INI_PYTEST_CONFIG_SECTION),
+)
+
+STAGED_TEST_GROUP_FAILURE_MESSAGE: str = (
+    "code_rules_gate: staged test group rooted at {group_root} "
+    "failed under pytest; commit blocked."
+)
+
+MINIMUM_STAGED_PYTEST_PYTHON_MAJOR: int = 3
+
+MINIMUM_STAGED_PYTEST_PYTHON_MINOR: int = 12

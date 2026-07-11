@@ -1,0 +1,97 @@
+# Stop conditions
+
+The workflow ends one of two ways: converged (PR marked ready) or blocked. A
+blocker exit returns `{ converged: false, rounds, finalSha, blocker }`, and the
+skill still runs teardown (revoke permissions, final report).
+
+## Blockers (end the run short of ready)
+
+- **Iteration cap** — 20 loop iterations pass without a full convergence-check
+  pass. The iteration counter increments on every pass through any phase, so a
+  convergence-check gate that no round can clear (for example a `mergeable_state`
+  stuck at `blocked`, `behind`, or `unknown` that a rebase does not fix) and a
+  Copilot gate agent that keeps dying and retrying on the same HEAD both reach
+  the cap this way. `blocker` reports `iteration cap reached`.
+- **Fix stalled** — the fix lens reports no push (`pushed: false`) without
+  resolving every finding thread, returns a SHA equal to the prior HEAD on a
+  case-folded common prefix (a full or abbreviated SHA of the unchanged commit
+  both count), or returns null for a round's findings. HEAD did not move and the
+  threads were not all resolved, so the next round would re-raise the same
+  findings. The run ends with a `blocker` that names the finding count and the
+  stalled HEAD. A round whose every finding carries no GitHub thread
+  (`replyToCommentId: null` on each) and whose fix reports
+  `resolvedWithoutCommit: true` is also a stall: it moves no code and resolves no
+  thread, so re-converging on the unchanged HEAD would loop the same finding to
+  the iteration cap. The `blocker` names the in-memory finding count and the
+  stalled HEAD. An all-stale round that makes no commit but resolves every
+  finding thread (`resolvedWithoutCommit: true` with at least one thread-bearing
+  finding) is not a stall — the run re-converges on the unchanged HEAD and
+  reaches the terminal Bugbot, Copilot, and convergence gates.
+- **Static-sweep stalled** — the deterministic static sweep (`code_rules_gate.py
+  --base origin/main`, `ruff`, `mypy`, stem-matched `pytest`) raises gate or test
+  failures the fixer cannot clear on the current HEAD, so HEAD does not move. The
+  reading lenses never run on a sweep-dirty HEAD, so the run ends with a
+  static-sweep stall `blocker` naming the failure count and the stalled HEAD
+  rather than looping to the iteration cap.
+- **Mark-ready failed** — the convergence check passes but the mark-ready step
+  cannot confirm the PR left draft state (`gh pr ready` errored, or the draft
+  re-query still reports true). The workflow does not report `converged: true`;
+  the run ends with a `blocker` naming the failed ready transition.
+- **Clean-audit post blocked** — every review lens is clean on HEAD, but the
+  CLEAN bugteam review cannot be posted (the `post_audit_thread.py` post is
+  denied, errors, or its agent dies). The convergence gate's bugteam-review
+  check can never pass without that CLEAN review, so the run stops rather than
+  re-converge to the iteration cap. The `blocker` names the post failure and the
+  HEAD. Unblock a permission denial by allowing `post_audit_thread.py` with a
+  Bash permission rule. Unblock any other failure by creating a fresh temporary
+  file whose exact content is an empty JSON array (`[]`) and re-running the run's
+  own `post_audit_thread.py --skill bugteam --state CLEAN` command for the
+  lens-verified HEAD with that file as `--findings-json`; then re-run the
+  workflow. A CLEAN post carries an empty findings array by construction, so this
+  re-issues the run's own command for the outcome the lenses already established
+  for that HEAD.
+- **No review lens reviewed HEAD** — a round can end with no lens having reviewed
+  the HEAD three ways: the preflight resolves no SHA, every lens agent dies, or
+  every lens is down or disabled. A single such round retries on the next round.
+  Three consecutive no-lens-reviewed rounds (any mix of the three causes) reach
+  `CONFIG.maxConsecutiveNoLensRounds` and stop the run with a `blocker` that names
+  the consecutive count and only the causes that actually occurred, rather than
+  looping to the iteration cap. Any round in which at least one lens reviews the
+  HEAD resets the consecutive count.
+
+## Not a blocker (the run continues)
+
+- **Terminal Bugbot gate down or disabled** — the terminal Bugbot gate runs once
+  the internal lenses are clean. When Cursor Bugbot is off for the run (the
+  default unless `CLAUDE_REVIEWS_ENABLED` lists `bugbot`) or opted out via
+  `CLAUDE_REVIEWS_DISABLED`, the gate spawns no agent and passes to the Copilot
+  gate with `bugbotDown` set. When Bugbot is enabled but never produces a check
+  run or review after the gate poll budget, the gate returns down the same way.
+  The run continues, and the convergence check runs with `--bugbot-down` so its
+  Bugbot gate is bypassed.
+- **Copilot down or out of quota** — when Copilot posts an out-of-usage notice on
+  the current HEAD (the user who requested the review reached their quota limit)
+  rather than a code review, or surfaces no review at all after the configured cap, the
+  Copilot gate returns `down: true`. The run logs a notice, runs the convergence
+  check with `--copilot-down` (the Copilot review gate and the
+  pending-requested-reviews gate bypassed), and marks the PR ready. `copilotNote`
+  records the bypass for the final report.
+- **A lens agent dies** — when one parallel reading lens returns null (a terminal
+  agent failure), the round proceeds on the surviving lenses. A real defect it
+  would have caught surfaces in a later round or at the convergence check. A dead
+  terminal Bugbot gate agent (null result) is a retry rather than an approval, so
+  the gate re-runs on the same HEAD rather than treating a dead agent as a clean
+  Bugbot verdict.
+- **Every lens agent dies (a single round)** — when all three parallel reading
+  lenses return null in the same round, the round is a failure, not a clean: the
+  workflow posts no CLEAN bugteam artifact and does not advance to the terminal
+  gates. It re-resolves HEAD and retries on the next round. This is a
+  no-lens-reviewed round, so consecutive occurrences are bounded by the
+  no-review-lens cap in the blockers above, not just the iteration cap.
+
+## User stop
+
+Stopping the background workflow (`TaskStop`, or the user halting the run) ends
+it where it stands. Re-launching `/autoconverge` starts a fresh run; the
+workflow journal allows resuming the prior run from its last completed step with
+`Workflow({ scriptPath, resumeFromRunId })`.

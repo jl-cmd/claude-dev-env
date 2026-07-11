@@ -1,0 +1,294 @@
+"""Tests for check_docstring_runon_sentence — the plain-illustrative-docstrings backstop.
+
+A readable docstring breaks its narrative into short sentences a general developer
+follows on first read. The one mechanical mark of a dense wall is a single run-on
+sentence: many words strung together with an em-dash or a semicolon. This check
+flags that mark in module, class, and public-function docstring narrative prose,
+and leaves the "is it illustrative" judgment to the audit lane.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+from types import ModuleType
+
+_HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+if _HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _HOOKS_DIRECTORY)
+
+from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
+    ALL_DOCSTRING_ARGS_SECTION_HEADERS,
+    ALL_DOCSTRING_TERMINATING_SECTION_HEADERS,
+)
+
+
+def _load_enforcer_module() -> ModuleType:
+    module_path = Path(__file__).parent / "code_rules_enforcer.py"
+    spec = importlib.util.spec_from_file_location("code_rules_enforcer", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+code_rules_enforcer = _load_enforcer_module()
+
+
+def check_docstring_runon_sentence(content: str, file_path: str) -> list[str]:
+    return code_rules_enforcer.check_docstring_runon_sentence(content, file_path)
+
+
+def validate_content(content: str, file_path: str, old_content: str) -> list[str]:
+    return code_rules_enforcer.validate_content(content, file_path, old_content)
+
+
+PRODUCTION_FILE_PATH = "/project/src/run_lifecycle.py"
+TEST_FILE_PATH = "/project/src/test_run_lifecycle.py"
+HOOK_INFRASTRUCTURE_PATH = "/home/user/.claude/hooks/blocking/example.py"
+
+
+def _run_lifecycle_module() -> str:
+    return (
+        '"""Generic run-lifecycle plumbing for the STP version promoter run.\n'
+        "\n"
+        "Owns the SIGINT install/restore/installability check, the atexit terminal-record\n"
+        "registration, and the interrupted-run finalizer — the non-promoter-specific\n"
+        "machinery that brackets a run so the JSONL artifact always carries a terminal\n"
+        "record and an in-flight theme record on interrupt.\n"
+        '"""\n'
+        "\n"
+        "def install_signal_handler() -> None:\n"
+        "    return None\n"
+    )
+
+
+def _approved_bar_module() -> str:
+    return (
+        '"""Make sure a run\'s log always records how it ended.\n'
+        "\n"
+        "So when you reopen the report, the last line tells you the truth: the run\n"
+        "finished cleanly, or you hit Ctrl-C while theme 42 was processing, or it died\n"
+        "on an unexpected error. Without this, a killed run looks identical to a clean\n"
+        "one — and you're debugging blind.\n"
+        '"""\n'
+        "\n"
+        "def describe_outcome() -> None:\n"
+        "    return None\n"
+    )
+
+
+def _class_docstring_runon() -> str:
+    return (
+        "class RunRecorder:\n"
+        '    """Owns the SIGINT install and restore step, the atexit record hook, and the\n'
+        "    interrupted-run finalizer — the plumbing that brackets a run so the artifact\n"
+        "    always carries a terminal record and an in-flight theme record on interrupt.\n"
+        '    """\n'
+        "\n"
+        "    def record(self) -> None:\n"
+        "        return None\n"
+    )
+
+
+def _normal_short_docstring() -> str:
+    return (
+        "def summarize_run() -> str:\n"
+        '    """Write the run summary.\n'
+        "\n"
+        "    Each line names one theme and its final outcome.\n"
+        '    """\n'
+        '    return ""\n'
+    )
+
+
+def _long_args_line_outside_narrative() -> str:
+    return (
+        "def configure_run(option_name: str) -> None:\n"
+        '    """Set one option for the run.\n'
+        "\n"
+        "    Args:\n"
+        "        option_name: the name of the option to set, described here in a needlessly\n"
+        "            long sentence that runs far past thirty words and even carries an\n"
+        "            em-dash — yet the check stays silent because every word here sits after\n"
+        "            the Args header and therefore outside the inspected narrative entirely.\n"
+        '    """\n'
+        "    return None\n"
+    )
+
+
+def _private_function_runon() -> str:
+    return (
+        "def _install_handlers() -> None:\n"
+        '    """Owns the SIGINT install and restore step, the atexit record hook, and the\n'
+        "    interrupted-run finalizer — the plumbing that brackets a run so the artifact\n"
+        "    always carries a terminal record and an in-flight theme record on interrupt.\n"
+        '    """\n'
+        "    return None\n"
+    )
+
+
+def _property_method_runon() -> str:
+    return (
+        "class Widget:\n"
+        "    @property\n"
+        "    def label(self) -> str:\n"
+        '        """Owns the SIGINT install and restore step, the atexit record hook, and the\n'
+        "        interrupted-run finalizer — the plumbing that brackets a run so the artifact\n"
+        "        always carries a terminal record and an in-flight theme record on interrupt.\n"
+        '        """\n'
+        '        return "label"\n'
+    )
+
+
+def test_should_flag_run_lifecycle_module_docstring_wall() -> None:
+    issues = check_docstring_runon_sentence(_run_lifecycle_module(), PRODUCTION_FILE_PATH)
+    assert any("run-on" in each for each in issues), (
+        f"Expected the module-docstring wall to flag, got: {issues!r}"
+    )
+    assert any("module" in each for each in issues)
+    assert len(issues) == 1
+
+
+def test_should_not_flag_approved_bar_module_docstring() -> None:
+    issues = check_docstring_runon_sentence(_approved_bar_module(), PRODUCTION_FILE_PATH)
+    assert issues == [], f"The approved bar must pass clean, got: {issues!r}"
+
+
+def test_should_flag_class_docstring_wall() -> None:
+    issues = check_docstring_runon_sentence(_class_docstring_runon(), PRODUCTION_FILE_PATH)
+    assert any("RunRecorder" in each for each in issues), (
+        f"Expected the class-docstring wall to flag, got: {issues!r}"
+    )
+    assert len(issues) == 1
+
+
+def test_should_not_flag_normal_short_docstring() -> None:
+    issues = check_docstring_runon_sentence(_normal_short_docstring(), PRODUCTION_FILE_PATH)
+    assert issues == [], f"A short multi-sentence docstring must not flag, got: {issues!r}"
+
+
+def test_should_not_flag_long_args_line_outside_narrative() -> None:
+    issues = check_docstring_runon_sentence(
+        _long_args_line_outside_narrative(), PRODUCTION_FILE_PATH
+    )
+    assert issues == [], f"The Args section is outside the narrative, got: {issues!r}"
+
+
+def test_should_skip_private_function() -> None:
+    issues = check_docstring_runon_sentence(_private_function_runon(), PRODUCTION_FILE_PATH)
+    assert issues == [], f"Private functions are out of scope, got: {issues!r}"
+
+
+def test_should_skip_property_method() -> None:
+    issues = check_docstring_runon_sentence(_property_method_runon(), PRODUCTION_FILE_PATH)
+    assert issues == [], f"@property methods are exempt, got: {issues!r}"
+
+
+def test_should_skip_test_file() -> None:
+    issues = check_docstring_runon_sentence(_run_lifecycle_module(), TEST_FILE_PATH)
+    assert issues == [], f"Test files exempt, got: {issues!r}"
+
+
+def test_should_skip_hook_infrastructure() -> None:
+    issues = check_docstring_runon_sentence(_run_lifecycle_module(), HOOK_INFRASTRUCTURE_PATH)
+    assert issues == [], f"Hook infrastructure exempt, got: {issues!r}"
+
+
+def test_should_handle_syntax_error_gracefully() -> None:
+    issues = check_docstring_runon_sentence("def broken(\n", PRODUCTION_FILE_PATH)
+    assert issues == [], f"Syntax error must yield no issues, got: {issues!r}"
+
+
+def test_validate_content_surfaces_docstring_runon_wall() -> None:
+    issues = validate_content(_run_lifecycle_module(), PRODUCTION_FILE_PATH, old_content="")
+    matching_issues = [each for each in issues if "run-on" in each]
+    assert matching_issues, f"Expected validate_content to surface the run-on wall, got: {issues!r}"
+
+
+def _attached_cli_flag_double_hyphen() -> str:
+    return (
+        "def gather_remote_reviews() -> None:\n"
+        '    """Read every review the bot left across all the pages it produced and\n'
+        "    gather them into one ordered list by paging through the endpoint with the\n"
+        "    --paginate --slurp flags so the newest review across the whole set rises to\n"
+        "    the top of the report for the reader.\n"
+        '    """\n'
+        "    return None\n"
+    )
+
+
+def _spaced_double_hyphen_joiner() -> str:
+    return (
+        "def gather_remote_reviews() -> None:\n"
+        '    """Read every review the bot left across all the pages it produced and\n'
+        "    gather them into one ordered list so the newest review rises to the top of\n"
+        "    the report -- the single line a tired reader scans first to learn how the\n"
+        "    whole run actually ended today.\n"
+        '    """\n'
+        "    return None\n"
+    )
+
+
+def test_should_not_flag_attached_cli_flag_double_hyphen() -> None:
+    issues = check_docstring_runon_sentence(
+        _attached_cli_flag_double_hyphen(), PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        "An attached --flag token is not a clause joiner and must not flag, "
+        f"got: {issues!r}"
+    )
+
+
+def test_should_flag_spaced_double_hyphen_joiner() -> None:
+    issues = check_docstring_runon_sentence(
+        _spaced_double_hyphen_joiner(), PRODUCTION_FILE_PATH
+    )
+    assert any("run-on" in each for each in issues), (
+        f"A spaced double-hyphen joiner past the word limit must flag, got: {issues!r}"
+    )
+    assert len(issues) == 1
+
+
+def _diagram_first_literal_block() -> str:
+    return (
+        "def emit_tally() -> None:\n"
+        '    """Post the voyage tally so the reader sees how the run ended.\n'
+        "\n"
+        "    A calm voyage versus a halted one::\n"
+        "\n"
+        "        vessel 42 -- halted -> marked mid-voyage while it sailed\n"
+        "        calm — every vessel it carried shows a clean recorded outcome\n"
+        "        OK:   a calm run and a sunk run read differently in the log\n"
+        "        FLAG: a sunk run looks identical to a calm finished run here\n"
+        "    The reader reads the final outcome at a glance.\n"
+        '    """\n'
+        "    return None\n"
+    )
+
+
+def test_should_not_flag_diagram_first_literal_block() -> None:
+    issues = check_docstring_runon_sentence(
+        _diagram_first_literal_block(), PRODUCTION_FILE_PATH
+    )
+    assert issues == [], (
+        "A '::' listing's arrow, em-dash, and OK/FLAG rows sit outside the "
+        f"narrative and must not inflate the run-on count, got: {issues!r}"
+    )
+
+
+def test_docstring_names_every_inspected_section_header() -> None:
+    docstring = code_rules_enforcer.check_docstring_runon_sentence.__doc__
+    assert docstring is not None
+    inspected_headers = set(ALL_DOCSTRING_ARGS_SECTION_HEADERS) | set(
+        ALL_DOCSTRING_TERMINATING_SECTION_HEADERS
+    )
+    missing_headers = sorted(
+        each_header for each_header in inspected_headers if each_header not in docstring
+    )
+    assert missing_headers == [], (
+        "The docstring must name every section header the body cuts the narrative on; "
+        f"missing: {missing_headers!r}"
+    )

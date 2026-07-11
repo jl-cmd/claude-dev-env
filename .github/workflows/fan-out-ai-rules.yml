@@ -1,0 +1,49 @@
+name: Fan-out AI Rules
+
+on:
+  push:
+    branches: [main]
+    paths: ["AGENTS.md"]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  fan-out:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Requires repo variables FANOUT_OWNER_1 and FANOUT_OWNER_2; each token env
+      # name below is the owner upper-cased, hyphens dropped, plus _TOKEN.
+      - name: Mint installation token for the first owner scope
+        id: owner-1-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ vars.FANOUT_OWNER_1 }}
+
+      - name: Mint installation token for the second owner scope
+        id: owner-2-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ vars.FANOUT_OWNER_2 }}
+
+      - name: Enumerate targets, dispatch sync events, and reconcile
+        env:
+          JONECHO_TOKEN: ${{ steps.owner-1-token.outputs.token }}
+          JLCMD_TOKEN: ${{ steps.owner-2-token.outputs.token }}
+          FANOUT_OWNER_SCOPES: ${{ vars.FANOUT_OWNER_1 }},${{ vars.FANOUT_OWNER_2 }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          SOURCE_SHA: ${{ hashFiles('AGENTS.md') }}
+        run: python scripts/fan_out_dispatch.py

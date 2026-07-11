@@ -1,0 +1,1022 @@
+"""Run all pre-push validators and report results.
+
+This script orchestrates all automated validators and produces a unified report.
+Exit code 0 = all checks pass, 1 = violations found.
+"""
+# pragma: no-tdd-gate
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Tuple
+
+from .health_check import get_system_health, get_validator_version, print_health_report
+from .mypy_integration import check_mypy_available, run_mypy_check
+from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
+from .python_style_checks import fix_file
+from .ruff_integration import check_ruff_available, run_ruff_check
+
+
+VALIDATORS_DIR = Path(__file__).parent
+hooks_dir = VALIDATORS_DIR.parent
+package_name = VALIDATORS_DIR.name
+
+_hooks_directory_on_path = str(hooks_dir.resolve())
+if _hooks_directory_on_path not in sys.path:
+    sys.path.insert(0, _hooks_directory_on_path)
+
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
+    apply_edits,
+    edits_for_tool,
+)
+
+
+def _windows_non_unc_working_directory_string(
+    candidate_directory_strings: list[str | None],
+) -> str:
+    """Return the first candidate cwd that is not a UNC path (Windows only)."""
+    for each_candidate in candidate_directory_strings:
+        if each_candidate is None:
+            continue
+        expanded_candidate = str(Path(each_candidate).expanduser())
+        if expanded_candidate.startswith("\\\\"):
+            continue
+        return expanded_candidate
+    current_working_directory = os.getcwd()
+    expanded_current_working_directory = str(Path(current_working_directory).expanduser())
+    if not expanded_current_working_directory.startswith("\\\\"):
+        return expanded_current_working_directory
+    raise RuntimeError(
+        "Cannot find a non-UNC working directory for hook validator subprocesses."
+    )
+
+
+def _hooks_subprocess_working_directory_and_environment() -> tuple[str, dict[str, str]]:
+    """Return cwd and env for validator subprocesses.
+
+    On Windows, ``CreateProcess`` rejects some UNC working directories (invalid
+    directory name). When the hooks tree resolves to UNC, use a local temp cwd
+    and put the hooks directory on ``PYTHONPATH`` so ``python -m validators.*``
+    still resolves.
+    """
+    hooks_directory_string = str(hooks_dir.resolve())
+    environment = os.environ.copy()
+    previous_pythonpath = environment.get("PYTHONPATH", "")
+    environment["PYTHONPATH"] = (
+        hooks_directory_string
+        + (os.pathsep + previous_pythonpath if previous_pythonpath else "")
+    )
+    working_directory_string = hooks_directory_string
+    if sys.platform == "win32" and working_directory_string.startswith("\\\\"):
+        windows_temp_fallback_directory = str(Path(r"C:\Windows\Temp"))
+        working_directory_string = _windows_non_unc_working_directory_string(
+            [
+                os.environ.get("TEMP"),
+                os.environ.get("TMP"),
+                tempfile.gettempdir(),
+                windows_temp_fallback_directory,
+            ]
+        )
+    return working_directory_string, environment
+
+
+def invoke_validator_module(module_stem: str, forwarded_file_paths: List[str]) -> subprocess.CompletedProcess[str]:  # pragma: no-tdd-gate
+    """Run a sibling validator as ``python -m validators.<module_stem>``.
+
+    The subprocess uses the hooks tree on ``PYTHONPATH`` (and normally ``cwd``
+    there). On Windows, if that path is UNC, ``cwd`` falls back to a local temp
+    directory so ``CreateProcess`` succeeds.
+    """
+    qualified_module = ".".join([package_name, module_stem])
+    working_directory_string, environment = (
+        _hooks_subprocess_working_directory_and_environment()
+    )
+    return subprocess.run(
+        [sys.executable, "-m", qualified_module, *forwarded_file_paths],
+        capture_output=True,
+        text=True,
+        cwd=working_directory_string,
+        env=environment,
+    )
+
+
+def run_validators_entrypoint_subprocess(
+    extra_arguments: List[str],
+    stdin_text: Optional[str] = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run ``python -m validators.run_all_validators`` with a Windows-safe cwd.
+
+    Args:
+        extra_arguments: Argument vector appended after the module name.
+        stdin_text: Text replayed as the subprocess stdin, or None to leave
+            stdin empty. The PreToolUse gate mode reads its payload from stdin,
+            so a caller exercising ``--pre-tool-use`` passes the payload here.
+
+    Returns:
+        The completed subprocess carrying its captured stdout and stderr.
+    """
+    working_directory_string, environment = (
+        _hooks_subprocess_working_directory_and_environment()
+    )
+    entry_module = f"{package_name}.run_all_validators"
+    return subprocess.run(
+        [sys.executable, "-m", entry_module, *extra_arguments],
+        capture_output=True,
+        text=True,
+        cwd=working_directory_string,
+        env=environment,
+        input=stdin_text,
+    )
+
+
+@dataclass(frozen=True)
+class TimingMetrics:
+    """Timing information for validator runs (immutable)."""
+
+    total_seconds: float
+    validator_times: Dict[str, float]
+
+
+def create_timing_metrics(validator_times: Dict[str, float]) -> TimingMetrics:
+    """Create a TimingMetrics instance from validator times.
+
+    Args:
+        validator_times: Dict mapping validator names to elapsed seconds
+
+    Returns:
+        TimingMetrics with calculated total
+    """
+    total = sum(validator_times.values())
+    return TimingMetrics(
+        total_seconds=total,
+        validator_times=dict(validator_times),
+    )
+
+
+def add_timing(metrics: TimingMetrics, name: str, seconds: float) -> TimingMetrics:
+    """Add a timing entry, returning a new TimingMetrics instance.
+
+    Args:
+        metrics: Existing TimingMetrics
+        name: Validator name
+        seconds: Elapsed time in seconds
+
+    Returns:
+        New TimingMetrics with added entry
+    """
+    new_times = dict(metrics.validator_times)
+    new_times[name] = seconds
+    return create_timing_metrics(new_times)
+
+
+def format_timing_report(metrics: TimingMetrics) -> str:
+    """Format timing metrics as a report string.
+
+    Args:
+        metrics: TimingMetrics to format
+
+    Returns:
+        Formatted report string
+    """
+    lines = ["", "Timing:"]
+    for name, seconds in sorted(metrics.validator_times.items(), key=lambda x: -x[1]):
+        lines.append(f"  {name}: {seconds:.3f}s")
+    lines.append(f"  Total: {metrics.total_seconds:.3f}s")
+    return "\n".join(lines)
+
+
+def print_header() -> None:
+    """Print the header with version information."""
+    version = get_validator_version()
+    print("=" * 60)
+    print(f"PRE-PUSH VALIDATOR RESULTS (v{version})")
+    print("=" * 60)
+
+
+def build_json_output(
+    results: List["ValidatorResult"],
+    metrics: TimingMetrics,
+    include_timing: bool,
+) -> Dict[str, object]:
+    """Build JSON output dictionary.
+
+    Args:
+        results: List of validator results
+        metrics: TimingMetrics instance
+        include_timing: Whether to include timing data
+
+    Returns:
+        Dict suitable for JSON serialization
+    """
+    return {
+        "version": get_validator_version(),
+        "timestamp": datetime.now().isoformat(),
+        "results": [
+            {"name": r.name, "checks": r.checks, "passed": r.passed, "output": r.output}
+            for r in results
+        ],
+        "timing": metrics.validator_times if include_timing else None,
+    }
+
+
+@dataclass(frozen=True)
+class ValidatorResult:
+    """Result from running a validator."""
+
+    name: str
+    checks: str
+    passed: bool
+    output: str
+    skipped: bool = False
+
+
+def run_with_fallback(
+    validator_func: Callable[[], ValidatorResult],
+    fallback_name: str,
+    fallback_checks: str,
+) -> ValidatorResult:
+    """Run a validator with graceful error handling.
+
+    Args:
+        validator_func: Validator function to run
+        fallback_name: Name to use in error result
+        fallback_checks: Check numbers for error result
+
+    Returns:
+        ValidatorResult, either from validator or skipped fallback
+    """
+    try:
+        return validator_func()
+    except FileNotFoundError as error:
+        return ValidatorResult(
+            name=fallback_name,
+            checks=fallback_checks,
+            passed=False,
+            output=f"Validator not found: {error} (skipped)",
+            skipped=True,
+        )
+    except Exception as error:
+        return ValidatorResult(
+            name=fallback_name,
+            checks=fallback_checks,
+            passed=False,
+            output=f"Validator error: {error} (skipped)",
+            skipped=True,
+        )
+
+
+def run_python_style_checks(files: List[Path]) -> ValidatorResult:
+    """Run Python style checks on files."""
+    py_files = [f for f in files if f.suffix == ".py"]
+    if not py_files:
+        return ValidatorResult(
+            name="Python Style",
+            checks="1,2,3,4",
+            passed=True,
+            output="No Python files to check",
+        )
+
+    result = invoke_validator_module("python_style_checks", [str(f) for f in py_files])
+
+    return ValidatorResult(
+        name="Python Style",
+        checks="1,2,3,4",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_test_safety_checks(files: List[Path]) -> ValidatorResult:
+    """Run test safety checks on test files."""
+    test_files = [f for f in files if "test" in f.name.lower() and f.suffix == ".py"]
+    if not test_files:
+        return ValidatorResult(
+            name="Test Safety",
+            checks="11,21",
+            passed=True,
+            output="No test files to check",
+        )
+
+    result = invoke_validator_module("test_safety_checks", [str(f) for f in test_files])
+
+    return ValidatorResult(
+        name="Test Safety",
+        checks="11,21",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def get_project_root() -> Optional[Path]:
+    """Get project root by finding git root.
+
+    Uses ``git -C <hooks_dir>`` to pin git's working tree to the hooks
+    directory without setting the subprocess cwd. On Windows, ``CreateProcess``
+    rejects some UNC working directories, so setting ``cwd=hooks_dir`` would
+    fail when ``hooks_dir`` resolves to a UNC path. The ``-C`` flag tells git
+    to operate as if started in that directory while the subprocess itself
+    inherits a normal cwd from the caller. Anchoring git to ``hooks_dir`` is
+    required so the lookup resolves to this repo even when the caller's cwd
+    points at an unrelated git checkout (e.g., the user's home), avoiding
+    validators that ``rglob`` over tens of thousands of unrelated files.
+    """
+    completed_git_lookup = subprocess.run(
+        ["git", "-C", str(hooks_dir), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+    )
+    if completed_git_lookup.returncode == 0:
+        return Path(completed_git_lookup.stdout.strip())
+    return None
+
+
+def run_file_structure_checks(project_root: Optional[Path] = None) -> ValidatorResult:
+    """Run file structure checks on project."""
+    if project_root is None:
+        project_root = get_project_root()
+
+    if project_root is None:
+        return ValidatorResult(
+            name="File Structure",
+            checks="14,15",
+            passed=True,
+            output="Not in a git repository - skipping",
+        )
+
+    result = invoke_validator_module("file_structure_checks", [str(project_root)])
+
+    return ValidatorResult(
+        name="File Structure",
+        checks="14,15",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_react_checks(files: List[Path]) -> ValidatorResult:
+    """Run React checks on TSX/JSX files."""
+    react_files = [f for f in files if f.suffix in (".tsx", ".jsx")]
+    if not react_files:
+        return ValidatorResult(
+            name="React",
+            checks="17",
+            passed=True,
+            output="No React files to check",
+        )
+
+    result = invoke_validator_module("react_checks", [str(f) for f in react_files])
+
+    return ValidatorResult(
+        name="React",
+        checks="17",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_git_checks() -> ValidatorResult:
+    """Run git/GitHub checks."""
+    result = invoke_validator_module("git_checks", [])
+
+    return ValidatorResult(
+        name="Git/PR Workflow",
+        checks="23,24",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_comment_checks(files: List[Path]) -> ValidatorResult:
+    """Comment preservation is enforced by code_rules_enforcer hook.
+
+    The hook compares old vs new content to block NEW comments and
+    print a stderr advisory when an existing comment is removed. This
+    standalone validator is disabled because it flags ALL comments in
+    existing files, which forces agents to remove them to pass validation.
+    """
+    return ValidatorResult(
+        name="No Comments",
+        checks="26",
+        passed=True,
+        output="Handled by code_rules_enforcer hook (old vs new comparison)",
+    )
+
+
+def run_ruff_checks(files: List[Path]) -> ValidatorResult:
+    """Run ruff for fast Python linting."""
+    if not check_ruff_available():
+        return ValidatorResult(
+            name="Ruff",
+            checks="37",
+            passed=True,
+            output="Ruff not installed - skipping",
+        )
+
+    result = run_ruff_check(files)
+
+    return ValidatorResult(
+        name="Ruff",
+        checks="37",
+        passed=result.passed,
+        output=result.output,
+    )
+
+
+def run_mypy_checks(files: List[Path]) -> ValidatorResult:
+    """Run mypy for static type checking."""
+    if not check_mypy_available():
+        return ValidatorResult(
+            name="Mypy",
+            checks="39,40",
+            passed=True,
+            output="Mypy not installed - skipping",
+        )
+
+    result = run_mypy_check(files)
+
+    return ValidatorResult(
+        name="Mypy",
+        checks="39,40",
+        passed=result.passed,
+        output=result.output[:500] if len(result.output) > 500 else result.output,
+    )
+
+
+def run_abbreviation_checks(files: List[Path]) -> ValidatorResult:
+    """Run abbreviation checks on Python files."""
+    py_files = [f for f in files if f.suffix == ".py"]
+    if not py_files:
+        return ValidatorResult(
+            name="Abbreviations",
+            checks="5",
+            passed=True,
+            output="No Python files to check",
+        )
+
+    result = invoke_validator_module("abbreviation_checks", [str(f) for f in py_files])
+
+    return ValidatorResult(
+        name="Abbreviations",
+        checks="5",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_pr_reference_checks(files: List[Path]) -> ValidatorResult:
+    """Run PR reference checks on code files."""
+    code_files = [f for f in files if f.suffix in (".py", ".ts", ".tsx", ".js", ".jsx")]
+    if not code_files:
+        return ValidatorResult(
+            name="PR References",
+            checks="6",
+            passed=True,
+            output="No code files to check",
+        )
+
+    result = invoke_validator_module("pr_reference_checks", [str(f) for f in code_files])
+
+    return ValidatorResult(
+        name="PR References",
+        checks="6",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_magic_value_checks(files: List[Path]) -> ValidatorResult:
+    """Run magic value checks on Python files."""
+    py_files = [f for f in files if f.suffix == ".py"]
+    if not py_files:
+        return ValidatorResult(
+            name="Magic Values",
+            checks="7",
+            passed=True,
+            output="No Python files to check",
+        )
+
+    result = invoke_validator_module("magic_value_checks", [str(f) for f in py_files])
+
+    return ValidatorResult(
+        name="Magic Values",
+        checks="7",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_useless_test_checks(files: List[Path]) -> ValidatorResult:
+    """Run useless test checks on test files."""
+    test_files = [f for f in files if "test" in f.name.lower() and f.suffix == ".py"]
+    if not test_files:
+        return ValidatorResult(
+            name="Useless Tests",
+            checks="12",
+            passed=True,
+            output="No test files to check",
+        )
+
+    result = invoke_validator_module("useless_test_checks", [str(f) for f in test_files])
+
+    return ValidatorResult(
+        name="Useless Tests",
+        checks="12",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_security_checks(files: List[Path]) -> ValidatorResult:
+    """Run security checks on Python files."""
+    py_files = [f for f in files if f.suffix == ".py"]
+    if not py_files:
+        return ValidatorResult(
+            name="Security",
+            checks="27,28,29",
+            passed=True,
+            output="No Python files to check",
+        )
+
+    result = invoke_validator_module("security_checks", [str(f) for f in py_files])
+
+    return ValidatorResult(
+        name="Security",
+        checks="27,28,29",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_code_quality_checks(files: List[Path]) -> ValidatorResult:
+    """Run code quality checks on Python files."""
+    py_files = [f for f in files if f.suffix == ".py"]
+    if not py_files:
+        return ValidatorResult(
+            name="Code Quality",
+            checks="30,31,32",
+            passed=True,
+            output="No Python files to check",
+        )
+
+    result = invoke_validator_module("code_quality_checks", [str(f) for f in py_files])
+
+    return ValidatorResult(
+        name="Code Quality",
+        checks="30,31,32",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_python_antipattern_checks(files: List[Path]) -> ValidatorResult:
+    """Run Python anti-pattern checks on Python files."""
+    py_files = [f for f in files if f.suffix == ".py"]
+    if not py_files:
+        return ValidatorResult(
+            name="Python Anti-patterns",
+            checks="33,34,35",
+            passed=True,
+            output="No Python files to check",
+        )
+
+    result = invoke_validator_module("python_antipattern_checks", [str(f) for f in py_files])
+
+    return ValidatorResult(
+        name="Python Anti-patterns",
+        checks="33,34,35",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_todo_checks(files: List[Path]) -> ValidatorResult:
+    """Run TODO/FIXME checks on Python files."""
+    py_files = [f for f in files if f.suffix == ".py"]
+    if not py_files:
+        return ValidatorResult(
+            name="TODO Tracking",
+            checks="36",
+            passed=True,
+            output="No Python files to check",
+        )
+
+    result = invoke_validator_module("todo_checks", [str(f) for f in py_files])
+
+    return ValidatorResult(
+        name="TODO Tracking",
+        checks="36",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def run_type_safety_checks(files: List[Path]) -> ValidatorResult:
+    """Run type safety checks on Python files."""
+    py_files = [f for f in files if f.suffix == ".py"]
+    if not py_files:
+        return ValidatorResult(
+            name="Type Safety",
+            checks="39,40",
+            passed=True,
+            output="No Python files to check",
+        )
+
+    result = invoke_validator_module("type_safety_checks", [str(f) for f in py_files])
+
+    return ValidatorResult(
+        name="Type Safety",
+        checks="39,40",
+        passed=result.returncode == 0,
+        output=result.stdout or result.stderr or "All checks passed",
+    )
+
+
+def fix_python_style(files: List[Path]) -> List[str]:
+    """Apply Python style fixes to files.
+
+    Args:
+        files: List of files to fix
+
+    Returns:
+        List of files that were fixed
+    """
+    fixed_files: List[str] = []
+    py_files = [f for f in files if f.suffix == ".py"]
+
+    for file_path in py_files:
+        if fix_file(file_path):
+            fixed_files.append(str(file_path))
+
+    return fixed_files
+
+
+def get_changed_files() -> List[Path]:
+    """Get list of files changed in current commit/staging."""
+    # Try staged files first
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        capture_output=True,
+        text=True,
+    )
+
+    files = result.stdout.strip().split("\n") if result.stdout.strip() else []
+
+    # If no staged files, try last commit
+    if not files:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD~1"],
+            capture_output=True,
+            text=True,
+        )
+        files = result.stdout.strip().split("\n") if result.stdout.strip() else []
+
+    return [Path(f) for f in files if f]
+
+
+def _read_target_file_content(file_path: str) -> Optional[str]:
+    """Return the on-disk content of *file_path*, or None when it cannot be read."""
+    try:
+        with open(file_path, "r", encoding="utf-8") as readable_file:
+            return readable_file.read()
+    except (FileNotFoundError, OSError, UnicodeDecodeError):
+        return None
+
+
+def reconstruct_proposed_content(
+    tool_name: str, tool_input: Dict[str, object]
+) -> Optional[str]:
+    """Return the post-edit content one Write, Edit, or MultiEdit payload leaves on disk.
+
+    ::
+
+        Write     -> tool_input["content"] verbatim
+        Edit      -> existing file, each old_string rewritten to new_string
+        MultiEdit -> existing file, each edit applied in order
+
+    The Edit and MultiEdit reconstruction reuses the shared applier so this gate
+    judges the same post-edit content the standalone blockers judge.
+
+    Args:
+        tool_name: The intercepted tool — Write, Edit, or MultiEdit.
+        tool_input: The tool's input payload.
+
+    Returns:
+        The proposed post-edit content, or None when the payload carries no
+        readable target for an edit or no string content for a write.
+    """
+    if tool_name == "Write":
+        written_content = tool_input.get("content", "")
+        return written_content if isinstance(written_content, str) else None
+    file_path = tool_input.get("file_path", "")
+    if not isinstance(file_path, str) or not file_path:
+        return None
+    existing_content = _read_target_file_content(file_path)
+    if existing_content is None:
+        return None
+    return apply_edits(existing_content, edits_for_tool(tool_name, dict(tool_input)))
+
+
+def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
+    """Run every validator scoped to individual files against *all_files*.
+
+    Excludes the branch-scoped File Structure and Git validators, which grade
+    the whole project rather than a single proposed file.
+
+    Args:
+        all_files: The files under validation — a single reconstructed file in
+            gate mode.
+
+    Returns:
+        One ValidatorResult per file-scoped validator, in run order.
+    """
+    return [
+        run_python_style_checks(all_files),
+        run_test_safety_checks(all_files),
+        run_react_checks(all_files),
+        run_ruff_checks(all_files),
+        run_mypy_checks(all_files),
+        run_abbreviation_checks(all_files),
+        run_pr_reference_checks(all_files),
+        run_magic_value_checks(all_files),
+        run_useless_test_checks(all_files),
+        run_security_checks(all_files),
+        run_code_quality_checks(all_files),
+        run_python_antipattern_checks(all_files),
+        run_todo_checks(all_files),
+        run_type_safety_checks(all_files),
+    ]
+
+
+def validate_proposed_file(
+    file_path: str, proposed_content: str
+) -> List[ValidatorResult]:
+    """Validate *proposed_content* as if written to *file_path*.
+
+    Writes the content to a temporary file that carries the target's basename so
+    suffix-based and test-name-based validator filtering matches the real path,
+    then runs the file-scoped validators against it.
+
+    Args:
+        file_path: The destination path the write or edit targets.
+        proposed_content: The reconstructed post-edit content of that file.
+
+    Returns:
+        One ValidatorResult per file-scoped validator.
+    """
+    base_name = Path(file_path).name
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        temporary_file = Path(temporary_directory) / base_name
+        temporary_file.write_text(proposed_content, encoding="utf-8")
+        return run_file_scoped_validators([temporary_file])
+
+
+def _proposed_content_deny_reason(failed_results: List[ValidatorResult]) -> str:
+    """Compose the deny reason naming each failing validator and its output.
+
+    Args:
+        failed_results: The validator results that did not pass.
+
+    Returns:
+        The composed ``permissionDecisionReason`` text.
+    """
+    violation_summaries = [
+        f"{each_result.name} (checks {each_result.checks}): {each_result.output.strip()}"
+        for each_result in failed_results
+    ]
+    deny_reason_item_separator = " | "
+    joined_summaries = deny_reason_item_separator.join(violation_summaries)
+    return (
+        f"BLOCKED: [validators] {len(failed_results)} "
+        f"validator(s) failed: {joined_summaries}"
+    )
+
+
+def _emit_pre_tool_use_deny(deny_reason: str) -> None:
+    """Write one PreToolUse deny JSON payload carrying *deny_reason* to stdout."""
+    deny_payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": deny_reason,
+        }
+    }
+    log_hook_block(
+        calling_hook_name="run_all_validators.py",
+        hook_event="PreToolUse",
+        block_reason=deny_reason,
+    )
+    sys.stdout.write(json.dumps(deny_payload) + "\n")
+    sys.stdout.flush()
+
+
+def _evaluate_pre_tool_use_payload() -> None:
+    """Read the PreToolUse payload from stdin and deny a violating file write.
+
+    Reconstructs the proposed post-edit content of the one target file and runs
+    the file-scoped validators against it. Emits a deny decision naming each
+    failing validator when any fires; writes nothing for a clean file, an
+    unparseable payload, or a payload no validator covers.
+    """
+    pre_tool_use_payload = json.load(sys.stdin)
+    if not isinstance(pre_tool_use_payload, dict):
+        return
+    tool_name = pre_tool_use_payload.get("tool_name", "")
+    tool_input = pre_tool_use_payload.get("tool_input", {})
+    if not isinstance(tool_name, str) or not isinstance(tool_input, dict):
+        return
+    file_path = tool_input.get("file_path", "")
+    if not isinstance(file_path, str) or not file_path:
+        return
+    proposed_content = reconstruct_proposed_content(tool_name, tool_input)
+    if not proposed_content:
+        return
+    all_results = validate_proposed_file(file_path, proposed_content)
+    failed_results = [
+        each_result
+        for each_result in all_results
+        if not each_result.passed and not each_result.skipped
+    ]
+    if failed_results:
+        _emit_pre_tool_use_deny(_proposed_content_deny_reason(failed_results))
+
+
+def run_pre_tool_use_gate() -> int:
+    """Run the PreToolUse gate, never crashing the tool call on an internal error.
+
+    A hook that raises is rendered by the harness as a tool malfunction, so an
+    unexpected failure here logs to stderr and returns 0 rather than propagating.
+
+    Returns:
+        Always 0 — the gate signals a block through the deny payload, not an
+        exit code.
+    """
+    try:
+        _evaluate_pre_tool_use_payload()
+    except json.JSONDecodeError:
+        return 0
+    except Exception as error:
+        sys.stderr.write(f"[run_all_validators] pre-tool-use gate error: {error}\n")
+        sys.stderr.flush()
+    return 0
+
+
+def main() -> int:
+    """Run all validators and report results."""
+    parser = argparse.ArgumentParser(description="Run pre-push validators")
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Auto-fix violations where possible",
+    )
+    parser.add_argument(
+        "--health",
+        action="store_true",
+        help="Run health check only",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results as JSON",
+    )
+    parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="Disable colored output",
+    )
+    parser.add_argument(
+        "--context",
+        type=int,
+        default=2,
+        help="Lines of context around violations",
+    )
+    parser.add_argument(
+        "--pre-tool-use",
+        action="store_true",
+        help="Run as a PreToolUse gate on the single proposed file write from stdin",
+    )
+    args = parser.parse_args()
+
+    if args.pre_tool_use:
+        return run_pre_tool_use_gate()
+
+    if args.health:
+        health = get_system_health()
+        print_health_report(health)
+        return 0 if health.all_healthy else 1
+
+    mode = OutputMode.JSON if args.json else OutputMode.TEXT
+    formatter = OutputFormatter(
+        mode=mode,
+        use_colors=not args.no_color,
+        context_lines=args.context,
+    )
+
+    start_time = time.time()
+
+    if not args.json:
+        print(formatter.format_header("PRE-PUSH VALIDATOR RESULTS"))
+
+    files = get_changed_files()
+    if not files:
+        if not args.json:
+            print("No changed files detected. Skipping file-based checks.\n")
+    else:
+        if not args.json:
+            print(f"Checking {len(files)} changed file(s):")
+            for file_path in files[:10]:
+                print(f"  - {file_path}")
+            if len(files) > 10:
+                print(f"  ... and {len(files) - 10} more")
+            print()
+
+    if args.fix and files and not args.json:
+        print("Applying auto-fixes...")
+        fixed_files = fix_python_style(files)
+        if fixed_files:
+            print(f"Fixed {len(fixed_files)} file(s):")
+            for fixed_file in fixed_files:
+                print(f"  - {fixed_file}")
+            print()
+        else:
+            print("No auto-fixes needed.")
+            print()
+
+    results: List[ValidatorResult] = []
+    validators: List[Tuple[str, Callable[[], ValidatorResult]]] = []
+
+    if files:
+        validators = [
+            ("Python Style", lambda: run_python_style_checks(files)),
+            ("Test Safety", lambda: run_test_safety_checks(files)),
+            ("React", lambda: run_react_checks(files)),
+            ("Comments", lambda: run_comment_checks(files)),
+            ("Ruff", lambda: run_ruff_checks(files)),
+            ("Mypy", lambda: run_mypy_checks(files)),
+            ("Abbreviations", lambda: run_abbreviation_checks(files)),
+            ("PR References", lambda: run_pr_reference_checks(files)),
+            ("Magic Values", lambda: run_magic_value_checks(files)),
+            ("Useless Tests", lambda: run_useless_test_checks(files)),
+            ("Security", lambda: run_security_checks(files)),
+            ("Code Quality", lambda: run_code_quality_checks(files)),
+            ("Python Anti-patterns", lambda: run_python_antipattern_checks(files)),
+            ("TODO Tracking", lambda: run_todo_checks(files)),
+            ("Type Safety", lambda: run_type_safety_checks(files)),
+        ]
+
+    validators.extend([
+        ("File Structure", run_file_structure_checks),
+        ("Git/PR", run_git_checks),
+    ])
+
+    for i, (name, validator_func) in enumerate(validators, 1):
+        if not args.json:
+            progress = formatter.format_progress(i, len(validators), name)
+            print(f"\r{progress}", end="", flush=True)
+
+        result = validator_func()
+        results.append(result)
+
+    if not args.json:
+        print("\r" + " " * 60 + "\r", end="")
+
+    all_passed = all(r.passed for r in results)
+    passed_count = sum(1 for r in results if r.passed)
+    failed_count = len(results) - passed_count
+
+    if args.json:
+        json_results: List[ValidatorResultDict] = [
+            {"name": r.name, "checks": r.checks, "passed": r.passed, "output": r.output}
+            for r in results
+        ]
+        print(formatter.format_results(json_results))
+    else:
+        for result in results:
+            print(formatter.format_result(result.name, result.checks, result.passed, result.output))
+            print()
+
+        elapsed = time.time() - start_time
+        print(formatter.format_stats(len(files), failed_count, elapsed))
+        print(formatter.format_summary(passed_count, failed_count))
+
+        print()
+        print("MANUAL CHECKS REQUIRED:")
+        print("  [ ] Constants near usage")
+        print("  [ ] Consistent terminology")
+        print("  [ ] Required vs optional params")
+        print("  [ ] Single responsibility")
+        print("  [ ] No over-engineering")
+        print()
+
+    return 0 if all_passed else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,640 @@
+"""Unit tests for conventional_pr_title_gate PreToolUse hook."""
+
+import importlib.util
+import io
+import json
+import pathlib
+import subprocess
+import sys
+from contextlib import redirect_stderr, redirect_stdout
+
+_HOOK_DIR = pathlib.Path(__file__).parent
+if str(_HOOK_DIR) not in sys.path:
+    sys.path.insert(0, str(_HOOK_DIR))
+
+hook_spec = importlib.util.spec_from_file_location(
+    "conventional_pr_title_gate",
+    _HOOK_DIR / "conventional_pr_title_gate.py",
+)
+assert hook_spec is not None
+assert hook_spec.loader is not None
+hook_module = importlib.util.module_from_spec(hook_spec)
+hook_spec.loader.exec_module(hook_module)
+
+_matches_gh_pr_title_subcommand = hook_module._matches_gh_pr_title_subcommand
+_parsed_command_tokens = hook_module._parsed_command_tokens
+_extract_flag_value = hook_module._extract_flag_value
+_is_conventional_commit_title = hook_module._is_conventional_commit_title
+_repo_enforces_default_conventional_pr_titles = (
+    hook_module._repo_enforces_default_conventional_pr_titles
+)
+_workflow_customizes_semantic_types = hook_module._workflow_customizes_semantic_types
+_pull_request_title_to_validate = hook_module._pull_request_title_to_validate
+
+_SEMANTIC_WORKFLOW_TEXT = (
+    "name: PR checks\n"
+    "on:\n"
+    "  pull_request:\n"
+    "jobs:\n"
+    "  validate:\n"
+    "    steps:\n"
+    "      - uses: amannn/action-semantic-pull-request@v5\n"
+)
+
+_PLAIN_WORKFLOW_TEXT = (
+    "name: Tests\non:\n  push:\njobs:\n  test:\n    steps:\n      - run: npm test\n"
+)
+
+_SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT = (
+    "name: PR checks\n"
+    "on:\n"
+    "  pull_request:\n"
+    "    types: [opened, edited, synchronize]\n"
+    "jobs:\n"
+    "  validate:\n"
+    "    steps:\n"
+    "      - uses: amannn/action-semantic-pull-request@v5\n"
+    "        env:\n"
+    "          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"
+    "        with:\n"
+    "          types: |\n"
+    "            feat\n"
+    "            fix\n"
+    "            wip\n"
+)
+
+_SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT = (
+    "name: PR checks\n"
+    "on:\n"
+    "  pull_request:\n"
+    "    types: [opened, edited, synchronize]\n"
+    "jobs:\n"
+    "  validate:\n"
+    "    steps:\n"
+    "      - uses: amannn/action-semantic-pull-request@v5\n"
+)
+
+_SEMANTIC_WORKFLOW_NAME_STEP_CUSTOM_TYPES_TEXT = (
+    "name: PR checks\n"
+    "on:\n"
+    "  pull_request:\n"
+    "    types: [opened, edited, synchronize]\n"
+    "jobs:\n"
+    "  validate:\n"
+    "    steps:\n"
+    "      - name: Validate PR title\n"
+    "        uses: amannn/action-semantic-pull-request@v5\n"
+    "        with:\n"
+    "          types: |\n"
+    "            feat\n"
+    "            fix\n"
+    "            wip\n"
+)
+
+_SEMANTIC_WORKFLOW_TYPES_ABOVE_USES_TEXT = (
+    "name: PR checks\n"
+    "on:\n"
+    "  pull_request:\n"
+    "    types: [opened, edited, synchronize]\n"
+    "jobs:\n"
+    "  validate:\n"
+    "    steps:\n"
+    "      - name: Validate PR title\n"
+    "        with:\n"
+    "          types: |\n"
+    "            feat\n"
+    "            fix\n"
+    "            wip\n"
+    "        uses: amannn/action-semantic-pull-request@v5\n"
+)
+
+_SEMANTIC_WORKFLOW_FLOW_STYLE_TYPES_TEXT = (
+    "name: PR checks\n"
+    "on:\n"
+    "  pull_request:\n"
+    "    types: [opened, edited, synchronize]\n"
+    "jobs:\n"
+    "  validate:\n"
+    "    steps:\n"
+    "      - uses: amannn/action-semantic-pull-request@v5\n"
+    "        with: { types: [feat, fix, wip] }\n"
+)
+
+
+def _init_repo_with_workflow(repo_root: pathlib.Path, workflow_text: str) -> None:
+    subprocess.run(["git", "init", str(repo_root)], capture_output=True, check=True)
+    workflows_directory = repo_root / ".github" / "workflows"
+    workflows_directory.mkdir(parents=True)
+    (workflows_directory / "pr-check.yml").write_text(workflow_text, encoding="utf-8")
+
+
+def _run_hook_with_stdin_text(stdin_text: str) -> tuple[str, str, int]:
+    captured_stdout = io.StringIO()
+    captured_stderr = io.StringIO()
+    exit_code = 0
+    sys.stdin = io.StringIO(stdin_text)
+    try:
+        with redirect_stdout(captured_stdout), redirect_stderr(captured_stderr):
+            try:
+                hook_module.main()
+            except SystemExit as exit_signal:
+                exit_code = exit_signal.code or 0
+    finally:
+        sys.stdin = sys.__stdin__
+    return captured_stdout.getvalue(), captured_stderr.getvalue(), exit_code
+
+
+def _run_hook(hook_input: dict) -> tuple[str, int]:
+    stdout_text, _stderr_text, exit_code = _run_hook_with_stdin_text(json.dumps(hook_input))
+    return stdout_text, exit_code
+
+
+def test_matches_gh_pr_create_with_title() -> None:
+    assert _matches_gh_pr_title_subcommand('gh pr create --title "add x"')
+
+
+def test_matches_gh_pr_edit_with_title() -> None:
+    assert _matches_gh_pr_title_subcommand('gh pr edit 10 --title "add x"')
+
+
+def test_does_not_match_gh_pr_comment() -> None:
+    assert not _matches_gh_pr_title_subcommand('gh pr comment 10 --body "LGTM"')
+
+
+def test_does_not_match_unrelated_command() -> None:
+    assert not _matches_gh_pr_title_subcommand("gh pr list --repo owner/repo")
+
+
+def test_does_not_match_echoed_gh_pr_create() -> None:
+    assert not _matches_gh_pr_title_subcommand('echo gh pr create --title "add x"')
+
+
+def test_matches_gh_pr_create_when_invoked_by_executable_path() -> None:
+    assert _matches_gh_pr_title_subcommand('/usr/bin/gh pr create --title "add x"')
+
+
+def test_extract_flag_value_space_form() -> None:
+    assert (
+        _extract_flag_value('gh pr create --title "feat: add x" --draft', "--title", "-t")
+        == "feat: add x"
+    )
+
+
+def test_extract_flag_value_equals_form() -> None:
+    assert (
+        _extract_flag_value('gh pr create --title="fix: broken thing" --draft', "--title", "-t")
+        == "fix: broken thing"
+    )
+
+
+def test_extract_flag_value_short_form() -> None:
+    assert _extract_flag_value('gh pr create -t "chore: bump deps"', "--title", "-t") == (
+        "chore: bump deps"
+    )
+
+
+def test_extract_flag_value_returns_none_when_absent() -> None:
+    assert _extract_flag_value("gh pr create --draft", "--title", "-t") is None
+
+
+def test_extract_flag_value_skips_title_word_embedded_in_label_value() -> None:
+    command = 'gh pr create --label="use --title inside" --title "feat: real"'
+    assert _extract_flag_value(command, "--title", "-t") == "feat: real"
+
+
+def test_extract_flag_value_reads_attached_short_repo_flag() -> None:
+    assert (
+        _extract_flag_value("gh pr create -Rowner/other --title x", "--repo", "-R") == "owner/other"
+    )
+
+
+def test_extract_flag_value_reads_equals_short_repo_flag() -> None:
+    assert (
+        _extract_flag_value("gh pr create -R=owner/other --title x", "--repo", "-R")
+        == "owner/other"
+    )
+
+
+def test_parsed_command_tokens_returns_none_on_unparseable_command() -> None:
+    assert _parsed_command_tokens("gh pr create --title 'unmatched quote here") is None
+
+
+def test_is_conventional_commit_title_accepts_plain_type() -> None:
+    assert _is_conventional_commit_title("feat: add the thing")
+
+
+def test_is_conventional_commit_title_accepts_scope_and_breaking_marker() -> None:
+    assert _is_conventional_commit_title("feat(hooks)!: drop the old flag")
+
+
+def test_is_conventional_commit_title_rejects_non_conventional_title() -> None:
+    assert not _is_conventional_commit_title("add the thing")
+
+
+def test_pull_request_title_to_validate_returns_none_for_shell_variable_title() -> None:
+    assert _pull_request_title_to_validate('gh pr create --title "$TITLE"') is None
+
+
+def test_pull_request_title_to_validate_returns_literal_for_plain_title() -> None:
+    assert (
+        _pull_request_title_to_validate('gh pr create --title "add the thing"') == "add the thing"
+    )
+
+
+def test_pull_request_title_to_validate_reads_real_title_past_embedded_flag_word() -> None:
+    command = 'gh pr create --label="use --title inside" --title "feat: x"'
+    assert _pull_request_title_to_validate(command) == "feat: x"
+
+
+def test_pull_request_title_to_validate_returns_none_for_attached_repo_flag() -> None:
+    command = 'gh pr create -Rowner/other --title "add the thing"'
+    assert _pull_request_title_to_validate(command) is None
+
+
+def test_repo_enforces_default_conventional_pr_titles_true_for_marker_workflow(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    assert _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_repo_enforces_default_conventional_pr_titles_false_for_plain_workflow(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "plain_repo"
+    _init_repo_with_workflow(repo_root, _PLAIN_WORKFLOW_TEXT)
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_repo_enforces_default_conventional_pr_titles_false_when_no_workflows_directory(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "no_workflows_repo"
+    subprocess.run(["git", "init", str(repo_root)], capture_output=True, check=True)
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_repo_enforces_default_conventional_pr_titles_false_when_action_customizes_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "custom_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_repo_enforces_default_conventional_pr_titles_true_when_only_event_types_present(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "event_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT)
+    assert _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_repo_enforces_default_conventional_pr_titles_true_when_one_marker_workflow_keeps_default_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "mixed_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+    workflows_directory = repo_root / ".github" / "workflows"
+    (workflows_directory / "pr-title-default.yml").write_text(
+        _SEMANTIC_WORKFLOW_TEXT, encoding="utf-8"
+    )
+    assert _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_workflow_customizes_semantic_types_true_for_action_types_input() -> None:
+    assert _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+
+
+def test_workflow_customizes_semantic_types_false_for_event_types_only() -> None:
+    assert not _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT)
+
+
+def test_workflow_customizes_semantic_types_true_for_name_step_layout() -> None:
+    assert _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_NAME_STEP_CUSTOM_TYPES_TEXT)
+
+
+def test_repo_enforces_default_conventional_pr_titles_false_for_name_step_custom_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "name_step_custom_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_NAME_STEP_CUSTOM_TYPES_TEXT)
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_workflow_customizes_semantic_types_true_when_types_above_uses() -> None:
+    assert _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_TYPES_ABOVE_USES_TEXT)
+
+
+def test_repo_enforces_default_conventional_pr_titles_false_when_types_above_uses(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "types_above_uses_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TYPES_ABOVE_USES_TEXT)
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_workflow_customizes_semantic_types_true_for_flow_style_types() -> None:
+    assert _workflow_customizes_semantic_types(_SEMANTIC_WORKFLOW_FLOW_STYLE_TYPES_TEXT)
+
+
+def test_repo_enforces_default_conventional_pr_titles_false_for_flow_style_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "flow_style_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_FLOW_STYLE_TYPES_TEXT)
+    assert not _repo_enforces_default_conventional_pr_titles(str(repo_root))
+
+
+def test_main_blocks_non_conventional_title_in_semantic_ci_repo(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    response_payload = json.loads(stdout_text)
+    decision_block = response_payload["hookSpecificOutput"]
+    assert decision_block["permissionDecision"] == "deny"
+    assert "conventional-pr-title" in decision_block["permissionDecisionReason"]
+
+
+def test_main_allows_shell_variable_title_in_semantic_ci_repo(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "$TITLE"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_conventional_title_in_semantic_ci_repo(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "feat(hooks): add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_conventional_title_with_scope_and_breaking_marker(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "feat(x)!: drop y"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_junk_title_when_no_semantic_marker(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "plain_repo"
+    _init_repo_with_workflow(repo_root, _PLAIN_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_custom_type_title_when_action_customizes_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "custom_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "wip: iterate on the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_blocks_non_conventional_title_when_one_marker_workflow_keeps_default_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "mixed_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_CUSTOM_TYPES_TEXT)
+    workflows_directory = repo_root / ".github" / "workflows"
+    (workflows_directory / "pr-title-default.yml").write_text(
+        _SEMANTIC_WORKFLOW_TEXT, encoding="utf-8"
+    )
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    response_payload = json.loads(stdout_text)
+    decision_block = response_payload["hookSpecificOutput"]
+    assert decision_block["permissionDecision"] == "deny"
+    assert "conventional-pr-title" in decision_block["permissionDecisionReason"]
+
+
+def test_main_allows_custom_type_title_for_name_step_layout(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "name_step_custom_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_NAME_STEP_CUSTOM_TYPES_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "wip: iterate on the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_custom_type_title_when_types_above_uses(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "types_above_uses_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TYPES_ABOVE_USES_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "wip: iterate on the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_custom_type_title_for_flow_style_types(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "flow_style_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_FLOW_STYLE_TYPES_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "wip: iterate on the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_conventional_title_past_embedded_flag_word_in_label(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {
+                "command": 'gh pr create --label="use --title inside" --title "feat: add x"'
+            },
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_cross_repo_title_with_attached_repo_flag(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create -Rowner/other --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_blocks_non_conventional_title_when_only_event_types_present(
+    tmp_path: pathlib.Path,
+) -> None:
+    repo_root = tmp_path / "event_types_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_WITH_EVENT_TYPES_ONLY_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    response_payload = json.loads(stdout_text)
+    assert response_payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_main_allows_echoed_gh_pr_create_in_semantic_ci_repo(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'echo gh pr create --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_non_gh_pr_create_command(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": "gh pr list --repo owner/repo"},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_gh_pr_create_with_no_title(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": "gh pr create --draft"},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_when_repo_flag_present(tmp_path: pathlib.Path) -> None:
+    repo_root = tmp_path / "semantic_repo"
+    _init_repo_with_workflow(repo_root, _SEMANTIC_WORKFLOW_TEXT)
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "Bash",
+            "cwd": str(repo_root),
+            "tool_input": {"command": 'gh pr create --repo owner/other --title "add the thing"'},
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_allows_non_bash_tool() -> None:
+    stdout_text, exit_code = _run_hook(
+        {"tool_name": "Write", "tool_input": {"content": "add the thing"}}
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
+def test_main_with_empty_stdin_exits_silently() -> None:
+    stdout_text, stderr_text, exit_code = _run_hook_with_stdin_text("")
+    assert exit_code == 0
+    assert stdout_text == ""
+    assert stderr_text == ""
+
+
+def test_main_with_invalid_json_stdin_exits_silently() -> None:
+    stdout_text, stderr_text, exit_code = _run_hook_with_stdin_text("{broken")
+    assert exit_code == 0
+    assert stdout_text == ""
+    assert stderr_text == ""

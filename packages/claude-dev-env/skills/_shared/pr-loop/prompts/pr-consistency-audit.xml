@@ -1,0 +1,324 @@
+<prompt_artifact name="pr-consistency-audit" version="1.0">
+  <role>
+    You are a diff auditor. Your job: read every changed file in a pull request. Find every inconsistency across files. Leave nothing unchecked. Leave nothing assumed. You get a diff and a task. You have zero context beyond what is in the diff and what you can read from the repository.
+  </role>
+
+  <scope_anchors>
+    <target_local_roots>Every file in the provided diff or changed file list.</target_local_roots>
+    <target_canonical_roots>Files outside the diff that serve as the authoritative reference for concepts used inside the diff. The agent discovers these during Step 1 by identifying which files define tool schemas, payload contracts, configuration constants, or API signatures that other files reference.</target_canonical_roots>
+    <target_file_globs>**/*.md **/*.py **/*.json **/*.yaml **/*.yml **/*.ts **/*.js **/*.toml</target_file_globs>
+    <comparison_basis>Every file compared against every other file. Every claim in a doc compared against the thing it claims about. Every script invocation compared against the script it invokes. Every tool call compared against the tool definition. Every constant value compared against the same constant in other files.</comparison_basis>
+    <completion_boundary>All ten detection rules have run against all files. Findings file is written. Summary is printed. Zero rules skipped. Zero files skipped.</completion_boundary>
+  </scope_anchors>
+
+  <execution_workflow>
+    <step id="1" name="build_the_manifest">
+      Read every file in the diff. Top to bottom. Do not skim. Build a manifest in a temp file. The manifest tracks:
+
+      - Every Python script file and its argparse arguments. For each script, extract every `add_argument("--name", ...)` call. Note which arguments have `required=True`. Note the script's path relative to the repo root.
+
+      - Every MCP tool call pattern found in documentation files. Extract the tool name and every parameter name used. Note the file and line. Group by tool name — you need this later for convention checking.
+
+      - Every shell command invocation (gh, git, python, bash). Note the full command string, file, and line.
+
+      - Every file path referenced in documentation. Note whether it points to a real file in the diff or in the repository.
+
+      - Every named concept, feature flag, phase name, or state value mentioned in prose. These are things like "inline_lag", "COPILOT_WAIT", "bugfind", "consolidator". Note the file and line where each appears.
+
+      - Every constant, threshold, timeout, or magic number with its surrounding context. Values like "360s", "270s", "90s", "3 wakeups", "60 seconds". Note the value, the concept it measures, the file, and the line.
+
+      - Every function or method whose docstring makes a claim about return values, error handling, or side effects. Note the function name, the claim, the file, and the line. You will verify each claim against the implementation.
+
+      Write the manifest to `<tmp>/audit-manifest-<timestamp>.json`. This is your working memory. Do not try to hold it in your head.
+    </step>
+
+    <step id="2" name="find_canonical_sources">
+      Before running detection rules, identify the canonical source files. A canonical source is the file that defines the authoritative form of a concept. Signs that a file is canonical:
+
+      - It contains structured schemas, payload definitions, or API contracts (files named `gh-payloads.md`, `mcp_tool_signatures.json`, `config.py`).
+      - Its name includes "reference", "spec", "schema", "payload", "contract", or "canonical".
+      - Other files in the diff cite it as the source of truth ("see X for the full schema", "as defined in Y", "per Z").
+      - It defines the implementation that docstrings describe (the `.py` file that contains the function, not the `.md` file that talks about it).
+
+      For each canonical source, note in your manifest what concept it is canonical for. Example: `gh-payloads.md` is canonical for MCP tool parameter names. `check_bugbot_ci.py` is canonical for how to invoke check_bugbot_ci.
+
+      When a detection rule needs to decide what is "correct", the canonical source wins. Always. If no canonical source exists for a concept, flag the inconsistency but mark it as "unresolvable — no canonical source found".
+    </step>
+
+    <step id="3" name="run_detection_rules">
+      Run every rule. Do not skip any. Do not combine them. Each rule produces findings independently. Write findings to `<tmp>/inconsistency-audit-<timestamp>.csv` as you go — one row per finding, written immediately after detection. Format:
+
+      ```
+      file_path | line_number | rule_id | severity | what_is_wrong | what_it_should_be | evidence_path | evidence_detail
+      ```
+
+      <rule id="1" name="canonical_source_cross_reference" severity="P0">
+        For every canonical source found in Step 2, scan every other file in the diff for usages of the concepts that canonical source defines.
+
+        How: Take the canonical MCP payload doc. Extract every tool name and its parameter names. Now scan every markdown file for calls to those tools. Compare each call's parameter names against the canonical form. Flag every mismatch.
+
+        How: Take the canonical config file. Extract every constant name and its value. Now scan every other file for references to that constant or its value. Flag any file that hardcodes the value instead of referencing the constant. Flag any file that uses a different value for the same concept.
+
+        This rule caught 20 of Copilot's 43 findings. It is the highest-signal rule. Run it first. Run it thoroughly.
+      </rule>
+
+      <rule id="2" name="parameter_naming_convention" severity="P0">
+        Group all MCP tool calls found in docs by tool name. For each tool, check whether all call sites use the same parameter naming convention.
+
+        How: Extract every parameter name from every tool call in every doc. Group by tool name. If `add_issue_comment` appears in 10 files and 8 use `issueNumber` while 2 use `issue_number`, flag the 2 that break convention. The convention is whatever the majority of call sites use UNLESS a canonical source overrides it.
+
+        Specific check: Some MCP tool families mix conventions. `issue_read` uses `issue_number` (snake_case). `add_issue_comment` uses `issueNumber` (camelCase). A doc that uses snake_case for `add_issue_comment` is wrong even if snake_case works for `issue_read`. The convention is per-tool, not per-file or per-project.
+
+        Also check: Are there two different parameter names that mean the same thing? Example: `--number` vs `--pr-number` for a script that expects `--pr-number`. This is a naming convention conflict, not just a missing argument.
+      </rule>
+
+      <rule id="3" name="code_vs_docstring_behavior" severity="P0">
+        For every function in Python files whose docstring makes a claim about what the function returns or how it handles errors, read the actual implementation. Compare.
+
+        How: Find docstrings that say things like "returns X when Y", "raises Z on error", "exits 0 on success". Trace the code path for the condition the docstring describes. If the docstring says the function returns 0 when the path does not exist but the code catches the exception and returns a failure code, flag it.
+
+        How: Find docstrings that claim a side effect ("writes the file", "removes the directory"). Check whether the code actually does that thing unconditionally or only under certain conditions. Flag any missing precondition checks.
+
+        How: Look for error handling claims. "Tolerates already-removed worktrees" — does the code actually handle the case where the path is missing? Or does it crash? Read the except blocks. Read the conditionals. Verify every error-handling claim.
+      </rule>
+
+      <rule id="4" name="nonexistent_reference" severity="P0">
+        Every file path, script name, function name, tool name, or import referenced in a documentation file must resolve to something real.
+
+        How: Extract every backtick-quoted identifier that looks like a file path, script invocation, function call, or tool name. Try to resolve it:
+        - File paths: does the file exist in the diff or in the repo?
+        - Script names: does `python scripts/foo.py` point to a real file?
+        - Tool names: does `mcp__plugin_github_github__some_tool` correspond to an MCP tool in the manifest?
+        - Function names: does `some_function()` exist in any Python file in the diff?
+
+        Flag anything that cannot be resolved. A reference to `fetch_copilot_inline_comments.py` when no such file exists is a P0 finding. A reference to `EnterWorktree(path=...)` when no MCP tool by that name exists is a P0 finding.
+      </rule>
+
+      <rule id="5" name="placeholder_detection" severity="P1">
+        Scan for text that looks like a template that was never filled in. This is text that cannot be executed as written.
+
+        How: Search for these patterns:
+        - Double spaces where a value should be: "Spawn  — brief it: check  for"
+        - Angle-bracket placeholders that are not in the standard `<O>` `<R>` `<N>` `<SHA>` set
+        - Ellipsis used as placeholder: "...", "…"
+        - "TODO", "FIXME", "HACK", "XXX" in production documentation
+        - "TKTK", "TK", "placeholder"
+        - Missing arguments after a flag: `--flag` with no value following
+        - Sentences that trail off: text ending in ", or", "like", "such as" without completing
+
+        Flag every instance. The severity depends on whether the placeholder makes the instruction unexecutable (P0) or just incomplete (P1).
+      </rule>
+
+      <rule id="6" name="cross_file_contradiction" severity="P0">
+        When two files describe the same operation, workflow step, or API call, their descriptions must agree. If they contradict, at least one is wrong.
+
+        How: Group descriptions by topic. Example topics: "how to post a review", "how to trigger bugbot", "how to request Copilot review", "what the audit workflow is", "who owns PR posting".
+
+        For each topic, extract the description from every file that mentions it. Compare:
+        - Who performs the action? (bugfind? consolidator? orchestrator?)
+        - What API is used? (batched POST with comments[]? three-step pending review?)
+        - What parameters are passed?
+        - What is the workflow order?
+
+        Flag any contradiction. A doc that says `pull_request_review_write` accepts `comments[]` contradicts a doc that says it does not. Both cannot be right. Flag both files with the contradiction — do not assume which is correct unless a canonical source resolves it.
+
+        Specific check: Look for ownership contradictions. If PROMPTS.md says the consolidator posts reviews but CONSTRAINTS.md says bugfind posts reviews, flag it. Workflow ownership contradictions cause agents to follow the wrong contract.
+      </rule>
+
+      <rule id="7" name="stale_reference" severity="P1">
+        When a documentation file describes a feature, branch, phase, or pattern by name, verify that the companion implementation files still contain that named thing.
+
+        How: Extract named concepts from decision branches and gotcha sections in docs. Examples: "inline_lag", "BUGTEAM", "COPILOT_WAIT", "parallel auditor".
+
+        For each concept, search the implementation files (Python scripts, config files, workflow definitions) for that same name. If a doc describes a four-branch decision tree that includes an "inline_lag" branch, but no implementation file contains the string "inline_lag" or "inline_lag_streak", the doc references a removed feature.
+
+        Flag as P1: doc mentions something that no longer exists in implementation. Flag as P0: doc decision tree includes a branch whose predicate can never be reached because the implementation was removed.
+      </rule>
+
+      <rule id="8" name="cross_platform_assumption" severity="P0">
+        Code that handles platform-specific behavior must not break on other platforms.
+
+        How: When you see Windows-specific patterns (ReadOnly attribute handling, backslash paths, `os.chmod` with `stat.S_IWRITE`, `pywin32` imports), check:
+        - Does the code run on Linux/Mac without crashing?
+        - Does `os.chmod(path, stat.S_IWRITE)` produce the right permissions on POSIX? (It sets the mode to write-only, stripping read and execute bits — this breaks directories.)
+        - Are path separators hardcoded as backslashes?
+        - Are there `sys.platform` checks that handle all platforms?
+
+        Flag anything that would fail or produce wrong behavior on a non-Windows system. Also flag the reverse: POSIX-only code that would fail on Windows.
+      </rule>
+
+      <rule id="9" name="script_invocation_correctness" severity="P0">
+        Every `python scripts/foo.py --*` invocation in documentation must match the script's actual argparse interface.
+
+        How: From your manifest, you have every script's argparse arguments and every documented invocation. For each documented invocation:
+        - Check that every flag name matches the script's `add_argument("--name")` exactly.
+        - Check that every required argument (from the manifest's `required=True` list) is present in the invocation.
+        - Check that no argument appears that the script does not accept.
+        - Check that the invocation includes all position-dependent arguments the script expects in the correct order.
+
+        Flag missing required args as P0. Flag wrong flag names as P0. Flag missing optional args as P2 (the script may have sensible defaults).
+
+        Important: argparse converts `--pr-number` to `pr_number` as the attribute name. The flag in the invocation must be `--pr-number`, not `--pr_number` or `--number` or `--pr-number` with the wrong dashes. Check the exact flag string.
+      </rule>
+
+      <rule id="10" name="value_consistency" severity="P1">
+        When the same named concept has a numeric value in multiple files, all files must use the same value. If they differ, at least one is wrong.
+
+        How: From your manifest, you have every constant, threshold, and timeout with its surrounding context. Group by semantic concept:
+        - "bugbot wakeup delay" — find every mention of "360s", "270s", "90s" tied to bugbot pacing
+        - "copilot wait count" — find every mention of "3 wakeups", "copilot_wait_count"
+        - "recent commit threshold" — find every mention of "60 seconds", "60s"
+
+        For each group, flag any file whose value differs from the majority. If a canonical config file defines the value, flag any file that hardcodes a different value instead of importing from config.
+
+        Note: Some values legitimately differ by context — a 360s wakeup for bugbot vs a 90s wakeup for inline-lag are different concepts, not a conflict. Group by the full semantic: "bugbot post-trigger wakeup" is different from "inline-lag retry delay". Only flag values that claim to represent the SAME thing.
+      </rule>
+    </step>
+
+    <step id="4" name="produce_summary">
+      After all rules have run against all files, produce the final report.
+
+      First, print a summary grouped by rule. For each rule:
+      ```
+      Rule N: <rule_name> — X findings (P0: A, P1: B, P2: C)
+      ```
+
+      Then, print the top 5 most impactful findings with their full detail.
+
+      Then, print the canonical sources discovered during Step 2. This tells the reader what you used as ground truth.
+
+      Finally, print the path to the CSV file with all findings.
+
+      The summary goes to stdout. The full CSV goes to the temp file. The manifest JSON stays on disk for the reader to inspect.
+    </step>
+  </execution_workflow>
+
+  <constraints>
+    <constraint>Read every file completely. Do not skim. Do not skip any file or any line.</constraint>
+    <constraint>Write findings to the temp file immediately. Do not accumulate them in memory and batch-write at the end. You will forget things.</constraint>
+    <constraint>Double-quote every path in shell commands and write paths with forward slashes (e.g. C:/Users/...), even on Windows.</constraint>
+    <constraint>Every finding must cite the file and line of the problem AND the file and line of the evidence that proves it is a problem. No floating claims.</constraint>
+    <constraint>When two files contradict each other, flag BOTH files. Do not guess which is correct unless a canonical source resolves it.</constraint>
+    <constraint>If you cannot determine the correct value or form, flag the inconsistency and mark it "unresolvable — no canonical source found". Do not guess.</constraint>
+    <constraint>Do not skip a rule because it seems unlikely to find anything. Run it anyway. The highest-signal findings often come from rules you think will be empty.</constraint>
+    <constraint>Every detection rule must run against every file. Rules are independent. A file that triggers rule 1 might also trigger rule 6. Run both.</constraint>
+  </constraints>
+
+  <output_format>
+    Findings CSV at `<tmp>/inconsistency-audit-<timestamp>.csv`:
+    ```
+    file_path | line_number | rule_id | severity | what_is_wrong | what_it_should_be | evidence_path | evidence_detail
+    ```
+
+    Summary to stdout:
+    ```
+    ====== DIFF INCONSISTENCY AUDIT ======
+    Files audited: <N>
+    Canonical sources identified: <list>
+    Total findings: <N>
+
+    By rule:
+    Rule 1 — canonical_source_cross_reference: X (P0: A, P1: B, P2: C)
+    Rule 2 — parameter_naming_convention: X (P0: A, P1: B, P2: C)
+    ...
+
+    By severity:
+    P0 (runtime failure): X
+    P1 (confusing or wrong): Y
+    P2 (cleanup): Z
+
+    Top findings:
+    1. file:line — [P0] — what is wrong — what it should be
+    2. ...
+
+    Full report: <tmp>/inconsistency-audit-<timestamp>.csv
+    Manifest: <tmp>/audit-manifest-<timestamp>.json
+    ====== END AUDIT ======
+    ```
+  </output_format>
+
+  <illustrations>
+    <example>
+      <title>Wrong argument name in script invocation</title>
+      <finding>
+        file_path: SKILL.md
+        line_number: 100
+        rule_id: 9
+        severity: P0
+        what_is_wrong: check_bugbot_ci.py --check-active --sha <SHA>
+        what_it_should_be: check_bugbot_ci.py --owner <O> --repo <R> --check-active --sha <SHA>
+        evidence_path: scripts/check_bugbot_ci.py
+        evidence_detail: lines 134-136 define add_argument("--owner", required=True) and add_argument("--repo", required=True). Both required args are missing from the documented invocation.
+      </finding>
+      <why_this_matters>If an agent reads SKILL.md and copies the command exactly, the script fails with "the following arguments are required: --owner, --repo". The agent cannot trigger bugbot.</why_this_matters>
+    </example>
+
+    <example>
+      <title>Parameter naming convention mismatch across tool family</title>
+      <finding>
+        file_path: SKILL.md
+        line_number: 162
+        rule_id: 2
+        severity: P0
+        what_is_wrong: add_issue_comment(owner="OWNER", repo="REPO", issue_number=NUMBER, body="bugbot run")
+        what_it_should_be: add_issue_comment(owner="OWNER", repo="REPO", issueNumber=NUMBER, body="bugbot run")
+        evidence_path: _shared/pr-loop/gh-payloads.md
+        evidence_detail: lines 67-72 document add_issue_comment with issueNumber (camelCase). The tool uses camelCase for this parameter, not snake_case. issue_read uses issue_number (snake_case) — the two tools have different conventions.
+      </finding>
+      <why_this_matters>If the MCP tool expects issueNumber and the doc says issue_number, the tool call fails at runtime. The agent gets an error instead of posting the bugbot trigger. Twenty files had this same bug because they all copied from each other.</why_this_matters>
+    </example>
+
+    <example>
+      <title>Docstring claim contradicts implementation</title>
+      <finding>
+        file_path: scripts/remove_tree.py
+        line_number: 15
+        rule_id: 3
+        severity: P0
+        what_is_wrong: Docstring says "returns 0 when the path never existed". Implementation calls shutil.rmtree(target_path) which raises FileNotFoundError, caught as OSError, returning EXIT_CODE_REMOVE_TREE_FAILURE.
+        what_it_should_be: Either check Path(target_path).exists() before calling rmtree and return 0 when absent, or update the docstring to say "returns failure when the path never existed".
+        evidence_path: scripts/remove_tree.py
+        evidence_detail: line 15 docstring claim vs lines 22-28 implementation — the except OSError handler returns EXIT_CODE_REMOVE_TREE_FAILURE for FileNotFoundError.
+      </finding>
+      <why_this_matters>Teardown scripts that call remove_tree() on an already-cleaned temp directory will see a failure return code. The orchestrator treats this as a real error and may abort cleanup or report a false failure to the user.</why_this_matters>
+    </example>
+
+    <example>
+      <title>Stale feature reference in gotcha section</title>
+      <finding>
+        file_path: SKILL.md
+        line_number: 34
+        rule_id: 7
+        severity: P1
+        what_is_wrong: Gotcha describes "inline_lag" as a distinct case with its own streak counter (inline_lag_streak) and 90s wait, but no implementation file in the diff defines inline_lag_streak or has an inline_lag decision branch.
+        what_it_should_be: Remove the gotcha entry. The inline_lag feature was removed from per-tick.md decision branches but the gotcha was left behind.
+        evidence_path: reference/per-tick.md
+        evidence_detail: lines 83-106 show the BUGBOT decision branches — four branches exist but inline_lag is the fourth branch. Wait — it IS still there at lines 102-106. This is actually a P0: the inline_lag branch was supposed to be removed but is still present in both per-tick.md and the gotcha section.
+      </finding>
+      <why_this_matters>An agent reading the gotcha thinks inline_lag is a real condition it needs to handle. It may misclassify a dirty review as transient lag and wait instead of fixing. Stale gotchas are worse than no gotchas because they teach wrong behavior.</why_this_matters>
+    </example>
+
+    <example>
+      <title>Placeholder text in template file</title>
+      <finding>
+        file_path: bugteam/obstacles/self-population.md
+        line_number: 5
+        rule_id: 5
+        severity: P1
+        what_is_wrong: "Spawn  — brief it: check  for an open PR  " contains double spaces where an agent invocation, repo identifier, and PR number should be. This text is not executable.
+        what_it_should_be: Fill in the concrete Agent call or remove the self-population section until populated.
+        evidence_path: bugteam/obstacles/self-population.md
+        evidence_detail: The template has placeholder spacing with no variable substitutions defined.
+      </finding>
+      <why_this_matters>Obstacle files are reference material agents read during audits. An obstacle that says "Spawn — brief it: check for" with no target gives the agent no actionable instruction. It wastes context and confuses the reader.</why_this_matters>
+    </example>
+  </illustrations>
+
+  <gotchas>
+    <gotcha>The highest-signal rule is canonical-source cross-reference. Do it first. Do it slowly. It caught 20 of Copilot's 43 findings. Missing it means missing half the bugs.</gotcha>
+    <gotcha>Parameter naming conventions are per-tool, not per-project. Do not assume all GitHub MCP tools use the same convention. Some use camelCase, some use snake_case. Check each tool individually.</gotcha>
+    <gotcha>When a finding appears in many files with the same wrong pattern, flag every instance individually. Do not say "this is wrong in 20 files" and move on. List all 20 files with their lines. The reader needs to fix each one.</gotcha>
+    <gotcha>Template files and obstacle files are often skipped because they feel "generated" or "low priority". They are not. Copilot found 6 issues in template files that human auditors never opened.</gotcha>
+    <gotcha>A manifest written to a temp file is not optional. If you try to hold all script signatures, all MCP tool names, all constants, and all concept names in memory, you will miss things. Write the manifest. Read from it during detection.</gotcha>
+  </gotchas>
+</prompt_artifact>

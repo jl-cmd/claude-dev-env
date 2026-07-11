@@ -1,0 +1,450 @@
+from __future__ import annotations
+
+import importlib.util
+import os
+import shutil
+import stat
+import tempfile
+from collections.abc import Callable, Iterator
+from pathlib import Path
+
+import pytest
+
+ENFORCER_PATH = Path(__file__).resolve().parent / "code_rules_enforcer.py"
+specification = importlib.util.spec_from_file_location("code_rules_enforcer", ENFORCER_PATH)
+assert specification is not None and specification.loader is not None
+code_rules_enforcer = importlib.util.module_from_spec(specification)
+specification.loader.exec_module(code_rules_enforcer)
+
+CONSTANTS_BODY = 'MEDIUM_TERMINAL = "terminal"\nMEDIUM_CODE = "code"\nMEDIUM_TEXT = "text"\n'
+
+
+def _strip_read_only_and_retry(
+    removal_function: Callable[[str], object],
+    target_path: str,
+    _exc_info: BaseException,
+) -> None:
+    try:
+        os.chmod(target_path, stat.S_IWRITE)
+        removal_function(target_path)
+    except OSError:
+        pass
+
+
+@pytest.fixture
+def neutral_root() -> Iterator[Path]:
+    """Yield a temp directory whose path carries no ``test_`` segment.
+
+    The enforcer's ``is_test_file`` keys on the full path string, and pytest's
+    own ``tmp_path`` directory name embeds the test name, which would make every
+    synthetic constants path look like a test file. A neutral ``mkdtemp`` root
+    mirrors how a production constants module path looks.
+
+    A ``.git`` marker is planted at the root so the cross-tree widening resolves
+    the repository root to this synthetic tree, never an enclosing real
+    checkout, keeping every test bounded and deterministic.
+    """
+    neutral_directory = Path(tempfile.mkdtemp(prefix="deadconst-")).resolve()
+    (neutral_directory / ".git").mkdir()
+    try:
+        yield neutral_directory
+    finally:
+        shutil.rmtree(neutral_directory, onexc=_strip_read_only_and_retry)
+
+
+def _check(source: str, file_path: str) -> list[str]:
+    return code_rules_enforcer.check_dead_module_constants(source, file_path)
+
+
+def _check_edit(fragment: str, full_file_content: str, file_path: str) -> list[str]:
+    return code_rules_enforcer.check_dead_module_constants(
+        fragment, file_path, full_file_content
+    )
+
+
+def _build_constants_package(
+    workflow_directory: Path,
+    constants_body: str,
+    consumer_body: str,
+) -> Path:
+    constants_package = workflow_directory / "report_constants"
+    constants_package.mkdir(parents=True)
+    (constants_package / "__init__.py").write_text("", encoding="utf-8")
+    constants_path = constants_package / "render_report_constants.py"
+    constants_path.write_text(constants_body, encoding="utf-8")
+    (workflow_directory / "render_report.py").write_text(consumer_body, encoding="utf-8")
+    return constants_path
+
+
+def test_flags_constant_imported_by_no_module_in_the_tree(neutral_root: Path) -> None:
+    consumer_body = (
+        "from report_constants.render_report_constants import (\n"
+        "    MEDIUM_CODE,\n"
+        "    MEDIUM_TERMINAL,\n"
+        ")\n"
+        "\n"
+        "def panel_class(medium: str) -> str:\n"
+        "    if medium == MEDIUM_TERMINAL:\n"
+        "        return 'terminal'\n"
+        "    return 'code-panel' if medium == MEDIUM_CODE else 'text-panel'\n"
+    )
+    constants_path = _build_constants_package(
+        neutral_root / "workflow", CONSTANTS_BODY, consumer_body
+    )
+    issues = _check(CONSTANTS_BODY, str(constants_path))
+    assert any("MEDIUM_TEXT" in each_issue for each_issue in issues), (
+        f"Expected dead MEDIUM_TEXT flagged, got: {issues}"
+    )
+    assert not any(
+        "MEDIUM_TERMINAL" in each_issue or "MEDIUM_CODE" in each_issue for each_issue in issues
+    ), f"Imported constants must not be flagged, got: {issues}"
+
+
+def test_flags_a_dead_constant_added_by_an_edit_to_an_existing_module(
+    neutral_root: Path,
+) -> None:
+    consumer_body = (
+        "from report_constants.render_report_constants import (\n"
+        "    MEDIUM_CODE,\n"
+        "    MEDIUM_TERMINAL,\n"
+        ")\n"
+        "\n"
+        "def panel_class(medium: str) -> str:\n"
+        "    if medium == MEDIUM_TERMINAL:\n"
+        "        return 'terminal'\n"
+        "    return 'code-panel' if medium == MEDIUM_CODE else 'text-panel'\n"
+    )
+    prior_body = 'MEDIUM_TERMINAL = "terminal"\nMEDIUM_CODE = "code"\n'
+    constants_path = _build_constants_package(
+        neutral_root / "workflow", prior_body, consumer_body
+    )
+    edit_fragment = 'MEDIUM_CODE = "code"\nMEDIUM_TEXT = "text"\n'
+    post_edit_body = prior_body + 'MEDIUM_TEXT = "text"\n'
+    issues = _check_edit(edit_fragment, post_edit_body, str(constants_path))
+    assert any("MEDIUM_TEXT" in each_issue for each_issue in issues), (
+        f"An Edit that inserts a dead constant must be flagged, got: {issues}"
+    )
+    assert not any(
+        "MEDIUM_TERMINAL" in each_issue or "MEDIUM_CODE" in each_issue
+        for each_issue in issues
+    ), f"Imported constants must not be flagged on an edit, got: {issues}"
+
+
+def test_does_not_flag_constant_imported_one_directory_up(neutral_root: Path) -> None:
+    consumer_uses_text = (
+        "from report_constants.render_report_constants import (\n"
+        "    MEDIUM_CODE,\n"
+        "    MEDIUM_TERMINAL,\n"
+        "    MEDIUM_TEXT,\n"
+        ")\n"
+        "\n"
+        "def panel_class(medium: str) -> str:\n"
+        "    if medium == MEDIUM_TERMINAL:\n"
+        "        return 'terminal'\n"
+        "    if medium == MEDIUM_TEXT:\n"
+        "        return 'text-panel'\n"
+        "    return 'code-panel' if medium == MEDIUM_CODE else 'text-panel'\n"
+    )
+    constants_path = _build_constants_package(
+        neutral_root / "workflow", CONSTANTS_BODY, consumer_uses_text
+    )
+    issues = _check(CONSTANTS_BODY, str(constants_path))
+    assert issues == [], f"No constant is dead when all are imported, got: {issues}"
+
+
+def test_does_not_flag_dunder_all_member_with_a_live_consumer(neutral_root: Path) -> None:
+    constants_body = CONSTANTS_BODY + '__all__ = ["MEDIUM_TERMINAL"]\n'
+    consumer_body = (
+        "from report_constants.render_report_constants import MEDIUM_TERMINAL\n"
+        "\n"
+        "def label() -> str:\n"
+        "    return MEDIUM_TERMINAL\n"
+    )
+    constants_path = _build_constants_package(
+        neutral_root / "workflow", constants_body, consumer_body
+    )
+    issues = _check(constants_body, str(constants_path))
+    assert issues == [], f"An __all__ member a consumer imports stays live, got: {issues}"
+
+
+def test_dunder_all_narrows_check_to_exported_constants(neutral_root: Path) -> None:
+    constants_body = (
+        'JSONL_APPEND_OPEN_MODE = "a"\n'
+        'ZIPFILE_READ_OPEN_MODE = "r"\n'
+        "PRIVATE_BUFFER_BYTES = 1024\n"
+        '__all__ = ["JSONL_APPEND_OPEN_MODE", "ZIPFILE_READ_OPEN_MODE"]\n'
+    )
+    consumer_body = (
+        "from report_constants.render_report_constants import JSONL_APPEND_OPEN_MODE\n"
+        "\n"
+        "def open_mode() -> str:\n"
+        "    return JSONL_APPEND_OPEN_MODE\n"
+    )
+    constants_path = _build_constants_package(
+        neutral_root / "workflow", constants_body, consumer_body
+    )
+    issues = _check(constants_body, str(constants_path))
+    assert any("ZIPFILE_READ_OPEN_MODE" in each_issue for each_issue in issues), (
+        f"An exported constant no module imports is dead, got: {issues}"
+    )
+    assert not any("JSONL_APPEND_OPEN_MODE" in each_issue for each_issue in issues), (
+        f"An exported constant a consumer imports must not be flagged, got: {issues}"
+    )
+    assert not any("PRIVATE_BUFFER_BYTES" in each_issue for each_issue in issues), (
+        f"A constant __all__ omits is the author's private value and is exempt, got: {issues}"
+    )
+
+
+def test_does_not_run_on_ordinary_production_module(neutral_root: Path) -> None:
+    workflow_directory = neutral_root / "workflow"
+    workflow_directory.mkdir(parents=True)
+    ordinary_path = workflow_directory / "render_report.py"
+    body = "WIDGET_LIMIT = 5\n\ndef widgets() -> int:\n    return WIDGET_LIMIT\n"
+    ordinary_path.write_text(body, encoding="utf-8")
+    issues = _check(body, str(ordinary_path))
+    assert issues == [], (
+        f"The dead-constant check runs only on dedicated constants modules, got: {issues}"
+    )
+
+
+def test_runs_on_config_directory_module(neutral_root: Path) -> None:
+    package_directory = neutral_root / "app"
+    config_directory = package_directory / "config"
+    config_directory.mkdir(parents=True)
+    constants_body = "TIMEOUT_SECONDS = 30\nUNUSED_THRESHOLD = 99\n"
+    constants_path = config_directory / "timing.py"
+    constants_path.write_text(constants_body, encoding="utf-8")
+    consumer_body = (
+        "from config.timing import TIMEOUT_SECONDS\n"
+        "\n"
+        "def deadline() -> int:\n"
+        "    return TIMEOUT_SECONDS\n"
+    )
+    (package_directory / "service.py").write_text(consumer_body, encoding="utf-8")
+    issues = _check(constants_body, str(constants_path))
+    assert any("UNUSED_THRESHOLD" in each_issue for each_issue in issues), (
+        f"Expected dead UNUSED_THRESHOLD flagged in config module, got: {issues}"
+    )
+    assert not any("TIMEOUT_SECONDS" in each_issue for each_issue in issues), (
+        f"Consumed config constant must not be flagged, got: {issues}"
+    )
+
+
+def test_counts_a_reference_from_a_test_module(neutral_root: Path) -> None:
+    workflow_directory = neutral_root / "workflow"
+    constants_body = 'ONLY_TESTS_USE_THIS = "x"\n'
+    constants_path = workflow_directory / "render_report_constants.py"
+    workflow_directory.mkdir(parents=True)
+    constants_path.write_text(constants_body, encoding="utf-8")
+    test_body = (
+        "from render_report_constants import ONLY_TESTS_USE_THIS\n"
+        "\n"
+        "def test_value() -> None:\n"
+        "    assert ONLY_TESTS_USE_THIS == 'x'\n"
+    )
+    (workflow_directory / "test_render_report.py").write_text(test_body, encoding="utf-8")
+    issues = _check(constants_body, str(constants_path))
+    assert issues == [], f"A constant used only by a test under the tree stays live, got: {issues}"
+
+
+def test_is_skipped_on_a_constants_test_file(neutral_root: Path) -> None:
+    workflow_directory = neutral_root / "workflow"
+    workflow_directory.mkdir(parents=True)
+    test_constants_path = workflow_directory / "test_render_report_constants.py"
+    body = 'UNREFERENCED = "y"\n'
+    test_constants_path.write_text(body, encoding="utf-8")
+    issues = _check(body, str(test_constants_path))
+    assert issues == [], f"Test files are exempt, got: {issues}"
+
+
+def _build_cross_tree_repository(
+    repository_root: Path,
+    constants_body: str,
+    sibling_consumer_body: str,
+) -> Path:
+    config_directory = repository_root / "shared" / "theme_db" / "config"
+    config_directory.mkdir(parents=True)
+    constants_path = config_directory / "constants.py"
+    constants_path.write_text(constants_body, encoding="utf-8")
+    sibling_directory = repository_root / "cdp"
+    sibling_directory.mkdir(parents=True)
+    (sibling_directory / "tally.py").write_text(sibling_consumer_body, encoding="utf-8")
+    return constants_path
+
+
+def test_does_not_flag_constant_used_only_in_a_sibling_tree(neutral_root: Path) -> None:
+    constants_body = 'CROSS_TREE_CONSTANT = "cross"\nLOCALLY_DEAD_CONSTANT = "dead"\n'
+    sibling_consumer_body = (
+        "from shared.theme_db.config.constants import CROSS_TREE_CONSTANT\n"
+        "\n"
+        "def tally() -> str:\n"
+        "    return CROSS_TREE_CONSTANT\n"
+    )
+    constants_path = _build_cross_tree_repository(
+        neutral_root, constants_body, sibling_consumer_body
+    )
+    issues = _check(constants_body, str(constants_path))
+    assert not any("CROSS_TREE_CONSTANT" in each_issue for each_issue in issues), (
+        f"A constant consumed by a sibling tree in the repository must not be flagged, got: {issues}"
+    )
+    assert any("LOCALLY_DEAD_CONSTANT" in each_issue for each_issue in issues), (
+        f"A constant referenced nowhere in the repository stays flagged, got: {issues}"
+    )
+
+
+def _build_name_collision_repository(
+    repository_root: Path,
+    promoter_timing_body: str,
+    promoter_consumer_body: str,
+    harness_constants_body: str,
+    harness_consumer_body: str,
+) -> Path:
+    promoter_config = repository_root / "promoter" / "config"
+    promoter_config.mkdir(parents=True)
+    timing_path = promoter_config / "timing.py"
+    timing_path.write_text(promoter_timing_body, encoding="utf-8")
+    (repository_root / "promoter" / "runtime.py").write_text(
+        promoter_consumer_body, encoding="utf-8"
+    )
+    harness_config = repository_root / "harness" / "config"
+    harness_config.mkdir(parents=True)
+    (harness_config / "lockfile_constants.py").write_text(
+        harness_constants_body, encoding="utf-8"
+    )
+    (repository_root / "harness" / "lockfile.py").write_text(
+        harness_consumer_body, encoding="utf-8"
+    )
+    return timing_path
+
+
+def test_same_named_constant_in_an_unrelated_module_does_not_mask_a_dead_one(
+    neutral_root: Path,
+) -> None:
+    promoter_timing_body = "LOCKFILE_ACQUIRE_BYTE_LENGTH = 1\nSWEEP_INTERVAL_SECONDS = 30\n"
+    promoter_consumer_body = (
+        "from config.timing import SWEEP_INTERVAL_SECONDS\n"
+        "\n"
+        "def deadline() -> int:\n"
+        "    return SWEEP_INTERVAL_SECONDS\n"
+    )
+    harness_constants_body = "LOCKFILE_ACQUIRE_BYTE_LENGTH = 1\n"
+    harness_consumer_body = (
+        "from harness.config.lockfile_constants import LOCKFILE_ACQUIRE_BYTE_LENGTH\n"
+        "\n"
+        "def acquire() -> int:\n"
+        "    return LOCKFILE_ACQUIRE_BYTE_LENGTH\n"
+    )
+    timing_path = _build_name_collision_repository(
+        neutral_root,
+        promoter_timing_body,
+        promoter_consumer_body,
+        harness_constants_body,
+        harness_consumer_body,
+    )
+    issues = _check(promoter_timing_body, str(timing_path))
+    assert any("LOCKFILE_ACQUIRE_BYTE_LENGTH" in each_issue for each_issue in issues), (
+        "A constant whose only same-named twin lives in an unrelated module's "
+        f"import must still be flagged dead, got: {issues}"
+    )
+    assert not any("SWEEP_INTERVAL_SECONDS" in each_issue for each_issue in issues), (
+        f"A constant consumed within its own package must not be flagged, got: {issues}"
+    )
+
+
+def test_returns_empty_list_at_file_cap(
+    neutral_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("code_rules_dead_module_constant.MAX_SCAN_ROOT_FILE_COUNT", 0)
+    constants_path = _build_constants_package(
+        neutral_root / "workflow",
+        CONSTANTS_BODY,
+        "def noop() -> None:\n    pass\n",
+    )
+    issues = _check(CONSTANTS_BODY, str(constants_path))
+    assert issues == [], f"File cap hit must return [] (cannot prove dead), got: {issues}"
+
+
+def _write_noise_modules(directory: Path, count: int) -> None:
+    directory.mkdir(parents=True)
+    for each_index in range(count):
+        (directory / f"mod_{each_index}.py").write_text(
+            "def noop() -> int:\n    return 1\n", encoding="utf-8"
+        )
+
+
+def test_dead_exported_constant_flagged_despite_many_noncandidate_siblings(
+    neutral_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("code_rules_dead_module_constant.MAX_SCAN_ROOT_FILE_COUNT", 3)
+    package_directory = neutral_root / "pkg"
+    package_directory.mkdir(parents=True)
+    constants_body = 'DEAD_EXPORTED = "x"\n__all__ = ["DEAD_EXPORTED"]\n'
+    constants_path = package_directory / "settings_constants.py"
+    constants_path.write_text(constants_body, encoding="utf-8")
+    _write_noise_modules(neutral_root / "noise", 10)
+    issues = _check(constants_body, str(constants_path))
+    assert any("DEAD_EXPORTED" in each_issue for each_issue in issues), (
+        "A dead exported constant must stay flagged when the widened scan meets "
+        f"many sibling modules that never import from this module, got: {issues}"
+    )
+
+
+def test_live_qualified_importer_found_despite_many_noncandidate_siblings(
+    neutral_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("code_rules_dead_module_constant.MAX_SCAN_ROOT_FILE_COUNT", 3)
+    package_directory = neutral_root / "pkg"
+    package_directory.mkdir(parents=True)
+    constants_body = 'LIVE_EXPORTED = "y"\n__all__ = ["LIVE_EXPORTED"]\n'
+    constants_path = package_directory / "settings_constants.py"
+    constants_path.write_text(constants_body, encoding="utf-8")
+    _write_noise_modules(neutral_root / "noise", 10)
+    consumer_directory = neutral_root / "app"
+    consumer_directory.mkdir(parents=True)
+    consumer_body = (
+        "from pkg.settings_constants import LIVE_EXPORTED\n"
+        "\n"
+        "def use() -> str:\n"
+        "    return LIVE_EXPORTED\n"
+    )
+    (consumer_directory / "consumer.py").write_text(consumer_body, encoding="utf-8")
+    issues = _check(constants_body, str(constants_path))
+    assert issues == [], (
+        "A constant imported through a qualified from-import must stay live even "
+        f"when many non-importing siblings surround it, got: {issues}"
+    )
+
+
+def test_widened_scan_reads_each_file_at_most_once(
+    neutral_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    constants_body = 'CROSS_TREE_CONSTANT = "cross"\nLOCALLY_DEAD_CONSTANT = "dead"\n'
+    sibling_consumer_body = (
+        "from shared.theme_db.config.constants import CROSS_TREE_CONSTANT\n"
+        "\n"
+        "def tally() -> str:\n"
+        "    return CROSS_TREE_CONSTANT\n"
+    )
+    constants_path = _build_cross_tree_repository(
+        neutral_root, constants_body, sibling_consumer_body
+    )
+    package_tree_neighbor = constants_path.parent.parent / "neighbor.py"
+    package_tree_neighbor.write_text(
+        "def neighbor() -> int:\n    return 1\n", encoding="utf-8"
+    )
+    read_counts: dict[str, int] = {}
+    original_read_text = Path.read_text
+
+    def counting_read_text(self: Path, *positional: object, **keyword: object) -> str:
+        normalized_key = os.path.normcase(str(self.resolve()))
+        read_counts[normalized_key] = read_counts.get(normalized_key, 0) + 1
+        return original_read_text(self, *positional, **keyword)  # type: ignore[arg-type]  # forwards args
+
+    monkeypatch.setattr(Path, "read_text", counting_read_text)
+    _check(constants_body, str(constants_path))
+    over_read_paths = {
+        each_path: each_count for each_path, each_count in read_counts.items() if each_count > 1
+    }
+    assert not over_read_paths, (
+        f"Widening must read each .py file at most once, got over-reads: {over_read_paths}"
+    )

@@ -1,0 +1,254 @@
+"""Constants for the commit-time terminology sweep."""
+
+import re
+
+ALL_SWEEP_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset(
+    {".py", ".mjs", ".js", ".ts"}
+)
+
+MARKDOWN_FILE_EXTENSION: str = ".md"
+
+INLINE_CODE_SPAN_PATTERN: re.Pattern[str] = re.compile(r"`[^`]*`")
+
+SNAKE_CASE_IDENTIFIER_PATTERN: re.Pattern[str] = re.compile(
+    r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b"
+)
+
+CAMEL_CASE_IDENTIFIER_PATTERN: re.Pattern[str] = re.compile(
+    r"\b[a-z]+(?:[A-Z][a-z0-9]*)+\b"
+)
+
+CAMEL_CASE_WORD_PATTERN: re.Pattern[str] = re.compile(
+    r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+"
+)
+
+HYPHENATED_PROSE_TOKEN_PATTERN: re.Pattern[str] = re.compile(
+    r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)+\b"
+)
+
+PROSE_WORD_PATTERN: re.Pattern[str] = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+
+STRING_LITERAL_CONTENT_PATTERN: re.Pattern[str] = re.compile(
+    r"\"([^\"]*)\"|'([^']*)'|`([^`]*)`"
+)
+
+DIFF_FILE_HEADER_PREFIX: str = "+++ "
+
+DIFF_HUNK_HEADER_PATTERN: re.Pattern[str] = re.compile(
+    r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@"
+)
+
+DIFF_ADDED_LINE_PREFIX: str = "+"
+
+DIFF_REMOVED_LINE_PREFIX: str = "-"
+
+DIFF_NEW_FILE_HEADER_PREFIX: str = "+++"
+
+DIFF_OLD_FILE_HEADER_PREFIX: str = "---"
+
+ALL_DIFF_FILE_PATH_STRIP_PREFIXES: tuple[str, ...] = ("a/", "b/")
+
+PYTHON_COMMENT_MARKER: str = "#"
+
+JAVASCRIPT_LINE_COMMENT_MARKER: str = "//"
+
+JSDOC_CONTINUATION_MARKER: str = "*"
+
+MINIMUM_IDENTIFIER_TOKEN_COUNT: int = 2
+
+ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS: frozenset[str] = frozenset(
+    {
+        "only",
+        "driven",
+        "safe",
+        "based",
+        "level",
+        "quality",
+        "known",
+        "source",
+        "party",
+        "case",
+        "time",
+        "wide",
+        "free",
+        "friendly",
+        "specific",
+        "aware",
+        "ready",
+        "side",
+        "grade",
+        "oriented",
+        "related",
+        "sensitive",
+        "facing",
+    }
+)
+
+TERMINOLOGY_FINDING_TEMPLATE: str = (
+    "{file_path}:{line_number}: prose term '{candidate}' near-misses code "
+    "identifier '{identifier}' (shared prefix token, divergent tail) — align "
+    "the prose wording with the identifier"
+)
+
+TERMINOLOGY_SWEEP_DESCRIPTION: str = (
+    "Flag prose terms that near-miss an identifier introduced on added code "
+    "lines of a unified diff."
+)
+
+DIFF_FILE_ARGUMENT_HELP: str = (
+    "Read the unified diff from this file instead of standard input."
+)
+
+
+ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND: tuple[str, ...] = (
+    "git",
+    "diff",
+    "--cached",
+    "--unified=0",
+)
+
+GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS: int = 30
+
+TERMINOLOGY_SWEEP_GATE_HEADER: str = (
+    "terminology_sweep: {finding_count} cross-surface terminology near-miss(es) "
+    "on staged prose:"
+)
+
+ALL_PROSE_STOPWORD_TOKENS: frozenset[str] = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "to",
+        "of",
+        "in",
+        "on",
+        "at",
+        "by",
+        "as",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        "each",
+        "every",
+        "any",
+        "all",
+        "both",
+        "few",
+        "many",
+        "some",
+        "such",
+        "and",
+        "or",
+        "nor",
+        "but",
+        "if",
+        "then",
+        "than",
+        "so",
+        "not",
+        "no",
+        "with",
+        "for",
+        "from",
+        "into",
+        "onto",
+        "over",
+        "under",
+        "up",
+        "down",
+        "out",
+        "off",
+        "own",
+        "same",
+        "just",
+        "still",
+        "yet",
+        "ever",
+        "never",
+        "now",
+        "here",
+        "there",
+        "where",
+        "when",
+        "how",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "whose",
+        "why",
+        "we",
+        "you",
+        "they",
+        "he",
+        "she",
+        "i",
+        "me",
+        "my",
+        "your",
+        "their",
+        "our",
+        "his",
+        "her",
+        "them",
+        "us",
+        "do",
+        "does",
+        "did",
+        "done",
+        "has",
+        "have",
+        "had",
+        "having",
+        "can",
+        "could",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "should",
+        "will",
+        "would",
+        "s",
+    }
+)
+
+ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX: tuple[str, ...] = (
+    "git",
+    "grep",
+    "--quiet",
+    "--word-regexp",
+    "--fixed-strings",
+)
+
+GIT_BASE_TREE_REVISION: str = "HEAD"
+
+ALL_STRING_ESCAPE_SEQUENCES: tuple[str, ...] = (
+    "\\n",
+    "\\t",
+    "\\r",
+    "\\\\",
+)
+
+TEST_FILE_PREFIX: str = "test_"
+
+TEST_FILE_SUFFIX: str = "_test"
+
+TEST_DIRECTORY_PATH_SEGMENT: str = "/tests/"
+
+ALL_TEST_FILE_NAME_INFIX_MARKERS: tuple[str, ...] = ("_test.", ".test.", ".spec.")
+
+PROSE_WINDOW_WORD_SEPARATOR: str = " "
+
+IDENTIFIER_TOKEN_SEPARATOR: str = "_"

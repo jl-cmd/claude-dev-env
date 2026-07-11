@@ -1,0 +1,301 @@
+# claude-dev-env
+
+Consistent development standards for Claude Code across every repo. Install once, get TDD enforcement, code quality hooks, specialized agents, and battle-tested rules everywhere.
+
+## Quick Start
+
+### Prerequisites
+
+- **Node.js 18+** (includes `npx`)
+- **Python 3.8+** (for hook scripts)
+- **Claude Code CLI** installed and working
+
+### Install
+
+```bash
+npx claude-dev-env
+```
+
+That's it. The installer will:
+
+1. Detect your Python 3 command (`python3`, `python`, or `py -3`)
+2. Copy 13 rules, 5 docs, 27 agents, 10 commands, and 12 skills to `~/.claude/`
+3. Copy hook scripts to `~/.claude/hooks/`
+4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
+5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
+
+The `--only prompts` group sources the prompt-generator skill, the agent-prompt skill, and the prompt-workflow hooks from [@jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator) — a standalone npm package that claude-dev-env declares as a runtime dependency. No separate installation is required; `npx claude-dev-env` installs it transparently.
+
+### Selective Install
+
+Only want specific tools? Use the `--only` flag with one or more groups:
+
+```bash
+npx claude-dev-env --only prompts           # prompt-generator, agent-prompt + workflow hooks
+npx claude-dev-env --only journal           # session-log, session-tidy
+npx claude-dev-env --only research          # deep-research, research-mode
+npx claude-dev-env --only core             # dev standards, hooks, agents, commands
+npx claude-dev-env --only prompts,research  # combine groups
+```
+
+| Group | What's included |
+|-------|----------------|
+| `core` | Rules, docs, commands, agents, all hooks |
+| `prompts` | prompt-generator, agent-prompt, prompt-workflow hooks and rules |
+| `journal` | session-log, session-tidy |
+| `research` | deep-research, research-mode |
+
+### Verify
+
+Start a new Claude Code session. You should see hook activity on your first prompt (code-rules-reminder, hook-structure-context). Run any slash command like `/commit` or `/plan` to confirm commands loaded.
+
+### Update
+
+Run the same command again. It overwrites existing files and updates hook entries in place:
+
+```bash
+npx claude-dev-env
+```
+
+### Uninstall
+
+Removes only the files this package installed (tracked via manifest) and cleans hook entries from `settings.json`:
+
+```bash
+npx claude-dev-env --uninstall
+```
+
+### Bootstrap the project-path registry (one-time, post-install)
+
+The `es.exe` path rewriter hook and the untracked-repo detector both read their state from a per-user registry at `~/.claude/project-paths.json`. This file maps short repo names (the keys Claude can use in `es.exe` commands) to absolute paths. It is per-user data and never lives in this repo — it is gitignored.
+
+After installing or updating `claude-dev-env`, run the bootstrap script once to populate the registry by scanning for `.git` directories with Everything's command-line binary:
+
+```bash
+python packages/claude-dev-env/scripts/setup_project_paths.py
+```
+
+Requirements:
+
+- Everything (from voidtools) installed with its service running
+- `es.exe` available on `PATH`
+
+The script discovers candidate repos via `es.exe`, filters out ephemeral locations (`temp`, `tmp`, `worktree`, `node_modules`, `.cache`, `$recycle.bin`), shows the proposed mapping, and writes `~/.claude/project-paths.json` only after you confirm at the prompt. The file is atomically replaced on write and merges with any entries already present.
+
+Once the registry is populated, Claude's `es.exe <repo-name>` calls are rewritten to `es.exe "<absolute-path>"` before Bash runs, so searches resolve deterministically without retries.
+
+## What This Solves
+
+Without shared config, every repo needs its own `.claude/rules/`, `.claude/hooks/`, `.claude/agents/`, etc. That means:
+
+- Duplicated config across 5+ repos
+- Drift when you update standards in one place but forget others
+- New repos start with zero guardrails
+
+This package centralizes all general-purpose Claude Code config. Project-specific rules still live in each repo's `.claude/` directory and merge with these.
+
+## What's Included
+
+### Rules (13)
+
+Behavioral rules loaded into every session. These shape how Claude approaches work before any code is written.
+
+| Rule | What it does |
+|------|-------------|
+| `tdd` | Red-green-refactor is non-negotiable |
+| `code-standards` | References CODE_RULES.md for all code generation |
+| `conservative-action` | Research first, act only when explicitly asked |
+| `right-sized-engineering` | Simple > clever, functions > classes, concrete > abstract |
+| `explore-thoroughly` | Read before proposing, map patterns before committing |
+| `research-mode` | Anti-hallucination: cite sources, say "I don't know", use direct quotes |
+| `parallel-tools` | Independent tool calls run simultaneously |
+| `agent-spawn-protocol` | Context sufficiency check before delegating to agents |
+| `git-workflow` | Draft PRs, one commit per review stage, stacked PR patterns |
+| `code-reviews` | Systematic PR review response protocol |
+| `testing` | Complete mocks, reference TEST_QUALITY.md |
+| `context7` | Fetch current docs via Context7 MCP instead of relying on training data |
+| `cleanup-temp-files` | Remove scratch files after tasks complete |
+
+### Docs (5)
+
+Reference documents that rules and agents point to for detailed standards.
+
+| Document | Coverage |
+|----------|----------|
+| `CODE_RULES.md` | Hook-enforced rules, naming conventions, config patterns, type hints, readability rubric |
+| `TEST_QUALITY.md` | Test writing standards, mock completeness, assertion patterns |
+| `REACT_PATTERNS.md` | Component architecture, hooks, state management conventions |
+| `DJANGO_PATTERNS.md` | Model patterns, view architecture, ORM best practices |
+| `PR_DESCRIPTION_GUIDE.md` | PR description structure and file-grouped format |
+
+### Agents (28)
+
+Specialized agent prompts for common development tasks. Claude Code automatically discovers these and makes them available for delegation.
+
+**Code Quality:** clean-coder, code-advisor, code-quality-agent, readability-review-agent, refactoring-specialist, right-sized-engineer
+
+**Testing:** tdd-test-writer, test-data-builder, validation-expert
+
+**Planning:** parallel-workflow-coordinator, mandatory-agent-workflow-agent, stub-detector-agent
+
+**Documentation:** docs-agent, doc-orchestrator
+
+**Configuration:** config-extraction-agent, config-centralizer, magic-value-eliminator-agent
+
+**Tooling:** agent-writer, tooling-builder
+
+**Git:** git-commit-crafter, pr-description-writer, session-continuity-manager
+
+**File Formats:** docx-agent, pdf-agent, xlsx-agent
+
+**Research:** deep-research
+
+**Other:** clasp-deployment-orchestrator, project-context-loader
+
+### Commands (10)
+
+Slash commands for common workflows.
+
+| Command | Purpose |
+|---------|---------|
+| `/commit` | Structured git commit with conventional format |
+| `/plan` | Create implementation plans with config search |
+| `/implement` | Execute plans with TDD workflow |
+| `/review-plan` | Review and critique implementation plans |
+| `/right-size` | Check for over/under-engineering |
+| `/stubcheck` | Find stubs, TODOs, and NotImplementedError |
+| `/pr-comments` | Process PR review comments systematically |
+| `/docupdate` | Update documentation after changes |
+| `/initialize` | Session initialization with protocol review |
+| `/sum` | Summarize current work context |
+
+### Skills (12)
+
+**Prompt Engineering (`--only prompts`):**
+
+| Skill | Purpose |
+|-------|---------|
+| `prompt-generator` | Write, refine, and structure prompts for Claude with emotion-informed framing |
+| `agent-prompt` | Craft structured agent prompts and spawn background agents after approval |
+
+**Session & Memory (`--only journal`):**
+
+| Skill | Purpose |
+|-------|---------|
+| `session-log` | Log session reports to Obsidian vault with decisions and outcomes |
+| `session-tidy` | Clean up and organize session folder structure |
+
+**Research (`--only research`):**
+
+| Skill | Purpose |
+|-------|---------|
+| `deep-research` | Iterative multi-source research with citations and Obsidian reports |
+| `research-mode` | Anti-hallucination constraints with citation requirements |
+
+**Core (`--only core`):**
+
+| Skill | Purpose |
+|-------|---------|
+| `pr-review-responder` | Systematic PR review response: fetch comments, checklist, fix, reply, commit |
+| `orchestrator` | Turns the session into the advisor-orchestrator (the user's sole interface): it spawns executor subagents to do all code edits and test runs, and answers a blocked executor with a plan, correction, or stop; caps consultations and reuses warm agents before spawning new ones |
+| `orchestrator-refresh` | Sub-skill fired by the `/orchestrator` loop about every 20 minutes to re-assert the executor-advisor discipline mid-run |
+| `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |
+| `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
+| `recall` | Retrieve prior session context and decisions from Obsidian vault |
+| `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
+| `task-build` | Gather every open task in the session and register each on the task list via TaskCreate |
+| `verified-build` | Runs a code task through the two-phase verified workflow — coders write, a fresh-context verifier grades, and git commit/push open only on a clean verdict. |
+| `findbugs` | Single-shot clean-room code-quality audit on the current PR diff (zero conversation context, returns P0/P1/P2 findings with file:line evidence) |
+| `fixbugs` | Recover the most recent `/findbugs` findings, package them as a goal, and hand off to `/agent-prompt` to spawn a background sonnet clean-coder fix agent |
+| `bugteam` | Autonomous audit-and-fix loop using Claude Code's agent teams feature (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and v2.1.32+); fresh teammates per loop, 10-loop cap, scoped permission grant/revoke wrapping the cycle |
+| `reviewer-gates` | Availability gates for PR-loop reviewers: CLAUDE_REVIEWS_DISABLED opt-out parse, once-per-run Copilot quota pre-check, and the Cursor Bugbot trigger/acknowledge/CI-detect flow |
+| `pr-scope-resolve` | Resolves a PR-loop skill's audit/fix target (owner, repo, number, refs, head SHA) through one MCP-first ladder with a single canonical refusal line |
+| `pr-fix-protocol` | Applies reviewer findings as verified fixes and drives unresolved threads to zero: executor choice, the shared 13-step fix sequence, atomic reply-and-resolve, and post-push state resets |
+| `post-audit-findings` | Publishes an audit pass as one GitHub PR review via post_audit_thread.py: findings-JSON mapping, anchored/unanchored partition, self-PR reviewer toggle, and thread-id harvest for the fix loop |
+| `pr-loop-lifecycle` | Opens and closes a PR-loop run: permission grant with auto-mode escalation, worktree preflight, then teardown, PR description rewrite, always-run revoke, and the final report |
+| `pr-loop-cloud-transport` | Six-step transport workflow that lets any PR-loop skill run in a Claude Code session whose `gh` CLI is absent or cannot act on the PR (unauthenticated, or the wrong account): MCP schema load, origin/HEAD fix, live-identity review rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check |
+
+### Hooks
+
+Automated enforcement that runs on Claude Code events. The installer detects your Python 3 command and rewrites hook paths to absolute `~/.claude/hooks/` paths in `settings.json`.
+
+#### PreToolUse (before tool execution)
+
+| Matcher | Hook | What it does |
+|---------|------|-------------|
+| Write\|Edit | `write-existing-file-blocker` | Warns before overwriting files that should be edited |
+| Write\|Edit | `sensitive-file-protector` | Blocks writes to .env, credentials, and sensitive files |
+| Write\|Edit | `hook-format-validator` | Validates hook file format on write |
+| Write\|Edit | `run_all_validators` | Runs the full validation suite (30+ checks) |
+| Write\|Edit | `code_rules_enforcer` | Blocks CODE_RULES.md violations (comments, magic values, imports) |
+| Write\|Edit | `tdd-enforcer` | Prompts TDD confirmation when writing production code |
+| Write\|Edit | `state-description-blocker` | Blocks historical/comparative language in comments and .md files |
+| Edit | `refactor-guard` | Ensures refactoring happens only after green tests |
+| Edit | `migration-safety-advisor` | Warns about risky database migration patterns |
+| Bash | `destructive-command-blocker` | Blocks rm -rf, git reset --hard, and other destructive commands |
+| Bash | `block-main-commit` | Blocks direct commits to main/master branch |
+| Bash | `pr-description-enforcer` | Enforces PR description structure and style |
+| Bash | `test-preflight-check` | Validates server health and database before test runs |
+| Task\|Agent | `parallel-task-blocker` | Limits concurrent Task/Agent delegations |
+| AskUserQuestion | `attention-needed-notify` | Desktop notification when Claude needs your input |
+
+#### Other Events
+
+| Event | Hook | What it does |
+|-------|------|-------------|
+| SessionStart | `plugin-data-dir-cleanup` | Cleans stale plugin data on session start |
+| Stop | `attention-needed-notify` | Desktop notification when Claude stops |
+| Stop | `hedging-language-blocker` | Blocks responses with hedging language (anti-hallucination) |
+| SessionEnd | `session-end-cleanup` | Cleans temporary state on session end |
+| ConfigChange | `config-change-guard` | Guards against accidental settings changes |
+| PostToolUse (Write\|Edit) | `mypy_validator` | Runs mypy type checking after file writes |
+| PostToolUse (Write\|Edit) | `auto-formatter` | Auto-formats Python (ruff/black) and JS (prettier) on write |
+| PostToolUse (Agent\|Task) | `investigation-tracker-reset` | Resets investigation tracker after delegation |
+| Notification | `claude-notification-handler` | Routes Claude Code notifications to desktop |
+
+#### Validators Module
+
+The `hooks/validators/` directory contains 30+ individual check modules with a full test suite:
+
+Abbreviations, code quality, comments, file structure, git conventions, magic values, mypy integration, PR references, Python antipatterns, Python style, React patterns, ruff integration, security, TODO tracking, type safety, useless test detection, and more.
+
+## Also Available as a Plugin
+
+If you prefer the Claude Code plugin system over npm:
+
+```bash
+claude plugin install jl-cmd/claude-dev-env
+```
+
+## Recommended Companion Plugins
+
+These plugins provide additional skills and capabilities that complement this config:
+
+```bash
+claude plugin install anthropics/claude-code-plugins        # Official: frontend-design, code-review, playwright, hookify, skill-creator, claude-md-management, serena, pyright-lsp, typescript-lsp, claude-code-setup
+claude plugin install anthropics/claude-code-workflows      # Official: python-dev, ui-design, unit-testing, context-management, agent-teams, and more
+claude plugin install jl-cmd/claude-workflow                # Workflow definitions with YAML schemas
+```
+
+Note: prompt-generator, journal, and deep-research skills are all included in claude-dev-env. Use `--only prompts`, `--only journal`, or `--only research` if you only want a subset.
+
+GSD (project management) is available as an npm package:
+```bash
+npx get-shit-done-cc
+```
+
+## Customization
+
+Installed rules merge with your project's `.claude/` config. To override a rule for a specific project, create a rule with the same filename in your project's `.claude/rules/` directory.
+
+Installed hooks run alongside any hooks already in your `settings.json` or `settings.local.json`. The installer preserves existing hook entries.
+
+## Requirements
+
+- Node.js 18+ (for the installer)
+- Python 3.8+ (for hooks)
+- Claude Code CLI
+
+## License
+
+MIT

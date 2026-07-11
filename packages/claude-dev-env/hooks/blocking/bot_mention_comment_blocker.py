@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""PreToolUse hook: block @cursor or @copilot mentions in add_issue_comment body.
+
+Bugbot trigger requires exactly ``bugbot run`` with no other text. Copilot review
+requires the GitHub REST API endpoint, not an issue comment mention. This hook
+catches both mistakes and returns the correct procedure for each.
+"""
+
+import json
+import sys
+from pathlib import Path
+
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.bot_mention_comment_blocker_constants import (  # noqa: E402
+    COPILOT_MENTION_TOKEN,
+    CORRECTIVE_MESSAGE_COPILOT,
+    CORRECTIVE_MESSAGE_CURSOR,
+    CURSOR_MENTION_TOKEN,
+    TOOL_NAME,
+)
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+
+
+def _body_contains_token(body: str, token: str) -> bool:
+    return token.lower() in body.lower()
+
+
+def _detect_bot_mention(body: str) -> str | None:
+    """Return corrective message if body contains a blocked mention, else None."""
+    if _body_contains_token(body, COPILOT_MENTION_TOKEN):
+        return CORRECTIVE_MESSAGE_COPILOT
+    if _body_contains_token(body, CURSOR_MENTION_TOKEN):
+        return CORRECTIVE_MESSAGE_CURSOR
+    return None
+
+
+def main() -> None:
+    try:
+        hook_input = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    if hook_input.get("tool_name", "") != TOOL_NAME:
+        sys.exit(0)
+
+    body = hook_input.get("tool_input", {}).get("body", "")
+    if not body:
+        sys.exit(0)
+
+    corrective_message = _detect_bot_mention(body)
+    if corrective_message is None:
+        sys.exit(0)
+
+    deny_payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": corrective_message,
+        }
+    }
+    log_hook_block(
+        calling_hook_name="bot_mention_comment_blocker.py",
+        hook_event="PreToolUse",
+        block_reason=corrective_message,
+        tool_name=TOOL_NAME,
+    )
+    print(json.dumps(deny_payload))
+    sys.stdout.flush()
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,19 @@
+{
+  "name": "claude-dev-env",
+  "owner": {
+    "name": "jl-cmd"
+  },
+  "metadata": {
+    "description": "Code standards, rules, hooks, agents, and commands for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "config",
+      "source": "./",
+      "description": "Code standards, rules, hooks, agents, and commands for consistent Claude Code development",
+      "version": "1.0.0",
+      "category": "development",
+      "tags": ["code-standards", "hooks", "agents", "tdd", "quality"]
+    }
+  ]
+}
