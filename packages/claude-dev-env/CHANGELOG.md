@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.93.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v1.93.0...claude-dev-env-v1.93.1) (2026-07-11)
+
+
+### Maintenance
+
+* initial public release ([6ade839](https://github.com/jl-cmd/claude-dev-env/commit/6ade839600286cef28e2d1512d21f90eb01faf79))
+
 ## [1.93.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v1.92.1...claude-dev-env-v1.93.0) (2026-07-11)
 
 
