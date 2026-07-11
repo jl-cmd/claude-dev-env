@@ -91,6 +91,10 @@ For every file-global constant declared at module scope in production code outsi
 
 Full rule including the decision table, examples, and reference-counting details: [`packages/claude-dev-env/rules/file-global-constants.md`](packages/claude-dev-env/rules/file-global-constants.md).
 
+#### Dead scaffolding in test modules
+
+Test files are exempt from the file-global-constants rule above, yet a test module still carries dead code an edit strands. A test file exports nothing, so a single-file scan settles it. Flag a private module-level constant (such as `_ABSENT_DOTENV_FILENAME`) that no other line in the test file reads. Flag a parameter on a private, non-fixture test helper (such as `_configuration(monkeypatch, tmp_path)`) that the helper's own body never reads. A pytest fixture parameter and a public `test_*` function parameter are injected by name and stay exempt. Enforced at Write/Edit time by `check_dead_test_module_constant` and `check_unused_test_helper_parameter` in `packages/claude-dev-env/hooks/blocking/code_rules_test_layout.py`.
+
 ### Types
 
 - Function parameters and return values carry type annotations.

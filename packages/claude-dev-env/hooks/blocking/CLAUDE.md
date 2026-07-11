@@ -50,6 +50,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_shared.py` | Shared dataclasses and helpers used by multiple check modules |
 | `code_rules_string_magic.py` | Magic string detection with masking and f-string support; whitespace-only indentation literals in function bodies |
 | `code_rules_test_assertions.py` | Test assertion style rules |
+| `code_rules_test_layout.py` | Dead scaffolding in a test module: a private module constant read by no other line, and an unused parameter on a private test helper |
 | `code_rules_test_branching_except.py` | No bare or broad `except` in test branches |
 | `code_rules_test_isolation.py` | Tests must not rely on home-dir or temp-dir side effects |
 | `code_rules_type_escape.py` | No `Any` imports, `cast()`, or `# type: ignore` outside boundary files |
