@@ -69,12 +69,20 @@ def _is_dead_constant_scan_target(file_path: str) -> bool:
     basename = file_path.lower().replace("\\", "/").rsplit("/", 1)[-1]
     return TEST_FUNCTION_MODULE_BASENAME_PATTERN.match(basename) is not None
 
-def _is_constant_name(name: str) -> bool:
-    """Return whether a name is an UPPER_SNAKE constant identifier.
+def _is_private_constant_name(name: str) -> bool:
+    """Return whether a name is a private UPPER_SNAKE constant identifier.
 
-    A leading underscore is allowed, so a private module constant such as
-    ``_ABSENT_DOTENV_FILENAME`` qualifies.
+    ::
+
+        _ABSENT_DOTENV_FILENAME  ->  private constant, judged
+        EXPECTED_TOTAL           ->  public constant, left alone
+
+    Only a leading-underscore name qualifies. A public module constant exports
+    to importer modules, so the cross-module ``check_dead_module_constants``
+    governs it and this single-file scan leaves it alone.
     """
+    if not name.startswith(PRIVATE_NAME_PREFIX):
+        return False
     if len(name) < MINIMUM_CONSTANT_NAME_LENGTH:
         return False
     if not name.replace("_", "").isalnum():
@@ -90,15 +98,15 @@ def _assignment_targets(statement: ast.stmt) -> list[ast.expr]:
     return []
 
 def _statement_constant_targets(statement: ast.stmt) -> list[tuple[str, int]]:
-    """Return (name, line) for each UPPER_SNAKE constant one statement binds."""
+    """Return (name, line) for each private UPPER_SNAKE constant one statement binds."""
     named_targets: list[tuple[str, int]] = []
     for each_target in _assignment_targets(statement):
-        if isinstance(each_target, ast.Name) and _is_constant_name(each_target.id):
+        if isinstance(each_target, ast.Name) and _is_private_constant_name(each_target.id):
             named_targets.append((each_target.id, statement.lineno))
     return named_targets
 
 def _module_constant_targets(tree: ast.Module) -> list[tuple[str, int]]:
-    """Return (name, line) for every module-scope UPPER_SNAKE constant, in order."""
+    """Return (name, line) for every module-scope private UPPER_SNAKE constant, in order."""
     constant_targets: list[tuple[str, int]] = []
     for each_statement in tree.body:
         constant_targets.extend(_statement_constant_targets(each_statement))
@@ -139,19 +147,19 @@ def _dead_constant_messages(tree: ast.Module, referenced_names: set[str]) -> lis
     return issues
 
 def check_dead_test_module_constant(content: str, file_path: str) -> list[str]:
-    """Flag a module-level constant in a test-function module no other line reads.
+    """Flag a private module-level constant in a test-function module no line reads.
 
     ::
 
         tests/test_report.py, a private UPPER_SNAKE constant no Load reference
         and no string literal names   ->   dead scaffolding, flag it
+        tests/test_report.py, a public constant (EXPECTED_TOTAL)   ->   skip
         tests/conftest.py / tests/expected_values.py / *_constants.py   ->   skip
 
-    A ``test_*.py`` / ``*_test.py`` module of test functions exports nothing, so
-    a constant read by no reference and named in no string literal is dead code
-    left after an edit. A ``conftest.py``, a shared helper module under a
-    ``tests/`` directory, and a dedicated constants or ``config/`` module all
-    export their constants to importer modules, so the cross-module
+    A private constant read by no reference and named in no string literal is
+    dead scaffolding an edit stranded. A public constant, a ``conftest.py``, a
+    shared helper module under ``tests/``, and a dedicated constants or
+    ``config/`` module all export to importer modules, so the cross-module
     ``check_dead_module_constants`` judges those and this check skips them.
 
     Args:
@@ -159,7 +167,7 @@ def check_dead_test_module_constant(content: str, file_path: str) -> list[str]:
         file_path: The destination path, used for the test-function-module gate.
 
     Returns:
-        One message per dead constant, capped at the configured maximum.
+        One message per dead private constant, capped at the configured maximum.
     """
     if not _is_dead_constant_scan_target(file_path):
         return []

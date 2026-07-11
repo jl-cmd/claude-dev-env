@@ -44,6 +44,15 @@ def test_should_flag_dead_constant_in_underscore_test_module() -> None:
     issues = _dead_constant(source, UNDERSCORE_TEST_FILE_PATH)
     assert any("_UNREAD_CONSTANT" in each_issue for each_issue in issues), issues
 
+def test_should_not_flag_dead_public_constant_in_test_file() -> None:
+    source = (
+        "EXPECTED_TOTAL = 3\n"
+        "\n"
+        "def test_total() -> None:\n"
+        "    assert True\n"
+    )
+    assert _dead_constant(source, TEST_FILE_PATH) == []
+
 def test_should_not_flag_constant_read_by_a_later_line() -> None:
     source = (
         "_EXPECTED_TOTAL = 208\n"
