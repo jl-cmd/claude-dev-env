@@ -42,8 +42,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-          registry-url: "https://registry.npmjs.org"
+      - run: npm install -g npm@latest
       - run: npm publish --access public
         working-directory: packages/claude-dev-env
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
