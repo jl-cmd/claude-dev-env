@@ -6,6 +6,14 @@ skill still runs teardown (revoke permissions, final report).
 
 ## Blockers (end the run short of ready)
 
+- **Budget stop** — the workflow's `budget` API is the pacing signal: when a
+  usage target is set, `converge.mjs` checks `budget.remaining()` before each
+  round and stops at the round boundary when one full round (three parallel
+  lenses + one fix commit + re-verify) does not fit. The run returns
+  `blocker: "budget"` with the run id; resume with
+  `Workflow({scriptPath, resumeFromRunId})` — completed rounds replay from the
+  journal. The workflow never starts a round the budget cannot finish: a
+  half-run round records nothing resumable and replays dirty.
 - **Iteration cap** — 20 loop iterations pass without a full convergence-check
   pass. The iteration counter increments on every pass through any phase, so a
   convergence-check gate that no round can clear (for example a `mergeable_state`

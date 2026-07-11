@@ -21,9 +21,12 @@ Drives one draft PR to convergence in a single autonomous workflow run. Each rou
 | `workflow/convergence_summary.py` | Builds the convergence-summary agent prompt over the merged findings. |
 | `workflow/render_report.py` | Builds the closing HTML report from the merged journal and summary. |
 | `reference/convergence.md` | Round shape: the static sweep, the three parallel internal lenses, deduplication, fix commit, the terminal Bugbot and Copilot gates, and the ready definition. |
-| `reference/stop-conditions.md` | Every way the run ends short of ready. |
+| `reference/stop-conditions.md` | Every way the run ends short of ready, including the budget stop. |
 | `reference/gotchas.md` | Hard-won failure lessons. |
-| `reference/closing-report.md` | Specification for the closing HTML report format. |
+| `reference/closing-report.md` | The closing HTML report: data source, build steps, publishing. |
+| `reference/multi-pr.md` | The several-PRs path: per-PR worktrees, the `converge_multi.mjs` launch, per-PR teardown. |
+| `reference/self-closing-loop.md` | The deferred-PR generations and the Conventional-Commit title rule. |
+| `reference/headless-safety.md` | The agent-prompt headless-safety preamble and the rm auto-allow paths. |
 
 ## Entry point
 

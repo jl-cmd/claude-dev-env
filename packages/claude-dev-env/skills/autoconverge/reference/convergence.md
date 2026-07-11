@@ -35,7 +35,8 @@ same edit → verify → commit fix flow the rounds use, landing in one verified
 commit before convergence begins. The pass is best-effort: when no case clears
 all three criteria the run proceeds straight to convergence. Whatever the reuse
 pass surfaces also joins the round findings, so the code-review lens re-checks
-any improvement that did not land.
+any improvement that did not land. The run result's `reuseNote` records what
+landed.
 
 ## The round loop
 
@@ -93,6 +94,13 @@ confirmation gates that are expected to return zero.
 6. **Zero findings on a stable HEAD** → post the CLEAN bugteam audit artifact
    for that HEAD, then move to the terminal Bugbot gate.
 
+A round whose findings are ALL code-standard violations (pure CODE_RULES/style,
+no behavioral impact) passes for convergence purposes: the workflow files a
+follow-up issue listing the findings, opens a draft environment-hardening PR
+(hooks/rules that block those violation classes at Write/Edit time), resolves
+any bot threads with a deferral note, and reports the deferral in
+`standardsNote`. The hardening PRs land in the run result's `deferredPrs` list.
+
 **BUGBOT** gate (terminal external confirmation):
 
 - Runs once the internal lenses are clean. When Bugbot is off for the run — the
@@ -132,6 +140,8 @@ the strongest model only where judgment is dense:
 - **opus** — the reading lenses (code-review, bug-audit, self-review,
   reuse), the terminal Bugbot gate, and the code-editing steps that fix findings
   (fix-edit, conflict-edit, repair-edit, standards-edit).
+- **haiku** — the mechanical probes: preflight, the Copilot gate, the
+  CLEAN-audit post, and the convergence check.
 
 ## Full-diff rule
 
