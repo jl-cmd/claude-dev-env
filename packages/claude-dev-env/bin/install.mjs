@@ -154,9 +154,8 @@ const INSTALL_GROUPS = {
         skills: [
             'orchestrator', 'orchestrator-refresh', 'team-advisor',
             'anthropic-plan', 'everything-search',
-            'pr-review-responder',
             'privacy-hygiene',
-            'recall', 'remember', 'task-build', 'verified-build'
+            'recall', 'remember', 'task-build'
         ],
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,
@@ -164,10 +163,6 @@ const INSTALL_GROUPS = {
     journal: {
         description: 'Session logging and memory',
         skills: ['session-log', 'session-tidy'],
-    },
-    research: {
-        description: 'Deep research and citation tools',
-        skills: ['deep-research', 'research-mode'],
     },
     ...discoverDependencyGroups(),
 };
