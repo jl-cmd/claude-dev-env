@@ -181,6 +181,10 @@ from code_rules_test_branching_except import (  # noqa: E402
 from code_rules_test_isolation import (  # noqa: E402
     check_tests_use_isolated_filesystem_paths,
 )
+from code_rules_test_layout import (  # noqa: E402
+    check_dead_test_module_constant,
+    check_unused_test_helper_parameter,
+)
 from code_rules_type_escape import (  # noqa: E402
     check_boundary_types,
     check_type_escape_hatches,
@@ -324,6 +328,8 @@ def validate_content(
         all_issues.extend(check_stub_implementations(effective_content, file_path))
         all_issues.extend(check_typed_dict_encode_decode(effective_content, file_path))
         all_issues.extend(check_test_branching_in_production(effective_content, file_path))
+        all_issues.extend(check_dead_test_module_constant(effective_content, file_path))
+        all_issues.extend(check_unused_test_helper_parameter(effective_content, file_path))
         all_issues.extend(check_bare_except(effective_content, file_path))
         all_issues.extend(check_thin_wrapper_files(effective_content, file_path))
         all_issues.extend(check_zero_payload_function_alias(effective_content, file_path))
