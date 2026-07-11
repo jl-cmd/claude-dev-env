@@ -184,6 +184,16 @@ On teardown entry, when `~/.claude/runtime/pr-loop/bugteam-pr-<N>/handoff.json`
 exists, read its `completed_steps` and skip any checkpoint the list already
 names, so a resumed run performs only the checkpoints left.
 
+Before the checkpoints, when the workflow returned a non-null `copilotNote`
+(the Copilot gate was bypassed), query the PR's reviews once more for a
+`copilot-pull-request-reviewer[bot]` review on the final HEAD
+(`fetch_copilot_reviews.py`, or the GitHub MCP `pull_request_read` method
+`get_reviews`). Copilot typically posts within 10–15 minutes of a request, so
+a review can land between the bypass and teardown. When one exists and
+carries findings, mark the PR draft, route the findings through one fix
+round per the `pr-fix-protocol` skill, re-verify, push, and mark the PR
+ready again — then run the checkpoints.
+
 1. **When `converged` is true — build and publish the closing report.**
    Skip this entire step (report, artifact publish, comment, Chrome open) when the
    workflow returned a non-null `blocker`. Per-round live-dashboard refresh is out of

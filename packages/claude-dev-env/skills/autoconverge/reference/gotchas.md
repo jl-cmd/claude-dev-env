@@ -60,3 +60,14 @@ fails in a new way.
   own. When landing a fix needs it, stop and tell the user the verified-commit
   gate is blocking the push and that going forward needs either a `# verify-skip`
   bypass or a switch to `/pr-converge`, then let the user decide.
+
+- **A Copilot "down" verdict is valid only after the full poll budget.** A
+  successful review request means the review is in flight — Copilot typically
+  posts within 10–15 minutes of the request. A gate agent that returns
+  `down:true` on a partial poll misreports an in-flight review as reviewer
+  unavailability, and the run marks the PR ready moments before the review
+  lands. After a successful request the only valid gate outcomes are a
+  received review on HEAD, an out-of-usage notice, or the full poll budget
+  spent. The teardown re-checks the PR for a late-arriving Copilot review
+  whenever the gate was bypassed, and routes its findings through one more
+  fix round.

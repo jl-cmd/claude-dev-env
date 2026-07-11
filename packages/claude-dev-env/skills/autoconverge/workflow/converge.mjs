@@ -1677,6 +1677,7 @@ function runCopilotGate(head) {
       `   - Copilot review present on HEAD whose state is APPROVED, or COMMENTED with no inline findings -> a clean pass: return {sha:${'`'}${head}${'`'}, clean:true, down:false, findings:[]}.\n` +
       `   - Copilot findings on HEAD -> return them (each with its inline comment id in replyToCommentId; category 'code-standard' for pure CODE_RULES/style violations with no behavioral impact, 'bug' otherwise), clean:false, down:false.\n` +
       `   - No review after ${CONFIG.copilotMaxPolls} attempts -> Copilot is down for this run (unreachable, or silently out of quota with no notice): return {sha:${'`'}${head}${'`'}, clean:false, down:true, findings:[]}.\n\n` +
+      `A down verdict is valid ONLY in two cases: the review request itself failed, or the FULL poll budget (${CONFIG.copilotMaxPolls} attempts x 360 seconds) elapsed with no review on HEAD. A successful review request means the review is in flight; returning down:true on a partial poll is an invalid result. Never end the poll early for any reason other than a received review on HEAD or an out-of-usage notice — not tooling friction, not turn-length pressure, not a failed attempt to write a polling helper. When your wait tooling fails, re-arm it and keep polling until the budget is spent.\n\n` +
       `Return strictly the schema.`,
     { label: 'copilot-gate', phase: 'Copilot gate', schema: COPILOT_SCHEMA, ...TIERS.haikuLow },
   )
