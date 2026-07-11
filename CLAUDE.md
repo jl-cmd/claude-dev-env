@@ -42,7 +42,7 @@ Notes:
 
 ### The install pipeline
 
-`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `agents/`, `skills/`, `hooks/`, `system-prompts/`, `scripts/`, `_shared/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, `research`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
+`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `agents/`, `skills/`, `hooks/`, `system-prompts/`, `scripts/`, `_shared/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
 
 ### Hooks
 

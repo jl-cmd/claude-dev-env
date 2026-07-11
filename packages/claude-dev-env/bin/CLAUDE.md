@@ -26,4 +26,4 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 
 ## Install groups
 
-`install.mjs` defines install groups (`core`, `journal`, `research`) plus any dependency groups discovered from `package.json` `dependencies`. The `core` group installs skills, all hooks, and the content directories. `journal` and `research` install only their skill sets.
+`install.mjs` defines install groups (`core`, `journal`) plus any dependency groups discovered from `package.json` `dependencies`. The `core` group installs skills, all hooks, and the content directories. `journal` installs only its skill set.
