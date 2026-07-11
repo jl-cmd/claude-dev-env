@@ -50,5 +50,5 @@ jobs:
           echo "id-token request token set: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+yes}${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-no}"
           echo "NODE_AUTH_TOKEN set: ${NODE_AUTH_TOKEN:+yes}${NODE_AUTH_TOKEN:-no}"
           echo "npm userconfig: ${NPM_CONFIG_USERCONFIG:-none}"
-      - run: npm publish --access public
+      - run: npm publish --access public --loglevel=verbose
         working-directory: packages/claude-dev-env
