@@ -8,7 +8,10 @@ monkeypatch line leaves behind: a dead private module constant, and an
 unused private-helper parameter.
 """
 
+import re
+
 PRIVATE_NAME_PREFIX: str = "_"
+TEST_FUNCTION_MODULE_BASENAME_PATTERN: re.Pattern[str] = re.compile(r"^(test_.+|.+_test)\.py$")
 FIXTURE_DECORATOR_MARKER: str = "fixture"
 SELF_PARAMETER_NAME: str = "self"
 CLASS_METHOD_FIRST_PARAMETER_NAME: str = "cls"

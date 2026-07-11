@@ -1,17 +1,23 @@
 """Test-module dead-scaffolding checks: dead constant, unused helper parameter.
 
-Two checks run only on a genuine test module (``test_*.py``, ``*_test.py``,
-``*.spec.*``, ``conftest.py``, or a file under a ``tests/`` directory), where
-scaffolding left after an edit hides in plain sight. A test file exports
-nothing, so a single-file scan proves a symbol dead: when a removed
-monkeypatch line was the last reader of a module constant, or the last user
-of a private helper's parameter, the leftover is dead code the checks flag at
-Write/Edit time.
+Both checks run on a test module where scaffolding left after an edit hides in
+plain sight: when a removed monkeypatch line was the last reader of a module
+constant, or the last user of a private helper's parameter, the leftover is
+dead code the checks flag at Write/Edit time.
+
+The dead-constant check runs only on a ``test_*.py`` / ``*_test.py`` module of
+test functions, which exports nothing, so a single-file scan proves a constant
+no other line reads is dead. A ``conftest.py``, a shared helper module reached
+only through the ``tests/`` directory gate, and a dedicated constants or
+``config/`` module all export their constants to importer modules, so the
+cross-module ``check_dead_module_constants`` governs their constants and the
+dead-constant check leaves them alone.
 """
 
 import ast
 from typing import TypeGuard
 
+from code_rules_dead_module_constant import _is_dedicated_constants_module
 from code_rules_shared import is_strict_test_file
 from hooks_constants.test_layout_constants import (
     CLASS_METHOD_FIRST_PARAMETER_NAME,
@@ -21,6 +27,7 @@ from hooks_constants.test_layout_constants import (
     MINIMUM_CONSTANT_NAME_LENGTH,
     PRIVATE_NAME_PREFIX,
     SELF_PARAMETER_NAME,
+    TEST_FUNCTION_MODULE_BASENAME_PATTERN,
     UNUSED_TEST_HELPER_PARAMETER_GUIDANCE,
 )
 
@@ -34,6 +41,33 @@ def _parse_module(content: str) -> ast.Module | None:
     except SyntaxError:
         return None
 
+def _is_dead_constant_scan_target(file_path: str) -> bool:
+    """Return whether a single-file dead-constant scan can judge this module.
+
+    ::
+
+        tests/test_report.py                      -> scan  (test functions export nothing)
+        tests/conftest.py                         -> skip  (fixtures shared with siblings)
+        tests/expected_values.py                  -> skip  (a shared module exports)
+        hooks_constants/test_layout_constants.py  -> skip  (a constants module exports)
+
+    A ``test_*`` / ``*_test`` module of test functions exports nothing, so a
+    constant no other line reads is dead. A ``conftest.py``, a shared helper
+    module reached only through the ``tests/`` directory gate, and a dedicated
+    constants or ``config/`` module all export to importer modules, where the
+    cross-module ``check_dead_module_constants`` governs their constants.
+
+    Args:
+        file_path: The destination path of the write.
+
+    Returns:
+        True only for a ``test_*.py`` / ``*_test.py`` module that is not a
+        dedicated constants or ``config/`` module.
+    """
+    if _is_dedicated_constants_module(file_path):
+        return False
+    basename = file_path.lower().replace("\\", "/").rsplit("/", 1)[-1]
+    return TEST_FUNCTION_MODULE_BASENAME_PATTERN.match(basename) is not None
 
 def _is_constant_name(name: str) -> bool:
     """Return whether a name is an UPPER_SNAKE constant identifier.
@@ -47,7 +81,6 @@ def _is_constant_name(name: str) -> bool:
         return False
     return name == name.upper() and any(each_char.isalpha() for each_char in name)
 
-
 def _assignment_targets(statement: ast.stmt) -> list[ast.expr]:
     """Return the assignment targets of a plain or annotated assignment."""
     if isinstance(statement, ast.Assign):
@@ -55,7 +88,6 @@ def _assignment_targets(statement: ast.stmt) -> list[ast.expr]:
     if isinstance(statement, ast.AnnAssign) and statement.value is not None:
         return [statement.target]
     return []
-
 
 def _statement_constant_targets(statement: ast.stmt) -> list[tuple[str, int]]:
     """Return (name, line) for each UPPER_SNAKE constant one statement binds."""
@@ -65,14 +97,12 @@ def _statement_constant_targets(statement: ast.stmt) -> list[tuple[str, int]]:
             named_targets.append((each_target.id, statement.lineno))
     return named_targets
 
-
 def _module_constant_targets(tree: ast.Module) -> list[tuple[str, int]]:
     """Return (name, line) for every module-scope UPPER_SNAKE constant, in order."""
     constant_targets: list[tuple[str, int]] = []
     for each_statement in tree.body:
         constant_targets.extend(_statement_constant_targets(each_statement))
     return constant_targets
-
 
 def _referenced_names(tree: ast.Module) -> set[str]:
     """Return every name the module reads plus every string literal it holds.
@@ -95,7 +125,6 @@ def _referenced_names(tree: ast.Module) -> set[str]:
     }
     return load_names | literal_values
 
-
 def _dead_constant_messages(tree: ast.Module, referenced_names: set[str]) -> list[str]:
     """Return one message per module constant absent from the referenced set."""
     issues: list[str] = []
@@ -109,32 +138,35 @@ def _dead_constant_messages(tree: ast.Module, referenced_names: set[str]) -> lis
             break
     return issues
 
-
 def check_dead_test_module_constant(content: str, file_path: str) -> list[str]:
-    """Flag a module-level constant in a test file that no other line reads.
+    """Flag a module-level constant in a test-function module no other line reads.
 
     ::
 
-        a private UPPER_SNAKE constant that no Load reference and no string
-        literal in the module names   ->   dead scaffolding, flag it
+        tests/test_report.py, a private UPPER_SNAKE constant no Load reference
+        and no string literal names   ->   dead scaffolding, flag it
+        tests/conftest.py / tests/expected_values.py / *_constants.py   ->   skip
 
-    A test module exports nothing, so a constant read by no reference and named
-    in no string literal is dead code left after an edit.
+    A ``test_*.py`` / ``*_test.py`` module of test functions exports nothing, so
+    a constant read by no reference and named in no string literal is dead code
+    left after an edit. A ``conftest.py``, a shared helper module under a
+    ``tests/`` directory, and a dedicated constants or ``config/`` module all
+    export their constants to importer modules, so the cross-module
+    ``check_dead_module_constants`` judges those and this check skips them.
 
     Args:
         content: The post-edit file content under validation.
-        file_path: The destination path, used for the test-file gate.
+        file_path: The destination path, used for the test-function-module gate.
 
     Returns:
         One message per dead constant, capped at the configured maximum.
     """
-    if not is_strict_test_file(file_path):
+    if not _is_dead_constant_scan_target(file_path):
         return []
     tree = _parse_module(content)
     if tree is None:
         return []
     return _dead_constant_messages(tree, _referenced_names(tree))
-
 
 def _node_names_fixture(node: ast.AST) -> bool:
     """Return whether one decorator sub-node spells the pytest fixture marker."""
@@ -143,7 +175,6 @@ def _node_names_fixture(node: ast.AST) -> bool:
     if isinstance(node, ast.Attribute):
         return FIXTURE_DECORATOR_MARKER in node.attr
     return False
-
 
 def _has_fixture_decorator(function_node: _FunctionNode) -> bool:
     """Return whether a function carries a pytest fixture decorator.
@@ -158,7 +189,6 @@ def _has_fixture_decorator(function_node: _FunctionNode) -> bool:
             return True
     return False
 
-
 def _is_judged_parameter(parameter_name: str) -> bool:
     """Return whether a parameter name is worth judging for being unread.
 
@@ -169,13 +199,11 @@ def _is_judged_parameter(parameter_name: str) -> bool:
         return False
     return not parameter_name.startswith(PRIVATE_NAME_PREFIX)
 
-
 def _candidate_parameters(function_node: _FunctionNode) -> list[ast.arg]:
     """Return the parameters of a function worth judging for being unread."""
     arguments = function_node.args
     all_parameters = arguments.posonlyargs + arguments.args + arguments.kwonlyargs
     return [each for each in all_parameters if _is_judged_parameter(each.arg)]
-
 
 def _read_parameter_names(function_node: _FunctionNode) -> set[str]:
     """Return every name read anywhere in a function body."""
@@ -184,7 +212,6 @@ def _read_parameter_names(function_node: _FunctionNode) -> set[str]:
         for each_node in ast.walk(function_node)
         if isinstance(each_node, ast.Name) and isinstance(each_node.ctx, ast.Load)
     }
-
 
 def _unused_parameter_messages(function_node: _FunctionNode) -> list[str]:
     """Return one message per candidate parameter the function body never reads."""
@@ -199,7 +226,6 @@ def _unused_parameter_messages(function_node: _FunctionNode) -> list[str]:
         )
     return issues
 
-
 def _is_private_plain_function(statement: ast.stmt) -> TypeGuard[_FunctionNode]:
     """Return whether a statement is a private, non-fixture module-level function."""
     if not isinstance(statement, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -207,7 +233,6 @@ def _is_private_plain_function(statement: ast.stmt) -> TypeGuard[_FunctionNode]:
     if not statement.name.startswith(PRIVATE_NAME_PREFIX):
         return False
     return not _has_fixture_decorator(statement)
-
 
 def check_unused_test_helper_parameter(content: str, file_path: str) -> list[str]:
     """Flag a parameter of a private test helper that its body never reads.
