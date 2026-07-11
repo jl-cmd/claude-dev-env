@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $noiseEmailPatterns = @(
-    'example',
+    '@example\.(com|org|net)$',
     'sentry\.io',
     '@anthropic',
     '^Claude@\d'
@@ -20,6 +20,21 @@ function Test-NoiseEmail {
         if ($Email -imatch $pattern) { return $true }
     }
     return $false
+}
+
+function Get-EncodingAgnosticTextViews {
+    param([string]$FilePath)
+    try {
+        $fileBytes = [System.IO.File]::ReadAllBytes($FilePath)
+    }
+    catch {
+        return @()
+    }
+    if ($fileBytes.Length -eq 0) { return @() }
+    return @(
+        [System.Text.Encoding]::Latin1.GetString($fileBytes),
+        [System.Text.Encoding]::Unicode.GetString($fileBytes)
+    )
 }
 
 function Get-EmailCandidatesFromProfile {
@@ -35,17 +50,13 @@ function Get-EmailCandidatesFromProfile {
         $candidateFiles = Get-ChildItem -LiteralPath $scanDirectory -Recurse -File -ErrorAction SilentlyContinue |
             Where-Object { $_.Length -lt $maximumFileBytes }
         foreach ($candidateFile in $candidateFiles) {
-            try {
-                $fileText = Get-Content -LiteralPath $candidateFile.FullName -Raw -Encoding Ascii -ErrorAction Stop
-            }
-            catch {
-                continue
-            }
-            if ([string]::IsNullOrEmpty($fileText)) { continue }
-            foreach ($match in [regex]::Matches($fileText, $emailPattern)) {
-                $candidateEmail = $match.Value
-                if (-not (Test-NoiseEmail -Email $candidateEmail)) {
-                    [void]$foundEmails.Add($candidateEmail)
+            $decodedTextViews = Get-EncodingAgnosticTextViews -FilePath $candidateFile.FullName
+            foreach ($decodedText in $decodedTextViews) {
+                foreach ($match in [regex]::Matches($decodedText, $emailPattern)) {
+                    $candidateEmail = $match.Value
+                    if (-not (Test-NoiseEmail -Email $candidateEmail)) {
+                        [void]$foundEmails.Add($candidateEmail)
+                    }
                 }
             }
         }
@@ -80,68 +91,74 @@ function Write-AccountResult {
     }
 }
 
-$cliConfigPath = Join-Path $HOME '.claude.json'
-if (-not (Test-Path -LiteralPath $cliConfigPath)) {
-    Write-Error "CLI config not found: $cliConfigPath"
-    exit 2
-}
+function Invoke-GetSessionAccount {
+    $cliConfigPath = Join-Path $HOME '.claude.json'
+    if (-not (Test-Path -LiteralPath $cliConfigPath)) {
+        Write-Error "CLI config not found: $cliConfigPath"
+        exit 2
+    }
 
-try {
-    $cliConfig = Get-Content -LiteralPath $cliConfigPath -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
-}
-catch {
-    Write-Error "Failed to parse CLI config as JSON: $cliConfigPath"
-    exit 2
-}
+    try {
+        $cliConfig = Get-Content -LiteralPath $cliConfigPath -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    }
+    catch {
+        Write-Error "Failed to parse CLI config as JSON: $cliConfigPath"
+        exit 2
+    }
 
-$cliEmail = $cliConfig.oauthAccount.emailAddress
-$cliAccountUuid = $cliConfig.oauthAccount.accountUuid
-if (-not $cliEmail -or -not $cliAccountUuid) {
-    Write-Error "CLI config is missing oauthAccount.emailAddress or oauthAccount.accountUuid: $cliConfigPath"
-    exit 2
-}
+    $cliEmail = $cliConfig.oauthAccount.emailAddress
+    $cliAccountUuid = $cliConfig.oauthAccount.accountUuid
+    if (-not $cliEmail -or -not $cliAccountUuid) {
+        Write-Error "CLI config is missing oauthAccount.emailAddress or oauthAccount.accountUuid: $cliConfigPath"
+        exit 2
+    }
 
-$profileDirectory = $env:CLAUDE_USER_DATA_DIR
-if (-not $profileDirectory -or -not (Test-Path -LiteralPath $profileDirectory)) {
-    Write-AccountResult -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'cli-config'
-    exit 0
-}
+    $profileDirectory = $env:CLAUDE_USER_DATA_DIR
+    if (-not $profileDirectory -or -not (Test-Path -LiteralPath $profileDirectory)) {
+        Write-AccountResult -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'cli-config'
+        exit 0
+    }
 
-$profileConfigPath = Join-Path $profileDirectory 'config.json'
-if (-not (Test-Path -LiteralPath $profileConfigPath)) {
-    Write-Error "Desktop profile config not found: $profileConfigPath"
-    exit 2
-}
+    $profileConfigPath = Join-Path $profileDirectory 'config.json'
+    if (-not (Test-Path -LiteralPath $profileConfigPath)) {
+        Write-Error "Desktop profile config not found: $profileConfigPath"
+        exit 2
+    }
 
-try {
-    $profileConfig = Get-Content -LiteralPath $profileConfigPath -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
-}
-catch {
-    Write-Error "Failed to parse desktop profile config as JSON: $profileConfigPath"
-    exit 2
-}
+    try {
+        $profileConfig = Get-Content -LiteralPath $profileConfigPath -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    }
+    catch {
+        Write-Error "Failed to parse desktop profile config as JSON: $profileConfigPath"
+        exit 2
+    }
 
-$profileAccountUuid = $profileConfig.lastKnownAccountUuid
-if (-not $profileAccountUuid) {
-    Write-Error "Desktop profile config is missing lastKnownAccountUuid: $profileConfigPath"
-    exit 2
-}
+    $profileAccountUuid = $profileConfig.lastKnownAccountUuid
+    if (-not $profileAccountUuid) {
+        Write-Error "Desktop profile config is missing lastKnownAccountUuid: $profileConfigPath"
+        exit 2
+    }
 
-if ($profileAccountUuid -eq $cliAccountUuid) {
-    Write-AccountResult -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'desktop-profile (matches cli-config)'
-    exit 0
-}
+    if ($profileAccountUuid -eq $cliAccountUuid) {
+        Write-AccountResult -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'desktop-profile (matches cli-config)'
+        exit 0
+    }
 
-$candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $profileDirectory)
-if ($candidateEmails.Count -eq 1) {
-    Write-AccountResult -Email $candidateEmails[0] -AccountUuid $profileAccountUuid -Source 'desktop-profile (differs from cli-config)' -CliEmail $cliEmail -CliAccountUuid $cliAccountUuid
-    exit 0
-}
+    $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $profileDirectory)
+    if ($candidateEmails.Count -eq 1) {
+        Write-AccountResult -Email $candidateEmails[0] -AccountUuid $profileAccountUuid -Source 'desktop-profile (differs from cli-config)' -CliEmail $cliEmail -CliAccountUuid $cliAccountUuid
+        exit 0
+    }
 
-if ($candidateEmails.Count -eq 0) {
-    Write-Error "Desktop profile account ($profileAccountUuid) differs from CLI config, but no candidate email was recovered from profile storage: $profileDirectory"
+    if ($candidateEmails.Count -eq 0) {
+        Write-Error "Desktop profile account ($profileAccountUuid) differs from CLI config, but no candidate email was recovered from profile storage: $profileDirectory"
+        exit 1
+    }
+
+    Write-Error "Desktop profile account ($profileAccountUuid) differs from CLI config, and multiple candidate emails were found in profile storage: $($candidateEmails -join ', ')"
     exit 1
 }
 
-Write-Error "Desktop profile account ($profileAccountUuid) differs from CLI config, and multiple candidate emails were found in profile storage: $($candidateEmails -join ', ')"
-exit 1
+if ($MyInvocation.InvocationName -ne '.') {
+    Invoke-GetSessionAccount
+}
