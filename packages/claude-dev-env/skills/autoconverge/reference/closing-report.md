@@ -40,7 +40,12 @@ When the summary is absent, the report falls back to a minimal layout: the title
 
 ## Building the report
 
-Three steps run at teardown, each a separate process:
+Three steps run at teardown, each a separate process. Working files go under
+`$CLAUDE_JOB_DIR/tmp/` named by PR number — the work dir as
+`autoconverge-agg-<prNumber>`, the prompt as
+`autoconverge-summary-prompt-<prNumber>.txt`, the summary as
+`autoconverge-summary-<prNumber>.json`, and the report as
+`autoconverge-report-<prNumber>.html`:
 
 1. **Merge the runs and build the summary prompt.**
    ```
@@ -51,7 +56,9 @@ Three steps run at teardown, each a separate process:
      --out-prompt "<prompt path>.txt" \
      [--standards-note "<note>"] [--copilot-note "<note>"]
    ```
-   `--journal` is any one of the PR's journals — the seed that locates the rest. The script prints a JSON line carrying `combinedJournal`, `roundCount`, `finalSha`, and `findingCount`.
+   `--journal` is any one of the PR's journals — the seed that locates the rest.
+   Resolve it by globbing `~/.claude/projects/**/workflows/wf_<runId>.json`,
+   where `runId` is the run id the `Workflow` result returned. The script prints a JSON line carrying `combinedJournal`, `roundCount`, `finalSha`, and `findingCount`.
 
 2. **Write the summary.** Spawn a `convergence-summary` agent on the prompt file's text. Its JSON answer — the `prProblem`/`prFix`/`problemScenes`/`fixScenes`/`verdictLine`/`issueClasses` object — goes to a `.json` file.
 

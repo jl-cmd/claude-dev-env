@@ -9,4 +9,7 @@ Reference documentation for the `autoconverge` skill. The `converge.mjs` workflo
 | `convergence.md` | Round shape: the static sweep, the three parallel internal lenses (code-review, bug-audit, self-review), deduplication, the fix commit step, the terminal Bugbot and Copilot gates, and the definition of a clean convergence. |
 | `stop-conditions.md` | Every condition that ends the run short of ready: budget cap, iteration cap, blocker exit, static-sweep stall, Bugbot and Copilot bypass. |
 | `gotchas.md` | Hard-won lessons from failed runs: PR title validation, conflicting PRs, worktree branch lock, resumed sessions rerooting, and minter issues. |
-| `closing-report.md` | Specification for the closing HTML convergence report the teardown step builds and publishes. |
+| `closing-report.md` | The closing HTML convergence report the teardown step builds and publishes: data source, build steps, publishing. |
+| `multi-pr.md` | The several-PRs path: per-PR worktrees, the `converge_multi.mjs` launch, per-PR teardown. |
+| `self-closing-loop.md` | The deferred-PR generations the orchestrator converges after teardown, and the Conventional-Commit title rule on hardening PRs. |
+| `headless-safety.md` | The headless-safety preamble every agent prompt carries, and the rm auto-allow paths. |
