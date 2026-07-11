@@ -42,12 +42,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-      - run: npm install -g npm@latest
+      - run: npm install -g npm@11
       - name: Report the publish environment
         run: |
           echo "npm version: $(npm --version)"
           echo "id-token request url set: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}${ACTIONS_ID_TOKEN_REQUEST_URL:-no}"
+          echo "id-token request token set: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+yes}${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-no}"
           echo "NODE_AUTH_TOKEN set: ${NODE_AUTH_TOKEN:+yes}${NODE_AUTH_TOKEN:-no}"
           echo "npm userconfig: ${NPM_CONFIG_USERCONFIG:-none}"
-      - run: npm publish --access public --provenance
+      - run: npm publish --access public
         working-directory: packages/claude-dev-env
