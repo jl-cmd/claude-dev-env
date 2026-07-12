@@ -1,0 +1,18 @@
+# Pending #20 disposition — session pollution when full tests/ collects both
+# test_fan_out_dispatch and test_sync_ai_rules (sync_ai_rules pops sys.modules["config"]).
+# See issue #20 comment on this node ID. Do not remove without an owner disposition.
+tests/test_fan_out_dispatch.py::TestImportKeepsAlreadyLoadedConfig::should_leave_an_already_imported_config_module_in_sys_modules
+
+# Linux is_ephemeral OS-temp gap (#18 out of scope)
+packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_ephemeral.py::test_should_return_false_for_os_tempfile_gettempdir_root
+
+# #20 pending — fails Windows+ubuntu (env-independent)
+packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_cap_meta.py::test_every_check_function_either_caps_or_is_explicitly_pending
+packages/claude-dev-env/hooks/blocking/test_code_rules_js_sibling_return_object_key_drift.py::test_shipped_converge_mjs_passes_its_own_check
+
+# #20 pending — ubuntu fail, Windows pass (venue-dependent; not env-independent)
+packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_duplicate_body_hook_routing.py::test_write_of_copied_helper_into_hook_directory_denies
+packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_duplicate_body_hook_routing.py::test_precheck_of_copied_helper_at_hook_target_exits_nonzero
+packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_zero_payload_alias_hook_routing.py::test_write_of_pass_through_alias_into_hook_directory_denies
+packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_zero_payload_alias_hook_routing.py::test_precheck_of_pass_through_alias_at_hook_target_exits_nonzero
+packages/claude-dev-env/scripts/test_sweep_empty_dirs.py::test_sweep_removes_nested_empty_dirs

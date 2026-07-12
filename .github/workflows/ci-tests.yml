@@ -1,0 +1,191 @@
+# Full Python + JS test suites on every PR and main push.
+#
+# Absorbs the former path-filter job (ci-sync-ai-rules.yml): the full root suite
+# covers tests/test_sync_ai_rules.py and tests/test_fan_out_dispatch.py on every
+# PR with Python 3.12, so that path-filter workflow is deleted on purpose.
+#
+# Deselect policy (single-source lists under .github/ci/):
+#   - LivePostAudit: permanently deselected (local register; no credential wiring;
+#     gh binary is present on runners but author-swap tokens are not).
+#   - Windows-semantics: deselected on ubuntu; run on windows-latest micro-job (#24)
+#     from the same windows-semantics-node-ids.txt file.
+#   - Author-swap restore: permanently deselected (issue #21 protocol; no gh auth
+#     switch credentials on CI runners).
+#   - Issue #21 listed hooks/blocking/test_gh_artifact_upload.py; amended to the
+#     real path packages/claude-dev-env/scripts/tests/test_gh_artifact_upload.py.
+#
+# basetemp lives under RUNNER_TEMP (not OS temp root, not inside the repo) so
+# is_ephemeral_script_path Linux exemptions do not treat pytest temp paths as
+# ephemeral production scripts.
+#
+# permissions.contents stays read — never loosens.
+
+name: CI — Full test suites
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python suite (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python test dependencies
+        run: |
+          pip install -e packages/claude-dev-env/ \
+            pytest \
+            pytest-xdist \
+            pyyaml \
+            psycopg \
+            mypy \
+            ruff
+
+      - name: Configure git identity for test repos
+        run: |
+          git config --global user.email "ci@github.com"
+          git config --global user.name "CI"
+
+      - name: Prepare pytest basetemp under RUNNER_TEMP
+        run: |
+          mkdir -p "$RUNNER_TEMP/pytest-basetemp-root"
+          mkdir -p "$RUNNER_TEMP/pytest-basetemp-pkg"
+
+      - name: Root suite (tests/)
+        env:
+          GITHUB_STEP_SUMMARY: ${{ runner.temp }}/pytest-step-summary-root.md
+        run: |
+          set -euo pipefail
+          deselect_args=()
+          for list_file in \
+            .github/ci/live-post-audit-deselects.txt \
+            .github/ci/windows-semantics-node-ids.txt \
+            .github/ci/known-pending-deselects.txt \
+            .github/ci/author-swap-deselects.txt
+          do
+            while IFS= read -r node_id || [ -n "${node_id}" ]; do
+              node_id="${node_id//$'\r'/}"
+              case "${node_id}" in
+                ''|\#*) continue ;;
+              esac
+              deselect_args+=(--deselect="${node_id}")
+            done < "${list_file}"
+          done
+          expected_deselect_count=0
+          for list_file in \
+            .github/ci/live-post-audit-deselects.txt \
+            .github/ci/windows-semantics-node-ids.txt \
+            .github/ci/known-pending-deselects.txt \
+            .github/ci/author-swap-deselects.txt
+          do
+            while IFS= read -r node_id || [ -n "${node_id}" ]; do
+              node_id="${node_id//$'\r'/}"
+              case "${node_id}" in
+                ''|\#*) continue ;;
+              esac
+              expected_deselect_count=$((expected_deselect_count + 1))
+            done < "${list_file}"
+          done
+          deselect_flag_count=${#deselect_args[@]}
+          echo "deselect flag count=${deselect_flag_count} expected non-comment lines=${expected_deselect_count}"
+          if [ "${deselect_flag_count}" -ne "${expected_deselect_count}" ]; then
+            echo "ERROR: deselect_args length (${deselect_flag_count}) != expected non-comment line count (${expected_deselect_count})"
+            exit 1
+          fi
+          for each_deselect_flag in "${deselect_args[@]}"; do
+            case "${each_deselect_flag}" in
+              *test_fan_out_dispatch.py*)
+                echo "known-pending deselect: ${each_deselect_flag}"
+                ;;
+            esac
+          done
+          python -m pytest tests/ \
+            --basetemp="$RUNNER_TEMP/pytest-basetemp-root" \
+            -q \
+            "${deselect_args[@]}"
+
+      - name: Package suite
+        env:
+          GITHUB_STEP_SUMMARY: ${{ runner.temp }}/pytest-step-summary-pkg.md
+        run: |
+          set -euo pipefail
+          deselect_args=()
+          for list_file in \
+            .github/ci/live-post-audit-deselects.txt \
+            .github/ci/windows-semantics-node-ids.txt \
+            .github/ci/known-pending-deselects.txt \
+            .github/ci/author-swap-deselects.txt
+          do
+            while IFS= read -r node_id || [ -n "${node_id}" ]; do
+              node_id="${node_id//$'\r'/}"
+              case "${node_id}" in
+                ''|\#*) continue ;;
+              esac
+              deselect_args+=(--deselect="${node_id}")
+            done < "${list_file}"
+          done
+          expected_deselect_count=0
+          for list_file in \
+            .github/ci/live-post-audit-deselects.txt \
+            .github/ci/windows-semantics-node-ids.txt \
+            .github/ci/known-pending-deselects.txt \
+            .github/ci/author-swap-deselects.txt
+          do
+            while IFS= read -r node_id || [ -n "${node_id}" ]; do
+              node_id="${node_id//$'\r'/}"
+              case "${node_id}" in
+                ''|\#*) continue ;;
+              esac
+              expected_deselect_count=$((expected_deselect_count + 1))
+            done < "${list_file}"
+          done
+          deselect_flag_count=${#deselect_args[@]}
+          echo "deselect flag count=${deselect_flag_count} expected non-comment lines=${expected_deselect_count}"
+          if [ "${deselect_flag_count}" -ne "${expected_deselect_count}" ]; then
+            echo "ERROR: deselect_args length (${deselect_flag_count}) != expected non-comment line count (${expected_deselect_count})"
+            exit 1
+          fi
+          for each_deselect_flag in "${deselect_args[@]}"; do
+            case "${each_deselect_flag}" in
+              *test_fan_out_dispatch.py*)
+                echo "known-pending deselect: ${each_deselect_flag}"
+                ;;
+            esac
+          done
+          python -m pytest packages/claude-dev-env \
+            --basetemp="$RUNNER_TEMP/pytest-basetemp-pkg" \
+            -q \
+            "${deselect_args[@]}"
+
+  javascript:
+    name: JS suite (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # No npm cache: package has no lockfile (issue #22).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install and run JS tests
+        working-directory: packages/claude-dev-env
+        run: |
+          npm install
+          npm test

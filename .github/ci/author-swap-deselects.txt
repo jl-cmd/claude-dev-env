@@ -1,0 +1,11 @@
+# Author-swap restore hook tests — require gh account switch credentials.
+# Permanently deselected from the ubuntu Python suite (issue #21 protocol).
+# No credential wiring on CI runners for gh auth switch / restore paths.
+packages/claude-dev-env/hooks/blocking/test_gh_pr_author_restore.py::test_main_switches_back_and_deletes_state_file
+packages/claude-dev-env/hooks/blocking/test_gh_pr_author_restore.py::test_main_preserves_state_file_when_switch_fails
+packages/claude-dev-env/hooks/blocking/test_gh_pr_author_restore.py::test_main_no_op_on_malformed_state_file
+packages/claude-dev-env/hooks/blocking/test_gh_pr_author_restore.py::test_main_no_op_when_state_file_missing_original_account
+packages/claude-dev-env/hooks/blocking/test_gh_pr_author_restore.py::test_main_deletes_state_file_when_original_account_wrong_type
+packages/claude-dev-env/hooks/blocking/test_gh_pr_author_restore.py::test_main_deletes_state_file_when_original_account_blank
+packages/claude-dev-env/hooks/blocking/test_gh_pr_author_restore.py::test_main_per_session_key_isolation
+packages/claude-dev-env/hooks/blocking/test_gh_pr_author_restore.py::test_main_logs_high_level_failure_when_restore_switch_fails

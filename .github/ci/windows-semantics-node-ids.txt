@@ -1,0 +1,14 @@
+# Windows-path semantics node IDs.
+# Ubuntu Python suite: --deselect each line.
+# Windows micro-job (#24): --select / explicit node-id list from this same file.
+# Single source so select/deselect cannot drift.
+#
+# Issue #21 listed hooks/blocking/test_gh_artifact_upload.py; the real path is
+# packages/claude-dev-env/scripts/tests/test_gh_artifact_upload.py (amended here).
+packages/claude-dev-env/scripts/tests/test_gh_artifact_upload.py::test_timestamped_asset_name_prefixes_basename
+packages/claude-dev-env/hooks/blocking/test_destructive_command_blocker.py::test_rm_rf_allowed_when_unquoted_windows_backslash_target_is_ephemeral
+packages/claude-dev-env/hooks/blocking/test_destructive_command_blocker.py::test_rm_rf_allowed_when_unquoted_windows_backslash_target_contains_worktrees_segment
+packages/claude-dev-env/hooks/blocking/test_destructive_command_blocker.py::test_rm_rf_allowed_when_finding_example_windows_backslash_ephemeral_target
+packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_ephemeral.py::test_should_return_true_for_root_anchored_tmp_and_temp[C:/Temp/scratch.py]
+packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_ephemeral.py::test_should_return_true_for_root_anchored_tmp_and_temp[c:/tmp/scratch.py]
+packages/claude-dev-env/hooks/blocking/test_destructive_command_blocker.py::test_rm_rf_asks_when_rm_target_uses_windows_backslash_absolute_path_unquoted
