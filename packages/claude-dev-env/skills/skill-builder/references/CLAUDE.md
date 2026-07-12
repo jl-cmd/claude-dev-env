@@ -6,14 +6,18 @@ Best-practice specifications and the mandatory self-audit checklist for the `/sk
 
 | File | Purpose |
 |---|---|
-| `self-audit-checklist.md` | 33-point checklist run after every build, improvement, or polish pass. Every item must pass before delivery. |
-| `skill-types.md` | 9-type skill taxonomy with folder structures per type (Library & API Reference, Product Verification, Data Fetching, Business Process, Code Scaffolding, Code Quality, CI/CD, Runbooks, Infrastructure). |
-| `progressive-disclosure.md` | Hub pattern, folder conventions, and hard rules: SKILL.md under 500 lines, detail in reference/, scripts execute without context load, references one level deep. |
-| `delegation-map.md` | Subagent handoff patterns and transcript guidance for the skill-builder → skill-writer handoff. |
+| `self-audit-checklist.md` | Checklist after every build, improvement, or polish pass. Every item must pass before delivery. |
+| `skill-types.md` | 9-type skill taxonomy with folder structures per type. |
+| `progressive-disclosure.md` | Hub pattern, folder conventions, hard rules: SKILL.md under 500 lines, one-level references. |
+| `skill-modularity.md` | Cross-skill modularity: one capability, sub-skills by name, composition plan, anti-monolith. |
+| `description-field.md` | Frontmatter description as trigger catalog (capability stem + Triggers). No story prose. |
+| `delegation-map.md` | Subagent handoff patterns and transcript guidance for skill-builder → skill-writer. |
 | `thariq-x-post-skills.json` | Source reference data from Anthropic lessons on building Claude Code skills. |
 
 ## Conventions
 
-- These files are loaded on demand by `SKILL.md` routing — not all are loaded on every run.
-- `self-audit-checklist.md` is always loaded at the end of a build cycle.
+- These files load on demand from `SKILL.md` routing — not all on every run.
+- `self-audit-checklist.md` always loads at the end of a build cycle.
+- Load `skill-modularity.md` during Gather and when scope/overlap is diagnosed.
+- Load `description-field.md` during Gather, polish Step 1, and any activation diagnosis.
 - `thariq-x-post-skills.json` is source reference data, not executable content.

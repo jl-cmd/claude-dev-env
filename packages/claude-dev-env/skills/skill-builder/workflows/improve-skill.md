@@ -42,8 +42,11 @@ Failure classification:
 
 | Symptom | Diagnosis | Apply |
 |---|---|---|
-| Skill never activates when it should | Description missing trigger phrases or too vague | Principles: Description field |
-| Skill activates when it shouldn’t | Description too broad, no refusal cases | Principles: Constraints and refusal cases |
+| Skill never activates when it should | Description missing trigger phrases, story prose, or too vague | `description-field.md` trigger catalog |
+| Skill activates when it shouldn’t | Description too broad / story; no refusal boundary | Description triggers + Constraints / when-this-applies |
+| Description is multi-sentence narrative | Description used as summary/story | Rewrite per `description-field.md` |
+| Skill owns unrelated jobs | Monolith / multi-capability | `skill-modularity.md` — split or orchestrator + sub-skills |
+| Skill reimplements another skill’s steps | Silent reimplementation | Compose by name; sub-skills table |
 | Claude reads wrong files first | Structure not intuitive, hub doesn’t guide well | Progressive disclosure |
 | Claude ignores a companion file | File not signaled in SKILL.md or poorly linked | File index, hub pattern |
 | Claude over-explains basics | Skill states what Claude already knows | Principles: Concision |
@@ -51,6 +54,8 @@ Failure classification:
 | Claude makes same mistake repeatedly | Missing gotcha | Principles: Gotchas |
 | Claude errors on script execution | Script doesn’t handle errors, missing deps | Principles: Scripts |
 | Output format is wrong | Missing template or examples | Principles: Templates and examples |
+
+When scope or activation is in play, re-read `${CLAUDE_SKILL_DIR}/references/skill-modularity.md` and `${CLAUDE_SKILL_DIR}/references/description-field.md`.
 
 **Output:** Diagnosis per failure — which best practice was violated.
 
@@ -64,9 +69,11 @@ Failure classification:
 
 For each diagnosis from Step 2:
 
-1. Read the relevant section in `${CLAUDE_SKILL_DIR}/references/progressive-disclosure.md` or the SKILL.md principles.
+1. Read the matching reference (`description-field.md`, `skill-modularity.md`, `progressive-disclosure.md`, or SKILL.md principles).
 2. Make the minimum change that addresses the failure.
-3. Verify the fix doesn’t break anything that was working.
+3. For description failures: rewrite frontmatter into a trigger catalog (capability stem + Triggers list); strip story prose.
+4. For modularity failures: add sub-skills table, split packages, or thin the orchestrator; do not paste peer skill procedures.
+5. Verify the fix doesn’t break anything that was working.
 
 Delegate larger rewrites to `/skill-writer` using the refine-skill handoff from delegation-map.md.
 
@@ -113,6 +120,8 @@ Present to the user:
 1. **What was observed** — summary of failures from Step 1.
 2. **What was diagnosed** — which best practices were violated.
 3. **What changed** — delta summary (files modified, lines added/removed).
-4. **New gotchas added** — list of gotchas captured.
-5. **Audit summary** — post-fix audit results.
-6. **Suggested re-test** — a concrete task to verify the fix with Claude B.
+4. **Description** — final frontmatter if rewritten (paste the trigger catalog).
+5. **Composition** — sub-skills or splits if modularity changed.
+6. **New gotchas added** — list of gotchas captured.
+7. **Audit summary** — post-fix audit results.
+8. **Suggested re-test** — a concrete task to verify the fix with Claude B.

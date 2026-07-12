@@ -1,12 +1,12 @@
 # skill-builder
 
-Orchestrates the complete skill-building lifecycle: classify the skill type, scaffold folders, write via `skill-writer`, self-audit against a 33-point checklist, and refine from real usage observations.
+Orchestrates the skill-building lifecycle: classify type, scaffold folders, write via `skill-writer`, enforce modularity (sub-skills / composition), write description as a trigger catalog, self-audit, and refine from real usage.
 
-**Trigger:** "build a skill", "new skill workflow", "improve this skill", "optimize skill description", "skill development lifecycle".
+**Trigger:** build a skill, new skill workflow, improve this skill, optimize skill description, skill development lifecycle, skill modularity, description trigger catalog.
 
 ## Purpose
 
-The expert that enforces craft standards. For quick one-off SKILL.md edits, use `/skill-writer` directly. This skill classifies, scaffolds, gathers context, delegates writing, and self-audits the result.
+Enforces craft standards for new and existing skills. For quick one-off SKILL.md edits, use `/skill-writer` directly. This skill classifies, scaffolds, gathers context (including composition plan and description triggers), delegates writing, and self-audits.
 
 ## Key files
 
@@ -15,13 +15,15 @@ The expert that enforces craft standards. For quick one-off SKILL.md edits, use 
 | `SKILL.md` | Hub — routing, principles, file index |
 | `references/skill-types.md` | 9-type taxonomy with folder structures per type |
 | `references/progressive-disclosure.md` | Hub pattern, folder conventions, hard rules |
-| `references/self-audit-checklist.md` | 33-point mandatory post-build audit |
+| `references/skill-modularity.md` | Cross-skill modularity, sub-skills, composition plan |
+| `references/description-field.md` | Description as trigger catalog (not story prose) |
+| `references/self-audit-checklist.md` | Mandatory post-build audit |
 | `references/delegation-map.md` | Subagent handoff patterns and transcript guidance |
 | `references/thariq-x-post-skills.json` | Source reference — lessons from building Claude Code skills |
 | `workflows/new-skill.md` | Full lifecycle for new skills (6 steps) |
 | `workflows/improve-skill.md` | Observation-first flow for existing skills (6 steps) |
-| `workflows/polish-skill.md` | Description audit and final validation (5 steps) |
-| `templates/gap-analysis.md` | Template for documenting skill gaps |
+| `workflows/polish-skill.md` | Description trigger-catalog audit and final validation (5 steps) |
+| `templates/gap-analysis.md` | Gaps, composition plan, description triggers |
 
 ## Subdirectories
 
@@ -40,6 +42,7 @@ The expert that enforces craft standards. For quick one-off SKILL.md edits, use 
 
 ## Conventions
 
-- Every build ends with the 33-point self-audit at `references/self-audit-checklist.md`; fix failures before delivery.
-- `skill-builder` orchestrates; `skill-writer` authors. The handoff packet must include type, gap analysis, degree-of-freedom assessment, and constraints.
-- The Claude A / Claude B pattern: Claude A (this session) designs; Claude B (subagents) tests by running the built skill on real tasks.
+- Every build ends with the self-audit at `references/self-audit-checklist.md`; fix failures before delivery.
+- Modularity items and description trigger-catalog items are mandatory on every delivery.
+- `skill-builder` orchestrates; `skill-writer` authors. Handoff packet must include type, gap analysis, composition plan, description trigger catalog, degree-of-freedom assessment, and constraints.
+- Claude A / Claude B: Claude A (this session) designs; Claude B (subagents) tests the built skill on real tasks.

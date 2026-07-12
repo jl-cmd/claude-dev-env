@@ -52,9 +52,11 @@ Best-practice-driven lifecycle for building a skill from scratch.
 
 ## Step 3: Gather
 
-**Goal:** Collect domain knowledge, failure patterns, and gotchas from the user.
+**Goal:** Collect domain knowledge, failure patterns, gotchas, and a composition plan.
 
 > "Build a Gotchas Section — these sections should be built up from common failure points that Claude runs into when using your skill."
+
+Read `${CLAUDE_SKILL_DIR}/references/skill-modularity.md` and `${CLAUDE_SKILL_DIR}/references/description-field.md` before the interview. Modularity and description triggers are gates: do not proceed to Write until the composition plan and trigger catalog drafts are filled.
 
 ### Interview questions
 
@@ -68,16 +70,26 @@ Ask the user:
 6. "Are there rules or constraints Claude must never violate?"
 7. "What tools, scripts, or libraries does Claude need to use?"
 8. "Does this skill need to run differently for different models (Haiku vs Opus)?"
+9. "In one sentence, what is the single capability this skill owns?"
+10. "Which existing skills already cover a step of this work? Which steps should this skill invoke by name?"
+11. "Is this one skill, several skills, or a thin orchestrator that calls sub-skills?"
+12. "What exact phrases, slash commands, or file types should select this skill?"
+
+### Related-skills inventory
+
+Scan installed skills and the package skill tree for names that touch the same domain. List each with: keep separate / invoke as sub-skill / absorb (with reason if absorb).
 
 ### Generate gap analysis
 
 Use the template at `${CLAUDE_SKILL_DIR}/templates/gap-analysis.md`. Fill in:
 
 - Skill type and degree of freedom
-- Task description
+- Task description (one capability sentence)
 - Gaps identified (what failed, what was needed)
 - Recurring patterns across gaps
 - Initial gotcha candidates
+- **Composition plan** — capability sentence, related skills, sub-skills to invoke, split or orchestrator decision, missing sub-skills to create
+- **Description triggers** — capability stem tokens + trigger phrase list (not story prose)
 
 ### Assess degree of freedom
 
@@ -91,7 +103,15 @@ Use the template at `${CLAUDE_SKILL_DIR}/templates/gap-analysis.md`. Fill in:
 
 Record the assessment with reasoning.
 
-**Output:** Completed gap analysis, initial gotchas list, degree-of-freedom assessment.
+### Modularity gate
+
+Copy the author checklist from `skill-modularity.md` and check every box. If the capability sentence needs an unrelated "and", stop and split scope with the user before Step 4.
+
+### Description gate
+
+Draft the frontmatter description using the template in `description-field.md`. Copy the description checklist and check every box. Story prose fails the gate.
+
+**Output:** Completed gap analysis (composition plan + description triggers), initial gotchas, degree-of-freedom assessment, modularity checklist, draft description.
 
 ---
 
@@ -101,7 +121,7 @@ Record the assessment with reasoning.
 
 Delegate to `/skill-writer` using the structured handoff from `${CLAUDE_SKILL_DIR}/references/delegation-map.md`.
 
-The handoff must include: skill type, folder structure, gap analysis, initial gotchas, degree of freedom, constraints.
+The handoff must include: skill type, folder structure, gap analysis (composition plan + description triggers), initial gotchas, degree of freedom, constraints, sub-skills to name in SKILL.md, exact description string to put in frontmatter.
 
 After skill-writer produces the draft:
 
@@ -109,8 +129,10 @@ After skill-writer produces the draft:
 2. Verify SKILL.md body is under 500 lines.
 3. Verify all references are one level deep.
 4. Verify files over 100 lines have a TOC.
+5. Verify modularity: single capability, sub-skills table when composing, no silent reimplementation of inventoried skills.
+6. Verify description is a trigger catalog per `description-field.md` (not story prose).
 
-Fix structural issues before proceeding.
+Fix structural, modularity, and description issues before proceeding.
 
 **Output:** Complete skill package at the target directory.
 
@@ -134,14 +156,16 @@ For an independent check, spawn a subagent to run the audit (see delegation-map.
 
 ## Step 6: Deliver
 
-**Goal:** Hand off the finished skill with full documentation.
+**Goal:** Hand off the finished skill with full documentation. Prompt user if they want a PR up with the skill.
 
 Present to the user:
 
 1. **File map** — every file created, with its purpose.
 2. **Skill type** — classification and why it fits.
 3. **Degree of freedom** — assessment and reasoning.
-4. **Gotchas seeded** — initial gotchas captured.
-5. **Audit summary** — "All 33 items: N passed, M N/A."
-6. **Maintenance notes** — what to watch for in future usage that might warrant iteration.
-7. **Suggested first test** — a concrete task to try with Claude B.
+4. **Composition plan** — capability sentence, sub-skills invoked, any skills split out.
+5. **Description** — final frontmatter trigger catalog (paste the string).
+6. **Gotchas seeded** — initial gotchas captured.
+7. **Audit summary** — "All checklist items: N passed, M N/A."
+8. **Maintenance notes** — what to watch for in future usage that might warrant iteration.
+9. **Suggested first test** — a concrete task to try with Claude B.

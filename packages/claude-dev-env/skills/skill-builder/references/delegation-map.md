@@ -13,17 +13,23 @@ Create a skill with these parameters:
 
 **Skill type:** [one of 9 types from skill-types.md]
 **Folder structure:** [directories to create: reference/, scripts/, etc.]
-**What it does:** [one-sentence capability description]
+**What it does:** [one-sentence capability — single job]
 **Domain context:** [what Claude needs to know that it doesn't already]
 **Initial gotchas:** [failure patterns to document from the start]
 **Degree of freedom:** [high | medium | low — with reasoning]
 **Constraints:** [non-negotiables]
+**Composition plan:** [related skills; sub-skills with when/produces/missing; leaf vs orchestrator]
+**Description (exact frontmatter string):** [capability stem. Triggers: phrase, phrase, ...]
+  — Trigger catalog only per description-field.md. No story prose.
 
 Produce:
 1. SKILL.md with hub layout (principle, gotchas, when-applies, process, file index, folder map)
-2. Companion files as needed (reference docs, workflow steps, templates)
-3. Every file under 500 lines; TOC on files over 100 lines
-4. File index listing every file and its purpose
+2. Frontmatter description set to the exact trigger-catalog string above
+3. Sub-skills table in body when composition plan lists peer skills
+4. Companion files as needed (reference docs, workflow steps, templates)
+5. Every file under 500 lines; TOC on files over 100 lines
+6. File index listing every file and its purpose
+7. No reimplementation of steps owned by named sub-skills
 ```
 
 ### Refine skill handoff
@@ -36,8 +42,11 @@ Refine this existing skill:
 **What to change:** [specific instructions to add/remove/modify]
 **New gotchas to add:** [failure patterns discovered]
 **What to preserve:** [working content — do not touch]
+**Description rewrite (if activation issue):** [exact new trigger-catalog string]
+**Composition change (if modularity issue):** [sub-skills to add/invoke or split plan]
 
 Constraint: Only change what the observations demand. Do not reorganize working content.
+Description must remain a trigger catalog (description-field.md), never story prose.
 ```
 
 ## Spawning a test subagent

@@ -10,60 +10,83 @@ Final optimization pass for a skill that is functionally complete.
 
 ---
 
-## Step 1: Description Audit
+## Step 1: Description trigger-catalog audit
 
-**Goal:** Verify the description field is optimized for model discovery.
+**Goal:** Rewrite the frontmatter `description` into a dense trigger catalog. Selection metadata only — not a story.
+
+Read `${CLAUDE_SKILL_DIR}/references/description-field.md` and apply its checklist in full.
 
 > "The description is critical for skill selection: Claude uses it to choose the right Skill from potentially 100+ available Skills."
 
 > "The description field is not a summary — it's a description of when to trigger."
 
-Check each requirement:
+### Fail conditions (must rewrite)
 
-- [ ] **Third person.** "Processes Excel files" not "I can help you process Excel files."
-- [ ] **Includes what AND when.** Both the capability and trigger contexts.
-- [ ] **Specific trigger phrases.** Different phrasings of the same intent should all match.
-- [ ] **Under 1024 characters.** Hard limit.
-- [ ] **No XML tags.**
-- [ ] **Distinguishable from similar skills.** If two skills overlap, the descriptions must make the boundary clear.
+- Multi-sentence narrative or benefits language ("helps you", "ensures reliable…")
+- First or second person
+- Process/implementation detail that belongs in the body
+- Missing concrete trigger phrases
+- Overlap with a sibling skill with no distinguishing tokens
+
+### Required shape
+
+```yaml
+description: >-
+  <capability tokens>. Triggers: <phrase>, <phrase>, <slash>, <filetype>.
+```
+
+### Checklist
+
+- [ ] **Third person** — no I/you
+- [ ] **Capability stem** — what tokens, ≤20 words, no story
+- [ ] **Triggers list** — concrete phrases / slash forms / file types
+- [ ] **Under 1024 characters** (prefer much shorter; always-on context)
+- [ ] **No XML tags**
+- [ ] **Not a story** — no narrative, benefits, or process dump
+- [ ] **Sibling boundary** — distinguishable from related skills
 
 ### Trigger phrase review
 
 Generate 10 variations of the user's intent:
+
 - Formal and casual phrasings
-- Cases where the user doesn't explicitly name the skill but clearly needs it
+- Cases where the user doesn't name the skill but clearly needs it
 - Cases where this skill competes with another but should win
 
-For each, answer: would the current description cause Claude to select this skill?
+For each: would the current description select this skill?
+If you aren't sure of user's intent, present options to the user via askuserquestion for trigger phases.
 
-Also check 5 near-miss phrasings — adjacent domains where this skill should NOT trigger. Verify the description doesn't cause false activation.
+Also check 5 near-miss phrasings — adjacent domains that must not activate. Adjust Triggers tokens only as needed for boundary.
 
-### Fix issues
+### Fix
 
-If the description fails any check, revise it. Show before/after with the specific change and why it improves discovery.
+If any check fails, rewrite. Show before/after. The after form must match `description-field.md` good examples.
 
-**Output:** Verified description (and revised version if changes were made).
-
----
-
-## Step 2: Progressive Disclosure Audit
-
-**Goal:** Verify the file structure follows all progressive disclosure rules.
-
-Apply the hard rules and hub pattern in `${CLAUDE_SKILL_DIR}/references/progressive-disclosure.md`. Cross-check progressive-disclosure items on `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
-
-### Fix structural issues
-
-If any check fails, restructure. Common fixes:
-- SKILL.md too long → move sections to companion files, leave links.
-- Nested references → surface all links to SKILL.md.
-- Missing TOC → add to files over 100 lines.
-
-**Output:** Verified file structure (and restructured files if changes were made).
+**Output:** Final description string (trigger catalog).
 
 ---
 
-## Step 3: Gotcha Freshness
+## Step 2: Progressive disclosure and modularity audit
+
+**Goal:** Verify within-skill structure and cross-skill modularity.
+
+1. Apply hard rules in `${CLAUDE_SKILL_DIR}/references/progressive-disclosure.md`.
+2. Apply modularity rules in `${CLAUDE_SKILL_DIR}/references/skill-modularity.md`.
+3. Cross-check matching items on `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
+
+### Common fixes
+
+- SKILL.md too long → move sections to companion files, leave links
+- Nested references → surface all links on SKILL.md
+- Missing TOC → add to files over 100 lines
+- Multi-capability package → split or orchestrator + named sub-skills
+- Silent reimplementation → invoke peer skill by name; add Sub-skills table
+
+**Output:** Verified structure and composition (and edits if needed).
+
+---
+
+## Step 3: Gotcha freshness
 
 **Goal:** Ensure gotchas reflect current observations.
 
@@ -73,20 +96,22 @@ If any check fails, restructure. Common fixes:
 - Check against recent usage: are there new failure modes not yet captured?
 - Remove gotchas for issues that no longer occur (the skill fixed them).
 - Verify each gotcha is actionable — a reader should know what to avoid and why.
+- Verify they are relevant by going over them 1 by 1 with the user via AskUserQuestion.
 
 **Output:** Updated gotchas section (and any new gotchas for skill-builder itself).
 
 ---
 
-## Step 4: Full Self-Audit
+## Step 4: Full self-audit
 
-**Goal:** Complete 33-point checklist pass.
+**Goal:** Complete checklist pass including description and modularity items.
 
 Same as new-skill Step 5 and improve-skill Step 5:
 
 1. Read `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
 2. Check every item. Fix failures. Re-check.
 3. All items must be PASS or N/A.
+4. Description items and modularity items are never N/A for a delivered skill (sub-skills table alone may be N/A for pure leaf skills).
 
 **Output:** Completed checklist.
 
@@ -98,9 +123,10 @@ Same as new-skill Step 5 and improve-skill Step 5:
 
 Present to the user:
 
-1. **Description** — final version, confirmed trigger phrases.
-2. **File structure** — folder map with line counts.
-3. **Gotchas** — current gotcha count and most recent additions.
-4. **Audit summary** — "All 33 items: N passed, M N/A."
-5. **Before/after** — description changes if any, structural changes if any.
-6. **Maintenance notes** — what to watch for, when to re-audit.
+1. **Description** — final trigger-catalog string (paste it).
+2. **Composition** — sub-skills or leaf status.
+3. **File structure** — folder map with line counts.
+4. **Gotchas** — current gotcha count and most recent additions.
+5. **Audit summary** — "All checklist items: N passed, M N/A."
+6. **Before/after** — description rewrite and structural changes if any.
+7. **Maintenance notes** — what to watch for, when to re-audit.
