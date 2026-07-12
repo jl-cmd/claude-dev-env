@@ -58,6 +58,5 @@ jobs:
           JONECHO_TOKEN: ${{ steps.owner-1-token.outputs.token }}
           JLCMD_TOKEN: ${{ steps.owner-2-token.outputs.token }}
           FANOUT_OWNER_SCOPES: ${{ vars.FANOUT_OWNER_1 }},${{ vars.FANOUT_OWNER_2 }}
-          SOURCE_SHA: ${{ hashFiles('AGENTS.md') }}
           DISPATCHED_AT: ${{ steps.dispatch-floor.outputs.floor }}
         run: python scripts/fan_out_conclusion_report.py

@@ -194,3 +194,16 @@ class TestReportAllTargets:
 
         assert logged_identifier.startswith("example-owner/")
         assert "secret-repo" not in logged_identifier
+
+    def should_redact_a_target_whose_private_field_is_not_a_boolean(self) -> None:
+        target_with_null_private_field = {
+            "owner": {"login": EXAMPLE_OWNER},
+            "name": "secret-repo",
+            "full_name": "example-owner/secret-repo",
+            "private": None,
+        }
+
+        logged_identifier = _logged_identifier_for(target_with_null_private_field)
+
+        assert logged_identifier.startswith("example-owner/")
+        assert "secret-repo" not in logged_identifier

@@ -105,7 +105,9 @@ def _run_is_at_or_after_floor(run_created_at: str, dispatched_at_floor: str) -> 
     return run_moment >= floor_moment
 
 
-def _fetch_workflow_runs(owner: str, repo_name: str, token: str) -> tuple[int, list]:
+def _fetch_workflow_runs(
+    owner: str, repo_name: str, token: str
+) -> tuple[int, list[dict[str, object]]]:
     path = LISTENER_RUNS_QUERY_TEMPLATE % (
         owner,
         repo_name,
@@ -121,7 +123,7 @@ def _fetch_workflow_runs(owner: str, repo_name: str, token: str) -> tuple[int, l
 
 
 def _conclusion_from_most_recent_run(
-    all_workflow_runs: list,
+    all_workflow_runs: list[dict[str, object]],
     dispatched_at_floor: str,
 ) -> str:
     if not all_workflow_runs:
@@ -193,7 +195,7 @@ def _report_all_targets(
         if not owner or not repo_name or not full_repo_name:
             continue
         token = token_by_owner.get(str(owner), "")
-        is_private = bool(each_repo.get("private", True))
+        is_private = each_repo.get("private") is not False
         status = _resolve_target_status(
             str(owner), str(repo_name), token, dispatched_at_floor
         )
