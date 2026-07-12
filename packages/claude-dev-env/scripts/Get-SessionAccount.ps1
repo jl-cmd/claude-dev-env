@@ -131,7 +131,7 @@ function Resolve-SessionAccount {
     }
 
     try {
-        $cliConfig = Get-Content -LiteralPath $CliConfigPath -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+        $cliConfig = Get-Content -LiteralPath $CliConfigPath -Raw -ErrorAction Stop | ConvertFrom-Json -AsHashtable -ErrorAction Stop
     }
     catch {
         return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse CLI config as JSON: $CliConfigPath"
@@ -158,7 +158,7 @@ function Resolve-SessionAccount {
     }
 
     try {
-        $profileConfig = Get-Content -LiteralPath $profileConfigPath -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+        $profileConfig = Get-Content -LiteralPath $profileConfigPath -Raw -ErrorAction Stop | ConvertFrom-Json -AsHashtable -ErrorAction Stop
     }
     catch {
         return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse desktop profile config as JSON: $profileConfigPath"
