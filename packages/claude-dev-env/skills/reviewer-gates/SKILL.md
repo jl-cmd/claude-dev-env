@@ -81,6 +81,20 @@ The silent-pass pre-check runs first so a bot that already finished cleanly is n
 
 **Flag reset rule:** `bugbot_down` resets to false whenever `<current_head>` changes — a new HEAD invalidates the old down-detection. `copilot_down` never resets mid-run; it holds until the run ends.
 
+## Convergence-check bypass flags
+
+When a reviewer is down, `check_convergence.py` must skip that reviewer's gate so the run still marks ready on its remaining signals. Each condition has one CLI flag and one matching `CLAUDE_REVIEWS_DISABLED` token:
+
+| Condition | `check_convergence.py` flag | `CLAUDE_REVIEWS_DISABLED` token |
+|---|---|---|
+| Bugbot down or off | `--bugbot-down` | `bugbot` |
+| Copilot down or opted out | `--copilot-down` | `copilot` |
+| Bugteam CLEAN post blocked | `--bugteam-post-blocked` | `bugteam` |
+
+The caller passes the flag on its own `check_convergence.py` run. The flag alone does not reach the independent mark-ready blocker hook, which re-runs `check_convergence.py` with no flags on `gh pr ready`. Each flag also honors its token: `check_convergence.py` reads the same bypass from `CLAUDE_REVIEWS_DISABLED`. So export the matching token in the same shell before `gh pr ready`, and the hook's no-flag re-check inherits the bypass through the env. Combine tokens with commas when more than one reviewer is down (`CLAUDE_REVIEWS_DISABLED="copilot,bugteam"`).
+
+The `bugteam` token here means the bugteam CLEAN-review gate is skipped for this convergence check. It does not disable the bugbot or copilot gates: each token is scoped to its own reviewer.
+
 ## Gotchas
 
 - **`bugbot run` is load-bearing text.** Alternative phrasings (`@cursor run`, `cursor review`, `bugbot please`) return no error and do nothing.

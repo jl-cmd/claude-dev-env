@@ -481,7 +481,9 @@ function serializeOneLineJson(valueToSerialize) {
 /**
  * Spawn a fresh general-utility general-purpose agent for its administrative task:
  * 'post-clean-audit' posts the terminal CLEAN bugteam review. The agent edits no
- * code.
+ * code. The post_audit_thread.py invocation and exit-code contract this prompt
+ * drives is owned by _shared/pr-loop/post-audit-thread-contract.md; the clean-audit
+ * bypass policy for a refused post is in reference/stop-conditions.md.
  * @param {'post-clean-audit'} task the short task name
  * @param {object} context task-specific context
  * @returns {Promise<object>} the task result
@@ -548,8 +550,11 @@ function runConvergenceCheck(context) {
   const bugteamPostBlockedNote = context.bugteamPostBlocked
     ? `   The --bugteam-post-blocked flag is set because the environment refused the CLEAN bugteam review post this run. The review lenses already cleared this HEAD, so the check skips the bugteam CLEAN-review gate and prints a SKIP notice for it rather than failing on a review that was never allowed to land.\n`
     : ''
-  const copilotOptOut = context.copilotDown
-    ? `   Copilot is down this run, so before gh pr ready export the token in this same shell session so the independent mark-ready blocker hook's convergence re-check inherits it:\n      bash: export CLAUDE_REVIEWS_DISABLED="copilot"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "copilot")\n`
+  const reviewerOptOutTokens = []
+  if (context.copilotDown) reviewerOptOutTokens.push('copilot')
+  if (context.bugteamPostBlocked) reviewerOptOutTokens.push('bugteam')
+  const reviewerOptOut = reviewerOptOutTokens.length > 0
+    ? `   Reviewer(s) opted out this run (${reviewerOptOutTokens.join(', ')}), so before gh pr ready export the token(s) in this same shell session so the independent mark-ready blocker hook's convergence re-check — which re-runs check_convergence.py with no flags — inherits the bypass through the env:\n      bash: export CLAUDE_REVIEWS_DISABLED="${reviewerOptOutTokens.join(',')}"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "${reviewerOptOutTokens.join(',')}")\n`
     : ''
   return convergeReadOnlyAgent(
     `Run the convergence gate for ${prCoordinates} on HEAD ${context.head} and, only when every gate passes, mark the PR ready. Do not edit code.\n\n` +
@@ -559,7 +564,7 @@ function runConvergenceCheck(context) {
       `   Exit 1 -> set pass:false and failures to each printed FAIL line verbatim.\n` +
       `   Exit 2 -> retry once; if it still errors, set pass:false, failures:["check_convergence gh error"].\n\n` +
       `2. Only when step 1 set pass:true, mark the PR ready and confirm it left draft state:\n` +
-      copilotOptOut +
+      reviewerOptOut +
       `   Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
       `   Re-query the draft state: gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .draft\n` +
       `   Set ready:true only when the re-query prints false (the PR is no longer a draft); set ready:false when gh pr ready errors or the re-query still prints true.\n` +
@@ -1841,14 +1846,9 @@ function cleanAuditPostReason(auditResult) {
 }
 
 /**
- * Recorded-bypass note for a CLEAN bugteam audit post the environment refused.
- *
- * Every review lens already cleared this HEAD, so the CLEAN post is a
- * record-keeping artifact, not the safety-bearing gate. A refused post degrades
- * to a recorded bypass — the same shape as the Bugbot-down and Copilot-down
- * paths — and the run proceeds to the terminal Bugbot gate with the convergence
- * check's bugteam-review gate skipped. The note names the HEAD and the reason
- * for the final report.
+ * Build the run-level bypass note naming the HEAD and the refusal reason for a
+ * CLEAN bugteam post the environment refused. See reference/stop-conditions.md
+ * § "Clean-audit post bypassed" for the full policy.
  * @param {string} head converged PR HEAD SHA the CLEAN post targeted
  * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from the post-clean-audit task, or null when the agent never ran
  * @returns {string} the run-level bypass note
@@ -1860,6 +1860,25 @@ function cleanAuditBypassNote(head, auditResult) {
     `so the CLEAN post is bypassed and the run proceeds to the terminal Bugbot gate ` +
     `with the convergence check's bugteam-review gate skipped.`
   )
+}
+
+/**
+ * Resolve the run-level clean-audit note from a CLEAN bugteam post attempt.
+ *
+ * A landed post clears any earlier-round bypass note so FINALIZE runs the
+ * bugteam gate; a refused post records the bypass note and logs it. This one
+ * helper handles both outcomes at both post sites.
+ * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from the post task, or null when the agent never ran
+ * @param {string} head converged PR HEAD SHA the CLEAN post targeted
+ * @param {number} rounds current round number, named in the log line
+ * @returns {string|null} the bypass note when the post was refused, or null when it landed
+ */
+function resolveCleanAuditNote(auditResult, head, rounds) {
+  if (auditResult?.posted) {
+    return null
+  }
+  log(`Round ${rounds}: CLEAN bugteam post bypassed on ${head?.slice(0, 7)} (${cleanAuditPostReason(auditResult)}) — recording the bypass and proceeding to the terminal Bugbot gate`)
+  return cleanAuditBypassNote(head, auditResult)
 }
 
 /**
@@ -2270,6 +2289,15 @@ let reuseNote = null
 let reviewerAvailability = null
 const deferredPrs = []
 
+const assembleResult = (outcomeFields) => ({
+  ...outcomeFields,
+  standardsNote,
+  copilotNote,
+  cleanAuditNote,
+  reuseNote,
+  deferredPrs,
+})
+
 const preflight = await runGitTask('preflight-git')
 reviewerAvailability = preflight
 if (isResolvedHeadUsable(preflight?.sha)) {
@@ -2357,10 +2385,7 @@ while (iterations < CONFIG.maxIterations) {
         deferredStandardsFindings: findings,
         standardsDeferral,
       })
-      if (!auditResult?.posted) {
-        cleanAuditNote = cleanAuditBypassNote(head, auditResult)
-        log(`Round ${rounds}: CLEAN bugteam post bypassed on ${head?.slice(0, 7)} (${cleanAuditPostReason(auditResult)}) — recording the bypass and proceeding to the terminal Bugbot gate`)
-      }
+      cleanAuditNote = resolveCleanAuditNote(auditResult, head, rounds)
       phase = 'BUGBOT'
       continue
     }
@@ -2401,10 +2426,7 @@ while (iterations < CONFIG.maxIterations) {
       head = null
       continue
     }
-    if (!auditResult?.posted) {
-      cleanAuditNote = cleanAuditBypassNote(head, auditResult)
-      log(`Round ${rounds}: CLEAN bugteam post bypassed on ${head?.slice(0, 7)} (${cleanAuditPostReason(auditResult)}) — recording the bypass and proceeding to the terminal Bugbot gate`)
-    }
+    cleanAuditNote = resolveCleanAuditNote(auditResult, head, rounds)
     resetNoLensRounds()
     phase = 'BUGBOT'
     continue
@@ -2483,18 +2505,13 @@ while (iterations < CONFIG.maxIterations) {
     }
     if (copilotOutcome.kind === 'user-review') {
       log(`Copilot raised ${copilotOutcome.findings.length} code-concern finding(s) — holding for user review: the workflow does not auto-fix them and does not mark the PR ready`)
-      return {
+      return assembleResult({
         converged: false,
         rounds,
         finalSha: head,
         blocker: 'user-review',
         userReview: buildUserReview(copilot, copilotOutcome.findings),
-        standardsNote,
-        copilotNote,
-        cleanAuditNote,
-        reuseNote,
-        deferredPrs,
-      }
+      })
     }
     if (copilotOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(copilotOutcome.findings)) {
@@ -2537,7 +2554,7 @@ while (iterations < CONFIG.maxIterations) {
     if (convergenceOutcome.kind === 'ready') {
       const readyOutcome = classifyReadyOutcome(finalizeResult)
       if (readyOutcome.converged) {
-        return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, cleanAuditNote, reuseNote, deferredPrs }
+        return assembleResult({ converged: true, rounds, finalSha: head, blocker: null })
       }
       blocker = readyOutcome.blocker
       break
@@ -2550,14 +2567,9 @@ while (iterations < CONFIG.maxIterations) {
   }
 }
 
-return {
+return assembleResult({
   converged: false,
   rounds,
   finalSha: head,
   blocker: blocker || `iteration cap reached (${CONFIG.maxIterations})`,
-  standardsNote,
-  copilotNote,
-  cleanAuditNote,
-  reuseNote,
-  deferredPrs,
-}
+})

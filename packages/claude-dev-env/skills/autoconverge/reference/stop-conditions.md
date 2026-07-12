@@ -56,6 +56,8 @@ skill still runs teardown (revoke permissions, final report).
 
 ## Not a blocker (the run continues)
 
+Each reviewer-down condition below skips its own convergence-check gate. The flag and the matching `CLAUDE_REVIEWS_DISABLED` token for each condition are the single flag-per-condition table in [`../../reviewer-gates/SKILL.md`](../../reviewer-gates/SKILL.md) § "Convergence-check bypass flags"; the token carries the bypass into the mark-ready blocker hook's no-flag re-check.
+
 - **Clean-audit post bypassed** — every review lens is clean on HEAD, but the
   environment refuses the CLEAN bugteam review post (the `post_audit_thread.py`
   post is denied, errors, or its agent never runs). The lens results already show

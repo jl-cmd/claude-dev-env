@@ -8,6 +8,7 @@ Runtime documents and scripts shared by every PR-loop skill. Changes here affect
 |---|---|
 | `audit-contract.md` | Canonical finding schema (Shape A / Shape B) and loop contract; defines the JSON shapes every audit skill must emit |
 | `audit-reply-template.md` | Canonical reply skeleton Claude posts to each unresolved review thread; single source of truth for reply structure |
+| `post-audit-thread-contract.md` | Single source of truth for the `post_audit_thread.py` invocation string, exit-code table, and per-caller policy (bugteam exit 2 = hard blocker; autoconverge clean-audit failed post = recorded bypass) |
 | `fix-protocol.md` | Ordered sequence a fix lens follows: read, capture SHA, TDD, apply, validate, self-audit, commit, push, reply + resolve |
 | `gh-payloads.md` | How to build GitHub review and reply payloads via MCP tools; describes the one-review-per-loop pattern |
 | `state-schema.md` | Fields each PR-loop workflow tracks across iterations; documents common fields and per-skill extensions |

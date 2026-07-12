@@ -10,8 +10,13 @@
 Each bypass flag closes one reviewer gate when that reviewer is unavailable.
 ``--bugbot-down`` skips the bugbot check-run gate. ``--copilot-down`` skips
 the Copilot review and pending-review gates. ``--bugteam-post-blocked`` skips
-the bugteam CLEAN-review gate. The bugbot and copilot flags also honor the
-``CLAUDE_REVIEWS_DISABLED`` env token.
+the bugteam CLEAN-review gate.
+
+Each flag also honors its own reviews-disabled token: "bugbot", "copilot",
+or "bugteam". A caller that cannot pass the flag reaches the same bypass by
+exporting the token. The mark-ready blocker hook re-runs this script with no
+flags, so its convergence re-check reads the bypass from the exported token
+instead.
 """
 
 from __future__ import annotations
@@ -49,6 +54,7 @@ from pr_converge_skill_constants.constants import (
 )
 from reviews_disabled import (
     is_bugbot_disabled_via_env,
+    is_bugteam_disabled_via_env,
     is_copilot_disabled_via_env,
 )
 
@@ -301,6 +307,21 @@ def _resolve_copilot_down(is_copilot_down_flag: bool) -> bool:
     return is_copilot_down_flag or is_copilot_disabled_via_env()
 
 
+def _resolve_bugteam_post_blocked(is_bugteam_post_blocked_flag: bool) -> bool:
+    """Combine the --bugteam-post-blocked flag with the bugteam env opt-out.
+
+    ::
+
+        flag True, env unset                        -> True   (caller passed the flag)
+        flag False, reviews-disabled lists bugteam  -> True   (exported token)
+        flag False, env unset                       -> False  (gate runs)
+
+    The mark-ready blocker hook re-runs this script with no flags, so the env
+    fallback lets an exported bugteam token carry the bypass into that re-check.
+    """
+    return is_bugteam_post_blocked_flag or is_bugteam_disabled_via_env()
+
+
 def main(all_arguments: list[str]) -> int:
     """Run the script end-to-end against parsed CLI arguments.
 
@@ -317,7 +338,7 @@ def main(all_arguments: list[str]) -> int:
         number=getattr(arguments, "pr_number"),
         is_bugbot_down=_resolve_bugbot_down(arguments.bugbot_down),
         is_copilot_down=_resolve_copilot_down(arguments.copilot_down),
-        is_bugteam_post_blocked=arguments.bugteam_post_blocked,
+        is_bugteam_post_blocked=_resolve_bugteam_post_blocked(arguments.bugteam_post_blocked),
     )
 
 

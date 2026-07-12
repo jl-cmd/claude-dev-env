@@ -29,6 +29,16 @@ const productionModule = new Function(
 
 const { cleanAuditPostReason, cleanAuditBypassNote } = productionModule;
 
+function buildResolveCleanAuditNote(logStub) {
+  const factory = new Function(
+    'log',
+    'cleanAuditPostReason',
+    'cleanAuditBypassNote',
+    `${functionBody('resolveCleanAuditNote')}\n return resolveCleanAuditNote;`,
+  );
+  return factory(logStub, cleanAuditPostReason, cleanAuditBypassNote);
+}
+
 const provenanceModule = new Function(
   `const LENS_NAMES = ${moduleConstantSource('LENS_NAMES')};\n` +
     `const GITHUB_ISSUE_URL_PATTERN = ${moduleConstantSource('GITHUB_ISSUE_URL_PATTERN')};\n` +
@@ -526,8 +536,7 @@ test('the standards-only call site records a clean-audit bypass and continues to
     convergeSource.indexOf('if (findings.length > 0) {'),
   );
   assert.match(branch, /runGeneralUtilityTask\(.*'post-clean-audit'/);
-  assert.match(branch, /if \(!auditResult\?\.posted\)/);
-  assert.match(branch, /cleanAuditNote = cleanAuditBypassNote\(head, auditResult\)/);
+  assert.match(branch, /cleanAuditNote = resolveCleanAuditNote\(auditResult, head, rounds\)/);
   assert.match(branch, /phase = 'BUGBOT'/);
   assert.doesNotMatch(branch, /blocker = cleanAuditBlocker/);
   assert.doesNotMatch(branch, /\bbreak\b/);
@@ -583,8 +592,7 @@ test('the all-clean call site records a clean-audit bypass and continues to BUGB
   );
   assert.match(branch, /runGeneralUtilityTask\(.*'post-clean-audit'/);
   assert.match(branch, /if \(auditResult\?\.noLensRan\)/);
-  assert.match(branch, /if \(!auditResult\?\.posted\)/);
-  assert.match(branch, /cleanAuditNote = cleanAuditBypassNote\(head, auditResult\)/);
+  assert.match(branch, /cleanAuditNote = resolveCleanAuditNote\(auditResult, head, rounds\)/);
   assert.match(branch, /resetNoLensRounds\(\)/);
   assert.match(branch, /phase = 'BUGBOT'/);
   assert.doesNotMatch(branch, /blocker = cleanAuditBlocker/);
@@ -609,6 +617,28 @@ test('runConvergenceCheck threads a --bugteam-post-blocked flag and an explanato
   assert.match(body, /skips the bugteam CLEAN-review gate/);
 });
 
+test('resolveCleanAuditNote records a bypass note on a refused post and resets to null when a later round lands the post', () => {
+  const loggedLines = [];
+  const resolveCleanAuditNote = buildResolveCleanAuditNote((message) => loggedLines.push(message));
+
+  const bypassNote = resolveCleanAuditNote(
+    { posted: false, reviewUrl: '', reason: 'denied by the classifier' },
+    'abc1234def5678',
+    2,
+  );
+  assert.notEqual(bypassNote, null, 'a refused post records the bypass note');
+  assert.match(bypassNote, /denied by the classifier/);
+  assert.equal(loggedLines.length, 1, 'a refused post logs the bypass once');
+
+  const clearedNote = resolveCleanAuditNote(
+    { posted: true, reviewUrl: 'https://github.com/o/r/pull/1#pullrequestreview-9', reason: '' },
+    'abc1234def5678',
+    3,
+  );
+  assert.equal(clearedNote, null, 'a landed post in a later round resets the bypass note so FINALIZE runs the bugteam gate');
+  assert.equal(loggedLines.length, 1, 'a landed post logs no bypass line');
+});
+
 test('the finalize call derives bugteamPostBlocked from a set cleanAuditNote', () => {
   assert.match(
     convergeSource,
@@ -616,9 +646,15 @@ test('the finalize call derives bugteamPostBlocked from a set cleanAuditNote', (
   );
 });
 
-test('the workflow declares cleanAuditNote and carries it in every assembled result object', () => {
+test('the workflow declares cleanAuditNote and assembles it into every result via a single note-fields builder', () => {
   assert.match(convergeSource, /let cleanAuditNote = null/);
-  const multiLineReturns = convergeSource.match(/standardsNote,\n\s*copilotNote,\n\s*cleanAuditNote,\n\s*reuseNote,/g) || [];
-  assert.ok(multiLineReturns.length >= 2, 'expected cleanAuditNote in the user-review and iteration-cap result objects');
-  assert.match(convergeSource, /blocker: null, standardsNote, copilotNote, cleanAuditNote, reuseNote, deferredPrs/);
+  assert.match(
+    convergeSource,
+    /const assembleResult = \(outcomeFields\) => \(\{\n\s*\.\.\.outcomeFields,\n\s*standardsNote,\n\s*copilotNote,\n\s*cleanAuditNote,\n\s*reuseNote,\n\s*deferredPrs,\n\s*\}\)/,
+  );
+  const assembleCalls = convergeSource.match(/return assembleResult\(/g) || [];
+  assert.ok(
+    assembleCalls.length >= 3,
+    'expected the user-review, converged, and iteration-cap returns to build through assembleResult',
+  );
 });

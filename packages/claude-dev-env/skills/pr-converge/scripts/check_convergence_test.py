@@ -256,3 +256,63 @@ def test_bugteam_post_blocked_defaults_to_false_when_flag_absent() -> None:
         ["--owner", "o", "--repo", "r", "--pr-number", "1"]
     )
     assert arguments.bugteam_post_blocked is False
+
+
+def test_resolve_bugteam_post_blocked_true_when_flag_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert check_convergence._resolve_bugteam_post_blocked(True) is True
+
+
+def test_resolve_bugteam_post_blocked_true_when_env_disables_bugteam(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    assert check_convergence._resolve_bugteam_post_blocked(False) is True
+
+
+def test_resolve_bugteam_post_blocked_false_when_flag_unset_and_env_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert check_convergence._resolve_bugteam_post_blocked(False) is False
+
+
+def test_resolve_bugteam_post_blocked_false_when_env_disables_only_copilot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "copilot")
+    assert check_convergence._resolve_bugteam_post_blocked(False) is False
+
+
+def test_env_bugteam_token_does_not_disable_copilot_or_bugbot_opt_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    assert check_convergence._resolve_copilot_down(False) is False
+    assert check_convergence._resolve_bugteam_post_blocked(False) is True
+
+
+def test_main_derives_bugteam_post_blocked_from_env_when_flag_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    captured_bugteam_post_blocked: list[bool] = []
+
+    def stub_check_all(
+        *,
+        owner: str,
+        repo: str,
+        number: int,
+        is_bugbot_down: bool,
+        is_copilot_down: bool,
+        is_bugteam_post_blocked: bool = False,
+    ) -> int:
+        captured_bugteam_post_blocked.append(is_bugteam_post_blocked)
+        return 0
+
+    monkeypatch.setattr(check_convergence, "check_all", stub_check_all)
+    exit_code = check_convergence.main(["--owner", "o", "--repo", "r", "--pr-number", "1"])
+    assert exit_code == 0
+    assert captured_bugteam_post_blocked == [True]
