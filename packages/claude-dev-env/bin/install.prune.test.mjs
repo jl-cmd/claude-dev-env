@@ -1,13 +1,24 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import {
+    mkdtempSync,
+    mkdirSync,
+    writeFileSync,
+    existsSync,
+    readFileSync,
+    readdirSync,
+    rmSync,
+    cpSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
+const PACKAGE_DIRECTORY = dirname(THIS_DIRECTORY);
+const EXCLUDED_PACKAGE_COPY_DIRECTORY = 'node_modules';
 
 const RETIRED_SKILL_DIRECTORIES = [
     'findbugs',
@@ -37,6 +48,41 @@ const DEPENDENCY_STUB_PACKAGE_SEGMENTS = ['@jl-cmd', 'prompt-generator'];
  * @param {string} homeDirectory The sandbox home the stub is nested under.
  * @returns {string} The stub modules root to place on the child's NODE_PATH.
  */
+let isolatedInstallerPath = null;
+let isolatedPackageCopyRoot = null;
+
+/**
+ * Copy the package into a temp directory without node_modules and return the
+ * copy's installer path.
+ *
+ * The installer resolves its declared dependencies with Node's regular
+ * node_modules walk starting at its own file, so the real installer under the
+ * repo always finds `@jl-cmd/prompt-generator` once `npm install` has run —
+ * removing NODE_PATH from the child cannot make the dependency unresolvable
+ * there. Running the copy makes resolution genuinely fail through the
+ * installer's own catch path: no node_modules sits in the copy's ancestry and
+ * the child gets no NODE_PATH. The copy is created once and shared by every
+ * unresolved-dependency install; installs write only into their sandbox HOME.
+ *
+ * @returns {string} The path to `bin/install.mjs` inside the package copy.
+ */
+function ensureIsolatedInstallerPath() {
+    if (isolatedInstallerPath !== null) return isolatedInstallerPath;
+    isolatedPackageCopyRoot = mkdtempSync(join(tmpdir(), 'cdev-prune-package-'));
+    cpSync(PACKAGE_DIRECTORY, isolatedPackageCopyRoot, {
+        recursive: true,
+        filter: sourcePath => basename(sourcePath) !== EXCLUDED_PACKAGE_COPY_DIRECTORY,
+    });
+    isolatedInstallerPath = join(isolatedPackageCopyRoot, 'bin', 'install.mjs');
+    return isolatedInstallerPath;
+}
+
+after(() => {
+    if (isolatedPackageCopyRoot !== null) {
+        rmSync(isolatedPackageCopyRoot, { recursive: true, force: true });
+    }
+});
+
 function ensureDependencyStub(homeDirectory) {
     const stubModulesRoot = join(homeDirectory, 'dependency-stub-modules');
     const stubPackageDirectory = join(stubModulesRoot, ...DEPENDENCY_STUB_PACKAGE_SEGMENTS);
@@ -108,8 +154,10 @@ function plantSkillDirectory(skillsDirectory, skillName, withSkillManifest) {
  *
  * The declared dependency package is resolvable by default: the child's
  * NODE_PATH points at a sandbox stub so `createRequire.resolve` finds it and the
- * full-install prune runs. Passing ``{ dependencyResolvable: false }`` removes
- * NODE_PATH so the dependency fails to resolve and the installer skips the prune.
+ * full-install prune runs. Passing ``{ dependencyResolvable: false }`` runs the
+ * installer from an isolated package copy with no node_modules in its ancestry
+ * and no NODE_PATH, so the dependency fails to resolve and the installer skips
+ * the prune.
  *
  * @param {string} homeDirectory The sandbox home the installer writes into.
  * @param {string[]} extraArguments Installer arguments (for example ``['--only', 'core']``).
@@ -124,13 +172,16 @@ function runInstaller(homeDirectory, extraArguments, options = {}) {
         USERPROFILE: homeDirectory,
         GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
     };
+    let installerPath;
     if (dependencyResolvable) {
         childEnvironment.NODE_PATH = ensureDependencyStub(homeDirectory);
+        installerPath = INSTALLER_PATH;
     } else {
         delete childEnvironment.NODE_PATH;
+        installerPath = ensureIsolatedInstallerPath();
     }
-    return execFileSync('node', [INSTALLER_PATH, ...extraArguments], {
-        cwd: THIS_DIRECTORY,
+    return execFileSync('node', [installerPath, ...extraArguments], {
+        cwd: dirname(installerPath),
         encoding: 'utf8',
         env: childEnvironment,
     });
