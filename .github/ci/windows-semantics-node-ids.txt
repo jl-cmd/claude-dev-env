@@ -11,3 +11,4 @@ packages/claude-dev-env/hooks/blocking/test_destructive_command_blocker.py::test
 packages/claude-dev-env/hooks/blocking/test_destructive_command_blocker.py::test_rm_rf_allowed_when_finding_example_windows_backslash_ephemeral_target
 packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_ephemeral.py::test_should_return_true_for_root_anchored_tmp_and_temp[C:/Temp/scratch.py]
 packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_ephemeral.py::test_should_return_true_for_root_anchored_tmp_and_temp[c:/tmp/scratch.py]
+packages/claude-dev-env/hooks/blocking/test_destructive_command_blocker.py::test_rm_rf_asks_when_rm_target_uses_windows_backslash_absolute_path_unquoted

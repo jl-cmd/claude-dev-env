@@ -9,6 +9,7 @@ GitHub automation for this repo. Holds issue templates, CI/CD workflows, and the
 | `ISSUE_TEMPLATE/` | GitHub issue form templates shown when a user opens a new issue |
 | `workflows/` | GitHub Actions workflow files — CI, npm publish, PR title validation, and AI rules sync |
 | `scripts/` | Python helper scripts invoked by the workflows |
+| `ci/` | Pytest deselect node-ID lists for the ubuntu Python suite |
 
 ## Workflows at a glance
 
@@ -18,7 +19,7 @@ GitHub automation for this repo. Holds issue templates, CI/CD workflows, and the
 | `publish.yml` | Push to `main`, schedule, manual | Runs release-please and publishes the `claude-dev-env` package to npm when a release is created |
 | `fan-out-ai-rules.yml` | Push to `main` when `AGENTS.md` changes, schedule (Mon noon UTC), manual | Dispatches `sync-ai-rules` events to all registered dependent repos |
 | `sync-ai-rules.yml` | `repository_dispatch` (`sync-ai-rules`), manual | Pulls `AGENTS.md` from this repo and writes it to `.cursor/BUGBOT.md` and `AGENTS.md` in the target repo |
-| `ci-sync-ai-rules.yml` | PR touching sync script or its tests | Runs the `sync_ai_rules.py` and `fan_out_dispatch.py` test suites |
+| `ci-tests.yml` | Push to `main`, PR against `main` | Runs the full Python suite (root `tests/` + `packages/claude-dev-env`) and the JS suite (`npm test` in `packages/claude-dev-env`) |
 
 ## Conventions
 

@@ -9,6 +9,8 @@
 #     gh binary is present on runners but author-swap tokens are not).
 #   - Windows-semantics: deselected on ubuntu; run on windows-latest micro-job (#24)
 #     from the same windows-semantics-node-ids.txt file.
+#   - Author-swap restore: permanently deselected (issue #21 protocol; no gh auth
+#     switch credentials on CI runners).
 #   - Issue #21 listed hooks/blocking/test_gh_artifact_upload.py; amended to the
 #     real path packages/claude-dev-env/scripts/tests/test_gh_artifact_upload.py.
 #
@@ -74,7 +76,8 @@ jobs:
           for list_file in \
             .github/ci/live-post-audit-deselects.txt \
             .github/ci/windows-semantics-node-ids.txt \
-            .github/ci/known-pending-deselects.txt
+            .github/ci/known-pending-deselects.txt \
+            .github/ci/author-swap-deselects.txt
           do
             while IFS= read -r node_id || [ -n "${node_id}" ]; do
               node_id="${node_id//$'\r'/}"
@@ -88,7 +91,8 @@ jobs:
           for list_file in \
             .github/ci/live-post-audit-deselects.txt \
             .github/ci/windows-semantics-node-ids.txt \
-            .github/ci/known-pending-deselects.txt
+            .github/ci/known-pending-deselects.txt \
+            .github/ci/author-swap-deselects.txt
           do
             while IFS= read -r node_id || [ -n "${node_id}" ]; do
               node_id="${node_id//$'\r'/}"
@@ -125,7 +129,8 @@ jobs:
           for list_file in \
             .github/ci/live-post-audit-deselects.txt \
             .github/ci/windows-semantics-node-ids.txt \
-            .github/ci/known-pending-deselects.txt
+            .github/ci/known-pending-deselects.txt \
+            .github/ci/author-swap-deselects.txt
           do
             while IFS= read -r node_id || [ -n "${node_id}" ]; do
               node_id="${node_id//$'\r'/}"
@@ -139,7 +144,8 @@ jobs:
           for list_file in \
             .github/ci/live-post-audit-deselects.txt \
             .github/ci/windows-semantics-node-ids.txt \
-            .github/ci/known-pending-deselects.txt
+            .github/ci/known-pending-deselects.txt \
+            .github/ci/author-swap-deselects.txt
           do
             while IFS= read -r node_id || [ -n "${node_id}" ]; do
               node_id="${node_id//$'\r'/}"
