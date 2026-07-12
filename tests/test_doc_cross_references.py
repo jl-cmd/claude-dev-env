@@ -40,6 +40,7 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         "config/constants.py",
         "config/selectors.py",
         ".claude/CLAUDE.md",
+        ".claude/plain-language-allow.json",
         ".claude/settings.json",
         "docs/.claude-notes.md",
         "docs/file1.md",
