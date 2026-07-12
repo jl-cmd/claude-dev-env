@@ -17,13 +17,13 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 
 ## Shared support code
 
-`_shared/` — support code used by more than one skill. It holds `pr-loop/`, which provides prompt templates and Python helper scripts shared across the PR-loop skills, and `advisor/`, which provides the shared warm-advisor protocol used by `team-advisor` and `orchestrator`.
+`_shared/` — support code used by more than one skill. It holds `pr-loop/`, which provides prompt templates and Python helper scripts shared across the PR-loop skills, and `advisor/`, which provides the shared warm-advisor protocol used by `team-advisor`, `orchestrator`, and `orchestrator-refresh`.
 
 ## Skill groups
 
 **Planning and implementation**
 - `anthropic-plan` — creates a source-grounded plan packet before any code changes
-- `orchestrator` — turns the session into the advisor-orchestrator: it spawns executor subagents to do the code edits and test runs; hard decisions go to a shared advisor (Claude warm `session-advisor` via SendMessage; Grok self-as-advisor on the orchestrating session)
+- `orchestrator` — turns the session into the orchestrator: it spawns executor subagents to do the code edits and test runs; hard decisions go to a shared advisor (Claude warm `session-advisor` via SendMessage; Grok self-as-advisor on the orchestrating session)
 - `orchestrator-refresh` — sub-skill fired by the `/orchestrator` loop to re-assert the host-matched shared-advisor discipline mid-run (Claude SendMessage; Grok self-as-advisor, no Agent spawn)
 - `team-advisor` — binds one advisor at the strongest reachable tier (Claude warm agent; Grok self-as-advisor) and consults it for a second opinion before a big decision, at completion, when stuck, or when reconsidering the approach
 

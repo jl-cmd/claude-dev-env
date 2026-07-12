@@ -1,7 +1,7 @@
 ---
 name: orchestrator
 description: >-
-  Advisor-orchestrator mode: plan and delegate while workflow-backed agents
+  Orchestrator mode: plan and delegate while workflow-backed agents
   execute; a shared session-advisor answers hard decisions with endorse,
   correction, plan, or stop. Triggers: '/orchestrator', 'orchestrator
   strategy', 'run with an orchestrator', 'executor-advisor mode',
@@ -24,7 +24,7 @@ than a solo frontier agent held to the same verification rigor, with
 Claude Code has no `multiagent` coordinator field or Managed-Agents-style
 `create_agent`/`send_to_agent` primitives; this skill reaches the same
 shape with the tools Claude Code already has. Under this skill the session
-is the advisor-orchestrator. In Claude Code the user always talks to the session and never to a
+is the orchestrator. In Claude Code the user always talks to the session and never to a
 subagent, so the session is the user's sole interface: all user-facing
 communication flows through it. It spawns and resumes executor subagents
 — `clean-coder` and the like — and those executors do every bit of the
@@ -79,12 +79,16 @@ session drives the plan and routes hard decisions to the shared advisor
    On a **Claude host**, follow the Warm-up procedure in that doc (Agent spawn
    of `session-advisor`). Compute the model floor as the max of the
    orchestrating session's own tier and the highest model in the Workflow Agent
-   Routing table below (today: max(Sonnet, Opus) = Opus). Paste the **Claude
-   host** Advisor block from that doc, with the resolved agent name filled in,
-   into every executor's spawn prompt. On a **Grok host**, skip that spawn —
-   use the protocol's self-as-advisor path (this session *is* the advisor;
-   single tier `Grok`, attempt result `self`). Paste the **Grok host** Advisor
-   block from that doc into every executor's spawn prompt — never the Claude
+   Routing table below (for example, max(Sonnet, Opus) = Opus when those are
+   the tiers in play). That floor is a lower bound only — the Claude spawn walk
+   tries top-down from Fable down to that floor per
+   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md);
+   it is not a "spawn only at the floor" rule. Paste the **Claude host**
+   Advisor block from that doc, with the resolved agent name filled in, into
+   every executor's spawn prompt. On a **Grok host**, skip that spawn — use
+   the protocol's self-as-advisor path (this session *is* the advisor; single
+   tier `Grok`, attempt result `self`). Paste the **Grok host** Advisor block
+   from that doc into every executor's spawn prompt — never the Claude
    SendMessage block. Every row in the routing table is a consumer of the
    shared advisor, not just this session. The orchestrating session owns the
    shared advisor's lifecycle end to end (spawn or self-bind, drift handling
