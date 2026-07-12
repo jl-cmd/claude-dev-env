@@ -255,15 +255,11 @@ def test_resolve_canonical_hooks_directory_uses_home_env_overrides(
     assert resolved == fake_home / ".claude" / "hooks" / "git-hooks"
 
 
-def test_list_local_core_hooks_path_values_surfaces_git_stderr(
+def test_list_local_core_hooks_path_values_raises_on_unexpected_git_failure(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When git -C ... config --get-all exits non-zero with stderr, the helper
-    must print a diagnostic to sys.stderr so the failure is distinguishable from
-    "no local override exists".
-    """
+    """When git -C ... config --get-all exits non-zero with stderr, raise RuntimeError."""
     failing_completed_process = subprocess.CompletedProcess(
         args=["git"],
         returncode=128,
@@ -274,16 +270,11 @@ def test_list_local_core_hooks_path_values_surfaces_git_stderr(
         fix_hookspath.subprocess, "run", lambda *_args, **_kwargs: failing_completed_process
     )
 
-    returned_values = fix_hookspath.list_local_core_hooks_path_values(
-        tmp_path / "any-repo", None
-    )
-
-    assert returned_values == []
-    captured_streams = capsys.readouterr()
-    assert "fix_hookspath" in captured_streams.err
-    assert "core.hooksPath" in captured_streams.err
-    assert "not a git repository" in captured_streams.err
-
+    with pytest.raises(RuntimeError, match="not a git repository"):
+        fix_hookspath.list_local_core_hooks_path_values(
+            tmp_path / "any-repo",
+            None,
+        )
 
 def test_list_local_core_hooks_path_values_quiet_when_stderr_empty(
     tmp_path: Path,
@@ -308,13 +299,10 @@ def test_list_local_core_hooks_path_values_quiet_when_stderr_empty(
     assert captured_streams.err == ""
 
 
-def test_read_global_core_hooks_path_surfaces_git_stderr(
-    capsys: pytest.CaptureFixture[str],
+def test_read_global_core_hooks_path_raises_on_unexpected_git_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When the global git-config read exits non-zero with stderr, the helper
-    must print a diagnostic so callers can distinguish "global unset" from
-    "git broken"."""
+    """When the global git-config read exits non-zero with stderr, raise RuntimeError."""
     failing_completed_process = subprocess.CompletedProcess(
         args=["git"],
         returncode=128,
@@ -325,13 +313,8 @@ def test_read_global_core_hooks_path_surfaces_git_stderr(
         fix_hookspath.subprocess, "run", lambda *_args, **_kwargs: failing_completed_process
     )
 
-    returned_value = fix_hookspath.read_global_core_hooks_path(None)
-
-    assert returned_value == ""
-    captured_streams = capsys.readouterr()
-    assert "fix_hookspath" in captured_streams.err
-    assert "core.hooksPath" in captured_streams.err
-    assert "bad config" in captured_streams.err
+    with pytest.raises(RuntimeError, match="bad config"):
+        fix_hookspath.read_global_core_hooks_path(None)
 
 
 def test_read_global_core_hooks_path_quiet_when_stderr_empty(
