@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,53 @@ const RETIRED_SKILL_DIRECTORIES = [
 ];
 const PERSONAL_SKILL_DIRECTORIES = ['balatro', 'midjourney-sref', 'credit-card-picker'];
 const SHIPPED_SKILL_DIRECTORY = 'autoconverge';
+const PRUNED_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
+const SKIP_PRUNE_NOTICE_MARKER = 'Skipping retired-skill prune';
+const DEPENDENCY_STUB_PACKAGE_SEGMENTS = ['@jl-cmd', 'prompt-generator'];
+
+/**
+ * Create a stub node_modules tree the installer can resolve the declared
+ * dependency package from, and return its root for the child's NODE_PATH.
+ *
+ * The installer resolves `@jl-cmd/prompt-generator/package.json`; a lone
+ * package.json at that path is enough for `createRequire.resolve` to succeed.
+ * The stub makes the dependency resolvable inside the sandbox so a full install
+ * exercises the real prune path. It does not prove the real private package
+ * resolves in a real install — CI cannot host that package — only that the
+ * resolved-dependency branch prunes as designed.
+ *
+ * @param {string} homeDirectory The sandbox home the stub is nested under.
+ * @returns {string} The stub modules root to place on the child's NODE_PATH.
+ */
+function ensureDependencyStub(homeDirectory) {
+    const stubModulesRoot = join(homeDirectory, 'dependency-stub-modules');
+    const stubPackageDirectory = join(stubModulesRoot, ...DEPENDENCY_STUB_PACKAGE_SEGMENTS);
+    mkdirSync(stubPackageDirectory, { recursive: true });
+    writeFileSync(
+        join(stubPackageDirectory, 'package.json'),
+        JSON.stringify({
+            name: DEPENDENCY_STUB_PACKAGE_SEGMENTS.join('/'),
+            version: '1.0.0',
+            description: 'sandbox dependency stub',
+        }) + '\n',
+    );
+    return stubModulesRoot;
+}
+
+/**
+ * Report whether a retired skill directory landed under the prune backup root.
+ *
+ * @param {string} claudeDirectory The sandbox ~/.claude directory.
+ * @param {string} skillName The retired skill directory name to look for.
+ * @returns {boolean} True when a timestamped backup holds the skill directory.
+ */
+function prunedBackupContains(claudeDirectory, skillName) {
+    const backupRoot = join(claudeDirectory, PRUNED_BACKUP_DIRECTORY_NAME);
+    if (!existsSync(backupRoot)) return false;
+    return readdirSync(backupRoot, { withFileTypes: true })
+        .filter(entry => entry.isDirectory())
+        .some(timestampDir => existsSync(join(backupRoot, timestampDir.name, skillName)));
+}
 
 /**
  * Create an isolated ~/.claude sandbox and return the paths a prune test reads.
@@ -57,22 +104,35 @@ function plantSkillDirectory(skillsDirectory, skillName, withSkillManifest) {
 }
 
 /**
- * Run the real installer against the sandbox home and return its combined output.
+ * Run the real installer against the sandbox home and return its stdout.
+ *
+ * The declared dependency package is resolvable by default: the child's
+ * NODE_PATH points at a sandbox stub so `createRequire.resolve` finds it and the
+ * full-install prune runs. Passing ``{ dependencyResolvable: false }`` removes
+ * NODE_PATH so the dependency fails to resolve and the installer skips the prune.
  *
  * @param {string} homeDirectory The sandbox home the installer writes into.
  * @param {string[]} extraArguments Installer arguments (for example ``['--only', 'core']``).
+ * @param {{dependencyResolvable?: boolean}} options Whether the dependency resolves.
  * @returns {string} The installer's stdout.
  */
-function runInstaller(homeDirectory, extraArguments) {
+function runInstaller(homeDirectory, extraArguments, options = {}) {
+    const dependencyResolvable = options.dependencyResolvable !== false;
+    const childEnvironment = {
+        ...process.env,
+        HOME: homeDirectory,
+        USERPROFILE: homeDirectory,
+        GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
+    };
+    if (dependencyResolvable) {
+        childEnvironment.NODE_PATH = ensureDependencyStub(homeDirectory);
+    } else {
+        delete childEnvironment.NODE_PATH;
+    }
     return execFileSync('node', [INSTALLER_PATH, ...extraArguments], {
         cwd: THIS_DIRECTORY,
         encoding: 'utf8',
-        env: {
-            ...process.env,
-            HOME: homeDirectory,
-            USERPROFILE: homeDirectory,
-            GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
-        },
+        env: childEnvironment,
     });
 }
 
@@ -91,13 +151,23 @@ test('a full reinstall over a pre-manifest dirty tree prunes retired skills and 
         }
         assert.equal(existsSync(sandbox.manifestPath), false, 'sandbox starts with no manifest');
 
-        runInstaller(sandbox.homeDirectory, []);
+        const installerOutput = runInstaller(sandbox.homeDirectory, []);
 
+        assert.equal(
+            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            false,
+            'the resolvable-dependency install runs the prune rather than skipping it',
+        );
         for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
             assert.equal(
                 existsSync(join(sandbox.skillsDirectory, retiredSkill)),
                 false,
                 `retired skill ${retiredSkill} should be pruned`,
+            );
+            assert.equal(
+                prunedBackupContains(sandbox.claudeDirectory, retiredSkill),
+                true,
+                `retired skill ${retiredSkill} should be moved to the prune backup`,
             );
         }
         for (const personalSkill of PERSONAL_SKILL_DIRECTORIES) {
@@ -138,13 +208,23 @@ test('a full reinstall over an old-format manifest without a skills key still pr
             }, null, 2) + '\n',
         );
 
-        runInstaller(sandbox.homeDirectory, []);
+        const installerOutput = runInstaller(sandbox.homeDirectory, []);
 
+        assert.equal(
+            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            false,
+            'the resolvable-dependency install runs the prune rather than skipping it',
+        );
         for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
             assert.equal(
                 existsSync(join(sandbox.skillsDirectory, retiredSkill)),
                 false,
                 `retired skill ${retiredSkill} should be pruned via the ever-shipped fallback`,
+            );
+            assert.equal(
+                prunedBackupContains(sandbox.claudeDirectory, retiredSkill),
+                true,
+                `retired skill ${retiredSkill} should be moved to the prune backup`,
             );
         }
         const manifest = readManifest(sandbox.manifestPath);
@@ -172,12 +252,22 @@ test('a full reinstall prunes a manifest-recorded skill absent from the package 
             }, null, 2) + '\n',
         );
 
-        runInstaller(sandbox.homeDirectory, []);
+        const installerOutput = runInstaller(sandbox.homeDirectory, []);
 
+        assert.equal(
+            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            false,
+            'the resolvable-dependency install runs the prune rather than skipping it',
+        );
         assert.equal(
             existsSync(join(sandbox.skillsDirectory, retiredManifestSkill)),
             false,
             'a skill the prior manifest recorded but the package no longer ships is pruned',
+        );
+        assert.equal(
+            prunedBackupContains(sandbox.claudeDirectory, retiredManifestSkill),
+            true,
+            'the manifest-recorded retired skill is moved to the prune backup',
         );
         assert.equal(
             existsSync(join(sandbox.skillsDirectory, personalSkill)),
@@ -204,6 +294,11 @@ test('a scoped --only install leaves retired skills in place because prune runs 
                 true,
                 `retired skill ${retiredSkill} should survive a scoped install`,
             );
+            assert.equal(
+                prunedBackupContains(sandbox.claudeDirectory, retiredSkill),
+                false,
+                `retired skill ${retiredSkill} should not be moved to backup by a scoped install`,
+            );
         }
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
@@ -216,8 +311,13 @@ test('a full reinstall keeps pr-fix-protocol because the package ships it again'
         plantSkillDirectory(sandbox.skillsDirectory, 'pr-fix-protocol', true);
         writeFileSync(join(sandbox.skillsDirectory, 'pr-fix-protocol', 'SKILL.md'), 'stale seeded copy\n');
 
-        runInstaller(sandbox.homeDirectory, []);
+        const installerOutput = runInstaller(sandbox.homeDirectory, []);
 
+        assert.equal(
+            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            false,
+            'the resolvable-dependency install runs the prune rather than skipping it',
+        );
         const restoredSkillPath = join(sandbox.skillsDirectory, 'pr-fix-protocol', 'SKILL.md');
         assert.equal(existsSync(restoredSkillPath), true, 'pr-fix-protocol survives and is reinstalled');
         assert.notEqual(
@@ -225,6 +325,81 @@ test('a full reinstall keeps pr-fix-protocol because the package ships it again'
             'stale seeded copy\n',
             'the shipped pr-fix-protocol overwrites the stale seeded copy',
         );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a full reinstall with an unresolved dependency skips the prune and leaves retired skills untouched', () => {
+    const sandbox = createSandbox();
+    try {
+        for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
+            plantSkillDirectory(sandbox.skillsDirectory, retiredSkill, true);
+        }
+
+        const installerOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: false });
+
+        assert.equal(
+            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            true,
+            'the installer logs a notice that it is skipping the prune',
+        );
+        for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
+            assert.equal(
+                existsSync(join(sandbox.skillsDirectory, retiredSkill)),
+                true,
+                `retired skill ${retiredSkill} should survive when a dependency is unresolved`,
+            );
+            assert.equal(
+                prunedBackupContains(sandbox.claudeDirectory, retiredSkill),
+                false,
+                `retired skill ${retiredSkill} should not be moved to backup when the prune is skipped`,
+            );
+        }
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('the prune skip is scoped: once the dependency resolves a later full install prunes normally', () => {
+    const sandbox = createSandbox();
+    try {
+        for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
+            plantSkillDirectory(sandbox.skillsDirectory, retiredSkill, true);
+        }
+
+        const skippedOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: false });
+        assert.equal(
+            skippedOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            true,
+            'the unresolved-dependency install skips the prune',
+        );
+        for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
+            assert.equal(
+                existsSync(join(sandbox.skillsDirectory, retiredSkill)),
+                true,
+                `retired skill ${retiredSkill} should still be present after the skipped prune`,
+            );
+        }
+
+        const resolvedOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: true });
+        assert.equal(
+            resolvedOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            false,
+            'the resolved-dependency install runs the prune, proving the skip is not a permanent disable',
+        );
+        for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
+            assert.equal(
+                existsSync(join(sandbox.skillsDirectory, retiredSkill)),
+                false,
+                `retired skill ${retiredSkill} should be pruned once the dependency resolves`,
+            );
+            assert.equal(
+                prunedBackupContains(sandbox.claudeDirectory, retiredSkill),
+                true,
+                `retired skill ${retiredSkill} should be moved to the prune backup on the resolved install`,
+            );
+        }
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
     }

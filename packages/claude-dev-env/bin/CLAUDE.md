@@ -15,6 +15,14 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 | `git_hooks_installer.test.mjs` | Tests for `git_hooks_installer.mjs` |
 | `install_mypy_ini.test.mjs` | Tests for `install_mypy_ini.mjs` |
 
+## Retired-skill prune
+
+The full-install prune renames a retired skill directory into a timestamped backup rather than deleting it. Each pruned directory is renamed to `~/.claude/.claude-dev-env-pruned/<timestamp>/<skill-name>/`, a backup root outside `~/.claude/skills` so a backed-up directory is never re-discovered as a skill. Backups accumulate — nothing cleans them — so a user can recover a directory. A rename that fails leaves the directory in place with a logged warning and never falls back to deletion, so a prune failure costs at most a cosmetic leftover.
+
+Matching is by directory name alone, so a user-authored directory whose name collides with a retired skill is backed up as if it were that skill. Only a name in neither the installed set nor the ever-shipped set, and `~/.claude/skills/_shared`, are left in place.
+
+The prune is skipped for the whole run — with a logged notice naming the unresolved group — when any declared dependency group fails to resolve. An unresolved dependency contributes no skills to the installed set, so a live skill that a dependency package supplies would look retired; holding the prune until every dependency resolves keeps such a skill from being backed up.
+
 ## Key exports from install.mjs
 
 | Export | Description |
