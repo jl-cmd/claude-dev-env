@@ -7,23 +7,23 @@ into `SKILL.md` use `§Section name` notation.
 <example> User: `/pr-converge` Claude: [PR context + one tick of internal
 code-review/bugteam work, then the terminal Bugbot and Copilot gates; Step 4
 per `workflows/schedule-wakeup-loop.md` — default loop until convergence or
-stop]
+10→stop]
 </example>
 
 <example> CODE_REVIEW tick (the entry phase), the static sweep raises a
 `ruff` failure on a changed file. Claude: [fixes it TDD, one commit, pushes,
-resets `bugbot_clean_at = null`, `code_review_clean_at = null`,
-`bugteam_clean_at = null`, `copilot_clean_at = null`, `merge_state_status =
-null`, stays `phase = CODE_REVIEW`, Step 4 at 270s, re-runs the sweep next
-tick]
+resets push-invalidated markers per [ground-rules.md](ground-rules.md) /
+[state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+`bugbot_down`, `bugbot_acknowledged_at`), stays `phase = CODE_REVIEW`, Step 4
+at 270s, re-runs the sweep next tick]
 </example>
 
 <example> CODE_REVIEW tick, static sweep clean, `/code-review high --fix`
 applies fixes to the working tree. Claude: [commits the applied fixes in one
-commit, pushes, resets `bugbot_clean_at = null`, `code_review_clean_at =
-null`, `bugteam_clean_at = null`, `copilot_clean_at = null`,
-`merge_state_status = null`, stays `phase = CODE_REVIEW`, Step 4 at 270s,
-returns]
+commit, pushes, resets push-invalidated markers per
+[ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md) (all
+`*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`),
+stays `phase = CODE_REVIEW`, Step 4 at 270s, returns]
 </example>
 
 <example> CODE_REVIEW tick, static sweep clean and `/code-review high --fix`
@@ -32,10 +32,11 @@ clean (no changes applied). Claude: [sets `code_review_clean_at = HEAD`,
 </example>
 
 <example> BUGTEAM phase, bugteam pushed a fix commit during its run. Claude:
-[re-resolves HEAD, resets `bugbot_clean_at = null`, `code_review_clean_at =
-null`, `bugteam_clean_at = null`, `copilot_clean_at = null`,
-`merge_state_status = null`, `phase = CODE_REVIEW`, Step 4 at 270s, re-enters
-the internal passes on the new HEAD]
+[re-resolves HEAD, resets push-invalidated markers per
+[ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md) (all
+`*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`),
+`phase = CODE_REVIEW`, Step 4 at 270s, re-enters the internal passes on the
+new HEAD]
 </example>
 
 <example> BUGTEAM phase, bugteam reports convergence with no push. Claude:
@@ -57,10 +58,10 @@ the same tick]
 
 <example> Terminal BUGBOT gate, Bugbot has 2 unaddressed findings on HEAD.
 Claude: [TDD-fixes both, one commit, pushes, replies inline on both threads,
-resets `bugbot_clean_at = null`, `code_review_clean_at = null`,
-`bugteam_clean_at = null`, `copilot_clean_at = null`, `merge_state_status =
-null`, `phase = CODE_REVIEW`, Step 4 at 270s, re-enters the internal passes
-on the new HEAD]
+resets push-invalidated markers per [ground-rules.md](ground-rules.md) /
+[state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+`bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, Step 4 at
+270s, re-enters the internal passes on the new HEAD]
 </example>
 
 <example> Convergence gates after the terminal Bugbot gate confirms
@@ -101,20 +102,20 @@ HEAD`, `phase = BUGTEAM`]
 <example> Convergence gates reached, but `mergeStateStatus: DIRTY` (base
 advanced, merge conflicts). Claude: [runs §Convergence gate (c); does NOT
 mark ready; invokes `rebase` skill per `../../rebase/SKILL.md` Phase 1–4;
-after force-with-lease push, resets `bugbot_clean_at = null`,
-`code_review_clean_at = null`, `bugteam_clean_at = null`,
-`copilot_clean_at = null`, `merge_state_status = null`, `phase =
-CODE_REVIEW`, schedules next wakeup]
+after force-with-lease push, resets push-invalidated markers per
+[ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md) (all
+`*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`),
+`phase = CODE_REVIEW`, schedules next wakeup]
 </example>
 
 <example> Convergence gates reached, mergeability CLEAN, Copilot review at
 `current_head` `state == "CHANGES_REQUESTED"` with two unaddressed inline
 findings. Claude: [runs §Convergence gates (a); applies Fix protocol (TDD
-test → fix → push → reply inline both threads), resets `bugbot_clean_at =
-null`, `code_review_clean_at = null`, `bugteam_clean_at = null`,
-`copilot_clean_at = null`, `merge_state_status = null`, `phase =
-CODE_REVIEW`, schedules next wakeup, re-enters the internal passes on the
-new HEAD]
+test → fix → push → reply inline both threads), resets push-invalidated
+markers per [ground-rules.md](ground-rules.md) /
+[state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+`bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedules
+next wakeup, re-enters the internal passes on the new HEAD]
 </example>
 
 <example> Convergence gates reached, mergeability CLEAN, no Copilot review on
@@ -138,10 +139,10 @@ at <SHA>, bugteam CLEAN at <SHA>, mergeable_state clean, copilot CLEAN at
 Copilot review returned `state: CHANGES_REQUESTED` with inline findings on
 `current_head`. Claude: [does NOT mark PR ready — gate (d) failed;
 applies Fix protocol on every confirmed Copilot finding (TDD test → fix →
-push → reply inline on each thread); resets `bugbot_clean_at = null`,
-`code_review_clean_at = null`, `bugteam_clean_at = null`,
-`copilot_clean_at = null`, `merge_state_status = null`; `phase =
-CODE_REVIEW`; schedules next wakeup, re-enters the internal passes on the new
-HEAD. Full back-to-back-clean cycle plus all six gates must hold again on new
-HEAD.]
+push → reply inline on each thread); resets push-invalidated markers per
+[ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md) (all
+`*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`);
+`phase = CODE_REVIEW`; schedules next wakeup, re-enters the internal passes
+on the new HEAD. Full back-to-back-clean cycle plus all six gates must hold
+again on new HEAD.]
 </example>

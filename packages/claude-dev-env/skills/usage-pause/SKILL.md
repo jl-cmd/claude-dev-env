@@ -41,16 +41,19 @@ On exit 2 the script prints `{"error": ...}`. Ask the user for a manual reset ti
 
 `scripts/resolve_usage_window.py` is the source of truth for live probe behavior. Endpoint URL, header names/values, credential path and token keys, response bucket keys, stage sizing, and the weekly warn threshold all live in `scripts/usage_pause_constants/resolve_usage_window_constants.py` — read those modules for the current values; do not restate them here.
 
-In short: the resolver reads the Claude Code CLI's stored OAuth access token (honored only while unexpired), probes the OAuth usage endpoint the interactive `/usage` panel uses, and returns the session and weekly buckets with utilization and reset times.
+In short: the resolver picks a bearer token, probes the OAuth usage endpoint the interactive `/usage` panel uses, and returns the session and weekly buckets with utilization and reset times. Token sources, in order:
 
-Fallbacks, in order: an expired or unreadable stored token, a failed request, or a response with no readable session-window reset time all end in exit 2 — the manual-override ask above. The manual path works with no probe at all, so the skill functions even when the credential file is stale.
+1. The Claude Code CLI's stored OAuth access token (honored only while unexpired).
+2. The session ingress bearer token file named by `CLAUDE_SESSION_INGRESS_TOKEN_FILE` (cloud sessions).
+
+Fallbacks, in order: both token sources unavailable (expired/unreadable credential and no ingress file), a failed request, or a response with no readable session-window reset time all end in exit 2 — the manual-override ask above. The manual path works with no probe at all, so the skill functions even when both token sources are unavailable.
 
 Why this probe and not the others:
 
 - The interactive `/usage` panel shows the same data but has no scriptable output.
 - `claude -p --output-format json` spends usage to answer and its metadata reports per-call token counts, not the account window clock.
 - `anthropic-ratelimit-*` response headers cover API-key Messages traffic, not the subscription session window, and reading them also costs a request.
-- Refreshing the OAuth token from a script is out of scope: token rotation would desync the refresh token the CLI has on disk and log the CLI out. The resolver only ever reads the credential file.
+- Refreshing the OAuth token from a script is out of scope: token rotation would desync the refresh token the CLI has on disk and log the CLI out. The resolver only ever reads tokens (credential file or session ingress file).
 
 ## Weekly limit guard
 

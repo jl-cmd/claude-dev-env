@@ -219,14 +219,15 @@ post a fresh PR in a fresh branch based on origin main to the user.
   (string, not an object). Always check the correct fields and use
   case-insensitive substring matching on login values, never strict
   equality.
-- **`is_outdated` is informational, not a skip flag** — GitHub marks a
-  thread `is_outdated=true` when the line it anchors to has changed since
-  the comment was posted. The original concern can still apply to current
-  code (the fix may have moved, not landed). The convergence gate counts
-  every thread with `is_resolved == false` regardless of `is_outdated`.
-  Outdated threads must be verified against current HEAD and either
-  fix-and-resolved or just resolved (with an inline reply explaining why
-  the concern no longer applies).
+- **`isOutdated` has dual scope** — GitHub marks a thread `isOutdated=true`
+  when the line it anchors to has changed since the comment was posted. The
+  machine gate (`check_convergence.py` / [convergence-gates.md](reference/convergence-gates.md)
+  gate (e)) excludes `isOutdated == true` bot threads from the fail count —
+  only non-outdated unresolved bot threads fail the gate. The agent-side
+  `pr-fix-protocol` unresolved-thread sweep still verifies outdated
+  unresolved threads against HEAD before resolve when the protocol requires
+  it (the original concern can still apply when the fix moved rather than
+  landed).
 - **Tilde paths fail on Windows Git Bash** — `~/.claude/skills/...`
   resolves to the wrong home directory in Bash-tool contexts. Use
   `$HOME/.claude/skills/...` in shell invocations or `Path.home() /

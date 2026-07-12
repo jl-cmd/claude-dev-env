@@ -24,9 +24,10 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
   Reset to `null` on every push.
 - `merge_state_status`: last-observed `mergeable_state` from
   `pull_request_read(method="get")` (e.g. `clean`, `dirty`, `blocked`,
-  `behind`, `unknown`), or `null` before the first check. Reset to `null`
-  on every push. Gate (c) in [convergence-gates.md](convergence-gates.md)
-  invokes rebase on `dirty`; other non-`clean` values are hard blockers.
+  `behind`, `unknown`, `unstable`), or `null` before the first check. Reset
+  to `null` on every push. Gate (c) in [convergence-gates.md](convergence-gates.md)
+  invokes rebase on `dirty`; other non-`clean` values (`blocked`, `behind`,
+  `unknown`, `unstable`) are hard blockers.
 - `copilot_wait_count`: integer, init `0`. Consecutive COPILOT_WAIT ticks
   with no Copilot review surfaced at `current_head`. Escalate as hard blocker
   at `>= 3`. Reset to `0` when a Copilot review surfaces at `current_head`
