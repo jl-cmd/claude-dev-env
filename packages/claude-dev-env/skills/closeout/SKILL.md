@@ -54,6 +54,12 @@ Copy this checklist into your response and mark each phase as you finish it:
 - [ ] Phase 6 — Print the computed cloud handoff prompt in chat
 ```
 
+### Track the phases on the task list
+
+At invocation, copy the six phases onto the session task list — one task each via TaskCreate: harvest, draft + user validation, dedupe, repo routing, filing, handoff prompt. Mark a task `in_progress` with TaskUpdate when its phase starts and `completed` when the phase finishes.
+
+Hold one line on the filing task: never mark it `completed` while any planned issue is still uncreated. A filing phase that lands fewer issues than the approved set keeps the filing task open, with the missing issues named on it.
+
 ### Phase 1 — Harvest obstacles
 
 Read three sources, in order:
