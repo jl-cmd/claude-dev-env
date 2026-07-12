@@ -26,10 +26,13 @@ from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     ALL_WRITE_EDIT_TOOL_NAMES,
     ASK_USER_QUESTION_TOOL_NAME,
     BLOCKQUOTE_LINE_PATTERN,
+    DOT_CLAUDE_DIRECTORY_NAME,
     FENCED_CODE_BLOCK_PATTERN,
     FILE_PATH_PATTERN,
     INLINE_CODE_PATTERN,
     MARKDOWN_EXTENSION,
+    PROJECT_ALLOWLIST_FILENAME,
+    PROJECT_ROOT_WALK_LIMIT,
     URL_PATTERN,
     USER_FACING_PLAIN_LANGUAGE_NOTICE,
 )
@@ -49,13 +52,23 @@ def strip_non_prose_regions(text: str) -> str:
     return without_paths
 
 
-def find_banned_terms(text: str) -> list[tuple[str, str]]:
+def find_banned_terms(
+    text: str, all_allowlisted_terms: frozenset[str] = frozenset()
+) -> list[tuple[str, str]]:
     """Return each (matched term, suggested replacement) found in the prose.
 
     Each term appears at most once, in first-seen order. Matching is
     case-insensitive and respects word boundaries; multi-word phrases match as
-    whole units. Terms in the software-term allowlist are exempt and never
-    flagged.
+    whole units. Terms in the software-term allowlist and terms in the
+    caller-supplied per-project allowlist are exempt and never flagged.
+
+    Args:
+        text: The prose to scan.
+        all_allowlisted_terms: Lowercased project-vocabulary terms to exempt, on top
+            of the built-in software-term allowlist.
+
+    Returns:
+        The (matched term, suggested replacement) pairs, in first-seen order.
     """
     prose_text = strip_non_prose_regions(text)
     all_matches: list[tuple[str, str]] = []
@@ -69,9 +82,107 @@ def find_banned_terms(text: str) -> list[tuple[str, str]]:
             continue
         if normalized_term in ALL_SOFTWARE_TERMS:
             continue
+        if normalized_term in all_allowlisted_terms:
+            continue
         seen_terms.add(normalized_term)
         all_matches.append((normalized_term, each_replacement))
     return all_matches
+
+
+def _allowlist_start_directory(
+    tool_name: str, tool_input: dict, payload_by_key: dict[str, object]
+) -> Path | None:
+    """Return the directory to begin the project-allowlist search from.
+
+    A Write/Edit/MultiEdit on a file starts at that file's parent directory; an
+    AskUserQuestion (or a write with no path) starts at the session working
+    directory the payload carries.
+
+    Args:
+        tool_name: The intercepted tool's name.
+        tool_input: The intercepted tool's input payload.
+        payload_by_key: The full PreToolUse payload carrying ``cwd``.
+
+    Returns:
+        The starting directory, or None when neither a file path nor a working
+        directory is available.
+    """
+    if tool_name in ALL_WRITE_EDIT_TOOL_NAMES:
+        file_path = tool_input.get("file_path", "")
+        if isinstance(file_path, str) and file_path:
+            return Path(file_path).parent
+    working_directory = payload_by_key.get("cwd", "")
+    if isinstance(working_directory, str) and working_directory:
+        return Path(working_directory)
+    return None
+
+
+def _find_project_allowlist_file(start_directory: Path) -> Path | None:
+    """Walk ancestors from start_directory for the project allowlist file.
+
+    Args:
+        start_directory: The directory to begin the upward walk from.
+
+    Returns:
+        The first ``.claude/plain-language-allow.json`` found on the ancestor
+        chain, or None when none exists within the walk limit.
+    """
+    current_directory = start_directory
+    for _ in range(PROJECT_ROOT_WALK_LIMIT):
+        candidate = current_directory / DOT_CLAUDE_DIRECTORY_NAME / PROJECT_ALLOWLIST_FILENAME
+        if candidate.is_file():
+            return candidate
+        if current_directory.parent == current_directory:
+            break
+        current_directory = current_directory.parent
+    return None
+
+
+def _parse_project_allowlist_file(allowlist_path: Path) -> frozenset[str]:
+    """Read a JSON array of allowlist words into a lowercased term set.
+
+    Malformed JSON, an unreadable file, or any non-list shape yields an empty
+    set, so the hook falls back to the standard check rather than crashing.
+
+    Args:
+        allowlist_path: The allowlist file to read.
+
+    Returns:
+        The lowercased string entries, or an empty set on any read/parse fault.
+    """
+    try:
+        raw_text = allowlist_path.read_text(encoding="utf-8")
+        parsed_entries = json.loads(raw_text)
+    except (OSError, ValueError):
+        return frozenset()
+    if not isinstance(parsed_entries, list):
+        return frozenset()
+    return frozenset(
+        each_entry.lower() for each_entry in parsed_entries if isinstance(each_entry, str)
+    )
+
+
+def _load_project_allowlist(
+    tool_name: str, tool_input: dict, payload_by_key: dict[str, object]
+) -> frozenset[str]:
+    """Load the per-project domain-vocabulary allowlist for the write's project.
+
+    Args:
+        tool_name: The intercepted tool's name.
+        tool_input: The intercepted tool's input payload.
+        payload_by_key: The full PreToolUse payload carrying ``cwd``.
+
+    Returns:
+        The lowercased allowlist terms for the project the write targets, or an
+        empty set when no allowlist applies.
+    """
+    start_directory = _allowlist_start_directory(tool_name, tool_input, payload_by_key)
+    if start_directory is None:
+        return frozenset()
+    allowlist_path = _find_project_allowlist_file(start_directory)
+    if allowlist_path is None:
+        return frozenset()
+    return _parse_project_allowlist_file(allowlist_path)
 
 
 def build_block_reason(all_matches: list[tuple[str, str]]) -> str:
@@ -197,7 +308,10 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     if not prose_text:
         return None
 
-    all_matches = find_banned_terms(prose_text)
+    all_allowlisted_terms = _load_project_allowlist(
+        raw_tool_name, raw_tool_input, payload_by_key
+    )
+    all_matches = find_banned_terms(prose_text, all_allowlisted_terms)
     if not all_matches:
         return None
 

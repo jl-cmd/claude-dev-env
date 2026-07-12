@@ -289,6 +289,10 @@ MARKDOWN_EXTENSION: str = ".md"
 ASK_USER_QUESTION_TOOL_NAME: str = "AskUserQuestion"
 ALL_WRITE_EDIT_TOOL_NAMES: frozenset[str] = frozenset({"Write", "Edit", "MultiEdit"})
 
+DOT_CLAUDE_DIRECTORY_NAME: str = ".claude"
+PROJECT_ALLOWLIST_FILENAME: str = "plain-language-allow.json"
+PROJECT_ROOT_WALK_LIMIT: int = 40
+
 USER_FACING_PLAIN_LANGUAGE_NOTICE: str = (
     "Plain-language check: replace each flagged formal word with the simpler "
     "word named in the reason."
