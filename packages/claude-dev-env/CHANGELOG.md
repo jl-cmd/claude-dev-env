@@ -1,5 +1,96 @@
 # Changelog
 
+## [1.94.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v1.93.1...claude-dev-env-v1.94.0) (2026-07-12)
+
+
+### Features
+
+* add Get-SessionAccount.ps1 session account reporter ([405cc3c](https://github.com/jl-cmd/claude-dev-env/commit/405cc3c490c35bf8967aaf05f349db7f12686b0e))
+* **fan-out:** report each target's dispatch conclusion with redaction ([4305ca9](https://github.com/jl-cmd/claude-dev-env/commit/4305ca9e78f118517df052df22daa00593b789b3))
+* **hooks:** add per-repository PII scan exemption ([b770d71](https://github.com/jl-cmd/claude-dev-env/commit/b770d7131b95a59cbc35f5b41c067ed8b922074f))
+* **hooks:** add per-repository PII scan exemption ([d2ce8c3](https://github.com/jl-cmd/claude-dev-env/commit/d2ce8c3e2ba632b9246f76f391e0e35055238a4a))
+* **skill-builder:** enforce modularity and description trigger catalogs ([c57fad4](https://github.com/jl-cmd/claude-dev-env/commit/c57fad475dd68c6e49485581d7c0944b173b9dbd))
+* **skill-builder:** modularity and description trigger catalogs ([f476e2e](https://github.com/jl-cmd/claude-dev-env/commit/f476e2ed034a5254a06c6be1d0e5edaced70dd63))
+* **skills:** add grokify Grok Build handoff skill ([5a03041](https://github.com/jl-cmd/claude-dev-env/commit/5a03041fd7940106d8297c53a113aa9c9dfd8a9f))
+* **skills:** add grokify Grok Build handoff skill ([ab700cc](https://github.com/jl-cmd/claude-dev-env/commit/ab700cc147b813f22edbfd24083c015042be5a6b))
+* **skills:** require executed checks before Copilot findings self-heal ([5a400e8](https://github.com/jl-cmd/claude-dev-env/commit/5a400e83d33e53d274bbdcd99be191fe95cc9734))
+* **skills:** require executed checks before Copilot findings self-heal ([0549d96](https://github.com/jl-cmd/claude-dev-env/commit/0549d96397c825f89baed8fdfaab7ae6a0118aca)), closes [#13](https://github.com/jl-cmd/claude-dev-env/issues/13)
+
+
+### Bug Fixes
+
+* address review round fixes for Get-SessionAccount ([228a5fc](https://github.com/jl-cmd/claude-dev-env/commit/228a5fc3e9d30ba265bd02097f292127c33f1f1c))
+* **autoconverge:** describe the real bypassed-gate output and drop a redundant path guard ([84e7bfe](https://github.com/jl-cmd/claude-dev-env/commit/84e7bfe24c8a60898dad857e72db1ea2217194db))
+* **autoconverge:** export the bugbot opt-out token and collect the convergence contract pins ([83c2678](https://github.com/jl-cmd/claude-dev-env/commit/83c26787be6063c38e060e2b319773fc2d659d89))
+* **autoconverge:** record a bypass note when the CLEAN audit post is refused ([d197eb3](https://github.com/jl-cmd/claude-dev-env/commit/d197eb3f96f37187753b074e78f8d21311db04ef))
+* **autoconverge:** record a bypass note when the CLEAN audit post is refused ([a02fa4f](https://github.com/jl-cmd/claude-dev-env/commit/a02fa4f9cb59acb7f3d330a52d444e88165134d9))
+* **autoconverge:** reset the clean-audit bypass on a landed post and single-home the reviewer bypass contracts ([a297513](https://github.com/jl-cmd/claude-dev-env/commit/a297513d4107317ae0d631eb119ca7d9246c7443))
+* **hooks:** pin PII exemption to exact github.com origin host ([0b6e7de](https://github.com/jl-cmd/claude-dev-env/commit/0b6e7defe7a3bee1039b539c74f42587514f90e4))
+* **hooks:** reject invalid port authority in PII origin host pin ([bddc2ab](https://github.com/jl-cmd/claude-dev-env/commit/bddc2abc22ffc398e215975842b7bf27bebc303c))
+* **packaging:** drop pyproject entries for trimmed skill constants ([eac2b36](https://github.com/jl-cmd/claude-dev-env/commit/eac2b36e7636ab34fd33510053b9fbcac4bbbadb))
+* **pr-converge:** give the scripts path bootstrap a repo-unique module name ([7a80536](https://github.com/jl-cmd/claude-dev-env/commit/7a8053627b110b5d6e9591f6e66bde352b60bdc9))
+* remove unused constant and tighten fan-out conclusion report tests ([29c818f](https://github.com/jl-cmd/claude-dev-env/commit/29c818f220b5ff2107335796d43a4a1080097790))
+* **scripts:** address static-sweep findings in Get-SessionAccount ([bb62aca](https://github.com/jl-cmd/claude-dev-env/commit/bb62aca89d815e75cd40b4db6a8228f289de150c))
+* **skill-builder:** prompt PR on deliver; user-confirm polish triggers/gotchas ([a928103](https://github.com/jl-cmd/claude-dev-env/commit/a928103bdcc4152460e6f55cfb8ccfa54846c1e4))
+* **skills:** clean fix_hookspath CLI exit and accurate shared README ([312e1e0](https://github.com/jl-cmd/claude-dev-env/commit/312e1e084e32c4c9bfcf79c575add5670f842a6a))
+
+
+### Documentation
+
+* **autoconverge:** trim SKILL.md to a hub with variant flows in reference files ([24cd719](https://github.com/jl-cmd/claude-dev-env/commit/24cd719a8e083a90006733c042f337f86f0a76bd))
+* **autoconverge:** trim SKILL.md to a hub with variant flows in reference files ([4f70bb7](https://github.com/jl-cmd/claude-dev-env/commit/4f70bb7db066ea425ec764e3779639b81d23c5f0))
+* **skills:** single-home pr-converge state schema with TOC ([e41f293](https://github.com/jl-cmd/claude-dev-env/commit/e41f2933879f9fd4fc8a37e422eaa3faaceed832))
+
+
+### Maintenance
+
+* **skills:** trim shipped skills to the core set ([fcb403c](https://github.com/jl-cmd/claude-dev-env/commit/fcb403cb9482bf266f04a21180d5d19b38dfc9af))
+* **skills:** trim shipped skills to the core set ([b51b919](https://github.com/jl-cmd/claude-dev-env/commit/b51b919396860971486d08cb83cdb319b418f7e6))
+
+
+### Refactoring
+
+* **pr-converge:** drop the dead exit-code re-export and single-home the bugteam exit-2 policy ([3d9a265](https://github.com/jl-cmd/claude-dev-env/commit/3d9a26528a9c1be67b4be6fc0fd77ca70415b850))
+* **scripts:** lift Get-SessionAccount storage-scan values to named constants ([c8c0e39](https://github.com/jl-cmd/claude-dev-env/commit/c8c0e395084f7341ea1956c2882e4c0e7214805b))
+* **skills:** align orchestrator family to advisor protocol ([e013766](https://github.com/jl-cmd/claude-dev-env/commit/e01376670b83f25186fcf0073a13b8b3f2ef3002))
+* **skills:** align orchestrator family to advisor protocol ([44b4978](https://github.com/jl-cmd/claude-dev-env/commit/44b497805ac98d812e98212f22ec9b5b1b959aa5))
+* **skills:** bugteam wrappers and lifecycle pointers ([772fbb9](https://github.com/jl-cmd/claude-dev-env/commit/772fbb95ebd7faa15a67f3d7958cabfd8b091877))
+* **skills:** bugteam wrappers and lifecycle pointers ([4690406](https://github.com/jl-cmd/claude-dev-env/commit/469040622e8961c3b3203c4f37761beb357ed3a0))
+* **skills:** drop stale copilot-review triage caller ([c0932b0](https://github.com/jl-cmd/claude-dev-env/commit/c0932b01d2019b221c7ae51c37d8a9765d18e439))
+* **skills:** drop stale copilot-review triage caller ([cc20938](https://github.com/jl-cmd/claude-dev-env/commit/cc20938281f3e01d7d4f1f68e02184e4b7b6c85b))
+* **skills:** lean pr-converge hub and retarget fix-protocol paths ([f18b570](https://github.com/jl-cmd/claude-dev-env/commit/f18b5701ed08066ec8f45e4073b127d86ea90677))
+* **skills:** modularize pr-converge hubs and gates ([7d656f2](https://github.com/jl-cmd/claude-dev-env/commit/7d656f2e830e861a50a3eacfd77d4beeeaa47244))
+* **skills:** point autoconverge ready definition at script gates ([0913eeb](https://github.com/jl-cmd/claude-dev-env/commit/0913eebce4db2409216742404d8b42ade3bf8a79))
+* **skills:** point autoconverge ready definition at script gates ([b0c650c](https://github.com/jl-cmd/claude-dev-env/commit/b0c650c54d4d4483cc43d61045519221a0dae069))
+* **skills:** point everything-search hard limits at rule ([693447a](https://github.com/jl-cmd/claude-dev-env/commit/693447ae46dd1f390c915b6f861b1238065856d8))
+* **skills:** point everything-search hard limits at rule ([52f158f](https://github.com/jl-cmd/claude-dev-env/commit/52f158fbe583062d27d4bb0aaac101ea8f65d169))
+* **skills:** point usage-pause probe numbers at constants ([73607b1](https://github.com/jl-cmd/claude-dev-env/commit/73607b1aa48814cefb75ef620284c168ad95c410))
+* **skills:** point usage-pause probe numbers at constants ([811d5b6](https://github.com/jl-cmd/claude-dev-env/commit/811d5b608848ea44b537c96392e10c669fd0b15e))
+* **skills:** shared fix_hookspath hard-fail SSO ([3dd8c2d](https://github.com/jl-cmd/claude-dev-env/commit/3dd8c2d28ad82d04d4ad4cdeb1fe6ebcbba3539a))
+* **skills:** shared fix_hookspath hard-fail SSO ([322395d](https://github.com/jl-cmd/claude-dev-env/commit/322395dc01483cf0522324b0b2f19b4a2405fab0))
+* **skills:** single-home pr-converge state schema ([f364e00](https://github.com/jl-cmd/claude-dev-env/commit/f364e00b00a268f937a9d56bf59d07a0e4a9ea7b))
+* **skills:** single-home session-log and session-tidy contracts ([2458e84](https://github.com/jl-cmd/claude-dev-env/commit/2458e8493c3b5c61d7ccf95969c23a9085936f27))
+* **skills:** single-home session-log and session-tidy contracts ([1c08e18](https://github.com/jl-cmd/claude-dev-env/commit/1c08e18573c3e97874454796b3b52d67d3f75ca7))
+* **skills:** thin anthropic-plan workflow contract ([748920d](https://github.com/jl-cmd/claude-dev-env/commit/748920da661989f541c37c979093b60e3bc4604f))
+* **skills:** thin anthropic-plan workflow contract ([78f8e04](https://github.com/jl-cmd/claude-dev-env/commit/78f8e0408d52daed6460ff3c7f6e323720d3036c))
+* **skills:** thin bugteam code_rules_gate wrap to shared SSO ([429af62](https://github.com/jl-cmd/claude-dev-env/commit/429af6239e5fcfe96c5d277e2f6131c6bd7564ab))
+* **skills:** thin reviewer-gates Gate 3 to check_bugbot_ci ([97fc292](https://github.com/jl-cmd/claude-dev-env/commit/97fc292be54d030398635a03f993421c5f34cb00))
+* **skills:** thin reviewer-gates Gate 3 to check_bugbot_ci ([f8f5d81](https://github.com/jl-cmd/claude-dev-env/commit/f8f5d816a2ca8bc43ca82c3af774f7eefe611b1c))
+* **skills:** thin skill-builder hub to references ([ae49773](https://github.com/jl-cmd/claude-dev-env/commit/ae497730555e81c0bcf880ae4d1fd9db521c17c6))
+* **skills:** thin skill-builder hub to references ([e571e53](https://github.com/jl-cmd/claude-dev-env/commit/e571e53f0d00c1de6a53f2e9ed48e4365f8516fc))
+
+
+### CI
+
+* re-trigger checks after Wave B smoke-test land ([538449a](https://github.com/jl-cmd/claude-dev-env/commit/538449aa926979927b902df605d6e74de8348eb9))
+
+
+### Tests
+
+* resolve eight environment-independent suite failures ([f32e5aa](https://github.com/jl-cmd/claude-dev-env/commit/f32e5aa32fad1164eeeed9aca02573c3e5bec03f)), closes [#20](https://github.com/jl-cmd/claude-dev-env/issues/20)
+* resolve eight environment-independent suite failures ([#20](https://github.com/jl-cmd/claude-dev-env/issues/20)) ([ec2fa61](https://github.com/jl-cmd/claude-dev-env/commit/ec2fa61c12a0e7e84a51cc299cc2497f16c2046d))
+* **skills:** smoke-only bugteam wrap tests for preflight and fix_hookspath ([b6dff60](https://github.com/jl-cmd/claude-dev-env/commit/b6dff60bfb9b87bcdae8083d8896eb05e7d087ed))
+
 ## [1.93.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v1.93.0...claude-dev-env-v1.93.1) (2026-07-11)
 
 
