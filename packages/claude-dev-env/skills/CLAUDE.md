@@ -32,7 +32,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `pr-converge` — paced convergence loop across `ScheduleWakeup` ticks
 - `bugteam` — open-loop audit-fix until convergence
 - `copilot-review` — requests and polls a GitHub Copilot review
-- `copilot-finding-triage` — tiers each Copilot gate finding and routes it (auto-fix or user page)
+- `copilot-finding-triage` — tiers each Copilot gate finding, verifies each code concern with an executed check, then routes it (auto-fix a confirmed defect, resolve a refuted one, page the user only for an inconclusive one)
 - `reviewer-gates` — availability gates for external reviewers (opt-out parse, Copilot quota, Bugbot trigger/detect)
 - `pr-loop-lifecycle` — opens and closes a PR-loop run (grant, teardown, PR description, revoke, report)
 - `pr-loop-cloud-transport` — six-step transport workflow that lets any PR-loop skill run in a session whose `gh` CLI is absent or cannot act on the PR (MCP schema load, origin/HEAD fix, identity rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check)
