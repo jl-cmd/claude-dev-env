@@ -23,6 +23,9 @@ import os
 from pathlib import Path
 
 NAS_HOST_ENV_VAR = "CLAUDE_NAS_HOST"
+PII_EXEMPT_REPOS_ENV_VAR = "CLAUDE_PII_EXEMPT_REPOS"
+PII_EXEMPT_REPOS_JSON_KEY = "pii_exempt_repositories"
+PII_EXEMPT_REPOS_SEPARATOR = ","
 NAS_SSH_USER_ENV_VAR = "CLAUDE_NAS_SSH_USER"
 NAS_SSH_PORT_ENV_VAR = "CLAUDE_NAS_SSH_PORT"
 NAS_JSON_KEY = "nas"
@@ -42,7 +45,7 @@ def _local_identity_file_path() -> Path:
     return Path.home() / CLAUDE_HOME_DIRECTORY_NAME / LOCAL_IDENTITY_FILE_NAME
 
 
-def _nas_section_from_local_file() -> dict[str, object]:
+def _identity_dictionary_from_local_file() -> dict[str, object]:
     identity_path = _local_identity_file_path()
     if not identity_path.is_file():
         return {}
@@ -50,10 +53,50 @@ def _nas_section_from_local_file() -> dict[str, object]:
         parsed_identity = json.loads(identity_path.read_text(encoding="utf-8"))
     except (OSError, ValueError, UnicodeDecodeError):
         return {}
-    if not isinstance(parsed_identity, dict):
-        return {}
-    nas_section = parsed_identity.get(NAS_JSON_KEY, {})
+    return parsed_identity if isinstance(parsed_identity, dict) else {}
+
+
+def _nas_section_from_local_file() -> dict[str, object]:
+    nas_section = _identity_dictionary_from_local_file().get(NAS_JSON_KEY, {})
     return nas_section if isinstance(nas_section, dict) else {}
+
+
+def _normalized_slug_set(all_raw_slugs: list[object]) -> frozenset[str]:
+    return frozenset(
+        each_slug.strip().lower()
+        for each_slug in all_raw_slugs
+        if isinstance(each_slug, str) and each_slug.strip()
+    )
+
+
+def pii_exempt_repository_slugs() -> frozenset[str]:
+    """Return owner/repo slugs whose commits skip the staged PII scan.
+
+    ::
+
+        CLAUDE_PII_EXEMPT_REPOS="Owner/repo-a, Other/b"  ->  {"owner/repo-a", "other/b"}
+        (env unset, file lists ["Owner/repo-a"])         ->  {"owner/repo-a"}
+        (env unset, no file)                             ->  frozenset()
+
+    The environment variable (comma-separated) wins, then the
+    ``pii_exempt_repositories`` list in the git-ignored
+    ``~/.claude/local-identity.json``. Slugs are lowercased so matching is
+    case-insensitive.
+
+    Returns:
+        Lowercased ``owner/repo`` slugs exempt from staged-commit PII scanning.
+    """
+    slugs_from_environment = os.environ.get(PII_EXEMPT_REPOS_ENV_VAR)
+    if slugs_from_environment:
+        return _normalized_slug_set(
+            list(slugs_from_environment.split(PII_EXEMPT_REPOS_SEPARATOR))
+        )
+    stored_slugs = _identity_dictionary_from_local_file().get(
+        PII_EXEMPT_REPOS_JSON_KEY
+    )
+    if not isinstance(stored_slugs, list):
+        return frozenset()
+    return _normalized_slug_set(stored_slugs)
 
 
 def nas_host() -> str:

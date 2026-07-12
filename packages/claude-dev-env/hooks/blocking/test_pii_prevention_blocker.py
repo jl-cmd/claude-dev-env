@@ -903,3 +903,76 @@ def test_git_exe_dash_c_commit_scans_named_repo_not_cwd(tmp_path: Path) -> None:
     assert dash_c_scan is not None
     assert "email" in dash_c_scan
     assert SYNTHETIC_REAL_EMAIL not in dash_c_scan
+
+
+def _add_repository_origin(repository_root: Path, origin_url: str) -> None:
+    subprocess.run(
+        ["git", "remote", "add", "origin", origin_url],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_exempt_repository_commit_skips_staged_pii_scan(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root, "https://github.com/ExemptOwner/exempt-repo.git"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is None
+
+
+def test_exempt_repository_matches_ssh_origin_url(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root, "git@github.com:ExemptOwner/exempt-repo.git"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "exemptowner/EXEMPT-REPO")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is None
+
+
+def test_non_exempt_repository_commit_still_scans_staged_pii(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root, "https://github.com/OtherOwner/other-repo.git"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_repository_without_origin_is_not_exempt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
