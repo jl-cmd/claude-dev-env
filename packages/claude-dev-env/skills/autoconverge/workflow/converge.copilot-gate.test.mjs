@@ -17,17 +17,19 @@ function functionBody(functionName) {
 
 const productionModule = new Function(
   `${functionBody('classifyReviewerGateOutcome')}\n` +
-    `${functionBody('classifyCopilotOutcome')}\n` +
-    `${functionBody('hasCodeConcernFinding')}\n` +
+    `${functionBody('partitionFindingsByTier')}\n` +
+    `${functionBody('normalizeVerifierVerdict')}\n` +
+    `${functionBody('attachVerifiedRepro')}\n` +
     `${functionBody('buildUserReview')}\n` +
     `${functionBody('resolveCopilotDown')}\n` +
     `${functionBody('resolveReviewerDown')}\n` +
-    'return { classifyReviewerGateOutcome, classifyCopilotOutcome, hasCodeConcernFinding, buildUserReview, resolveCopilotDown, resolveReviewerDown };',
+    'return { classifyReviewerGateOutcome, partitionFindingsByTier, normalizeVerifierVerdict, attachVerifiedRepro, buildUserReview, resolveCopilotDown, resolveReviewerDown };',
 )();
 const {
   classifyReviewerGateOutcome,
-  classifyCopilotOutcome,
-  hasCodeConcernFinding,
+  partitionFindingsByTier,
+  normalizeVerifierVerdict,
+  attachVerifiedRepro,
   buildUserReview,
   resolveCopilotDown,
   resolveReviewerDown,
@@ -95,59 +97,112 @@ test('Copilot findings route to a fix when Copilot is reachable and not down', (
   assert.equal(outcome.kind, 'fix');
 });
 
-test('self-healing-only Copilot findings route to a fix when Copilot is reachable and not down', () => {
-  const outcome = classifyCopilotOutcome(
-    copilotResult({
-      findings: [copilotFinding({ tier: 'self-healing' })],
+function verifierResult(overrides) {
+  return {
+    verdict: 'confirmed',
+    checkCommand: 'pytest -k repro',
+    checkOutput: 'AssertionError: boom',
+    evidence: 'ran the repro and it failed',
+    ...overrides,
+  };
+}
+
+test('partitionFindingsByTier splits self-healing findings from code-concern findings', () => {
+  const { selfHealing, codeConcern } = partitionFindingsByTier([
+    copilotFinding({ tier: 'self-healing' }),
+    copilotFinding({ tier: 'code-concern', file: 'b.py', line: 2 }),
+  ]);
+  assert.equal(selfHealing.length, 1);
+  assert.equal(codeConcern.length, 1);
+  assert.equal(codeConcern[0].file, 'b.py');
+});
+
+test('partitionFindingsByTier routes a finding with a missing tier into code-concern so an unlabeled finding is never auto-fixed', () => {
+  const { selfHealing, codeConcern } = partitionFindingsByTier([{ file: 'a.py', line: 1 }]);
+  assert.equal(selfHealing.length, 0);
+  assert.equal(codeConcern.length, 1);
+});
+
+test('normalizeVerifierVerdict downgrades a confirmed verdict backed by an empty checkCommand to inconclusive', () => {
+  const normalized = normalizeVerifierVerdict(verifierResult({ checkCommand: '' }));
+  assert.equal(normalized.verdict, 'inconclusive');
+  assert.match(normalized.evidence, /downgraded to inconclusive/);
+});
+
+test('normalizeVerifierVerdict downgrades a refuted verdict backed by an empty checkOutput to inconclusive', () => {
+  const normalized = normalizeVerifierVerdict(verifierResult({ verdict: 'refuted', checkOutput: '' }));
+  assert.equal(normalized.verdict, 'inconclusive');
+  assert.match(normalized.evidence, /downgraded to inconclusive/);
+});
+
+test('normalizeVerifierVerdict treats whitespace-only check fields as no executed check and downgrades', () => {
+  const normalized = normalizeVerifierVerdict(verifierResult({ checkCommand: '   ', checkOutput: '\t' }));
+  assert.equal(normalized.verdict, 'inconclusive');
+});
+
+test('normalizeVerifierVerdict returns an inconclusive default when the verifier agent died', () => {
+  const normalized = normalizeVerifierVerdict(null);
+  assert.equal(normalized.verdict, 'inconclusive');
+  assert.equal(normalized.checkCommand, '');
+  assert.equal(normalized.checkOutput, '');
+  assert.match(normalized.evidence, /verifier agent died/);
+});
+
+test('normalizeVerifierVerdict passes a backed conclusive verdict through unchanged', () => {
+  const backed = verifierResult({ verdict: 'confirmed' });
+  assert.deepEqual(normalizeVerifierVerdict(backed), backed);
+});
+
+test('normalizeVerifierVerdict passes an inconclusive verdict through unchanged even with empty check fields', () => {
+  const inconclusive = verifierResult({ verdict: 'inconclusive', checkCommand: '', checkOutput: '' });
+  assert.deepEqual(normalizeVerifierVerdict(inconclusive), inconclusive);
+});
+
+test('attachVerifiedRepro folds the repro command and captured output into the finding detail, requires the re-run, and drops the verification field', () => {
+  const finding = attachVerifiedRepro(
+    copilotFinding({
+      tier: 'code-concern',
+      detail: 'the original finding detail',
+      verification: {
+        verdict: 'confirmed',
+        checkCommand: 'pytest -k repro',
+        checkOutput: 'AssertionError: boom',
+        evidence: 'ran the repro and it failed',
+      },
     }),
   );
-  assert.equal(outcome.kind, 'fix');
+  assert.equal(finding.verification, undefined, 'expected the verification field to be dropped from the fix-flow finding');
+  assert.match(finding.detail, /the original finding detail/, 'expected the original detail to be preserved');
+  assert.match(finding.detail, /pytest -k repro/, 'expected the repro command to be folded into the detail');
+  assert.match(finding.detail, /AssertionError: boom/, 'expected the captured failing output to be folded into the detail');
+  assert.match(finding.detail, /re-run the exact repro/, 'expected the detail to require re-running the exact repro after the fix');
+  assert.match(finding.detail, /regression test/i, 'expected the detail to ask for the repro as a regression test');
 });
 
-test('a code-concern Copilot finding routes to user-review rather than an auto-fix', () => {
-  const outcome = classifyCopilotOutcome(
-    copilotResult({
-      reviewUrl: 'https://github.com/o/r/pull/1#pullrequestreview-9',
-      findings: [copilotFinding({ tier: 'code-concern', severity: 'P0' })],
-    }),
-  );
-  assert.equal(outcome.kind, 'user-review');
-  assert.equal(outcome.findings.length, 1);
-});
-
-test('a mixed round with one code-concern finding routes the whole round to user-review', () => {
-  const outcome = classifyCopilotOutcome(
-    copilotResult({
-      findings: [
-        copilotFinding({ tier: 'self-healing' }),
-        copilotFinding({ tier: 'code-concern', file: 'b.py', line: 2 }),
-      ],
-    }),
-  );
-  assert.equal(outcome.kind, 'user-review');
-});
-
-test('hasCodeConcernFinding treats a missing or unexpected tier as a code concern', () => {
-  assert.equal(hasCodeConcernFinding([copilotFinding({ tier: 'self-healing' })]), false);
-  assert.equal(hasCodeConcernFinding([copilotFinding({ tier: 'code-concern' })]), true);
-  assert.equal(hasCodeConcernFinding([{ file: 'a.py', line: 1 }]), true);
-});
-
-test('buildUserReview carries the review URL and pares findings to the triage fields', () => {
+test('buildUserReview carries the review URL and pares findings to the triage fields plus the verifier evidence note', () => {
   const reviewUrl = 'https://github.com/o/r/pull/1#pullrequestreview-9';
   const userReview = buildUserReview(
     copilotResult({ reviewUrl }),
-    [copilotFinding({ tier: 'code-concern', severity: 'P0', title: 'unsafe eval', detail: 'ignored' })],
+    [
+      copilotFinding({
+        tier: 'code-concern',
+        severity: 'P0',
+        title: 'unsafe eval',
+        detail: 'ignored',
+        verification: { verdict: 'inconclusive', checkCommand: '', checkOutput: '', evidence: 'no runnable check exists for the claim' },
+      }),
+    ],
   );
   assert.equal(userReview.reviewUrl, reviewUrl);
   assert.deepEqual(userReview.findings, [
-    { file: 'a.py', line: 1, severity: 'P0', tier: 'code-concern', title: 'unsafe eval' },
+    { file: 'a.py', line: 1, severity: 'P0', tier: 'code-concern', title: 'unsafe eval', evidence: 'no runnable check exists for the claim' },
   ]);
 });
 
-test('buildUserReview defaults a missing review URL to an empty string', () => {
+test('buildUserReview defaults a missing review URL and a missing verifier evidence note to empty strings', () => {
   const userReview = buildUserReview(copilotResult({}), [copilotFinding({ tier: 'code-concern' })]);
   assert.equal(userReview.reviewUrl, '');
+  assert.equal(userReview.findings[0].evidence, '');
 });
 
 test('COPILOT_SCHEMA carries a required down field', () => {
@@ -188,6 +243,29 @@ test('COPILOT_SCHEMA carries a reviewUrl the user-review payload links to', () =
   assert.match(schemaSource, /reviewUrl:\s*\{\s*type:\s*'string'/, 'expected a reviewUrl string field on COPILOT_SCHEMA');
 });
 
+test('COPILOT_VERIFY_VERDICTS names the confirmed, refuted, and inconclusive verdicts', () => {
+  const verdictsMatch = convergeSource.match(/const COPILOT_VERIFY_VERDICTS = \[([^\]]*)\]/);
+  assert.notEqual(verdictsMatch, null, 'expected a COPILOT_VERIFY_VERDICTS constant');
+  assert.match(verdictsMatch[1], /'confirmed'/, 'expected the verdict enum to name confirmed');
+  assert.match(verdictsMatch[1], /'refuted'/, 'expected the verdict enum to name refuted');
+  assert.match(verdictsMatch[1], /'inconclusive'/, 'expected the verdict enum to name inconclusive');
+});
+
+test('COPILOT_VERIFY_SCHEMA requires the verdict, checkCommand, checkOutput, and evidence fields with the verdict enum drawn from the verdict constant', () => {
+  const schemaStart = convergeSource.indexOf('const COPILOT_VERIFY_SCHEMA =');
+  const schemaEnd = convergeSource.indexOf('const REVIEWER_AVAILABILITY_SCHEMA =');
+  assert.notEqual(schemaStart, -1, 'expected COPILOT_VERIFY_SCHEMA to exist');
+  const schemaSource = convergeSource.slice(schemaStart, schemaEnd);
+  assert.match(schemaSource, /enum:\s*COPILOT_VERIFY_VERDICTS/, 'expected the verdict enum to draw from the COPILOT_VERIFY_VERDICTS constant');
+  for (const requiredField of ['verdict', 'checkCommand', 'checkOutput', 'evidence']) {
+    assert.match(
+      schemaSource,
+      new RegExp(`required:\\s*\\[[^\\]]*'${requiredField}'[^\\]]*\\]`),
+      `expected ${requiredField} to be a required field on the verifier schema`,
+    );
+  }
+});
+
 test('the Copilot gate prompt tiers each finding and returns the review URL', () => {
   const copilotPrompt = functionBody('runCopilotGate');
   assert.match(copilotPrompt, /tier 'self-healing'/, 'expected the prompt to define the self-healing tier');
@@ -196,18 +274,58 @@ test('the Copilot gate prompt tiers each finding and returns the review URL', ()
   assert.match(copilotPrompt, /reviewUrl set to the Copilot review html_url/, 'expected the findings branch to return the review URL');
 });
 
-test('the COPILOT phase returns blocker user-review with the findings carried through on a code-concern outcome', () => {
+test('the COPILOT phase returns blocker user-review only when inconclusive findings remain after verification, carrying the verifier-noted payload with no auto-fix in the branch', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
   const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", copilotPhaseStart);
   const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
-  const userReviewBranchStart = copilotPhase.indexOf("copilotOutcome.kind === 'user-review'");
-  assert.notEqual(userReviewBranchStart, -1, 'expected the COPILOT phase to handle a user-review outcome');
-  const userReviewBranch = copilotPhase.slice(userReviewBranchStart, userReviewBranchStart + 500);
-  assert.match(userReviewBranch, /blocker:\s*'user-review'/, 'expected the branch to return blocker user-review');
+  const userReviewGuardStart = copilotPhase.indexOf('inconclusive.length > 0');
+  assert.notEqual(userReviewGuardStart, -1, 'expected the user-review return to be guarded by inconclusive.length > 0');
+  const userReviewBranch = copilotPhase.slice(userReviewGuardStart, userReviewGuardStart + 600);
+  assert.match(userReviewBranch, /blocker:\s*'user-review'/, 'expected the guarded branch to return blocker user-review');
   assert.match(userReviewBranch, /converged:\s*false/, 'expected the branch to return converged false');
-  assert.match(userReviewBranch, /userReview:\s*buildUserReview\(copilot, copilotOutcome\.findings\)/, 'expected the branch to carry the user-review payload');
+  assert.match(
+    userReviewBranch,
+    /userReview:\s*buildUserReview\(copilot, inconclusive\)/,
+    'expected the branch to carry the inconclusive-findings user-review payload',
+  );
   const autoFixIndex = userReviewBranch.indexOf('applyFixes');
-  assert.equal(autoFixIndex, -1, 'expected the user-review branch to not auto-fix the code-concern findings');
+  assert.equal(autoFixIndex, -1, 'expected the user-review branch to not auto-fix the inconclusive findings');
+  const userReviewReturns = (copilotPhase.match(/blocker:\s*'user-review'/g) || []).length;
+  assert.equal(userReviewReturns, 1, 'expected exactly one user-review return in the COPILOT phase');
+});
+
+test('the COPILOT phase awaits verifyCodeConcernFindings exactly once, inside the code-concern guard', () => {
+  const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
+  const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", copilotPhaseStart);
+  const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
+  const guardStart = copilotPhase.indexOf('if (codeConcern.length > 0)');
+  assert.notEqual(guardStart, -1, 'expected the verification to sit behind a codeConcern.length > 0 guard');
+  const verifyCalls = convergeSource.match(/await verifyCodeConcernFindings\(/g) || [];
+  assert.equal(verifyCalls.length, 1, 'expected verifyCodeConcernFindings to be awaited exactly once outside its own definition');
+  const verifyCallIndex = copilotPhase.indexOf('await verifyCodeConcernFindings(head, codeConcern)');
+  assert.ok(verifyCallIndex > guardStart, 'expected the verifyCodeConcernFindings call to sit inside the code-concern guard');
+});
+
+test('the all-refuted / empty-roundFindings COPILOT path advances to FINALIZE with the gate passed', () => {
+  const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
+  const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", copilotPhaseStart);
+  const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
+  const emptyRoundStart = copilotPhase.indexOf('roundFindings.length === 0');
+  assert.notEqual(emptyRoundStart, -1, 'expected the COPILOT phase to handle an empty roundFindings set after verification');
+  const emptyRoundBranch = copilotPhase.slice(emptyRoundStart, emptyRoundStart + 300);
+  assert.match(emptyRoundBranch, /copilotDown = false/, 'expected the empty-roundFindings path to clear copilotDown');
+  assert.match(emptyRoundBranch, /phase = 'FINALIZE'/, 'expected the empty-roundFindings path to advance to FINALIZE');
+});
+
+test('the COPILOT phase folds confirmed findings through attachVerifiedRepro into the round fix list', () => {
+  const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
+  const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", copilotPhaseStart);
+  const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
+  assert.match(
+    copilotPhase,
+    /roundFindings = \[\.\.\.selfHealing, \.\.\.confirmed\.map\(\(each\) => attachVerifiedRepro\(each\)\)\]/,
+    'expected the fix list to be the self-healing findings plus the confirmed findings mapped through attachVerifiedRepro',
+  );
 });
 
 test('the Copilot gate prompt detects an out-of-usage notice and returns a down result', () => {
@@ -332,7 +450,7 @@ test('resolveCopilotDown clears the bypass for a retry outcome', () => {
 
 test('the standards-only Copilot sub-path resets copilotDown before FINALIZE', () => {
   const standardsBranchStart = convergeSource.indexOf(
-    'isStandardsOnlyRound(copilotOutcome.findings)',
+    'isStandardsOnlyRound(roundFindings)',
   );
   assert.notEqual(
     standardsBranchStart,

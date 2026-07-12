@@ -17,7 +17,7 @@ export const meta = {
     { title: 'Reuse', detail: 'Before convergence, one reuse lens scans the full diff for reuse improvements that are certain, behaviorally identical, and autonomously implementable, and applies the qualifying ones in one commit' },
     { title: 'Converge', detail: 'A deterministic static sweep runs first each round; then code-review, bug-audit, and self-review run in parallel on the same HEAD; one clean-coder applies all fixes; the loop repeats until every lens is clean on a stable HEAD' },
     { title: 'Bugbot gate', detail: 'A terminal confirmation gate that runs once the internal lenses are clean; when Bugbot is disabled or unavailable it spawns no agent and passes, otherwise it fetches Bugbot\'s verdict and routes any finding back into Converge' },
-    { title: 'Copilot gate', detail: 'When the quota pre-check reports Copilot out of premium-request quota or unavailable, skip the gate with no agent spawned; otherwise request a Copilot review and poll up to the configured cap, then route findings by tier — self-healing findings flow back into Converge, and one or more code-concern findings return blocker user-review with the findings for the orchestrator to gate on rather than auto-fixing or marking the PR ready; when Copilot is down or out of quota log a notice and mark the PR ready with the gate bypassed' },
+    { title: 'Copilot gate', detail: 'When the quota pre-check reports Copilot out of premium-request quota or unavailable, skip the gate with no agent spawned; otherwise request a Copilot review and poll up to the configured cap, then route findings by tier — self-healing findings flow back into Converge, and each code-concern finding goes to its own verifier agent that must execute a check against HEAD: a confirmed finding (defect reproduced by a run command) joins the fix round carrying its repro, a refuted finding (correct behavior demonstrated by a run command) is replied-to and resolved with the check evidence, and only inconclusive findings return blocker user-review for the orchestrator to gate on rather than auto-fixing or marking the PR ready; when Copilot is down or out of quota log a notice and mark the PR ready with the gate bypassed' },
     { title: 'Finalize', detail: 'Run check_convergence.py; mark draft=false on a full pass' },
   ],
 }
@@ -633,6 +633,24 @@ const COPILOT_SCHEMA = {
     findings: COPILOT_FINDINGS_SCHEMA,
   },
   required: ['sha', 'clean', 'down', 'findings'],
+}
+
+const COPILOT_VERIFY_VERDICTS = ['confirmed', 'refuted', 'inconclusive']
+
+const COPILOT_VERIFY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    verdict: {
+      type: 'string',
+      enum: COPILOT_VERIFY_VERDICTS,
+      description: 'confirmed when the executed check tangibly reproduces the defect; refuted when the executed check tangibly demonstrates correct behavior in the exact scenario the finding claims is broken; inconclusive (the default) for everything else — no runnable check exists for the claim, the check is infeasible in this environment, the results are ambiguous, or the fix would require a product decision between defensible behaviors',
+    },
+    checkCommand: { type: 'string', description: 'the exact command(s) executed against the flagged HEAD; non-empty for confirmed and refuted — the workflow downgrades a conclusive verdict with an empty checkCommand to inconclusive' },
+    checkOutput: { type: 'string', description: 'the captured output of checkCommand demonstrating the behavior in question; non-empty for confirmed and refuted — the workflow downgrades a conclusive verdict with an empty checkOutput to inconclusive' },
+    evidence: { type: 'string', description: 'one line naming what check was attempted and what it showed, or why it was not decisive' },
+  },
+  required: ['verdict', 'checkCommand', 'checkOutput', 'evidence'],
 }
 
 const REVIEWER_AVAILABILITY_SCHEMA = {
@@ -1387,47 +1405,79 @@ function classifyReviewerGateOutcome(reviewerGate) {
 }
 
 /**
- * Layer the Copilot-specific two-tier triage over the shared reviewer-gate
- * classifier. The base classifier decides retry / down / approved and routes any
- * findings to a fix; this wrapper then upgrades a fix round carrying a
- * code-concern finding to a 'user-review' outcome, so the workflow neither
- * auto-fixes it nor marks the PR ready. A self-healing-only fix round passes
- * through unchanged and flows into the fix flow. Only the Copilot gate uses this
- * wrapper; the terminal Bugbot gate keeps the base classifier, whose findings
- * carry no tier and always route to a fix.
- * @param {object|null|undefined} copilot the Copilot gate result, or null on agent failure
- * @returns {{kind: string, findings?: Array<object>}} the next action
+ * Split a Copilot round's findings by routing tier. Any tier other than the
+ * explicit 'self-healing' counts as a code concern, so a missing or unexpected
+ * tier routes to the verification stage rather than silently into the auto-fix
+ * flow.
+ * @param {Array<object>} findings the Copilot findings for the round
+ * @returns {{selfHealing: Array<object>, codeConcern: Array<object>}} the tier partition
  */
-function classifyCopilotOutcome(copilot) {
-  const outcome = classifyReviewerGateOutcome(copilot)
-  if (outcome.kind === 'fix' && hasCodeConcernFinding(outcome.findings)) {
-    return { kind: 'user-review', findings: outcome.findings }
+function partitionFindingsByTier(findings) {
+  return {
+    selfHealing: findings.filter((each) => each.tier === 'self-healing'),
+    codeConcern: findings.filter((each) => each.tier !== 'self-healing'),
   }
-  return outcome
 }
 
 /**
- * Decide whether a Copilot round carries a code-concern finding — one that is
- * behavior-changing or needs a product decision, so the workflow may neither
- * auto-fix it nor mark the PR ready. Any tier other than the explicit
- * 'self-healing' counts as a code concern, so a missing or unexpected tier
- * defaults to code-concern rather than silently routing into the auto-fix flow.
- * @param {Array<object>} findings the Copilot findings for the round
- * @returns {boolean} true when at least one finding is not tier self-healing
+ * Enforce the executed-check rule on one verifier result. A verdict is
+ * conclusive (confirmed or refuted) only when an actual check ran: a dead
+ * verifier agent (null result) is inconclusive, and a conclusive verdict whose
+ * checkCommand or checkOutput is empty carries no executed check, so it is
+ * downgraded to inconclusive rather than trusted — source-reading reasoning
+ * alone never confirms or refutes a finding.
+ * @param {object|null|undefined} verifier the COPILOT_VERIFY_SCHEMA result, or null on agent failure
+ * @returns {object} a verifier result whose verdict honors the executed-check rule
  */
-function hasCodeConcernFinding(findings) {
-  return findings.some((each) => each.tier !== 'self-healing')
+function normalizeVerifierVerdict(verifier) {
+  if (verifier == null) {
+    return { verdict: 'inconclusive', checkCommand: '', checkOutput: '', evidence: 'verifier agent died — no check was executed' }
+  }
+  const isConclusive = verifier.verdict === 'confirmed' || verifier.verdict === 'refuted'
+  const hasExecutedCheck = verifier.checkCommand.trim() !== '' && verifier.checkOutput.trim() !== ''
+  if (isConclusive && !hasExecutedCheck) {
+    return {
+      ...verifier,
+      verdict: 'inconclusive',
+      evidence: `conclusive verdict arrived with an empty checkCommand or checkOutput, so no executed check backs it — downgraded to inconclusive. ${verifier.evidence || ''}`.trim(),
+    }
+  }
+  return verifier
+}
+
+/**
+ * Fold a confirmed finding's executed repro into the finding detail the fix
+ * steps render, so the fix prompt carries the exact repro command and captured
+ * failing output, requires the before/after re-run of that same command, and
+ * asks for the repro as a regression test. The verification field is dropped so
+ * the finding matches the shape the fix flow renders.
+ * @param {object} finding a code-concern finding carrying a confirmed verification
+ * @returns {object} the finding with the repro folded into its detail
+ */
+function attachVerifiedRepro(finding) {
+  const { verification, ...bareFinding } = finding
+  return {
+    ...bareFinding,
+    detail:
+      `${finding.detail}\n\n` +
+      `CONFIRMED BY EXECUTED CHECK — this repro already demonstrates the defect on HEAD.\n` +
+      `   Repro command(s):\n${verification.checkCommand}\n` +
+      `   Captured failing output:\n${verification.checkOutput}\n` +
+      `   After fixing: re-run the exact repro command(s) above and capture the output showing the wrong behavior is gone; include that before/after output in the thread reply. Where the repo's test suite covers this surface, add the repro as a regression test.`,
+  }
 }
 
 /**
  * Build the user-review payload the orchestrator hands to the
- * copilot-finding-triage skill: the Copilot review link plus the code-concern
- * findings pared to the fields the ntfy summary and the review gate read. The
- * workflow returns this alongside blocker 'user-review' so the orchestrating
- * session runs the notify-and-wait gate; a background workflow cannot hold for a
- * human, so it carries the findings out rather than deciding them.
+ * copilot-finding-triage skill: the Copilot review link plus the inconclusive
+ * findings pared to the fields the ntfy summary and the review gate read, each
+ * carrying its verifier's one-line evidence note (what check was attempted and
+ * why it was not decisive). The workflow returns this alongside blocker
+ * 'user-review' so the orchestrating session runs the notify-and-wait gate; a
+ * background workflow cannot hold for a human, so it carries the findings out
+ * rather than deciding them.
  * @param {object} copilot the COPILOT_SCHEMA gate result carrying the review URL
- * @param {Array<object>} findings the Copilot findings for this HEAD
+ * @param {Array<object>} findings the inconclusive findings for this HEAD, each carrying its verification
  * @returns {{reviewUrl: string, findings: Array<object>}} the triage payload
  */
 function buildUserReview(copilot, findings) {
@@ -1439,6 +1489,7 @@ function buildUserReview(copilot, findings) {
       severity: each.severity,
       tier: each.tier,
       title: each.title,
+      evidence: each.verification?.evidence || '',
     })),
   }
 }
@@ -1862,11 +1913,93 @@ function runCopilotGate(head) {
       `   - No review after ${CONFIG.copilotMaxPolls} attempts -> Copilot is down for this run (unreachable, or silently out of quota with no notice): return {sha:${'`'}${head}${'`'}, clean:false, down:true, findings:[]}.\n\n` +
       `Tier every finding for routing, separate from its category:\n` +
       `   - tier 'self-healing': pure style, type hints, misplaced or unused imports, formatting, magic-value extraction, test-only changes, doc-or-description vs code mismatches, or code de-duplication — any fix that cannot change observable runtime behavior for production callers. These route into the fix flow automatically.\n` +
-      `   - tier 'code-concern': logic or correctness, security, data handling, error-handling semantics, or concurrency — anything behavior-changing or needing a product decision. These hold for a user-review gate rather than an auto-fix.\n` +
+      `   - tier 'code-concern': logic or correctness, security, data handling, error-handling semantics, or concurrency — anything behavior-changing or needing a product decision. Each of these goes to a verification agent that must execute a check against HEAD; only findings the check leaves inconclusive hold for a user-review gate.\n` +
       `   - Classify as 'code-concern' whenever the tier is in doubt.\n\n` +
       `A down verdict is valid ONLY in two cases: the review request itself failed, or the FULL poll budget (${CONFIG.copilotMaxPolls} attempts x 360 seconds) elapsed with no review on HEAD. A successful review request means the review is in flight; returning down:true on a partial poll is an invalid result. Never end the poll early for any reason other than a received review on HEAD or an out-of-usage notice — not tooling friction, not turn-length pressure, not a failed attempt to write a polling helper. When your wait tooling fails, re-arm it and keep polling until the budget is spent.\n\n` +
       `Return strictly the schema.`,
     { label: 'copilot-gate', phase: 'Copilot gate', schema: COPILOT_SCHEMA, ...TIERS.haikuLow },
+  )
+}
+
+/**
+ * Spawn the verifier agent for one Copilot code-concern finding. The verifier
+ * decides confirmed / refuted / inconclusive by executing a check against the
+ * flagged HEAD; normalizeVerifierVerdict then enforces the executed-check rule
+ * on its result. It routes through convergeAgent (not the read-only spawn)
+ * because building a purpose-built check may write scratch files, but it fixes
+ * nothing and never commits or pushes.
+ * @param {string} head converged PR HEAD SHA
+ * @param {object} finding one code-concern finding from the Copilot gate
+ * @returns {Promise<object>} COPILOT_VERIFY_SCHEMA result
+ */
+function runCopilotFindingVerifier(head, finding) {
+  return convergeAgent(
+    `You are the VERIFICATION step for one Copilot code-concern finding on ${prCoordinates}, HEAD ${head}. Decide whether the finding is tangibly real by EXECUTING a check. Do not fix anything, do not commit, and do not push.\n\n` +
+      `The finding:\n${renderFindingsBlock([finding])}\n\n` +
+      `THE HARD RULE — a verdict is conclusive ONLY if an actual check was executed. Reading the source and reasoning about it, however sound, never produces a conclusive verdict. A check is a concrete command you run against this HEAD — executing the flagged code path with crafted inputs, forcing the claimed error condition, or running a purpose-built test — whose captured output demonstrates the behavior in question. Source inspection may inform where to aim the check, but is never itself grounds for confirmed or refuted.\n\n` +
+      `Steps:\n` +
+      `1. Confirm the working tree is on the PR branch at HEAD ${head} with no uncommitted edits.\n` +
+      `2. Read the flagged code only to aim the check, then build and run it. Keep any purpose-built test or scratch input in the OS temp dir, and leave the repo working tree exactly as you found it (git status clean when you finish).\n` +
+      `3. Choose the verdict:\n` +
+      `   - confirmed: your executed check tangibly reproduces the defect the finding claims — the captured output shows the wrong behavior.\n` +
+      `   - refuted: your executed check tangibly demonstrates the code already behaves correctly in the exact scenario the finding claims is broken — the captured output shows the correct behavior.\n` +
+      `   - inconclusive (the DEFAULT): everything else — no runnable check exists for the claim, the check is infeasible in this environment, the results are ambiguous, or the fix would require a product decision between defensible behaviors.\n\n` +
+      `Return strictly the schema. For confirmed and refuted, checkCommand is the exact command(s) you ran and checkOutput is their captured output — both non-empty; the workflow downgrades a conclusive verdict with an empty checkCommand or checkOutput to inconclusive. evidence is one line naming what check was attempted and what it showed (for inconclusive: why it was not decisive).`,
+    { label: `copilot-verify:${finding.file}:${finding.line}`, phase: 'Copilot gate', schema: COPILOT_VERIFY_SCHEMA, agentType: 'general-purpose', ...TIERS.sonnetMedium },
+  )
+}
+
+/**
+ * Verify each code-concern Copilot finding with its own executed-check verifier,
+ * all in parallel, and partition the round by normalized verdict. Reachable only
+ * from the COPILOT phase's code-concern path, so a round with no code-concern
+ * findings spawns no verifier.
+ * @param {string} head converged PR HEAD SHA
+ * @param {Array<object>} codeConcernFindings the round's code-concern findings
+ * @returns {Promise<{confirmed: Array<object>, refuted: Array<object>, inconclusive: Array<object>}>} the findings, each carrying its verification
+ */
+async function verifyCodeConcernFindings(head, codeConcernFindings) {
+  const verdicts = await parallel(
+    codeConcernFindings.map((each) => () => runCopilotFindingVerifier(head, each)),
+  )
+  const verified = codeConcernFindings.map((each, position) => ({
+    ...each,
+    verification: normalizeVerifierVerdict(verdicts[position]),
+  }))
+  return {
+    confirmed: verified.filter((each) => each.verification.verdict === 'confirmed'),
+    refuted: verified.filter((each) => each.verification.verdict === 'refuted'),
+    inconclusive: verified.filter((each) => each.verification.verdict === 'inconclusive'),
+  }
+}
+
+/**
+ * Reply to and resolve the review threads of findings refuted by an executed
+ * check, quoting the check command and captured output so the thread records why
+ * the finding counts clean. Findings with no review thread (replyToCommentId
+ * null) need no reply, so a batch carrying no thread ids spawns no agent. Makes
+ * no code edits, no commit, and no push.
+ * @param {string} head converged PR HEAD SHA
+ * @param {Array<object>} refutedFindings the refuted findings, each carrying its verification
+ * @returns {Promise<string|null>} the agent transcript, or null when no finding carries a thread
+ */
+function runRefutedThreadResolution(head, refutedFindings) {
+  const threadBearing = refutedFindings.filter((each) => collectFindingThreadIds(each).length > 0)
+  if (threadBearing.length === 0) return Promise.resolve(null)
+  const findingsBlock = threadBearing
+    .map((each, position) =>
+      `${position + 1}. [${each.severity}] ${each.file}:${each.line} — ${each.title}\n` +
+      `   (GitHub review comment ids: ${collectFindingThreadIds(each).join(', ')})\n` +
+      `   Check command(s): ${each.verification.checkCommand}\n` +
+      `   Captured output: ${each.verification.checkOutput}\n` +
+      `   Evidence note: ${each.verification.evidence}`)
+    .join('\n')
+  return convergeAgent(
+    `You are the THREAD-RESOLUTION step for ${threadBearing.length} Copilot finding(s) on ${prCoordinates}, HEAD ${head}, each refuted by an executed check: the check's captured output demonstrates the code already behaves correctly in the exact scenario the finding claims is broken. Make NO code edits, NO commit, and NO push — only reply to and resolve the review threads below.\n\n` +
+      `Refuted findings with their check evidence:\n${findingsBlock}\n\n` +
+      `For each finding: post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "<the check command(s) and the captured output demonstrating the correct behavior>". Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
+      `Return a one-line summary naming the threads you resolved.`,
+    { label: 'copilot-refuted-resolve', phase: 'Copilot gate', agentType: 'general-purpose', ...TIERS.sonnetMedium },
   )
 }
 
@@ -2443,7 +2576,7 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     const copilot = await runCopilotGate(head)
-    const copilotOutcome = classifyCopilotOutcome(copilot)
+    const copilotOutcome = classifyReviewerGateOutcome(copilot)
     copilotDown = resolveCopilotDown(copilotOutcome)
     copilotNote = null
     if (copilotOutcome.kind === 'retry') {
@@ -2457,39 +2590,57 @@ while (iterations < CONFIG.maxIterations) {
       phase = 'FINALIZE'
       continue
     }
-    if (copilotOutcome.kind === 'user-review') {
-      log(`Copilot raised ${copilotOutcome.findings.length} code-concern finding(s) — holding for user review: the workflow does not auto-fix them and does not mark the PR ready`)
-      return {
-        converged: false,
-        rounds,
-        finalSha: head,
-        blocker: 'user-review',
-        userReview: buildUserReview(copilot, copilotOutcome.findings),
-        standardsNote,
-        copilotNote,
-        reuseNote,
-        deferredPrs,
-      }
-    }
     if (copilotOutcome.kind === 'fix') {
-      if (isStandardsOnlyRound(copilotOutcome.findings)) {
-        log(`Copilot raised ${copilotOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
-        const standardsOutcome = await openStandardsFollowUpOnce(head, copilotOutcome.findings, 'copilot', { copilotDisabled: copilotDown, bugbotDisabled: bugbotDown })
-        standardsNote = standardsDeferralNote(copilotOutcome.findings.length, buildStandardsDeferral())
+      const { selfHealing, codeConcern } = partitionFindingsByTier(copilotOutcome.findings)
+      let roundFindings = copilotOutcome.findings
+      if (codeConcern.length > 0) {
+        log(`Copilot raised ${codeConcern.length} code-concern finding(s) — verifying each with an executed check before any routing`)
+        const { confirmed, refuted, inconclusive } = await verifyCodeConcernFindings(head, codeConcern)
+        if (refuted.length > 0) {
+          log(`${refuted.length} finding(s) refuted by an executed check — replying with the evidence and resolving their threads`)
+          await runRefutedThreadResolution(head, refuted)
+        }
+        if (inconclusive.length > 0) {
+          log(`${inconclusive.length} finding(s) stayed inconclusive after verification — holding for user review: the workflow does not auto-fix them and does not mark the PR ready`)
+          return {
+            converged: false,
+            rounds,
+            finalSha: head,
+            blocker: 'user-review',
+            userReview: buildUserReview(copilot, inconclusive),
+            standardsNote,
+            copilotNote,
+            reuseNote,
+            deferredPrs,
+          }
+        }
+        roundFindings = [...selfHealing, ...confirmed.map((each) => attachVerifiedRepro(each))]
+        if (roundFindings.length === 0) {
+          log('Every code-concern finding was refuted with executed-check evidence and the round carries no self-healing findings — the Copilot gate passes')
+          copilotDown = false
+          copilotNote = null
+          phase = 'FINALIZE'
+          continue
+        }
+      }
+      if (isStandardsOnlyRound(roundFindings)) {
+        log(`Copilot raised ${roundFindings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
+        const standardsOutcome = await openStandardsFollowUpOnce(head, roundFindings, 'copilot', { copilotDisabled: copilotDown, bugbotDisabled: bugbotDown })
+        standardsNote = standardsDeferralNote(roundFindings.length, buildStandardsDeferral())
         if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
         copilotDown = false
         copilotNote = null
         phase = 'FINALIZE'
         continue
       }
-      log(`Copilot raised ${copilotOutcome.findings.length} finding(s) — fixing and re-converging`)
-      const fixResult = await applyFixes(head, copilotOutcome.findings, 'copilot')
-      const hadThreadBearingFinding = copilotOutcome.findings.some((each) => collectFindingThreadIds(each).length > 0)
+      log(`Copilot raised ${roundFindings.length} finding(s) — fixing and re-converging`)
+      const fixResult = await applyFixes(head, roundFindings, 'copilot')
+      const hadThreadBearingFinding = roundFindings.some((each) => collectFindingThreadIds(each).length > 0)
       const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
       if (!fixProgress.progressed) {
         blocker = fixResult?.resolvedWithoutCommit === true && !hadThreadBearingFinding
-          ? `fix stalled: copilot round raised ${copilotOutcome.findings.length} in-memory finding(s) with no GitHub thread, the fix judged them all stale (resolvedWithoutCommit) and moved no code on HEAD ${head} — re-raising would loop to the iteration cap`
-          : `copilot fix lens landed no push for ${copilotOutcome.findings.length} finding(s) on HEAD ${head}`
+          ? `fix stalled: copilot round raised ${roundFindings.length} in-memory finding(s) with no GitHub thread, the fix judged them all stale (resolvedWithoutCommit) and moved no code on HEAD ${head} — re-raising would loop to the iteration cap`
+          : `copilot fix lens landed no push for ${roundFindings.length} finding(s) on HEAD ${head}`
         break
       }
       head = null

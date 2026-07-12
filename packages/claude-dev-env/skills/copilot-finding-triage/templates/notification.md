@@ -13,10 +13,12 @@ Copilot code concern on PR {pr_number}: {short_pr_title}
 ## Body
 
 ```
-{finding_count} code concern(s) need your call on PR {pr_number} ({head_sha}):
+{finding_count} code concern(s) survived verification as inconclusive and need your call on PR {pr_number} ({head_sha}):
 
 - {file_1}:{line_1} — {severity_1} — {one_sentence_concern_1}
+  Check: {evidence_note_1}
 - {file_2}:{line_2} — {severity_2} — {one_sentence_concern_2}
+  Check: {evidence_note_2}
 
 Review: {review_url}
 Reply within 45 minutes or the run tears down and reports these findings unreviewed.
@@ -24,10 +26,13 @@ Reply within 45 minutes or the run tears down and reports these findings unrevie
 
 ## Field notes
 
-- `{finding_count}` counts the CODE CONCERN findings on this HEAD, not the
-  self-healing ones.
+- `{finding_count}` counts the inconclusive findings on this HEAD — the code
+  concerns an executed check left undecided — not the self-healing, confirmed, or
+  refuted ones.
 - Each bullet holds one finding: its `file:line`, its severity, and one sentence
   naming the concern.
+- `{evidence_note_N}` is the verifier's one-line note stating what check was
+  attempted and why it was not decisive.
 - `{review_url}` is the same URL passed as `--click-url`, so the reader sees it
   in the body and reaches it by tapping the message.
 - The 45-minute clock starts when the page reaches the user, which is the moment

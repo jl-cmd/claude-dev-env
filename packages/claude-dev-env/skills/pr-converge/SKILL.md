@@ -70,7 +70,7 @@ no request, no poll, no agent — and exports
 pending-requested-reviews gate and the run still marks ready on the remaining
 signals.
 
-## Copilot findings — two-tier triage
+## Copilot findings — tier, verify, then route
 
 The Copilot step tiers each finding it surfaces. A **self-healing** finding is
 pure style, type hints, misplaced or unused imports, formatting, magic-value
@@ -83,15 +83,36 @@ converges when the Copilot step is clean.
 
 A **code-concern** finding is behavior-changing or needs a product decision:
 logic or correctness, security, data handling, error-handling semantics, or
-concurrency. Tier a finding as code-concern whenever the tier is in doubt. On
-one or more code-concern findings, do not auto-fix them and do not let the tick
-mark the PR ready. Run the
+concurrency. Tier a finding as code-concern whenever the tier is in doubt.
+
+Each code-concern finding goes to a verifier before any routing — the same
+three-verdict standard the single-run gate applies, at this tick's Copilot step.
+A verdict is conclusive only when an actual check ran: the verifier executes a
+command against the flagged HEAD and captures its output. Reading the source
+never produces a conclusive verdict. The verdict carries
+`{ verdict, checkCommand, checkOutput, evidence }`; a conclusive verdict with an
+empty `checkCommand` or `checkOutput` downgrades to inconclusive.
+
+- **confirmed** — the check reproduces the defect. The finding joins the fix tick
+  carrying its repro, and the fix re-runs that same check, adds a regression test
+  where the suite covers the surface, lands in one commit, pushes, and replies on
+  the thread with the fix SHA and the before/after output. No page.
+- **refuted** — the check shows the code already behaves correctly in the exact
+  scenario the finding claims is broken. The tick replies on the thread with the
+  command and output, resolves it, and counts it clean. No page.
+- **inconclusive** — everything else, and the verifier's default: no runnable
+  check exists, the check is infeasible here, the results are ambiguous, or the
+  fix needs a product decision. Any doubt sorts here.
+
+On one or more inconclusive findings, do not auto-fix them and do not let the
+tick mark the PR ready. Run the
 [`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate: send the
-ntfy alert with the finding summary and the Copilot review link, then hold for
-the user's response on a 45-minute deadline that spans ticks — carry the
-deadline in the run's persisted state so each tick reads it on entry. Act on the
-user's direction when it arrives inside the window; when the deadline passes
-with no response, run teardown and report the code-concern findings un-reviewed.
+ntfy alert with the per-finding summary and evidence note and the Copilot review
+link, then hold for the user's response on a 45-minute deadline that spans
+ticks — carry the deadline in the run's persisted state so each tick reads it on
+entry. Act on the user's direction when it arrives inside the window; when the
+deadline passes with no response, run teardown and report the inconclusive
+findings un-reviewed.
 
 ## Budget-aware tick boundaries
 

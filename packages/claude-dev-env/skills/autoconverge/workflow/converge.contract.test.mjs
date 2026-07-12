@@ -272,7 +272,7 @@ test('the CONVERGE fix branch does not re-assign head from the fix before re-con
 
 test('the COPILOT fix branch does not re-assign head from the fix before re-converging', () => {
   assert.doesNotMatch(
-    fixBranchAfter('${copilotOutcome.findings.length} finding(s) — fixing and re-converging'),
+    fixBranchAfter('${roundFindings.length} finding(s) — fixing and re-converging'),
     /head\s*=\s*fixProgress/,
     'the CONVERGE pass it transitions to re-resolves HEAD from GitHub, so assigning the fix SHA here is dead',
   );
