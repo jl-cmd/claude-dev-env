@@ -50,17 +50,7 @@ If the description fails any check, revise it. Show before/after with the specif
 
 **Goal:** Verify the file structure follows all progressive disclosure rules.
 
-> "Keep SKILL.md body under 500 lines."
-
-Check:
-
-- [ ] SKILL.md body under 500 lines.
-- [ ] All reference files link directly from SKILL.md (one level deep).
-- [ ] Every file over 100 lines has a table of contents.
-- [ ] File index in SKILL.md lists every companion file with its purpose.
-- [ ] Forward slashes only in all paths.
-- [ ] File names are descriptive (`form_validation_rules.md`, not `doc2.md`).
-- [ ] Scripts clearly marked as execute vs read-as-reference.
+Apply the hard rules and hub pattern in `${CLAUDE_SKILL_DIR}/references/progressive-disclosure.md`. Cross-check progressive-disclosure items on `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
 
 ### Fix structural issues
 
@@ -90,7 +80,7 @@ If any check fails, restructure. Common fixes:
 
 ## Step 4: Full Self-Audit
 
-**Goal:** Complete 38-point checklist pass.
+**Goal:** Complete 33-point checklist pass.
 
 Same as new-skill Step 5 and improve-skill Step 5:
 
@@ -111,6 +101,6 @@ Present to the user:
 1. **Description** — final version, confirmed trigger phrases.
 2. **File structure** — folder map with line counts.
 3. **Gotchas** — current gotcha count and most recent additions.
-4. **Audit summary** — "All 38 items: N passed, M N/A."
+4. **Audit summary** — "All 33 items: N passed, M N/A."
 5. **Before/after** — description changes if any, structural changes if any.
 6. **Maintenance notes** — what to watch for, when to re-audit.

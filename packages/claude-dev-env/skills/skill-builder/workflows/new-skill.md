@@ -142,6 +142,6 @@ Present to the user:
 2. **Skill type** — classification and why it fits.
 3. **Degree of freedom** — assessment and reasoning.
 4. **Gotchas seeded** — initial gotchas captured.
-5. **Audit summary** — "All 38 items: N passed, M N/A."
+5. **Audit summary** — "All 33 items: N passed, M N/A."
 6. **Maintenance notes** — what to watch for in future usage that might warrant iteration.
 7. **Suggested first test** — a concrete task to try with Claude B.

@@ -28,15 +28,7 @@ Spawn a subagent with the existing skill on a real task (see delegation-map.md f
 
 ### Transcript analysis
 
-> "Watch for unexpected exploration paths, missed connections, overreliance on certain sections, and ignored content."
-
-Document:
-- Where did the skill work well?
-- Where did it fail or produce subpar results?
-- Did Claude B follow the skill’s instructions as written?
-- Did Claude B ignore any sections or files?
-- Did Claude B explore in unexpected directions?
-- What would a gotcha have prevented?
+Follow **Reading a transcript for observations** in `${CLAUDE_SKILL_DIR}/references/delegation-map.md`. Note what worked, what failed, and which gotcha would have prevented each failure.
 
 **Output:** Observation notes with specific failure examples.
 
