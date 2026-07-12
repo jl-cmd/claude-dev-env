@@ -38,10 +38,10 @@ Decide (four branches; match first whose predicate holds):
   `pull_request_review_id`:** Fix protocol input (same shape as bugbot
   dirty). Apply the `pr-fix-protocol` skill
   (`../../pr-fix-protocol/SKILL.md`) in the same tick.
-  Reset `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
-  `copilot_clean_at = null`, `phase = CODE_REVIEW`, schedule next wakeup,
-  return. Full back-to-back-clean cycle plus all six gates must hold again on
-  new HEAD.
+  Reset `bugbot_clean_at = null`, `code_review_clean_at = null`,
+  `bugteam_clean_at = null`, AND `copilot_clean_at = null`,
+  `phase = CODE_REVIEW`, schedule next wakeup, return. Full
+  back-to-back-clean cycle plus all six gates must hold again on new HEAD.
 - **`classification == "dirty"` with empty inline comments matching
   `pull_request_review_id`:** Copilot posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
@@ -49,9 +49,9 @@ Decide (four branches; match first whose predicate holds):
   `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`), whose reply
   step for body-only findings posts a top-level review reply citing the
   new HEAD SHA. Reset
-  `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
-  `copilot_clean_at = null`, `phase = CODE_REVIEW`,
-  schedule next wakeup, return. Convergence needs full
+  `bugbot_clean_at = null`, `code_review_clean_at = null`,
+  `bugteam_clean_at = null`, AND `copilot_clean_at = null`,
+  `phase = CODE_REVIEW`, schedule next wakeup, return. Convergence needs full
   back-to-back-clean on new HEAD.
 - **`classification == "clean"` (state `APPROVED`):** Set
   `copilot_clean_at = current_head`. Record evidence: "Copilot APPROVED at <SHA>".
@@ -80,15 +80,17 @@ Decide (four branches; match first whose predicate holds):
   `pull_request_review_id`:** Treat identically to gate (a) dirty+inline
   path — apply the `pr-fix-protocol` skill
   (`../../pr-fix-protocol/SKILL.md`). Reset
-  `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = CODE_REVIEW`,
-  schedule next wakeup, return.
+  `bugbot_clean_at = null`, `code_review_clean_at = null`,
+  `bugteam_clean_at = null`, AND `copilot_clean_at = null`,
+  `phase = CODE_REVIEW`, schedule next wakeup, return.
 - **`classification == "dirty"` with empty inline comments matching
   `pull_request_review_id`:** Claude posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
   threads). Treat identically to gate (a) dirty+body path — apply the
   `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`). Reset
-  `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = CODE_REVIEW`,
-  schedule next wakeup, return.
+  `bugbot_clean_at = null`, `code_review_clean_at = null`,
+  `bugteam_clean_at = null`, AND `copilot_clean_at = null`,
+  `phase = CODE_REVIEW`, schedule next wakeup, return.
 - **`classification == "clean"` (state `APPROVED`):** Record evidence:
   "Claude APPROVED at <SHA>". Continue to gate (c).
 - **No Claude review on `current_head` yet:** Record evidence:
@@ -113,9 +115,9 @@ Persist `mergeable_state` into `merge_state_status`. Decide:
   ([`../../rebase/SKILL.md`](../../rebase/SKILL.md)) Phase 1–4 against PR's
   base ref. After rebase + force-with-lease push, new HEAD invalidates
   every prior clean state — reset `bugbot_clean_at = null`,
-  `code_review_clean_at = null`, `copilot_clean_at = null`,
-  `merge_state_status = null`, `phase = CODE_REVIEW`,
-  schedule next wakeup, return. Loop re-runs from
+  `code_review_clean_at = null`, `bugteam_clean_at = null`,
+  `copilot_clean_at = null`, `merge_state_status = null`,
+  `phase = CODE_REVIEW`, schedule next wakeup, return. Loop re-runs from
   scratch on new HEAD.
 - **`mergeable_state` is `"blocked"`, `"behind"`, `"unknown"`, or `"unstable"` for
   non-conflict reasons** (required checks pending/failing for "unstable",
@@ -159,7 +161,8 @@ against `current_head`. Decide:
     Continue to gate (e) when (b) and (c) still pass.
   - `state: CHANGES_REQUESTED` or `COMMENTED` with non-empty body → dirty.
     Treat identically to gate (a) dirty path — spawn Agent (subagent_type: clean-coder) to fix,
-    reset `bugbot_clean_at = null` AND `copilot_clean_at = null`,
+    reset `bugbot_clean_at = null`, `code_review_clean_at = null`,
+    `bugteam_clean_at = null`, AND `copilot_clean_at = null`,
     `phase = CODE_REVIEW`, schedule next wakeup, return.
 - **No Copilot review at `current_head` yet:** Record evidence: "No Copilot
   review at <SHA> (wait count: <N>)". Increment `copilot_wait_count`
@@ -189,7 +192,8 @@ Decide:
 - **One or more unresolved threads:** Do **not** mark ready. Apply the
   `pr-fix-protocol` skill's unresolved-thread sweep
   (`../../pr-fix-protocol/SKILL.md`). Push if any code changed → reset
-  `bugbot_clean_at = null` AND `copilot_clean_at = null`,
+  `bugbot_clean_at = null`, `code_review_clean_at = null`,
+  `bugteam_clean_at = null`, AND `copilot_clean_at = null`,
   `phase = CODE_REVIEW`, schedule next wakeup, return. If only resolutions
   (no code changes), re-check this gate without resetting.
 

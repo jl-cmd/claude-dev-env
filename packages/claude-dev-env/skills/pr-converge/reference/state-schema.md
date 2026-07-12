@@ -102,7 +102,7 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
   `{agent_id, created_tick, last_used_tick}` for the persistent per-step
   agents the loop resumes across ticks. Exactly three step keys:
   `fix_executor` (the clean-coder that applies findings in Step 4 dirty,
-  Step 6 findings, gates (a)/(d), and Step 7a), `thread_sweep`, and
+  Step 6 findings, gates (a)/(b)/(e), and Step 7a), `thread_sweep`, and
   `copilot_watch`. `agent_id` is the id the `Agent` tool returned at spawn;
   `created_tick` is the `tick_count` at spawn; `last_used_tick` is bumped
   on every `SendMessage` resume.

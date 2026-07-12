@@ -167,9 +167,9 @@ a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
    `python "$HOME/.claude/_shared/pr-loop/scripts/code_rules_gate.py" --base origin/main`,
    `ruff`, `mypy`, and stem-matched `pytest`. On any failure, apply the
    `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`), commit and push,
-   reset `bugbot_clean_at = null` and `code_review_clean_at = null`, stay
-   `phase = CODE_REVIEW`, and re-run the sweep. When the sweep is clean, run
-   `/code-review` below.
+   reset `bugbot_clean_at = null`, `code_review_clean_at = null`, and
+   `bugteam_clean_at = null`, stay `phase = CODE_REVIEW`, and re-run the
+   sweep. When the sweep is clean, run `/code-review` below.
 
 b. Run Claude Code's built-in `/code-review high --fix` on the FULL
    `origin/main...HEAD` diff — every file the PR touches — via the
@@ -194,9 +194,10 @@ c. Decide (two branches; match first whose predicate holds):
    - **`/code-review` applied fixes (working tree changed):** Commit the
      applied fixes in one commit → push, following the `pr-fix-protocol`
      skill's commit and push steps (`../../pr-fix-protocol/SKILL.md`). Reset
-     `bugbot_clean_at = null` AND `code_review_clean_at = null`. Stay
-     `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
-     re-enters the internal passes on the new HEAD.
+     `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
+     `bugteam_clean_at = null`. Stay `phase = CODE_REVIEW`, schedule next
+     wakeup, return. Every fix push re-enters the internal passes on the new
+     HEAD.
    - **Clean (no changes applied):** Set
      `code_review_clean_at = current_head`, `phase = BUGTEAM`. Continue
      BUGTEAM in same tick — back-to-back convergence requires code-review and
@@ -245,8 +246,9 @@ pushed commits during its run. `current_head` from Step 1 is stale:
    Re-resolve HEAD next tick.
 
    If `new_head != current_head`, set `current_head = new_head`,
-   `bugbot_clean_at = null`, `bugbot_down = false`. New commits invalidate
-   bugbot's prior clean and down-detection state.
+   `bugbot_clean_at = null`, `code_review_clean_at = null`,
+   `bugteam_clean_at = null`, `bugbot_down = false`. New commits invalidate
+   prior clean and down-detection state.
 
 c. Inspect bugteam outcome. Reports `convergence (zero findings)` or list
 of unfixed findings with file:line.
@@ -254,17 +256,17 @@ of unfixed findings with file:line.
 d. Decide based on post-bugteam state — order matters. Check
 pushed-during-bugteam FIRST so a convergence report against a stale HEAD
 never falsely terminates:
-   - **Audit pushed this tick (`bugbot_clean_at` reset in step b):**
-     Reset `code_review_clean_at = null`, `phase = CODE_REVIEW`, schedule next
-     wakeup, return. Every fix push re-enters the internal passes on the new
-     HEAD.
+   - **Audit pushed this tick (clean-at fields reset in step b):**
+     `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
+     re-enters the internal passes on the new HEAD.
    - **Convergence AND no push:** the internal passes are clean on
-     `current_head`. `phase = BUGBOT` — route into the terminal Bugbot gate,
-     which confirms and then runs the convergence gates. Continue BUGBOT in the
-     same tick.
+     `current_head`. Stamp `bugteam_clean_at = current_head`, then
+     `phase = BUGBOT` — route into the terminal Bugbot gate, which confirms
+     and then runs the convergence gates. Continue BUGBOT in the same tick.
    - **Findings without committed fixes:** apply the `pr-fix-protocol`
-     skill (`../../pr-fix-protocol/SKILL.md`). Reset `code_review_clean_at =
-     null`, `phase = CODE_REVIEW`, schedule next wakeup, return.
+     skill (`../../pr-fix-protocol/SKILL.md`). Reset `bugbot_clean_at = null`,
+     `code_review_clean_at = null`, `bugteam_clean_at = null`,
+     `phase = CODE_REVIEW`, schedule next wakeup, return.
 
 ### `phase == BUGBOT` (terminal gate)
 
@@ -329,11 +331,11 @@ c. Decide (four branches; match first whose predicate holds):
    - **`commit_id == current_head` with unaddressed inline findings:**
      Apply the `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`).
      Reset `inline_lag_streak = 0`, `bugbot_clean_at = null`,
-     `code_review_clean_at = null`, `phase = CODE_REVIEW`. With `state.json`:
-     the clean-coder teammate executes the fix, writes `state.json`, goes idle;
-     the next tick re-enters CODE_REVIEW on the new HEAD. No `state.json`
-     (single-PR): the lead executes it, stays `phase = CODE_REVIEW`. Schedule
-     next wakeup, return.
+     `code_review_clean_at = null`, `bugteam_clean_at = null`,
+     `phase = CODE_REVIEW`. With `state.json`: the clean-coder teammate
+     executes the fix, writes `state.json`, goes idle; the next tick re-enters
+     CODE_REVIEW on the new HEAD. No `state.json` (single-PR): the lead
+     executes it, stays `phase = CODE_REVIEW`. Schedule next wakeup, return.
 
 ### `phase == COPILOT_WAIT`
 
@@ -362,10 +364,10 @@ b. Decide (three branches; match first whose predicate holds):
      at `current_head`:** Apply the `pr-fix-protocol` skill
      (`../../pr-fix-protocol/SKILL.md`) — it covers body-only findings with
      no inline threads. Reset
-     `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
-     `copilot_clean_at = null`. **Set `phase = CODE_REVIEW`** (NOT
-     COPILOT_WAIT) — every fix push re-enters the internal passes on the new
-     HEAD. Schedule next wakeup, return.
+     `bugbot_clean_at = null`, `code_review_clean_at = null`,
+     `bugteam_clean_at = null`, AND `copilot_clean_at = null`. **Set
+     `phase = CODE_REVIEW`** (NOT COPILOT_WAIT) — every fix push re-enters the
+     internal passes on the new HEAD. Schedule next wakeup, return.
    - **No Copilot review at `current_head` yet:** Increment
      `copilot_wait_count` (init 0 on COPILOT_WAIT entry; reset to 0 on
      every push and on every successful Copilot review). `>= 3` → hard
