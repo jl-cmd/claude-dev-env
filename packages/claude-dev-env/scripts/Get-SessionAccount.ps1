@@ -14,6 +14,8 @@ $noiseEmailPatterns = @(
     '^Claude@\d'
 )
 
+$isoLatin1CodePage = 28591
+
 function Test-NoiseEmail {
     param([string]$Email)
     foreach ($pattern in $noiseEmailPatterns) {
@@ -26,19 +28,23 @@ function Get-EncodingAgnosticTextViews {
     param([string]$FilePath)
     try {
         $fileBytes = [System.IO.File]::ReadAllBytes($FilePath)
+        if ($fileBytes.Length -eq 0) { return @() }
+        $isoLatin1Encoding = [System.Text.Encoding]::GetEncoding($isoLatin1CodePage)
+        return @(
+            $isoLatin1Encoding.GetString($fileBytes),
+            [System.Text.Encoding]::Unicode.GetString($fileBytes)
+        )
     }
     catch {
         return @()
     }
-    if ($fileBytes.Length -eq 0) { return @() }
-    return @(
-        [System.Text.Encoding]::Latin1.GetString($fileBytes),
-        [System.Text.Encoding]::Unicode.GetString($fileBytes)
-    )
 }
 
 function Get-EmailCandidatesFromProfile {
-    param([string]$ProfileDirectory)
+    param(
+        [string]$ProfileDirectory,
+        [string]$ExcludeEmail
+    )
     $scanDirectories = @('sentry', 'IndexedDB', 'Session Storage', 'WebStorage') |
         ForEach-Object { Join-Path $ProfileDirectory $_ } |
         Where-Object { Test-Path -LiteralPath $_ }
@@ -54,7 +60,8 @@ function Get-EmailCandidatesFromProfile {
             foreach ($decodedText in $decodedTextViews) {
                 foreach ($match in [regex]::Matches($decodedText, $emailPattern)) {
                     $candidateEmail = $match.Value
-                    if (-not (Test-NoiseEmail -Email $candidateEmail)) {
+                    $isKnownCliEmail = $ExcludeEmail -and ($candidateEmail -ieq $ExcludeEmail)
+                    if (-not (Test-NoiseEmail -Email $candidateEmail) -and -not $isKnownCliEmail) {
                         [void]$foundEmails.Add($candidateEmail)
                     }
                 }
@@ -159,7 +166,7 @@ function Resolve-SessionAccount {
         return New-SessionAccountResult -ExitCode 0 -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'desktop-profile (matches cli-config)'
     }
 
-    $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $ProfileDirectory)
+    $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $ProfileDirectory -ExcludeEmail $cliEmail)
     if ($candidateEmails.Count -eq 1) {
         return New-SessionAccountResult -ExitCode 0 -Email $candidateEmails[0] -AccountUuid $profileAccountUuid -Source 'desktop-profile (differs from cli-config)' -CliEmail $cliEmail -CliAccountUuid $cliAccountUuid
     }

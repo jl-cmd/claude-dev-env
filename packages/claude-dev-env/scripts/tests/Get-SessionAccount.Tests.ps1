@@ -194,6 +194,21 @@ Describe 'Resolve-SessionAccount' {
         $sessionAccount.CliEmail | Should -Be 'cli@company.com'
     }
 
+    It 'recovers the desktop email even when the known cli email also lingers in profile storage' {
+        $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'lingering-cli') -Email 'cli@company.com' -AccountUuid 'uuid-cli'
+        $profileDirectory = Join-Path $TestDrive 'lingering-profile'
+        New-ProfileConfigFile -ProfileDirectory $profileDirectory -LastKnownAccountUuid 'uuid-desktop'
+        New-Utf16StorageFile -ProfileDirectory $profileDirectory -StoreName 'Session Storage' -FileName '000008.ldb' -EmailText 'desktop@company.com'
+        New-Utf16StorageFile -ProfileDirectory $profileDirectory -StoreName 'IndexedDB' -FileName '000009.ldb' -EmailText 'cli@company.com'
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $profileDirectory
+
+        $sessionAccount.ExitCode | Should -Be 0
+        $sessionAccount.Email | Should -Be 'desktop@company.com'
+        $sessionAccount.AccountUuid | Should -Be 'uuid-desktop'
+        $sessionAccount.CliEmail | Should -Be 'cli@company.com'
+    }
+
     It 'returns exit code 1 when the desktop account differs but no candidate email is recovered' {
         $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'none-cli') -Email 'cli@company.com' -AccountUuid 'uuid-cli'
         $profileDirectory = Join-Path $TestDrive 'none-profile'
@@ -216,5 +231,40 @@ Describe 'Resolve-SessionAccount' {
 
         $sessionAccount.ExitCode | Should -Be 1
         $sessionAccount.ErrorMessage | Should -Match 'multiple candidate emails'
+    }
+}
+
+Describe 'Write-AccountResult' {
+    It 'writes the account fields as text without cli lines when no CliEmail is given' {
+        $AsJson = $false
+        $textLines = Write-AccountResult -Email 'a@company.com' -AccountUuid 'uuid-a' -Source 'cli-config'
+        $joinedText = $textLines -join "`n"
+
+        $joinedText | Should -Match 'Account: a@company.com'
+        $joinedText | Should -Match 'AccountUuid: uuid-a'
+        $joinedText | Should -Match 'Source: cli-config'
+        $joinedText | Should -Not -Match 'CliAccount:'
+    }
+
+    It 'writes the cli account lines as text when a CliEmail is given' {
+        $AsJson = $false
+        $textLines = Write-AccountResult -Email 'd@company.com' -AccountUuid 'uuid-d' -Source 'desktop-profile (differs from cli-config)' -CliEmail 'c@company.com' -CliAccountUuid 'uuid-c'
+        $joinedText = $textLines -join "`n"
+
+        $joinedText | Should -Match 'Account: d@company.com'
+        $joinedText | Should -Match 'CliAccount: c@company.com'
+        $joinedText | Should -Match 'CliAccountUuid: uuid-c'
+    }
+
+    It 'emits a JSON object carrying the account contract fields when AsJson is set' {
+        $AsJson = $true
+        $jsonOutput = Write-AccountResult -Email 'd@company.com' -AccountUuid 'uuid-d' -Source 'desktop-profile (differs from cli-config)' -CliEmail 'c@company.com' -CliAccountUuid 'uuid-c'
+        $parsedResult = $jsonOutput | ConvertFrom-Json
+
+        $parsedResult.account | Should -Be 'd@company.com'
+        $parsedResult.accountUuid | Should -Be 'uuid-d'
+        $parsedResult.source | Should -Be 'desktop-profile (differs from cli-config)'
+        $parsedResult.cliAccount | Should -Be 'c@company.com'
+        $parsedResult.cliAccountUuid | Should -Be 'uuid-c'
     }
 }
