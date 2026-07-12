@@ -1,6 +1,6 @@
 ---
 name: usage-pause
-description: Waits out the account's 5-hour usage window in ScheduleWakeup stages that keep every agent context warm. Resolves the window's reset time and remaining headroom by probing the OAuth usage endpoint, or takes a manual override ('/usage-pause 10:20pm', '/usage-pause 74m'). Warns and stops when the weekly limit is near its cap. Each wakeup pings live and idle-warm agents with a one-line no-new-work checkpoint and records finished results; the final wakeup restores the crons the skill cancelled at pause time. Triggers: '/usage-pause', 'pause until the usage window resets', 'wait out the usage limit', 'usage limit pause'.
+description: 5-hour usage window, agent context warm, weekly limit is near its cap. Triggers: '/usage-pause', 'pause until the usage window resets', 'wait out the usage limit', 'usage limit pause', 'usage limit', 'pause usage', 'usage pause'.
 argument-hint: "[reset time like 10:20pm | duration like 74m]"
 ---
 
