@@ -81,7 +81,7 @@ mcp__plugin_github_github__add_reply_to_pull_request_comment(
   body="<reply body using unified template>"
 )
 
-mcp__plugin_github_github__pull_request_review_write(
+pull_request_review_write(
   method="resolve_thread",
   owner="<owner>",
   repo="<repo>",
