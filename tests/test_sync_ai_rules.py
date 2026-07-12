@@ -1,6 +1,7 @@
 """Specifications for the AI rules sync listener script."""
 
 import os
+import shutil
 import subprocess
 import urllib.error
 from pathlib import Path
@@ -66,13 +67,10 @@ FAKE_GITHUB_TOKEN = "ghp_fake_token_for_tests"
 FAKE_GITHUB_REPOSITORY = "test-owner/test-repo"
 
 
-@pytest.fixture
-def git_repo(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Generator[Path, None, None]:
-    """Yields a fully initialized git work repo with a bare remote and cwd set to it."""
-    bare_remote = tmp_path / "remote.git"
-    work_dir = tmp_path / "work"
+def _initialize_git_repo_pair(template_root: Path) -> None:
+    """Build a bare remote and seeded work tree under template_root once."""
+    bare_remote = template_root / "remote.git"
+    work_dir = template_root / "work"
     work_dir.mkdir()
 
     subprocess.run(
@@ -126,6 +124,45 @@ def git_repo(
     )
     subprocess.run(
         ["git", "push", "--no-verify", "--set-upstream", "origin", "HEAD:main"],
+        cwd=str(work_dir),
+        check=True,
+        capture_output=True,
+    )
+
+
+@pytest.fixture(scope="module")
+def _git_repo_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Module-scoped template work tree + bare remote for git_repo copies."""
+    template_root = tmp_path_factory.mktemp("sync_ai_rules_git_template")
+    _initialize_git_repo_pair(template_root)
+    return template_root
+
+
+@pytest.fixture
+def git_repo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    _git_repo_template: Path,
+) -> Generator[Path, None, None]:
+    """Yields a fully initialized git work repo with a bare remote and cwd set to it.
+
+    Copies the module-scoped template so each test still gets an isolated repo
+    without re-running the full git init/config/commit/push sequence.
+    """
+    bare_remote = tmp_path / "remote.git"
+    work_dir = tmp_path / "work"
+    shutil.copytree(_git_repo_template / "work", work_dir)
+    shutil.copytree(_git_repo_template / "remote.git", bare_remote)
+
+    isolated_hooks_directory = work_dir / ".git" / "pytest-hook-isolation"
+    subprocess.run(
+        ["git", "config", "core.hooksPath", str(isolated_hooks_directory)],
+        cwd=str(work_dir),
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "remote", "set-url", "origin", str(bare_remote)],
         cwd=str(work_dir),
         check=True,
         capture_output=True,
