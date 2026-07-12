@@ -10,20 +10,30 @@ tests are separate from the hook tests (which live beside their hooks under
 `packages/claude-dev-env/hooks/`) and from the JS installer tests
 (`packages/claude-dev-env/bin/*.test.mjs`).
 
-Run the full suite from the repo root:
+## Running Python tests
 
-```bash
-python -m pytest
-```
+Two suites share the root `pytest.ini`. Run them as **separate** sessions so the
+two `config` packages (repo-root `config/` and
+`packages/claude-dev-env/hooks/blocking/config/`) do not collide during collection.
 
-Or target a single file:
+| Scope | Command |
+|-------|---------|
+| Root suite only (`tests/`) | `python -m pytest tests/` |
+| Package suite (`packages/claude-dev-env`) | `python -m pytest packages/claude-dev-env` |
+| Default bare invocation | `python -m pytest` |
+
+Bare `python -m pytest` is scoped to `tests/` via `testpaths` in `pytest.ini`.
+It is the same root-suite session as `python -m pytest tests/`.
+
+Target a single file:
 
 ```bash
 python -m pytest tests/test_fan_out_dispatch.py
 ```
 
 `pytest.ini` at the repo root sets `--import-mode=importlib`, adds `.` and
-`.github/scripts` to `pythonpath`, and collects both `test_*` and `should_*` functions.
+`.github/scripts` to `pythonpath`, scopes default collection to `tests/` via
+`testpaths`, and collects both `test_*` and `should_*` functions.
 
 ## Files
 
