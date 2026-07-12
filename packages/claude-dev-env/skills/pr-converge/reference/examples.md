@@ -7,7 +7,7 @@ into `SKILL.md` use `§Section name` notation.
 <example> User: `/pr-converge` Claude: [PR context + one tick of internal
 code-review/bugteam work, then the terminal Bugbot and Copilot gates; Step 4
 per `workflows/schedule-wakeup-loop.md` — default loop until convergence or
-10→stop]
+stop]
 </example>
 
 <example> CODE_REVIEW tick (the entry phase), the static sweep raises a

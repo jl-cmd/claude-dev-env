@@ -212,7 +212,7 @@ Decide:
 **Machine pre-condition checklist.** Run the script — do not hand-check labels:
 
 ```
-python ~/.claude/skills/pr-converge/scripts/check_convergence.py \
+python $HOME/.claude/skills/pr-converge/scripts/check_convergence.py \
   --owner <O> --repo <R> --pr-number <N> \
   [--bugbot-down] [--copilot-down]
 ```
