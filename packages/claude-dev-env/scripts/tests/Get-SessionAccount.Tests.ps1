@@ -80,6 +80,18 @@ Describe 'Test-NoiseEmail' {
         (Test-NoiseEmail -Email 'someone@sentry.io') | Should -Be $true
         (Test-NoiseEmail -Email 'billing@anthropic.com') | Should -Be $true
     }
+
+    It 'rejects a sentry ingest subdomain address' {
+        (Test-NoiseEmail -Email 'abc@o123.ingest.sentry.io') | Should -Be $true
+    }
+
+    It 'keeps an address whose local part merely contains sentry.io' {
+        (Test-NoiseEmail -Email 'sentry.io.reports@realcompany.com') | Should -Be $false
+    }
+
+    It 'keeps an address whose domain merely starts with anthropic' {
+        (Test-NoiseEmail -Email 'user@anthropic-partner.com') | Should -Be $false
+    }
 }
 
 Describe 'Get-EmailCandidatesFromProfile' {
@@ -109,6 +121,16 @@ Describe 'Get-EmailCandidatesFromProfile' {
 
         $candidateEmails.Count | Should -Be 1
         $candidateEmails[0] | Should -Be 'sam.exampleson@company.com'
+    }
+
+    It 'counts the same email recovered with differing casing across stores as one candidate' {
+        $profileDirectory = Join-Path $TestDrive 'mixed-case-profile'
+        New-Utf16StorageFile -ProfileDirectory $profileDirectory -StoreName 'Session Storage' -FileName '000012.ldb' -EmailText 'Desktop@Company.com'
+        New-Utf16StorageFile -ProfileDirectory $profileDirectory -StoreName 'IndexedDB' -FileName '000013.ldb' -EmailText 'desktop@company.com'
+
+        $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $profileDirectory)
+
+        $candidateEmails.Count | Should -Be 1
     }
 
     It 'refuses to recover an email whose local part is glued to an adjacent boundary byte' {
@@ -142,6 +164,43 @@ Describe 'Resolve-SessionAccount' {
 
         $sessionAccount.ExitCode | Should -Be 2
         $sessionAccount.ErrorMessage | Should -Match 'Failed to parse CLI config'
+    }
+
+    It 'returns exit code 2 when the CLI config top level is a JSON string' {
+        $configDirectory = Join-Path $TestDrive 'scalar-cli'
+        New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+        $cliConfigPath = Join-Path $configDirectory '.claude.json'
+        [System.IO.File]::WriteAllText($cliConfigPath, '"just a string"', [System.Text.Encoding]::UTF8)
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory ''
+
+        $sessionAccount.ExitCode | Should -Be 2
+        $sessionAccount.ErrorMessage | Should -Match 'not a JSON object'
+    }
+
+    It 'returns exit code 2 when the CLI config top level is a JSON array' {
+        $configDirectory = Join-Path $TestDrive 'array-cli'
+        New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+        $cliConfigPath = Join-Path $configDirectory '.claude.json'
+        [System.IO.File]::WriteAllText($cliConfigPath, '[1, 2, 3]', [System.Text.Encoding]::UTF8)
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory ''
+
+        $sessionAccount.ExitCode | Should -Be 2
+        $sessionAccount.ErrorMessage | Should -Match 'not a JSON object'
+    }
+
+    It 'returns exit code 2 when the desktop profile config top level is not a JSON object' {
+        $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'scalar-profile-cli') -Email 'cli@company.com' -AccountUuid 'uuid-cli'
+        $profileDirectory = Join-Path $TestDrive 'scalar-profile'
+        New-Item -ItemType Directory -Path $profileDirectory -Force | Out-Null
+        $profileConfigPath = Join-Path $profileDirectory 'config.json'
+        [System.IO.File]::WriteAllText($profileConfigPath, '42', [System.Text.Encoding]::UTF8)
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $profileDirectory
+
+        $sessionAccount.ExitCode | Should -Be 2
+        $sessionAccount.ErrorMessage | Should -Match 'not a JSON object'
     }
 
     It 'returns exit code 2 when the CLI config lacks oauthAccount fields' {
@@ -281,7 +340,7 @@ Describe 'Write-AccountResult' {
 
     It 'emits a JSON object carrying the account contract fields when AsJson is set' {
         $AsJson = $true
-        $jsonOutput = Write-AccountResult -Email 'd@company.com' -AccountUuid 'uuid-d' -Source 'desktop-profile (differs from cli-config)' -CliEmail 'c@company.com' -CliAccountUuid 'uuid-c'
+        $jsonOutput = Write-AccountResult -Email 'd@company.com' -AccountUuid 'uuid-d' -Source 'desktop-profile (differs from cli-config)' -CliEmail 'c@company.com' -CliAccountUuid 'uuid-c' -AsJson:$AsJson
         $parsedResult = $jsonOutput | ConvertFrom-Json
 
         $parsedResult.account | Should -Be 'd@company.com'

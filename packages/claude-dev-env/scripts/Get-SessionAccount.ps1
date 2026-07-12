@@ -6,8 +6,8 @@ param(
 
 $noiseEmailPatterns = @(
     '@example\.(com|org|net)$',
-    'sentry\.io',
-    '@anthropic',
+    '(@|\.)sentry\.io$',
+    '@anthropic\.',
     '^Claude@\d'
 )
 
@@ -51,7 +51,7 @@ function Get-EmailCandidatesFromProfile {
     $scanDirectories = $profileStorageDirectoryNames |
         ForEach-Object { Join-Path $ProfileDirectory $_ } |
         Where-Object { Test-Path -LiteralPath $_ }
-    $foundEmails = [System.Collections.Generic.HashSet[string]]::new()
+    $foundEmails = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     foreach ($scanDirectory in $scanDirectories) {
         $candidateFiles = Get-ChildItem -LiteralPath $scanDirectory -Recurse -File -ErrorAction SilentlyContinue |
@@ -137,6 +137,10 @@ function Resolve-SessionAccount {
         return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse CLI config as JSON: $CliConfigPath"
     }
 
+    if ($cliConfig -isnot [System.Collections.IDictionary]) {
+        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config top level is not a JSON object: $CliConfigPath"
+    }
+
     $oauthAccount = $cliConfig['oauthAccount']
     $cliEmail = if ($oauthAccount) { $oauthAccount['emailAddress'] } else { $null }
     $cliAccountUuid = if ($oauthAccount) { $oauthAccount['accountUuid'] } else { $null }
@@ -160,7 +164,11 @@ function Resolve-SessionAccount {
         return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse desktop profile config as JSON: $profileConfigPath"
     }
 
-    $profileAccountUuid = $profileConfig.lastKnownAccountUuid
+    if ($profileConfig -isnot [System.Collections.IDictionary]) {
+        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config top level is not a JSON object: $profileConfigPath"
+    }
+
+    $profileAccountUuid = $profileConfig['lastKnownAccountUuid']
     if (-not $profileAccountUuid) {
         return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config is missing lastKnownAccountUuid: $profileConfigPath"
     }
