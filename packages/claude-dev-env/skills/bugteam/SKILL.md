@@ -83,10 +83,9 @@ Bugteam-only obligations:
 [ ] Step 1: PR scope resolved
 [ ] Step 2: loop state set
 [ ] Step 3: cycle complete (converged | cap reached | stuck | error)
-[ ] Step 4: working tree clean
-[ ] Step 4.5: PR description rewritten (or skip warning logged)
-[ ] Step 5: project permissions revoked
-[ ] Step 6: final report printed
+[ ] Step 4: apply pr-loop-lifecycle Close
+    Skill({skill: "pr-loop-lifecycle", args: "--skill bugteam close"})
+    (see pr-loop-lifecycle/SKILL.md "How callers invoke this")
 ```
 
 ## First invocation of a session
