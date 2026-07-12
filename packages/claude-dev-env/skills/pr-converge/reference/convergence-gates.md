@@ -158,7 +158,7 @@ against `current_head`. Decide:
   - `state: APPROVED` → set `copilot_clean_at = current_head`. Record
     evidence: "Copilot APPROVED at <SHA>". Re-validate gates (b) and (c)
     on same tick (Claude status and mergeability may have changed while
-    waiting). Set `phase = BUGTEAM`.
+    waiting). Stay on `COPILOT_WAIT` — do not re-enter BUGTEAM.
     Continue to gate (e) when (b) and (c) still pass.
   - `state: CHANGES_REQUESTED` or `COMMENTED` with non-empty body → dirty.
     Treat identically to gate (a) dirty path — spawn Agent (subagent_type: clean-coder) to fix,

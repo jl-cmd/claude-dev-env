@@ -250,7 +250,7 @@ post a fresh PR in a fresh branch based on origin main to the user.
 ## Progress checklist
 
 State variables (`phase`, `bugbot_clean_at`, `code_review_clean_at`,
-`copilot_clean_at`, counters) are
+`bugteam_clean_at`, `copilot_clean_at`, `merge_state_status`, counters) are
 defined in [`reference/state-schema.md`](reference/state-schema.md). Ground rules
 in [`reference/ground-rules.md`](reference/ground-rules.md).
 

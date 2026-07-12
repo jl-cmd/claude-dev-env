@@ -357,9 +357,10 @@ python ~/.claude/skills/pr-converge/scripts/fetch_copilot_inline_comments.py --o
 b. Decide (three branches; match first whose predicate holds):
 
    - **Copilot review `state: APPROVED` at `current_head`:** Set
-     `copilot_clean_at = current_head`. Record "Copilot APPROVED". Set
-     `phase = BUGTEAM`. Continue to convergence-gates.md gate (b) in same
-     tick — back-to-back convergence requires all gates on same HEAD.
+     `copilot_clean_at = current_head`. Record "Copilot APPROVED". Stay on
+     `COPILOT_WAIT` — do not re-enter BUGTEAM. Continue to
+     convergence-gates.md gate (b) in same tick; re-validate gates (b), (c),
+     then (e), (f) on the same HEAD.
    - **Copilot review dirty (CHANGES_REQUESTED or COMMENTED with findings)
      at `current_head`:** Apply the `pr-fix-protocol` skill
      (`../../pr-fix-protocol/SKILL.md`) — it covers body-only findings with

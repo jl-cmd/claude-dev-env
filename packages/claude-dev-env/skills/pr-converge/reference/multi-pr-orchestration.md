@@ -52,8 +52,8 @@ Create once at session start. Each teammate writes result before going idle.
 }
 ```
 
-**`status` values:** `fresh` | `in_progress` | `awaiting_bugbot` |
-`awaiting_bugteam` | `converged` | `blocked`
+**`status` values:** `fresh` | `in_progress` | `awaiting_code_review` |
+`awaiting_bugbot` | `awaiting_bugteam` | `converged` | `blocked`
 
 **Write rule:** Subagents read current file, merge **only** their PR's entry
 under `prs`, write back. Writes keyed on `pr_number`; other PRs untouched.
@@ -112,8 +112,10 @@ Bugfind subagent completes (findings or clean):
      `add_reply_to_pull_request_comment(owner, repo, pullNumber, commentId, body)`.
   5. Writes `state.json` (per §Concurrency): `last_action: "fix_pushed"`,
      `current_head: <new SHA>`, `bugbot_clean_at: null`,
-     `bugbot_down: false`, `phase:
-     "BUGBOT"`, `status: "awaiting_bugbot"`, `last_updated` ISO-8601 UTC.
+     `code_review_clean_at: null`, `bugteam_clean_at: null`,
+     `copilot_clean_at: null`, `merge_state_status: null`,
+     `bugbot_down: false`, `phase: "CODE_REVIEW"`,
+     `status: "awaiting_code_review"`, `last_updated` ISO-8601 UTC.
   6. Goes idle.
 
 - **PRs with zero findings:** spawn one `general-purpose` subagent per PR via

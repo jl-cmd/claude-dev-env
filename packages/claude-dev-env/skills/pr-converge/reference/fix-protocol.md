@@ -17,7 +17,9 @@ obligations and the same-tick re-entry rule.
   (what changed + commit identifier), matching §Audit result → fix worker step 4 — **before** writing
   `state.json` and going idle.
 - Writes `last_action: "fix_pushed"`, `current_head: <new SHA>`,
-  `bugbot_clean_at: null`, `code_review_clean_at: null`, `bugbot_down: false`,
+  `bugbot_clean_at: null`, `code_review_clean_at: null`,
+  `bugteam_clean_at: null`, `copilot_clean_at: null`,
+  `merge_state_status: null`, `bugbot_down: false`,
   `phase: "CODE_REVIEW"`, `status: "awaiting_code_review"`, `last_updated`
   (ISO-8601 UTC) to `state.json` (per §Concurrency).
 - Goes idle. Orchestrator spawns a follow-up `general-purpose` agent for the
