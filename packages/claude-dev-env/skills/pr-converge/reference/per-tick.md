@@ -1,5 +1,16 @@
 # Per-tick work
 
+## Contents
+
+- [Invocation modes](#invocation-modes)
+- [Pacing workflow](#pacing-workflow)
+- [Step 1: Resolve current HEAD and PR context](#step-1-resolve-current-head-and-pr-context)
+- [Step 1.5: Resolve the PR worktree (cwd routing)](#step-15-resolve-the-pr-worktree-cwd-routing)
+- [Step 2: Branch on phase](#step-2-branch-on-phase)
+- [Step 3: Re-trigger bugbot](#step-3-re-trigger-bugbot)
+- [Step 4: Loop pacing](#step-4-loop-pacing)
+- [Bugteam execution](#bugteam-execution)
+
 Use on **draft PR**. Cursor Bugbot and `/bugteam` re-run after each push. Fix
 findings between rounds until back-to-back clean on same `HEAD`, then mark
 PR ready for review.
@@ -40,8 +51,10 @@ pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get") → `
 ```
 
 If owner/repo/number are not yet known, extract them from the PR URL.
-If `current_head` changed since last tick, reset `bugbot_down` to `false`
-(new HEAD invalidates prior down-detection state).
+If `current_head` changed since last tick, reset push-invalidated markers
+per [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
+(all `*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`) —
+new HEAD invalidates prior clean and down-detection state.
 
 Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 
@@ -166,10 +179,11 @@ a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
    gates over the full `origin/main...HEAD` changed files:
    `python "$HOME/.claude/_shared/pr-loop/scripts/code_rules_gate.py" --base origin/main`,
    `ruff`, `mypy`, and stem-matched `pytest`. On any failure, apply the
-   `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`), commit and push,
-   reset `bugbot_clean_at = null` and `code_review_clean_at = null`, stay
-   `phase = CODE_REVIEW`, and re-run the sweep. When the sweep is clean, run
-   `/code-review` below.
+   shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)), commit and push,
+   reset push-invalidated markers per [ground-rules.md](ground-rules.md) /
+   [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+   `bugbot_down`, `bugbot_acknowledged_at`), stay `phase = CODE_REVIEW`, and
+   re-run the sweep. When the sweep is clean, run `/code-review` below.
 
 b. Run Claude Code's built-in `/code-review high --fix` on the FULL
    `origin/main...HEAD` diff — every file the PR touches — via the
@@ -192,11 +206,13 @@ b. Run Claude Code's built-in `/code-review high --fix` on the FULL
 c. Decide (two branches; match first whose predicate holds):
 
    - **`/code-review` applied fixes (working tree changed):** Commit the
-     applied fixes in one commit → push, following the `pr-fix-protocol`
-     skill's commit and push steps (`../../pr-fix-protocol/SKILL.md`). Reset
-     `bugbot_clean_at = null` AND `code_review_clean_at = null`. Stay
-     `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
-     re-enters the internal passes on the new HEAD.
+     applied fixes in one commit → push, following the shared fix protocol
+     commit and push steps ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md)). Reset
+     push-invalidated markers per [ground-rules.md](ground-rules.md) /
+     [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+     `bugbot_down`, `bugbot_acknowledged_at`). Stay `phase = CODE_REVIEW`,
+     schedule next wakeup, return. Every fix push re-enters the internal
+     passes on the new HEAD.
    - **Clean (no changes applied):** Set
      `code_review_clean_at = current_head`, `phase = BUGTEAM`. Continue
      BUGTEAM in same tick — back-to-back convergence requires code-review and
@@ -244,9 +260,11 @@ pushed commits during its run. `current_head` from Step 1 is stale:
    proceed with convergence-gates — schedule a 90s wakeup and return.
    Re-resolve HEAD next tick.
 
-   If `new_head != current_head`, set `current_head = new_head`,
-   `bugbot_clean_at = null`, `bugbot_down = false`. New commits invalidate
-   bugbot's prior clean and down-detection state.
+   If `new_head != current_head`, set `current_head = new_head` and reset
+   push-invalidated markers per [ground-rules.md](ground-rules.md) /
+   [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+   `bugbot_down`, `bugbot_acknowledged_at`). New commits invalidate prior
+   clean and down-detection state.
 
 c. Inspect bugteam outcome. Reports `convergence (zero findings)` or list
 of unfixed findings with file:line.
@@ -254,17 +272,19 @@ of unfixed findings with file:line.
 d. Decide based on post-bugteam state — order matters. Check
 pushed-during-bugteam FIRST so a convergence report against a stale HEAD
 never falsely terminates:
-   - **Audit pushed this tick (`bugbot_clean_at` reset in step b):**
-     Reset `code_review_clean_at = null`, `phase = CODE_REVIEW`, schedule next
-     wakeup, return. Every fix push re-enters the internal passes on the new
-     HEAD.
+   - **Audit pushed this tick (clean-at fields reset in step b):**
+     `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
+     re-enters the internal passes on the new HEAD.
    - **Convergence AND no push:** the internal passes are clean on
-     `current_head`. `phase = BUGBOT` — route into the terminal Bugbot gate,
-     which confirms and then runs the convergence gates. Continue BUGBOT in the
-     same tick.
-   - **Findings without committed fixes:** apply the `pr-fix-protocol`
-     skill (`../../pr-fix-protocol/SKILL.md`). Reset `code_review_clean_at =
-     null`, `phase = CODE_REVIEW`, schedule next wakeup, return.
+     `current_head`. Stamp `bugteam_clean_at = current_head`, then
+     `phase = BUGBOT` — route into the terminal Bugbot gate, which confirms
+     and then runs the convergence gates. Continue BUGBOT in the same tick.
+   - **Findings without committed fixes:** apply the shared fix protocol
+     ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [fix-protocol.md](fix-protocol.md)). Reset push-invalidated markers
+     per [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
+     (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
+     `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule next wakeup,
+     return.
 
 ### `phase == BUGBOT` (terminal gate)
 
@@ -314,8 +334,8 @@ pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_
    → filter threads where `is_resolved == false`
    ```
 
-   Per-thread handling lives in the `pr-fix-protocol` skill's
-   unresolved-thread sweep (`../../pr-fix-protocol/SKILL.md`).
+   Per-thread handling lives in the shared fix protocol's
+   unresolved-thread sweep (`../../../_shared/pr-loop/fix-protocol.md`).
 
 c. Decide (four branches; match first whose predicate holds):
    - **No bugbot review yet, OR latest review's `commit_id` ≠
@@ -327,11 +347,13 @@ c. Decide (four branches; match first whose predicate holds):
      `inline_lag_streak = 0`, advance to the [convergence
      gates](convergence-gates.md) in the same tick.
    - **`commit_id == current_head` with unaddressed inline findings:**
-     Apply the `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`).
-     Reset `inline_lag_streak = 0`, `bugbot_clean_at = null`,
-     `code_review_clean_at = null`, `phase = CODE_REVIEW`. With `state.json`:
-     the clean-coder teammate executes the fix, writes `state.json`, goes idle;
-     the next tick re-enters CODE_REVIEW on the new HEAD. No `state.json`
+     Apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)).
+     Reset `inline_lag_streak = 0` and push-invalidated markers per
+     [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
+     (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
+     `bugbot_acknowledged_at`), `phase = CODE_REVIEW`. With `state.json`: the
+     clean-coder teammate executes the fix, writes `state.json`, goes idle; the
+     next tick re-enters CODE_REVIEW on the new HEAD. No `state.json`
      (single-PR): the lead executes it, stays `phase = CODE_REVIEW`. Schedule
      next wakeup, return.
 
@@ -355,17 +377,18 @@ python ~/.claude/skills/pr-converge/scripts/fetch_copilot_inline_comments.py --o
 b. Decide (three branches; match first whose predicate holds):
 
    - **Copilot review `state: APPROVED` at `current_head`:** Set
-     `copilot_clean_at = current_head`. Record "Copilot APPROVED". Set
-     `phase = BUGTEAM`. Continue to convergence-gates.md gate (b) in same
-     tick — back-to-back convergence requires all gates on same HEAD.
+     `copilot_clean_at = current_head`. Record "Copilot APPROVED". Stay on
+     `COPILOT_WAIT` — do not re-enter BUGTEAM. Continue to
+     convergence-gates.md gate (b) in same tick; re-validate gates (b), (c),
+     then (e), (f) on the same HEAD.
    - **Copilot review dirty (CHANGES_REQUESTED or COMMENTED with findings)
-     at `current_head`:** Apply the `pr-fix-protocol` skill
-     (`../../pr-fix-protocol/SKILL.md`) — it covers body-only findings with
-     no inline threads. Reset
-     `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
-     `copilot_clean_at = null`. **Set `phase = CODE_REVIEW`** (NOT
-     COPILOT_WAIT) — every fix push re-enters the internal passes on the new
-     HEAD. Schedule next wakeup, return.
+     at `current_head`:** Apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) — it covers body-only findings with
+     no inline threads. Reset push-invalidated markers per
+     [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
+     (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
+     `bugbot_acknowledged_at`). **Set `phase = CODE_REVIEW`** (NOT COPILOT_WAIT)
+     — every fix push re-enters the internal passes on the new HEAD. Schedule
+     next wakeup, return.
    - **No Copilot review at `current_head` yet:** Increment
      `copilot_wait_count` (init 0 on COPILOT_WAIT entry; reset to 0 on
      every push and on every successful Copilot review). `>= 3` → hard

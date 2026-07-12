@@ -1,5 +1,13 @@
 # Convergence gates
 
+## Contents
+
+- [(a) Copilot findings gate](#a-copilot-findings-gate)
+- [(b) Claude reviewer gate (agent-side)](#b-claude-reviewer-gate-agent-side)
+- [(c) Mergeability gate](#c-mergeability-gate)
+- [(d) Post-convergence Copilot review request](#d-post-convergence-copilot-review-request)
+- [(e) Thread-resolution gate](#e-thread-resolution-gate)
+- [(f) Mark ready and report](#f-mark-ready-and-report)
 Run **only** after the terminal Bugbot gate confirms the HEAD
 (`bugbot_clean_at == current_head` OR `bugbot_down`), which runs just before
 these gates once Step 2 BUGTEAM reports `convergence (zero findings)` with no
@@ -36,33 +44,34 @@ Decide (four branches; match first whose predicate holds):
 
 - **`classification == "dirty"` with non-empty inline comments matching
   `pull_request_review_id`:** Fix protocol input (same shape as bugbot
-  dirty). Apply the `pr-fix-protocol` skill
-  (`../../pr-fix-protocol/SKILL.md`) in the same tick.
-  Reset `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
-  `copilot_clean_at = null`, `phase = CODE_REVIEW`, schedule next wakeup,
-  return. Full back-to-back-clean cycle plus all six gates must hold again on
-  new HEAD.
+  dirty). Apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) in the same tick.
+  Reset push-invalidated markers per [ground-rules.md](ground-rules.md) /
+  [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+  `bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule
+  next wakeup, return. Full back-to-back-clean cycle plus all six gates must
+  hold again on new HEAD.
 - **`classification == "dirty"` with empty inline comments matching
   `pull_request_review_id`:** Copilot posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
   threads). Parse body for actionable findings. Apply the
-  `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`), whose reply
+  shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)), whose reply
   step for body-only findings posts a top-level review reply citing the
-  new HEAD SHA. Reset
-  `bugbot_clean_at = null`, `code_review_clean_at = null`, AND
-  `copilot_clean_at = null`, `phase = CODE_REVIEW`,
-  schedule next wakeup, return. Convergence needs full
-  back-to-back-clean on new HEAD.
+  new HEAD SHA. Reset push-invalidated markers per
+  [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
+  (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
+  `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule next wakeup,
+  return. Convergence needs full back-to-back-clean on new HEAD.
 - **`classification == "clean"` (state `APPROVED`):** Set
   `copilot_clean_at = current_head`. Record evidence: "Copilot APPROVED at <SHA>".
   Continue to gate (b).
 - **No Copilot review on `current_head` yet:** Record evidence: "No Copilot review at <SHA>".
   Skip — gate (d) issues proactive request. Continue to gate (b).
 
-## (b) Claude reviewer gate
+## (b) Claude reviewer gate (agent-side)
 
-Fetch latest Claude reviewer (`claude[bot]`) review plus inline comments
-anchored to most recent Claude review on `current_head`:
+Agent-side only — not a `check_convergence.py` condition. Fetch latest Claude
+reviewer (`claude[bot]`) review plus inline comments anchored to most recent
+Claude review on `current_head`:
 
 ```
 pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
@@ -78,17 +87,20 @@ Decide (four branches; match first whose predicate holds):
 
 - **`classification == "dirty"` with non-empty inline comments matching
   `pull_request_review_id`:** Treat identically to gate (a) dirty+inline
-  path — apply the `pr-fix-protocol` skill
-  (`../../pr-fix-protocol/SKILL.md`). Reset
-  `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = CODE_REVIEW`,
-  schedule next wakeup, return.
+  path — apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)). Reset push-invalidated markers per
+  [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
+  (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
+  `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule next wakeup,
+  return.
 - **`classification == "dirty"` with empty inline comments matching
   `pull_request_review_id`:** Claude posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
   threads). Treat identically to gate (a) dirty+body path — apply the
-  `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`). Reset
-  `bugbot_clean_at = null` AND `copilot_clean_at = null`, `phase = CODE_REVIEW`,
-  schedule next wakeup, return.
+  shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)). Reset
+  push-invalidated markers per [ground-rules.md](ground-rules.md) /
+  [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+  `bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule
+  next wakeup, return.
 - **`classification == "clean"` (state `APPROVED`):** Record evidence:
   "Claude APPROVED at <SHA>". Continue to gate (c).
 - **No Claude review on `current_head` yet:** Record evidence:
@@ -112,11 +124,11 @@ Persist `mergeable_state` into `merge_state_status`. Decide:
   **not** mark ready. Invoke **`rebase`** skill
   ([`../../rebase/SKILL.md`](../../rebase/SKILL.md)) Phase 1–4 against PR's
   base ref. After rebase + force-with-lease push, new HEAD invalidates
-  every prior clean state — reset `bugbot_clean_at = null`,
-  `code_review_clean_at = null`, `copilot_clean_at = null`,
-  `merge_state_status = null`, `phase = CODE_REVIEW`,
-  schedule next wakeup, return. Loop re-runs from
-  scratch on new HEAD.
+  every prior clean state — reset push-invalidated markers per
+  [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
+  (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
+  `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule next wakeup,
+  return. Loop re-runs from scratch on new HEAD.
 - **`mergeable_state` is `"blocked"`, `"behind"`, `"unknown"`, or `"unstable"` for
   non-conflict reasons** (required checks pending/failing for "unstable",
   branch behind base without conflicts for "behind", GitHub indeterminate
@@ -155,12 +167,14 @@ against `current_head`. Decide:
   - `state: APPROVED` → set `copilot_clean_at = current_head`. Record
     evidence: "Copilot APPROVED at <SHA>". Re-validate gates (b) and (c)
     on same tick (Claude status and mergeability may have changed while
-    waiting). Set `phase = BUGTEAM`.
+    waiting). Stay on `COPILOT_WAIT` — do not re-enter BUGTEAM.
     Continue to gate (e) when (b) and (c) still pass.
   - `state: CHANGES_REQUESTED` or `COMMENTED` with non-empty body → dirty.
-    Treat identically to gate (a) dirty path — spawn Agent (subagent_type: clean-coder) to fix,
-    reset `bugbot_clean_at = null` AND `copilot_clean_at = null`,
-    `phase = CODE_REVIEW`, schedule next wakeup, return.
+    Treat identically to gate (a) dirty path — apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)).
+    Reset push-invalidated markers per [ground-rules.md](ground-rules.md) /
+    [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+    `bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule
+    next wakeup, return.
 - **No Copilot review at `current_head` yet:** Record evidence: "No Copilot
   review at <SHA> (wait count: <N>)". Increment `copilot_wait_count`
   (init 0 on first COPILOT_WAIT entry; reset to 0 on every push and on every
@@ -171,48 +185,72 @@ against `current_head`. Decide:
 
 ## (e) Thread-resolution gate
 
-Before marking ready, count ALL unresolved review threads on the PR:
+Agent-side prep before the machine checklist in gate (f). The script label
+`zero unresolved bot threads` is what marks ready; this gate clears those
+threads first.
 
-```
-pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
-  → filter threads where `is_resolved == false`
-  → count
-```
+Machine filter (same as `check_convergence.py`):
 
-This count is the `pr-fix-protocol` unresolved-thread sweep
-(`../../pr-fix-protocol/SKILL.md`).
+- `isResolved == false`
+- `isOutdated == true` → thread **excluded** (does not fail the gate)
+- first-comment author login contains `cursor`, `claude`, or `copilot`
+  (case-insensitive substrings only)
+
+Broader unresolved-thread sweeps (all authors, including human reviewers) are
+agent-side via the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) and are not script conditions.
 
 Decide:
 
-- **Zero unresolved threads:** Record evidence:
-  "0 unresolved threads across PR at <SHA>". Continue to gate (f).
-- **One or more unresolved threads:** Do **not** mark ready. Apply the
-  `pr-fix-protocol` skill's unresolved-thread sweep
-  (`../../pr-fix-protocol/SKILL.md`). Push if any code changed → reset
-  `bugbot_clean_at = null` AND `copilot_clean_at = null`,
-  `phase = CODE_REVIEW`, schedule next wakeup, return. If only resolutions
-  (no code changes), re-check this gate without resetting.
+- **Zero unresolved bot threads** under the filter above: Record evidence:
+  "0 unresolved bot threads at <SHA>". Continue to gate (f).
+- **One or more unresolved bot threads:** Do **not** mark ready. Apply the
+  shared fix protocol unresolved-thread sweep ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md) step 12; skill deltas in [`fix-protocol.md`](fix-protocol.md)). Push if any code changed → reset
+  push-invalidated markers per [ground-rules.md](ground-rules.md) /
+  [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
+  `bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule
+  next wakeup, return. If only resolutions (no code changes), re-check this
+  gate without resetting.
 
 ## (f) Mark ready and report
 
-**Mandatory pre-condition checklist.** Before calling `update_pull_request`,
-verify ALL seven conditions below. Three are preconditions from the main
-loop (bugbot clean, bugteam convergence, no intervening push); four are
-evidence from gates (a)–(e) above. All seven must be confirmed:
+**Machine pre-condition checklist.** Run the script — do not hand-check labels:
 
-- [ ] `bugbot_clean_at == current_head` (from per-tick.md Step 2 BUGBOT §c)
-- [ ] bugteam `convergence (zero findings)` at `current_head` (from per-tick.md Step 2 BUGTEAM §d)
-- [ ] `copilot_clean_at == current_head` (from gate (a) or gate (d)), or the Copilot gate bypassed for the run via `copilot_down`
-- [ ] Claude `APPROVED` or absent at `current_head` (from gate (b))
-- [ ] `mergeable_state == "clean"` AND `mergeable == true` (from gate (c))
-- [ ] Zero unresolved review threads anywhere on the PR (from gate (e))
-- [ ] No push since bugteam convergence (from per-tick.md Step 2 BUGTEAM §b)
+```
+python $HOME/.claude/skills/pr-converge/scripts/check_convergence.py \
+  --owner <O> --repo <R> --pr-number <N> \
+  [--bugbot-down] [--copilot-down]
+```
 
-If ANY checkbox cannot be confirmed with evidence, do NOT mark ready.
-Report the specific missing condition and route through the appropriate
-fix path (BUGBOT for dirty reviews, rebase for merge conflicts, etc.).
+Ready means exit `0` and the line:
 
-Only when ALL seven conditions are confirmed:
+```
+All pre-conditions met — PR is ready to mark ready.
+```
+
+Exact printed labels (script order):
+
+1. `bugbot_clean_at == current_head`
+2. `bugbot review body clean` (omitted when `bugbot_down`)
+3. `bugteam_clean_at == current_head`
+4. `copilot_clean_at == current_head`
+5. `zero unresolved bot threads`
+6. `PR is mergeable`
+7. `no pending requested reviews`
+
+On label 5: `isOutdated == true` excludes the thread; bot filter is login
+substrings `cursor` | `claude` | `copilot` only. The script has no Claude
+APPROVED review gate.
+
+**Agent-side only (not script conditions):** Claude reviewer presence or
+APPROVED state (gate (b)); broader non-bot thread sweeps; loop preconditions
+such as no push since bugteam convergence. Confirm those in the agent path
+before invoking the script; they never appear as `check_convergence.py` labels.
+
+When the script fails (exit 1), do NOT mark ready. Report the FAIL label and
+route through the matching fix path (BUGBOT for dirty reviews, rebase for
+merge conflicts, and so on).
+
+When the script passes (exit 0):
 
 Use the `update_pull_request` MCP tool:
 
@@ -220,7 +258,5 @@ Use the `update_pull_request` MCP tool:
 
 With `state.json`, append convergence row to
 `<TMPDIR>/pr-converge-<session_id>/converged.log` per `multi-pr-orchestration.md` §Memory; else skip.
-Report: `PR #<NUMBER> converged: bugbot CLEAN at <SHA>, bugteam CLEAN at
-<SHA>, mergeable_state clean, copilot CLEAN at <SHA>, claude <APPROVED|absent>
-at <SHA>, 0 unresolved threads across PR; marked ready for review`.
-**Omit loop pacing** per **Convergence** of active pacing workflow.
+Report from the script's PASS lines (the seven labels above). **Omit loop
+pacing** per **Convergence** of active pacing workflow.

@@ -30,23 +30,13 @@ string is absent after scanning, report `pr-converge requires
 ScheduleWakeup; aborting` and stop.
 
 Call `EnterWorktree` with no arguments before any API call, file read, or
-edit. Agent-view sessions start in the shared checkout. While Write/Edit
-tools auto-isolate on first use, Bash calls (`gh`, `git`) do not trigger
-isolation and will modify shared state. This step is mandatory — do not
-proceed to any state-modifying operation until the working directory
-contains `.claude/worktrees/`. If `EnterWorktree` fails, report the failure
-and stop; do not continue in place.
+edit. Agent-view sessions start in the shared checkout; Bash (`gh`, `git`)
+does not auto-isolate. Do not proceed until the working directory contains
+`.claude/worktrees/`. If `EnterWorktree` fails, report the failure and stop.
 
-`EnterWorktree` isolates the session's **own** repo. When the PR under
-convergence shares that repo, its worktree is where the CODE_REVIEW phase
-runs. When the PR lives in a different repo, `EnterWorktree` cannot
-re-root into it; Step 1.5 resolves a **PR worktree** — a checkout of the
-PR's repo on its head branch — and routes the working directory into it.
-Routing the working directory into the PR's repo is routine and
-automatic, never a fork to pause on. The Pre-flight `.claude/worktrees/`
-gate covers the session repo's own isolation; for a cross-repo PR the
-working directory routes into the PR's repo for local work and returns to
-the session worktree before teardown. See
+`EnterWorktree` isolates the session repo. When the PR lives in a different
+repo, Step 1.5 routes the working directory into a **PR worktree** of that
+repo on its head branch (routine, never a pause). See
 [`reference/per-tick.md` § Step 1.5](reference/per-tick.md).
 
 ## Resume from a prior run
@@ -72,47 +62,23 @@ signals.
 
 ## Copilot findings — tier, verify, then route
 
-The Copilot step tiers each finding it surfaces. A **self-healing** finding is
-pure style, type hints, misplaced or unused imports, formatting, magic-value
-extraction, a test-only change, a doc-or-description vs code mismatch, or code
-de-duplication — a fix that cannot change observable runtime behavior for
-production callers. Self-healing findings flow into the existing fix tick and
-count toward convergence, with no user alert. The tick-paced loop holds them
-naturally: the fix lands on `current_head`, the next tick re-checks, and the run
-converges when the Copilot step is clean.
+Tier, verify, and route each Copilot finding via
+[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) (self-healing
+auto-fix; code-concern verify then confirmed / refuted / inconclusive).
 
-A **code-concern** finding is behavior-changing or needs a product decision:
-logic or correctness, security, data handling, error-handling semantics, or
-concurrency. Tier a finding as code-concern whenever the tier is in doubt.
+**pr-converge phase routing after triage:**
 
-Each code-concern finding goes to a verifier before any routing — the same
-three-verdict standard the single-run gate applies, at this tick's Copilot step.
-A verdict is conclusive only when an actual check ran: the verifier executes a
-command against the flagged HEAD and captures its output. Reading the source
-never produces a conclusive verdict. The verdict carries
-`{ verdict, checkCommand, checkOutput, evidence }`; a conclusive verdict with an
-empty `checkCommand` or `checkOutput` downgrades to inconclusive.
-
-- **confirmed** — the check reproduces the defect. The finding joins the fix tick
-  carrying its repro, and the fix re-runs that same check, adds a regression test
-  where the suite covers the surface, lands in one commit, pushes, and replies on
-  the thread with the fix SHA and the before/after output. No page.
-- **refuted** — the check shows the code already behaves correctly in the exact
-  scenario the finding claims is broken. The tick replies on the thread with the
-  command and output, resolves it, and counts it clean. No page.
-- **inconclusive** — everything else, and the verifier's default: no runnable
-  check exists, the check is infeasible here, the results are ambiguous, or the
-  fix needs a product decision. Any doubt sorts here.
-
-On one or more inconclusive findings, do not auto-fix them and do not let the
-tick mark the PR ready. Run the
-[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate: send the
-ntfy alert with the per-finding summary and evidence note and the Copilot review
-link, then hold for the user's response on a 45-minute deadline that spans
-ticks — carry the deadline in the run's persisted state so each tick reads it on
-entry. Act on the user's direction when it arrives inside the window; when the
-deadline passes with no response, run teardown and report the inconclusive
-findings un-reviewed.
+- Self-healing and **confirmed** findings join the fix tick on `current_head`;
+  after push, reset clean-at SHAs, set `phase = CODE_REVIEW`, return to Step 5.
+- **Refuted** findings resolve clean on the thread; no phase change.
+- One or more **inconclusive** findings: do not mark ready. Run the triage
+  skill's user gate (ntfy + 45-minute hold across ticks; persist the deadline so
+  each tick reads it on entry). Act on the user's direction inside the window;
+  on timeout, teardown and report the findings un-reviewed.
+- Enter `COPILOT_WAIT` only from gate (d) after requesting a Copilot review
+  (Step 7 → 7a). Stay on `COPILOT_WAIT` until a review surfaces at
+  `current_head`, `copilot_wait_count >= 3` hard-blocks, or `copilot_down`
+  skips the Copilot path entirely.
 
 ## Budget-aware tick boundaries
 
@@ -160,7 +126,7 @@ truth for a resumed tick; the handoff copy is the pointer a fresh session reads
 when `$CLAUDE_JOB_DIR` is gone.
 
 Fields: `phase`, `tick_count`, `bugbot_clean_at`, `code_review_clean_at`,
-`bugteam_clean_at`, `copilot_clean_at`, `current_head`,
+`bugteam_clean_at`, `copilot_clean_at`, `merge_state_status`, `current_head`,
 `bugbot_acknowledged_at`, `bugbot_down`, `copilot_down`,
 `bugteam_skill_invoked_at_head`, `bugteam_skill_invoked_at_tick`,
 `agents_session_id`, `persistent_agents`.
@@ -219,14 +185,17 @@ post a fresh PR in a fresh branch based on origin main to the user.
   (string, not an object). Always check the correct fields and use
   case-insensitive substring matching on login values, never strict
   equality.
-- **`is_outdated` is informational, not a skip flag** — GitHub marks a
-  thread `is_outdated=true` when the line it anchors to has changed since
-  the comment was posted. The original concern can still apply to current
-  code (the fix may have moved, not landed). The convergence gate counts
-  every thread with `is_resolved == false` regardless of `is_outdated`.
-  Outdated threads must be verified against current HEAD and either
-  fix-and-resolved or just resolved (with an inline reply explaining why
-  the concern no longer applies).
+- **`isOutdated` has dual scope** — GitHub marks a thread `isOutdated=true`
+  when the line it anchors to has changed since the comment was posted. The
+  machine gate (`check_convergence.py` / [convergence-gates.md](reference/convergence-gates.md)
+  gate (e)) excludes `isOutdated == true` bot threads from the fail count —
+  only non-outdated unresolved bot threads fail the gate. The agent-side
+  unresolved-thread sweep in the shared fix protocol
+  ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md)
+  step 12; skill deltas in [`reference/fix-protocol.md`](reference/fix-protocol.md))
+  still verifies outdated unresolved threads against HEAD before resolve when
+  the protocol requires it (the original concern can still apply when the fix
+  moved rather than landed).
 - **Tilde paths fail on Windows Git Bash** — `~/.claude/skills/...`
   resolves to the wrong home directory in Bash-tool contexts. Use
   `$HOME/.claude/skills/...` in shell invocations or `Path.home() /
@@ -250,7 +219,7 @@ post a fresh PR in a fresh branch based on origin main to the user.
 ## Progress checklist
 
 State variables (`phase`, `bugbot_clean_at`, `code_review_clean_at`,
-`copilot_clean_at`, counters) are
+`bugteam_clean_at`, `copilot_clean_at`, `merge_state_status`, counters) are
 defined in [`reference/state-schema.md`](reference/state-schema.md). Ground rules
 in [`reference/ground-rules.md`](reference/ground-rules.md).
 
@@ -259,9 +228,10 @@ script invocations, decision criteria. Every "return to Step N" means the next
 tick starts fresh from that step.
 
 **Hard gate: do not advance from any step while ANY unresolved review
-thread exists on the PR.** The sweep semantics and per-thread handling live
-in the `pr-fix-protocol` skill's unresolved-thread sweep
-(`../pr-fix-protocol/SKILL.md`).
+thread exists on the PR.** Sweep semantics and per-thread handling live in
+the shared fix protocol
+([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md)
+step 12; skill deltas in [`reference/fix-protocol.md`](reference/fix-protocol.md)).
 
 **Full-PR-diff rule: every CODE-REVIEW round (Step 5) and every BUGTEAM
 round (Step 6) covers the FULL `origin/main...HEAD` diff — every file
@@ -277,8 +247,8 @@ round as converged. This rule holds every tick, every loop, every PR.
       (`../pr-loop-lifecycle/SKILL.md`): permission grant + worktree preflight.
 
 - [ ] **Step 1: Resolve PR scope + PR worktree**
-      Apply the `pr-scope-resolve` skill (`../pr-scope-resolve/SKILL.md`)
-      with caller `pr-converge`. Resolve the **PR
+      Apply Step 1.5 scope resolution in
+      [`reference/per-tick.md`](reference/per-tick.md). Resolve the **PR
       worktree** — the local checkout every local step this tick targets:
       the `EnterWorktree` checkout when the PR shares the session's repo,
       else a checkout of the PR's repo that the working directory routes
@@ -300,194 +270,77 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] not mergeable → rebase → force-push → return to Step 1
 
 - [ ] **Step 4: BUGBOT — terminal Bugbot confirmation gate**
-      The terminal external gate. Step 6 routes here after BUGTEAM converges, so
-      Bugbot confirms code the internal passes already drove to clean.
-      See: [`reference/per-tick.md` § BUGBOT terminal gate + Step 3](reference/per-tick.md)
+      Step 6 routes here after BUGTEAM converges. Bugbot confirms code the
+      internal passes already drove to clean.
+      See: [`reference/per-tick.md` § BUGBOT terminal gate + Step 3](reference/per-tick.md);
+      availability and trigger via `reviewer-gates`
+      (`../reviewer-gates/SKILL.md` § Gate 1 / Gate 3).
 
-      - [ ] **Availability gate (runs first, every BUGBOT entry).**
-            Gate semantics live in the `reviewer-gates` skill
-            (`../reviewer-gates/SKILL.md` § Gate 1). Cursor Bugbot is off by default and runs only when `CLAUDE_REVIEWS_ENABLED` lists `bugbot`; a `bugbot` token in `CLAUDE_REVIEWS_DISABLED` keeps it off even then.
-            `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
-            - [ ] Exit 0 (Bugbot disabled for this run — the default) → set `bugbot_down = true`, advance to the Step 7 convergence gates (no trigger, no wait, no agent). Cursor Bugbot is skipped for the entire run.
-            - [ ] Exit 1 → continue below.
+      - [ ] **disabled / down** → `bugbot_down = true` → Step 7
+      - [ ] **dirty on `current_head`** → apply shared fix protocol
+            ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md);
+            skill deltas in [`reference/fix-protocol.md`](reference/fix-protocol.md))
+            → push → reset push-invalidated markers → `phase = CODE_REVIEW` → Step 5
+      - [ ] **clean on `current_head`** → zero unresolved threads (else fix + resolve first)
+            → `bugbot_clean_at = current_head` → Step 7
+      - [ ] **no review / commit_id mismatch** → `reviewer-gates` Bugbot flow (Gate 3):
+            silent pass → stamp + Step 7; queued/triggered → 360s wakeup → Step 4;
+            down → `bugbot_down = true` → Step 7
 
-      Fetch bugbot reviews + inline comments on `current_head`.
+- [ ] **Step 5: CODE-REVIEW — static sweep, review, fix, advance**
+      Entry phase every tick; re-entered after any fix push.
+      See: [`reference/per-tick.md` § CODE_REVIEW entry](reference/per-tick.md).
+      Pre-condition: cwd is the Step 1.5 PR worktree on `current_head`.
+      Scope: FULL `origin/main...HEAD` diff every tick (no path args, no delta cut).
 
-      - [ ] **dirty** (findings on `current_head`) →
-            - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to this tick's findings
-            - [ ] Push → reset `bugbot_clean_at = null`, `code_review_clean_at = null` → `phase = CODE_REVIEW` → return to Step 5
-      - [ ] **clean** (no findings on `current_head`) →
-            - [ ] Count ALL unresolved threads on PR (`is_resolved == false`) → zero? advance; >0? fix + resolve first
-            - [ ] `bugbot_clean_at = current_head`
-            - [ ] Advance to the Step 7 convergence gates
-      - [ ] **no review yet / commit_id mismatch** →
-            Apply the `reviewer-gates` skill's Bugbot flow
-            (`../reviewer-gates/SKILL.md` § Gate 3) against `current_head`,
-            then map its outcomes:
-            - [ ] Silent pass → `bugbot_clean_at = current_head` → advance to the Step 7 convergence gates
-            - [ ] Already queued, or trigger acknowledged → schedule 360s wakeup → return to Step 4 next tick
-            - [ ] Bugbot down → `bugbot_down = true` → advance to the Step 7 convergence gates (bypass)
-- [ ] **Step 5: CODE-REVIEW — entry phase: static sweep, review, fix, advance**
-      The first internal step of every convergence tick (Step 2 seeds
-      `phase = CODE_REVIEW`), re-entered after any fix push.
-      See: [`reference/per-tick.md` § CODE_REVIEW entry](reference/per-tick.md)
-
-      Pre-condition: the working directory is the Step 1.5 PR worktree on
-      `current_head` (`git rev-parse --show-toplevel` is that checkout).
-      When the session is rooted in a different repo than the PR, `cd`
-      into the PR worktree first — `/code-review` audits the repo of the
-      current working directory, so this routing targets the real PR
-      diff. This `cd` is routine and automatic.
-
-      - [ ] **Static sweep — runs first, before `/code-review`.** Run the
-            deterministic gates over the full `origin/main...HEAD` changed files:
-            `python "$HOME/.claude/_shared/pr-loop/scripts/code_rules_gate.py" --base origin/main`,
-            `ruff`, `mypy`, and stem-matched `pytest`.
-            - [ ] Any failure → apply the `pr-fix-protocol` skill
-                  (`../pr-fix-protocol/SKILL.md`), commit/push, reset
-                  `bugbot_clean_at = null` and `code_review_clean_at = null`, stay
-                  `phase = CODE_REVIEW`, and re-run (return to Step 5).
-            - [ ] Clean → run `/code-review` below.
-
-      Run Claude Code's built-in `/code-review high --fix` on the full
-      `origin/main...HEAD` diff —
-      the [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally)
-      — so it reviews the diff and applies its findings to the working
-      tree. Invoke `/code-review high --fix` so the pre-catch pass gets broad
-      coverage regardless of the session's current effort.
-
-      **Scope: the FULL `origin/main...HEAD` diff every tick** — every file
-      the PR touches. Do not delta-scope to commits added since the prior
-      clean SHA, do not scope to a single file, do not scope to bugbot's
-      flagged paths. Before running, confirm the working tree is on the
-      PR's HEAD with no uncommitted edits, then invoke `/code-review high --fix`
-      with no path arguments so it audits the whole branch diff against
-      `origin/main`. A partial-scope round does not count and cannot set
-      `code_review_clean_at`.
-
-      - [ ] **fixes applied** (working tree changed) →
-            - [ ] Commit the applied fixes (one commit) → push
-            - [ ] reset `bugbot_clean_at = null`, `code_review_clean_at = null`
-            - [ ] stay `phase = CODE_REVIEW` → return to Step 5 (internal-first)
-      - [ ] **clean** (no changes applied) →
-            - [ ] Zero unresolved threads per the `pr-fix-protocol` sweep (`../pr-fix-protocol/SKILL.md`) → advance; else fix + resolve first (same skill)
-            - [ ] `code_review_clean_at = current_head`
-            - [ ] `phase = BUGTEAM` → advance to Step 6
+      - [ ] **Static sweep fails** → apply shared fix protocol → push → reset markers
+            → stay CODE_REVIEW → Step 5
+      - [ ] **`/code-review high --fix` applies fixes** → commit + push → reset markers
+            → stay CODE_REVIEW → Step 5
+      - [ ] **clean** → zero unresolved threads (else fix + resolve) →
+            `code_review_clean_at = current_head` → `phase = BUGTEAM` → Step 6
 
 - [ ] **Step 6: BUGTEAM — run, decide, fix, reply, resolve**
       See: [`reference/per-tick.md` § Step 2 BUGTEAM](reference/per-tick.md);
-      [`../bugteam/SKILL.md`](../bugteam/SKILL.md)
-
+      [`../bugteam/SKILL.md`](../bugteam/SKILL.md).
       Pre-condition: `code_review_clean_at == current_head`.
+      Mandatory: `Skill({skill: "bugteam", args: "<PR URL>"})` this tick
+      (enforcer-blocked otherwise; `qbug` is not a substitute). Scope: FULL
+      `origin/main...HEAD` diff. Re-resolve HEAD after bugteam.
 
-      Step 6 advances ONLY after `Skill({skill: "bugteam", args: "<PR URL>"})`
-      fires this tick. Substituting an `Agent({subagent_type: "clean-coder"})`
-      audit call for the formal Skill invocation is a protocol violation — the
-      `pr_converge_bugteam_enforcer` hook blocks it. `qbug` is NOT an accepted
-      substitute; `bugteam` is the only allowed skill at this step.
-
-      **Scope: the FULL `origin/main...HEAD` diff every tick** — every file
-      the PR touches. Pass the PR URL as the sole argument so bugteam audits
-      the whole branch diff against `origin/main`. Do not pass a file list,
-      a path filter, a commit range, or any "just the new commits since
-      last clean" cut — bugteam owns its own discovery on the full PR diff.
-      A partial-scope round does not count and cannot satisfy the
-      converged-on-current-HEAD condition below.
-
-      After bugteam completes, re-resolve HEAD.
-
-      - [ ] **bugteam pushed new commits** →
-            - [ ] Verify all bugteam review threads replied + resolved
-            - [ ] reset `bugbot_clean_at = null`, `code_review_clean_at = null`
-            - [ ] `phase = CODE_REVIEW` → schedule 360s wakeup → return to Step 5
-      - [ ] **converged (zero findings), no push** →
-            - [ ] Count ALL unresolved threads on PR (`is_resolved == false`) → zero? advance; >0? fix + resolve first
-            - [ ] `phase = BUGBOT` → advance to Step 4 (terminal Bugbot gate)
-      - [ ] **findings without committed fixes** →
-            - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to the findings
-            - [ ] Push → reset `bugbot_clean_at = null`, `code_review_clean_at = null` → `phase = CODE_REVIEW` → return to Step 5
+      - [ ] **bugteam pushed** → verify threads replied + resolved → reset markers
+            → `phase = CODE_REVIEW` → 360s wakeup → Step 5
+      - [ ] **converged, no push** → zero unresolved threads →
+            `bugteam_clean_at = current_head` → `phase = BUGBOT` → Step 4
+      - [ ] **findings without committed fixes** → apply shared fix protocol → push →
+            reset markers → `phase = CODE_REVIEW` → Step 5
 
 - [ ] **Step 7: Convergence gates**
-      See: [`reference/convergence-gates.md`](reference/convergence-gates.md)
+      Full procedure: [`reference/convergence-gates.md`](reference/convergence-gates.md).
 
       Pre-condition: Step 6 converged AND (`bugbot_clean_at == current_head` OR
       `bugbot_down`). The terminal Bugbot gate (Step 4) sets that state just
-      before these gates run.
-      Count unresolved threads before each gate.
+      before these gates run. Count unresolved threads before each gate.
+      Every gate records evidence; gate (f) cites evidence from (a)–(e).
 
-      **(a) Universal unresolved-thread sweep**
-      - [ ] Fetch ALL unresolved threads on the PR:
-            ```
-            pull_request_read(method="get_review_comments")
-              → filter threads where is_resolved == false
-            ```
-      - [ ] Any unresolved? → apply the `pr-fix-protocol` skill's unresolved-thread sweep (`../pr-fix-protocol/SKILL.md`). Push if any code changed → reset markers → `phase = CODE_REVIEW` → return to Step 5
-      - [ ] When `copilot_down == true` (start-of-run quota pre-check), skip the Copilot fetch below — no request, no poll, no agent — and continue to gate (b); the Copilot gate is bypassed for the whole run.
-      - [ ] Fetch Copilot review on `current_head` (top-level review state — uses get_reviews, identifies by reviewer):
-            ```
-            python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
-            ```
-      - [ ] dirty → apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) → push → reset markers → `phase = CODE_REVIEW` → return to Step 5
-      - [ ] clean (no findings) → `copilot_clean_at = current_head` → gate (b)
-      - [ ] no review yet → gate (b)
-
-      **(b) Mergeability re-check**
-      ```
-      pull_request_read(method="get") → .mergeable_state, .mergeable
-      ```
-      - [ ] mergeable → gate (c)
-      - [ ] not mergeable → rebase → push → return to Step 1
-
-      **(c) Request Copilot review**
-      - [ ] When `copilot_down == true`, skip the request and do not enter COPILOT_WAIT — continue to gate (d); the run marks ready on the remaining signals.
-      - [ ] Check for pending Copilot review:
-            ```
-            python ~/.claude/skills/pr-converge/scripts/check_pending_reviews.py --owner <O> --repo <R> --pr-number <N>
-              → filter by copilot user
-            ```
-      - [ ] Pending review already exists → skip request → gate (d)
-      - [ ] No pending review → request:
-            ```
-            gh api --method POST repos/<O>/<R>/pulls/<N>/requested_reviewers \
-              -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
-            ```
-      - [ ] `phase = COPILOT_WAIT` → schedule 360s wakeup → return to Step 7a next tick
-
-      **(d) Thread resolution — author-agnostic, outdated-agnostic**
-      ```
-      pull_request_read(method="get_review_comments")
-        → count threads where is_resolved == false
-      ```
-      - [ ] zero unresolved → gate (e)
-      - [ ] unresolved → apply the `pr-fix-protocol` skill's unresolved-thread sweep (`../pr-fix-protocol/SKILL.md`). Push if code changed → reset markers → `phase = CODE_REVIEW` → return to Step 5
-
-      **(e) Mark ready**
-      - [ ] For each reviewer that is down, pass its convergence-check bypass flag and export its matching `CLAUDE_REVIEWS_DISABLED` token in this tick's shell before marking ready, per the flag-per-condition table in [`../reviewer-gates/SKILL.md`](../reviewer-gates/SKILL.md) § "Convergence-check bypass flags". The token carries the bypass into the independent mark-ready blocker hook, which re-runs the check with no flags.
-      - [ ] Run automated convergence check (append the flag for any down reviewer):
-            ```
-            python $HOME/.claude/skills/pr-converge/scripts/check_convergence.py \
-              --owner <O> --repo <R> --pr-number <N>
-            ```
-      - [ ] Exit 0 (all pass) → `update_pull_request(draft=false)` → advance to Step 8
-      - [ ] Exit 1 (FAIL lines) → address each failure → reset markers → `phase = CODE_REVIEW` → return to Step 5
-      - [ ] Exit 2 (gh error) → retry once; persistent → stop
+      - [ ] **(a) Copilot findings** — fetch Copilot on `current_head`; dirty → fix + return to Step 5; clean → stamp `copilot_clean_at`; absent → continue; when `copilot_down`, skip
+      - [ ] **(b) Claude reviewer** — fetch Claude on `current_head`; dirty → fix + return to Step 5; clean or absent → continue
+      - [ ] **(c) Mergeability** — `mergeable_state == "clean"` and `mergeable == true`; dirty → rebase + return to Step 1; blocked/behind/unknown/unstable → hard blocker
+      - [ ] **(d) Post-convergence Copilot request** — request Copilot when not pending and not `copilot_down`; enter `COPILOT_WAIT` (Step 7a); when `copilot_down`, skip to (e)
+      - [ ] **(e) Thread-resolution** — zero unresolved threads across the PR; else sweep + fix/resolve
+      - [ ] **(f) Mark ready** — run `check_convergence.py`; exit 0 → `update_pull_request(draft=false)` → Step 8; exit 1 → fix path; exit 2 → retry/stop
 
 - [ ] **Step 7a: COPILOT_WAIT — fetch Copilot, decide**
-      See: [`reference/per-tick.md` § Step 2 COPILOT_WAIT](reference/per-tick.md)
+      See: [`reference/per-tick.md` § Step 2 COPILOT_WAIT](reference/per-tick.md).
+      Skipped entirely when `copilot_down` (gate (d) never enters this phase).
 
-      This step does not run when `copilot_down == true`: gate (c) skips the
-      Copilot request, so the loop never enters COPILOT_WAIT.
-
-      Fetch Copilot reviews + inline comments on `current_head`.
-
-      - [ ] **clean (no findings)** →
-            `copilot_clean_at = current_head` → return to Step 7 (re-validate gates b, d, e)
-      - [ ] **dirty (findings present)** →
-            - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to the findings
-            - [ ] Push → reset markers → `phase = CODE_REVIEW` → return to Step 5
-      - [ ] **no review yet** →
-            increment `copilot_wait_count` → ≥ 3 = hard blocker → stop
-            schedule 360s wakeup → return to Step 7a next tick
+      - [ ] **clean** → `copilot_clean_at = current_head` → Step 7 (re-validate (b), (c), (e), (f))
+      - [ ] **dirty** → apply shared fix protocol
+            ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md);
+            skill deltas in [`reference/fix-protocol.md`](reference/fix-protocol.md))
+            → push → reset markers → `phase = CODE_REVIEW` → Step 5
+      - [ ] **no review yet** → increment `copilot_wait_count` → ≥ 3 hard-blocks;
+            else 360s wakeup → Step 7a next tick
 
 - [ ] **Step 8: Clean working tree**
       `pr-loop-lifecycle` Close (`../pr-loop-lifecycle/SKILL.md`).
@@ -516,8 +369,33 @@ round as converged. This rule holds every tick, every loop, every PR.
 | Hard blocker or user stops loop | [`reference/stop-conditions.md`](reference/stop-conditions.md) |
 | Tick is ambiguous against the steps above | [`reference/examples.md`](reference/examples.md) |
 
-## Folder map
+## Depends on / invokes
 
-- `SKILL.md` — this hub.
-- `reference/` — workflow detail per situation.
-- `workflows/` — pacing implementations.
+| Skill / path | Role |
+|---|---|
+| `pr-loop-lifecycle` | Open (permission grant + worktree preflight) and Close (cleanup, PR description, revoke) |
+| `reviewer-gates` | Copilot quota gate, Bugbot availability, Bugbot trigger flow |
+| `copilot-finding-triage` | Tier, verify, and route each Copilot finding |
+| `bugteam` | Full-diff bug audit in Step 6 (Skill invocation mandatory) |
+| `pr-loop-cloud-transport` | When `gh` is unavailable or unauthenticated |
+| [`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md) | Shared 13-step fix sequence (TDD, commit, push, reply, resolve) |
+| [`reference/fix-protocol.md`](reference/fix-protocol.md) | pr-converge deltas on the shared fix protocol |
+
+## Package file index
+
+| Path | Purpose |
+|---|---|
+| `SKILL.md` | Hub: pre-flight, state, progress checklist, gotchas |
+| `CLAUDE.md` | Package map for agents working in this skill |
+| `pr_converge_skill_constants/` | Importable constants for skill scripts |
+| `reference/per-tick.md` | Full per-tick procedure (phases, cwd routing, pacing) |
+| `reference/convergence-gates.md` | Six gates before mark-ready |
+| `reference/fix-protocol.md` | pr-converge fix-protocol deltas |
+| `reference/ground-rules.md` | Non-negotiable loop constraints |
+| `reference/state-schema.md` | `pr-converge-state.json` fields |
+| `reference/stop-conditions.md` | Hard stops without convergence |
+| `reference/multi-pr-orchestration.md` | Multi-PR session orchestration |
+| `reference/examples.md` | Worked tick sequences |
+| `reference/obstacles/` | Per-obstacle fix runbooks |
+| `scripts/` | Convergence helpers, Copilot fetch, fix-reply poster, tests |
+| `workflows/schedule-wakeup-loop.md` | ScheduleWakeup pacing |
