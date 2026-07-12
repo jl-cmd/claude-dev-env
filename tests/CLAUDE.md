@@ -21,9 +21,30 @@ two `config` packages (repo-root `config/` and
 | Root suite only (`tests/`) | `python -m pytest tests/` |
 | Package suite (`packages/claude-dev-env`) | `python -m pytest packages/claude-dev-env` |
 | Default bare invocation | `python -m pytest` |
+| Parallel (after xdist install) | `python -m pytest tests/ -n auto` |
 
 Bare `python -m pytest` is scoped to `tests/` via `testpaths` in `pytest.ini`.
 It is the same root-suite session as `python -m pytest tests/`.
+
+### Parallel runs (`pytest-xdist`)
+
+Install the optional dev extra (or the plugin alone):
+
+```bash
+pip install -e "packages/claude-dev-env[dev]"
+# or: pip install pytest-xdist
+```
+
+Then pass `-n auto` on a **single** suite session (same split as serial):
+
+```bash
+python -m pytest tests/ -n auto
+python -m pytest packages/claude-dev-env -n auto
+```
+
+Do not merge the two suites into one session. CI runs both suite sessions with
+`-n auto` (pytest-xdist is installed in the workflow). Local use is supported
+once the plugin is installed.
 
 Target a single file:
 

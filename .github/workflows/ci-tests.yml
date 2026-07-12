@@ -118,6 +118,7 @@ jobs:
           python -m pytest tests/ \
             --basetemp="$RUNNER_TEMP/pytest-basetemp-root" \
             -q \
+            -n auto \
             "${deselect_args[@]}"
 
       - name: Package suite
@@ -171,6 +172,7 @@ jobs:
           python -m pytest packages/claude-dev-env \
             --basetemp="$RUNNER_TEMP/pytest-basetemp-pkg" \
             -q \
+            -n auto \
             "${deselect_args[@]}"
 
   javascript:
