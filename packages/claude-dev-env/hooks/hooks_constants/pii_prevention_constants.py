@@ -187,6 +187,22 @@ ALL_STAGED_FILES_COMMAND: tuple[str, ...] = (
 ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX: tuple[str, ...] = ("git", "show")
 STAGED_BLOB_PREFIX: str = ":"
 
+ALL_GIT_ORIGIN_URL_COMMAND: tuple[str, ...] = (
+    "git",
+    "config",
+    "--get",
+    "remote.origin.url",
+)
+GIT_URL_SUFFIX: str = ".git"
+GITHUB_COM_HOST: str = "github.com"
+ALL_NETWORK_GIT_URL_SCHEMES: frozenset[str] = frozenset({"http", "https", "ssh"})
+SCP_STYLE_PATH_SEPARATOR: str = ":"
+USERINFO_HOST_SEPARATOR: str = "@"
+URL_SCHEME_SEPARATOR: str = "://"
+WINDOWS_PATH_SEPARATOR: str = "\\"
+POSIX_PATH_SEPARATOR: str = "/"
+MINIMUM_OWNER_REPO_SEGMENT_COUNT: int = 2
+
 BODY_FILE_ENCODING: str = "utf-8"
 NULL_BYTE_MARKER: bytes = b"\x00"
 MESSAGE_LINE_SEPARATOR: str = "\n"

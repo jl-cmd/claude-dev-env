@@ -66,6 +66,74 @@ class TestNasValuesPlaceholderDefault:
                 assert local_identity.nas_ssh_port() == 22
 
 
+class TestPiiExemptRepositorySlugs:
+    def should_read_slugs_from_the_environment_lowercased(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"CLAUDE_PII_EXEMPT_REPOS": "ExemptOwner/exempt-repo, Other/Repo"},
+            clear=False,
+        ):
+            slugs = local_identity.pii_exempt_repository_slugs()
+            assert slugs == frozenset({"exemptowner/exempt-repo", "other/repo"})
+
+    def should_read_slugs_from_the_local_identity_file(self, tmp_path: Path) -> None:
+        claude_home = tmp_path / ".claude"
+        claude_home.mkdir()
+        (claude_home / "local-identity.json").write_text(
+            json.dumps({"pii_exempt_repositories": ["FileOwner/file-repo"]}),
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("CLAUDE_PII_EXEMPT_REPOS", None)
+            with patch.object(Path, "home", return_value=tmp_path):
+                slugs = local_identity.pii_exempt_repository_slugs()
+                assert slugs == frozenset({"fileowner/file-repo"})
+
+    def should_return_an_empty_set_when_no_env_and_no_file(
+        self, tmp_path: Path
+    ) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("CLAUDE_PII_EXEMPT_REPOS", None)
+            with patch.object(Path, "home", return_value=tmp_path):
+                assert local_identity.pii_exempt_repository_slugs() == frozenset()
+
+    def should_prefer_environment_slugs_over_local_identity_file(
+        self, tmp_path: Path
+    ) -> None:
+        claude_home = tmp_path / ".claude"
+        claude_home.mkdir()
+        (claude_home / "local-identity.json").write_text(
+            json.dumps({"pii_exempt_repositories": ["FileOwner/file-repo"]}),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"CLAUDE_PII_EXEMPT_REPOS": "EnvOwner/env-repo"},
+            clear=False,
+        ):
+            with patch.object(Path, "home", return_value=tmp_path):
+                slugs = local_identity.pii_exempt_repository_slugs()
+                assert slugs == frozenset({"envowner/env-repo"})
+
+    def should_fall_through_to_json_when_environment_is_whitespace_only(
+        self, tmp_path: Path
+    ) -> None:
+        claude_home = tmp_path / ".claude"
+        claude_home.mkdir()
+        (claude_home / "local-identity.json").write_text(
+            json.dumps({"pii_exempt_repositories": ["FileOwner/file-repo"]}),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"CLAUDE_PII_EXEMPT_REPOS": " , , "},
+            clear=False,
+        ):
+            with patch.object(Path, "home", return_value=tmp_path):
+                slugs = local_identity.pii_exempt_repository_slugs()
+                assert slugs == frozenset({"fileowner/file-repo"})
+
+
 class TestDenyMessagesQuoteTheResolvedHost:
     def should_include_the_resolved_host_and_port_in_the_bare_binary_message(
         self,
