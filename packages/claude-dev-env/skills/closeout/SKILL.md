@@ -41,8 +41,6 @@ Triggers: `/closeout`, "close out this session", "file the session obstacles", "
 
 ## The process
 
-Copy this checklist into your response and mark each phase as you finish it:
-
 ```
 - [ ] Phase 1 — Harvest obstacles from the three sources; quote verbatim evidence
 - [ ] Phase 1 — Run the PII pass over every candidate
