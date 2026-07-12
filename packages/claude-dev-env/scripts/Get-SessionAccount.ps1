@@ -27,7 +27,7 @@ function Test-NoiseEmail {
     return $false
 }
 
-function Get-EncodingAgnosticTextViews {
+function Get-EncodingAgnosticTextView {
     param([string]$FilePath)
     try {
         $fileBytes = [System.IO.File]::ReadAllBytes($FilePath)
@@ -57,7 +57,7 @@ function Get-EmailCandidatesFromProfile {
         $candidateFiles = Get-ChildItem -LiteralPath $scanDirectory -Recurse -File -ErrorAction SilentlyContinue |
             Where-Object { $_.Length -lt $maximumStorageFileBytes }
         foreach ($candidateFile in $candidateFiles) {
-            $decodedTextViews = Get-EncodingAgnosticTextViews -FilePath $candidateFile.FullName
+            $decodedTextViews = Get-EncodingAgnosticTextView -FilePath $candidateFile.FullName
             foreach ($decodedText in $decodedTextViews) {
                 foreach ($match in [regex]::Matches($decodedText, $emailAddressPattern)) {
                     $candidateEmail = $match.Value
@@ -100,7 +100,7 @@ function Write-AccountResult {
     }
 }
 
-function New-SessionAccountResult {
+function Get-SessionAccountResult {
     param(
         [int]$ExitCode,
         [string]$Email = $null,
@@ -127,66 +127,66 @@ function Resolve-SessionAccount {
         [string]$ProfileDirectory
     )
     if (-not (Test-Path -LiteralPath $CliConfigPath)) {
-        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config not found: $CliConfigPath"
+        return Get-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config not found: $CliConfigPath"
     }
 
     try {
         $cliConfig = Get-Content -LiteralPath $CliConfigPath -Raw -ErrorAction Stop | ConvertFrom-Json -AsHashtable -ErrorAction Stop
     }
     catch {
-        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse CLI config as JSON: $CliConfigPath"
+        return Get-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse CLI config as JSON: $CliConfigPath"
     }
 
     if ($cliConfig -isnot [System.Collections.IDictionary]) {
-        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config top level is not a JSON object: $CliConfigPath"
+        return Get-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config top level is not a JSON object: $CliConfigPath"
     }
 
     $oauthAccount = $cliConfig['oauthAccount']
     $cliEmail = if ($oauthAccount) { $oauthAccount['emailAddress'] } else { $null }
     $cliAccountUuid = if ($oauthAccount) { $oauthAccount['accountUuid'] } else { $null }
     if (-not $cliEmail -or -not $cliAccountUuid) {
-        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config is missing oauthAccount.emailAddress or oauthAccount.accountUuid: $CliConfigPath"
+        return Get-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config is missing oauthAccount.emailAddress or oauthAccount.accountUuid: $CliConfigPath"
     }
 
     if (-not $ProfileDirectory -or -not (Test-Path -LiteralPath $ProfileDirectory)) {
-        return New-SessionAccountResult -ExitCode 0 -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'cli-config'
+        return Get-SessionAccountResult -ExitCode 0 -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'cli-config'
     }
 
     $profileConfigPath = Join-Path $ProfileDirectory 'config.json'
     if (-not (Test-Path -LiteralPath $profileConfigPath)) {
-        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config not found: $profileConfigPath"
+        return Get-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config not found: $profileConfigPath"
     }
 
     try {
         $profileConfig = Get-Content -LiteralPath $profileConfigPath -Raw -ErrorAction Stop | ConvertFrom-Json -AsHashtable -ErrorAction Stop
     }
     catch {
-        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse desktop profile config as JSON: $profileConfigPath"
+        return Get-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse desktop profile config as JSON: $profileConfigPath"
     }
 
     if ($profileConfig -isnot [System.Collections.IDictionary]) {
-        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config top level is not a JSON object: $profileConfigPath"
+        return Get-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config top level is not a JSON object: $profileConfigPath"
     }
 
     $profileAccountUuid = $profileConfig['lastKnownAccountUuid']
     if (-not $profileAccountUuid) {
-        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config is missing lastKnownAccountUuid: $profileConfigPath"
+        return Get-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config is missing lastKnownAccountUuid: $profileConfigPath"
     }
 
     if ($profileAccountUuid -eq $cliAccountUuid) {
-        return New-SessionAccountResult -ExitCode 0 -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'desktop-profile (matches cli-config)'
+        return Get-SessionAccountResult -ExitCode 0 -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'desktop-profile (matches cli-config)'
     }
 
     $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $ProfileDirectory -ExcludeEmail $cliEmail)
     if ($candidateEmails.Count -eq 1) {
-        return New-SessionAccountResult -ExitCode 0 -Email $candidateEmails[0] -AccountUuid $profileAccountUuid -Source 'desktop-profile (differs from cli-config)' -CliEmail $cliEmail -CliAccountUuid $cliAccountUuid
+        return Get-SessionAccountResult -ExitCode 0 -Email $candidateEmails[0] -AccountUuid $profileAccountUuid -Source 'desktop-profile (differs from cli-config)' -CliEmail $cliEmail -CliAccountUuid $cliAccountUuid
     }
 
     if ($candidateEmails.Count -eq 0) {
-        return New-SessionAccountResult -ExitCode 1 -ErrorMessage "Desktop profile account ($profileAccountUuid) differs from CLI config, but no candidate email was recovered from profile storage: $ProfileDirectory"
+        return Get-SessionAccountResult -ExitCode 1 -ErrorMessage "Desktop profile account ($profileAccountUuid) differs from CLI config, but no candidate email was recovered from profile storage: $ProfileDirectory"
     }
 
-    return New-SessionAccountResult -ExitCode 1 -ErrorMessage "Desktop profile account ($profileAccountUuid) differs from CLI config, and multiple candidate emails were found in profile storage: $($candidateEmails -join ', ')"
+    return Get-SessionAccountResult -ExitCode 1 -ErrorMessage "Desktop profile account ($profileAccountUuid) differs from CLI config, and multiple candidate emails were found in profile storage: $($candidateEmails -join ', ')"
 }
 
 function Invoke-GetSessionAccount {

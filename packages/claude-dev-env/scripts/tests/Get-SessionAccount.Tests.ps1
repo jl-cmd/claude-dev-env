@@ -318,7 +318,6 @@ Describe 'Resolve-SessionAccount' {
 
 Describe 'Write-AccountResult' {
     It 'writes the account fields as text without cli lines when no CliEmail is given' {
-        $AsJson = $false
         $textLines = Write-AccountResult -Email 'a@company.com' -AccountUuid 'uuid-a' -Source 'cli-config'
         $joinedText = $textLines -join "`n"
 
@@ -329,7 +328,6 @@ Describe 'Write-AccountResult' {
     }
 
     It 'writes the cli account lines as text when a CliEmail is given' {
-        $AsJson = $false
         $textLines = Write-AccountResult -Email 'd@company.com' -AccountUuid 'uuid-d' -Source 'desktop-profile (differs from cli-config)' -CliEmail 'c@company.com' -CliAccountUuid 'uuid-c'
         $joinedText = $textLines -join "`n"
 
