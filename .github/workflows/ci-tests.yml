@@ -77,11 +77,39 @@ jobs:
             .github/ci/known-pending-deselects.txt
           do
             while IFS= read -r node_id || [ -n "${node_id}" ]; do
+              node_id="${node_id//$'\r'/}"
               case "${node_id}" in
                 ''|\#*) continue ;;
               esac
               deselect_args+=(--deselect="${node_id}")
             done < "${list_file}"
+          done
+          expected_deselect_count=0
+          for list_file in \
+            .github/ci/live-post-audit-deselects.txt \
+            .github/ci/windows-semantics-node-ids.txt \
+            .github/ci/known-pending-deselects.txt
+          do
+            while IFS= read -r node_id || [ -n "${node_id}" ]; do
+              node_id="${node_id//$'\r'/}"
+              case "${node_id}" in
+                ''|\#*) continue ;;
+              esac
+              expected_deselect_count=$((expected_deselect_count + 1))
+            done < "${list_file}"
+          done
+          deselect_flag_count=${#deselect_args[@]}
+          echo "deselect flag count=${deselect_flag_count} expected non-comment lines=${expected_deselect_count}"
+          if [ "${deselect_flag_count}" -ne "${expected_deselect_count}" ]; then
+            echo "ERROR: deselect_args length (${deselect_flag_count}) != expected non-comment line count (${expected_deselect_count})"
+            exit 1
+          fi
+          for each_deselect_flag in "${deselect_args[@]}"; do
+            case "${each_deselect_flag}" in
+              *test_fan_out_dispatch.py*)
+                echo "known-pending deselect: ${each_deselect_flag}"
+                ;;
+            esac
           done
           python -m pytest tests/ \
             --basetemp="$RUNNER_TEMP/pytest-basetemp-root" \
@@ -100,11 +128,39 @@ jobs:
             .github/ci/known-pending-deselects.txt
           do
             while IFS= read -r node_id || [ -n "${node_id}" ]; do
+              node_id="${node_id//$'\r'/}"
               case "${node_id}" in
                 ''|\#*) continue ;;
               esac
               deselect_args+=(--deselect="${node_id}")
             done < "${list_file}"
+          done
+          expected_deselect_count=0
+          for list_file in \
+            .github/ci/live-post-audit-deselects.txt \
+            .github/ci/windows-semantics-node-ids.txt \
+            .github/ci/known-pending-deselects.txt
+          do
+            while IFS= read -r node_id || [ -n "${node_id}" ]; do
+              node_id="${node_id//$'\r'/}"
+              case "${node_id}" in
+                ''|\#*) continue ;;
+              esac
+              expected_deselect_count=$((expected_deselect_count + 1))
+            done < "${list_file}"
+          done
+          deselect_flag_count=${#deselect_args[@]}
+          echo "deselect flag count=${deselect_flag_count} expected non-comment lines=${expected_deselect_count}"
+          if [ "${deselect_flag_count}" -ne "${expected_deselect_count}" ]; then
+            echo "ERROR: deselect_args length (${deselect_flag_count}) != expected non-comment line count (${expected_deselect_count})"
+            exit 1
+          fi
+          for each_deselect_flag in "${deselect_args[@]}"; do
+            case "${each_deselect_flag}" in
+              *test_fan_out_dispatch.py*)
+                echo "known-pending deselect: ${each_deselect_flag}"
+                ;;
+            esac
           done
           python -m pytest packages/claude-dev-env \
             --basetemp="$RUNNER_TEMP/pytest-basetemp-pkg" \
