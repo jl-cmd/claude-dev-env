@@ -1,6 +1,6 @@
 # skill-builder
 
-Orchestrates the complete skill-building lifecycle: classify the skill type, scaffold folders, write via `skill-writer`, self-audit against a 38-point checklist, and refine from real usage observations.
+Orchestrates the complete skill-building lifecycle: classify the skill type, scaffold folders, write via `skill-writer`, self-audit against a 33-point checklist, and refine from real usage observations.
 
 **Trigger:** "build a skill", "new skill workflow", "improve this skill", "optimize skill description", "skill development lifecycle".
 
@@ -12,10 +12,10 @@ The expert that enforces craft standards. For quick one-off SKILL.md edits, use 
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Hub — routing, 9-type taxonomy table, core principles, file index |
+| `SKILL.md` | Hub — routing, principles, file index |
 | `references/skill-types.md` | 9-type taxonomy with folder structures per type |
 | `references/progressive-disclosure.md` | Hub pattern, folder conventions, hard rules |
-| `references/self-audit-checklist.md` | 38-point mandatory post-build audit |
+| `references/self-audit-checklist.md` | 33-point mandatory post-build audit |
 | `references/delegation-map.md` | Subagent handoff patterns and transcript guidance |
 | `references/thariq-x-post-skills.json` | Source reference — lessons from building Claude Code skills |
 | `workflows/new-skill.md` | Full lifecycle for new skills (6 steps) |
@@ -40,6 +40,6 @@ The expert that enforces craft standards. For quick one-off SKILL.md edits, use 
 
 ## Conventions
 
-- Every build ends with the 38-point self-audit at `references/self-audit-checklist.md`; fix failures before delivery.
+- Every build ends with the 33-point self-audit at `references/self-audit-checklist.md`; fix failures before delivery.
 - `skill-builder` orchestrates; `skill-writer` authors. The handoff packet must include type, gap analysis, degree-of-freedom assessment, and constraints.
 - The Claude A / Claude B pattern: Claude A (this session) designs; Claude B (subagents) tests by running the built skill on real tasks.
