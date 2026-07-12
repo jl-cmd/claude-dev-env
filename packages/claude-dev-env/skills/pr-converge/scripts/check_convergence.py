@@ -25,7 +25,7 @@ import argparse
 import sys
 from typing import NamedTuple
 
-import _path_setup  # noqa: F401
+import _pr_converge_path_setup  # noqa: F401
 from check_convergence_gates import (
     _check_bot_review,
     _check_bugbot,

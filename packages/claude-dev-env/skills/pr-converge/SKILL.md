@@ -441,7 +441,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] unresolved → apply the `pr-fix-protocol` skill's unresolved-thread sweep (`../pr-fix-protocol/SKILL.md`). Push if code changed → reset markers → `phase = CODE_REVIEW` → return to Step 5
 
       **(e) Mark ready**
-      - [ ] For each reviewer that is down, pass its convergence-check bypass flag and export its matching `CLAUDE_REVIEWS_DISABLED` token in this tick's shell before marking ready, per the flag-per-condition table in [`../reviewer-gates/SKILL.md`](../reviewer-gates/SKILL.md) § "Convergence-check bypass flags". Copilot down uses `--copilot-down` / `copilot`; a blocked bugteam CLEAN post uses `--bugteam-post-blocked` / `bugteam`; Bugbot down uses `--bugbot-down` / `bugbot`. The token carries the bypass into the independent mark-ready blocker hook, which re-runs the check with no flags.
+      - [ ] For each reviewer that is down, pass its convergence-check bypass flag and export its matching `CLAUDE_REVIEWS_DISABLED` token in this tick's shell before marking ready, per the flag-per-condition table in [`../reviewer-gates/SKILL.md`](../reviewer-gates/SKILL.md) § "Convergence-check bypass flags". The token carries the bypass into the independent mark-ready blocker hook, which re-runs the check with no flags.
       - [ ] Run automated convergence check (append the flag for any down reviewer):
             ```
             python $HOME/.claude/skills/pr-converge/scripts/check_convergence.py \

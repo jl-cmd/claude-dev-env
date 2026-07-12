@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-import _path_setup  # noqa: F401
+import _pr_converge_path_setup  # noqa: F401
 from check_convergence_gates import (
     JsonObject,
     ReviewStateGroup,

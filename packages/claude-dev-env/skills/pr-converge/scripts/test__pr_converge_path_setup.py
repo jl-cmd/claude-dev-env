@@ -1,8 +1,8 @@
-"""Importing _path_setup registers the skill and shared pr-loop directories.
+"""Importing _pr_converge_path_setup registers the skill and shared directories.
 
 ::
 
-    import _path_setup
+    import _pr_converge_path_setup
     ok: str(skill_directory) in sys.path
     ok: str(shared_pr_loop_scripts_directory) in sys.path
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import _path_setup  # noqa: F401
+import _pr_converge_path_setup  # noqa: F401
 
 _SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
 

@@ -21,7 +21,7 @@ from types import ModuleType
 
 import pytest
 
-import _path_setup  # noqa: F401
+import _pr_converge_path_setup  # noqa: F401
 from pr_converge_skill_constants.constants import EXIT_CODE_GH_ERROR
 
 _SCRIPTS_DIRECTORY = Path(__file__).absolute().parent

@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 
-import _path_setup  # noqa: F401
+import _pr_converge_path_setup  # noqa: F401
 from pr_converge_skill_constants.constants import (
     ALL_BUGBOT_CHECK_RUN_COMPLETE_CONCLUSIONS,
     BUGBOT_CHECK_RUN_NAME_SUBSTRING,
