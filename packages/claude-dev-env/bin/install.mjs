@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync, realpathSync } from 'node:fs';
-import { join, dirname, resolve, relative } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync, renameSync, realpathSync } from 'node:fs';
+import { join, dirname, resolve, relative, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import { installAllGitHooks } from './git_hooks_installer.mjs';
 import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
 import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -18,6 +19,10 @@ const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json
 const packageRequire = createRequire(import.meta.url);
 
 export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+
+const SKILL_MANIFEST_FILENAME = 'SKILL.md';
+const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
+const PRUNED_SKILLS_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 
 export const CORE_INCLUDE_DIRECTORIES = [
     'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
@@ -94,17 +99,33 @@ function resolveDependencyPackageRoot(dependencyPackageName) {
     return dirname(dependencyPackageJsonPath);
 }
 
+/**
+ * Discovers the install groups contributed by resolvable dependency packages and
+ * the names of the declared dependencies that failed to resolve.
+ *
+ * A dependency that cannot be resolved contributes no group, so its skills never
+ * enter the installed set. The retired-skill prune subtracts the installed set
+ * from the ever-shipped set, so an unresolved dependency whose skills migrated
+ * out of the main package would leave those live skills looking retired. The
+ * returned unresolved-name list lets the caller skip the prune in that degraded
+ * mode rather than delete a live skill.
+ *
+ * @returns {{groups: object, unresolvedDependencyNames: string[]}} The resolvable
+ *   dependency groups keyed by group name, and the names that failed to resolve.
+ */
 function discoverDependencyGroups() {
     const ownPackageJsonPath = join(PACKAGE_ROOT, 'package.json');
     const ownPackageJson = JSON.parse(readFileSync(ownPackageJsonPath, 'utf8'));
     const dependencies = ownPackageJson.dependencies || {};
     const discoveredGroups = {};
+    const unresolvedDependencyNames = [];
     for (const dependencyName of Object.keys(dependencies)) {
         let dependencyRoot;
         try {
             dependencyRoot = resolveDependencyPackageRoot(dependencyName);
         } catch {
             console.error(`  WARNING: Could not resolve dependency ${dependencyName}, skipping`);
+            unresolvedDependencyNames.push(dependencyName);
             continue;
         }
         const dependencyPackageJson = JSON.parse(
@@ -145,8 +166,11 @@ function discoverDependencyGroups() {
         }
         discoveredGroups[groupName] = group;
     }
-    return discoveredGroups;
+    return { groups: discoveredGroups, unresolvedDependencyNames };
 }
+
+const dependencyDiscovery = discoverDependencyGroups();
+const UNRESOLVED_DEPENDENCY_NAMES = dependencyDiscovery.unresolvedDependencyNames;
 
 const INSTALL_GROUPS = {
     core: {
@@ -164,7 +188,7 @@ const INSTALL_GROUPS = {
         description: 'Session logging and memory',
         skills: ['session-log', 'session-tidy'],
     },
-    ...discoverDependencyGroups(),
+    ...dependencyDiscovery.groups,
 };
 
 /**
@@ -606,9 +630,97 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
     return groupCount;
 }
 
-function writeManifest(installedFiles) {
+function writeManifest(installedFiles, skillNames) {
     const manifest = { package: PACKAGE_NAME, version: PACKAGE_VERSION, installedAt: new Date().toISOString(), files: installedFiles };
+    if (skillNames) {
+        manifest.skills = skillNames;
+    }
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
+}
+
+/**
+ * Read the skill directory names the previous install recorded.
+ *
+ * Returns null when no manifest exists or the manifest predates the skills key,
+ * so a caller can treat "unknown prior skills" the same in both cases and lean
+ * on the ever-shipped set to find retired skills.
+ *
+ * @returns {string[]|null} The prior manifest's skill names, or null when absent.
+ */
+function readPriorManifestSkills() {
+    if (!existsSync(MANIFEST_FILE)) return null;
+    try {
+        const priorManifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
+        return Array.isArray(priorManifest.skills) ? priorManifest.skills : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Move retired skill directories a prior install left under ~/.claude/skills into
+ * a timestamped backup directory rather than deleting them.
+ *
+ * A directory is pruned only when the package no longer ships it and either the
+ * prior manifest recorded it or the package once shipped it. Subtracting the
+ * just-installed set from the ever-shipped set at call time means restoring a
+ * skill to the package protects it — it re-enters the installed set and never
+ * counts as retired. Matching is by directory name alone, so a personal
+ * directory a user authored under a name that collides with a retired skill
+ * (for example `code`, `implement`, `refine`, `gotcha`, `caveman`) is treated as
+ * that retired skill and moved to backup; only a name in neither set, and
+ * ~/.claude/skills/_shared, are left in place.
+ *
+ * Each pruned directory is renamed to
+ * ~/.claude/.claude-dev-env-pruned/<timestamp>/<skill-name>/ — a backup root
+ * outside ~/.claude/skills, so a moved directory is never re-discovered as a
+ * skill — under one shared timestamp per run. A backup is never cleaned up, so a
+ * user can recover a wrongly-matched directory. One directory whose rename fails
+ * (for example a read-only file or a cross-device move) is logged and left in
+ * place, never deleted, so a prune failure costs at most a cosmetic leftover.
+ *
+ * @param {Set<string>} installedSkillNames Skill names this install just wrote.
+ * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
+ */
+function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
+    const skillsDirectory = join(CLAUDE_HOME, 'skills');
+    if (!existsSync(skillsDirectory)) return;
+    const retiredSkillNames = new Set(
+        [...EVER_SHIPPED_SKILL_NAMES].filter(skillName => !installedSkillNames.has(skillName))
+    );
+    const priorSkillNames = new Set(priorManifestSkills || []);
+    const runTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupRoot = join(CLAUDE_HOME, PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, runTimestamp);
+    const existingSkillDirs = readdirSync(skillsDirectory, { withFileTypes: true })
+        .filter(entry => entry.isDirectory());
+    for (const skillDir of existingSkillDirs) {
+        const skillName = skillDir.name;
+        if (NEVER_PRUNED_SKILL_DIRECTORIES.has(skillName)) continue;
+        if (installedSkillNames.has(skillName)) continue;
+        const isPruneCandidate = priorSkillNames.has(skillName) || retiredSkillNames.has(skillName);
+        if (!isPruneCandidate) continue;
+        moveRetiredSkillToBackup(skillsDirectory, backupRoot, skillName);
+    }
+}
+
+/**
+ * Move one retired skill directory into the run's backup root, leaving it in
+ * place when the move fails.
+ *
+ * @param {string} skillsDirectory The ~/.claude/skills directory holding the skill.
+ * @param {string} backupRoot The run's timestamped backup directory.
+ * @param {string} skillName The retired skill directory name to move.
+ */
+function moveRetiredSkillToBackup(skillsDirectory, backupRoot, skillName) {
+    const skillPath = join(skillsDirectory, skillName);
+    const backupPath = join(backupRoot, skillName);
+    try {
+        mkdirSync(backupRoot, { recursive: true });
+        renameSync(skillPath, backupPath);
+        console.log(`  ✗ ${join('skills', skillName)} (retired — moved to ${join(PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, basename(backupRoot), skillName)})`);
+    } catch (moveError) {
+        console.warn(`  Warning: could not move retired ${join('skills', skillName)} to backup, leaving in place (${moveError.message})`);
+    }
 }
 
 function install(selectedGroups, options = {}) {
@@ -708,6 +820,7 @@ function install(selectedGroups, options = {}) {
     let skillsCreated = 0;
     let skillsUpdated = 0;
     const skillPaths = [];
+    const installedSkillNames = new Set();
     for (const sourceRoot of allSourceRoots) {
         const skillsSource = join(sourceRoot, 'skills');
         if (!existsSync(skillsSource)) continue;
@@ -718,6 +831,9 @@ function install(selectedGroups, options = {}) {
             skillsCreated += stats.created;
             skillsUpdated += stats.updated;
             skillPaths.push(...stats.paths);
+            if (existsSync(join(skillsSource, skillDir.name, SKILL_MANIFEST_FILENAME))) {
+                installedSkillNames.add(skillDir.name);
+            }
         }
     }
     summary.skills = { created: skillsCreated, updated: skillsUpdated, paths: skillPaths };
@@ -804,7 +920,21 @@ function install(selectedGroups, options = {}) {
         allInstalledFiles.push(claudeHubDest);
         console.log(`  \u2713 ${relative(CLAUDE_HOME, claudeHubDest)} (hub)`);
     }
-    writeManifest(allInstalledFiles);
+    const isFullInstall = !selectedGroups;
+    const priorManifestSkills = readPriorManifestSkills();
+    let manifestSkillNames = priorManifestSkills;
+    if (isFullInstall) {
+        if (UNRESOLVED_DEPENDENCY_NAMES.length > 0) {
+            console.log(
+                `  Skipping retired-skill prune — unresolved dependency group(s): ${UNRESOLVED_DEPENDENCY_NAMES.join(', ')}. `
+                + 'A skill that migrated to a dependency package would look retired and be moved to backup, so the prune is held until every dependency resolves.',
+            );
+        } else {
+            pruneRetiredSkills(installedSkillNames, priorManifestSkills);
+        }
+        manifestSkillNames = [...installedSkillNames].sort();
+    }
+    writeManifest(allInstalledFiles, manifestSkillNames);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {
         if (summary[directory]) {

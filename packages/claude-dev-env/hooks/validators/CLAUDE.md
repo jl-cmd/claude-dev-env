@@ -34,7 +34,6 @@ A library of check modules used by the validation hooks. Each module focuses on 
 | `todo_checks.py` | TODO/FIXME markers without an associated issue reference |
 | `type_safety_checks.py` | Type-safety rules (no `Any`, no `cast`, no `# type: ignore`) |
 | `useless_test_checks.py` | Tests that check only existence or constant values |
-| `verify_paths.py` | Validates that file paths referenced in code actually exist |
 
 ## Subdirectory
 

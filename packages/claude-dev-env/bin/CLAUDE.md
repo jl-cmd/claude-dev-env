@@ -6,13 +6,22 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 
 | File | Purpose |
 |---|---|
-| `install.mjs` | Main installer: discovers install groups, copies content directories (`rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`), merges hooks into `settings.json`, installs skills, runs `git_hooks_installer.mjs` and `install_mypy_ini.mjs` |
+| `install.mjs` | Main installer: discovers install groups, copies content directories (`rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`), merges hooks into `settings.json`, installs skills, prunes retired skills on a full install, runs `git_hooks_installer.mjs` and `install_mypy_ini.mjs` |
+| `ever-shipped-skills.mjs` | Static `EVER_SHIPPED_SKILL_NAMES` set of every top-level skill directory name the package has shipped; the installer subtracts the current skill set from it to prune retired skills left under `~/.claude/skills` |
 | `expand_home_directory_tokens.mjs` | Expands residual `$HOME` / `${HOME}` / `~/` tokens in settings.json hook and statusLine commands to absolute home paths at install time (literal-safe for homes that contain `$`) |
 | `git_hooks_installer.mjs` | Installs or updates the `pre-commit`, `pre-push`, and `post-commit` Git hooks in the user's git config; writes hook scripts that delegate to the installed Python hooks |
 | `install_mypy_ini.mjs` | Writes `~/.mypy.ini` with settings that make mypy find the hooks package and enforce strict type checking |
 | `install.test.mjs` | Tests for `install.mjs` — covers conflict detection, interpreter detection, settings merging |
 | `git_hooks_installer.test.mjs` | Tests for `git_hooks_installer.mjs` |
 | `install_mypy_ini.test.mjs` | Tests for `install_mypy_ini.mjs` |
+
+## Retired-skill prune
+
+The full-install prune renames a retired skill directory into a timestamped backup rather than deleting it. Each pruned directory is renamed to `~/.claude/.claude-dev-env-pruned/<timestamp>/<skill-name>/`, a backup root outside `~/.claude/skills` so a backed-up directory is never re-discovered as a skill. Backups accumulate — nothing cleans them — so a user can recover a directory. A rename that fails leaves the directory in place with a logged warning and never falls back to deletion, so a prune failure costs at most a cosmetic leftover.
+
+Matching is by directory name alone, so a user-authored directory whose name collides with a retired skill is backed up as if it were that skill. A directory is pruned when the prior install's manifest recorded it or the ever-shipped set names it, and the current install did not just write it. A name absent from all three of those sets, together with `~/.claude/skills/_shared`, is left in place.
+
+The prune is skipped for the whole run — with a logged notice naming the unresolved group — when any declared dependency group fails to resolve. An unresolved dependency contributes no skills to the installed set, so a live skill that a dependency package supplies would look retired; holding the prune until every dependency resolves keeps such a skill from being backed up.
 
 ## Key exports from install.mjs
 

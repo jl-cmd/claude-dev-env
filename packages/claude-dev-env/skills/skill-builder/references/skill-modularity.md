@@ -84,7 +84,7 @@ In Process or a dedicated **Sub-skills** section:
 
 | Skill | When | Produces |
 |---|---|---|
-| `/pr-scope-resolve` | Step 1 — resolve the PR target | owner, repo, PR number, head ref |
+| `/reviewer-gates` | Step 1 — gate external reviewers | opt-out, Copilot quota, Bugbot trigger decisions |
 | `/skill-writer` | Step 4 — author SKILL.md | skill package files |
 
 If a listed skill is not installed, respond: `[exact refusal or degrade line]`.
