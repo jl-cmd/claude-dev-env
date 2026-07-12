@@ -73,7 +73,7 @@ thread as one atomic action. Do not yield to the lead between the two calls. Do
 not batch all replies before any resolves.
 
 ```
-mcp__plugin_github_github__add_reply_to_pull_request_comment(
+add_reply_to_pull_request_comment(
   owner="<owner>",
   repo="<repo>",
   pullNumber=<number>,
