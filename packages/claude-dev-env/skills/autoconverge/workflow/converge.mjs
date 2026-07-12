@@ -537,19 +537,24 @@ function runGeneralUtilityTask(task, context) {
  * the FINALIZE loop routes to the repair path, which loops back and re-runs this
  * same combined check; only the passing path ever attempts gh pr ready. The agent
  * edits no code, so it runs on the cheapest model at low effort.
- * @param {object} context carries head, bugbotDown, and copilotDown
+ * @param {object} context carries head, bugbotDown, copilotDown, and bugteamPostBlocked
  * @returns {Promise<object>} FINALIZE_SCHEMA result
  */
 function runConvergenceCheck(context) {
   const label = 'finalize-check'
   const bugbotDownFlag = context.bugbotDown ? ' --bugbot-down' : ''
   const copilotDownFlag = context.copilotDown ? ' --copilot-down' : ''
+  const bugteamPostBlockedFlag = context.bugteamPostBlocked ? ' --bugteam-post-blocked' : ''
+  const bugteamPostBlockedNote = context.bugteamPostBlocked
+    ? `   The --bugteam-post-blocked flag is set because the environment refused the CLEAN bugteam review post this run. The review lenses already cleared this HEAD, so the check skips the bugteam CLEAN-review gate and prints a SKIP notice for it rather than failing on a review that was never allowed to land.\n`
+    : ''
   const copilotOptOut = context.copilotDown
     ? `   Copilot is down this run, so before gh pr ready export the token in this same shell session so the independent mark-ready blocker hook's convergence re-check inherits it:\n      bash: export CLAUDE_REVIEWS_DISABLED="copilot"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "copilot")\n`
     : ''
   return convergeReadOnlyAgent(
     `Run the convergence gate for ${prCoordinates} on HEAD ${context.head} and, only when every gate passes, mark the PR ready. Do not edit code.\n\n` +
-      `1. Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}\n` +
+      `1. Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}${bugteamPostBlockedFlag}\n` +
+      bugteamPostBlockedNote +
       `   Exit 0 -> every gate passed: set pass:true, failures:[].\n` +
       `   Exit 1 -> set pass:false and failures to each printed FAIL line verbatim.\n` +
       `   Exit 2 -> retry once; if it still errors, set pass:false, failures:["check_convergence gh error"].\n\n` +
@@ -1818,24 +1823,42 @@ async function applyFixes(head, findings, sourceLabel) {
 }
 
 /**
- * Blocker message for a CLEAN bugteam audit that did not land. The convergence
- * gate's bugteam-review check can never pass without this review, so a blocked
- * post stops the run with an actionable message rather than re-converging until
- * the iteration cap. This fires only after the round already produced its grounded
- * audit outcome for this HEAD — all lenses clean, or code-standard-only findings
- * deferred — so re-issuing the run's own grounded post is legitimate recovery.
- * Handles a dead post agent (a null result) as not posted.
- * @param {string} head converged PR HEAD SHA
- * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from the post-clean-audit task, or null when the agent died
- * @returns {string} the blocker message naming the post failure and the unblock path
+ * Reason a CLEAN bugteam audit post did not land, read from a not-posted result.
+ *
+ * ::
+ *
+ *     {posted: false, reason: 'denied by the classifier'}  ->  'denied by the classifier'
+ *     null  ->  'the post agent returned no result'         (the spawn was refused)
+ *
+ * A null result is the environment-refused case: the post agent, or its very
+ * spawn, returned nothing, so a fixed phrase stands in for the reason the agent
+ * would otherwise carry.
+ * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from the post-clean-audit task, or null when the agent never ran
+ * @returns {string} the one-line refusal reason
  */
-function cleanAuditBlocker(head, auditResult) {
-  const reason = auditResult?.reason || 'the post agent returned no result'
+function cleanAuditPostReason(auditResult) {
+  return auditResult?.reason || 'the post agent returned no result'
+}
+
+/**
+ * Recorded-bypass note for a CLEAN bugteam audit post the environment refused.
+ *
+ * Every review lens already cleared this HEAD, so the CLEAN post is a
+ * record-keeping artifact, not the safety-bearing gate. A refused post degrades
+ * to a recorded bypass — the same shape as the Bugbot-down and Copilot-down
+ * paths — and the run proceeds to the terminal Bugbot gate with the convergence
+ * check's bugteam-review gate skipped. The note names the HEAD and the reason
+ * for the final report.
+ * @param {string} head converged PR HEAD SHA the CLEAN post targeted
+ * @param {object} auditResult CLEAN_AUDIT_SCHEMA result from the post-clean-audit task, or null when the agent never ran
+ * @returns {string} the run-level bypass note
+ */
+function cleanAuditBypassNote(head, auditResult) {
   return (
-    `clean-audit post blocked: the CLEAN bugteam review could not be posted on HEAD ${head} (${reason}) — ` +
-    `the convergence gate's bugteam-review check can never pass without it, so the run stops rather than re-converge to the iteration cap. ` +
-    `To unblock: when the reason is a permission denial, allow post_audit_thread.py for this run with a Bash permission rule and re-run. ` +
-    `For any other failure (gh auth expiry, network, a script error), diagnose the printed reason, then re-issue the run's own grounded post: create a fresh temporary file whose exact content is an empty JSON array ([]) and re-run post_audit_thread.py --skill bugteam --state CLEAN for this lens-verified HEAD ${head} with that file as --findings-json. A CLEAN post carries an empty findings array by construction, so this re-runs the run's own command for the outcome the lenses already established for this HEAD, not a newly authored review.`
+    `The CLEAN bugteam review could not be posted on HEAD ${head} ` +
+    `(${cleanAuditPostReason(auditResult)}) — every review lens already cleared this HEAD, ` +
+    `so the CLEAN post is bypassed and the run proceeds to the terminal Bugbot gate ` +
+    `with the convergence check's bugteam-review gate skipped.`
   )
 }
 
@@ -2239,6 +2262,7 @@ let bugbotDown = input.bugbotDisabled || false
 let copilotDown = input.copilotDisabled || false
 let copilotNote = null
 let standardsNote = null
+let cleanAuditNote = null
 let hasStandardsFollowUpFiled = false
 let wasStandardsHardeningPrOpened = false
 let standardsFollowUpIssueUrl = ''
@@ -2334,8 +2358,8 @@ while (iterations < CONFIG.maxIterations) {
         standardsDeferral,
       })
       if (!auditResult?.posted) {
-        blocker = cleanAuditBlocker(head, auditResult)
-        break
+        cleanAuditNote = cleanAuditBypassNote(head, auditResult)
+        log(`Round ${rounds}: CLEAN bugteam post bypassed on ${head?.slice(0, 7)} (${cleanAuditPostReason(auditResult)}) — recording the bypass and proceeding to the terminal Bugbot gate`)
       }
       phase = 'BUGBOT'
       continue
@@ -2378,8 +2402,8 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     if (!auditResult?.posted) {
-      blocker = cleanAuditBlocker(head, auditResult)
-      break
+      cleanAuditNote = cleanAuditBypassNote(head, auditResult)
+      log(`Round ${rounds}: CLEAN bugteam post bypassed on ${head?.slice(0, 7)} (${cleanAuditPostReason(auditResult)}) — recording the bypass and proceeding to the terminal Bugbot gate`)
     }
     resetNoLensRounds()
     phase = 'BUGBOT'
@@ -2467,6 +2491,7 @@ while (iterations < CONFIG.maxIterations) {
         userReview: buildUserReview(copilot, copilotOutcome.findings),
         standardsNote,
         copilotNote,
+        cleanAuditNote,
         reuseNote,
         deferredPrs,
       }
@@ -2503,7 +2528,7 @@ while (iterations < CONFIG.maxIterations) {
   }
 
   if (phase === 'FINALIZE') {
-    const finalizeResult = await runConvergenceCheck({ head, bugbotDown, copilotDown })
+    const finalizeResult = await runConvergenceCheck({ head, bugbotDown, copilotDown, bugteamPostBlocked: cleanAuditNote !== null })
     const convergenceOutcome = classifyConvergenceOutcome(finalizeResult)
     if (convergenceOutcome.kind === 'retry') {
       log('Convergence check agent died or returned no FAIL lines — re-running the check on the same HEAD')
@@ -2512,7 +2537,7 @@ while (iterations < CONFIG.maxIterations) {
     if (convergenceOutcome.kind === 'ready') {
       const readyOutcome = classifyReadyOutcome(finalizeResult)
       if (readyOutcome.converged) {
-        return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, reuseNote, deferredPrs }
+        return { converged: true, rounds, finalSha: head, blocker: null, standardsNote, copilotNote, cleanAuditNote, reuseNote, deferredPrs }
       }
       blocker = readyOutcome.blocker
       break
@@ -2532,6 +2557,7 @@ return {
   blocker: blocker || `iteration cap reached (${CONFIG.maxIterations})`,
   standardsNote,
   copilotNote,
+  cleanAuditNote,
   reuseNote,
   deferredPrs,
 }

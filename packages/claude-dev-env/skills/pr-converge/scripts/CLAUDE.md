@@ -8,6 +8,8 @@ Python helper scripts for the `pr-converge` skill, plus their tests and a PowerS
 |---|---|
 | `check_bugbot_ci.py` | Checks bugbot CI check-run status on a given SHA |
 | `check_convergence.py` | Evaluates whether all convergence gates pass on the current HEAD |
+| `check_convergence_gates.py` | GitHub REST leaf checks (review and Bugbot) the convergence gates call |
+| `check_convergence_thread_gates.py` | GitHub GraphQL and REST leaf checks (review threads and pending reviewers) the convergence gates call |
 | `check_pending_reviews.py` | Fetches pending review requests and reviewer states |
 | `fetch_copilot_reviews.py` | Fetches Copilot reviewer reviews filtered to the current HEAD |
 | `post_fix_reply.py` | Posts an inline reply to a review comment thread |
