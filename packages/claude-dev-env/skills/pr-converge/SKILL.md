@@ -408,80 +408,30 @@ round as converged. This rule holds every tick, every loop, every PR.
             - [ ] Push → reset `bugbot_clean_at = null`, `code_review_clean_at = null` → `phase = CODE_REVIEW` → return to Step 5
 
 - [ ] **Step 7: Convergence gates**
-      See: [`reference/convergence-gates.md`](reference/convergence-gates.md)
+      Full procedure: [`reference/convergence-gates.md`](reference/convergence-gates.md).
 
       Pre-condition: Step 6 converged AND (`bugbot_clean_at == current_head` OR
       `bugbot_down`). The terminal Bugbot gate (Step 4) sets that state just
-      before these gates run.
-      Count unresolved threads before each gate.
+      before these gates run. Count unresolved threads before each gate.
+      Every gate records evidence; gate (f) cites evidence from (a)–(e).
 
-      **(a) Universal unresolved-thread sweep**
-      - [ ] Fetch ALL unresolved threads on the PR:
-            ```
-            pull_request_read(method="get_review_comments")
-              → filter threads where is_resolved == false
-            ```
-      - [ ] Any unresolved? → apply the `pr-fix-protocol` skill's unresolved-thread sweep (`../pr-fix-protocol/SKILL.md`). Push if any code changed → reset markers → `phase = CODE_REVIEW` → return to Step 5
-      - [ ] When `copilot_down == true` (start-of-run quota pre-check), skip the Copilot fetch below — no request, no poll, no agent — and continue to gate (b); the Copilot gate is bypassed for the whole run.
-      - [ ] Fetch Copilot review on `current_head` (top-level review state — uses get_reviews, identifies by reviewer):
-            ```
-            python ~/.claude/skills/pr-converge/scripts/fetch_copilot_reviews.py --owner <O> --repo <R> --pr-number <N>
-            ```
-      - [ ] dirty → apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) → push → reset markers → `phase = CODE_REVIEW` → return to Step 5
-      - [ ] clean (no findings) → `copilot_clean_at = current_head` → gate (b)
-      - [ ] no review yet → gate (b)
-
-      **(b) Mergeability re-check**
-      ```
-      pull_request_read(method="get") → .mergeable_state, .mergeable
-      ```
-      - [ ] mergeable → gate (c)
-      - [ ] not mergeable → rebase → push → return to Step 1
-
-      **(c) Request Copilot review**
-      - [ ] When `copilot_down == true`, skip the request and do not enter COPILOT_WAIT — continue to gate (d); the run marks ready on the remaining signals.
-      - [ ] Check for pending Copilot review:
-            ```
-            python ~/.claude/skills/pr-converge/scripts/check_pending_reviews.py --owner <O> --repo <R> --pr-number <N>
-              → filter by copilot user
-            ```
-      - [ ] Pending review already exists → skip request → gate (d)
-      - [ ] No pending review → request:
-            ```
-            gh api --method POST repos/<O>/<R>/pulls/<N>/requested_reviewers \
-              -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
-            ```
-      - [ ] `phase = COPILOT_WAIT` → schedule 360s wakeup → return to Step 7a next tick
-
-      **(d) Thread resolution — author-agnostic, outdated-agnostic**
-      ```
-      pull_request_read(method="get_review_comments")
-        → count threads where is_resolved == false
-      ```
-      - [ ] zero unresolved → gate (e)
-      - [ ] unresolved → apply the `pr-fix-protocol` skill's unresolved-thread sweep (`../pr-fix-protocol/SKILL.md`). Push if code changed → reset markers → `phase = CODE_REVIEW` → return to Step 5
-
-      **(e) Mark ready**
-      - [ ] When `copilot_down == true`, export `CLAUDE_REVIEWS_DISABLED="copilot"` in this tick's shell before the check below, so it bypasses the Copilot review gate and the pending-requested-reviews gate.
-      - [ ] Run automated convergence check:
-            ```
-            python $HOME/.claude/skills/pr-converge/scripts/check_convergence.py \
-              --owner <O> --repo <R> --pr-number <N>
-            ```
-      - [ ] Exit 0 (all pass) → `update_pull_request(draft=false)` → advance to Step 8
-      - [ ] Exit 1 (FAIL lines) → address each failure → reset markers → `phase = CODE_REVIEW` → return to Step 5
-      - [ ] Exit 2 (gh error) → retry once; persistent → stop
+      - [ ] **(a) Copilot findings** — fetch Copilot on `current_head`; dirty → fix + return to Step 5; clean → stamp `copilot_clean_at`; absent → continue; when `copilot_down`, skip
+      - [ ] **(b) Claude reviewer** — fetch Claude on `current_head`; dirty → fix + return to Step 5; clean or absent → continue
+      - [ ] **(c) Mergeability** — `mergeable_state == "clean"` and `mergeable == true`; dirty → rebase + return to Step 1; blocked/behind/unknown/unstable → hard blocker
+      - [ ] **(d) Post-convergence Copilot request** — request Copilot when not pending and not `copilot_down`; enter `COPILOT_WAIT` (Step 7a); when `copilot_down`, skip to (e)
+      - [ ] **(e) Thread-resolution** — zero unresolved threads across the PR; else sweep + fix/resolve
+      - [ ] **(f) Mark ready** — run `check_convergence.py`; exit 0 → `update_pull_request(draft=false)` → Step 8; exit 1 → fix path; exit 2 → retry/stop
 
 - [ ] **Step 7a: COPILOT_WAIT — fetch Copilot, decide**
       See: [`reference/per-tick.md` § Step 2 COPILOT_WAIT](reference/per-tick.md)
 
-      This step does not run when `copilot_down == true`: gate (c) skips the
+      This step does not run when `copilot_down == true`: gate (d) skips the
       Copilot request, so the loop never enters COPILOT_WAIT.
 
       Fetch Copilot reviews + inline comments on `current_head`.
 
       - [ ] **clean (no findings)** →
-            `copilot_clean_at = current_head` → return to Step 7 (re-validate gates b, d, e)
+            `copilot_clean_at = current_head` → return to Step 7 (re-validate gates (b), (c), then (e), (f))
       - [ ] **dirty (findings present)** →
             - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to the findings
             - [ ] Push → reset markers → `phase = CODE_REVIEW` → return to Step 5

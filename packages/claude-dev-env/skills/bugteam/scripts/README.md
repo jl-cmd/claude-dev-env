@@ -6,7 +6,7 @@ Scripts in this directory are **executed** by the lead or teammates. They are no
 |--------|---------|
 | `bugteam_preflight.py` | Run pytest (when configured) and optional `pre-commit` before `/bugteam`. |
 | `bugteam_fix_hookspath.py` | Auto-remediate a stale local `core.hooksPath` override, set canonical global value, re-run `bugteam_preflight.py`. Invoked by Claude when preflight reports a `core.hooksPath` failure. |
-| `bugteam_code_rules_gate.py` | Run `validate_content` from `code-rules-enforcer.py` on PR-scoped files (`git diff` vs merge-base). Exit `1` if any mandatory rule fails. Invoked **before each audit**; the fixer clears it before the auditor runs. |
+| `bugteam_code_rules_gate.py` | Local `validate_content` runner on PR-scoped files (`git diff` vs merge-base). Exit `1` if any mandatory rule fails. Present with tests; the pre-audit gate of record is the package-shared `../../_shared/pr-loop/scripts/code_rules_gate.py` (see `reference/audit-and-teammates.md`). |
 | `windows_safe_rmtree.py` | Recursively remove a directory tree on Windows by stripping ReadOnly attributes and retrying the failing syscall. Invoked from SKILL.md Step 4 to delete `<run_temp_dir>` after teardown. |
 | `probe_code_rules_enforcer_check.py` | Dynamically load `~/.claude/hooks/blocking/code_rules_enforcer.py` and invoke a named check function against a fixture file. Used by the historical Copilot gap-analysis investigation as a verification shape (see `reference/copilot-gap-analysis.md`). |
 
