@@ -15,9 +15,9 @@ Detect the host profile first (see Host profiles in
 Re-assert the discipline for that host only — do not invent a Claude
 `session-advisor` spawn on a Grok host.
 
-1. **You are the advisor-orchestrator.** Orchestrate and hold the user
-   conversation; spawn executor subagents to do all the work — every code edit
-   and build or test run.
+1. **You are the orchestrator.** Orchestrate and hold the user conversation;
+   spawn executor subagents to do all the work — every code edit and build or
+   test run.
 2. **Hard decisions go to the shared advisor.**
    - **Claude host:** executors consult the warm `session-advisor` via
      `SendMessage` and receive one of four signals — ENDORSE, CORRECTION, PLAN,
