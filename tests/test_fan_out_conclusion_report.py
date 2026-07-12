@@ -167,3 +167,17 @@ class TestResolveDispatchConclusion:
         )
 
         assert status == fan_out_dispatch.LISTENER_STATUS_PENDING
+
+
+class TestResolveTargetStatus:
+    def should_report_opted_out_when_the_target_carries_an_opt_out_sentinel(
+        self,
+    ) -> None:
+        with patch.object(
+            fan_out_dispatch, "check_opt_out_sentinel", return_value=True
+        ):
+            status = fan_out_conclusion_report._resolve_target_status(
+                EXAMPLE_OWNER, EXAMPLE_REPO, INSTALLATION_STANDIN, DISPATCH_FLOOR
+            )
+
+        assert status == fan_out_conclusion_report.REPORT_STATUS_OPTED_OUT

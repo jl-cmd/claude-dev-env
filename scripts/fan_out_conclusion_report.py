@@ -18,9 +18,11 @@ their own repo list while the private name stays out of a world-readable log.
 
 The correlation floor comes from the ``DISPATCHED_AT`` environment variable the
 workflow records just before the dispatch step. Absent that variable, the
-report's own start time is the floor, a close upper bound on the true dispatch
-moment that over-includes only a listener run started in the gap between the
-report's launch and this read.
+report's own start time stands in as the floor. That time falls after the real
+dispatch, so it risks dropping a listener run created before the report
+launched, logging it as no-matching-run. The workflow always sets
+``DISPATCHED_AT``, so this fallback covers only a standalone run with no
+preceding dispatch.
 
 A workflow lookup that returns neither 200 nor 404 reports as no-matching-run.
 Only a 200 body is trusted. The reused HTTP helper does not tell an auth error
