@@ -12,7 +12,6 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Set
 
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 
@@ -72,13 +71,13 @@ class Violation:
         return f"{self.file}:{self.line}: {self.message}"
 
 
-def check_imports_at_top(tree: ast.AST, filename: str) -> List[Violation]:
+def check_imports_at_top(tree: ast.AST, filename: str) -> list[Violation]:
     """Check that all imports sit at the top of the file.
 
     Flags module-level imports that follow other statements and imports
     nested inside function or method bodies.
     """
-    violations: List[Violation] = []
+    violations: list[Violation] = []
     violations.extend(_check_module_level_import_order(tree, filename))
     violations.extend(_check_no_inline_imports(tree, filename))
     return violations
@@ -97,11 +96,11 @@ def _is_docstring_statement(statement: ast.stmt) -> bool:
     return isinstance(literal, ast.Constant) and isinstance(literal.value, str)
 
 
-def _check_module_level_import_order(tree: ast.AST, filename: str) -> List[Violation]:
+def _check_module_level_import_order(tree: ast.AST, filename: str) -> list[Violation]:
     """Flag module-level imports that appear after other statements."""
     if not isinstance(tree, ast.Module):
         return []
-    violations: List[Violation] = []
+    violations: list[Violation] = []
     has_seen_non_import = False
     for each_statement in tree.body:
         is_import = _is_import_statement(each_statement)
@@ -118,17 +117,17 @@ def _check_module_level_import_order(tree: ast.AST, filename: str) -> List[Viola
     return violations
 
 
-def _check_no_inline_imports(tree: ast.AST, filename: str) -> List[Violation]:
+def _check_no_inline_imports(tree: ast.AST, filename: str) -> list[Violation]:
     """Flag import statements located inside function or method bodies."""
-    violations: List[Violation] = []
+    violations: list[Violation] = []
     for each_function_node in iter_function_definitions(tree):
         violations.extend(_inline_imports_in(each_function_node, filename))
     return violations
 
 
-def _inline_imports_in(function_node: FunctionNode, filename: str) -> List[Violation]:
+def _inline_imports_in(function_node: FunctionNode, filename: str) -> list[Violation]:
     """Return violations for imports nested inside a single function."""
-    violations: List[Violation] = []
+    violations: list[Violation] = []
     for each_descendant in ast.walk(function_node):
         if isinstance(each_descendant, (ast.Import, ast.ImportFrom)):
             violations.append(
@@ -141,9 +140,9 @@ def _inline_imports_in(function_node: FunctionNode, filename: str) -> List[Viola
     return violations
 
 
-def check_no_empty_line_after_decorators(source: str, filename: str) -> List[Violation]:
+def check_no_empty_line_after_decorators(source: str, filename: str) -> list[Violation]:
     """Check that no empty line separates a decorator from its function."""
-    violations: List[Violation] = []
+    violations: list[Violation] = []
     try:
         tree = ast.parse(source)
     except SyntaxError:
@@ -157,7 +156,7 @@ def check_no_empty_line_after_decorators(source: str, filename: str) -> List[Vio
 
 def _decorator_gap_violation(
     function_node: FunctionNode, filename: str
-) -> Optional[Violation]:
+) -> Violation | None:
     """Return a violation when an empty line separates a decorator from its function."""
     if not function_node.decorator_list:
         return None
@@ -174,13 +173,13 @@ def _decorator_gap_violation(
     )
 
 
-def check_blank_lines_between_functions(source: str, filename: str) -> List[Violation]:
+def check_blank_lines_between_functions(source: str, filename: str) -> list[Violation]:
     """Check that consecutive top-level functions carry the expected blank gap."""
-    violations: List[Violation] = []
+    violations: list[Violation] = []
     source_lines = real_newline_lines(source)
     ordered_functions = top_level_functions(source)
     for each_current_function, each_next_function in zip(
-        ordered_functions, ordered_functions[1:]
+        ordered_functions, ordered_functions[1:], strict=False
     ):
         violation = _spacing_violation(
             each_current_function, each_next_function, source_lines, filename
@@ -193,9 +192,9 @@ def check_blank_lines_between_functions(source: str, filename: str) -> List[Viol
 def _spacing_violation(
     current_function: FunctionNode,
     next_function: FunctionNode,
-    source_lines: List[str],
+    all_source_lines: list[str],
     filename: str,
-) -> Optional[Violation]:
+) -> Violation | None:
     """Return a violation when two functions hold the wrong blank-line count.
 
     A run of purely empty lines is measured; a run holding any other content
@@ -205,7 +204,7 @@ def _spacing_violation(
     if current_end is None:
         return None
     next_start = function_start_line(next_function)
-    gap_lines = source_lines[current_end : next_start - 1]
+    gap_lines = all_source_lines[current_end : next_start - 1]
     if not gap_is_blank_only(gap_lines):
         return None
     blank_line_count = len(gap_lines)
@@ -219,11 +218,11 @@ def _spacing_violation(
     )
 
 
-def check_view_function_naming(tree: ast.AST, filename: str) -> List[Violation]:
+def check_view_function_naming(tree: ast.AST, filename: str) -> list[Violation]:
     """Check that request-handling functions in views.py end with _view."""
     if not filename.endswith(VIEWS_FILENAME):
         return []
-    violations: List[Violation] = []
+    violations: list[Violation] = []
     for each_function_node in iter_function_definitions(tree):
         if _is_misnamed_view(each_function_node):
             violations.append(
@@ -246,31 +245,31 @@ def _is_misnamed_view(function_node: FunctionNode) -> bool:
     return not function_node.name.endswith(VIEW_SUFFIX)
 
 
-def _decorator_span_line_numbers(decorators: List[ast.expr]) -> Set[int]:
+def _decorator_span_line_numbers(all_decorators: list[ast.expr]) -> set[int]:
     """Return every source line a decorator expression occupies."""
-    occupied_lines: Set[int] = set()
-    for each_decorator in decorators:
+    occupied_lines: set[int] = set()
+    for each_decorator in all_decorators:
         end_line = each_decorator.end_lineno or each_decorator.lineno
         occupied_lines.update(range(each_decorator.lineno, end_line + 1))
     return occupied_lines
 
 
 def _blank_gap_lines_for_function(
-    function_node: FunctionNode, source_lines: List[str]
-) -> Set[int]:
+    function_node: FunctionNode, all_source_lines: list[str]
+) -> set[int]:
     """Return blank line numbers between one function's decorators and its def."""
-    decorators = function_node.decorator_list
-    if not decorators:
+    all_decorators = function_node.decorator_list
+    if not all_decorators:
         return set()
-    occupied_lines = _decorator_span_line_numbers(decorators)
+    occupied_lines = _decorator_span_line_numbers(all_decorators)
     first_decorator_line = min(
-        each_decorator.lineno for each_decorator in decorators
+        each_decorator.lineno for each_decorator in all_decorators
     )
     return {
         each_line_number
         for each_line_number in range(first_decorator_line, function_node.lineno)
         if each_line_number not in occupied_lines
-        and source_lines[each_line_number - 1].strip() == ""
+        and all_source_lines[each_line_number - 1].strip() == ""
     }
 
 
@@ -285,7 +284,7 @@ def fix_empty_lines_after_decorators(source: str) -> str:
     except SyntaxError:
         return source
     source_lines = real_newline_lines(source)
-    blank_line_numbers: Set[int] = set()
+    blank_line_numbers: set[int] = set()
     for each_function_node in iter_function_definitions(tree):
         blank_line_numbers |= _blank_gap_lines_for_function(
             each_function_node, source_lines
@@ -299,7 +298,7 @@ def fix_empty_lines_after_decorators(source: str) -> str:
     )
 
 
-def _normalized_gap(all_gap_lines: List[str], blank_line: str) -> List[str]:
+def _normalized_gap(all_gap_lines: list[str], blank_line: str) -> list[str]:
     """Return the between-function gap normalized to the expected blank count.
 
     A gap that is entirely blank becomes exactly the expected number of blank
@@ -321,7 +320,7 @@ def fix_function_spacing(source: str) -> str:
     previous_end_line = functions[0].end_lineno
     if previous_end_line is None:
         return source
-    rebuilt: List[str] = list(source_lines[:previous_end_line])
+    rebuilt: list[str] = list(source_lines[:previous_end_line])
     for each_next_function in functions[1:]:
         next_start_line = function_start_line(each_next_function)
         gap_lines = source_lines[previous_end_line : next_start_line - 1]
@@ -353,9 +352,9 @@ def fix_file(file_path: Path) -> bool:
     return True
 
 
-def validate_file(file_path: Path) -> List[Violation]:
+def validate_file(file_path: Path) -> list[Violation]:
     """Validate a Python file against every style check."""
-    violations: List[Violation] = []
+    violations: list[Violation] = []
     filename = str(file_path)
     try:
         source = file_path.read_text(encoding="utf-8")
@@ -382,7 +381,7 @@ def main() -> int:
     if len(sys.argv) < minimum_argument_count:
         logger.error("Usage: %s <file1.py> [file2.py ...]", Path(sys.argv[0]).name)
         return 1
-    all_violations: List[Violation] = []
+    all_violations: list[Violation] = []
     for each_file_arg in sys.argv[1:]:
         file_path = Path(each_file_arg)
         if not file_path.exists():
