@@ -4,6 +4,7 @@ import ast
 import difflib
 import os
 import sys
+import tempfile
 from collections.abc import Collection, Iterator
 from pathlib import Path
 
@@ -28,6 +29,13 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     EPHEMERAL_EXEMPT_DISABLE_ENVIRONMENT_VARIABLE_NAME,
     LEADING_DRIVE_LETTER_PATTERN,
     STRICT_TEST_FILE_BASENAME_PATTERN,
+)
+from hooks_constants.harness_scratchpad_constants import (  # noqa: E402
+    HARNESS_SCRATCHPAD_LEAF_DIRECTORY_NAME,
+    HARNESS_SCRATCHPAD_PATH_SEPARATOR_REPLACEMENT,
+    HARNESS_SCRATCHPAD_USER_DIRECTORY_PREFIX,
+    HOOK_PAYLOAD_SESSION_ID_KEY,
+    HOOK_PAYLOAD_WORKING_DIRECTORY_KEY,
 )
 from hooks_constants.unused_module_import_constants import (  # noqa: E402
     TYPE_CHECKING_IDENTIFIER,
@@ -265,6 +273,80 @@ def is_ephemeral_script_path(file_path: str) -> bool:
         if normalized == each_temp_root or normalized.startswith(each_temp_root + "/"):
             return True
     return False
+
+
+def _resolve_session_scratchpad_root(hook_payload: dict) -> str | None:
+    """Rebuild the harness session scratchpad directory from a PreToolUse payload.
+
+    ::
+
+        payload.cwd = /home/user/project    payload.session_id = 5f2c...
+                          |                            |
+        <tempdir>/claude-<uid>/-home-user-project/5f2c.../scratchpad
+                     |               |
+                  os.getuid()   cwd with each "/" turned to "-"
+
+    No environment variable carries this path, so it is rebuilt from the three
+    signals a hook can read: the POSIX user id and the ``cwd`` and ``session_id``
+    fields the harness puts in every PreToolUse payload. The rebuilt directory
+    is returned only when it exists on disk, so a wrong guess or a non-POSIX
+    platform yields None and the gates keep full enforcement.
+
+    Args:
+        hook_payload: The PreToolUse payload carrying ``cwd`` and ``session_id``.
+
+    Returns:
+        The scratchpad directory path when it exists on disk, else None.
+    """
+    get_user_id = getattr(os, "getuid", None)
+    if get_user_id is None:
+        return None
+    session_id = hook_payload.get(HOOK_PAYLOAD_SESSION_ID_KEY, "")
+    working_directory = hook_payload.get(HOOK_PAYLOAD_WORKING_DIRECTORY_KEY, "")
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    if not isinstance(working_directory, str) or not working_directory:
+        return None
+    mangled_working_directory = working_directory.replace("\\", "/").replace(
+        "/", HARNESS_SCRATCHPAD_PATH_SEPARATOR_REPLACEMENT
+    )
+    user_directory_name = f"{HARNESS_SCRATCHPAD_USER_DIRECTORY_PREFIX}{get_user_id()}"
+    scratchpad_root = os.path.join(
+        tempfile.gettempdir(),
+        user_directory_name,
+        mangled_working_directory,
+        session_id,
+        HARNESS_SCRATCHPAD_LEAF_DIRECTORY_NAME,
+    )
+    if not os.path.isdir(scratchpad_root):
+        return None
+    return scratchpad_root
+
+
+def is_under_session_scratchpad(file_path: str, hook_payload: dict) -> bool:
+    """Return True when file_path resolves under the harness session scratchpad.
+
+    One-off scripts written to the session scratchpad are throwaway tooling
+    outside every repo, so the TDD and CODE_RULES gates skip them. Both
+    file_path and the rebuilt scratchpad root are resolved through the real
+    filesystem (symlinks followed) before the containment test, so a symlink
+    into the scratchpad exempts and a symlink out of it does not.
+
+    Args:
+        file_path: The path the write targets.
+        hook_payload: The PreToolUse payload carrying ``cwd`` and ``session_id``.
+
+    Returns:
+        True when file_path's real path sits at or under the session scratchpad.
+    """
+    if not file_path:
+        return False
+    scratchpad_root = _resolve_session_scratchpad_root(hook_payload)
+    if scratchpad_root is None:
+        return False
+    real_target = os.path.realpath(file_path)
+    real_root = os.path.realpath(scratchpad_root)
+    return real_target == real_root or real_target.startswith(real_root + os.sep)
 
 
 def is_migration_file(file_path: str) -> bool:

@@ -22,7 +22,10 @@ if _hooks_root_path_string not in sys.path:
 if _blocking_directory_path_string not in sys.path:
     sys.path.insert(0, _blocking_directory_path_string)
 
-from code_rules_shared import is_ephemeral_script_path  # noqa: E402
+from code_rules_shared import (  # noqa: E402
+    is_ephemeral_script_path,
+    is_under_session_scratchpad,
+)
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_TDD_NOTICE  # noqa: E402
@@ -592,7 +595,11 @@ def main() -> None:
     if not file_path:
         sys.exit(0)
 
-    if _is_inside_dotclaude_segment(file_path) or is_ephemeral_script_path(file_path):
+    if (
+        is_under_session_scratchpad(file_path, input_data)
+        or _is_inside_dotclaude_segment(file_path)
+        or is_ephemeral_script_path(file_path)
+    ):
         sys.exit(0)
 
     path = Path(file_path)
