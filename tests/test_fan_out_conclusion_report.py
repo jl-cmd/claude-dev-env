@@ -41,18 +41,17 @@ def _conclusion_for_missing_workflow() -> str:
         )
 
 
-def test_public_target_is_not_redacted() -> None:
-    identifier = fan_out_conclusion_report.redacted_repo_identifier(
-        "example-owner/public-repo", is_private=False
-    )
-
-    assert identifier == "example-owner/public-repo"
-
-
-def test_listener_missing_maps_from_workflow_not_found() -> None:
-    status = _conclusion_for_missing_workflow()
-
-    assert status == fan_out_conclusion_report.REPORT_STATUS_LISTENER_MISSING
+def _logged_identifier_for(target_repo: dict) -> str:
+    token_by_owner = {EXAMPLE_OWNER: INSTALLATION_STANDIN}
+    with patch.object(
+        fan_out_dispatch,
+        "make_github_api_request",
+        return_value=(fan_out_dispatch.HTTP_STATUS_NOT_FOUND, None, None),
+    ), patch.object(fan_out_dispatch, "dispatch_logger") as recording_logger:
+        fan_out_conclusion_report._report_all_targets(
+            [target_repo], token_by_owner, DISPATCH_FLOOR
+        )
+    return recording_logger.info.call_args.args[1]
 
 
 class TestRedactedRepoIdentifier:
@@ -181,3 +180,17 @@ class TestResolveTargetStatus:
             )
 
         assert status == fan_out_conclusion_report.REPORT_STATUS_OPTED_OUT
+
+
+class TestReportAllTargets:
+    def should_redact_a_target_whose_visibility_is_unknown(self) -> None:
+        target_missing_private_key = {
+            "owner": {"login": EXAMPLE_OWNER},
+            "name": "secret-repo",
+            "full_name": "example-owner/secret-repo",
+        }
+
+        logged_identifier = _logged_identifier_for(target_missing_private_key)
+
+        assert logged_identifier.startswith("example-owner/")
+        assert "secret-repo" not in logged_identifier
