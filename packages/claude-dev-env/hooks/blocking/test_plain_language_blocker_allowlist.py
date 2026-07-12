@@ -23,6 +23,11 @@ def _load_blocker() -> ModuleType:
 _BLOCKER = _load_blocker()
 
 
+def _init_repo(root: Path) -> Path:
+    (root / ".git").mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def _write_allowlist(project_root: Path, all_words: list[str]) -> None:
     allowlist_path = project_root / ALLOWLIST_RELATIVE_PATH
     allowlist_path.parent.mkdir(parents=True, exist_ok=True)
@@ -54,10 +59,8 @@ def _ask_user_question_payload(project_root: Path, prose: str) -> dict[str, obje
 
 def test_allowlisted_word_passes_in_markdown_write(tmp_path: Path) -> None:
     prose = "Please submit the release notes."
-    project_without_allowlist = tmp_path / "control"
-    project_without_allowlist.mkdir()
-    project_with_allowlist = tmp_path / "domain"
-    project_with_allowlist.mkdir()
+    project_without_allowlist = _init_repo(tmp_path / "control")
+    project_with_allowlist = _init_repo(tmp_path / "domain")
     _write_allowlist(project_with_allowlist, ["submit"])
 
     control_deny_reason = _BLOCKER.evaluate(
@@ -73,10 +76,8 @@ def test_allowlisted_word_passes_in_markdown_write(tmp_path: Path) -> None:
 
 def test_allowlisted_word_passes_in_ask_user_question(tmp_path: Path) -> None:
     prose = "Which theme should we identify first?"
-    project_without_allowlist = tmp_path / "control"
-    project_without_allowlist.mkdir()
-    project_with_allowlist = tmp_path / "domain"
-    project_with_allowlist.mkdir()
+    project_without_allowlist = _init_repo(tmp_path / "control")
+    project_with_allowlist = _init_repo(tmp_path / "domain")
     _write_allowlist(project_with_allowlist, ["identify"])
 
     control_deny_reason = _BLOCKER.evaluate(
@@ -91,6 +92,7 @@ def test_allowlisted_word_passes_in_ask_user_question(tmp_path: Path) -> None:
 
 
 def test_non_allowlisted_heavy_word_still_blocked(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
     _write_allowlist(tmp_path, ["submit"])
 
     deny_reason = _BLOCKER.evaluate(
@@ -102,10 +104,8 @@ def test_non_allowlisted_heavy_word_still_blocked(tmp_path: Path) -> None:
 
 def test_allowlist_match_is_case_insensitive(tmp_path: Path) -> None:
     prose = "Please SUBMIT the release notes."
-    project_without_allowlist = tmp_path / "control"
-    project_without_allowlist.mkdir()
-    project_with_allowlist = tmp_path / "domain"
-    project_with_allowlist.mkdir()
+    project_without_allowlist = _init_repo(tmp_path / "control")
+    project_with_allowlist = _init_repo(tmp_path / "domain")
     _write_allowlist(project_with_allowlist, ["Submit"])
 
     control_deny_reason = _BLOCKER.evaluate(
@@ -120,6 +120,7 @@ def test_allowlist_match_is_case_insensitive(tmp_path: Path) -> None:
 
 
 def test_malformed_allowlist_json_is_ignored(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
     _write_raw_allowlist(tmp_path, "{ this is not valid json ")
 
     deny_reason = _BLOCKER.evaluate(
@@ -130,14 +131,44 @@ def test_malformed_allowlist_json_is_ignored(tmp_path: Path) -> None:
 
 
 def test_allowlist_in_a_different_project_root_is_not_applied(tmp_path: Path) -> None:
-    project_with_allowlist = tmp_path / "project_a"
-    project_without_allowlist = tmp_path / "project_b"
-    project_with_allowlist.mkdir()
-    project_without_allowlist.mkdir()
+    project_with_allowlist = _init_repo(tmp_path / "project_a")
+    project_without_allowlist = _init_repo(tmp_path / "project_b")
     _write_allowlist(project_with_allowlist, ["submit"])
 
     deny_reason = _BLOCKER.evaluate(
         _markdown_write_payload(project_without_allowlist, "Please submit the notes.")
+    )
+
+    assert deny_reason is not None and "submit" in deny_reason
+
+
+def test_allowlist_above_the_repo_root_is_not_applied(tmp_path: Path) -> None:
+    _write_allowlist(tmp_path, ["submit"])
+    repository_root = _init_repo(tmp_path / "repo")
+
+    deny_reason = _BLOCKER.evaluate(
+        _markdown_write_payload(repository_root, "Please submit the notes.")
+    )
+
+    assert deny_reason is not None and "submit" in deny_reason
+
+
+def test_allowlist_at_the_repo_root_is_applied(tmp_path: Path) -> None:
+    repository_root = _init_repo(tmp_path / "repo")
+    _write_allowlist(repository_root, ["submit"])
+
+    deny_reason = _BLOCKER.evaluate(
+        _markdown_write_payload(repository_root, "Please submit the notes.")
+    )
+
+    assert deny_reason is None
+
+
+def test_allowlist_without_a_repo_root_is_not_applied(tmp_path: Path) -> None:
+    _write_allowlist(tmp_path, ["submit"])
+
+    deny_reason = _BLOCKER.evaluate(
+        _markdown_write_payload(tmp_path, "Please submit the notes.")
     )
 
     assert deny_reason is not None and "submit" in deny_reason

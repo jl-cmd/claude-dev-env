@@ -33,6 +33,7 @@ from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     MARKDOWN_EXTENSION,
     PROJECT_ALLOWLIST_FILENAME,
     PROJECT_ROOT_WALK_LIMIT,
+    REPOSITORY_MARKER_NAME,
     URL_PATTERN,
     USER_FACING_PLAIN_LANGUAGE_NOTICE,
 )
@@ -118,20 +119,39 @@ def _allowlist_start_directory(
 
 
 def _find_project_allowlist_file(start_directory: Path) -> Path | None:
-    """Walk ancestors from start_directory for the project allowlist file.
+    """Walk ancestors from start_directory for a repo-scoped project allowlist file.
+
+    ::
+
+        parent/                      .claude/allow  -> ignored (above the repo root)
+        parent/repo/     <- .git     .claude/allow  -> applied (repo root reached)
+        parent/repo/pkg/             .claude/allow  -> applied (inside the repo tree)
+
+    The allowlist must live inside the repository so it is reviewed like any
+    other committed config. The walk checks each directory for the allowlist,
+    then for the ``.git`` repository marker; it accepts an allowlist at or below
+    the first ``.git``-bearing directory, stops at that repository root, and
+    never ascends past it. When no ``.git`` marker appears within the walk
+    limit, the directory is not inside a repository and no allowlist applies, so
+    a global file such as ``~/.claude/plain-language-allow.json`` never loosens
+    the gate for every project.
 
     Args:
         start_directory: The directory to begin the upward walk from.
 
     Returns:
-        The first ``.claude/plain-language-allow.json`` found on the ancestor
-        chain, or None when none exists within the walk limit.
+        The nearest in-repository ``.claude/plain-language-allow.json`` at or
+        below the repository root, or None when the walk finds no repository
+        root or no allowlist within it.
     """
+    nearest_allowlist: Path | None = None
     current_directory = start_directory
     for _ in range(PROJECT_ROOT_WALK_LIMIT):
         candidate = current_directory / DOT_CLAUDE_DIRECTORY_NAME / PROJECT_ALLOWLIST_FILENAME
-        if candidate.is_file():
-            return candidate
+        if nearest_allowlist is None and candidate.is_file():
+            nearest_allowlist = candidate
+        if (current_directory / REPOSITORY_MARKER_NAME).exists():
+            return nearest_allowlist
         if current_directory.parent == current_directory:
             break
         current_directory = current_directory.parent

@@ -5,6 +5,9 @@ the session's system prompt, laid out as
 ``<tempdir>/claude-<uid>/<mangled-cwd>/<session-id>/scratchpad``. These constants
 name the fixed path components the code-rules and TDD gates read to rebuild that
 directory from the signals a hook process can see.
+
+The exemption is POSIX-only: without ``os.getuid`` (Windows) it never fires,
+so full enforcement stays in place there.
 """
 
 HARNESS_SCRATCHPAD_USER_DIRECTORY_PREFIX: str = "claude-"

@@ -292,6 +292,7 @@ ALL_WRITE_EDIT_TOOL_NAMES: frozenset[str] = frozenset({"Write", "Edit", "MultiEd
 DOT_CLAUDE_DIRECTORY_NAME: str = ".claude"
 PROJECT_ALLOWLIST_FILENAME: str = "plain-language-allow.json"
 PROJECT_ROOT_WALK_LIMIT: int = 40
+REPOSITORY_MARKER_NAME: str = ".git"
 
 USER_FACING_PLAIN_LANGUAGE_NOTICE: str = (
     "Plain-language check: replace each flagged formal word with the simpler "
