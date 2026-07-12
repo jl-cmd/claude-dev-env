@@ -19,6 +19,15 @@
 #   - Issue #21 listed hooks/blocking/test_gh_artifact_upload.py; amended to the
 #     real path packages/claude-dev-env/scripts/tests/test_gh_artifact_upload.py.
 #
+# Quality gate (#23): runs packages/claude-dev-env/scripts/check.ps1 (ruff + mypy
+# + enforcer pytest). CI builds PYTEST_ADDOPTS from the same four .github/ci/
+# deselect lists so the gate matches the documented deselect set. Local
+# `check.ps1` without PYTEST_ADDOPTS may run more tests — deliberate: the CI
+# gate is script + tools + documented deselect set, not a strict local mirror.
+# check.ps1 runs pytest from hooks/blocking with relative file globs; node IDs
+# stay full repo-relative paths (pytest rootdir is the monorepo root), so no
+# prefix stripping is required for deselects to match.
+#
 # basetemp lives under RUNNER_TEMP (not OS temp root, not inside the repo) so
 # is_ephemeral_script_path Linux exemptions do not treat pytest temp paths as
 # ephemeral production scripts.
@@ -230,3 +239,113 @@ jobs:
         run: |
           npm install
           npm test
+
+  quality-gate:
+    name: Quality gate (check.ps1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install quality-gate dependencies
+        run: |
+          pip install -e packages/claude-dev-env/ \
+            pytest \
+            ruff \
+            mypy
+
+      - name: Run check.ps1 with documented deselect set
+        shell: pwsh
+        run: |
+          # CI gate = check.ps1 + tools + documented deselect set.
+          # Local check.ps1 without PYTEST_ADDOPTS may run more tests — deliberate.
+          $allDeselectListFiles = @(
+            '.github/ci/live-post-audit-deselects.txt'
+            '.github/ci/windows-semantics-node-ids.txt'
+            '.github/ci/known-pending-deselects.txt'
+            '.github/ci/author-swap-deselects.txt'
+          )
+          $allDeselectFlags = [System.Collections.Generic.List[string]]::new()
+          $expectedDeselectCount = 0
+          foreach ($eachListFile in $allDeselectListFiles) {
+            foreach ($eachRawLine in Get-Content -LiteralPath $eachListFile) {
+              $eachNodeId = $eachRawLine -replace "`r", ''
+              if ([string]::IsNullOrWhiteSpace($eachNodeId)) { continue }
+              if ($eachNodeId.StartsWith('#')) { continue }
+              $allDeselectFlags.Add("--deselect=$eachNodeId")
+              $expectedDeselectCount++
+            }
+          }
+          $deselectFlagCount = $allDeselectFlags.Count
+          Write-Host "deselect flag count=$deselectFlagCount expected non-comment lines=$expectedDeselectCount"
+          if ($deselectFlagCount -ne $expectedDeselectCount) {
+            throw "deselect_args length ($deselectFlagCount) != expected non-comment line count ($expectedDeselectCount)"
+          }
+          # Full repo-relative node IDs match when check.ps1 runs pytest from
+          # hooks/blocking (pytest rootdir is the monorepo root). Do not strip
+          # the packages/claude-dev-env/hooks/blocking/ prefix.
+          $env:PYTEST_ADDOPTS = ($allDeselectFlags -join ' ')
+          Write-Host "PYTEST_ADDOPTS deselect count=$deselectFlagCount"
+          $checkOutputLines = & pwsh -File packages/claude-dev-env/scripts/check.ps1 2>&1
+          $checkExitCode = $LASTEXITCODE
+          $checkOutputLines | ForEach-Object { Write-Host $_ }
+          $checkOutputText = ($checkOutputLines | Out-String)
+          if ($checkExitCode -ne 0) {
+            throw "check.ps1 exited $checkExitCode"
+          }
+          if ($checkOutputText -notmatch 'CHECK: OK') {
+            throw "check.ps1 output missing CHECK: OK"
+          }
+
+  windows-semantics:
+    name: Windows-semantics micro-suite
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python test dependencies
+        run: |
+          pip install -e packages/claude-dev-env/ \
+            pytest \
+            pytest-xdist \
+            pyyaml \
+            psycopg \
+            mypy \
+            ruff
+
+      - name: Run windows-semantics node IDs
+        shell: pwsh
+        run: |
+          $windowsSemanticsListPath = '.github/ci/windows-semantics-node-ids.txt'
+          $allSelectedNodeIds = [System.Collections.Generic.List[string]]::new()
+          $expectedSelectedCount = 0
+          foreach ($eachRawLine in Get-Content -LiteralPath $windowsSemanticsListPath) {
+            $eachNodeId = $eachRawLine -replace "`r", ''
+            if ([string]::IsNullOrWhiteSpace($eachNodeId)) { continue }
+            if ($eachNodeId.StartsWith('#')) { continue }
+            $allSelectedNodeIds.Add($eachNodeId)
+            $expectedSelectedCount++
+          }
+          $selectedCount = $allSelectedNodeIds.Count
+          Write-Host "selected count=$selectedCount expected non-comment lines=$expectedSelectedCount"
+          if ($selectedCount -ne $expectedSelectedCount) {
+            throw "selected count ($selectedCount) != expected non-comment line count ($expectedSelectedCount)"
+          }
+          $expectedWindowsSemanticsCount = 7
+          if ($selectedCount -ne $expectedWindowsSemanticsCount) {
+            throw "selected count ($selectedCount) != expected windows-semantics count ($expectedWindowsSemanticsCount)"
+          }
+          Write-Host "selected count=$selectedCount"
+          & python -m pytest @($allSelectedNodeIds.ToArray()) -q
+          if ($LASTEXITCODE -ne 0) {
+            throw "windows-semantics pytest exited $LASTEXITCODE"
+          }
