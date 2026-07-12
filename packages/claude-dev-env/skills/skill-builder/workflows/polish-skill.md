@@ -50,17 +50,7 @@ If the description fails any check, revise it. Show before/after with the specif
 
 **Goal:** Verify the file structure follows all progressive disclosure rules.
 
-> "Keep SKILL.md body under 500 lines."
-
-Check:
-
-- [ ] SKILL.md body under 500 lines.
-- [ ] All reference files link directly from SKILL.md (one level deep).
-- [ ] Every file over 100 lines has a table of contents.
-- [ ] File index in SKILL.md lists every companion file with its purpose.
-- [ ] Forward slashes only in all paths.
-- [ ] File names are descriptive (`form_validation_rules.md`, not `doc2.md`).
-- [ ] Scripts clearly marked as execute vs read-as-reference.
+Apply the hard rules and hub pattern in `${CLAUDE_SKILL_DIR}/references/progressive-disclosure.md`. Cross-check progressive-disclosure items on `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
 
 ### Fix structural issues
 

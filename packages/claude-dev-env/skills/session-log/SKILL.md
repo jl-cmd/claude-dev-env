@@ -31,12 +31,14 @@ Sessions come in many shapes — convergence loops, feature builds, research div
 
 ## Backend Detection (run before Step 1)
 
-Determine which storage backend is available. First success wins.
+Determine which storage backend is available for the write path. First success wins.
 
 1. **Headless vault** — Bash `ob --version` to verify the obsidian-headless CLI is installed. Check `OBSIDIAN_VAULT_PATH` env var or `~/.claude/vault/` for a vault directory. When the CLI check succeeds AND at least one of those paths resolves to a vault directory, set `backend = "headless"`.
 2. **Local vault** — fall back to `~/.claude/vault/`. Create `~/.claude/vault/sessions` via `mkdir -p` if missing. Set `backend = "local"`.
 
-**Session-number detection:** Bash `ls` the project's session folder, parse filenames matching `[N]. *.html` or `[N]. *.md` to preserve sequence across the format migration. Highest N + 1. New project → start at 1.
+session-log writes with Write/Edit and publishes with Artifact, so it uses headless or local filesystem paths only. `/session-tidy` Phase 0 reuses this headless → local order and adds an Obsidian MCP branch for vault maintenance.
+
+**Session-number detection:** Bash `ls` the project's session folder, parse filenames matching `[N]. *.html` or `[N]. *.md`. Highest N + 1. New project → start at 1.
 
 **Output paths:**
 - headless: `$OBSIDIAN_VAULT_PATH/sessions/[Project]/[N]. [Title].html` (falls back to `~/.claude/vault/` when the env var is unset)
@@ -139,15 +141,12 @@ Only invoke `/remember` for decisions the user confirms; `/remember` writes the 
 Scope: the current project's session folder only.
 
 1. **List files** in the project's vault session folder via Bash `ls`.
-2. **Quick audit** each `.html` file for:
-   - **Naming convention:** must match `[N]. [Title].html`
-   - **Frontmatter completeness:** HTML comment block at top of `<body>` contains `type`, `project`, `session`, `date`, `status`, `blocked`, `vault_context_retrieved`, `tags`
-   - **Status coherence:** `status: completed` with `blocked: true` is contradictory. `status: in-progress` or `status: blocked` on sessions older than 7 days is stale.
-3. **Auto-fix minor issues** via Edit:
-   - Missing frontmatter fields that can be inferred (e.g., `blocked: false` when status is `completed`; `vault_context_retrieved: false` when the field is absent, since the field defaults to false in pre-existing sessions)
+2. **Audit** each `.html` and `.md` session file using the audit rules in `session-tidy` Phase 1 (naming, frontmatter completeness, type, status coherence, orphaned next-steps, categorization). session-tidy SKILL.md is the single home for those rules.
+3. **Auto-fix minor HTML metadata issues** via Edit (this step's write path is HTML-oriented):
+   - Missing frontmatter fields that can be inferred (e.g., `blocked: false` when status is `completed`; `vault_context_retrieved: false` when the field is absent)
    - `type` field set to a wrong value (correct to `session-report`)
 
-   When the Edit touches the session report created in this run, call `Artifact` again with the same `file_path` and `favicon` from step 2 to redeploy — the URL captured in step 2 stays unchanged. When the Edit touches an older session report published in a prior run, call `Artifact` on that `file_path` with no `url` argument, since this skill keeps no record of that file's earlier URL — this publishes the older report at a new URL. Surface a `Session [N] republished at a new URL: <url>` line so the user can update any prior shares.
+   When the Edit touches the session report created in this run, call `Artifact` again with the same `file_path` and `favicon` from step 2 to redeploy — the URL captured in step 2 stays unchanged. When the Edit touches an older HTML session report published in a prior run, call `Artifact` on that `file_path` with no `url` argument, since this skill keeps no record of that file's earlier URL — this publishes that report at a new URL. Surface a `Session [N] republished at a new URL: <url>` line so the user can update any prior shares.
 4. **Report issues that need user input:**
    - Files with wrong naming convention (propose new name)
    - Stale statuses (propose update to `completed` or ask)
@@ -155,7 +154,7 @@ Scope: the current project's session folder only.
 
    If no issues are found, skip silently. Do not report "all clean."
 5. **Rollup check:** if the project has 5+ sessions and no `Summary.html` or `Summary.md`, mention it:
-   > "This project has [N] sessions and no summary. A rollup would help; `/session-tidy` is defined for the Markdown session format and may mis-audit or propose destructive renames against HTML sessions, so a manual rollup is the safe path."
+   > "This project has [N] sessions and no summary. Run `/session-tidy` for a project rollup."
 
 ## Step 6: Finalize
 
@@ -176,7 +175,7 @@ The primary outcome comes from the session title resolved in step 1.
 ## Run-and-report checklist
 
 - [ ] Backend detected and announced
-- [ ] Session number resolved from `[N]. *.html` and `[N]. *.md` files (both parsed to preserve sequence across the format migration)
+- [ ] Session number resolved from `[N]. *.html` and `[N]. *.md` files (highest N + 1)
 - [ ] `artifact-design` skill loaded before composing page content
 - [ ] HTML composed for this session's character (no document wrapper tags; self-contained, responsive, theme-aware)
 - [ ] Frontmatter HTML comment present as the first content line
@@ -185,7 +184,7 @@ The primary outcome comes from the session title resolved in step 1.
 - [ ] Published via the `Artifact` tool with the fixed favicon `📓`; URL captured (or HTML emitted to chat when step 2 Write failed)
 - [ ] Vault-context line appended via Edit (step 3); `Artifact` redeployed on the same URL
 - [ ] Decision extraction surfaced any unrecorded items
-- [ ] Session tidy reported anomalies or stayed silent
+- [ ] Session tidy ran session-tidy Phase 1 audit rules on the project folder (or stayed silent when clean)
 - [ ] `/rename` command copied to clipboard via `pwsh Set-Clipboard`
 
 ## Folder map

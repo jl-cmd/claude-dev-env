@@ -12,7 +12,7 @@ The expert that enforces craft standards. For quick one-off SKILL.md edits, use 
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Hub — routing, 9-type taxonomy table, core principles, file index |
+| `SKILL.md` | Hub — routing, principles, file index |
 | `references/skill-types.md` | 9-type taxonomy with folder structures per type |
 | `references/progressive-disclosure.md` | Hub pattern, folder conventions, hard rules |
 | `references/self-audit-checklist.md` | 38-point mandatory post-build audit |

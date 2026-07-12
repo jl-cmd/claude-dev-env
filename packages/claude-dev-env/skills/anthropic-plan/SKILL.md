@@ -48,19 +48,7 @@ The workflow writes the packet into the live checkout under `docs/plans/<slug>/`
 
 ## Workflow Contract
 
-The workflow handles the full planning loop:
-
-1. Resolve repo root and packet path.
-2. Read project instructions, rules, relevant skills, manifests, docs, tests, hooks, agents, commands, configs, and workflows.
-3. Build a source inventory and extract source facts into `context/source-map.md`.
-4. Write the packet under `docs/plans/<slug>/`.
-5. Run `packages/claude-dev-env/skills/anthropic-plan/scripts/validate_packet.py`.
-6. Spawn `plan-packet-validator` in fresh context.
-7. Repair packet findings up to the workflow cap.
-8. Run the reuse audit: search the codebase for existing equivalents of each new file/symbol the packet introduces, write `validation/reuse-audit.md`, and gate approval on any unjustified reproduction.
-9. Build a single-file offline visual HTML of the finished packet from `templates/visual-plan.template.html` and write it beside the packet as `visual-plan.html`.
-10. Return packet path, validation state, and findings.
-11. Stop before implementation.
+Phases run inside `workflow/plan-packet.mjs` (Discover → Write packet under `docs/plans/<slug>/` → Validate with `validate_packet.py` and `plan-packet-validator` → Reuse audit → Visualize → Approval). The workflow returns the packet path and validation state, then **stop before implementation**. Phase detail lives in that script's `phases` list.
 
 ## Packet Shape
 

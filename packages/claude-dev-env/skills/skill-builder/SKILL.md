@@ -60,23 +60,11 @@ The feedback loop: observe Claude B’s behavior, bring insights back, refine th
 
 > "After cataloging all of our skills, we noticed they cluster into a few recurring categories."
 
-Classify the skill into one of 9 types. The type determines folder structure. See `${CLAUDE_SKILL_DIR}/references/skill-types.md` for full details.
-
-| # | Type | Key folders |
-|---|---|---|
-| 1 | Library & API Reference | reference/, examples/ |
-| 2 | Product Verification | scripts/, reference/ |
-| 3 | Data Fetching & Analysis | reference/, scripts/ |
-| 4 | Business Process & Team Automation | templates/, scripts/ |
-| 5 | Code Scaffolding & Templates | templates/, scripts/ |
-| 6 | Code Quality & Review | reference/, scripts/ |
-| 7 | CI/CD & Deployment | workflows/, scripts/ |
-| 8 | Runbooks | reference/, templates/ |
-| 9 | Infrastructure Operations | reference/, scripts/ |
+Classify into one of 9 types — type sets folder structure. Taxonomy and layouts: [`references/skill-types.md`](references/skill-types.md).
 
 ## Principles
 
-These are non-negotiable. Every skill must satisfy them. The self-audit checklist enforces them.
+These are non-negotiable. Every skill must satisfy them. Enforce via [`references/self-audit-checklist.md`](references/self-audit-checklist.md).
 
 ### Concision and defaults
 
@@ -96,25 +84,15 @@ High freedom (text guidance) for open fields. Low freedom (exact scripts, no par
 
 ### Progressive disclosure
 
-> "Keep SKILL.md body under 500 lines."
-
-SKILL.md is a hub. Detail lives in reference/, scripts execute without being read into context. References one level deep. Files over 100 lines get a TOC. Forward slashes only.
-
-See `${CLAUDE_SKILL_DIR}/references/progressive-disclosure.md` for the full specification.
+Hub pattern, line caps, one-level references, TOC and path rules: [`references/progressive-disclosure.md`](references/progressive-disclosure.md).
 
 ### Description field
 
-> "Always write in third person. The description is critical for skill selection: Claude uses it to choose the right Skill from potentially 100+ available Skills."
-
-Include what the skill does AND specific trigger phrases. Max 1024 chars.
-
-> "The description field is not a summary — it’s a description of when to trigger."
+Third person; what the skill does and when it triggers. Full criteria on the self-audit checklist Description field item.
 
 ### Gotchas
 
-> "Build a Gotchas Section — the highest-signal content in any skill."
-
-Mandatory section. Built from real failure observations. Updated over time as new failure modes surface.
+Mandatory highest-signal section (see Gotchas above). Capture real failure modes; self-audit requires the section present and actionable.
 
 ### Templates and examples
 
