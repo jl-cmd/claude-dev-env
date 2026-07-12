@@ -1,6 +1,15 @@
 # State across ticks
 
-**Dual persistence:** Single-PR `/pr-converge` writes loop state to
+## Contents
+
+- [Dual persistence](#dual-persistence)
+- [Fields](#fields)
+- [Read/write lifecycle](#readwrite-lifecycle)
+- [Handoff files](#handoff-files)
+
+## Dual persistence
+
+Single-PR `/pr-converge` writes loop state to
 `$CLAUDE_JOB_DIR/pr-converge-state.json`; that file is the source of truth
 for `phase`, heads, counters, status. Multi-PR mode additionally maintains
 `<TMPDIR>/pr-converge-<session_id>/state.json` for orchestrator coordination
@@ -8,6 +17,8 @@ across PRs. Both files share most of the fields below; the
 `bugteam_skill_invoked_at_head` and `bugteam_skill_invoked_at_tick` fields
 live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
 (see those field entries below for details).
+
+## Fields
 
 - `phase`: `BUGBOT`, `CODE_REVIEW`, `BUGTEAM`, or `COPILOT_WAIT`. Start
   `CODE_REVIEW` on first tick. `BUGBOT` is the terminal external-confirmation
@@ -18,8 +29,20 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
 - `code_review_clean_at`: HEAD SHA where the `/code-review` pass last
   reported clean (no validated findings), or `null`. Reset to `null` on
   every push.
+- `bugteam_clean_at`: HEAD SHA where bugteam last reported clean, or `null`.
+  Reset to `null` on every push.
 - `copilot_clean_at`: HEAD SHA where Copilot last reported clean, or `null`.
   Reset to `null` on every push.
+- `merge_state_status`: last-observed `mergeable_state` from
+  `pull_request_read(method="get")` (e.g. `clean`, `dirty`, `blocked`,
+  `behind`, `unknown`, `unstable`), or `null` before the first check. Reset
+  to `null` on every push. Gate (c) in [convergence-gates.md](convergence-gates.md)
+  invokes rebase on `dirty`; other non-`clean` values (`blocked`, `behind`,
+  `unknown`, `unstable`) are hard blockers.
+- `current_head`: SHA of the last-known PR HEAD. Each tick refreshes it from
+  `pull_request_read(method="get")` → `.head.sha`, and again after any push
+  that moves HEAD. Clean-at stamps, wait counters, and phase gates compare
+  against this value.
 - `copilot_wait_count`: integer, init `0`. Consecutive COPILOT_WAIT ticks
   with no Copilot review surfaced at `current_head`. Escalate as hard blocker
   at `>= 3`. Reset to `0` when a Copilot review surfaces at `current_head`
@@ -95,10 +118,12 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
   `{agent_id, created_tick, last_used_tick}` for the persistent per-step
   agents the loop resumes across ticks. Exactly three step keys:
   `fix_executor` (the clean-coder that applies findings in Step 4 dirty,
-  Step 6 findings, gates (a)/(d), and Step 7a), `thread_sweep`, and
+  Step 6 findings, gates (a)/(b)/(e), and Step 7a), `thread_sweep`, and
   `copilot_watch`. `agent_id` is the id the `Agent` tool returned at spawn;
   `created_tick` is the `tick_count` at spawn; `last_used_tick` is bumped
   on every `SendMessage` resume.
+
+## Read/write lifecycle
 
 Single-PR tick begins by reading `$CLAUDE_JOB_DIR/pr-converge-state.json`
 if it exists and ends by writing the updated state back to that same file
