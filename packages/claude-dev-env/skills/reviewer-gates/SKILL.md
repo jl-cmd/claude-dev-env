@@ -61,7 +61,7 @@ Run the pre-check once per run, not per tick or per round. Every later tick read
 
 ## Gate 3: Bugbot trigger, acknowledge, and CI-detect
 
-Cursor Bugbot signals through CI check runs, not always through a posted review.
+Cursor Bugbot signals through CI check runs.
 Mode flags and exit codes for `check_bugbot_ci.py` live in the script docstring
 — run
 `python "$HOME/.claude/skills/pr-converge/scripts/check_bugbot_ci.py" --help`
