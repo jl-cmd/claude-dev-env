@@ -1722,7 +1722,7 @@ function runAuditLens(head, preflightResult) {
  * Self-review lens: the semantic pre-catch parity pass over the full diff. It
  * covers the doc-vs-code parity, test-assertion completeness, and
  * PR-description-vs-diff lanes that sit outside the A-P bug categories, reusing
- * the pr-consistency-audit skill's canonical-source cross-reference method. It
+ * the pr-consistency-audit prompt's canonical-source cross-reference method. It
  * stays on opus because line-citation accuracy, symbol attribution, and
  * inventory or count claims are semantic judgments a cheaper tier misreads. It
  * reports findings without editing.
@@ -1735,7 +1735,7 @@ function runSelfReviewLens(head, preflightResult) {
     `You are the self-review parity lens for ${prCoordinates}, HEAD ${head}. Review the FULL origin/main...HEAD diff — every file the PR touches. Do NOT edit, commit, or push.\n\n` +
       renderLensDiffContext(preflightResult) +
       `Read the pre-catch rubric at ${CONFIG.precatchRubric} for the three lane checklists, and cover each lane:\n` +
-      `1. Doc-vs-code parity: reuse the pr-consistency-audit skill's canonical-source cross-reference method ($HOME/.claude/skills/pr-consistency-audit/SKILL.md) and the drift rubric at $HOME/.claude/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md. Verify every line citation resolves, every referenced file or script path exists, every symbol is attributed to the file that defines it, and every inventory, count, and ordering claim matches the code.\n` +
+      `1. Doc-vs-code parity: reuse the pr-consistency-audit prompt's canonical-source cross-reference method ($HOME/.claude/skills/_shared/pr-loop/prompts/pr-consistency-audit.xml) and the drift rubric at $HOME/.claude/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md. Verify every line citation resolves, every referenced file or script path exists, every symbol is attributed to the file that defines it, and every inventory, count, and ordering claim matches the code.\n` +
       `2. Test-assertion completeness: every changed or new production path has a paired test that calls it and asserts on its behavior, and a changed test pins behavior rather than hiding it behind a mock.\n` +
       `3. PR-description-vs-diff two-way parity: fetch the PR body read-only, then confirm every PR-body claim maps to a hunk in the diff and every hunk maps to a claim; flag invented paths, invented counts, and out-of-scope changes.\n\n` +
       `Before returning clean, state one proof-of-absence line per lane naming what you checked. Return strictly the schema: clean=true with empty findings when all three lanes pass, otherwise one entry per finding (severity P0/P1/P2; category 'code-standard' for a pure doc or style parity gap with no behavioral impact, 'bug' otherwise; replyToCommentId=null). Set sha=${'`'}${head}${'`'}, down=false.`,

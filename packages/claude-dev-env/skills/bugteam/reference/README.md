@@ -22,8 +22,7 @@ The `pre-push-review` skill was retired. Its mechanical checks are now covered a
 
 - **`/qbug`** — a full PR audit-fix cycle that spawns subagents, runs multiple audit loops, and produces a structured report. It is NOT a lightweight pre-push gate. Do not use `/qbug` as a substitute for `git push` (the hook fires automatically). Use `/qbug` when you want a thorough multi-loop review of a PR before requesting human review.
 
-References updated:
-- `skills/pr-review-responder/SKILL.md` — Rule 6 and checklist item updated to reference the git pre-push hook
-- `commands/plan.md` — Phase 5 step 10 updated to reference the git pre-push hook
+References:
+- `commands/plan.md` — Phase 5 step 10 cites the git pre-push hook
 - `hooks/github-action/pre-push-review.yml` — deleted (workflow no longer needed)
 - `hooks/github-action/test_workflow.py` — deleted alongside the workflow

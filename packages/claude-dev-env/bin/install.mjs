@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import { installAllGitHooks } from './git_hooks_installer.mjs';
 import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
 import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -18,6 +19,9 @@ const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json
 const packageRequire = createRequire(import.meta.url);
 
 export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+
+const SKILL_MANIFEST_FILENAME = 'SKILL.md';
+const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
 
 export const CORE_INCLUDE_DIRECTORIES = [
     'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
@@ -606,9 +610,70 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
     return groupCount;
 }
 
-function writeManifest(installedFiles) {
+function writeManifest(installedFiles, skillNames) {
     const manifest = { package: PACKAGE_NAME, version: PACKAGE_VERSION, installedAt: new Date().toISOString(), files: installedFiles };
+    if (skillNames) {
+        manifest.skills = skillNames;
+    }
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
+}
+
+/**
+ * Read the skill directory names the previous install recorded.
+ *
+ * Returns null when no manifest exists or the manifest predates the skills key,
+ * so a caller can treat "unknown prior skills" the same in both cases and lean
+ * on the ever-shipped set to find retired skills.
+ *
+ * @returns {string[]|null} The prior manifest's skill names, or null when absent.
+ */
+function readPriorManifestSkills() {
+    if (!existsSync(MANIFEST_FILE)) return null;
+    try {
+        const priorManifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
+        return Array.isArray(priorManifest.skills) ? priorManifest.skills : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Remove retired skill directories a prior install left under ~/.claude/skills.
+ *
+ * A directory is pruned only when the package no longer ships it and either the
+ * prior manifest recorded it or the package once shipped it. Subtracting the
+ * just-installed set from the ever-shipped set at call time means restoring a
+ * skill to the package protects it — it re-enters the installed set and never
+ * counts as retired. A personal skill in neither set is never touched, and
+ * ~/.claude/skills/_shared is always kept. One directory that fails to remove
+ * (for example a read-only file) is logged and skipped so the install finishes.
+ *
+ * @param {Set<string>} installedSkillNames Skill names this install just wrote.
+ * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
+ */
+function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
+    const skillsDirectory = join(CLAUDE_HOME, 'skills');
+    if (!existsSync(skillsDirectory)) return;
+    const retiredSkillNames = new Set(
+        [...EVER_SHIPPED_SKILL_NAMES].filter(skillName => !installedSkillNames.has(skillName))
+    );
+    const priorSkillNames = new Set(priorManifestSkills || []);
+    const existingSkillDirs = readdirSync(skillsDirectory, { withFileTypes: true })
+        .filter(entry => entry.isDirectory());
+    for (const skillDir of existingSkillDirs) {
+        const skillName = skillDir.name;
+        if (NEVER_PRUNED_SKILL_DIRECTORIES.has(skillName)) continue;
+        if (installedSkillNames.has(skillName)) continue;
+        const isPruneCandidate = priorSkillNames.has(skillName) || retiredSkillNames.has(skillName);
+        if (!isPruneCandidate) continue;
+        const skillPath = join(skillsDirectory, skillName);
+        try {
+            rmSync(skillPath, { recursive: true, force: true });
+            console.log(`  ✗ ${join('skills', skillName)} (pruned — retired skill)`);
+        } catch (pruneError) {
+            console.warn(`  Warning: could not prune ${join('skills', skillName)} (${pruneError.message})`);
+        }
+    }
 }
 
 function install(selectedGroups, options = {}) {
@@ -708,6 +773,7 @@ function install(selectedGroups, options = {}) {
     let skillsCreated = 0;
     let skillsUpdated = 0;
     const skillPaths = [];
+    const installedSkillNames = new Set();
     for (const sourceRoot of allSourceRoots) {
         const skillsSource = join(sourceRoot, 'skills');
         if (!existsSync(skillsSource)) continue;
@@ -718,6 +784,9 @@ function install(selectedGroups, options = {}) {
             skillsCreated += stats.created;
             skillsUpdated += stats.updated;
             skillPaths.push(...stats.paths);
+            if (existsSync(join(skillsSource, skillDir.name, SKILL_MANIFEST_FILENAME))) {
+                installedSkillNames.add(skillDir.name);
+            }
         }
     }
     summary.skills = { created: skillsCreated, updated: skillsUpdated, paths: skillPaths };
@@ -804,7 +873,14 @@ function install(selectedGroups, options = {}) {
         allInstalledFiles.push(claudeHubDest);
         console.log(`  \u2713 ${relative(CLAUDE_HOME, claudeHubDest)} (hub)`);
     }
-    writeManifest(allInstalledFiles);
+    const isFullInstall = !selectedGroups;
+    const priorManifestSkills = readPriorManifestSkills();
+    let manifestSkillNames = priorManifestSkills;
+    if (isFullInstall) {
+        pruneRetiredSkills(installedSkillNames, priorManifestSkills);
+        manifestSkillNames = [...installedSkillNames].sort();
+    }
+    writeManifest(allInstalledFiles, manifestSkillNames);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {
         if (summary[directory]) {
