@@ -16,8 +16,18 @@ import subprocess
 import sys
 
 _HOOK_DIR = pathlib.Path(__file__).parent
+_HOOKS_DIR = _HOOK_DIR.parent
 if str(_HOOK_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOK_DIR))
+if str(_HOOKS_DIR) not in sys.path:
+    sys.path.insert(0, str(_HOOKS_DIR))
+
+from hooks_constants.bash_pre_tool_use_dispatcher_constants import (  # noqa: E402
+    ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
+    ALL_BASH_HOSTED_HOOK_ENTRIES,
+    BASH_TOOL_NAME,
+    POWERSHELL_TOOL_NAME,
+)
 
 guard_spec = importlib.util.spec_from_file_location(
     "verdict_directory_write_blocker",
@@ -708,18 +718,43 @@ def _pretooluse_commands_for_matcher(matcher_substring: str) -> list[str]:
     return matching_commands
 
 
-def test_guard_is_registered_on_bash() -> None:
+_VERDICT_GUARD_SCRIPT_RELATIVE_PATH = "blocking/verdict_directory_write_blocker.py"
+_BASH_DISPATCHER_BASENAME = "bash_pre_tool_use_dispatcher.py"
+
+
+def _verdict_guard_hosted_entries() -> list:
+    return [
+        each_entry
+        for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES
+        if each_entry.script_relative_path == _VERDICT_GUARD_SCRIPT_RELATIVE_PATH
+    ]
+
+
+def _assert_bash_dispatcher_registered_for_matcher(matcher_substring: str) -> None:
+    matching_commands = _pretooluse_commands_for_matcher(matcher_substring)
     assert any(
-        "verdict_directory_write_blocker.py" in each_command
-        for each_command in _pretooluse_commands_for_matcher("Bash")
+        _BASH_DISPATCHER_BASENAME in each_command
+        for each_command in matching_commands
+    ), (
+        f"bash_pre_tool_use_dispatcher.py must be registered on matcher containing "
+        f"{matcher_substring!r}; commands={matching_commands!r}"
     )
+
+
+def test_guard_is_registered_on_bash() -> None:
+    _assert_bash_dispatcher_registered_for_matcher("Bash")
+    matching_entries = _verdict_guard_hosted_entries()
+    assert len(matching_entries) == 1
+    assert matching_entries[0].applicable_tool_names == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+    assert BASH_TOOL_NAME in matching_entries[0].applicable_tool_names
 
 
 def test_guard_is_registered_on_powershell() -> None:
-    assert any(
-        "verdict_directory_write_blocker.py" in each_command
-        for each_command in _pretooluse_commands_for_matcher("PowerShell")
-    )
+    _assert_bash_dispatcher_registered_for_matcher("PowerShell")
+    matching_entries = _verdict_guard_hosted_entries()
+    assert len(matching_entries) == 1
+    assert matching_entries[0].applicable_tool_names == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+    assert POWERSHELL_TOOL_NAME in matching_entries[0].applicable_tool_names
 
 
 def test_hook_subprocess_imports_real_config_when_parent_holds_shadowing_config(

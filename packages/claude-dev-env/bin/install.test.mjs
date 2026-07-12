@@ -637,6 +637,12 @@ test('commandReferencesManagedHook leaves an unmanaged inline -c command that im
 });
 
 
+
+function isPreToolUseDispatcherCommand(command) {
+    // Basename-anchored match: bash_pre_tool_use_dispatcher.py must not count.
+    return /(?:^|[/\\])pre_tool_use_dispatcher\.py(?![A-Za-z0-9_])/.test(command);
+}
+
 function countManagedRunAllValidatorsHooks(settings) {
     const writeEditGroups = (settings.hooks.PreToolUse || []).filter(
         group => group.matcher === 'Write|Edit'
@@ -996,7 +1002,7 @@ test('mergeHooksIntoSettings into old folded-hooks settings yields exactly one d
     const allPreToolUseGroups = settings.hooks.PreToolUse || [];
     const allHookCommands = allPreToolUseGroups.flatMap(group => group.hooks.map(hook => hook.command));
 
-    const allDispatcherCommands = allHookCommands.filter(cmd => cmd.includes('pre_tool_use_dispatcher.py'));
+    const allDispatcherCommands = allHookCommands.filter(isPreToolUseDispatcherCommand);
     assert.equal(allDispatcherCommands.length, 1, 'exactly one dispatcher entry must be present');
 
     for (const foldedPath of FOLDED_HOOK_RELATIVE_PATHS) {
@@ -1029,7 +1035,7 @@ test('mergeHooksIntoSettings is idempotent when run twice against an already-upd
     const allPreToolUseGroups = settings.hooks.PreToolUse || [];
     const allHookCommands = allPreToolUseGroups.flatMap(group => group.hooks.map(hook => hook.command));
 
-    const allDispatcherCommands = allHookCommands.filter(cmd => cmd.includes('pre_tool_use_dispatcher.py'));
+    const allDispatcherCommands = allHookCommands.filter(isPreToolUseDispatcherCommand);
     assert.equal(allDispatcherCommands.length, 1, 'dispatcher must appear exactly once after two merges');
     assert.equal(countManagedRunAllValidatorsHooks(settings), 1, 'run_all_validators must appear exactly once after two merges');
 });
@@ -1042,7 +1048,7 @@ test('shipped hooks.json matches the dispatcher design: dispatchers registered, 
 
     const allPreToolUseGroups = shippedHooksConfig.hooks.PreToolUse || [];
     const allPreCommands = allPreToolUseGroups.flatMap(group => group.hooks.map(hook => hook.command));
-    const preDispatcherCommands = allPreCommands.filter(cmd => cmd.includes('pre_tool_use_dispatcher.py'));
+    const preDispatcherCommands = allPreCommands.filter(isPreToolUseDispatcherCommand);
     assert.equal(preDispatcherCommands.length, 1, 'shipped hooks.json must register the PreToolUse dispatcher exactly once');
 
     assert.equal(
@@ -1222,6 +1228,6 @@ test('mergeHooksIntoSettings prunes the inline run_all_validators runner when th
     }
 
     const dispatcherGroup = settings.hooks.PreToolUse.find(group => group.matcher === 'Write|Edit|MultiEdit');
-    const dispatcherCommands = dispatcherGroup.hooks.filter(hook => hook.command.includes('pre_tool_use_dispatcher.py'));
+    const dispatcherCommands = dispatcherGroup.hooks.filter(hook => isPreToolUseDispatcherCommand(hook.command));
     assert.equal(dispatcherCommands.length, 1, 'the PreToolUse dispatcher must remain exactly once');
 });
