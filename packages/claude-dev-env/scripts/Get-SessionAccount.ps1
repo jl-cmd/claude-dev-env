@@ -91,72 +91,95 @@ function Write-AccountResult {
     }
 }
 
-function Invoke-GetSessionAccount {
-    $cliConfigPath = Join-Path $HOME '.claude.json'
-    if (-not (Test-Path -LiteralPath $cliConfigPath)) {
-        Write-Error "CLI config not found: $cliConfigPath"
-        exit 2
+function New-SessionAccountResult {
+    param(
+        [int]$ExitCode,
+        [string]$Email = $null,
+        [string]$AccountUuid = $null,
+        [string]$Source = $null,
+        [string]$CliEmail = $null,
+        [string]$CliAccountUuid = $null,
+        [string]$ErrorMessage = $null
+    )
+    [pscustomobject]@{
+        ExitCode       = $ExitCode
+        Email          = $Email
+        AccountUuid    = $AccountUuid
+        Source         = $Source
+        CliEmail       = $CliEmail
+        CliAccountUuid = $CliAccountUuid
+        ErrorMessage   = $ErrorMessage
+    }
+}
+
+function Resolve-SessionAccount {
+    param(
+        [string]$CliConfigPath,
+        [string]$ProfileDirectory
+    )
+    if (-not (Test-Path -LiteralPath $CliConfigPath)) {
+        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config not found: $CliConfigPath"
     }
 
     try {
-        $cliConfig = Get-Content -LiteralPath $cliConfigPath -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+        $cliConfig = Get-Content -LiteralPath $CliConfigPath -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
     }
     catch {
-        Write-Error "Failed to parse CLI config as JSON: $cliConfigPath"
-        exit 2
+        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse CLI config as JSON: $CliConfigPath"
     }
 
     $cliEmail = $cliConfig.oauthAccount.emailAddress
     $cliAccountUuid = $cliConfig.oauthAccount.accountUuid
     if (-not $cliEmail -or -not $cliAccountUuid) {
-        Write-Error "CLI config is missing oauthAccount.emailAddress or oauthAccount.accountUuid: $cliConfigPath"
-        exit 2
+        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config is missing oauthAccount.emailAddress or oauthAccount.accountUuid: $CliConfigPath"
     }
 
-    $profileDirectory = $env:CLAUDE_USER_DATA_DIR
-    if (-not $profileDirectory -or -not (Test-Path -LiteralPath $profileDirectory)) {
-        Write-AccountResult -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'cli-config'
-        exit 0
+    if (-not $ProfileDirectory -or -not (Test-Path -LiteralPath $ProfileDirectory)) {
+        return New-SessionAccountResult -ExitCode 0 -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'cli-config'
     }
 
-    $profileConfigPath = Join-Path $profileDirectory 'config.json'
+    $profileConfigPath = Join-Path $ProfileDirectory 'config.json'
     if (-not (Test-Path -LiteralPath $profileConfigPath)) {
-        Write-Error "Desktop profile config not found: $profileConfigPath"
-        exit 2
+        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config not found: $profileConfigPath"
     }
 
     try {
         $profileConfig = Get-Content -LiteralPath $profileConfigPath -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
     }
     catch {
-        Write-Error "Failed to parse desktop profile config as JSON: $profileConfigPath"
-        exit 2
+        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse desktop profile config as JSON: $profileConfigPath"
     }
 
     $profileAccountUuid = $profileConfig.lastKnownAccountUuid
     if (-not $profileAccountUuid) {
-        Write-Error "Desktop profile config is missing lastKnownAccountUuid: $profileConfigPath"
-        exit 2
+        return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Desktop profile config is missing lastKnownAccountUuid: $profileConfigPath"
     }
 
     if ($profileAccountUuid -eq $cliAccountUuid) {
-        Write-AccountResult -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'desktop-profile (matches cli-config)'
-        exit 0
+        return New-SessionAccountResult -ExitCode 0 -Email $cliEmail -AccountUuid $cliAccountUuid -Source 'desktop-profile (matches cli-config)'
     }
 
-    $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $profileDirectory)
+    $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $ProfileDirectory)
     if ($candidateEmails.Count -eq 1) {
-        Write-AccountResult -Email $candidateEmails[0] -AccountUuid $profileAccountUuid -Source 'desktop-profile (differs from cli-config)' -CliEmail $cliEmail -CliAccountUuid $cliAccountUuid
-        exit 0
+        return New-SessionAccountResult -ExitCode 0 -Email $candidateEmails[0] -AccountUuid $profileAccountUuid -Source 'desktop-profile (differs from cli-config)' -CliEmail $cliEmail -CliAccountUuid $cliAccountUuid
     }
 
     if ($candidateEmails.Count -eq 0) {
-        Write-Error "Desktop profile account ($profileAccountUuid) differs from CLI config, but no candidate email was recovered from profile storage: $profileDirectory"
-        exit 1
+        return New-SessionAccountResult -ExitCode 1 -ErrorMessage "Desktop profile account ($profileAccountUuid) differs from CLI config, but no candidate email was recovered from profile storage: $ProfileDirectory"
     }
 
-    Write-Error "Desktop profile account ($profileAccountUuid) differs from CLI config, and multiple candidate emails were found in profile storage: $($candidateEmails -join ', ')"
-    exit 1
+    return New-SessionAccountResult -ExitCode 1 -ErrorMessage "Desktop profile account ($profileAccountUuid) differs from CLI config, and multiple candidate emails were found in profile storage: $($candidateEmails -join ', ')"
+}
+
+function Invoke-GetSessionAccount {
+    $cliConfigPath = Join-Path $HOME '.claude.json'
+    $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $env:CLAUDE_USER_DATA_DIR
+    if ($sessionAccount.ErrorMessage) {
+        Write-Error $sessionAccount.ErrorMessage -ErrorAction Continue
+        exit $sessionAccount.ExitCode
+    }
+    Write-AccountResult -Email $sessionAccount.Email -AccountUuid $sessionAccount.AccountUuid -Source $sessionAccount.Source -CliEmail $sessionAccount.CliEmail -CliAccountUuid $sessionAccount.CliAccountUuid
+    exit $sessionAccount.ExitCode
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

@@ -1,51 +1,84 @@
 Set-StrictMode -Version Latest
 
-$scriptUnderTest = Join-Path (Split-Path -Parent $PSScriptRoot) 'Get-SessionAccount.ps1'
-. $scriptUnderTest
+BeforeAll {
+    $scriptUnderTest = Join-Path (Split-Path -Parent $PSScriptRoot) 'Get-SessionAccount.ps1'
+    . $scriptUnderTest
 
-function New-Utf16StorageFile {
-    param(
-        [string]$ProfileDirectory,
-        [string]$StoreName,
-        [string]$FileName,
-        [string]$EmailText
-    )
-    $storeDirectory = Join-Path $ProfileDirectory $StoreName
-    New-Item -ItemType Directory -Path $storeDirectory -Force | Out-Null
-    $emailBytes = [System.Text.Encoding]::Unicode.GetBytes("`0`0$EmailText`0`0")
-    $filePath = Join-Path $storeDirectory $FileName
-    [System.IO.File]::WriteAllBytes($filePath, $emailBytes)
-}
+    function New-Utf16StorageFile {
+        param(
+            [string]$ProfileDirectory,
+            [string]$StoreName,
+            [string]$FileName,
+            [string]$EmailText
+        )
+        $storeDirectory = Join-Path $ProfileDirectory $StoreName
+        New-Item -ItemType Directory -Path $storeDirectory -Force | Out-Null
+        $emailBytes = [System.Text.Encoding]::Unicode.GetBytes("`0`0$EmailText`0`0")
+        $filePath = Join-Path $storeDirectory $FileName
+        [System.IO.File]::WriteAllBytes($filePath, $emailBytes)
+    }
 
-function New-Utf8StorageFile {
-    param(
-        [string]$ProfileDirectory,
-        [string]$StoreName,
-        [string]$FileName,
-        [string]$JsonText
-    )
-    $storeDirectory = Join-Path $ProfileDirectory $StoreName
-    New-Item -ItemType Directory -Path $storeDirectory -Force | Out-Null
-    $filePath = Join-Path $storeDirectory $FileName
-    [System.IO.File]::WriteAllText($filePath, $JsonText, [System.Text.Encoding]::UTF8)
+    function New-Utf8StorageFile {
+        param(
+            [string]$ProfileDirectory,
+            [string]$StoreName,
+            [string]$FileName,
+            [string]$JsonText
+        )
+        $storeDirectory = Join-Path $ProfileDirectory $StoreName
+        New-Item -ItemType Directory -Path $storeDirectory -Force | Out-Null
+        $filePath = Join-Path $storeDirectory $FileName
+        [System.IO.File]::WriteAllText($filePath, $JsonText, [System.Text.Encoding]::UTF8)
+    }
+
+    function New-CliConfigFile {
+        param(
+            [string]$Directory,
+            [string]$Email,
+            [string]$AccountUuid
+        )
+        New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+        $cliConfigPath = Join-Path $Directory '.claude.json'
+        $cliConfigJson = [pscustomobject]@{
+            oauthAccount = [pscustomobject]@{
+                emailAddress = $Email
+                accountUuid  = $AccountUuid
+            }
+        } | ConvertTo-Json
+        [System.IO.File]::WriteAllText($cliConfigPath, $cliConfigJson, [System.Text.Encoding]::UTF8)
+        return $cliConfigPath
+    }
+
+    function New-ProfileConfigFile {
+        param(
+            [string]$ProfileDirectory,
+            [string]$LastKnownAccountUuid
+        )
+        New-Item -ItemType Directory -Path $ProfileDirectory -Force | Out-Null
+        $profileConfigPath = Join-Path $ProfileDirectory 'config.json'
+        $profileConfigJson = [pscustomobject]@{
+            lastKnownAccountUuid = $LastKnownAccountUuid
+        } | ConvertTo-Json
+        [System.IO.File]::WriteAllText($profileConfigPath, $profileConfigJson, [System.Text.Encoding]::UTF8)
+    }
 }
 
 Describe 'Test-NoiseEmail' {
     It 'rejects the placeholder example domain' {
-        (Test-NoiseEmail -Email 'noreply@example.com') | Should Be $true
+        (Test-NoiseEmail -Email 'noreply@example.com') | Should -Be $true
     }
 
     It 'keeps a legitimate local part that contains the substring example' {
-        (Test-NoiseEmail -Email 'sam.exampleson@company.com') | Should Be $false
+        (Test-NoiseEmail -Email 'sam.exampleson@company.com') | Should -Be $false
     }
 
     It 'keeps a legitimate domain that merely contains the substring example' {
-        (Test-NoiseEmail -Email 'person@example-labs.io') | Should Be $false
+        (Test-NoiseEmail -Email 'person@example-labs.io') | Should -Be $false
     }
 
     It 'still rejects sentry and anthropic noise addresses' {
-        (Test-NoiseEmail -Email 'someone@sentry.io') | Should Be $true
-        (Test-NoiseEmail -Email 'billing@anthropic.com') | Should Be $true
+        (Test-NoiseEmail -Email 'someone@sentry.io') | Should -Be $true
+        (Test-NoiseEmail -Email 'billing@anthropic.com') | Should -Be $true
     }
 }
 
@@ -56,7 +89,7 @@ Describe 'Get-EmailCandidatesFromProfile' {
 
         $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $profileDirectory)
 
-        ($candidateEmails -contains 'user@host.com') | Should Be $true
+        ($candidateEmails -contains 'user@host.com') | Should -Be $true
     }
 
     It 'recovers an email stored as UTF-8 JSON in the sentry store' {
@@ -65,7 +98,7 @@ Describe 'Get-EmailCandidatesFromProfile' {
 
         $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $profileDirectory)
 
-        ($candidateEmails -contains 'person@company.com') | Should Be $true
+        ($candidateEmails -contains 'person@company.com') | Should -Be $true
     }
 
     It 'keeps a single UTF-16 email whose local part contains the substring example' {
@@ -74,7 +107,114 @@ Describe 'Get-EmailCandidatesFromProfile' {
 
         $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $profileDirectory)
 
-        $candidateEmails.Count | Should Be 1
-        $candidateEmails[0] | Should Be 'sam.exampleson@company.com'
+        $candidateEmails.Count | Should -Be 1
+        $candidateEmails[0] | Should -Be 'sam.exampleson@company.com'
+    }
+}
+
+Describe 'Resolve-SessionAccount' {
+    It 'returns exit code 2 when the CLI config file is absent' {
+        $cliConfigPath = Join-Path $TestDrive 'absent-cli/.claude.json'
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory ''
+
+        $sessionAccount.ExitCode | Should -Be 2
+        $sessionAccount.ErrorMessage | Should -Match 'CLI config not found'
+    }
+
+    It 'returns exit code 2 when the CLI config is not valid JSON' {
+        $configDirectory = Join-Path $TestDrive 'unparseable-cli'
+        New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+        $cliConfigPath = Join-Path $configDirectory '.claude.json'
+        [System.IO.File]::WriteAllText($cliConfigPath, 'this is not json {', [System.Text.Encoding]::UTF8)
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory ''
+
+        $sessionAccount.ExitCode | Should -Be 2
+        $sessionAccount.ErrorMessage | Should -Match 'Failed to parse CLI config'
+    }
+
+    It 'returns exit code 2 when the CLI config lacks oauthAccount fields' {
+        $configDirectory = Join-Path $TestDrive 'incomplete-cli'
+        New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+        $cliConfigPath = Join-Path $configDirectory '.claude.json'
+        [System.IO.File]::WriteAllText($cliConfigPath, '{"oauthAccount":{"emailAddress":"","accountUuid":""}}', [System.Text.Encoding]::UTF8)
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory ''
+
+        $sessionAccount.ExitCode | Should -Be 2
+        $sessionAccount.ErrorMessage | Should -Match 'missing oauthAccount'
+    }
+
+    It 'reports the cli-config account with exit code 0 when no desktop profile is set' {
+        $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'cli-only') -Email 'cli@company.com' -AccountUuid 'uuid-cli'
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory ''
+
+        $sessionAccount.ExitCode | Should -Be 0
+        $sessionAccount.Source | Should -Be 'cli-config'
+        $sessionAccount.Email | Should -Be 'cli@company.com'
+    }
+
+    It 'returns exit code 2 when the desktop profile config is absent' {
+        $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'missing-profile-cli') -Email 'cli@company.com' -AccountUuid 'uuid-cli'
+        $profileDirectory = Join-Path $TestDrive 'profile-without-config'
+        New-Item -ItemType Directory -Path $profileDirectory -Force | Out-Null
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $profileDirectory
+
+        $sessionAccount.ExitCode | Should -Be 2
+        $sessionAccount.ErrorMessage | Should -Match 'Desktop profile config not found'
+    }
+
+    It 'reports the matching desktop-profile account with exit code 0' {
+        $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'match-cli') -Email 'cli@company.com' -AccountUuid 'uuid-shared'
+        $profileDirectory = Join-Path $TestDrive 'match-profile'
+        New-ProfileConfigFile -ProfileDirectory $profileDirectory -LastKnownAccountUuid 'uuid-shared'
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $profileDirectory
+
+        $sessionAccount.ExitCode | Should -Be 0
+        $sessionAccount.Source | Should -Be 'desktop-profile (matches cli-config)'
+        $sessionAccount.Email | Should -Be 'cli@company.com'
+    }
+
+    It 'recovers the desktop account email with exit code 0 when exactly one candidate differs from the cli account' {
+        $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'differ-cli') -Email 'cli@company.com' -AccountUuid 'uuid-cli'
+        $profileDirectory = Join-Path $TestDrive 'differ-profile'
+        New-ProfileConfigFile -ProfileDirectory $profileDirectory -LastKnownAccountUuid 'uuid-desktop'
+        New-Utf16StorageFile -ProfileDirectory $profileDirectory -StoreName 'Session Storage' -FileName '000005.ldb' -EmailText 'desktop@company.com'
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $profileDirectory
+
+        $sessionAccount.ExitCode | Should -Be 0
+        $sessionAccount.Email | Should -Be 'desktop@company.com'
+        $sessionAccount.AccountUuid | Should -Be 'uuid-desktop'
+        $sessionAccount.Source | Should -Be 'desktop-profile (differs from cli-config)'
+        $sessionAccount.CliEmail | Should -Be 'cli@company.com'
+    }
+
+    It 'returns exit code 1 when the desktop account differs but no candidate email is recovered' {
+        $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'none-cli') -Email 'cli@company.com' -AccountUuid 'uuid-cli'
+        $profileDirectory = Join-Path $TestDrive 'none-profile'
+        New-ProfileConfigFile -ProfileDirectory $profileDirectory -LastKnownAccountUuid 'uuid-desktop'
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $profileDirectory
+
+        $sessionAccount.ExitCode | Should -Be 1
+        $sessionAccount.ErrorMessage | Should -Match 'no candidate email was recovered'
+    }
+
+    It 'returns exit code 1 when the desktop account differs and multiple candidate emails are found' {
+        $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'multi-cli') -Email 'cli@company.com' -AccountUuid 'uuid-cli'
+        $profileDirectory = Join-Path $TestDrive 'multi-profile'
+        New-ProfileConfigFile -ProfileDirectory $profileDirectory -LastKnownAccountUuid 'uuid-desktop'
+        New-Utf16StorageFile -ProfileDirectory $profileDirectory -StoreName 'Session Storage' -FileName '000006.ldb' -EmailText 'first@company.com'
+        New-Utf16StorageFile -ProfileDirectory $profileDirectory -StoreName 'IndexedDB' -FileName '000007.ldb' -EmailText 'second@company.com'
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $profileDirectory
+
+        $sessionAccount.ExitCode | Should -Be 1
+        $sessionAccount.ErrorMessage | Should -Match 'multiple candidate emails'
     }
 }
