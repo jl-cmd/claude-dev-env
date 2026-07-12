@@ -26,7 +26,9 @@ Run from the repo root unless noted. The shell is Windows `pwsh`.
 | Task | Command |
 |------|---------|
 | JS tests (installer + skill scripts) | `cd packages/claude-dev-env && npm test` |
-| Python tests (whole repo) | `python -m pytest` |
+| Python tests (root suite, `tests/`) | `python -m pytest tests/` |
+| Python tests (package suite) | `python -m pytest packages/claude-dev-env` |
+| Python tests (default bare = root suite) | `python -m pytest` |
 | One Python test file | `python -m pytest tests/test_fan_out_dispatch.py` |
 | Quality gate (ruff + mypy + enforcer tests) | `pwsh -File packages/claude-dev-env/scripts/check.ps1` |
 | Install locally to `~/.claude/` | `cd packages/claude-dev-env && node bin/install.mjs` |
@@ -34,7 +36,7 @@ Run from the repo root unless noted. The shell is Windows `pwsh`.
 Notes:
 
 - `npm test` runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` — the installer and skill helper scripts.
-- The root `pytest.ini` sets `--import-mode=importlib`, puts `.` and `.github/scripts` on `pythonpath`, and collects both `test_*` and `should_*` functions.
+- The root `pytest.ini` sets `--import-mode=importlib`, puts `.` and `.github/scripts` on `pythonpath`, scopes default collection to `tests/` via `testpaths`, and collects both `test_*` and `should_*` functions. Run the package suite as a separate session: `python -m pytest packages/claude-dev-env`.
 - Hook tests live next to the hooks they cover (for example `packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer*.py`). `check.ps1` runs mypy over `hooks/blocking` and `hooks/validators` using `hooks/pyproject.toml`, then runs the enforcer pytest suite. It exits on the first failing tool and prints `CHECK: OK` or `CHECK: FAILED tools=...`.
 - The Python hook packages (the `*_constants` modules) are declared in `packages/claude-dev-env/pyproject.toml`. Install them editable (`pip install -e packages/claude-dev-env`) so hook tests resolve their constant imports.
 
