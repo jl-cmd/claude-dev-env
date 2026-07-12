@@ -19,7 +19,7 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 
 The full-install prune renames a retired skill directory into a timestamped backup rather than deleting it. Each pruned directory is renamed to `~/.claude/.claude-dev-env-pruned/<timestamp>/<skill-name>/`, a backup root outside `~/.claude/skills` so a backed-up directory is never re-discovered as a skill. Backups accumulate — nothing cleans them — so a user can recover a directory. A rename that fails leaves the directory in place with a logged warning and never falls back to deletion, so a prune failure costs at most a cosmetic leftover.
 
-Matching is by directory name alone, so a user-authored directory whose name collides with a retired skill is backed up as if it were that skill. Only a name in neither the installed set nor the ever-shipped set, and `~/.claude/skills/_shared`, are left in place.
+Matching is by directory name alone, so a user-authored directory whose name collides with a retired skill is backed up as if it were that skill. A directory is pruned when the prior install's manifest recorded it or the ever-shipped set names it, and the current install did not just write it. A name absent from all three of those sets, together with `~/.claude/skills/_shared`, is left in place.
 
 The prune is skipped for the whole run — with a logged notice naming the unresolved group — when any declared dependency group fails to resolve. An unresolved dependency contributes no skills to the installed set, so a live skill that a dependency package supplies would look retired; holding the prune until every dependency resolves keeps such a skill from being backed up.
 
