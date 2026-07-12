@@ -14,6 +14,7 @@ infrastructure.
 | File | Role |
 |------|------|
 | `fan_out_dispatch.py` | Dispatcher for the AI rules fan-out sync. Enumerates target repos under the configured owner scopes (`FANOUT_OWNER_SCOPES` env var or `config/local-identity.json`), checks opt-out sentinels, fires `repository_dispatch` events, then polls each listener for its conclusion. Run by `.github/workflows/fan-out-ai-rules.yml`. Reads a per-owner token from the environment (`config/local_identity.py` derives each `<OWNER>_TOKEN` name). |
+| `fan_out_conclusion_report.py` | Post-dispatch reporter for the AI rules fan-out. Re-enumerates the same target repos and logs one line per repo with this dispatch's listener conclusion (`succeeded`, `failed`, `listener-missing`, `no-matching-run`, or `opted-out`), correlating a listener run by its `created_at` against the `DISPATCHED_AT` floor. Redacts private or unknown-visibility target names to an owner scope plus a sha256 prefix. Run by `.github/workflows/fan-out-ai-rules.yml` after the dispatch step so a failed listener names its repo. |
 | `bootstrap-listeners.sh` | Idempotent shell script that copies `sync-ai-rules.yml` and `sync_ai_rules.py` into target repos and opens bootstrap PRs. Run from a machine with `gh` auth before onboarding a new repo. |
 
 ## Running the dispatcher locally
@@ -24,7 +25,8 @@ FANOUT_OWNER_SCOPES=example-owner EXAMPLEOWNER_TOKEN=<token> python scripts/fan_
 
 ## Tests
 
-Unit tests for `fan_out_dispatch.py` live at `tests/test_fan_out_dispatch.py`.
+Unit tests for `fan_out_dispatch.py` live at `tests/test_fan_out_dispatch.py`, and
+unit tests for `fan_out_conclusion_report.py` live at `tests/test_fan_out_conclusion_report.py`.
 Run with:
 
 ```bash
