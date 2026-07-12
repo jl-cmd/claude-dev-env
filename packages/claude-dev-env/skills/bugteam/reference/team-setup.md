@@ -4,10 +4,12 @@
 
 ### Utility scripts
 
-Bugteam-specific utilities (preflight, fix_hookspath, grant, revoke) live in
-the skill-local [`scripts/`](../scripts/) directory. Shared utilities remain in
-[`_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/) (run, do not paste
-into context). Utility scripts are **executed**, not loaded as primary context
+Skill-path thin entries for preflight and fix_hookspath live in the skill-local
+[`scripts/`](../scripts/) directory and delegate to package shared
+[`_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/). Shared homes for
+grant, revoke, and code_rules_gate also live under `_shared/pr-loop/scripts/`
+(run, do not paste into context). Utility scripts are **executed**, not loaded
+as primary context
 ([`sources.md`](../sources.md) § Progressive disclosure and utility scripts).
 
 ```bash
@@ -60,7 +62,7 @@ python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/grant_project_claude_p
 
 The script reads `Path.cwd()` and writes idempotent allow rules into `~/.claude/settings.json`. Run from the project root. If it fails (non-zero exit), surface the error and stop — do not proceed without the grant.
 
-This is the **first** action of every `/bugteam` invocation, before any subagent spawn. The corresponding revoke runs at Step 5 regardless of how the cycle exits.
+This is the **first** action of every `/bugteam` invocation, before any subagent spawn. The matching revoke runs inside Step 4 (`pr-loop-lifecycle` Close) regardless of how the cycle exits.
 
 ## Step 1 — Resolve PR scope (detail)
 

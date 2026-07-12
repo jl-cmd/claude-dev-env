@@ -6,9 +6,9 @@ Python scripts executed by the bugteam lead or teammates at runtime. These are n
 
 | File | Purpose |
 |---|---|
-| `bugteam_preflight.py` | Run pytest and optional `pre-commit` before the first loop. Skips pytest when `BUGTEAM_PREFLIGHT_SKIP=1` or no test files exist. |
-| `bugteam_fix_hookspath.py` | Auto-remediate a stale `core.hooksPath` override, set the canonical global value, re-run preflight. |
-| `bugteam_code_rules_gate.py` | Run `validate_content` from `code_rules_enforcer.py` on PR-scoped files. Exit 1 on mandatory rule failures. |
+| `bugteam_preflight.py` | Skill-path thin entry for shared `_shared/pr-loop/scripts/preflight.py`. Skips pytest when `BUGTEAM_PREFLIGHT_SKIP=1` or no test files exist. |
+| `bugteam_fix_hookspath.py` | Skill-path thin entry for shared `_shared/pr-loop/scripts/fix_hookspath.py`. Auto-remediates a stale `core.hooksPath` override. |
+| `bugteam_code_rules_gate.py` | Thin skill-path entry; re-exports shared `_shared/pr-loop/scripts/code_rules_gate.py` (of record). |
 | `windows_safe_rmtree.py` | Remove a directory tree on Windows by stripping ReadOnly attributes and retrying on failure. |
 | `probe_code_rules_enforcer_check.py` | Load `code_rules_enforcer.py` and invoke a named check function against a fixture file. |
 | `reflow_skill_md.py` | Reflow the bugteam SKILL.md body to fit line-length limits. |
@@ -17,9 +17,9 @@ Python scripts executed by the bugteam lead or teammates at runtime. These are n
 
 | File | Tests |
 |---|---|
-| `test_bugteam_preflight.py` | `bugteam_preflight.py` |
-| `test_bugteam_code_rules_gate.py` | `bugteam_code_rules_gate.py` |
-| `test_bugteam_fix_hookspath.py` | `bugteam_fix_hookspath.py` |
+| `test_bugteam_preflight.py` | Smoke for thin wrap; behavioral suite is `_shared/pr-loop/scripts/tests/test_preflight.py` |
+| `test_bugteam_code_rules_gate.py` | Smoke for thin wrap; behavioral suite is `_shared/pr-loop/scripts/tests/test_code_rules_gate.py` |
+| `test_bugteam_fix_hookspath.py` | Smoke for thin wrap; behavioral suite is `_shared/pr-loop/scripts/tests/test_fix_hookspath.py` |
 | `test_probe_code_rules_enforcer_check.py` | `probe_code_rules_enforcer_check.py` |
 | `test_windows_safe_rmtree.py` | `windows_safe_rmtree.py` |
 

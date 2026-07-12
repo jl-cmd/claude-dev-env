@@ -483,15 +483,10 @@ def test_check_wrapper_plumb_through_exempts_test_files() -> None:
         "    return _helper('a', clean_name='b')\n"
     )
     shared_issues = gate_module.check_wrapper_plumb_through(source, "pkg/test_thing.py")
-    bugteam_gate = _load_bugteam_gate_module()
-    bugteam_issues = bugteam_gate.check_wrapper_plumb_through(source, "pkg/test_thing.py")
     assert shared_issues == [], (
         "a test_* function in a test-file path that calls a module-level helper "
         "exposing an optional kwarg is not a wrapper; the shared gate must exempt "
         "test files and emit zero findings"
-    )
-    assert bugteam_issues == [], (
-        "the bugteam gate copy must apply the identical test-file exemption"
     )
 
 
@@ -1245,8 +1240,6 @@ def test_check_wrapper_plumb_through_dedupes_nested_public_function_calls() -> N
     assert len(issues) == 1, f"expected 1 finding, got {len(issues)}: {issues!r}"
 
 
-
-
 def test_check_wrapper_plumb_through_ignores_calls_nested_inside_delegate_arguments() -> None:
     """Regression: nested callees inside another call's arguments are not wrapper sites.
 
@@ -1764,68 +1757,6 @@ def test_main_blocks_banned_noun_on_added_lines_past_document_order(
         "the fourth banned-noun identifier — the only one on staged lines — must "
         "block even though three untouched ones precede it in document order"
     )
-
-
-def _load_bugteam_gate_module() -> ModuleType:
-    bugteam_scripts_dir = (
-        Path(__file__).resolve().parents[4]
-        / "skills"
-        / "bugteam"
-        / "scripts"
-    )
-    if str(bugteam_scripts_dir) not in sys.path:
-        sys.path.insert(0, str(bugteam_scripts_dir))
-    module_path = bugteam_scripts_dir / "bugteam_code_rules_gate.py"
-    spec = importlib.util.spec_from_file_location("bugteam_code_rules_gate", module_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_both_gates_classify_wrapper_plumb_through_identically() -> None:
-    """The bugteam and _shared gate copies of check_wrapper_plumb_through must
-    return identical findings. A class method calling a module-level delegate
-    is not a wrapper; both gates must exclude it rather than one emitting a
-    false positive the other does not."""
-    bugteam_gate = _load_bugteam_gate_module()
-    class_method_calling_delegate = (
-        "def fetch(target, *, retries=3):\n"
-        "    return target\n"
-        "\n"
-        "class MyService:\n"
-        "    def public_method(self, target):\n"
-        "        return fetch(target)\n"
-    )
-    nested_call_inside_delegate_argument = (
-        "def delegate(value, *, retries=3):\n"
-        "    return value\n"
-        "\n"
-        "def helper(value):\n"
-        "    return value\n"
-        "\n"
-        "def public_caller(value):\n"
-        "    return delegate(helper(value))\n"
-    )
-    name_call_dropping_kwarg = (
-        "def delegate(value, *, retries=3):\n"
-        "    return value\n"
-        "\n"
-        "def public_wrapper(value):\n"
-        "    return delegate(value)\n"
-    )
-    for each_source in (
-        class_method_calling_delegate,
-        nested_call_inside_delegate_argument,
-        name_call_dropping_kwarg,
-    ):
-        shared_issues = gate_module.check_wrapper_plumb_through(each_source, "module.py")
-        bugteam_issues = bugteam_gate.check_wrapper_plumb_through(each_source, "module.py")
-        assert shared_issues == bugteam_issues, (
-            "both gate copies of check_wrapper_plumb_through must classify "
-            f"identically; shared={shared_issues!r} bugteam={bugteam_issues!r}"
-        )
 
 
 def test_check_wrapper_plumb_through_stays_under_function_length_threshold() -> None:

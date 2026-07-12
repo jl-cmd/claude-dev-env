@@ -1,15 +1,15 @@
-# GitHub PR comments
+# GitHub PR comments (bugteam-only)
 
-Per-loop pull-request reviews and post-fix replies use two distinct transports:
+Transport, exit codes, retry/backoff, and payload shapes live in
+[`../../../_shared/pr-loop/gh-payloads.md`](../../../_shared/pr-loop/gh-payloads.md)
+and
+[`post_audit_thread.py`](../../../_shared/pr-loop/scripts/post_audit_thread.py).
+Read those for how the review POST runs; this file covers only bugteam lead and
+FIX behavior around that transport.
 
-- **Per-loop audit review** — posted via [`post_audit_thread.py`](../../../_shared/pr-loop/scripts/post_audit_thread.py). One review per audit pass. `APPROVE` on CLEAN (the request event; GitHub stores it as `state=APPROVED`; body documents "no findings", zero inline comments). `REQUEST_CHANGES` on DIRTY (one inline anchored comment per finding; each becomes its own resolvable thread).
-- **Fix replies** — posted via the GitHub MCP `add_reply_to_pull_request_comment` after the fix commit lands. The reply body uses the unified template at [`../../../_shared/pr-loop/audit-reply-template.md`](../../../_shared/pr-loop/audit-reply-template.md); reply and `resolve_thread` are atomic per thread.
+## Lead posts the audit review
 
-## Per-loop audit review (post_audit_thread.py)
-
-The invocation string and exit-code table are the shared contract in [`../../../_shared/pr-loop/post-audit-thread-contract.md`](../../../_shared/pr-loop/post-audit-thread-contract.md). The bugteam-specific `--findings-json` shape and the child-comment harvest below extend that contract.
-
-Run the script at the end of every audit pass:
+The lead runs `post_audit_thread.py` at the end of every audit pass:
 
 ```
 python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" \
@@ -22,19 +22,55 @@ python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" 
   --findings-json <path>
 ```
 
-Capture `<head_sha>` via `git rev-parse HEAD` in the subagent cwd immediately before this call so the review attaches to the commit the audit actually scoped.
+Capture `<head_sha>` via `git rev-parse HEAD` in the subagent cwd immediately
+before this call so the review attaches to the commit the audit actually scoped.
 
-`--findings-json` points to a JSON file whose root is a list of objects shaped `{path, line, side, severity, description, fix_summary}`. Build it from the merged Shape A findings: finding `file` → `path`. Each finding's `failure_mode` carries the full audit-to-fix handoff text per [`agents/code-quality-agent.md`](../../../agents/code-quality-agent.md); split `failure_mode` at the literal `Fix:` heading so the failure narrative becomes `description` and the suffix beginning at `Fix:` (including the trailing `Validation:` clause) becomes `fix_summary`. When a finding's `failure_mode` omits the `Fix:` heading, write the full text to BOTH `description` and `fix_summary` so the script's body template (`INLINE_COMMENT_BODY_TEMPLATE` in [`packages/claude-dev-env/_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py`](../../../_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py)) renders coherently. Set `side="RIGHT"` for every entry. On CLEAN the list is empty (`[]`); on DIRTY the list carries one entry per finding.
+- **CLEAN** — `APPROVE` event (GitHub stores `state=APPROVED`); body documents
+  "no findings"; empty findings list (`[]`); zero inline comments.
+- **DIRTY** — `REQUEST_CHANGES`; one inline anchored comment per finding (each
+  becomes its own resolvable thread).
 
-The exit codes are in the shared contract linked above. For bugteam, an exit `2` (retry exhaustion) is a hard blocker: the lead exits `error: post_audit_thread retry exhausted` without retrying and without falling back to a flat issue comment.
+## Findings JSON (Shape A `Fix:` split)
 
-Harvest the parent review URL from stdout, then extract the numeric review id from the URL's `#pullrequestreview-<id>` suffix (the trailing URL fragment of `html_url`, the part after `#`). Fetch child-comment URLs via `pull_request_read(method="get_review_comments", owner=<owner>, repo=<repo>, pullNumber=<N>)` filtered to that review id. That same response carries each comment's PR review thread node id (e.g. `PRRT_kwDOxxx`) — capture it alongside the numeric comment id. Match children to findings in the order they appear in the findings JSON, and store the mapping as `loop_comment_index[finding_id]` carrying both `finding_comment_id` (numeric) and `thread_node_id` (`PRRT_kwDOxxx`) for the FIX step to reply against and resolve.
+`--findings-json` is a JSON list of
+`{path, line, side, severity, description, fix_summary}`. Build it from the
+merged Shape A findings: finding `file` → `path`. Each finding's `failure_mode`
+carries the full audit-to-fix handoff text per
+[`agents/code-quality-agent.md`](../../../agents/code-quality-agent.md); split
+`failure_mode` at the literal `Fix:` heading so the failure narrative becomes
+`description` and the suffix beginning at `Fix:` (including the trailing
+`Validation:` clause) becomes `fix_summary`. When a finding's `failure_mode`
+omits the `Fix:` heading, write the full text to BOTH `description` and
+`fix_summary`. Set `side="RIGHT"` for every entry.
 
-The script reads its body skeleton from [`../../../_shared/pr-loop/audit-reply-template.md`](../../../_shared/pr-loop/audit-reply-template.md) at runtime, so the template doc remains the single source of truth for the body shape — edits there propagate without restarting the caller.
+## Anchor validation before JSON
 
-## Fix reply (MCP)
+Validate `(path, line)` against the captured diff before adding a finding to the
+findings JSON. GitHub rejects the entire review POST when any inline comment
+targets a line missing from the diff at `--commit`. Findings without a diff
+anchor stay out of the JSON; surface them in the calling skill's user-facing
+output so the audit pass still completes.
 
-After the fix commit lands, post one reply per finding thread and resolve the thread atomically.
+## FIX waits for harvest (`loop_comment_index`)
+
+FIX does not reply until harvest completes. After a successful post:
+
+1. Read the parent review URL from stdout; extract the numeric review id from
+   the `#pullrequestreview-<id>` suffix.
+2. Fetch child comments via
+   `pull_request_read(method="get_review_comments", ...)` filtered to that
+   review id.
+3. Capture each comment's PR review thread node id (`PRRT_kwDOxxx`) alongside
+   the numeric comment id.
+4. Match children to findings in findings-JSON order; store
+   `loop_comment_index[finding_id]` with `finding_comment_id` (numeric) and
+   `thread_node_id` (`PRRT_kwDOxxx`).
+
+## Atomic reply + resolve
+
+After the fix commit lands, post one reply per finding thread and resolve that
+thread as one atomic action. Do not yield to the lead between the two calls. Do
+not batch all replies before any resolves.
 
 ```
 mcp__plugin_github_github__add_reply_to_pull_request_comment(
@@ -44,13 +80,7 @@ mcp__plugin_github_github__add_reply_to_pull_request_comment(
   commentId=<finding_comment_id>,
   body="<reply body using unified template>"
 )
-```
 
-The reply body uses the unified template from [`../../../_shared/pr-loop/audit-reply-template.md`](../../../_shared/pr-loop/audit-reply-template.md). Per-status `<status_line>` / `<action_heading>` values live in [`../PROMPTS.md`](../PROMPTS.md) § FIX execution step 8.
-
-Immediately after the reply call returns, resolve the same thread:
-
-```
 mcp__plugin_github_github__pull_request_review_write(
   method="resolve_thread",
   owner="<owner>",
@@ -60,18 +90,8 @@ mcp__plugin_github_github__pull_request_review_write(
 )
 ```
 
-`<thread_node_id>` is the PR review thread node ID (`PRRT_kwDOxxx`) harvested above when calling `get_review_comments`, distinct from the numeric comment ID used in the reply call. See [obstacles/fix-resolve-thread.md](obstacles/fix-resolve-thread.md) for the full identifier-shape rationale.
-
-The two calls form one atomic per-thread action. Do not yield to the lead between them. Do not batch all replies before any resolves.
-
-## Anchor validation
-
-GitHub's reviews endpoint rejects the entire POST if any inline comment in `comments[]` targets a line not present in the diff at `--commit`. Validate `(path, line)` against the captured diff before adding a finding to the findings JSON. Findings without a diff anchor stay out of the JSON; surface them in the calling skill's user-facing output instead so the audit pass still completes.
-
-## GitHub MCP tools used
-
-- `add_reply_to_pull_request_comment` — fix replies on existing review comments.
-- `pull_request_review_write` (`method="resolve_thread"`) — thread resolution after the reply lands; called atomically with the reply.
-- `pull_request_read` (`method="get_review_comments"`) — harvest child-comment ids/urls after the script's parent review posts.
-
-Reference: https://github.com/github/github-mcp-server.
+Reply body template:
+[`../../../_shared/pr-loop/audit-reply-template.md`](../../../_shared/pr-loop/audit-reply-template.md).
+Per-status `<status_line>` / `<action_heading>` values live in
+[`../PROMPTS.md`](../PROMPTS.md) § FIX execution step 8. Identifier-shape
+rationale: [obstacles/fix-resolve-thread.md](obstacles/fix-resolve-thread.md).

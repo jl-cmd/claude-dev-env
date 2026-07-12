@@ -6,13 +6,12 @@ Python package of named constants imported by the bugteam scripts. Each module h
 
 | File | Constants for |
 |---|---|
-| `bugteam_preflight_constants.py` | `bugteam_preflight.py` — env var name, hooks path suffix, exit codes, ignore dirs, argument tuples, config filenames. |
-| `bugteam_code_rules_gate_constants.py` | `bugteam_code_rules_gate.py` — gate-related path and exit-code constants. |
-| `bugteam_fix_hookspath_constants.py` | `bugteam_fix_hookspath.py` — canonical hooks path, remediation message strings. |
 | `probe_code_rules_enforcer_check_constants.py` | `probe_code_rules_enforcer_check.py` — enforcer module path and function name constants. |
 | `reflow_skill_md_constants.py` | `reflow_skill_md.py` — line-length and formatting constants. |
 | `windows_safe_rmtree_constants.py` | `windows_safe_rmtree.py` — retry count and wait constants. |
 | `__init__.py` | Empty package marker. |
+
+Preflight, fix_hookspath, and code_rules_gate constants live under package shared `pr_loop_shared_constants` with the shared implementations.
 
 ## Convention
 

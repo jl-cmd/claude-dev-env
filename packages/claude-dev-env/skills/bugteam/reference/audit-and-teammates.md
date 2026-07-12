@@ -161,7 +161,7 @@ After replies, the teammate writes outcome XML (schema in [`../PROMPTS.md`](../P
 
 Same self-termination model as bugfind. Missing notification → hard blocker.
 
-`approve: false` → `error: bugfix teammate refused shutdown` → Step 4 then 5.
+`approve: false` → `error: bugfix teammate refused shutdown` → Step 4 (`pr-loop-lifecycle` Close).
 
 Substitute placeholders from `last_findings` into the fix prompt per [`../PROMPTS.md`](../PROMPTS.md). The spawn XML includes TaskCreate/self_audit_checklist for task tracking — the FIX subagent MUST create tasks before starting.
 
