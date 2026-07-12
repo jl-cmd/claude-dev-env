@@ -6,6 +6,7 @@ Covers:
 - idempotent: second invocation produces the same final state with no errors
 - no-op when no override exists and global is already canonical
 - exits non-zero with a clear message when canonical hooks dir is missing
+- main() maps unexpected git stderr hard-fail RuntimeError to exit 1
 - handles paths with spaces
 """
 
@@ -229,15 +230,43 @@ def test_should_exit_nonzero_when_canonical_hooks_directory_missing(
     assert "hooks/git-hooks" in captured_streams.err.replace("\\", "/")
 
 
-def test_constant_wrapper_functions_have_been_removed() -> None:
-    """The three wrappers returned an already-imported module-level constant
-    unchanged. They added a layer of indirection with no transformation,
-    validation, or test seam, so they were inlined at every call site
-    and removed.
-    """
-    assert not hasattr(fix_hookspath, "_expected_hooks_path_suffix")
-    assert not hasattr(fix_hookspath, "_canonical_hooks_directory_components")
-    assert not hasattr(fix_hookspath, "_home_env_var_names")
+def test_main_exits_one_on_unexpected_git_stderr(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """main() must catch hard-fail RuntimeError from git stderr and exit 1 cleanly."""
+    home_directory = tmp_path / "home"
+    home_directory.mkdir()
+    environment = _make_isolated_git_environment(home_directory)
+    _create_canonical_hooks_directory(home_directory)
+    repository_path = tmp_path / "synthetic-repo"
+    _initialize_repository(repository_path, environment)
+    unexpected_git_stderr = (
+        "fatal: not a git repository (or any parent up to mount point /)"
+    )
+    failing_completed_process = subprocess.CompletedProcess(
+        args=["git"],
+        returncode=128,
+        stdout="",
+        stderr=unexpected_git_stderr,
+    )
+    monkeypatch.setattr(
+        fix_hookspath.subprocess,
+        "run",
+        lambda *_args, **_kwargs: failing_completed_process,
+    )
+
+    exit_code = fix_hookspath.main(
+        ["--repo-root", str(repository_path)],
+        all_environment_overrides=environment,
+    )
+
+    assert exit_code == 1
+    captured_streams = capsys.readouterr()
+    assert "not a git repository" in captured_streams.err
+    assert "Traceback" not in captured_streams.err
+    assert "Traceback" not in captured_streams.out
 
 
 def test_is_canonical_hooks_path_still_recognizes_canonical_suffix() -> None:

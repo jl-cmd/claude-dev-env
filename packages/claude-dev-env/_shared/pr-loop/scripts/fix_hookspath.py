@@ -283,7 +283,8 @@ def main(
             forwarded to every git invocation and to the preflight rerun.
 
     Returns:
-        Zero on success. Non-zero on the first failing git command or on a
+        Zero on success. Non-zero on the first failing git command, on a
+        hard-fail git stderr diagnostic (caught ``RuntimeError``), or on a
         non-zero preflight rerun exit code.
     """
     arguments = parse_arguments(all_arguments)
@@ -305,6 +306,37 @@ def main(
             file=sys.stderr,
         )
         return 1
+    try:
+        return _repair_hooks_path_then_rerun_preflight(
+            repository_root=repository_root,
+            canonical_hooks_directory=canonical_hooks_directory,
+            all_environment_overrides=all_environment_overrides,
+        )
+    except RuntimeError as runtime_error:
+        print(f"fix_hookspath: {runtime_error}", file=sys.stderr)
+        return 1
+
+
+def _repair_hooks_path_then_rerun_preflight(
+    repository_root: Path,
+    canonical_hooks_directory: Path,
+    all_environment_overrides: dict[str, str] | None,
+) -> int:
+    """Apply local/global hooksPath repairs, then re-run preflight.
+
+    Args:
+        repository_root: Repository root used for local git config and preflight.
+        canonical_hooks_directory: Absolute path to the packaged git-hooks tree.
+        all_environment_overrides: Optional environment variable mapping
+            forwarded to every git invocation and to the preflight rerun.
+
+    Returns:
+        Zero on success. Non-zero on the first failing git write or on a
+        non-zero preflight rerun exit code.
+
+    Raises:
+        RuntimeError: When a git read exits non-zero with non-empty stderr.
+    """
     local_hooks_path_values = list_local_core_hooks_path_values(
         repository_root,
         all_environment_overrides,
