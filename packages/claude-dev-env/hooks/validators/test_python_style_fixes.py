@@ -212,6 +212,7 @@ class TestDirectInvocation:
             capture_output=True,
             text=True,
             env=scrubbed_environment,
+            check=False,
         )
         assert "ModuleNotFoundError" not in completed_process.stderr
         assert completed_process.returncode == 0

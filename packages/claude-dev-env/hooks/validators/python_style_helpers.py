@@ -7,9 +7,8 @@ matching the source newline convention.
 
 import ast
 from collections.abc import Iterator
-from typing import Union
 
-FunctionNode = Union[ast.FunctionDef, ast.AsyncFunctionDef]
+FunctionNode = ast.FunctionDef | ast.AsyncFunctionDef
 
 
 def iter_function_definitions(tree: ast.AST) -> Iterator[FunctionNode]:
