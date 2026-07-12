@@ -156,7 +156,7 @@ For an independent check, spawn a subagent to run the audit (see delegation-map.
 
 ## Step 6: Deliver
 
-**Goal:** Hand off the finished skill with full documentation.
+**Goal:** Hand off the finished skill with full documentation. Prompt user if they want a PR up with the skill.
 
 Present to the user:
 

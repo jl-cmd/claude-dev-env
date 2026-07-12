@@ -54,6 +54,7 @@ Generate 10 variations of the user's intent:
 - Cases where this skill competes with another but should win
 
 For each: would the current description select this skill?
+If you aren't sure of user's intent, present options to the user via askuserquestion for trigger phases.
 
 Also check 5 near-miss phrasings — adjacent domains that must not activate. Adjust Triggers tokens only as needed for boundary.
 
@@ -95,6 +96,7 @@ If any check fails, rewrite. Show before/after. The after form must match `descr
 - Check against recent usage: are there new failure modes not yet captured?
 - Remove gotchas for issues that no longer occur (the skill fixed them).
 - Verify each gotcha is actionable — a reader should know what to avoid and why.
+- Verify they are relevant by going over them 1 by 1 with the user via AskUserQuestion.
 
 **Output:** Updated gotchas section (and any new gotchas for skill-builder itself).
 
