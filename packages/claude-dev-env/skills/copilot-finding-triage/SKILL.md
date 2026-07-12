@@ -1,19 +1,25 @@
 ---
 name: copilot-finding-triage
 description: >-
-  Sorts each Copilot gate finding from a converge run into one of two tiers and
-  routes it: a self-healing finding is auto-fixed, pushed, and counted toward
-  convergence with no user page, while a code concern pages the user over ntfy
-  and holds the run behind a 45-minute gate. Triggers: 'copilot finding triage',
-  'user review gate', 'tier copilot findings', 'triage the copilot gate'.
+  Sorts each Copilot gate finding from a converge run into one of two tiers, then
+  verifies each code concern with an executed check before routing it: a
+  self-healing finding is auto-fixed, pushed, and counted toward convergence with
+  no user page; a confirmed or refuted code concern is handled by the run with its
+  check evidence; only a code concern the check leaves inconclusive pages the user
+  over ntfy and holds the run behind a 45-minute gate. Triggers: 'copilot finding
+  triage', 'user review gate', 'tier copilot findings', 'triage the copilot gate'.
 ---
 
 # Copilot Finding Triage
 
-After a converge run's Copilot gate returns its findings, this skill sorts each
-one into a tier and acts on it. Findings scoped to style, type hints, or tests
-heal themselves inside the run. A logic, security, or behavior finding pages the user
-and holds the run until they answer or a 45-minute deadline passes.
+After a converge run's Copilot gate returns its findings, this skill tiers each
+one, verifies every code concern with an executed check, then acts on it.
+Findings scoped to style, type hints, or tests heal themselves inside the run. A
+logic, security, or behavior finding goes to a verifier that runs a check against
+HEAD: a confirmed defect joins the fix round carrying its repro, a refuted claim
+is answered on the thread with the check evidence, and only a finding the check
+leaves inconclusive pages the user and holds the run until they answer or a
+45-minute deadline passes.
 
 ## When this applies
 
@@ -40,12 +46,48 @@ Read the complete rubric in `reference/tier-rubric.md`. The short form:
   product decision. Logic or correctness defects, security, data handling,
   error-handling semantics, and concurrency.
 
-A finding that straddles both tiers sorts to CODE CONCERN. Any doubt routes to
-the user gate.
+A finding that straddles both tiers sorts to CODE CONCERN. Any doubt about the
+tier sorts the finding to CODE CONCERN.
+
+## The verification stage
+
+Tiering names who might act; the verification stage between tiering and the user
+gate settles it for every code concern. Each code-concern finding goes to its own
+verifier agent, all in parallel, inside the run. The verifier runs a check
+against the flagged HEAD and returns one of three verdicts.
+
+**The governing rule: a verdict is conclusive only if an actual check was
+executed.** Reading the source and reasoning about it, however sound, never
+produces a conclusive verdict. A check is a concrete command the verifier runs
+against the flagged HEAD — executing the code path with crafted inputs, forcing
+the claimed error condition, or running a purpose-built test — whose captured
+output demonstrates the behavior in question. Each verdict carries
+`{verdict, checkCommand, checkOutput, evidence}`; a conclusive verdict whose
+`checkCommand` or `checkOutput` is empty carries no executed check, so the run
+downgrades it to inconclusive.
+
+- **CONFIRMED** — the check reproduces the defect. The finding becomes
+  self-healing: it joins the fix round carrying its repro. The fix re-runs the
+  same repro check and shows it passes, adds the repro to the test suite as a
+  regression test where the suite covers that surface, lands in one commit and
+  pushes, replies to the thread with the fix SHA plus the before/after check
+  output, and resolves the thread. No page.
+- **REFUTED** — the check shows the code already behaves correctly in the exact
+  scenario the finding claims is broken. The run replies to the thread with the
+  command(s) and captured output, resolves the thread, and counts the finding
+  clean. No page.
+- **INCONCLUSIVE** — everything else: no runnable check exists, the check is
+  infeasible in this environment, the results are ambiguous, or the fix needs a
+  product decision between defensible behaviors. The verifier defaults to
+  inconclusive, and any doubt sorts here. These findings, and only these, flow
+  into the user gate.
+
+A run with zero inconclusive findings never reaches the user gate.
 
 ## Self-healing flow
 
-A self-healing finding never pages the user.
+A self-healing finding never pages the user. This covers a finding tiered
+self-healing and a code concern the verifier confirmed.
 
 1. Fix the finding through the caller's existing fix flow.
 2. Verify the fix.
@@ -54,16 +96,18 @@ A self-healing finding never pages the user.
 
 ## User gate protocol
 
-Run this protocol when one or more CODE CONCERN findings sit on the round's HEAD.
+Run this protocol when one or more code-concern findings stayed inconclusive
+after verification on the round's HEAD.
 
 ### Step 1 — Page the user
 
 Run `scripts/notify_ntfy.py` with:
 
 - `--title` naming the PR.
-- `--message` summarizing each code-concern finding, one line each, as
-  `file:line — severity — one sentence`. Build the body from
-  `templates/notification.md`.
+- `--message` summarizing each inconclusive finding, one line each, as
+  `file:line — severity — one sentence`, followed by the verifier's one-line
+  evidence note stating what check was attempted and why it was not decisive.
+  Build the body from `templates/notification.md`.
 - `--click-url` set to the Copilot review URL, so tapping the page opens the
   review.
 
@@ -82,17 +126,22 @@ moment the script exits zero.
 - If the deadline passes with no answer, run the caller's normal teardown and
   report the un-reviewed findings in the final report.
 
-### Step 3 — Self-healing findings run in parallel
+### Step 3 — Self-healing and confirmed findings run in parallel
 
-Self-healing findings on the same HEAD do not wait for the gate. Fix, verify,
-commit, and push them through the caller's fix flow, and count the round toward
-convergence.
+Self-healing findings and confirmed code concerns on the same HEAD do not wait
+for the gate. Fix, verify, commit, and push them through the caller's fix flow,
+and count the round toward convergence. A confirmed finding carries its repro, so
+its fix re-runs that same check and posts the before/after output on the thread.
 
 ## Gate checklist
 
 - [ ] Every finding on HEAD carries a tier.
 - [ ] Each self-healing finding is fixed, verified, and pushed.
-- [ ] Each code-concern finding appears as one line in the ntfy body.
+- [ ] Each code-concern finding carries a verifier verdict from an executed check.
+- [ ] Each confirmed finding is fixed with its repro re-run and pushed.
+- [ ] Each refuted finding's thread carries the check evidence and is resolved.
+- [ ] Each inconclusive finding appears as one line in the ntfy body with its
+      evidence note.
 - [ ] The page carries the PR name, the per-finding summary, and the review URL.
 - [ ] `scripts/notify_ntfy.py` exited zero before the 45-minute clock started.
 - [ ] The wakeup is armed for 45 minutes from a delivered page.
@@ -102,9 +151,9 @@ convergence.
 
 | Path | Role |
 |------|------|
-| `SKILL.md` | This hub: when it applies, the tier split, the gate protocol. |
-| `reference/tier-rubric.md` | The complete tier rubric and the behavior-safe test. |
-| `templates/notification.md` | The ntfy message body for a code-concern page. |
+| `SKILL.md` | This hub: when it applies, the tier split, the verification stage, the gate protocol. |
+| `reference/tier-rubric.md` | The complete tier rubric, the three verdicts, and the executed-check standard. |
+| `templates/notification.md` | The ntfy message body for an inconclusive-finding page. |
 | `scripts/notify_ntfy.py` | The ntfy publish CLI. |
 | `scripts/test_notify_ntfy.py` | Tests for the publish CLI. |
 
@@ -116,9 +165,13 @@ convergence.
 - **A failed page is not consent.** A failed ntfy POST holds the gate open. It
   does not auto-approve the round. Read the script's non-zero exit as a page that
   never reached the user, and keep the run held.
-- **Doubt sorts to CODE CONCERN.** When a finding could sit in either tier,
-  classify it as a code concern and page the user. The safe default never
-  auto-fixes a finding that might change runtime behavior.
+- **A conclusive verdict needs an executed check.** Source reading, however
+  sound, never confirms or refutes a finding. A confirmed or refuted verdict
+  whose `checkCommand` or `checkOutput` is empty downgrades to inconclusive and
+  pages the user.
+- **Doubt sorts to INCONCLUSIVE.** When an executed check does not pin down the
+  behavior, the verifier defaults to inconclusive and the finding pages the user.
+  The safe default never auto-fixes a finding whose behavior a check did not show.
 - **The 45-minute clock starts at page success.** The timer starts when the page
   reaches the user, which is the moment `scripts/notify_ntfy.py` exits zero, not
   the moment the finding is classified.

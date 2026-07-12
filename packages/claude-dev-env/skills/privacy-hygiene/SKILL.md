@@ -22,8 +22,8 @@ Find and remove personal data and high-confidence secrets before they land in gi
 
 | Category | Blocked examples | Allowed residual |
 |---|---|---|
-| Email | `person@company.io` | `user@example.com`, `user@example.org`, `user@example.net` |
-| Home path | `C:/Users/realname/...`, `/Users/realname/...`, `/home/realname/...` | `C:/Users/example/...`, `C:/Users/<you>/...`, `/Users/alice/...` |
+| Email | `user@example.com` | `user@example.com`, `user@example.org`, `user@example.net` |
+| Home path | `C:/Users/example/...`, `/Users/example/...`, `/home/example/...` | `C:/Users/example/...`, `C:/Users/<you>/...`, `/Users/alice/...` |
 | LAN address | Unlisted `10.x` / `172.16–31.x` / `192.168.x` | Public addresses; your NAS host from `CLAUDE_NAS_HOST` or `~/.claude/local-identity.json`; entries in `ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES` |
 | Secret | `ghp_…`, `github_pat_…`, `AKIA…`, PEM private-key headers | Public keys, redacted `***`, env var names without values |
 
@@ -55,7 +55,7 @@ git diff --name-only origin/main...HEAD
 Run from the repo root (PowerShell-friendly example):
 
 ```
-rg -n --hidden -g '!node_modules' -g '!.git' -e '@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' -e 'Users[/\\][^/\\]+' -e '/home/[^/]+' -e '\b(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)\b' -e '\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b' -e '\bgithub_pat_[A-Za-z0-9_]{20,}\b' -e '\bAKIA[0-9A-Z]{16}\b' -e '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+rg -n --hidden -g '!node_modules' -g '!.git' -e '@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' -e 'Users[/\\][^/\\]+' -e '[/]home/[^/]+' -e '\b(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)\b' -e '\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b' -e '\bgithub_pat_[A-Za-z0-9_]{20,}\b' -e '\bAKIA[0-9A-Z]{16}\b' -e '-----BEGIN [A-Z ]*PRIVATE KEY-----'
 ```
 
 Review each hit. Ignore:
@@ -104,6 +104,7 @@ Hooks register via `hooks/hooks.json` into `~/.claude/settings.json`. Once insta
 ## Open knobs
 
 - **NAS / LAN allowlist:** Unlisted private IPs are blocked. The scanner resolves your NAS host from `CLAUDE_NAS_HOST`, then `~/.claude/local-identity.json` (`nas.host`), and allowlists it when it is a private address, so the committed tree holds no real host. `ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES` in `hooks_constants` holds the static allowlist for any host every machine must share.
+- **Commit-scan exempt repositories:** named owner/repo slugs skip the staged-commit PII scan only. Set `CLAUDE_PII_EXEMPT_REPOS` (comma-separated `owner/repo` values) or list them under `pii_exempt_repositories` in `~/.claude/local-identity.json`. Matching uses the repository's `remote.origin.url` and accepts only the exact host `github.com` (https, ssh scheme, or scp-style). A repository with no readable origin is never exempt (fail-closed to scanning). Write / Edit / MultiEdit and durable post bodies still scan in every repository.
 - **Public maintainer identity:** when a real email or name is intentional product surface, keep it and note that in the PR body so reviewers do not treat it as a leak.
 
 ## What this skill does not do

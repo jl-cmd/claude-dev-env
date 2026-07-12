@@ -28,6 +28,7 @@ import pii_prevention_blocker as blocker_module  # noqa: E402
 from pii_prevention_blocker import (  # noqa: E402
     evaluate,
     evaluate_bash_command,
+    evaluate_post_body_texts,
     evaluate_staged_commit,
     evaluate_write_edit_payload,
     extract_git_commit_working_directory,
@@ -903,3 +904,301 @@ def test_git_exe_dash_c_commit_scans_named_repo_not_cwd(tmp_path: Path) -> None:
     assert dash_c_scan is not None
     assert "email" in dash_c_scan
     assert SYNTHETIC_REAL_EMAIL not in dash_c_scan
+
+
+def _add_repository_origin(repository_root: Path, origin_url: str) -> None:
+    subprocess.run(
+        ["git", "remote", "add", "origin", origin_url],
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_exempt_repository_commit_skips_staged_pii_scan(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root, "https://github.com/ExemptOwner/exempt-repo.git"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is None
+
+
+def test_exempt_repository_matches_ssh_origin_url(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root, "git@github.com:ExemptOwner/exempt-repo.git"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "exemptowner/EXEMPT-REPO")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is None
+
+
+def test_non_exempt_repository_commit_still_scans_staged_pii(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root, "https://github.com/OtherOwner/other-repo.git"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_repository_without_origin_is_not_exempt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_owner_repo_slug_from_https_origin_with_git_suffix() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://github.com/Owner/repo.git"
+        )
+        == "owner/repo"
+    )
+
+
+def test_owner_repo_slug_from_https_origin_without_git_suffix() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://github.com/Owner/repo"
+        )
+        == "owner/repo"
+    )
+
+
+def test_owner_repo_slug_from_scp_ssh_origin() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "git@github.com:Owner/repo.git"
+        )
+        == "owner/repo"
+    )
+
+
+def test_owner_repo_slug_from_ssh_scheme_origin() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "ssh://git@github.com/Owner/repo.git"
+        )
+        == "owner/repo"
+    )
+
+
+def test_owner_repo_slug_from_trailing_slash_git_suffix() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://github.com/Owner/repo.git/"
+        )
+        == "owner/repo"
+    )
+
+
+def test_owner_repo_slug_rejects_spoofed_evil_host() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://evil.test/ExemptOwner/exempt-repo.git"
+        )
+        is None
+    )
+
+
+def test_owner_repo_slug_rejects_notgithub_com_host() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://notgithub.com/Owner/repo.git"
+        )
+        is None
+    )
+
+
+def test_owner_repo_slug_rejects_github_com_suffix_host() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://github.com.evil.test/Owner/repo.git"
+        )
+        is None
+    )
+
+
+def test_owner_repo_slug_rejects_invalid_https_port_authority() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://github.com:443.evil.test/Owner/repo.git"
+        )
+        is None
+    )
+
+
+def test_owner_repo_slug_rejects_invalid_ssh_port_authority() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "ssh://git@github.com:22.evil.test/Owner/repo.git"
+        )
+        is None
+    )
+
+
+def test_owner_repo_slug_from_https_origin_with_valid_port() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://github.com:443/Owner/repo.git"
+        )
+        == "owner/repo"
+    )
+
+
+def test_owner_repo_slug_from_ssh_origin_with_valid_port() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "ssh://git@github.com:22/Owner/repo.git"
+        )
+        == "owner/repo"
+    )
+
+
+def test_owner_repo_slug_rejects_path_shaped_origin() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "C:/repos/ExemptOwner/exempt-repo"
+        )
+        is None
+    )
+
+
+def test_spoofed_origin_host_still_denies_staged_email(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root, "https://evil.test/ExemptOwner/exempt-repo.git"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_invalid_port_authority_origin_still_denies_staged_email(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root,
+        "https://github.com:443.evil.test/ExemptOwner/exempt-repo.git",
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_path_shaped_origin_still_denies_staged_email(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(repository_root, "C:/repos/ExemptOwner/exempt-repo")
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_trailing_slash_git_suffix_origin_still_exempts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root, "https://github.com/ExemptOwner/exempt-repo.git/"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is None
+
+
+def test_ssh_scheme_origin_still_exempts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root, "ssh://git@github.com/ExemptOwner/exempt-repo.git"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is None
+
+
+def test_write_still_scans_when_repository_is_exempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_write_edit_payload(
+        "Write",
+        {
+            "file_path": "notes.md",
+            "content": f"Reach me at {SYNTHETIC_REAL_EMAIL}",
+        },
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_post_body_still_scans_when_repository_is_exempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_post_body_texts(
+        [f"Reach me at {SYNTHETIC_REAL_EMAIL}"]
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason

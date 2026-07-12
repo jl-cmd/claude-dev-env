@@ -30,6 +30,7 @@ python -m pytest tests/test_fan_out_dispatch.py
 | File | What it covers |
 |------|----------------|
 | `test_fan_out_dispatch.py` | Unit specs for `scripts/fan_out_dispatch.py`: repo filtering (`is_target_repo`), dispatch retry logic, polling, exit-code computation, and summary formatting. |
+| `test_fan_out_conclusion_report.py` | Unit specs for `scripts/fan_out_conclusion_report.py`: private-target redaction, dispatch-correlation filtering by run `created_at`, the 404-to-`listener-missing` mapping, and the `no-matching-run` fallback. |
 | `test_local_identity.py` | Unit specs for `config/local_identity.py`: owner-scope resolution from the environment, a git-ignored local file, and the placeholder default, plus token environment-variable naming. |
 | `test_sync_ai_rules.py` | Specs for `.github/scripts/sync_ai_rules.py`: destination path logic, canonical-repo behaviour (writes `.cursor/BUGBOT.md` only), drift detection, and the listener's write logic against a real temporary git repo. |
 | `test_bugbot_rules_contract.py` | Contract test: verifies that `AGENTS.md` and `.cursor/BUGBOT.md` list the same CODE_RULES exemptions as `code_rules_enforcer.py`. Keeps the LLM review docs in step with the hook-enforced gate. |

@@ -153,25 +153,52 @@ The two flags carry this run's Copilot and Bugbot availability, so the next gene
 skips a reviewer that is down or out of quota without re-probing. This list is the seed the
 [self-closing loop](reference/self-closing-loop.md) converges next.
 
-## Copilot findings — two-tier triage
+## Copilot findings — tier, verify, then route
 
 The Copilot gate tiers each finding: a **self-healing** finding (style, type
 hints, imports, formatting, magic-value extraction, test-only or doc-vs-code
 fixes — nothing that changes observable runtime behavior) flows into the fix
 round with no user notification. A **code-concern** finding (logic, security,
 data handling, error-handling semantics, concurrency — the tier whenever in
-doubt) stops the workflow with `converged: false`, `blocker: "user-review"`, and
-a `userReview` field carrying
-`{ reviewUrl, findings: [{ file, line, severity, tier, title }] }`.
+doubt) goes to a verification stage before any routing.
+
+Each code-concern finding gets its own verifier agent, all in parallel, inside
+the workflow. A verdict is conclusive only when an actual check ran: the verifier
+executes a command against the flagged HEAD — running the code path with crafted
+inputs, forcing the claimed error condition, or running a purpose-built test —
+and captures its output. The verdict carries
+`{ verdict, checkCommand, checkOutput, evidence }`; a conclusive verdict with an
+empty `checkCommand` or `checkOutput` downgrades to inconclusive.
+
+- **confirmed** — the check reproduces the defect. The finding becomes
+  self-healing: it joins the fix round carrying its repro, and the fix re-runs
+  that same check, adds a regression test where the suite covers the surface,
+  lands in one commit, pushes, and replies on the thread with the fix SHA and the
+  before/after output. No page.
+- **refuted** — the check shows the code already behaves correctly in the exact
+  scenario the finding claims is broken. The workflow replies on the thread with
+  the command and output, resolves it, and counts it clean. No page.
+- **inconclusive** — everything else, and the verifier's default: no runnable
+  check exists, the check is infeasible here, the results are ambiguous, or the
+  fix needs a product decision. Any doubt sorts here. Only inconclusive findings
+  page the user.
+
+A round whose code concerns all confirm or refute never returns
+`blocker: "user-review"`. On one or more inconclusive findings, the workflow
+stops with `converged: false`, `blocker: "user-review"`, and a `userReview`
+field carrying
+`{ reviewUrl, findings: [{ file, line, severity, tier, title, evidence }] }` —
+`evidence` is the verifier's one-line note stating what check was attempted and
+why it was not decisive.
 
 A background workflow cannot hold for a human, so the wait belongs to the
 orchestrating session. On a `blocker: "user-review"` return, run the
 [`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) skill: send the
-ntfy notification (the finding summary plus the `reviewUrl` Copilot review link),
-then hold with a 45-minute `ScheduleWakeup` for the user's response. When the
-user answers within the window, follow their direction. When the window closes
-with no response, run normal teardown and report the code-concern findings
-un-reviewed.
+ntfy notification (the per-finding summary and evidence note plus the `reviewUrl`
+Copilot review link), then hold with a 45-minute `ScheduleWakeup` for the user's
+response. When the user answers within the window, follow their direction. When
+the window closes with no response, run normal teardown and report the
+inconclusive findings un-reviewed.
 
 ## Budget stop
 
@@ -205,11 +232,12 @@ On teardown entry, when `~/.claude/runtime/pr-loop/bugteam-pr-<N>/handoff.json`
 exists, read its `completed_steps` and skip any checkpoint the list already
 names, so a resumed run performs only the checkpoints left.
 
-On a `blocker: "user-review"` return, run the
-[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate before
-teardown: send the ntfy alert with the finding summary and the
-`userReview.reviewUrl` link, then hold with a 45-minute `ScheduleWakeup`. Act on
-the user's direction when it arrives inside the window; when the window closes
+On a `blocker: "user-review"` return, the workflow held one or more code-concern
+findings that stayed inconclusive after the executed-check verification stage.
+Run the [`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate before
+teardown: send the ntfy alert with the per-finding summary and evidence note and
+the `userReview.reviewUrl` link, then hold with a 45-minute `ScheduleWakeup`. Act
+on the user's direction when it arrives inside the window; when the window closes
 with no response, fall through to normal teardown and report the
 `userReview.findings` un-reviewed. The PR stays a draft in this path — the
 workflow marked nothing ready.

@@ -8,8 +8,12 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 LISTENER_WORKFLOW_SOURCE="${REPO_ROOT}/.github/workflows/sync-ai-rules.yml"
 LISTENER_SCRIPT_SOURCE="${REPO_ROOT}/.github/scripts/sync_ai_rules.py"
+LISTENER_CONFIG_PATHS_SOURCE="${REPO_ROOT}/config/sync_ai_rules_paths.py"
+LISTENER_CONFIG_INIT_SOURCE="${REPO_ROOT}/config/__init__.py"
 LISTENER_WORKFLOW_DEST=".github/workflows/sync-ai-rules.yml"
 LISTENER_SCRIPT_DEST=".github/scripts/sync_ai_rules.py"
+LISTENER_CONFIG_PATHS_DEST="config/sync_ai_rules_paths.py"
+LISTENER_CONFIG_INIT_DEST="config/__init__.py"
 BOOTSTRAP_BRANCH_NAME="chore/bootstrap-ai-rules-sync-v1"
 PR_TITLE="chore: bootstrap AI rules sync listener (v1)"
 DOCS_LINK="https://github.com/jl-cmd/claude-dev-env/blob/main/docs/ai-rules-sync.md"
@@ -161,14 +165,22 @@ deploy_to_repo() {
 
     local workflow_matches=0
     local script_matches=0
+    local config_paths_matches=0
+    local config_init_matches=0
     if [[ -f "${work_dir}/${LISTENER_WORKFLOW_DEST}" ]] && cmp -s "${LISTENER_WORKFLOW_SOURCE}" "${work_dir}/${LISTENER_WORKFLOW_DEST}"; then
         workflow_matches=1
     fi
     if [[ -f "${work_dir}/${LISTENER_SCRIPT_DEST}" ]] && cmp -s "${LISTENER_SCRIPT_SOURCE}" "${work_dir}/${LISTENER_SCRIPT_DEST}"; then
         script_matches=1
     fi
+    if [[ -f "${work_dir}/${LISTENER_CONFIG_PATHS_DEST}" ]] && cmp -s "${LISTENER_CONFIG_PATHS_SOURCE}" "${work_dir}/${LISTENER_CONFIG_PATHS_DEST}"; then
+        config_paths_matches=1
+    fi
+    if [[ -f "${work_dir}/${LISTENER_CONFIG_INIT_DEST}" ]] && cmp -s "${LISTENER_CONFIG_INIT_SOURCE}" "${work_dir}/${LISTENER_CONFIG_INIT_DEST}"; then
+        config_init_matches=1
+    fi
 
-    if [[ ${workflow_matches} -eq 1 && ${script_matches} -eq 1 ]]; then
+    if [[ ${workflow_matches} -eq 1 && ${script_matches} -eq 1 && ${config_paths_matches} -eq 1 && ${config_init_matches} -eq 1 ]]; then
         log_info "${repo_full_name}: already up to date, skipping"
         echo "skipped"
         return
@@ -176,9 +188,12 @@ deploy_to_repo() {
 
     mkdir -p "${work_dir}/.github/workflows"
     mkdir -p "${work_dir}/.github/scripts"
+    mkdir -p "${work_dir}/config"
 
     cp "${LISTENER_WORKFLOW_SOURCE}" "${work_dir}/${LISTENER_WORKFLOW_DEST}"
     cp "${LISTENER_SCRIPT_SOURCE}" "${work_dir}/${LISTENER_SCRIPT_DEST}"
+    cp "${LISTENER_CONFIG_PATHS_SOURCE}" "${work_dir}/${LISTENER_CONFIG_PATHS_DEST}"
+    cp "${LISTENER_CONFIG_INIT_SOURCE}" "${work_dir}/${LISTENER_CONFIG_INIT_DEST}"
 
     if [[ "${DRY_RUN}" == "true" ]]; then
         log_info "[DRY RUN] Would create branch and PR in ${repo_full_name}"
@@ -189,7 +204,9 @@ deploy_to_repo() {
     git -C "${work_dir}" checkout -b "${BOOTSTRAP_BRANCH_NAME}" >/dev/null 2>&1
     git -C "${work_dir}" add -f \
         "${LISTENER_WORKFLOW_DEST}" \
-        "${LISTENER_SCRIPT_DEST}" >/dev/null 2>&1
+        "${LISTENER_SCRIPT_DEST}" \
+        "${LISTENER_CONFIG_PATHS_DEST}" \
+        "${LISTENER_CONFIG_INIT_DEST}" >/dev/null 2>&1
     git -C "${work_dir}" commit -m "chore: bootstrap AI rules sync listener (v1)" >/dev/null 2>&1
     git -C "${work_dir}" push origin "${BOOTSTRAP_BRANCH_NAME}" >/dev/null 2>&1
 

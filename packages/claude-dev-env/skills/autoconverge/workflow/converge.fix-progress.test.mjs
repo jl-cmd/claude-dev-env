@@ -99,7 +99,7 @@ test('the converge call site sets a fix-stalled blocker when an all-null-thread 
 
 test('the copilot call site sets a fix-stalled blocker when an all-null-thread resolvedWithoutCommit round cannot progress', () => {
   const copilotBranch = convergeSource.slice(
-    convergeSource.indexOf("const fixResult = await applyFixes(head, copilotOutcome.findings, 'copilot')"),
+    convergeSource.indexOf("const fixResult = await applyFixes(head, roundFindings, 'copilot')"),
     convergeSource.indexOf("phase = 'CONVERGE'\n      continue\n    }\n    phase = 'FINALIZE'"),
   );
   assert.match(copilotBranch, /collectFindingThreadIds/);

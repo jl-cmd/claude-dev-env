@@ -575,7 +575,7 @@ test('every standardsDeferralNote call site passes the shared deferral state wit
     'expected the terminal-Bugbot call site to pass buildStandardsDeferral() inline',
   );
   assert.equal(
-    noteCalls.filter((eachCall) => /standardsDeferralNote\(copilotOutcome\.findings\.length, buildStandardsDeferral\(\)\)/.test(eachCall)).length,
+    noteCalls.filter((eachCall) => /standardsDeferralNote\(roundFindings\.length, buildStandardsDeferral\(\)\)/.test(eachCall)).length,
     1,
     'expected the copilot call site to pass buildStandardsDeferral() inline',
   );

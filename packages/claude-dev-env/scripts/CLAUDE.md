@@ -21,6 +21,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `Install-SweepEmptyDirs.ps1` | Registers `sweep_empty_dirs.py` as a scheduled task on Windows |
 | `check.ps1` | Runs the full code-quality check suite |
 | `Show-Asset.ps1` | Opens files on screen, sizing each image window to the image's pixel dimensions (scaled to fit the screen); non-image files open in their default application |
+| `Get-SessionAccount.ps1` | Reports which Claude account the current session is actually logged into by comparing `~/.claude.json`'s CLI login against a `CLAUDE_USER_DATA_DIR` desktop profile's `lastKnownAccountUuid`, recovering the desktop account's email from profile storage when the two accounts differ |
 
 ## Subdirectories
 
@@ -28,10 +29,18 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 |---|---|
 | `dev_env_scripts_constants/` | Named constants (`timing.py`) for scripts in this directory |
 | `sync_to_cursor/` | Package that builds Cursor `.mdc` files from Claude rules and docs |
-| `tests/` | pytest suite for the Python scripts in this directory |
+| `tests/` | pytest suite for the Python scripts and Pester (`*.Tests.ps1`) suite for the PowerShell scripts in this directory |
 
 ## Running tests
 
+Python scripts (pytest):
+
 ```bash
 python -m pytest packages/claude-dev-env/scripts/tests/
+```
+
+PowerShell scripts (Pester 5+, `*.Tests.ps1`):
+
+```powershell
+Invoke-Pester -Path packages/claude-dev-env/scripts/tests/
 ```
