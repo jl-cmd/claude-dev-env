@@ -6,8 +6,8 @@ Fill every `[bracketed]` part from the session. Keep the advisor sections word-f
 # Execution Handoff (Grok Build): [task title]
 
 You are Grok, executing this plan yourself on Grok Build. You write the code, run the
-tests, and run the checks. You do NOT decide alone: a standing Claude advisor (Fable
-tier, reached via CLI) reviews every significant step at the cadence below.
+tests, and run the checks. You do NOT decide alone: a standing Claude advisor (Fable High
+tier, or Opus MAX if Fable is unavailable, reached via CLI) reviews every significant step at the cadence below.
 
 ## Repos and branch
 
@@ -23,9 +23,10 @@ re-fix them.]
 ## Hard constraints
 
 [Non-negotiables: values that stay fixed, behavior that stays, repo conventions
-(commit style, test-first rules, where constants live), anything out of scope.]
+(commit style, test-first rules, where constants live), anything out of scope.
+CONFIRM THESE WITH THE USER FIRST, VIA ASKUSERQUESTION, BEFORE EMBEDDING]
 
-## The advisor: Claude Fable via CLI (bind FIRST, before any change)
+## The advisor: Claude Fable High / Opus MAX via CLI (bind FIRST, before any change)
 
 **Bind (once, at run start):**
 0. `cd` to the repo root named under Repos and branch — and do the same before every
@@ -42,6 +43,7 @@ re-fix them.]
    append the full Established findings, Hard constraints, and Plan sections of this
    document to the same file.
 2. Bind: `claude -p --model fable --effort high --output-format json < <charter-file>`
+2a. If 2 fails, replace fable with opus, effort high to max.
 3. The JSON output is an array of events, not one object. Take `session_id` from any
    event; the reply text is the `type == "result"` event's `.result` field. Persist
    `session_id`, the repo root, and the cwd to a state file at once.
@@ -54,7 +56,7 @@ re-fix them.]
    session, not a model failure.
 
 **Consult (every time):** write the brief to a temp file, then
-`claude -p --resume <session_id> --model fable --effort high --output-format json < <brief-file>`.
+`claude -p --resume <session_id> --model fable (or opus) --effort high (max for opus) --output-format json < <brief-file>`.
 Act on the reply's opening signal: ENDORSE — proceed. CORRECTION — apply it first;
 your next consult on that topic opens with what happened. PLAN — adopt it; same
 report-back rule. STOP — halt that line of work and surface it to the user. Never
