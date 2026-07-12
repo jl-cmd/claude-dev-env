@@ -1,11 +1,9 @@
 # Fix protocol
 
-The full fix protocol — executor choice, the shared 13-step sequence,
-reply transport, thread resolution, the unresolved-thread sweep, and
-post-push resets — lives in the `pr-fix-protocol` skill
-(`../../pr-fix-protocol/SKILL.md`), which follows the shared step
-sequence in `../../../_shared/pr-loop/fix-protocol.md`. Hook handling
-per [ground-rules.md](ground-rules.md).
+Open and apply the shared fix sequence in
+[`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md)
+— executor choice, the 13-step sequence, reply transport, thread resolution,
+and post-push resets. Hook handling per [ground-rules.md](ground-rules.md).
 
 This file holds only the pr-converge deltas: the multi-PR teammate
 obligations and the same-tick re-entry rule.
@@ -17,7 +15,9 @@ obligations and the same-tick re-entry rule.
   (what changed + commit identifier), matching §Audit result → fix worker step 4 — **before** writing
   `state.json` and going idle.
 - Writes `last_action: "fix_pushed"`, `current_head: <new SHA>`,
-  `bugbot_clean_at: null`, `code_review_clean_at: null`, `bugbot_down: false`,
+  `bugbot_clean_at: null`, `code_review_clean_at: null`,
+  `bugteam_clean_at: null`, `copilot_clean_at: null`,
+  `merge_state_status: null`, `bugbot_down: false`,
   `phase: "CODE_REVIEW"`, `status: "awaiting_code_review"`, `last_updated`
   (ISO-8601 UTC) to `state.json` (per §Concurrency).
 - Goes idle. Orchestrator spawns a follow-up `general-purpose` agent for the

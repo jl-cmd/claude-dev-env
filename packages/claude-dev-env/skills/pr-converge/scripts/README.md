@@ -84,8 +84,7 @@ Fetch via MCP:
     pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
       → filter threads where `is_resolved == false`
 
-Sweep semantics and per-thread handling live in the `pr-fix-protocol`
-skill's unresolved-thread sweep (`../../pr-fix-protocol/SKILL.md`).
+Sweep semantics and per-thread handling live in the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md) step 12; skill deltas in [`../reference/fix-protocol.md`](../reference/fix-protocol.md)).
 
 ### Request Copilot review: `gh api` REST endpoint
 
@@ -99,7 +98,9 @@ Check for an existing pending review first with
 
 ## Shared modules
 
-Shared Python utilities live under `_shared/pr-loop/scripts/` — `_xml_utils.py` for XML serialization, `_cli_utils.py` for CLI guards, `_path_resolver.py` for canonical path resolution. These serve `/bugteam`, `/qbug`, `/findbugs`, and `/fixbugs` equally.
+Shared Python utilities live under `skills/_shared/pr-loop/scripts/` —
+`_xml_utils.py` for XML serialization, `_cli_utils.py` for CLI guards,
+`_path_resolver.py` for canonical path resolution.
 
 ## Tests
 
