@@ -110,6 +110,16 @@ Describe 'Get-EmailCandidatesFromProfile' {
         $candidateEmails.Count | Should -Be 1
         $candidateEmails[0] | Should -Be 'sam.exampleson@company.com'
     }
+
+    It 'refuses to recover an email whose local part is glued to an adjacent boundary byte' {
+        $profileDirectory = Join-Path $TestDrive 'prefix-polluted-profile'
+        New-Utf16StorageFile -ProfileDirectory $profileDirectory -StoreName 'Session Storage' -FileName '000010.ldb' -EmailText '.desktop@company.com'
+
+        $candidateEmails = @(Get-EmailCandidatesFromProfile -ProfileDirectory $profileDirectory)
+
+        ($candidateEmails -contains '.desktop@company.com') | Should -Be $false
+        $candidateEmails.Count | Should -Be 0
+    }
 }
 
 Describe 'Resolve-SessionAccount' {
@@ -207,6 +217,19 @@ Describe 'Resolve-SessionAccount' {
         $sessionAccount.Email | Should -Be 'desktop@company.com'
         $sessionAccount.AccountUuid | Should -Be 'uuid-desktop'
         $sessionAccount.CliEmail | Should -Be 'cli@company.com'
+    }
+
+    It 'fails safe with exit code 1 rather than reporting a prefix-polluted email as the account' {
+        $cliConfigPath = New-CliConfigFile -Directory (Join-Path $TestDrive 'polluted-cli') -Email 'cli@company.com' -AccountUuid 'uuid-cli'
+        $profileDirectory = Join-Path $TestDrive 'polluted-resolve-profile'
+        New-ProfileConfigFile -ProfileDirectory $profileDirectory -LastKnownAccountUuid 'uuid-desktop'
+        New-Utf16StorageFile -ProfileDirectory $profileDirectory -StoreName 'Session Storage' -FileName '000011.ldb' -EmailText '.desktop@company.com'
+
+        $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $profileDirectory
+
+        $sessionAccount.ExitCode | Should -Be 1
+        $sessionAccount.Email | Should -BeNullOrEmpty
+        $sessionAccount.ErrorMessage | Should -Match 'no candidate email was recovered'
     }
 
     It 'returns exit code 1 when the desktop account differs but no candidate email is recovered' {

@@ -48,7 +48,7 @@ function Get-EmailCandidatesFromProfile {
     $scanDirectories = @('sentry', 'IndexedDB', 'Session Storage', 'WebStorage') |
         ForEach-Object { Join-Path $ProfileDirectory $_ } |
         Where-Object { Test-Path -LiteralPath $_ }
-    $emailPattern = '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+'
+    $emailPattern = '(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(?![a-zA-Z0-9-])'
     $maximumFileBytes = 50MB
     $foundEmails = [System.Collections.Generic.HashSet[string]]::new()
 
