@@ -548,7 +548,7 @@ function runConvergenceCheck(context) {
   const copilotDownFlag = context.copilotDown ? ' --copilot-down' : ''
   const bugteamPostBlockedFlag = context.bugteamPostBlocked ? ' --bugteam-post-blocked' : ''
   const bugteamPostBlockedNote = context.bugteamPostBlocked
-    ? `   The --bugteam-post-blocked flag is set because the environment refused the CLEAN bugteam review post this run. The review lenses already cleared this HEAD, so the check skips the bugteam CLEAN-review gate and prints a SKIP notice for it rather than failing on a review that was never allowed to land.\n`
+    ? `   The --bugteam-post-blocked flag is set because the environment refused the CLEAN bugteam review post this run. The review lenses already cleared this HEAD, so the check skips the bugteam CLEAN-review gate and reports that gate as PASS — bypassed (bugteam_post_blocked) rather than failing on a review that was never allowed to land.\n`
     : ''
   const reviewerOptOutTokens = []
   if (context.bugbotDown) reviewerOptOutTokens.push('bugbot')

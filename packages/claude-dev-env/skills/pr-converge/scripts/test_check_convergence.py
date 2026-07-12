@@ -22,9 +22,6 @@ from pr_converge_skill_constants.constants import EXIT_CODE_GH_ERROR
 _SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
 _PR_CONVERGE_DIRECTORY = _SCRIPTS_DIRECTORY.parent
 
-if str(_PR_CONVERGE_DIRECTORY) not in sys.path:
-    sys.path.insert(0, str(_PR_CONVERGE_DIRECTORY))
-
 
 def _load_module() -> ModuleType:
     for each_cached_name in [
