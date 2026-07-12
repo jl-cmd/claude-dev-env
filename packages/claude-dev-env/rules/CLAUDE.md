@@ -12,6 +12,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code l
 | File | Rule |
 |---|---|
 | `agent-spawn-protocol.md` | Protocol for spawning subagents: context sufficiency check, prompt generation via `/prompt-generator`, then spawn |
+| `anti-corollary-tests.md` | Tests must carry information: no corollary matrices over canonical reductions, no suite that only matches a dead-implementation default, stated mutation in the audit lane |
 | `ask-user-question-required.md` | Every user-directed question goes through the `AskUserQuestion` tool — no plain-text questions |
 | `bdd.md` | BDD discovery-driven development workflow and Example Mapping reference |
 | `claude-md-orphan-file.md` | Every backticked bare filename in a per-directory `CLAUDE.md` table's first column names a file in that directory's subtree |
