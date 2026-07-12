@@ -14,13 +14,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Set
 
+_hooks_directory = str(Path(__file__).resolve().parent.parent)
+
 try:
     from hooks_constants.python_style_checks_constants import (
         EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS,
         MINIMUM_ARGUMENT_COUNT,
     )
 except ModuleNotFoundError:
-    _hooks_directory = str(Path(__file__).resolve().parent.parent)
     if _hooks_directory not in sys.path:
         sys.path.insert(0, _hooks_directory)
     from hooks_constants.python_style_checks_constants import (

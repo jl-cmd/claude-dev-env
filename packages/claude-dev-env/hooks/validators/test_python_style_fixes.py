@@ -217,6 +217,35 @@ class TestDirectInvocation:
         assert "ModuleNotFoundError" not in completed_process.stderr
         assert completed_process.returncode == 0
 
+    def test_direct_invocation_with_hooks_constants_resolvable_off_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """First import succeeds while the validators package stays off sys.path."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("TMPDIR", str(tmp_path))
+        synthetic_constants_root = tmp_path / "synthetic_root"
+        constants_package = synthetic_constants_root / "hooks_constants"
+        constants_package.mkdir(parents=True)
+        (constants_package / "__init__.py").write_text("", encoding="utf-8")
+        (constants_package / "python_style_checks_constants.py").write_text(
+            "EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS = 2\nMINIMUM_ARGUMENT_COUNT = 1\n",
+            encoding="utf-8",
+        )
+        script_path = Path(__file__).resolve().parent / "python_style_checks.py"
+        target_path = tmp_path / "clean_sample.py"
+        target_path.write_text(GOOD_IMPORTS, encoding="utf-8")
+        isolated_environment = dict(os.environ)
+        isolated_environment["PYTHONPATH"] = str(synthetic_constants_root)
+        completed_process = subprocess.run(
+            [sys.executable, str(script_path), str(target_path)],
+            capture_output=True,
+            text=True,
+            env=isolated_environment,
+            check=False,
+        )
+        assert "NameError" not in completed_process.stderr
+        assert completed_process.returncode == 0
+
     def test_ast_module_import_available(self) -> None:
         """The ast module the checker depends on parses a trivial module."""
         assert ast.parse("x = 1").body
