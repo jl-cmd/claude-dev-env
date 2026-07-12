@@ -17,9 +17,9 @@ Python scripts executed by the bugteam lead or teammates at runtime. These are n
 
 | File | Tests |
 |---|---|
-| `test_bugteam_preflight.py` | `bugteam_preflight.py` (via thin wrap) |
+| `test_bugteam_preflight.py` | Smoke for thin wrap; behavioral suite is `_shared/pr-loop/scripts/tests/test_preflight.py` |
 | `test_bugteam_code_rules_gate.py` | Smoke for thin wrap; behavioral suite is `_shared/pr-loop/scripts/tests/test_code_rules_gate.py` |
-| `test_bugteam_fix_hookspath.py` | `bugteam_fix_hookspath.py` (via thin wrap) |
+| `test_bugteam_fix_hookspath.py` | Smoke for thin wrap; behavioral suite is `_shared/pr-loop/scripts/tests/test_fix_hookspath.py` |
 | `test_probe_code_rules_enforcer_check.py` | `probe_code_rules_enforcer_check.py` |
 | `test_windows_safe_rmtree.py` | `windows_safe_rmtree.py` |
 

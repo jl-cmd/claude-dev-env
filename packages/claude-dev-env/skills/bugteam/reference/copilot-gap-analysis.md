@@ -1,5 +1,7 @@
 # Copilot gap analysis
 
+> **Of-record gate location:** skill-local `bugteam_code_rules_gate.py` is a thin re-export. The of-record implementation is `_shared/pr-loop/scripts/code_rules_gate.py`.
+
 > **Status: HISTORICAL — patch plan partially superseded.**
 >
 > This file documents the read-only investigation that motivated the K–N rubric addendum and the Step 2.6 / Step 3.5 standards-review phases. **The audit-rubric portion of the patch plan was reverted in [PR #292](https://github.com/jl-cmd/claude-dev-env/pull/292):** PROMPTS.md no longer carries the K–N addendum or the `<copilot_derived_addendum_source>` block, and SKILL.md no longer runs the Step 2.6 / Step 3.5 standards-review phases.
