@@ -194,7 +194,11 @@ ALL_GIT_ORIGIN_URL_COMMAND: tuple[str, ...] = (
     "remote.origin.url",
 )
 GIT_URL_SUFFIX: str = ".git"
-GIT_ORIGIN_URL_SEGMENT_PATTERN: re.Pattern[str] = re.compile(r"[/:]")
+GITHUB_COM_HOST: str = "github.com"
+ALL_NETWORK_GIT_URL_SCHEMES: frozenset[str] = frozenset({"http", "https", "ssh"})
+SCP_STYLE_PATH_SEPARATOR: str = ":"
+USERINFO_HOST_SEPARATOR: str = "@"
+URL_SCHEME_SEPARATOR: str = "://"
 WINDOWS_PATH_SEPARATOR: str = "\\"
 POSIX_PATH_SEPARATOR: str = "/"
 MINIMUM_OWNER_REPO_SEGMENT_COUNT: int = 2

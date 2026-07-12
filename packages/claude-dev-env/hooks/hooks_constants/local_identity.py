@@ -1,19 +1,23 @@
-"""Resolve the NAS host, ssh user, and ssh port for the NAS ssh enforcer hook.
+"""Resolve local identity values for NAS ssh and PII exempt-repo hooks.
 
-The enforcer ships into ``~/.claude/`` and cannot read a repository file, so it
-reads the real NAS values from the environment or a git-ignored file in the
-Claude home directory, and it composes the two deny messages that quote those
-values. The committed defaults are placeholders.
+The enforcer hooks ship into ``~/.claude/`` and cannot read a repository file,
+so they read real machine values from the environment or a git-ignored file in
+the Claude home directory. This module supplies NAS host/user/port, the two
+NAS deny messages that quote those values, and the owner/repo slug set used by
+``pii_exempt_repository_slugs`` (``CLAUDE_PII_EXEMPT_REPOS`` /
+``pii_exempt_repositories``). The committed NAS defaults are placeholders.
 
 ::
 
-    CLAUDE_NAS_HOST set to a host   ->  nas_host() returns that host
-    CLAUDE_NAS_SSH_PORT set to 2200 ->  nas_ssh_port() returns 2200
-    (env unset, no file)            ->  nas_host() == "nas.example.local"
-                                        nas_ssh_port() == 22
+    CLAUDE_NAS_HOST set to a host              ->  nas_host() returns that host
+    CLAUDE_NAS_SSH_PORT set to 2200            ->  nas_ssh_port() returns 2200
+    CLAUDE_PII_EXEMPT_REPOS="Owner/repo"       ->  {"owner/repo"}
+    (env unset, no file)                       ->  nas_host() == "nas.example.local"
+                                                   nas_ssh_port() == 22
+                                                   pii_exempt_repository_slugs() == frozenset()
 
-Each value comes from its ``CLAUDE_NAS_*`` environment variable, then
-``~/.claude/local-identity.json``, then the placeholder default.
+Each value comes from its environment variable, then
+``~/.claude/local-identity.json``, then the placeholder default (NAS only).
 """
 
 from __future__ import annotations
@@ -75,22 +79,25 @@ def pii_exempt_repository_slugs() -> frozenset[str]:
     ::
 
         CLAUDE_PII_EXEMPT_REPOS="Owner/repo-a, Other/b"  ->  {"owner/repo-a", "other/b"}
+        CLAUDE_PII_EXEMPT_REPOS=" , , " + file lists A   ->  {"a"}  (whitespace falls through)
         (env unset, file lists ["Owner/repo-a"])         ->  {"owner/repo-a"}
         (env unset, no file)                             ->  frozenset()
 
-    The environment variable (comma-separated) wins, then the
-    ``pii_exempt_repositories`` list in the git-ignored
-    ``~/.claude/local-identity.json``. Slugs are lowercased so matching is
-    case-insensitive.
+    A non-empty environment variable (comma-separated) wins. When the variable
+    is unset or normalizes to no slugs, the ``pii_exempt_repositories`` list in
+    the git-ignored ``~/.claude/local-identity.json`` is used. Slugs are
+    lowercased so matching is case-insensitive.
 
     Returns:
         Lowercased ``owner/repo`` slugs exempt from staged-commit PII scanning.
     """
     slugs_from_environment = os.environ.get(PII_EXEMPT_REPOS_ENV_VAR)
-    if slugs_from_environment:
-        return _normalized_slug_set(
+    if slugs_from_environment is not None:
+        normalized_environment_slugs = _normalized_slug_set(
             list(slugs_from_environment.split(PII_EXEMPT_REPOS_SEPARATOR))
         )
+        if normalized_environment_slugs:
+            return normalized_environment_slugs
     stored_slugs = _identity_dictionary_from_local_file().get(
         PII_EXEMPT_REPOS_JSON_KEY
     )
