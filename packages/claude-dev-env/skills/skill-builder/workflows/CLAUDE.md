@@ -6,12 +6,14 @@ Step-by-step workflow files for each skill lifecycle phase, loaded on demand by 
 
 | File | Purpose |
 |---|---|
-| `new-skill.md` | Full lifecycle for creating a new skill: 6 steps from intent capture through type classification, folder scaffolding, writing via skill-writer, self-audit, and delivery. |
-| `improve-skill.md` | Observation-first flow for improving an existing skill: 6 steps starting from real usage failures, gap analysis, targeted rewrite, and re-audit. |
-| `polish-skill.md` | Description audit and final validation: 5 steps for description optimization, trigger phrase review, and checklist sign-off. |
+| `new-skill.md` | Full lifecycle: classify, scaffold, gather (composition + description triggers), write via skill-writer, self-audit, deliver. |
+| `improve-skill.md` | Observation-first improve: diagnose activation/modularity/quality, targeted fix, re-audit. |
+| `polish-skill.md` | Description trigger-catalog audit, progressive disclosure + modularity audit, checklist sign-off. |
 
 ## Conventions
 
 - `SKILL.md` routes to exactly one workflow file per invocation based on the user's intent (new / improve / polish).
-- Each workflow references `../references/self-audit-checklist.md` at its final step.
+- Each workflow references `../references/self-audit-checklist.md` at its final verification step.
+- New and improve load `skill-modularity.md` and `description-field.md` when gathering or diagnosing.
+- Polish Step 1 is the dedicated description rewrite pass.
 - Load only the workflow that matches the active task; the other two stay out of context.

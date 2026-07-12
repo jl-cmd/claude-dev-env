@@ -149,6 +149,8 @@ Skills that help fetch, push, and deploy code.
 
 > "These skills may reference other skills to collect data."
 
+Compose peer skills by name (see `skill-modularity.md`). Do not paste those peers' procedures into this package.
+
 **Examples:** `babysit-pr`, `deploy-<service>`, `cherry-pick-prod`
 
 **Folder structure:**
@@ -226,3 +228,5 @@ skill-name/
 | "Manage infrastructure / cleanup" | 9. Infrastructure Operations |
 
 When the skill straddles multiple types, pick the dominant one for folder structure and note the secondary influence.
+
+If it straddles **capabilities** (not just types), split into separate skills or a thin orchestrator plus sub-skills — see `skill-modularity.md`. Frontmatter `description` stays a trigger catalog for whichever package owns the job — see `description-field.md`.

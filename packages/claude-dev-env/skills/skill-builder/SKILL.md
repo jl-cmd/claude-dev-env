@@ -1,10 +1,10 @@
 ---
 name: skill-builder
 description: >-
-  Runs the skill-building lifecycle: type classification, scaffolding, writing
-  through skill-writer, self-audit against a checklist, and refinement from real
-  usage. Triggers: 'build a skill', 'new skill workflow', 'improve this skill',
-  'optimize skill description', 'skill development lifecycle'.
+  Skill lifecycle: classify, scaffold, write via skill-writer, self-audit, compose
+  sub-skills, polish description triggers. Triggers: build a skill, new skill
+  workflow, improve this skill, optimize skill description, skill development
+  lifecycle, skill modularity, skill composition, description trigger catalog.
 ---
 
 # Skill Builder
@@ -18,6 +18,10 @@ Sources: [Anthropic best practices](https://platform.claude.com/docs/en/agents-a
 Highest-signal content. Append a bullet each time a skill build fails in a new way.
 
 > "The highest-signal content in any skill is the Gotchas section. These sections should be built up from common failure points that Claude runs into when using your skill."
+
+- Story-form `description` burns always-on context and weakens selection — rewrite to capability stem + `Triggers:` list (`description-field.md`).
+- Multi-capability packages fail modularity audit — split or thin orchestrator + named sub-skills (`skill-modularity.md`).
+- Skipping the composition plan before Write reintroduces silent reimplementation of peer skills.
 
 ## When this skill applies
 
@@ -86,9 +90,21 @@ High freedom (text guidance) for open fields. Low freedom (exact scripts, no par
 
 Hub pattern, line caps, one-level references, TOC and path rules: [`references/progressive-disclosure.md`](references/progressive-disclosure.md).
 
-### Description field
+### Modularity and composition
 
-Third person; what the skill does and when it triggers. Full criteria on the self-audit checklist Description field item.
+One skill = one capability. Multi-step work invokes **sub-skills** (peer skills) by name. Prefer compose over reimplement. Full rules: [`references/skill-modularity.md`](references/skill-modularity.md).
+
+> "You can just reference other skills by name, and the model will invoke them if they are installed."
+
+New-skill Gather records a composition plan before write. Self-audit modularity items are mandatory.
+
+### Description field (trigger catalog)
+
+The frontmatter `description` is **selection metadata** pre-loaded for every skill. Write a **trigger catalog**, not a story: short capability stem + concrete trigger phrases. No narrative, benefits language, or process dump.
+
+Full rules: [`references/description-field.md`](references/description-field.md). Polish workflow Step 1 is the dedicated rewrite pass.
+
+> "The description field is not a summary — it’s a description of when to trigger."
 
 ### Gotchas
 
@@ -126,6 +142,8 @@ Multi-step processes get `[ ]` checklists. Quality-critical operations get feedb
 
 > No Windows paths. Don’t offer too many options — provide a default with escape hatch. Avoid time-sensitive claims. Use consistent terminology. No deeply nested references.
 
+Also: story-form descriptions; monolith multi-capability skills; silent reimplementation of peer skills; nested folders used as fake sub-skills.
+
 ## Self-audit
 
 After every build, improvement, or polish pass, run the mandatory checklist at `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`. Every item must pass before delivery. Fix failures, then re-audit.
@@ -135,9 +153,11 @@ After every build, improvement, or polish pass, run the mandatory checklist at `
 skill-builder orchestrates; skill-writer authors. The handoff packet from Step 4 must include:
 
 - Skill type and folder structure
-- Gap analysis or observation findings
+- Gap analysis or observation findings (composition plan + description triggers)
 - Degree of freedom assessment
 - Initial gotchas
+- Composition plan: related skills, sub-skills to invoke, split decisions
+- Description trigger catalog: capability stem + trigger phrases (not prose)
 - Any constraints
 
 See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact patterns.
@@ -149,12 +169,14 @@ See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact patterns.
 | `SKILL.md` | This hub — principles, process, routing, file index |
 | `references/skill-types.md` | 9-type taxonomy with folder structures per type |
 | `references/progressive-disclosure.md` | Folder conventions, hub pattern, hard rules |
-| `references/self-audit-checklist.md` | 33-point mandatory post-build audit |
+| `references/skill-modularity.md` | Cross-skill modularity, sub-skills, composition plan |
+| `references/description-field.md` | Description as trigger catalog (not story prose) |
+| `references/self-audit-checklist.md` | Mandatory post-build audit (core, modularity, description) |
 | `references/delegation-map.md` | Subagent handoff patterns and transcript guidance |
 | `workflows/new-skill.md` | Full lifecycle for new skills (6 steps) |
 | `workflows/improve-skill.md` | Observation-first flow for existing skills (6 steps) |
-| `workflows/polish-skill.md` | Description audit and final validation (5 steps) |
-| `templates/gap-analysis.md` | Template for documenting skill gaps |
+| `workflows/polish-skill.md` | Description trigger-catalog audit and final validation (5 steps) |
+| `templates/gap-analysis.md` | Gaps, composition plan, description triggers |
 
 ## Folder map
 

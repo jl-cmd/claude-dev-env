@@ -6,11 +6,35 @@
 
 ## Task Description
 
-[What the user is trying to accomplish — the capability this skill should provide]
+[One capability sentence — the single job this skill owns]
 
 ## Degree of Freedom
 
 [High | Medium | Low] — [Reasoning based on task fragility and variability]
+
+## Composition Plan
+
+See `references/skill-modularity.md`.
+
+- **Capability sentence:** [one job, no unrelated "and"]
+- **Related skills inventory:** [skill → keep separate | invoke as sub-skill | absorb + reason]
+- **Sub-skills to invoke:** [name → when → produces → missing behavior]
+- **Split or orchestrator:** [one leaf skill | several skills | thin orchestrator + peers]
+- **Missing sub-skills to create:** [names to build first or as siblings]
+
+## Description Triggers
+
+See `references/description-field.md`. Not story prose.
+
+- **Capability stem tokens:** [5–20 words]
+- **Trigger phrases:** [comma-separated phrases, slash forms, file types]
+- **Near-miss exclusions:** [tokens that must not select this skill]
+- **Draft description string:**
+
+```yaml
+description: >-
+  <stem>. Triggers: <phrases>.
+```
 
 ## Gaps Identified
 

@@ -12,8 +12,12 @@ Source synthesis: [Anthropic best practices](https://platform.claude.com/docs/en
   > "Match the level of specificity to the task's fragility and variability."
 - [ ] **Naming convention** — Name uses gerund form (verb-ing) unless it's a well-known acronym or proper name. Lowercase, numbers, hyphens only. Max 64 chars. No reserved words.
   > "Use consistent naming patterns to make Skills easier to reference."
-- [ ] **Description field** — Third person. Includes what AND when. Specific trigger phrases. Max 1024 chars. No XML tags.
+- [ ] **Description is a trigger catalog** — Capability stem (what tokens) + concrete Triggers list (when). Third person. Max 1024 chars. No XML. Spec: `description-field.md`.
   > "The description is critical for skill selection: Claude uses it to choose the right Skill from potentially 100+ available Skills."
+- [ ] **Description is not a story** — No narrative prose, benefits language ("helps you"), first/second person, or process/implementation dump in frontmatter.
+  > "The description field is not a summary — it's a description of when to trigger."
+- [ ] **Description match surface** — Includes specific phrases, slash forms, and file types a user would say; distinguishable from sibling skills.
+  > "Be specific and include key terms."
 - [ ] **SKILL.md body under 500 lines**
   > "Keep SKILL.md body under 500 lines for optimal performance."
 - [ ] **One level deep** — All reference files link directly from SKILL.md. No nested references.
@@ -78,10 +82,23 @@ Source synthesis: [Anthropic best practices](https://platform.claude.com/docs/en
 - [ ] **Persistent data uses `${CLAUDE_PLUGIN_DATA}`** — Not stored in skill directory itself.
   > "Data stored in the skill directory may be deleted when you upgrade the skill."
 
-## Composition and measurement (if applicable)
+## Modularity and composition
 
-- [ ] **Skill dependencies documented** — Skills this one composes with are named.
+Mandatory for every skill. Spec: `skill-modularity.md`. Progressive disclosure (file split) does not satisfy these items.
+
+- [ ] **Single capability boundary** — One clear job in one sentence. Unrelated jobs are separate skills or an orchestrator that only routes to named sub-skills.
+  > "The best skills fit cleanly into one; the more confusing ones straddle several."
+- [ ] **Compose before reimplement** — Steps an existing skill already owns are invoked by name, not pasted into this package. Local reimplementation has a one-line why in the gap analysis or gotchas.
   > "You can just reference other skills by name, and the model will invoke them if they are installed."
+- [ ] **Sub-skills table (when composing)** — Each invoked skill lists when to call it, what it produces, and missing-install behavior. N/A only when the skill is a pure leaf (invokes no peers).
+  > "You may want to have skills that depend on each other."
+- [ ] **Sibling boundary clear** — Description and when-this-applies distinguish this skill from related skills in the same domain. No silent overlap.
+  > "The description field is not a summary — it's a description of when to trigger."
+- [ ] **No monolith packing** — Multi-capability content is not stuffed under one description. Either split packages or thin orchestrator + peer sub-skills (not nested fake skills under `workflows/`).
+  > skill-modularity.md — anti-patterns: monolith, silent reimplementation, folder nesting as composition.
+
+## Hooks (if applicable)
+
 - [ ] **Hooks declared** — If skill registers hooks, their purpose and scope is stated.
   > "Skills can include hooks that are only activated when the skill is called."
 
@@ -89,4 +106,4 @@ Source synthesis: [Anthropic best practices](https://platform.claude.com/docs/en
 
 ## Usage
 
-Copy this checklist into your response after building. Check off each item. Any item that fails → fix before delivering. Any item marked "if applicable" that doesn't apply → mark N/A with a one-line reason.
+Copy this checklist into your response after building. Check off each item. Any item that fails → fix before delivering. Any item marked "if applicable" that doesn't apply → mark N/A with a one-line reason. Sub-skills table may be N/A for pure leaf skills; single capability boundary and no-monolith never are.
