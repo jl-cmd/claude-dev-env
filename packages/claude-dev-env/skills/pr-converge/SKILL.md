@@ -315,7 +315,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 
       - [ ] **dirty** (findings on `current_head`) →
             - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to this tick's findings
-            - [ ] Push → reset `bugbot_clean_at = null`, `code_review_clean_at = null`, `bugteam_clean_at = null` → `phase = CODE_REVIEW` → return to Step 5
+            - [ ] Push → reset push-invalidated markers per [ground-rules.md](reference/ground-rules.md) / [state-schema.md](reference/state-schema.md) (all `*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`) → `phase = CODE_REVIEW` → return to Step 5
       - [ ] **clean** (no findings on `current_head`) →
             - [ ] Count ALL unresolved threads on PR (`is_resolved == false`) → zero? advance; >0? fix + resolve first
             - [ ] `bugbot_clean_at = current_head`
@@ -345,9 +345,10 @@ round as converged. This rule holds every tick, every loop, every PR.
             `ruff`, `mypy`, and stem-matched `pytest`.
             - [ ] Any failure → apply the `pr-fix-protocol` skill
                   (`../pr-fix-protocol/SKILL.md`), commit/push, reset
-                  `bugbot_clean_at = null`, `code_review_clean_at = null`, and
-                  `bugteam_clean_at = null`, stay `phase = CODE_REVIEW`, and
-                  re-run (return to Step 5).
+                  push-invalidated markers per [ground-rules.md](reference/ground-rules.md) /
+                  [state-schema.md](reference/state-schema.md) (all `*_clean_at`,
+                  `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`),
+                  stay `phase = CODE_REVIEW`, and re-run (return to Step 5).
             - [ ] Clean → run `/code-review` below.
 
       Run Claude Code's built-in `/code-review high --fix` on the full
@@ -368,7 +369,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 
       - [ ] **fixes applied** (working tree changed) →
             - [ ] Commit the applied fixes (one commit) → push
-            - [ ] reset `bugbot_clean_at = null`, `code_review_clean_at = null`, `bugteam_clean_at = null`
+            - [ ] reset push-invalidated markers per [ground-rules.md](reference/ground-rules.md) / [state-schema.md](reference/state-schema.md) (all `*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`)
             - [ ] stay `phase = CODE_REVIEW` → return to Step 5 (internal-first)
       - [ ] **clean** (no changes applied) →
             - [ ] Zero unresolved threads per the `pr-fix-protocol` sweep (`../pr-fix-protocol/SKILL.md`) → advance; else fix + resolve first (same skill)
@@ -399,7 +400,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 
       - [ ] **bugteam pushed new commits** →
             - [ ] Verify all bugteam review threads replied + resolved
-            - [ ] reset `bugbot_clean_at = null`, `code_review_clean_at = null`, `bugteam_clean_at = null`
+            - [ ] reset push-invalidated markers per [ground-rules.md](reference/ground-rules.md) / [state-schema.md](reference/state-schema.md) (all `*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`)
             - [ ] `phase = CODE_REVIEW` → schedule 360s wakeup → return to Step 5
       - [ ] **converged (zero findings), no push** →
             - [ ] Count ALL unresolved threads on PR (`is_resolved == false`) → zero? advance; >0? fix + resolve first
@@ -407,7 +408,7 @@ round as converged. This rule holds every tick, every loop, every PR.
             - [ ] `phase = BUGBOT` → advance to Step 4 (terminal Bugbot gate)
       - [ ] **findings without committed fixes** →
             - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to the findings
-            - [ ] Push → reset `bugbot_clean_at = null`, `code_review_clean_at = null`, `bugteam_clean_at = null` → `phase = CODE_REVIEW` → return to Step 5
+            - [ ] Push → reset push-invalidated markers per [ground-rules.md](reference/ground-rules.md) / [state-schema.md](reference/state-schema.md) (all `*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`) → `phase = CODE_REVIEW` → return to Step 5
 
 - [ ] **Step 7: Convergence gates**
       Full procedure: [`reference/convergence-gates.md`](reference/convergence-gates.md).
@@ -436,7 +437,7 @@ round as converged. This rule holds every tick, every loop, every PR.
             `copilot_clean_at = current_head` → return to Step 7 (re-validate gates (b), (c), then (e), (f))
       - [ ] **dirty (findings present)** →
             - [ ] Apply the `pr-fix-protocol` skill (`../pr-fix-protocol/SKILL.md`) to the findings
-            - [ ] Push → reset `bugbot_clean_at = null`, `code_review_clean_at = null`, `bugteam_clean_at = null`, `copilot_clean_at = null` → `phase = CODE_REVIEW` → return to Step 5
+            - [ ] Push → reset push-invalidated markers per [ground-rules.md](reference/ground-rules.md) / [state-schema.md](reference/state-schema.md) (all `*_clean_at`, `merge_state_status`, `bugbot_down`, `bugbot_acknowledged_at`) → `phase = CODE_REVIEW` → return to Step 5
       - [ ] **no review yet** →
             increment `copilot_wait_count` → ≥ 3 = hard blocker → stop
             schedule 360s wakeup → return to Step 7a next tick

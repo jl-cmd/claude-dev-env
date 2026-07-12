@@ -39,8 +39,9 @@ the internal passes on the new HEAD]
 </example>
 
 <example> BUGTEAM phase, bugteam reports convergence with no push. Claude:
-[the internal passes are clean on `current_head`; `phase = BUGBOT` — routes into
-the terminal Bugbot gate in the same tick]
+[the internal passes are clean on `current_head`; stamps `bugteam_clean_at =
+current_head`, then `phase = BUGBOT` — routes into the terminal Bugbot gate in
+the same tick]
 </example>
 
 <example> Terminal BUGBOT gate, Bugbot disabled for the run (the default).
