@@ -1051,6 +1051,42 @@ def test_owner_repo_slug_rejects_github_com_suffix_host() -> None:
     )
 
 
+def test_owner_repo_slug_rejects_invalid_https_port_authority() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://github.com:443.evil.test/Owner/repo.git"
+        )
+        is None
+    )
+
+
+def test_owner_repo_slug_rejects_invalid_ssh_port_authority() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "ssh://git@github.com:22.evil.test/Owner/repo.git"
+        )
+        is None
+    )
+
+
+def test_owner_repo_slug_from_https_origin_with_valid_port() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "https://github.com:443/Owner/repo.git"
+        )
+        == "owner/repo"
+    )
+
+
+def test_owner_repo_slug_from_ssh_origin_with_valid_port() -> None:
+    assert (
+        blocker_module._owner_repo_slug_from_origin_url(
+            "ssh://git@github.com:22/Owner/repo.git"
+        )
+        == "owner/repo"
+    )
+
+
 def test_owner_repo_slug_rejects_path_shaped_origin() -> None:
     assert (
         blocker_module._owner_repo_slug_from_origin_url(
@@ -1067,6 +1103,24 @@ def test_spoofed_origin_host_still_denies_staged_email(
     _init_repo_with_staged_email(repository_root)
     _add_repository_origin(
         repository_root, "https://evil.test/ExemptOwner/exempt-repo.git"
+    )
+    monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
+    deny_reason = evaluate_bash_command(
+        "git commit -m test",
+        working_directory=str(repository_root),
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_invalid_port_authority_origin_still_denies_staged_email(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_staged_email(repository_root)
+    _add_repository_origin(
+        repository_root,
+        "https://github.com:443.evil.test/ExemptOwner/exempt-repo.git",
     )
     monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
     deny_reason = evaluate_bash_command(

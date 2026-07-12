@@ -104,6 +104,7 @@ Hooks register via `hooks/hooks.json` into `~/.claude/settings.json`. Once insta
 ## Open knobs
 
 - **NAS / LAN allowlist:** Unlisted private IPs are blocked. The scanner resolves your NAS host from `CLAUDE_NAS_HOST`, then `~/.claude/local-identity.json` (`nas.host`), and allowlists it when it is a private address, so the committed tree holds no real host. `ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES` in `hooks_constants` holds the static allowlist for any host every machine must share.
+- **Commit-scan exempt repositories:** named owner/repo slugs skip the staged-commit PII scan only. Set `CLAUDE_PII_EXEMPT_REPOS` (comma-separated `owner/repo` values) or list them under `pii_exempt_repositories` in `~/.claude/local-identity.json`. Matching uses the repository's `remote.origin.url` and accepts only the exact host `github.com` (https, ssh scheme, or scp-style). A repository with no readable origin is never exempt (fail-closed to scanning). Write / Edit / MultiEdit and durable post bodies still scan in every repository.
 - **Public maintainer identity:** when a real email or name is intentional product surface, keep it and note that in the PR body so reviewers do not treat it as a leak.
 
 ## What this skill does not do

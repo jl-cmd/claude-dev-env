@@ -235,6 +235,10 @@ def _host_and_path_from_scheme_url(origin_url: str) -> tuple[str, str] | None:
     maybe_host = parsed_url.hostname
     if maybe_host is None:
         return None
+    try:
+        parsed_url.port
+    except ValueError:
+        return None
     repository_path = parsed_url.path.replace(
         WINDOWS_PATH_SEPARATOR, POSIX_PATH_SEPARATOR
     ).lstrip(POSIX_PATH_SEPARATOR)
@@ -287,23 +291,29 @@ def _owner_repo_slug_from_origin_url(origin_url: str) -> str | None:
 
     ::
 
-        https://github.com/Owner/Repo.git       ->  owner/repo
-        https://github.com/Owner/Repo           ->  owner/repo
-        git@github.com:Owner/Repo.git            ->  owner/repo
-        ssh://git@github.com/Owner/Repo.git      ->  owner/repo
-        https://github.com/Owner/Repo.git/       ->  owner/repo
-        https://evil.test/Owner/Repo.git         ->  None
-        C:/repos/Owner/Repo                      ->  None
+        https://github.com/Owner/Repo.git                 ->  owner/repo
+        https://github.com/Owner/Repo                     ->  owner/repo
+        https://github.com:443/Owner/Repo.git             ->  owner/repo
+        ssh://git@github.com:22/Owner/Repo.git            ->  owner/repo
+        git@github.com:Owner/Repo.git                     ->  owner/repo
+        ssh://git@github.com/Owner/Repo.git               ->  owner/repo
+        https://github.com/Owner/Repo.git/                ->  owner/repo
+        https://evil.test/Owner/Repo.git                  ->  None
+        https://github.com:443.evil.test/Owner/Repo.git   ->  None
+        ssh://git@github.com:22.evil.test/Owner/Repo.git  ->  None
+        C:/repos/Owner/Repo                               ->  None
 
-    Accepts only the exact host ``github.com`` (case-insensitive). Spoof hosts
-    and path-shaped origins return None so the repository is never exempt.
+    Accepts only the exact host ``github.com`` (case-insensitive). Spoof hosts,
+    unparseable port authorities, and path-shaped origins return None so the
+    repository is never exempt.
 
     Args:
         origin_url: The ``remote.origin.url`` value, https or ssh form.
 
     Returns:
         The ``owner/repo`` slug in lowercase, or None when the host is not
-        exactly ``github.com`` or the URL carries no owner/repo tail.
+        exactly ``github.com``, the port authority is unparseable, or the URL
+        carries no owner/repo tail.
     """
     maybe_host_and_path = _host_and_repository_path_from_origin_url(origin_url)
     if maybe_host_and_path is None:

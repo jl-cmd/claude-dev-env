@@ -38,7 +38,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `hosted_hook_runner.py` | `run_hook_capturing_output()` — shared runner that runs one dispatcher-hosted hook in-process via runpy and returns its captured stdout and crash flag |
 | `inline_tuple_string_magic_constants.py` | Patterns for detecting magic strings in inline tuple literals |
 | `js_conventions_constants.py` | Banned identifier set, boolean-prefix pattern, and declaration/JSDoc patterns for the JavaScript convention checks |
-| `local_identity.py` | Loader for the NAS host, ssh user, and ssh port the ssh enforcer guards, resolved from the `CLAUDE_NAS_*` env vars or `~/.claude/local-identity.json` with placeholder defaults; also composes the enforcer's two deny messages that quote those values |
+| `local_identity.py` | Loader for local machine values: NAS host, ssh user, and ssh port the ssh enforcer guards (`CLAUDE_NAS_*` / `~/.claude/local-identity.json` with placeholder defaults), plus the PII commit-scan exempt-repo slug set (`CLAUDE_PII_EXEMPT_REPOS` / `pii_exempt_repositories`); also composes the ssh enforcer's two deny messages that quote the NAS values |
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
 | `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, launcher-wrapper set, shell control-operator tokens and split pattern, leading-assignment and duration patterns, and the batch-mode pattern for the NAS ssh binary enforcer |
@@ -85,5 +85,5 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 - Hooks import from this package with `from hooks_constants.<module> import <CONSTANT>`.
 - Tests for these modules live beside them as `test_<module>.py`. Run with `python -m pytest hooks_constants/test_<name>.py`.
 - `dynamic_stderr_handler.py`, `pre_tool_use_stdin.py`, `multi_edit_reconstruction.py`, `hosted_hook_runner.py`, and `text_stripping.py` are utility modules (not pure constants) but live here because they are shared across many hooks.
-- `local_identity.py` is a loader: it reads the environment or `~/.claude/local-identity.json` to resolve the private NAS values, keeping a committed placeholder default.
+- `local_identity.py` is a loader: it reads the environment or `~/.claude/local-identity.json` to resolve private NAS values (with committed placeholder defaults) and the PII commit-scan exempt-repo slug set (`CLAUDE_PII_EXEMPT_REPOS` / `pii_exempt_repositories`).
 
