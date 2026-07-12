@@ -61,21 +61,25 @@ Run the pre-check once per run, not per tick or per round. Every later tick read
 
 ## Gate 3: Bugbot trigger, acknowledge, and CI-detect
 
-Cursor Bugbot signals through CI check runs, not always through a posted review. The decision tree runs against `<current_head>` with `check_bugbot_ci.py` (installed at `$HOME/.claude/skills/pr-converge/scripts/check_bugbot_ci.py`; `--help` documents every mode):
+Cursor Bugbot signals through CI check runs.
+Mode flags and exit codes for `check_bugbot_ci.py` live in the script docstring
+— run
+`python "$HOME/.claude/skills/pr-converge/scripts/check_bugbot_ci.py" --help`
+for every mode. Caller action sequence against `<current_head>`:
 
 1. **Silent-pass pre-check (always first).**
    `python "$HOME/.claude/skills/pr-converge/scripts/check_bugbot_ci.py" --check-clean --owner <O> --repo <R> --sha <current_head>`
-   - Exit 0 — Bugbot CI completed with a `success`/`neutral` conclusion and posted no review: a silent pass. Record `bugbot_clean_at = <current_head>` and stop; do not trigger.
-   - Exit 1 (not a silent pass) or exit 2 (gh CLI error, silent pass not confirmable) — continue.
+   - Silent pass confirmed → record `bugbot_clean_at = <current_head>` and stop; do not trigger.
+   - Silent pass not confirmed → continue.
 2. **Already-queued check.**
    `... check_bugbot_ci.py --check-active --owner <O> --repo <R> --sha <current_head>`
-   - Exit 0 — Bugbot is already queued on this commit. Skip posting; wait for completion (callers schedule their own wakeup).
-   - Exit 1 — continue.
-3. **Trigger.** Post exactly `bugbot run` as an issue comment (`add_issue_comment`) — no `@cursor[bot]` mention, no other text. `bugbot run` is empirically the only re-trigger Cursor Bugbot recognizes; every other phrasing silently no-ops. Wait 8 seconds with an in-turn Monitor delay, never a foreground `sleep` (blocked in headless runs).
+   - Already queued → skip posting; wait for completion (callers schedule their own wakeup).
+   - Not active → continue.
+3. **Trigger.** Post exactly `bugbot run` as an issue comment (`add_issue_comment`) — no `@cursor[bot]` mention, no other text. `bugbot run` is the only re-trigger Cursor Bugbot recognizes; every other phrasing silently no-ops. Wait 8 seconds with an in-turn Monitor delay, never a foreground `sleep` (blocked in headless runs).
 4. **Acknowledge check.**
    `... check_bugbot_ci.py --owner <O> --repo <R> --sha <current_head>`
-   - Exit 0 — a check run is present: record `bugbot_acknowledged_at = <now, ISO 8601>`; the caller polls on its own cadence.
-   - Exit non-zero — Bugbot is down: set `bugbot_down = true` and route past the Bugbot phase; the run continues on its remaining signals.
+   - Check run present → record `bugbot_acknowledged_at = <now, ISO 8601>`; the caller polls on its own cadence.
+   - Check run absent → Bugbot is down: set `bugbot_down = true` and route past the Bugbot phase; the run continues on its remaining signals.
 
 The silent-pass pre-check runs first so a bot that already finished cleanly is never re-prompted — Bugbot refuses to re-run on an evaluated commit, and without the pre-check the acknowledge step would falsely mark `bugbot_down = true`.
 
