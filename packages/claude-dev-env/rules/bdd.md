@@ -2,8 +2,6 @@
 
 **Canonical detail:** `~/.claude/system-prompts/software-engineer.xml` → `<behavior_protocol>`.
 
-**On-demand depth:** `@~/.claude/skills/bdd-protocol/SKILL.md` (Example Mapping §6.4, §7.6 catalog, solo patterns). Tracking design: [jl-cmd/claude-dev-env#82](https://github.com/jl-cmd/claude-dev-env/issues/82).
-
 **Optional long-form references (load when needed):**
 
 - `@~/.claude/docs/BDD_SCENARIO_QUALITY.md` — seven scenario quality patterns (§7.6-style)
@@ -21,7 +19,7 @@ Conversation is the essential practice: if discovery is skipped, structured form
 
 ## Solo developer
 
-You are often the stakeholder. Use **Example Mapping** in chat ("the one where …", probes, parking lot). Load **`bdd-protocol`** when you need the full algorithm and anti-pattern list.
+You are often the stakeholder. Use **Example Mapping** in chat ("the one where …", probes, parking lot). See the optional long-form references above for the full algorithm and anti-pattern list.
 
 ## Naming
 
