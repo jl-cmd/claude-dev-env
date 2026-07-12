@@ -29,6 +29,8 @@ Run from the repo root unless noted. The shell is Windows `pwsh`.
 | Python tests (root suite, `tests/`) | `python -m pytest tests/` |
 | Python tests (package suite) | `python -m pytest packages/claude-dev-env` |
 | Python tests (default bare = root suite) | `python -m pytest` |
+| Python tests in parallel (root suite) | `python -m pytest tests/ -n auto` |
+| Python tests in parallel (package suite) | `python -m pytest packages/claude-dev-env -n auto` |
 | One Python test file | `python -m pytest tests/test_fan_out_dispatch.py` |
 | Quality gate (ruff + mypy + enforcer tests) | `pwsh -File packages/claude-dev-env/scripts/check.ps1` |
 | Install locally to `~/.claude/` | `cd packages/claude-dev-env && node bin/install.mjs` |
@@ -36,8 +38,10 @@ Run from the repo root unless noted. The shell is Windows `pwsh`.
 Notes:
 
 - `npm test` runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` — the installer and skill helper scripts.
-- The root `pytest.ini` sets `--import-mode=importlib`, puts `.` and `.github/scripts` on `pythonpath`, scopes default collection to `tests/` via `testpaths`, and collects both `test_*` and `should_*` functions. Run the package suite as a separate session: `python -m pytest packages/claude-dev-env`.
-- Hook tests live next to the hooks they cover (for example `packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer*.py`). `check.ps1` runs mypy over `hooks/blocking` and `hooks/validators` using `hooks/pyproject.toml`, then runs the enforcer pytest suite. It exits on the first failing tool and prints `CHECK: OK` or `CHECK: FAILED tools=...`.
+- The root `pytest.ini` sets `--import-mode=importlib`, puts `.` and `.github/scripts` on `pythonpath`, scopes default collection to `tests/` via `testpaths`, and collects both `test_*` and `should_*` functions. Run the package suite as a separate session: `python -m pytest packages/claude-dev-env`. Do not merge the two Python suites into one session — the two `config` packages collide during collection.
+- Parallel runs need `pytest-xdist`. Install with `pip install -e "packages/claude-dev-env[dev]"` or `pip install pytest-xdist`, then pass `-n auto` on a single suite session.
+- CI (`.github/workflows/ci-tests.yml`) runs the same split Python sessions and the JS suite. Node IDs CI deselects live under `.github/ci/`; the why for each family is the local-only register in `tests/CLAUDE.md`.
+- Hook tests live next to the hooks they cover (for example `packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer*.py`). `check.ps1` runs ruff, mypy over `hooks/blocking` and `hooks/validators` using `hooks/pyproject.toml`, then runs the enforcer pytest suite. It exits on the first failing tool and prints `CHECK: OK` or `CHECK: FAILED tools=...`. Full ruff/mypy green is a local quality gate; CI runs pytest only.
 - The Python hook packages (the `*_constants` modules) are declared in `packages/claude-dev-env/pyproject.toml`. Install them editable (`pip install -e packages/claude-dev-env`) so hook tests resolve their constant imports.
 
 ## Architecture
