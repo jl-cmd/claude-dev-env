@@ -407,6 +407,20 @@ test('the merged FINALIZE check opts the unflagged convergence hook out of Copil
   );
 });
 
+test('the merged FINALIZE check opts the unflagged convergence hook out of Bugbot when bugbotDown before gh pr ready', () => {
+  const checkBody = functionBody('runConvergenceCheck');
+  assert.match(
+    checkBody,
+    /context\.bugbotDown/,
+    'expected the merged check to branch on bugbotDown so a bugbot-down run reaches the opt-out token push',
+  );
+  assert.match(
+    checkBody,
+    /reviewerOptOutTokens\.push\('bugbot'\)/,
+    'expected the merged check opt-out to push the bugbot token so the unflagged mark-ready hook re-derives the Bugbot bypass',
+  );
+});
+
 test('the COPILOT phase short-circuits on the unified reviewer-down gate before spawning the gate agent', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
   assert.notEqual(copilotPhaseStart, -1, 'expected a COPILOT phase block');

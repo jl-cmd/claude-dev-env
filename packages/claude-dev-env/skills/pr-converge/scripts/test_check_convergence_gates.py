@@ -11,30 +11,11 @@ Each test drives the real leaf, stubbing only the ``gh`` transport helpers.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
-from types import ModuleType
 
 import pytest
 
-_SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
-
-
-def _load_gates() -> ModuleType:
-    if str(_SCRIPTS_DIRECTORY) not in sys.path:
-        sys.path.insert(0, str(_SCRIPTS_DIRECTORY))
-    module_path = _SCRIPTS_DIRECTORY / "check_convergence_gates.py"
-    spec = importlib.util.spec_from_file_location("gates_under_test", module_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-gates = _load_gates()
+import check_convergence_gates as gates
 
 
 def test_flatten_paginated_reviews_flattens_and_sorts_newest_first() -> None:

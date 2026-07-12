@@ -11,32 +11,11 @@ Each test drives the real leaf, stubbing only the ``gh`` transport helpers.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
-from types import ModuleType
 
 import pytest
 
-_SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
-
-
-def _load_thread_gates() -> ModuleType:
-    if str(_SCRIPTS_DIRECTORY) not in sys.path:
-        sys.path.insert(0, str(_SCRIPTS_DIRECTORY))
-    module_path = _SCRIPTS_DIRECTORY / "check_convergence_thread_gates.py"
-    spec = importlib.util.spec_from_file_location(
-        "thread_gates_under_test", module_path
-    )
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-thread_gates = _load_thread_gates()
+import check_convergence_thread_gates as thread_gates
 
 
 def test_is_unresolved_bot_thread_true_for_cursor_authored_open_thread() -> None:
@@ -68,17 +47,12 @@ def test_count_unresolved_bot_threads_counts_a_single_cursor_thread(
         "path": "src/app.py",
         "comments": {"nodes": [{"author": {"login": "cursor[bot]"}}]},
     }
+    review_threads = {
+        "nodes": [thread],
+        "pageInfo": {"hasNextPage": False, "endCursor": None},
+    }
     graphql_payload = {
-        "data": {
-            "repository": {
-                "pullRequest": {
-                    "reviewThreads": {
-                        "nodes": [thread],
-                        "pageInfo": {"hasNextPage": False, "endCursor": None},
-                    }
-                }
-            }
-        }
+        "data": {"repository": {"pullRequest": {"reviewThreads": review_threads}}}
     }
 
     def _stub_gh_graphql(query: str, variables: dict[str, object]) -> tuple[int, str]:
