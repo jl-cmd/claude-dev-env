@@ -2,6 +2,8 @@
 
 AST-based Python style checks for code quality enforcement.
 
+The checks live in `python_style_checks.py`; the shared source-line splitting and function-discovery helpers they build on live in `python_style_helpers.py`.
+
 ## Checks Implemented
 
 1. **Imports at top** - All import statements must be at the top of the file

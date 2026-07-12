@@ -12,6 +12,7 @@ A library of check modules used by the validation hooks. Each module focuses on 
 | `output_formatter.py` | Formats `Violation` lists into human-readable output |
 | `run_all_validators.py` | Entry point — runs every check module and aggregates results |
 | `health_check.py` | Verifies that all validator dependencies (ruff, mypy) are reachable |
+| `python_style_helpers.py` | Shared source-line splitting and function-discovery helpers imported by `python_style_checks.py` |
 
 ## Check modules
 
