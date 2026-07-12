@@ -53,6 +53,9 @@ def list_local_core_hooks_path_values(
     Returns:
         Non-empty stripped values from ``git config --local --get-all``, or
         an empty list when no values are configured.
+
+    Raises:
+        RuntimeError: When git exits non-zero with a non-empty stderr diagnostic.
     """
     git_command = [
         "git",
@@ -75,11 +78,9 @@ def list_local_core_hooks_path_values(
     if completed_process.returncode != 0:
         diagnostic_stderr = completed_process.stderr.strip()
         if diagnostic_stderr:
-            print(
-                "fix_hookspath: git read of local core.hooksPath on "
-                f"{repository_root} exited {completed_process.returncode}: "
-                f"{diagnostic_stderr}",
-                file=sys.stderr,
+            raise RuntimeError(
+                f"git read of local core.hooksPath on {repository_root} "
+                f"exited {completed_process.returncode}: {diagnostic_stderr}"
             )
         return []
     return [
@@ -99,8 +100,11 @@ def read_global_core_hooks_path(
             forwarded to ``subprocess.run``.
 
     Returns:
-        The stripped global value, or an empty string when unset or when git
-        returns non-zero.
+        The stripped global value, or an empty string when the key is unset
+        (git exits non-zero with empty stderr).
+
+    Raises:
+        RuntimeError: When git exits non-zero with a non-empty stderr diagnostic.
     """
     git_command = list(ALL_GIT_GLOBAL_GET_CORE_HOOKS_PATH_COMMAND)
     completed_process = subprocess.run(
@@ -115,10 +119,9 @@ def read_global_core_hooks_path(
     if completed_process.returncode != 0:
         diagnostic_stderr = completed_process.stderr.strip()
         if diagnostic_stderr:
-            print(
-                "fix_hookspath: git read of global core.hooksPath exited "
-                f"{completed_process.returncode}: {diagnostic_stderr}",
-                file=sys.stderr,
+            raise RuntimeError(
+                f"git read of global core.hooksPath exited "
+                f"{completed_process.returncode}: {diagnostic_stderr}"
             )
         return ""
     return completed_process.stdout.strip()
@@ -280,7 +283,8 @@ def main(
             forwarded to every git invocation and to the preflight rerun.
 
     Returns:
-        Zero on success. Non-zero on the first failing git command or on a
+        Zero on success. Non-zero on the first failing git command, on a
+        hard-fail git stderr diagnostic (caught ``RuntimeError``), or on a
         non-zero preflight rerun exit code.
     """
     arguments = parse_arguments(all_arguments)
@@ -302,6 +306,37 @@ def main(
             file=sys.stderr,
         )
         return 1
+    try:
+        return _repair_hooks_path_then_rerun_preflight(
+            repository_root=repository_root,
+            canonical_hooks_directory=canonical_hooks_directory,
+            all_environment_overrides=all_environment_overrides,
+        )
+    except RuntimeError as runtime_error:
+        print(f"fix_hookspath: {runtime_error}", file=sys.stderr)
+        return 1
+
+
+def _repair_hooks_path_then_rerun_preflight(
+    repository_root: Path,
+    canonical_hooks_directory: Path,
+    all_environment_overrides: dict[str, str] | None,
+) -> int:
+    """Apply local/global hooksPath repairs, then re-run preflight.
+
+    Args:
+        repository_root: Repository root used for local git config and preflight.
+        canonical_hooks_directory: Absolute path to the packaged git-hooks tree.
+        all_environment_overrides: Optional environment variable mapping
+            forwarded to every git invocation and to the preflight rerun.
+
+    Returns:
+        Zero on success. Non-zero on the first failing git write or on a
+        non-zero preflight rerun exit code.
+
+    Raises:
+        RuntimeError: When a git read exits non-zero with non-empty stderr.
+    """
     local_hooks_path_values = list_local_core_hooks_path_values(
         repository_root,
         all_environment_overrides,

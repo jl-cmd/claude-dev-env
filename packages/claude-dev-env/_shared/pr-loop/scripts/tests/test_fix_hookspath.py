@@ -6,6 +6,7 @@ Covers:
 - idempotent: second invocation produces the same final state with no errors
 - no-op when no override exists and global is already canonical
 - exits non-zero with a clear message when canonical hooks dir is missing
+- main() maps unexpected git stderr hard-fail RuntimeError to exit 1
 - handles paths with spaces
 """
 
@@ -229,15 +230,43 @@ def test_should_exit_nonzero_when_canonical_hooks_directory_missing(
     assert "hooks/git-hooks" in captured_streams.err.replace("\\", "/")
 
 
-def test_constant_wrapper_functions_have_been_removed() -> None:
-    """The three wrappers returned an already-imported module-level constant
-    unchanged. They added a layer of indirection with no transformation,
-    validation, or test seam, so they were inlined at every call site
-    and removed.
-    """
-    assert not hasattr(fix_hookspath, "_expected_hooks_path_suffix")
-    assert not hasattr(fix_hookspath, "_canonical_hooks_directory_components")
-    assert not hasattr(fix_hookspath, "_home_env_var_names")
+def test_main_exits_one_on_unexpected_git_stderr(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """main() must catch hard-fail RuntimeError from git stderr and exit 1 cleanly."""
+    home_directory = tmp_path / "home"
+    home_directory.mkdir()
+    environment = _make_isolated_git_environment(home_directory)
+    _create_canonical_hooks_directory(home_directory)
+    repository_path = tmp_path / "synthetic-repo"
+    _initialize_repository(repository_path, environment)
+    unexpected_git_stderr = (
+        "fatal: not a git repository (or any parent up to mount point /)"
+    )
+    failing_completed_process = subprocess.CompletedProcess(
+        args=["git"],
+        returncode=128,
+        stdout="",
+        stderr=unexpected_git_stderr,
+    )
+    monkeypatch.setattr(
+        fix_hookspath.subprocess,
+        "run",
+        lambda *_args, **_kwargs: failing_completed_process,
+    )
+
+    exit_code = fix_hookspath.main(
+        ["--repo-root", str(repository_path)],
+        all_environment_overrides=environment,
+    )
+
+    assert exit_code == 1
+    captured_streams = capsys.readouterr()
+    assert "not a git repository" in captured_streams.err
+    assert "Traceback" not in captured_streams.err
+    assert "Traceback" not in captured_streams.out
 
 
 def test_is_canonical_hooks_path_still_recognizes_canonical_suffix() -> None:
@@ -255,15 +284,11 @@ def test_resolve_canonical_hooks_directory_uses_home_env_overrides(
     assert resolved == fake_home / ".claude" / "hooks" / "git-hooks"
 
 
-def test_list_local_core_hooks_path_values_surfaces_git_stderr(
+def test_list_local_core_hooks_path_values_raises_on_unexpected_git_failure(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When git -C ... config --get-all exits non-zero with stderr, the helper
-    must print a diagnostic to sys.stderr so the failure is distinguishable from
-    "no local override exists".
-    """
+    """When git -C ... config --get-all exits non-zero with stderr, raise RuntimeError."""
     failing_completed_process = subprocess.CompletedProcess(
         args=["git"],
         returncode=128,
@@ -274,16 +299,11 @@ def test_list_local_core_hooks_path_values_surfaces_git_stderr(
         fix_hookspath.subprocess, "run", lambda *_args, **_kwargs: failing_completed_process
     )
 
-    returned_values = fix_hookspath.list_local_core_hooks_path_values(
-        tmp_path / "any-repo", None
-    )
-
-    assert returned_values == []
-    captured_streams = capsys.readouterr()
-    assert "fix_hookspath" in captured_streams.err
-    assert "core.hooksPath" in captured_streams.err
-    assert "not a git repository" in captured_streams.err
-
+    with pytest.raises(RuntimeError, match="not a git repository"):
+        fix_hookspath.list_local_core_hooks_path_values(
+            tmp_path / "any-repo",
+            None,
+        )
 
 def test_list_local_core_hooks_path_values_quiet_when_stderr_empty(
     tmp_path: Path,
@@ -308,13 +328,10 @@ def test_list_local_core_hooks_path_values_quiet_when_stderr_empty(
     assert captured_streams.err == ""
 
 
-def test_read_global_core_hooks_path_surfaces_git_stderr(
-    capsys: pytest.CaptureFixture[str],
+def test_read_global_core_hooks_path_raises_on_unexpected_git_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When the global git-config read exits non-zero with stderr, the helper
-    must print a diagnostic so callers can distinguish "global unset" from
-    "git broken"."""
+    """When the global git-config read exits non-zero with stderr, raise RuntimeError."""
     failing_completed_process = subprocess.CompletedProcess(
         args=["git"],
         returncode=128,
@@ -325,13 +342,8 @@ def test_read_global_core_hooks_path_surfaces_git_stderr(
         fix_hookspath.subprocess, "run", lambda *_args, **_kwargs: failing_completed_process
     )
 
-    returned_value = fix_hookspath.read_global_core_hooks_path(None)
-
-    assert returned_value == ""
-    captured_streams = capsys.readouterr()
-    assert "fix_hookspath" in captured_streams.err
-    assert "core.hooksPath" in captured_streams.err
-    assert "bad config" in captured_streams.err
+    with pytest.raises(RuntimeError, match="bad config"):
+        fix_hookspath.read_global_core_hooks_path(None)
 
 
 def test_read_global_core_hooks_path_quiet_when_stderr_empty(
@@ -372,3 +384,114 @@ def test_should_handle_paths_with_spaces(tmp_path: Path) -> None:
 
     assert exit_code == 0
     assert _read_local_hooks_path(repository_path, environment) == ""
+
+
+def test_unset_local_core_hooks_path_removes_local_override(tmp_path: Path) -> None:
+    home_directory = tmp_path / "home"
+    home_directory.mkdir()
+    environment = _make_isolated_git_environment(home_directory)
+    repository_path = tmp_path / "synthetic-repo"
+    _initialize_repository(repository_path, environment)
+    stale_local_value = str(repository_path / ".git" / "hooks")
+    _set_local_hooks_path(repository_path, stale_local_value, environment)
+    assert _read_local_hooks_path(repository_path, environment) == stale_local_value
+
+    exit_code = fix_hookspath.unset_local_core_hooks_path(repository_path, environment)
+
+    assert exit_code == 0
+    assert _read_local_hooks_path(repository_path, environment) == ""
+
+
+def test_set_global_core_hooks_path_writes_global_value(tmp_path: Path) -> None:
+    home_directory = tmp_path / "home"
+    home_directory.mkdir()
+    environment = _make_isolated_git_environment(home_directory)
+    canonical_hooks_directory = _create_canonical_hooks_directory(home_directory)
+    target_value = str(canonical_hooks_directory).replace("\\", "/")
+
+    exit_code = fix_hookspath.set_global_core_hooks_path(target_value, environment)
+
+    assert exit_code == 0
+    global_value_after_set = _read_global_hooks_path(environment)
+    assert (
+        global_value_after_set.replace("\\", "/")
+        .rstrip("/")
+        .endswith("hooks/git-hooks")
+    )
+
+
+def test_normalize_hooks_path_converts_backslashes_and_strips_trailing_slash() -> None:
+    windows_style_path = r"C:\Users\example\.claude\hooks\git-hooks\\"
+    unix_style_path = "/home/example/.claude/hooks/git-hooks/"
+
+    assert fix_hookspath.normalize_hooks_path(windows_style_path) == (
+        "C:/Users/example/.claude/hooks/git-hooks"
+    )
+    assert fix_hookspath.normalize_hooks_path(unix_style_path) == (
+        "/home/example/.claude/hooks/git-hooks"
+    )
+    assert fix_hookspath.normalize_hooks_path("already/normalized") == "already/normalized"
+
+
+def test_rerun_preflight_returns_subprocess_exit_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository_path = tmp_path / "synthetic-repo"
+    repository_path.mkdir()
+    recorded_commands: list[list[str]] = []
+
+    def fake_run(
+        command: list[str],
+        check: bool = False,
+        env: dict[str, str] | None = None,
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        recorded_commands.append(list(command))
+        return subprocess.CompletedProcess(
+            args=list(command),
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
+    monkeypatch.setattr(fix_hookspath.subprocess, "run", fake_run)
+
+    exit_code = fix_hookspath.rerun_preflight(repository_path, None)
+
+    assert exit_code == 0
+    assert len(recorded_commands) == 1
+    invoked_command = recorded_commands[0]
+    assert any(str(each_argument).endswith("preflight.py") for each_argument in invoked_command)
+    assert "--no-pytest" in invoked_command
+    assert "--repo-root" in invoked_command
+    assert str(repository_path) in invoked_command
+
+
+def test_rerun_preflight_propagates_nonzero_exit_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository_path = tmp_path / "synthetic-repo"
+    repository_path.mkdir()
+    preflight_failure_exit_code = 2
+
+    def fake_run(
+        command: list[str],
+        check: bool = False,
+        env: dict[str, str] | None = None,
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=list(command),
+            returncode=preflight_failure_exit_code,
+            stdout="",
+            stderr="preflight failed",
+        )
+
+    monkeypatch.setattr(fix_hookspath.subprocess, "run", fake_run)
+
+    exit_code = fix_hookspath.rerun_preflight(repository_path, None)
+
+    assert exit_code == preflight_failure_exit_code
+
