@@ -151,27 +151,38 @@ bugbot-flagged path does not satisfy the round; its clean verdict is not a clean
 
 ## The ready definition
 
-`check_convergence.py` is the single source of truth for readiness. It re-derives
-every condition from GitHub and marks the PR ready only when all of these hold on
-the current HEAD:
+`check_convergence.py` (`pr-converge/scripts/check_convergence.py`) is the single
+source of truth for readiness. Ready means the script exits `0` and prints:
 
-1. Bugbot CI check run is completed with a success or neutral conclusion
-   (bypassed when Bugbot is off for the run — the default unless
-   `CLAUDE_REVIEWS_ENABLED` lists `bugbot` — opted out via
-   `CLAUDE_REVIEWS_DISABLED`, or proved unreachable this run).
-2. The Bugbot review body on HEAD reports no findings (checked when a Bugbot
-   review is present).
-3. A CLEAN bugteam audit review sits on HEAD.
-4. The Copilot review on HEAD is clean or approved (bypassed when Copilot is down
-   or out of quota this run).
-5. Zero unresolved bot review threads anywhere on the PR — counting Cursor,
-   Claude, and Copilot authored threads. The filter is purely
-   `isResolved == false`; `isOutdated` is informational, and the fix lens
-   verifies each outdated thread against current HEAD like any other (the
-   `pr-fix-protocol` skill's unresolved-thread sweep).
-6. The PR is mergeable (`mergeable` true and `mergeable_state` clean).
-7. No requested reviewers are still pending (bypassed when Copilot is down or out
-   of quota this run).
+```
+All pre-conditions met — PR is ready to mark ready.
+```
+
+The script re-derives every condition from GitHub and prints one PASS/FAIL line
+per label. Exact printed labels (script order):
+
+1. `bugbot_clean_at == current_head` — Bugbot CI check run completed with a
+   success or neutral conclusion on HEAD (bypassed when Bugbot is off for the
+   run, opted out, or proved unreachable; `--bugbot-down` or the
+   `CLAUDE_REVIEWS_DISABLED` / default-off env path).
+2. `bugbot review body clean` — Bugbot review body on HEAD reports no findings
+   (omitted entirely when the check-run gate is bypassed via `bugbot_down`).
+3. `bugteam_clean_at == current_head` — a CLEAN bugteam audit review sits on HEAD.
+4. `copilot_clean_at == current_head` — Copilot review on HEAD is clean or
+   approved (bypassed when Copilot is down or out of quota; `--copilot-down` or
+   the env token).
+5. `zero unresolved bot threads` — zero unresolved bot-authored review threads.
+   Counts only threads whose first-comment author login contains `cursor`,
+   `claude`, or `copilot` (case-insensitive). A thread with `isOutdated == true`
+   is excluded from the count and does not fail the gate. Non-bot threads are
+   out of scope for this label.
+6. `PR is mergeable` — `mergeable` true and `mergeable_state` clean.
+7. `no pending requested reviews` — no pending requested reviewers (bypassed when
+   Copilot is down or out of quota).
+
+The script has no Claude APPROVED review gate. Agent-side checks (Claude
+reviewer presence, broader unresolved-thread sweeps via `pr-fix-protocol`) sit
+outside this machine checklist.
 
 ## Audit-trail design
 

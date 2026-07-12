@@ -59,10 +59,11 @@ Decide (four branches; match first whose predicate holds):
 - **No Copilot review on `current_head` yet:** Record evidence: "No Copilot review at <SHA>".
   Skip — gate (d) issues proactive request. Continue to gate (b).
 
-## (b) Claude reviewer gate
+## (b) Claude reviewer gate (agent-side)
 
-Fetch latest Claude reviewer (`claude[bot]`) review plus inline comments
-anchored to most recent Claude review on `current_head`:
+Agent-side only — not a `check_convergence.py` condition. Fetch latest Claude
+reviewer (`claude[bot]`) review plus inline comments anchored to most recent
+Claude review on `current_head`:
 
 ```
 pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_reviews")
@@ -174,22 +175,26 @@ against `current_head`. Decide:
 
 ## (e) Thread-resolution gate
 
-Before marking ready, count ALL unresolved review threads on the PR:
+Agent-side prep before the machine checklist in gate (f). The script label
+`zero unresolved bot threads` is what marks ready; this gate clears those
+threads first.
 
-```
-pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_comments")
-  → filter threads where `is_resolved == false`
-  → count
-```
+Machine filter (same as `check_convergence.py`):
 
-This count is the `pr-fix-protocol` unresolved-thread sweep
-(`../../pr-fix-protocol/SKILL.md`).
+- `isResolved == false`
+- `isOutdated == true` → thread **excluded** (does not fail the gate)
+- first-comment author login contains `cursor`, `claude`, or `copilot`
+  (case-insensitive substrings only)
+
+Broader unresolved-thread sweeps (all authors, including human reviewers) are
+agent-side via the `pr-fix-protocol` skill
+(`../../pr-fix-protocol/SKILL.md`) and are not script conditions.
 
 Decide:
 
-- **Zero unresolved threads:** Record evidence:
-  "0 unresolved threads across PR at <SHA>". Continue to gate (f).
-- **One or more unresolved threads:** Do **not** mark ready. Apply the
+- **Zero unresolved bot threads** under the filter above: Record evidence:
+  "0 unresolved bot threads at <SHA>". Continue to gate (f).
+- **One or more unresolved bot threads:** Do **not** mark ready. Apply the
   `pr-fix-protocol` skill's unresolved-thread sweep
   (`../../pr-fix-protocol/SKILL.md`). Push if any code changed → reset
   `bugbot_clean_at = null`, `code_review_clean_at = null`,
@@ -199,24 +204,44 @@ Decide:
 
 ## (f) Mark ready and report
 
-**Mandatory pre-condition checklist.** Before calling `update_pull_request`,
-verify ALL seven conditions below. Three are preconditions from the main
-loop (bugbot clean, bugteam convergence, no intervening push); four are
-evidence from gates (a)–(e) above. All seven must be confirmed:
+**Machine pre-condition checklist.** Run the script — do not hand-check labels:
 
-- [ ] `bugbot_clean_at == current_head` (from per-tick.md Step 2 BUGBOT §c)
-- [ ] bugteam `convergence (zero findings)` at `current_head` (from per-tick.md Step 2 BUGTEAM §d)
-- [ ] `copilot_clean_at == current_head` (from gate (a) or gate (d)), or the Copilot gate bypassed for the run via `copilot_down`
-- [ ] Claude `APPROVED` or absent at `current_head` (from gate (b))
-- [ ] `mergeable_state == "clean"` AND `mergeable == true` (from gate (c))
-- [ ] Zero unresolved review threads anywhere on the PR (from gate (e))
-- [ ] No push since bugteam convergence (from per-tick.md Step 2 BUGTEAM §b)
+```
+python ~/.claude/skills/pr-converge/scripts/check_convergence.py \
+  --owner <O> --repo <R> --pr-number <N> \
+  [--bugbot-down] [--copilot-down]
+```
 
-If ANY checkbox cannot be confirmed with evidence, do NOT mark ready.
-Report the specific missing condition and route through the appropriate
-fix path (BUGBOT for dirty reviews, rebase for merge conflicts, etc.).
+Ready means exit `0` and the line:
 
-Only when ALL seven conditions are confirmed:
+```
+All pre-conditions met — PR is ready to mark ready.
+```
+
+Exact printed labels (script order):
+
+1. `bugbot_clean_at == current_head`
+2. `bugbot review body clean` (omitted when `bugbot_down`)
+3. `bugteam_clean_at == current_head`
+4. `copilot_clean_at == current_head`
+5. `zero unresolved bot threads`
+6. `PR is mergeable`
+7. `no pending requested reviews`
+
+On label 5: `isOutdated == true` excludes the thread; bot filter is login
+substrings `cursor` | `claude` | `copilot` only. The script has no Claude
+APPROVED review gate.
+
+**Agent-side only (not script conditions):** Claude reviewer presence or
+APPROVED state (gate (b)); broader non-bot thread sweeps; loop preconditions
+such as no push since bugteam convergence. Confirm those in the agent path
+before invoking the script; they never appear as `check_convergence.py` labels.
+
+When the script fails (exit 1), do NOT mark ready. Report the FAIL label and
+route through the matching fix path (BUGBOT for dirty reviews, rebase for
+merge conflicts, and so on).
+
+When the script passes (exit 0):
 
 Use the `update_pull_request` MCP tool:
 
@@ -224,7 +249,5 @@ Use the `update_pull_request` MCP tool:
 
 With `state.json`, append convergence row to
 `<TMPDIR>/pr-converge-<session_id>/converged.log` per `multi-pr-orchestration.md` §Memory; else skip.
-Report: `PR #<NUMBER> converged: bugbot CLEAN at <SHA>, bugteam CLEAN at
-<SHA>, mergeable_state clean, copilot CLEAN at <SHA>, claude <APPROVED|absent>
-at <SHA>, 0 unresolved threads across PR; marked ready for review`.
-**Omit loop pacing** per **Convergence** of active pacing workflow.
+Report from the script's PASS lines (the seven labels above). **Omit loop
+pacing** per **Convergence** of active pacing workflow.
