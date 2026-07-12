@@ -96,14 +96,17 @@ Or, for a single repo:
 ./scripts/bootstrap-listeners.sh --owner JonEcho --skip all-other-repos
 ```
 
-Or copy manually:
+Or copy manually. The listener needs four files: the workflow, the listener
+script, and the two `config/` modules the script imports at startup.
 
 ```bash
 # From the root of claude-dev-env:
 gh repo clone owner/target-repo /tmp/target
-mkdir -p /tmp/target/.github/workflows /tmp/target/.github/scripts
+mkdir -p /tmp/target/.github/workflows /tmp/target/.github/scripts /tmp/target/config
 cp .github/workflows/sync-ai-rules.yml /tmp/target/.github/workflows/
 cp .github/scripts/sync_ai_rules.py    /tmp/target/.github/scripts/
+cp config/sync_ai_rules_paths.py       /tmp/target/config/
+cp config/__init__.py                  /tmp/target/config/
 ```
 
 Then commit and push a PR in the target repo.
