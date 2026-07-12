@@ -60,6 +60,8 @@ ALL_DENIED_FILENAMES = (
     "composer.lock",
 )
 
+ALL_UPPERCASE_DENIED_FILENAMES = (".ENV", "ID_RSA", "CREDENTIALS.JSON", "SERVER.PEM")
+
 ALL_ORDINARY_FILENAMES = ("main.py", "README.md", "settings.json")
 
 
@@ -114,6 +116,16 @@ def test_sensitive_filename_is_denied(tmp_path: Path, sensitive_filename: str) -
     )
 
 
+@pytest.mark.parametrize("uppercase_filename", ALL_UPPERCASE_DENIED_FILENAMES)
+def test_uppercase_sensitive_filename_is_denied(tmp_path: Path, uppercase_filename: str) -> None:
+    completed = _run_hook(WRITE_TOOL_NAME, tmp_path / uppercase_filename, PLACEHOLDER_TEMPLATE_BODY)
+    assert completed.returncode == 0, completed.stderr
+    assert _permission_decision(completed) == DENY_DECISION, (
+        f"{uppercase_filename} names a secret in an uppercase spelling and must stay denied like "
+        f"its lowercase form; got stdout {completed.stdout!r}"
+    )
+
+
 @pytest.mark.parametrize("ordinary_filename", ALL_ORDINARY_FILENAMES)
 def test_ordinary_source_file_is_allowed(tmp_path: Path, ordinary_filename: str) -> None:
     completed = _run_hook(WRITE_TOOL_NAME, tmp_path / ordinary_filename, ORDINARY_SOURCE_BODY)
@@ -159,10 +171,7 @@ def test_malformed_payload_fails_open() -> None:
     assert completed.stdout.strip() == ""
 
 
-@pytest.mark.parametrize(
-    "trailing_suffix_filename",
-    (".env.example.bak", ".env.template.old", ".env.sample.orig"),
-)
+@pytest.mark.parametrize("trailing_suffix_filename", (".env.example.bak", ".env.template.old", ".env.sample.orig"))
 def test_template_suffix_must_be_last_to_earn_the_exemption(
     tmp_path: Path, trailing_suffix_filename: str
 ) -> None:

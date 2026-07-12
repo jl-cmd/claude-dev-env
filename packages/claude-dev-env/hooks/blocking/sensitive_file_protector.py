@@ -79,7 +79,7 @@ def is_sensitive_file(file_path: str) -> str | None:
     if is_template_filename(filename):
         return None
     for each_pattern in ALL_SENSITIVE_PATTERNS:
-        if fnmatch.fnmatch(filename, each_pattern):
+        if fnmatch.fnmatch(filename.lower(), each_pattern.lower()):
             return each_pattern
     return None
 
