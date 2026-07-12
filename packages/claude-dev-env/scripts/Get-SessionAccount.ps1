@@ -4,9 +4,6 @@ param(
     [switch]$AsJson
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-
 $noiseEmailPatterns = @(
     '@example\.(com|org|net)$',
     'sentry\.io',
@@ -81,7 +78,8 @@ function Write-AccountResult {
         [string]$AccountUuid,
         [string]$Source,
         [string]$CliEmail,
-        [string]$CliAccountUuid
+        [string]$CliAccountUuid,
+        [switch]$AsJson
     )
     if ($AsJson) {
         [pscustomobject]@{
@@ -139,8 +137,9 @@ function Resolve-SessionAccount {
         return New-SessionAccountResult -ExitCode 2 -ErrorMessage "Failed to parse CLI config as JSON: $CliConfigPath"
     }
 
-    $cliEmail = $cliConfig.oauthAccount.emailAddress
-    $cliAccountUuid = $cliConfig.oauthAccount.accountUuid
+    $oauthAccount = $cliConfig['oauthAccount']
+    $cliEmail = if ($oauthAccount) { $oauthAccount['emailAddress'] } else { $null }
+    $cliAccountUuid = if ($oauthAccount) { $oauthAccount['accountUuid'] } else { $null }
     if (-not $cliEmail -or -not $cliAccountUuid) {
         return New-SessionAccountResult -ExitCode 2 -ErrorMessage "CLI config is missing oauthAccount.emailAddress or oauthAccount.accountUuid: $CliConfigPath"
     }
@@ -183,16 +182,21 @@ function Resolve-SessionAccount {
 }
 
 function Invoke-GetSessionAccount {
+    param(
+        [switch]$AsJson
+    )
     $cliConfigPath = Join-Path $HOME '.claude.json'
     $sessionAccount = Resolve-SessionAccount -CliConfigPath $cliConfigPath -ProfileDirectory $env:CLAUDE_USER_DATA_DIR
     if ($sessionAccount.ErrorMessage) {
         Write-Error $sessionAccount.ErrorMessage -ErrorAction Continue
         exit $sessionAccount.ExitCode
     }
-    Write-AccountResult -Email $sessionAccount.Email -AccountUuid $sessionAccount.AccountUuid -Source $sessionAccount.Source -CliEmail $sessionAccount.CliEmail -CliAccountUuid $sessionAccount.CliAccountUuid
+    Write-AccountResult -Email $sessionAccount.Email -AccountUuid $sessionAccount.AccountUuid -Source $sessionAccount.Source -CliEmail $sessionAccount.CliEmail -CliAccountUuid $sessionAccount.CliAccountUuid -AsJson:$AsJson
     exit $sessionAccount.ExitCode
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    Invoke-GetSessionAccount
+    Set-StrictMode -Version Latest
+    $ErrorActionPreference = 'Stop'
+    Invoke-GetSessionAccount -AsJson:$AsJson
 }
