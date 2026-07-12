@@ -22,10 +22,22 @@ function moduleConstantSource(constantName) {
 }
 
 const productionModule = new Function(
-  `${functionBody('cleanAuditBlocker')}\n` + 'return { cleanAuditBlocker };',
+  `${functionBody('cleanAuditPostReason')}\n` +
+    `${functionBody('cleanAuditBypassNote')}\n` +
+    'return { cleanAuditPostReason, cleanAuditBypassNote };',
 )();
 
-const { cleanAuditBlocker } = productionModule;
+const { cleanAuditPostReason, cleanAuditBypassNote } = productionModule;
+
+function buildResolveCleanAuditNote(logStub) {
+  const factory = new Function(
+    'log',
+    'cleanAuditPostReason',
+    'cleanAuditBypassNote',
+    `${functionBody('resolveCleanAuditNote')}\n return resolveCleanAuditNote;`,
+  );
+  return factory(logStub, cleanAuditPostReason, cleanAuditBypassNote);
+}
 
 const provenanceModule = new Function(
   `const LENS_NAMES = ${moduleConstantSource('LENS_NAMES')};\n` +
@@ -79,28 +91,22 @@ function buildRunGeneralUtilityTask(convergeAgentStub) {
 
 const CONVERGED_HEAD = 'abcdef0123456789abcdef0123456789abcdef01';
 
-test('cleanAuditBlocker names the reason, the HEAD, and grounded recovery for both permission and non-permission failures without any compose-by-hand language', () => {
-  const message = cleanAuditBlocker(CONVERGED_HEAD, {
+test('cleanAuditBypassNote names the HEAD and the reason and frames a recorded bypass rather than a stop', () => {
+  const note = cleanAuditBypassNote(CONVERGED_HEAD, {
     posted: false,
     reviewUrl: '',
     reason: 'denied by the auto mode classifier',
   });
-  assert.match(message, /denied by the auto mode classifier/);
-  assert.match(message, /post_audit_thread\.py/);
-  assert.match(message, new RegExp(CONVERGED_HEAD));
-  assert.match(message, /can never pass without it/);
-  assert.match(message, /permission rule/);
-  assert.match(message, /gh auth|network|script error/);
-  assert.match(message, /re-run/);
-  assert.match(message, /empty JSON array/, 'expected a self-contained recovery that creates a fresh empty findings file');
-  assert.doesNotMatch(message, /the run's own empty findings file/, 'expected no reference to a findings file that may never have been created');
-  assert.doesNotMatch(message, /by hand/i);
-  assert.doesNotMatch(message, /compose/i);
+  assert.match(note, /denied by the auto mode classifier/);
+  assert.match(note, new RegExp(CONVERGED_HEAD));
+  assert.match(note, /could not be posted/);
+  assert.match(note, /bugteam-review gate skipped/);
+  assert.doesNotMatch(note, /the run stops/);
 });
 
-test('cleanAuditBlocker falls back to a no-result reason when the post agent died', () => {
-  const message = cleanAuditBlocker(CONVERGED_HEAD, null);
-  assert.match(message, /the post agent returned no result/);
+test('cleanAuditPostReason reads the result reason and falls back to a no-result reason when the post agent died', () => {
+  assert.equal(cleanAuditPostReason(null), 'the post agent returned no result');
+  assert.equal(cleanAuditPostReason({ posted: false, reason: 'denied by the classifier' }), 'denied by the classifier');
 });
 
 test('the post-clean-audit task in runGeneralUtilityTask returns the CLEAN_AUDIT_SCHEMA result rather than an unused transcript', () => {
@@ -524,15 +530,16 @@ test('CLEAN_AUDIT_SCHEMA requires posted, reviewUrl, and reason', () => {
   );
 });
 
-test('the standards-only call site breaks with a clean-audit blocker when the post does not land', () => {
+test('the standards-only call site records a clean-audit bypass and continues to BUGBOT when the post does not land', () => {
   const branch = convergeSource.slice(
     convergeSource.indexOf('if (isStandardsOnlyRound(findings)) {'),
     convergeSource.indexOf('if (findings.length > 0) {'),
   );
   assert.match(branch, /runGeneralUtilityTask\(.*'post-clean-audit'/);
-  assert.match(branch, /if \(!auditResult\?\.posted\)/);
-  assert.match(branch, /blocker = cleanAuditBlocker\(head, auditResult\)/);
-  assert.match(branch, /\bbreak\b/);
+  assert.match(branch, /cleanAuditNote = resolveCleanAuditNote\(auditResult, head, rounds\)/);
+  assert.match(branch, /phase = 'BUGBOT'/);
+  assert.doesNotMatch(branch, /blocker = cleanAuditBlocker/);
+  assert.doesNotMatch(branch, /\bbreak\b/);
 });
 
 test('the standards-only call site relays lens provenance, the deferred standards findings, and the deferral filing state', () => {
@@ -578,15 +585,17 @@ test('every standardsDeferralNote call site passes the shared deferral state wit
   assert.doesNotMatch(convergeSource, /buildStandardsDeferral\(standardsOutcome\)/);
 });
 
-test('the all-clean call site breaks with a clean-audit blocker when the post does not land', () => {
+test('the all-clean call site records a clean-audit bypass and continues to BUGBOT when the post does not land, keeping the noLensRan re-converge', () => {
   const branch = convergeSource.slice(
     convergeSource.indexOf('all lenses clean on'),
     convergeSource.indexOf("if (phase === 'BUGBOT') {"),
   );
   assert.match(branch, /runGeneralUtilityTask\(.*'post-clean-audit'/);
-  assert.match(branch, /if \(!auditResult\?\.posted\)/);
-  assert.match(branch, /blocker = cleanAuditBlocker\(head, auditResult\)/);
-  assert.match(branch, /\bbreak\b/);
+  assert.match(branch, /if \(auditResult\?\.noLensRan\)/);
+  assert.match(branch, /cleanAuditNote = resolveCleanAuditNote\(auditResult, head, rounds\)/);
+  assert.match(branch, /resetNoLensRounds\(\)/);
+  assert.match(branch, /phase = 'BUGBOT'/);
+  assert.doesNotMatch(branch, /blocker = cleanAuditBlocker/);
 });
 
 test('the all-clean call site relays lens provenance into the post-clean-audit context without a postFindings field', () => {
@@ -597,4 +606,55 @@ test('the all-clean call site relays lens provenance into the post-clean-audit c
   assert.match(branch, /const allCleanNamedLenses = nameLensResults\(lenses\)/);
   assert.match(branch, /lensResults: allCleanNamedLenses/);
   assert.doesNotMatch(branch, /postFindings/);
+});
+
+test('runConvergenceCheck threads a --bugteam-post-blocked flag and an explanatory note when the bugteam post was bypassed', () => {
+  const body = functionBody('runConvergenceCheck');
+  assert.match(body, /const bugteamPostBlockedFlag = context\.bugteamPostBlocked \? ' --bugteam-post-blocked' : ''/);
+  assert.match(body, /context\.bugteamPostBlocked/);
+  assert.match(body, /\$\{bugteamPostBlockedFlag\}/);
+  assert.match(body, /bugteamPostBlockedNote/);
+  assert.match(body, /skips the bugteam CLEAN-review gate/);
+});
+
+test('resolveCleanAuditNote records a bypass note on a refused post and resets to null when a later round lands the post', () => {
+  const loggedLines = [];
+  const resolveCleanAuditNote = buildResolveCleanAuditNote((message) => loggedLines.push(message));
+
+  const bypassNote = resolveCleanAuditNote(
+    { posted: false, reviewUrl: '', reason: 'denied by the classifier' },
+    'abc1234def5678',
+    2,
+  );
+  assert.notEqual(bypassNote, null, 'a refused post records the bypass note');
+  assert.match(bypassNote, /denied by the classifier/);
+  assert.equal(loggedLines.length, 1, 'a refused post logs the bypass once');
+
+  const clearedNote = resolveCleanAuditNote(
+    { posted: true, reviewUrl: 'https://github.com/o/r/pull/1#pullrequestreview-9', reason: '' },
+    'abc1234def5678',
+    3,
+  );
+  assert.equal(clearedNote, null, 'a landed post in a later round resets the bypass note so FINALIZE runs the bugteam gate');
+  assert.equal(loggedLines.length, 1, 'a landed post logs no bypass line');
+});
+
+test('the finalize call derives bugteamPostBlocked from a set cleanAuditNote', () => {
+  assert.match(
+    convergeSource,
+    /runConvergenceCheck\(\{ head, bugbotDown, copilotDown, bugteamPostBlocked: cleanAuditNote !== null \}\)/,
+  );
+});
+
+test('the workflow declares cleanAuditNote and assembles it into every result via a single note-fields builder', () => {
+  assert.match(convergeSource, /let cleanAuditNote = null/);
+  assert.match(
+    convergeSource,
+    /const assembleResult = \(outcomeFields\) => \(\{\n\s*\.\.\.outcomeFields,\n\s*standardsNote,\n\s*copilotNote,\n\s*cleanAuditNote,\n\s*reuseNote,\n\s*deferredPrs,\n\s*\}\)/,
+  );
+  const assembleCalls = convergeSource.match(/return assembleResult\(/g) || [];
+  assert.ok(
+    assembleCalls.length >= 3,
+    'expected the user-review, converged, and iteration-cap returns to build through assembleResult',
+  );
 });

@@ -1234,7 +1234,7 @@ test('the FINALIZE phase drives the merged check and reads ready from its result
   const finalizeStart = convergeSource.indexOf("if (phase === 'FINALIZE') {");
   assert.notEqual(finalizeStart, -1, 'expected a FINALIZE phase block');
   const finalizeBody = convergeSource.slice(finalizeStart, finalizeStart + 1000);
-  assert.match(finalizeBody, /runConvergenceCheck\(\{ head, bugbotDown, copilotDown \}\)/);
+  assert.match(finalizeBody, /runConvergenceCheck\(\{ head, bugbotDown, copilotDown, bugteamPostBlocked: cleanAuditNote !== null \}\)/);
   assert.match(finalizeBody, /classifyReadyOutcome\(finalizeResult\)/);
   assert.doesNotMatch(
     finalizeBody,

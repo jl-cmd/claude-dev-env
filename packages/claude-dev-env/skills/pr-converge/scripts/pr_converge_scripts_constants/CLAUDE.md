@@ -9,6 +9,7 @@ Constants module for the `pr-converge` skill's Python scripts. Re-exports all ru
 | `__init__.py` | Package marker |
 | `pr_converge_constants.py` | Re-exports all constants from `pr_converge_skill_constants.constants` plus adds script-specific values |
 | `reflow_skill_md_constants.py` | Constants for `reflow_skill_md.py`: line width limit, list item patterns, `TARGET_SKILL_PATH` |
+| `convergence_gate_constants.py` | Constants for `check_convergence_gates.py`: short-SHA length, join separators, and the review-threads GraphQL query |
 
 ## Conventions
 

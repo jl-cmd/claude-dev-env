@@ -45,19 +45,6 @@ skill still runs teardown (revoke permissions, final report).
   cannot confirm the PR left draft state (`gh pr ready` errored, or the draft
   re-query still reports true). The workflow does not report `converged: true`;
   the run ends with a `blocker` naming the failed ready transition.
-- **Clean-audit post blocked** — every review lens is clean on HEAD, but the
-  CLEAN bugteam review cannot be posted (the `post_audit_thread.py` post is
-  denied, errors, or its agent dies). The convergence gate's bugteam-review
-  check can never pass without that CLEAN review, so the run stops rather than
-  re-converge to the iteration cap. The `blocker` names the post failure and the
-  HEAD. Unblock a permission denial by allowing `post_audit_thread.py` with a
-  Bash permission rule. Unblock any other failure by creating a fresh temporary
-  file whose exact content is an empty JSON array (`[]`) and re-running the run's
-  own `post_audit_thread.py --skill bugteam --state CLEAN` command for the
-  lens-verified HEAD with that file as `--findings-json`; then re-run the
-  workflow. A CLEAN post carries an empty findings array by construction, so this
-  re-issues the run's own command for the outcome the lenses already established
-  for that HEAD.
 - **No review lens reviewed HEAD** — a round can end with no lens having reviewed
   the HEAD three ways: the preflight resolves no SHA, every lens agent dies, or
   every lens is down or disabled. A single such round retries on the next round.
@@ -69,6 +56,19 @@ skill still runs teardown (revoke permissions, final report).
 
 ## Not a blocker (the run continues)
 
+Each reviewer-down condition below skips its own convergence-check gate. The flag and the matching `CLAUDE_REVIEWS_DISABLED` token for each condition are the single flag-per-condition table in [`../../reviewer-gates/SKILL.md`](../../reviewer-gates/SKILL.md) § "Convergence-check bypass flags"; the token carries the bypass into the mark-ready blocker hook's no-flag re-check.
+
+- **Clean-audit post bypassed** — every review lens is clean on HEAD, but the
+  environment refuses the CLEAN bugteam review post (the `post_audit_thread.py`
+  post is denied, errors, or its agent never runs). The lens results already show
+  this HEAD is clean, so the CLEAN post is a record-keeping artifact, not the
+  safety-bearing gate. The run records a `cleanAuditNote` naming the HEAD and the
+  reason, logs the bypass, and proceeds to the terminal Bugbot gate — the same
+  shape as the Bugbot-down and Copilot-down paths. The convergence check runs with
+  `--bugteam-post-blocked` so its bugteam CLEAN-review gate is skipped and the run
+  closes on the remaining signals. A round where no lens actually reviewed HEAD is
+  separate: that re-converges under the no-review-lens rule above, since no lens
+  grounded a post.
 - **Terminal Bugbot gate down or disabled** — the terminal Bugbot gate runs once
   the internal lenses are clean. When Cursor Bugbot is off for the run (the
   default unless `CLAUDE_REVIEWS_ENABLED` lists `bugbot`) or opted out via

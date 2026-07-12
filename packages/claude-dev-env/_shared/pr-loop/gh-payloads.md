@@ -55,9 +55,9 @@ user-facing output (chat reply to the user) rather than in the PR review body.
 
 ## Review POST failure
 
-There is no fallback path. `post_audit_thread.py` exits `2` on retry
-exhaustion (four non-2xx responses across the built-in `1s / 4s / 16s` backoff)
-and the orchestrator halts with `error: post_audit_thread retry exhausted`.
+There is no fallback payload to build. On retry exhaustion
+`post_audit_thread.py` exits `2` and the orchestrator halts — see
+[`./post-audit-thread-contract.md`](./post-audit-thread-contract.md) § Exit codes.
 A hard blocker on the audit-posting path is a halt condition, not a degraded
 flat-issue-comment fall-through.
 

@@ -158,25 +158,14 @@ cd into `<worktree_path>` before any git or file operation.
        --findings-json <path>
      ```
 
-     The script POSTs a single review with `event=APPROVE` on CLEAN
-     (the request event; GitHub stores it as `state=APPROVED`; empty
-     `comments[]`, body documents "no findings") or
-     `event=REQUEST_CHANGES` on DIRTY (one inline anchored comment per
-     finding; each becomes its own resolvable thread on the PR). It
-     handles retries internally (1s / 4s / 16s backoff across four
-     attempts). Exit codes:
+     The event handling, retry backoff, and exit-code table are the
+     shared contract in
+     [`../../_shared/pr-loop/post-audit-thread-contract.md`](../../_shared/pr-loop/post-audit-thread-contract.md).
+     For bugteam, an exit `2` (retry exhaustion) is a hard blocker: halt
+     and exit `error: post_audit_thread retry exhausted` without retrying
+     and without falling back to a flat issue comment.
 
-     - `0` — review posted; the new review's `html_url` is on stdout.
-       Capture this URL as the parent review URL.
-     - `1` — user input error (bad arguments, malformed findings JSON,
-       missing template).
-     - `2` — retry exhaustion. Hard blocker; halt and exit
-       `error: post_audit_thread retry exhausted` without retrying and
-       without falling back to a flat issue comment. There is no
-       fallback path — a hard blocker on the audit-posting path is a
-       halt condition.
-
-     Exit 0 emits the new review's `html_url` on stdout. Extract the
+     Harvest the parent review URL from stdout, then extract the
      numeric review id from that URL's `#pullrequestreview-<id>` suffix
      (the trailing URL fragment, the part after `#`). Then harvest child-comment URLs
      **and PR review thread node ids** via
