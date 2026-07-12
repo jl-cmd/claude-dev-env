@@ -149,7 +149,7 @@ See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact patterns.
 | `SKILL.md` | This hub — principles, process, routing, file index |
 | `references/skill-types.md` | 9-type taxonomy with folder structures per type |
 | `references/progressive-disclosure.md` | Folder conventions, hub pattern, hard rules |
-| `references/self-audit-checklist.md` | 38-point mandatory post-build audit |
+| `references/self-audit-checklist.md` | 33-point mandatory post-build audit |
 | `references/delegation-map.md` | Subagent handoff patterns and transcript guidance |
 | `workflows/new-skill.md` | Full lifecycle for new skills (6 steps) |
 | `workflows/improve-skill.md` | Observation-first flow for existing skills (6 steps) |

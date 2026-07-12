@@ -72,47 +72,23 @@ signals.
 
 ## Copilot findings — tier, verify, then route
 
-The Copilot step tiers each finding it surfaces. A **self-healing** finding is
-pure style, type hints, misplaced or unused imports, formatting, magic-value
-extraction, a test-only change, a doc-or-description vs code mismatch, or code
-de-duplication — a fix that cannot change observable runtime behavior for
-production callers. Self-healing findings flow into the existing fix tick and
-count toward convergence, with no user alert. The tick-paced loop holds them
-naturally: the fix lands on `current_head`, the next tick re-checks, and the run
-converges when the Copilot step is clean.
+Tier, verify, and route each Copilot finding via
+[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) (self-healing
+auto-fix; code-concern verify then confirmed / refuted / inconclusive).
 
-A **code-concern** finding is behavior-changing or needs a product decision:
-logic or correctness, security, data handling, error-handling semantics, or
-concurrency. Tier a finding as code-concern whenever the tier is in doubt.
+**pr-converge phase routing after triage:**
 
-Each code-concern finding goes to a verifier before any routing — the same
-three-verdict standard the single-run gate applies, at this tick's Copilot step.
-A verdict is conclusive only when an actual check ran: the verifier executes a
-command against the flagged HEAD and captures its output. Reading the source
-never produces a conclusive verdict. The verdict carries
-`{ verdict, checkCommand, checkOutput, evidence }`; a conclusive verdict with an
-empty `checkCommand` or `checkOutput` downgrades to inconclusive.
-
-- **confirmed** — the check reproduces the defect. The finding joins the fix tick
-  carrying its repro, and the fix re-runs that same check, adds a regression test
-  where the suite covers the surface, lands in one commit, pushes, and replies on
-  the thread with the fix SHA and the before/after output. No page.
-- **refuted** — the check shows the code already behaves correctly in the exact
-  scenario the finding claims is broken. The tick replies on the thread with the
-  command and output, resolves it, and counts it clean. No page.
-- **inconclusive** — everything else, and the verifier's default: no runnable
-  check exists, the check is infeasible here, the results are ambiguous, or the
-  fix needs a product decision. Any doubt sorts here.
-
-On one or more inconclusive findings, do not auto-fix them and do not let the
-tick mark the PR ready. Run the
-[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate: send the
-ntfy alert with the per-finding summary and evidence note and the Copilot review
-link, then hold for the user's response on a 45-minute deadline that spans
-ticks — carry the deadline in the run's persisted state so each tick reads it on
-entry. Act on the user's direction when it arrives inside the window; when the
-deadline passes with no response, run teardown and report the inconclusive
-findings un-reviewed.
+- Self-healing and **confirmed** findings join the fix tick on `current_head`;
+  after push, reset clean-at SHAs, set `phase = CODE_REVIEW`, return to Step 5.
+- **Refuted** findings resolve clean on the thread; no phase change.
+- One or more **inconclusive** findings: do not mark ready. Run the triage
+  skill's user gate (ntfy + 45-minute hold across ticks; persist the deadline so
+  each tick reads it on entry). Act on the user's direction inside the window;
+  on timeout, teardown and report the findings un-reviewed.
+- Enter `COPILOT_WAIT` only from gate (d) after requesting a Copilot review
+  (Step 7 → 7a). Stay on `COPILOT_WAIT` until a review surfaces at
+  `current_head`, `copilot_wait_count >= 3` hard-blocks, or `copilot_down`
+  skips the Copilot path entirely.
 
 ## Budget-aware tick boundaries
 

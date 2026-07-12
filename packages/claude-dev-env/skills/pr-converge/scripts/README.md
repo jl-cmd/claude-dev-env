@@ -99,7 +99,9 @@ Check for an existing pending review first with
 
 ## Shared modules
 
-Shared Python utilities live under `_shared/pr-loop/scripts/` — `_xml_utils.py` for XML serialization, `_cli_utils.py` for CLI guards, `_path_resolver.py` for canonical path resolution. These serve `/bugteam`, `/qbug`, `/findbugs`, and `/fixbugs` equally.
+Shared Python utilities live under `skills/_shared/pr-loop/scripts/` —
+`_xml_utils.py` for XML serialization, `_cli_utils.py` for CLI guards,
+`_path_resolver.py` for canonical path resolution.
 
 ## Tests
 

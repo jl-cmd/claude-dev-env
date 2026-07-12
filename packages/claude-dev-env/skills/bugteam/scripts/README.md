@@ -5,7 +5,7 @@ Scripts in this directory are **executed** by the lead or teammates. They are no
 | Script | Purpose |
 |--------|---------|
 | `bugteam_preflight.py` | Run pytest (when configured) and optional `pre-commit` before `/bugteam`. Skill-path entry; implementation delegates to package shared `_shared/pr-loop/scripts/preflight.py`. |
-| `bugteam_fix_hookspath.py` | Auto-remediate a stale local `core.hooksPath` override, set canonical global value, re-run `bugteam_preflight.py`. Invoked by Claude when preflight reports a `core.hooksPath` failure. |
+| `bugteam_fix_hookspath.py` | Auto-remediate a stale local `core.hooksPath` override, set canonical global value, re-run preflight. Skill-path entry; implementation delegates to package shared `_shared/pr-loop/scripts/fix_hookspath.py`. Invoked by Claude when preflight reports a `core.hooksPath` failure. |
 | `bugteam_code_rules_gate.py` | **Local / tests-only** `validate_content` runner on PR-scoped files. Not the pre-audit gate of record — that is package-shared `../../_shared/pr-loop/scripts/code_rules_gate.py` (see `reference/audit-and-teammates.md`). |
 | `windows_safe_rmtree.py` | Windows-safe recursive directory removal (strips ReadOnly, retries). Standalone helper with unit tests; run-temp teardown is `skills/_shared/pr-loop/scripts/teardown_worktrees.py` under `pr-loop-lifecycle` Close. |
 | `probe_code_rules_enforcer_check.py` | Dynamically load `~/.claude/hooks/blocking/code_rules_enforcer.py` and invoke a named check function against a fixture file. Used by the historical Copilot gap-analysis investigation as a verification shape (see `reference/copilot-gap-analysis.md`). |
@@ -27,6 +27,8 @@ python "${CLAUDE_SKILL_DIR}/scripts/bugteam_preflight.py"
 
 ## `bugteam_fix_hookspath.py`
 
+Skill-path entry; implementation lives at `_shared/pr-loop/scripts/fix_hookspath.py`.
+
 From the repository root:
 
 ```bash
@@ -37,7 +39,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/bugteam_fix_hookspath.py"
 - Sets `git config --global core.hooksPath ~/.claude/hooks/git-hooks` when the global value is unset or non-canonical.
 - Refuses to run (exit non-zero) when `~/.claude/hooks/git-hooks` does not exist on disk — install via `npx claude-dev-env .` first.
 - Idempotent: a second invocation is a clean no-op.
-- Re-runs `bugteam_preflight.py --no-pytest` and propagates its exit code.
+- Re-runs package-shared `preflight.py --no-pytest` and propagates its exit code.
 
 The bugteam SKILL invokes this automatically when preflight stderr indicates a `core.hooksPath` failure, so Claude does not surface the error to the user.
 

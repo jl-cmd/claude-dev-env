@@ -372,3 +372,114 @@ def test_should_handle_paths_with_spaces(tmp_path: Path) -> None:
 
     assert exit_code == 0
     assert _read_local_hooks_path(repository_path, environment) == ""
+
+
+def test_unset_local_core_hooks_path_removes_local_override(tmp_path: Path) -> None:
+    home_directory = tmp_path / "home"
+    home_directory.mkdir()
+    environment = _make_isolated_git_environment(home_directory)
+    repository_path = tmp_path / "synthetic-repo"
+    _initialize_repository(repository_path, environment)
+    stale_local_value = str(repository_path / ".git" / "hooks")
+    _set_local_hooks_path(repository_path, stale_local_value, environment)
+    assert _read_local_hooks_path(repository_path, environment) == stale_local_value
+
+    exit_code = fix_hookspath.unset_local_core_hooks_path(repository_path, environment)
+
+    assert exit_code == 0
+    assert _read_local_hooks_path(repository_path, environment) == ""
+
+
+def test_set_global_core_hooks_path_writes_global_value(tmp_path: Path) -> None:
+    home_directory = tmp_path / "home"
+    home_directory.mkdir()
+    environment = _make_isolated_git_environment(home_directory)
+    canonical_hooks_directory = _create_canonical_hooks_directory(home_directory)
+    target_value = str(canonical_hooks_directory).replace("\\", "/")
+
+    exit_code = fix_hookspath.set_global_core_hooks_path(target_value, environment)
+
+    assert exit_code == 0
+    global_value_after_set = _read_global_hooks_path(environment)
+    assert (
+        global_value_after_set.replace("\\", "/")
+        .rstrip("/")
+        .endswith("hooks/git-hooks")
+    )
+
+
+def test_normalize_hooks_path_converts_backslashes_and_strips_trailing_slash() -> None:
+    windows_style_path = r"C:\Users\example\.claude\hooks\git-hooks\\"
+    unix_style_path = "/home/example/.claude/hooks/git-hooks/"
+
+    assert fix_hookspath.normalize_hooks_path(windows_style_path) == (
+        "C:/Users/example/.claude/hooks/git-hooks"
+    )
+    assert fix_hookspath.normalize_hooks_path(unix_style_path) == (
+        "/home/example/.claude/hooks/git-hooks"
+    )
+    assert fix_hookspath.normalize_hooks_path("already/normalized") == "already/normalized"
+
+
+def test_rerun_preflight_returns_subprocess_exit_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository_path = tmp_path / "synthetic-repo"
+    repository_path.mkdir()
+    recorded_commands: list[list[str]] = []
+
+    def fake_run(
+        command: list[str],
+        check: bool = False,
+        env: dict[str, str] | None = None,
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        recorded_commands.append(list(command))
+        return subprocess.CompletedProcess(
+            args=list(command),
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
+    monkeypatch.setattr(fix_hookspath.subprocess, "run", fake_run)
+
+    exit_code = fix_hookspath.rerun_preflight(repository_path, None)
+
+    assert exit_code == 0
+    assert len(recorded_commands) == 1
+    invoked_command = recorded_commands[0]
+    assert any(str(each_argument).endswith("preflight.py") for each_argument in invoked_command)
+    assert "--no-pytest" in invoked_command
+    assert "--repo-root" in invoked_command
+    assert str(repository_path) in invoked_command
+
+
+def test_rerun_preflight_propagates_nonzero_exit_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository_path = tmp_path / "synthetic-repo"
+    repository_path.mkdir()
+    preflight_failure_exit_code = 2
+
+    def fake_run(
+        command: list[str],
+        check: bool = False,
+        env: dict[str, str] | None = None,
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=list(command),
+            returncode=preflight_failure_exit_code,
+            stdout="",
+            stderr="preflight failed",
+        )
+
+    monkeypatch.setattr(fix_hookspath.subprocess, "run", fake_run)
+
+    exit_code = fix_hookspath.rerun_preflight(repository_path, None)
+
+    assert exit_code == preflight_failure_exit_code
+

@@ -28,6 +28,10 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
   to `null` on every push. Gate (c) in [convergence-gates.md](convergence-gates.md)
   invokes rebase on `dirty`; other non-`clean` values (`blocked`, `behind`,
   `unknown`, `unstable`) are hard blockers.
+- `current_head`: SHA of the last-known PR HEAD. Each tick refreshes it from
+  `pull_request_read(method="get")` → `.head.sha`, and again after any push
+  that moves HEAD. Clean-at stamps, wait counters, and phase gates compare
+  against this value.
 - `copilot_wait_count`: integer, init `0`. Consecutive COPILOT_WAIT ticks
   with no Copilot review surfaced at `current_head`. Escalate as hard blocker
   at `>= 3`. Reset to `0` when a Copilot review surfaces at `current_head`

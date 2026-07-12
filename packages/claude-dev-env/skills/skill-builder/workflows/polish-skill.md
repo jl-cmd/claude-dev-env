@@ -80,7 +80,7 @@ If any check fails, restructure. Common fixes:
 
 ## Step 4: Full Self-Audit
 
-**Goal:** Complete 38-point checklist pass.
+**Goal:** Complete 33-point checklist pass.
 
 Same as new-skill Step 5 and improve-skill Step 5:
 
@@ -101,6 +101,6 @@ Present to the user:
 1. **Description** — final version, confirmed trigger phrases.
 2. **File structure** — folder map with line counts.
 3. **Gotchas** — current gotcha count and most recent additions.
-4. **Audit summary** — "All 38 items: N passed, M N/A."
+4. **Audit summary** — "All 33 items: N passed, M N/A."
 5. **Before/after** — description changes if any, structural changes if any.
 6. **Maintenance notes** — what to watch for, when to re-audit.

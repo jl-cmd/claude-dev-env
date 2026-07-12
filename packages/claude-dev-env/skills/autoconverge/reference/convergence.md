@@ -159,30 +159,13 @@ All pre-conditions met — PR is ready to mark ready.
 ```
 
 The script re-derives every condition from GitHub and prints one PASS/FAIL line
-per label. Exact printed labels (script order):
-
-1. `bugbot_clean_at == current_head` — Bugbot CI check run completed with a
-   success or neutral conclusion on HEAD (bypassed when Bugbot is off for the
-   run, opted out, or proved unreachable; `--bugbot-down` or the
-   `CLAUDE_REVIEWS_DISABLED` / default-off env path).
-2. `bugbot review body clean` — Bugbot review body on HEAD reports no findings
-   (omitted entirely when the check-run gate is bypassed via `bugbot_down`).
-3. `bugteam_clean_at == current_head` — a CLEAN bugteam audit review sits on HEAD.
-4. `copilot_clean_at == current_head` — Copilot review on HEAD is clean or
-   approved (bypassed when Copilot is down or out of quota; `--copilot-down` or
-   the env token).
-5. `zero unresolved bot threads` — zero unresolved bot-authored review threads.
-   Counts only threads whose first-comment author login contains `cursor`,
-   `claude`, or `copilot` (case-insensitive). A thread with `isOutdated == true`
-   is excluded from the count and does not fail the gate. Non-bot threads are
-   out of scope for this label.
-6. `PR is mergeable` — `mergeable` true and `mergeable_state` clean.
-7. `no pending requested reviews` — no pending requested reviewers (bypassed when
-   Copilot is down or out of quota).
+per label. The exact printed labels (script order) live in
+[`pr-converge/reference/convergence-gates.md`](../../pr-converge/reference/convergence-gates.md)
+§ (f) Mark ready and report — the seven-label block under "Exact printed labels".
 
 The script has no Claude APPROVED review gate. Agent-side checks (Claude
-reviewer presence, broader unresolved-thread sweeps via `pr-fix-protocol`) sit
-outside this machine checklist.
+reviewer presence, broader unresolved-thread sweeps) sit outside this machine
+checklist.
 
 ## Audit-trail design
 
