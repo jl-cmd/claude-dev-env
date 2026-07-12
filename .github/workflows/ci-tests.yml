@@ -1,5 +1,10 @@
 # Full Python + JS test suites on every PR and main push.
 #
+# Path filters (dorny/paths-filter, per-job): pure root-docs / inert-path PRs skip
+# the python and javascript jobs. Push to main always runs the full suite.
+# v1 keeps all of packages/claude-dev-env/** in both filters because package
+# markdown is fixture-bearing.
+#
 # Absorbs the former path-filter job (ci-sync-ai-rules.yml): the full root suite
 # covers tests/test_sync_ai_rules.py and tests/test_fan_out_dispatch.py on every
 # PR with Python 3.12, so that path-filter workflow is deleted on purpose.
@@ -18,7 +23,7 @@
 # is_ephemeral_script_path Linux exemptions do not treat pytest temp paths as
 # ephemeral production scripts.
 #
-# permissions.contents stays read — never loosens.
+# permissions: contents read + pull-requests read (dorny/paths-filter on PRs).
 
 name: CI — Full test suites
 
@@ -30,14 +35,46 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-tests-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect path changes
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      javascript: ${{ steps.filter.outputs.javascript }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            python:
+              - '**/*.py'
+              - 'pytest.ini'
+              - 'pyproject.toml'
+              - 'packages/claude-dev-env/**'
+              - 'tests/**'
+              - '.github/scripts/**'
+              - '.github/workflows/ci-tests.yml'
+              - '.github/ci/**'
+              - 'AGENTS.md'
+              - 'config/**'
+            javascript:
+              - 'packages/claude-dev-env/**'
+              - 'package.json'
+              - '.github/workflows/ci-tests.yml'
+
   python:
     name: Python suite (ubuntu)
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -175,6 +212,8 @@ jobs:
 
   javascript:
     name: JS suite (ubuntu)
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.javascript == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
