@@ -16,6 +16,9 @@ from typing import Callable
 
 import pytest
 
+import _path_setup  # noqa: F401
+from pr_converge_skill_constants.constants import EXIT_CODE_GH_ERROR
+
 _SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
 _PR_CONVERGE_DIRECTORY = _SCRIPTS_DIRECTORY.parent
 
@@ -334,7 +337,7 @@ def should_return_one_from_print_conditions_when_any_condition_fails(
 
 def should_propagate_systemexit_from_get_pr_head_sha(monkeypatch: pytest.MonkeyPatch) -> None:
     def stub_get_pr_head_sha_raising_systemexit(**_call_keywords: object) -> str:
-        raise SystemExit(check_convergence.EXIT_CODE_GH_ERROR)
+        raise SystemExit(EXIT_CODE_GH_ERROR)
 
     monkeypatch.setattr(
         check_convergence, "_get_pr_head_sha", stub_get_pr_head_sha_raising_systemexit
@@ -343,7 +346,7 @@ def should_propagate_systemexit_from_get_pr_head_sha(monkeypatch: pytest.MonkeyP
         check_convergence.check_all(
             owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
         )
-    assert exc_info.value.code == check_convergence.EXIT_CODE_GH_ERROR
+    assert exc_info.value.code == EXIT_CODE_GH_ERROR
 
 
 def should_derive_copilot_down_from_env_when_main_omits_the_flag(

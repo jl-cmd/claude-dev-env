@@ -72,9 +72,9 @@ Bugteam-only obligations:
   thread_node_id}` triple into `loop_comment_index` (per-loop scope; see
   [reference/team-setup.md](reference/team-setup.md) § Loop state block) so
   the matching FIX action owns the reply-and-resolve unit.
-- Exit 2 from `post_audit_thread.py` is a hard blocker: the lead halts the
-  loop and exits `error: post_audit_thread retry exhausted` without
-  retrying.
+- Exit-code policy: the bugteam row in
+  [`../../_shared/pr-loop/post-audit-thread-contract.md`](../../_shared/pr-loop/post-audit-thread-contract.md)
+  § Per-caller policy.
 
 ## Progress checklist
 

@@ -48,7 +48,6 @@ from pr_converge_skill_constants.constants import (
     BUGTEAM_NEW_CLEAN_LABEL,
     BUGTEAM_NEW_HEADER_PREFIX,
     COPILOT_LOGIN_FILTER_SUBSTRING,
-    EXIT_CODE_GH_ERROR,  # noqa: F401
     GH_REVIEWS_PATH_TEMPLATE,
     REVIEWS_PER_PAGE,
 )

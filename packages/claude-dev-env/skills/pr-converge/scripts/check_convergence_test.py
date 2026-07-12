@@ -21,6 +21,9 @@ from types import ModuleType
 
 import pytest
 
+import _path_setup  # noqa: F401
+from pr_converge_skill_constants.constants import EXIT_CODE_GH_ERROR
+
 _SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
 _PR_CONVERGE_DIRECTORY = _SCRIPTS_DIRECTORY.parent
 
@@ -168,14 +171,14 @@ def test_gh_error_exit_code_is_two_and_propagates_from_head_fetch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _raise_gh_error(**_call_keywords: object) -> str:
-        raise SystemExit(check_convergence.EXIT_CODE_GH_ERROR)
+        raise SystemExit(EXIT_CODE_GH_ERROR)
 
     monkeypatch.setattr(check_convergence, "_get_pr_head_sha", _raise_gh_error)
     with pytest.raises(SystemExit) as raised:
         check_convergence.check_all(
             owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
         )
-    assert check_convergence.EXIT_CODE_GH_ERROR == 2
+    assert EXIT_CODE_GH_ERROR == 2
     assert raised.value.code == 2
 
 
