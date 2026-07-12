@@ -158,6 +158,7 @@ from code_rules_shared import (  # noqa: E402
     is_ephemeral_script_path,
     is_hook_infrastructure,
     is_test_file,
+    is_under_session_scratchpad,
 )
 from code_rules_string_magic import (  # noqa: E402
     check_inline_literal_collections,
@@ -1103,6 +1104,9 @@ def main(all_arguments: list[str]) -> None:
     tool_name = pretooluse_payload.get("tool_name", "")
     tool_input = pretooluse_payload.get("tool_input", {})
     file_path = tool_input.get("file_path", "")
+
+    if is_under_session_scratchpad(file_path, pretooluse_payload):
+        sys.exit(0)
 
     runs_full_verdict = _is_validated_target(file_path)
     if not runs_full_verdict and not _is_hook_infrastructure_python_target(file_path):

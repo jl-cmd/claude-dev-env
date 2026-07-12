@@ -32,6 +32,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
+| `harness_scratchpad_constants.py` | Fixed path components (`claude-` user-directory prefix, separator replacement, `scratchpad` leaf name) and payload keys that rebuild the harness session scratchpad directory for the code-rules and TDD gate exemptions |
 | `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
 | `hook_log_extractor_constants.py` | Neon table name, offset state file path, timeouts, and outcome-type mapping for the hook-log extractor |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
