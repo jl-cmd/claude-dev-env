@@ -4,10 +4,12 @@
 
 ### Utility scripts
 
-Bugteam-specific utilities (preflight, fix_hookspath, grant, revoke) live in
-the skill-local [`scripts/`](../scripts/) directory. Shared utilities remain in
-[`_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/) (run, do not paste
-into context). Utility scripts are **executed**, not loaded as primary context
+Skill-path thin entries for preflight and fix_hookspath live in the skill-local
+[`scripts/`](../scripts/) directory and delegate to package shared
+[`_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/). Shared homes for
+grant, revoke, and code_rules_gate also live under `_shared/pr-loop/scripts/`
+(run, do not paste into context). Utility scripts are **executed**, not loaded
+as primary context
 ([`sources.md`](../sources.md) § Progressive disclosure and utility scripts).
 
 ```bash
