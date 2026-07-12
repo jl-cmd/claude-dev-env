@@ -1,4 +1,4 @@
-"""String constants for the AI rules fan-out dispatcher: summary-table labels and row templates, GitHub Actions annotation templates, and environment-variable names."""
+"""String constants for the AI rules fan-out dispatcher: summary-table labels and row templates, GitHub Actions annotation templates, the per-repo conclusion-report status labels, the private-target redaction format, the listener-runs query template, and environment-variable names."""
 
 SUMMARY_TABLE_HEADER_ROW: str = "| Metric | Count |"
 SUMMARY_TABLE_SEPARATOR_ROW: str = "|--------|-------|"
@@ -55,3 +55,16 @@ STALE_SECTION_BODY: str = (
     "%s target repo(s) have no listener run in the past %s days."
 )
 SUMMARY_METRIC_ROW_TEMPLATE: str = "| %s | %s |"
+ENV_DISPATCHED_AT: str = "DISPATCHED_AT"
+REPO_FULL_NAME_SEPARATOR: str = "/"
+REDACTED_REPO_HASH_PREFIX_LENGTH: int = 8
+REDACTED_REPO_IDENTIFIER_TEMPLATE: str = "%s/[redacted:%s]"
+REPO_CONCLUSION_LOG_TEMPLATE: str = "::notice::Target %s dispatch conclusion: %s"
+LISTENER_RUNS_QUERY_TEMPLATE: str = (
+    "/repos/%s/%s/actions/workflows/%s/runs?event=repository_dispatch&per_page=1"
+)
+REPORT_STATUS_SUCCEEDED: str = "succeeded"
+REPORT_STATUS_FAILED: str = "failed"
+REPORT_STATUS_LISTENER_MISSING: str = "listener-missing"
+REPORT_STATUS_NO_MATCHING_RUN: str = "no-matching-run"
+REPORT_STATUS_OPTED_OUT: str = "opted-out"
