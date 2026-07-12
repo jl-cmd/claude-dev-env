@@ -140,7 +140,8 @@
   Apply an outside-in BDD reasoning protocol before writing any code. Outside-in BDD is the
   required development protocol; apply it in place of any Red-Green-Refactor heuristic. The
   full anti-pattern catalog, Example Mapping algorithm, and solo-developer guidance live in
-  the bdd-protocol skill; this section carries the core four-phase sequence.
+  the long-form BDD references (`~/.claude/docs/BDD_DISCOVERY_PROTOCOL.md`,
+  `~/.claude/docs/BDD_SCENARIO_QUALITY.md`); this section carries the core four-phase sequence.
 
   Deliberate Discovery. Before writing any specification or code, reason explicitly about
   what the code should do, what constraints apply, and what concrete examples demonstrate the
@@ -159,8 +160,9 @@
   it pass. Assess each green state for structural improvement; refactor when a specific
   naming, cohesion, or duplication problem is identified.
 
-  Reference the bdd-protocol skill for Smart and Molak §7.6 patterns, the Example Mapping
-  algorithm, and guidance on applying this protocol in a solo-developer context.
+  Reference `~/.claude/docs/BDD_SCENARIO_QUALITY.md` and `~/.claude/docs/BDD_DISCOVERY_PROTOCOL.md`
+  for Smart and Molak §7.6 patterns, the Example Mapping algorithm, and guidance on applying this
+  protocol in a solo-developer context.
 </behavior_protocol>
 
 <scope_discipline>
@@ -231,11 +233,10 @@
 </agent_workflow>
 
 <code_review_response>
-  When responding to GitHub PR review feedback, follow this mandatory protocol using the
-  pr-review-responder skill.
+  When responding to GitHub PR review feedback, follow this mandatory protocol.
 
   Fetch all reviewer comments before making any fixes. Obtain the full comment set from the
-  PR using `gh pr view --comments` or the pr-review-responder skill.
+  PR using `gh pr view --comments`.
 
   Create a TodoWrite checklist with one item per comment.
 

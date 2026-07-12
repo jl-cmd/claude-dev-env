@@ -2,7 +2,7 @@
 
 **When this applies:** GitHub PR review feedback on a branch you are fixing.
 
-**MANDATORY PROTOCOL (use pr-review-responder skill):**
+**MANDATORY PROTOCOL:**
 
 1. Fetch ALL reviewer comments BEFORE any fixes
 2. Create TodoWrite checklist - One item per comment
