@@ -16,6 +16,12 @@ $noiseEmailPatterns = @(
 
 $isoLatin1CodePage = 28591
 
+$profileStorageDirectoryNames = @('sentry', 'IndexedDB', 'Session Storage', 'WebStorage')
+
+$emailAddressPattern = '(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(?![a-zA-Z0-9-])'
+
+$maximumStorageFileBytes = 50MB
+
 function Test-NoiseEmail {
     param([string]$Email)
     foreach ($pattern in $noiseEmailPatterns) {
@@ -45,20 +51,18 @@ function Get-EmailCandidatesFromProfile {
         [string]$ProfileDirectory,
         [string]$ExcludeEmail
     )
-    $scanDirectories = @('sentry', 'IndexedDB', 'Session Storage', 'WebStorage') |
+    $scanDirectories = $profileStorageDirectoryNames |
         ForEach-Object { Join-Path $ProfileDirectory $_ } |
         Where-Object { Test-Path -LiteralPath $_ }
-    $emailPattern = '(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(?![a-zA-Z0-9-])'
-    $maximumFileBytes = 50MB
     $foundEmails = [System.Collections.Generic.HashSet[string]]::new()
 
     foreach ($scanDirectory in $scanDirectories) {
         $candidateFiles = Get-ChildItem -LiteralPath $scanDirectory -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Length -lt $maximumFileBytes }
+            Where-Object { $_.Length -lt $maximumStorageFileBytes }
         foreach ($candidateFile in $candidateFiles) {
             $decodedTextViews = Get-EncodingAgnosticTextViews -FilePath $candidateFile.FullName
             foreach ($decodedText in $decodedTextViews) {
-                foreach ($match in [regex]::Matches($decodedText, $emailPattern)) {
+                foreach ($match in [regex]::Matches($decodedText, $emailAddressPattern)) {
                     $candidateEmail = $match.Value
                     $isKnownCliEmail = $ExcludeEmail -and ($candidateEmail -ieq $ExcludeEmail)
                     if (-not (Test-NoiseEmail -Email $candidateEmail) -and -not $isKnownCliEmail) {
