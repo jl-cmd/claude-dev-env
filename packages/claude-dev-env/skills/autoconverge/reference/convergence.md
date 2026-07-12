@@ -151,27 +151,21 @@ bugbot-flagged path does not satisfy the round; its clean verdict is not a clean
 
 ## The ready definition
 
-`check_convergence.py` is the single source of truth for readiness. It re-derives
-every condition from GitHub and marks the PR ready only when all of these hold on
-the current HEAD:
+`check_convergence.py` (`pr-converge/scripts/check_convergence.py`) is the single
+source of truth for readiness. Ready means the script exits `0` and prints:
 
-1. Bugbot CI check run is completed with a success or neutral conclusion
-   (bypassed when Bugbot is off for the run — the default unless
-   `CLAUDE_REVIEWS_ENABLED` lists `bugbot` — opted out via
-   `CLAUDE_REVIEWS_DISABLED`, or proved unreachable this run).
-2. The Bugbot review body on HEAD reports no findings (checked when a Bugbot
-   review is present).
-3. A CLEAN bugteam audit review sits on HEAD.
-4. The Copilot review on HEAD is clean or approved (bypassed when Copilot is down
-   or out of quota this run).
-5. Zero unresolved bot review threads anywhere on the PR — counting Cursor,
-   Claude, and Copilot authored threads. The filter is purely
-   `isResolved == false`; `isOutdated` is informational, and the fix lens
-   verifies each outdated thread against current HEAD like any other (the
-   `pr-fix-protocol` skill's unresolved-thread sweep).
-6. The PR is mergeable (`mergeable` true and `mergeable_state` clean).
-7. No requested reviewers are still pending (bypassed when Copilot is down or out
-   of quota this run).
+```
+All pre-conditions met — PR is ready to mark ready.
+```
+
+The script re-derives every condition from GitHub and prints one PASS/FAIL line
+per label. The exact printed labels (script order) live in
+[`pr-converge/reference/convergence-gates.md`](../../pr-converge/reference/convergence-gates.md)
+§ (f) Mark ready and report — the seven-label block under "Exact printed labels".
+
+The script has no Claude APPROVED review gate. Agent-side checks (Claude
+reviewer presence, broader unresolved-thread sweeps) sit outside this machine
+checklist.
 
 ## Audit-trail design
 
