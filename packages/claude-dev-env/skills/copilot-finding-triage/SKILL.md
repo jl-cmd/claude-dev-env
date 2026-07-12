@@ -28,7 +28,6 @@ inside one of these callers:
 
 - `autoconverge` — the single-run converge workflow, at its Copilot wait-gate.
 - `pr-converge` — the looping converge workflow, at each Copilot tick.
-- `copilot-review` — the standalone Copilot babysitter.
 
 Each caller already fetches the review and carries a fix-and-push flow. This
 skill decides, per finding, whether that flow runs on its own or waits behind
