@@ -14,6 +14,10 @@ const skillSource = readFileSync(
   join(workflowDirectory, '..', 'SKILL.md'),
   'utf8',
 );
+const headlessSafetySource = readFileSync(
+  join(workflowDirectory, '..', 'reference', 'headless-safety.md'),
+  'utf8',
+);
 
 function lensPromptBody(builderName) {
   let builderStart = convergeSource.indexOf(`function ${builderName}(`);
@@ -819,17 +823,43 @@ test('SKILL.md does not attribute the known-temp-var resolution to the standalon
   );
 });
 
-test('SKILL.md attributes the known-temp-var resolution to the cwd-scoped auto-allow path', () => {
-  const tempVarSentenceMatch =
-    /[^.]*\bTMPDIR\b[^.]*CLAUDE_JOB_DIR[^.]*\./i.exec(skillSource.replace(/\s+/g, ' '));
-  assert.notEqual(
-    tempVarSentenceMatch,
-    null,
+test('headless-safety.md attributes the known-temp-var resolution to the cwd-scoped auto-allow path', () => {
+  const standaloneSectionMatch =
+    /1\.\s*\*\*Standalone path\*\*[\s\S]*?(?=2\.\s*\*\*Compound path\*\*)/i.exec(
+      headlessSafetySource,
+    );
+  assert.notEqual(standaloneSectionMatch, null, 'expected numbered standalone path section');
+  assert.doesNotMatch(
+    standaloneSectionMatch[0],
+    /resolves the known temporary variables/i,
+    'standalone path must not claim the known-temp-var resolution',
+  );
+
+  const compoundSectionMatch =
+    /2\.\s*\*\*Compound path\*\*[\s\S]*?(?=3\.\s*\*\*Cwd-scoped path\*\*)/i.exec(
+      headlessSafetySource,
+    );
+  assert.notEqual(compoundSectionMatch, null, 'expected numbered compound path section');
+  assert.doesNotMatch(
+    compoundSectionMatch[0],
+    /resolves the known temporary variables/i,
+    'compound path must not claim the known-temp-var resolution',
+  );
+
+  const cwdScopedSectionMatch =
+    /3\.\s*\*\*Cwd-scoped path\*\*[\s\S]*?(?=\n\nEven so|\n## |$)/i.exec(
+      headlessSafetySource,
+    );
+  assert.notEqual(cwdScopedSectionMatch, null, 'expected numbered cwd-scoped path section');
+  const cwdScopedSection = cwdScopedSectionMatch[0].replace(/\s+/g, ' ');
+  assert.match(
+    cwdScopedSection,
+    /resolves the known temporary variables[\s\S]{0,80}\bTEMP\b[\s\S]{0,40}\bTMP\b[\s\S]{0,40}\bTMPDIR\b[\s\S]{0,40}\bCLAUDE_JOB_DIR\b/i,
     'expected a sentence describing the TEMP/TMP/TMPDIR/CLAUDE_JOB_DIR resolution',
   );
   assert.match(
-    tempVarSentenceMatch[0],
-    /declares? an ephemeral cwd|declared ephemeral cwd|ephemeral-cwd path|third (?:auto-allow )?path|cwd-scoped path/i,
+    cwdScopedSection,
+    /declares an ephemeral working directory|declared ephemeral cwd|cwd-scoped path/i,
     'expected the temp-var resolution to be tied to the cwd-scoped path that declares an ephemeral working directory, not the standalone or compound paths',
   );
 });

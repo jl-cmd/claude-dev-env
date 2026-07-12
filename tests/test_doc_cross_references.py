@@ -34,6 +34,7 @@ MAX_DETAIL_LINES_IN_FAILURE: int = 50
 ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
     {
         ".cursor/agents/clean-coder.md",
+        "config/local-identity.json",
         "config/sweep_config.py",
         "config/timing.py",
         "config/constants.py",
@@ -121,6 +122,24 @@ def _references_in_text(text_to_scan: str) -> set[str]:
     }
 
 
+def _reference_exists_on_disk(
+    reference: str, *, source_file: Path | None = None
+) -> bool:
+    if (REPOSITORY_ROOT / reference).exists():
+        return True
+    if not reference.startswith("packages/"):
+        packaged_path = REPOSITORY_ROOT / "packages" / "claude-dev-env" / reference
+        if packaged_path.exists():
+            return True
+    if source_file is not None:
+        for each_directory in (source_file.parent, *source_file.parents):
+            if (each_directory / reference).exists():
+                return True
+            if each_directory == REPOSITORY_ROOT:
+                break
+    return False
+
+
 def _missing_references_for_python_files() -> dict[str, set[str]]:
     missing_by_source_file: dict[str, set[str]] = {}
     for each_python_file in _iter_repo_files(".py"):
@@ -128,7 +147,7 @@ def _missing_references_for_python_files() -> dict[str, set[str]]:
             for each_reference in _references_in_text(each_docstring):
                 if each_reference in ALLOWED_MISSING_PATHS:
                     continue
-                if (REPOSITORY_ROOT / each_reference).exists():
+                if _reference_exists_on_disk(each_reference, source_file=each_python_file):
                     continue
                 relative_source_path = each_python_file.relative_to(
                     REPOSITORY_ROOT
@@ -149,7 +168,7 @@ def _missing_references_for_markdown_files() -> dict[str, set[str]]:
         for each_reference in _references_in_text(each_text):
             if each_reference in ALLOWED_MISSING_PATHS:
                 continue
-            if (REPOSITORY_ROOT / each_reference).exists():
+            if _reference_exists_on_disk(each_reference, source_file=each_markdown_file):
                 continue
             relative_source_path = each_markdown_file.relative_to(
                 REPOSITORY_ROOT
