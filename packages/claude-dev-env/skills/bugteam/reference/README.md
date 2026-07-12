@@ -23,6 +23,6 @@ The `pre-push-review` skill was retired. Its mechanical checks are now covered a
 - **`/qbug`** — a full PR audit-fix cycle that spawns subagents, runs multiple audit loops, and produces a structured report. It is NOT a lightweight pre-push gate. Do not use `/qbug` as a substitute for `git push` (the hook fires automatically). Use `/qbug` when you want a thorough multi-loop review of a PR before requesting human review.
 
 References:
-- `commands/plan.md` — Phase 5 step 10 cites the git pre-push hook
+- `hooks/git-hooks/pre_push.py` — the git pre-push hook that runs the CODE_RULES gate over the commits about to be pushed
 - `hooks/github-action/pre-push-review.yml` — deleted (workflow no longer needed)
 - `hooks/github-action/test_workflow.py` — deleted alongside the workflow
