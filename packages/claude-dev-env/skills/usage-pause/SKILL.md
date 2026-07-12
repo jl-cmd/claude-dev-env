@@ -1,10 +1,6 @@
 ---
 name: usage-pause
-description: >-
-  Waits out the account's 5-hour usage window in ScheduleWakeup stages that keep
-  every agent context warm. Accepts a manual override like '/usage-pause
-  10:20pm' or '/usage-pause 74m'. Triggers: '/usage-pause', 'pause until the
-  usage window resets', 'wait out the usage limit', 'usage limit pause'.
+description: 5-hour usage window, agent context warm, weekly limit is near its cap. Triggers: '/usage-pause', 'pause until the usage window resets', 'wait out the usage limit', 'usage limit pause', 'usage limit', 'pause usage', 'usage pause'.
 argument-hint: "[reset time like 10:20pm | duration like 74m]"
 ---
 
@@ -37,27 +33,27 @@ On exit 0 the script prints one JSON object:
 | `session_utilization` | Percent of the 5-hour window spent (null on override) |
 | `weekly_utilization` | Percent of the weekly window spent (null on override) |
 | `weekly_resets_at` | When the weekly window resets (null on override) |
-| `weekly_near_cap` | True when the weekly meter is at or past 90 percent |
+| `weekly_near_cap` | True when the weekly meter is at or past the warn threshold |
 
 On exit 2 the script prints `{"error": ...}`. Ask the user for a manual reset time via AskUserQuestion (offer clock-time and duration examples), then rerun with `--override`.
 
 ### Probe mechanism
 
-The resolver gets a bearer token from one of two sources and sends `GET https://api.anthropic.com/api/oauth/usage` with `Authorization: Bearer <token>` and `anthropic-beta: oauth-2025-04-20`. This is the same endpoint the interactive `/usage` panel reads. The response carries a `five_hour` bucket and a `seven_day` bucket, each with `utilization` (percent spent) and `resets_at`.
+`scripts/resolve_usage_window.py` is the source of truth for live probe behavior. Endpoint URL, header names/values, credential path and token keys, response bucket keys, stage sizing, and the weekly warn threshold all live in `scripts/usage_pause_constants/resolve_usage_window_constants.py` — read those modules for the current values; do not restate them here.
 
-Token sources, in order:
+In short: the resolver picks a bearer token, probes the OAuth usage endpoint the interactive `/usage` panel uses, and returns the session and weekly buckets with utilization and reset times. Token sources, in order:
 
-- The Claude Code CLI's OAuth access token in `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`, honored only while its `expiresAt` sits in the future).
-- The session ingress token in the file named by the `CLAUDE_SESSION_INGRESS_TOKEN_FILE` environment variable, read when the credential file token is unavailable. Claude Code cloud sessions set this variable and omit the credential file.
+1. The Claude Code CLI's stored OAuth access token (honored only while unexpired).
+2. The session ingress bearer token file named by `CLAUDE_SESSION_INGRESS_TOKEN_FILE` (cloud sessions).
 
-Fallbacks, in order: no usable token from either source, a failed request, or a response with no readable `five_hour` reset time all end in exit 2 — the manual-override ask above. The manual path works with no probe at all, so the skill functions even when both token sources are stale.
+Fallbacks, in order: both token sources unavailable (expired/unreadable credential and no ingress file), a failed request, or a response with no readable session-window reset time all end in exit 2 — the manual-override ask above. The manual path works with no probe at all, so the skill functions even when both token sources are unavailable.
 
 Why this probe and not the others:
 
 - The interactive `/usage` panel shows the same data but has no scriptable output.
 - `claude -p --output-format json` spends usage to answer and its metadata reports per-call token counts, not the account window clock.
 - `anthropic-ratelimit-*` response headers cover API-key Messages traffic, not the subscription session window, and reading them also costs a request.
-- Refreshing the OAuth token from a script is out of scope: token rotation would desync the refresh token the CLI has on disk and log the CLI out. The resolver only ever reads its token sources.
+- Refreshing the OAuth token from a script is out of scope: token rotation would desync the refresh token the CLI has on disk and log the CLI out. The resolver only ever reads tokens (credential file or session ingress file).
 
 ## Weekly limit guard
 
@@ -70,7 +66,7 @@ Before the first sleep:
 1. List active recurring loops (CronList). Record each one's schedule and prompt, then cancel it (CronDelete). Carry the recorded list inside the wakeup prompts so the state survives every stage.
 2. Schedule the first stage with ScheduleWakeup, using the first duration in `stages_seconds` and the stage prompt template below.
 
-The stage plan keeps every stage at or under 58 minutes (3480 seconds, inside the 3600-second clamp) and ends with a roughly 2-minute tail stage so the final firing lands just past the reset. A leftover too short to stand alone folds into the tail.
+The stage plan (`stages_seconds` from the resolver) keeps every stage under the maximum stage length and ends with a short tail so the final firing lands just past the reset. Stage sizing constants live in `scripts/usage_pause_constants/resolve_usage_window_constants.py`; a leftover too short to stand alone folds into the tail.
 
 Every wakeup does exactly three things — ping, record, schedule — and dispatches no new work. The cache rationale: an unpinged idle agent left past the cache window resumes cold and re-reads its whole transcript, so pings run tighter than the cache lifetime and keep each agent's next real invocation cheap.
 
@@ -110,7 +106,7 @@ Fill each `<slot>` at schedule time: `<remaining_stage_durations>` is the tail o
 | `SKILL.md` | This flow: resolve, weekly guard, stage chain, templates |
 | `scripts/resolve_usage_window.py` | The window resolver and stage planner CLI |
 | `scripts/test_resolve_usage_window.py` | Behavioral tests for parsing, staging, token reading, extraction, CLI |
-| `scripts/usage_pause_constants/resolve_usage_window_constants.py` | Endpoint, credential keys, the session ingress token env var, stage sizing, thresholds, result keys |
+| `scripts/usage_pause_constants/resolve_usage_window_constants.py` | Endpoint, credential keys, stage sizing, thresholds, result keys |
 
 ## Gotchas
 
