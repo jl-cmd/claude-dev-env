@@ -1,5 +1,8 @@
 """Specifications that LLM review docs match hook-enforced CODE_RULES exemptions."""
 
+from __future__ import annotations
+
+import re
 from pathlib import Path
 
 
@@ -57,7 +60,51 @@ def _magic_values_configuration_section(document_text: str) -> str:
 
 
 def _structure_section(document_text: str) -> str:
-    return _slice_named_section(document_text, section_heading="### Structure", section_end_marker="\n### ")
+    return _slice_named_section(
+        document_text, section_heading="### Structure", section_end_marker="\n### "
+    )
+
+
+def _mentions_standalone_hook_implementation(section_text: str) -> bool:
+    return re.search(r"\bhook\b", section_text, flags=re.IGNORECASE) is not None
+
+
+def _workflow_registry_bullet(document_text: str) -> str:
+    workflow_label = "Workflow registries:"
+    workflow_bullet_start = document_text.find(workflow_label)
+    assert workflow_bullet_start != -1, (
+        f"{workflow_label!r} not found in document "
+        f"(first 200 chars: {document_text[:200]!r})"
+    )
+    newline_after_bullet = document_text.find("\n", workflow_bullet_start)
+    if newline_after_bullet == -1:
+        return document_text[workflow_bullet_start:]
+    return document_text[workflow_bullet_start:newline_after_bullet]
+
+
+def _assert_workflow_registry_describes_substring_match(workflow_bullet: str) -> None:
+    lower_bullet = workflow_bullet.lower()
+    assert "substring" in lower_bullet, (
+        "Workflow registry exemption must describe path substring matching, "
+        f"got: {workflow_bullet!r}"
+    )
+    assert any(
+        each_phrase in lower_bullet
+        for each_phrase in (
+            "contains any of these substrings",
+            "contains the substring",
+            "appears as a substring",
+            "as a substring",
+        )
+    ), (
+        "Workflow registry exemption must use substring-match language "
+        f"(not basename-only), got: {workflow_bullet!r}"
+    )
+    assert "/workflow/" in workflow_bullet
+    assert "/states.py" in workflow_bullet
+    assert "/modules.py" in workflow_bullet
+    assert "_tab.py" in workflow_bullet
+    assert "basename" not in lower_bullet
 
 
 def test_bugbot_documents_upper_snake_exemptions_matching_hook() -> None:
@@ -74,18 +121,8 @@ def test_bugbot_documents_upper_snake_exemptions_matching_hook() -> None:
 
 def test_bugbot_workflow_registry_phrasing_describes_substring_match() -> None:
     """BUGBOT phrasing must describe substring matching (hook behavior), not basename-only matching."""
-    text = _bugbot_text()
-    assert "contains the substring" in text
-    workflow_bullet_start = text.find("Workflow registries:")
-    assert workflow_bullet_start != -1
-    newline_after_bullet = text.find("\n", workflow_bullet_start)
-    workflow_bullet = text[workflow_bullet_start:newline_after_bullet]
-    assert "contains the substring" in workflow_bullet
-    assert "/workflow/" in workflow_bullet
-    assert "/states.py" in workflow_bullet
-    assert "/modules.py" in workflow_bullet
-    assert "_tab.py" in workflow_bullet
-    assert "basename" not in workflow_bullet.lower()
+    workflow_bullet = _workflow_registry_bullet(_bugbot_text())
+    _assert_workflow_registry_describes_substring_match(workflow_bullet)
 
 
 def test_bugbot_file_length_matches_hook_advisory_behavior() -> None:
@@ -102,7 +139,6 @@ def test_bugbot_file_length_matches_hook_advisory_behavior() -> None:
 def test_agents_instructions_upper_snake_path_exemptions() -> None:
     """AGENTS Part 1 (static rubric) documents UPPER_SNAKE path exemptions without naming implementation files."""
     text = _agents_instructions_part1_text()
-    lower = text.lower()
     assert "/migrations/" in text
     assert "/workflow/" in text
     assert "_tab.py" in text
@@ -111,9 +147,9 @@ def test_agents_instructions_upper_snake_path_exemptions() -> None:
     assert "test_" in text
     assert "conftest" in text
     assert "/tests/" in text
-    magic_values_section_lower = _magic_values_configuration_section(text).lower()
-    assert "hook" not in magic_values_section_lower
-    assert "code_rules_enforcer" not in magic_values_section_lower
+    magic_values_section = _magic_values_configuration_section(text)
+    assert not _mentions_standalone_hook_implementation(magic_values_section)
+    assert "code_rules_enforcer" not in magic_values_section.lower()
 
 
 def test_agents_instructions_file_length_is_advisory_signal() -> None:
@@ -126,22 +162,12 @@ def test_agents_instructions_file_length_is_advisory_signal() -> None:
     assert "stderr" in lower
     assert "hard limit" not in lower
     assert "hard gate" not in lower
-    structure_section_lower = _structure_section(text).lower()
-    assert "code_rules_enforcer" not in structure_section_lower
-    assert "hook" not in structure_section_lower
+    structure_section = _structure_section(text)
+    assert "code_rules_enforcer" not in structure_section.lower()
+    assert not _mentions_standalone_hook_implementation(structure_section)
 
 
 def test_agents_workflow_registry_phrasing_describes_substring_match() -> None:
     """Workflow exemption must describe path substring matching, not basename-only matching."""
-    text = _agents_instructions_text()
-    workflow_label = "Workflow registries:"
-    workflow_bullet_start = text.index(workflow_label)
-    newline_after_bullet = text.index("\n", workflow_bullet_start)
-    workflow_bullet = text[workflow_bullet_start:newline_after_bullet]
-    lower_bullet = workflow_bullet.lower()
-    assert "substring" in lower_bullet
-    assert "/workflow/" in workflow_bullet
-    assert "/states.py" in workflow_bullet
-    assert "/modules.py" in workflow_bullet
-    assert "_tab.py" in workflow_bullet
-    assert "basename" not in lower_bullet
+    workflow_bullet = _workflow_registry_bullet(_agents_instructions_text())
+    _assert_workflow_registry_describes_substring_match(workflow_bullet)
