@@ -1,0 +1,4 @@
+# Pending #20 disposition — session pollution when full tests/ collects both
+# test_fan_out_dispatch and test_sync_ai_rules (sync_ai_rules pops sys.modules["config"]).
+# See issue #20 comment on this node ID. Do not remove without an owner disposition.
+tests/test_fan_out_dispatch.py::TestImportKeepsAlreadyLoadedConfig::should_leave_an_already_imported_config_module_in_sys_modules

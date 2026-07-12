@@ -73,7 +73,8 @@ jobs:
           deselect_args=()
           for list_file in \
             .github/ci/live-post-audit-deselects.txt \
-            .github/ci/windows-semantics-node-ids.txt
+            .github/ci/windows-semantics-node-ids.txt \
+            .github/ci/known-pending-deselects.txt
           do
             while IFS= read -r node_id || [ -n "${node_id}" ]; do
               case "${node_id}" in
@@ -95,7 +96,8 @@ jobs:
           deselect_args=()
           for list_file in \
             .github/ci/live-post-audit-deselects.txt \
-            .github/ci/windows-semantics-node-ids.txt
+            .github/ci/windows-semantics-node-ids.txt \
+            .github/ci/known-pending-deselects.txt
           do
             while IFS= read -r node_id || [ -n "${node_id}" ]; do
               case "${node_id}" in
