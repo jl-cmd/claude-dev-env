@@ -110,21 +110,80 @@ UTF8_ENCODING: str = "utf-8"
 UTF8_DECODE_ERRORS: str = "replace"
 """``errors=`` value for subprocess text decode so invalid bytes never yield None streams."""
 
-ALL_USAGE_EXHAUSTION_SIGNATURES: tuple[str, ...] = (
+ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
+    "429",
+    "rate limit",
+    "credit",
+    "quota",
     "usage limit",
     "out of usage",
     "quota exceeded",
-    "rate limit",
     "usage exhausted",
 )
-"""Case-insensitive substrings that mark a non-zero ping as usage exhaustion."""
+"""Case-insensitive substrings that mark a non-zero exit as a usage-limit failure."""
+
+ALL_USAGE_EXHAUSTION_SIGNATURES: tuple[str, ...] = ALL_USAGE_LIMIT_SIGNATURES
+"""Alias used by the preflight soft gate for the same usage-limit signatures."""
 
 ALL_AUTH_FAILURE_SIGNATURES: tuple[str, ...] = (
+    "401",
+    "unauthorized",
+    "invalid key",
     "not logged in",
     "unauthenticated",
     "authentication failed",
     "please log in",
     "login required",
-    "unauthorized",
 )
 """Case-insensitive substrings that mark a non-zero completion as an auth failure."""
+
+PROMPT_FILE_FLAG: str = "--prompt-file"
+"""CLI flag that points grok at a prompt file for headless single-turn work."""
+
+CWD_FLAG: str = "--cwd"
+"""CLI flag that sets the working directory for the headless grok process."""
+
+OUTPUT_FORMAT_FLAG: str = "--output-format"
+"""CLI flag that selects the headless output format."""
+
+OUTPUT_FORMAT_JSON: str = "json"
+"""Output-format value that requests machine-readable JSON from grok."""
+
+ALWAYS_APPROVE_FLAG: str = "--always-approve"
+"""CLI flag that auto-approves tool executions in the headless worker."""
+
+AGENT_FLAG: str = "--agent"
+"""CLI flag that names the role agent definition the worker should load."""
+
+MODEL_FLAG: str = "--model"
+"""CLI flag that pins a model id when ``GROK_MODEL_PIN`` is non-empty."""
+
+GROK_MODEL_PIN: str = ""
+"""Optional model id pin. Empty string leaves the CLI default (``grok-4.5``)."""
+
+LEADER_SOCKET_FILENAME_PREFIX: str = "grok-leader-"
+"""Filename prefix for each unique per-invocation leader socket under the run state directory."""
+
+LEADER_SOCKET_FILENAME_SUFFIX: str = ".sock"
+"""Filename suffix for each unique per-invocation leader socket."""
+
+CLASSIFICATION_OK: str = "ok"
+"""Outcome classification when the headless process exits zero."""
+
+CLASSIFICATION_USAGE_LIMIT: str = "usage_limit"
+"""Outcome classification when stdout/stderr match a usage-limit signature."""
+
+CLASSIFICATION_AUTH_FAILURE: str = "auth_failure"
+"""Outcome classification when stdout/stderr match an auth-failure signature."""
+
+CLASSIFICATION_TIMEOUT: str = "timeout"
+"""Outcome classification when the headless process exceeds the timeout and is killed."""
+
+CLASSIFICATION_ERROR: str = "error"
+"""Outcome classification for a non-zero exit that matches no known signature."""
+
+DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
+"""Default timeout applied to one headless worker invocation, in seconds."""
+
+TIMEOUT_RETURN_CODE: int = -1
+"""Return code recorded on the outcome when a timed-out process leaves no return code."""
