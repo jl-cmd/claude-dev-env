@@ -245,7 +245,7 @@ def test_pattern_detects_synthetic_missing_reference() -> None:
     candidate = "packages/this/path/does/not/exist.py"
     assert candidate in references, f"Matcher must extract the candidate, got: {references}"
     assert not (REPOSITORY_ROOT / candidate).exists(), (
-        f"Synthetic path must not actually exist, otherwise the assertion is vacuous"
+        "Synthetic path must not actually exist, otherwise the assertion is vacuous"
     )
 
 
