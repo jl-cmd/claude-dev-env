@@ -44,6 +44,14 @@ test('extractResultText prefers Claude result over Grok text', () => {
   assert.equal(extractResultText(envelope), '{"from":"result"}');
 });
 
+test('extractResultText prefers Grok text over a conversational message', () => {
+  const envelope = JSON.stringify({
+    message: 'working',
+    text: '{"from":"text"}',
+  });
+  assert.equal(extractResultText(envelope), '{"from":"text"}');
+});
+
 test('extractResultText reads Claude message field', () => {
   const envelope = JSON.stringify({ message: '{"from":"message"}' });
   assert.equal(extractResultText(envelope), '{"from":"message"}');

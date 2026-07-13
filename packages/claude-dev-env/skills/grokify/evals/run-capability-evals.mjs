@@ -14,7 +14,6 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const OPT_IN_ENV = 'GROK_CAPABILITY_EVALS';
@@ -114,8 +113,8 @@ function printOptInHelp() {
   );
 }
 
-function mintLeaderSocketPath(runDirectory) {
-  return join(runDirectory, `leader-${randomUUID()}.sock`);
+function mintLeaderSocketPath(runDirectory, evalName) {
+  return join(runDirectory, `leader-${evalName}.sock`);
 }
 
 function writePromptFile(runDirectory, evalName, promptText) {
@@ -259,13 +258,13 @@ export function extractResultText(stdout) {
       if (maybeResult !== null) {
         return maybeResult;
       }
-      const maybeMessage = extractStringField(parsed, 'message');
-      if (maybeMessage !== null) {
-        return maybeMessage;
-      }
       const maybeText = extractStringField(parsed, 'text');
       if (maybeText !== null) {
         return maybeText;
+      }
+      const maybeMessage = extractStringField(parsed, 'message');
+      if (maybeMessage !== null) {
+        return maybeMessage;
       }
     }
   } catch {
@@ -310,7 +309,7 @@ function launchEval(runDirectory, { evalName, promptText, maxTurns, agentName })
   const processResult = runGrok({
     promptPath,
     workingDirectory: runDirectory,
-    leaderSocketPath: mintLeaderSocketPath(runDirectory),
+    leaderSocketPath: mintLeaderSocketPath(runDirectory, evalName),
     maxTurns,
     agentName,
   });
