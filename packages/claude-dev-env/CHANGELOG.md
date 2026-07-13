@@ -1,5 +1,56 @@
 # Changelog
 
+## [1.95.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v1.94.0...claude-dev-env-v1.95.0) (2026-07-13)
+
+
+### Features
+
+* **advisor:** Grok host binds max-tier Claude via CLI chain ([e586f64](https://github.com/jl-cmd/claude-dev-env/commit/e586f64367558d648f12ef67bab3fb8e9ae6869f))
+* **advisor:** Grok host binds max-tier Claude via CLI chain ([b3756e8](https://github.com/jl-cmd/claude-dev-env/commit/b3756e890499bab393f3660a6e89c8e11c42fa0e))
+* **hooks:** add per-project domain-vocabulary allowlist to plain_language_blocker ([67a99db](https://github.com/jl-cmd/claude-dev-env/commit/67a99dbe34b17c045a910610d3eb873407b6fba0))
+* **hooks:** exempt session-scratchpad writes from tdd and code-rules gates ([44a62ad](https://github.com/jl-cmd/claude-dev-env/commit/44a62ad90d5f0a5f599ea1ea463c317065bdb5e7))
+* **hooks:** session-scratchpad exemption and per-project plain-language allowlist ([4a091f5](https://github.com/jl-cmd/claude-dev-env/commit/4a091f5a1299c5995efce9d34812759f9df01ba2))
+* **install:** prune retired skills on reinstall ([c2d4d98](https://github.com/jl-cmd/claude-dev-env/commit/c2d4d986b5d032d4fa81f5b8435ffa07294b1505))
+* **install:** prune retired skills on reinstall ([9a2dce8](https://github.com/jl-cmd/claude-dev-env/commit/9a2dce8ee02c837f9c82718390c29f102658091e)), closes [#66](https://github.com/jl-cmd/claude-dev-env/issues/66)
+* **skills:** add closeout session-obstacle filing skill ([9e05677](https://github.com/jl-cmd/claude-dev-env/commit/9e05677b3be0676e17e7467193a448234c604129))
+* **skills:** add closeout session-obstacle filing skill ([dae012e](https://github.com/jl-cmd/claude-dev-env/commit/dae012e601dc0c1a16c0f51f29681521295a94b7)), closes [#67](https://github.com/jl-cmd/claude-dev-env/issues/67)
+* **skills:** track closeout phases on the session task list ([3e008d4](https://github.com/jl-cmd/claude-dev-env/commit/3e008d46c92baf404c674b1ab794b7fb67e79233))
+
+
+### Bug Fixes
+
+* **hooks:** bound the plain-language allowlist walk at the repo root ([66ab329](https://github.com/jl-cmd/claude-dev-env/commit/66ab3294579f7a125cf69311d324c871b0033195))
+* **hooks:** let sensitive_file_protector pass a template filename ([f2604fb](https://github.com/jl-cmd/claude-dev-env/commit/f2604fb0cc4f210ab13c70f8f58a886aef970f18))
+* **hooks:** let sensitive_file_protector pass a template filename ([fbb9063](https://github.com/jl-cmd/claude-dev-env/commit/fbb90636af0086cf0e61883cf28845752084cdf4))
+* **install:** guard prune against unresolved dependencies and make it recoverable ([6122511](https://github.com/jl-cmd/claude-dev-env/commit/612251187af535dc0e3cd54577d35c22a16a9021))
+* **validators:** use decorator end line for decorator-gap check and fixer ([2db73fb](https://github.com/jl-cmd/claude-dev-env/commit/2db73fb1bc46c1a9dbc90452336e459b5e6865ae))
+
+
+### Documentation
+
+* **bugteam:** repoint pre-push hook reference to its real source ([b6d3463](https://github.com/jl-cmd/claude-dev-env/commit/b6d34633e4f9d160d60b5bfef9e9196e335e25bf))
+* **install:** state all three prune triggers in the CLAUDE.md prune section ([46bfcfb](https://github.com/jl-cmd/claude-dev-env/commit/46bfcfbfeaefeaa43660f2ae130f40029c1b85b9))
+* remove dangling pointers to retired skills ([7d18a3c](https://github.com/jl-cmd/claude-dev-env/commit/7d18a3c156a0f3e89b5fb32c86ad009a1deff95a))
+* remove dangling pointers to retired skills ([b36cd33](https://github.com/jl-cmd/claude-dev-env/commit/b36cd3347452d499c0d7c835433a6ccbd9537a87))
+* **rules:** add anti-corollary test-quality rule ([8e7e07d](https://github.com/jl-cmd/claude-dev-env/commit/8e7e07d215817448efb8fb0ef93fd01d06ea8cbe))
+* **rules:** add anti-corollary test-quality rule ([fac7d5f](https://github.com/jl-cmd/claude-dev-env/commit/fac7d5f87ec90f699dc247d824ad9c4ede604405))
+
+
+### Maintenance
+
+* restore full check.ps1 gate for ruff and mypy ([#51](https://github.com/jl-cmd/claude-dev-env/issues/51)) ([037733a](https://github.com/jl-cmd/claude-dev-env/commit/037733a697157600326a57935e120c2d80ae1d74))
+* restore full check.ps1 gate for ruff and mypy ([#51](https://github.com/jl-cmd/claude-dev-env/issues/51)) ([324a597](https://github.com/jl-cmd/claude-dev-env/commit/324a5976b9a474711cdeba3c3bc90eaf2361ed0c))
+
+
+### CI
+
+* enable pytest-xdist -n auto for full suite jobs ([#25](https://github.com/jl-cmd/claude-dev-env/issues/25)) ([792243f](https://github.com/jl-cmd/claude-dev-env/commit/792243f60d036401dddb1694df9dc2c60ab22996))
+
+
+### Tests
+
+* **install:** isolate unresolved-dep prune tests from installed node_modules ([d24f5c6](https://github.com/jl-cmd/claude-dev-env/commit/d24f5c670cdc137457c83a6898e381f22fe8c23d))
+
 ## [1.94.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v1.93.1...claude-dev-env-v1.94.0) (2026-07-12)
 
 
