@@ -111,7 +111,6 @@ ignore = [
 "session/plugin_data_dir_cleanup.py" = ["F401"]
 "validation/mypy_validator.py" = ["PLW1510"]
 "validators/exempt_paths.py" = ["F401"]
-"validators/health_check.py" = ["PLW1510"]
 "validators/mypy_integration.py" = ["PLW1510"]
 "validators/python_style_checks.py" = ["B905"]
 "validators/ruff_integration.py" = ["PLW1510"]
