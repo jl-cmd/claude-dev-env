@@ -18,6 +18,7 @@ def check_mypy_available() -> bool:
     try:
         result = subprocess.run(
             ["mypy", "--version"],
+            check=False,
             capture_output=True,
             text=True,
         )
@@ -85,6 +86,7 @@ def run_mypy_check(files: list[Path]) -> MypyResult:
     result = subprocess.run(
         ["mypy", *config_argument, "--ignore-missing-imports", "--no-error-summary"]
         + py_files,
+        check=False,
         capture_output=True,
         text=True,
     )
