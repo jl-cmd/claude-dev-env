@@ -157,6 +157,13 @@ Pass finding comment URL, comment id, and thread node id for each finding (from 
 
 After replies, the teammate writes outcome XML (schema in [`../PROMPTS.md`](../PROMPTS.md)).
 
+### Tier-1 flag profiles
+
+When tier-1 (headless grok) runs for audit or fix work, take CLI flag profiles
+from the **grok-spawn** skill flag-profiles reference. Do not restate those
+flags here. This page keeps the Agent-tool spawn shape for Claude-host
+teammates.
+
 ### Shutdown (bugfix)
 
 Same self-termination model as bugfind. Missing notification → hard blocker.
