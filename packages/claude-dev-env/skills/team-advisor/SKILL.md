@@ -29,21 +29,25 @@ the CLI fallback — using `team-advisor-agent` as the name and this session as
 the only consumer (skip the "who you are and your assignment" opener in each
 consult; a single-consumer session doesn't need it).
 
-**Grok host:** use the self-as-advisor path in the shared protocol: this
-session answers ENDORSE / CORRECTION / PLAN / STOP itself. Do not spawn a
-Claude `session-advisor` subagent and do not walk the Claude multi-tier
-ladder.
+**Grok host:** bind a max-tier Claude advisor through the shared CLI Claude-chain
+in the protocol (Fable high, then Opus max; `claude_chain_runner.py` walks
+`~/.claude/claude-chain.json` for account usage failover). Consult via
+`--resume <session_id>` on that bind. This session is the sole consumer of that
+CLI advisor; skip the multi-consumer opener. When the chain cannot bind or
+reply, fail closed and report to the user — do **not** answer ENDORSE /
+CORRECTION / PLAN / STOP as this Grok session.
 
 ## Constraints
 
-- One `team-advisor-agent` per session, owned by this session for its whole
-  lifecycle (spawn, drift-respawn, shutdown) — see
+- One advisor bind per session (`team-advisor-agent` on Claude; one CLI
+  `session_id` on Grok), owned by this session for its whole lifecycle
+  (spawn or CLI bind, drift re-bind, shutdown) — see
   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
-- Never spawn the warm agent, or its CLI fallback, at a tier below this
-  session's own tier.
-- The warm agent (or its CLI equivalent) only answers. It never edits a
-  file, never runs a build or test, and never posts anything on the
-  session's behalf.
+- Never bind the advisor, or its CLI path, at a tier below the protocol floor
+  for this host (Claude: this session's own tier; Grok: Opus floor with Fable
+  first).
+- The advisor only answers. It never edits a file, never runs a build or
+  test, and never posts anything on the session's behalf.
 
 ## File Index
 

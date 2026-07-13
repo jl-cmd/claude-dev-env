@@ -2,13 +2,13 @@
 
 Warm-advisor bind-and-consult protocol shared by `team-advisor`, `orchestrator`, `orchestrator-refresh`, and every executor subagent `orchestrator` routes work to. Changes here affect all of these simultaneously — treat this as a breaking-change surface.
 
-Host profile (Claude vs Grok) is detected first; Claude walks the multi-tier Agent spawn ladder, Grok self-binds as the advisor with a separate executor paste block.
+Host profile (Claude vs Grok) is detected first; Claude walks the multi-tier Agent spawn ladder (CLI chain as fallback), Grok binds a max-tier Claude advisor through the CLI Claude-chain (fail closed when the chain cannot serve) with a separate executor paste block.
 
 ## Key documents
 
 | File | Purpose |
 |---|---|
-| `advisor-protocol.md` | Host profiles first, Claude-only model floor, warm-up spawn procedure and charter, consult format and cadence, lifecycle ownership (spawn on Claude / re-charter on Grok), host-matched Advisor blocks for executor spawns, and the Claude CLI fallback chain |
+| `advisor-protocol.md` | Host profiles first, model floor, warm-up / CLI bind procedure and charter, consult format and cadence, lifecycle ownership (Agent spawn on Claude / CLI re-bind on Grok), host-matched Advisor blocks for executor spawns, and the shared CLI Claude-chain |
 
 ## Subdirectory
 

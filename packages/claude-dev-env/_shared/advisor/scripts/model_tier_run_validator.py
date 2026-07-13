@@ -17,13 +17,13 @@ from data, not inferred from a transcript.
     )
     validate_model_tier_run(ladder_walk)  # ok: returns None, raises nothing
 
-    self_bind = ModelTierRun(
-        own_tier="Grok",
-        candidate_tiers=["Grok"],
-        attempts=[{"tier": "Grok", "result": "self"}],
-        selected_tier="Grok",
+    cli_bind = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[{"tier": "Fable", "result": "cli"}],
+        selected_tier="Fable",
     )
-    validate_model_tier_run(self_bind)  # ok: host self-as-advisor bind
+    validate_model_tier_run(cli_bind)  # ok: Grok-host CLI Claude-chain bind
 
 A run whose selected_tier is not the first successful bind fails.
 On any broken invariant, validate_model_tier_run raises ModelTierRunError.
@@ -52,17 +52,18 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     ATTEMPT_ORDER_MISMATCH_MESSAGE,
     ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE,
     CANDIDATE_TIERS_MISMATCH_MESSAGE,
+    CLI_BIND_SUCCESS_TOKEN,
     CLI_INVALID_JSON_EXIT_CODE,
     CLI_MISSING_PATH_EXIT_CODE,
     CLI_SUCCESS_EXIT_CODE,
     CLI_USAGE_MESSAGE,
     CLI_VALIDATION_FAILURE_EXIT_CODE,
+    GROK_CLI_ADVISOR_FLOOR_TIER,
     GROK_MODEL_TIER,
     INCOMPLETE_FALLBACK_WALK_MESSAGE,
     MISSING_FALLBACK_REASON_MESSAGE,
     SELECTED_TIER_MISMATCH_MESSAGE,
     SELECTED_TIER_NOT_NULL_MESSAGE,
-    SELF_BIND_SUCCESS_TOKEN,
     SPAWN_OUTCOME_KEY,
     SPAWN_SUCCESS_TOKEN,
     TIER_KEY,
@@ -99,7 +100,8 @@ def _expected_candidate_tiers(own_tier: str) -> list[str]:
     if maybe_canonical_own_tier is None:
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
     if maybe_canonical_own_tier == GROK_MODEL_TIER:
-        return [GROK_MODEL_TIER]
+        floor_index = ALL_MODEL_TIERS.index(GROK_CLI_ADVISOR_FLOOR_TIER)
+        return list(ALL_MODEL_TIERS[: floor_index + 1])
     floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
     return list(ALL_MODEL_TIERS[: floor_index + 1])
 
@@ -109,8 +111,12 @@ def _is_successful_attempt_outcome(
     outcome_token: str,
 ) -> bool:
     if canonical_tier == GROK_MODEL_TIER:
-        return outcome_token == SELF_BIND_SUCCESS_TOKEN
-    return outcome_token == SPAWN_SUCCESS_TOKEN
+        return False
+    if outcome_token == SPAWN_SUCCESS_TOKEN:
+        return True
+    if outcome_token == CLI_BIND_SUCCESS_TOKEN:
+        return True
+    return False
 
 
 def validate_model_tier_run(run: ModelTierRun) -> None:
@@ -118,13 +124,15 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
 
     ::
 
-        validate_model_tier_run(ladder_walk)  # ok: multi-tier ladder walk
-        validate_model_tier_run(self_bind)    # ok: single-tier self-bind
+        validate_model_tier_run(ladder_walk)  # ok: multi-tier Agent walk
+        validate_model_tier_run(cli_bind)     # ok: CLI Claude-chain bind
         validate_model_tier_run(broken_log)   # flag: ModelTierRunError
 
-    Candidate tiers must match the floor slice (or ``["Grok"]`` alone). Tries
-    walk that slice in order; early stop only after ``spawned`` or ``self``.
-    A null selected_tier requires a full walk plus fallback_reason.
+    Candidate tiers must match the floor slice. ``own_tier=Grok`` maps to the
+    Grok-host CLI advisor floor (Fable → Opus). Tries walk that slice in order;
+    early stop only after ``spawned`` or ``cli``. A null selected_tier requires
+    a full walk plus fallback_reason (fail-closed on Grok when the chain
+    cannot serve).
 
     Args:
         run: The structured spawn-walk log to check.
