@@ -28,6 +28,8 @@ const WORKFLOW_MAX_TURNS = 8;
 const PROBE_FILE_NAME = 'capability-probe-write.txt';
 const PROBE_FILE_CONTENTS = 'capability-probe-ok';
 const HOOKS_LOG_NAME = 'hooks.log';
+const HOOKS_LOG_GLOBAL_SETTINGS_MARKER = 'global/settings';
+const HOOKS_LOG_PRE_TOOL_USE_MARKER = 'pre_tool_use';
 const SPAWN_MARKER = 'SPAWN_OK';
 const GROK_SPAWN_TIMEOUT_MS = 600000;
 const SPAWN_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
@@ -445,9 +447,11 @@ function runEvalFour(runDirectory) {
   const hooksLogPath = join(runDirectory, HOOKS_LOG_NAME);
   let hooksNote = 'hooks.log not present (soft check skipped)';
   if (existsSync(hooksLogPath)) {
-    const hooksLogText = readFileSync(hooksLogPath, 'utf8');
-    const hasGlobalSettings = hooksLogText.includes('global/settings');
-    const hasPreToolUse = hooksLogText.toLowerCase().includes('pre_tool_use');
+    const hooksLogText = readFileSync(hooksLogPath, 'utf8').toLowerCase();
+    const hasGlobalSettings = hooksLogText.includes(
+      HOOKS_LOG_GLOBAL_SETTINGS_MARKER,
+    );
+    const hasPreToolUse = hooksLogText.includes(HOOKS_LOG_PRE_TOOL_USE_MARKER);
     hooksNote =
       hasGlobalSettings && hasPreToolUse
         ? 'hooks.log contains global/settings and pre_tool_use'
