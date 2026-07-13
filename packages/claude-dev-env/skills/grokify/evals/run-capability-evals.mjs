@@ -433,9 +433,8 @@ function runEvalFour(runDirectory) {
     maxTurns: WRITE_MAX_TURNS,
   });
   const probePath = join(runDirectory, PROBE_FILE_NAME);
-  const isProbePresent = existsSync(probePath);
   assertCondition(
-    isProbePresent,
+    existsSync(probePath),
     `E4: probe file missing under the eval cwd (write_succeeded claim: ${JSON.stringify(payload.write_succeeded)})`,
   );
   const probeContents = readFileSync(probePath, 'utf8');
@@ -454,7 +453,7 @@ function runEvalFour(runDirectory) {
         ? 'hooks.log contains global/settings and pre_tool_use'
         : 'hooks.log present but missing expected markers (soft)';
   }
-  return { payload, hooksNote, isProbePresent };
+  return { payload, hooksNote };
 }
 
 export function isWorkflowToolAbsent(payload) {
@@ -508,7 +507,6 @@ function main() {
       'E4 ok',
       JSON.stringify({
         payload: e4Outcome.payload,
-        isProbePresent: e4Outcome.isProbePresent,
         hooksNote: e4Outcome.hooksNote,
       }),
     );
