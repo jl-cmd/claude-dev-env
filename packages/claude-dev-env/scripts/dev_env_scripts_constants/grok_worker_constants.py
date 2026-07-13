@@ -75,7 +75,7 @@ REASON_GROK_BINARY_MISSING: str = "grok_binary_missing"
 """Fallthrough reason when the grok binary is not resolvable on PATH."""
 
 REASON_GROK_AUTH_FAILED: str = "grok_auth_failed"
-"""Fallthrough reason when ``grok models`` exits non-zero or is unusable."""
+"""Catch-all fallthrough for non-usage failures (auth, timeout, launch, missing streams)."""
 
 REASON_CLAUDE_DEV_ENV_CONFIG_MISSING: str = "claude_dev_env_config_missing"
 """Fallthrough reason when the install manifest or role agents are absent."""
@@ -106,6 +106,9 @@ CLI_RUN_STATE_DIR_FLAG: str = "--run-temp-dir"
 
 UTF8_ENCODING: str = "utf-8"
 """Encoding used for subprocess text mode and the ping cache file."""
+
+UTF8_DECODE_ERRORS: str = "replace"
+"""``errors=`` value for subprocess text decode so invalid bytes never yield None streams."""
 
 ALL_USAGE_EXHAUSTION_SIGNATURES: tuple[str, ...] = (
     "usage limit",

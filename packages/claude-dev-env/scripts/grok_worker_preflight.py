@@ -7,8 +7,9 @@ is never a run failure for the caller — it is only a fallthrough signal.
 Checks run in order and stop at the first failure:
 
 1. The ``grok`` binary is resolvable on PATH.
-2. Auth material is present: ``grok models`` exits 0. The probe uses its own
-   ``--leader-socket`` path so it never contends with running workers.
+2. Auth material is present: ``grok models`` exits 0 with decoded text streams.
+   The probe uses its own ``--leader-socket`` path so it never contends with
+   running workers.
 3. ``claude-dev-env`` is installed for the requested role: the install manifest
    exists in the user Claude config directory, and every agent definition file
    that role needs is present under ``agents/``.
@@ -17,6 +18,17 @@ Opt-in ``--ping`` runs one cached live single-turn call with a run-scoped TTL.
 The cache file lives under the caller-supplied run state directory. Auth failure
 invalidates any cached ping. Usage exhaustion is reported under a distinct
 reason from auth failure.
+
+``grok_auth_failed`` is the catch-all machine-readable reason for every non-usage
+failure: non-zero auth, missing or undecoded stdout/stderr, subprocess launch
+errors, probe timeouts, and non-usage ping failures. Only usage exhaustion uses
+``grok_usage_exhausted``. Machine-readable reason strings stay stable; do not
+split the catch-all unless a caller contract requires a new token.
+
+Library callers of ``run_preflight`` do not need to create ``run_state_directory``
+first: the library ensures the parent exists before writing the ping cache.
+A failed cache write is soft — the soft gate can still report usable without a
+cache file.
 
 Stdout is one machine-readable line::
 
@@ -74,6 +86,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     SINGLE_TURN_FLAG,
     STDOUT_FALLTHROUGH_TEMPLATE,
     STDOUT_OK_LINE,
+    UTF8_DECODE_ERRORS,
     UTF8_ENCODING,
 )
 
@@ -120,7 +133,15 @@ def _usable() -> PreflightOutcome:
 
 
 def _combined_completion_text(completion: subprocess.CompletedProcess[str]) -> str:
-    return f"{completion.stdout}{completion.stderr}".lower()
+    stdout_text = completion.stdout if completion.stdout is not None else ""
+    stderr_text = completion.stderr if completion.stderr is not None else ""
+    return f"{stdout_text}{stderr_text}".lower()
+
+
+def _has_decoded_text_streams(
+    completion: subprocess.CompletedProcess[str],
+) -> bool:
+    return completion.stdout is not None and completion.stderr is not None
 
 
 def _matches_any_signature(
@@ -180,6 +201,7 @@ def _write_successful_ping_cache(
         PING_CACHE_IS_OK_KEY: True,
     }
     try:
+        run_state_directory.mkdir(parents=True, exist_ok=True)
         _ping_cache_path(run_state_directory).write_text(
             json.dumps(all_cache_payload), encoding=UTF8_ENCODING
         )
@@ -234,6 +256,7 @@ def _run_grok_command(
             capture_output=True,
             text=True,
             encoding=UTF8_ENCODING,
+            errors=UTF8_DECODE_ERRORS,
             timeout=timeout_seconds,
             check=False,
         )
@@ -254,7 +277,11 @@ def _probe_grok_auth(run_state_directory: Path) -> PreflightOutcome:
         _build_models_invocation(leader_socket_path),
         timeout_seconds=DEFAULT_AUTH_TIMEOUT_SECONDS,
     )
-    if completion is None or completion.returncode != 0:
+    if (
+        completion is None
+        or completion.returncode != 0
+        or not _has_decoded_text_streams(completion)
+    ):
         _invalidate_ping_cache(run_state_directory)
         return _fallthrough(REASON_GROK_AUTH_FAILED)
     return _usable()
@@ -280,7 +307,7 @@ def _probe_grok_ping(run_state_directory: Path) -> PreflightOutcome:
         _build_ping_invocation(leader_socket_path),
         timeout_seconds=DEFAULT_PING_TIMEOUT_SECONDS,
     )
-    if completion is None:
+    if completion is None or not _has_decoded_text_streams(completion):
         _invalidate_ping_cache(run_state_directory)
         return _fallthrough(REASON_GROK_AUTH_FAILED)
     if completion.returncode != 0:
@@ -301,11 +328,16 @@ def run_preflight(
         role: Role whose agent definition set must be installed.
         should_ping: When True, run the opt-in cached live single-turn ping.
         run_state_directory: Run-scoped directory for leader sockets and cache.
+            Created when missing so library callers need not mkdir first.
 
     Returns:
         The soft-gate outcome. Callers treat a non-usable outcome as fallthrough,
         not as a hard run failure.
     """
+    try:
+        run_state_directory.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
     if not _is_grok_binary_resolvable():
         return _fallthrough(REASON_GROK_BINARY_MISSING)
     auth_outcome = _probe_grok_auth(run_state_directory)
