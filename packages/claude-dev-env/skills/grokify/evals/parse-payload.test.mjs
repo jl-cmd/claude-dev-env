@@ -25,6 +25,12 @@ test('tryParseJsonObject strips leading prose before the first brace', () => {
   assert.deepEqual(parsed, E1_CLAIM_PAYLOAD);
 });
 
+test('tryParseJsonObject extracts the object when trailing prose carries braces', () => {
+  const withTrailingBraces = `${JSON.stringify(E1_CLAIM_PAYLOAD)}\nNote: see {run-directory} for logs.`;
+  const parsed = tryParseJsonObject(withTrailingBraces);
+  assert.deepEqual(parsed, E1_CLAIM_PAYLOAD);
+});
+
 test('tryParseJsonObject returns null for empty input', () => {
   assert.equal(tryParseJsonObject(''), null);
   assert.equal(tryParseJsonObject('   '), null);

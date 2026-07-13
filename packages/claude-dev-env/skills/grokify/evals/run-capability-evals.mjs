@@ -194,15 +194,24 @@ export function tryParseJsonObject(text) {
     // fall through to extraction
   }
   const firstBrace = trimmed.indexOf('{');
-  const lastBrace = trimmed.lastIndexOf('}');
-  if (firstBrace === -1 || lastBrace <= firstBrace) {
+  if (firstBrace === -1) {
     return null;
   }
-  try {
-    return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
-  } catch {
-    return null;
+  for (
+    let closingBrace = trimmed.lastIndexOf('}');
+    closingBrace > firstBrace;
+    closingBrace = trimmed.lastIndexOf('}', closingBrace - 1)
+  ) {
+    try {
+      const parsed = JSON.parse(trimmed.slice(firstBrace, closingBrace + 1));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // try the next-shorter closing-brace candidate
+    }
   }
+  return null;
 }
 
 function extractStringField(parsedEnvelope, fieldName) {
@@ -239,14 +248,16 @@ export function extractResultText(stdout) {
         if (!eachEvent || typeof eachEvent !== 'object') {
           continue;
         }
-        if (typeof eachEvent.result === 'string') {
-          textChunks.push(eachEvent.result);
-        }
-        if (typeof eachEvent.text === 'string') {
-          textChunks.push(eachEvent.text);
-        }
-        if (typeof eachEvent.content === 'string') {
-          textChunks.push(eachEvent.content);
+        const eventText =
+          typeof eachEvent.result === 'string'
+            ? eachEvent.result
+            : typeof eachEvent.text === 'string'
+              ? eachEvent.text
+              : typeof eachEvent.content === 'string'
+                ? eachEvent.content
+                : null;
+        if (eventText !== null) {
+          textChunks.push(eventText);
         }
       }
       if (textChunks.length > 0) {
