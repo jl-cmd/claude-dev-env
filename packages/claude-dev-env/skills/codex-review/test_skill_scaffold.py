@@ -77,9 +77,7 @@ def test_reference_shell_pages_exist() -> None:
 
 
 def test_constants_package_directory_exists() -> None:
-    constants_directory = (
-        SKILL_DIRECTORY / "scripts" / "codex_review_scripts_constants"
-    )
+    constants_directory = SKILL_DIRECTORY / "scripts" / "codex_review_scripts_constants"
 
     assert (constants_directory / "__init__.py").is_file()
     assert (constants_directory / "CLAUDE.md").is_file()
