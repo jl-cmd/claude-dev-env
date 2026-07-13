@@ -9,7 +9,7 @@ GitHub automation for this repo. Holds issue templates, CI/CD workflows, and the
 | `ISSUE_TEMPLATE/` | GitHub issue form templates shown when a user opens a new issue |
 | `workflows/` | GitHub Actions workflow files — CI, npm publish, PR title validation, and AI rules sync |
 | `scripts/` | Python helper scripts invoked by the workflows |
-| `ci/` | Pytest deselect node-ID lists for the ubuntu Python suite |
+| `ci/` | Pytest deselect node-ID lists for the ubuntu Python suite. Why for each family: local-only register in `tests/CLAUDE.md` |
 
 ## Workflows at a glance
 
