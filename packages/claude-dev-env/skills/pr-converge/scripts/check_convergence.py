@@ -75,6 +75,10 @@ from reviews_disabled import (
     is_bugteam_disabled_via_env,
     is_copilot_disabled_via_env,
 )
+from check_convergence_availability import (
+    _resolve_bugbot_waiver,
+    _resolve_copilot_waiver,
+)
 
 JsonObject = dict[str, object]
 GateCondition = tuple[str, tuple[bool, str]]
@@ -102,6 +106,8 @@ class GateContext(NamedTuple):
     is_bugbot_down: bool
     is_copilot_down: bool
     is_bugteam_post_blocked: bool
+    bugbot_bypass_note: str = "bugbot_down"
+    copilot_bypass_note: str = "copilot_down"
     fixture: ConvergenceFixture | None = None
 
 
@@ -168,10 +174,20 @@ def _check_bugteam_clean(*, owner: str, repo: str, number: int, head_sha: str) -
     return _evaluate_bugteam_clean_from_reviews(all_flat, head_sha)
 
 
+def _bypassed_note(bypass_note: str) -> str:
+    """Format the PASS detail line for a gate bypassed for the given reason."""
+    return f"bypassed ({bypass_note})"
+
+
 def _bugbot_conditions(context: GateContext) -> list[GateCondition]:
     """Build the Bugbot gate conditions, bypassed when Bugbot is down."""
     if context.is_bugbot_down:
-        return [("bugbot_clean_at == current_head", (True, "bypassed (bugbot_down)"))]
+        return [
+            (
+                "bugbot_clean_at == current_head",
+                (True, _bypassed_note(context.bugbot_bypass_note)),
+            )
+        ]
     if context.fixture is not None:
         return [
             (
@@ -223,7 +239,10 @@ def _bugteam_condition(context: GateContext) -> GateCondition:
 def _copilot_review_condition(context: GateContext) -> GateCondition:
     """Build the Copilot review gate condition, bypassed when Copilot is down."""
     if context.is_copilot_down:
-        return ("copilot_clean_at == current_head", (True, "bypassed (copilot_down)"))
+        return (
+            "copilot_clean_at == current_head",
+            (True, _bypassed_note(context.copilot_bypass_note)),
+        )
     if context.fixture is not None:
         return (
             "copilot_clean_at == current_head",
@@ -247,7 +266,10 @@ def _copilot_review_condition(context: GateContext) -> GateCondition:
 def _pending_reviews_condition(context: GateContext) -> GateCondition:
     """Build the pending-requested-reviews condition, bypassed when Copilot is down."""
     if context.is_copilot_down:
-        return ("no pending requested reviews", (True, "bypassed (copilot_down)"))
+        return (
+            "no pending requested reviews",
+            (True, _bypassed_note(context.copilot_bypass_note)),
+        )
     if context.fixture is not None:
         return (
             "no pending requested reviews",
@@ -394,6 +416,8 @@ def check_all(
     is_bugbot_down: bool,
     is_copilot_down: bool,
     is_bugteam_post_blocked: bool,
+    bugbot_bypass_note: str = "bugbot_down",
+    copilot_bypass_note: str = "copilot_down",
 ) -> int:
     """Run every convergence gate and print one PASS/FAIL line per condition.
 
@@ -417,6 +441,8 @@ def check_all(
         is_bugbot_down=is_bugbot_down,
         is_copilot_down=is_copilot_down,
         is_bugteam_post_blocked=is_bugteam_post_blocked,
+        bugbot_bypass_note=bugbot_bypass_note,
+        copilot_bypass_note=copilot_bypass_note,
         fixture=None,
     )
     return _evaluate_convergence(context)
@@ -430,6 +456,8 @@ def _check_all_from_fixture(
     is_bugbot_down: bool,
     is_copilot_down: bool,
     is_bugteam_post_blocked: bool,
+    bugbot_bypass_note: str = "bugbot_down",
+    copilot_bypass_note: str = "copilot_down",
 ) -> int:
     """Run every convergence gate against a frozen API snapshot.
 
@@ -453,6 +481,8 @@ def _check_all_from_fixture(
         is_bugbot_down=is_bugbot_down,
         is_copilot_down=is_copilot_down,
         is_bugteam_post_blocked=is_bugteam_post_blocked,
+        bugbot_bypass_note=bugbot_bypass_note,
+        copilot_bypass_note=copilot_bypass_note,
         fixture=fixture,
     )
     return _evaluate_convergence(context)
@@ -535,8 +565,8 @@ def main(all_arguments: list[str]) -> int:
         0 on full convergence, 1 on one or more gate failures.
     """
     arguments = parse_arguments(all_arguments)
-    is_bugbot_down = _resolve_bugbot_down(arguments.bugbot_down)
-    is_copilot_down = _resolve_copilot_down(arguments.copilot_down)
+    bugbot_waiver = _resolve_bugbot_waiver(arguments.bugbot_down)
+    copilot_waiver = _resolve_copilot_waiver(arguments.copilot_down)
     is_bugteam_post_blocked = _resolve_bugteam_post_blocked(arguments.bugteam_post_blocked)
     fixture_path = getattr(arguments, "fixture", None)
     if fixture_path:
@@ -546,17 +576,21 @@ def main(all_arguments: list[str]) -> int:
             repo=arguments.repo,
             number=getattr(arguments, "pr_number"),
             fixture=fixture,
-            is_bugbot_down=is_bugbot_down,
-            is_copilot_down=is_copilot_down,
+            is_bugbot_down=bugbot_waiver.is_waived,
+            is_copilot_down=copilot_waiver.is_waived,
             is_bugteam_post_blocked=is_bugteam_post_blocked,
+            bugbot_bypass_note=bugbot_waiver.bypass_note,
+            copilot_bypass_note=copilot_waiver.bypass_note,
         )
     return check_all(
         owner=arguments.owner,
         repo=arguments.repo,
         number=getattr(arguments, "pr_number"),
-        is_bugbot_down=is_bugbot_down,
-        is_copilot_down=is_copilot_down,
+        is_bugbot_down=bugbot_waiver.is_waived,
+        is_copilot_down=copilot_waiver.is_waived,
         is_bugteam_post_blocked=is_bugteam_post_blocked,
+        bugbot_bypass_note=bugbot_waiver.bypass_note,
+        copilot_bypass_note=copilot_waiver.bypass_note,
     )
 
 

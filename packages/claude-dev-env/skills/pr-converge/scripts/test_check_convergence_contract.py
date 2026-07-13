@@ -315,6 +315,7 @@ def test_main_derives_bugteam_post_blocked_from_env_when_flag_omitted(
         is_bugbot_down: bool,
         is_copilot_down: bool,
         is_bugteam_post_blocked: bool = False,
+        **_bypass_note_kwargs: str,
     ) -> int:
         captured_bugteam_post_blocked.append(is_bugteam_post_blocked)
         return 0

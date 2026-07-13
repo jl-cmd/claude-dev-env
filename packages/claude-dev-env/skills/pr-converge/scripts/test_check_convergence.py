@@ -360,6 +360,7 @@ def should_derive_copilot_down_from_env_when_main_omits_the_flag(
         is_bugbot_down: bool,
         is_copilot_down: bool,
         is_bugteam_post_blocked: bool = False,
+        **_bypass_note_kwargs: str,
     ) -> int:
         captured_copilot_down.append(is_copilot_down)
         return 0
@@ -369,3 +370,29 @@ def should_derive_copilot_down_from_env_when_main_omits_the_flag(
     assert exit_code == 0
     assert captured_copilot_down == [True]
 
+
+def should_print_probe_reason_on_the_bypassed_copilot_gate_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _patch_all_gates_passing(monkeypatch)
+    monkeypatch.setattr(
+        check_convergence, "_check_bot_review", _raise_if_called("_check_bot_review")
+    )
+    monkeypatch.setattr(
+        check_convergence,
+        "_check_no_pending_reviews",
+        _raise_if_called("_check_no_pending_reviews"),
+    )
+    exit_code = check_convergence.check_all(
+        owner="o",
+        repo="r",
+        number=1,
+        is_bugbot_down=False,
+        is_copilot_down=True,
+        is_bugteam_post_blocked=False,
+        copilot_bypass_note="copilot unavailable: out of premium quota",
+    )
+    captured_stdout = capsys.readouterr().out
+    probe_line = "bypassed (copilot unavailable: out of premium quota)"
+    assert captured_stdout.count(probe_line) == 2
+    assert exit_code == 0
