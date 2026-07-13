@@ -17,6 +17,7 @@ def check_ruff_available() -> bool:
     try:
         result = subprocess.run(
             ["ruff", "--version"],
+            check=False,
             capture_output=True,
             text=True,
         )
@@ -39,6 +40,7 @@ def run_ruff_check(files: list[Path]) -> RuffResult:
 
     result = subprocess.run(
         ["ruff", "check"] + py_files,
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -61,6 +63,7 @@ def run_ruff_fix(files: list[Path]) -> RuffResult:
 
     result = subprocess.run(
         ["ruff", "check", "--fix"] + py_files,
+        check=False,
         capture_output=True,
         text=True,
     )

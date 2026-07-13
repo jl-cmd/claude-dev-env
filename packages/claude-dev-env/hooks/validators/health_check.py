@@ -110,6 +110,7 @@ def check_optional_tool(tool_name: str) -> bool:
     try:
         result = subprocess.run(
             [tool_name, "--version"],
+            check=False,
             capture_output=True,
             text=True,
         )
