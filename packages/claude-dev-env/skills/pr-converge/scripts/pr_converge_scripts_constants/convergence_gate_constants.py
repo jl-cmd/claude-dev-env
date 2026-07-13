@@ -48,3 +48,11 @@ FIXTURE_KEY_PENDING_REVIEWS_DETAIL: str = "pending_reviews_detail"
 FIXTURE_DEFAULT_THREADS_DETAIL: str = "0 unresolved"
 FIXTURE_DEFAULT_PENDING_DETAIL: str = "none pending"
 MERGEABLE_STATE_CLEAN: str = "clean"
+
+COPILOT_DOWN_BYPASS_NOTE: str = "copilot_down"
+BUGBOT_DOWN_BYPASS_NOTE: str = "bugbot_down"
+REVIEWER_UNAVAILABLE_NOTE_TEMPLATE: str = "{token} unavailable: {message}"
+GATE_PROBE_ERROR_DETAIL_TEMPLATE: str = "enforced (probe error: {reason})"
+SETTINGS_DISK_FALLBACK_LOG_TEMPLATE: str = (
+    "reviewer-availability: settings.json unreadable; using process env for %s and %s"
+)

@@ -8,7 +8,7 @@ Python helper scripts for the `pr-converge` skill, plus their tests and a PowerS
 |---|---|
 | `check_bugbot_ci.py` | Checks bugbot CI check-run status on a given SHA |
 | `check_convergence.py` | Evaluates whether all convergence gates pass on the current HEAD |
-| `check_convergence_availability.py` | Resolves reviewer waivers from flag, env-and-disk `CLAUDE_REVIEWS_DISABLED` union, and the availability probe, with a three-state probe reason |
+| `check_convergence_availability.py` | Resolves reviewer waivers from flag, disk-authoritative settings (env fallback), and the availability/quota probe, with waived / enforced / probe_error_reason states |
 | `check_convergence_gates.py` | GitHub REST leaf checks (review and Bugbot) the convergence gates call |
 | `check_convergence_thread_gates.py` | GitHub GraphQL and REST leaf checks (review threads and pending reviewers) the convergence gates call |
 | `check_pending_reviews.py` | Fetches pending review requests and reviewer states |

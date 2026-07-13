@@ -80,6 +80,18 @@ EXPECTED_COPILOT_DOWN_STDOUT = (
 
 EXPECTED_FAIL_SUMMARY = "One or more pre-conditions not met — do not mark ready.\n"
 
+EXPECTED_COPILOT_PROBE_ERROR_STDOUT = (
+    "HEAD: abcdef1\n\n"
+    "1. bugbot_clean_at == current_head: PASS — clean\n"
+    "2. bugbot review body clean: PASS — clean\n"
+    "3. bugteam_clean_at == current_head: PASS — clean\n"
+    "4. copilot_clean_at == current_head: FAIL — enforced (probe error: quota API down)\n"
+    "5. zero unresolved bot threads: PASS — clean\n"
+    "6. PR is mergeable: PASS — clean\n"
+    "7. no pending requested reviews: FAIL — enforced (probe error: quota API down)\n\n"
+    "One or more pre-conditions not met — do not mark ready.\n"
+)
+
 
 def _load_check_convergence() -> ModuleType:
     if str(_PR_CONVERGE_DIRECTORY) not in sys.path:
@@ -324,3 +336,34 @@ def test_main_derives_bugteam_post_blocked_from_env_when_flag_omitted(
     exit_code = check_convergence.main(["--owner", "o", "--repo", "r", "--pr-number", "1"])
     assert exit_code == 0
     assert captured_bugteam_post_blocked == [True]
+
+
+def test_copilot_probe_error_fail_lines_match_the_pinned_contract(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _patch_gates_clean(monkeypatch)
+    monkeypatch.setattr(
+        check_convergence,
+        "_check_bot_review",
+        lambda **_keywords: (_ for _ in ()).throw(
+            AssertionError("copilot live gate must not run on probe error")
+        ),
+    )
+    monkeypatch.setattr(
+        check_convergence,
+        "_check_no_pending_reviews",
+        lambda **_keywords: (_ for _ in ()).throw(
+            AssertionError("pending live gate must not run on probe error")
+        ),
+    )
+    exit_code = check_convergence.check_all(
+        owner="o",
+        repo="r",
+        number=1,
+        is_bugbot_down=False,
+        is_copilot_down=False,
+        is_bugteam_post_blocked=False,
+        copilot_probe_error_reason="quota API down",
+    )
+    assert capsys.readouterr().out == EXPECTED_COPILOT_PROBE_ERROR_STDOUT
+    assert exit_code == 1

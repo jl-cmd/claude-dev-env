@@ -17,6 +17,7 @@ from typing import Callable
 import pytest
 
 import _pr_converge_path_setup  # noqa: F401
+import check_convergence_availability as availability_module
 from pr_converge_skill_constants.constants import EXIT_CODE_GH_ERROR
 
 _SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
@@ -350,6 +351,12 @@ def should_derive_copilot_down_from_env_when_main_omits_the_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "copilot")
+    monkeypatch.setattr(
+        availability_module,
+        "get_claude_user_settings_path",
+        lambda: Path("does-not-exist"),
+    )
+    availability_module._log_disk_settings_fallback_once.cache_clear()
     captured_copilot_down: list[bool] = []
 
     def stub_check_all(

@@ -2,22 +2,19 @@
 
 ::
 
-    flag / env / disk-settings list the reviewer  -> waived, note "copilot_down"
-    probe reports the reviewer down                -> waived, "copilot unavailable: <reason>"
-    probe reports the reviewer up                   -> enforced, no note
-    probe raises                                     -> enforced, "probe error: <exc>" (logged)
+    flag / resolved settings disable the reviewer  -> waived, note "copilot_down"
+    copilot out of quota                           -> waived, "copilot unavailable: <reason>"
+    bugbot settings-disabled (opt-out / no opt-in) -> waived, "bugbot_down"
+    copilot quota available                         -> enforced, no note
+    copilot probe error / indeterminate             -> enforced, probe_error_reason set
 
-Two staleness fixes live here. The disabled decision unions the frozen process
-env with the on-disk ``settings.json`` ``CLAUDE_REVIEWS_DISABLED`` list. It logs
-any discrepancy between the two. A mid-session settings change then reaches the
-flagless mark-ready re-check the hook runs.
+When ``~/.claude/settings.json`` is readable it is the sole source for both
+``CLAUDE_REVIEWS_DISABLED`` and ``CLAUDE_REVIEWS_ENABLED``. The process env is
+the fallback only when that file is missing, unreadable, or not a JSON object.
 
-An availability probe consults the shared reviewer-availability check. A reviewer
-that is out of quota waives its gate with a recorded reason rather than stalling
-the run. A caught probe failure fails safe: the gate stays enforced, labelled a
-probe error so a broken probe never reads as a healthy enforcement. An uncaught
-probe failure propagates and exits the checker non-zero, which the mark-ready
-hook also treats as not-ready.
+Bugbot has no quota or outage API. Confirmed-down for Bugbot means the resolved
+settings disable it (opt-out or missing opt-in). A runtime Bugbot outage is
+detected later as a poll timeout, not at this gate.
 """
 
 from __future__ import annotations
@@ -27,23 +24,31 @@ import json
 import logging
 import os
 import subprocess
-from pathlib import Path
 from typing import NamedTuple
 
 import _pr_converge_path_setup  # noqa: F401
+from copilot_quota import evaluate_copilot_quota
+from pr_converge_scripts_constants.convergence_gate_constants import (
+    BUGBOT_DOWN_BYPASS_NOTE,
+    COPILOT_DOWN_BYPASS_NOTE,
+    REVIEWER_UNAVAILABLE_NOTE_TEMPLATE,
+    SETTINGS_DISK_FALLBACK_LOG_TEMPLATE,
+)
+from pr_loop_shared_constants.claude_permissions_constants import (
+    get_claude_user_settings_path,
+)
 from pr_loop_shared_constants.copilot_quota_constants import (
     COPILOT_QUOTA_DEFAULT_ENV_FILE_PATH,
-)
-from pr_loop_shared_constants.reviewer_availability_constants import (
-    EXIT_CODE_REVIEWER_DOWN,
+    EXIT_CODE_OUT_OF_QUOTA,
+    EXIT_CODE_QUOTA_AVAILABLE,
 )
 from pr_loop_shared_constants.reviews_disabled_constants import (
     CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
     CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR,
+    CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME,
 )
-from reviewer_availability import evaluate_reviewer_availability
 
 _logger = logging.getLogger(__name__)
 
@@ -53,119 +58,174 @@ class ReviewerWaiver(NamedTuple):
 
     is_waived: bool
     bypass_note: str
+    probe_error_reason: str = ""
 
 
-class _ReviewsDisabled(NamedTuple):
-    """The reviews-disabled reviewer tokens seen in the frozen env and on disk."""
+class _ReviewsSettings(NamedTuple):
+    """Resolved disabled and enabled reviewer tokens for one settings source."""
 
-    env_tokens: frozenset[str]
-    disk_tokens: frozenset[str]
-
-
-def _settings_json_path() -> Path:
-    """Resolve the installed ``settings.json`` from this script's Claude home root."""
-    scripts_directory = Path(__file__).resolve().parent
-    claude_home = scripts_directory.parent.parent.parent
-    return claude_home / "settings.json"
+    disabled_tokens: frozenset[str]
+    enabled_tokens: frozenset[str]
 
 
-def _tokens_from_text(reviews_disabled_text: str) -> frozenset[str]:
-    """Split a CLAUDE_REVIEWS_DISABLED value into its lowercase reviewer tokens."""
+def _tokens_from_text(reviews_token_text: str) -> frozenset[str]:
+    """Split a comma-separated reviews token list into lowercase tokens."""
     return frozenset(
         each_token.strip().lower()
-        for each_token in reviews_disabled_text.split(CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR)
+        for each_token in reviews_token_text.split(CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR)
         if each_token.strip()
     )
 
 
-def _env_disabled_tokens() -> frozenset[str]:
-    """Return the reviews-disabled tokens from the frozen process environment."""
-    return _tokens_from_text(os.environ.get(CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, ""))
+def _tokens_from_env(environment_variable_name: str) -> frozenset[str]:
+    """Return the tokens listed in a process environment variable."""
+    return _tokens_from_text(os.environ.get(environment_variable_name, ""))
 
 
-def _disk_disabled_tokens() -> frozenset[str]:
-    """Return the reviews-disabled tokens from the on-disk settings.json env block."""
-    settings_path = _settings_json_path()
+def _tokens_from_env_block(
+    all_env_entries: dict[str, object], environment_variable_name: str
+) -> frozenset[str]:
+    """Return the tokens listed under one key of a settings.json env block."""
+    reviews_token_text = all_env_entries.get(environment_variable_name, "")
+    if not isinstance(reviews_token_text, str):
+        return frozenset()
+    return _tokens_from_text(reviews_token_text)
+
+
+def _try_read_disk_env_block() -> dict[str, object] | None:
+    """Return the settings.json env block, or None when disk is not authoritative."""
+    settings_path = get_claude_user_settings_path()
     if not settings_path.is_file():
-        return frozenset()
+        return None
     try:
-        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        settings_payload = json.loads(settings_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return frozenset()
-    if not isinstance(settings, dict):
-        return frozenset()
-    env_block = settings.get("env", {})
-    if not isinstance(env_block, dict):
-        return frozenset()
-    reviews_disabled_text = env_block.get(CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, "")
-    if not isinstance(reviews_disabled_text, str):
-        return frozenset()
-    return _tokens_from_text(reviews_disabled_text)
+        return None
+    if not isinstance(settings_payload, dict):
+        return None
+    all_env_entries = settings_payload.get("env", {})
+    if not isinstance(all_env_entries, dict):
+        return {}
+    return all_env_entries
 
 
-def _log_settings_discrepancy(reviews: _ReviewsDisabled) -> None:
-    """Print a stderr notice when the frozen env and disk settings disagree."""
+@functools.lru_cache(maxsize=1)
+def _log_disk_settings_fallback_once() -> None:
+    """Log once per process that settings.json fell back to the process env."""
     _logger.warning(
-        "reviewer-availability: %s differs between the frozen env %s and disk settings %s - taking the union.",
+        SETTINGS_DISK_FALLBACK_LOG_TEMPLATE,
         CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
-        sorted(reviews.env_tokens),
-        sorted(reviews.disk_tokens),
+        CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME,
     )
 
 
-def _is_reviewer_disabled_including_disk(reviewer_token: str) -> bool:
-    """Return True when the frozen env or on-disk settings disable the reviewer."""
-    reviews = _ReviewsDisabled(_env_disabled_tokens(), _disk_disabled_tokens())
-    if reviews.env_tokens != reviews.disk_tokens:
-        _log_settings_discrepancy(reviews)
-    return reviewer_token in (reviews.env_tokens | reviews.disk_tokens)
+def _resolve_reviews_settings() -> _ReviewsSettings:
+    """Return disabled and enabled tokens from disk, or env when disk is unreadable."""
+    all_disk_env_entries = _try_read_disk_env_block()
+    if all_disk_env_entries is not None:
+        return _ReviewsSettings(
+            disabled_tokens=_tokens_from_env_block(
+                all_disk_env_entries, CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME
+            ),
+            enabled_tokens=_tokens_from_env_block(
+                all_disk_env_entries, CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME
+            ),
+        )
+    _log_disk_settings_fallback_once()
+    return _ReviewsSettings(
+        disabled_tokens=_tokens_from_env(CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME),
+        enabled_tokens=_tokens_from_env(CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME),
+    )
+
+
+def _is_copilot_disabled_via_resolved_settings() -> bool:
+    """Return True when the resolved settings disable the copilot reviewer."""
+    return (
+        CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN
+        in _resolve_reviews_settings().disabled_tokens
+    )
+
+
+def _is_bugbot_disabled_via_resolved_settings() -> bool:
+    """Return True when the resolved settings disable the bugbot reviewer.
+
+    Bugbot is off by default. It is disabled when the disabled list names it, or
+    when the enabled list does not name it.
+    """
+    reviews_settings = _resolve_reviews_settings()
+    is_opted_out = (
+        CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN in reviews_settings.disabled_tokens
+    )
+    is_opted_in = CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN in reviews_settings.enabled_tokens
+    return is_opted_out or not is_opted_in
+
+
+def _unavailable_note(reviewer_token: str, message: str) -> str:
+    """Format the bypass note for a confirmed-down reviewer."""
+    return REVIEWER_UNAVAILABLE_NOTE_TEMPLATE.format(
+        token=reviewer_token, message=message
+    )
 
 
 @functools.lru_cache(maxsize=None)
-def _probe_reviewer_down(reviewer_token: str) -> ReviewerWaiver:
-    """Probe reviewer availability once per run; fail safe to enforced on error.
+def _probe_copilot_quota() -> ReviewerWaiver:
+    """Probe Copilot quota once per run; waive only on confirmed out-of-quota.
 
     ::
 
-        exit == reviewer-down  -> ReviewerWaiver(True, "copilot unavailable: <msg>")
-        exit == available       -> ReviewerWaiver(False, "")
-        probe raises             -> ReviewerWaiver(False, "probe error: <exc>") + stderr
-
-    A caught probe failure keeps the gate enforced rather than silently waiving
-    it. It carries a distinct probe-error note so a broken probe never reads as a
-    healthy enforcement. ``lru_cache`` runs the underlying check at most once per
-    reviewer per process; each gate invocation is a fresh process.
+        exit == out-of-quota (1)  -> waived, "copilot unavailable: <msg>"
+        exit == available (0)     -> enforced
+        exit == API down / no account / other non-zero
+                                  -> enforced, probe_error_reason set
+        probe raises              -> enforced, probe_error_reason set
     """
     try:
-        availability = evaluate_reviewer_availability(
-            reviewer_token=reviewer_token,
+        quota_decision = evaluate_copilot_quota(
+            cli_account=None,
             env_file_path=COPILOT_QUOTA_DEFAULT_ENV_FILE_PATH,
         )
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as probe_error:
         _logger.warning(
             "reviewer-availability: probe error for %s: %s",
-            reviewer_token,
+            CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
             probe_error,
         )
-        return ReviewerWaiver(False, f"probe error: {probe_error}")
-    if availability.exit_code == EXIT_CODE_REVIEWER_DOWN:
-        return ReviewerWaiver(True, f"{reviewer_token} unavailable: {availability.message}")
-    return ReviewerWaiver(False, "")
+        return ReviewerWaiver(False, "", str(probe_error))
+    if quota_decision.exit_code == EXIT_CODE_OUT_OF_QUOTA:
+        return ReviewerWaiver(
+            True,
+            _unavailable_note(
+                CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN, quota_decision.message
+            ),
+            "",
+        )
+    if quota_decision.exit_code == EXIT_CODE_QUOTA_AVAILABLE:
+        return ReviewerWaiver(False, "", "")
+    return ReviewerWaiver(False, "", quota_decision.message)
+
+
+def _waiver_from_cli_flag(is_down_flag: bool, bypass_note: str) -> ReviewerWaiver:
+    """Build a waiver from an explicit CLI flag alone (fixture offline path)."""
+    if is_down_flag:
+        return ReviewerWaiver(True, bypass_note, "")
+    return ReviewerWaiver(False, "", "")
 
 
 def _resolve_copilot_waiver(is_copilot_down_flag: bool) -> ReviewerWaiver:
-    """Resolve the Copilot waiver from flag, env-and-disk opt-out, then the probe."""
-    if is_copilot_down_flag or _is_reviewer_disabled_including_disk(
-        CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN
-    ):
-        return ReviewerWaiver(True, "copilot_down")
-    return _probe_reviewer_down(CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN)
+    """Resolve the Copilot waiver from flag, resolved settings, then the quota probe."""
+    if is_copilot_down_flag or _is_copilot_disabled_via_resolved_settings():
+        return ReviewerWaiver(True, COPILOT_DOWN_BYPASS_NOTE, "")
+    return _probe_copilot_quota()
 
 
 def _resolve_bugbot_waiver(is_bugbot_down_flag: bool) -> ReviewerWaiver:
-    """Resolve the Bugbot waiver from flag, env-and-disk opt-out, then the probe."""
-    if is_bugbot_down_flag or _is_reviewer_disabled_including_disk(
-        CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN
-    ):
-        return ReviewerWaiver(True, "bugbot_down")
-    return _probe_reviewer_down(CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN)
+    """Resolve the Bugbot waiver from flag, then resolved settings.
+
+    Bugbot has no quota or outage API. Once the resolved settings (disk when
+    readable, else env) confirm the opt-in, the gate is enforced. Re-probing
+    via ``evaluate_reviewer_availability`` would re-read the process env and
+    undo a mid-session disk enable of Bugbot.
+    """
+    if is_bugbot_down_flag or _is_bugbot_disabled_via_resolved_settings():
+        return ReviewerWaiver(True, BUGBOT_DOWN_BYPASS_NOTE, "")
+    return ReviewerWaiver(False, "", "")
