@@ -8,6 +8,8 @@ Python package of named constants imported by codex-review scripts. Importing fr
 |---|---|
 | `__init__.py` | Package marker and package docstring. |
 | `run_constants.py` | Binary name, flag strings, custom-instructions prompt, version-probe pattern, timeout default, JSONL keys, and outcome class labels for `run_codex_review.py`. |
+| `findings_constants.py` | Finding field keys, fenced-JSON and freeform patterns for `parse_codex_findings.py`. |
+| `classifier_constants.py` | Failure class names and stream markers for `codex_down_classifier.py`. |
 
 ## Convention
 
