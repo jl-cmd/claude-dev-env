@@ -65,6 +65,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `bot_mention_comment_blocker.py` | PreToolUse (Write/Edit) | PR review comments that @-mention a bot |
 | `claude_md_orphan_file_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | Per-directory `CLAUDE.md` table cells naming a bare filename absent from the directory subtree |
 | `code_verifier_spawn_preflight_gate.py` | PreToolUse (Agent) | Spawning the `code-verifier` subagent when the branch has a merge conflict vs its base or a CODE_RULES violation on a working-tree-added line |
+| `comment_path_reference_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A comment in a `.github/workflows` YAML file that cites a repository path resolving under neither the repository root nor any job `working-directory` while a file of that basename exists elsewhere in the tree |
 | `convergence_gate_blocker.py` | PreToolUse (Bash) | Convergence workflow actions on a conflicting PR |
 | `conventional_pr_title_gate.py` | PreToolUse (Bash) | `gh pr create`/`gh pr edit` with a `--title` that is not a Conventional Commit, in a repo whose CI runs a semantic-pull-request title check |
 | `destructive_command_blocker.py` | PreToolUse (Bash/PowerShell) | Shell commands with destructive literals (`rm -rf`, `git reset --hard`, etc.) |
