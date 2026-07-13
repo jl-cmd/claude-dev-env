@@ -9,3 +9,6 @@ DEFAULT_AGE_SECONDS: int = 120
 
 DEFAULT_POLL_INTERVAL: int = 30
 """Seconds between sweep passes in continuous-watch mode."""
+
+WORKER_STAGGER_SECONDS: int = 15
+"""Seconds between staggered headless grok worker process starts in a batch."""

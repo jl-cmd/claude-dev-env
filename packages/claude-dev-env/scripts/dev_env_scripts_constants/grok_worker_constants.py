@@ -182,5 +182,137 @@ CLASSIFICATION_ERROR: str = "error"
 DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
 """Default timeout applied to one headless worker invocation, in seconds."""
 
+DEFAULT_WORKER_MAX_TURNS: int = 8
+"""Default max-turns value applied to one headless worker invocation."""
+
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
+
+TOOL_PROFILE_READONLY: str = "readonly"
+"""Tool profile that removes write, edit, and shell tools from the worker."""
+
+TOOL_PROFILE_BUILD: str = "build"
+"""Tool profile that keeps full tools and forbids commit, push, and gh via prompt."""
+
+ALL_KNOWN_TOOL_PROFILES: frozenset[str] = frozenset(
+    {TOOL_PROFILE_READONLY, TOOL_PROFILE_BUILD}
+)
+"""Accepted tool-profile names on a batch worker specification."""
+
+DISALLOWED_TOOLS_FLAG: str = "--disallowed-tools"
+"""CLI flag that names tools the headless worker must not use."""
+
+ALL_READONLY_DISALLOWED_TOOLS: tuple[str, ...] = ("Write", "Edit", "Bash")
+"""Tools removed under the readonly tool profile."""
+
+READONLY_DISALLOWED_TOOLS_VALUE: str = ",".join(ALL_READONLY_DISALLOWED_TOOLS)
+"""Comma-joined argument value for ``--disallowed-tools`` under readonly."""
+
+DISABLE_WEB_SEARCH_FLAG: str = "--disable-web-search"
+"""CLI flag that turns off web search for repo-only readonly workers."""
+
+DEBUG_FILE_FLAG: str = "--debug-file"
+"""CLI flag that points grok at a per-worker debug log path."""
+
+OUTPUT_FILENAME_PREFIX: str = "grok-worker-output-"
+"""Filename prefix for each per-worker report file under the run state directory."""
+
+OUTPUT_FILENAME_SUFFIX: str = ".txt"
+"""Filename suffix for each per-worker report file."""
+
+PROMPT_FILENAME_PREFIX: str = "grok-worker-prompt-"
+"""Filename prefix for each assembled per-worker prompt file."""
+
+PROMPT_FILENAME_SUFFIX: str = ".txt"
+"""Filename suffix for each assembled per-worker prompt file."""
+
+DEBUG_FILENAME_PREFIX: str = "grok-worker-debug-"
+"""Filename prefix for each per-worker debug log file."""
+
+DEBUG_FILENAME_SUFFIX: str = ".log"
+"""Filename suffix for each per-worker debug log file."""
+
+PROMPT_PART_JOIN_SEPARATOR: str = "\n\n"
+"""Separator inserted between prompt part file bodies when assembling a worker prompt."""
+
+BUILD_PROFILE_PROMPT_HEADER: str = (
+    "Tool profile: build. Never commit, push, or call gh.\n\n"
+)
+"""Leading instruction block prepended to every build-profile worker prompt."""
+
+READONLY_PROFILE_PROMPT_HEADER: str = (
+    "Tool profile: readonly. Do not write, edit, or run shell commands.\n\n"
+)
+"""Leading instruction block prepended to every readonly-profile worker prompt."""
+
+BATCH_SPEC_ROLE_KEY: str = "role"
+"""JSON key for the preflight role on a batch specification."""
+
+BATCH_SPEC_SHOULD_PING_KEY: str = "should_ping"
+"""JSON key for the opt-in preflight ping flag on a batch specification."""
+
+BATCH_SPEC_WORKERS_KEY: str = "workers"
+"""JSON key for the worker list on a batch specification."""
+
+WORKER_SPEC_ROLE_NAME_KEY: str = "role_name"
+"""JSON key for one worker's role name."""
+
+WORKER_SPEC_PROMPT_PARTS_KEY: str = "prompt_parts"
+"""JSON key for one worker's ordered prompt-part file paths."""
+
+WORKER_SPEC_CWD_KEY: str = "cwd"
+"""JSON key for one worker's working directory."""
+
+WORKER_SPEC_TOOL_PROFILE_KEY: str = "tool_profile"
+"""JSON key for one worker's tool profile name."""
+
+WORKER_SPEC_TIMEOUT_KEY: str = "timeout_seconds"
+"""JSON key for one worker's timeout in seconds."""
+
+WORKER_SPEC_IS_REPO_ONLY_KEY: str = "is_repo_only"
+"""JSON key for whether a readonly worker also disables web search."""
+
+WORKER_SPEC_MAX_TURNS_KEY: str = "max_turns"
+"""JSON key for one worker's max-turns cap."""
+
+WORKER_SPEC_AGENT_NAME_KEY: str = "agent_name"
+"""JSON key for one worker's optional agent definition name."""
+
+CLI_BATCH_SPEC_FLAG: str = "--spec"
+"""CLI flag that points the batch launcher at a JSON batch specification file."""
+
+SUMMARY_IS_PREFLIGHT_USABLE_KEY: str = "is_preflight_usable"
+"""Batch summary JSON key for the preflight usability flag."""
+
+SUMMARY_PREFLIGHT_REASON_KEY: str = "preflight_reason"
+"""Batch summary JSON key for the preflight fallthrough reason."""
+
+SUMMARY_WORKERS_KEY: str = "workers"
+"""Batch summary JSON key for the list of per-worker reports."""
+
+SUMMARY_ROLE_NAME_KEY: str = "role_name"
+"""Per-worker report JSON key for the worker role name."""
+
+SUMMARY_RETURNCODE_KEY: str = "returncode"
+"""Per-worker report JSON key for the process exit code."""
+
+SUMMARY_CLASSIFICATION_KEY: str = "classification"
+"""Per-worker report JSON key for the runner classification string."""
+
+SUMMARY_IS_OK_KEY: str = "is_ok"
+"""Per-worker report JSON key for whether the worker completed successfully."""
+
+SUMMARY_REPORT_TEXT_KEY: str = "report_text"
+"""Per-worker report JSON key for the captured worker report text."""
+
+SUMMARY_OUTPUT_FILE_KEY: str = "output_file"
+"""Per-worker report JSON key for the report file path."""
+
+SUMMARY_LEADER_SOCKET_KEY: str = "leader_socket"
+"""Per-worker report JSON key for the leader socket path."""
+
+SUMMARY_PROMPT_FILE_KEY: str = "prompt_file"
+"""Per-worker report JSON key for the assembled prompt file path."""
+
+SUMMARY_TOOL_PROFILE_KEY: str = "tool_profile"
+"""Per-worker report JSON key for the tool profile used."""
