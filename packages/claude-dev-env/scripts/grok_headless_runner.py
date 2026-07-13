@@ -38,6 +38,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     CWD_FLAG,
     GROK_BINARY_NAME,
     GROK_MODEL_PIN,
+    KILL_GRACE_TIMEOUT_SECONDS,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
@@ -163,7 +164,12 @@ def _normalize_stream(stream_payload: str | None) -> str:
 
 def _timeout_outcome(process: subprocess.Popen[str]) -> GrokRunnerOutcome:
     process.kill()
-    captured_stdout, captured_stderr = process.communicate()
+    try:
+        captured_stdout, captured_stderr = process.communicate(
+            timeout=KILL_GRACE_TIMEOUT_SECONDS
+        )
+    except subprocess.TimeoutExpired:
+        captured_stdout, captured_stderr = "", ""
     stdout_text = _normalize_stream(captured_stdout)
     stderr_text = _normalize_stream(captured_stderr)
     returncode = (

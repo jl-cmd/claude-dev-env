@@ -1,7 +1,8 @@
-"""Named constants for the grok worker preflight soft gate.
+"""Named constants for the grok worker preflight soft gate and headless runner.
 
 Per the project's configuration conventions, every scalar and structural
-constant the preflight needs lives here rather than inline in the module.
+constant the preflight and the headless runner need lives here rather than
+inline in the modules.
 """
 
 from __future__ import annotations
@@ -117,7 +118,6 @@ ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
     "quota",
     "usage limit",
     "out of usage",
-    "quota exceeded",
     "usage exhausted",
 )
 """Case-insensitive substrings that mark a non-zero exit as a usage-limit failure."""
@@ -184,3 +184,6 @@ CLASSIFICATION_ERROR: str = "error"
 
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
+
+KILL_GRACE_TIMEOUT_SECONDS: int = 10
+"""Seconds to wait for a killed process to reap its pipes before giving up on its streams."""
