@@ -180,6 +180,54 @@ function runGrok({
   };
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function extractLastBalancedObject(text) {
+  const doubleQuote = '"';
+  const escapeCharacter = '\\';
+  let isInsideString = false;
+  let isNextCharacterEscaped = false;
+  let openBraceDepth = 0;
+  let objectStartIndex = -1;
+  let lastParsedObject = null;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (isInsideString) {
+      if (isNextCharacterEscaped) {
+        isNextCharacterEscaped = false;
+      } else if (character === escapeCharacter) {
+        isNextCharacterEscaped = true;
+      } else if (character === doubleQuote) {
+        isInsideString = false;
+      }
+      continue;
+    }
+    if (character === doubleQuote) {
+      isInsideString = true;
+    } else if (character === '{') {
+      if (openBraceDepth === 0) {
+        objectStartIndex = index;
+      }
+      openBraceDepth += 1;
+    } else if (character === '}' && openBraceDepth > 0) {
+      openBraceDepth -= 1;
+      if (openBraceDepth === 0) {
+        try {
+          const parsed = JSON.parse(text.slice(objectStartIndex, index + 1));
+          if (isPlainObject(parsed)) {
+            lastParsedObject = parsed;
+          }
+        } catch {
+          // not a JSON object; keep scanning for a later balanced candidate
+        }
+      }
+    }
+  }
+  return lastParsedObject;
+}
+
 export function tryParseJsonObject(text) {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -187,31 +235,13 @@ export function tryParseJsonObject(text) {
   }
   try {
     const parsed = JSON.parse(trimmed);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    if (isPlainObject(parsed)) {
       return parsed;
     }
   } catch {
-    // fall through to extraction
+    // fall through to balanced-object extraction
   }
-  const firstBrace = trimmed.indexOf('{');
-  if (firstBrace === -1) {
-    return null;
-  }
-  for (
-    let closingBrace = trimmed.lastIndexOf('}');
-    closingBrace > firstBrace;
-    closingBrace = trimmed.lastIndexOf('}', closingBrace - 1)
-  ) {
-    try {
-      const parsed = JSON.parse(trimmed.slice(firstBrace, closingBrace + 1));
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return parsed;
-      }
-    } catch {
-      // try the next-shorter closing-brace candidate
-    }
-  }
-  return null;
+  return extractLastBalancedObject(trimmed);
 }
 
 function extractStringField(parsedEnvelope, fieldName) {
