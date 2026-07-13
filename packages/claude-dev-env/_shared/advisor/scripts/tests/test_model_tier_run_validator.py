@@ -261,9 +261,9 @@ def test_cli_bind_fallthrough_to_opus_passes() -> None:
     assert validate_model_tier_run(run) is None
 
 
-def test_grok_own_tier_maps_to_fable_opus_cli_bind_passes() -> None:
+def test_third_party_own_tier_maps_to_fable_opus_cli_bind_passes() -> None:
     run = ModelTierRun(
-        own_tier="Grok",
+        own_tier="ThirdParty",
         candidate_tiers=["Fable", "Opus"],
         attempts=[{"tier": "Fable", "result": "cli"}],
         selected_tier="Fable",
@@ -271,9 +271,9 @@ def test_grok_own_tier_maps_to_fable_opus_cli_bind_passes() -> None:
     assert validate_model_tier_run(run) is None
 
 
-def test_grok_own_tier_lowercase_cli_bind_passes() -> None:
+def test_third_party_own_tier_lowercase_cli_bind_passes() -> None:
     run = ModelTierRun(
-        own_tier="grok",
+        own_tier="thirdparty",
         candidate_tiers=["fable", "opus"],
         attempts=[{"tier": "fable", "result": "cli"}],
         selected_tier="fable",
@@ -292,9 +292,9 @@ def test_self_token_is_not_bind_success_raises() -> None:
         validate_model_tier_run(run)
 
 
-def test_grok_self_token_is_not_bind_success_raises() -> None:
+def test_third_party_self_token_is_not_bind_success_raises() -> None:
     run = ModelTierRun(
-        own_tier="Grok",
+        own_tier="ThirdParty",
         candidate_tiers=["Fable", "Opus"],
         attempts=[{"tier": "Fable", "result": "self"}],
         selected_tier="Fable",
@@ -303,20 +303,20 @@ def test_grok_self_token_is_not_bind_success_raises() -> None:
         validate_model_tier_run(run)
 
 
-def test_grok_host_legacy_single_tier_self_bind_raises() -> None:
+def test_third_party_host_legacy_single_tier_self_bind_raises() -> None:
     run = ModelTierRun(
-        own_tier="Grok",
-        candidate_tiers=["Grok"],
-        attempts=[{"tier": "Grok", "result": "self"}],
-        selected_tier="Grok",
+        own_tier="ThirdParty",
+        candidate_tiers=["ThirdParty"],
+        attempts=[{"tier": "ThirdParty", "result": "self"}],
+        selected_tier="ThirdParty",
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
 
 
-def test_grok_cli_exhausted_fail_closed_passes() -> None:
+def test_third_party_cli_exhausted_fail_closed_passes() -> None:
     run = ModelTierRun(
-        own_tier="Grok",
+        own_tier="ThirdParty",
         candidate_tiers=["Fable", "Opus"],
         attempts=[
             {"tier": "Fable", "result": "unavailable"},
@@ -324,15 +324,15 @@ def test_grok_cli_exhausted_fail_closed_passes() -> None:
         ],
         selected_tier=None,
         fallback_reason=(
-            "Grok host CLI Claude-chain exhausted; fail closed"
+            "third-party host CLI Claude-chain exhausted; fail closed"
         ),
     )
     assert validate_model_tier_run(run) is None
 
 
-def test_grok_cli_exhausted_without_fallback_reason_raises() -> None:
+def test_third_party_cli_exhausted_without_fallback_reason_raises() -> None:
     run = ModelTierRun(
-        own_tier="Grok",
+        own_tier="ThirdParty",
         candidate_tiers=["Fable", "Opus"],
         attempts=[
             {"tier": "Fable", "result": "unavailable"},
@@ -344,9 +344,9 @@ def test_grok_cli_exhausted_without_fallback_reason_raises() -> None:
         validate_model_tier_run(run)
 
 
-def test_grok_cli_selected_tier_mismatch_raises() -> None:
+def test_third_party_cli_selected_tier_mismatch_raises() -> None:
     run = ModelTierRun(
-        own_tier="Grok",
+        own_tier="ThirdParty",
         candidate_tiers=["Fable", "Opus"],
         attempts=[{"tier": "Fable", "result": "cli"}],
         selected_tier="Opus",

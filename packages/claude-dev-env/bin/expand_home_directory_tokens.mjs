@@ -1,7 +1,7 @@
 /**
  * Install-time expansion of $HOME / ${HOME} / ~/ in settings.json commands.
  *
- * Hosts that require referenced env vars at hook load time (for example Grok)
+ * Hosts that require referenced env vars at hook load time (for example a third-party host)
  * skip the hook when HOME is unset — common on Windows — so the installer
  * rewrites residual tokens to absolute home paths.
  */

@@ -4,16 +4,16 @@
 
     resolve_cli_model_id("Opus")   # ok: "opus"
     resolve_cli_model_id("fable")  # ok: "fable" (any letter case)
-    resolve_cli_model_id("Grok")   # ok: "grok" (Grok host single tier)
+    resolve_cli_model_id("ThirdParty")  # ok: "third-party" (third-party host tier)
     resolve_cli_model_id(" Opus ") # ok: "opus" (leading/trailing whitespace)
     resolve_cli_model_id("Titan")  # flag: ValueError
 
-    detect_host_profile(setting_by_name={"GROK_BUILD": "1"})  # ok: "Grok"
+    detect_host_profile(setting_by_name={"THIRD_PARTY": "1"})  # ok: "ThirdParty"
     detect_host_profile(
         setting_by_name={"ADVISOR_HOST_PROFILE": "Claude"}
     )  # ok: "Claude"
 
-Values are stable short aliases (``opus``, ``sonnet``, ``grok``), not dated
+Values are stable short aliases (``opus``, ``sonnet``, ``third-party``), not dated
 full model IDs such as ``claude-opus-4-…``. The map lives in
 ``advisor_scripts_constants`` so protocol text, skills, and tests share one
 source of truth for the aliases the Agent tool ``model:`` field and CLI
@@ -35,13 +35,13 @@ if _config_directory not in sys.path:
 
 from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
     ALL_CLI_MODEL_ID_BY_TIER,
-    ALL_GROK_BUILD_TRUTHY_VALUES,
     ALL_HOST_PROFILES,
     ALL_KNOWN_TIER_NAMES,
-    GROK_BUILD_ENV_VAR,
+    ALL_THIRD_PARTY_TRUTHY_VALUES,
     HOST_PROFILE_CLAUDE,
     HOST_PROFILE_ENV_VAR,
-    HOST_PROFILE_GROK,
+    HOST_PROFILE_THIRD_PARTY,
+    THIRD_PARTY_ENV_VAR,
     UNKNOWN_HOST_PROFILE_ERROR,
     UNKNOWN_LADDER_NAME_ERROR,
 )
@@ -53,13 +53,13 @@ def canonical_tier_name(tier_name: str) -> str | None:
     ::
 
         canonical_tier_name("opus")   # ok: "Opus"
-        canonical_tier_name("grok")   # ok: "Grok"
+        canonical_tier_name("thirdparty")  # ok: "ThirdParty"
         canonical_tier_name(" Opus ") # ok: "Opus"
         canonical_tier_name("")       # ok: None
         canonical_tier_name("Titan")  # ok: None
 
     Strips leading and trailing whitespace, then matches any letter case
-    against ``ALL_KNOWN_TIER_NAMES`` (Claude ladder plus the Grok host tier).
+    against ``ALL_KNOWN_TIER_NAMES`` (Claude ladder plus the third-party host tier).
 
     Args:
         tier_name: Raw tier text from a spawn log, protocol walk, or caller.
@@ -83,7 +83,7 @@ def resolve_cli_model_id(tier: str) -> str:
 
         resolve_cli_model_id("Sonnet")  # ok: "sonnet"
         resolve_cli_model_id("HAIKU")   # ok: "haiku"
-        resolve_cli_model_id("Grok")    # ok: "grok"
+        resolve_cli_model_id("ThirdParty")  # ok: "third-party"
         resolve_cli_model_id(" Opus ")  # ok: "opus"
         resolve_cli_model_id("Titan")   # flag: ValueError
 
@@ -93,7 +93,7 @@ def resolve_cli_model_id(tier: str) -> str:
 
     Args:
         tier: Ladder tier name (``Fable``, ``Opus``, ``Sonnet``, ``Haiku``,
-            or ``Grok``).
+            or ``ThirdParty``).
 
     Returns:
         The short model alias for that tier (for example ``"opus"``).
@@ -118,9 +118,9 @@ def detect_host_profile(
 
     ::
 
-        detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "Grok"})
-        # ok: "Grok"
-        detect_host_profile(setting_by_name={"GROK_BUILD": "1"})  # ok: "Grok"
+        detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "ThirdParty"})
+        # ok: "ThirdParty"
+        detect_host_profile(setting_by_name={"THIRD_PARTY": "1"})  # ok: "ThirdParty"
         detect_host_profile(setting_by_name={})                   # ok: "Claude"
         detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "X"})
         # flag: ValueError
@@ -128,14 +128,14 @@ def detect_host_profile(
     Order:
 
     1. ``ADVISOR_HOST_PROFILE`` when set (must be a known profile name).
-    2. ``GROK_BUILD`` when truthy (``1``, ``true``, ``yes``, ``on``).
+    2. ``THIRD_PARTY`` when truthy (``1``, ``true``, ``yes``, ``on``).
     3. Default ``Claude``.
 
     Args:
         setting_by_name: Env name → setting text (defaults to ``os.environ``).
 
     Returns:
-        ``HOST_PROFILE_GROK`` or ``HOST_PROFILE_CLAUDE``.
+        ``HOST_PROFILE_THIRD_PARTY`` or ``HOST_PROFILE_CLAUDE``.
 
     Raises:
         ValueError: When ``ADVISOR_HOST_PROFILE`` is set to an unknown name.
@@ -157,8 +157,8 @@ def detect_host_profile(
             raise ValueError(UNKNOWN_HOST_PROFILE_ERROR.format(explicit_host_profile))
         return maybe_canonical_host
     raw_harness_marker = resolved_setting_by_name.get(
-        GROK_BUILD_ENV_VAR, ""
+        THIRD_PARTY_ENV_VAR, ""
     ).strip().lower()
-    if raw_harness_marker in ALL_GROK_BUILD_TRUTHY_VALUES:
-        return HOST_PROFILE_GROK
+    if raw_harness_marker in ALL_THIRD_PARTY_TRUTHY_VALUES:
+        return HOST_PROFILE_THIRD_PARTY
     return HOST_PROFILE_CLAUDE
