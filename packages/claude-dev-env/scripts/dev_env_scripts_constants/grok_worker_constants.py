@@ -182,8 +182,5 @@ CLASSIFICATION_TIMEOUT: str = "timeout"
 CLASSIFICATION_ERROR: str = "error"
 """Outcome classification for a non-zero exit that matches no known signature."""
 
-DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
-"""Default timeout applied to one headless worker invocation, in seconds."""
-
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""

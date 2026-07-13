@@ -47,6 +47,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     OUTPUT_FORMAT_JSON,
     PROMPT_FILE_FLAG,
     TIMEOUT_RETURN_CODE,
+    UTF8_DECODE_ERRORS,
     UTF8_ENCODING,
 )
 
@@ -110,9 +111,8 @@ def _combined_text(stdout_text: str, stderr_text: str) -> str:
 
 
 def _matches_any_signature(
-    stdout_text: str, stderr_text: str, all_signatures: tuple[str, ...]
+    combined_text: str, all_signatures: tuple[str, ...]
 ) -> bool:
-    combined_text = _combined_text(stdout_text, stderr_text)
     return any(
         each_signature in combined_text for each_signature in all_signatures
     )
@@ -129,9 +129,8 @@ def _classify_completion(
             stdout=stdout_text,
             stderr=stderr_text,
         )
-    if _matches_any_signature(
-        stdout_text, stderr_text, ALL_USAGE_LIMIT_SIGNATURES
-    ):
+    combined_text = _combined_text(stdout_text, stderr_text)
+    if _matches_any_signature(combined_text, ALL_USAGE_LIMIT_SIGNATURES):
         return GrokRunnerOutcome(
             is_ok=False,
             returncode=returncode,
@@ -139,9 +138,7 @@ def _classify_completion(
             stdout=stdout_text,
             stderr=stderr_text,
         )
-    if _matches_any_signature(
-        stdout_text, stderr_text, ALL_AUTH_FAILURE_SIGNATURES
-    ):
+    if _matches_any_signature(combined_text, ALL_AUTH_FAILURE_SIGNATURES):
         return GrokRunnerOutcome(
             is_ok=False,
             returncode=returncode,
@@ -158,11 +155,9 @@ def _classify_completion(
     )
 
 
-def _normalize_stream(stream_payload: str | bytes | None) -> str:
+def _normalize_stream(stream_payload: str | None) -> str:
     if stream_payload is None:
         return ""
-    if isinstance(stream_payload, bytes):
-        return stream_payload.decode(UTF8_ENCODING, errors="replace")
     return stream_payload
 
 
@@ -195,6 +190,7 @@ def _invoke_process(
             stderr=subprocess.PIPE,
             text=True,
             encoding=UTF8_ENCODING,
+            errors=UTF8_DECODE_ERRORS,
         )
     except FileNotFoundError:
         return GrokRunnerOutcome(
