@@ -66,13 +66,17 @@ def test_skill_composes_opt_out_and_fix_protocol_by_name() -> None:
     assert "reviewer-gates" in skill_text
 
 
-def test_skill_documents_non_zero_one_gate_exit_path() -> None:
+def test_skill_documents_gate_exit_contract() -> None:
     skill_text = _read_skill_text()
 
     assert "--reviewer codex" in skill_text
+    assert "Exit 0" in skill_text
+    assert "Exit 1" in skill_text
     assert "Any other exit" in skill_text
-    assert "parse failure" in skill_text
     assert "blocker" in skill_text
+    assert "CLAUDE_REVIEWS_DISABLED=codex" in skill_text
+    assert "not among them" not in skill_text
+    assert "codex is not among" not in skill_text
 
 
 def test_skill_documents_flow_skeleton() -> None:

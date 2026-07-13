@@ -23,7 +23,7 @@ Respond with the quoted line exactly and stop:
 - Version or shape probe reports Codex unavailable: `/codex-review cannot run: Codex CLI is missing or the shape probe failed.`
 - Classification is `down`: `/codex-review cannot complete: Codex reviewer is down.`
 
-Gate exits other than 0 or 1 (including the shared gate rejecting `--reviewer codex`) are blockers: stop without a probe or review invoke. Do not invent an opt-out refusal for a parse failure.
+Gate exits other than 0 or 1 are blockers: stop without a probe or review invoke. Do not invent an opt-out refusal for a non-opt-out failure.
 
 ## Sub-skills
 
@@ -55,7 +55,7 @@ python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer co
 
 - **Exit 0** — Codex reviews are disabled: refuse with the opt-out line above. Do not probe, review, or fix.
 - **Exit 1** — continue.
-- **Any other exit** — the shared gate rejects the `--reviewer` argument. Known tokens are `bugbot`, `bugteam`, and `copilot`; `codex` is not among them, so this invocation exits with a parse failure (exit 2). Treat that parse failure as a blocker and stop; do not skip the gate or continue as if it exited 1. Do not report the opt-out refusal line for a parse failure.
+- **Any other exit** — treat as a blocker and stop; do not skip the gate or continue as if it exited 1. Do not report the opt-out refusal line for a non-opt-out failure.
 
 Gate semantics live in `reviewer-gates` ([../reviewer-gates/SKILL.md](../reviewer-gates/SKILL.md)). The shared script owns the token parse; this skill does not re-parse `CLAUDE_REVIEWS_DISABLED`.
 
@@ -84,7 +84,7 @@ Run Codex against the chosen target on the classifying path only.
 - **Classifying command:** `codex exec [options] review --json …` — this is the only path that emits the success JSONL stream Step 4 reads. Full surface: [reference/cli-contract.md](reference/cli-contract.md).
 - **Non-classifying form:** plain `codex review` (no `exec`, no `--json`) is not a classification input on the observed CLI; do not feed its stdout into Step 4.
 - **`scripts/` surface:** this package's `scripts/` directory holds named constants only. The headless wrapper entrypoint is sister work and is not present here.
-- **Interim classify path:** agents classify only from the `codex exec … review --json` JSONL stream via the skill-class map in Step 4. Do not invent a non-JSONL parse. Fail closed on probe miss, non-usable stream, or `codex_down` — the same honesty as the gate parse-failure path.
+- **Interim classify path:** agents classify only from the `codex exec … review --json` JSONL stream via the skill-class map in Step 4. Do not invent a non-JSONL parse. Fail closed on probe miss, non-usable stream, or `codex_down`.
 
 ### Step 4: Classify outcome
 
@@ -120,7 +120,7 @@ This skill does not restate the fix sequence. Orchestrator callers that re-enter
 
 - **One capability:** run Codex review and classify; fixes go through `pr-fix-protocol`.
 - **Compose, do not rebuild:** opt-out via `reviews_disabled.py`; fixes via `pr-fix-protocol`.
-- **Fail closed** on opt-out, gate parse failure, probe failure, and `down`.
+- **Fail closed** on opt-out, non-0/1 gate exit, probe failure, and `down`.
 - **Preserve draft state** of any open PR; this skill does not flip ready.
 - **Honor hooks** on any commit the fix protocol creates.
 
@@ -132,13 +132,18 @@ Claude: [runs opt-out gate; on exit 1 probes Codex shape, picks base-branch or `
 </example>
 
 <example>
+`CLAUDE_REVIEWS_DISABLED=codex`
+Claude: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
+</example>
+
+<example>
 User: "babysit codex review on this PR"
 Claude: [same flow; after findings, applies pr-fix-protocol, then re-runs the classifying review once for confirmation when the caller stays on this skill]
 </example>
 
 ## Gotchas
 
-- **`--reviewer codex` is the token this skill passes.** The shared gate's known tokens are `bugbot`, `bugteam`, and `copilot`. Step 0 therefore exits with a parse failure (not 0 or 1). Treat that as a blocker and stop rather than skipping the gate. Opt-out exit 0 and the opt-out refusal line apply only when the gate accepts the token and the env list disables it.
+- **Opt-out uses `CLAUDE_REVIEWS_DISABLED=codex`.** Step 0 exit 0 means refuse with the opt-out line; exit 1 means continue; any other exit is a blocker.
 - **Only `codex exec … review --json` JSONL is classifiable.** Plain `codex review` stdout is non-classifying. Only a Step 4 `findings` class enters Step 5.
 - **`scripts/` holds constants only.** The headless wrapper entrypoint is sister work; agents do not invent a non-JSONL parse in this package.
 - **Uncommitted targets have no review threads.** Fix protocol reply-and-resolve applies only when a PR carries threads; local-only runs stop after the fix commit path the protocol allows without a PR.

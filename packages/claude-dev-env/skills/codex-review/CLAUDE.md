@@ -30,9 +30,9 @@ Step 0 runs `reviews_disabled.py --reviewer codex` before any probe or review in
 |---|---|
 | 0 | Opt-out active — refuse with the opt-out line in `SKILL.md` and stop |
 | 1 | Continue the flow |
-| Any other | Shared gate rejects the `--reviewer` argument (known tokens are `bugbot`, `bugteam`, `copilot`) — treat as a blocker and stop |
+| Any other | Blocker — stop; do not invent an opt-out refusal |
 
-The shared gate does not accept `codex` as a `--reviewer` value, so Step 0 exits with a parse failure rather than the opt-out or continue path. Sister work owns token registration; this package does not re-parse `CLAUDE_REVIEWS_DISABLED`.
+Set `CLAUDE_REVIEWS_DISABLED=codex` to disable. This package does not re-parse `CLAUDE_REVIEWS_DISABLED`; the shared gate owns the token parse.
 
 ## Scripts surface
 
