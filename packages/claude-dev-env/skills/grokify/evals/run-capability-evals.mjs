@@ -33,6 +33,7 @@ const GROK_SPAWN_TIMEOUT_MS = 600000;
 const SPAWN_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 const WORKFLOW_RESULT_NO_TOOL = 'no_tool';
 const SPAWN_TIMEOUT_ERROR_CODE = 'ETIMEDOUT';
+const ENVELOPE_TEXT_FIELDS_BY_PRIORITY = ['result', 'text', 'message'];
 
 const E1_PROMPT = `You are running a capability inventory. Do not edit files.
 
@@ -295,17 +296,11 @@ export function extractResultText(stdout) {
       }
     }
     if (parsed && typeof parsed === 'object') {
-      const maybeResult = extractStringField(parsed, 'result');
-      if (maybeResult !== null) {
-        return maybeResult;
-      }
-      const maybeText = extractStringField(parsed, 'text');
-      if (maybeText !== null) {
-        return maybeText;
-      }
-      const maybeMessage = extractStringField(parsed, 'message');
-      if (maybeMessage !== null) {
-        return maybeMessage;
+      for (const fieldName of ENVELOPE_TEXT_FIELDS_BY_PRIORITY) {
+        const fieldValue = extractStringField(parsed, fieldName);
+        if (fieldValue !== null) {
+          return fieldValue;
+        }
       }
     }
   } catch {

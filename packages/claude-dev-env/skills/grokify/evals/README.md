@@ -9,6 +9,7 @@ Live measurements of Grok Build capabilities used by the `grokify` skill wording
 - `grok` on `PATH` and authenticated (`grok models` exits 0)
 - Network access for the Grok API
 - A writable platform temp directory (`$env:TEMP` on Windows, `$TMPDIR` / `/tmp` elsewhere)
+- For E3, an agent `grok` can load under `--agent`. The runner passes the agent named by `GROK_CAPABILITY_EVAL_AGENT` (default `Explore`); set that variable to an agent your `grok` resolves when the default does not exist for you.
 
 ## Run
 
