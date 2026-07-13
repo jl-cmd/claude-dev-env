@@ -1,7 +1,8 @@
 """Behavioral tests for the gate's empty-file-set loudness and inspected-count report.
 
 Covers the three acceptance criteria of the loud-empty change:
-- A run whose resolved file set is empty exits clean and says so.
+- A run whose resolved file set is empty exits non-zero and says so; a set
+  emptied only by the ``--only-under`` scope exits clean with the loud count.
 - A run over new, untracked modules inspects them.
 - Every run reports how many files it inspected.
 """
@@ -95,26 +96,48 @@ def temporary_git_repository(tmp_path: Path) -> Path:
     return repository_root
 
 
-def test_diff_mode_with_empty_file_set_exits_clean_and_says_so(
+def test_diff_mode_with_empty_file_set_exits_non_zero_and_says_so(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """HEAD == base and nothing untracked: a no-op run exits 0 yet still reports loudly.
+    """HEAD == base and nothing untracked: the gate refuses to vouch for nothing.
 
-    An empty resolved file set is a clean no-op, not a blocking failure: the
-    gate loop runs until exit 0, so a branch with no diff from base must reach
-    it. The loud stderr report stays so an operator still sees that zero files
-    were inspected.
+    A diff that resolves zero candidate files means the gate inspected
+    nothing — a bad merge base or a wrong directory looks exactly like this.
+    Issue #62's contract: that run exits non-zero and says so, because a
+    silent pass over zero files is trusted like a real pass.
     """
     monkeypatch.chdir(temporary_git_repository)
 
     exit_code = gate_module.main(["--base", "HEAD"])
 
     captured = capsys.readouterr()
-    assert exit_code == 0
+    assert exit_code != 0
     assert "inspected 0 file(s)" in captured.err
     assert "empty" in captured.err.lower()
+
+
+def test_diff_mode_changes_outside_only_under_prefixes_exit_clean_and_report(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Changes exist but none under the given prefixes: a scoped no-op exits 0.
+
+    The candidate set is non-empty, so the gate's wiring is proven live; the
+    ``--only-under`` scope legitimately excludes every candidate. That run
+    reports the zero count loudly and exits clean, so scoped gate loops keep
+    converging on branches whose changes sit outside the scoped tree.
+    """
+    (temporary_git_repository / "notes.txt").write_text("note\n", encoding="utf-8")
+    monkeypatch.chdir(temporary_git_repository)
+
+    exit_code = gate_module.main(["--base", "HEAD", "--only-under", "src"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "inspected 0 file(s)" in captured.err
 
 
 def test_diff_mode_inspects_untracked_module_and_reports_count(

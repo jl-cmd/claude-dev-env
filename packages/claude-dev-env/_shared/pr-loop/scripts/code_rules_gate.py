@@ -235,12 +235,13 @@ def _deduplicate_paths(all_paths: list[Path]) -> list[Path]:
 
 
 def _report_empty_file_set() -> int:
-    """Report an empty resolved file set loudly and return the empty-set code.
+    """Report an empty resolved file set loudly and exit non-zero.
 
-    An empty resolved file set is a clean no-op, not a blocking failure: the
-    gate loop runs until exit 0, so a branch with no diff from base reaches it.
-    The loud stderr report stays so an operator still sees that zero files were
-    inspected.
+    Zero candidate files means the gate inspected nothing, and a bad merge
+    base or a wrong directory produces exactly this state. A quiet pass here
+    would be trusted like a real pass (issue #62), so the run refuses with
+    its own exit code, distinct from the violation and error codes. A set
+    emptied only by the ``--only-under`` scope never reaches this reporter.
     """
     sys.stderr.write(EMPTY_FILE_SET_MESSAGE + "\n")
     sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
@@ -292,17 +293,24 @@ def _run_diff_mode(
     arguments: argparse.Namespace,
     repository_root: Path,
 ) -> int:
-    """Validate the merge-base diff joined with the untracked files."""
+    """Validate the merge-base diff joined with the untracked files.
+
+    Zero candidates means nothing was inspected (bad wiring looks the same),
+    so that run refuses loudly. A set emptied only by the ``--only-under``
+    scope flows through ``run_gate`` over zero files and exits clean.
+    """
     all_candidate_paths = _deduplicate_paths(
         paths_from_git_diff(repository_root, arguments.base)
         + paths_from_git_untracked(repository_root)
     )
+    if not all_candidate_paths:
+        return _report_empty_file_set()
     file_paths = filter_paths_under_prefixes(
         all_candidate_paths, repository_root, arguments.only_under
     )
-    if not file_paths:
-        return _report_empty_file_set()
-    scoped_added_lines = added_lines_by_file(repository_root, arguments.base, file_paths)
+    scoped_added_lines = (
+        added_lines_by_file(repository_root, arguments.base, file_paths) if file_paths else {}
+    )
     return run_gate(
         validate_content,
         file_paths,
