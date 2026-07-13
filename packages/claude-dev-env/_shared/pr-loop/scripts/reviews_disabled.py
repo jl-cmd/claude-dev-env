@@ -7,10 +7,11 @@
     enabled lists bugbot, disabled bugbot   -> bugbot   flag: off (opt-out wins)
     disabled empty                          -> bugteam  ok:   runs
     disabled lists copilot                  -> copilot  flag: off
+    disabled lists codex                    -> codex    flag: off
 
 Bugbot is off by default and runs only when the enabled list names it.
-Bugteam and copilot run by default and stop only when the disabled list
-names them; both lists parse case-insensitively and tolerate whitespace.
+Bugteam, copilot, and codex run by default and stop only when the disabled
+list names them; both lists parse case-insensitively and tolerate whitespace.
 """
 
 from __future__ import annotations
