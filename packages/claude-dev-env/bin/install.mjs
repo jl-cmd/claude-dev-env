@@ -535,7 +535,7 @@ function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePath
  * a new matcher group does not double-run. User-authored hooks are preserved as
  * entries, but residual $HOME / ${HOME} / ~/ tokens in every hook and statusLine
  * command are expanded to absolute home paths so hosts that require referenced
- * env vars at load time (Grok on Windows) can execute them.
+ * env vars at load time (a third-party host on Windows) can execute them.
  *
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.

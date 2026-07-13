@@ -37,9 +37,9 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     ALL_CLI_MODEL_ID_BY_TIER,
     ALL_KNOWN_TIER_NAMES,
     ALL_MODEL_TIERS,
-    GROK_MODEL_TIER,
     HOST_PROFILE_CLAUDE,
-    HOST_PROFILE_GROK,
+    HOST_PROFILE_THIRD_PARTY,
+    THIRD_PARTY_MODEL_TIER,
 )
 
 SCRIPTS_ROOT = Path(__file__).parent.parent
@@ -56,13 +56,13 @@ DOCUMENTED_RESOLVE_ONE_LINER = (
         ("Opus", "opus"),
         ("Sonnet", "sonnet"),
         ("Haiku", "haiku"),
-        ("Grok", "grok"),
+        ("ThirdParty", "third-party"),
         ("fable", "fable"),
         ("OPUS", "opus"),
         ("sonnet", "sonnet"),
         ("hAiKu", "haiku"),
-        ("grok", "grok"),
-        (" GROK ", "grok"),
+        ("thirdparty", "third-party"),
+        (" THIRDPARTY ", "third-party"),
         (" Opus ", "opus"),
         ("\thaiku\n", "haiku"),
     ],
@@ -97,8 +97,8 @@ def test_sendmessage_reply_wait_is_positive_bound() -> None:
 def test_cli_model_alias_map_keys_match_known_tiers() -> None:
     assert set(ALL_CLI_MODEL_ID_BY_TIER) == set(ALL_KNOWN_TIER_NAMES)
     assert set(ALL_MODEL_TIERS).issubset(set(ALL_KNOWN_TIER_NAMES))
-    assert GROK_MODEL_TIER in ALL_KNOWN_TIER_NAMES
-    assert GROK_MODEL_TIER not in ALL_MODEL_TIERS
+    assert THIRD_PARTY_MODEL_TIER in ALL_KNOWN_TIER_NAMES
+    assert THIRD_PARTY_MODEL_TIER not in ALL_MODEL_TIERS
     assert all(
         ALL_CLI_MODEL_ID_BY_TIER[each_tier] for each_tier in ALL_KNOWN_TIER_NAMES
     )
@@ -106,7 +106,7 @@ def test_cli_model_alias_map_keys_match_known_tiers() -> None:
 
 def test_canonical_tier_name_strips_and_normalizes() -> None:
     assert canonical_tier_name(" opus ") == "Opus"
-    assert canonical_tier_name("grok") == "Grok"
+    assert canonical_tier_name("thirdparty") == "ThirdParty"
     assert canonical_tier_name("") is None
     assert canonical_tier_name("Titan") is None
 
@@ -119,30 +119,30 @@ def test_detect_host_profile_defaults_to_claude() -> None:
     "truthy_value",
     ["1", "true", "TRUE", "yes", "YES", "on", "On"],
 )
-def test_detect_host_profile_reads_grok_build_truthy_values(
+def test_detect_host_profile_reads_third_party_truthy_values(
     truthy_value: str,
 ) -> None:
     assert (
-        detect_host_profile(setting_by_name={"GROK_BUILD": truthy_value})
-        == HOST_PROFILE_GROK
+        detect_host_profile(setting_by_name={"THIRD_PARTY": truthy_value})
+        == HOST_PROFILE_THIRD_PARTY
     )
 
 
-def test_detect_host_profile_reads_grok_build_flag() -> None:
+def test_detect_host_profile_reads_third_party_flag() -> None:
     assert (
-        detect_host_profile(setting_by_name={"GROK_BUILD": "0"})
+        detect_host_profile(setting_by_name={"THIRD_PARTY": "0"})
         == HOST_PROFILE_CLAUDE
     )
     assert (
-        detect_host_profile(setting_by_name={"GROK_BUILD": "false"})
+        detect_host_profile(setting_by_name={"THIRD_PARTY": "false"})
         == HOST_PROFILE_CLAUDE
     )
 
 
 def test_detect_host_profile_reads_explicit_override() -> None:
     assert (
-        detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "Grok"})
-        == HOST_PROFILE_GROK
+        detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "ThirdParty"})
+        == HOST_PROFILE_THIRD_PARTY
     )
     assert (
         detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "claude"})
@@ -150,7 +150,7 @@ def test_detect_host_profile_reads_explicit_override() -> None:
     )
     assert (
         detect_host_profile(
-            setting_by_name={"ADVISOR_HOST_PROFILE": "Claude", "GROK_BUILD": "1"}
+            setting_by_name={"ADVISOR_HOST_PROFILE": "Claude", "THIRD_PARTY": "1"}
         )
         == HOST_PROFILE_CLAUDE
     )

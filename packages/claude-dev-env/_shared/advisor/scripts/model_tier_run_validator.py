@@ -23,7 +23,7 @@ from data, not inferred from a transcript.
         attempts=[{"tier": "Fable", "result": "cli"}],
         selected_tier="Fable",
     )
-    validate_model_tier_run(cli_bind)  # ok: Grok-host CLI Claude-chain bind
+    validate_model_tier_run(cli_bind)  # ok: third-party-host CLI Claude-chain bind
 
 A run whose selected_tier is not the first successful bind fails.
 On any broken invariant, validate_model_tier_run raises ModelTierRunError.
@@ -58,14 +58,14 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     CLI_SUCCESS_EXIT_CODE,
     CLI_USAGE_MESSAGE,
     CLI_VALIDATION_FAILURE_EXIT_CODE,
-    GROK_CLI_ADVISOR_FLOOR_TIER,
-    GROK_MODEL_TIER,
     INCOMPLETE_FALLBACK_WALK_MESSAGE,
     MISSING_FALLBACK_REASON_MESSAGE,
     SELECTED_TIER_MISMATCH_MESSAGE,
     SELECTED_TIER_NOT_NULL_MESSAGE,
     SPAWN_OUTCOME_KEY,
     SPAWN_SUCCESS_TOKEN,
+    THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER,
+    THIRD_PARTY_MODEL_TIER,
     TIER_KEY,
     UNKNOWN_OWN_TIER_MESSAGE,
 )
@@ -99,8 +99,8 @@ def _expected_candidate_tiers(own_tier: str) -> list[str]:
     maybe_canonical_own_tier = canonical_tier_name(own_tier)
     if maybe_canonical_own_tier is None:
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
-    if maybe_canonical_own_tier == GROK_MODEL_TIER:
-        floor_index = ALL_MODEL_TIERS.index(GROK_CLI_ADVISOR_FLOOR_TIER)
+    if maybe_canonical_own_tier == THIRD_PARTY_MODEL_TIER:
+        floor_index = ALL_MODEL_TIERS.index(THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER)
         return list(ALL_MODEL_TIERS[: floor_index + 1])
     floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
     return list(ALL_MODEL_TIERS[: floor_index + 1])
@@ -110,7 +110,7 @@ def _is_successful_attempt_outcome(
     canonical_tier: str,
     outcome_token: str,
 ) -> bool:
-    if canonical_tier == GROK_MODEL_TIER:
+    if canonical_tier == THIRD_PARTY_MODEL_TIER:
         return False
     if outcome_token == SPAWN_SUCCESS_TOKEN:
         return True
@@ -128,11 +128,12 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
         validate_model_tier_run(cli_bind)     # ok: CLI Claude-chain bind
         validate_model_tier_run(broken_log)   # flag: ModelTierRunError
 
-    Candidate tiers must match the floor slice. ``own_tier=Grok`` maps to the
-    Grok-host CLI advisor floor (Fable → Opus). Tries walk that slice in order;
+    Candidate tiers must match the floor slice. ``own_tier=ThirdParty`` maps to
+    the third-party-host CLI advisor floor (Fable → Opus). Tries walk that
+    slice in order;
     early stop only after ``spawned`` or ``cli``. A null selected_tier requires
-    a full walk plus fallback_reason (fail-closed on Grok when the chain
-    cannot serve).
+    a full walk plus fallback_reason (fail-closed on a third-party host when
+    the chain cannot serve).
 
     Args:
         run: The structured spawn-walk log to check.

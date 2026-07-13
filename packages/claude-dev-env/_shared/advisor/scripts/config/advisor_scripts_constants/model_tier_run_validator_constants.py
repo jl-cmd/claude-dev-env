@@ -13,25 +13,28 @@ that mark a bind.
     flag: any other result token counts as no bind
 
 The alias map turns each tier into its short CLI / Agent name (``opus``,
-``grok``), never a dated full model ID.
+``third-party``), never a dated full model ID.
 
 Host-profile detection (see ``detect_host_profile``):
 
-- ``ADVISOR_HOST_PROFILE=Grok`` or ``=Claude`` — explicit override
-- ``GROK_BUILD=1`` (or ``true`` / ``yes``) — Grok Build / xAI harness
+- ``ADVISOR_HOST_PROFILE=ThirdParty`` or ``=Claude`` — explicit override
+- ``THIRD_PARTY=1`` (or ``true`` / ``yes``) — a third-party (non-Claude) harness
 - default when neither is set: Claude
 """
 
 from __future__ import annotations
 
 HOST_PROFILE_CLAUDE: str = "Claude"
-HOST_PROFILE_GROK: str = "Grok"
-ALL_HOST_PROFILES: tuple[str, ...] = (HOST_PROFILE_CLAUDE, HOST_PROFILE_GROK)
+HOST_PROFILE_THIRD_PARTY: str = "ThirdParty"
+ALL_HOST_PROFILES: tuple[str, ...] = (
+    HOST_PROFILE_CLAUDE,
+    HOST_PROFILE_THIRD_PARTY,
+)
 
 ALL_MODEL_TIERS: tuple[str, ...] = ("Fable", "Opus", "Sonnet", "Haiku")
-GROK_MODEL_TIER: str = "Grok"
-ALL_KNOWN_TIER_NAMES: tuple[str, ...] = (*ALL_MODEL_TIERS, GROK_MODEL_TIER)
-GROK_CLI_ADVISOR_FLOOR_TIER: str = "Opus"
+THIRD_PARTY_MODEL_TIER: str = "ThirdParty"
+ALL_KNOWN_TIER_NAMES: tuple[str, ...] = (*ALL_MODEL_TIERS, THIRD_PARTY_MODEL_TIER)
+THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER: str = "Opus"
 
 ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS: int = 120
 
@@ -40,12 +43,12 @@ ALL_CLI_MODEL_ID_BY_TIER: dict[str, str] = {
     "Opus": "opus",
     "Sonnet": "sonnet",
     "Haiku": "haiku",
-    GROK_MODEL_TIER: "grok",
+    THIRD_PARTY_MODEL_TIER: "third-party",
 }
 
 HOST_PROFILE_ENV_VAR: str = "ADVISOR_HOST_PROFILE"
-GROK_BUILD_ENV_VAR: str = "GROK_BUILD"
-ALL_GROK_BUILD_TRUTHY_VALUES: frozenset[str] = frozenset(
+THIRD_PARTY_ENV_VAR: str = "THIRD_PARTY"
+ALL_THIRD_PARTY_TRUTHY_VALUES: frozenset[str] = frozenset(
     {"1", "true", "yes", "on"}
 )
 
