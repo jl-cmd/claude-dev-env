@@ -2,8 +2,12 @@
 
 ::
 
-    check_all(all gates passing)       -> exit 0, "All pre-conditions met ..."
-    check_all(one gate failing)        -> exit 1, "One or more ... do not mark ready."
+    check_all(all gates passing,
+        is_bugteam_post_blocked=False,
+    )       -> exit 0, "All pre-conditions met ..."
+    check_all(one gate failing,
+        is_bugteam_post_blocked=False,
+    )        -> exit 1, "One or more ... do not mark ready."
     _get_pr_head_sha raises SystemExit -> exit 2 propagates
     parse_arguments([... --bugteam-post-blocked]) -> bugteam_post_blocked True
 
@@ -122,7 +126,7 @@ def test_all_pass_stdout_and_exit_code_match_the_pinned_contract(
     _patch_gates_clean(monkeypatch)
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
-    )
+    , is_bugteam_post_blocked=False)
     assert capsys.readouterr().out == EXPECTED_ALL_PASS_STDOUT
     assert exit_code == 0
 
@@ -133,7 +137,7 @@ def test_bugbot_down_bypass_line_matches_the_pinned_contract(
     _patch_gates_clean(monkeypatch)
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=True, is_copilot_down=False
-    )
+    , is_bugteam_post_blocked=False)
     assert capsys.readouterr().out == EXPECTED_BUGBOT_DOWN_STDOUT
     assert exit_code == 0
 
@@ -144,7 +148,7 @@ def test_copilot_down_bypass_lines_match_the_pinned_contract(
     _patch_gates_clean(monkeypatch)
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=True
-    )
+    , is_bugteam_post_blocked=False)
     assert capsys.readouterr().out == EXPECTED_COPILOT_DOWN_STDOUT
     assert exit_code == 0
 
@@ -160,7 +164,7 @@ def test_a_failing_gate_yields_exit_one_and_the_fail_summary(
     monkeypatch.setattr(check_convergence, "_get_mergeable", _blocked_mergeable)
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
-    )
+    , is_bugteam_post_blocked=False)
     captured_stdout = capsys.readouterr().out
     assert "6. PR is mergeable: FAIL — blocked\n" in captured_stdout
     assert captured_stdout.endswith(EXPECTED_FAIL_SUMMARY)
@@ -177,7 +181,7 @@ def test_gh_error_exit_code_is_two_and_propagates_from_head_fetch(
     with pytest.raises(SystemExit) as raised:
         check_convergence.check_all(
             owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
-        )
+        , is_bugteam_post_blocked=False)
     assert EXIT_CODE_GH_ERROR == 2
     assert raised.value.code == 2
 

@@ -26,7 +26,10 @@ from pr_converge_skill_constants.constants import (
     GH_REVIEWS_PATH_TEMPLATE,
     REVIEWS_PER_PAGE,
 )
-from pr_converge_scripts_constants.convergence_gate_constants import SHORT_SHA_LENGTH
+from pr_converge_scripts_constants.convergence_gate_constants import (
+    MERGEABLE_STATE_CLEAN,
+    SHORT_SHA_LENGTH,
+)
 
 JsonObject = dict[str, object]
 ReviewStateGroup = tuple[str, ...]
@@ -70,6 +73,25 @@ def _get_pr_head_sha(*, owner: str, repo: str, number: int) -> str:
     return head_sha
 
 
+def _evaluate_mergeable_from_pr_object(pr_object: JsonObject) -> tuple[bool, str]:
+    """Return whether a PR object dict is cleanly mergeable.
+
+    Pure evaluator: no network IO. Live and fixture paths share this contract.
+
+    Args:
+        pr_object: Pull request JSON object with mergeable and mergeable_state fields.
+
+    Returns:
+        (True, clean) when mergeable is true and state is clean; otherwise (False, state).
+    """
+    mergeable: object = pr_object.get("mergeable")
+    mergeable_state: object = pr_object.get("mergeable_state", "unknown")
+    state_text = str(mergeable_state)
+    if mergeable is True and state_text == MERGEABLE_STATE_CLEAN:
+        return True, MERGEABLE_STATE_CLEAN
+    return False, state_text
+
+
 def _get_mergeable(*, owner: str, repo: str, number: int) -> tuple[bool, str]:
     """Return whether the PR is cleanly mergeable, with the mergeable-state detail."""
     endpoint = GH_PR_OBJECT_PATH_TEMPLATE.format(owner=owner, repo=repo, number=number)
@@ -77,12 +99,9 @@ def _get_mergeable(*, owner: str, repo: str, number: int) -> tuple[bool, str]:
     if returncode != 0:
         return False, f"gh api error: {stdout}"
     pr_object = json.loads(stdout)
-    mergeable: object = pr_object.get("mergeable")
-    mergeable_state: object = pr_object.get("mergeable_state", "unknown")
-    state_text = str(mergeable_state)
-    if mergeable is True and state_text == "clean":
-        return True, "clean"
-    return False, state_text
+    if not isinstance(pr_object, dict):
+        return False, "unknown"
+    return _evaluate_mergeable_from_pr_object(pr_object)
 
 
 def _bugbot_check_runs(

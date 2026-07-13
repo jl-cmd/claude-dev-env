@@ -283,7 +283,7 @@ def should_bypass_bugbot_gates_when_bugbot_down_is_true(
     )
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=True, is_copilot_down=False
-    )
+    , is_bugteam_post_blocked=False)
     assert "bypassed (bugbot_down)" in capsys.readouterr().out
     assert exit_code == 0
 
@@ -298,7 +298,7 @@ def should_bypass_copilot_gates_when_copilot_down_is_true(
     )
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=True
-    )
+    , is_bugteam_post_blocked=False)
     assert "bypassed (copilot_down)" in capsys.readouterr().out
     assert exit_code == 0
 
@@ -342,7 +342,7 @@ def should_propagate_systemexit_from_get_pr_head_sha(monkeypatch: pytest.MonkeyP
     with pytest.raises(SystemExit) as exc_info:
         check_convergence.check_all(
             owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
-        )
+        , is_bugteam_post_blocked=False)
     assert exc_info.value.code == EXIT_CODE_GH_ERROR
 
 
@@ -368,3 +368,4 @@ def should_derive_copilot_down_from_env_when_main_omits_the_flag(
     exit_code = check_convergence.main(["--owner", "o", "--repo", "r", "--pr-number", "1"])
     assert exit_code == 0
     assert captured_copilot_down == [True]
+
