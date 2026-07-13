@@ -11,6 +11,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `setup_project_paths.py` | One-time bootstrap: discovers git repos via `es.exe` (Everything) and writes `~/.claude/project-paths.json`; never hardcodes scan roots |
 | `sweep_empty_dirs.py` | Deletes empty directories older than a configurable age under a given root; runs once (`--once`) or in continuous-watch mode |
 | `sync_to_cursor.py` | Entry point for syncing Claude rules to Cursor `.mdc` files; delegates to the `sync_to_cursor/` package |
+| `resolve_worker_spawn.py` | Dispatches a worker role through grok then claude fallback tiers (preflight, headless grok, `claude_agent_required` handoff, optional claude headless); protocol: [`../_shared/pr-loop/worker-spawn.md`](../_shared/pr-loop/worker-spawn.md) |
 
 ## PowerShell scripts
 
