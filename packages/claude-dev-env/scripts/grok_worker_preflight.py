@@ -142,7 +142,10 @@ def _is_auth_failure_text(completion: subprocess.CompletedProcess[str]) -> bool:
 
 def _invalidate_ping_cache(run_state_directory: Path) -> None:
     cache_file = _ping_cache_path(run_state_directory)
-    cache_file.unlink(missing_ok=True)
+    try:
+        cache_file.unlink(missing_ok=True)
+    except OSError:
+        return
 
 
 def _read_ping_cache(run_state_directory: Path) -> dict[str, object] | None:
@@ -176,9 +179,12 @@ def _write_successful_ping_cache(
         PING_CACHE_CHECKED_AT_KEY: checked_at,
         PING_CACHE_IS_OK_KEY: True,
     }
-    _ping_cache_path(run_state_directory).write_text(
-        json.dumps(all_cache_payload), encoding=UTF8_ENCODING
-    )
+    try:
+        _ping_cache_path(run_state_directory).write_text(
+            json.dumps(all_cache_payload), encoding=UTF8_ENCODING
+        )
+    except OSError:
+        return
 
 
 def _is_grok_binary_resolvable() -> bool:
@@ -231,7 +237,7 @@ def _run_grok_command(
             timeout=timeout_seconds,
             check=False,
         )
-    except FileNotFoundError:
+    except OSError:
         return None
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(
