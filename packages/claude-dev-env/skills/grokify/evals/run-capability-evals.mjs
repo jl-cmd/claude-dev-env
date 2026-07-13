@@ -29,6 +29,7 @@ const WORKFLOW_MAX_TURNS = 8;
 const PROBE_FILE_NAME = 'capability-probe-write.txt';
 const PROBE_FILE_CONTENTS = 'capability-probe-ok';
 const HOOKS_LOG_NAME = 'hooks.log';
+const SPAWN_MARKER = 'SPAWN_OK';
 
 const E1_PROMPT = `You are running a capability inventory. Do not edit files.
 
@@ -46,13 +47,13 @@ Reply with ONLY one JSON object and nothing else:
 const E2_PROMPT = `You are measuring spawn_subagent.
 
 1. Use spawn_subagent (or the equivalent agent-spawn tool) once.
-2. Instruct the child to print exactly SPAWN_OK on its first line, then list basenames from the agents directory under the user's Claude config (for example ~/.claude/agents).
+2. Instruct the child to print exactly ${SPAWN_MARKER} on its first line, then list basenames from the agents directory under the user's Claude config (for example ~/.claude/agents).
 3. Wait for the child to finish.
 
 Reply with ONLY one JSON object and nothing else:
 {
-  "spawn_succeeded": <true if the child ran and returned SPAWN_OK>,
-  "child_excerpt": "<short excerpt of child output>"
+  "spawn_succeeded": <true if the child ran and returned ${SPAWN_MARKER}>,
+  "child_excerpt": "<excerpt of child output that includes its first line>"
 }`;
 
 const E3_PROMPT = `You are measuring skill readability under an agent definition.
@@ -339,6 +340,12 @@ function runEvalTwo(runDirectory) {
     payload.spawn_succeeded === true,
     `E2: expected spawn_succeeded === true, got ${JSON.stringify(payload.spawn_succeeded)}`,
   );
+  const childExcerpt =
+    typeof payload.child_excerpt === 'string' ? payload.child_excerpt : '';
+  assertCondition(
+    childExcerpt.includes(SPAWN_MARKER),
+    `E2: expected child_excerpt to include ${SPAWN_MARKER}, got ${JSON.stringify(payload.child_excerpt)}`,
+  );
   return payload;
 }
 
@@ -365,16 +372,14 @@ function runEvalFour(runDirectory) {
   const probePath = join(runDirectory, PROBE_FILE_NAME);
   const isProbePresent = existsSync(probePath);
   assertCondition(
-    isProbePresent || payload.write_succeeded === true,
-    `E4: probe write did not succeed (file missing and write_succeeded not true)`,
+    isProbePresent,
+    `E4: probe file missing under the eval cwd (write_succeeded claim: ${JSON.stringify(payload.write_succeeded)})`,
   );
-  if (isProbePresent) {
-    const probeContents = readFileSync(probePath, 'utf8');
-    assertCondition(
-      probeContents.includes(PROBE_FILE_CONTENTS),
-      `E4: probe file contents mismatch: ${JSON.stringify(probeContents)}`,
-    );
-  }
+  const probeContents = readFileSync(probePath, 'utf8');
+  assertCondition(
+    probeContents.includes(PROBE_FILE_CONTENTS),
+    `E4: probe file contents mismatch: ${JSON.stringify(probeContents)}`,
+  );
   const hooksLogPath = join(runDirectory, HOOKS_LOG_NAME);
   let hooksNote = 'hooks.log not present (soft check skipped)';
   if (existsSync(hooksLogPath)) {
