@@ -283,24 +283,38 @@ function resolveDefaultAgentName() {
   return process.env.GROK_CAPABILITY_EVAL_AGENT || 'Explore';
 }
 
-function runEvalOne(runDirectory) {
-  const promptPath = writePromptFile(runDirectory, 'e1', E1_PROMPT);
+function launchEval(runDirectory, { evalName, promptText, maxTurns, agentName }) {
+  const label = evalName.toUpperCase();
+  const promptPath = writePromptFile(runDirectory, evalName, promptText);
   const processResult = runGrok({
     promptPath,
     workingDirectory: runDirectory,
     leaderSocketPath: mintLeaderSocketPath(runDirectory),
-    maxTurns: DEFAULT_MAX_TURNS,
+    maxTurns,
+    agentName,
   });
   assertCondition(
     processResult.error === null,
-    `E1: failed to launch grok: ${processResult.error}`,
+    `${label}: failed to launch grok: ${processResult.error}`,
   );
   assertCondition(
     processResult.exitCode === 0,
-    `E1: grok exit ${processResult.exitCode}\n${processResult.stderr}\n${processResult.stdout}`,
+    `${label}: grok exit ${processResult.exitCode}\n${processResult.stderr}\n${processResult.stdout}`,
   );
   const payload = parsePayload(processResult.stdout);
-  assertCondition(payload !== null, `E1: could not parse JSON payload from grok output`);
+  assertCondition(
+    payload !== null,
+    `${label}: could not parse JSON payload from grok output`,
+  );
+  return payload;
+}
+
+function runEvalOne(runDirectory) {
+  const payload = launchEval(runDirectory, {
+    evalName: 'e1',
+    promptText: E1_PROMPT,
+    maxTurns: DEFAULT_MAX_TURNS,
+  });
   assertCondition(
     payload.can_spawn_subagent_tool === true,
     `E1: expected can_spawn_subagent_tool === true, got ${JSON.stringify(payload.can_spawn_subagent_tool)}`,
@@ -316,23 +330,11 @@ function runEvalOne(runDirectory) {
 }
 
 function runEvalTwo(runDirectory) {
-  const promptPath = writePromptFile(runDirectory, 'e2', E2_PROMPT);
-  const processResult = runGrok({
-    promptPath,
-    workingDirectory: runDirectory,
-    leaderSocketPath: mintLeaderSocketPath(runDirectory),
+  const payload = launchEval(runDirectory, {
+    evalName: 'e2',
+    promptText: E2_PROMPT,
     maxTurns: SPAWN_MAX_TURNS,
   });
-  assertCondition(
-    processResult.error === null,
-    `E2: failed to launch grok: ${processResult.error}`,
-  );
-  assertCondition(
-    processResult.exitCode === 0,
-    `E2: grok exit ${processResult.exitCode}\n${processResult.stderr}\n${processResult.stdout}`,
-  );
-  const payload = parsePayload(processResult.stdout);
-  assertCondition(payload !== null, `E2: could not parse JSON payload from grok output`);
   assertCondition(
     payload.spawn_succeeded === true,
     `E2: expected spawn_succeeded === true, got ${JSON.stringify(payload.spawn_succeeded)}`,
@@ -341,24 +343,12 @@ function runEvalTwo(runDirectory) {
 }
 
 function runEvalThree(runDirectory) {
-  const promptPath = writePromptFile(runDirectory, 'e3', E3_PROMPT);
-  const processResult = runGrok({
-    promptPath,
-    workingDirectory: runDirectory,
-    leaderSocketPath: mintLeaderSocketPath(runDirectory),
+  const payload = launchEval(runDirectory, {
+    evalName: 'e3',
+    promptText: E3_PROMPT,
     maxTurns: SKILL_MAX_TURNS,
     agentName: resolveDefaultAgentName(),
   });
-  assertCondition(
-    processResult.error === null,
-    `E3: failed to launch grok: ${processResult.error}`,
-  );
-  assertCondition(
-    processResult.exitCode === 0,
-    `E3: grok exit ${processResult.exitCode}\n${processResult.stderr}\n${processResult.stdout}`,
-  );
-  const payload = parsePayload(processResult.stdout);
-  assertCondition(payload !== null, `E3: could not parse JSON payload from grok output`);
   assertCondition(
     payload.skill_read_ok === true,
     `E3: expected skill_read_ok === true, got ${JSON.stringify(payload.skill_read_ok)}`,
@@ -367,23 +357,11 @@ function runEvalThree(runDirectory) {
 }
 
 function runEvalFour(runDirectory) {
-  const promptPath = writePromptFile(runDirectory, 'e4', E4_PROMPT);
-  const processResult = runGrok({
-    promptPath,
-    workingDirectory: runDirectory,
-    leaderSocketPath: mintLeaderSocketPath(runDirectory),
+  const payload = launchEval(runDirectory, {
+    evalName: 'e4',
+    promptText: E4_PROMPT,
     maxTurns: WRITE_MAX_TURNS,
   });
-  assertCondition(
-    processResult.error === null,
-    `E4: failed to launch grok: ${processResult.error}`,
-  );
-  assertCondition(
-    processResult.exitCode === 0,
-    `E4: grok exit ${processResult.exitCode}\n${processResult.stderr}\n${processResult.stdout}`,
-  );
-  const payload = parsePayload(processResult.stdout);
-  assertCondition(payload !== null, `E4: could not parse JSON payload from grok output`);
   const probePath = join(runDirectory, PROBE_FILE_NAME);
   const isProbePresent = existsSync(probePath);
   assertCondition(
@@ -412,23 +390,11 @@ function runEvalFour(runDirectory) {
 }
 
 function runEvalFive(runDirectory) {
-  const promptPath = writePromptFile(runDirectory, 'e5', E5_PROMPT);
-  const processResult = runGrok({
-    promptPath,
-    workingDirectory: runDirectory,
-    leaderSocketPath: mintLeaderSocketPath(runDirectory),
+  const payload = launchEval(runDirectory, {
+    evalName: 'e5',
+    promptText: E5_PROMPT,
     maxTurns: WORKFLOW_MAX_TURNS,
   });
-  assertCondition(
-    processResult.error === null,
-    `E5: failed to launch grok: ${processResult.error}`,
-  );
-  assertCondition(
-    processResult.exitCode === 0,
-    `E5: grok exit ${processResult.exitCode}\n${processResult.stderr}\n${processResult.stdout}`,
-  );
-  const payload = parsePayload(processResult.stdout);
-  assertCondition(payload !== null, `E5: could not parse JSON payload from grok output`);
   const isWorkflowAbsent =
     payload.has_workflow_tool === false || payload.result === 'no_tool';
   assertCondition(
