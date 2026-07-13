@@ -563,7 +563,7 @@ test('the standards-only call site relays lens provenance, the deferred standard
 
 test('every standardsDeferralNote call site passes the shared deferral state with no legacy argument', () => {
   const noteCalls = convergeSource.match(/standardsNote = standardsDeferralNote\([^\n]*/g) || [];
-  assert.equal(noteCalls.length, 3);
+  assert.equal(noteCalls.length, 4);
   assert.equal(
     noteCalls.filter((eachCall) => /standardsDeferralNote\(findings\.length, standardsDeferral\)/.test(eachCall)).length,
     1,
@@ -578,6 +578,11 @@ test('every standardsDeferralNote call site passes the shared deferral state wit
     noteCalls.filter((eachCall) => /standardsDeferralNote\(roundFindings\.length, buildStandardsDeferral\(\)\)/.test(eachCall)).length,
     1,
     'expected the copilot call site to pass buildStandardsDeferral() inline',
+  );
+  assert.equal(
+    noteCalls.filter((eachCall) => /standardsDeferralNote\(codexOutcome\.findings\.length, buildStandardsDeferral\(\)\)/.test(eachCall)).length,
+    1,
+    'expected the codex call site to pass buildStandardsDeferral() inline',
   );
   for (const eachCall of noteCalls) {
     assert.doesNotMatch(eachCall, /hardeningPrOpened|standardsOutcome|\b(?:true|false)\b/);
@@ -642,7 +647,7 @@ test('resolveCleanAuditNote records a bypass note on a refused post and resets t
 test('the finalize call derives bugteamPostBlocked from a set cleanAuditNote', () => {
   assert.match(
     convergeSource,
-    /runConvergenceCheck\(\{ head, bugbotDown, copilotDown, bugteamPostBlocked: cleanAuditNote !== null \}\)/,
+    /runConvergenceCheck\(\{ head, bugbotDown, copilotDown, codexDown, codexCleanAt, bugteamPostBlocked: cleanAuditNote !== null \}\)/,
   );
 });
 
