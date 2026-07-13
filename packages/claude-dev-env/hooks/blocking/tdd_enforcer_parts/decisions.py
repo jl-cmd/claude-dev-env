@@ -9,12 +9,28 @@ import sys
 from pathlib import Path
 
 from tdd_enforcer_parts.config.tdd_enforcer_constants import (
+    ENTRY_HOOK_FILE_NAME,
     FRESHNESS_WINDOW_SECONDS,
     NEWLINE_JOIN_SEPARATOR,
 )
 
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.messages import USER_FACING_TDD_NOTICE
+
+
+def _entry_hook_path() -> Path:
+    """Return the entry hook file that wires the gate's exemption rules together.
+
+    The exemption logic the deny message points at lives in the entry hook
+    beside this parts package, not in this emit-only module::
+
+        tdd_enforcer_parts/decisions.py  ->  parent  ->  blocking/
+        blocking/tdd_enforcer.py         <-  the named exemption home
+
+    So the guidance names the entry hook, letting a reader land on the module
+    that actually decides exemptions.
+    """
+    return Path(__file__).resolve().parent.parent / ENTRY_HOOK_FILE_NAME
 
 
 def build_deny_reason(production_path: Path, all_candidates: list[Path]) -> str:
@@ -28,7 +44,7 @@ def build_deny_reason(production_path: Path, all_candidates: list[Path]) -> str:
         The multi-line reason shown when no fresh test satisfies the gate.
     """
     candidate_lines = NEWLINE_JOIN_SEPARATOR.join(f"  - {each_path}" for each_path in all_candidates)
-    hook_source_path = Path(__file__).resolve()
+    hook_source_path = _entry_hook_path()
     return (
         f"[TDD] Blocking write to production file: {production_path}\n"
         f"No matching test file exists, or it has not been modified within the last "

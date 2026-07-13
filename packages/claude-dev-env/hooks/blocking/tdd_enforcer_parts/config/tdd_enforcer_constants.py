@@ -13,6 +13,7 @@ GIT_EXECUTABLE_NAME: str = "git"
 GIT_LS_FILES_SUBCOMMAND: str = "ls-files"
 GIT_PATHSPEC_SEPARATOR: str = "--"
 PYTHON_SOURCE_EXTENSION: str = ".py"
+ENTRY_HOOK_FILE_NAME: str = "tdd_enforcer.py"
 NEWLINE_JOIN_SEPARATOR: str = "\n"
 ALL_PRODUCTION_EXTENSIONS: frozenset[str] = frozenset({".py", ".ts", ".tsx", ".js", ".jsx"})
 ALL_SKIP_EXTENSIONS: frozenset[str] = frozenset(
