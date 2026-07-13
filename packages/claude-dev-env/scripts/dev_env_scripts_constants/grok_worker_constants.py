@@ -184,3 +184,66 @@ DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
 
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
+
+TIER_GROK: int = 1
+"""Dispatcher tier number for the headless grok worker path."""
+
+TIER_CLAUDE_AGENT: int = 2
+"""Dispatcher tier number for the in-host claude_agent_required handoff."""
+
+TIER_CLAUDE_HEADLESS: int = 3
+"""Dispatcher tier number for the headless claude chain path."""
+
+REASON_CLAUDE_AGENT_REQUIRED: str = "claude_agent_required"
+"""Fallthrough reason when the caller must run claude_agent_required itself."""
+
+DEFAULT_SPAWN_MAX_TURNS: int = 8
+"""Default max-turns applied to the headless grok worker when the caller names none."""
+
+SPAWN_SERVED_EXIT_CODE: int = 0
+"""CLI exit code when a dispatcher tier served the call."""
+
+SPAWN_EXHAUSTED_EXIT_CODE: int = 2
+"""CLI exit code when no dispatcher tier served the call."""
+
+SPAWN_CONFIG_ERROR_EXIT_CODE: int = 3
+"""CLI exit code when the claude chain configuration is missing or invalid."""
+
+RESULT_KEY_TIER_USED: str = "tier_used"
+"""JSON result key naming the tier that served the call, or null."""
+
+RESULT_KEY_OK: str = "ok"
+"""JSON result key holding whether the served call completed successfully."""
+
+RESULT_KEY_ATTEMPTS: str = "attempts"
+"""JSON result key holding the ordered list of tier attempts."""
+
+RESULT_KEY_OUTPUT: str = "output"
+"""JSON result key holding captured worker stdout from the serving tier."""
+
+RESULT_KEY_RETURNCODE: str = "returncode"
+"""JSON result key holding the process return code from the last tier run."""
+
+ATTEMPT_KEY_TIER: str = "tier"
+"""JSON attempt key naming the tier number tried."""
+
+ATTEMPT_KEY_OK: str = "ok"
+"""JSON attempt key holding whether that tier completed successfully."""
+
+ATTEMPT_KEY_REASON: str = "reason"
+"""JSON attempt key holding the fallthrough or handoff reason string."""
+
+CLI_PROMPT_FILE_FLAG: str = "--prompt-file"
+"""CLI flag naming the prompt file path for the dispatcher."""
+
+CLI_CWD_FLAG: str = "--cwd"
+"""CLI flag naming the working directory for the worker process."""
+
+CLI_TIMEOUT_FLAG: str = "--timeout-seconds"
+"""CLI flag naming the per-tier timeout in seconds."""
+
+CLI_ENABLE_CLAUDE_TIER_FLAG: str = "--enable-claude-tier"
+"""CLI flag that enables the headless claude chain tier on a Claude host."""
+
+EMPTY_OUTPUT: str = ""
+"""Empty captured output when no tier produced stdout."""
