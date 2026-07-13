@@ -7,6 +7,7 @@ PreToolUse hooks that deny (block) tool calls when a rule is violated. The main 
 | Directory | Role |
 |---|---|
 | `config/` | Shared constants for the verified-commit gate family (`verified_commit_constants.py`) |
+| `tdd_enforcer_parts/` | Concern modules the `tdd_enforcer.py` entry hook wires together: path classification, content analysis, candidate-path resolution, freshness, git-tracking restore detection, decisions, and constants |
 
 ## Core enforcer
 
