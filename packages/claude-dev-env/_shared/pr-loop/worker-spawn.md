@@ -31,6 +31,16 @@ calling skill must then run the Agent tool in-process.
 On a **ThirdParty** host, or when the claude tier is enabled on a Claude host,
 the dispatcher continues to tier 3.
 
+## Tier-1 fleets via grok-spawn
+
+For a fleet of tier-1 grok workers (batch spec in, reports out), use the
+**grok-spawn** skill. That skill owns the batch playbook and points at flag
+profiles under its reference docs. This page stays the single-worker
+dispatcher contract (`resolve_worker_spawn`).
+
+The calling session owns verification and every commit, push, or GitHub post.
+Workers never commit or post.
+
 ## Required inputs
 
 ### CLI
