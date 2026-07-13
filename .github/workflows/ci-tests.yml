@@ -258,13 +258,11 @@ jobs:
             ruff \
             mypy
 
-      - name: Run check.ps1 (pytest leg; ruff/mypy skipped pending static cleanup)
+      - name: "Run check.ps1 (full gate: ruff + mypy + enforcer pytest)"
         shell: pwsh
         run: |
-          # CI gate pytest leg = check.ps1 + documented deselect set + basetemp.
-          # -SkipRuff/-SkipMypy: ruff ~923 + mypy ~72 pre-existing on main; tracked
-          # for separate static cleanup. Pytest leg is the #23 acceptance surface.
-          # Local check.ps1 without PYTEST_ADDOPTS may run more tests — deliberate.
+          # Full check.ps1 gate (ruff + mypy + enforcer pytest). PYTEST_ADDOPTS carries
+          # basetemp under RUNNER_TEMP plus documented deselect lists. Local gate may run more tests (no deselects) - deliberate.
           $allDeselectListFiles = @(
             '.github/ci/live-post-audit-deselects.txt'
             '.github/ci/windows-semantics-node-ids.txt'
@@ -294,7 +292,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $gateBasetemp | Out-Null
           $env:PYTEST_ADDOPTS = "--basetemp=$gateBasetemp " + ($allDeselectFlags -join ' ')
           Write-Host "PYTEST_ADDOPTS deselect count=$deselectFlagCount basetemp=$gateBasetemp"
-          $checkOutputLines = & pwsh -File packages/claude-dev-env/scripts/check.ps1 -SkipRuff -SkipMypy 2>&1
+          $checkOutputLines = & pwsh -File packages/claude-dev-env/scripts/check.ps1 2>&1
           $checkExitCode = $LASTEXITCODE
           $checkOutputLines | ForEach-Object { Write-Host $_ }
           $checkOutputText = ($checkOutputLines | Out-String)

@@ -133,7 +133,11 @@ def _referenced_names(tree: ast.Module) -> set[str]:
     }
     return load_names | literal_values
 
-def _dead_constant_messages(tree: ast.Module, referenced_names: set[str]) -> list[str]:
+def _dead_constant_messages(
+    tree: ast.Module,
+    referenced_names: set[str],
+    maximum_issues: int,
+) -> list[str]:
     """Return one message per module constant absent from the referenced set."""
     issues: list[str] = []
     for each_name, each_line in _module_constant_targets(tree):
@@ -142,7 +146,7 @@ def _dead_constant_messages(tree: ast.Module, referenced_names: set[str]) -> lis
         issues.append(
             f"Line {each_line}: constant {each_name!r} - {DEAD_TEST_CONSTANT_GUIDANCE}"
         )
-        if len(issues) >= MAX_TEST_LAYOUT_ISSUES:
+        if len(issues) >= maximum_issues:
             break
     return issues
 
@@ -174,7 +178,9 @@ def check_dead_test_module_constant(content: str, file_path: str) -> list[str]:
     tree = _parse_module(content)
     if tree is None:
         return []
-    return _dead_constant_messages(tree, _referenced_names(tree))
+    return _dead_constant_messages(
+        tree, _referenced_names(tree), MAX_TEST_LAYOUT_ISSUES
+    )
 
 def _node_names_fixture(node: ast.AST) -> bool:
     """Return whether one decorator sub-node spells the pytest fixture marker."""
