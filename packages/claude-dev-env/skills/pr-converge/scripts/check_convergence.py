@@ -14,24 +14,32 @@
 Each bypass flag closes one reviewer gate when that reviewer is unavailable.
 ``--bugbot-down`` skips the bugbot check-run gate. ``--copilot-down`` skips
 the Copilot review and pending-review gates. ``--bugteam-post-blocked`` skips
-the bugteam CLEAN-review gate.
+the bugteam CLEAN-review gate. ``--codex-down`` skips the Codex review gate.
 
 Each flag also honors its own reviews-disabled token: "bugbot", "copilot",
-or "bugteam". A caller that cannot pass the flag reaches the same bypass by
-exporting the token. The mark-ready blocker hook re-runs this script with no
-flags, so its convergence re-check reads the bypass from the exported token
-instead.
+"bugteam", or "codex". A caller that cannot pass the flag reaches the same
+bypass by exporting the token. The mark-ready blocker hook re-runs this script
+with no flags, so its convergence re-check reads the bypass from the exported
+token instead.
+
+The Codex gate is conditional-required: it demands
+``codex_clean_at == current_head`` only when the weekly usage probe reports
+more than the probe's threshold percent left. At or below that threshold, null
+usage, the codex token, or ``codex_down`` never blocks ready.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import NamedTuple
 
 import _pr_converge_path_setup  # noqa: F401
+import codex_usage_probe as codex_usage_probe_module
 from check_convergence_gates import (
     _check_bot_review,
     _check_bugbot,
@@ -47,9 +55,22 @@ from check_convergence_thread_gates import (
     _check_no_pending_reviews,
     _count_unresolved_bot_threads,
 )
+from codex_review_scripts_constants.codex_usage_probe_constants import (
+    USAGE_REPORT_KEY_PERCENT_LEFT,
+)
+from codex_usage_probe import is_codex_review_required, probe_weekly_usage
 from pr_converge_scripts_constants.convergence_gate_constants import (
+    CLAUDE_JOB_DIR_ENV_VAR_NAME,
+    CODEX_BYPASS_DETAIL,
+    CODEX_CLEAN_AT_STATE_KEY,
+    CODEX_CLEAN_DETAIL_TEMPLATE,
+    CODEX_GATE_LABEL,
+    CODEX_MISSING_CLEAN_DETAIL_TEMPLATE,
+    CODEX_SKIPPED_USAGE_DETAIL,
     FIXTURE_DEFAULT_PENDING_DETAIL,
     FIXTURE_DEFAULT_THREADS_DETAIL,
+    FIXTURE_KEY_CODEX_CLEAN_AT,
+    FIXTURE_KEY_CODEX_PERCENT_LEFT,
     FIXTURE_KEY_HEAD_SHA,
     FIXTURE_KEY_PENDING_REVIEWS_DETAIL,
     FIXTURE_KEY_PENDING_REVIEWS_PASSED,
@@ -57,6 +78,7 @@ from pr_converge_scripts_constants.convergence_gate_constants import (
     FIXTURE_KEY_REVIEWS,
     FIXTURE_KEY_UNRESOLVED_BOT_THREADS_DETAIL,
     FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED,
+    PR_CONVERGE_STATE_FILENAME,
 )
 from pr_converge_skill_constants.constants import (
     ALL_COPILOT_CLEAN_REVIEW_STATES,
@@ -72,6 +94,7 @@ from pr_converge_skill_constants.constants import (
 from reviews_disabled import (
     is_bugbot_disabled_via_env,
     is_bugteam_disabled_via_env,
+    is_codex_disabled_via_env,
     is_copilot_disabled_via_env,
 )
 
@@ -89,6 +112,8 @@ class ConvergenceFixture(NamedTuple):
     unresolved_bot_threads_detail: str
     is_no_pending_reviews: bool
     pending_reviews_detail: str
+    codex_percent_left: float | None
+    codex_clean_at: str | None
 
 
 class GateContext(NamedTuple):
@@ -101,6 +126,8 @@ class GateContext(NamedTuple):
     is_bugbot_down: bool
     is_copilot_down: bool
     is_bugteam_post_blocked: bool
+    is_codex_down: bool
+    live_codex_clean_at: str | None = None
     fixture: ConvergenceFixture | None = None
 
 
@@ -243,6 +270,119 @@ def _copilot_review_condition(context: GateContext) -> GateCondition:
     )
 
 
+def _sha_matches_head(stamp_sha: str, head_sha: str) -> bool:
+    """Return True when a clean-at stamp matches the PR HEAD SHA (full or prefix)."""
+    if not stamp_sha or not head_sha:
+        return False
+    return head_sha.startswith(stamp_sha) or stamp_sha.startswith(head_sha)
+
+
+def _evaluate_codex_clean(
+    *,
+    percent_left: float | None,
+    codex_clean_at: str | None,
+    head_sha: str,
+) -> tuple[bool, str]:
+    """Return whether the conditional Codex gate passes for the given usage and stamp.
+
+    ::
+
+        percent_left None or <= threshold  -> skip (never blocks)
+        percent_left > threshold, clean    -> pass
+        percent_left > threshold, missing  -> fail
+
+    Args:
+        percent_left: Weekly Codex percent remaining, or None when unknown.
+        codex_clean_at: HEAD SHA where Codex last reported clean, or None.
+        head_sha: Current PR HEAD commit SHA.
+
+    Returns:
+        (passed, detail) for the Codex gate condition line.
+    """
+    if not is_codex_review_required(percent_left):
+        return True, CODEX_SKIPPED_USAGE_DETAIL
+    if codex_clean_at is not None and _sha_matches_head(codex_clean_at, head_sha):
+        return True, CODEX_CLEAN_DETAIL_TEMPLATE % _short_sha(head_sha)
+    return False, CODEX_MISSING_CLEAN_DETAIL_TEMPLATE % _short_sha(head_sha)
+
+
+def _probe_codex_percent_left() -> float | None:
+    """Probe weekly Codex usage and return percent remaining, or None when unknown."""
+    try:
+        usage_report = probe_weekly_usage(
+            exchange_app_server_messages=(
+                codex_usage_probe_module._exchange_app_server_messages_via_subprocess
+            )
+        )
+    except (
+        FileNotFoundError,
+        OSError,
+        subprocess.TimeoutExpired,
+        subprocess.SubprocessError,
+        json.JSONDecodeError,
+        ValueError,
+        TypeError,
+        KeyError,
+    ):
+        return None
+    raw_percent = usage_report.get(USAGE_REPORT_KEY_PERCENT_LEFT)
+    if isinstance(raw_percent, bool):
+        return None
+    if isinstance(raw_percent, (int, float)):
+        return float(raw_percent)
+    return None
+
+
+def _read_codex_clean_at_from_job_state() -> str | None:
+    """Read ``codex_clean_at`` from the single-PR job-dir state file when present."""
+    job_directory = os.environ.get(CLAUDE_JOB_DIR_ENV_VAR_NAME)
+    if not job_directory:
+        return None
+    state_path = Path(job_directory) / PR_CONVERGE_STATE_FILENAME
+    if not state_path.is_file():
+        return None
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    clean_at = payload.get(CODEX_CLEAN_AT_STATE_KEY)
+    if isinstance(clean_at, str) and clean_at:
+        return clean_at
+    return None
+
+
+def _resolve_live_codex_clean_at(cli_codex_clean_at: str | None) -> str | None:
+    """Prefer the CLI stamp, then the job-dir state stamp, for the live Codex gate."""
+    if cli_codex_clean_at:
+        return cli_codex_clean_at
+    return _read_codex_clean_at_from_job_state()
+
+
+def _codex_condition(context: GateContext) -> GateCondition:
+    """Build the conditional Codex gate, bypassed when Codex is down."""
+    if context.is_codex_down:
+        return (CODEX_GATE_LABEL, (True, CODEX_BYPASS_DETAIL))
+    if context.fixture is not None:
+        return (
+            CODEX_GATE_LABEL,
+            _evaluate_codex_clean(
+                percent_left=context.fixture.codex_percent_left,
+                codex_clean_at=context.fixture.codex_clean_at,
+                head_sha=context.head_sha,
+            ),
+        )
+    return (
+        CODEX_GATE_LABEL,
+        _evaluate_codex_clean(
+            percent_left=_probe_codex_percent_left(),
+            codex_clean_at=context.live_codex_clean_at,
+            head_sha=context.head_sha,
+        ),
+    )
+
+
 def _pending_reviews_condition(context: GateContext) -> GateCondition:
     """Build the pending-requested-reviews condition, bypassed when Copilot is down."""
     if context.is_copilot_down:
@@ -306,6 +446,7 @@ def _build_all_conditions(context: GateContext) -> list[GateCondition]:
     conditions = list(_bugbot_conditions(context))
     conditions.append(_bugteam_condition(context))
     conditions.append(_copilot_review_condition(context))
+    conditions.append(_codex_condition(context))
     conditions.extend(_state_conditions(context))
     return conditions
 
@@ -373,6 +514,18 @@ def _load_convergence_fixture(from_path: Path) -> ConvergenceFixture:
         raise ValueError("fixture pending_reviews_passed must be a bool")
     if not isinstance(pending_detail, str):
         raise ValueError("fixture pending_reviews_detail must be a string")
+    codex_percent_left = payload.get(FIXTURE_KEY_CODEX_PERCENT_LEFT)
+    codex_clean_at = payload.get(FIXTURE_KEY_CODEX_CLEAN_AT)
+    if isinstance(codex_percent_left, bool):
+        raise ValueError("fixture codex_percent_left must be a number or null")
+    if codex_percent_left is not None and not isinstance(codex_percent_left, (int, float)):
+        raise ValueError("fixture codex_percent_left must be a number or null")
+    if codex_clean_at is not None and not isinstance(codex_clean_at, str):
+        raise ValueError("fixture codex_clean_at must be a string or null")
+    typed_percent_left: float | None = (
+        float(codex_percent_left) if isinstance(codex_percent_left, (int, float)) else None
+    )
+    typed_codex_clean_at: str | None = codex_clean_at if isinstance(codex_clean_at, str) else None
     return ConvergenceFixture(
         head_sha=head_sha,
         pr_object=pr_object,
@@ -381,6 +534,8 @@ def _load_convergence_fixture(from_path: Path) -> ConvergenceFixture:
         unresolved_bot_threads_detail=threads_detail,
         is_no_pending_reviews=is_pending_ok,
         pending_reviews_detail=pending_detail,
+        codex_percent_left=typed_percent_left,
+        codex_clean_at=typed_codex_clean_at,
     )
 
 
@@ -391,6 +546,8 @@ def check_all(
     is_bugbot_down: bool,
     is_copilot_down: bool,
     is_bugteam_post_blocked: bool,
+    is_codex_down: bool,
+    live_codex_clean_at: str | None,
 ) -> int:
     """Run every convergence gate and print one PASS/FAIL line per condition.
 
@@ -401,6 +558,8 @@ def check_all(
         is_bugbot_down: True bypasses the bugbot check-run and review-body gates.
         is_copilot_down: True bypasses the Copilot review and pending gates.
         is_bugteam_post_blocked: True skips the bugteam CLEAN-review gate.
+        is_codex_down: True bypasses the conditional Codex review gate.
+        live_codex_clean_at: Optional SHA stamp for the live Codex clean-at check.
 
     Returns:
         0 when every gate passes, 1 when at least one gate fails.
@@ -414,6 +573,8 @@ def check_all(
         is_bugbot_down=is_bugbot_down,
         is_copilot_down=is_copilot_down,
         is_bugteam_post_blocked=is_bugteam_post_blocked,
+        is_codex_down=is_codex_down,
+        live_codex_clean_at=live_codex_clean_at,
         fixture=None,
     )
     return _evaluate_convergence(context)
@@ -427,6 +588,7 @@ def _check_all_from_fixture(
     is_bugbot_down: bool,
     is_copilot_down: bool,
     is_bugteam_post_blocked: bool,
+    is_codex_down: bool,
 ) -> int:
     """Run every convergence gate against a frozen API snapshot.
 
@@ -438,6 +600,7 @@ def _check_all_from_fixture(
         is_bugbot_down: True bypasses the bugbot check-run and review-body gates.
         is_copilot_down: True bypasses the Copilot review and pending gates.
         is_bugteam_post_blocked: True skips the bugteam CLEAN-review gate.
+        is_codex_down: True bypasses the conditional Codex review gate.
 
     Returns:
         0 when every gate passes, 1 when at least one gate fails.
@@ -450,6 +613,8 @@ def _check_all_from_fixture(
         is_bugbot_down=is_bugbot_down,
         is_copilot_down=is_copilot_down,
         is_bugteam_post_blocked=is_bugteam_post_blocked,
+        is_codex_down=is_codex_down,
+        live_codex_clean_at=None,
         fixture=fixture,
     )
     return _evaluate_convergence(context)
@@ -481,6 +646,16 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip the bugteam CLEAN-review gate when the environment refused the CLEAN post on HEAD.",
     )
+    parser.add_argument(
+        "--codex-down",
+        action="store_true",
+        help="Bypass the conditional Codex review gate when Codex is down or opted out.",
+    )
+    parser.add_argument(
+        "--codex-clean-at",
+        default=None,
+        help="HEAD SHA where Codex last reported clean (live path; optional when job-dir state holds it).",
+    )
     return parser
 
 
@@ -492,7 +667,7 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
 
     Returns:
         Namespace exposing owner, repo, pr_number, fixture, bugbot_down, copilot_down,
-        and bugteam_post_blocked attributes.
+        bugteam_post_blocked, codex_down, and codex_clean_at attributes.
     """
     return _build_argument_parser().parse_args(all_argv)
 
@@ -522,6 +697,21 @@ def _resolve_bugteam_post_blocked(is_bugteam_post_blocked_flag: bool) -> bool:
     return is_bugteam_post_blocked_flag or is_bugteam_disabled_via_env()
 
 
+def _resolve_codex_down(is_codex_down_flag: bool) -> bool:
+    """Combine the --codex-down flag with the CLAUDE_REVIEWS_DISABLED env opt-out.
+
+    ::
+
+        flag True, env unset                      -> True   (caller passed the flag)
+        flag False, reviews-disabled lists codex  -> True   (exported token)
+        flag False, env unset                     -> False  (gate may run)
+
+    The mark-ready blocker hook re-runs this script with no flags, so the env
+    fallback lets an exported codex token carry the bypass into that re-check.
+    """
+    return is_codex_down_flag or is_codex_disabled_via_env()
+
+
 def main(all_arguments: list[str]) -> int:
     """Run the script end-to-end against parsed CLI arguments.
 
@@ -535,6 +725,10 @@ def main(all_arguments: list[str]) -> int:
     is_bugbot_down = _resolve_bugbot_down(arguments.bugbot_down)
     is_copilot_down = _resolve_copilot_down(arguments.copilot_down)
     is_bugteam_post_blocked = _resolve_bugteam_post_blocked(arguments.bugteam_post_blocked)
+    is_codex_down = _resolve_codex_down(arguments.codex_down)
+    live_codex_clean_at = _resolve_live_codex_clean_at(
+        getattr(arguments, "codex_clean_at", None)
+    )
     fixture_path = getattr(arguments, "fixture", None)
     if fixture_path:
         fixture = _load_convergence_fixture(Path(fixture_path))
@@ -546,6 +740,7 @@ def main(all_arguments: list[str]) -> int:
             is_bugbot_down=is_bugbot_down,
             is_copilot_down=is_copilot_down,
             is_bugteam_post_blocked=is_bugteam_post_blocked,
+            is_codex_down=is_codex_down,
         )
     return check_all(
         owner=arguments.owner,
@@ -554,6 +749,8 @@ def main(all_arguments: list[str]) -> int:
         is_bugbot_down=is_bugbot_down,
         is_copilot_down=is_copilot_down,
         is_bugteam_post_blocked=is_bugteam_post_blocked,
+        is_codex_down=is_codex_down,
+        live_codex_clean_at=live_codex_clean_at,
     )
 
 

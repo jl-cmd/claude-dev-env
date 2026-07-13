@@ -295,8 +295,9 @@ passes are clean; Bugbot confirms the HEAD, then the convergence gates run.
 `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
 
 - Exit 0 (Bugbot disabled for this run — the default, unless
-  `CLAUDE_REVIEWS_ENABLED` lists `bugbot`) → set `bugbot_down = true`, advance to
-  the [convergence gates](convergence-gates.md) in the same tick with the Bugbot
+  `CLAUDE_REVIEWS_ENABLED` lists `bugbot`) → set `bugbot_down = true`, run the
+  [Codex review step](#codex-review-step-conditional), advance to the
+  [convergence gates](convergence-gates.md) in the same tick with the Bugbot
   gate bypassed; skip steps a–c below.
 - Exit 1 (`CLAUDE_REVIEWS_ENABLED` lists `bugbot` and `CLAUDE_REVIEWS_DISABLED`
   does not) → go to step a.
@@ -344,8 +345,9 @@ c. Decide (four branches; match first whose predicate holds):
      Bugbot gate next tick.
    - **`commit_id == current_head` AND zero unaddressed inline AND review
      body clean:** Set `bugbot_clean_at = current_head`, reset
-     `inline_lag_streak = 0`, advance to the [convergence
-     gates](convergence-gates.md) in the same tick.
+     `inline_lag_streak = 0`, run the [Codex review step](#codex-review-step-conditional)
+     then advance to the [convergence gates](convergence-gates.md) in the same
+     tick.
    - **`commit_id == current_head` with unaddressed inline findings:**
      Apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)).
      Reset `inline_lag_streak = 0` and push-invalidated markers per
@@ -401,6 +403,43 @@ back-to-back-clean guarantee (the internal code-review and bugteam passes both
 clean on the same HEAD before the terminal gates re-open) only holds when every
 fix commit re-enters through CODE_REVIEW.
 
+## Codex review step (conditional)
+
+Run once the terminal Bugbot gate has confirmed HEAD (or set `bugbot_down`) and
+**before** the [convergence gates](convergence-gates.md) machine checklist.
+Uses the `codex-review` skill wrapper against the PR **base** branch (HEAD vs
+base), never an invented commit range.
+
+1. **Opt-out / down gate.**
+   `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer codex`
+   - Exit 0 → set `codex_down = true`, skip the skill, continue to convergence
+     gates (export `CLAUDE_REVIEWS_DISABLED` including `codex` before the
+     checklist so `check_convergence.py` bypasses without flags).
+   - Exit 1 → continue.
+
+2. **Usage probe.**
+   `python "$HOME/.claude/skills/codex-review/scripts/codex_usage_probe.py"`
+   - When `percent_left` is null or not strictly above the probe threshold
+     constant (`WEEKLY_USAGE_GATE_THRESHOLD_PERCENT`): skip Codex; do not set
+     `codex_clean_at`; continue to convergence gates (the machine checklist
+     skips the condition on the same rule).
+   - When above threshold: continue to the skill.
+
+3. **Skill wrapper (HEAD vs base).** Invoke `codex-review` (or read
+   `../../codex-review/SKILL.md` when `Skill` is not invokable) so the wrapper
+   reviews the diff against the PR base branch at `current_head`.
+
+4. **Classify.**
+   - `clean` → set `codex_clean_at = current_head`; write the stamp into
+     `$CLAUDE_JOB_DIR/pr-converge-state.json` (and pass `--codex-clean-at` into
+     `check_convergence.py` when invoking the checklist).
+   - `findings` → apply the shared fix protocol; reset push-invalidated markers
+     (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
+     `bugbot_acknowledged_at`, `codex_down`); `phase = CODE_REVIEW`; schedule
+     next wakeup; return.
+   - `down` / `codex_down` → set `codex_down = true`; continue to convergence
+     gates without blocking ready.
+
 ## Step 3: Re-trigger bugbot
 
 - [ ] **Availability gate.** Enforced at BUGBOT entry (see `### phase == BUGBOT`).
@@ -413,10 +452,14 @@ fix commit re-enters through CODE_REVIEW.
   (`../../reviewer-gates/SKILL.md` § Gate 3) against `current_head` — the
   silent-pass pre-check, the already-queued check, the trigger comment, and
   the acknowledge check, with their rationale. Map its outcomes:
-- [ ] Silent pass → set `bugbot_clean_at = current_head`, advance to the [convergence gates](convergence-gates.md) same tick
+- [ ] Silent pass → set `bugbot_clean_at = current_head`, run the
+  [Codex review step](#codex-review-step-conditional), advance to the
+  [convergence gates](convergence-gates.md) same tick
 - [ ] Already queued → skip posting, wait for completion, advance to Step 4
 - [ ] Trigger acknowledged (`bugbot_acknowledged_at` recorded) → advance to Step 4
-- [ ] Bugbot down → set `bugbot_down = true`, advance to the [convergence gates](convergence-gates.md) same tick
+- [ ] Bugbot down → set `bugbot_down = true`, run the
+  [Codex review step](#codex-review-step-conditional), advance to the
+  [convergence gates](convergence-gates.md) same tick
 
 ## Step 4: Loop pacing
 

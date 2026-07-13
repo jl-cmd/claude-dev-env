@@ -49,9 +49,10 @@ EXPECTED_ALL_PASS_STDOUT = (
     "2. bugbot review body clean: PASS — clean\n"
     "3. bugteam_clean_at == current_head: PASS — clean\n"
     "4. copilot_clean_at == current_head: PASS — clean\n"
-    "5. zero unresolved bot threads: PASS — clean\n"
-    "6. PR is mergeable: PASS — clean\n"
-    "7. no pending requested reviews: PASS — clean\n\n"
+    "5. codex_clean_at == current_head: PASS — skipped (usage at/below threshold)\n"
+    "6. zero unresolved bot threads: PASS — clean\n"
+    "7. PR is mergeable: PASS — clean\n"
+    "8. no pending requested reviews: PASS — clean\n\n"
     "All pre-conditions met — PR is ready to mark ready.\n"
 )
 
@@ -60,9 +61,10 @@ EXPECTED_BUGBOT_DOWN_STDOUT = (
     "1. bugbot_clean_at == current_head: PASS — bypassed (bugbot_down)\n"
     "2. bugteam_clean_at == current_head: PASS — clean\n"
     "3. copilot_clean_at == current_head: PASS — clean\n"
-    "4. zero unresolved bot threads: PASS — clean\n"
-    "5. PR is mergeable: PASS — clean\n"
-    "6. no pending requested reviews: PASS — clean\n\n"
+    "4. codex_clean_at == current_head: PASS — skipped (usage at/below threshold)\n"
+    "5. zero unresolved bot threads: PASS — clean\n"
+    "6. PR is mergeable: PASS — clean\n"
+    "7. no pending requested reviews: PASS — clean\n\n"
     "All pre-conditions met — PR is ready to mark ready.\n"
 )
 
@@ -72,9 +74,10 @@ EXPECTED_COPILOT_DOWN_STDOUT = (
     "2. bugbot review body clean: PASS — clean\n"
     "3. bugteam_clean_at == current_head: PASS — clean\n"
     "4. copilot_clean_at == current_head: PASS — bypassed (copilot_down)\n"
-    "5. zero unresolved bot threads: PASS — clean\n"
-    "6. PR is mergeable: PASS — clean\n"
-    "7. no pending requested reviews: PASS — bypassed (copilot_down)\n\n"
+    "5. codex_clean_at == current_head: PASS — skipped (usage at/below threshold)\n"
+    "6. zero unresolved bot threads: PASS — clean\n"
+    "7. PR is mergeable: PASS — clean\n"
+    "8. no pending requested reviews: PASS — bypassed (copilot_down)\n\n"
     "All pre-conditions met — PR is ready to mark ready.\n"
 )
 
@@ -114,8 +117,15 @@ def _refuse_bugteam_clean(**_call_keywords: object) -> tuple[bool, str]:
     )
 
 
+def _null_codex_percent_left() -> float | None:
+    return None
+
+
 def _patch_gates_clean(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(check_convergence, "_get_pr_head_sha", _clean_head)
+    monkeypatch.setattr(
+        check_convergence, "_probe_codex_percent_left", _null_codex_percent_left
+    )
     for each_gate_name in _ALL_LEAF_GATE_NAMES:
         monkeypatch.setattr(check_convergence, each_gate_name, _clean_gate)
 
@@ -126,7 +136,7 @@ def test_all_pass_stdout_and_exit_code_match_the_pinned_contract(
     _patch_gates_clean(monkeypatch)
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
-    , is_bugteam_post_blocked=False)
+    , is_bugteam_post_blocked=False, is_codex_down=False, live_codex_clean_at=None)
     assert capsys.readouterr().out == EXPECTED_ALL_PASS_STDOUT
     assert exit_code == 0
 
@@ -137,7 +147,7 @@ def test_bugbot_down_bypass_line_matches_the_pinned_contract(
     _patch_gates_clean(monkeypatch)
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=True, is_copilot_down=False
-    , is_bugteam_post_blocked=False)
+    , is_bugteam_post_blocked=False, is_codex_down=False, live_codex_clean_at=None)
     assert capsys.readouterr().out == EXPECTED_BUGBOT_DOWN_STDOUT
     assert exit_code == 0
 
@@ -148,7 +158,7 @@ def test_copilot_down_bypass_lines_match_the_pinned_contract(
     _patch_gates_clean(monkeypatch)
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=True
-    , is_bugteam_post_blocked=False)
+    , is_bugteam_post_blocked=False, is_codex_down=False, live_codex_clean_at=None)
     assert capsys.readouterr().out == EXPECTED_COPILOT_DOWN_STDOUT
     assert exit_code == 0
 
@@ -164,9 +174,9 @@ def test_a_failing_gate_yields_exit_one_and_the_fail_summary(
     monkeypatch.setattr(check_convergence, "_get_mergeable", _blocked_mergeable)
     exit_code = check_convergence.check_all(
         owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
-    , is_bugteam_post_blocked=False)
+    , is_bugteam_post_blocked=False, is_codex_down=False, live_codex_clean_at=None)
     captured_stdout = capsys.readouterr().out
-    assert "6. PR is mergeable: FAIL — blocked\n" in captured_stdout
+    assert "7. PR is mergeable: FAIL — blocked\n" in captured_stdout
     assert captured_stdout.endswith(EXPECTED_FAIL_SUMMARY)
     assert exit_code == 1
 
@@ -181,7 +191,7 @@ def test_gh_error_exit_code_is_two_and_propagates_from_head_fetch(
     with pytest.raises(SystemExit) as raised:
         check_convergence.check_all(
             owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
-        , is_bugteam_post_blocked=False)
+        , is_bugteam_post_blocked=False, is_codex_down=False, live_codex_clean_at=None)
     assert EXIT_CODE_GH_ERROR == 2
     assert raised.value.code == 2
 
@@ -220,6 +230,8 @@ def test_skip_bugteam_gate_when_bugteam_post_blocked_is_true(
         is_bugbot_down=False,
         is_copilot_down=False,
         is_bugteam_post_blocked=True,
+        is_codex_down=False,
+        live_codex_clean_at=None,
     )
     assert "bypassed (bugteam_post_blocked)" in capsys.readouterr().out
     assert exit_code == 0
@@ -245,6 +257,8 @@ def test_run_bugteam_gate_when_bugteam_post_blocked_is_false(
         is_bugbot_down=False,
         is_copilot_down=False,
         is_bugteam_post_blocked=False,
+        is_codex_down=False,
+        live_codex_clean_at=None,
     )
     assert "_check_bugteam_clean" in invoked_gate_names
     assert "bypassed (bugteam_post_blocked)" not in capsys.readouterr().out
@@ -315,6 +329,8 @@ def test_main_derives_bugteam_post_blocked_from_env_when_flag_omitted(
         is_bugbot_down: bool,
         is_copilot_down: bool,
         is_bugteam_post_blocked: bool = False,
+        is_codex_down: bool = False,
+        live_codex_clean_at: str | None = None,
     ) -> int:
         captured_bugteam_post_blocked.append(is_bugteam_post_blocked)
         return 0

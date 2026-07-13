@@ -8,11 +8,12 @@
 - [(d) Post-convergence Copilot review request](#d-post-convergence-copilot-review-request)
 - [(e) Thread-resolution gate](#e-thread-resolution-gate)
 - [(f) Mark ready and report](#f-mark-ready-and-report)
+- [(g) Codex review gate (conditional-required)](#g-codex-review-gate-conditional-required)
 Run **only** after the terminal Bugbot gate confirms the HEAD
 (`bugbot_clean_at == current_head` OR `bugbot_down`), which runs just before
 these gates once Step 2 BUGTEAM reports `convergence (zero findings)` with no
 push during the bugteam tick. Gates run in order; first failure determines
-next-tick behavior. Mark PR ready only when all six pass.
+next-tick behavior. Mark PR ready only when every gate that applies passes.
 
 **Mandatory evidence rule:** Every gate that fetches data MUST produce a
 summary of its findings before proceeding to the next gate. Gate (f) MUST
@@ -218,7 +219,8 @@ Decide:
 ```
 python $HOME/.claude/skills/pr-converge/scripts/check_convergence.py \
   --owner <O> --repo <R> --pr-number <N> \
-  [--bugbot-down] [--copilot-down]
+  [--bugbot-down] [--copilot-down] [--codex-down] \
+  [--codex-clean-at <SHA>]
 ```
 
 Ready means exit `0` and the line:
@@ -233,11 +235,13 @@ Exact printed labels (script order):
 2. `bugbot review body clean` (omitted when `bugbot_down`)
 3. `bugteam_clean_at == current_head`
 4. `copilot_clean_at == current_head`
-5. `zero unresolved bot threads`
-6. `PR is mergeable`
-7. `no pending requested reviews`
+5. `codex_clean_at == current_head` (skipped when usage is at/below threshold,
+   null, `codex_down`, or the `codex` opt-out token)
+6. `zero unresolved bot threads`
+7. `PR is mergeable`
+8. `no pending requested reviews`
 
-On label 5: `isOutdated == true` excludes the thread; bot filter is login
+On label 6: `isOutdated == true` excludes the thread; bot filter is login
 substrings `cursor` | `claude` | `copilot` only. The script has no Claude
 APPROVED review gate.
 
@@ -248,7 +252,7 @@ before invoking the script; they never appear as `check_convergence.py` labels.
 
 When the script fails (exit 1), do NOT mark ready. Report the FAIL label and
 route through the matching fix path (BUGBOT for dirty reviews, rebase for
-merge conflicts, and so on).
+merge conflicts, Codex findings via the shared fix protocol, and so on).
 
 When the script passes (exit 0):
 
@@ -258,5 +262,28 @@ Use the `update_pull_request` MCP tool:
 
 With `state.json`, append convergence row to
 `<TMPDIR>/pr-converge-<session_id>/converged.log` per `multi-pr-orchestration.md` §Memory; else skip.
-Report from the script's PASS lines (the seven labels above). **Omit loop
+Report from the script's PASS lines (the eight labels above). **Omit loop
 pacing** per **Convergence** of active pacing workflow.
+
+## (g) Codex review gate (conditional-required)
+
+Machine condition label: `codex_clean_at == current_head`.
+
+**Threshold rule** (shared with `codex_usage_probe.py` —
+`WEEKLY_USAGE_GATE_THRESHOLD_PERCENT`; never restate the numeric literal):
+
+- When the weekly probe reports **more than** the threshold percent left: a
+  clean Codex review on `current_head` is required. Stamp
+  `codex_clean_at = current_head` after a clean skill run, and pass
+  `--codex-clean-at <SHA>` (or keep it in `$CLAUDE_JOB_DIR/pr-converge-state.json`)
+  so `check_convergence.py` can verify the stamp.
+- When usage is **at or below** the threshold, or `percent_left` is null: the
+  gate is skipped and never blocks ready.
+- When `codex_down == true`, when `CLAUDE_REVIEWS_DISABLED` lists `codex`, or
+  when the caller passes `--codex-down`: the gate is bypassed and never blocks.
+
+**Agent path before the machine checklist:** run the usage probe, then when
+required and not opted out, invoke the `codex-review` skill against the PR base
+branch (HEAD vs base) per [per-tick.md](per-tick.md). Findings enter the shared
+fix protocol; a `codex_down` classification sets `codex_down = true` and
+continues without blocking.
