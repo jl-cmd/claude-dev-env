@@ -34,3 +34,14 @@ query($owner: String!, $repo: String!, $number: Int!, $first: Int!, $cursor: Str
   }
 }
 """
+
+FIXTURE_KEY_HEAD_SHA: str = "head_sha"
+FIXTURE_KEY_PR_OBJECT: str = "pr_object"
+FIXTURE_KEY_REVIEWS: str = "reviews"
+FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED: str = "unresolved_bot_threads_passed"
+FIXTURE_KEY_UNRESOLVED_BOT_THREADS_DETAIL: str = "unresolved_bot_threads_detail"
+FIXTURE_KEY_PENDING_REVIEWS_PASSED: str = "pending_reviews_passed"
+FIXTURE_KEY_PENDING_REVIEWS_DETAIL: str = "pending_reviews_detail"
+FIXTURE_DEFAULT_THREADS_DETAIL: str = "0 unresolved"
+FIXTURE_DEFAULT_PENDING_DETAIL: str = "none pending"
+MERGEABLE_STATE_CLEAN: str = "clean"

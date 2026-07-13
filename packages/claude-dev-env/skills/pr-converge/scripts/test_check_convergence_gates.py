@@ -66,3 +66,19 @@ def test_check_bugbot_reports_success_when_the_named_run_is_complete(
     passed, detail = gates._check_bugbot(owner="o", repo="r", sha="abc")
     assert passed is True
     assert "check run 9" in detail
+
+
+def should_evaluate_mergeable_from_pr_object_clean() -> None:
+    passed, detail = gates._evaluate_mergeable_from_pr_object(
+        {"mergeable": True, "mergeable_state": "clean"}
+    )
+    assert passed is True
+    assert detail == "clean"
+
+
+def should_evaluate_mergeable_from_pr_object_unknown() -> None:
+    passed, detail = gates._evaluate_mergeable_from_pr_object(
+        {"mergeable": None, "mergeable_state": "unknown"}
+    )
+    assert passed is False
+    assert detail == "unknown"
