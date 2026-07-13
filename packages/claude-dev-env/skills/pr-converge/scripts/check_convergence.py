@@ -16,11 +16,11 @@ Each bypass flag closes one reviewer gate when that reviewer is unavailable.
 the Copilot review and pending-review gates. ``--bugteam-post-blocked`` skips
 the bugteam CLEAN-review gate.
 
-Each flag also honors its own reviews-disabled token: "bugbot", "copilot",
-or "bugteam". A caller that cannot pass the flag reaches the same bypass by
-exporting the token. The mark-ready blocker hook re-runs this script with no
-flags, so its convergence re-check reads the bypass from the exported token
-instead.
+Copilot and Bugbot waivers are disk-authoritative: when ``~/.claude/settings.json``
+is readable its env block is the single source; the frozen process env is only a
+fallback when that disk read fails, and the fallback is logged. Bugteam's opt-out
+is env-only via ``_resolve_bugteam_post_blocked``. A probe error enforces the
+gate and prints the reason on the FAIL line.
 """
 
 from __future__ import annotations
@@ -569,12 +569,22 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
 
 
 def _resolve_bugbot_down(is_bugbot_down_flag: bool) -> bool:
-    """Combine the --bugbot-down flag with the env availability gate for Bugbot."""
+    """Pinned contract/unit-test helper for the bugbot flag and env bypass.
+
+    Production ``main()`` resolves Bugbot waivers through ``_resolve_bugbot_waiver``.
+    This function serves only pinned contract and unit tests; issue #120 tracks
+    its removal.
+    """
     return is_bugbot_down_flag or is_bugbot_disabled_via_env()
 
 
 def _resolve_copilot_down(is_copilot_down_flag: bool) -> bool:
-    """Combine the --copilot-down flag with the CLAUDE_REVIEWS_DISABLED env opt-out."""
+    """Pinned contract/unit-test helper for the copilot flag and env bypass.
+
+    Production ``main()`` resolves Copilot waivers through ``_resolve_copilot_waiver``.
+    This function serves only pinned contract and unit tests; issue #120 tracks
+    its removal.
+    """
     return is_copilot_down_flag or is_copilot_disabled_via_env()
 
 
