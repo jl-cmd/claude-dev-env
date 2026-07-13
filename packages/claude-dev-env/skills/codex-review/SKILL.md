@@ -53,6 +53,7 @@ python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer co
 
 - **Exit 0** — Codex reviews are disabled: refuse with the opt-out line above. Do not probe, wrap, or fix.
 - **Exit 1** — continue.
+- **Any other exit** — the shared gate rejects the `--reviewer` argument (the gate must list `codex` among its known reviewer tokens). Treat this parse failure as a blocker and stop; do not skip the gate or continue as if it exited 1.
 
 Gate semantics live in `reviewer-gates` ([../reviewer-gates/SKILL.md](../reviewer-gates/SKILL.md)). The shared script owns the token parse; this skill does not re-parse `CLAUDE_REVIEWS_DISABLED`.
 
