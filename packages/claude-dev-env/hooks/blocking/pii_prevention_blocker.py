@@ -103,7 +103,7 @@ def list_staged_file_paths(
     try:
         completed_process = subprocess.run(
             list(ALL_STAGED_FILES_COMMAND),
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(repository_root),
@@ -137,7 +137,7 @@ def read_staged_file_text(
     try:
         completed_process = subprocess.run(
             list(ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX) + [staged_blob_reference],
-            capture_output=True,
+            check=False, capture_output=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(repository_root),
         )
@@ -236,7 +236,7 @@ def _host_and_path_from_scheme_url(origin_url: str) -> tuple[str, str] | None:
     if maybe_host is None:
         return None
     try:
-        parsed_url.port
+        _ = parsed_url.port
     except ValueError:
         return None
     repository_path = parsed_url.path.replace(
@@ -337,7 +337,7 @@ def _repository_origin_slug(repository_root: Path) -> str | None:
     try:
         completed_process = subprocess.run(
             list(ALL_GIT_ORIGIN_URL_COMMAND),
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(repository_root),

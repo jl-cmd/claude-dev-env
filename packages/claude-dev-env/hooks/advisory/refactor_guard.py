@@ -8,7 +8,6 @@ functions, restructuring) rather than writing new code or replacing wholesale.
 Only fires for Edit operations (not Write, which creates/replaces entire files).
 """
 import json
-import os
 import re
 import subprocess
 import sys
@@ -24,7 +23,7 @@ def get_git_diff_added_lines(file_path: str) -> set[str]:
     try:
         result = subprocess.run(
             ["git", "diff", "HEAD", "--", file_path],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=5,
         )
@@ -34,7 +33,7 @@ def get_git_diff_added_lines(file_path: str) -> set[str]:
 
         staged_result = subprocess.run(
             ["git", "diff", "--staged", "--", file_path],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=5,
         )
@@ -51,7 +50,7 @@ def is_new_file(file_path: str) -> bool:
     try:
         result = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard", "--", file_path],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=5,
         )

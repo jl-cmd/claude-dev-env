@@ -154,7 +154,7 @@ def _bool_parameters_for_function(
             continue
         if _argument_is_boolean(each_argument, default_node):
             bool_parameters.append((each_argument.arg, each_argument.lineno))
-    for each_argument, each_default in zip(arguments.kwonlyargs, arguments.kw_defaults):
+    for each_argument, each_default in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=False):
         if each_argument.arg in ALL_SELF_AND_CLS_PARAMETER_NAMES:
             continue
         if _argument_is_boolean(each_argument, each_default):

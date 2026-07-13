@@ -48,6 +48,7 @@ PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__
 HOOKS_DIR = os.path.join(PLUGIN_ROOT, "hooks") + os.sep
 PYTHON_FORMAT_TIMEOUT_SECONDS = 12
 JS_FORMAT_TIMEOUT_SECONDS = 30
+GIT_LS_FILES_TIMEOUT_SECONDS = 5
 PRETTIER_CONFIG_NAMES = {
     ".prettierrc",
     ".prettierrc.json",
@@ -99,10 +100,10 @@ def is_untracked_in_git(file_path: str) -> bool:
     try:
         git_check = subprocess.run(
             ["git", "ls-files", "--error-unmatch", file_path],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             cwd=containing_directory,
-            timeout=5,
+            timeout=GIT_LS_FILES_TIMEOUT_SECONDS,
         )
         return git_check.returncode != 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -150,7 +151,7 @@ def main() -> None:
             [sys.executable, "-m", "black", file_path],
         ]:
             try:
-                format_run = subprocess.run(each_formatter_command, capture_output=True, text=True, timeout=PYTHON_FORMAT_TIMEOUT_SECONDS)
+                format_run = subprocess.run(each_formatter_command, check=False, capture_output=True, text=True, timeout=PYTHON_FORMAT_TIMEOUT_SECONDS)
                 if format_run.returncode == 0:
                     formatter_name = each_formatter_command[0] if each_formatter_command[0] != sys.executable else each_formatter_command[2]
                     send_format_notification(file_path, formatter_name)
@@ -165,7 +166,7 @@ def main() -> None:
         try:
             prettier_run = subprocess.run(
                 ["npx", "--yes", "prettier", "--write", file_path],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True,
                 timeout=JS_FORMAT_TIMEOUT_SECONDS,
             )

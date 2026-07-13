@@ -46,14 +46,18 @@ def _read_body_file_contents(file_path: str) -> str | None:
         resolved_target = given_path.resolve()
         try:
             resolved_target.relative_to(allowed_root)
-        except ValueError:
-            raise PathTraversalError("symlink target resolves outside allowed root")
+        except ValueError as traversal_error:
+            raise PathTraversalError(
+                "symlink target resolves outside allowed root"
+            ) from traversal_error
     resolved_path = given_path.resolve()
     if not given_path.is_absolute():
         try:
             resolved_path.relative_to(allowed_root)
-        except ValueError:
-            raise PathTraversalError("relative path resolves outside allowed root")
+        except ValueError as traversal_error:
+            raise PathTraversalError(
+                "relative path resolves outside allowed root"
+            ) from traversal_error
     try:
         with open(resolved_path, "r", encoding=UTF8_ENCODING, errors="replace") as body_file:
             return body_file.read()

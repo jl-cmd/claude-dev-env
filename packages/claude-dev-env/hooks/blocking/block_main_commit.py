@@ -80,7 +80,7 @@ def get_branch_at_directory(working_dir: str | None = None) -> str | None:
     try:
         completed_process = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=working_dir,
@@ -99,7 +99,7 @@ def is_protected_repo(working_dir: str | None = None) -> bool:
     try:
         completed_process = subprocess.run(
             ["git", "remote", "get-url", "origin"],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=working_dir,

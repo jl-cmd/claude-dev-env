@@ -183,7 +183,7 @@ def _collect_fixture_injection_arguments(
     undefaulted_keyword_only_arguments = [
         each_keyword_argument
         for each_keyword_argument, each_default in zip(
-            arguments.kwonlyargs, arguments.kw_defaults
+            arguments.kwonlyargs, arguments.kw_defaults, strict=False
         )
         if each_default is None
     ]

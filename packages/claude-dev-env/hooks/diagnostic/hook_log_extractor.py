@@ -309,7 +309,7 @@ class AttachmentRecordIterator:
 
     def __iter__(self) -> Iterator[tuple[dict[str, object], int, int]]:
         try:
-            jsonl_file_handle = io.open(self._jsonl_file_path, "rb")
+            jsonl_file_handle = io.open(self._jsonl_file_path, "rb")  # noqa: SIM115
         except (FileNotFoundError, OSError):
             self.final_line_number = self._start_line_number
             self.final_byte_offset = self._start_offset
@@ -419,14 +419,13 @@ def save_offsets(
     state_file_parent = os.path.dirname(state_file_path)
     if state_file_parent:
         os.makedirs(state_file_parent, exist_ok=True)
-    temporary_file_handle = tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",
         dir=state_file_parent or None,
         delete=False,
-    )
-    temporary_file_path = temporary_file_handle.name
-    try:
+    ) as temporary_file_handle:
+        temporary_file_path = temporary_file_handle.name
         try:
             json.dump(
                 offset_by_jsonl_path,
@@ -436,8 +435,14 @@ def save_offsets(
             )
             temporary_file_handle.flush()
             os.fsync(temporary_file_handle.fileno())
-        finally:
+        except Exception:
             temporary_file_handle.close()
+            try:
+                os.unlink(temporary_file_path)
+            except OSError:
+                pass
+            raise
+    try:
         os.replace(temporary_file_path, state_file_path)
     except Exception:
         try:
@@ -468,15 +473,12 @@ def _acquire_offsets_lock(state_file_path: str) -> Iterator[None]:
     lock_parent_directory = os.path.dirname(lock_file_path)
     if lock_parent_directory:
         os.makedirs(lock_parent_directory, exist_ok=True)
-    lock_file_handle = io.open(lock_file_path, "a+", encoding="utf-8")
-    try:
+    with io.open(lock_file_path, "a+", encoding="utf-8") as lock_file_handle:
         _lock_file_handle_blocking(lock_file_handle)
         try:
             yield
         finally:
             _unlock_file_handle(lock_file_handle)
-    finally:
-        lock_file_handle.close()
 
 
 def _lock_file_handle_blocking(lock_file_handle: IO[str]) -> None:

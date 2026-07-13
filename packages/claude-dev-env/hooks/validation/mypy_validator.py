@@ -70,7 +70,7 @@ def discover_project_root(target_file: str) -> Path | None:
     try:
         completed_process = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(Path(target_file).parent),
@@ -359,7 +359,7 @@ def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
 
     completed_process = subprocess.run(
         mypy_command,
-        capture_output=True,
+        check=False, capture_output=True,
         text=True,
         env=os.environ.copy(),
         timeout=MYPY_TIMEOUT_SECONDS,

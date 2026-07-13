@@ -149,7 +149,7 @@ def _write_swap_state(
     serialized_payload = json.dumps(swap_state).encode(STATE_FILE_PAYLOAD_TEXT_ENCODING_NAME)
     open_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, OS_O_NOFOLLOW_ATTRIBUTE_NAME):
-        open_flags |= os.O_NOFOLLOW  # type: ignore[attr-defined]  # POSIX-only flag, guarded by hasattr above
+        open_flags |= getattr(os, OS_O_NOFOLLOW_ATTRIBUTE_NAME)
     file_descriptor = _open_state_file_with_retry(state_file, open_flags)
     if file_descriptor is None:
         return False
