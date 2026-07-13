@@ -21,9 +21,9 @@ Respond with the quoted line exactly and stop:
 
 - Opt-out gate exit 0: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
 - Version or shape probe reports Codex unavailable: `/codex-review cannot run: Codex CLI is missing or the shape probe failed.`
-- Wrapper classifies `down`: `/codex-review cannot complete: Codex reviewer is down.`
+- Classification is `down`: `/codex-review cannot complete: Codex reviewer is down.`
 
-Gate exits other than 0 or 1 (including the shared gate rejecting `--reviewer codex`) are blockers: stop without a probe or wrapper call. Do not invent an opt-out refusal for a parse failure.
+Gate exits other than 0 or 1 (including the shared gate rejecting `--reviewer codex`) are blockers: stop without a probe or review invoke. Do not invent an opt-out refusal for a parse failure.
 
 ## Sub-skills
 
@@ -40,7 +40,7 @@ If `pr-fix-protocol` is not installed when findings exist, stop with: `/codex-re
 - [ ] Step 0 — Opt-out gate
 - [ ] Step 1 — Version and shape probe
 - [ ] Step 2 — Target pick
-- [ ] Step 3 — Invoke wrapper
+- [ ] Step 3 — Run classifying review
 - [ ] Step 4 — Classify outcome
 - [ ] Step 5 — Route findings (or stop on clean / down)
 ```
@@ -53,7 +53,7 @@ Before any other work, run:
 python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer codex
 ```
 
-- **Exit 0** — Codex reviews are disabled: refuse with the opt-out line above. Do not probe, wrap, or fix.
+- **Exit 0** — Codex reviews are disabled: refuse with the opt-out line above. Do not probe, review, or fix.
 - **Exit 1** — continue.
 - **Any other exit** — the shared gate rejects the `--reviewer` argument. Known tokens are `bugbot`, `bugteam`, and `copilot`; `codex` is not among them, so this invocation exits with a parse failure (exit 2). Treat that parse failure as a blocker and stop; do not skip the gate or continue as if it exited 1. Do not report the opt-out refusal line for a parse failure.
 
@@ -72,21 +72,23 @@ Choose what Codex reviews:
 
 | Context | Target |
 |---|---|
-| PR-loop caller (or an open PR on the current branch) | Diff against the PR base branch |
-| Standalone run with no PR | Uncommitted work (staged and unstaged), falling back to the working tree state the wrapper accepts |
+| PR-loop caller (or an open PR on the current branch) | Diff against the PR base branch (`--base`) |
+| Standalone run with no PR | Uncommitted work via `--uncommitted` (staged + unstaged + untracked) |
 
 Do not invent a synthetic commit range when a base branch is available. Loop-caller wiring for base-branch resolution lives in [reference/loop-integration.md](reference/loop-integration.md).
 
-### Step 3: Invoke wrapper
+### Step 3: Run classifying review
 
-Run the Codex review wrapper against the chosen target.
+Run Codex against the chosen target on the classifying path only.
 
-- **CLI surface:** [reference/cli-contract.md](reference/cli-contract.md) — raw command forms (`codex review`, `codex exec … review`), option ordering, success JSONL stream, finding-bullet text shape, and `codex_down` failure classes.
-- **This skill's job:** pass the Step 2 target and collect a structured outcome for classification. Do not parse raw Codex stdout inline in these steps; the wrapper owns that boundary.
+- **Classifying command:** `codex exec [options] review --json …` — this is the only path that emits the success JSONL stream Step 4 reads. Full surface: [reference/cli-contract.md](reference/cli-contract.md).
+- **Non-classifying form:** plain `codex review` (no `exec`, no `--json`) is not a classification input on the observed CLI; do not feed its stdout into Step 4.
+- **`scripts/` surface:** this package's `scripts/` directory holds named constants only. The headless wrapper entrypoint is sister work and is not present here.
+- **Interim classify path:** agents classify only from the `codex exec … review --json` JSONL stream via the skill-class map in Step 4. Do not invent a non-JSONL parse. Fail closed on probe miss, non-usable stream, or `codex_down` — the same honesty as the gate parse-failure path.
 
 ### Step 4: Classify outcome
 
-Map the wrapper result to exactly one skill-level class:
+Map the JSONL observation to exactly one skill-level class:
 
 | Class | Meaning | Next action |
 |---|---|---|
@@ -126,33 +128,34 @@ This skill does not restate the fix sequence. Orchestrator callers that re-enter
 
 <example>
 User: `/codex-review`
-Claude: [runs opt-out gate; on exit 1 probes Codex shape, picks base-branch or uncommitted target, invokes wrapper, reports clean or routes findings; on non-0/1 gate exit stops as a blocker]
+Claude: [runs opt-out gate; on exit 1 probes Codex shape, picks base-branch or `--uncommitted` target, runs `codex exec … review --json`, classifies from JSONL, reports clean or routes findings; on non-0/1 gate exit stops as a blocker]
 </example>
 
 <example>
 User: "babysit codex review on this PR"
-Claude: [same flow; after findings, applies pr-fix-protocol, then re-invokes wrapper once for confirmation when the caller stays on this skill]
+Claude: [same flow; after findings, applies pr-fix-protocol, then re-runs the classifying review once for confirmation when the caller stays on this skill]
 </example>
 
 ## Gotchas
 
 - **`--reviewer codex` is the token this skill passes.** The shared gate's known tokens are `bugbot`, `bugteam`, and `copilot`. Step 0 therefore exits with a parse failure (not 0 or 1). Treat that as a blocker and stop rather than skipping the gate. Opt-out exit 0 and the opt-out refusal line apply only when the gate accepts the token and the env list disables it.
-- **Raw Codex CLI output is not the findings format.** Only a wrapper-classified `findings` payload enters Step 5.
+- **Only `codex exec … review --json` JSONL is classifiable.** Plain `codex review` stdout is non-classifying. Only a Step 4 `findings` class enters Step 5.
+- **`scripts/` holds constants only.** The headless wrapper entrypoint is sister work; agents do not invent a non-JSONL parse in this package.
 - **Uncommitted targets have no review threads.** Fix protocol reply-and-resolve applies only when a PR carries threads; local-only runs stop after the fix commit path the protocol allows without a PR.
 
 ## File index
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Hub: opt-out, probe, target, wrapper, classify, fix handoff |
+| `SKILL.md` | Hub: opt-out, probe, target, classifying review, classify, fix handoff |
 | `CLAUDE.md` | Package map for agents opening this skill |
-| `reference/cli-contract.md` | Observed CLI surface, `codex_down`, skill-class map |
+| `reference/cli-contract.md` | Observed CLI surface, probe signals, `codex_down`, skill-class map |
 | `reference/loop-integration.md` | PR-loop target pick and re-entry after fixes |
-| `scripts/codex_review_scripts_constants/` | Named constants for skill scripts |
+| `scripts/codex_review_scripts_constants/` | Named constants only (wrapper entrypoint is sister work) |
 
 ## Folder map
 
 - `SKILL.md` — orchestration steps and refusals.
 - `CLAUDE.md` — purpose, trigger, key files.
 - `reference/` — cli-contract and loop-integration detail.
-- `scripts/codex_review_scripts_constants/` — importable constants package.
+- `scripts/codex_review_scripts_constants/` — importable constants package (no wrapper entrypoint here).

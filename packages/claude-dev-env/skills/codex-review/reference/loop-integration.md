@@ -6,8 +6,8 @@ How `codex-review` plugs into PR-loop orchestrators and standalone runs.
 
 | Caller context | Target |
 |---|---|
-| PR loop (`pr-converge`, `autoconverge`, `bugteam`, or an open PR on the branch) | Diff against the PR base branch |
-| Standalone (no PR) | Uncommitted work (staged and unstaged) per the wrapper contract |
+| PR loop (`pr-converge`, `autoconverge`, `bugteam`, or an open PR on the branch) | Diff against the PR base branch (`--base`) |
+| Standalone (no PR) | Uncommitted work via `--uncommitted` (staged + unstaged + untracked) |
 
 ## Classification vocabulary
 
@@ -28,5 +28,5 @@ When classification is `findings`, the skill invokes `pr-fix-protocol` by name w
 Orchestrators that keep looping after a push:
 
 1. Re-resolve current HEAD.
-2. Re-run the Codex wrapper against the same target class (base branch vs uncommitted).
+2. Re-run the classifying path (`codex exec … review --json`) against the same target class (base branch vs `--uncommitted`).
 3. Re-classify with the table above.

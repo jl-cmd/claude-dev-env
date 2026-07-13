@@ -80,7 +80,6 @@ def test_skill_documents_flow_skeleton() -> None:
     skill_text_lower = skill_text.lower()
 
     assert "shape probe" in skill_text_lower
-    assert "wrapper" in skill_text_lower
     assert "classif" in skill_text_lower
     assert "`down`" in skill_text
     assert "`clean`" in skill_text
@@ -88,6 +87,76 @@ def test_skill_documents_flow_skeleton() -> None:
     assert "`codex_down`" in skill_text
     assert "base branch" in skill_text_lower
     assert "uncommitted" in skill_text_lower
+    assert "untracked" in skill_text_lower
+
+
+def test_skill_classifying_path_is_exec_with_json() -> None:
+    skill_text = _read_skill_text()
+    cli_contract_text = (REFERENCE_DIRECTORY / "cli-contract.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "codex exec" in skill_text
+    assert "--json" in skill_text
+    assert (
+        "codex exec … review --json" in skill_text
+        or "codex exec [options] review --json" in skill_text
+    )
+    assert "non-classifying" in skill_text.lower() or "Non-classifying" in skill_text
+    assert "codex exec" in cli_contract_text
+    assert "--json" in cli_contract_text
+    assert "non-classifying" in cli_contract_text.lower()
+
+
+def test_cli_contract_probe_lists_minimum_shape_signals() -> None:
+    cli_contract_text = (REFERENCE_DIRECTORY / "cli-contract.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "codex exec review --help" in cli_contract_text
+    assert "Minimum shape signals" in cli_contract_text
+    assert "Fail-closed rule" in cli_contract_text
+    assert "--uncommitted" in cli_contract_text
+    assert "--base" in cli_contract_text
+    assert "--commit" in cli_contract_text
+    assert "--json" in cli_contract_text
+    assert "`review`" in cli_contract_text
+
+
+def test_scripts_surface_is_constants_only_wrapper_is_sister_work() -> None:
+    skill_text = _read_skill_text()
+    package_map_text = PACKAGE_MAP_PATH.read_text(encoding="utf-8")
+    constants_map_text = (
+        SKILL_DIRECTORY / "scripts" / "codex_review_scripts_constants" / "CLAUDE.md"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        "constants only" in skill_text.lower() or "Named constants only" in skill_text
+    )
+    assert "sister work" in skill_text.lower()
+    assert "non-JSONL" in skill_text or "non-jsonl" in skill_text.lower()
+    assert "sister work" in package_map_text.lower()
+    assert (
+        "constants only" in package_map_text.lower()
+        or "Named constants only" in package_map_text
+    )
+    assert "sister work" in constants_map_text.lower()
+
+
+def test_uncommitted_includes_untracked() -> None:
+    skill_text = _read_skill_text()
+    cli_contract_text = (REFERENCE_DIRECTORY / "cli-contract.md").read_text(
+        encoding="utf-8"
+    )
+    loop_integration_text = (REFERENCE_DIRECTORY / "loop-integration.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "untracked" in skill_text.lower()
+    assert "staged + unstaged + untracked" in cli_contract_text.lower()
+    assert "untracked" in loop_integration_text.lower()
+    assert "--uncommitted" in skill_text
+    assert "--uncommitted" in loop_integration_text
 
 
 def test_skill_body_stays_under_line_cap() -> None:
@@ -104,6 +173,7 @@ def test_package_map_claude_md_exists() -> None:
     assert "reference/" in package_map_text
     assert "cli-contract.md" in package_map_text
     assert "codex_down" in package_map_text
+    assert "review --json" in package_map_text
 
 
 def test_reference_shell_pages_exist() -> None:

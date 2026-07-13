@@ -1,12 +1,22 @@
 # CLI contract
 
-Observed shape of the Codex CLI review surface the wrapper invokes. Fixture capture: `codex` 0.144.3.
+Observed shape of the Codex CLI review surface the skill classifies from. Fixture capture: `codex` 0.144.3.
 
 ## Command shape
 
-### `codex review`
+### Classifying path: `codex exec … review --json`
 
-Non-interactive code review.
+Skill classification (Step 4) reads only the JSONL stream from:
+
+```text
+codex exec [exec-options] review --json [review-options] [PROMPT]
+```
+
+`--json` is required for a classifiable success stream. Without `--json`, stdout is not a Step 4 input.
+
+### `codex review` (non-classifying)
+
+Plain `codex review` is a non-interactive review form. It is **not** the skill classifying path: bare `codex review --json` is not a supported classifiable form on the observed CLI (0.144.3). Do not feed plain `codex review` stdout into skill classification.
 
 | Form | Role |
 |---|---|
@@ -18,7 +28,7 @@ Non-interactive code review.
 | `--title <TITLE>` | Review title |
 | `--enable` / `--disable <FEATURE>` | Feature toggles |
 
-Exactly one target among `PROMPT`, `--uncommitted`, `--base`, and `--commit`.
+Exactly one target among `PROMPT`, `--uncommitted`, `--base`, and `--commit`. The same target flags apply under `codex exec … review`.
 
 ### `codex exec`
 
@@ -35,12 +45,12 @@ Subcommands: `resume`, `review`, `help`.
 | `--full-auto` | Full auto |
 | `--dangerously-bypass-approvals-and-sandbox` | Bypass approvals and sandbox |
 | `-C` / `--cd <DIR>` | Working directory |
-| `--json` | JSONL event stream on stdout |
+| `--json` | JSONL event stream on stdout (required for classification) |
 | `-o` / `--output-last-message` | Write last message to a path |
 
 ### Ordering rule
 
-`codex exec` options belong **before** the `review` subcommand.
+`codex exec` options belong **before** the `review` subcommand. Review options such as `--json` and `--uncommitted` follow `review`.
 
 - Parses: `codex exec review --json --uncommitted`
 - Fails (exit 2, usage on stderr): trailing `-C <DIR>` after `review` (`unexpected argument '-C' found`)
@@ -49,7 +59,7 @@ Run from the target repo directory, or place `-C <DIR>` before `review`.
 
 ## Success stream
 
-With `--json`, a successful run writes JSONL on stdout and exits 0.
+`codex exec … review --json` writes JSONL on stdout and exits 0 on success.
 
 1. `thread.started` — includes `thread_id`
 2. `turn.started`
@@ -96,4 +106,20 @@ Skill steps and loop re-entry use three skill-level classes. This page's raw CLI
 
 ## Probe
 
-The wrapper probes `codex exec review --help` and treats any unrecognized shape as `codex_down` (skill class `down`).
+Probe command: `codex exec review --help`.
+
+### Minimum shape signals
+
+The help text must include each of these greppable tokens:
+
+| Signal | Role |
+|---|---|
+| `review` | Subcommand present under `codex exec` |
+| `--uncommitted` | Staged + unstaged + untracked target |
+| `--base` | Base-branch target |
+| `--commit` | Commit-SHA target |
+| `--json` | JSONL event stream on stdout |
+
+### Fail-closed rule
+
+Any missing signal, non-zero probe exit, or missing binary is `codex_down` (skill class `down`). Do not continue to a review invoke when the probe fails.
