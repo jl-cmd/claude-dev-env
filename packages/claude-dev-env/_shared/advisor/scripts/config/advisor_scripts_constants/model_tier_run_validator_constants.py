@@ -9,7 +9,7 @@ that mark a bind.
     attempt = {"tier": "Opus", "result": "spawned"}
                        ^^^^^^           ^^^^^^^^^
                        a ladder tier    SPAWN_SUCCESS_TOKEN
-    ok:   "self" marks a Grok host self-bind (SELF_BIND_SUCCESS_TOKEN)
+    ok:   "cli" marks a CLI Claude-chain bind (CLI_BIND_SUCCESS_TOKEN)
     flag: any other result token counts as no bind
 
 The alias map turns each tier into its short CLI / Agent name (``opus``,
@@ -31,6 +31,7 @@ ALL_HOST_PROFILES: tuple[str, ...] = (HOST_PROFILE_CLAUDE, HOST_PROFILE_GROK)
 ALL_MODEL_TIERS: tuple[str, ...] = ("Fable", "Opus", "Sonnet", "Haiku")
 GROK_MODEL_TIER: str = "Grok"
 ALL_KNOWN_TIER_NAMES: tuple[str, ...] = (*ALL_MODEL_TIERS, GROK_MODEL_TIER)
+GROK_CLI_ADVISOR_FLOOR_TIER: str = "Opus"
 
 ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS: int = 120
 
@@ -51,7 +52,7 @@ ALL_GROK_BUILD_TRUTHY_VALUES: frozenset[str] = frozenset(
 TIER_KEY: str = "tier"
 SPAWN_OUTCOME_KEY: str = "result"
 SPAWN_SUCCESS_TOKEN: str = "spawned"
-SELF_BIND_SUCCESS_TOKEN: str = "self"
+CLI_BIND_SUCCESS_TOKEN: str = "cli"
 
 UNKNOWN_OWN_TIER_MESSAGE: str = "own_tier is not a known model tier"
 UNKNOWN_LADDER_NAME_ERROR: str = "ladder name is not a known model tier: {!r}"

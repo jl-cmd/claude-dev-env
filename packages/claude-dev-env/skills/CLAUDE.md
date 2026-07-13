@@ -23,9 +23,9 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 
 **Planning and implementation**
 - `anthropic-plan` — creates a source-grounded plan packet before any code changes
-- `orchestrator` — turns the session into the orchestrator: it spawns executor subagents to do the code edits and test runs; hard decisions go to a shared advisor (Claude warm `session-advisor` via SendMessage; Grok self-as-advisor on the orchestrating session)
-- `orchestrator-refresh` — sub-skill fired by the `/orchestrator` loop to re-assert the host-matched shared-advisor discipline mid-run (Claude SendMessage; Grok self-as-advisor, no Agent spawn)
-- `team-advisor` — binds one advisor at the strongest reachable tier (Claude warm agent; Grok self-as-advisor) and consults it for a second opinion before a big decision, at completion, when stuck, or when reconsidering the approach
+- `orchestrator` — turns the session into the orchestrator: it spawns executor subagents to do the code edits and test runs; hard decisions go to a shared advisor (Claude warm `session-advisor` via SendMessage; Grok: max-tier Claude via CLI Claude-chain)
+- `orchestrator-refresh` — sub-skill fired by the `/orchestrator` loop to re-assert the host-matched shared-advisor discipline mid-run (Claude SendMessage; Grok Claude CLI chain, no Agent-tool advisor spawn)
+- `team-advisor` — binds one advisor at the strongest reachable tier (Claude warm agent; Grok max-tier Claude via CLI Claude-chain, fail closed when unreachable) and consults it for a second opinion before a big decision, at completion, when stuck, or when reconsidering the approach
 
 **PR review and convergence**
 - `autoconverge` — autonomous single-run workflow that drives a PR to ready

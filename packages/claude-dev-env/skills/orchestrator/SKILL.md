@@ -30,7 +30,7 @@ communication flows through it. It spawns and resumes executor subagents
 — `clean-coder` and the like — and those executors do every bit of the
 execution: the code edits, the build runs, the test runs. The orchestrating
 session drives the plan and routes hard decisions to the shared advisor
-(Claude: warm `session-advisor`; Grok: this session self-as-advisor).
+(Claude: warm `session-advisor`; Grok: Claude CLI advisor via the chain runner).
 
 ## Gotchas
 
@@ -43,7 +43,7 @@ session drives the plan and routes hard decisions to the shared advisor
   wasted. Hand every code edit and every build or test run to an executor; keep
   the orchestrating session's own tool use to orchestration and light
   verification reads. Hard decisions go to the shared advisor (Claude:
-  `session-advisor` via SendMessage; Grok: this session inline).
+  `session-advisor` via SendMessage; Grok: Claude CLI advisor via the chain).
 - **Flat ad hoc spawns bypass routing.** Every execution task goes through a
   workflow-backed spawn or workflow resume so the required agent type, model,
   prompt packet, and sidecar metadata stay attached to the work.
@@ -54,15 +54,15 @@ session drives the plan and routes hard decisions to the shared advisor
   spawn returns an `agentId` (format `a...-...`); keep it so `SendMessage` can
   reach that agent later. A named agent is reachable by name.
 - **Only the orchestrating session owns the shared advisor's lifecycle.** An
-  executor that finds the advisor unreachable (Claude warm agent, or this
-  session on Grok) reports that upward; it never spawns a replacement itself.
+  executor that finds the advisor unreachable (Claude warm agent, or Claude
+  CLI bind on Grok) reports that upward; it never spawns a replacement itself.
 
 ## Process
 
 1. **Check whether the refresh loop is already running this
    session.** If it is, do not schedule a second loop. Reuse any live
-   shared advisor bind (Claude warm `session-advisor`, or Grok self-bind —
-   run step 3 only when none exists yet), then skip straight to step 4.
+   shared advisor bind (Claude warm `session-advisor`, or Grok Claude CLI
+   bind — run step 3 only when none exists yet), then skip straight to step 4.
 
 2. **Register the discipline reminder.** By default, schedule it with
    `ScheduleWakeup` at `delaySeconds: 1200`, prompt `/orchestrator-refresh`,
@@ -85,15 +85,18 @@ session drives the plan and routes hard decisions to the shared advisor
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md);
    it is not a "spawn only at the floor" rule. Paste the **Claude host**
    Advisor block from that doc, with the resolved agent name filled in, into
-   every executor's spawn prompt. On a **Grok host**, skip that spawn — use
-   the protocol's self-as-advisor path (this session *is* the advisor; single
-   tier `Grok`, attempt result `self`). Paste the **Grok host** Advisor block
-   from that doc into every executor's spawn prompt — never the Claude
-   SendMessage block. Every row in the routing table is a consumer of the
-   shared advisor, not just this session. The orchestrating session owns the
-   shared advisor's lifecycle end to end (spawn or self-bind, drift handling
-   per the shared doc, shutdown at task end); executors only ever SendMessage
-   the warm agent (Claude) or report to this session (Grok).
+   every executor's spawn prompt. On a **Grok host**, skip the Agent spawn —
+   bind a max-tier Claude advisor through the protocol's CLI Claude-chain path
+   (Fable high, then Opus max; `claude_chain_runner.py` for account usage
+   failover). Paste the **Grok host** Advisor block from that doc into every
+   executor's spawn prompt — never the Claude SendMessage block. Every row in
+   the routing table is a consumer of the shared advisor, not just this
+   session. The orchestrating session owns the shared advisor's lifecycle end
+   to end (Agent spawn or CLI bind, drift handling per the shared doc,
+   shutdown at task end); executors only ever SendMessage the warm agent
+   (Claude) or report to this session so it can consult the CLI advisor
+   (Grok). When the CLI chain cannot bind, fail closed and report to the user
+   — do not answer the four signals as this Grok session.
 
 4. **Orchestrate the task.** Hold the plan and the user conversation. Execute
    workflow-backed spawns or resumes using the routing table below, and keep
@@ -112,10 +115,13 @@ session drives the plan and routes hard decisions to the shared advisor
 
    **Claude host:** consult the shared `session-advisor` via `SendMessage`.
    **Grok host:** executors report to this orchestrating session; this session
-   answers the four signals inline (self-as-advisor — no Agent, no
-   SendMessage-to-`session-advisor`). Every consult gets back one of four
-   signals (ENDORSE, CORRECTION, PLAN, or STOP). See
-   `agents/session-advisor.md` for what each signal means and
+   consults the bound Claude CLI advisor (`claude_chain_runner.py` +
+   `--resume`) and relays the four-signal reply (no Agent-tool
+   `session-advisor`, no SendMessage to one). Every consult gets back one of
+   four signals (ENDORSE, CORRECTION, PLAN, or STOP). When the CLI advisor is
+   unreachable, fail closed and surface that to the user — do not invent a
+   signal as this session. See `agents/session-advisor.md` for what each
+   signal means and
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
    for the consult format.
 
@@ -173,8 +179,8 @@ Routing rules:
   session (see
   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md))
   — on Claude, executors consult a warm `session-advisor` via SendMessage; on
-  Grok, this session is the advisor and executors report here. Executors never
-  spawn or respawn the advisor.
+  Grok, executors report here and this session relays the Claude CLI advisor.
+  Executors never spawn or respawn the advisor.
 - Reuse a warm agent over a cold spawn whenever one holds relevant context.
 
 ## File Index

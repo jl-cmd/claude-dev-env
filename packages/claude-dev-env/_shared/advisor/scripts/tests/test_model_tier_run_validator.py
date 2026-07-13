@@ -238,30 +238,75 @@ def test_cli_missing_path_returns_usage_exit_code() -> None:
     assert main([]) == 2
 
 
-def test_grok_host_single_tier_self_bind_passes() -> None:
+def test_cli_bind_at_fable_passes() -> None:
     run = ModelTierRun(
-        own_tier="Grok",
-        candidate_tiers=["Grok"],
-        attempts=[{"tier": "Grok", "result": "self"}],
-        selected_tier="Grok",
+        own_tier="Opus",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[{"tier": "Fable", "result": "cli"}],
+        selected_tier="Fable",
     )
     assert validate_model_tier_run(run) is None
 
 
-def test_grok_host_lowercase_self_bind_passes() -> None:
+def test_cli_bind_fallthrough_to_opus_passes() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[
+            {"tier": "Fable", "result": "unavailable"},
+            {"tier": "Opus", "result": "cli"},
+        ],
+        selected_tier="Opus",
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_grok_own_tier_maps_to_fable_opus_cli_bind_passes() -> None:
+    run = ModelTierRun(
+        own_tier="Grok",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[{"tier": "Fable", "result": "cli"}],
+        selected_tier="Fable",
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_grok_own_tier_lowercase_cli_bind_passes() -> None:
     run = ModelTierRun(
         own_tier="grok",
-        candidate_tiers=["grok"],
-        attempts=[{"tier": "grok", "result": "self"}],
-        selected_tier="grok",
+        candidate_tiers=["fable", "opus"],
+        attempts=[{"tier": "fable", "result": "cli"}],
+        selected_tier="fable",
     )
     assert validate_model_tier_run(run) is None
 
 
-def test_grok_host_multi_tier_candidate_list_raises() -> None:
+def test_self_token_is_not_bind_success_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[{"tier": "Fable", "result": "self"}],
+        selected_tier="Fable",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
+
+
+def test_grok_self_token_is_not_bind_success_raises() -> None:
     run = ModelTierRun(
         own_tier="Grok",
-        candidate_tiers=["Fable", "Opus", "Grok"],
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[{"tier": "Fable", "result": "self"}],
+        selected_tier="Fable",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
+
+
+def test_grok_host_legacy_single_tier_self_bind_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Grok",
+        candidate_tiers=["Grok"],
         attempts=[{"tier": "Grok", "result": "self"}],
         selected_tier="Grok",
     )
@@ -269,22 +314,41 @@ def test_grok_host_multi_tier_candidate_list_raises() -> None:
         validate_model_tier_run(run)
 
 
-def test_grok_host_spawned_token_is_not_self_bind_raises() -> None:
+def test_grok_cli_exhausted_fail_closed_passes() -> None:
     run = ModelTierRun(
         own_tier="Grok",
-        candidate_tiers=["Grok"],
-        attempts=[{"tier": "Grok", "result": "spawned"}],
-        selected_tier="Grok",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[
+            {"tier": "Fable", "result": "unavailable"},
+            {"tier": "Opus", "result": "unavailable"},
+        ],
+        selected_tier=None,
+        fallback_reason=(
+            "Grok host CLI Claude-chain exhausted; fail closed"
+        ),
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_grok_cli_exhausted_without_fallback_reason_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Grok",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[
+            {"tier": "Fable", "result": "unavailable"},
+            {"tier": "Opus", "result": "unavailable"},
+        ],
+        selected_tier=None,
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
 
 
-def test_grok_host_selected_tier_mismatch_raises() -> None:
+def test_grok_cli_selected_tier_mismatch_raises() -> None:
     run = ModelTierRun(
         own_tier="Grok",
-        candidate_tiers=["Grok"],
-        attempts=[{"tier": "Grok", "result": "self"}],
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[{"tier": "Fable", "result": "cli"}],
         selected_tier="Opus",
     )
     with pytest.raises(ModelTierRunError):
