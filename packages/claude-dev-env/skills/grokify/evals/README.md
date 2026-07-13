@@ -12,7 +12,7 @@ Live measurements of Grok Build capabilities used by the `grokify` skill wording
 
 ## Run
 
-From the package root or this skill folder:
+From the package root (`packages/claude-dev-env`):
 
 ```powershell
 # Windows PowerShell
@@ -25,10 +25,26 @@ node skills/grokify/evals/run-capability-evals.mjs
 GROK_CAPABILITY_EVALS=1 node skills/grokify/evals/run-capability-evals.mjs
 ```
 
-Or pass `--run` without the env var:
+From this skill folder (`packages/claude-dev-env/skills/grokify`):
 
 ```powershell
+# Windows PowerShell
+$env:GROK_CAPABILITY_EVALS = "1"
+node evals/run-capability-evals.mjs
+```
+
+```bash
+# POSIX
+GROK_CAPABILITY_EVALS=1 node evals/run-capability-evals.mjs
+```
+
+Or pass `--run` without the env var (paths match the cwd above):
+
+```powershell
+# from package root
 node skills/grokify/evals/run-capability-evals.mjs --run
+# from this skill folder
+node evals/run-capability-evals.mjs --run
 ```
 
 Without `GROK_CAPABILITY_EVALS=1` or `--run`, the script prints how to opt in and exits 0 (no live calls).
@@ -41,7 +57,7 @@ Without `GROK_CAPABILITY_EVALS=1` or `--run`, the script prints how to opt in an
 | E2 | `spawn_succeeded === true` (child reports `SPAWN_OK`) |
 | E3 | `skill_read_ok === true` via `--agent` plus skill file read |
 | E4 | Probe write under the eval cwd succeeds (soft: hooks log may show `global/settings` + `pre_tool_use`) |
-| E5 | `has_workflow_tool === false` or result `no_tool` |
+| E5 | `has_workflow_tool === false` and `result === "no_tool"` (both fields agree on absence) |
 
 Each live `grok` call uses a unique `--leader-socket` under a fresh temp directory so concurrent runs do not share a socket.
 

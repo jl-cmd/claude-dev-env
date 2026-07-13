@@ -30,6 +30,10 @@ const PROBE_FILE_NAME = 'capability-probe-write.txt';
 const PROBE_FILE_CONTENTS = 'capability-probe-ok';
 const HOOKS_LOG_NAME = 'hooks.log';
 const SPAWN_MARKER = 'SPAWN_OK';
+const GROK_SPAWN_TIMEOUT_MS = 600000;
+const SPAWN_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
+const WORKFLOW_RESULT_NO_TOOL = 'no_tool';
+const SPAWN_TIMEOUT_ERROR_CODE = 'ETIMEDOUT';
 
 const E1_PROMPT = `You are running a capability inventory. Do not edit files.
 
@@ -165,7 +169,8 @@ function runGrok({
   const processResult = spawnSync(GROK_BINARY, allArguments, {
     encoding: 'utf8',
     cwd: workingDirectory,
-    maxBuffer: 20 * 1024 * 1024,
+    maxBuffer: SPAWN_MAX_BUFFER_BYTES,
+    timeout: GROK_SPAWN_TIMEOUT_MS,
     windowsHide: true,
   });
   return {
@@ -284,6 +289,21 @@ function resolveDefaultAgentName() {
   return process.env.GROK_CAPABILITY_EVAL_AGENT || 'Explore';
 }
 
+function describeLaunchFailure(label, processResult) {
+  const launchError = processResult.error;
+  if (
+    launchError &&
+    typeof launchError === 'object' &&
+    launchError.code === SPAWN_TIMEOUT_ERROR_CODE
+  ) {
+    return `${label}: grok timed out after ${GROK_SPAWN_TIMEOUT_MS}ms`;
+  }
+  if (launchError !== null) {
+    return `${label}: failed to launch grok: ${launchError}`;
+  }
+  return `${label}: grok exit ${processResult.exitCode}\n${processResult.stderr}\n${processResult.stdout}`;
+}
+
 function launchEval(runDirectory, { evalName, promptText, maxTurns, agentName }) {
   const label = evalName.toUpperCase();
   const promptPath = writePromptFile(runDirectory, evalName, promptText);
@@ -295,12 +315,8 @@ function launchEval(runDirectory, { evalName, promptText, maxTurns, agentName })
     agentName,
   });
   assertCondition(
-    processResult.error === null,
-    `${label}: failed to launch grok: ${processResult.error}`,
-  );
-  assertCondition(
-    processResult.exitCode === 0,
-    `${label}: grok exit ${processResult.exitCode}\n${processResult.stderr}\n${processResult.stdout}`,
+    processResult.error === null && processResult.exitCode === 0,
+    describeLaunchFailure(label, processResult),
   );
   const payload = parsePayload(processResult.stdout);
   assertCondition(
@@ -394,17 +410,25 @@ function runEvalFour(runDirectory) {
   return { payload, hooksNote, isProbePresent };
 }
 
+export function isWorkflowToolAbsent(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+  return (
+    payload.has_workflow_tool === false &&
+    payload.result === WORKFLOW_RESULT_NO_TOOL
+  );
+}
+
 function runEvalFive(runDirectory) {
   const payload = launchEval(runDirectory, {
     evalName: 'e5',
     promptText: E5_PROMPT,
     maxTurns: WORKFLOW_MAX_TURNS,
   });
-  const isWorkflowAbsent =
-    payload.has_workflow_tool === false || payload.result === 'no_tool';
   assertCondition(
-    isWorkflowAbsent,
-    `E5: expected has_workflow_tool === false or result === "no_tool", got ${JSON.stringify(payload)}`,
+    isWorkflowToolAbsent(payload),
+    `E5: expected has_workflow_tool === false and result === "no_tool", got ${JSON.stringify(payload)}`,
   );
   return payload;
 }

@@ -4,6 +4,7 @@ import {
   tryParseJsonObject,
   extractResultText,
   parsePayload,
+  isWorkflowToolAbsent,
 } from './run-capability-evals.mjs';
 
 const E1_CLAIM_PAYLOAD = {
@@ -112,4 +113,39 @@ test('parsePayload still reads Claude stream array envelopes', () => {
   const payload = parsePayload(envelope);
   assert.equal(payload.can_spawn_subagent_tool, true);
   assert.deepEqual(payload.tool_names, ['spawn_subagent']);
+});
+
+test('isWorkflowToolAbsent accepts consistent absence', () => {
+  assert.equal(
+    isWorkflowToolAbsent({ has_workflow_tool: false, result: 'no_tool' }),
+    true,
+  );
+});
+
+test('isWorkflowToolAbsent rejects contradictory true and no_tool', () => {
+  assert.equal(
+    isWorkflowToolAbsent({ has_workflow_tool: true, result: 'no_tool' }),
+    false,
+  );
+});
+
+test('isWorkflowToolAbsent rejects contradictory false and has_tool', () => {
+  assert.equal(
+    isWorkflowToolAbsent({ has_workflow_tool: false, result: 'has_tool' }),
+    false,
+  );
+});
+
+test('isWorkflowToolAbsent rejects consistent presence', () => {
+  assert.equal(
+    isWorkflowToolAbsent({ has_workflow_tool: true, result: 'has_tool' }),
+    false,
+  );
+});
+
+test('isWorkflowToolAbsent rejects partial or missing fields', () => {
+  assert.equal(isWorkflowToolAbsent({ has_workflow_tool: false }), false);
+  assert.equal(isWorkflowToolAbsent({ result: 'no_tool' }), false);
+  assert.equal(isWorkflowToolAbsent(null), false);
+  assert.equal(isWorkflowToolAbsent({}), false);
 });
