@@ -56,7 +56,7 @@ Without `GROK_CAPABILITY_EVALS=1` or `--run`, the script prints how to opt in an
 |------|-----------|
 | E1 | `can_spawn_subagent_tool === true` and tool list includes `spawn_subagent` |
 | E2 | `spawn_succeeded === true` (child reports `SPAWN_OK`) |
-| E3 | `skill_read_ok === true` via `--agent` plus skill file read |
+| E3 | `skill_read_ok === true` and `agent_definition_loaded === true` (skill file read under `--agent`) |
 | E4 | Probe write under the eval cwd succeeds (soft: hooks log may show `global/settings` + `pre_tool_use`) |
 | E5 | `has_workflow_tool === false` and `result === "no_tool"` (both fields agree on absence) |
 

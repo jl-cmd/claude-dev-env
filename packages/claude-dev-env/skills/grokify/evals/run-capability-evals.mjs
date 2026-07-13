@@ -34,6 +34,7 @@ const SPAWN_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 const WORKFLOW_RESULT_NO_TOOL = 'no_tool';
 const SPAWN_TIMEOUT_ERROR_CODE = 'ETIMEDOUT';
 const ENVELOPE_TEXT_FIELDS_BY_PRIORITY = ['result', 'text', 'message'];
+const STREAM_EVENT_TEXT_FIELDS_BY_PRIORITY = ['result', 'text', 'content'];
 
 const E1_PROMPT = `You are running a capability inventory. Do not edit files.
 
@@ -256,6 +257,16 @@ function extractStringField(parsedEnvelope, fieldName) {
   return null;
 }
 
+function pickStringFieldByPriority(candidate, fieldNames) {
+  for (const fieldName of fieldNames) {
+    const fieldValue = extractStringField(candidate, fieldName);
+    if (fieldValue !== null) {
+      return fieldValue;
+    }
+  }
+  return null;
+}
+
 export function extractResultText(stdout) {
   const trimmed = stdout.trim();
   if (!trimmed) {
@@ -279,14 +290,10 @@ export function extractResultText(stdout) {
         if (!eachEvent || typeof eachEvent !== 'object') {
           continue;
         }
-        const eventText =
-          typeof eachEvent.result === 'string'
-            ? eachEvent.result
-            : typeof eachEvent.text === 'string'
-              ? eachEvent.text
-              : typeof eachEvent.content === 'string'
-                ? eachEvent.content
-                : null;
+        const eventText = pickStringFieldByPriority(
+          eachEvent,
+          STREAM_EVENT_TEXT_FIELDS_BY_PRIORITY,
+        );
         if (eventText !== null) {
           textChunks.push(eventText);
         }
@@ -296,11 +303,12 @@ export function extractResultText(stdout) {
       }
     }
     if (parsed && typeof parsed === 'object') {
-      for (const fieldName of ENVELOPE_TEXT_FIELDS_BY_PRIORITY) {
-        const fieldValue = extractStringField(parsed, fieldName);
-        if (fieldValue !== null) {
-          return fieldValue;
-        }
+      const envelopeText = pickStringFieldByPriority(
+        parsed,
+        ENVELOPE_TEXT_FIELDS_BY_PRIORITY,
+      );
+      if (envelopeText !== null) {
+        return envelopeText;
       }
     }
   } catch {
@@ -410,6 +418,10 @@ function runEvalThree(runDirectory) {
   assertCondition(
     payload.skill_read_ok === true,
     `E3: expected skill_read_ok === true, got ${JSON.stringify(payload.skill_read_ok)}`,
+  );
+  assertCondition(
+    payload.agent_definition_loaded === true,
+    `E3: expected agent_definition_loaded === true, got ${JSON.stringify(payload.agent_definition_loaded)}`,
   );
   return payload;
 }
