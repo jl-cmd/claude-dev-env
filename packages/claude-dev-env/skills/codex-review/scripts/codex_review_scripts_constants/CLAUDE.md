@@ -6,7 +6,7 @@ Python package of named constants imported by codex-review scripts. Importing fr
 
 | File | Constants for |
 |---|---|
-| `__init__.py` | Package marker and package docstring. Script-specific constant modules land here with the wrapper and probe scripts. |
+| `__init__.py` | Package marker and package docstring. |
 
 ## Convention
 

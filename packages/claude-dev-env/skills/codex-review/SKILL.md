@@ -23,6 +23,8 @@ Respond with the quoted line exactly and stop:
 - Version or shape probe reports Codex unavailable: `/codex-review cannot run: Codex CLI is missing or the shape probe failed.`
 - Wrapper classifies `down`: `/codex-review cannot complete: Codex reviewer is down.`
 
+Gate exits other than 0 or 1 (including the shared gate rejecting `--reviewer codex`) are blockers: stop without a probe or wrapper call. Do not invent an opt-out refusal for a parse failure.
+
 ## Sub-skills
 
 | Skill | When | Produces |
@@ -53,18 +55,16 @@ python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer co
 
 - **Exit 0** — Codex reviews are disabled: refuse with the opt-out line above. Do not probe, wrap, or fix.
 - **Exit 1** — continue.
-- **Any other exit** — the shared gate rejects the `--reviewer` argument (the gate must list `codex` among its known reviewer tokens). Treat this parse failure as a blocker and stop; do not skip the gate or continue as if it exited 1.
+- **Any other exit** — the shared gate rejects the `--reviewer` argument. Known tokens are `bugbot`, `bugteam`, and `copilot`; `codex` is not among them, so this invocation exits with a parse failure (exit 2). Treat that parse failure as a blocker and stop; do not skip the gate or continue as if it exited 1. Do not report the opt-out refusal line for a parse failure.
 
 Gate semantics live in `reviewer-gates` ([../reviewer-gates/SKILL.md](../reviewer-gates/SKILL.md)). The shared script owns the token parse; this skill does not re-parse `CLAUDE_REVIEWS_DISABLED`.
 
 ### Step 1: Version and shape probe
 
-Probe the local Codex CLI so the run fails closed when the binary is missing or the installed shape does not match the wrapper contract.
+Probe the local Codex CLI so the run fails closed when the binary is missing or the installed shape does not match the contract.
 
-- **Contract owner:** [reference/cli-contract.md](reference/cli-contract.md) — probe commands, minimum shape, and fail signals.
-- **Probe outcome:** continue only when the probe reports a supported shape. On failure, refuse with the probe refusal line above.
-
-Wrapper and parser internals that implement the probe live with the cli-contract child; this step names the gate and its stop behavior.
+- **Contract owner:** [reference/cli-contract.md](reference/cli-contract.md) — probe command (`codex exec review --help`), minimum shape signals, and fail-as-`codex_down` rule.
+- **Probe outcome:** continue only when the probe reports a supported shape. On failure, refuse with the probe refusal line above (skill class `down`).
 
 ### Step 2: Target pick
 
@@ -81,12 +81,12 @@ Do not invent a synthetic commit range when a base branch is available. Loop-cal
 
 Run the Codex review wrapper against the chosen target.
 
-- **Contract owner:** [reference/cli-contract.md](reference/cli-contract.md) — wrapper entrypoint, required arguments (target, repo root, optional PR metadata), stdout/stderr shape, and exit codes.
-- **This skill's job:** pass the Step 2 target and collect the wrapper's structured outcome for classification. Do not parse raw Codex output inline; the wrapper (and its parser) own that boundary.
+- **CLI surface:** [reference/cli-contract.md](reference/cli-contract.md) — raw command forms (`codex review`, `codex exec … review`), option ordering, success JSONL stream, finding-bullet text shape, and `codex_down` failure classes.
+- **This skill's job:** pass the Step 2 target and collect a structured outcome for classification. Do not parse raw Codex stdout inline in these steps; the wrapper owns that boundary.
 
 ### Step 4: Classify outcome
 
-Map the wrapper result to exactly one class:
+Map the wrapper result to exactly one skill-level class:
 
 | Class | Meaning | Next action |
 |---|---|---|
@@ -94,7 +94,15 @@ Map the wrapper result to exactly one class:
 | `clean` | Review completed with no findings against the target | Report one-line clean summary; stop |
 | `findings` | Review completed with one or more addressable findings | Continue to Step 5 |
 
-Classification rules and payload fields for each class live in [reference/cli-contract.md](reference/cli-contract.md).
+#### Skill class ↔ CLI observation map
+
+| Skill class | Maps from (cli-contract) | Signal |
+|---|---|---|
+| `down` | `codex_down` rows; unrecognized probe shape | Non-usable review (exit 1/2 failures, config/auth/model errors, probe miss) |
+| `clean` | Success stream (exit 0 JSONL) with no finding bullets in the `agent_message` body | Usable review, zero addressable findings |
+| `findings` | Success stream (exit 0 JSONL) whose `agent_message` carries one or more `- [P#] …` bullets | Usable review with addressable findings |
+
+Raw CLI failure vocabulary is `codex_down` only ([reference/cli-contract.md](reference/cli-contract.md)). Skill steps and loop re-entry use `down` / `clean` / `findings`.
 
 ### Step 5: Route findings into the shared fix protocol
 
@@ -110,7 +118,7 @@ This skill does not restate the fix sequence. Orchestrator callers that re-enter
 
 - **One capability:** run Codex review and classify; fixes go through `pr-fix-protocol`.
 - **Compose, do not rebuild:** opt-out via `reviews_disabled.py`; fixes via `pr-fix-protocol`.
-- **Fail closed** on opt-out, probe failure, and `down`.
+- **Fail closed** on opt-out, gate parse failure, probe failure, and `down`.
 - **Preserve draft state** of any open PR; this skill does not flip ready.
 - **Honor hooks** on any commit the fix protocol creates.
 
@@ -118,7 +126,7 @@ This skill does not restate the fix sequence. Orchestrator callers that re-enter
 
 <example>
 User: `/codex-review`
-Claude: [runs opt-out gate, probes Codex shape, picks base-branch or uncommitted target, invokes wrapper, reports clean or routes findings]
+Claude: [runs opt-out gate; on exit 1 probes Codex shape, picks base-branch or uncommitted target, invokes wrapper, reports clean or routes findings; on non-0/1 gate exit stops as a blocker]
 </example>
 
 <example>
@@ -126,15 +134,10 @@ User: "babysit codex review on this PR"
 Claude: [same flow; after findings, applies pr-fix-protocol, then re-invokes wrapper once for confirmation when the caller stays on this skill]
 </example>
 
-<example>
-`CLAUDE_REVIEWS_DISABLED=codex`
-Claude: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
-</example>
-
 ## Gotchas
 
-- **`--reviewer codex` is the opt-out token.** The shared gate must list `codex` among known reviewers for Step 0 to accept the flag; until that token ships, treat a gate parse failure as a blocker and stop rather than skipping the gate.
-- **Raw Codex CLI output is not the findings format.** Only the wrapper's classified payload enters Step 5.
+- **`--reviewer codex` is the token this skill passes.** The shared gate's known tokens are `bugbot`, `bugteam`, and `copilot`. Step 0 therefore exits with a parse failure (not 0 or 1). Treat that as a blocker and stop rather than skipping the gate. Opt-out exit 0 and the opt-out refusal line apply only when the gate accepts the token and the env list disables it.
+- **Raw Codex CLI output is not the findings format.** Only a wrapper-classified `findings` payload enters Step 5.
 - **Uncommitted targets have no review threads.** Fix protocol reply-and-resolve applies only when a PR carries threads; local-only runs stop after the fix commit path the protocol allows without a PR.
 
 ## File index
@@ -143,13 +146,13 @@ Claude: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
 |---|---|
 | `SKILL.md` | Hub: opt-out, probe, target, wrapper, classify, fix handoff |
 | `CLAUDE.md` | Package map for agents opening this skill |
-| `reference/cli-contract.md` | CLI probe, wrapper, and classification contracts |
+| `reference/cli-contract.md` | Observed CLI surface, `codex_down`, skill-class map |
 | `reference/loop-integration.md` | PR-loop target pick and re-entry after fixes |
-| `scripts/codex_review_scripts_constants/` | Named constants for future skill scripts |
+| `scripts/codex_review_scripts_constants/` | Named constants for skill scripts |
 
 ## Folder map
 
 - `SKILL.md` — orchestration steps and refusals.
 - `CLAUDE.md` — purpose, trigger, key files.
-- `reference/` — stable homes for cli-contract and loop-integration detail.
-- `scripts/codex_review_scripts_constants/` — importable constants package (empty shell at scaffold).
+- `reference/` — cli-contract and loop-integration detail.
+- `scripts/codex_review_scripts_constants/` — importable constants package.

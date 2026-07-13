@@ -78,6 +78,16 @@ All observed failures classify as `codex_down`.
 | `codex_down` | 1 | JSONL on stdout | `error` event whose message embeds a 400 `invalid_request_error` JSON (`The '<model>' model is not supported when using Codex with a ChatGPT account.` / `The '<model>' model requires a newer version of Codex.`), then `item.completed` `agent_message` `Review was interrupted...`, then `turn.failed` repeating the embedded error |
 | `codex_down` | 2 | Usage text on stderr; no JSONL | Argument / CLI parse error (e.g. unexpected option after `review`) |
 
+## Skill classification map
+
+Skill steps and loop re-entry use three skill-level classes. This page's raw CLI failure name is `codex_down` only.
+
+| Skill class (`SKILL.md` Step 4) | Maps from this page | Signal |
+|---|---|---|
+| `down` | Any `codex_down` row; unrecognized probe shape | Non-usable review |
+| `clean` | Success stream (exit 0 JSONL) with no finding bullets in the `agent_message` body | Usable review, zero addressable findings |
+| `findings` | Success stream (exit 0 JSONL) with one or more `- [P#] …` bullets in the `agent_message` body | Usable review with addressable findings |
+
 ## Auth surface
 
 - Credentials live under the Codex home directory as `auth.json`. `CODEX_HOME` relocates that directory. `cli_auth_credentials_store = "file"` pins the file store.
@@ -86,4 +96,4 @@ All observed failures classify as `codex_down`.
 
 ## Probe
 
-The wrapper probes `codex exec review --help` and treats any unrecognized shape as `codex_down`.
+The wrapper probes `codex exec review --help` and treats any unrecognized shape as `codex_down` (skill class `down`).
