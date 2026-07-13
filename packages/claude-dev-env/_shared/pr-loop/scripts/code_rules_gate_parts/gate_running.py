@@ -129,20 +129,18 @@ def _added_lines_for(
     return all_added_lines_by_path.get(each_resolved)
 
 
-def _collect_partitioned_violations(
+def _partition_over_eligible_paths(
     validate_content: ValidateContentCallable,
-    all_file_paths: list[Path],
+    all_eligible_paths: list[Path],
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None,
-    should_read_staged_content: bool = False,
+    should_read_staged_content: bool,
 ) -> PartitionedViolations:
-    """Validate every eligible file and partition results, counting read skips."""
+    """Validate each already-resolved eligible file and partition the results."""
     blocking_by_file: dict[Path, list[str]] = {}
     advisory_by_file: dict[Path, list[str]] = {}
     skipped_unreadable_count = 0
-    for each_resolved in _eligible_resolved_paths(
-        all_file_paths, repository_root, should_read_staged_content
-    ):
+    for each_resolved in all_eligible_paths:
         scoped_violations = _scoped_violations_for_file(
             validate_content,
             each_resolved,
@@ -159,6 +157,26 @@ def _collect_partitioned_violations(
         if advisory:
             advisory_by_file[each_resolved] = advisory
     return blocking_by_file, advisory_by_file, skipped_unreadable_count
+
+
+def _collect_partitioned_violations(
+    validate_content: ValidateContentCallable,
+    all_file_paths: list[Path],
+    repository_root: Path,
+    all_added_lines_by_path: dict[Path, set[int]] | None,
+    should_read_staged_content: bool = False,
+) -> PartitionedViolations:
+    """Validate every eligible file and partition results, counting read skips."""
+    all_eligible_paths = _eligible_resolved_paths(
+        all_file_paths, repository_root, should_read_staged_content
+    )
+    return _partition_over_eligible_paths(
+        validate_content,
+        all_eligible_paths,
+        repository_root,
+        all_added_lines_by_path,
+        should_read_staged_content,
+    )
 
 
 def _blocking_header(blocking_count: int, is_whole_file_scope: bool) -> str:
@@ -250,17 +268,17 @@ def _validate_and_count(
     should_read_staged_content: bool,
 ) -> PartitionedViolations:
     """Validate the eligible files, report the inspected count, return partitions."""
-    eligible_count = len(
-        _eligible_resolved_paths(all_file_paths, repository_root, should_read_staged_content)
+    all_eligible_paths = _eligible_resolved_paths(
+        all_file_paths, repository_root, should_read_staged_content
     )
-    blocking_by_file, advisory_by_file, skipped_count = _collect_partitioned_violations(
+    blocking_by_file, advisory_by_file, skipped_count = _partition_over_eligible_paths(
         validate_content,
-        all_file_paths,
+        all_eligible_paths,
         repository_root,
         all_added_lines_by_path,
         should_read_staged_content,
     )
-    _report_inspected_count(eligible_count - skipped_count)
+    _report_inspected_count(len(all_eligible_paths) - skipped_count)
     return blocking_by_file, advisory_by_file, skipped_count
 
 
