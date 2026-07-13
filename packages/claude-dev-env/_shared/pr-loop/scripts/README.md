@@ -8,6 +8,7 @@ Runnable helpers used by **bugteam**, **qbug**, **pr-converge**, and related ski
 | --- | --- |
 | `preflight.py` | Local checks before a PR-loop run (pytest discovery, optional pre-commit, hooksPath sanity). |
 | `reviewer_availability.py` | Unified availability check for Copilot and Bugbot; reuses `copilot_quota.py` and `reviews_disabled.py` and exits 0 when the named `--reviewer` may be spawned. |
+| `reviews_disabled.py` | Opt-out and opt-in gate for reviewer tokens `bugteam`, `bugbot`, `copilot`, and `codex` via `CLAUDE_REVIEWS_DISABLED` / `CLAUDE_REVIEWS_ENABLED`. |
 | `code_rules_gate.py` | CODE_RULES gate over PR-scoped diffs (`--base`, staged-only, path filters). |
 | `fix_hookspath.py` | Repair `core.hooksPath` when it does not point at the packaged git-hooks tree. Single home for unexpected non-empty git stderr (hard-fail `RuntimeError`); skill wrappers may call it later. |
 | `grant_project_claude_permissions.py` / `revoke_project_claude_permissions.py` | Claude Code permission JSON helpers used during publish-style flows. |
