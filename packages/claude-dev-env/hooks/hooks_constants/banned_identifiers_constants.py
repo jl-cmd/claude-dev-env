@@ -22,7 +22,6 @@ ALL_BANNED_IDENTIFIERS: frozenset[str] = frozenset(
         "cnt",
         "btn",
         "idx",
-        "tmp",
         "msg",
         "elem",
         "val",

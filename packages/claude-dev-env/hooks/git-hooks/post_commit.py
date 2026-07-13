@@ -10,7 +10,6 @@ When you commit in a submodule, this hook:
 This prevents the "lost work" issue where submodule commits aren't tracked by parent.
 """
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,7 +20,7 @@ def run_git(*args: str, cwd: Path | None = None) -> str:
     result = subprocess.run(
         ["git"] + list(args),
         cwd=cwd,
-        capture_output=True,
+        check=False, capture_output=True,
         text=True,
     )
     return result.stdout.strip()
@@ -74,7 +73,7 @@ def main() -> int:
 
     diff_result = subprocess.run(
         ["git", "diff", "--cached", "--quiet"],
-        cwd=parent_repo,
+        check=False, cwd=parent_repo,
     )
 
     if diff_result.returncode == 0:
@@ -89,7 +88,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
 
     subprocess.run(
         ["git", "commit", "-m", full_commit_msg],
-        cwd=parent_repo,
+        check=False, cwd=parent_repo,
     )
 
     print("Parent updated successfully.")

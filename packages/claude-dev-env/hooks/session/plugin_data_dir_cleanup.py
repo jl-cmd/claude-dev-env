@@ -13,7 +13,6 @@ separate from the EEXIST fixes in v2.1.70-v2.1.72.
 """
 
 import os
-import sys
 
 PLUGINS_DATA_DIRECTORY = os.path.join(
     os.path.expanduser("~"), ".claude", "plugins", "data"

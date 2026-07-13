@@ -180,7 +180,7 @@ def _forwards_parameters_unchanged(call_node: ast.Call, all_parameter_names: lis
         return False
     if len(call_node.args) != len(all_parameter_names):
         return False
-    for each_argument, each_parameter_name in zip(call_node.args, all_parameter_names):
+    for each_argument, each_parameter_name in zip(call_node.args, all_parameter_names, strict=False):
         if not isinstance(each_argument, ast.Name) or each_argument.id != each_parameter_name:
             return False
     return True

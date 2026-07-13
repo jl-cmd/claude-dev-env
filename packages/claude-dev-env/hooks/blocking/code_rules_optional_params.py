@@ -36,10 +36,10 @@ def _collect_optional_param_defaults(
     all_args = arguments.posonlyargs + arguments.args
     defaults_aligned = [None] * (len(all_args) - len(arguments.defaults)) + list(arguments.defaults)
     param_defaults: dict[str, ast.expr] = {}
-    for each_arg, each_default in zip(all_args, defaults_aligned):
+    for each_arg, each_default in zip(all_args, defaults_aligned, strict=False):
         if each_default is not None:
             param_defaults[each_arg.arg] = each_default
-    for each_kwarg, each_kwdefault in zip(arguments.kwonlyargs, arguments.kw_defaults):
+    for each_kwarg, each_kwdefault in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=False):
         if each_kwdefault is not None:
             param_defaults[each_kwarg.arg] = each_kwdefault
     return param_defaults

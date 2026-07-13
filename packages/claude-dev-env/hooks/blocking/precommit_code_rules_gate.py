@@ -72,7 +72,7 @@ def resolve_repository_root(working_directory: str | None) -> Path | None:
     try:
         completed_process = subprocess.run(
             list(ALL_GIT_REPOSITORY_ROOT_COMMAND),
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=working_directory,
@@ -102,7 +102,7 @@ def list_staged_python_files(repository_root: Path) -> list[str]:
     try:
         completed_process = subprocess.run(
             list(ALL_STAGED_PYTHON_FILES_COMMAND),
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(repository_root),
@@ -145,7 +145,7 @@ def run_staged_gate(repository_root: Path) -> tuple[int, str]:
                 str(repository_root),
                 "--staged",
             ],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",

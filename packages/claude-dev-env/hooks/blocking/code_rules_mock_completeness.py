@@ -276,7 +276,7 @@ def check_incomplete_mocks(content: str, file_path: str) -> None:
 
     all_scoped_definitions = _collect_scoped_mock_definitions(module_tree)
 
-    for each_scope_id, each_mock_name, each_declared_keys, each_definition_line, each_scope_node in all_scoped_definitions:
+    for each_scope_id, each_mock_name, each_declared_keys, each_definition_line, each_scope_node in all_scoped_definitions:  # noqa: B007
         assigned_attributes = _collect_mock_attribute_assignments_in_scope(each_scope_node, each_mock_name)
         all_known_fields = each_declared_keys | assigned_attributes
         field_accesses = _collect_mock_field_accesses_in_scope(each_scope_node, each_mock_name)

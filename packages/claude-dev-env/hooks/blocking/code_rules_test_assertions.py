@@ -557,7 +557,7 @@ def _leading_token_overlap(first_name: str, second_name: str) -> int:
     first_tokens = first_name.split("_")
     second_tokens = second_name.split("_")
     shared = 0
-    for first_token, second_token in zip(first_tokens, second_tokens):
+    for first_token, second_token in zip(first_tokens, second_tokens, strict=False):
         if first_token != second_token:
             break
         shared += 1
