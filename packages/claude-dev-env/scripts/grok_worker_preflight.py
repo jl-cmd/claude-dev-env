@@ -25,10 +25,10 @@ errors, probe timeouts, and non-usage ping failures. Only usage exhaustion uses
 ``grok_usage_exhausted``. Machine-readable reason strings stay stable; do not
 split the catch-all unless a caller contract requires a new token.
 
-Library callers of ``run_preflight`` do not need to create ``run_state_directory``
-first: the library ensures the parent exists before writing the ping cache.
-A failed cache write is soft — the soft gate can still report usable without a
-cache file.
+Library callers of ``run_preflight`` need not create ``run_state_directory``
+first: the library attempts to create it (best-effort mkdir) before writing the
+ping cache. A failed cache write is soft — the soft gate can still report
+usable without a cache file.
 
 Stdout is one machine-readable line::
 
@@ -328,7 +328,7 @@ def run_preflight(
         role: Role whose agent definition set must be installed.
         should_ping: When True, run the opt-in cached live single-turn ping.
         run_state_directory: Run-scoped directory for leader sockets and cache.
-            Created when missing so library callers need not mkdir first.
+            Best-effort mkdir when missing; callers need not create it first.
 
     Returns:
         The soft-gate outcome. Callers treat a non-usable outcome as fallthrough,
