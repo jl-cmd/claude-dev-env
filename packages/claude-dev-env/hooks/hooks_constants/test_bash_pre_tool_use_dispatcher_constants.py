@@ -10,16 +10,21 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-_HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
-if _HOOKS_DIR not in sys.path:
-    sys.path.insert(0, _HOOKS_DIR)
-
-from hooks_constants.bash_pre_tool_use_dispatcher_constants import (  # noqa: E402
-    ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
-    ALL_BASH_HOSTED_HOOK_ENTRIES,
-    BASH_TOOL_NAME,
-    POWERSHELL_TOOL_NAME,
-)
+try:
+    from hooks_constants.bash_pre_tool_use_dispatcher_constants import (
+        ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
+        ALL_BASH_HOSTED_HOOK_ENTRIES,
+        BASH_TOOL_NAME,
+        POWERSHELL_TOOL_NAME,
+    )
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from hooks_constants.bash_pre_tool_use_dispatcher_constants import (
+        ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
+        ALL_BASH_HOSTED_HOOK_ENTRIES,
+        BASH_TOOL_NAME,
+        POWERSHELL_TOOL_NAME,
+    )
 
 _EXPECTED_BASH_ORDER = (
     "blocking/es_exe_path_rewriter.py",
@@ -34,6 +39,7 @@ _EXPECTED_BASH_ORDER = (
     "blocking/precommit_code_rules_gate.py",
     "blocking/session_edit_stage_gate.py",
     "blocking/pr_description_enforcer.py",
+    "blocking/pr_description_numeric_claims.py",
     "blocking/test_preflight_check.py",
     "blocking/convergence_gate_blocker.py",
     "blocking/windows_rmtree_blocker.py",

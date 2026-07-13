@@ -116,6 +116,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `_gh_body_arg_utils.py` | Parsing helpers for `gh_body_arg_blocker.py` |
 | `pr_description_body_audit.py` | Body audit logic for `pr_description_enforcer.py` |
 | `pr_description_command_parser.py` | `gh` command parsing for `pr_description_enforcer.py` |
+| `pr_description_numeric_claims.py` | Re-measures test-count and line-count claims in a PR body against the named repository path for `pr_description_enforcer.py` |
 | `pr_description_pr_number.py` | PR number extraction logic |
 | `pr_description_proof_of_work.py` | Proof-of-work comment audit and `gh pr ready` gate logic for `pr_description_enforcer.py` |
 | `pr_description_readability.py` | Readability checks on PR description bodies |
