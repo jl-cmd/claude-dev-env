@@ -118,7 +118,13 @@ def test_selected_tier_not_first_spawned_attempt_raises() -> None:
         ],
         selected_tier="Fable",
     )
-    with pytest.raises(ModelTierRunError):
+    with pytest.raises(
+        ModelTierRunError,
+        match=(
+            "selected_tier does not match the first successful bind "
+            r"\(spawned or cli\)"
+        ),
+    ):
         validate_model_tier_run(run)
 
 
