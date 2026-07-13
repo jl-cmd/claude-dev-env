@@ -18,7 +18,16 @@ Non-interactive code review.
 | `--title <TITLE>` | Review title |
 | `--enable` / `--disable <FEATURE>` | Feature toggles |
 
-Exactly one target among `PROMPT`, `--uncommitted`, `--base`, and `--commit`.
+Exactly one target among `PROMPT`, `--uncommitted`, `--base`, and `--commit`. The four targets are mutually exclusive: a flag target never carries a positional `[PROMPT]`, and the custom-instructions text is itself the fourth target (PROMPT mode only).
+
+Observed rejection when a flag target is combined with `[PROMPT]` (fixture: `codex` 0.144.3):
+
+```text
+error: the argument '--uncommitted' cannot be used with '[PROMPT]'
+Usage: codex exec review --json --uncommitted [PROMPT]
+```
+
+Exit code 2.
 
 ### `codex exec`
 

@@ -1,0 +1,13 @@
+Review complete with one finding.
+
+```json
+[
+  {
+    "title": "Restore empty-input handling",
+    "priority": "P1",
+    "file": "src/stats.py",
+    "line_range": "2-2",
+    "body": "Divides by zero on empty input instead of returning 0.0."
+  }
+]
+```
