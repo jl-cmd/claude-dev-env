@@ -235,7 +235,13 @@ def _deduplicate_paths(all_paths: list[Path]) -> list[Path]:
 
 
 def _report_empty_file_set() -> int:
-    """Report an empty resolved file set loudly and return the empty-set code."""
+    """Report an empty resolved file set loudly and return the empty-set code.
+
+    An empty resolved file set is a clean no-op, not a blocking failure: the
+    gate loop runs until exit 0, so a branch with no diff from base reaches it.
+    The loud stderr report stays so an operator still sees that zero files were
+    inspected.
+    """
     sys.stderr.write(EMPTY_FILE_SET_MESSAGE + "\n")
     sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
     return EMPTY_FILE_SET_EXIT_CODE

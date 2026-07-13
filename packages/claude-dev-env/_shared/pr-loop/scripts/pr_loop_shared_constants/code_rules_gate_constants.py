@@ -6,7 +6,7 @@ MAX_VIOLATIONS_PER_CHECK: int = 3
 
 GATE_ERROR_EXIT_CODE: int = 2
 
-EMPTY_FILE_SET_EXIT_CODE: int = 3
+EMPTY_FILE_SET_EXIT_CODE: int = 0
 
 EMPTY_FILE_SET_MESSAGE: str = (
     "code_rules_gate: the resolved file set is empty; nothing was inspected."

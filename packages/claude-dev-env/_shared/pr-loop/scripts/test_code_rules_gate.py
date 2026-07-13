@@ -1,7 +1,7 @@
 """Behavioral tests for the gate's empty-file-set loudness and inspected-count report.
 
 Covers the three acceptance criteria of the loud-empty change:
-- A run whose resolved file set is empty exits non-zero and says so.
+- A run whose resolved file set is empty exits clean and says so.
 - A run over new, untracked modules inspects them.
 - Every run reports how many files it inspected.
 """
@@ -95,18 +95,24 @@ def temporary_git_repository(tmp_path: Path) -> Path:
     return repository_root
 
 
-def test_diff_mode_with_empty_file_set_exits_non_zero_and_says_so(
+def test_diff_mode_with_empty_file_set_exits_clean_and_says_so(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """HEAD == base and nothing untracked: the run read nothing and must not read as a pass."""
+    """HEAD == base and nothing untracked: a no-op run exits 0 yet still reports loudly.
+
+    An empty resolved file set is a clean no-op, not a blocking failure: the
+    gate loop runs until exit 0, so a branch with no diff from base must reach
+    it. The loud stderr report stays so an operator still sees that zero files
+    were inspected.
+    """
     monkeypatch.chdir(temporary_git_repository)
 
     exit_code = gate_module.main(["--base", "HEAD"])
 
     captured = capsys.readouterr()
-    assert exit_code != 0
+    assert exit_code == 0
     assert "inspected 0 file(s)" in captured.err
     assert "empty" in captured.err.lower()
 
