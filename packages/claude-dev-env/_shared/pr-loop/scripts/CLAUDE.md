@@ -23,6 +23,7 @@ Python scripts invoked at runtime by the PR-loop skills. Each script is a standa
 
 | Entry | Description |
 |---|---|
+| `code_rules_gate_parts/` | The decomposed modules `code_rules_gate.py` wires together: enforcer loading, git file sets, blob readers, added-line maps, violation scoping, wrapper plumb-through, gate running, staged-test running, and argument parsing |
 | `pr_loop_shared_constants/` | Named constants used by the scripts above |
 | `tests/` | pytest suite for all scripts in this directory |
 
