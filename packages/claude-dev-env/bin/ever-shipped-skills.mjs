@@ -34,6 +34,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'fresh-branch',
     'gh-paginate',
     'gotcha',
+    'grok-spawn',
     'grokify',
     'implement',
     'log-audit',
