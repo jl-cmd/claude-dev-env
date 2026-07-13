@@ -395,7 +395,6 @@ def main(all_command_arguments: list[str]) -> int:
     parser = _build_argument_parser()
     parsed_arguments = parser.parse_args(all_command_arguments)
     run_state_directory = parsed_arguments.run_state_directory
-    run_state_directory.mkdir(parents=True, exist_ok=True)
     outcome = run_preflight(
         role=parsed_arguments.role,
         should_ping=parsed_arguments.ping,

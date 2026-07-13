@@ -809,6 +809,26 @@ def test_run_preflight_ping_missing_binary_invalidates_cache(
     assert not cache_path.exists()
 
 
+def test_main_uncreatable_run_state_dir_falls_through_without_crashing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An uncreatable run-state dir yields a parseable fallthrough line, not a crash."""
+    blocker_file = tmp_path / "blocker"
+    blocker_file.write_text("x", encoding=UTF8_ENCODING)
+    run_state_directory = blocker_file / "run"
+    monkeypatch.setattr(preflight, "preflight_which", lambda _name: None)
+
+    exit_code = preflight.main(
+        [CLI_RUN_STATE_DIR_FLAG, str(run_state_directory)]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == EXIT_FALLTHROUGH
+    assert captured.out.strip() == STDOUT_FALLTHROUGH_TEMPLATE.format(
+        reason=REASON_GROK_BINARY_MISSING
+    )
+
+
 def test_auth_returncode_zero_with_none_stdout_falls_through(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
