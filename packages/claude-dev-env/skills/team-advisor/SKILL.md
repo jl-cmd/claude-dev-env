@@ -30,7 +30,7 @@ the only consumer (skip the "who you are and your assignment" opener in each
 consult; a single-consumer session doesn't need it).
 
 **Grok host:** bind a max-tier Claude advisor through the shared CLI Claude-chain
-in the protocol (Fable high, then Opus max; `claude_chain_runner.py` walks
+in the protocol (Fable max, then Opus max; `claude_chain_runner.py` walks
 `~/.claude/claude-chain.json` for account usage failover). Consult via
 `--resume <session_id>` on that bind. This session is the sole consumer of that
 CLI advisor; skip the multi-consumer opener. When the chain cannot bind or
