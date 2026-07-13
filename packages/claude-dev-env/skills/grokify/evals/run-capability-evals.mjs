@@ -220,7 +220,7 @@ export function extractResultText(stdout) {
   try {
     const parsed = JSON.parse(trimmed);
     if (Array.isArray(parsed)) {
-      const resultEvent = parsed.find(
+      const resultEvent = parsed.findLast(
         (eachEvent) =>
           eachEvent &&
           typeof eachEvent === 'object' &&

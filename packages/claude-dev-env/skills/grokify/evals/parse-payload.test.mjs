@@ -59,6 +59,17 @@ test('extractResultText reads Claude stream result events', () => {
   assert.equal(extractResultText(envelope), JSON.stringify(E1_CLAIM_PAYLOAD));
 });
 
+test('extractResultText prefers the last result event in a stream array', () => {
+  const intermediateClaim = { can_spawn_subagent_tool: false, tool_names: [] };
+  const envelope = JSON.stringify([
+    { type: 'assistant', content: 'thinking' },
+    { type: 'result', result: JSON.stringify(intermediateClaim) },
+    { type: 'assistant', content: 'retry' },
+    { type: 'result', result: JSON.stringify(E1_CLAIM_PAYLOAD) },
+  ]);
+  assert.equal(extractResultText(envelope), JSON.stringify(E1_CLAIM_PAYLOAD));
+});
+
 test('parsePayload extracts nested claim JSON from Grok text envelope', () => {
   const envelope = JSON.stringify({
     text: JSON.stringify(E1_CLAIM_PAYLOAD),
