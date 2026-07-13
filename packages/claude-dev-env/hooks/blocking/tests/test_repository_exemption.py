@@ -10,6 +10,7 @@ Covers the origin-URL slug parser and the per-repository exemption decision::
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -17,7 +18,39 @@ import pytest
 from pii_prevention_blocker_parts.repository_exemption import (
     _is_repository_exempt_from_pii_scan,
     _owner_repo_slug_from_origin_url,
+    repository_allowlisted_values,
 )
+
+_ALLOWED_VALUE = "owner.fixture" + "@" + "acme-corp" + ".example" + ".io"
+
+
+def _write_allowlist_identity(identity_path: Path, slug: str) -> None:
+    identity_path.write_text(
+        json.dumps({"pii_allowlisted_values": {slug: [_ALLOWED_VALUE]}}),
+        encoding="utf-8",
+    )
+
+
+def test_repository_allowlisted_values_returns_the_mapped_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    identity_path = tmp_path / "local-identity.json"
+    _write_allowlist_identity(identity_path, "AllowOwner/allow-repo")
+    monkeypatch.setenv("CLAUDE_LOCAL_IDENTITY_PATH", str(identity_path))
+    repository_root = tmp_path / "repo"
+    _init_repo_with_github_origin(repository_root, "AllowOwner/allow-repo")
+    assert repository_allowlisted_values(repository_root) == frozenset({_ALLOWED_VALUE})
+
+
+def test_repository_allowlisted_values_empty_for_an_unmapped_repo(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    identity_path = tmp_path / "local-identity.json"
+    _write_allowlist_identity(identity_path, "AllowOwner/allow-repo")
+    monkeypatch.setenv("CLAUDE_LOCAL_IDENTITY_PATH", str(identity_path))
+    repository_root = tmp_path / "repo"
+    _init_repo_with_github_origin(repository_root, "OtherOwner/other-repo")
+    assert repository_allowlisted_values(repository_root) == frozenset()
 
 
 def test_github_https_origin_yields_lowercased_owner_repo_slug() -> None:
@@ -66,3 +99,7 @@ def test_repository_without_origin_is_never_exempt(tmp_path: Path) -> None:
     repository_root.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repository_root, check=True)
     assert _is_repository_exempt_from_pii_scan(repository_root) is False
+
+
+def test_owner_repo_slug_strips_a_trailing_slash_origin() -> None:
+    assert _owner_repo_slug_from_origin_url("https://github.com/Owner/Repo/") == "owner/repo"

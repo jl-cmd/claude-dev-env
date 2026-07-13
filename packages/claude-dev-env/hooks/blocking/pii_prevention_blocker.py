@@ -44,6 +44,7 @@ try:
     from pii_prevention_blocker_parts.repository_exemption import (
         _is_repository_exempt_from_pii_scan,
         _owner_repo_slug_from_origin_url,
+        repository_allowlisted_values,
     )
     from pii_prevention_blocker_parts.repository_resolution import (
         compose_command_working_directory,
@@ -187,7 +188,9 @@ def read_staged_file_text(
         return _unscannable_result(relative_path, STAGED_BLOB_REASON_DECODE_FAILED)
 
 
-def _scan_staged_path(repository_root: Path, relative_path: str) -> str | None:
+def _scan_staged_path(
+    repository_root: Path, relative_path: str, all_allowlisted_values: frozenset[str]
+) -> str | None:
     """Return a deny reason for one staged path, or None when it is clean."""
     staged_text, unscannable_reason = read_staged_file_text(
         repository_root, relative_path
@@ -196,7 +199,11 @@ def _scan_staged_path(repository_root: Path, relative_path: str) -> str | None:
         return unscannable_reason
     if staged_text is None:
         return _unscannable_result(relative_path, STAGED_BLOB_REASON_GIT_SHOW_FAILED)[1]
-    all_findings = scan_text_for_pii(staged_text)
+    all_findings = [
+        each_finding
+        for each_finding in scan_text_for_pii(staged_text)
+        if each_finding.matched_text not in all_allowlisted_values
+    ]
     if not all_findings:
         return None
     return build_deny_reason(all_findings, f"staged commit ({relative_path})")
@@ -206,7 +213,8 @@ def evaluate_staged_commit(repository_root: Path) -> str | None:
     """Return a deny reason when staged content carries PII or is unscannable.
 
     Fail-closed: git list/show failures and unscannable blobs deny the commit
-    rather than treating unread content as clean.
+    rather than treating unread content as clean. A value in the repository's
+    PII allowlist is dropped from the findings, so its commits may carry it.
 
     Args:
         repository_root: Repository whose index is about to be committed.
@@ -217,10 +225,13 @@ def evaluate_staged_commit(repository_root: Path) -> str | None:
     all_relative_paths, list_failure_reason = list_staged_file_paths(repository_root)
     if list_failure_reason is not None or all_relative_paths is None:
         return list_failure_reason or STAGED_LIST_FAILURE_REASON
+    all_allowlisted_values = repository_allowlisted_values(repository_root)
     for each_relative_path in all_relative_paths:
         if is_path_exempt_from_pii_scan(each_relative_path):
             continue
-        deny_reason = _scan_staged_path(repository_root, each_relative_path)
+        deny_reason = _scan_staged_path(
+            repository_root, each_relative_path, all_allowlisted_values
+        )
         if deny_reason is not None:
             return deny_reason
     return None

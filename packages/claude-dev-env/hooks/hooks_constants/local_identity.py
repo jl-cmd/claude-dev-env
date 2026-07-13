@@ -27,9 +27,11 @@ import os
 from pathlib import Path
 
 NAS_HOST_ENV_VAR = "CLAUDE_NAS_HOST"
+LOCAL_IDENTITY_PATH_ENV_VAR = "CLAUDE_LOCAL_IDENTITY_PATH"
 PII_EXEMPT_REPOS_ENV_VAR = "CLAUDE_PII_EXEMPT_REPOS"
 PII_EXEMPT_REPOS_JSON_KEY = "pii_exempt_repositories"
 PII_EXEMPT_REPOS_SEPARATOR = ","
+PII_ALLOWLISTED_VALUES_JSON_KEY = "pii_allowlisted_values"
 NAS_SSH_USER_ENV_VAR = "CLAUDE_NAS_SSH_USER"
 NAS_SSH_PORT_ENV_VAR = "CLAUDE_NAS_SSH_PORT"
 NAS_JSON_KEY = "nas"
@@ -46,6 +48,9 @@ NAS_SSH_RULE_REFERENCE = "~/.claude/rules/nas-ssh-invocation.md"
 
 
 def _local_identity_file_path() -> Path:
+    path_override = os.environ.get(LOCAL_IDENTITY_PATH_ENV_VAR)
+    if path_override:
+        return Path(path_override)
     return Path.home() / CLAUDE_HOME_DIRECTORY_NAME / LOCAL_IDENTITY_FILE_NAME
 
 
@@ -73,13 +78,22 @@ def _normalized_slug_set(all_raw_slugs: list[object]) -> frozenset[str]:
     )
 
 
+def _environment_exempt_slugs() -> frozenset[str]:
+    """Return the exempt slugs named by ``CLAUDE_PII_EXEMPT_REPOS``, or empty."""
+    slugs_from_environment = os.environ.get(PII_EXEMPT_REPOS_ENV_VAR)
+    if slugs_from_environment is None:
+        return frozenset()
+    return _normalized_slug_set(
+        list(slugs_from_environment.split(PII_EXEMPT_REPOS_SEPARATOR))
+    )
+
+
 def pii_exempt_repository_slugs() -> frozenset[str]:
     """Return owner/repo slugs whose commits skip the staged PII scan.
 
     ::
 
         CLAUDE_PII_EXEMPT_REPOS="Owner/repo-a, Other/b"  ->  {"owner/repo-a", "other/b"}
-        CLAUDE_PII_EXEMPT_REPOS=" , , " + file lists A   ->  {"a"}  (whitespace falls through)
         (env unset, file lists ["Owner/repo-a"])         ->  {"owner/repo-a"}
         (env unset, no file)                             ->  frozenset()
 
@@ -91,19 +105,56 @@ def pii_exempt_repository_slugs() -> frozenset[str]:
     Returns:
         Lowercased ``owner/repo`` slugs exempt from staged-commit PII scanning.
     """
-    slugs_from_environment = os.environ.get(PII_EXEMPT_REPOS_ENV_VAR)
-    if slugs_from_environment is not None:
-        normalized_environment_slugs = _normalized_slug_set(
-            list(slugs_from_environment.split(PII_EXEMPT_REPOS_SEPARATOR))
-        )
-        if normalized_environment_slugs:
-            return normalized_environment_slugs
+    environment_slugs = _environment_exempt_slugs()
+    if environment_slugs:
+        return environment_slugs
     stored_slugs = _identity_dictionary_from_local_file().get(
         PII_EXEMPT_REPOS_JSON_KEY
     )
     if not isinstance(stored_slugs, list):
         return frozenset()
     return _normalized_slug_set(stored_slugs)
+
+
+def _normalized_allowlisted_values(all_raw_values: object) -> frozenset[str]:
+    """Return the non-empty string members of a raw values list, or empty."""
+    if not isinstance(all_raw_values, list):
+        return frozenset()
+    return frozenset(
+        each_value
+        for each_value in all_raw_values
+        if isinstance(each_value, str) and each_value
+    )
+
+
+def pii_allowlisted_values_by_repository() -> dict[str, frozenset[str]]:
+    """Return the exact literal values each repository allows past the PII scan.
+
+    ::
+
+        file {"Owner/Repo": ["user@example.com"]}  ->  {"owner/repo": {"user@example.com"}}
+        (env unset, no file, or bad json)          ->  {}
+
+    Keyed by lowercased ``owner/repo`` slug so matching is case-insensitive; the
+    values stay exact. The mapping lives under ``pii_allowlisted_values`` in the
+    git-ignored ``~/.claude/local-identity.json`` so a private repository's real
+    fixture addresses stay out of this published tree.
+
+    Returns:
+        Lowercased ``owner/repo`` slug to the frozenset of exact allowed values.
+    """
+    stored_mapping = _identity_dictionary_from_local_file().get(
+        PII_ALLOWLISTED_VALUES_JSON_KEY
+    )
+    if not isinstance(stored_mapping, dict):
+        return {}
+    all_values_by_slug: dict[str, frozenset[str]] = {}
+    for each_raw_slug, each_raw_values in stored_mapping.items():
+        normalized_slug = each_raw_slug.strip().lower() if isinstance(each_raw_slug, str) else ""
+        allowlisted_values = _normalized_allowlisted_values(each_raw_values)
+        if normalized_slug and allowlisted_values:
+            all_values_by_slug[normalized_slug] = allowlisted_values
+    return all_values_by_slug
 
 
 def nas_host() -> str:
