@@ -14,6 +14,7 @@ Runtime documents and scripts shared by every PR-loop skill. Changes here affect
 | `state-schema.md` | Fields each PR-loop workflow tracks across iterations; documents common fields and per-skill extensions |
 | `code-rules-gate.md` | Reference for the CODE_RULES pre-commit gate check; describes what the gate blocks and when it runs |
 | `precatch-rubric.md` | Shared pre-catch lane checklist — deterministic sweep, doc-vs-code parity, test-assertion completeness, PR-description parity, adversarial audit — that autoconverge's lenses and pr-converge's CODE_REVIEW step read on demand |
+| `worker-spawn.md` | Worker-spawn tier protocol: three tiers, CLI/API inputs, JSON result shape, host detection, leader-socket rule, cloud setup; documents `scripts/resolve_worker_spawn.py` |
 
 ## Subdirectory
 
