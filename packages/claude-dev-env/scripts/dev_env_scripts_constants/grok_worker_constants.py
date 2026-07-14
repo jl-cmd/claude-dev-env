@@ -113,7 +113,9 @@ ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
     "rate limit",
     "usage limit",
     "out of usage",
-    "quota exceeded",
+    "rate quota exceeded",
+    "usage quota exceeded",
+    "api quota exceeded",
     "usage exhausted",
     "insufficient credit",
     "http 429",
@@ -127,15 +129,17 @@ ALL_USAGE_EXHAUSTION_SIGNATURES: tuple[str, ...] = ALL_USAGE_LIMIT_SIGNATURES
 ALL_AUTH_FAILURE_SIGNATURES: tuple[str, ...] = (
     "http 401",
     "status 401",
-    "unauthorized",
-    "invalid key",
+    "error: unauthorized",
+    "unauthorized: please login",
+    "invalid api key",
     "not logged in",
+    "not authenticated",
     "unauthenticated",
     "authentication failed",
     "please log in",
     "login required",
 )
-"""Case-insensitive substrings that mark a non-zero completion as an auth failure."""
+"""Case-insensitive multi-token phrases that mark a non-zero completion as an auth failure."""
 
 PROMPT_FILE_FLAG: str = "--prompt-file"
 """CLI flag that points grok at a prompt file for headless single-turn work."""
