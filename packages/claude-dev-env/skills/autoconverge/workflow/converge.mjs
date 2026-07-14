@@ -2061,11 +2061,9 @@ function runCodexGate(head) {
       `1. Opt-out gate. Run exactly:\n` +
       `   python "${CONFIG.prLoopScripts}/reviews_disabled.py" --reviewer codex\n` +
       `   Exit 0 means CLAUDE_REVIEWS_DISABLED lists codex -> return {sha:${'`'}${head}${'`'}, clean:true, down:true, skipped:true, skipReason:'token', findings:[]} and stop. Exit 1 means continue.\n\n` +
-      `2. Usage probe. Run exactly:\n` +
-      `   python "${CONFIG.codexScripts}/codex_usage_probe.py"\n` +
-      `   Capture the single JSON object on stdout (percent_left may be a number or null). Decide required vs skip ONLY through the shared helper — never restate a percent threshold:\n` +
-      `   python -c "import json,sys; sys.path.insert(0, r'${CONFIG.codexScripts}'); from codex_usage_probe import is_codex_review_required; report=json.load(sys.stdin); print('required' if is_codex_review_required(report.get('percent_left')) else 'skip')"\n` +
-      `   piping the probe JSON into that one-liner on stdin. When it prints skip -> return {sha:${'`'}${head}${'`'}, clean:true, down:false, skipped:true, skipReason:'usage', findings:[]} and stop. When it prints required -> continue.\n\n` +
+      `2. Usage probe. Run exactly this one pipeline (bash or PowerShell both accept the pipe operator):\n` +
+      `   python "${CONFIG.codexScripts}/codex_usage_probe.py" | python -c "import json,sys; sys.path.insert(0, r'${CONFIG.codexScripts}'); from codex_usage_probe import is_codex_review_required; report=json.load(sys.stdin); print('required' if is_codex_review_required(report.get('percent_left')) else 'skip')"\n` +
+      `   The left side prints one JSON object (percent_left may be a number or null). The right side decides required vs skip ONLY through the shared helper - never restate a percent threshold. When it prints skip -> return {sha:${'`'}${head}${'`'}, clean:true, down:false, skipped:true, skipReason:'usage', findings:[]} and stop. When it prints required -> continue.\n\n` +
       `3. Resolve the PR base branch (the review target is HEAD vs base, never an invented commit range). Run exactly:\n` +
       `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .base.ref\n` +
       `   Capture the printed base branch name.\n\n` +

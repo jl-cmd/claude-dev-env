@@ -104,8 +104,8 @@ Map the wrapper capture (and its JSONL observation) to exactly one skill-level c
 | Skill class | Maps from (cli-contract) | Signal |
 |---|---|---|
 | `down` | `codex_down` rows; unrecognized probe shape | Non-usable review (exit 1/2 failures, config/auth/model errors, probe miss) |
-| `clean` | Success stream (exit 0 JSONL) with no finding bullets in the `agent_message` body | Usable review, zero addressable findings |
-| `findings` | Success stream (exit 0 JSONL) whose `agent_message` carries one or more `- [P#] …` bullets | Usable review with addressable findings |
+| `clean` | Wrapper `completed` and `parse_codex_findings(agent_message)` empty (blank text or structured `[]`) | Usable review, zero addressable findings |
+| `findings` | Wrapper `completed` and `parse_codex_findings(agent_message)` non-empty (fenced JSON objects, freeform `- [P#]` bullets, or floor text) | Usable review with addressable findings |
 
 Raw CLI failure vocabulary is `codex_down` only ([reference/cli-contract.md](reference/cli-contract.md)). Skill steps and loop re-entry use `down` / `clean` / `findings`. Classification rules, findings parse, and payload fields live in [reference/cli-contract.md](reference/cli-contract.md).
 
@@ -146,7 +146,7 @@ Claude: [same flow; after findings, applies pr-fix-protocol, then re-runs the cl
 
 ## Gotchas
 
-- **Opt-out uses `CLAUDE_REVIEWS_DISABLED=codex`.** Step 0 exit 0 means refuse with the opt-out line; exit 1 means continue; any other exit is a blocker. The shared gate must list `codex` among known reviewers for Step 0 to accept the flag.
+- **Opt-out uses `CLAUDE_REVIEWS_DISABLED=codex`.** `reviews_disabled.py --reviewer codex` exit 0 disables the review; exit 1 continues the probe and wrapper. Standalone `/codex-review` stops with the opt-out refusal line and never runs the wrapper (no `codex_down` capture). Orchestrator gates map the same exit 0 to `codex_down` / `codexDown` bypass on the machine checklist. Export `CLAUDE_REVIEWS_DISABLED=codex` (alone or comma-joined with other reviewers). A gate parse failure for an unknown token is a blocker — stop rather than skipping the gate. The shared gate must list `codex` among known reviewers for Step 0 to accept the flag.
 - **Only `codex exec … review --json` JSONL is classifiable.** Plain `codex review` stdout is non-classifying. Only a Step 4 `findings` class enters Step 5.
 - **Wrapper capture is not skill classification.** Step 5 consumes the skill-class payload from Step 4 (`down` / `clean` / `findings`), built from the wrapper's capture fields and the findings parse.
 - **Uncommitted targets have no review threads.** Fix protocol reply-and-resolve applies only when a PR carries threads; local-only runs stop after the fix commit path the protocol allows without a PR.
@@ -157,10 +157,12 @@ Claude: [same flow; after findings, applies pr-fix-protocol, then re-runs the cl
 |---|---|
 | `SKILL.md` | Hub: opt-out, probe, target, classifying review, classify, fix handoff |
 | `CLAUDE.md` | Package map for agents opening this skill |
-| `reference/cli-contract.md` | Observed CLI surface, wrapper capture, probe signals, skill-class map |
-| `reference/loop-integration.md` | PR-loop target pick and re-entry after fixes |
+| `reference/cli-contract.md` | CLI probe, wrapper capture, auth, cloud runbook, fixture-backed failure classes |
+| `reference/loop-integration.md` | Gate placement, threshold, opt-out, state fields, re-entry |
 | `scripts/run_codex_review.py` | Headless capture wrapper (`run_codex_review`) |
 | `scripts/test_run_codex_review.py` | Behavioral tests for the capture wrapper |
+| `scripts/codex_down_classifier.py` | Maps exit code and stream text to detail class and `completed` / `codex_down` |
+| `scripts/parse_codex_findings.py` | Parses agent text: fenced JSON, freeform bullets, then floor |
 | `scripts/codex_review_scripts_constants/run_constants.py` | Importable named constants for the capture wrapper |
 | `scripts/codex_usage_probe.py` | Weekly usage probe CLI (`percent_left`, `window_reset`, `source`) |
 | `scripts/test_codex_usage_probe.py` | Probe unit tests (app-server fixtures and gate helper) |
@@ -171,7 +173,9 @@ Claude: [same flow; after findings, applies pr-fix-protocol, then re-runs the cl
 - `SKILL.md` — orchestration steps and refusals.
 - `CLAUDE.md` — purpose, trigger, key files.
 - `reference/` — stable homes for cli-contract and loop-integration detail.
-- `scripts/` — capture wrapper, weekly usage probe, tests, and constants package.
+- `scripts/` — capture wrapper, classifier, findings parser, weekly usage probe, tests, fixtures, and constants package.
 - `scripts/run_codex_review.py` — headless capture wrapper entrypoint.
+- `scripts/codex_down_classifier.py` — detail-class and gate-outcome classifier.
+- `scripts/parse_codex_findings.py` — findings parser entrypoint.
 - `scripts/codex_usage_probe.py` — weekly usage probe entrypoint.
 - `scripts/codex_review_scripts_constants/` — importable constants package for skill scripts.
