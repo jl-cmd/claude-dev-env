@@ -48,7 +48,7 @@ Decide (four branches; match first whose predicate holds):
   dirty). Apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) in the same tick.
   Reset push-invalidated markers per [ground-rules.md](ground-rules.md) /
   [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
-  `bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule
+  `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
   next wakeup, return. Full back-to-back-clean cycle plus all six gates must
   hold again on new HEAD.
 - **`classification == "dirty"` with empty inline comments matching
@@ -60,7 +60,7 @@ Decide (four branches; match first whose predicate holds):
   new HEAD SHA. Reset push-invalidated markers per
   [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
   (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
-  `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule next wakeup,
+  `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule next wakeup,
   return. Convergence needs full back-to-back-clean on new HEAD.
 - **`classification == "clean"` (state `APPROVED`):** Set
   `copilot_clean_at = current_head`. Record evidence: "Copilot APPROVED at <SHA>".
@@ -91,7 +91,7 @@ Decide (four branches; match first whose predicate holds):
   path — apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)). Reset push-invalidated markers per
   [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
   (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
-  `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule next wakeup,
+  `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule next wakeup,
   return.
 - **`classification == "dirty"` with empty inline comments matching
   `pull_request_review_id`:** Claude posted findings only in review body
@@ -100,7 +100,7 @@ Decide (four branches; match first whose predicate holds):
   shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)). Reset
   push-invalidated markers per [ground-rules.md](ground-rules.md) /
   [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
-  `bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule
+  `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
   next wakeup, return.
 - **`classification == "clean"` (state `APPROVED`):** Record evidence:
   "Claude APPROVED at <SHA>". Continue to gate (c).
@@ -128,7 +128,7 @@ Persist `mergeable_state` into `merge_state_status`. Decide:
   every prior clean state — reset push-invalidated markers per
   [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
   (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
-  `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule next wakeup,
+  `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule next wakeup,
   return. Loop re-runs from scratch on new HEAD.
 - **`mergeable_state` is `"blocked"`, `"behind"`, `"unknown"`, or `"unstable"` for
   non-conflict reasons** (required checks pending/failing for "unstable",
@@ -174,7 +174,7 @@ against `current_head`. Decide:
     Treat identically to gate (a) dirty path — apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)).
     Reset push-invalidated markers per [ground-rules.md](ground-rules.md) /
     [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
-    `bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule
+    `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
     next wakeup, return.
 - **No Copilot review at `current_head` yet:** Record evidence: "No Copilot
   review at <SHA> (wait count: <N>)". Increment `copilot_wait_count`
@@ -208,7 +208,7 @@ Decide:
   shared fix protocol unresolved-thread sweep ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md) step 12; skill deltas in [`fix-protocol.md`](fix-protocol.md)). Push if any code changed → reset
   push-invalidated markers per [ground-rules.md](ground-rules.md) /
   [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
-  `bugbot_down`, `bugbot_acknowledged_at`), `phase = CODE_REVIEW`, schedule
+  `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
   next wakeup, return. If only resolutions (no code changes), re-check this
   gate without resetting.
 

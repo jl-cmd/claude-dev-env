@@ -6,8 +6,8 @@ Reference pages for the `codex-review` skill. `SKILL.md` cites these files for C
 
 | File | Purpose |
 |---|---|
-| `cli-contract.md` | Observed Codex CLI review surface: command shape and option ordering, success JSONL stream and finding-bullet format, `codex_down` failure classes, auth surface, and the `codex exec review --help` shape probe. |
-| `loop-integration.md` | Target selection for PR loops vs standalone runs, and how findings re-enter `pr-fix-protocol` inside an orchestrator. |
+| `cli-contract.md` | Codex CLI surface, wrapper I/O (`completed` / `codex_down`), skill class mapping (`down` / `clean` / `findings`), failure classes, auth, and shape probe. |
+| `loop-integration.md` | Target selection, findings handoff, re-entry after fix, and orchestrator state fields (`codex_clean_at`, `codex_down`). |
 
 ## Conventions
 
