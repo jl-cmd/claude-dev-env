@@ -111,7 +111,7 @@ preflight/runner classification strings (for example `grok_binary_missing`,
 |---|---|
 | `0` | A tier served (`tier_used` is not null) |
 | `2` | Exhausted — no tier served |
-| `3` | Config error (claude chain configuration missing or invalid) |
+| `3` | Config error: missing `--prompt-file` (`output` = `prompt_file_missing`) or claude chain configuration missing or invalid |
 
 ## Host detection
 
