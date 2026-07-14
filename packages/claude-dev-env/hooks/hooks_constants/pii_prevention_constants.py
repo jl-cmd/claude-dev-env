@@ -293,12 +293,6 @@ STAGED_LIST_FAILURE_REASON: str = (
     "(git diff --cached failed). Refuse commit until the index is readable."
 )
 
-REPOSITORY_ROOT_UNRESOLVED_REASON: str = (
-    "BLOCKED [pii_prevention_blocker]: could not resolve the git repository root "
-    "for a commit command (not a git work tree, git missing, or bad -C path). "
-    "Refuse commit until the repository root is resolvable."
-)
-
 STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE: str = (
     "BLOCKED [pii_prevention_blocker]: staged file '{relative_path}' could not be "
     "scanned for PII ({reason}). Refuse commit, shrink the blob, or keep binary "

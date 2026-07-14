@@ -11,6 +11,8 @@ PreToolUse hooks that deny (block) tool calls when a rule is violated. The main 
 | `claude_md_orphan_file_blocker_parts/` | Concern modules the `claude_md_orphan_file_blocker.py` entry hook wires together: reference extraction, subtree scan, scan plan, decision, and constants |
 | `package_inventory_stale_blocker_parts/` | Concern modules the `package_inventory_stale_blocker.py` entry hook wires together: inventory detection, decision, and constants |
 | `inventory_intent_records/` | The shared per-session pending-intent store both inventory blockers read to break the file/row add-order deadlock |
+| `pii_prevention_blocker_parts/` | Concern modules the `pii_prevention_blocker.py` entry hook wires together: per-repository scan exemption, and resolving the repository a commit command targets (with `config/` for the resolution deny-message constants) |
+| `tests/` | pytest suite for `pii_prevention_blocker.py` repository resolution and the `pii_prevention_blocker_parts` modules |
 
 ## Core enforcer
 
@@ -87,7 +89,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `package_inventory_stale_blocker.py` | PreToolUse (Write) | A new production code file created in a directory whose `README.md`/`CLAUDE.md` inventory (or a parent skill's `SKILL.md` Layout table mapping the `scripts/` subdirectory) names two or more sibling files but no entry for the new file |
 | `pii_commit_command.py` | library | Token-aware git-commit detection reused by `pii_prevention_blocker.py` |
 | `pii_payload_scan.py` | library | Write/Edit and durable post-body PII evaluation reused by `pii_prevention_blocker.py` |
-| `pii_prevention_blocker.py` | PreToolUse (Write/Edit/MultiEdit/Bash/PowerShell/MCP GitHub) | Content that carries high-confidence personal data or secrets (real emails, home-dir paths, private IPs, credential material) on write, durable GitHub posts, or staged commit paths |
+| `pii_prevention_blocker.py` | PreToolUse (Write/Edit/MultiEdit/Bash/PowerShell/MCP GitHub) | Entry hook — content that carries high-confidence personal data or secrets (real emails, home-dir paths, private IPs, credential material) on write, durable GitHub posts, or staged commit paths; resolves the staged-commit repository from the command it gates (via `pii_prevention_blocker_parts`), not the session working directory |
 | `pii_scanner.py` | library | Pure text scanners shared by `pii_prevention_blocker.py` |
 | `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose |
 | `pr_converge_bugteam_enforcer.py` | PreToolUse | Enforces that bugteam runs in parallel with bugbot in pr-converge loops |

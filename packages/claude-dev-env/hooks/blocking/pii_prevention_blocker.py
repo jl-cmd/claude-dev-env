@@ -25,67 +25,82 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
-_blocking_directory = str(Path(__file__).resolve().parent)
-_hooks_directory = str(Path(__file__).resolve().parent.parent)
-if _blocking_directory not in sys.path:
-    sys.path.insert(0, _blocking_directory)
-if _hooks_directory not in sys.path:
-    sys.path.insert(0, _hooks_directory)
+try:
+    _blocking_directory = str(Path(__file__).resolve().parent)
+    _hooks_directory = str(Path(__file__).resolve().parent.parent)
+    for each_bootstrap_directory in (_blocking_directory, _hooks_directory):
+        if each_bootstrap_directory not in sys.path:
+            sys.path.insert(0, each_bootstrap_directory)
+    from pii_commit_command import (
+        extract_git_commit_working_directory,
+        is_git_commit_shell_command,
+    )
+    from pii_payload_scan import (
+        build_deny_reason,
+        evaluate_post_body_texts,
+        evaluate_write_edit_payload,
+    )
+    from pii_prevention_blocker_parts.repository_exemption import (
+        _is_repository_exempt_from_pii_scan,
+        _owner_repo_slug_from_origin_url,
+    )
+    from pii_prevention_blocker_parts.repository_resolution import (
+        compose_command_working_directory,
+        expand_user_directory,
+        refusal_reason_for_unresolved_repository,
+    )
+    from pii_scanner import is_path_exempt_from_pii_scan, scan_text_for_pii
+    from precommit_code_rules_gate import resolve_repository_root
+    from volatile_path_in_post_blocker import (
+        extract_gh_post_body_texts_for_privacy_gate,
+        extract_mcp_body_texts,
+    )
 
-from block_main_commit import resolve_directory  # noqa: E402
-from pii_commit_command import (  # noqa: E402
-    extract_git_commit_working_directory,
-    is_git_commit_shell_command,
-)
-from pii_payload_scan import (  # noqa: E402
-    build_deny_reason,
-    evaluate_post_body_texts,
-    evaluate_write_edit_payload,
-)
-from pii_scanner import is_path_exempt_from_pii_scan, scan_text_for_pii  # noqa: E402
-from precommit_code_rules_gate import resolve_repository_root  # noqa: E402
-from volatile_path_in_post_blocker import (  # noqa: E402
-    extract_gh_post_body_texts_for_privacy_gate,
-    extract_mcp_body_texts,
-)
+    from hooks_constants.hook_block_logger import log_hook_block
+    from hooks_constants.pii_prevention_constants import (
+        ALL_SHELL_TOOL_NAMES,
+        ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX,
+        ALL_STAGED_FILES_COMMAND,
+        ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
+        BODY_FILE_ENCODING,
+        GIT_COMMAND_TIMEOUT_SECONDS,
+        HOOK_SCRIPT_BASENAME,
+        MAXIMUM_STAGED_FILE_BYTES,
+        MCP_GITHUB_TOOL_PREFIX,
+        NULL_BYTE_MARKER,
+        STAGED_BLOB_PREFIX,
+        STAGED_BLOB_REASON_DECODE_FAILED,
+        STAGED_BLOB_REASON_GIT_SHOW_FAILED,
+        STAGED_BLOB_REASON_NULL_BYTES,
+        STAGED_BLOB_REASON_OVERSIZED,
+        STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE,
+        STAGED_LIST_FAILURE_REASON,
+    )
+    from hooks_constants.pre_tool_use_stdin import (
+        read_hook_input_dictionary_from_stdin,
+    )
+except ImportError as import_error:
+    raise ImportError(
+        "pii_prevention_blocker: cannot import its sibling modules; "
+        "ensure the blocking and hooks directories are importable."
+    ) from import_error
 
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.local_identity import pii_exempt_repository_slugs  # noqa: E402
-from hooks_constants.pii_prevention_constants import (  # noqa: E402
-    ALL_GIT_ORIGIN_URL_COMMAND,
-    ALL_NETWORK_GIT_URL_SCHEMES,
-    ALL_SHELL_TOOL_NAMES,
-    ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX,
-    ALL_STAGED_FILES_COMMAND,
-    ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    BODY_FILE_ENCODING,
-    GIT_COMMAND_TIMEOUT_SECONDS,
-    GIT_URL_SUFFIX,
-    GITHUB_COM_HOST,
-    HOOK_SCRIPT_BASENAME,
-    MAXIMUM_STAGED_FILE_BYTES,
-    MCP_GITHUB_TOOL_PREFIX,
-    MINIMUM_OWNER_REPO_SEGMENT_COUNT,
-    NULL_BYTE_MARKER,
-    POSIX_PATH_SEPARATOR,
-    REPOSITORY_ROOT_UNRESOLVED_REASON,
-    SCP_STYLE_PATH_SEPARATOR,
-    STAGED_BLOB_PREFIX,
-    STAGED_BLOB_REASON_DECODE_FAILED,
-    STAGED_BLOB_REASON_GIT_SHOW_FAILED,
-    STAGED_BLOB_REASON_NULL_BYTES,
-    STAGED_BLOB_REASON_OVERSIZED,
-    STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE,
-    STAGED_LIST_FAILURE_REASON,
-    URL_SCHEME_SEPARATOR,
-    USERINFO_HOST_SEPARATOR,
-    WINDOWS_PATH_SEPARATOR,
-)
-from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
-    read_hook_input_dictionary_from_stdin,
-)
+
+__all__ = [
+    "evaluate",
+    "evaluate_bash_command",
+    "evaluate_post_body_texts",
+    "evaluate_staged_commit",
+    "evaluate_write_edit_payload",
+    "extract_git_commit_working_directory",
+    "is_git_commit_shell_command",
+    "list_staged_file_paths",
+    "read_staged_file_text",
+    "resolve_repository_root",
+    "_owner_repo_slug_from_origin_url",
+    "main",
+]
 
 
 def list_staged_file_paths(
@@ -120,20 +135,10 @@ def list_staged_file_paths(
     return all_paths, None
 
 
-def read_staged_file_text(
-    repository_root: Path, relative_path: str
-) -> tuple[str | None, str | None]:
-    """Return staged blob text, or report why the blob is unscannable.
-
-    Args:
-        repository_root: Repository root for the git show working directory.
-        relative_path: Repository-relative path of the staged file.
-
-    Returns:
-        ``(text, None)`` when the blob is scannable UTF-8 text, or
-        ``(None, deny_reason)`` when the blob cannot be scanned (fail-closed).
-    """
-    staged_blob_reference = STAGED_BLOB_PREFIX + relative_path
+def _git_show_staged_blob(
+    repository_root: Path, staged_blob_reference: str
+) -> subprocess.CompletedProcess[bytes] | None:
+    """Return the ``git show`` result for a staged blob, or None on failure."""
     try:
         completed_process = subprocess.run(
             list(ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX) + [staged_blob_reference],
@@ -142,38 +147,62 @@ def read_staged_file_text(
             cwd=str(repository_root),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
-            relative_path=relative_path,
-            reason=STAGED_BLOB_REASON_GIT_SHOW_FAILED,
-        )
+        return None
     if completed_process.returncode != 0:
-        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
-            relative_path=relative_path,
-            reason=STAGED_BLOB_REASON_GIT_SHOW_FAILED,
-        )
+        return None
+    return completed_process
+
+
+def _unscannable_result(relative_path: str, reason: str) -> tuple[None, str]:
+    """Build the ``(None, deny_reason)`` pair for an unscannable staged blob."""
+    return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
+        relative_path=relative_path, reason=reason
+    )
+
+
+def read_staged_file_text(
+    repository_root: Path, relative_path: str
+) -> tuple[str | None, str | None]:
+    """Return staged blob text, or ``(None, deny_reason)`` when unscannable.
+
+    Args:
+        repository_root: Repository root for the git show working directory.
+        relative_path: Repository-relative path of the staged file.
+
+    Returns:
+        ``(text, None)`` for scannable UTF-8 text; ``(None, reason)`` otherwise.
+    """
+    staged_blob_reference = STAGED_BLOB_PREFIX + relative_path
+    completed_process = _git_show_staged_blob(repository_root, staged_blob_reference)
+    if completed_process is None:
+        return _unscannable_result(relative_path, STAGED_BLOB_REASON_GIT_SHOW_FAILED)
     raw_bytes = completed_process.stdout
     if len(raw_bytes) > MAXIMUM_STAGED_FILE_BYTES:
-        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
-            relative_path=relative_path,
-            reason=STAGED_BLOB_REASON_OVERSIZED,
-        )
+        return _unscannable_result(relative_path, STAGED_BLOB_REASON_OVERSIZED)
     if NULL_BYTE_MARKER in raw_bytes:
-        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
-            relative_path=relative_path,
-            reason=STAGED_BLOB_REASON_NULL_BYTES,
-        )
+        return _unscannable_result(relative_path, STAGED_BLOB_REASON_NULL_BYTES)
     try:
         return raw_bytes.decode(BODY_FILE_ENCODING), None
     except UnicodeDecodeError:
-        return None, STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
-            relative_path=relative_path,
-            reason=STAGED_BLOB_REASON_DECODE_FAILED,
-        )
+        return _unscannable_result(relative_path, STAGED_BLOB_REASON_DECODE_FAILED)
 
 
-def evaluate_staged_commit(
-    repository_root: Path,
-) -> str | None:
+def _scan_staged_path(repository_root: Path, relative_path: str) -> str | None:
+    """Return a deny reason for one staged path, or None when it is clean."""
+    staged_text, unscannable_reason = read_staged_file_text(
+        repository_root, relative_path
+    )
+    if unscannable_reason is not None:
+        return unscannable_reason
+    if staged_text is None:
+        return _unscannable_result(relative_path, STAGED_BLOB_REASON_GIT_SHOW_FAILED)[1]
+    all_findings = scan_text_for_pii(staged_text)
+    if not all_findings:
+        return None
+    return build_deny_reason(all_findings, f"staged commit ({relative_path})")
+
+
+def evaluate_staged_commit(repository_root: Path) -> str | None:
     """Return a deny reason when staged content carries PII or is unscannable.
 
     Fail-closed: git list/show failures and unscannable blobs deny the commit
@@ -191,182 +220,39 @@ def evaluate_staged_commit(
     for each_relative_path in all_relative_paths:
         if is_path_exempt_from_pii_scan(each_relative_path):
             continue
-        staged_text, unscannable_reason = read_staged_file_text(
-            repository_root, each_relative_path
-        )
-        if unscannable_reason is not None:
-            return unscannable_reason
-        if staged_text is None:
-            return STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE.format(
-                relative_path=each_relative_path,
-                reason=STAGED_BLOB_REASON_GIT_SHOW_FAILED,
-            )
-        all_findings = scan_text_for_pii(staged_text)
-        if all_findings:
-            gate_surface = f"staged commit ({each_relative_path})"
-            return build_deny_reason(all_findings, gate_surface)
+        deny_reason = _scan_staged_path(repository_root, each_relative_path)
+        if deny_reason is not None:
+            return deny_reason
     return None
 
 
-def _strip_trailing_path_separators(origin_url: str) -> str:
-    stripped_url = origin_url
-    while stripped_url and stripped_url[-1] in (
-        POSIX_PATH_SEPARATOR,
-        WINDOWS_PATH_SEPARATOR,
-    ):
-        stripped_url = stripped_url[:-1]
-    return stripped_url
+def _evaluate_commit_staged_content(
+    bash_command: str, working_directory: str | None
+) -> str | None:
+    """Scan the staged content of the repository the commit command targets.
 
+    Resolves the repository from the command's ``-C``/``cd`` path, falling back
+    to the session working directory only when the command names none, so a
+    removed cwd never blocks a commit that targets a valid repo.
 
-def _strip_trailing_git_suffix(origin_url: str) -> str:
-    if origin_url.lower().endswith(GIT_URL_SUFFIX):
-        return origin_url[: -len(GIT_URL_SUFFIX)]
-    return origin_url
+    Args:
+        bash_command: The Bash or PowerShell tool command string.
+        working_directory: Session working directory fallback.
 
-
-def _normalized_origin_url(origin_url: str) -> str:
-    return _strip_trailing_git_suffix(_strip_trailing_path_separators(origin_url))
-
-
-def _host_and_path_from_scheme_url(origin_url: str) -> tuple[str, str] | None:
-    parsed_url = urlparse(origin_url)
-    if parsed_url.scheme not in ALL_NETWORK_GIT_URL_SCHEMES:
-        return None
-    maybe_host = parsed_url.hostname
-    if maybe_host is None:
-        return None
-    try:
-        _ = parsed_url.port
-    except ValueError:
-        return None
-    repository_path = parsed_url.path.replace(
-        WINDOWS_PATH_SEPARATOR, POSIX_PATH_SEPARATOR
-    ).lstrip(POSIX_PATH_SEPARATOR)
-    return maybe_host.lower(), repository_path
-
-
-def _host_and_path_from_scp_url(origin_url: str) -> tuple[str, str] | None:
-    if USERINFO_HOST_SEPARATOR not in origin_url:
-        return None
-    userinfo_and_host, separator, repository_path = origin_url.partition(
-        SCP_STYLE_PATH_SEPARATOR
+    Returns:
+        Deny reason text, or None when the staged content is clean or exempt.
+    """
+    command_directory = compose_command_working_directory(bash_command)
+    attempted_directory = (
+        command_directory if command_directory is not None else working_directory
     )
-    if not separator or USERINFO_HOST_SEPARATOR not in userinfo_and_host:
+    expanded_directory = expand_user_directory(attempted_directory)
+    repository_root = resolve_repository_root(expanded_directory)
+    if repository_root is None:
+        return refusal_reason_for_unresolved_repository(attempted_directory)
+    if _is_repository_exempt_from_pii_scan(repository_root):
         return None
-    if not repository_path:
-        return None
-    host = userinfo_and_host.rsplit(USERINFO_HOST_SEPARATOR, maxsplit=1)[-1]
-    if not host:
-        return None
-    normalized_path = repository_path.replace(
-        WINDOWS_PATH_SEPARATOR, POSIX_PATH_SEPARATOR
-    )
-    return host.lower(), normalized_path
-
-
-def _host_and_repository_path_from_origin_url(
-    origin_url: str,
-) -> tuple[str, str] | None:
-    normalized_url = _normalized_origin_url(origin_url)
-    if URL_SCHEME_SEPARATOR in normalized_url:
-        return _host_and_path_from_scheme_url(normalized_url)
-    return _host_and_path_from_scp_url(normalized_url)
-
-
-def _owner_repo_slug_from_path(repository_path: str) -> str | None:
-    all_segments = [
-        each_segment
-        for each_segment in repository_path.split(POSIX_PATH_SEPARATOR)
-        if each_segment
-    ]
-    if len(all_segments) < MINIMUM_OWNER_REPO_SEGMENT_COUNT:
-        return None
-    owner_name = all_segments[0]
-    repository_name = all_segments[1]
-    return POSIX_PATH_SEPARATOR.join((owner_name, repository_name)).lower()
-
-
-def _owner_repo_slug_from_origin_url(origin_url: str) -> str | None:
-    """Return the lowercased owner/repo slug from a github.com origin URL.
-
-    ::
-
-        https://github.com/Owner/Repo.git                 ->  owner/repo
-        https://github.com/Owner/Repo                     ->  owner/repo
-        https://github.com:443/Owner/Repo.git             ->  owner/repo
-        ssh://git@github.com:22/Owner/Repo.git            ->  owner/repo
-        git@github.com:Owner/Repo.git                     ->  owner/repo
-        ssh://git@github.com/Owner/Repo.git               ->  owner/repo
-        https://github.com/Owner/Repo.git/                ->  owner/repo
-        https://evil.test/Owner/Repo.git                  ->  None
-        https://github.com:443.evil.test/Owner/Repo.git   ->  None
-        ssh://git@github.com:22.evil.test/Owner/Repo.git  ->  None
-        C:/repos/Owner/Repo                               ->  None
-
-    Accepts only the exact host ``github.com`` (case-insensitive). Spoof hosts,
-    unparseable port authorities, and path-shaped origins return None so the
-    repository is never exempt.
-
-    Args:
-        origin_url: The ``remote.origin.url`` value, https or ssh form.
-
-    Returns:
-        The ``owner/repo`` slug in lowercase, or None when the host is not
-        exactly ``github.com``, the port authority is unparseable, or the URL
-        carries no owner/repo tail.
-    """
-    maybe_host_and_path = _host_and_repository_path_from_origin_url(origin_url)
-    if maybe_host_and_path is None:
-        return None
-    host, repository_path = maybe_host_and_path
-    if host != GITHUB_COM_HOST:
-        return None
-    return _owner_repo_slug_from_path(repository_path)
-
-
-def _repository_origin_slug(repository_root: Path) -> str | None:
-    """Return the lowercased owner/repo slug of the origin remote, or None.
-
-    Args:
-        repository_root: Repository whose origin remote identifies it.
-
-    Returns:
-        The ``owner/repo`` slug in lowercase, or None when the repository has no
-        readable origin remote or the URL carries no owner/repo tail.
-    """
-    try:
-        completed_process = subprocess.run(
-            list(ALL_GIT_ORIGIN_URL_COMMAND),
-            check=False, capture_output=True,
-            text=True,
-            timeout=GIT_COMMAND_TIMEOUT_SECONDS,
-            cwd=str(repository_root),
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return None
-    if completed_process.returncode != 0:
-        return None
-    return _owner_repo_slug_from_origin_url(completed_process.stdout.strip())
-
-
-def _is_repository_exempt_from_pii_scan(repository_root: Path) -> bool:
-    """Report whether commits in *repository_root* skip the staged PII scan.
-
-    Exempt repositories are named by owner/repo slug through
-    ``CLAUDE_PII_EXEMPT_REPOS`` or the ``pii_exempt_repositories`` list in the
-    git-ignored ``~/.claude/local-identity.json``. A repository without a readable
-    origin remote is never exempt (fail-closed to scanning).
-
-    Args:
-        repository_root: Repository whose index is about to be committed.
-
-    Returns:
-        True when the repository's origin slug is in the exempt set.
-    """
-    origin_slug = _repository_origin_slug(repository_root)
-    if origin_slug is None:
-        return False
-    return origin_slug in pii_exempt_repository_slugs()
+    return evaluate_staged_commit(repository_root)
 
 
 def evaluate_bash_command(
@@ -376,7 +262,8 @@ def evaluate_bash_command(
 
     Args:
         bash_command: The Bash or PowerShell tool command string.
-        working_directory: Directory git should run in, or None for process CWD.
+        working_directory: Session working directory, used only when the command
+            names no repository path.
 
     Returns:
         Deny reason text, or None when the command is clean or out of scope.
@@ -393,14 +280,26 @@ def evaluate_bash_command(
         return post_deny_reason
     if not is_git_commit_shell_command(bash_command):
         return None
-    command_directory = extract_git_commit_working_directory(bash_command)
-    resolved_directory = resolve_directory(command_directory) or working_directory
-    repository_root = resolve_repository_root(resolved_directory)
-    if repository_root is None:
-        return REPOSITORY_ROOT_UNRESOLVED_REASON
-    if _is_repository_exempt_from_pii_scan(repository_root):
+    return _evaluate_commit_staged_content(bash_command, working_directory)
+
+
+def _evaluate_shell_tool(
+    all_tool_input: dict[str, object], payload_by_key: dict[str, object]
+) -> str | None:
+    """Resolve the command and working directory, then gate a shell tool call."""
+    command_value = all_tool_input.get("command", "")
+    if not isinstance(command_value, str) or not command_value:
         return None
-    return evaluate_staged_commit(repository_root)
+    working_directory_value = all_tool_input.get("working_directory")
+    working_directory = (
+        working_directory_value
+        if isinstance(working_directory_value, str)
+        else None
+    )
+    if working_directory is None:
+        cwd_value = payload_by_key.get("cwd")
+        working_directory = cwd_value if isinstance(cwd_value, str) else None
+    return evaluate_bash_command(command_value, working_directory=working_directory)
 
 
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
@@ -416,30 +315,12 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
     raw_tool_input = payload_by_key.get("tool_input", {})
     all_tool_input = raw_tool_input if isinstance(raw_tool_input, dict) else {}
-
     if tool_name in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
         return evaluate_write_edit_payload(tool_name, all_tool_input)
-
     if tool_name in ALL_SHELL_TOOL_NAMES:
-        command_value = all_tool_input.get("command", "")
-        if not isinstance(command_value, str) or not command_value:
-            return None
-        working_directory_value = all_tool_input.get("working_directory")
-        working_directory = (
-            working_directory_value
-            if isinstance(working_directory_value, str)
-            else None
-        )
-        if working_directory is None:
-            cwd_value = payload_by_key.get("cwd")
-            working_directory = cwd_value if isinstance(cwd_value, str) else None
-        return evaluate_bash_command(
-            command_value, working_directory=working_directory
-        )
-
+        return _evaluate_shell_tool(all_tool_input, payload_by_key)
     if tool_name.startswith(MCP_GITHUB_TOOL_PREFIX):
         return evaluate_post_body_texts(extract_mcp_body_texts(all_tool_input))
-
     return None
 
 
@@ -474,7 +355,7 @@ def main() -> None:
     deny_reason = evaluate(payload_dictionary)
     if deny_reason is None:
         sys.exit(0)
-    print(json.dumps(build_deny_payload(deny_reason)))
+    sys.stdout.write(json.dumps(build_deny_payload(deny_reason)) + "\n")
     sys.stdout.flush()
     sys.exit(0)
 
