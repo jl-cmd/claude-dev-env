@@ -161,8 +161,7 @@ Claude: [same flow; after findings, applies pr-fix-protocol, then re-runs the cl
 | `reference/loop-integration.md` | PR-loop target pick and re-entry after fixes |
 | `scripts/run_codex_review.py` | Headless capture wrapper (`run_codex_review`) |
 | `scripts/test_run_codex_review.py` | Behavioral tests for the capture wrapper |
-| `scripts/codex_review_scripts_constants/run_constants.py` | Named constants for the capture wrapper |
-| `scripts/codex_review_scripts_constants/` | Importable constants package for skill scripts |
+| `scripts/codex_review_scripts_constants/run_constants.py` | Importable named constants for the capture wrapper |
 
 ## Folder map
 

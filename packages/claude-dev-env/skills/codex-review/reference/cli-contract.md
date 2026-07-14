@@ -129,7 +129,9 @@ Skill-level classes `down` / `clean` / `findings` are **not** produced here. The
 ### Caller contracts
 
 - Create `run_state_directory` before calling the wrapper; the wrapper writes `codex-review.jsonl` into that directory and does not create parents.
+- A missing `repository_directory` or `run_state_directory` raises `ValueError`. Both are checked before any Codex process starts, so a bad path costs no review run.
 - Treat `outcome_class` as the capture success signal; do not treat `exit_code == 0` alone as success.
+- `codex-review.jsonl` holds the stream's own line endings, so the captured file matches the bytes Codex wrote to stdout.
 
 ## Skill classification map
 
@@ -153,11 +155,12 @@ Probe command: `codex exec review --help`. The wrapper probes this help surface 
 
 ### Minimum shape signals
 
-The help text must include each of these greppable tokens as **whole tokens** (not mere substrings of longer flag names):
+The `review` subcommand is proven by the probe itself: a CLI without it exits non-zero on `codex exec review --help`, which is already a `codex_down` signal.
+
+The help text must then include each of these four flags as a **whole token** (not a mere substring of a longer flag name):
 
 | Signal | Role |
 |---|---|
-| `review` | Subcommand present under `codex exec` |
 | `--uncommitted` | Staged + unstaged + untracked target |
 | `--base` | Base-branch target |
 | `--commit` | Commit-SHA target |

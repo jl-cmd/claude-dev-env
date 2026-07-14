@@ -15,8 +15,7 @@ One Codex review pass per invocation. The skill owns sequence and skill-level cl
 | `reference/loop-integration.md` | Base-branch vs `--uncommitted` (staged + unstaged + untracked) target pick; re-entry after a fix push; skill-class vocabulary for orchestrators. |
 | `scripts/run_codex_review.py` | Headless capture wrapper: probes, single-target argv, JSONL capture, `completed` / `codex_down`. |
 | `scripts/test_run_codex_review.py` | Behavioral tests for `run_codex_review`. |
-| `scripts/codex_review_scripts_constants/run_constants.py` | Named constants for the capture wrapper. |
-| `scripts/codex_review_scripts_constants/` | Named constants package for skill scripts. |
+| `scripts/codex_review_scripts_constants/run_constants.py` | Named constants package for skill scripts: binary name, flags, prompt, probe pattern, timeout, exit sentinels, JSONL keys, capture outcome labels. |
 
 ## Subdirectories
 

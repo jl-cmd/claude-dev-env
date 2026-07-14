@@ -35,6 +35,7 @@ from codex_review_scripts_constants.run_constants import (
     JSONL_AGENT_MESSAGE_TEXT_KEY,
     JSONL_AGENT_MESSAGE_TYPE,
     JSONL_CAPTURE_FILENAME,
+    JSONL_CAPTURE_NEWLINE,
     JSONL_ENTRY_COMPLETED_TYPE,
     JSONL_ENTRY_KEY,
     JSONL_EVENT_TYPE_KEY,
@@ -205,6 +206,13 @@ def _require_single_target(
         )
 
 
+def _require_existing_directory(directory_path: Path, parameter_name: str) -> None:
+    if not directory_path.is_dir():
+        raise ValueError(
+            f"{parameter_name} is not an existing directory: {directory_path}"
+        )
+
+
 def _build_review_arguments(
     *,
     base_branch: str | None,
@@ -283,7 +291,11 @@ def _capture_review_run(
     jsonl_text = completion_or_exit.stdout or ""
     stderr_text = completion_or_exit.stderr or ""
     jsonl_path = run_state_directory / JSONL_CAPTURE_FILENAME
-    jsonl_path.write_text(jsonl_text, encoding=UTF8_ENCODING)
+    jsonl_path.write_text(
+        jsonl_text,
+        encoding=UTF8_ENCODING,
+        newline=JSONL_CAPTURE_NEWLINE,
+    )
     review_returncode = completion_or_exit.returncode
     if review_returncode != 0:
         return CodexReviewOutcome(
@@ -341,7 +353,9 @@ def run_codex_review(
 
     Raises:
         ValueError: When zero targets or more than one target is selected, or
-            when ``repository_directory`` is not an existing directory.
+            when ``repository_directory`` or ``run_state_directory`` is not an
+            existing directory. Both directories are checked before any Codex
+            process starts, so a bad path costs no review run.
     """
     _require_single_target(
         base_branch=base_branch,
@@ -349,10 +363,8 @@ def run_codex_review(
         commit_sha=commit_sha,
         is_prompt_target=is_prompt_target,
     )
-    if not repository_directory.is_dir():
-        raise ValueError(
-            f"repository_directory is not an existing directory: {repository_directory}"
-        )
+    _require_existing_directory(repository_directory, "repository_directory")
+    _require_existing_directory(run_state_directory, "run_state_directory")
     resolved_timeout_seconds = (
         DEFAULT_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
     )
