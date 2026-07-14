@@ -170,6 +170,12 @@ def _normalize_stream(stream_payload: str | None) -> str:
     return stream_payload
 
 
+def _resolve_returncode(process: subprocess.Popen[str]) -> int:
+    if process.returncode is not None:
+        return process.returncode
+    return TIMEOUT_RETURN_CODE
+
+
 def _timeout_outcome(process: subprocess.Popen[str]) -> GrokRunnerOutcome:
     process.kill()
     try:
@@ -180,11 +186,7 @@ def _timeout_outcome(process: subprocess.Popen[str]) -> GrokRunnerOutcome:
         captured_stdout, captured_stderr = "", ""
     stdout_text = _normalize_stream(captured_stdout)
     stderr_text = _normalize_stream(captured_stderr)
-    returncode = (
-        process.returncode
-        if process.returncode is not None
-        else TIMEOUT_RETURN_CODE
-    )
+    returncode = _resolve_returncode(process)
     if returncode == 0:
         return _classify_completion(returncode, stdout_text, stderr_text)
     return GrokRunnerOutcome(
@@ -229,11 +231,7 @@ def _invoke_process(
         return _timeout_outcome(process)
     stdout_text = _normalize_stream(captured_stdout)
     stderr_text = _normalize_stream(captured_stderr)
-    returncode = (
-        process.returncode
-        if process.returncode is not None
-        else TIMEOUT_RETURN_CODE
-    )
+    returncode = _resolve_returncode(process)
     return _classify_completion(returncode, stdout_text, stderr_text)
 
 
