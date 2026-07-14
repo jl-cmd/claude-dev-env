@@ -84,3 +84,31 @@ def test_invalid_fenced_json_falls_through_to_floor() -> None:
     assert len(all_findings) == 1
     assert all_findings[0].structured is False
     assert "Partial reply" in all_findings[0].body
+
+
+def test_fenced_json_array_of_non_dicts_falls_through_to_floor() -> None:
+    reviewer_text = 'Garbage payload.\n\n```json\n["not","objects"]\n```\n'
+
+    all_findings = parser.parse_codex_findings(reviewer_text)
+
+    assert len(all_findings) >= 1
+    assert all(each_finding.structured is False for each_finding in all_findings)
+    assert any("Garbage payload" in each_finding.body for each_finding in all_findings)
+
+
+def test_fenced_json_array_of_non_dicts_with_freeform_bullet_yields_freeform() -> None:
+    reviewer_text = (
+        'Intro text.\n\n```json\n["not","objects"]\n```\n\n'
+        "- [P1] Restore empty-input handling — src/stats.py:2-2\n"
+        "  Divides by zero on empty input.\n"
+    )
+
+    all_findings = parser.parse_codex_findings(reviewer_text)
+
+    assert len(all_findings) == 1
+    finding = all_findings[0]
+    assert finding.structured is False
+    assert finding.title == "Restore empty-input handling"
+    assert finding.priority == "P1"
+    assert finding.file == "src/stats.py"
+    assert "Divides by zero" in finding.body

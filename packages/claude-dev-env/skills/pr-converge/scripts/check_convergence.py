@@ -20,7 +20,8 @@ Each flag also honors its own reviews-disabled token: "bugbot", "copilot",
 "bugteam", or "codex". A caller that cannot pass the flag reaches the same
 bypass by exporting the token. The mark-ready blocker hook re-runs this script
 with no flags, so its convergence re-check reads the bypass from the exported
-token instead.
+token instead. For Codex, sticky job-dir state ``codex_down: true`` is a third
+bypass source when the original run could not re-pass ``--codex-down``.
 
 The Codex gate is conditional-required: it demands
 ``codex_clean_at == current_head`` only when the weekly usage probe reports
@@ -64,6 +65,7 @@ from pr_converge_scripts_constants.convergence_gate_constants import (
     CODEX_BYPASS_DETAIL,
     CODEX_CLEAN_AT_STATE_KEY,
     CODEX_CLEAN_DETAIL_TEMPLATE,
+    CODEX_DOWN_STATE_KEY,
     CODEX_GATE_LABEL,
     CODEX_MISSING_CLEAN_DETAIL_TEMPLATE,
     CODEX_SKIPPED_USAGE_DETAIL,
@@ -351,6 +353,32 @@ def _read_codex_clean_at_from_job_state() -> str | None:
     if isinstance(clean_at, str) and clean_at:
         return clean_at
     return None
+
+
+def _read_codex_down_from_job_state() -> bool:
+    """Return True when job-dir state records sticky ``codex_down`` as JSON true.
+
+    ::
+
+        {"codex_down": true}   -> True
+        {"codex_down": false}  -> False
+        missing key / corrupt  -> False
+
+    Only exact boolean true counts; strings, numbers, and missing values do not.
+    """
+    job_directory = os.environ.get(CLAUDE_JOB_DIR_ENV_VAR_NAME)
+    if not job_directory:
+        return False
+    state_path = Path(job_directory) / PR_CONVERGE_STATE_FILENAME
+    if not state_path.is_file():
+        return False
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    return payload.get(CODEX_DOWN_STATE_KEY) is True
 
 
 def _resolve_live_codex_clean_at(cli_codex_clean_at: str | None) -> str | None:
@@ -698,18 +726,24 @@ def _resolve_bugteam_post_blocked(is_bugteam_post_blocked_flag: bool) -> bool:
 
 
 def _resolve_codex_down(is_codex_down_flag: bool) -> bool:
-    """Combine the --codex-down flag with the CLAUDE_REVIEWS_DISABLED env opt-out.
+    """Combine --codex-down, env opt-out, and sticky job-state ``codex_down``.
 
     ::
 
-        flag True, env unset                      -> True   (caller passed the flag)
-        flag False, reviews-disabled lists codex  -> True   (exported token)
-        flag False, env unset                     -> False  (gate may run)
+        flag True, env unset, job unset             -> True   (caller passed the flag)
+        flag False, reviews-disabled lists codex    -> True   (exported token)
+        flag False, env unset, job codex_down true  -> True   (sticky job-state)
+        flag False, env unset, job unset or false   -> False  (gate may run)
 
     The mark-ready blocker hook re-runs this script with no flags, so the env
-    fallback lets an exported codex token carry the bypass into that re-check.
+    token and sticky job-state ``codex_down`` both carry the bypass into that
+    re-check when the original run cannot re-pass ``--codex-down``.
     """
-    return is_codex_down_flag or is_codex_disabled_via_env()
+    return (
+        is_codex_down_flag
+        or is_codex_disabled_via_env()
+        or _read_codex_down_from_job_state()
+    )
 
 
 def main(all_arguments: list[str]) -> int:

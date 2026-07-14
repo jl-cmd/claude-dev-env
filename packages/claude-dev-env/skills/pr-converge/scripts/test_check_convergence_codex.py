@@ -269,12 +269,14 @@ def should_resolve_codex_down_true_when_flag_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.delenv("CLAUDE_JOB_DIR", raising=False)
     assert check_convergence._resolve_codex_down(True) is True
 
 
 def should_resolve_codex_down_true_when_env_disables_codex(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("CLAUDE_JOB_DIR", raising=False)
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "codex")
     assert check_convergence._resolve_codex_down(False) is True
 
@@ -283,7 +285,108 @@ def should_resolve_codex_down_false_when_flag_unset_and_env_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.delenv("CLAUDE_JOB_DIR", raising=False)
     assert check_convergence._resolve_codex_down(False) is False
+
+
+def should_resolve_codex_down_true_when_job_state_sticky_down(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path))
+    (tmp_path / "pr-converge-state.json").write_text(
+        json.dumps({"codex_down": True}),
+        encoding="utf-8",
+    )
+    assert check_convergence._resolve_codex_down(False) is True
+
+
+def should_resolve_codex_down_false_when_job_state_codex_down_is_false(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path))
+    (tmp_path / "pr-converge-state.json").write_text(
+        json.dumps({"codex_down": False}),
+        encoding="utf-8",
+    )
+    assert check_convergence._resolve_codex_down(False) is False
+
+
+def should_bypass_when_job_state_codex_down_is_true(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path))
+    (tmp_path / "pr-converge-state.json").write_text(
+        json.dumps({"codex_down": True}),
+        encoding="utf-8",
+    )
+    fixture_path = _write_fixture(
+        tmp_path,
+        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_clean_at=None,
+        filename="job-state-codex-down.json",
+    )
+    exit_code = check_convergence.main(
+        [
+            "--owner",
+            "jl-cmd",
+            "--repo",
+            "claude-dev-env",
+            "--pr-number",
+            "111",
+            "--fixture",
+            str(fixture_path),
+            "--bugbot-down",
+            "--copilot-down",
+        ]
+    )
+    captured = capsys.readouterr().out
+    assert exit_code == 0
+    assert "bypassed (codex_down)" in captured
+    assert "no codex clean on" not in captured
+
+
+def should_fail_when_job_state_lacks_codex_down_and_clean_stamp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path))
+    (tmp_path / "pr-converge-state.json").write_text(
+        json.dumps({}),
+        encoding="utf-8",
+    )
+    fixture_path = _write_fixture(
+        tmp_path,
+        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_clean_at=None,
+        filename="job-state-no-down.json",
+    )
+    exit_code = check_convergence.main(
+        [
+            "--owner",
+            "jl-cmd",
+            "--repo",
+            "claude-dev-env",
+            "--pr-number",
+            "111",
+            "--fixture",
+            str(fixture_path),
+            "--bugbot-down",
+            "--copilot-down",
+        ]
+    )
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert "codex_clean_at == current_head: FAIL" in captured
+    assert "no codex clean on" in captured
 
 
 def should_accept_codex_down_flag_in_parsed_arguments() -> None:

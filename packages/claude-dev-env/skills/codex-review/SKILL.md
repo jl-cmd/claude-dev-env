@@ -144,11 +144,17 @@ Claude: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
 | `CLAUDE.md` | Package map for agents opening this skill |
 | `reference/cli-contract.md` | CLI probe, wrapper, and classification contracts |
 | `reference/loop-integration.md` | PR-loop target pick and re-entry after fixes |
-| `scripts/codex_review_scripts_constants/` | Named constants for future skill scripts |
+| `scripts/run_codex_review.py` | Wrapper entrypoint: invoke Codex, classify outcome |
+| `scripts/parse_codex_findings.py` | Parse reviewer text into structured or freeform findings |
+| `scripts/codex_down_classifier.py` | Map wrapper failures to the `down` class |
+| `scripts/codex_usage_probe.py` | Weekly usage probe for the conditional Codex gate |
+| `scripts/codex_review_scripts_constants/` | Named constants for the scripts above |
+| `scripts/fixtures/` | Sample Codex outputs for script tests |
 
 ## Folder map
 
 - `SKILL.md` — orchestration steps and refusals.
 - `CLAUDE.md` — purpose, trigger, key files.
-- `reference/` — stable homes for cli-contract and loop-integration detail.
-- `scripts/codex_review_scripts_constants/` — importable constants package (empty shell at scaffold).
+- `reference/` — cli-contract and loop-integration detail.
+- `scripts/` — wrapper, parser, classifier, usage probe, tests, and fixtures.
+- `scripts/codex_review_scripts_constants/` — importable constants for the scripts.
