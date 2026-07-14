@@ -84,3 +84,47 @@ def test_invalid_fenced_json_falls_through_to_floor() -> None:
     assert len(all_findings) == 1
     assert all_findings[0].structured is False
     assert "Partial reply" in all_findings[0].body
+
+
+def test_non_dict_json_list_falls_through_to_freeform() -> None:
+    reviewer_text = (
+        "note\n\n"
+        "```json\n"
+        '["x", 1]\n'
+        "```\n\n"
+        "- [P1] Real bug — src/a.py:1-2\n"
+        "  body\n"
+    )
+
+    all_findings = parser.parse_codex_findings(reviewer_text)
+
+    assert len(all_findings) == 1
+    finding = all_findings[0]
+    assert finding.title == "Real bug"
+    assert finding.priority == "P1"
+    assert finding.file == "src/a.py"
+    assert finding.line_range == "1-2"
+    assert "body" in finding.body
+    assert finding.structured is False
+
+
+def test_empty_shell_structured_dicts_fall_through_to_floor() -> None:
+    reviewer_text = '```json\n[{"name":"T","sev":"P1"}]\n```\n'
+
+    all_findings = parser.parse_codex_findings(reviewer_text)
+
+    assert len(all_findings) == 1
+    finding = all_findings[0]
+    assert finding.structured is False
+    assert finding.body == reviewer_text
+    assert finding.title == ""
+
+
+def test_all_empty_object_shells_fall_through_to_floor() -> None:
+    reviewer_text = "```json\n[{}, {}]\n```\n"
+
+    all_findings = parser.parse_codex_findings(reviewer_text)
+
+    assert len(all_findings) == 1
+    assert all_findings[0].structured is False
+    assert all_findings[0].body == reviewer_text

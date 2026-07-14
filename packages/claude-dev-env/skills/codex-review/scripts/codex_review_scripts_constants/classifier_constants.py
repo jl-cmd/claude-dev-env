@@ -18,14 +18,18 @@ ALL_MODEL_ERROR_MARKERS = (
 )
 ALL_USAGE_LIMIT_MARKERS = (
     "rate limit",
-    "quota",
     "too many requests",
-    "429",
-    "credits",
+    "http 429",
+    " (429)",
+    "credits exhausted",
+    "out of credits",
+    "api quota",
+    "usage quota",
 )
 ALL_AUTH_FAILURE_MARKERS = (
-    "401",
     "unauthorized",
-    "login",
+    "authentication failed",
+    "login required",
+    "not authenticated",
 )
 SUCCESS_EXIT_CODE = 0

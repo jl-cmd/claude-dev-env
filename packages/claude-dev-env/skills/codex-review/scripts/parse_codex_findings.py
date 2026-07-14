@@ -79,6 +79,12 @@ def _finding_from_structured_fields(
     )
 
 
+def _has_usable_structured_fields(finding: CodexFinding) -> bool:
+    has_title = bool(finding.title.strip())
+    has_body = bool(finding.body.strip())
+    return has_title or has_body
+
+
 def _try_parse_structured_findings(reviewer_text: str) -> list[CodexFinding] | None:
     fenced_json_block = re.compile(
         FENCED_JSON_BLOCK_PATTERN,
@@ -92,12 +98,18 @@ def _try_parse_structured_findings(reviewer_text: str) -> list[CodexFinding] | N
             continue
         if not isinstance(parsed_payload, list):
             continue
+        if not parsed_payload:
+            return []
         all_findings: list[CodexFinding] = []
         for each_entry in parsed_payload:
             if not isinstance(each_entry, dict):
                 continue
-            all_findings.append(_finding_from_structured_fields(each_entry))
-        return all_findings
+            candidate_finding = _finding_from_structured_fields(each_entry)
+            if not _has_usable_structured_fields(candidate_finding):
+                continue
+            all_findings.append(candidate_finding)
+        if all_findings:
+            return all_findings
     return None
 
 
@@ -167,17 +179,22 @@ def parse_codex_findings(reviewer_text: str) -> list[CodexFinding]:
 
         parse_codex_findings("```json\\n[]\\n```")  # ok: []
         parse_codex_findings("loose note")          # ok: one unstructured finding
+        parse_codex_findings('```json\\n["x"]\\n```\\n- [P1] T — a.py:1-1')
+        # ok: freeform finding (non-dict JSON list is not structured clean)
 
-    Tries fenced JSON first (the custom-instructions contract), then the
-    freeform ``- [P1] title — path:start-end`` shape, then a single floor
-    finding that carries the raw text.
+    Tries fenced JSON first (the custom-instructions contract). An empty
+    array ``[]`` is structured clean. A non-empty array that yields no
+    usable object findings (non-dicts, empty shells, wrong keys) is not
+    accepted; freeform and floor paths run instead. Freeform is the
+    ``- [P1] title — path:start-end`` shape. Floor carries the raw text.
 
     Args:
         reviewer_text: Agent message text from a completed Codex review.
 
     Returns:
-        Parsed findings; empty only when the text is blank or a structured
-        empty array.
+        Parsed findings. Empty only when the text is blank, or when a
+        fenced structured payload is exactly the empty array ``[]``.
+        Non-blank text never returns empty for any other structured shape.
     """
     if not reviewer_text.strip():
         return []

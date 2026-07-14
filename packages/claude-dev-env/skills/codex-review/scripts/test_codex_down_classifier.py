@@ -109,3 +109,35 @@ def test_unparseable_nonzero_exit_maps_to_codex_down() -> None:
 
     assert classification.detail_class == FAILURE_CLASS_UNKNOWN
     assert classification.outcome_class == OUTCOME_CLASS_CODEX_DOWN
+
+
+def test_bare_token_streams_map_to_unknown_not_usage_or_auth() -> None:
+    all_false_positive_streams = (
+        "failed opening ticket/429/summary",
+        "disk quota exceeded on volume",
+        "failed to parse credits field in CSV",
+        "could not render login form widget",
+        "request id ab401cd failed",
+    )
+
+    for each_stream_text in all_false_positive_streams:
+        classification = classifier.classify_codex_run(
+            exit_code=1,
+            stream_text=each_stream_text,
+        )
+        assert classification.detail_class == FAILURE_CLASS_UNKNOWN, each_stream_text
+        assert classification.outcome_class == OUTCOME_CLASS_CODEX_DOWN
+
+
+def test_contextual_usage_and_auth_phrases_still_classify() -> None:
+    usage_classification = classifier.classify_codex_run(
+        exit_code=1,
+        stream_text="HTTP 429: rate limit hit; api quota exhausted for this key",
+    )
+    auth_classification = classifier.classify_codex_run(
+        exit_code=1,
+        stream_text="authentication failed; login required",
+    )
+
+    assert usage_classification.detail_class == FAILURE_CLASS_USAGE_LIMIT
+    assert auth_classification.detail_class == FAILURE_CLASS_AUTH_FAILURE
