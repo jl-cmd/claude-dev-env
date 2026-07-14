@@ -559,11 +559,20 @@ function runConvergenceCheck(context) {
   if (context.copilotDown) reviewerOptOutTokens.push('copilot')
   if (context.codexDown) reviewerOptOutTokens.push('codex')
   if (context.bugteamPostBlocked) reviewerOptOutTokens.push('bugteam')
+  const jobDirName = process.env.CLAUDE_JOB_DIR
+  const needsCodexCleanExportFallback = Boolean(context.codexCleanAt) && !jobDirName
+  if (needsCodexCleanExportFallback && !reviewerOptOutTokens.includes('codex')) {
+    reviewerOptOutTokens.push('codex')
+  }
   const reviewerOptOut = reviewerOptOutTokens.length > 0
-    ? `   Reviewer(s) opted out this run (${reviewerOptOutTokens.join(', ')}), so before gh pr ready export the token(s) in this same shell session so the independent mark-ready blocker hook's convergence re-check — which re-runs check_convergence.py with no flags — inherits the bypass through the env:\n      bash: export CLAUDE_REVIEWS_DISABLED="${reviewerOptOutTokens.join(',')}"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "${reviewerOptOutTokens.join(',')}")\n`
+    ? `   Reviewer(s) opted out this run (${reviewerOptOutTokens.join(', ')}), so before gh pr ready export the token(s) in this same shell session so the independent mark-ready blocker hook's convergence re-check — which re-runs check_convergence.py with no flags — inherits the bypass through the env. Emit exactly one export (merge every token into a single value; never overwrite with a second assignment):\n      bash: export CLAUDE_REVIEWS_DISABLED="${reviewerOptOutTokens.join(',')}"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "${reviewerOptOutTokens.join(',')}")\n`
     : ''
   const codexCleanAtNote = context.codexCleanAt
-    ? `   The Codex gate reported clean on this HEAD, so the --codex-clean-at flag above satisfies this same-shell check. The independent mark-ready blocker hook re-runs check_convergence.py with no flags, and it reads the Codex clean stamp only from the single-PR job-dir state file, so before gh pr ready persist the stamp there: merge {"codex_clean_at": "${context.codexCleanAt}"} into the file named pr-converge-state.json inside the directory named by the CLAUDE_JOB_DIR environment variable (create the file with just that key when it does not exist yet, and preserve any keys already in it). When CLAUDE_JOB_DIR is unset there is no durable stamp for the flagless re-check to read, so export the codex opt-out token in this same shell instead so the re-check inherits the bypass:\n      bash: export CLAUDE_REVIEWS_DISABLED="codex"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "codex")\n`
+    ? (
+      jobDirName
+        ? `   The Codex gate reported clean on this HEAD, so the --codex-clean-at flag above satisfies this same-shell check. The independent mark-ready blocker hook re-runs check_convergence.py with no flags, and it reads the Codex clean stamp only from the single-PR job-dir state file, so before gh pr ready persist the stamp there: merge {"codex_clean_at": "${context.codexCleanAt}"} into the file named pr-converge-state.json inside the directory named by the CLAUDE_JOB_DIR environment variable (create the file with just that key when it does not exist yet, and preserve any keys already in it).\n`
+        : `   The Codex gate reported clean on this HEAD, so the --codex-clean-at flag above satisfies this same-shell check. CLAUDE_JOB_DIR is unset in this shell, so there is no durable stamp file for the flagless mark-ready re-check — the codex token is already included in the single CLAUDE_REVIEWS_DISABLED export above (do not emit a second export that overwrites other tokens).\n`
+    )
     : ''
   return convergeReadOnlyAgent(
     `Run the convergence gate for ${prCoordinates} on HEAD ${context.head} and, only when every gate passes, mark the PR ready. Do not edit code.\n\n` +
@@ -2727,7 +2736,7 @@ while (iterations < CONFIG.maxIterations) {
   if (phase === 'COPILOT') {
     if (resolveReviewerDown(reviewerAvailability?.copilot, input.copilotDisabled || false)) {
       copilotDown = true
-      copilotNote = 'Copilot was unavailable or out of premium-request quota this round — the Copilot gate was bypassed with no agent spawned and the PR was marked ready without a Copilot review'
+      copilotNote = 'Copilot was unavailable or out of premium-request quota this round — the Copilot gate was bypassed with no agent spawned; remaining gates including Codex still run before ready'
       log('Copilot gate: the shared reviewer-availability probe (or the run input) reported Copilot unavailable — skipping the Copilot gate with no agent spawned and proceeding to the Codex gate with the Copilot gate bypassed.')
       phase = 'CODEX'
       continue
@@ -2743,7 +2752,7 @@ while (iterations < CONFIG.maxIterations) {
     if (copilotOutcome.kind === 'down') {
       log('Copilot gate: Copilot is down or out of quota — no review on HEAD after the poll cap. Logging a notice and proceeding to the Codex gate with the Copilot gate bypassed.')
       copilotDown = true
-      copilotNote = 'Copilot was down or out of quota — the Copilot gate was bypassed and the PR was marked ready without a Copilot review'
+      copilotNote = 'Copilot was down or out of quota — the Copilot gate was bypassed; remaining gates including Codex still run before ready'
       phase = 'CODEX'
       continue
     }

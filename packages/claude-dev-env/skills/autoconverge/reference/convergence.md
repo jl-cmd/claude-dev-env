@@ -40,7 +40,7 @@ landed.
 
 ## The round loop
 
-The workflow holds four states and moves between them until the PR is ready or
+The workflow holds five states and moves between them until the PR is ready or
 a blocker ends the run. A single iteration counter increments on every pass
 through any phase and caps the whole run at 20 loop iterations; the round counter
 tracks CONVERGE passes only and is never the cap. The internal lenses drive the

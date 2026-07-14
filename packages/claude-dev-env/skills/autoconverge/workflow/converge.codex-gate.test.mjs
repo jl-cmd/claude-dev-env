@@ -216,8 +216,18 @@ test('runConvergenceCheck tells the finalize agent to persist codex_clean_at for
   );
   assert.match(
     checkBody,
-    /CLAUDE_REVIEWS_DISABLED.*codex|export the codex opt-out token/i,
-    'expected a codex opt-out export fallback when CLAUDE_JOB_DIR is unset',
+    /needsCodexCleanExportFallback/,
+    'expected a single-export fallback path when CLAUDE_JOB_DIR is unset',
+  );
+  assert.match(
+    checkBody,
+    /Emit exactly one export/,
+    'expected the opt-out instruction to forbid a second overwriting export',
+  );
+  assert.doesNotMatch(
+    checkBody,
+    /export CLAUDE_REVIEWS_DISABLED="codex"/,
+    'expected no second solo codex export that would overwrite other tokens',
   );
 });
 
