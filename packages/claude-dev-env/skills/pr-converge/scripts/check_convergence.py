@@ -335,21 +335,40 @@ def _probe_codex_percent_left() -> float | None:
     return None
 
 
-def _read_codex_clean_at_from_job_state() -> str | None:
-    """Read ``codex_clean_at`` from the single-PR job-dir state file when present."""
+def _read_job_state() -> dict[str, object]:
+    """Read the single-PR job-dir state file, or an empty mapping when unreadable.
+
+    ::
+
+        CLAUDE_JOB_DIR unset      -> {}
+        state file absent         -> {}
+        corrupt or non-object     -> {}
+        {"codex_down": true}      -> {"codex_down": True}
+
+    Args:
+        None.
+
+    Returns:
+        The parsed state object, or an empty dict when no state is readable.
+    """
     job_directory = os.environ.get(CLAUDE_JOB_DIR_ENV_VAR_NAME)
     if not job_directory:
-        return None
+        return {}
     state_path = Path(job_directory) / PR_CONVERGE_STATE_FILENAME
     if not state_path.is_file():
-        return None
+        return {}
     try:
         payload = json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return None
+        return {}
     if not isinstance(payload, dict):
-        return None
-    clean_at = payload.get(CODEX_CLEAN_AT_STATE_KEY)
+        return {}
+    return payload
+
+
+def _read_codex_clean_at_from_job_state() -> str | None:
+    """Read ``codex_clean_at`` from the single-PR job-dir state file when present."""
+    clean_at = _read_job_state().get(CODEX_CLEAN_AT_STATE_KEY)
     if isinstance(clean_at, str) and clean_at:
         return clean_at
     return None
@@ -366,19 +385,7 @@ def _read_codex_down_from_job_state() -> bool:
 
     Only exact boolean true counts; strings, numbers, and missing values do not.
     """
-    job_directory = os.environ.get(CLAUDE_JOB_DIR_ENV_VAR_NAME)
-    if not job_directory:
-        return False
-    state_path = Path(job_directory) / PR_CONVERGE_STATE_FILENAME
-    if not state_path.is_file():
-        return False
-    try:
-        payload = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    if not isinstance(payload, dict):
-        return False
-    return payload.get(CODEX_DOWN_STATE_KEY) is True
+    return _read_job_state().get(CODEX_DOWN_STATE_KEY) is True
 
 
 def _resolve_live_codex_clean_at(cli_codex_clean_at: str | None) -> str | None:
