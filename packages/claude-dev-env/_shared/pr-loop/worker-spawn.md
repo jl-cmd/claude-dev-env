@@ -58,7 +58,7 @@ python resolve_worker_spawn.py \
 
 | Flag | Required | Meaning |
 |---|---|---|
-| `--role` | no (default `bugteam`) | Role name for preflight agent-set checks; mapped to the primary agent stem for headless `--agent` (for example `bugteam` → `code-quality-agent`; unknown roles fall back to the raw role string) |
+| `--role` | no (default `bugteam`) | Role name for preflight agent-set checks; mapped to the primary agent stem for headless `--agent` (for example `bugteam` → `code-quality-agent`, `clean-coder` → `clean-coder`; unknown roles fall back to the raw role string) |
 | `--prompt-file` | yes | Prompt file path for headless workers |
 | `--cwd` | yes | Working directory for headless grok and claude workers |
 | `--run-temp-dir` | yes | Run-scoped directory for leader sockets and preflight cache (created if missing) |

@@ -2,19 +2,20 @@
 name: bugteam
 description: >-
   Open pull request audit–fix until convergence: CODE_RULES gate, clean-room
-  audit (`code-quality-agent`, opus) and fix (`clean-coder`), per-loop
-  GitHub reviews, 20-audit cap; grant then revoke `.claude/**`. AUDIT routes
-  through `resolve_worker_spawn.py` (headless tiers or Agent-tool fallback).
-  Triggers: '/bugteam', 'run the bug team', 'auto-fix the PR until clean',
-  'loop audit and fix'.
+  audit (`code-quality-agent`, opus) and fix (`clean-coder`, opus), per-loop
+  GitHub reviews, 20-audit cap; grant then revoke `.claude/**`. AUDIT, FIX, and
+  standards-fix route through `resolve_worker_spawn.py` (headless tiers or
+  Agent-tool fallback). Triggers: '/bugteam', 'run the bug team', 'auto-fix
+  the PR until clean', 'loop audit and fix'.
 ---
 
 # Bugteam
 
 Audit–fix until convergence. Bugfind: `code-quality-agent`, fresh process or
 fresh agent context each loop, auditing all A–P categories via the
-worker-spawn dispatcher. Bugfix: `clean-coder`. Hard cap: 20 audit loops.
-Grant `.claude/**` at start, revoke always at end.
+worker-spawn dispatcher. Bugfix and standards-fix: `clean-coder` via the same
+dispatcher (role `clean-coder`; tier 2 pins model opus). Hard cap: 20 audit
+loops. Grant `.claude/**` at start, revoke always at end.
 
 The audit agent loads the A–P category rubrics from
 `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/` alongside
@@ -51,9 +52,11 @@ First match wins; respond with the quoted line exactly and stop:
 - **No PR or upstream diff.** `No PR or upstream diff. /bugteam needs a target.`
 - **Dirty tree.** `Uncommitted changes detected. Stash, commit, or revert before
   /bugteam.`
-- **Missing subagents.** Before Step 0, confirm `code-quality-agent` and
-  `clean-coder` exist. Else: `Required subagent type <name> not installed.
-  /bugteam needs both code-quality-agent and clean-coder available.`
+- **Missing subagents (tier 2 only).** Before a tier-2 Agent-tool spawn,
+  confirm `code-quality-agent` and `clean-coder` exist. Else: `Required
+  subagent type <name> not installed. /bugteam needs both code-quality-agent
+  and clean-coder available.` Headless tiers rely on the preflight's
+  agent-definition-file check instead.
 
 ## Audit posting
 

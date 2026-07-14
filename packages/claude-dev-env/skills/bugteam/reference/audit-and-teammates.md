@@ -99,7 +99,17 @@ Repeat until an exit condition fires.
       `git merge-base` + `git diff --name-only` live inside the script; see [`../../../_shared/pr-loop/scripts/README.md`](../../../_shared/pr-loop/scripts/README.md) for what lives under this directory, and [`../../../_shared/pr-loop/code-rules-gate.md`](../../../_shared/pr-loop/code-rules-gate.md) for gate-only merge-base / invocation semantics. The lead runs this (not a teammate).
 
    2. If exit code **0** → continue to step 2.5 (AUDIT spawn) below.
-   3. If exit code **non-zero** → spawn a new **clean-coder** teammate (`mode="bypassPermissions"`) — **standards-fix pass** — with instructions: read the script’s stderr, edit the repo until a **re-run** of the **same** gate command exits **0**, then one commit, `git push`, shutdown. Repeat standards-fix spawns until the gate exits **0** or **5** failed gate rounds (each round = one teammate session after a non-zero gate). If still non-zero after 5 rounds → exit reason = `error: code rules gate failed pre-audit`.
+   3. If exit code **non-zero** → run a **standards-fix pass** through the
+      worker-spawn dispatcher (role `clean-coder`; see **Standards-fix
+      action** below). Instructions: read the gate script’s stderr, edit the
+      repo until a **re-run** of the **same** gate command exits **0**. On
+      tiers 1 and 3 the headless worker edits and runs tests but never
+      commits or pushes — the lead stages with explicit `git add`, mints the
+      code-verifier verdict, then commits and pushes. Tier 2 keeps in-agent
+      commit and push with `mode="bypassPermissions"`. Repeat standards-fix
+      spawns until the gate exits **0** or **5** failed gate rounds (each
+      round = one worker session after a non-zero gate). If still non-zero
+      after 5 rounds → exit reason = `error: code rules gate failed pre-audit`.
    4. After gate exit **0**, increment `loop_count`. If `loop_count > 20`, exit reason = `cap reached` (counts **audits**, not standards-only rounds).
    5. Execute **AUDIT action** (spawn bugfind). Print progress: `Loop <L> audit: ...`
 
@@ -180,26 +190,143 @@ path (MCP posting).
 
 `last_action = "audited"`. Append audit metadata to `audit_log`.
 
+## Standards-fix action
+
+Route through the worker-spawn dispatcher
+([`worker-spawn.md`](../../../_shared/pr-loop/worker-spawn.md)). Role
+`clean-coder` maps to primary agent `clean-coder`. Every round is a fresh
+process or a fresh agent context. The **5-round cap** stays (each round = one
+worker session after a non-zero gate).
+
+1. **Write a standards-fix prompt** under the per-PR workspace that includes
+   the gate stderr, the exact gate re-run command, and the worktree path. On
+   headless tiers the permission flag maps to each CLI's own flag
+   (`--permission-mode bypassPermissions`).
+
+2. **Dispatch:**
+
+   ```bash
+   python "${CLAUDE_SKILL_DIR}/../../../scripts/resolve_worker_spawn.py" \
+     --role clean-coder \
+     --prompt-file "${run_temp_dir}/pr-<N>/loop-<L>.standards-fix-prompt.txt" \
+     --cwd <worktree_path> \
+     --run-temp-dir <run_temp_dir>
+   ```
+
+3. **Follow the result:**
+
+   - **Tier 1 or 3 served** (`tier_used` is `1` or `3`, exit `0`): the
+     headless worker edits and runs tests but never commits or pushes. The
+     lead session stages the worker's files itself with an explicit `git add`
+     (the session edit tracker does not see files the lead did not edit),
+     mints the code-verifier verdict in its own context, then commits and
+     pushes — so the commit gate and the staged-commit scans fire on the real
+     diff. Re-run the gate command; if still non-zero, start the next round.
+   - **`claude_agent_required`** (exit `2`, attempts include tier `2` with
+     that reason): spawn the Agent-tool worker with in-agent commit and push:
+
+     ```
+     Agent(
+       subagent_type="clean-coder",
+       name="standards-fix-pr<N>-loop<L>-round<R>",
+       model="opus",
+       mode="bypassPermissions",
+       run_in_background=true,
+       description="Standards-fix {owner}/{repo}#{N} loop {L} round {R}",
+       prompt="<gate stderr + re-run command + commit/push/shutdown>"
+     )
+     ```
+
+The missing-subagent refusal in [`../SKILL.md`](../SKILL.md) applies to tier 2
+only; headless tiers rely on the preflight's agent-definition-file check.
+
 ## FIX action (fresh teammate)
 
-Spawn:
+Route through the worker-spawn dispatcher
+([`worker-spawn.md`](../../../_shared/pr-loop/worker-spawn.md)). Role
+`clean-coder` maps to primary agent `clean-coder`. Every loop is a fresh
+process or a fresh agent context. The teammate sees only the latest audit’s
+findings — prior-loop findings, fix history, and chat stay in the lead.
 
-```
-Agent(
-  subagent_type="clean-coder",
-  name="bugfix-pr<N>-loop<L>",
-  mode="bypassPermissions",
-  run_in_background=true,
-  description="Bugfix PR <N> loop <L>",
-  prompt="<output of build_fix_prompt.py; see ../../_shared/pr-loop/scripts/build_fix_prompt.py>"
-)
-```
+Pass finding comment URL, comment id, and thread node id for each finding
+(from `loop_comment_index`) in the XML prompt.
 
-The teammate sees only the latest audit’s findings — each `Agent` call starts with a fresh context window; prior-loop findings, fix history, and chat stay in the lead.
+1. **Build the headless fix prompt** and write it to a prompt file under the
+   per-PR workspace:
 
-Pass finding comment URL, comment id, and thread node id for each finding (from `loop_comment_index`) in the XML prompt so the teammate owns both the reply and the thread resolution. After commit, the teammate posts one reply per finding using the unified template at [`../../../_shared/pr-loop/audit-reply-template.md`](../../../_shared/pr-loop/audit-reply-template.md) — the full header / horizontal rule / `<action_heading> ✅` / explanation / anchored-bullet / closing-paragraph skeleton, with `<status_line>` set per the path (`Fixed in <short_sha>` for `status=fixed`, `Could not address this loop` for `status=could_not_address`, `Hook blocked the fix commit` for `status=hook_blocked`). Per-thread reply and `resolve_thread` are atomic; the mechanics follow the shared 13-step sequence in [`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md) (step 12 carries the exact reply-and-resolve sequence). Same identity model as bugfind: teammate posts; lead waits.
+   ```bash
+   python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/build_fix_prompt.py" \
+     --owner <O> --repo <R> --pr-number <N> --loop <L> \
+     --head-ref <head> --base-ref <base> \
+     --worktree-path <worktree_path> \
+     --findings-json <findings_json_path> \
+     --flavor headless \
+     > "${run_temp_dir}/pr-<N>/loop-<L>.fix-prompt.xml"
+   ```
 
-After replies, the teammate writes outcome XML (schema in [`../PROMPTS.md`](../PROMPTS.md)).
+2. **Dispatch** via
+   [`resolve_worker_spawn.py`](../../../scripts/resolve_worker_spawn.py):
+
+   ```bash
+   python "${CLAUDE_SKILL_DIR}/../../../scripts/resolve_worker_spawn.py" \
+     --role clean-coder \
+     --prompt-file "${run_temp_dir}/pr-<N>/loop-<L>.fix-prompt.xml" \
+     --cwd <worktree_path> \
+     --run-temp-dir <run_temp_dir>
+   ```
+
+   The lead **blocks on the process** and reads the stdout JSON result.
+
+3. **Follow the result:**
+
+   - **Tier 1 or 3 served** (`tier_used` is `1` or `3`, exit `0`): On tiers 1
+     and 3 the headless worker edits and runs tests but never commits or
+     pushes. The lead session stages the worker's files itself with an
+     explicit `git add` (the session edit tracker does not see files the lead
+     did not edit), mints the code-verifier verdict in its own context, then
+     commits and pushes — so the commit gate and the staged-commit scans fire
+     on the real diff. Read the outcome XML at
+     `<worktree_path>/.bugteam-pr<N>-loop<L>.fix-outcomes.xml`. The **lead**
+     posts one reply per finding using the unified template at
+     [`../../../_shared/pr-loop/audit-reply-template.md`](../../../_shared/pr-loop/audit-reply-template.md)
+     — the full header / horizontal rule / `<action_heading> ✅` /
+     explanation / anchored-bullet / closing-paragraph skeleton, with
+     `<status_line>` set per the path (`Fixed in <short_sha>` for
+     `status=fixed`, `Could not address this loop` for
+     `status=could_not_address`, `Hook blocked the fix commit` for
+     `status=hook_blocked`). Per-thread reply and `resolve_thread` are
+     atomic; the mechanics follow the shared 13-step sequence in
+     [`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md)
+     (step 12 carries the exact reply-and-resolve sequence).
+   - **`claude_agent_required`** (exit `2`, attempts include tier `2` with
+     that reason): Tier 2 keeps the current behavior end to end, including
+     in-agent commit and push and `mode="bypassPermissions"`. Rebuild the
+     prompt with default `--flavor agent` (omit `--flavor` or pass `agent`)
+     and spawn the Agent-tool worker, pinning model opus:
+
+     ```
+     Agent(
+       subagent_type="clean-coder",
+       name="bugfix-pr<N>-loop<L>",
+       model="opus",
+       mode="bypassPermissions",
+       run_in_background=true,
+       description="Bugfix PR <N> loop <L>",
+       prompt="<output of build_fix_prompt.py --flavor agent>"
+     )
+     ```
+
+     After commit, the teammate posts one reply per finding using the same
+     unified template and writes outcome XML (schema in
+     [`../PROMPTS.md`](../PROMPTS.md)).
+
+The fix prompt XML is emitted by
+[`build_fix_prompt.py`](../../_shared/pr-loop/scripts/build_fix_prompt.py).
+`--flavor headless` targets the dispatcher path (gh reads, outcome file, no
+commit/push/MCP/TaskCreate/Artifact). Default `--flavor agent` targets the
+Agent-tool path (in-agent commit, push, and MCP replies). On headless tiers
+the permission flag maps to each CLI's own flag
+(`--permission-mode bypassPermissions`).
 
 ### Tier-1 flag profiles
 
@@ -216,9 +343,9 @@ Same self-termination model as bugfind. Missing notification → hard blocker.
 
 `approve: false` → `error: bugfix teammate refused shutdown` → Step 4 (`pr-loop-lifecycle` Close).
 
-Substitute placeholders from `last_findings` into the fix prompt per [`../PROMPTS.md`](../PROMPTS.md). The spawn XML includes TaskCreate/self_audit_checklist for task tracking — the FIX subagent MUST create tasks before starting.
+Substitute placeholders from `last_findings` into the fix prompt per [`../PROMPTS.md`](../PROMPTS.md). The agent-flavor spawn XML includes TaskCreate/self_audit_checklist for task tracking — the tier-2 FIX subagent MUST create tasks before starting. Headless flavors omit TaskCreate.
 
-**Verify push:** `git rev-parse HEAD` after fix must differ from before; new HEAD must exist on `origin/<branch>` (`git fetch origin <branch> && git rev-parse origin/<branch>` matches `HEAD`). If HEAD did not change → `stuck — bugfix teammate could not address findings`.
+**Verify push:** `git rev-parse HEAD` after fix must differ from before; new HEAD must exist on `origin/<branch>` (`git fetch origin <branch> && git rev-parse origin/<branch>` matches `HEAD`). If HEAD did not change → `stuck — bugfix teammate could not address findings`. On tiers 1 and 3 this check runs after the **lead** commit and push.
 
 **Scope verification.** Run `git diff HEAD~1 --name-only` and compare against the set of files referenced in `bugs_to_fix`. When the commit touches files NOT in the `bugs_to_fix` list, judge whether the extras are a coherent part of the fix: a shared helper the auditor did not think to name, a test file that exercises the fix, a config update the fix requires. If the extras are coherent with the fix, note them in the outcome XML's `<scope_notes>` and keep the outcome as `fixed`. If the extras look unrelated, suspicious, or out of scope, downgrade to `unverified_fixed` with reason `commit touched unexpected files: <list>`. The auditor's file list is a default, not a contract — the fix's coherence is the contract.
 
