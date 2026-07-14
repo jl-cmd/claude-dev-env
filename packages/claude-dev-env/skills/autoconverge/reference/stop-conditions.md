@@ -80,10 +80,11 @@ Each reviewer-down condition below skips its own convergence-check gate. The fla
 - **Copilot down or out of quota** — when Copilot posts an out-of-usage notice on
   the current HEAD (the user who requested the review reached their quota limit)
   rather than a code review, or surfaces no review at all after the configured cap, the
-  Copilot gate returns `down: true`. The run logs a notice, runs the convergence
-  check with `--copilot-down` (the Copilot review gate and the
-  pending-requested-reviews gate bypassed), and proceeds to the Codex gate then
-  mark-ready. `copilotNote` records the bypass for the final report.
+  Copilot gate returns `down: true`. The run logs a notice, sets `copilotDown`,
+  and proceeds to the Codex gate. The later convergence check receives
+  `--copilot-down` (the Copilot review gate and the pending-requested-reviews
+  gate bypassed), then mark-ready. `copilotNote` records the bypass for the
+  final report.
 - **Terminal Codex gate skipped or down** — the conditional-required Codex gate
   runs after Bugbot and Copilot. When `CLAUDE_REVIEWS_DISABLED` lists `codex`
   (`reviews_disabled.py --reviewer codex` exit 0), the gate sets `codexDown` and
