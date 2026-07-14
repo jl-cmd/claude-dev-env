@@ -50,7 +50,7 @@ MERGEABLE_STATE_CLEAN: str = "clean"
 
 CODEX_GATE_LABEL: str = "codex_clean_at == current_head"
 CODEX_BYPASS_DETAIL: str = "bypassed (codex_down)"
-CODEX_SKIPPED_USAGE_DETAIL: str = "skipped (usage at/below threshold)"
+CODEX_SKIPPED_USAGE_DETAIL: str = "skipped (codex review not required)"
 CODEX_CLEAN_DETAIL_TEMPLATE: str = "clean at %s"
 CODEX_MISSING_CLEAN_DETAIL_TEMPLATE: str = "no codex clean on %s"
 CLAUDE_JOB_DIR_ENV_VAR_NAME: str = "CLAUDE_JOB_DIR"

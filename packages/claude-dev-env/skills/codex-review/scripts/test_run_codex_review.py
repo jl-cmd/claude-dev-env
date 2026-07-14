@@ -23,6 +23,7 @@ from codex_review_scripts_constants.run_constants import (  # noqa: E402
     CODEX_MODEL_PIN,
     COMMIT_TARGET_FLAG,
     CUSTOM_INSTRUCTIONS_PROMPT,
+    DECODE_ERROR_EXIT_CODE,
     DEFAULT_TIMEOUT_SECONDS,
     EXEC_SUBCOMMAND,
     HELP_FLAG,
@@ -33,8 +34,10 @@ from codex_review_scripts_constants.run_constants import (  # noqa: E402
     OUTCOME_CLASS_CODEX_DOWN,
     OUTCOME_CLASS_COMPLETED,
     REVIEW_SUBCOMMAND,
+    SUBPROCESS_TEXT_ERRORS,
     TIMEOUT_EXIT_CODE,
     UNCOMMITTED_TARGET_FLAG,
+    UTF8_ENCODING,
     VERSION_FLAG,
 )
 
@@ -437,7 +440,47 @@ def test_jsonl_capture_and_agent_message_extraction(
     assert review_keyword_arguments["timeout"] == DEFAULT_TIMEOUT_SECONDS
     assert review_keyword_arguments["capture_output"] is True
     assert review_keyword_arguments["text"] is True
+    assert review_keyword_arguments["encoding"] == UTF8_ENCODING
+    assert review_keyword_arguments["errors"] == SUBPROCESS_TEXT_ERRORS
     assert review_keyword_arguments["check"] is False
+
+
+def test_unicode_decode_error_returns_codex_down(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_directory = tmp_path / "repo"
+    repository_directory.mkdir()
+    run_state_directory = tmp_path / "run_state"
+    run_state_directory.mkdir()
+
+    def behavior(
+        all_arguments: list[str],
+    ) -> subprocess.CompletedProcess[str] | BaseException:
+        if _is_version_probe(all_arguments):
+            return _completed(all_arguments, 0, stdout=VERSION_STDOUT)
+        if _is_shape_probe(all_arguments):
+            return _completed(all_arguments, 0, stdout=HELP_TEXT_WITH_TARGETS)
+        if _is_review_run(all_arguments):
+            return UnicodeDecodeError(
+                "utf-8",
+                b"\xff",
+                0,
+                1,
+                "invalid start byte",
+            )
+        raise AssertionError(f"unexpected invocation: {all_arguments!r}")
+
+    _install_recorder(monkeypatch, behavior)
+
+    review_outcome = wrapper.run_codex_review(
+        repository_directory=repository_directory,
+        run_state_directory=run_state_directory,
+        is_uncommitted=True,
+    )
+
+    assert review_outcome.outcome_class == OUTCOME_CLASS_CODEX_DOWN
+    assert review_outcome.exit_code == DECODE_ERROR_EXIT_CODE
+    assert review_outcome.jsonl_path is None
 
 
 def test_timeout_returns_codex_down(

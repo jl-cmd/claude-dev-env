@@ -173,7 +173,7 @@ def should_skip_when_usage_at_or_below_threshold(
     captured = capsys.readouterr().out
     assert exit_code == 0
     assert "codex_clean_at == current_head: PASS" in captured
-    assert "skipped (usage at/below threshold)" in captured
+    assert "skipped (codex review not required)" in captured
 
 
 def should_skip_when_codex_percent_left_is_null(
@@ -201,7 +201,7 @@ def should_skip_when_codex_percent_left_is_null(
     )
     captured = capsys.readouterr().out
     assert exit_code == 0
-    assert "skipped (usage at/below threshold)" in captured
+    assert "skipped (codex review not required)" in captured
 
 
 def should_bypass_when_codex_token_disables_reviewer(

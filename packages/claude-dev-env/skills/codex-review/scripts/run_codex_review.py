@@ -28,6 +28,7 @@ from codex_review_scripts_constants.run_constants import (
     CODEX_MODEL_PIN,
     COMMIT_TARGET_FLAG,
     CUSTOM_INSTRUCTIONS_PROMPT,
+    DECODE_ERROR_EXIT_CODE,
     DEFAULT_TIMEOUT_SECONDS,
     EXEC_SUBCOMMAND,
     HELP_FLAG,
@@ -43,6 +44,7 @@ from codex_review_scripts_constants.run_constants import (
     OUTCOME_CLASS_CODEX_DOWN,
     OUTCOME_CLASS_COMPLETED,
     REVIEW_SUBCOMMAND,
+    SUBPROCESS_TEXT_ERRORS,
     TIMEOUT_EXIT_CODE,
     UNCOMMITTED_TARGET_FLAG,
     UTF8_ENCODING,
@@ -103,6 +105,8 @@ def _run_command(
         cwd=str(working_directory) if working_directory is not None else None,
         capture_output=True,
         text=True,
+        encoding=UTF8_ENCODING,
+        errors=SUBPROCESS_TEXT_ERRORS,
         check=False,
         timeout=timeout_seconds,
         env=dict(os.environ),
@@ -125,6 +129,8 @@ def _safe_run(
         return MISSING_BINARY_EXIT_CODE
     except subprocess.TimeoutExpired:
         return TIMEOUT_EXIT_CODE
+    except UnicodeError:
+        return DECODE_ERROR_EXIT_CODE
 
 
 def _parse_binary_version(version_stdout: str) -> str:
