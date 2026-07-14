@@ -112,21 +112,21 @@ UTF8_DECODE_ERRORS: str = "replace"
 """``errors=`` value for subprocess text decode so invalid bytes never yield None streams."""
 
 ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
-    "429",
+    "http 429",
     "rate limit",
-    "credit",
-    "quota",
+    "quota exceeded",
+    "insufficient credit",
     "usage limit",
     "out of usage",
     "usage exhausted",
 )
-"""Case-insensitive substrings that mark a non-zero exit as a usage-limit failure."""
+"""Case-insensitive phrase signatures that mark a non-zero exit as a usage-limit failure."""
 
 ALL_USAGE_EXHAUSTION_SIGNATURES: tuple[str, ...] = ALL_USAGE_LIMIT_SIGNATURES
 """Alias used by the preflight soft gate for the same usage-limit signatures."""
 
 ALL_AUTH_FAILURE_SIGNATURES: tuple[str, ...] = (
-    "401",
+    "http 401",
     "unauthorized",
     "invalid key",
     "not logged in",
@@ -135,7 +135,7 @@ ALL_AUTH_FAILURE_SIGNATURES: tuple[str, ...] = (
     "please log in",
     "login required",
 )
-"""Case-insensitive substrings that mark a non-zero completion as an auth failure."""
+"""Case-insensitive phrase signatures that mark a non-zero completion as an auth failure."""
 
 PROMPT_FILE_FLAG: str = "--prompt-file"
 """CLI flag that points grok at a prompt file for headless single-turn work."""
@@ -184,6 +184,12 @@ CLASSIFICATION_ERROR: str = "error"
 
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
+
+LAUNCH_FAILURE_RETURN_CODE: int = -2
+"""Return code when the grok process cannot be launched (missing binary, permission, etc.)."""
+
+LAUNCH_FAILURE_STDERR_PREFIX: str = "failed to launch: "
+"""Prefix for the non-empty stderr diagnostic returned on a launch OSError."""
 
 KILL_GRACE_TIMEOUT_SECONDS: int = 10
 """Seconds to wait for a killed process to reap its pipes before giving up on its streams."""

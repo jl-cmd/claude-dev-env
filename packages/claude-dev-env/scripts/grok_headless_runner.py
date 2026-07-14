@@ -39,6 +39,8 @@ from dev_env_scripts_constants.grok_worker_constants import (
     GROK_BINARY_NAME,
     GROK_MODEL_PIN,
     KILL_GRACE_TIMEOUT_SECONDS,
+    LAUNCH_FAILURE_RETURN_CODE,
+    LAUNCH_FAILURE_STDERR_PREFIX,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
@@ -131,7 +133,13 @@ def _classify_completion(
             stderr=stderr_text,
         )
     combined_text = _combined_text(stdout_text, stderr_text)
-    if _matches_any_signature(combined_text, ALL_USAGE_LIMIT_SIGNATURES):
+    is_usage_limit = _matches_any_signature(
+        combined_text, ALL_USAGE_LIMIT_SIGNATURES
+    )
+    is_auth_failure = _matches_any_signature(
+        combined_text, ALL_AUTH_FAILURE_SIGNATURES
+    )
+    if is_usage_limit and not is_auth_failure:
         return GrokRunnerOutcome(
             is_ok=False,
             returncode=returncode,
@@ -139,7 +147,7 @@ def _classify_completion(
             stdout=stdout_text,
             stderr=stderr_text,
         )
-    if _matches_any_signature(combined_text, ALL_AUTH_FAILURE_SIGNATURES):
+    if is_auth_failure:
         return GrokRunnerOutcome(
             is_ok=False,
             returncode=returncode,
@@ -177,12 +185,25 @@ def _timeout_outcome(process: subprocess.Popen[str]) -> GrokRunnerOutcome:
         if process.returncode is not None
         else TIMEOUT_RETURN_CODE
     )
+    if returncode == 0:
+        return _classify_completion(returncode, stdout_text, stderr_text)
     return GrokRunnerOutcome(
         is_ok=False,
         returncode=returncode,
         classification=CLASSIFICATION_TIMEOUT,
         stdout=stdout_text,
         stderr=stderr_text,
+    )
+
+
+def _launch_failure_outcome(launch_error: OSError) -> GrokRunnerOutcome:
+    diagnostic_text = f"{LAUNCH_FAILURE_STDERR_PREFIX}{launch_error}"
+    return GrokRunnerOutcome(
+        is_ok=False,
+        returncode=LAUNCH_FAILURE_RETURN_CODE,
+        classification=CLASSIFICATION_ERROR,
+        stdout="",
+        stderr=diagnostic_text,
     )
 
 
@@ -198,14 +219,8 @@ def _invoke_process(
             encoding=UTF8_ENCODING,
             errors=UTF8_DECODE_ERRORS,
         )
-    except FileNotFoundError:
-        return GrokRunnerOutcome(
-            is_ok=False,
-            returncode=TIMEOUT_RETURN_CODE,
-            classification=CLASSIFICATION_ERROR,
-            stdout="",
-            stderr="",
-        )
+    except OSError as launch_error:
+        return _launch_failure_outcome(launch_error)
     try:
         captured_stdout, captured_stderr = process.communicate(
             timeout=timeout_seconds

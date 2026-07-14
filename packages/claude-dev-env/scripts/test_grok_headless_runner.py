@@ -28,6 +28,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CLASSIFICATION_USAGE_LIMIT,
     CWD_FLAG,
     GROK_BINARY_NAME,
+    LAUNCH_FAILURE_RETURN_CODE,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
@@ -35,6 +36,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
     PROMPT_FILE_FLAG,
+    TIMEOUT_RETURN_CODE,
 )
 
 FIXTURE_GROK_BINARY_VERSION = "0.2.99 (b1b49ccb71) [stable]"
@@ -65,11 +67,13 @@ class _FakeProcess:
         stdout: str = "",
         stderr: str = "",
         should_timeout: bool = False,
+        returncode_after_kill: int = -9,
     ) -> None:
         self.returncode = returncode
         self._stdout = stdout
         self._stderr = stderr
         self._should_timeout = should_timeout
+        self._returncode_after_kill = returncode_after_kill
         self.was_killed = False
         self.communicate_calls = 0
 
@@ -83,7 +87,7 @@ class _FakeProcess:
 
     def kill(self) -> None:
         self.was_killed = True
-        self.returncode = -9
+        self.returncode = self._returncode_after_kill
 
 
 class _PopenRecorder:
@@ -313,3 +317,115 @@ def test_scratch_paths_stay_under_run_state_directory(
     assert not leader_socket_path.is_relative_to(repo_root)
     written_inside_repo = list(repo_root.rglob("*"))
     assert written_inside_repo == []
+
+
+def test_dual_match_prefers_auth_failure_over_usage_limit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dual_match_stderr = (
+        "HTTP 401 rate limit exceeded: unauthorized"
+    )
+    fake_process = _FakeProcess(returncode=1, stderr=dual_match_stderr)
+    outcome, _, _, _, _ = _run_once(monkeypatch, tmp_path, fake_process)
+
+    assert outcome.is_ok is False
+    assert outcome.classification == CLASSIFICATION_AUTH_FAILURE
+    assert outcome.returncode == 1
+
+
+def test_incidental_credit_word_with_disk_full_is_error_not_usage_limit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_process = _FakeProcess(
+        returncode=1,
+        stdout="Finished auditing credit card picker skill",
+        stderr="Error: ENOSPC disk full",
+    )
+    outcome, _, _, _, _ = _run_once(monkeypatch, tmp_path, fake_process)
+
+    assert outcome.is_ok is False
+    assert outcome.classification == CLASSIFICATION_ERROR
+    assert outcome.returncode == 1
+    assert "credit card" in outcome.stdout
+
+
+def test_missing_binary_returns_launch_error_not_timeout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def _raise_missing_binary(
+        invocation: list[str], **keyword_arguments: object
+    ) -> object:
+        raise FileNotFoundError(2, "No such file or directory", GROK_BINARY_NAME)
+
+    monkeypatch.setattr(runner, "runner_popen", _raise_missing_binary)
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding="utf-8")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+
+    outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        max_turns=DEFAULT_MAX_TURNS,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+
+    assert outcome.is_ok is False
+    assert outcome.classification == CLASSIFICATION_ERROR
+    assert outcome.returncode == LAUNCH_FAILURE_RETURN_CODE
+    assert outcome.returncode != TIMEOUT_RETURN_CODE
+    assert outcome.stderr != ""
+
+
+def test_permission_error_on_launch_returns_error_outcome(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def _raise_permission_denied(
+        invocation: list[str], **keyword_arguments: object
+    ) -> object:
+        raise PermissionError(13, "Permission denied", GROK_BINARY_NAME)
+
+    monkeypatch.setattr(runner, "runner_popen", _raise_permission_denied)
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding="utf-8")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+
+    outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        max_turns=DEFAULT_MAX_TURNS,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+
+    assert outcome.is_ok is False
+    assert outcome.classification == CLASSIFICATION_ERROR
+    assert outcome.returncode == LAUNCH_FAILURE_RETURN_CODE
+    assert outcome.returncode != TIMEOUT_RETURN_CODE
+    assert outcome.stderr != ""
+
+
+def test_timeout_race_successful_exit_classifies_ok(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_process = _FakeProcess(
+        returncode=0,
+        stdout='{"done":true}',
+        should_timeout=True,
+        returncode_after_kill=0,
+    )
+    outcome, _, _, _, _ = _run_once(
+        monkeypatch, tmp_path, fake_process, timeout_seconds=DEFAULT_TIMEOUT_SECONDS
+    )
+
+    assert fake_process.was_killed is True
+    assert outcome.is_ok is True
+    assert outcome.classification == CLASSIFICATION_OK
+    assert outcome.returncode == 0
+    assert outcome.stdout == '{"done":true}'
