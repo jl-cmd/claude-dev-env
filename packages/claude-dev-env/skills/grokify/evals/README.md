@@ -68,3 +68,5 @@ Each live `grok` call uses a unique `--leader-socket` under a fresh temp directo
 
 - `SKILL.md` must not contain `cannot spawn Claude subagents`
 - `SKILL.md` and the handoff template must still mention `claude -p` for the advisor path
+
+`parse-payload.test.mjs` also runs under package `npm test` (no live `grok`): it unit-tests the runner's output parser (`tryParseJsonObject`, `extractResultText`, `parsePayload`, `isWorkflowToolAbsent`).

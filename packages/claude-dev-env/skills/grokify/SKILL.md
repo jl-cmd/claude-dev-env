@@ -56,10 +56,11 @@ The user types `/grokify`, alone or with guidance.
 | `capability-claims.test.mjs` | Offline static guards on capability wording. |
 | `evals/README.md` | How to run opt-in live capability evals. |
 | `evals/run-capability-evals.mjs` | Live E1–E5 runner (manual / opt-in only). |
+| `evals/parse-payload.test.mjs` | Offline unit tests for the eval output parser, run under `npm test`. |
 
 ## Folder map
 
 - `SKILL.md` — the whole workflow.
 - `templates/` — the handoff skeleton.
-- `evals/` — opt-in live Grok capability measurements.
+- `evals/` — the opt-in live runner plus its offline parser unit tests.
 - `capability-claims.test.mjs` — offline claim guards for `npm test`.
