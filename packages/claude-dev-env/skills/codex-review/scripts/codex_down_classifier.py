@@ -78,7 +78,8 @@ def classify_codex_run(*, exit_code: int, stream_text: str) -> CodexRunClassific
 
     Exit zero is a completed review. Every other class — including
     ``unknown`` for nonzero exits and unparseable text — maps to
-    ``codex_down`` so the conditional gate fails closed.
+    ``codex_down``, which bypasses the conditional gate so an unreachable
+    reviewer never blocks a PR from going ready.
 
     Args:
         exit_code: Process exit code from the Codex review invocation.

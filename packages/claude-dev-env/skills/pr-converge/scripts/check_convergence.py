@@ -36,6 +36,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
@@ -295,35 +296,43 @@ def _sha_matches_head(stamp_sha: str, head_sha: str) -> bool:
         return False
     if len(head_sha) < MINIMUM_ABBREVIATED_SHA_LENGTH:
         return False
-    return head_sha.startswith(stamp_sha) or stamp_sha.startswith(head_sha)
+    lowered_stamp_sha = stamp_sha.lower()
+    lowered_head_sha = head_sha.lower()
+    return lowered_head_sha.startswith(lowered_stamp_sha) or lowered_stamp_sha.startswith(
+        lowered_head_sha
+    )
 
 
 def _evaluate_codex_clean(
     *,
-    percent_left: float | None,
+    read_percent_left: Callable[[], float | None],
     codex_clean_at: str | None,
     head_sha: str,
 ) -> tuple[bool, str]:
-    """Return whether the conditional Codex gate passes for the given usage and stamp.
+    """Return whether the conditional Codex gate passes for the given stamp and usage.
 
     ::
 
-        percent_left None or <= threshold  -> skip (never blocks)
-        percent_left > threshold, clean    -> pass
-        percent_left > threshold, missing  -> fail
+        clean stamp on head                -> pass  (usage never read)
+        no stamp, percent None or <= limit -> skip  (never blocks)
+        no stamp, percent > limit          -> fail
+
+    A stamp on the current HEAD settles the gate on its own, so the usage read
+    stays behind it: the weekly probe spawns a Codex subprocess, and the common
+    already-clean tick has no reason to pay for one.
 
     Args:
-        percent_left: Weekly Codex percent remaining, or None when unknown.
+        read_percent_left: Reads weekly Codex percent remaining, or None when unknown.
         codex_clean_at: HEAD SHA where Codex last reported clean, or None.
         head_sha: Current PR HEAD commit SHA.
 
     Returns:
         (passed, detail) for the Codex gate condition line.
     """
-    if not is_codex_review_required(percent_left):
-        return True, CODEX_SKIPPED_USAGE_DETAIL
     if codex_clean_at is not None and _sha_matches_head(codex_clean_at, head_sha):
         return True, CODEX_CLEAN_DETAIL_TEMPLATE % _short_sha(head_sha)
+    if not is_codex_review_required(read_percent_left()):
+        return True, CODEX_SKIPPED_USAGE_DETAIL
     return False, CODEX_MISSING_CLEAN_DETAIL_TEMPLATE % _short_sha(head_sha)
 
 
@@ -381,15 +390,15 @@ def _read_job_state() -> dict[str, object]:
     return payload
 
 
-def _read_codex_clean_at_from_job_state() -> str | None:
-    """Read ``codex_clean_at`` from the single-PR job-dir state file when present."""
-    clean_at = _read_job_state().get(CODEX_CLEAN_AT_STATE_KEY)
+def _read_codex_clean_at_from_job_state(all_job_state_fields: dict[str, object]) -> str | None:
+    """Read ``codex_clean_at`` from an already-read job-dir state mapping."""
+    clean_at = all_job_state_fields.get(CODEX_CLEAN_AT_STATE_KEY)
     if isinstance(clean_at, str) and clean_at:
         return clean_at
     return None
 
 
-def _read_codex_down_from_job_state() -> bool:
+def _read_codex_down_from_job_state(all_job_state_fields: dict[str, object]) -> bool:
     """Return True when job-dir state records sticky ``codex_down`` as JSON true.
 
     ::
@@ -399,15 +408,31 @@ def _read_codex_down_from_job_state() -> bool:
         missing key / corrupt  -> False
 
     Only exact boolean true counts; strings, numbers, and missing values do not.
+
+    Args:
+        all_job_state_fields: Parsed job-dir state, empty when none is readable.
+
+    Returns:
+        True when the state records ``codex_down`` as JSON true.
     """
-    return _read_job_state().get(CODEX_DOWN_STATE_KEY) is True
+    return all_job_state_fields.get(CODEX_DOWN_STATE_KEY) is True
 
 
-def _resolve_live_codex_clean_at(cli_codex_clean_at: str | None) -> str | None:
-    """Prefer the CLI stamp, then the job-dir state stamp, for the live Codex gate."""
+def _resolve_live_codex_clean_at(
+    cli_codex_clean_at: str | None, all_job_state_fields: dict[str, object]
+) -> str | None:
+    """Prefer the CLI stamp, then the job-dir state stamp, for the live Codex gate.
+
+    Args:
+        cli_codex_clean_at: Stamp passed through ``--codex-clean-at``, or None.
+        all_job_state_fields: Parsed job-dir state, empty when none is readable.
+
+    Returns:
+        The stamp the live Codex gate checks against HEAD, or None.
+    """
     if cli_codex_clean_at:
         return cli_codex_clean_at
-    return _read_codex_clean_at_from_job_state()
+    return _read_codex_clean_at_from_job_state(all_job_state_fields)
 
 
 def _codex_condition(context: GateContext) -> GateCondition:
@@ -415,10 +440,11 @@ def _codex_condition(context: GateContext) -> GateCondition:
     if context.is_codex_down:
         return (CODEX_GATE_LABEL, (True, CODEX_BYPASS_DETAIL))
     if context.fixture is not None:
+        fixture_percent_left = context.fixture.codex_percent_left
         return (
             CODEX_GATE_LABEL,
             _evaluate_codex_clean(
-                percent_left=context.fixture.codex_percent_left,
+                read_percent_left=lambda: fixture_percent_left,
                 codex_clean_at=context.fixture.codex_clean_at,
                 head_sha=context.head_sha,
             ),
@@ -426,7 +452,7 @@ def _codex_condition(context: GateContext) -> GateCondition:
     return (
         CODEX_GATE_LABEL,
         _evaluate_codex_clean(
-            percent_left=_probe_codex_percent_left(),
+            read_percent_left=_probe_codex_percent_left,
             codex_clean_at=context.live_codex_clean_at,
             head_sha=context.head_sha,
         ),
@@ -747,7 +773,9 @@ def _resolve_bugteam_post_blocked(is_bugteam_post_blocked_flag: bool) -> bool:
     return is_bugteam_post_blocked_flag or is_bugteam_disabled_via_env()
 
 
-def _resolve_codex_down(is_codex_down_flag: bool) -> bool:
+def _resolve_codex_down(
+    is_codex_down_flag: bool, all_job_state_fields: dict[str, object]
+) -> bool:
     """Combine --codex-down, env opt-out, and sticky job-state ``codex_down``.
 
     ::
@@ -760,11 +788,18 @@ def _resolve_codex_down(is_codex_down_flag: bool) -> bool:
     The mark-ready blocker hook re-runs this script with no flags, so the env
     token and sticky job-state ``codex_down`` both carry the bypass into that
     re-check when the original run cannot re-pass ``--codex-down``.
+
+    Args:
+        is_codex_down_flag: True when the caller passed ``--codex-down``.
+        all_job_state_fields: Parsed job-dir state, empty when none is readable.
+
+    Returns:
+        True when any of the three bypass sources is in force.
     """
     return (
         is_codex_down_flag
         or is_codex_disabled_via_env()
-        or _read_codex_down_from_job_state()
+        or _read_codex_down_from_job_state(all_job_state_fields)
     )
 
 
@@ -778,10 +813,11 @@ def main(all_arguments: list[str]) -> int:
         0 on full convergence, 1 on one or more gate failures.
     """
     arguments = parse_arguments(all_arguments)
+    all_job_state_fields = _read_job_state()
     is_bugbot_down = _resolve_bugbot_down(arguments.bugbot_down)
     is_copilot_down = _resolve_copilot_down(arguments.copilot_down)
     is_bugteam_post_blocked = _resolve_bugteam_post_blocked(arguments.bugteam_post_blocked)
-    is_codex_down = _resolve_codex_down(arguments.codex_down)
+    is_codex_down = _resolve_codex_down(arguments.codex_down, all_job_state_fields)
     fixture_path = getattr(arguments, "fixture", None)
     if fixture_path:
         fixture = _load_convergence_fixture(Path(fixture_path))
@@ -803,7 +839,9 @@ def main(all_arguments: list[str]) -> int:
         is_copilot_down=is_copilot_down,
         is_bugteam_post_blocked=is_bugteam_post_blocked,
         is_codex_down=is_codex_down,
-        live_codex_clean_at=_resolve_live_codex_clean_at(arguments.codex_clean_at),
+        live_codex_clean_at=_resolve_live_codex_clean_at(
+            arguments.codex_clean_at, all_job_state_fields
+        ),
     )
 
 

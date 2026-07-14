@@ -120,6 +120,32 @@ def should_pass_when_codex_required_and_clean(
     assert "All pre-conditions met" in captured
 
 
+def should_pass_without_reading_usage_when_the_clean_stamp_is_on_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _probe_that_must_not_run() -> float | None:
+        raise AssertionError(
+            "the weekly usage probe must not run when codex_clean_at is on HEAD"
+        )
+
+    monkeypatch.setattr(
+        check_convergence, "_probe_codex_percent_left", _probe_that_must_not_run
+    )
+
+    is_passed, detail = check_convergence._evaluate_codex_clean(
+        read_percent_left=check_convergence._probe_codex_percent_left,
+        codex_clean_at=HEAD_SHA,
+        head_sha=HEAD_SHA,
+    )
+
+    assert is_passed is True
+    assert "clean at" in detail
+
+
+def should_match_a_clean_stamp_whose_hex_case_differs_from_the_head_sha() -> None:
+    assert check_convergence._sha_matches_head(HEAD_SHA.upper(), HEAD_SHA) is True
+
+
 def should_fail_when_codex_clean_stamp_is_shorter_than_an_abbreviated_sha(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -329,7 +355,9 @@ def should_resolve_codex_down_true_when_flag_set(
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
     monkeypatch.delenv("CLAUDE_JOB_DIR", raising=False)
-    assert check_convergence._resolve_codex_down(True) is True
+    assert check_convergence._resolve_codex_down(
+        True, check_convergence._read_job_state()
+    ) is True
 
 
 def should_resolve_codex_down_true_when_env_disables_codex(
@@ -337,7 +365,9 @@ def should_resolve_codex_down_true_when_env_disables_codex(
 ) -> None:
     monkeypatch.delenv("CLAUDE_JOB_DIR", raising=False)
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "codex")
-    assert check_convergence._resolve_codex_down(False) is True
+    assert check_convergence._resolve_codex_down(
+        False, check_convergence._read_job_state()
+    ) is True
 
 
 def should_resolve_codex_down_false_when_flag_unset_and_env_empty(
@@ -345,7 +375,9 @@ def should_resolve_codex_down_false_when_flag_unset_and_env_empty(
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
     monkeypatch.delenv("CLAUDE_JOB_DIR", raising=False)
-    assert check_convergence._resolve_codex_down(False) is False
+    assert check_convergence._resolve_codex_down(
+        False, check_convergence._read_job_state()
+    ) is False
 
 
 def should_resolve_codex_down_true_when_job_state_sticky_down(
@@ -358,7 +390,9 @@ def should_resolve_codex_down_true_when_job_state_sticky_down(
         json.dumps({"codex_down": True}),
         encoding="utf-8",
     )
-    assert check_convergence._resolve_codex_down(False) is True
+    assert check_convergence._resolve_codex_down(
+        False, check_convergence._read_job_state()
+    ) is True
 
 
 def should_resolve_codex_down_false_when_job_state_codex_down_is_false(
@@ -371,7 +405,9 @@ def should_resolve_codex_down_false_when_job_state_codex_down_is_false(
         json.dumps({"codex_down": False}),
         encoding="utf-8",
     )
-    assert check_convergence._resolve_codex_down(False) is False
+    assert check_convergence._resolve_codex_down(
+        False, check_convergence._read_job_state()
+    ) is False
 
 
 def should_bypass_when_job_state_codex_down_is_true(

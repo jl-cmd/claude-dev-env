@@ -1,4 +1,10 @@
-"""Named constants for the Codex down-classifier."""
+"""Named constants for the Codex down-classifier.
+
+The classifier reads the whole captured stream — the JSONL review body as well
+as stderr — so every marker is a phrase that only an error line carries. A bare
+status number such as ``401`` or ``429`` is not a marker: a finding that cites
+``src/api.py:401-405`` would read as an auth failure.
+"""
 
 from __future__ import annotations
 
@@ -20,12 +26,12 @@ ALL_USAGE_LIMIT_MARKERS = (
     "rate limit",
     "quota",
     "too many requests",
-    "429",
     "credits",
 )
 ALL_AUTH_FAILURE_MARKERS = (
-    "401",
     "unauthorized",
-    "login",
+    "not logged in",
+    "login required",
+    "codex login",
 )
 SUCCESS_EXIT_CODE = 0

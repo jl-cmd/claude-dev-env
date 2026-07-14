@@ -289,8 +289,15 @@ def should_bypass_bugbot_gates_when_bugbot_down_is_true(
         check_convergence, "_check_bugbot_not_dirty", _raise_if_called("_check_bugbot_not_dirty")
     )
     exit_code = check_convergence.check_all(
-        owner="o", repo="r", number=1, is_bugbot_down=True, is_copilot_down=False
-    , is_bugteam_post_blocked=False, is_codex_down=False, live_codex_clean_at=None)
+        owner="o",
+        repo="r",
+        number=1,
+        is_bugbot_down=True,
+        is_copilot_down=False,
+        is_bugteam_post_blocked=False,
+        is_codex_down=False,
+        live_codex_clean_at=None,
+    )
     assert "bypassed (bugbot_down)" in capsys.readouterr().out
     assert exit_code == 0
 
@@ -304,8 +311,15 @@ def should_bypass_copilot_gates_when_copilot_down_is_true(
         check_convergence, "_check_no_pending_reviews", _raise_if_called("_check_no_pending_reviews")
     )
     exit_code = check_convergence.check_all(
-        owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=True
-    , is_bugteam_post_blocked=False, is_codex_down=False, live_codex_clean_at=None)
+        owner="o",
+        repo="r",
+        number=1,
+        is_bugbot_down=False,
+        is_copilot_down=True,
+        is_bugteam_post_blocked=False,
+        is_codex_down=False,
+        live_codex_clean_at=None,
+    )
     assert "bypassed (copilot_down)" in capsys.readouterr().out
     assert exit_code == 0
 
@@ -348,8 +362,15 @@ def should_propagate_systemexit_from_get_pr_head_sha(monkeypatch: pytest.MonkeyP
     )
     with pytest.raises(SystemExit) as exc_info:
         check_convergence.check_all(
-            owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
-        , is_bugteam_post_blocked=False, is_codex_down=False, live_codex_clean_at=None)
+            owner="o",
+            repo="r",
+            number=1,
+            is_bugbot_down=False,
+            is_copilot_down=False,
+            is_bugteam_post_blocked=False,
+            is_codex_down=False,
+            live_codex_clean_at=None,
+        )
     assert exc_info.value.code == EXIT_CODE_GH_ERROR
 
 
