@@ -66,8 +66,13 @@ def _get_pr_head_sha(*, owner: str, repo: str, number: int) -> str:
     if returncode != 0:
         sys.stderr.write(f"gh api error fetching PR object: {stdout}\n")
         raise SystemExit(EXIT_CODE_GH_ERROR)
-    pr_object = json.loads(stdout)
-    head_sha: object = pr_object.get("head", {}).get("sha")
+    try:
+        pr_object = json.loads(stdout)
+    except json.JSONDecodeError as decode_error:
+        sys.stderr.write(f"gh api PR object not valid JSON: {stdout}\n")
+        raise SystemExit(EXIT_CODE_GH_ERROR) from decode_error
+    head_object = pr_object.get("head") if isinstance(pr_object, dict) else None
+    head_sha: object = head_object.get("sha") if isinstance(head_object, dict) else None
     if not isinstance(head_sha, str):
         raise SystemExit(EXIT_CODE_GH_ERROR)
     return head_sha
