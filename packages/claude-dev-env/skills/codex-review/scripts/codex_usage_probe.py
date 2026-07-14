@@ -10,12 +10,16 @@ window whose ``windowDurationMins`` is 10080 (seven days), preferring
 
 stdout is one JSON object ``{percent_left, window_reset, source}``.
 ``percent_left`` is 0-100, or null when the binary offers no usage data.
-Exit 0 when the probe ran (including null data); non-zero only on crash.
+Exit 0 when the probe completed against a reachable CLI (including null
+data). Exit non-zero when the Codex CLI is missing or broken, or when the
+probe itself crashes — consumers must not treat that as a usage-threshold
+skip.
 
-Gate rule for consumers: null or unknown ``percent_left`` counts as
-at-or-below ``WEEKLY_USAGE_GATE_THRESHOLD_PERCENT`` — the gate skips and
-never blocks on missing data. Require review only when
-``is_codex_review_required(percent_left)`` is true.
+Gate rule for consumers: null or unknown ``percent_left`` on exit 0 counts
+as at-or-below ``WEEKLY_USAGE_GATE_THRESHOLD_PERCENT`` — the gate may skip
+and never blocks on missing meters. A non-zero probe exit is CLI failure
+(classify ``codex_down`` or fail closed), not a threshold skip. Require
+review only when exit 0 and ``is_codex_review_required(percent_left)``.
 
 ::
 
@@ -534,9 +538,16 @@ def probe_weekly_usage_via_subprocess() -> UsageReport:
 def main() -> int:
     """Run the probe and print one JSON object on stdout.
 
+    ::
+
+        reachable CLI, meters present  -> exit 0, percent_left number
+        reachable CLI, no meters       -> exit 0, percent_left null  (usage skip ok)
+        missing or broken CLI          -> exit non-zero  (not a usage skip)
+
     Returns:
-        EXIT_CODE_SUCCESS on a completed probe (including null data), or
-        EXIT_CODE_CRASH when the probe itself fails.
+        EXIT_CODE_SUCCESS on a completed probe against a reachable CLI
+        (including null data), or EXIT_CODE_CRASH when the Codex CLI is
+        missing or broken or the probe itself fails.
     """
     try:
         usage_report = probe_weekly_usage(
@@ -550,7 +561,7 @@ def main() -> int:
         UnicodeDecodeError,
     ):
         print(json.dumps(_null_usage_report()))
-        return EXIT_CODE_SUCCESS
+        return EXIT_CODE_CRASH
     except (json.JSONDecodeError, ValueError, TypeError, KeyError):
         print(json.dumps(_null_usage_report()))
         return EXIT_CODE_CRASH

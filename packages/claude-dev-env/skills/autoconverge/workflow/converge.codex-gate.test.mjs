@@ -137,6 +137,39 @@ test('the Codex gate prompt decides required vs skip only through is_codex_revie
   );
 });
 
+test('the Codex gate prompt treats a non-zero usage-probe exit as codex_down not usage skip', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(
+    codexPrompt,
+    /Non-zero exit means the Codex CLI or probe is broken/,
+    'expected an explicit non-zero probe exit branch',
+  );
+  assert.match(
+    codexPrompt,
+    /Never map a failed probe to skipReason:'usage'/,
+    'expected failed probe to be barred from the usage-skip path',
+  );
+  assert.match(
+    codexPrompt,
+    /clean:false, down:true, skipped:false, skipReason:''/,
+    'expected failed probe to return the codex_down schema shape',
+  );
+});
+
+test('the Codex gate prompt sys.path insert uses CONFIG.codexScripts not a literal $HOME token', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(
+    codexPrompt,
+    /sys\.path\.insert\(0, r'\$\{CONFIG\.codexScripts\}'\)/,
+    'expected sys.path.insert to interpolate CONFIG.codexScripts (home-expanded at CONFIG build)',
+  );
+  assert.doesNotMatch(
+    codexPrompt,
+    /sys\.path\.insert\(0, r'\$HOME/,
+    'expected no unexpanded $HOME inside the Python raw-string path',
+  );
+});
+
 test('the Codex gate prompt runs the review wrapper against the PR base branch', () => {
   const codexPrompt = functionBody('runCodexGate');
   assert.match(codexPrompt, /run_codex_review/, 'expected the codex-review wrapper');
@@ -231,10 +264,21 @@ test('runConvergenceCheck tells the finalize agent to persist codex_clean_at for
   );
 });
 
-test('CONFIG points at the codex-review scripts directory', () => {
+test('CONFIG expands home for the codex-review scripts directory', () => {
   assert.match(
     convergeSource,
-    /codexScripts:\s*'\$HOME\/\.claude\/skills\/codex-review\/scripts'/,
+    /const homeDirectory = \(process\.env\.HOME \|\| process\.env\.USERPROFILE/,
+    'expected home to be resolved from process.env before CONFIG path use',
+  );
+  assert.match(
+    convergeSource,
+    /codexScripts:\s*`\$\{homeDirectory\}\/\.claude\/skills\/codex-review\/scripts`/,
+    'expected codexScripts to expand homeDirectory rather than embed $HOME',
+  );
+  assert.doesNotMatch(
+    convergeSource,
+    /codexScripts:\s*'\$HOME\//,
+    'expected no literal $HOME token in codexScripts (Python raw strings do not expand it)',
   );
 });
 
