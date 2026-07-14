@@ -7,6 +7,7 @@ Python package of named constants imported by codex-review scripts. Importing fr
 | File | Constants for |
 |---|---|
 | `__init__.py` | Package marker and package docstring. Script-specific constant modules land here with the wrapper and probe scripts. |
+| `codex_usage_probe_constants.py` | The weekly-usage probe CLI: gate threshold, report JSON keys, app-server JSON-RPC surface, rate-limit field keys, weekly-window sizing, text-status parse patterns, source labels, and exit codes. |
 
 ## Convention
 
