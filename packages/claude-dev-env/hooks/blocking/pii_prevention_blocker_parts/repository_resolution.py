@@ -24,7 +24,6 @@ try:
     for each_bootstrap_directory in (_blocking_directory, _hooks_directory):
         if each_bootstrap_directory not in sys.path:
             sys.path.insert(0, each_bootstrap_directory)
-    from block_main_commit import extract_git_working_directory
     from pii_commit_command import (
         _all_command_segments,
         _segment_invokes_git_commit,
@@ -33,6 +32,9 @@ try:
         _token_is_git_binary,
     )
     from pii_prevention_blocker_parts.config.repository_resolution_constants import (
+        ALL_DIRECTORY_CHANGE_COMMAND_NAMES,
+        ALL_DIRECTORY_CHANGE_PATH_OPTION_NAMES,
+        DIRECTORY_CHANGE_OPTION_TERMINATOR,
         REPOSITORY_ROOT_UNRESOLVED_CWD_LABEL,
         REPOSITORY_ROOT_UNRESOLVED_REASON_TEMPLATE,
     )
@@ -91,6 +93,48 @@ def _all_commit_working_directory_values(shell_command: str) -> list[str]:
     return []
 
 
+def _directory_change_target_from_segment(
+    all_segment_tokens: list[str],
+) -> str | None:
+    """Return the destination path of a ``cd``/``pushd`` segment, or None."""
+    command_index = _skip_leading_noop_tokens(all_segment_tokens)
+    if command_index >= len(all_segment_tokens):
+        return None
+    command_token = _strip_token_edge_quotes(
+        all_segment_tokens[command_index]
+    ).lower()
+    if command_token not in ALL_DIRECTORY_CHANGE_COMMAND_NAMES:
+        return None
+    token_index = command_index + 1
+    while token_index < len(all_segment_tokens):
+        each_token = _strip_token_edge_quotes(all_segment_tokens[token_index])
+        if each_token == DIRECTORY_CHANGE_OPTION_TERMINATOR:
+            token_index += 1
+            continue
+        if each_token.lower() in ALL_DIRECTORY_CHANGE_PATH_OPTION_NAMES:
+            token_index += 1
+            continue
+        return each_token
+    return None
+
+
+def _leading_directory_change_path(shell_command: str) -> str | None:
+    """Return the last ``cd``/``pushd`` path before the first git-commit segment.
+
+    Token-aware so ``git.exe`` (and other recognized git binary spellings) still
+    pick up a leading directory change, which the regex ``git commit`` fallback
+    misses.
+    """
+    last_changed_directory: str | None = None
+    for each_segment in _all_command_segments(shell_command):
+        if _segment_invokes_git_commit(each_segment):
+            return last_changed_directory
+        segment_directory = _directory_change_target_from_segment(each_segment)
+        if segment_directory is not None:
+            last_changed_directory = segment_directory
+    return None
+
+
 def _next_composed_directory(composed_directory: str | None, each_value: str) -> str:
     """Apply one ``-C`` value to the running composition, like a chained chdir."""
     if os.path.isabs(each_value):
@@ -115,6 +159,7 @@ def compose_command_working_directory(shell_command: str) -> str | None:
 
         git -C /a -C sub commit    ->  /a/sub
         cd "/my repo" && git commit ->  /my repo
+        cd /repo && git.exe commit ->  /repo
         git commit                 ->  None
 
     Multiple ``-C`` values compose in order (a later absolute value resets); a
@@ -131,7 +176,7 @@ def compose_command_working_directory(shell_command: str) -> str | None:
     all_values = _all_commit_working_directory_values(shell_command)
     if all_values:
         return _compose_working_directories(all_values)
-    return extract_git_working_directory(shell_command)
+    return _leading_directory_change_path(shell_command)
 
 
 def expand_user_directory(directory: str | None) -> str | None:

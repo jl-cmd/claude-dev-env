@@ -63,6 +63,19 @@ def test_cd_prefix_scans_named_repo_from_unrelated_cwd(tmp_path: Path) -> None:
     assert "email" in deny_reason
 
 
+def test_cd_prefix_with_git_exe_scans_named_repo_from_unrelated_cwd(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "healthy_repo"
+    _init_repo_with_staged_pii(repository_root)
+    deny_reason = evaluate_bash_command(
+        f"cd {repository_root} && git.exe commit -m x",
+        working_directory="/tmp",
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
 def test_removed_working_directory_does_not_block_named_repo(tmp_path: Path) -> None:
     repository_root = tmp_path / "healthy_repo"
     _init_repo_with_staged_pii(repository_root)

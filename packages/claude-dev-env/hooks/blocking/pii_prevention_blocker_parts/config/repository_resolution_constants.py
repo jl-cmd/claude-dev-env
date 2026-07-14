@@ -16,3 +16,13 @@ REPOSITORY_ROOT_UNRESOLVED_REASON_TEMPLATE: str = (
 )
 
 REPOSITORY_ROOT_UNRESOLVED_CWD_LABEL: str = "the session working directory"
+
+ALL_DIRECTORY_CHANGE_COMMAND_NAMES: frozenset[str] = frozenset(
+    {"cd", "pushd", "set-location", "sl"}
+)
+
+ALL_DIRECTORY_CHANGE_PATH_OPTION_NAMES: frozenset[str] = frozenset(
+    {"-path", "-literalpath"}
+)
+
+DIRECTORY_CHANGE_OPTION_TERMINATOR: str = "--"

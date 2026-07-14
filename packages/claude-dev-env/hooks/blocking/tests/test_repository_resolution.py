@@ -78,3 +78,31 @@ def test_windows_git_exe_dash_c_is_the_target() -> None:
         compose_command_working_directory(r'git.exe -C "/srv/repo" commit -m x')
         == "/srv/repo"
     )
+
+
+def test_leading_cd_with_git_exe_supplies_the_target() -> None:
+    assert (
+        compose_command_working_directory("cd /work/repo && git.exe commit -m x")
+        == "/work/repo"
+    )
+
+
+def test_leading_pushd_with_git_exe_supplies_the_target() -> None:
+    assert (
+        compose_command_working_directory("pushd /work/repo; git.exe commit -m x")
+        == "/work/repo"
+    )
+
+
+def test_quoted_cd_path_with_git_exe_is_read_whole() -> None:
+    assert (
+        compose_command_working_directory('cd "/my repo" && git.exe commit -m x')
+        == "/my repo"
+    )
+
+
+def test_dash_c_wins_over_leading_cd() -> None:
+    assert (
+        compose_command_working_directory("cd /ignored && git -C /named commit -m x")
+        == "/named"
+    )
