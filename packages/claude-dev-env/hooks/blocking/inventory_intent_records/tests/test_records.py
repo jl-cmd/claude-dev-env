@@ -71,3 +71,10 @@ def test_corrupt_records_file_reads_as_no_intent(tmp_path: Path) -> None:
     corrupt_file = tmp_path / "claude-inventory-intent-session-abc.json"
     corrupt_file.write_text("{not valid json", encoding="utf-8")
     assert records.has_fresh_file_intent(SESSION_ID, DIRECTORY, FILENAME) is False
+
+
+def test_non_utf8_records_file_reads_as_no_intent(tmp_path: Path) -> None:
+    byte_corrupt_file = tmp_path / "claude-inventory-intent-session-abc.json"
+    byte_corrupt_file.write_bytes(b"\xff\xfe not valid utf-8")
+    assert records.has_fresh_file_intent(SESSION_ID, DIRECTORY, FILENAME) is False
+    assert records.has_fresh_row_intent(SESSION_ID, DIRECTORY, FILENAME) is False

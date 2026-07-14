@@ -90,7 +90,7 @@ def _read_records(session_id: str) -> dict[str, list[dict[str, object]]]:
     intent_file = _intent_file_path(session_id)
     try:
         raw_text = intent_file.read_text(encoding="utf-8")
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, UnicodeDecodeError):
         return _empty_records()
     try:
         parsed_payload = json.loads(raw_text)
