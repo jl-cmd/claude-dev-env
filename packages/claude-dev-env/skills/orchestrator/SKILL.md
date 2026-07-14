@@ -153,9 +153,10 @@ Routing rules:
   it.
 - Exploration workflows return file paths, line numbers, and direct evidence;
   they do not write code or mutate repo state.
-- Fan-out worker fleets use the **grok-spawn** skill when grok is usable
-  (`grok_worker_preflight.py` soft gate). The Claude Code Agent tool remains
-  the Claude-host alternative for in-process workers.
+- Fan-out worker fleets use the **grok-spawn** skill when that skill is
+  installed and grok is usable (`grok_worker_preflight.py` soft gate). The
+  Claude Code Agent tool remains the Claude-host alternative for in-process
+  workers.
 
 ## Agent reuse (non-negotiable)
 

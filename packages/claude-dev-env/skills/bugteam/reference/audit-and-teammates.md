@@ -159,10 +159,12 @@ After replies, the teammate writes outcome XML (schema in [`../PROMPTS.md`](../P
 
 ### Tier-1 flag profiles
 
-When tier-1 (headless grok) runs for audit or fix work, take CLI flag profiles
-from the **grok-spawn** skill flag-profiles reference. Do not restate those
-flags here. This page keeps the Agent-tool spawn shape for Claude-host
-teammates.
+When tier-1 (headless grok) runs for audit or fix work and the **grok-spawn**
+skill is installed on the host, take CLI flag profiles from that skill's
+flag-profiles reference. Do not restate those flags here. When the skill is
+absent, use the host's grok headless defaults from the worker-spawn protocol
+and the headless runner. This page keeps the Agent-tool spawn shape for
+Claude-host teammates.
 
 ### Shutdown (bugfix)
 

@@ -18,7 +18,7 @@ branching for tiers 2 and 3.
 |---|---|---|
 | 1 | Grok headless | Python helper: `grok_worker_preflight` then `grok_headless_runner.run_headless_worker` |
 | 2 | `claude_agent_required` | **Not** the Python helper. A stop signal so the **calling skill / harness** runs the Claude Code Agent tool itself |
-| 3 | Claude headless | Python helper: `claude_chain_runner.run_claude` with `-p --prompt-file … --output-format json` and stdin redirected to null |
+| 3 | Claude headless | Python helper: `claude_chain_runner.run_claude` with `-p --output-format json --agent <stem>`, prompt body on stdin from the prompt file, and subprocess `cwd` set to the caller's working directory |
 
 ### `claude_agent_required` boundary
 
@@ -34,9 +34,10 @@ the dispatcher continues to tier 3.
 ## Tier-1 fleets via grok-spawn
 
 For a fleet of tier-1 grok workers (batch spec in, reports out), use the
-**grok-spawn** skill. That skill owns the batch playbook and points at flag
-profiles under its reference docs. This page stays the single-worker
-dispatcher contract (`resolve_worker_spawn`).
+**grok-spawn** skill when that skill is installed on the host (it ships on a
+sibling stack and is not part of this dispatcher page). When present, that
+skill owns the batch playbook and flag profiles under its reference docs.
+This page stays the single-worker dispatcher contract (`resolve_worker_spawn`).
 
 The calling session owns verification and every commit, push, or GitHub post.
 Workers never commit or post.
@@ -57,9 +58,9 @@ python resolve_worker_spawn.py \
 
 | Flag | Required | Meaning |
 |---|---|---|
-| `--role` | no (default `bugteam`) | Role name for preflight agent-set checks and the grok `--agent` name |
+| `--role` | no (default `bugteam`) | Role name for preflight agent-set checks; mapped to the primary agent stem for headless `--agent` (for example `bugteam` → `code-quality-agent`; unknown roles fall back to the raw role string) |
 | `--prompt-file` | yes | Prompt file path for headless workers |
-| `--cwd` | yes | Working directory for the headless grok process |
+| `--cwd` | yes | Working directory for headless grok and claude workers |
 | `--run-temp-dir` | yes | Run-scoped directory for leader sockets and preflight cache (created if missing) |
 | `--timeout-seconds` | no (default `600`) | Per-tier timeout in seconds |
 | `--enable-claude-tier` | no | Allow tier 3 on a Claude host |
