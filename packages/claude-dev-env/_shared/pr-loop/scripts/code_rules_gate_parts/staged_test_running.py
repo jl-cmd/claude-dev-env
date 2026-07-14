@@ -4,6 +4,10 @@ The commit gate runs each staged test file so a broken test blocks the commit.
 Files are grouped by the nearest ancestor holding a pytest config, and each
 group runs in its own pytest session with the working directory at that root, so
 two packages exposing a same-named top-level package never shadow each other.
+
+``conftest.py`` paths are never passed as pytest collection targets: pytest loads
+them automatically when nearby tests run, and collecting multiple bare confests
+in one session collides on the shared module basename.
 """
 
 import os
@@ -26,6 +30,7 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
     STAGED_PYTEST_TIMEOUT_SECONDS,
     STAGED_TEST_FAILURE_HEADER,
     STAGED_TEST_GROUP_FAILURE_MESSAGE,
+    TEST_CONFTEST_FILENAME,
 )
 from pr_loop_shared_constants.preflight_constants import (
     PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
@@ -34,6 +39,31 @@ from terminology_sweep import repository_environment
 
 from code_rules_gate_parts.git_file_sets import paths_from_git_staged
 from code_rules_gate_parts.wrapper_plumb_check import is_test_path
+
+
+def _is_conftest_path(file_path: Path) -> bool:
+    """Return True when *file_path* is a pytest ``conftest.py`` fixture module."""
+    return file_path.name == TEST_CONFTEST_FILENAME
+
+
+def _pytest_target_paths(all_test_paths: list[Path]) -> list[Path]:
+    """Return staged test paths that pytest should collect as targets.
+
+    ::
+
+        ok:   [pkg/test_a.py, pkg/conftest.py] -> [pkg/test_a.py]
+        ok:   [a/conftest.py, b/conftest.py]   -> []
+        flag: bare confests collected as targets share basename ``conftest``
+
+    Args:
+        all_test_paths: Staged paths that match the test-file classifier.
+
+    Returns:
+        The same paths with every ``conftest.py`` removed.
+    """
+    return [
+        each_path for each_path in all_test_paths if not _is_conftest_path(each_path)
+    ]
 
 
 def _staged_test_file_paths(repository_root: Path) -> list[Path]:
@@ -316,17 +346,23 @@ def _run_grouped_staged_tests(
 def run_staged_test_files(repository_root: Path) -> int:
     """Run pytest over the staged test files and return the gate exit code.
 
+    ``conftest.py`` files are excluded from collection targets. Pytest still
+    loads them automatically when a nearby staged test runs under the same
+    owning root.
+
     Args:
         repository_root: The repository root the staged test files belong to.
 
     Returns:
-        0 when no test file is staged, when every group collects no tests, or
-        when every group passes. The first failing group's exit code otherwise.
+        0 when no collectable test file is staged, when every group collects no
+        tests, or when every group passes. The first failing group's exit code
+        otherwise.
     """
     all_test_paths = _staged_test_file_paths(repository_root)
-    if not all_test_paths:
+    all_pytest_targets = _pytest_target_paths(all_test_paths)
+    if not all_pytest_targets:
         return 0
-    all_tests_by_root = _group_staged_tests_by_root(all_test_paths, repository_root)
+    all_tests_by_root = _group_staged_tests_by_root(all_pytest_targets, repository_root)
     first_failing_exit_code = _run_grouped_staged_tests(all_tests_by_root, repository_root)
     if first_failing_exit_code != 0:
         sys.stderr.write(STAGED_TEST_FAILURE_HEADER + "\n")
