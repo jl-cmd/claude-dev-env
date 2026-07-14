@@ -6,12 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SHARED_PR_LOOP_SCRIPTS = (
-    REPO_ROOT
-    / "packages"
-    / "claude-dev-env"
-    / "_shared"
-    / "pr-loop"
-    / "scripts"
+    REPO_ROOT / "packages" / "claude-dev-env" / "_shared" / "pr-loop" / "scripts"
 )
 GATE_SCRIPT = SHARED_PR_LOOP_SCRIPTS / "code_rules_gate.py"
 SRC_RELATIVE_PATH = "packages/claude-dev-env/skills/bugteam/example_module.py"
@@ -64,9 +59,7 @@ def stage_and_commit(repository_root: Path, commit_message: str) -> None:
 
 def copy_enforcer_into(repository_root: Path) -> None:
     blocking_source = REPO_ROOT / "packages" / "claude-dev-env" / "hooks" / "blocking"
-    blocking_destination = (
-        repository_root / "packages" / "claude-dev-env" / "hooks" / "blocking"
-    )
+    blocking_destination = repository_root / "packages" / "claude-dev-env" / "hooks" / "blocking"
     blocking_destination.mkdir(parents=True, exist_ok=True)
     for each_enforcer_module in sorted(blocking_source.glob("code_rules_*.py")):
         destination_path = blocking_destination / each_enforcer_module.name
@@ -78,9 +71,7 @@ def copy_enforcer_into(repository_root: Path) -> None:
 
 def copy_hooks_config_into(repository_root: Path) -> None:
     hooks_config_source = REPO_ROOT / "packages" / "claude-dev-env" / "hooks" / "config"
-    hooks_config_destination = (
-        repository_root / "packages" / "claude-dev-env" / "hooks" / "config"
-    )
+    hooks_config_destination = repository_root / "packages" / "claude-dev-env" / "hooks" / "config"
     hooks_config_destination.mkdir(parents=True, exist_ok=True)
     for each_python_file in hooks_config_source.glob("*.py"):
         (hooks_config_destination / each_python_file.name).write_text(
@@ -90,9 +81,7 @@ def copy_hooks_config_into(repository_root: Path) -> None:
 
 
 def copy_hooks_constants_into(repository_root: Path) -> None:
-    hooks_constants_source = (
-        REPO_ROOT / "packages" / "claude-dev-env" / "hooks" / "hooks_constants"
-    )
+    hooks_constants_source = REPO_ROOT / "packages" / "claude-dev-env" / "hooks" / "hooks_constants"
     hooks_constants_destination = (
         repository_root / "packages" / "claude-dev-env" / "hooks" / "hooks_constants"
     )
@@ -106,12 +95,7 @@ def copy_hooks_constants_into(repository_root: Path) -> None:
 
 def copy_gate_script_into(repository_root: Path) -> Path:
     destination_scripts = (
-        repository_root
-        / "packages"
-        / "claude-dev-env"
-        / "_shared"
-        / "pr-loop"
-        / "scripts"
+        repository_root / "packages" / "claude-dev-env" / "_shared" / "pr-loop" / "scripts"
     )
     destination_scripts.mkdir(parents=True, exist_ok=True)
     destination_gate = destination_scripts / "code_rules_gate.py"
@@ -135,6 +119,14 @@ def copy_gate_script_into(repository_root: Path) -> Path:
     for each_constants_file in source_constants.glob("*.py"):
         (destination_constants / each_constants_file.name).write_text(
             each_constants_file.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+    destination_parts = destination_scripts / "code_rules_gate_parts"
+    destination_parts.mkdir(parents=True, exist_ok=True)
+    source_parts = SHARED_PR_LOOP_SCRIPTS / "code_rules_gate_parts"
+    for each_part_file in source_parts.glob("*.py"):
+        (destination_parts / each_part_file.name).write_text(
+            each_part_file.read_text(encoding="utf-8"),
             encoding="utf-8",
         )
     return destination_gate
@@ -206,18 +198,11 @@ def test_preexisting_violation_on_untouched_line_is_advisory(tmp_path: Path) -> 
 
 def test_new_violation_on_added_line_is_blocking(tmp_path: Path) -> None:
     repository_root = set_up_fixture_repo(tmp_path)
-    baseline_content = (
-        "def compute() -> int:\n"
-        "    return 0\n"
-    )
+    baseline_content = "def compute() -> int:\n    return 0\n"
     write_file(repository_root, SRC_RELATIVE_PATH, baseline_content)
     stage_and_commit(repository_root, "baseline")
     run_git(repository_root, "checkout", "-b", "feature")
-    changed_content = (
-        "def compute() -> int:\n"
-        "    local_number = 7777\n"
-        "    return local_number\n"
-    )
+    changed_content = "def compute() -> int:\n    local_number = 7777\n    return local_number\n"
     write_file(repository_root, SRC_RELATIVE_PATH, changed_content)
     stage_and_commit(repository_root, "introduce magic")
     completed = invoke_gate(repository_root)
@@ -264,11 +249,7 @@ def test_mixed_preexisting_and_new_violations_split_correctly(tmp_path: Path) ->
 
 def test_explicit_paths_invocation_does_full_file_scan(tmp_path: Path) -> None:
     repository_root = set_up_fixture_repo(tmp_path)
-    baseline_content = (
-        "def compute() -> int:\n"
-        "    old_number = 9999\n"
-        "    return old_number\n"
-    )
+    baseline_content = "def compute() -> int:\n    old_number = 9999\n    return old_number\n"
     write_file(repository_root, SRC_RELATIVE_PATH, baseline_content)
     stage_and_commit(repository_root, "baseline with pre-existing magic")
     run_git(repository_root, "checkout", "-b", "feature")

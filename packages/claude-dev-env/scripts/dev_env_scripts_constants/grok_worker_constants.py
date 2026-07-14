@@ -105,6 +105,7 @@ CLI_RUN_STATE_DIR_FLAG: str = "--run-temp-dir"
 """CLI flag naming the run-scoped state directory for sockets and the ping cache."""
 
 UTF8_ENCODING: str = "utf-8"
+UTF8_DECODE_ERRORS: str = "replace"
 """Encoding used for subprocess text mode and the ping cache file."""
 
 ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (

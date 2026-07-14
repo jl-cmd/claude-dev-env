@@ -27,6 +27,9 @@ eval_*
 eval-*
 **/eval_*
 **/eval-*
+# Shipped opt-in capability evals under grokify (not disposable artifacts)
+!packages/claude-dev-env/skills/grokify/evals/
+!packages/claude-dev-env/skills/grokify/evals/**
 
 # Draft prompt artifacts (file-based validation loop)
 data/prompts/.draft-prompt.xml
