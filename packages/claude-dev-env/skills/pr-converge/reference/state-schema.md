@@ -33,6 +33,16 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
   Reset to `null` on every push.
 - `copilot_clean_at`: HEAD SHA where Copilot last reported clean, or `null`.
   Reset to `null` on every push.
+- `codex_clean_at`: HEAD SHA where the Codex review skill last reported clean,
+  or `null`. Reset to `null` on every push. The machine checklist requires this
+  stamp to equal `current_head` only when weekly usage is above the probe
+  threshold (see [convergence-gates.md](convergence-gates.md)).
+- `codex_down`: boolean, init `false`. Set `true` when the Codex skill
+  classifies `codex_down`, when `CLAUDE_REVIEWS_DISABLED` lists `codex`, or when
+  the agent passes `--codex-down` into `check_convergence.py`. While `true`,
+  the Codex gate never blocks ready. Reset to `false` on every push (same
+  push-invalidation rule as `bugbot_down`); the availability / opt-out check
+  re-applies on the next Codex entry.
 - `merge_state_status`: last-observed `mergeable_state` from
   `pull_request_read(method="get")` (e.g. `clean`, `dirty`, `blocked`,
   `behind`, `unknown`, `unstable`), or `null` before the first check. Reset

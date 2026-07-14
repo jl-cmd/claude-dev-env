@@ -3,7 +3,7 @@ name: autoconverge
 description: >-
   Drives one draft PR to convergence in one autonomous run: a deterministic static
   sweep, then code review, bug audit, and self-review on one HEAD, all fixes in one
-  commit, then Bugbot and Copilot as terminal confirmation gates before ready.
+  commit, then Bugbot, Copilot, and Codex as terminal confirmation gates before ready.
   Use when the user says '/autoconverge', 'autoconverge this PR', 'converge this
   PR in one run', 'run the converge workflow', or 'drive the PR to ready
   autonomously'.
@@ -296,8 +296,8 @@ ready again — then run the checkpoints.
 [`reference/convergence.md`](reference/convergence.md) defines the whole loop:
 the merge-conflict pre-flight, the reuse pass and its three landing criteria,
 the round shape (static sweep, the three parallel reading lenses, dedup, the
-one-commit fix flow, the standards-deferral path), the terminal Bugbot and
-Copilot gates, the per-role model tiers, the full-diff rule, and the exact
+one-commit fix flow, the standards-deferral path), the terminal Bugbot, Copilot,
+and Codex gates, the per-role model tiers, the full-diff rule, and the exact
 ready definition `check_convergence.py` enforces.
 [`reference/stop-conditions.md`](reference/stop-conditions.md) lists every way
 the run ends short of ready. Hard-won failure lessons live in

@@ -40,7 +40,7 @@ landed.
 
 ## The round loop
 
-The workflow holds four states and moves between them until the PR is ready or
+The workflow holds five states and moves between them until the PR is ready or
 a blocker ends the run. A single iteration counter increments on every pass
 through any phase and caps the whole run at 20 loop iterations; the round counter
 tracks CONVERGE passes only and is never the cap. The internal lenses drive the
@@ -124,10 +124,23 @@ any bot threads with a deferral note, and reports the deferral in
 - Request a Copilot review on HEAD (skipping a duplicate request), then poll up
   to the configured cap, 360 seconds apart.
 - Copilot findings → fix them and return to CONVERGE on the new HEAD.
-- Copilot clean or approved → move to the convergence check.
+- Copilot clean or approved → move to the Codex gate.
 - Copilot down or out of quota (an out-of-usage notice, or no review after the
-  configured cap) → log a notice and move to the convergence check with the Copilot gate
+  configured cap) → log a notice and move to the Codex gate with the Copilot gate
   bypassed.
+
+**CODEX** gate (conditional-required terminal confirmation):
+
+- Runs after Bugbot and Copilot. Honors `reviews_disabled.py --reviewer codex`,
+  the weekly usage probe via `is_codex_review_required` (shared threshold
+  constant — no inline percent), and the wrapper's `codex_down` class.
+- Opt-out token or `codex_down` → set `codexDown`, no stamp, move to the
+  convergence check with `--codex-down`.
+- Usage at/below threshold or null → skip with no stamp; the machine checklist
+  applies the same rule.
+- Above threshold → run the codex-review wrapper against the PR base branch.
+  Findings → fix and return to CONVERGE. Clean → stamp `codexCleanAt` and pass
+  `--codex-clean-at` into the convergence check.
 
 **Convergence check**:
 
@@ -146,8 +159,8 @@ the strongest model only where judgment is dense:
 - **opus** — the reading lenses (code-review, bug-audit, self-review,
   reuse), the terminal Bugbot gate, and the code-editing steps that fix findings
   (fix-edit, conflict-edit, repair-edit, standards-edit).
-- **haiku** — the mechanical probes: preflight, the Copilot gate, the
-  CLEAN-audit post, and the convergence check.
+- **haiku** — the mechanical probes: preflight, the Copilot gate, the Codex
+  gate, the CLEAN-audit post, and the convergence check.
 
 ## Full-diff rule
 
@@ -176,7 +189,8 @@ checklist.
 ## Audit-trail design
 
 Bugbot and Copilot post their own review threads, which the fix lens replies to
-and resolves. The bug-audit lens keeps its findings in memory across the round
-and posts only the terminal CLEAN bugteam review once every lens is clean on a
-stable HEAD — that single artifact is what gate 3 reads. This keeps thread churn
-to the threads the bots raise themselves.
+and resolves. Codex findings are local to the gate (no GitHub review thread) and
+enter the same fix path with `replyToCommentId: null`. The bug-audit lens keeps
+its findings in memory across the round and posts only the terminal CLEAN bugteam
+review once every lens is clean on a stable HEAD — that single artifact is what
+gate 3 reads. This keeps thread churn to the threads the bots raise themselves.

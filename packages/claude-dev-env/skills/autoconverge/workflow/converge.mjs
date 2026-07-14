@@ -11,13 +11,14 @@
 
 export const meta = {
   name: 'autoconverge',
-  description: 'Drive one draft PR to convergence in a single autonomous run: each round runs a deterministic static sweep first, then code-review, bug-audit, and self-review lenses in parallel on the same HEAD, dedups findings, fixes once, and re-verifies; Bugbot and Copilot then run as terminal confirmation gates before a final convergence check marks the PR ready.',
+  description: 'Drive one draft PR to convergence in a single autonomous run: each round runs a deterministic static sweep first, then code-review, bug-audit, and self-review lenses in parallel on the same HEAD, dedups findings, fixes once, and re-verifies; Bugbot, Copilot, and Codex then run as terminal confirmation gates before a final convergence check marks the PR ready.',
   whenToUse: 'Launched by the /autoconverge skill after it resolves PR scope, enters a worktree, and grants project .claude permissions.',
   phases: [
     { title: 'Reuse', detail: 'Before convergence, one reuse lens scans the full diff for reuse improvements that are certain, behaviorally identical, and autonomously implementable, and applies the qualifying ones in one commit' },
     { title: 'Converge', detail: 'A deterministic static sweep runs first each round; then code-review, bug-audit, and self-review run in parallel on the same HEAD; one clean-coder applies all fixes; the loop repeats until every lens is clean on a stable HEAD' },
     { title: 'Bugbot gate', detail: 'A terminal confirmation gate that runs once the internal lenses are clean; when Bugbot is disabled or unavailable it spawns no agent and passes, otherwise it fetches Bugbot\'s verdict and routes any finding back into Converge' },
-    { title: 'Copilot gate', detail: 'When the quota pre-check reports Copilot out of premium-request quota or unavailable, skip the gate with no agent spawned; otherwise request a Copilot review and poll up to the configured cap, then route findings by tier — self-healing findings flow back into Converge, and each code-concern finding goes to its own verifier agent that must execute a check against HEAD: a confirmed finding (defect reproduced by a run command) joins the fix round carrying its repro, a refuted finding (correct behavior demonstrated by a run command) is replied-to and resolved with the check evidence, and only inconclusive findings return blocker user-review for the orchestrator to gate on rather than auto-fixing or marking the PR ready; when Copilot is down or out of quota log a notice and mark the PR ready with the gate bypassed' },
+    { title: 'Copilot gate', detail: 'When the quota pre-check reports Copilot out of premium-request quota or unavailable, skip the gate with no agent spawned; otherwise request a Copilot review and poll up to the configured cap, then route findings by tier — self-healing findings flow back into Converge, and each code-concern finding goes to its own verifier agent that must execute a check against HEAD: a confirmed finding (defect reproduced by a run command) joins the fix round carrying its repro, a refuted finding (correct behavior demonstrated by a run command) is replied-to and resolved with the check evidence, and only inconclusive findings return blocker user-review for the orchestrator to gate on rather than auto-fixing or marking the PR ready; when Copilot is down or out of quota log a notice and proceed with the gate bypassed' },
+    { title: 'Codex gate', detail: 'A conditional-required terminal gate that runs after Bugbot and Copilot: when CLAUDE_REVIEWS_DISABLED lists codex, when weekly usage is at or below the shared probe threshold (or null), or when the wrapper classifies codex_down, the gate skips without blocking; when usage is above the threshold it runs the codex-review wrapper against the PR base branch, routes findings into the fix path, and on a clean pass records the codex-clean HEAD for the convergence check' },
     { title: 'Finalize', detail: 'Run check_convergence.py; mark draft=false on a full pass' },
   ],
 }
@@ -28,6 +29,7 @@ const CONFIG = {
   copilotMaxPolls: 8,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
+  codexScripts: '$HOME/.claude/skills/codex-review/scripts',
   bugteamRubric: '$HOME/.claude/_shared/pr-loop/audit-contract.md',
   precatchRubric: '$HOME/.claude/_shared/pr-loop/precatch-rubric.md',
 }
@@ -539,13 +541,15 @@ function runGeneralUtilityTask(task, context) {
  * the FINALIZE loop routes to the repair path, which loops back and re-runs this
  * same combined check; only the passing path ever attempts gh pr ready. The agent
  * edits no code, so it runs on the cheapest model at low effort.
- * @param {object} context carries head, bugbotDown, copilotDown, and bugteamPostBlocked
+ * @param {object} context carries head, bugbotDown, copilotDown, codexDown, codexCleanAt, and bugteamPostBlocked
  * @returns {Promise<object>} FINALIZE_SCHEMA result
  */
 function runConvergenceCheck(context) {
   const label = 'finalize-check'
   const bugbotDownFlag = context.bugbotDown ? ' --bugbot-down' : ''
   const copilotDownFlag = context.copilotDown ? ' --copilot-down' : ''
+  const codexDownFlag = context.codexDown ? ' --codex-down' : ''
+  const codexCleanAtFlag = context.codexCleanAt ? ` --codex-clean-at ${context.codexCleanAt}` : ''
   const bugteamPostBlockedFlag = context.bugteamPostBlocked ? ' --bugteam-post-blocked' : ''
   const bugteamPostBlockedNote = context.bugteamPostBlocked
     ? `   The --bugteam-post-blocked flag is set because the environment refused the CLEAN bugteam review post this run. The review lenses already cleared this HEAD, so the check skips the bugteam CLEAN-review gate and reports that gate as PASS — bypassed (bugteam_post_blocked) rather than failing on a review that was never allowed to land.\n`
@@ -553,19 +557,33 @@ function runConvergenceCheck(context) {
   const reviewerOptOutTokens = []
   if (context.bugbotDown) reviewerOptOutTokens.push('bugbot')
   if (context.copilotDown) reviewerOptOutTokens.push('copilot')
+  if (context.codexDown) reviewerOptOutTokens.push('codex')
   if (context.bugteamPostBlocked) reviewerOptOutTokens.push('bugteam')
+  const jobDirName = process.env.CLAUDE_JOB_DIR
+  const needsCodexCleanExportFallback = Boolean(context.codexCleanAt) && !jobDirName
+  if (needsCodexCleanExportFallback && !reviewerOptOutTokens.includes('codex')) {
+    reviewerOptOutTokens.push('codex')
+  }
   const reviewerOptOut = reviewerOptOutTokens.length > 0
-    ? `   Reviewer(s) opted out this run (${reviewerOptOutTokens.join(', ')}), so before gh pr ready export the token(s) in this same shell session so the independent mark-ready blocker hook's convergence re-check — which re-runs check_convergence.py with no flags — inherits the bypass through the env:\n      bash: export CLAUDE_REVIEWS_DISABLED="${reviewerOptOutTokens.join(',')}"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "${reviewerOptOutTokens.join(',')}")\n`
+    ? `   Reviewer(s) opted out this run (${reviewerOptOutTokens.join(', ')}), so before gh pr ready export the token(s) in this same shell session so the independent mark-ready blocker hook's convergence re-check — which re-runs check_convergence.py with no flags — inherits the bypass through the env. Emit exactly one export (merge every token into a single value; never overwrite with a second assignment):\n      bash: export CLAUDE_REVIEWS_DISABLED="${reviewerOptOutTokens.join(',')}"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "${reviewerOptOutTokens.join(',')}")\n`
+    : ''
+  const codexCleanAtNote = context.codexCleanAt
+    ? (
+      jobDirName
+        ? `   The Codex gate reported clean on this HEAD, so the --codex-clean-at flag above satisfies this same-shell check. The independent mark-ready blocker hook re-runs check_convergence.py with no flags, and it reads the Codex clean stamp only from the single-PR job-dir state file, so before gh pr ready persist the stamp there: merge {"codex_clean_at": "${context.codexCleanAt}"} into the file named pr-converge-state.json inside the directory named by the CLAUDE_JOB_DIR environment variable (create the file with just that key when it does not exist yet, and preserve any keys already in it).\n`
+        : `   The Codex gate reported clean on this HEAD, so the --codex-clean-at flag above satisfies this same-shell check. CLAUDE_JOB_DIR is unset in this shell, so there is no durable stamp file for the flagless mark-ready re-check — the codex token is already included in the single CLAUDE_REVIEWS_DISABLED export above (do not emit a second export that overwrites other tokens).\n`
+    )
     : ''
   return convergeReadOnlyAgent(
     `Run the convergence gate for ${prCoordinates} on HEAD ${context.head} and, only when every gate passes, mark the PR ready. Do not edit code.\n\n` +
-      `1. Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}${bugteamPostBlockedFlag}\n` +
+      `1. Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}${codexDownFlag}${codexCleanAtFlag}${bugteamPostBlockedFlag}\n` +
       bugteamPostBlockedNote +
       `   Exit 0 -> every gate passed: set pass:true, failures:[].\n` +
       `   Exit 1 -> set pass:false and failures to each printed FAIL line verbatim.\n` +
       `   Exit 2 -> retry once; if it still errors, set pass:false, failures:["check_convergence gh error"].\n\n` +
       `2. Only when step 1 set pass:true, mark the PR ready and confirm it left draft state:\n` +
       reviewerOptOut +
+      codexCleanAtNote +
       `   Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
       `   Re-query the draft state: gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .draft\n` +
       `   Set ready:true only when the re-query prints false (the PR is no longer a draft); set ready:false when gh pr ready errors or the re-query still prints true.\n` +
@@ -639,11 +657,49 @@ const COPILOT_SCHEMA = {
   properties: {
     sha: { type: 'string' },
     clean: { type: 'boolean' },
-    down: { type: 'boolean', description: 'true when Copilot is down or out of quota — it posts an out-of-usage notice or never surfaces a review on HEAD after the poll cap; the gate is bypassed and the run proceeds to mark-ready' },
+    down: { type: 'boolean', description: 'true when Copilot is down or out of quota — it posts an out-of-usage notice or never surfaces a review on HEAD after the poll cap; the gate is bypassed and the run proceeds to the Codex gate' },
     reviewUrl: { type: 'string', description: 'the Copilot review html_url when the gate carries findings, otherwise an empty string — the user-review payload links the orchestrator and the user to the review' },
     findings: COPILOT_FINDINGS_SCHEMA,
   },
   required: ['sha', 'clean', 'down', 'findings'],
+}
+
+const CODEX_SKIP_REASONS = ['', 'token', 'usage']
+
+const CODEX_FINDINGS_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      file: { type: 'string' },
+      line: { type: 'integer' },
+      severity: { type: 'string', enum: ['P0', 'P1', 'P2'] },
+      category: { type: 'string', enum: ['bug', 'code-standard'], description: 'code-standard for pure CODE_RULES/style violations with no behavioral impact; bug otherwise' },
+      title: { type: 'string' },
+      detail: { type: 'string' },
+      replyToCommentId: { type: ['integer', 'null'], description: 'GitHub review comment id to reply to and resolve, or null when the finding has no thread' },
+    },
+    required: ['file', 'line', 'severity', 'category', 'title', 'detail', 'replyToCommentId'],
+  },
+}
+
+const CODEX_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    sha: { type: 'string', description: 'PR HEAD SHA this gate evaluated' },
+    clean: { type: 'boolean', description: 'true when Codex reported no findings on sha, or when the gate skipped without requiring a review' },
+    down: { type: 'boolean', description: 'true when Codex is down (wrapper classifies codex_down) or opted out via the codex token — the gate is bypassed' },
+    skipped: { type: 'boolean', description: 'true when the gate did not run the review wrapper (opt-out token or usage at/below the shared threshold)' },
+    skipReason: {
+      type: 'string',
+      enum: CODEX_SKIP_REASONS,
+      description: 'token when CLAUDE_REVIEWS_DISABLED lists codex; usage when weekly percent_left is null or at/below the shared probe threshold; empty string when the review ran or classified down',
+    },
+    findings: CODEX_FINDINGS_SCHEMA,
+  },
+  required: ['sha', 'clean', 'down', 'skipped', 'skipReason', 'findings'],
 }
 
 const COPILOT_VERIFY_VERDICTS = ['confirmed', 'refuted', 'inconclusive']
@@ -1416,6 +1472,30 @@ function classifyReviewerGateOutcome(reviewerGate) {
 }
 
 /**
+ * Classify a Codex terminal-gate result into the loop's next action. Codex is a
+ * conditional-required sibling of Bugbot and Copilot: the agent may skip without
+ * running the review (opt-out token or weekly usage at/below the shared probe
+ * threshold), report down when the wrapper classifies codex_down, return findings
+ * for the fix path, or report clean so the run stamps codex_clean_at for the
+ * convergence check. A dead agent is a retry rather than an approval.
+ * @param {object|null|undefined} codexGate the CODEX_SCHEMA result, or null on agent failure
+ * @returns {{kind: string, findings?: Array<object>}} the next action
+ */
+function classifyCodexGateOutcome(codexGate) {
+  if (codexGate == null) return { kind: 'retry' }
+  if (codexGate.skipped === true) {
+    if (codexGate.skipReason === 'token') return { kind: 'skip-token' }
+    if (codexGate.skipReason === 'usage') return { kind: 'skip-usage' }
+    return { kind: 'retry' }
+  }
+  if (codexGate.down === true) return { kind: 'down' }
+  const allFindings = codexGate.findings || []
+  if (allFindings.length > 0) return { kind: 'fix', findings: allFindings }
+  if (codexGate.clean === true) return { kind: 'clean' }
+  return { kind: 'retry' }
+}
+
+/**
  * Split a Copilot round's findings by routing tier. Any tier other than the
  * explicit 'self-healing' counts as a code concern, so a missing or unexpected
  * tier routes to the verification stage rather than silently into the auto-fix
@@ -1938,7 +2018,7 @@ function resolveCleanAuditNote(auditResult, head, rounds) {
  * poll cap is hit; return Copilot's findings or a down signal. Copilot is down
  * when it posts an out-of-usage notice (the requester hit their quota) rather
  * than a review, or surfaces no review at all after the poll cap; the gate
- * reports either as down so the run logs a notice and proceeds to mark-ready with
+ * reports either as down so the run logs a notice and proceeds to the Codex gate with
  * the gate bypassed rather than waiting on a review that will not arrive.
  * @param {string} head converged PR HEAD SHA
  * @returns {Promise<object>} COPILOT_SCHEMA result
@@ -1961,6 +2041,43 @@ function runCopilotGate(head) {
       `A down verdict is valid ONLY in two cases: the review request itself failed, or the FULL poll budget (${CONFIG.copilotMaxPolls} attempts x 360 seconds) elapsed with no review on HEAD. A successful review request means the review is in flight; returning down:true on a partial poll is an invalid result. Never end the poll early for any reason other than a received review on HEAD or an out-of-usage notice — not tooling friction, not turn-length pressure, not a failed attempt to write a polling helper. When your wait tooling fails, re-arm it and keep polling until the budget is spent.\n\n` +
       `Return strictly the schema.`,
     { label: 'copilot-gate', phase: 'Copilot gate', schema: COPILOT_SCHEMA, ...TIERS.haikuLow },
+  )
+}
+
+/**
+ * Codex gate: conditional-required terminal confirmation after Bugbot and
+ * Copilot. Honors the shared opt-out token, the weekly usage probe threshold
+ * (via is_codex_review_required — never an inline percent), and the wrapper's
+ * codex_down classification. When required, runs the codex-review wrapper
+ * against the PR base branch and returns findings or a clean stamp for the
+ * convergence check.
+ * @param {string} head converged PR HEAD SHA
+ * @returns {Promise<object>} CODEX_SCHEMA result
+ */
+function runCodexGate(head) {
+  return convergeReadOnlyAgent(
+    `You are the Codex gate for ${prCoordinates}, HEAD ${head}. Do not edit code, commit, or push.\n\n` +
+      `Codex is a conditional-required terminal gate. Follow these steps in order and return strictly the schema.\n\n` +
+      `1. Opt-out gate. Run exactly:\n` +
+      `   python "${CONFIG.prLoopScripts}/reviews_disabled.py" --reviewer codex\n` +
+      `   Exit 0 means CLAUDE_REVIEWS_DISABLED lists codex -> return {sha:${'`'}${head}${'`'}, clean:true, down:true, skipped:true, skipReason:'token', findings:[]} and stop. Exit 1 means continue.\n\n` +
+      `2. Usage probe. Run exactly:\n` +
+      `   python "${CONFIG.codexScripts}/codex_usage_probe.py"\n` +
+      `   Capture the single JSON object on stdout (percent_left may be a number or null). Decide required vs skip ONLY through the shared helper — never restate a percent threshold:\n` +
+      `   python -c "import json,sys; sys.path.insert(0, r'${CONFIG.codexScripts}'); from codex_usage_probe import is_codex_review_required; report=json.load(sys.stdin); print('required' if is_codex_review_required(report.get('percent_left')) else 'skip')"\n` +
+      `   piping the probe JSON into that one-liner on stdin. When it prints skip -> return {sha:${'`'}${head}${'`'}, clean:true, down:false, skipped:true, skipReason:'usage', findings:[]} and stop. When it prints required -> continue.\n\n` +
+      `3. Resolve the PR base branch (the review target is HEAD vs base, never an invented commit range). Run exactly:\n` +
+      `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .base.ref\n` +
+      `   Capture the printed base branch name.\n\n` +
+      `4. Run the codex-review wrapper against that base. From the PR worktree root, run a short Python driver that imports the skill scripts (add "${CONFIG.codexScripts}" to sys.path) and:\n` +
+      `   - creates a temp run-state directory under the OS temp dir\n` +
+      `   - calls run_codex_review.run_codex_review(repository_directory=<repo root Path>, run_state_directory=<temp Path>, base_branch=<base ref from step 3>)\n` +
+      `   - when outcome_class is codex_down (or classify_codex_run on a non-zero exit reports codex_down) -> return {sha:${'`'}${head}${'`'}, clean:false, down:true, skipped:false, skipReason:'', findings:[]} and stop\n` +
+      `   - when outcome_class is completed: parse findings with parse_codex_findings.parse_codex_findings(agent_message)\n` +
+      `     - empty findings -> return {sha:${'`'}${head}${'`'}, clean:true, down:false, skipped:false, skipReason:'', findings:[]}\n` +
+      `     - non-empty findings -> map each to {file, line (integer start of line_range, or 1 when missing), severity (priority or P2), category ('code-standard' for pure CODE_RULES/style with no behavioral impact, 'bug' otherwise), title, detail (body), replyToCommentId:null} and return {sha:${'`'}${head}${'`'}, clean:false, down:false, skipped:false, skipReason:'', findings:[...]}\n\n` +
+      `Never hard-code a usage percent threshold. Never re-parse CLAUDE_REVIEWS_DISABLED by hand — only reviews_disabled.py decides the token. Return strictly the schema.`,
+    { label: 'codex-gate', phase: 'Codex gate', schema: CODEX_SCHEMA, agentType: 'general-purpose', ...TIERS.haikuLow },
   )
 }
 
@@ -2413,6 +2530,8 @@ const noLensRoundCauses = new Set()
 let blocker = null
 let bugbotDown = input.bugbotDisabled || false
 let copilotDown = input.copilotDisabled || false
+let codexDown = false
+let codexCleanAt = null
 let copilotNote = null
 let standardsNote = null
 let cleanAuditNote = null
@@ -2617,9 +2736,9 @@ while (iterations < CONFIG.maxIterations) {
   if (phase === 'COPILOT') {
     if (resolveReviewerDown(reviewerAvailability?.copilot, input.copilotDisabled || false)) {
       copilotDown = true
-      copilotNote = 'Copilot was unavailable or out of premium-request quota this round — the Copilot gate was bypassed with no agent spawned and the PR was marked ready without a Copilot review'
-      log('Copilot gate: the shared reviewer-availability probe (or the run input) reported Copilot unavailable — skipping the Copilot gate with no agent spawned and proceeding to mark-ready with the gate bypassed.')
-      phase = 'FINALIZE'
+      copilotNote = 'Copilot was unavailable or out of premium-request quota this round — the Copilot gate was bypassed with no agent spawned; remaining gates including Codex still run before ready'
+      log('Copilot gate: the shared reviewer-availability probe (or the run input) reported Copilot unavailable — skipping the Copilot gate with no agent spawned and proceeding to the Codex gate with the Copilot gate bypassed.')
+      phase = 'CODEX'
       continue
     }
     const copilot = await runCopilotGate(head)
@@ -2631,10 +2750,10 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     if (copilotOutcome.kind === 'down') {
-      log('Copilot gate: Copilot is down or out of quota — no review on HEAD after the poll cap. Logging a notice and proceeding to mark-ready with the Copilot gate bypassed.')
+      log('Copilot gate: Copilot is down or out of quota — no review on HEAD after the poll cap. Logging a notice and proceeding to the Codex gate with the Copilot gate bypassed.')
       copilotDown = true
-      copilotNote = 'Copilot was down or out of quota — the Copilot gate was bypassed and the PR was marked ready without a Copilot review'
-      phase = 'FINALIZE'
+      copilotNote = 'Copilot was down or out of quota — the Copilot gate was bypassed; remaining gates including Codex still run before ready'
+      phase = 'CODEX'
       continue
     }
     if (copilotOutcome.kind === 'fix') {
@@ -2662,7 +2781,7 @@ while (iterations < CONFIG.maxIterations) {
           log('Every code-concern finding was refuted with executed-check evidence and the round carries no self-healing findings — the Copilot gate passes')
           copilotDown = false
           copilotNote = null
-          phase = 'FINALIZE'
+          phase = 'CODEX'
           continue
         }
       }
@@ -2673,7 +2792,7 @@ while (iterations < CONFIG.maxIterations) {
         if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
         copilotDown = false
         copilotNote = null
-        phase = 'FINALIZE'
+        phase = 'CODEX'
         continue
       }
       log(`Copilot raised ${roundFindings.length} finding(s) — fixing and re-converging`)
@@ -2692,12 +2811,74 @@ while (iterations < CONFIG.maxIterations) {
     }
     copilotDown = false
     copilotNote = null
+    phase = 'CODEX'
+    continue
+  }
+
+  if (phase === 'CODEX') {
+    const codex = await runCodexGate(head)
+    const codexOutcome = classifyCodexGateOutcome(codex)
+    if (codexOutcome.kind === 'retry') {
+      log('Codex gate agent died or returned an unreliable result — re-running the gate on the same HEAD')
+      continue
+    }
+    if (codexOutcome.kind === 'skip-token') {
+      log('Codex gate: CLAUDE_REVIEWS_DISABLED lists codex — skipping the terminal Codex gate with no review spawned and proceeding to mark-ready with the gate bypassed.')
+      codexDown = true
+      codexCleanAt = null
+      phase = 'FINALIZE'
+      continue
+    }
+    if (codexOutcome.kind === 'skip-usage') {
+      log('Codex gate: weekly usage is at/below the shared probe threshold (or null) — skipping the terminal Codex gate; the convergence check applies the same rule.')
+      codexDown = false
+      codexCleanAt = null
+      phase = 'FINALIZE'
+      continue
+    }
+    if (codexOutcome.kind === 'down') {
+      log('Codex gate: Codex classified codex_down — bypassing the terminal Codex gate and proceeding to mark-ready with the gate bypassed.')
+      codexDown = true
+      codexCleanAt = null
+      phase = 'FINALIZE'
+      continue
+    }
+    if (codexOutcome.kind === 'fix') {
+      if (isStandardsOnlyRound(codexOutcome.findings)) {
+        log(`Codex raised ${codexOutcome.findings.length} code-standard-only finding(s) — deferring to follow-up PRs and treating the gate as passed`)
+        const standardsOutcome = await openStandardsFollowUpOnce(head, codexOutcome.findings, 'codex', { copilotDisabled: copilotDown, bugbotDisabled: bugbotDown })
+        standardsNote = standardsDeferralNote(codexOutcome.findings.length, buildStandardsDeferral())
+        if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
+        codexDown = false
+        codexCleanAt = head
+        phase = 'FINALIZE'
+        continue
+      }
+      log(`Codex raised ${codexOutcome.findings.length} finding(s) — fixing and re-converging`)
+      const fixResult = await applyFixes(head, codexOutcome.findings, 'codex')
+      const hadThreadBearingFinding = codexOutcome.findings.some((each) => collectFindingThreadIds(each).length > 0)
+      const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
+      if (!fixProgress.progressed) {
+        blocker = fixResult?.resolvedWithoutCommit === true && !hadThreadBearingFinding
+          ? `fix stalled: codex gate raised ${codexOutcome.findings.length} in-memory finding(s) with no GitHub thread, the fix judged them all stale (resolvedWithoutCommit) and moved no code on HEAD ${head} — re-raising would loop to the iteration cap`
+          : `codex fix lens landed no push for ${codexOutcome.findings.length} finding(s) on HEAD ${head}`
+        break
+      }
+      head = null
+      codexDown = false
+      codexCleanAt = null
+      phase = 'CONVERGE'
+      continue
+    }
+    log(`Codex gate: clean on ${head?.slice(0, 7)} — recording codex-clean HEAD for the convergence check`)
+    codexDown = false
+    codexCleanAt = head
     phase = 'FINALIZE'
     continue
   }
 
   if (phase === 'FINALIZE') {
-    const finalizeResult = await runConvergenceCheck({ head, bugbotDown, copilotDown, bugteamPostBlocked: cleanAuditNote !== null })
+    const finalizeResult = await runConvergenceCheck({ head, bugbotDown, copilotDown, codexDown, codexCleanAt, bugteamPostBlocked: cleanAuditNote !== null })
     const convergenceOutcome = classifyConvergenceOutcome(finalizeResult)
     if (convergenceOutcome.kind === 'retry') {
       log('Convergence check agent died or returned no FAIL lines — re-running the check on the same HEAD')

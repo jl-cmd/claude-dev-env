@@ -34,7 +34,7 @@ skill still runs teardown (revoke permissions, final report).
   stalled HEAD. An all-stale round that makes no commit but resolves every
   finding thread (`resolvedWithoutCommit: true` with at least one thread-bearing
   finding) is not a stall — the run re-converges on the unchanged HEAD and
-  reaches the terminal Bugbot, Copilot, and convergence gates.
+  reaches the terminal Bugbot, Copilot, Codex, and convergence gates.
 - **Static-sweep stalled** — the deterministic static sweep (`code_rules_gate.py
   --base origin/main`, `ruff`, `mypy`, stem-matched `pytest`) raises gate or test
   failures the fixer cannot clear on the current HEAD, so HEAD does not move. The
@@ -80,10 +80,20 @@ Each reviewer-down condition below skips its own convergence-check gate. The fla
 - **Copilot down or out of quota** — when Copilot posts an out-of-usage notice on
   the current HEAD (the user who requested the review reached their quota limit)
   rather than a code review, or surfaces no review at all after the configured cap, the
-  Copilot gate returns `down: true`. The run logs a notice, runs the convergence
-  check with `--copilot-down` (the Copilot review gate and the
-  pending-requested-reviews gate bypassed), and marks the PR ready. `copilotNote`
-  records the bypass for the final report.
+  Copilot gate returns `down: true`. The run logs a notice, sets `copilotDown`,
+  and proceeds to the Codex gate. The later convergence check receives
+  `--copilot-down` (the Copilot review gate and the pending-requested-reviews
+  gate bypassed), then mark-ready. `copilotNote` records the bypass for the
+  final report.
+- **Terminal Codex gate skipped or down** — the conditional-required Codex gate
+  runs after Bugbot and Copilot. When `CLAUDE_REVIEWS_DISABLED` lists `codex`
+  (`reviews_disabled.py --reviewer codex` exit 0), the gate sets `codexDown` and
+  advances with no review. When the weekly usage probe reports `percent_left`
+  null or at/below the shared threshold (`is_codex_review_required` false), the
+  gate skips without a stamp; the convergence check applies the same rule. When
+  the wrapper classifies `codex_down`, the gate sets `codexDown` and advances.
+  A clean required run stamps `codexCleanAt` for `--codex-clean-at`. Findings
+  re-enter CONVERGE through the existing fix path.
 - **A lens agent dies** — when one parallel reading lens returns null (a terminal
   agent failure), the round proceeds on the surviving lenses. A real defect it
   would have caught surfaces in a later round or at the convergence check. A dead
