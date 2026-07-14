@@ -317,6 +317,108 @@ def test_scratch_paths_stay_under_run_state_directory(
     assert written_inside_repo == []
 
 
+def test_classifies_usage_limit_still_matches_real_fixture(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_process = _FakeProcess(
+        returncode=1, stderr=FIXTURE_USAGE_LIMIT_STDERR
+    )
+    outcome, _, _, _, _ = _run_once(monkeypatch, tmp_path, fake_process)
+
+    assert outcome.classification == CLASSIFICATION_USAGE_LIMIT
+
+
+def test_credit_card_text_is_error_not_usage_limit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_process = _FakeProcess(
+        returncode=1,
+        stderr="invalid credit card field mapping on invoice line",
+    )
+    outcome, _, _, _, _ = _run_once(monkeypatch, tmp_path, fake_process)
+
+    assert outcome.is_ok is False
+    assert outcome.classification == CLASSIFICATION_ERROR
+    assert outcome.classification != CLASSIFICATION_USAGE_LIMIT
+
+
+def test_bare_near_miss_tokens_are_not_usage_limit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    all_near_miss_stderr = (
+        "vendor code 42901 rejected the payload",
+        "please verify credit before retry",
+        "adjust disk quota on volume",
+        "disk quota exceeded on volume",
+    )
+    for each_index, each_stderr in enumerate(all_near_miss_stderr):
+        each_case_directory = tmp_path / f"near-miss-{each_index}"
+        each_case_directory.mkdir()
+        fake_process = _FakeProcess(returncode=1, stderr=each_stderr)
+        outcome, _, _, _, _ = _run_once(
+            monkeypatch, each_case_directory, fake_process
+        )
+        assert outcome.classification == CLASSIFICATION_ERROR, each_stderr
+        assert outcome.classification != CLASSIFICATION_USAGE_LIMIT, each_stderr
+
+
+def test_auth_near_miss_text_is_error_not_auth_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    all_near_miss_stderr = (
+        "invalid keyword argument for helper",
+        "invalid key mapping on invoice line",
+        "unauthorized resource access by policy engine",
+        "unauthorized",
+    )
+    for each_index, each_stderr in enumerate(all_near_miss_stderr):
+        each_case_directory = tmp_path / f"auth-near-miss-{each_index}"
+        each_case_directory.mkdir()
+        fake_process = _FakeProcess(returncode=1, stderr=each_stderr)
+        outcome, _, _, _, _ = _run_once(
+            monkeypatch, each_case_directory, fake_process
+        )
+        assert outcome.classification == CLASSIFICATION_ERROR, each_stderr
+        assert outcome.classification != CLASSIFICATION_AUTH_FAILURE, each_stderr
+
+
+def test_tightened_usage_phrases_still_classify_usage_limit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    all_usage_stderr = (
+        "api quota exceeded for this request",
+        "usage quota exceeded on plan",
+        "rate quota exceeded for endpoint",
+    )
+    for each_index, each_stderr in enumerate(all_usage_stderr):
+        each_case_directory = tmp_path / f"usage-phrase-{each_index}"
+        each_case_directory.mkdir()
+        fake_process = _FakeProcess(returncode=1, stderr=each_stderr)
+        outcome, _, _, _, _ = _run_once(
+            monkeypatch, each_case_directory, fake_process
+        )
+        assert outcome.classification == CLASSIFICATION_USAGE_LIMIT, each_stderr
+
+
+def test_tightened_auth_phrases_still_classify_auth_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    all_auth_stderr = (
+        "error: unauthorized — please re-authenticate",
+        "invalid api key supplied for this request",
+        "client is not authenticated",
+    )
+    for each_index, each_stderr in enumerate(all_auth_stderr):
+        each_case_directory = tmp_path / f"auth-phrase-{each_index}"
+        each_case_directory.mkdir()
+        fake_process = _FakeProcess(returncode=1, stderr=each_stderr)
+        outcome, _, _, _, _ = _run_once(
+            monkeypatch, each_case_directory, fake_process
+        )
+        assert outcome.classification == CLASSIFICATION_AUTH_FAILURE, each_stderr
+
+
+def test_dual_match_prefers_auth_failure_over_usage_limit(
 def test_missing_binary_returns_dedicated_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

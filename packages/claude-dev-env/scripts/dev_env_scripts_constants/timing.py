@@ -1,4 +1,4 @@
-"""Timing constants for sweep_empty_dirs.
+"""Timing constants for sweep_empty_dirs and the grok batch launcher.
 
 Per the project's configuration conventions, timeouts, delays, and retries
 live in dev_env_scripts_constants/timing.py.
@@ -9,3 +9,6 @@ DEFAULT_AGE_SECONDS: int = 120
 
 DEFAULT_POLL_INTERVAL: int = 30
 """Seconds between sweep passes in continuous-watch mode."""
+
+WORKER_STAGGER_SECONDS: int = 15
+"""Seconds between staggered headless grok worker process starts in a batch."""

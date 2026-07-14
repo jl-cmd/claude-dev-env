@@ -177,6 +177,7 @@ const INSTALL_GROUPS = {
         description: 'Development standards, hooks, agents, commands',
         skills: [
             'orchestrator', 'orchestrator-refresh', 'team-advisor', 'grokify',
+            'grok-spawn',
             'anthropic-plan', 'everything-search',
             'privacy-hygiene',
             'recall', 'remember', 'task-build'

@@ -8,7 +8,10 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 |---|---|
 | `claude_chain_runner.py` | Runs a `claude` invocation through a config-driven fallback chain (`~/.claude/claude-chain.json`): the leading binary serves the call, and only a usage-limit failure falls over to the next logged-in binary; usable as an imported module (`run_claude`) or a CLI. Copy `claude-chain.example.json` to `~/.claude/claude-chain.json` and list your binaries in fallback order |
 | `gh_artifact_upload.py` | Uploads a file to a repo's durable `artifacts` prerelease under a timestamped asset name and prints the permanent download URL a GitHub post can link |
+| `grok_headless_runner.py` | Runs one worker as headless `grok`: builds argv, mints a unique leader socket, captures streams, kills on timeout with grace, classifies ok/usage_limit/auth_failure/timeout/error; imported by `spawn_grok_batch.py` |
+| `grok_worker_preflight.py` | Soft gate for the headless grok tier: binary on PATH, `grok models` auth, install manifest + role agents, opt-in cached live ping; non-zero exit is fallthrough, not failure |
 | `setup_project_paths.py` | One-time bootstrap: discovers git repos via `es.exe` (Everything) and writes `~/.claude/project-paths.json`; never hardcodes scan roots |
+| `spawn_grok_batch.py` | Launches a fleet of headless grok workers from a JSON batch spec: gates once through the preflight, assembles each prompt from part files, staggers starts, runs each through `grok_headless_runner.py`, and emits one batch summary JSON |
 | `sweep_empty_dirs.py` | Deletes empty directories older than a configurable age under a given root; runs once (`--once`) or in continuous-watch mode |
 | `sync_to_cursor.py` | Entry point for syncing Claude rules to Cursor `.mdc` files; delegates to the `sync_to_cursor/` package |
 | `resolve_worker_spawn.py` | Dispatches a worker role through grok then claude fallback tiers (preflight, headless grok, `claude_agent_required` handoff, optional claude headless); protocol: [`../_shared/pr-loop/worker-spawn.md`](../_shared/pr-loop/worker-spawn.md) |

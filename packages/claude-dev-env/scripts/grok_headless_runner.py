@@ -36,6 +36,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     CLASSIFICATION_AUTH_FAILURE,
     CLASSIFICATION_ERROR,
     CLASSIFICATION_OK,
+    CLASSIFICATION_STREAM_JOIN_SEPARATOR,
     CLASSIFICATION_TIMEOUT,
     CLASSIFICATION_USAGE_LIMIT,
     CWD_FLAG,
@@ -92,6 +93,7 @@ def _build_invocation(
     max_turns: int,
     leader_socket_path: Path,
     agent_name: str | None,
+    all_extra_arguments: tuple[str, ...] = (),
 ) -> list[str]:
     all_arguments = [
         GROK_BINARY_NAME,
@@ -111,11 +113,14 @@ def _build_invocation(
         all_arguments.extend([AGENT_FLAG, agent_name])
     if GROK_MODEL_PIN:
         all_arguments.extend([MODEL_FLAG, GROK_MODEL_PIN])
+    all_arguments.extend(all_extra_arguments)
     return all_arguments
 
 
 def _combined_text(stdout_text: str, stderr_text: str) -> str:
-    return f"{stdout_text}{stderr_text}".lower()
+    return CLASSIFICATION_STREAM_JOIN_SEPARATOR.join(
+        (stdout_text, stderr_text)
+    ).lower()
 
 
 def _matches_any_signature(combined_text: str, all_signatures: tuple[str, ...]) -> bool:
@@ -252,26 +257,38 @@ def run_headless_worker(
     max_turns: int,
     timeout_seconds: int,
     agent_name: str | None = None,
+    leader_socket_path: Path | None = None,
+    all_extra_arguments: tuple[str, ...] = (),
 ) -> GrokRunnerOutcome:
     """Run one headless grok worker and classify the process outcome.
 
     Args:
         prompt_file: Path to the prompt file passed via ``--prompt-file``.
         working_directory: Working directory passed via ``--cwd``.
-        run_state_directory: Run-scoped directory for the unique leader socket.
+        run_state_directory: Run-scoped directory the leader socket is minted
+            under. Read only when ``leader_socket_path`` is omitted.
         max_turns: Maximum agent turns passed via ``--max-turns``.
         timeout_seconds: Seconds before the process is killed on expiry.
         agent_name: Optional role agent name passed via ``--agent``.
+        leader_socket_path: Optional pre-minted leader socket path. When omitted,
+            a unique path is minted under ``run_state_directory``.
+        all_extra_arguments: Extra CLI tokens appended after the base argv
+            (tool-profile flags, debug file, and similar).
 
     Returns:
         The classified outcome including return code and captured streams.
     """
-    leader_socket_path = _mint_leader_socket_path(run_state_directory)
+    resolved_leader_socket_path = (
+        leader_socket_path
+        if leader_socket_path is not None
+        else _mint_leader_socket_path(run_state_directory)
+    )
     all_arguments = _build_invocation(
         prompt_file=prompt_file,
         working_directory=working_directory,
         max_turns=max_turns,
-        leader_socket_path=leader_socket_path,
+        leader_socket_path=resolved_leader_socket_path,
         agent_name=agent_name,
+        all_extra_arguments=all_extra_arguments,
     )
     return _invoke_process(all_arguments, timeout_seconds=timeout_seconds)
