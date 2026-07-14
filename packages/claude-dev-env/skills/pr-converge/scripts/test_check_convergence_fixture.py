@@ -178,3 +178,69 @@ def should_fail_closed_when_thread_and_pending_keys_missing(tmp_path: Path) -> N
     fixture = check_convergence._load_convergence_fixture(fixture_path)
     assert fixture.is_zero_unresolved_bot_threads is False
     assert fixture.is_no_pending_reviews is False
+
+
+def should_never_call_probes_on_fixture_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture_path = _write_passing_fixture(tmp_path)
+    probe_call_count = 0
+
+    def _refuse_probe(*_all_args: object, **_all_keywords: object) -> object:
+        nonlocal probe_call_count
+        probe_call_count += 1
+        raise RuntimeError("probe must not run on fixture path")
+
+    availability_module = sys.modules.get("check_convergence_availability")
+    if availability_module is None:
+        import check_convergence_availability as availability_module
+    monkeypatch.setattr(availability_module, "evaluate_copilot_quota", _refuse_probe)
+    monkeypatch.setattr(
+        check_convergence, "_resolve_bugbot_waiver", _refuse_probe
+    )
+    monkeypatch.setattr(
+        check_convergence, "_resolve_copilot_waiver", _refuse_probe
+    )
+    exit_code = check_convergence.main(
+        [
+            "--owner",
+            "jl-cmd",
+            "--repo",
+            "claude-dev-env",
+            "--pr-number",
+            "53",
+            "--fixture",
+            str(fixture_path),
+            "--bugbot-down",
+            "--copilot-down",
+        ]
+    )
+    assert exit_code == 0
+    assert probe_call_count == 0
+    assert "All pre-conditions met" in capsys.readouterr().out
+
+
+def should_ignore_hostile_reviews_disabled_env_on_fixture_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture_path = _write_passing_fixture(tmp_path)
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "copilot,bugbot,bugteam")
+    exit_code = check_convergence.main(
+        [
+            "--owner",
+            "jl-cmd",
+            "--repo",
+            "claude-dev-env",
+            "--pr-number",
+            "53",
+            "--fixture",
+            str(fixture_path),
+            "--bugbot-down",
+        ]
+    )
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert "bypassed (copilot_down)" not in captured
+    assert "fixture has no copilot review" in captured
+    assert "bypassed (bugbot_down)" in captured
+

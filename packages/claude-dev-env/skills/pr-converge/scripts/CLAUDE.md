@@ -8,6 +8,7 @@ Python helper scripts for the `pr-converge` skill, plus their tests and a PowerS
 |---|---|
 | `check_bugbot_ci.py` | Checks bugbot CI check-run status on a given SHA |
 | `check_convergence.py` | Evaluates whether all convergence gates pass on the current HEAD |
+| `check_convergence_availability.py` | Resolves reviewer waivers from flag, disk-authoritative settings (env fallback), and the availability/quota probe, with waived / enforced / probe_error_reason states |
 | `check_convergence_gates.py` | GitHub REST leaf checks (review and Bugbot) the convergence gates call |
 | `check_convergence_thread_gates.py` | GitHub GraphQL and REST leaf checks (review threads and pending reviewers) the convergence gates call |
 | `check_pending_reviews.py` | Fetches pending review requests and reviewer states |
@@ -19,6 +20,7 @@ Python helper scripts for the `pr-converge` skill, plus their tests and a PowerS
 | `conftest.py` | Puts the scripts directory on `sys.path` so pytest collects the suite |
 | `test_check_bugbot_ci.py` | Tests for `check_bugbot_ci.py` |
 | `test_check_convergence.py` | Tests for `check_convergence.py` |
+| `test_check_convergence_availability.py` | Tests for `check_convergence_availability.py` |
 | `test_check_convergence_contract.py` | Contract pins for `check_convergence.py` gate wiring |
 | `test_check_convergence_gates.py` | Tests for `check_convergence_gates.py` |
 | `test_check_convergence_thread_gates.py` | Tests for `check_convergence_thread_gates.py` |
