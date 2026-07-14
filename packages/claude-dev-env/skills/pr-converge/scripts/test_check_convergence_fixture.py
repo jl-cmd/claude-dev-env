@@ -165,3 +165,15 @@ def should_load_convergence_fixture_from_disk(tmp_path: Path) -> None:
     assert fixture.head_sha == HEAD_SHA
     assert fixture.pr_object["mergeable"] is True
     assert len(fixture.reviews) == 1
+
+
+def should_reject_fixture_missing_safety_gate_flags(tmp_path: Path) -> None:
+    fixture_path = tmp_path / "missing-safety-flags.json"
+    payload = {
+        "head_sha": HEAD_SHA,
+        "pr_object": {"mergeable": True, "mergeable_state": "clean"},
+        "reviews": [{"id": 1, "body": CLEAN_BODY, "commit_id": HEAD_SHA}],
+    }
+    fixture_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError):
+        check_convergence._load_convergence_fixture(fixture_path)
