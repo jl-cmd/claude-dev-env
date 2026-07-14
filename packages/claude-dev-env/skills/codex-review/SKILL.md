@@ -21,7 +21,7 @@ Respond with the quoted line exactly and stop:
 
 - Opt-out gate exit 0: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
 - Version or shape probe reports Codex unavailable: `/codex-review cannot run: Codex CLI is missing or the shape probe failed.`
-- Wrapper classifies `down`: `/codex-review cannot complete: Codex reviewer is down.`
+- Skill class is `down` (wrapper `outcome_class` is `codex_down`): `/codex-review cannot complete: Codex reviewer is down.`
 
 ## Sub-skills
 
