@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
-import shutil
 import subprocess
 import sys
 import threading
@@ -20,7 +18,6 @@ from types import ModuleType
 import pytest
 from codex_review_scripts_constants.codex_usage_probe_constants import (
     EXIT_CODE_SUCCESS,
-    PERCENT_EMPTY,
     PERCENT_FULL,
     READER_THREAD_JOIN_TIMEOUT_SECONDS,
     SOURCE_APP_SERVER_RATE_LIMITS,
