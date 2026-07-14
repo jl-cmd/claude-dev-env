@@ -248,6 +248,18 @@ def parse_rate_limits_message(message_text: str) -> UsageReport:
     return _parse_rate_limits_snapshot(all_rate_limit_fields)
 
 
+def _text_status_report(percent_left: float, status_text: str) -> UsageReport:
+    reset_match = re.search(TEXT_WINDOW_RESET_PATTERN, status_text)
+    window_reset = (
+        reset_match.group("reset").strip() if reset_match is not None else None
+    )
+    return {
+        USAGE_REPORT_KEY_PERCENT_LEFT: percent_left,
+        USAGE_REPORT_KEY_WINDOW_RESET: window_reset,
+        USAGE_REPORT_KEY_SOURCE: SOURCE_TEXT_STATUS,
+    }
+
+
 def parse_text_usage_status(status_text: str) -> UsageReport:
     """Parse human status text for a weekly percent remaining.
 
@@ -260,29 +272,13 @@ def parse_text_usage_status(status_text: str) -> UsageReport:
     left_match = re.search(TEXT_WEEKLY_PERCENT_LEFT_PATTERN, status_text)
     if left_match is not None:
         percent_left = _clamp_percent(float(left_match.group("percent")))
-        reset_match = re.search(TEXT_WINDOW_RESET_PATTERN, status_text)
-        window_reset = (
-            reset_match.group("reset").strip() if reset_match is not None else None
-        )
-        return {
-            USAGE_REPORT_KEY_PERCENT_LEFT: percent_left,
-            USAGE_REPORT_KEY_WINDOW_RESET: window_reset,
-            USAGE_REPORT_KEY_SOURCE: SOURCE_TEXT_STATUS,
-        }
+        return _text_status_report(percent_left, status_text)
     used_match = re.search(TEXT_WEEKLY_USED_PERCENT_PATTERN, status_text)
     if used_match is not None:
         percent_left = _clamp_percent(
             float(PERCENT_FULL) - float(used_match.group("percent"))
         )
-        reset_match = re.search(TEXT_WINDOW_RESET_PATTERN, status_text)
-        window_reset = (
-            reset_match.group("reset").strip() if reset_match is not None else None
-        )
-        return {
-            USAGE_REPORT_KEY_PERCENT_LEFT: percent_left,
-            USAGE_REPORT_KEY_WINDOW_RESET: window_reset,
-            USAGE_REPORT_KEY_SOURCE: SOURCE_TEXT_STATUS,
-        }
+        return _text_status_report(percent_left, status_text)
     return _null_usage_report()
 
 
@@ -358,12 +354,6 @@ def _usage_report_from_server_lines(all_server_lines: Sequence[str]) -> UsageRep
     for each_line in all_server_lines:
         usage_report = parse_rate_limits_message(each_line)
         if usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] is not None:
-            return usage_report
-        if usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_APP_SERVER_RATE_LIMITS:
-            return usage_report
-    for each_line in all_server_lines:
-        usage_report = parse_rate_limits_message(each_line)
-        if RATE_LIMITS_KEY in each_line:
             return usage_report
     return _null_usage_report()
 
