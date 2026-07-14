@@ -16,13 +16,16 @@ One Codex review pass per invocation. The skill owns sequence and skill-level cl
 | `scripts/run_codex_review.py` | Headless capture wrapper: probes, single-target argv, JSONL capture, `completed` / `codex_down`. |
 | `scripts/test_run_codex_review.py` | Behavioral tests for `run_codex_review`. |
 | `scripts/codex_review_scripts_constants/run_constants.py` | Named constants package for skill scripts: binary name, flags, prompt, probe pattern, timeout, exit sentinels, JSONL keys, capture outcome labels. |
+| `scripts/codex_usage_probe.py` | Weekly usage probe CLI: app-server rate-limits read, null-on-unknown JSON report. |
+| `scripts/test_codex_usage_probe.py` | Unit tests for the weekly usage probe and gate helper. |
+| `scripts/codex_review_scripts_constants/codex_usage_probe_constants.py` | Named constants for the weekly usage probe. |
 
 ## Subdirectories
 
 | Directory | Role |
 |---|---|
 | `reference/` | Progressive-disclosure pages for cli-contract and loop-integration. |
-| `scripts/` | Capture wrapper, tests, and constants package. |
+| `scripts/` | Capture wrapper, weekly usage probe, tests, and constants package. |
 
 ## Environment opt-out
 
@@ -38,4 +41,4 @@ Set `CLAUDE_REVIEWS_DISABLED=codex` to disable. This package does not re-parse `
 
 ## Scripts surface
 
-`scripts/` holds the capture wrapper (`run_codex_review.py`), its tests, and named constants. The wrapper returns capture fields only (`completed` / `codex_down`); agents map those fields to skill classes via the skill-class map. Classify only from a `codex exec … review --json` JSONL stream; do not invent a non-JSONL parse.
+`scripts/` holds the capture wrapper (`run_codex_review.py`), the weekly usage probe (`codex_usage_probe.py`), their tests, and named constants. The wrapper returns capture fields only (`completed` / `codex_down`); agents map those fields to skill classes via the skill-class map. Classify only from a `codex exec … review --json` JSONL stream; do not invent a non-JSONL parse.

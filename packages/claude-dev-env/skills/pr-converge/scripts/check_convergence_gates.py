@@ -28,6 +28,7 @@ from pr_converge_skill_constants.constants import (
 )
 from pr_converge_scripts_constants.convergence_gate_constants import (
     MERGEABLE_STATE_CLEAN,
+    REVIEW_SUBMITTED_AT_KEY,
     SHORT_SHA_LENGTH,
 )
 
@@ -66,8 +67,13 @@ def _get_pr_head_sha(*, owner: str, repo: str, number: int) -> str:
     if returncode != 0:
         sys.stderr.write(f"gh api error fetching PR object: {stdout}\n")
         raise SystemExit(EXIT_CODE_GH_ERROR)
-    pr_object = json.loads(stdout)
-    head_sha: object = pr_object.get("head", {}).get("sha")
+    try:
+        pr_object = json.loads(stdout)
+    except json.JSONDecodeError as decode_error:
+        sys.stderr.write(f"gh api PR object not valid JSON: {stdout}\n")
+        raise SystemExit(EXIT_CODE_GH_ERROR) from decode_error
+    head_object = pr_object.get("head") if isinstance(pr_object, dict) else None
+    head_sha: object = head_object.get("sha") if isinstance(head_object, dict) else None
     if not isinstance(head_sha, str):
         raise SystemExit(EXIT_CODE_GH_ERROR)
     return head_sha
@@ -98,7 +104,10 @@ def _get_mergeable(*, owner: str, repo: str, number: int) -> tuple[bool, str]:
     returncode, stdout = _gh_api(endpoint)
     if returncode != 0:
         return False, f"gh api error: {stdout}"
-    pr_object = json.loads(stdout)
+    try:
+        pr_object = json.loads(stdout)
+    except json.JSONDecodeError:
+        return False, "gh api PR object not valid JSON"
     if not isinstance(pr_object, dict):
         return False, "unknown"
     return _evaluate_mergeable_from_pr_object(pr_object)
@@ -151,6 +160,25 @@ def _check_bugbot(*, owner: str, repo: str, sha: str) -> tuple[bool, str]:
     return False, "no bugbot check run found"
 
 
+def _sort_reviews_newest_first(all_reviews: list[JsonObject]) -> list[JsonObject]:
+    """Return the reviews ordered newest-first by submission time.
+
+    The live gh path and the offline fixture path both feed the same
+    newest-first evaluators, so both order their reviews through here.
+
+    Args:
+        all_reviews: Review objects in any order.
+
+    Returns:
+        A new list ordered newest-first; a review with no submitted_at sorts last.
+    """
+    return sorted(
+        all_reviews,
+        key=lambda each_review: str(each_review.get(REVIEW_SUBMITTED_AT_KEY, "")),
+        reverse=True,
+    )
+
+
 def _flatten_paginated_reviews(stdout: str) -> list[JsonObject] | None:
     """Flatten a slurped, paginated reviews payload into a newest-first list."""
     try:
@@ -166,10 +194,7 @@ def _flatten_paginated_reviews(stdout: str) -> list[JsonObject] | None:
         for each_entry in each_page
         if isinstance(each_entry, dict)
     ]
-    all_flat.sort(
-        key=lambda each_review: str(each_review.get("submitted_at", "")), reverse=True
-    )
-    return all_flat
+    return _sort_reviews_newest_first(all_flat)
 
 
 def _review_matches_login(review: JsonObject, login_substring: str) -> bool:

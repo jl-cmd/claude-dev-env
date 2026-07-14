@@ -162,10 +162,16 @@ Claude: [same flow; after findings, applies pr-fix-protocol, then re-runs the cl
 | `scripts/run_codex_review.py` | Headless capture wrapper (`run_codex_review`) |
 | `scripts/test_run_codex_review.py` | Behavioral tests for the capture wrapper |
 | `scripts/codex_review_scripts_constants/run_constants.py` | Importable named constants for the capture wrapper |
+| `scripts/codex_usage_probe.py` | Weekly usage probe CLI (`percent_left`, `window_reset`, `source`) |
+| `scripts/test_codex_usage_probe.py` | Probe unit tests (app-server fixtures and gate helper) |
+| `scripts/codex_review_scripts_constants/codex_usage_probe_constants.py` | Named constants for the weekly usage probe |
 
 ## Folder map
 
 - `SKILL.md` — orchestration steps and refusals.
 - `CLAUDE.md` — purpose, trigger, key files.
 - `reference/` — stable homes for cli-contract and loop-integration detail.
-- `scripts/` — capture wrapper, tests, and constants package.
+- `scripts/` — capture wrapper, weekly usage probe, tests, and constants package.
+- `scripts/run_codex_review.py` — headless capture wrapper entrypoint.
+- `scripts/codex_usage_probe.py` — weekly usage probe entrypoint.
+- `scripts/codex_review_scripts_constants/` — importable constants package for skill scripts.
