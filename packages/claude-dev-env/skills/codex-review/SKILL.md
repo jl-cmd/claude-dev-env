@@ -81,19 +81,19 @@ Do not invent a synthetic commit range when a base branch is available. Loop-cal
 Run the Codex review wrapper against the chosen target.
 
 - **Contract owner:** [reference/cli-contract.md](reference/cli-contract.md) — wrapper entrypoint, required arguments (target, repo root, optional PR metadata), stdout/stderr shape, and exit codes.
-- **This skill's job:** pass the Step 2 target and collect the wrapper's structured outcome for classification. Do not parse raw Codex output inline; the wrapper (and its parser) own that boundary.
+- **This skill's job:** pass the Step 2 target and collect the wrapper outcome (`outcome_class`, `agent_message`, paths). Do not re-parse raw Codex streams by hand.
 
 ### Step 4: Classify outcome
 
-Map the wrapper result to exactly one class:
+Map the wrapper result plus the findings parser to exactly one class:
 
 | Class | Meaning | Next action |
 |---|---|---|
-| `down` | Codex did not produce a usable review (tool failure, auth, crash) | Refuse with the down line; stop |
-| `clean` | Review completed with no findings against the target | Report one-line clean summary; stop |
-| `findings` | Review completed with one or more addressable findings | Continue to Step 5 |
+| `down` | Wrapper `outcome_class` is `codex_down` (tool failure, auth, crash) | Refuse with the down line; stop |
+| `clean` | Wrapper completed and the findings list has no addressable items | Report one-line clean summary; stop |
+| `findings` | Wrapper completed and freeform or structured findings name a defect | Continue to Step 5 |
 
-Classification rules and payload fields for each class live in [reference/cli-contract.md](reference/cli-contract.md).
+`run_codex_review` returns `completed` or `codex_down` plus captured text. `parse_codex_findings` turns `agent_message` into the findings list. Empty list or a sole floor finding with empty title/priority/file (clean prose with no freeform bullets and no structured array) is `clean`. Freeform `- [P*]` lines or structured finding objects are `findings`. Wrapper I/O and class mapping live in [reference/cli-contract.md](reference/cli-contract.md).
 
 ### Step 5: Route findings into the shared fix protocol
 
@@ -132,8 +132,8 @@ Claude: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
 
 ## Gotchas
 
-- **`--reviewer codex` is the opt-out token.** The shared gate must list `codex` among known reviewers for Step 0 to accept the flag; until that token ships, treat a gate parse failure as a blocker and stop rather than skipping the gate.
-- **Raw Codex CLI output is not the findings format.** Only the wrapper's classified payload enters Step 5.
+- **`--reviewer codex` is the opt-out token.** `reviews_disabled.py --reviewer codex` accepts the `codex` token. Exit 0 refuses the skill; exit 1 continues.
+- **Raw Codex CLI output is not the findings format.** Step 4 maps the wrapper outcome and `parse_codex_findings` output into `down` / `clean` / `findings` before Step 5.
 - **Uncommitted targets have no review threads.** Fix protocol reply-and-resolve applies only when a PR carries threads; local-only runs stop after the fix commit path the protocol allows without a PR.
 
 ## File index
@@ -144,7 +144,7 @@ Claude: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
 | `CLAUDE.md` | Package map for agents opening this skill |
 | `reference/cli-contract.md` | CLI probe, wrapper, and classification contracts |
 | `reference/loop-integration.md` | PR-loop target pick and re-entry after fixes |
-| `scripts/run_codex_review.py` | Wrapper entrypoint: invoke Codex, classify outcome |
+| `scripts/run_codex_review.py` | Wrapper entrypoint: invoke Codex; return completed or codex_down plus agent_message |
 | `scripts/parse_codex_findings.py` | Parse reviewer text into structured or freeform findings |
 | `scripts/codex_down_classifier.py` | Map wrapper failures to the `down` class |
 | `scripts/codex_usage_probe.py` | Weekly usage probe for the conditional Codex gate |
