@@ -56,6 +56,34 @@ AUDIT_RUBRIC_REFERENCE_TEXT = (
     "Read the rubric files before auditing."
 )
 
+AUDIT_PROMPT_FLAVOR_AGENT = "agent"
+AUDIT_PROMPT_FLAVOR_HEADLESS = "headless"
+ALL_AUDIT_PROMPT_FLAVORS = frozenset({
+    AUDIT_PROMPT_FLAVOR_AGENT,
+    AUDIT_PROMPT_FLAVOR_HEADLESS,
+})
+
+AUDIT_COMMENT_POSTING_AGENT_TEXT = (
+    "Post findings as inline review comments on the PR via "
+    "the GitHub MCP add_comment_to_pending_review tool. "
+    "Group related findings into a single pending review."
+)
+AUDIT_COMMENT_POSTING_HEADLESS_TEXT = (
+    "Do not post reviews or comments. Use gh only when you must read "
+    "PR metadata. Write findings into the outcome XML named in "
+    "<output_format>. The lead session posts the review with "
+    "post_audit_thread.py after the worker exits."
+)
+AUDIT_OUTPUT_FORMAT_AGENT_TEXT = (
+    "Emit findings as JSON array of objects with keys: "
+    "severity (P0/P1/P2), file, line, category, message, suggestion."
+)
+AUDIT_OUTPUT_FORMAT_HEADLESS_TEMPLATE = (
+    "Write the complete audit outcome XML to {outcome_path}. "
+    "Leave review_url empty when the lead posts after you exit. "
+    "Do not use TaskCreate, MCP tools, or Artifact tools."
+)
+
 ALL_FIX_EXECUTION_STEPS = [
     "Read the finding and verify it against the current file at file:line.",
     "Write a failing test that reproduces the bug.",

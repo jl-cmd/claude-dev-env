@@ -116,23 +116,67 @@ Repeat until an exit condition fires.
 
 ## AUDIT action
 
-Spawn one audit agent that walks all A–P categories:
+Walk all A–P categories through the worker-spawn dispatcher
+([`worker-spawn.md`](../../../_shared/pr-loop/worker-spawn.md)). Every loop
+is a fresh process or a fresh agent context.
 
-```
-Agent(
-  subagent_type="code-quality-agent",
-  name="bugfind-pr<N>-loop<L>",
-  model="opus",
-  run_in_background=true,
-  description="Audit {owner}/{repo}#{N} loop {L}",
-  prompt="<output of build_audit_prompt.py; see ../../_shared/pr-loop/scripts/build_audit_prompt.py>"
-)
-```
+1. **Build the headless audit prompt** and write it to a prompt file under the
+   per-PR workspace:
+
+   ```bash
+   python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/build_audit_prompt.py" \
+     --owner <O> --repo <R> --pr-number <N> --loop <L> \
+     --head-ref <head> --base-ref <base> \
+     --worktree-path <worktree_path> --run-temp-dir <run_temp_dir> \
+     --flavor headless \
+     > "${run_temp_dir}/pr-<N>/loop-<L>.audit-prompt.xml"
+   ```
+
+   Optional: `--pr-body-file <path>` when the PR body is available on disk.
+
+2. **Dispatch** via
+   [`resolve_worker_spawn.py`](../../../scripts/resolve_worker_spawn.py). Role
+   `bugteam` maps to primary agent `code-quality-agent`:
+
+   ```bash
+   python "${CLAUDE_SKILL_DIR}/../../../scripts/resolve_worker_spawn.py" \
+     --role bugteam \
+     --prompt-file "${run_temp_dir}/pr-<N>/loop-<L>.audit-prompt.xml" \
+     --cwd <worktree_path> \
+     --run-temp-dir <run_temp_dir>
+   ```
+
+   The lead **blocks on the process** and reads the stdout JSON result.
+
+3. **Follow the result:**
+
+   - **Tier 1 or 3 served** (`tier_used` is `1` or `3`, exit `0`): the
+     dispatcher ran the worker to completion. Read the outcome XML at
+     `<worktree_path>/.bugteam-pr<N>-loop<L>.outcomes.xml`. The **lead**
+     posts the audit review with
+     [`post_audit_thread.py`](../../../_shared/pr-loop/scripts/post_audit_thread.py)
+     (see [SKILL.md § Audit posting](../SKILL.md#audit-posting)).
+   - **`claude_agent_required`** (exit `2`, attempts include tier `2` with
+     that reason): rebuild the prompt with default `--flavor agent` (omit
+     `--flavor` or pass `agent`) and spawn the Agent-tool worker, including
+     in-worker posting:
+
+     ```
+     Agent(
+       subagent_type="code-quality-agent",
+       name="bugfind-pr<N>-loop<L>",
+       model="opus",
+       run_in_background=true,
+       description="Audit {owner}/{repo}#{N} loop {L}",
+       prompt="<output of build_audit_prompt.py --flavor agent>"
+     )
+     ```
 
 The audit prompt XML is emitted by
 [`build_audit_prompt.py`](../../_shared/pr-loop/scripts/build_audit_prompt.py).
-Run it with `--owner --repo --pr-number --loop --head-ref --base-ref --worktree-path --run-temp-dir`
-to generate the complete `<spawn_prompt>` XML on stdout.
+`--flavor headless` targets the dispatcher path (gh reads, outcome file, no
+MCP/TaskCreate/Artifact). Default `--flavor agent` targets the Agent-tool
+path (MCP posting).
 
 `last_action = "audited"`. Append audit metadata to `audit_log`.
 
