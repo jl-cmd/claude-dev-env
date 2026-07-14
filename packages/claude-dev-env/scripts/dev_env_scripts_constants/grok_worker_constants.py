@@ -125,7 +125,8 @@ ALL_USAGE_EXHAUSTION_SIGNATURES: tuple[str, ...] = ALL_USAGE_LIMIT_SIGNATURES
 """Alias used by the preflight soft gate for the same usage-limit signatures."""
 
 ALL_AUTH_FAILURE_SIGNATURES: tuple[str, ...] = (
-    "401",
+    "http 401",
+    "status 401",
     "unauthorized",
     "invalid key",
     "not logged in",

@@ -1,4 +1,4 @@
-"""Timing constants for sweep_empty_dirs.
+"""Timing constants for sweep_empty_dirs and the grok batch launcher.
 
 Per the project's configuration conventions, timeouts, delays, and retries
 live in dev_env_scripts_constants/timing.py.
