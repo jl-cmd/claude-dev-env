@@ -264,8 +264,8 @@ pushed commits during its run. `current_head` from Step 1 is stale:
    If `new_head != current_head`, set `current_head = new_head` and reset
    push-invalidated markers per [ground-rules.md](ground-rules.md) /
    [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
-   `bugbot_down`, `bugbot_acknowledged_at`). New commits invalidate prior
-   clean and down-detection state.
+   `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`). New commits
+   invalidate prior clean and down-detection state.
 
 c. Inspect bugteam outcome. Reports `convergence (zero findings)` or list
 of unfixed findings with file:line.
