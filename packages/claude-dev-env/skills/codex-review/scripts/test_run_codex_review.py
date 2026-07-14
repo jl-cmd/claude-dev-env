@@ -20,7 +20,6 @@ from codex_review_scripts_constants.run_constants import (  # noqa: E402
     BASE_TARGET_FLAG,
     CODEX_BINARY_NAME,
     CODEX_HOME_ENV_VAR,
-    CODEX_MODEL_PIN,
     COMMIT_TARGET_FLAG,
     CUSTOM_INSTRUCTIONS_PROMPT,
     DEFAULT_TIMEOUT_SECONDS,
@@ -33,8 +32,10 @@ from codex_review_scripts_constants.run_constants import (  # noqa: E402
     OUTCOME_CLASS_CODEX_DOWN,
     OUTCOME_CLASS_COMPLETED,
     REVIEW_SUBCOMMAND,
+    SUBPROCESS_DECODE_EXIT_CODE,
     TIMEOUT_EXIT_CODE,
     UNCOMMITTED_TARGET_FLAG,
+    UTF8_ENCODING,
     VERSION_FLAG,
 )
 
@@ -342,6 +343,48 @@ def test_shape_probe_missing_target_flags_returns_codex_down(
         assert each_required_flag in HELP_TEXT_WITH_TARGETS
 
 
+def test_shape_probe_lookalike_flags_do_not_match_required_tokens(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_directory = tmp_path / "repo"
+    repository_directory.mkdir()
+    run_state_directory = tmp_path / "run_state"
+    run_state_directory.mkdir()
+    lookalike_help_text = (
+        "Usage: codex exec review [OPTIONS]\n"
+        "      --baseline <BRANCH>\n"
+        "      --commit-message <TEXT>\n"
+        "      --uncommitted-only\n"
+    )
+
+    def behavior(
+        all_arguments: list[str],
+    ) -> subprocess.CompletedProcess[str] | BaseException:
+        if _is_version_probe(all_arguments):
+            return _completed(all_arguments, 0, stdout=VERSION_STDOUT)
+        if _is_shape_probe(all_arguments):
+            return _completed(all_arguments, 0, stdout=lookalike_help_text)
+        raise AssertionError("review must not run after a failed shape probe")
+
+    recorder = _install_recorder(monkeypatch, behavior)
+
+    review_outcome = wrapper.run_codex_review(
+        repository_directory=repository_directory,
+        run_state_directory=run_state_directory,
+        is_uncommitted=True,
+    )
+
+    assert review_outcome.outcome_class == OUTCOME_CLASS_CODEX_DOWN
+    assert review_outcome.exit_code == 0
+    assert review_outcome.jsonl_path is None
+    assert not any(
+        _is_review_run(each_invocation)
+        for each_invocation in recorder.all_invocations
+    )
+    for each_required_flag in ALL_SHAPE_PROBE_REQUIRED_FLAGS:
+        assert each_required_flag in lookalike_help_text
+
+
 def test_shape_probe_nonzero_help_returns_codex_down(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -437,7 +480,34 @@ def test_jsonl_capture_and_agent_message_extraction(
     assert review_keyword_arguments["timeout"] == DEFAULT_TIMEOUT_SECONDS
     assert review_keyword_arguments["capture_output"] is True
     assert review_keyword_arguments["text"] is True
+    assert review_keyword_arguments["encoding"] == UTF8_ENCODING
     assert review_keyword_arguments["check"] is False
+
+
+def test_unicode_decode_error_returns_codex_down(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_directory = tmp_path / "repo"
+    repository_directory.mkdir()
+    run_state_directory = tmp_path / "run_state"
+    run_state_directory.mkdir()
+
+    def behavior(
+        all_arguments: list[str],
+    ) -> subprocess.CompletedProcess[str] | BaseException:
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    _install_recorder(monkeypatch, behavior)
+
+    review_outcome = wrapper.run_codex_review(
+        repository_directory=repository_directory,
+        run_state_directory=run_state_directory,
+        is_uncommitted=True,
+    )
+
+    assert review_outcome.outcome_class == OUTCOME_CLASS_CODEX_DOWN
+    assert review_outcome.exit_code == SUBPROCESS_DECODE_EXIT_CODE
+    assert review_outcome.jsonl_path is None
 
 
 def test_timeout_returns_codex_down(
@@ -535,9 +605,35 @@ def test_rejects_missing_target(
     assert recorder.all_invocations == []
 
 
-def test_model_pin_constant_is_empty_by_default() -> None:
-    assert CODEX_MODEL_PIN == ""
-    assert MODEL_FLAG == "-m"
+def test_model_pin_assembles_model_flag_before_review_subcommand(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_directory = tmp_path / "repo"
+    repository_directory.mkdir()
+    run_state_directory = tmp_path / "run_state"
+    run_state_directory.mkdir()
+    model_pin = "gpt-5-codex"
+    monkeypatch.setattr(wrapper, "CODEX_MODEL_PIN", model_pin)
+    recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
+
+    wrapper.run_codex_review(
+        repository_directory=repository_directory,
+        run_state_directory=run_state_directory,
+        is_uncommitted=True,
+    )
+
+    review_invocation = next(
+        each_invocation
+        for each_invocation in recorder.all_invocations
+        if _is_review_run(each_invocation)
+    )
+    model_flag_index = review_invocation.index(MODEL_FLAG)
+    review_subcommand_index = review_invocation.index(REVIEW_SUBCOMMAND)
+    assert review_invocation[model_flag_index : model_flag_index + 2] == [
+        MODEL_FLAG,
+        model_pin,
+    ]
+    assert model_flag_index < review_subcommand_index
 
 
 def test_review_exit_1_config_error_classifies_codex_down(

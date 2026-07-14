@@ -43,6 +43,8 @@ from codex_review_scripts_constants.run_constants import (
     OUTCOME_CLASS_CODEX_DOWN,
     OUTCOME_CLASS_COMPLETED,
     REVIEW_SUBCOMMAND,
+    SHAPE_FLAG_TOKEN_TAIL_PATTERN,
+    SUBPROCESS_DECODE_EXIT_CODE,
     TIMEOUT_EXIT_CODE,
     UNCOMMITTED_TARGET_FLAG,
     UTF8_ENCODING,
@@ -68,11 +70,15 @@ class CodexReviewOutcome:
         )
 
     Attributes:
-        outcome_class: ``completed`` or ``codex_down``.
+        outcome_class: Capture-boundary class ``completed`` or ``codex_down``.
+            Callers treat this field as the success signal; ``exit_code`` alone
+            is not enough (a shape probe can exit 0 while flags are missing).
         exit_code: Last process exit code, or a sentinel when none ran.
         binary_version: Parsed ``codex --version`` string, or empty.
         jsonl_path: Captured JSONL path, or None when review did not run.
-        agent_message: Last agent_message text from the JSONL stream.
+        agent_message: Last JSONL ``agent_message`` text when present; on a
+            non-zero review exit, falls back to stderr text when JSONL has no
+            agent message (config and argument errors land on stderr).
     """
 
     outcome_class: str
@@ -103,6 +109,7 @@ def _run_command(
         cwd=str(working_directory) if working_directory is not None else None,
         capture_output=True,
         text=True,
+        encoding=UTF8_ENCODING,
         check=False,
         timeout=timeout_seconds,
         env=dict(os.environ),
@@ -125,6 +132,8 @@ def _safe_run(
         return MISSING_BINARY_EXIT_CODE
     except subprocess.TimeoutExpired:
         return TIMEOUT_EXIT_CODE
+    except UnicodeDecodeError:
+        return SUBPROCESS_DECODE_EXIT_CODE
 
 
 def _parse_binary_version(version_stdout: str) -> str:
@@ -159,9 +168,17 @@ def _probe_review_shape(timeout_seconds: int) -> tuple[bool, int]:
         return False, completion_or_exit.returncode
     help_text = f"{completion_or_exit.stdout}{completion_or_exit.stderr}"
     has_required_flags = all(
-        each_flag in help_text for each_flag in ALL_SHAPE_PROBE_REQUIRED_FLAGS
+        _help_text_contains_flag(help_text, each_flag)
+        for each_flag in ALL_SHAPE_PROBE_REQUIRED_FLAGS
     )
     return has_required_flags, completion_or_exit.returncode
+
+
+def _help_text_contains_flag(help_text: str, flag_name: str) -> bool:
+    flag_token_pattern = re.compile(
+        re.escape(flag_name) + SHAPE_FLAG_TOKEN_TAIL_PATTERN
+    )
+    return flag_token_pattern.search(help_text) is not None
 
 
 def _require_single_target(
@@ -295,9 +312,20 @@ def run_codex_review(
 ) -> CodexReviewOutcome:
     """Run one Codex review against a single target and capture its outputs.
 
+    Capture-only boundary: returns ``completed`` or ``codex_down`` plus raw
+    capture fields. Skill-level classes ``down`` / ``clean`` / ``findings``
+    come from a later classifier that reads this outcome.
+
+    ::
+
+        ok:   outcome_class == "completed" and exit_code == 0
+        flag: outcome_class == "codex_down" even when exit_code == 0
+              (shape probe ran, required flags missing)
+
     Args:
         repository_directory: Repository root used as the process cwd.
-        run_state_directory: Directory that receives the JSONL stream file.
+        run_state_directory: Existing directory that receives the JSONL stream
+            file. The caller creates this directory before the call.
         base_branch: Base branch for ``--base``; exclusive with other targets.
         is_uncommitted: When True, uses ``--uncommitted``.
         commit_sha: Commit SHA for ``--commit``; exclusive with other targets.
@@ -305,7 +333,9 @@ def run_codex_review(
         timeout_seconds: Per-invocation timeout; defaults from constants.
 
     Returns:
-        Outcome class, exit code, binary version, JSONL path, and agent text.
+        Capture outcome (``completed`` / ``codex_down``), process exit code,
+        binary version, JSONL path, and agent text (JSONL agent_message, or
+        stderr on a failed review when JSONL has no agent message).
 
     Raises:
         ValueError: When zero targets or more than one target is selected.

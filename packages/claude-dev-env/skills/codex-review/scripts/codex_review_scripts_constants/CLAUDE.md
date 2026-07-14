@@ -7,7 +7,7 @@ Python package of named constants imported by codex-review scripts. Importing fr
 | File | Constants for |
 |---|---|
 | `__init__.py` | Package marker and package docstring. |
-| `run_constants.py` | Binary name, flag strings, custom-instructions prompt, version-probe pattern, timeout default, JSONL keys, and outcome class labels for `run_codex_review.py`. |
+| `run_constants.py` | Binary name, flag strings, custom-instructions prompt, version-probe pattern, timeout default, decode/timeout exit sentinels, shape-flag token tail, JSONL keys, and capture outcome class labels for `run_codex_review.py`. |
 
 ## Convention
 

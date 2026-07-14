@@ -78,22 +78,25 @@ Do not invent a synthetic commit range when a base branch is available. Loop-cal
 
 ### Step 3: Invoke wrapper
 
-Run the Codex review wrapper against the chosen target.
+Call `scripts/run_codex_review.py` (`run_codex_review`) against the chosen target.
 
-- **Contract owner:** [reference/cli-contract.md](reference/cli-contract.md) — wrapper entrypoint, required arguments (target, repo root, optional PR metadata), stdout/stderr shape, and exit codes.
-- **This skill's job:** pass the Step 2 target and collect the wrapper's structured outcome for classification. Do not parse raw Codex output inline; the wrapper (and its parser) own that boundary.
+- **Contract owner:** [reference/cli-contract.md](reference/cli-contract.md) — wrapper entrypoint, required arguments (target, repo root, run-state directory), capture fields, and exit codes.
+- **Wrapper boundary (capture only):** returns `completed` or `codex_down`, plus `exit_code`, `binary_version`, `jsonl_path`, and `agent_message`. It does not emit skill classes `down` / `clean` / `findings` and does not parse findings.
+- **This skill's job:** pass the Step 2 target, ensure `run_state_directory` exists, and hand the capture outcome to Step 4. Do not parse raw Codex stdout inline outside the documented parser path.
 
 ### Step 4: Classify outcome
 
-Map the wrapper result to exactly one class:
+Map the wrapper capture to exactly one skill class:
 
-| Class | Meaning | Next action |
-|---|---|---|
-| `down` | Codex did not produce a usable review (tool failure, auth, crash) | Refuse with the down line; stop |
-| `clean` | Review completed with no findings against the target | Report one-line clean summary; stop |
-| `findings` | Review completed with one or more addressable findings | Continue to Step 5 |
+| Skill class | From wrapper | Meaning | Next action |
+|---|---|---|---|
+| `down` | `outcome_class == codex_down` | Codex did not produce a usable review (tool failure, auth, crash, shape miss) | Refuse with the down line; stop |
+| `clean` | `outcome_class == completed` and findings parse empty | Review completed with no findings against the target | Report one-line clean summary; stop |
+| `findings` | `outcome_class == completed` and findings parse non-empty | Review completed with one or more addressable findings | Continue to Step 5 |
 
-Classification rules and payload fields for each class live in [reference/cli-contract.md](reference/cli-contract.md).
+`outcome_class` is the success signal. A process `exit_code` of 0 does not mean success when the wrapper already set `codex_down` (for example a shape probe that exits 0 but lacks required flags).
+
+Classification rules, findings parse, and payload fields live in [reference/cli-contract.md](reference/cli-contract.md).
 
 ### Step 5: Route findings into the shared fix protocol
 
@@ -132,8 +135,8 @@ Claude: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
 
 ## Gotchas
 
-- **`--reviewer codex` is the opt-out token.** The shared gate must list `codex` among known reviewers for Step 0 to accept the flag; until that token ships, treat a gate parse failure as a blocker and stop rather than skipping the gate.
-- **Raw Codex CLI output is not the findings format.** Only the wrapper's classified payload enters Step 5.
+- **`--reviewer codex` is the opt-out token.** The shared gate must list `codex` among known reviewers for Step 0 to accept the flag; treat a gate parse failure as a blocker and stop rather than skipping the gate.
+- **Wrapper capture is not skill classification.** Step 5 consumes the skill-class payload from Step 4 (`down` / `clean` / `findings`), built from the wrapper's capture fields and the findings parse.
 - **Uncommitted targets have no review threads.** Fix protocol reply-and-resolve applies only when a PR carries threads; local-only runs stop after the fix commit path the protocol allows without a PR.
 
 ## File index
@@ -142,13 +145,16 @@ Claude: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
 |---|---|
 | `SKILL.md` | Hub: opt-out, probe, target, wrapper, classify, fix handoff |
 | `CLAUDE.md` | Package map for agents opening this skill |
-| `reference/cli-contract.md` | CLI probe, wrapper, and classification contracts |
+| `reference/cli-contract.md` | CLI probe, wrapper capture, and skill classification contracts |
 | `reference/loop-integration.md` | PR-loop target pick and re-entry after fixes |
-| `scripts/codex_review_scripts_constants/` | Named constants for future skill scripts |
+| `scripts/run_codex_review.py` | Headless capture wrapper (`run_codex_review`) |
+| `scripts/test_run_codex_review.py` | Behavioral tests for the capture wrapper |
+| `scripts/codex_review_scripts_constants/run_constants.py` | Named constants for the capture wrapper |
+| `scripts/codex_review_scripts_constants/` | Importable constants package for skill scripts |
 
 ## Folder map
 
 - `SKILL.md` — orchestration steps and refusals.
 - `CLAUDE.md` — purpose, trigger, key files.
 - `reference/` — stable homes for cli-contract and loop-integration detail.
-- `scripts/codex_review_scripts_constants/` — importable constants package (empty shell at scaffold).
+- `scripts/` — capture wrapper, tests, and constants package.

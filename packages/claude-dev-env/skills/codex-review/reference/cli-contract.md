@@ -79,13 +79,47 @@ Each bullet is followed by an explanation paragraph. Priority tags use the `[P1]
 
 ## Failure classes
 
-All observed failures classify as `codex_down`.
+All observed CLI failures map to wrapper `outcome_class=codex_down`.
 
 | Class | Exit | Stream | Observed message shape |
 |---|---|---|---|
 | `codex_down` | 1 | Plain text on stderr; no JSONL | Config-load rejection, e.g. `Error loading config.toml: unknown variant 'default', expected 'fast' or 'flex' in 'service_tier'` |
 | `codex_down` | 1 | JSONL on stdout | `error` event whose message embeds a 400 `invalid_request_error` JSON (`The '<model>' model is not supported when using Codex with a ChatGPT account.` / `The '<model>' model requires a newer version of Codex.`), then `item.completed` `agent_message` `Review was interrupted...`, then `turn.failed` repeating the embedded error |
 | `codex_down` | 2 | Usage text on stderr; no JSONL | Argument / CLI parse error (e.g. unexpected option after `review`) |
+
+## Wrapper capture boundary
+
+Entrypoint: `scripts/run_codex_review.py` → `run_codex_review(...)`.
+
+The wrapper is **capture only**. It returns one of two classes:
+
+| Wrapper class | Meaning |
+|---|---|
+| `completed` | Review process exited 0; JSONL stream written under `run_state_directory` |
+| `codex_down` | Binary missing, timeout, decode failure, shape miss, or non-zero review exit |
+
+Skill-level classes `down` / `clean` / `findings` are **not** produced here. The skill (Step 4) maps:
+
+| Skill class | Source |
+|---|---|
+| `down` | Wrapper `codex_down` |
+| `clean` | Wrapper `completed` and findings parse empty |
+| `findings` | Wrapper `completed` and findings parse non-empty |
+
+### Capture fields
+
+| Field | Role |
+|---|---|
+| `outcome_class` | Success signal for the capture boundary (`completed` / `codex_down`) |
+| `exit_code` | Process status only (or a sentinel). May be `0` while `outcome_class` is `codex_down` (shape probe exits 0 but required flags are missing) |
+| `binary_version` | Parsed `codex --version` string, or empty |
+| `jsonl_path` | Path to captured stdout JSONL, or `None` when review did not run |
+| `agent_message` | Last JSONL `agent_message` text when present; on non-zero review exit, falls back to stderr when JSONL has no agent message |
+
+### Caller contracts
+
+- Create `run_state_directory` before calling the wrapper; the wrapper writes `codex-review.jsonl` into that directory and does not create parents.
+- Treat `outcome_class` as the capture success signal; do not treat `exit_code == 0` alone as success.
 
 ## Auth surface
 
@@ -95,4 +129,4 @@ All observed failures classify as `codex_down`.
 
 ## Probe
 
-The wrapper probes `codex exec review --help` and treats any unrecognized shape as `codex_down`.
+The wrapper probes `codex exec review --help` and treats any unrecognized shape as `codex_down`. Required target flags (`--base`, `--uncommitted`, `--commit`) must appear as whole tokens in the help text; longer lookalikes (`--baseline`, `--uncommitted-only`, `--commit-message`) do not count.
