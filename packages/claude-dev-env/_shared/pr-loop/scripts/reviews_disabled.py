@@ -7,10 +7,11 @@
     enabled lists bugbot, disabled bugbot   -> bugbot   flag: off (opt-out wins)
     disabled empty                          -> bugteam  ok:   runs
     disabled lists copilot                  -> copilot  flag: off
+    disabled lists codex                    -> codex    flag: off
 
 Bugbot is off by default and runs only when the enabled list names it.
-Bugteam and copilot run by default and stop only when the disabled list
-names them; both lists parse case-insensitively and tolerate whitespace.
+Bugteam, copilot, and codex run by default and stop only when the disabled
+list names them; both lists parse case-insensitively and tolerate whitespace.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import sys
 from pr_loop_shared_constants.reviews_disabled_constants import (
     CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
+    CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN,
     CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
     CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR,
@@ -33,6 +35,7 @@ from pr_loop_shared_constants.reviews_disabled_constants import (
 __all__ = [
     "CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN",
     "CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN",
+    "CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN",
     "CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN",
     "CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME",
     "CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR",
@@ -41,6 +44,7 @@ __all__ = [
     "is_bugbot_disabled_via_env",
     "is_bugbot_opted_out_via_env",
     "is_bugteam_disabled_via_env",
+    "is_codex_disabled_via_env",
     "is_copilot_disabled_via_env",
     "main",
 ]
@@ -129,6 +133,17 @@ def is_copilot_disabled_via_env() -> bool:
     )
 
 
+def is_codex_disabled_via_env() -> bool:
+    """Check whether CLAUDE_REVIEWS_DISABLED opts the Codex reviewer out.
+
+    Returns:
+        True when the env var lists the ``codex`` token.
+    """
+    return _is_reviewer_listed_in_env(
+        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN
+    )
+
+
 def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
     """Parse command-line arguments for the reviewer opt-out and opt-in gate check.
 
@@ -148,6 +163,7 @@ def parse_arguments(all_argv: list[str]) -> argparse.Namespace:
             CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN,
             CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
             CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
+            CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN,
         ],
         help="Reviewer token to test against the CLAUDE_REVIEWS_DISABLED / CLAUDE_REVIEWS_ENABLED gates",
     )
@@ -168,6 +184,7 @@ def main(all_arguments: list[str]) -> int:
         CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN: is_bugbot_disabled_via_env,
         CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN: is_bugteam_disabled_via_env,
         CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN: is_copilot_disabled_via_env,
+        CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN: is_codex_disabled_via_env,
     }
     return 0 if disabled_checker_by_reviewer[arguments.reviewer]() else 1
 

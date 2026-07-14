@@ -14,6 +14,12 @@ def test_build_deny_reason_names_candidates_and_production_path() -> None:
     assert "propose" in reason.lower() or "enhancement" in reason.lower()
 
 
+def test_build_deny_reason_points_exemption_guidance_at_entry_hook() -> None:
+    reason = decisions.build_deny_reason(Path("pkg/orders.py"), [])
+    assert "tdd_enforcer.py" in reason
+    assert "decisions.py" not in reason
+
+
 def test_emit_allow_writes_allow_decision(capsys: pytest.CaptureFixture[str]) -> None:
     decisions.emit_allow()
     parsed = json.loads(capsys.readouterr().out)
