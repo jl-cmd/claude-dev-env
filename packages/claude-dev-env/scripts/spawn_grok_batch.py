@@ -482,7 +482,16 @@ def _launch_one_worker(
             outcome=outcome,
             scratch_paths=scratch_paths,
         )
-    except (OSError, ValueError, RuntimeError) as raised_exception:
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        UnicodeError,
+        LookupError,
+    ) as raised_exception:
         return _error_report_for_exception(
             worker_spec=worker_spec,
             scratch_paths=scratch_paths,
