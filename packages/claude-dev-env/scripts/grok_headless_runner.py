@@ -33,6 +33,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     CLASSIFICATION_AUTH_FAILURE,
     CLASSIFICATION_ERROR,
     CLASSIFICATION_OK,
+    CLASSIFICATION_STREAM_JOIN_SEPARATOR,
     CLASSIFICATION_TIMEOUT,
     CLASSIFICATION_USAGE_LIMIT,
     CWD_FLAG,
@@ -112,7 +113,9 @@ def _build_invocation(
 
 
 def _combined_text(stdout_text: str, stderr_text: str) -> str:
-    return f"{stdout_text}{stderr_text}".lower()
+    return CLASSIFICATION_STREAM_JOIN_SEPARATOR.join(
+        (stdout_text, stderr_text)
+    ).lower()
 
 
 def _matches_any_signature(

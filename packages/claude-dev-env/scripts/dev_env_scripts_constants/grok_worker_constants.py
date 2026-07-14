@@ -193,6 +193,9 @@ CLASSIFICATION_TIMEOUT: str = "timeout"
 CLASSIFICATION_ERROR: str = "error"
 """Outcome classification for a non-zero exit that matches no known signature."""
 
+CLASSIFICATION_STREAM_JOIN_SEPARATOR: str = "\n"
+"""Separator placed between stdout and stderr before signature matching so a phrase never forms or splits across the stream boundary."""
+
 DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
 """Default timeout applied to one headless worker invocation, in seconds."""
 
