@@ -11,6 +11,8 @@ runs against the named path rather than the session working directory::
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pii_prevention_blocker_parts.repository_resolution import (
     compose_command_working_directory,
     expand_user_directory,
@@ -23,7 +25,9 @@ def test_single_absolute_dash_c_is_the_target() -> None:
 
 
 def test_relative_dash_c_composes_onto_a_leading_absolute_dash_c() -> None:
-    assert compose_command_working_directory("git -C /a -C sub commit -m x") == "/a/sub"
+    composed = compose_command_working_directory("git -C /a -C sub commit -m x")
+    assert composed is not None
+    assert Path(composed) == Path("/a") / "sub"
 
 
 def test_later_absolute_dash_c_resets_the_composition() -> None:
@@ -50,7 +54,7 @@ def test_expand_user_directory_expands_tilde() -> None:
     expanded = expand_user_directory("~/repo")
     assert expanded is not None
     assert not expanded.startswith("~")
-    assert expanded.endswith("/repo")
+    assert Path(expanded).name == "repo"
 
 
 def test_expand_user_directory_passes_none_through() -> None:
