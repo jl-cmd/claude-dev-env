@@ -153,11 +153,12 @@ the `persistent_agents` map
   within one bounded wait, drop the map entry, spawn a fresh named agent,
   record it, and continue the tick. Never abort a tick on a stale id;
   never retry the same dead id.
-- **Fresh every round (never persisted):** the Step 5 `/code-review high --fix`
-  pass and the Step 6 bugteam audit (unbiased eyes each round; the
-  enforcer needs the formal Skill call), and every `code-verifier` — a
-  named code-verifier never fires `SubagentStop`, so no verdict mints (see
-  the named-`code-verifier` entry in the Gotchas list below).
+- **Fresh every round (never persisted):** the Step 5 host-aware
+  `invoke_code_review.py` / `/code-review high --fix` pass and the Step 6
+  bugteam audit (unbiased eyes each round; the enforcer needs the formal
+  Skill call), and every `code-verifier` — a named code-verifier never fires
+  `SubagentStop`, so no verdict mints (see the named-`code-verifier` entry
+  in the Gotchas list below).
 - **Shutdown:** at loop end (convergence or a stop condition), send each
   persistent agent a shutdown request and clear `persistent_agents` before
   the `pr-loop-lifecycle` Close.
@@ -206,11 +207,11 @@ post a fresh PR in a fresh branch based on origin main to the user.
   `pwsh` calls run through the PowerShell tool, not Bash. Bash on
   Windows is Git Bash which cannot execute PowerShell cmdlets. Route all
   PowerShell work through the PowerShell tool or `pwsh -NoProfile -File`.
-- **Cross-repo PR: route cwd into the PR worktree before `/code-review`** —
-  `/code-review high --fix` (Step 5) audits the repo of the current working
-  directory. When the session is rooted in a different repo than the PR,
-  `EnterWorktree` cannot re-root (it is scoped to the session's repo);
-  resolve the PR worktree and `cd` into it per
+- **Cross-repo PR: route cwd into the PR worktree before Step 5 review** —
+  `invoke_code_review.py` and `/code-review high --fix` audit the repo of the
+  cwd (the helper's `--cwd`). When the session is rooted in a different repo
+  than the PR, `EnterWorktree` cannot re-root (it is scoped to the session's
+  repo); resolve the PR worktree and `cd` into it per
   [Step 1.5](reference/per-tick.md). Skipping this reviews and edits the
   wrong repo. The route is routine and automatic — never a material fork
   to pause on.
@@ -292,12 +293,25 @@ round as converged. This rule holds every tick, every loop, every PR.
       See: [`reference/per-tick.md` § CODE_REVIEW entry](reference/per-tick.md).
       Pre-condition: cwd is the Step 1.5 PR worktree on `current_head`.
       Scope: FULL `origin/main...HEAD` diff every tick (no path args, no delta cut).
+      Review always runs at effort high on model opus through
+      `invoke_code_review.py`. Mode decision inputs: host profile + session
+      model. Call:
+      `python "$HOME/.claude/scripts/invoke_code_review.py" --cwd <PR-worktree>
+      --session-model <alias>`. Chain mode uses that cwd and empty stdin; the
+      chain process never commits and never pushes. JSON stdout carries
+      `mode` (`in_session` | `chain`) and `dirty_tree`.
 
       - [ ] **Static sweep fails** → apply shared fix protocol → push → reset markers
             → stay CODE_REVIEW → Step 5
-      - [ ] **`/code-review high --fix` applies fixes** → commit + push → reset markers
-            → stay CODE_REVIEW → Step 5
-      - [ ] **clean** → zero unresolved threads (else fix + resolve) →
+      - [ ] **`mode == in_session`** (Claude host, session model opus) → run
+            `/code-review high --fix` in-session (no path args)
+      - [ ] **`mode == chain`** (any other host or non-opus session) → helper
+            already ran the headless review; use `dirty_tree` from JSON
+      - [ ] **fixes applied** (`dirty_tree` true / working tree dirty) →
+            commit + push via shared fix protocol → reset markers → stay
+            CODE_REVIEW → Step 5
+      - [ ] **clean** (`dirty_tree` false / no changes) → zero unresolved
+            threads (else fix + resolve) →
             `code_review_clean_at = current_head` → `phase = BUGTEAM` → Step 6
 
 - [ ] **Step 6: BUGTEAM — run, decide, fix, reply, resolve**
