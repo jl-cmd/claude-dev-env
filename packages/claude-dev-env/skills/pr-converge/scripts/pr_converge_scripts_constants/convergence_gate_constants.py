@@ -57,3 +57,4 @@ CLAUDE_JOB_DIR_ENV_VAR_NAME: str = "CLAUDE_JOB_DIR"
 PR_CONVERGE_STATE_FILENAME: str = "pr-converge-state.json"
 CODEX_CLEAN_AT_STATE_KEY: str = "codex_clean_at"
 CODEX_DOWN_STATE_KEY: str = "codex_down"
+MINIMUM_ABBREVIATED_SHA_LENGTH: int = 7

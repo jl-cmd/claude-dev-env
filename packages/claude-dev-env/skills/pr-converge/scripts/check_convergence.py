@@ -40,7 +40,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 import _pr_converge_path_setup  # noqa: F401
-import codex_usage_probe as codex_usage_probe_module
 from check_convergence_gates import (
     _check_bot_review,
     _check_bugbot,
@@ -59,7 +58,7 @@ from check_convergence_thread_gates import (
 from codex_review_scripts_constants.codex_usage_probe_constants import (
     USAGE_REPORT_KEY_PERCENT_LEFT,
 )
-from codex_usage_probe import is_codex_review_required, probe_weekly_usage
+from codex_usage_probe import is_codex_review_required, probe_weekly_usage_via_subprocess
 from pr_converge_scripts_constants.convergence_gate_constants import (
     CLAUDE_JOB_DIR_ENV_VAR_NAME,
     CODEX_BYPASS_DETAIL,
@@ -80,6 +79,7 @@ from pr_converge_scripts_constants.convergence_gate_constants import (
     FIXTURE_KEY_REVIEWS,
     FIXTURE_KEY_UNRESOLVED_BOT_THREADS_DETAIL,
     FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED,
+    MINIMUM_ABBREVIATED_SHA_LENGTH,
     PR_CONVERGE_STATE_FILENAME,
 )
 from pr_converge_skill_constants.constants import (
@@ -273,8 +273,27 @@ def _copilot_review_condition(context: GateContext) -> GateCondition:
 
 
 def _sha_matches_head(stamp_sha: str, head_sha: str) -> bool:
-    """Return True when a clean-at stamp matches the PR HEAD SHA (full or prefix)."""
-    if not stamp_sha or not head_sha:
+    """Return True when a clean-at stamp matches the PR HEAD SHA (full or prefix).
+
+    ::
+
+        stamp 86454e3d..., head 86454e3d...  -> True  (full match)
+        stamp 86454e3,    head 86454e3d...   -> True  (abbreviated stamp)
+        stamp 8,          head 86454e3d...   -> False (below the abbreviation floor)
+
+    A prefix shorter than an abbreviated SHA matches many commits, so a stamp
+    that short never passes the gate.
+
+    Args:
+        stamp_sha: The ``codex_clean_at`` stamp under test.
+        head_sha: Current PR HEAD commit SHA.
+
+    Returns:
+        True when the two name the same commit.
+    """
+    if len(stamp_sha) < MINIMUM_ABBREVIATED_SHA_LENGTH:
+        return False
+    if len(head_sha) < MINIMUM_ABBREVIATED_SHA_LENGTH:
         return False
     return head_sha.startswith(stamp_sha) or stamp_sha.startswith(head_sha)
 
@@ -311,11 +330,7 @@ def _evaluate_codex_clean(
 def _probe_codex_percent_left() -> float | None:
     """Probe weekly Codex usage and return percent remaining, or None when unknown."""
     try:
-        usage_report = probe_weekly_usage(
-            exchange_app_server_messages=(
-                codex_usage_probe_module._exchange_app_server_messages_via_subprocess
-            )
-        )
+        usage_report = probe_weekly_usage_via_subprocess()
     except (
         FileNotFoundError,
         OSError,
@@ -767,9 +782,6 @@ def main(all_arguments: list[str]) -> int:
     is_copilot_down = _resolve_copilot_down(arguments.copilot_down)
     is_bugteam_post_blocked = _resolve_bugteam_post_blocked(arguments.bugteam_post_blocked)
     is_codex_down = _resolve_codex_down(arguments.codex_down)
-    live_codex_clean_at = _resolve_live_codex_clean_at(
-        getattr(arguments, "codex_clean_at", None)
-    )
     fixture_path = getattr(arguments, "fixture", None)
     if fixture_path:
         fixture = _load_convergence_fixture(Path(fixture_path))
@@ -791,7 +803,7 @@ def main(all_arguments: list[str]) -> int:
         is_copilot_down=is_copilot_down,
         is_bugteam_post_blocked=is_bugteam_post_blocked,
         is_codex_down=is_codex_down,
-        live_codex_clean_at=live_codex_clean_at,
+        live_codex_clean_at=_resolve_live_codex_clean_at(arguments.codex_clean_at),
     )
 
 

@@ -19,6 +19,9 @@ import _pr_converge_path_setup  # noqa: F401
 from codex_review_scripts_constants.codex_usage_probe_constants import (
     WEEKLY_USAGE_GATE_THRESHOLD_PERCENT,
 )
+from pr_converge_scripts_constants.convergence_gate_constants import (
+    MINIMUM_ABBREVIATED_SHA_LENGTH,
+)
 
 _SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
 _PR_CONVERGE_DIRECTORY = _SCRIPTS_DIRECTORY.parent
@@ -115,6 +118,62 @@ def should_pass_when_codex_required_and_clean(
     assert "codex_clean_at == current_head: PASS" in captured
     assert "clean at" in captured
     assert "All pre-conditions met" in captured
+
+
+def should_fail_when_codex_clean_stamp_is_shorter_than_an_abbreviated_sha(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture_path = _write_fixture(
+        tmp_path,
+        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_clean_at=HEAD_SHA[:1],
+        filename="required-short-stamp.json",
+    )
+    exit_code = check_convergence.main(
+        [
+            "--owner",
+            "jl-cmd",
+            "--repo",
+            "claude-dev-env",
+            "--pr-number",
+            "111",
+            "--fixture",
+            str(fixture_path),
+            "--bugbot-down",
+            "--copilot-down",
+        ]
+    )
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert "codex_clean_at == current_head: FAIL" in captured
+
+
+def should_pass_when_codex_clean_stamp_is_an_abbreviated_head_sha(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture_path = _write_fixture(
+        tmp_path,
+        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_clean_at=HEAD_SHA[:MINIMUM_ABBREVIATED_SHA_LENGTH],
+        filename="required-abbreviated-stamp.json",
+    )
+    exit_code = check_convergence.main(
+        [
+            "--owner",
+            "jl-cmd",
+            "--repo",
+            "claude-dev-env",
+            "--pr-number",
+            "111",
+            "--fixture",
+            str(fixture_path),
+            "--bugbot-down",
+            "--copilot-down",
+        ]
+    )
+    captured = capsys.readouterr().out
+    assert exit_code == 0
+    assert "codex_clean_at == current_head: PASS" in captured
 
 
 def should_fail_when_codex_required_and_dirty(

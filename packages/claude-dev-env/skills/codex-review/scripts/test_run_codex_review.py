@@ -15,12 +15,14 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
 import run_codex_review as wrapper  # noqa: E402
+from codex_review_scripts_constants.classifier_constants import (  # noqa: E402
+    FAILURE_CLASS_CONFIG_ERROR,
+    FAILURE_CLASS_UNKNOWN,
+)
 from codex_review_scripts_constants.run_constants import (  # noqa: E402
-    ALL_SHAPE_PROBE_REQUIRED_FLAGS,
     BASE_TARGET_FLAG,
     CODEX_BINARY_NAME,
     CODEX_HOME_ENV_VAR,
-    CODEX_MODEL_PIN,
     COMMIT_TARGET_FLAG,
     CUSTOM_INSTRUCTIONS_PROMPT,
     DECODE_ERROR_EXIT_CODE,
@@ -30,13 +32,13 @@ from codex_review_scripts_constants.run_constants import (  # noqa: E402
     JSON_FLAG,
     JSONL_CAPTURE_FILENAME,
     MISSING_BINARY_EXIT_CODE,
-    MODEL_FLAG,
     OUTCOME_CLASS_CODEX_DOWN,
     OUTCOME_CLASS_COMPLETED,
     REVIEW_SUBCOMMAND,
     SUBPROCESS_TEXT_ERRORS,
     TIMEOUT_EXIT_CODE,
     UNCOMMITTED_TARGET_FLAG,
+    UNSUPPORTED_SHAPE_EXIT_CODE,
     UTF8_ENCODING,
     VERSION_FLAG,
 )
@@ -334,6 +336,8 @@ def test_shape_probe_missing_target_flags_returns_codex_down(
     )
 
     assert review_outcome.outcome_class == OUTCOME_CLASS_CODEX_DOWN
+    assert review_outcome.exit_code == UNSUPPORTED_SHAPE_EXIT_CODE
+    assert review_outcome.detail_class == FAILURE_CLASS_UNKNOWN
     assert review_outcome.binary_version == "0.144.3"
     assert review_outcome.agent_message == ""
     assert review_outcome.jsonl_path is None
@@ -341,8 +345,6 @@ def test_shape_probe_missing_target_flags_returns_codex_down(
         _is_review_run(each_invocation)
         for each_invocation in recorder.all_invocations
     )
-    for each_required_flag in ALL_SHAPE_PROBE_REQUIRED_FLAGS:
-        assert each_required_flag in HELP_TEXT_WITH_TARGETS
 
 
 def test_shape_probe_nonzero_help_returns_codex_down(
@@ -578,11 +580,6 @@ def test_rejects_missing_target(
     assert recorder.all_invocations == []
 
 
-def test_model_pin_constant_is_empty_by_default() -> None:
-    assert CODEX_MODEL_PIN == ""
-    assert MODEL_FLAG == "-m"
-
-
 def test_review_exit_1_config_error_classifies_codex_down(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -610,6 +607,7 @@ def test_review_exit_1_config_error_classifies_codex_down(
     )
 
     assert review_outcome.outcome_class == OUTCOME_CLASS_CODEX_DOWN
+    assert review_outcome.detail_class == FAILURE_CLASS_CONFIG_ERROR
     assert review_outcome.exit_code == 1
     assert review_outcome.agent_message == config_error_stderr
     assert review_outcome.jsonl_path is not None

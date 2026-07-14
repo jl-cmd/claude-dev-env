@@ -251,6 +251,34 @@ class TestProbeWeeklyUsage:
         assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_NO_USAGE_SURFACE
 
 
+class TestProbeWeeklyUsageViaSubprocess:
+    def should_report_usage_from_the_real_subprocess_exchange(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        probe = load_probe_module()
+        all_server_lines = _app_server_lines_from_rate_limits_payload(
+            REAL_APP_SERVER_RATE_LIMITS_REPLY_CODEX_0_144_3
+        )
+
+        def fake_subprocess_exchange(
+            all_request_messages: list[dict[str, object]],
+        ) -> list[str]:
+            assert len(all_request_messages) >= 2
+            return all_server_lines
+
+        monkeypatch.setattr(
+            probe,
+            "_exchange_app_server_messages_via_subprocess",
+            fake_subprocess_exchange,
+        )
+
+        usage_report = probe.probe_weekly_usage_via_subprocess()
+
+        assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] == 5
+        assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_APP_SERVER_RATE_LIMITS
+
+
 class TestGateThresholdHelper:
     def should_export_threshold_constant_of_ten(self) -> None:
         assert WEEKLY_USAGE_GATE_THRESHOLD_PERCENT == 10

@@ -379,6 +379,25 @@ def probe_weekly_usage(
     return _usage_report_from_server_lines(all_server_lines)
 
 
+def probe_weekly_usage_via_subprocess() -> UsageReport:
+    """Probe weekly usage against the real ``codex app-server`` subprocess.
+
+    ::
+
+        probe_weekly_usage_via_subprocess()
+        # ok: {"percent_left": 62.0, "window_reset": ..., "source": ...}
+
+    The production entry point for every caller that has no exchange seam of
+    its own to inject.
+
+    Returns:
+        The usage report with percent_left, window_reset, and source.
+    """
+    return probe_weekly_usage(
+        exchange_app_server_messages=_exchange_app_server_messages_via_subprocess
+    )
+
+
 def main() -> int:
     """Run the probe and print one JSON object on stdout.
 
@@ -387,9 +406,7 @@ def main() -> int:
         EXIT_CODE_CRASH when the probe itself fails.
     """
     try:
-        usage_report = probe_weekly_usage(
-            exchange_app_server_messages=_exchange_app_server_messages_via_subprocess
-        )
+        usage_report = probe_weekly_usage_via_subprocess()
     except (
         FileNotFoundError,
         OSError,

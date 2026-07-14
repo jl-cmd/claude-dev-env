@@ -21,11 +21,11 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from codex_down_classifier import classify_codex_run
 from codex_review_scripts_constants.run_constants import (
     ALL_SHAPE_PROBE_REQUIRED_FLAGS,
     BASE_TARGET_FLAG,
     CODEX_BINARY_NAME,
-    CODEX_MODEL_PIN,
     COMMIT_TARGET_FLAG,
     CUSTOM_INSTRUCTIONS_PROMPT,
     DECODE_ERROR_EXIT_CODE,
@@ -40,13 +40,13 @@ from codex_review_scripts_constants.run_constants import (
     JSONL_ENTRY_KEY,
     JSONL_EVENT_TYPE_KEY,
     MISSING_BINARY_EXIT_CODE,
-    MODEL_FLAG,
     OUTCOME_CLASS_CODEX_DOWN,
-    OUTCOME_CLASS_COMPLETED,
+    PROBE_TIMEOUT_SECONDS,
     REVIEW_SUBCOMMAND,
     SUBPROCESS_TEXT_ERRORS,
     TIMEOUT_EXIT_CODE,
     UNCOMMITTED_TARGET_FLAG,
+    UNSUPPORTED_SHAPE_EXIT_CODE,
     UTF8_ENCODING,
     VERSION_FLAG,
     VERSION_PROBE_PATTERN,
@@ -63,6 +63,7 @@ class CodexReviewOutcome:
 
         CodexReviewOutcome(
             outcome_class="completed",
+            detail_class="completed",
             exit_code=0,
             binary_version="0.144.3",
             jsonl_path=Path("run_state/codex-review.jsonl"),
@@ -71,6 +72,7 @@ class CodexReviewOutcome:
 
     Attributes:
         outcome_class: ``completed`` or ``codex_down``.
+        detail_class: ``completed`` or the failure class the stream text names.
         exit_code: Last process exit code, or a sentinel when none ran.
         binary_version: Parsed ``codex --version`` string, or empty.
         jsonl_path: Captured JSONL path, or None when review did not run.
@@ -78,15 +80,20 @@ class CodexReviewOutcome:
     """
 
     outcome_class: str
+    detail_class: str
     exit_code: int
     binary_version: str
     jsonl_path: Path | None
     agent_message: str
 
 
-def _down(*, exit_code: int, binary_version: str) -> CodexReviewOutcome:
+def _down(
+    *, exit_code: int, binary_version: str, stream_text: str
+) -> CodexReviewOutcome:
+    classification = classify_codex_run(exit_code=exit_code, stream_text=stream_text)
     return CodexReviewOutcome(
         outcome_class=OUTCOME_CLASS_CODEX_DOWN,
+        detail_class=classification.detail_class,
         exit_code=exit_code,
         binary_version=binary_version,
         jsonl_path=None,
@@ -140,34 +147,55 @@ def _parse_binary_version(version_stdout: str) -> str:
     return version_match.group(1)
 
 
-def _probe_binary_version(timeout_seconds: int) -> tuple[str, int | None]:
+def _probe_binary_version(timeout_seconds: int) -> tuple[str, int | None, str]:
     completion_or_exit = _safe_run(
         [CODEX_BINARY_NAME, VERSION_FLAG],
         working_directory=None,
         timeout_seconds=timeout_seconds,
     )
     if isinstance(completion_or_exit, int):
-        return "", completion_or_exit
+        return "", completion_or_exit, ""
+    probe_text = f"{completion_or_exit.stdout}{completion_or_exit.stderr}"
     if completion_or_exit.returncode != 0:
-        return "", completion_or_exit.returncode
-    return _parse_binary_version(completion_or_exit.stdout), None
+        return "", completion_or_exit.returncode, probe_text
+    return _parse_binary_version(completion_or_exit.stdout), None, probe_text
 
 
-def _probe_review_shape(timeout_seconds: int) -> tuple[bool, int]:
+def _probe_review_shape(timeout_seconds: int) -> tuple[bool, int, str]:
+    """Probe ``codex exec review --help`` for the target flags the wrapper needs.
+
+    ::
+
+        help text carries --base/--uncommitted/--commit -> (True, 0, text)
+        help text missing a target flag  -> (False, UNSUPPORTED_SHAPE_EXIT_CODE, text)
+        help exits nonzero               -> (False, that exit code, text)
+
+    An installed binary whose review surface lacks a target flag exits zero, so
+    the unsupported shape carries its own sentinel exit code rather than the
+    zero the successful help run reports.
+
+    Args:
+        timeout_seconds: Per-invocation timeout for the help probe.
+
+    Returns:
+        (is_shape_supported, exit_code, probe_text) for the help invocation.
+    """
     completion_or_exit = _safe_run(
         [CODEX_BINARY_NAME, EXEC_SUBCOMMAND, REVIEW_SUBCOMMAND, HELP_FLAG],
         working_directory=None,
         timeout_seconds=timeout_seconds,
     )
     if isinstance(completion_or_exit, int):
-        return False, completion_or_exit
-    if completion_or_exit.returncode != 0:
-        return False, completion_or_exit.returncode
+        return False, completion_or_exit, ""
     help_text = f"{completion_or_exit.stdout}{completion_or_exit.stderr}"
+    if completion_or_exit.returncode != 0:
+        return False, completion_or_exit.returncode, help_text
     has_required_flags = all(
         each_flag in help_text for each_flag in ALL_SHAPE_PROBE_REQUIRED_FLAGS
     )
-    return has_required_flags, completion_or_exit.returncode
+    if not has_required_flags:
+        return False, UNSUPPORTED_SHAPE_EXIT_CODE, help_text
+    return True, completion_or_exit.returncode, help_text
 
 
 def _require_single_target(
@@ -199,10 +227,7 @@ def _build_review_arguments(
     commit_sha: str | None,
     is_prompt_target: bool,
 ) -> list[str]:
-    all_arguments = [CODEX_BINARY_NAME, EXEC_SUBCOMMAND]
-    if CODEX_MODEL_PIN:
-        all_arguments.extend([MODEL_FLAG, CODEX_MODEL_PIN])
-    all_arguments.extend([REVIEW_SUBCOMMAND, JSON_FLAG])
+    all_arguments = [CODEX_BINARY_NAME, EXEC_SUBCOMMAND, REVIEW_SUBCOMMAND, JSON_FLAG]
     if is_uncommitted:
         all_arguments.append(UNCOMMITTED_TARGET_FLAG)
     elif base_branch is not None:
@@ -240,15 +265,25 @@ def _extract_agent_message(jsonl_text: str) -> str:
 
 
 def _probe_or_down(timeout_seconds: int) -> CodexReviewOutcome | str:
-    binary_version, version_failure_exit_code = _probe_binary_version(timeout_seconds)
+    probe_timeout_seconds = min(timeout_seconds, PROBE_TIMEOUT_SECONDS)
+    binary_version, version_failure_exit_code, version_text = _probe_binary_version(
+        probe_timeout_seconds
+    )
     if version_failure_exit_code is not None:
         return _down(
             exit_code=version_failure_exit_code,
             binary_version=binary_version,
+            stream_text=version_text,
         )
-    is_shape_supported, shape_exit_code = _probe_review_shape(timeout_seconds)
+    is_shape_supported, shape_exit_code, shape_text = _probe_review_shape(
+        probe_timeout_seconds
+    )
     if not is_shape_supported:
-        return _down(exit_code=shape_exit_code, binary_version=binary_version)
+        return _down(
+            exit_code=shape_exit_code,
+            binary_version=binary_version,
+            stream_text=shape_text,
+        )
     return binary_version
 
 
@@ -266,27 +301,31 @@ def _capture_review_run(
         timeout_seconds=timeout_seconds,
     )
     if isinstance(completion_or_exit, int):
-        return _down(exit_code=completion_or_exit, binary_version=binary_version)
+        return _down(
+            exit_code=completion_or_exit,
+            binary_version=binary_version,
+            stream_text="",
+        )
     jsonl_text = completion_or_exit.stdout or ""
     stderr_text = completion_or_exit.stderr or ""
     jsonl_path = run_state_directory / JSONL_CAPTURE_FILENAME
     run_state_directory.mkdir(parents=True, exist_ok=True)
     jsonl_path.write_text(jsonl_text, encoding=UTF8_ENCODING)
     review_returncode = completion_or_exit.returncode
-    if review_returncode != 0:
-        return CodexReviewOutcome(
-            outcome_class=OUTCOME_CLASS_CODEX_DOWN,
-            exit_code=review_returncode,
-            binary_version=binary_version,
-            jsonl_path=jsonl_path,
-            agent_message=_extract_agent_message(jsonl_text) or stderr_text,
-        )
+    classification = classify_codex_run(
+        exit_code=review_returncode,
+        stream_text=f"{jsonl_text}{stderr_text}",
+    )
+    agent_message = _extract_agent_message(jsonl_text)
+    if classification.outcome_class == OUTCOME_CLASS_CODEX_DOWN and not agent_message:
+        agent_message = stderr_text
     return CodexReviewOutcome(
-        outcome_class=OUTCOME_CLASS_COMPLETED,
+        outcome_class=classification.outcome_class,
+        detail_class=classification.detail_class,
         exit_code=review_returncode,
         binary_version=binary_version,
         jsonl_path=jsonl_path,
-        agent_message=_extract_agent_message(jsonl_text),
+        agent_message=agent_message,
     )
 
 
