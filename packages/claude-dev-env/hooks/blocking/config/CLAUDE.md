@@ -12,6 +12,8 @@ A Python package that holds shared constants for the verified-commit gate family
 |---|---|
 | `__init__.py` | Declares this as a regular package (not a namespace package) so it resolves first on `sys.path` |
 | `verified_commit_constants.py` | All tunables for the gate: directory names, regex patterns for detecting verdict paths and obfuscation attempts, timeout values, git subcommand sets, bypass marker, and corrective messages |
+| `verified_commit_context_constants.py` | `VERIFY_SKIP_ADDITIONAL_CONTEXT`, the ``# verify-skip`` usage rule the gate attaches to a deny payload's `additionalContext` |
+| `verified_commit_gate_output_constants.py` | The `PreToolUse` hook-event name, the `deny` permission decision string, and the gate's own module name for block logging |
 
 ## Key constants in `verified_commit_constants.py`
 

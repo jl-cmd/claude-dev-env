@@ -33,6 +33,27 @@ _DECOY_CONFIG_CONSTANTS_SOURCE = (
 )
 
 
+def _copy_mirrored_packages(mirrored_hooks_directory: Path, mirrored_blocking_directory: Path) -> None:
+    """Copy the ``config``, gate-parts, and ``hooks_constants`` packages into the mirror."""
+    shutil.copytree(_BLOCKING_SOURCE_DIRECTORY / "config", mirrored_blocking_directory / "config")
+    shutil.copytree(
+        _BLOCKING_SOURCE_DIRECTORY / "verified_commit_gate_parts",
+        mirrored_blocking_directory / "verified_commit_gate_parts",
+        ignore=shutil.ignore_patterns("tests", "__pycache__"),
+    )
+    shutil.copytree(_HOOKS_CONSTANTS_SOURCE_DIRECTORY, mirrored_hooks_directory / "hooks_constants")
+
+
+def _write_decoy_config_package(mirrored_hooks_directory: Path) -> None:
+    """Write the decoy ``config`` package that must never win resolution."""
+    decoy_config_directory = mirrored_hooks_directory / "config"
+    decoy_config_directory.mkdir()
+    (decoy_config_directory / "__init__.py").write_text(_DECOY_CONFIG_INIT_SOURCE, encoding="utf-8")
+    (decoy_config_directory / "verified_commit_constants.py").write_text(
+        _DECOY_CONFIG_CONSTANTS_SOURCE, encoding="utf-8"
+    )
+
+
 def _build_shadowed_hook_tree(tmp_path: Path) -> tuple[Path, Path]:
     """Mirror the hook tree with a decoy ``config`` package beside ``blocking``.
 
@@ -51,22 +72,20 @@ def _build_shadowed_hook_tree(tmp_path: Path) -> tuple[Path, Path]:
         if source_file.exists():
             shutil.copy2(source_file, mirrored_blocking_directory / each_file_name)
 
-    shutil.copytree(
-        _BLOCKING_SOURCE_DIRECTORY / "config",
-        mirrored_blocking_directory / "config",
-    )
-    shutil.copytree(
-        _HOOKS_CONSTANTS_SOURCE_DIRECTORY,
-        mirrored_hooks_directory / "hooks_constants",
-    )
-
-    decoy_config_directory = mirrored_hooks_directory / "config"
-    decoy_config_directory.mkdir()
-    (decoy_config_directory / "__init__.py").write_text(_DECOY_CONFIG_INIT_SOURCE, encoding="utf-8")
-    (decoy_config_directory / "verified_commit_constants.py").write_text(
-        _DECOY_CONFIG_CONSTANTS_SOURCE, encoding="utf-8"
-    )
+    _copy_mirrored_packages(mirrored_hooks_directory, mirrored_blocking_directory)
+    _write_decoy_config_package(mirrored_hooks_directory)
     return mirrored_hooks_directory, mirrored_blocking_directory
+
+
+def _probe_command(mirrored_hooks_directory: Path, mirrored_blocking_directory: Path) -> str:
+    """Build the ``sys.path`` preamble that shadows ``blocking`` with the decoy config."""
+    return textwrap.dedent(
+        f"""\
+        import sys
+        sys.path.insert(0, {str(mirrored_blocking_directory)!r})
+        sys.path.insert(0, {str(mirrored_hooks_directory)!r})
+        """
+    )
 
 
 @pytest.fixture
@@ -75,15 +94,8 @@ def run_under_config_shadow(
 ) -> Callable[[str], subprocess.CompletedProcess[str]]:
     """Return a runner that executes a driver under a foreign-``config`` sys.path.
 
-    ::
-
-        completed = run_under_config_shadow("import verified_commit_gate")
-        ok:   completed.returncode == 0 once the bootstrap seeds the real module
-        flag: nonzero with ModuleNotFoundError while the decoy config wins
-
-    The runner prefixes the driver with a ``sys.path`` preamble that puts the
-    mirrored ``hooks`` directory (holding the decoy ``config``) ahead of
-    ``blocking``, then runs the probe with the active interpreter.
+    ``run_under_config_shadow("import verified_commit_gate")`` returns 0 once
+    the bootstrap seeds the real module, nonzero while the decoy config wins.
 
     Args:
         tmp_path: Pytest's per-test temporary directory, fixture-injected.
@@ -93,16 +105,10 @@ def run_under_config_shadow(
         subprocess result.
     """
     mirrored_hooks_directory, mirrored_blocking_directory = _build_shadowed_hook_tree(tmp_path)
+    sys_path_preamble = _probe_command(mirrored_hooks_directory, mirrored_blocking_directory)
 
     def run_driver(driver_body: str) -> subprocess.CompletedProcess[str]:
         probe_script = tmp_path / "probe.py"
-        sys_path_preamble = textwrap.dedent(
-            f"""\
-            import sys
-            sys.path.insert(0, {str(mirrored_blocking_directory)!r})
-            sys.path.insert(0, {str(mirrored_hooks_directory)!r})
-            """
-        )
         probe_script.write_text(sys_path_preamble + textwrap.dedent(driver_body), encoding="utf-8")
         return subprocess.run(
             [sys.executable, str(probe_script)],
