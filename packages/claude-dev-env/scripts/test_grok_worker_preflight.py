@@ -45,6 +45,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     SINGLE_TURN_FLAG,
     STDOUT_FALLTHROUGH_TEMPLATE,
     STDOUT_OK_LINE,
+    UTF8_DECODE_ERRORS,
     UTF8_ENCODING,
 )
 
@@ -806,3 +807,217 @@ def test_run_preflight_ping_missing_binary_invalidates_cache(
     assert outcome.is_usable is False
     assert outcome.reason == REASON_GROK_AUTH_FAILED
     assert not cache_path.exists()
+
+
+def test_main_uncreatable_run_state_dir_falls_through_without_crashing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An uncreatable run-state dir yields a parseable fallthrough line, not a crash."""
+    blocker_file = tmp_path / "blocker"
+    blocker_file.write_text("x", encoding=UTF8_ENCODING)
+    run_state_directory = blocker_file / "run"
+    monkeypatch.setattr(preflight, "preflight_which", lambda _name: None)
+
+    exit_code = preflight.main(
+        [CLI_RUN_STATE_DIR_FLAG, str(run_state_directory)]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == EXIT_FALLTHROUGH
+    assert captured.out.strip() == STDOUT_FALLTHROUGH_TEMPLATE.format(
+        reason=REASON_GROK_BINARY_MISSING
+    )
+
+
+def test_auth_returncode_zero_with_none_stdout_falls_through(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """returncode 0 with undecoded None streams must not report usable."""
+    claude_home = tmp_path / "claude"
+    run_state_directory = tmp_path / "run"
+    run_state_directory.mkdir()
+    none_stream_completion = subprocess.CompletedProcess(
+        args=[GROK_BINARY_NAME, MODELS_SUBCOMMAND],
+        returncode=0,
+        stdout=None,
+        stderr=None,
+    )
+    recorder = _Recorder([none_stream_completion])
+    _install_ok_static_seams(monkeypatch, claude_home, recorder)
+
+    outcome = preflight.run_preflight(
+        role=ROLE_BUGTEAM,
+        should_ping=False,
+        run_state_directory=run_state_directory,
+    )
+
+    assert outcome.is_usable is False
+    assert outcome.reason == REASON_GROK_AUTH_FAILED
+
+
+def test_run_grok_command_passes_utf8_decode_errors_replace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Subprocess text mode must use errors=replace so invalid UTF-8 never yields None."""
+    captured_keyword_arguments: dict[str, object] = {}
+
+    def _capture_runner(
+        invocation: list[str], **keyword_arguments: object
+    ) -> subprocess.CompletedProcess[str]:
+        captured_keyword_arguments.update(keyword_arguments)
+        return _completed(invocation, 0, stdout="logged in")
+
+    claude_home = tmp_path / "claude"
+    run_state_directory = tmp_path / "run"
+    run_state_directory.mkdir()
+    _write_install_layout(claude_home)
+    monkeypatch.setattr(preflight, "claude_config_home", lambda: claude_home)
+    monkeypatch.setattr(
+        preflight, "preflight_which", lambda name: f"/fake/bin/{name}"
+    )
+    monkeypatch.setattr(preflight, "preflight_subprocess_runner", _capture_runner)
+
+    outcome = preflight.run_preflight(
+        role=ROLE_BUGTEAM,
+        should_ping=False,
+        run_state_directory=run_state_directory,
+    )
+
+    assert outcome.is_usable is True
+    assert captured_keyword_arguments.get("encoding") == UTF8_ENCODING
+    assert captured_keyword_arguments.get("errors") == UTF8_DECODE_ERRORS
+    assert UTF8_DECODE_ERRORS == "replace"
+
+
+def test_run_preflight_mkdirs_missing_run_state_directory_for_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Library path creates the run state directory so ping cache write succeeds."""
+    claude_home = tmp_path / "claude"
+    run_state_directory = tmp_path / "missing-run"
+    assert not run_state_directory.exists()
+    fixed_now = 1_700_000_000.0
+    recorder = _Recorder(
+        [
+            _completed([GROK_BINARY_NAME, MODELS_SUBCOMMAND], 0, stdout="logged in"),
+            _completed([GROK_BINARY_NAME, SINGLE_TURN_FLAG], 0, stdout="ok"),
+        ]
+    )
+    _install_ok_static_seams(monkeypatch, claude_home, recorder)
+    monkeypatch.setattr(preflight, "preflight_time", lambda: fixed_now)
+
+    outcome = preflight.run_preflight(
+        role=ROLE_BUGTEAM,
+        should_ping=True,
+        run_state_directory=run_state_directory,
+    )
+
+    assert outcome.is_usable is True
+    assert outcome.reason is None
+    assert run_state_directory.is_dir()
+    cache_path = run_state_directory / PING_CACHE_FILENAME
+    assert cache_path.is_file()
+    all_cache_payload = json.loads(cache_path.read_text(encoding=UTF8_ENCODING))
+    assert all_cache_payload[PING_CACHE_IS_OK_KEY] is True
+    assert all_cache_payload[PING_CACHE_CHECKED_AT_KEY] == fixed_now
+
+
+def test_ping_cache_write_oserror_still_reports_usable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Soft-gate stays usable when the successful ping cache write fails."""
+    claude_home = tmp_path / "claude"
+    run_state_directory = tmp_path / "run"
+    run_state_directory.mkdir()
+    fixed_now = 1_700_000_000.0
+    recorder = _Recorder(
+        [
+            _completed([GROK_BINARY_NAME, MODELS_SUBCOMMAND], 0, stdout="logged in"),
+            _completed([GROK_BINARY_NAME, SINGLE_TURN_FLAG], 0, stdout="ok"),
+        ]
+    )
+    _install_ok_static_seams(monkeypatch, claude_home, recorder)
+    monkeypatch.setattr(preflight, "preflight_time", lambda: fixed_now)
+
+    def _raise_oserror_on_write(self: Path, *_arguments: object, **_keywords: object) -> None:
+        raise OSError("simulated cache write failure")
+
+    monkeypatch.setattr(Path, "write_text", _raise_oserror_on_write)
+
+    outcome = preflight.run_preflight(
+        role=ROLE_BUGTEAM,
+        should_ping=True,
+        run_state_directory=run_state_directory,
+    )
+
+    assert outcome.is_usable is True
+    assert outcome.reason is None
+    assert not (run_state_directory / PING_CACHE_FILENAME).exists()
+
+
+def test_auth_timeout_falls_through_as_grok_auth_failed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """TimeoutExpired maps to the catch-all non-usage bucket grok_auth_failed."""
+    claude_home = tmp_path / "claude"
+    run_state_directory = tmp_path / "run"
+    run_state_directory.mkdir()
+
+    def _raise_timeout(
+        invocation: list[str], **_keyword_arguments: object
+    ) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd=invocation, timeout=1)
+
+    _write_install_layout(claude_home)
+    monkeypatch.setattr(preflight, "claude_config_home", lambda: claude_home)
+    monkeypatch.setattr(
+        preflight, "preflight_which", lambda name: f"/fake/bin/{name}"
+    )
+    monkeypatch.setattr(preflight, "preflight_subprocess_runner", _raise_timeout)
+
+    outcome = preflight.run_preflight(
+        role=ROLE_BUGTEAM,
+        should_ping=False,
+        run_state_directory=run_state_directory,
+    )
+
+    assert outcome.is_usable is False
+    assert outcome.reason == REASON_GROK_AUTH_FAILED
+
+
+def test_ping_timeout_falls_through_as_grok_auth_failed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ping TimeoutExpired also uses the catch-all non-usage bucket."""
+    claude_home = tmp_path / "claude"
+    run_state_directory = tmp_path / "run"
+    run_state_directory.mkdir()
+    all_completions = [
+        _completed([GROK_BINARY_NAME, MODELS_SUBCOMMAND], 0, stdout="logged in"),
+    ]
+
+    def _timeout_on_ping(
+        invocation: list[str], **_keyword_arguments: object
+    ) -> subprocess.CompletedProcess[str]:
+        if SINGLE_TURN_FLAG in invocation:
+            raise subprocess.TimeoutExpired(cmd=invocation, timeout=1)
+        if not all_completions:
+            raise AssertionError(f"unexpected invocation: {invocation}")
+        return all_completions.pop(0)
+
+    _write_install_layout(claude_home)
+    monkeypatch.setattr(preflight, "claude_config_home", lambda: claude_home)
+    monkeypatch.setattr(
+        preflight, "preflight_which", lambda name: f"/fake/bin/{name}"
+    )
+    monkeypatch.setattr(preflight, "preflight_subprocess_runner", _timeout_on_ping)
+    monkeypatch.setattr(preflight, "preflight_time", lambda: 1_700_000_000.0)
+
+    outcome = preflight.run_preflight(
+        role=ROLE_BUGTEAM,
+        should_ping=True,
+        run_state_directory=run_state_directory,
+    )
+
+    assert outcome.is_usable is False
+    assert outcome.reason == REASON_GROK_AUTH_FAILED

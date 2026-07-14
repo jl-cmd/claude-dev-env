@@ -109,6 +109,9 @@ CLI_RUN_STATE_DIR_FLAG: str = "--run-temp-dir"
 UTF8_ENCODING: str = "utf-8"
 """Encoding used for subprocess text mode and the ping cache file."""
 
+UTF8_DECODE_ERRORS: str = "replace"
+"""``errors=`` value for subprocess text decode so invalid bytes never yield None streams."""
+
 ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
     "rate limit",
     "usage limit",
@@ -195,11 +198,14 @@ DEFAULT_WORKER_MAX_TURNS: int = 8
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
 
-BINARY_MISSING_RETURN_CODE: int = 127
-"""Return code recorded when the grok binary is not found on PATH (distinct from timeout)."""
+LAUNCH_FAILURE_RETURN_CODE: int = -2
+"""Return code when the grok process cannot be launched (missing binary, permission, etc.)."""
 
-BINARY_NOT_FOUND_STDERR_TEMPLATE: str = "{binary_name} not found on PATH"
-"""Stable stderr diagnostic when Popen raises FileNotFoundError for the grok binary."""
+LAUNCH_FAILURE_STDERR_PREFIX: str = "failed to launch: "
+"""Prefix for the non-empty stderr diagnostic returned on a launch OSError."""
+
+KILL_GRACE_TIMEOUT_SECONDS: int = 10
+"""Seconds to wait for a killed process to reap its pipes before giving up on its streams."""
 
 MIN_WORKER_TIMEOUT_SECONDS: int = 1
 """Minimum accepted worker timeout_seconds in a batch specification."""
