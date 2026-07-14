@@ -178,11 +178,16 @@ Read the stdout JSON:
 
 Each worker entry carries `role_name`, `tool_profile`, `returncode`,
 `classification`, `is_ok`, `report_text`, `output_file`, `leader_socket`,
-`prompt_file`.
+`prompt_file`, `debug_file`.
 
 Open each `output_file` (or use `report_text`) and check the report contract
 sections. Failed workers (`is_ok` false) keep their classification
-(`usage_limit`, `auth_failure`, `timeout`, `error`) for routing.
+(`usage_limit`, `auth_failure`, `timeout`, `error`) for routing; read their
+`debug_file` for the grok-side log of the run.
+
+A negative `returncode` means no grok process produced it: `-1` timeout, `-2`
+launch failure, `-3` the launcher itself raised before the process started (a
+missing prompt-part file, for example).
 
 ### 6. Verify and own git / gh
 

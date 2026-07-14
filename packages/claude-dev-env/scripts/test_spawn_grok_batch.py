@@ -37,6 +37,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     READONLY_PROFILE_PROMPT_HEADER,
     REASON_GROK_BINARY_MISSING,
     SUMMARY_CLASSIFICATION_KEY,
+    SUMMARY_DEBUG_FILE_KEY,
     SUMMARY_IS_OK_KEY,
     SUMMARY_IS_PREFLIGHT_USABLE_KEY,
     SUMMARY_LEADER_SOCKET_KEY,
@@ -463,6 +464,48 @@ def test_batch_summary_as_dict_shape_and_report_collection(
         )
         == FIXTURE_REPORT_TEXT
     )
+
+
+def test_summary_debug_file_matches_the_debug_flag_passed_to_the_runner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    header_path, body_path = _write_prompt_parts(tmp_path, role_marker="worker")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    specification_path = _write_batch_spec(
+        tmp_path,
+        all_worker_payloads=[
+            _worker_payload(
+                role_name="worker",
+                all_prompt_parts=[str(header_path), str(body_path)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_READONLY,
+            )
+        ],
+    )
+    recorder = _RunnerRecorder({"worker": _ok_outcome()})
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    batch_summary = batch.run_grok_batch(
+        batch_spec=batch.load_batch_spec(specification_path),
+        run_state_directory=run_state_directory,
+    )
+    summary_payload = batch.batch_summary_as_dict(batch_summary)
+
+    all_extra_arguments = recorder.all_keyword_arguments[0]["all_extra_arguments"]
+    assert isinstance(all_extra_arguments, tuple)
+    debug_flag_index = all_extra_arguments.index(DEBUG_FILE_FLAG)
+    launched_debug_file = all_extra_arguments[debug_flag_index + 1]
+    all_worker_payloads = summary_payload[SUMMARY_WORKERS_KEY]
+    assert isinstance(all_worker_payloads, list)
+    reported_debug_file = all_worker_payloads[0][SUMMARY_DEBUG_FILE_KEY]
+    assert reported_debug_file == launched_debug_file
+    assert Path(str(reported_debug_file)).parent == run_state_directory
 
 
 def test_preflight_fallthrough_skips_workers(

@@ -55,6 +55,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     READONLY_PROFILE_PROMPT_HEADER,
     REPORT_STREAM_JOIN_SEPARATOR,
     SUMMARY_CLASSIFICATION_KEY,
+    SUMMARY_DEBUG_FILE_KEY,
     SUMMARY_IS_OK_KEY,
     SUMMARY_IS_PREFLIGHT_USABLE_KEY,
     SUMMARY_LEADER_SOCKET_KEY,
@@ -134,6 +135,7 @@ class WorkerReport:
     report_path: str
     leader_socket: str
     prompt_path: str
+    debug_path: str
 
 
 @dataclass(frozen=True)
@@ -429,25 +431,44 @@ def _invoke_worker(
     )
 
 
+def _worker_report(
+    *,
+    worker_spec: WorkerSpec,
+    scratch_paths: WorkerScratchPaths,
+    returncode: int,
+    classification: str,
+    is_ok: bool,
+    report_text: str,
+) -> WorkerReport:
+    with suppress(OSError):
+        _write_report_file(scratch_paths.report_path, report_text)
+    return WorkerReport(
+        role_name=worker_spec.role_name,
+        tool_profile=worker_spec.tool_profile,
+        returncode=returncode,
+        classification=classification,
+        is_ok=is_ok,
+        report_text=report_text,
+        report_path=str(scratch_paths.report_path),
+        leader_socket=str(scratch_paths.leader_socket_path),
+        prompt_path=str(scratch_paths.prompt_path),
+        debug_path=str(scratch_paths.debug_path),
+    )
+
+
 def _build_worker_report(
     *,
     worker_spec: WorkerSpec,
     outcome: GrokRunnerOutcome,
     scratch_paths: WorkerScratchPaths,
 ) -> WorkerReport:
-    report_text = _report_text_from_outcome(outcome)
-    with suppress(OSError):
-        _write_report_file(scratch_paths.report_path, report_text)
-    return WorkerReport(
-        role_name=worker_spec.role_name,
-        tool_profile=worker_spec.tool_profile,
+    return _worker_report(
+        worker_spec=worker_spec,
+        scratch_paths=scratch_paths,
         returncode=outcome.returncode,
         classification=outcome.classification,
         is_ok=outcome.is_ok,
-        report_text=report_text,
-        report_path=str(scratch_paths.report_path),
-        leader_socket=str(scratch_paths.leader_socket_path),
-        prompt_path=str(scratch_paths.prompt_path),
+        report_text=_report_text_from_outcome(outcome),
     )
 
 
@@ -457,19 +478,13 @@ def _error_report_for_exception(
     scratch_paths: WorkerScratchPaths,
     raised_exception: BaseException,
 ) -> WorkerReport:
-    report_text = f"{type(raised_exception).__name__}: {raised_exception}"
-    with suppress(OSError):
-        _write_report_file(scratch_paths.report_path, report_text)
-    return WorkerReport(
-        role_name=worker_spec.role_name,
-        tool_profile=worker_spec.tool_profile,
+    return _worker_report(
+        worker_spec=worker_spec,
+        scratch_paths=scratch_paths,
         returncode=WORKER_EXCEPTION_RETURN_CODE,
         classification=CLASSIFICATION_ERROR,
         is_ok=False,
-        report_text=report_text,
-        report_path=str(scratch_paths.report_path),
-        leader_socket=str(scratch_paths.leader_socket_path),
-        prompt_path=str(scratch_paths.prompt_path),
+        report_text=f"{type(raised_exception).__name__}: {raised_exception}",
     )
 
 
@@ -584,6 +599,7 @@ def batch_summary_as_dict(batch_summary: BatchSummary) -> dict[str, object]:
             SUMMARY_OUTPUT_FILE_KEY: each_report.report_path,
             SUMMARY_LEADER_SOCKET_KEY: each_report.leader_socket,
             SUMMARY_PROMPT_FILE_KEY: each_report.prompt_path,
+            SUMMARY_DEBUG_FILE_KEY: each_report.debug_path,
         }
         for each_report in batch_summary.all_worker_reports
     ]

@@ -77,7 +77,11 @@ REASON_GROK_BINARY_MISSING: str = "grok_binary_missing"
 """Fallthrough reason when the grok binary is not resolvable on PATH."""
 
 REASON_GROK_AUTH_FAILED: str = "grok_auth_failed"
-"""Fallthrough reason when ``grok models`` exits non-zero or is unusable."""
+"""Catch-all fallthrough for every non-usage failure of the auth or ping probe.
+
+Covers a probe that exits non-zero, one whose launch raises, one that times out,
+and one whose streams do not decode.
+"""
 
 REASON_CLAUDE_DEV_ENV_CONFIG_MISSING: str = "claude_dev_env_config_missing"
 """Fallthrough reason when the install manifest or role agents are absent."""
@@ -213,8 +217,12 @@ MIN_WORKER_TIMEOUT_SECONDS: int = 1
 MIN_WORKER_MAX_TURNS: int = 1
 """Minimum accepted worker max_turns in a batch specification."""
 
-WORKER_EXCEPTION_RETURN_CODE: int = 1
-"""Return code recorded on a WorkerReport when the worker body raises before a process runs."""
+WORKER_EXCEPTION_RETURN_CODE: int = -3
+"""Return code recorded on a WorkerReport when the worker body raises before a process runs.
+
+Negative like the other no-process sentinels, so a launcher-side failure never
+reads as a grok process that ran and exited ``1``.
+"""
 
 TOOL_PROFILE_READONLY: str = "readonly"
 """Tool profile that removes write, edit, and shell tools from the worker."""
@@ -347,6 +355,9 @@ SUMMARY_LEADER_SOCKET_KEY: str = "leader_socket"
 
 SUMMARY_PROMPT_FILE_KEY: str = "prompt_file"
 """Per-worker report JSON key for the assembled prompt file path."""
+
+SUMMARY_DEBUG_FILE_KEY: str = "debug_file"
+"""Per-worker report JSON key for the ``--debug-file`` log path."""
 
 SUMMARY_TOOL_PROFILE_KEY: str = "tool_profile"
 """Per-worker report JSON key for the tool profile used."""

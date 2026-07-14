@@ -253,7 +253,8 @@ def run_headless_worker(
     Args:
         prompt_file: Path to the prompt file passed via ``--prompt-file``.
         working_directory: Working directory passed via ``--cwd``.
-        run_state_directory: Run-scoped directory for the unique leader socket.
+        run_state_directory: Run-scoped directory the leader socket is minted
+            under. Read only when ``leader_socket_path`` is omitted.
         max_turns: Maximum agent turns passed via ``--max-turns``.
         timeout_seconds: Seconds before the process is killed on expiry.
         agent_name: Optional role agent name passed via ``--agent``.
