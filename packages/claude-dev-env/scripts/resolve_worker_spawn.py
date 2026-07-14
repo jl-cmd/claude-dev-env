@@ -9,9 +9,9 @@ Walk order:
    On a Claude host with the claude tier disabled, stop with
    ``claude_agent_required`` so the calling skill runs the Agent tool.
    On a third-party host, or when the claude tier is enabled, tier 3 runs
-   ``claude_chain_runner.run_claude`` with ``-p <prompt text> --output-format json``,
-   stdin redirected to null, and subprocess ``cwd`` set to the caller's working
-   directory.
+   ``claude_chain_runner.run_claude`` with ``-p --output-format json --agent
+   <stem>``, prompt body on stdin from the prompt file, and subprocess
+   ``cwd`` set to the caller's working directory.
 
 Import ``resolve_worker_spawn`` for the outcome object, or run as a CLI::
 
@@ -26,6 +26,7 @@ import argparse
 import json
 import subprocess
 import sys
+import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,15 +50,16 @@ from claude_chain_runner import (  # noqa: E402
     run_claude,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
+    AGENT_FLAG,
     ALL_AGENT_FILENAMES_BY_ROLE,
     ATTEMPT_KEY_OK,
     ATTEMPT_KEY_REASON,
     ATTEMPT_KEY_TIER,
-    CLI_CWD_FLAG,
     CLI_ENABLE_CLAUDE_TIER_FLAG,
     CLI_ROLE_FLAG,
     CLI_RUN_STATE_DIR_FLAG,
     CLI_TIMEOUT_FLAG,
+    CWD_FLAG,
     DEFAULT_ROLE,
     DEFAULT_SPAWN_MAX_TURNS,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
@@ -66,6 +68,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     OUTPUT_FORMAT_JSON,
     PROMPT_FILE_FLAG,
     REASON_CLAUDE_AGENT_REQUIRED,
+    REASON_PROMPT_FILE_MISSING,
     RESULT_KEY_ATTEMPTS,
     RESULT_KEY_OK,
     RESULT_KEY_OUTPUT,
@@ -83,6 +86,12 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
 from grok_headless_runner import GrokRunnerOutcome, run_headless_worker  # noqa: E402
 from grok_worker_preflight import PreflightOutcome, run_preflight  # noqa: E402
 from tier_model_ids import detect_host_profile  # noqa: E402
+
+_HEADLESS_CHAIN_RUNNER_LOCK = threading.Lock()
+
+
+def _headless_chain_runner_lock() -> threading.Lock:
+    return _HEADLESS_CHAIN_RUNNER_LOCK
 
 
 @dataclass(frozen=True)
@@ -135,13 +144,13 @@ def _primary_agent_name_for_role(role: str) -> str:
     return Path(all_agent_filenames[0]).stem
 
 
-def _build_claude_arguments(prompt_file: Path) -> list[str]:
-    prompt_text = prompt_file.read_text(encoding=UTF8_ENCODING)
+def _build_claude_arguments(*, agent_name: str) -> list[str]:
     return [
         SINGLE_TURN_FLAG,
-        prompt_text,
         OUTPUT_FORMAT_FLAG,
         OUTPUT_FORMAT_JSON,
+        AGENT_FLAG,
+        agent_name,
     ]
 
 
@@ -154,49 +163,45 @@ def _timeout_seconds_from_keywords(
     return None
 
 
-def _stdin_handle_from_keywords(all_keywords: dict[str, object]) -> int:
-    if "stdin" not in all_keywords:
-        return subprocess.DEVNULL
-    maybe_stdin = all_keywords["stdin"]
-    if isinstance(maybe_stdin, int):
-        return maybe_stdin
-    return subprocess.DEVNULL
-
-
 def _run_claude_with_headless_overrides(
     all_claude_arguments: list[str],
     *,
     timeout_seconds: int,
     working_directory: Path,
+    prompt_file: Path,
 ) -> ChainInvocationOutcome:
-    previous_runner = chain_runner.chain_subprocess_runner
     working_directory_path = str(working_directory)
+    with _HEADLESS_CHAIN_RUNNER_LOCK:
+        previous_runner = chain_runner.chain_subprocess_runner
 
-    def _runner_with_headless_overrides(
-        all_invocation_tokens: Sequence[str],
-        *all_positionals: object,
-        **all_keywords: object,
-    ) -> subprocess.CompletedProcess[str]:
-        del all_positionals
-        completed_process: subprocess.CompletedProcess[str] = previous_runner(
-            all_invocation_tokens,
-            capture_output=True,
-            text=True,
-            timeout=_timeout_seconds_from_keywords(all_keywords),
-            check=False,
-            stdin=_stdin_handle_from_keywords(all_keywords),
-            cwd=working_directory_path,
-        )
-        return completed_process
+        def _runner_with_headless_overrides(
+            all_invocation_tokens: Sequence[str],
+            *all_positionals: object,
+            **all_keywords: object,
+        ) -> subprocess.CompletedProcess[str]:
+            del all_positionals
+            with prompt_file.open(encoding=UTF8_ENCODING) as prompt_stdin:
+                completed_process: subprocess.CompletedProcess[str] = previous_runner(
+                    all_invocation_tokens,
+                    capture_output=True,
+                    text=True,
+                    timeout=_timeout_seconds_from_keywords(all_keywords),
+                    check=False,
+                    stdin=prompt_stdin,
+                    cwd=working_directory_path,
+                )
+                return completed_process
 
-    headless_runner: TextCapturingSubprocessRunner = _runner_with_headless_overrides
-    setattr(chain_runner, "chain_subprocess_runner", headless_runner)
-    try:
-        return spawn_claude_runner(
-            all_claude_arguments, timeout_seconds=timeout_seconds
+        headless_runner: TextCapturingSubprocessRunner = (
+            _runner_with_headless_overrides
         )
-    finally:
-        setattr(chain_runner, "chain_subprocess_runner", previous_runner)
+        setattr(chain_runner, "chain_subprocess_runner", headless_runner)
+        try:
+            return spawn_claude_runner(
+                all_claude_arguments, timeout_seconds=timeout_seconds
+            )
+        finally:
+            setattr(chain_runner, "chain_subprocess_runner", previous_runner)
 
 
 def _claude_agent_required_outcome(
@@ -244,22 +249,26 @@ def _served_claude_outcome(
 
 def _run_tier_claude_headless(
     *,
+    role: str,
     prompt_file: Path,
     working_directory: Path,
     timeout_seconds: int,
     all_attempts: list[SpawnAttempt],
 ) -> SpawnOutcome:
-    all_claude_arguments = _build_claude_arguments(prompt_file)
+    agent_name = _primary_agent_name_for_role(role)
+    all_claude_arguments = _build_claude_arguments(agent_name=agent_name)
     chain_outcome = _run_claude_with_headless_overrides(
         all_claude_arguments,
         timeout_seconds=timeout_seconds,
         working_directory=working_directory,
+        prompt_file=prompt_file,
     )
     return _served_claude_outcome(all_attempts, chain_outcome)
 
 
 def _after_grok_fallthrough(
     *,
+    role: str,
     prompt_file: Path,
     working_directory: Path,
     timeout_seconds: int,
@@ -274,6 +283,7 @@ def _after_grok_fallthrough(
             all_attempts, returncode=fallthrough_returncode
         )
     return _run_tier_claude_headless(
+        role=role,
         prompt_file=prompt_file,
         working_directory=working_directory,
         timeout_seconds=timeout_seconds,
@@ -304,6 +314,7 @@ def _run_tier_grok(
 def _record_preflight_fallthrough(
     preflight_outcome: PreflightOutcome,
     *,
+    role: str,
     prompt_file: Path,
     working_directory: Path,
     timeout_seconds: int,
@@ -311,6 +322,7 @@ def _record_preflight_fallthrough(
 ) -> SpawnOutcome:
     all_attempts = [_attempt(TIER_GROK, is_ok=False, reason=preflight_outcome.reason)]
     return _after_grok_fallthrough(
+        role=role,
         prompt_file=prompt_file,
         working_directory=working_directory,
         timeout_seconds=timeout_seconds,
@@ -335,6 +347,7 @@ def _record_grok_success(
 def _record_grok_fallthrough(
     grok_outcome: GrokRunnerOutcome,
     *,
+    role: str,
     prompt_file: Path,
     working_directory: Path,
     timeout_seconds: int,
@@ -348,6 +361,7 @@ def _record_grok_fallthrough(
         )
     ]
     return _after_grok_fallthrough(
+        role=role,
         prompt_file=prompt_file,
         working_directory=working_directory,
         timeout_seconds=timeout_seconds,
@@ -370,7 +384,7 @@ def resolve_worker_spawn(
     """Walk the worker-spawn tiers and return the structured outcome.
 
     Args:
-        role: Worker role name for preflight; mapped to a primary agent stem for grok.
+        role: Worker role name for preflight; mapped to a primary agent stem.
         prompt_file: Path to the prompt file for headless workers.
         working_directory: Working directory for grok and claude headless tiers.
         timeout_seconds: Timeout applied to each tier invocation.
@@ -389,6 +403,7 @@ def resolve_worker_spawn(
     if not preflight_outcome.is_usable:
         return _record_preflight_fallthrough(
             preflight_outcome,
+            role=role,
             prompt_file=prompt_file,
             working_directory=working_directory,
             timeout_seconds=timeout_seconds,
@@ -407,6 +422,7 @@ def resolve_worker_spawn(
         return _record_grok_success(grok_outcome)
     return _record_grok_fallthrough(
         grok_outcome,
+        role=role,
         prompt_file=prompt_file,
         working_directory=working_directory,
         timeout_seconds=timeout_seconds,
@@ -457,7 +473,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Path to the prompt file for headless workers.",
     )
     parser.add_argument(
-        CLI_CWD_FLAG,
+        CWD_FLAG,
         dest="working_directory",
         required=True,
         type=Path,
@@ -507,6 +523,24 @@ def _config_error_outcome(configuration_error: ChainConfigurationError) -> Spawn
     )
 
 
+def _missing_prompt_file_outcome() -> SpawnOutcome:
+    return SpawnOutcome(
+        tier_used=None,
+        is_ok=False,
+        all_attempts=(),
+        captured_stdout=REASON_PROMPT_FILE_MISSING,
+        returncode=SPAWN_CONFIG_ERROR_EXIT_CODE,
+    )
+
+
+def _write_spawn_outcome_and_exit_code(
+    spawn_outcome: SpawnOutcome, *, is_config_error: bool
+) -> int:
+    encoded_payload = encode_spawn_outcome(spawn_outcome)
+    sys.stdout.write(json.dumps(encoded_payload) + "\n")
+    return _exit_code_for_outcome(spawn_outcome, is_config_error=is_config_error)
+
+
 def main(all_command_arguments: list[str]) -> int:
     """Run the dispatcher for CLI arguments and print the JSON outcome.
 
@@ -520,6 +554,11 @@ def main(all_command_arguments: list[str]) -> int:
     parsed_arguments = parser.parse_args(all_command_arguments)
     run_state_directory = parsed_arguments.run_state_directory
     run_state_directory.mkdir(parents=True, exist_ok=True)
+    if not parsed_arguments.prompt_file.is_file():
+        return _write_spawn_outcome_and_exit_code(
+            _missing_prompt_file_outcome(),
+            is_config_error=True,
+        )
     is_config_error = False
     try:
         spawn_outcome = resolve_worker_spawn(
@@ -534,9 +573,9 @@ def main(all_command_arguments: list[str]) -> int:
     except ChainConfigurationError as configuration_error:
         is_config_error = True
         spawn_outcome = _config_error_outcome(configuration_error)
-    encoded_payload = encode_spawn_outcome(spawn_outcome)
-    sys.stdout.write(json.dumps(encoded_payload) + "\n")
-    return _exit_code_for_outcome(spawn_outcome, is_config_error=is_config_error)
+    return _write_spawn_outcome_and_exit_code(
+        spawn_outcome, is_config_error=is_config_error
+    )
 
 
 if __name__ == "__main__":

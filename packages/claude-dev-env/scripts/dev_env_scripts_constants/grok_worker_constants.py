@@ -203,6 +203,9 @@ TIER_CLAUDE_HEADLESS: int = 3
 REASON_CLAUDE_AGENT_REQUIRED: str = "claude_agent_required"
 """Fallthrough reason when the caller must run claude_agent_required itself."""
 
+REASON_PROMPT_FILE_MISSING: str = "prompt_file_missing"
+"""Config reason when the dispatcher CLI prompt file path is absent or unreadable."""
+
 DEFAULT_SPAWN_MAX_TURNS: int = 8
 """Default max-turns applied to the headless grok worker when the caller names none."""
 
@@ -238,9 +241,6 @@ ATTEMPT_KEY_OK: str = "ok"
 
 ATTEMPT_KEY_REASON: str = "reason"
 """JSON attempt key holding the fallthrough or handoff reason string."""
-
-CLI_CWD_FLAG: str = "--cwd"
-"""CLI flag naming the working directory for the worker process."""
 
 CLI_TIMEOUT_FLAG: str = "--timeout-seconds"
 """CLI flag naming the per-tier timeout in seconds."""
