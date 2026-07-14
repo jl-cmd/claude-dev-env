@@ -31,6 +31,7 @@ const HOOKS_LOG_NAME = 'hooks.log';
 const HOOKS_LOG_GLOBAL_SETTINGS_MARKER = 'global/settings';
 const HOOKS_LOG_PRE_TOOL_USE_MARKER = 'pre_tool_use';
 const SPAWN_MARKER = 'SPAWN_OK';
+const SPAWN_SUBAGENT_TOOL = 'spawn_subagent';
 const GROK_SPAWN_TIMEOUT_MS = 600000;
 const SPAWN_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 const WORKFLOW_RESULT_NO_TOOL = 'no_tool';
@@ -359,10 +360,9 @@ function launchEval(runDirectory, { evalName, promptText, maxTurns, agentName })
     maxTurns,
     agentName,
   });
-  assertCondition(
-    processResult.error === null && processResult.exitCode === 0,
-    describeLaunchFailure(label, processResult),
-  );
+  if (processResult.error !== null || processResult.exitCode !== 0) {
+    throw new Error(describeLaunchFailure(label, processResult));
+  }
   const payload = parsePayload(processResult.stdout);
   assertCondition(
     payload !== null,
@@ -385,8 +385,8 @@ function runEvalOne(runDirectory) {
     ? payload.tool_names.map(String)
     : [];
   assertCondition(
-    allToolNames.includes('spawn_subagent'),
-    `E1: expected tool_names to include spawn_subagent, got ${JSON.stringify(allToolNames)}`,
+    allToolNames.includes(SPAWN_SUBAGENT_TOOL),
+    `E1: expected tool_names to include ${SPAWN_SUBAGENT_TOOL}, got ${JSON.stringify(allToolNames)}`,
   );
   return payload;
 }
