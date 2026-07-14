@@ -66,7 +66,13 @@ def _get_pr_head_sha(*, owner: str, repo: str, number: int) -> str:
     if returncode != 0:
         sys.stderr.write(f"gh api error fetching PR object: {stdout}\n")
         raise SystemExit(EXIT_CODE_GH_ERROR)
-    pr_object = json.loads(stdout)
+    try:
+        pr_object = json.loads(stdout)
+    except json.JSONDecodeError:
+        sys.stderr.write("gh api PR object response not valid JSON\n")
+        raise SystemExit(EXIT_CODE_GH_ERROR) from None
+    if not isinstance(pr_object, dict):
+        raise SystemExit(EXIT_CODE_GH_ERROR)
     head_sha: object = pr_object.get("head", {}).get("sha")
     if not isinstance(head_sha, str):
         raise SystemExit(EXIT_CODE_GH_ERROR)
@@ -98,7 +104,10 @@ def _get_mergeable(*, owner: str, repo: str, number: int) -> tuple[bool, str]:
     returncode, stdout = _gh_api(endpoint)
     if returncode != 0:
         return False, f"gh api error: {stdout}"
-    pr_object = json.loads(stdout)
+    try:
+        pr_object = json.loads(stdout)
+    except json.JSONDecodeError:
+        return False, "gh api response not valid JSON"
     if not isinstance(pr_object, dict):
         return False, "unknown"
     return _evaluate_mergeable_from_pr_object(pr_object)
