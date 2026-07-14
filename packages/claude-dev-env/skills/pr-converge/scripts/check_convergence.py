@@ -357,6 +357,9 @@ def _load_convergence_fixture(from_path: Path) -> ConvergenceFixture:
     if not isinstance(reviews, list):
         raise ValueError("fixture reviews must be a list")
     typed_reviews = [each for each in reviews if isinstance(each, dict)]
+    typed_reviews.sort(
+        key=lambda each_review: str(each_review.get("submitted_at", "")), reverse=True
+    )
     is_threads_ok = payload.get(FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED, True)
     threads_detail = payload.get(
         FIXTURE_KEY_UNRESOLVED_BOT_THREADS_DETAIL, FIXTURE_DEFAULT_THREADS_DETAIL
