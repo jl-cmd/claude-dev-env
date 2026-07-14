@@ -63,3 +63,9 @@ GIT_PORCELAIN_FLAG: str = "--porcelain"
 
 IN_SESSION_RETURNCODE: int = 0
 """Return code reported when the helper hands the review back to the in-session skill."""
+
+HOST_PROFILE_ERROR_RETURNCODE: int = 1
+"""Return code when host-profile detection raises ValueError at the CLI boundary."""
+
+SUCCESSFUL_REVIEW_RETURNCODE: int = 0
+"""Return code required before a clean stamp may advance past CODE_REVIEW."""

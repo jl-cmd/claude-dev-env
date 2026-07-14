@@ -15,6 +15,11 @@ the spawn does not wait for interactive input. Result JSON on stdout only::
 
     {"mode", "served_command", "returncode", "dirty_tree"}
 
+A clean stamp requires a successful serve (``returncode == 0``, and for chain
+mode a non-null ``served_command``) plus ``dirty_tree`` false. A failed chain
+or config/host error leaves the tree clean but must not advance past
+CODE_REVIEW — use ``is_code_review_clean_stamp_allowed``.
+
 Import ``invoke_code_review`` for the outcome object, or run as a CLI::
 
     python invoke_code_review.py --cwd <dir> --session-model <alias>
@@ -45,7 +50,14 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     HOST_PROFILE_CLAUDE,
 )
 import claude_chain_runner as chain_runner  # noqa: E402
-from claude_chain_runner import ChainInvocationOutcome, run_claude  # noqa: E402
+from claude_chain_runner import (  # noqa: E402
+    ChainConfigurationError,
+    ChainInvocationOutcome,
+    run_claude,
+)
+from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
+    CHAIN_CONFIG_ERROR_EXIT_CODE,
+)
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
@@ -53,6 +65,7 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     GIT_BINARY,
     GIT_PORCELAIN_FLAG,
     GIT_STATUS_SUBCOMMAND,
+    HOST_PROFILE_ERROR_RETURNCODE,
     IN_SESSION_RETURNCODE,
     MODE_CHAIN,
     MODE_IN_SESSION,
@@ -62,6 +75,7 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     RESULT_KEY_MODE,
     RESULT_KEY_RETURNCODE,
     RESULT_KEY_SERVED_COMMAND,
+    SUCCESSFUL_REVIEW_RETURNCODE,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CLI_TIMEOUT_FLAG,
@@ -178,18 +192,23 @@ def build_code_review_arguments() -> list[str]:
 
 
 def is_working_tree_dirty(working_directory: Path) -> bool:
-    """Return True when ``git status --porcelain`` reports any path.
+    """Return True when the tree is dirty or ``git status`` fails.
 
     ::
 
         is_working_tree_dirty(clean_repo)  # ok: False
         is_working_tree_dirty(dirty_repo)  # ok: True
+        is_working_tree_dirty(broken_git)  # ok: True (non-zero status)
+
+    A non-zero ``git status`` return code must not report clean: the caller
+    treats an unknown tree as dirty so a clean stamp cannot bypass the gate.
 
     Args:
         working_directory: Git working tree to inspect.
 
     Returns:
-        True when the porcelain status output is non-empty after strip.
+        True when porcelain output is non-empty, or when git status exits
+        non-zero.
     """
     completion = review_git_status_runner(
         [GIT_BINARY, GIT_STATUS_SUBCOMMAND, GIT_PORCELAIN_FLAG],
@@ -198,8 +217,62 @@ def is_working_tree_dirty(working_directory: Path) -> bool:
         text=True,
         check=False,
     )
+    if completion.returncode != 0:
+        return True
     return bool(completion.stdout.strip())
 
+
+def is_successful_code_review(review_outcome: CodeReviewOutcome) -> bool:
+    """Return True when the invocation completed a successful review serve.
+
+    ::
+
+        is_successful_code_review(in_session_ok)   # ok: True
+        is_successful_code_review(chain_served)    # ok: True
+        is_successful_code_review(chain_failed)    # ok: False
+
+    Success requires ``returncode == 0``. Chain mode also requires a non-null
+    ``served_command``. In-session mode hands the slash command to the skill,
+    so ``served_command`` stays null by design.
+
+    Args:
+        review_outcome: Structured outcome from ``invoke_code_review``.
+
+    Returns:
+        True when the outcome is a successful serve that may stamp clean if
+        the working tree is also clean.
+    """
+    if review_outcome.returncode != SUCCESSFUL_REVIEW_RETURNCODE:
+        return False
+    if review_outcome.mode == MODE_CHAIN and review_outcome.served_command is None:
+        return False
+    return True
+
+
+def is_code_review_clean_stamp_allowed(review_outcome: CodeReviewOutcome) -> bool:
+    """Return True when the outcome may set ``code_review_clean_at``.
+
+    ::
+
+        is_code_review_clean_stamp_allowed(chain_clean_ok)     # ok: True
+        is_code_review_clean_stamp_allowed(chain_failed)       # ok: False
+        is_code_review_clean_stamp_allowed(chain_dirty_ok)     # ok: False
+
+    Clean stamp requires a successful serve and a clean working tree.
+    ``dirty_tree`` alone is not enough: a failed chain leaves the tree clean
+    and must stay in CODE_REVIEW.
+
+    Args:
+        review_outcome: Structured outcome from ``invoke_code_review``.
+
+    Returns:
+        True only when the review succeeded and ``is_dirty_tree`` is False.
+    """
+    if not is_successful_code_review(review_outcome):
+        return False
+    if review_outcome.is_dirty_tree:
+        return False
+    return True
 
 def _run_claude_with_empty_stdin(
     all_claude_arguments: list[str],
@@ -265,6 +338,14 @@ def _chain_outcome(
         is_dirty_tree=is_working_tree_dirty(working_directory),
     )
 
+
+def _failure_code_review_outcome(returncode: int) -> CodeReviewOutcome:
+    return CodeReviewOutcome(
+        mode=MODE_CHAIN,
+        served_command=None,
+        returncode=returncode,
+        is_dirty_tree=False,
+    )
 
 def invoke_code_review(
     *,
@@ -351,6 +432,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 def main(all_command_arguments: list[str]) -> int:
     """Run the invoker for CLI arguments and print the JSON outcome.
 
+    ``ChainConfigurationError`` and host ``ValueError`` still emit result JSON
+    on stdout (no traceback-only failure). The non-zero return code and null
+    ``served_command`` block a clean stamp.
+
     Args:
         all_command_arguments: The argument vector after the program name.
 
@@ -359,11 +444,16 @@ def main(all_command_arguments: list[str]) -> int:
     """
     parser = _build_argument_parser()
     parsed_arguments = parser.parse_args(all_command_arguments)
-    review_outcome = invoke_code_review(
-        working_directory=parsed_arguments.working_directory,
-        session_model=parsed_arguments.session_model,
-        timeout_seconds=parsed_arguments.timeout_seconds,
-    )
+    try:
+        review_outcome = invoke_code_review(
+            working_directory=parsed_arguments.working_directory,
+            session_model=parsed_arguments.session_model,
+            timeout_seconds=parsed_arguments.timeout_seconds,
+        )
+    except ChainConfigurationError:
+        review_outcome = _failure_code_review_outcome(CHAIN_CONFIG_ERROR_EXIT_CODE)
+    except ValueError:
+        review_outcome = _failure_code_review_outcome(HOST_PROFILE_ERROR_RETURNCODE)
     encoded_payload = encode_code_review_outcome(review_outcome)
     sys.stdout.write(json.dumps(encoded_payload) + "\n")
     return review_outcome.returncode

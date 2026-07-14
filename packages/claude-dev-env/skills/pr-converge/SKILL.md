@@ -299,19 +299,26 @@ round as converged. This rule holds every tick, every loop, every PR.
       `python "$HOME/.claude/scripts/invoke_code_review.py" --cwd <PR-worktree>
       --session-model <alias>`. Chain mode uses that cwd and empty stdin; the
       chain process never commits and never pushes. JSON stdout carries
-      `mode` (`in_session` | `chain`) and `dirty_tree`.
+      `mode` (`in_session` | `chain`), `served_command`, `returncode`, and
+      `dirty_tree`. Config/host errors still emit that JSON with non-zero
+      `returncode` (no traceback-only failure).
 
       - [ ] **Static sweep fails** → apply shared fix protocol → push → reset markers
             → stay CODE_REVIEW → Step 5
       - [ ] **`mode == in_session`** (Claude host, session model opus) → run
             `/code-review high --fix` in-session (no path args)
       - [ ] **`mode == chain`** (any other host or non-opus session) → helper
-            already ran the headless review; use `dirty_tree` from JSON
+            already ran the headless review; read `returncode`,
+            `served_command`, and `dirty_tree` from JSON
+      - [ ] **failed review** (`returncode != 0`, or chain with null
+            `served_command`) → do not set `code_review_clean_at` → stay
+            CODE_REVIEW → Step 5
       - [ ] **fixes applied** (`dirty_tree` true / working tree dirty) →
             commit + push via shared fix protocol → reset markers → stay
             CODE_REVIEW → Step 5
-      - [ ] **clean** (`dirty_tree` false / no changes) → zero unresolved
-            threads (else fix + resolve) →
+      - [ ] **clean** (successful serve: `returncode == 0`, chain
+            `served_command` non-null when chain, and `dirty_tree` false) →
+            zero unresolved threads (else fix + resolve) →
             `code_review_clean_at = current_head` → `phase = BUGTEAM` → Step 6
 
 - [ ] **Step 6: BUGTEAM — run, decide, fix, reply, resolve**

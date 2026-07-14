@@ -152,7 +152,9 @@ so the spawn does not wait for input.
 
 After a chain run, a non-empty `git status --porcelain` means the review
 applied fixes. The calling host commits and pushes those fixes per the fix
-protocol. The chain process never commits or posts.
+protocol. The chain process never commits or posts. A clean stamp requires
+`returncode == 0` and a non-null `served_command` plus a clean tree —
+`dirty_tree` false alone is not enough when the chain failed or never served.
 
 GitHub transport (`pr-loop-cloud-transport`) is a separate axis from this
 harness branch. That skill routes `gh` vs MCP; it does not change which host
