@@ -657,7 +657,7 @@ const COPILOT_SCHEMA = {
   properties: {
     sha: { type: 'string' },
     clean: { type: 'boolean' },
-    down: { type: 'boolean', description: 'true when Copilot is down or out of quota — it posts an out-of-usage notice or never surfaces a review on HEAD after the poll cap; the gate is bypassed and the run proceeds to mark-ready' },
+    down: { type: 'boolean', description: 'true when Copilot is down or out of quota — it posts an out-of-usage notice or never surfaces a review on HEAD after the poll cap; the gate is bypassed and the run proceeds to the Codex gate' },
     reviewUrl: { type: 'string', description: 'the Copilot review html_url when the gate carries findings, otherwise an empty string — the user-review payload links the orchestrator and the user to the review' },
     findings: COPILOT_FINDINGS_SCHEMA,
   },
@@ -2018,7 +2018,7 @@ function resolveCleanAuditNote(auditResult, head, rounds) {
  * poll cap is hit; return Copilot's findings or a down signal. Copilot is down
  * when it posts an out-of-usage notice (the requester hit their quota) rather
  * than a review, or surfaces no review at all after the poll cap; the gate
- * reports either as down so the run logs a notice and proceeds to mark-ready with
+ * reports either as down so the run logs a notice and proceeds to the Codex gate with
  * the gate bypassed rather than waiting on a review that will not arrive.
  * @param {string} head converged PR HEAD SHA
  * @returns {Promise<object>} COPILOT_SCHEMA result
