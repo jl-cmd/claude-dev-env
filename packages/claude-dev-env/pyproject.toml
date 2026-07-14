@@ -23,6 +23,7 @@ packages = [
     "bugteam_scripts_constants",
     "usage_pause_constants",
     "copilot_finding_triage_constants",
+    "codex_review_scripts_constants",
     "dev_env_scripts_constants",
     "advisor_scripts_constants",
 ]
@@ -37,5 +38,6 @@ pr_converge_scripts_constants = "skills/pr-converge/scripts/pr_converge_scripts_
 bugteam_scripts_constants = "skills/bugteam/scripts/bugteam_scripts_constants"
 usage_pause_constants = "skills/usage-pause/scripts/usage_pause_constants"
 copilot_finding_triage_constants = "skills/copilot-finding-triage/scripts/copilot_finding_triage_constants"
+codex_review_scripts_constants = "skills/codex-review/scripts/codex_review_scripts_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
 advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"
