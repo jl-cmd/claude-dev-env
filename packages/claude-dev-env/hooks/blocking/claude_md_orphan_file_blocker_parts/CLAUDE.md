@@ -18,7 +18,7 @@ hook imports them and re-exports their surface for the test suite.
 
 | Entry | Description |
 |---|---|
-| `config/` | The region-join newline and the retry hint the deny reason closes with (`orphan_blocker_constants.py`) |
+| `config/` | The region-join newline, the retry hint the deny reason closes with, and the missing-name join separator (`orphan_blocker_constants.py`) |
 | `tests/` | pytest suite with one test module per module above |
 
 ## Running tests

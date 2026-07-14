@@ -16,7 +16,7 @@ re-exports their surface for the test suite.
 
 | Entry | Description |
 |---|---|
-| `config/` | The retry hint the deny reason closes with (`inventory_blocker_constants.py`) |
+| `config/` | The retry hint the deny reason closes with and the inventory-name join separator (`inventory_blocker_constants.py`) |
 | `tests/` | pytest suite with one test module per module above |
 
 ## Running tests
