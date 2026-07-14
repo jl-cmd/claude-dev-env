@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,7 +16,9 @@ from types import ModuleType
 
 import pytest
 from codex_review_scripts_constants.codex_usage_probe_constants import (
+    CODEX_BINARY_NAME,
     EXIT_CODE_SUCCESS,
+    PERCENT_EMPTY,
     PERCENT_FULL,
     SOURCE_APP_SERVER_RATE_LIMITS,
     SOURCE_NO_USAGE_SURFACE,
@@ -123,8 +126,14 @@ TEXT_STATUS_WITH_WEEKLY_LEFT = (
     "Weekly limit: 42% left (resets 2026-07-19T23:49:08+00:00)\n"
 )
 
+TEXT_STATUS_WITH_RESETS_AT_PHRASING = (
+    "Status\n"
+    "Weekly limit: 42% left, resets at 2026-07-19T23:49:08+00:00\n"
+)
+
 TIMEOUT_SECONDS = 30
 TIMEOUT_COMMAND = "codex"
+
 
 
 def load_probe_module() -> ModuleType:
@@ -225,6 +234,16 @@ class TestParseTextStatus:
         )
         assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_TEXT_STATUS
 
+    def should_parse_window_reset_from_resets_at_phrasing(self) -> None:
+        probe = load_probe_module()
+        usage_report = probe.parse_text_usage_status(
+            TEXT_STATUS_WITH_RESETS_AT_PHRASING
+        )
+        assert (
+            usage_report[USAGE_REPORT_KEY_WINDOW_RESET]
+            == EXPECTED_TEXT_STATUS_WINDOW_RESET
+        )
+
     def should_yield_null_for_login_status_without_usage(self) -> None:
         probe = load_probe_module()
         usage_report = probe.parse_text_usage_status(
@@ -232,6 +251,33 @@ class TestParseTextStatus:
         )
         assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] is None
         assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_NO_USAGE_SURFACE
+
+
+class TestRealAppServerExchange:
+    """Drives the real ``codex app-server`` subprocess, not an injected fake.
+
+    The injected-exchange tests above cannot see a transport that never
+    delivers a reply, so this case runs the shipped subprocess exchange
+    against the installed binary and asserts a live weekly meter comes back.
+    Missing ``codex`` on PATH fails this test with a clear assertion rather
+    than a skip.
+    """
+
+    def should_read_a_live_weekly_meter_from_the_installed_binary(self) -> None:
+        assert (
+            shutil.which(CODEX_BINARY_NAME) is not None
+        ), f"{CODEX_BINARY_NAME} binary is required on PATH for real app-server coverage"
+        probe = load_probe_module()
+        usage_report = probe.probe_weekly_usage(
+            exchange_app_server_messages=(
+                probe._exchange_app_server_messages_via_subprocess
+            )
+        )
+        percent_left = usage_report[USAGE_REPORT_KEY_PERCENT_LEFT]
+        assert percent_left is not None
+        assert PERCENT_EMPTY <= percent_left <= PERCENT_FULL
+        assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_APP_SERVER_RATE_LIMITS
+        assert usage_report[USAGE_REPORT_KEY_WINDOW_RESET] is not None
 
 
 class TestProbeWeeklyUsage:

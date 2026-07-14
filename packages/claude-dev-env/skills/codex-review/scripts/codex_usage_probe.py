@@ -32,9 +32,10 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from typing import Protocol
+from typing import IO, Protocol
 
 from codex_review_scripts_constants.codex_usage_probe_constants import (
     ALL_APP_SERVER_COMMAND_PARTS,
@@ -325,28 +326,89 @@ def _resolve_codex_command() -> list[str]:
     return [codex_path, *ALL_APP_SERVER_COMMAND_PARTS]
 
 
+def _is_rate_limits_reply(message_text: str) -> bool:
+    """Return whether a stdout line is the reply to our rate-limits request."""
+    try:
+        message_payload = json.loads(message_text)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(message_payload, dict):
+        return False
+    return message_payload.get(JSONRPC_KEY_ID) == RATE_LIMITS_REQUEST_ID
+
+
+def _collect_server_lines(
+    server_stdout: IO[str],
+    all_server_lines: list[str],
+    is_exchange_over: threading.Event,
+) -> None:
+    """Append server stdout lines until the rate-limits reply lands or stdout ends."""
+    try:
+        for each_line in server_stdout:
+            stripped_line = each_line.strip()
+            if not stripped_line:
+                continue
+            all_server_lines.append(stripped_line)
+            if _is_rate_limits_reply(stripped_line):
+                break
+    except (OSError, ValueError):
+        pass
+    is_exchange_over.set()
+
+
 def _exchange_app_server_messages_via_subprocess(
     all_request_messages: list[dict[str, object]],
 ) -> list[str]:
+    """Run ``codex app-server`` and collect its replies to the probe's requests.
+
+    ::
+
+        write requests -> stdin stays OPEN -> server answers -> read reply -> close
+
+    The server treats end-of-input on stdin as a shutdown signal, so it exits
+    without answering when stdin closes right after the requests are written.
+    Stdin is held open until the rate-limits reply arrives or the timeout runs
+    out, then the server is torn down.
+
+    Args:
+        all_request_messages: JSON-RPC request/notification objects to send.
+
+    Returns:
+        The non-empty stdout lines the server emitted before the exchange ended.
+    """
     all_command_parts = _resolve_codex_command()
     stdin_text = NEWLINE.join(
         json.dumps(each_message) for each_message in all_request_messages
     ) + NEWLINE
-    completed = subprocess.run(
+    all_server_lines: list[str] = []
+    is_exchange_over = threading.Event()
+    with subprocess.Popen(
         all_command_parts,
-        input=stdin_text,
-        capture_output=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
         text=True,
         encoding=UTF8_ENCODING,
-        timeout=APP_SERVER_TIMEOUT_SECONDS,
-        check=False,
         shell=False,
-    )
-    return [
-        each_line
-        for each_line in completed.stdout.splitlines()
-        if each_line.strip()
-    ]
+    ) as server_process:
+        server_stdin = server_process.stdin
+        server_stdout = server_process.stdout
+        if server_stdin is None or server_stdout is None:
+            server_process.kill()
+            raise OSError("codex app-server offered no stdio pipes")
+        reader_thread = threading.Thread(
+            target=_collect_server_lines,
+            args=(server_stdout, all_server_lines, is_exchange_over),
+            daemon=True,
+        )
+        reader_thread.start()
+        try:
+            server_stdin.write(stdin_text)
+            server_stdin.flush()
+            is_exchange_over.wait(timeout=APP_SERVER_TIMEOUT_SECONDS)
+        finally:
+            server_process.kill()
+    return list(all_server_lines)
 
 
 def _usage_report_from_server_lines(all_server_lines: Sequence[str]) -> UsageReport:

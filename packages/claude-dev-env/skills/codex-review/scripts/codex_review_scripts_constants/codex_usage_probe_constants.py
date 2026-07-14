@@ -69,7 +69,7 @@ TEXT_WEEKLY_USED_PERCENT_PATTERN = (
     r"(?P<percent>\d{1,3}(?:\.\d+)?)\s*%\s*(?:used|consumed)"
 )
 TEXT_WINDOW_RESET_PATTERN = (
-    r"(?i)(?:weekly\s+)?(?:resets?|reset\s+at|window\s+reset)"
+    r"(?i)(?:weekly\s+)?(?:window\s+)?resets?(?:\s+at)?"
     r"[:\s]+(?P<reset>[^\s)\].,;]+)"
 )
 

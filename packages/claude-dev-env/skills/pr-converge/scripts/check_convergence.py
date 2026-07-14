@@ -41,6 +41,7 @@ from check_convergence_gates import (
     _get_pr_head_sha,
     _gh_api_paginated,
     _short_sha,
+    _sort_reviews_newest_first,
     _evaluate_mergeable_from_pr_object,
 )
 from check_convergence_thread_gates import (
@@ -356,9 +357,8 @@ def _load_convergence_fixture(from_path: Path) -> ConvergenceFixture:
         raise ValueError("fixture pr_object must be an object")
     if not isinstance(reviews, list):
         raise ValueError("fixture reviews must be a list")
-    typed_reviews = [each for each in reviews if isinstance(each, dict)]
-    typed_reviews.sort(
-        key=lambda each_review: str(each_review.get("submitted_at", "")), reverse=True
+    typed_reviews = _sort_reviews_newest_first(
+        [each for each in reviews if isinstance(each, dict)]
     )
     is_threads_ok = payload.get(FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED, True)
     threads_detail = payload.get(
