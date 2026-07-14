@@ -822,6 +822,7 @@ function install(selectedGroups, options = {}) {
     let skillsUpdated = 0;
     const skillPaths = [];
     const installedSkillNames = new Set();
+    const copiedSkillNames = new Set();
     for (const sourceRoot of allSourceRoots) {
         const skillsSource = join(sourceRoot, 'skills');
         if (!existsSync(skillsSource)) continue;
@@ -832,6 +833,7 @@ function install(selectedGroups, options = {}) {
             skillsCreated += stats.created;
             skillsUpdated += stats.updated;
             skillPaths.push(...stats.paths);
+            copiedSkillNames.add(skillDir.name);
             if (existsSync(join(skillsSource, skillDir.name, SKILL_MANIFEST_FILENAME))) {
                 installedSkillNames.add(skillDir.name);
             }
@@ -931,7 +933,7 @@ function install(selectedGroups, options = {}) {
                 + 'A skill that migrated to a dependency package would look retired and be moved to backup, so the prune is held until every dependency resolves.',
             );
         } else {
-            pruneRetiredSkills(installedSkillNames, priorManifestSkills);
+            pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
         }
         manifestSkillNames = [...installedSkillNames].sort();
     }

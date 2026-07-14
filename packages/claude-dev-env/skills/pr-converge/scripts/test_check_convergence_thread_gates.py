@@ -67,6 +67,30 @@ def test_count_unresolved_bot_threads_counts_a_single_cursor_thread(
     assert "src/app.py" in detail
 
 
+def test_check_no_pending_reviews_fails_closed_on_unparseable_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _stub_gh_api(endpoint_path: str) -> tuple[int, str]:
+        return 0, "not json at all"
+
+    monkeypatch.setattr(thread_gates, "_gh_api", _stub_gh_api)
+    passed, detail = thread_gates._check_no_pending_reviews(owner="o", repo="r", number=1)
+    assert passed is False
+    assert "not valid JSON" in detail
+
+
+def test_check_no_pending_reviews_passes_when_no_copilot_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _stub_gh_api(endpoint_path: str) -> tuple[int, str]:
+        return 0, json.dumps({"users": [], "teams": []})
+
+    monkeypatch.setattr(thread_gates, "_gh_api", _stub_gh_api)
+    passed, detail = thread_gates._check_no_pending_reviews(owner="o", repo="r", number=1)
+    assert passed is True
+    assert "no pending reviewers" in detail
+
+
 def test_format_unresolved_detail_bounds_the_listed_paths() -> None:
     over_limit = thread_gates.UNRESOLVED_THREAD_DETAIL_MAX + 2
     all_threads = [{"path": f"file{each_index}.py"} for each_index in range(over_limit)]

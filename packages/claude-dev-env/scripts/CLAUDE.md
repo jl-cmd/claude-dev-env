@@ -14,6 +14,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `spawn_grok_batch.py` | Launches a fleet of headless grok workers from a JSON batch spec: gates once through the preflight, assembles each prompt from part files, staggers starts, runs each through `grok_headless_runner.py`, and emits one batch summary JSON |
 | `sweep_empty_dirs.py` | Deletes empty directories older than a configurable age under a given root; runs once (`--once`) or in continuous-watch mode |
 | `sync_to_cursor.py` | Entry point for syncing Claude rules to Cursor `.mdc` files; delegates to the `sync_to_cursor/` package |
+| `resolve_worker_spawn.py` | Dispatches a worker role through grok then claude fallback tiers (preflight, headless grok, `claude_agent_required` handoff, optional claude headless); protocol: [`../_shared/pr-loop/worker-spawn.md`](../_shared/pr-loop/worker-spawn.md) |
 
 ## PowerShell scripts
 
