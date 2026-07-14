@@ -22,6 +22,7 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
 from codex_review_scripts_constants.codex_usage_probe_constants import (
+    EXIT_CODE_CRASH,
     EXIT_CODE_SUCCESS,
     PERCENT_FULL,
     READER_THREAD_JOIN_TIMEOUT_SECONDS,
@@ -184,6 +185,19 @@ def _assert_main_yields_null_skip_report(
 ) -> None:
     exit_code = probe.main()
     assert exit_code == EXIT_CODE_SUCCESS
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload[USAGE_REPORT_KEY_PERCENT_LEFT] is None
+    assert payload[USAGE_REPORT_KEY_SOURCE] == SOURCE_NO_USAGE_SURFACE
+    assert USAGE_REPORT_KEY_WINDOW_RESET in payload
+
+
+def _assert_main_yields_cli_failure_not_usage_skip(
+    probe: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = probe.main()
+    assert exit_code == EXIT_CODE_CRASH
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     assert payload[USAGE_REPORT_KEY_PERCENT_LEFT] is None
@@ -532,7 +546,7 @@ class TestMainExitCodes:
         )
         _assert_main_yields_null_skip_report(probe, capsys)
 
-    def should_exit_zero_with_null_report_when_binary_missing(
+    def should_exit_nonzero_when_binary_missing(
         self,
         capsys: pytest.CaptureFixture[str],
         monkeypatch: pytest.MonkeyPatch,
@@ -550,9 +564,9 @@ class TestMainExitCodes:
             "_exchange_app_server_messages_via_subprocess",
             missing_binary_exchange,
         )
-        _assert_main_yields_null_skip_report(probe, capsys)
+        _assert_main_yields_cli_failure_not_usage_skip(probe, capsys)
 
-    def should_exit_zero_with_null_report_when_subprocess_times_out(
+    def should_exit_nonzero_when_subprocess_times_out(
         self,
         capsys: pytest.CaptureFixture[str],
         monkeypatch: pytest.MonkeyPatch,
@@ -573,9 +587,9 @@ class TestMainExitCodes:
             "_exchange_app_server_messages_via_subprocess",
             timeout_exchange,
         )
-        _assert_main_yields_null_skip_report(probe, capsys)
+        _assert_main_yields_cli_failure_not_usage_skip(probe, capsys)
 
-    def should_exit_zero_with_null_report_when_os_error(
+    def should_exit_nonzero_when_os_error(
         self,
         capsys: pytest.CaptureFixture[str],
         monkeypatch: pytest.MonkeyPatch,
@@ -593,9 +607,9 @@ class TestMainExitCodes:
             "_exchange_app_server_messages_via_subprocess",
             os_error_exchange,
         )
-        _assert_main_yields_null_skip_report(probe, capsys)
+        _assert_main_yields_cli_failure_not_usage_skip(probe, capsys)
 
-    def should_exit_zero_with_null_report_when_subprocess_error(
+    def should_exit_nonzero_when_subprocess_error(
         self,
         capsys: pytest.CaptureFixture[str],
         monkeypatch: pytest.MonkeyPatch,
@@ -613,7 +627,7 @@ class TestMainExitCodes:
             "_exchange_app_server_messages_via_subprocess",
             subprocess_error_exchange,
         )
-        _assert_main_yields_null_skip_report(probe, capsys)
+        _assert_main_yields_cli_failure_not_usage_skip(probe, capsys)
 
     def should_exit_zero_with_null_report_when_json_rpc_error_payload(
         self,
@@ -637,7 +651,7 @@ class TestMainExitCodes:
         )
         _assert_main_yields_null_skip_report(probe, capsys)
 
-    def should_exit_zero_with_null_report_when_unicode_decode_error(
+    def should_exit_nonzero_when_unicode_decode_error(
         self,
         capsys: pytest.CaptureFixture[str],
         monkeypatch: pytest.MonkeyPatch,
@@ -661,4 +675,4 @@ class TestMainExitCodes:
             "_exchange_app_server_messages_via_subprocess",
             unicode_decode_error_exchange,
         )
-        _assert_main_yields_null_skip_report(probe, capsys)
+        _assert_main_yields_cli_failure_not_usage_skip(probe, capsys)
