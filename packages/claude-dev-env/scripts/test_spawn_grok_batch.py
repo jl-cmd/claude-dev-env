@@ -51,6 +51,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TOOL_PROFILE_BUILD,
     TOOL_PROFILE_READONLY,
     UTF8_ENCODING,
+    WORKER_SPEC_AGENT_NAME_KEY,
     WORKER_SPEC_MAX_TURNS_KEY,
     WORKER_SPEC_PROMPT_PARTS_KEY,
     WORKER_SPEC_TIMEOUT_KEY,
@@ -888,3 +889,86 @@ def test_load_batch_spec_accepts_default_timeout_and_max_turns(
     assert len(batch_spec.all_workers) == 1
     assert batch_spec.all_workers[0].timeout_seconds == DEFAULT_WORKER_TIMEOUT_SECONDS
     assert batch_spec.all_workers[0].max_turns == DEFAULT_WORKER_MAX_TURNS
+
+
+def test_unwritable_report_file_keeps_the_worker_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path, role_marker="disk-full")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    batch_spec = batch.load_batch_spec(
+        _write_batch_spec(
+            tmp_path,
+            all_worker_payloads=[
+                _worker_payload(
+                    role_name="disk-full",
+                    all_prompt_parts=[str(header_part), str(body_part)],
+                    working_directory=working_directory,
+                    tool_profile=TOOL_PROFILE_READONLY,
+                )
+            ],
+        )
+    )
+    recorder = _RunnerRecorder({"disk-full": _ok_outcome()})
+
+    def _unwritable_report(_report_path: Path, _report_text: str) -> None:
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+    monkeypatch.setattr(batch, "_write_report_file", _unwritable_report)
+
+    batch_summary = batch.run_grok_batch(
+        batch_spec=batch_spec,
+        run_state_directory=run_state_directory,
+    )
+
+    worker_report = batch_summary.all_worker_reports[0]
+    assert worker_report.is_ok is True
+    assert worker_report.classification == CLASSIFICATION_OK
+    assert worker_report.returncode == 0
+    assert worker_report.report_text == FIXTURE_REPORT_TEXT
+
+
+def test_batch_with_no_workers_returns_an_empty_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+
+    batch_summary = batch.run_grok_batch(
+        batch_spec=batch.BatchSpec(
+            role=DEFAULT_ROLE, should_ping=False, all_workers=()
+        ),
+        run_state_directory=tmp_path / "run-state",
+    )
+
+    assert batch_summary.is_preflight_usable is True
+    assert batch_summary.all_worker_reports == ()
+
+
+def test_load_batch_spec_rejects_empty_agent_name(tmp_path: Path) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="blank-agent-worker",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload[WORKER_SPEC_AGENT_NAME_KEY] = ""
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError, match=WORKER_SPEC_AGENT_NAME_KEY):
+        batch.load_batch_spec(specification_path)

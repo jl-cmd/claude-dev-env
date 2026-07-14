@@ -2,9 +2,10 @@
 """Batch launcher and report collector for fleets of headless grok workers.
 
 Loads a JSON batch specification, gates once through ``run_preflight``,
-assembles each worker prompt from part files, mints unique leader-socket and
-output paths under the run state directory, staggers starts, and launches each
-worker through ``run_headless_worker``. Emits one batch summary JSON on stdout.
+assembles each worker prompt from part files, mints unique prompt, report,
+leader-socket, and debug paths under the run state directory, staggers starts,
+and launches each worker through ``run_headless_worker``. Emits one batch
+summary JSON on stdout.
 
 Import ``run_grok_batch`` for the summary object, or run the module as a CLI::
 
@@ -295,6 +296,8 @@ def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
         raise ValueError(f"unknown tool_profile: {tool_profile}")
     if agent_name is not None and not isinstance(agent_name, str):
         raise ValueError("worker agent_name must be a string or null")
+    if isinstance(agent_name, str) and not agent_name:
+        raise ValueError("worker agent_name must be non-empty or null")
     all_prompt_part_paths = tuple(
         Path(_require_string(each_part, WORKER_SPEC_PROMPT_PARTS_KEY))
         for each_part in all_prompt_parts
@@ -433,7 +436,8 @@ def _build_worker_report(
     scratch_paths: WorkerScratchPaths,
 ) -> WorkerReport:
     report_text = _report_text_from_outcome(outcome)
-    _write_report_file(scratch_paths.report_path, report_text)
+    with suppress(OSError):
+        _write_report_file(scratch_paths.report_path, report_text)
     return WorkerReport(
         role_name=worker_spec.role_name,
         tool_profile=worker_spec.tool_profile,
@@ -497,9 +501,7 @@ def _launch_one_worker(
         ValueError,
         RuntimeError,
         TypeError,
-        KeyError,
         AttributeError,
-        UnicodeError,
         LookupError,
     ) as raised_exception:
         return _error_report_for_exception(
@@ -536,6 +538,12 @@ def run_grok_batch(
             all_worker_reports=(),
         )
     worker_count = len(batch_spec.all_workers)
+    if not worker_count:
+        return BatchSummary(
+            is_preflight_usable=True,
+            preflight_reason=None,
+            all_worker_reports=(),
+        )
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         all_futures = [
             executor.submit(
