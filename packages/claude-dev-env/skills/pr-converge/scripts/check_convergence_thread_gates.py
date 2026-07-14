@@ -207,7 +207,7 @@ def _check_no_pending_reviews(
     try:
         pending_payload = json.loads(stdout)
     except json.JSONDecodeError:
-        return True, "no pending (empty response)"
+        return False, "pending-reviewers response not valid JSON"
     copilot_pending = _pending_copilot_logins(
         _requested_reviewer_users(pending_payload)
     )

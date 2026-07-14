@@ -744,7 +744,7 @@ def test_missing_prompt_file_returns_json_config_exit(
         ]
     )
 
-    assert exit_code in {SPAWN_EXHAUSTED_EXIT_CODE, SPAWN_CONFIG_ERROR_EXIT_CODE}
+    assert exit_code == SPAWN_CONFIG_ERROR_EXIT_CODE
     captured = capsys.readouterr()
     assert captured.err == ""
     parsed_payload = json.loads(captured.out)
@@ -752,6 +752,148 @@ def test_missing_prompt_file_returns_json_config_exit(
     assert parsed_payload[RESULT_KEY_TIER_USED] is None
     assert parsed_payload[RESULT_KEY_OUTPUT] == REASON_PROMPT_FILE_MISSING
     assert parsed_payload[RESULT_KEY_RETURNCODE] == SPAWN_CONFIG_ERROR_EXIT_CODE
+
+
+def _deny_prompt_open(
+    monkeypatch: pytest.MonkeyPatch,
+    prompt_file: Path,
+    open_error: OSError,
+) -> None:
+    real_open = Path.open
+    resolved_prompt = prompt_file.resolve()
+
+    def open_with_denied_prompt(
+        self: Path,
+        *all_positionals: object,
+        **all_keywords: object,
+    ) -> object:
+        if self.resolve() == resolved_prompt:
+            raise open_error
+        return real_open(self, *all_positionals, **all_keywords)
+
+    monkeypatch.setattr(Path, "open", open_with_denied_prompt)
+
+
+def _main_arguments_for_paths(
+    *,
+    prompt_file: Path,
+    working_directory: Path,
+    run_state_directory: Path,
+) -> list[str]:
+    return [
+        CLI_ROLE_FLAG,
+        FIXTURE_ROLE,
+        PROMPT_FILE_FLAG,
+        str(prompt_file),
+        CWD_FLAG,
+        str(working_directory),
+        CLI_TIMEOUT_FLAG,
+        str(DEFAULT_WORKER_TIMEOUT_SECONDS),
+        CLI_RUN_STATE_DIR_FLAG,
+        str(run_state_directory),
+    ]
+
+
+def test_unreadable_prompt_file_returns_json_config_exit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    prompt_file, working_directory, run_state_directory = _paths(tmp_path)
+    _install_seams(
+        monkeypatch,
+        grok_outcome=_grok_failure(CLASSIFICATION_AUTH_FAILURE),
+        claude_outcome=_claude_served(),
+        host_profile=HOST_PROFILE_THIRD_PARTY,
+    )
+    _deny_prompt_open(
+        monkeypatch,
+        prompt_file,
+        PermissionError("Access is denied"),
+    )
+
+    exit_code = dispatcher.main(
+        _main_arguments_for_paths(
+            prompt_file=prompt_file,
+            working_directory=working_directory,
+            run_state_directory=run_state_directory,
+        )
+    )
+
+    assert exit_code == SPAWN_CONFIG_ERROR_EXIT_CODE
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    parsed_payload = json.loads(captured.out)
+    assert parsed_payload[RESULT_KEY_OK] is False
+    assert parsed_payload[RESULT_KEY_TIER_USED] is None
+    assert parsed_payload[RESULT_KEY_OUTPUT] == REASON_PROMPT_FILE_MISSING
+    assert parsed_payload[RESULT_KEY_RETURNCODE] == SPAWN_CONFIG_ERROR_EXIT_CODE
+    assert "executable_not_found" not in json.dumps(parsed_payload)
+    all_attempt_reasons = [
+        each_attempt.get(ATTEMPT_KEY_REASON)
+        for each_attempt in parsed_payload[RESULT_KEY_ATTEMPTS]
+    ]
+    assert REASON_PROMPT_FILE_MISSING in all_attempt_reasons
+    assert "executable_not_found" not in all_attempt_reasons
+
+
+def test_prompt_open_failure_not_classified_as_executable_not_found(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    prompt_file, working_directory, run_state_directory = _paths(tmp_path)
+    monkeypatch.setattr(
+        dispatcher,
+        "spawn_preflight_runner",
+        lambda **_keyword_arguments: _fallthrough_preflight(REASON_GROK_AUTH_FAILED),
+    )
+    monkeypatch.setattr(
+        dispatcher,
+        "spawn_host_profile_detector",
+        lambda *all_positionals, **all_keywords: HOST_PROFILE_THIRD_PARTY,
+    )
+    monkeypatch.setattr(
+        chain_runner,
+        "load_chain",
+        lambda _config_path: [chain_runner.ChainEntry(command="claude", extra_args=())],
+    )
+    monkeypatch.setattr(
+        chain_runner,
+        "chain_subprocess_runner",
+        lambda *all_positionals, **all_keywords: subprocess.CompletedProcess(
+            args=["claude"],
+            returncode=0,
+            stdout="{}",
+            stderr="",
+        ),
+    )
+    _deny_prompt_open(
+        monkeypatch,
+        prompt_file,
+        FileNotFoundError(2, "No such file or directory", str(prompt_file)),
+    )
+
+    exit_code = dispatcher.main(
+        _main_arguments_for_paths(
+            prompt_file=prompt_file,
+            working_directory=working_directory,
+            run_state_directory=run_state_directory,
+        )
+    )
+
+    assert exit_code == SPAWN_CONFIG_ERROR_EXIT_CODE
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    parsed_payload = json.loads(captured.out)
+    assert parsed_payload[RESULT_KEY_OK] is False
+    assert parsed_payload[RESULT_KEY_TIER_USED] is None
+    assert parsed_payload[RESULT_KEY_OUTPUT] == REASON_PROMPT_FILE_MISSING
+    assert parsed_payload[RESULT_KEY_RETURNCODE] == SPAWN_CONFIG_ERROR_EXIT_CODE
+    serialized_payload = json.dumps(parsed_payload)
+    assert "executable_not_found" not in serialized_payload
+    all_attempt_reasons = [
+        each_attempt.get(ATTEMPT_KEY_REASON)
+        for each_attempt in parsed_payload[RESULT_KEY_ATTEMPTS]
+    ]
+    assert REASON_PROMPT_FILE_MISSING in all_attempt_reasons
+    assert "executable_not_found" not in all_attempt_reasons
 
 
 def test_headless_chain_runner_lock_serializes_distinct_cwds(
@@ -807,3 +949,66 @@ def test_headless_chain_runner_lock_serializes_distinct_cwds(
         second_working_directory,
     }
     assert chain_runner.chain_subprocess_runner is not None
+
+
+def test_usage_limit_fallover_delivers_full_prompt_to_each_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    prompt_file, working_directory, run_state_directory = _paths(tmp_path)
+    monkeypatch.setattr(
+        dispatcher,
+        "spawn_preflight_runner",
+        lambda **_keyword_arguments: _fallthrough_preflight(REASON_GROK_AUTH_FAILED),
+    )
+    monkeypatch.setattr(
+        dispatcher,
+        "spawn_host_profile_detector",
+        lambda *all_positionals, **all_keywords: HOST_PROFILE_THIRD_PARTY,
+    )
+    monkeypatch.setattr(
+        chain_runner,
+        "load_chain",
+        lambda _config_path: [
+            chain_runner.ChainEntry(command="claude", extra_args=()),
+            chain_runner.ChainEntry(command="claude-ev", extra_args=()),
+        ],
+    )
+    prompt_text_by_command: dict[str, str] = {}
+
+    def _reading_subprocess_runner(
+        all_invocation_tokens: Sequence[str],
+        *all_positionals: object,
+        **all_keywords: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del all_positionals
+        command_name = str(all_invocation_tokens[0])
+        read_prompt = getattr(all_keywords.get("stdin"), "read", None)
+        prompt_text_by_command[command_name] = read_prompt() if read_prompt else ""
+        is_primary = command_name == "claude"
+        return subprocess.CompletedProcess(
+            args=list(all_invocation_tokens),
+            returncode=(
+                FIXTURE_FAILED_RETURNCODE if is_primary else SPAWN_SERVED_EXIT_CODE
+            ),
+            stdout="usage limit reached" if is_primary else FIXTURE_CLAUDE_STDOUT,
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        chain_runner, "chain_subprocess_runner", _reading_subprocess_runner
+    )
+
+    outcome = dispatcher.resolve_worker_spawn(
+        role=DEFAULT_ROLE,
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
+        is_claude_tier_enabled=False,
+        run_state_directory=run_state_directory,
+        max_turns=DEFAULT_SPAWN_MAX_TURNS,
+    )
+
+    assert prompt_text_by_command["claude"] == FIXTURE_PROMPT_TEXT
+    assert prompt_text_by_command["claude-ev"] == FIXTURE_PROMPT_TEXT
+    assert outcome.tier_used == TIER_CLAUDE_HEADLESS
+    assert outcome.is_ok is True

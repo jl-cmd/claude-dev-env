@@ -7,6 +7,10 @@ PreToolUse hooks that deny (block) tool calls when a rule is violated. The main 
 | Directory | Role |
 |---|---|
 | `config/` | Shared constants for the verified-commit gate family (`verified_commit_constants.py`) |
+| `tdd_enforcer_parts/` | Concern modules the `tdd_enforcer.py` entry hook wires together: path classification, content analysis, candidate-path resolution, freshness, git-tracking restore detection, decisions, and constants |
+| `claude_md_orphan_file_blocker_parts/` | Concern modules the `claude_md_orphan_file_blocker.py` entry hook wires together: reference extraction, subtree scan, scan plan, decision, and constants |
+| `package_inventory_stale_blocker_parts/` | Concern modules the `package_inventory_stale_blocker.py` entry hook wires together: inventory detection, decision, and constants |
+| `inventory_intent_records/` | The shared per-session pending-intent store both inventory blockers read to break the file/row add-order deadlock |
 
 ## Core enforcer
 

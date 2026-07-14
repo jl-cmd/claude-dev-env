@@ -7,9 +7,7 @@ from types import ModuleType
 
 def _load_constants_module() -> ModuleType:
     module_path = (
-        Path(__file__).parent.parent
-        / "pr_loop_shared_constants"
-        / "code_rules_gate_constants.py"
+        Path(__file__).parent.parent / "pr_loop_shared_constants" / "code_rules_gate_constants.py"
     )
     specification = importlib.util.spec_from_file_location(
         "pr_loop_shared_constants.code_rules_gate_constants", module_path
@@ -29,27 +27,12 @@ def test_max_violations_per_check_is_typed_integer() -> None:
     assert constants_module.MAX_VIOLATIONS_PER_CHECK == 3
 
 
-def test_expected_tuple_pair_length_is_typed_integer() -> None:
-    assert isinstance(constants_module.EXPECTED_TUPLE_PAIR_LENGTH, int)
-    assert constants_module.EXPECTED_TUPLE_PAIR_LENGTH == 2
-
-
 def test_all_code_file_extensions_is_frozenset() -> None:
     assert isinstance(constants_module.ALL_CODE_FILE_EXTENSIONS, frozenset)
-    assert constants_module.ALL_CODE_FILE_EXTENSIONS == frozenset(
-        {".py", ".js", ".ts", ".tsx", ".jsx"}
+    assert (
+        frozenset({".py", ".js", ".ts", ".tsx", ".jsx"})
+        == constants_module.ALL_CODE_FILE_EXTENSIONS
     )
-
-
-def test_all_literal_keyword_exemptions_is_frozenset() -> None:
-    assert isinstance(constants_module.ALL_LITERAL_KEYWORD_EXEMPTIONS, frozenset)
-    assert constants_module.ALL_LITERAL_KEYWORD_EXEMPTIONS == frozenset(
-        {"true", "false", "none", "null"}
-    )
-
-
-def test_config_path_segment() -> None:
-    assert constants_module.CONFIG_PATH_SEGMENT == "/config/"
 
 
 def test_tests_path_segment() -> None:
@@ -73,10 +56,6 @@ def test_test_filename_prefix() -> None:
     assert constants_module.TEST_FILENAME_PREFIX == "test_"
 
 
-def test_minimum_column_name_length_after_first_char() -> None:
-    assert constants_module.MINIMUM_COLUMN_NAME_LENGTH_AFTER_FIRST_CHAR == 2
-
-
 def test_git_name_status_added_prefix() -> None:
     assert constants_module.GIT_NAME_STATUS_ADDED_PREFIX == "A"
 
@@ -89,17 +68,8 @@ def test_expected_rename_column_count() -> None:
     assert constants_module.EXPECTED_RENAME_COLUMN_COUNT == 3
 
 
-def test_column_key_pattern_template_renders_with_minimum_length() -> None:
-    rendered_pattern = constants_module.COLUMN_KEY_PATTERN_TEMPLATE.format(
-        minimum_length=constants_module.MINIMUM_COLUMN_NAME_LENGTH_AFTER_FIRST_CHAR
-    )
-    assert rendered_pattern == r"^[a-z][a-z0-9_]{2,}$"
-
-
 def test_git_diff_name_only_null_terminated_command_prefix_includes_dash_z() -> None:
-    command_prefix = (
-        constants_module.ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX
-    )
+    command_prefix = constants_module.ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX
     assert command_prefix == ("git", "diff", "--name-only", "-z")
 
 
@@ -110,10 +80,7 @@ def test_banned_noun_span_pattern_extracts_definition_line_and_span() -> None:
     )
     match = constants_module.BANNED_NOUN_VIOLATION_PATTERN.search(message)
     assert match is not None
-    definition_line = int(
-        match.group(constants_module.BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX)
-    )
+    definition_line = int(match.group(constants_module.BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX))
     line_span = int(match.group(constants_module.BANNED_NOUN_SPAN_GROUP_INDEX))
     assert definition_line == 1
     assert line_span == 3
-

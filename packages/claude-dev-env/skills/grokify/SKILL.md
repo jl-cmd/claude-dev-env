@@ -12,7 +12,9 @@ One paste-ready handoff turns this session's work into a plan a Grok Build sessi
 
 ## Gotchas
 
-- Grok Build cannot spawn Claude subagents. The advisor is an out-of-process `claude -p` session — never write Agent-tool, `session-advisor`, or SendMessage instructions into the handoff.
+- Grok Build can use `spawn_subagent`, `--agent` / agent definitions, and can read skills under the user's Claude config paths. Skill evals measure these when `GROK_CAPABILITY_EVALS=1` (see `evals/README.md`).
+- The **grokify handoff's Claude-tier advisor** is an out-of-process `claude -p` bind/resume. Never write Claude Agent-tool, `session-advisor`, or SendMessage protocol into the handoff for that advisor path — product design for a Claude-model advisor, not a claim that Grok lacks agents.
+- Grok does not expose a Claude/GSD Workflow tool. When that tool is required, workflow orchestration stays with Claude.
 - A `--resume` after a usage-limit failover to another binary fails, because a session store belongs to the binary that minted it. The handoff must tell Grok to treat that failure as starting over: re-send the charter plus a compact recap, capture the new `session_id`.
 - Conversation-relative phrases ("as discussed", "the plan above", "the earlier choice") are dead text to Grok — every statement stands on its own.
 - Copy findings' measured numbers and `file:line` citations into the handoff exactly, and label each figure measured, bounded, or unverified.
@@ -51,8 +53,14 @@ The user types `/grokify`, alone or with guidance.
 |---|---|
 | `SKILL.md` | Trigger, process, fixed advisor structure. |
 | `templates/handoff-template.md` | Section-by-section skeleton of the handoff prompt. |
+| `capability-claims.test.mjs` | Offline static guards on capability wording. |
+| `evals/README.md` | How to run opt-in live capability evals. |
+| `evals/run-capability-evals.mjs` | Live E1–E5 runner (manual / opt-in only). |
+| `evals/parse-payload.test.mjs` | Offline unit tests for the eval output parser, run under `npm test`. |
 
 ## Folder map
 
 - `SKILL.md` — the whole workflow.
 - `templates/` — the handoff skeleton.
+- `evals/` — the opt-in live runner plus its offline parser unit tests.
+- `capability-claims.test.mjs` — offline claim guards for `npm test`.

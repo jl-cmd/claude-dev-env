@@ -165,3 +165,16 @@ def should_load_convergence_fixture_from_disk(tmp_path: Path) -> None:
     assert fixture.head_sha == HEAD_SHA
     assert fixture.pr_object["mergeable"] is True
     assert len(fixture.reviews) == 1
+
+
+def should_fail_closed_when_thread_and_pending_keys_missing(tmp_path: Path) -> None:
+    fixture_path = tmp_path / "no-gate-keys.json"
+    payload = {
+        "head_sha": HEAD_SHA,
+        "pr_object": {"mergeable": True, "mergeable_state": "clean"},
+        "reviews": [],
+    }
+    fixture_path.write_text(json.dumps(payload), encoding="utf-8")
+    fixture = check_convergence._load_convergence_fixture(fixture_path)
+    assert fixture.is_zero_unresolved_bot_threads is False
+    assert fixture.is_no_pending_reviews is False

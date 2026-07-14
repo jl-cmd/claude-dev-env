@@ -45,6 +45,12 @@ Scan the tool list at the top of this conversation for the literal string
 aborting` and stop. The workflow also needs the `gh` CLI authenticated for the
 PR's owner.
 
+## Review-lens boundary
+
+The code-review lens boundary (workflow agent versus the built-in `/code-review`
+command) is defined on the **Code-review lens** bullet in
+[`reference/convergence.md`](reference/convergence.md).
+
 ## Transport check (before any GitHub step)
 
 Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR
