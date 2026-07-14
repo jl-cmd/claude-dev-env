@@ -171,9 +171,10 @@ CODE_REVIEW.
 ### `phase == CODE_REVIEW`
 
 The entry phase of every convergence tick, re-entered after any fix push. It runs
-a deterministic static sweep, then Claude Code's built-in `/code-review high
---fix` on the full `origin/main...HEAD` diff; `/code-review` produces no GitHub
-review artifact, so there are no code-review threads to resolve.
+a deterministic static sweep, then the built-in `/code-review high --fix` on the
+full `origin/main...HEAD` diff at effort high on model opus. `/code-review`
+produces no GitHub review artifact, so there are no code-review threads to
+resolve.
 
 a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
    gates over the full `origin/main...HEAD` changed files:
@@ -184,29 +185,57 @@ a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
    [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
    `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), stay
    `phase = CODE_REVIEW`, and re-run the sweep. When the sweep is clean, run
-   `/code-review` below.
+   the host-aware review below.
 
-b. Run Claude Code's built-in `/code-review high --fix` on the FULL
-   `origin/main...HEAD` diff — every file the PR touches — via the
+b. Run the built-in `/code-review high --fix` on the FULL `origin/main...HEAD`
+   diff — every file the PR touches — via the
    [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
-   It reviews the diff and applies its findings to the working tree.
+   The review always runs at effort high on model opus. It reviews the diff and
+   applies its findings to the working tree.
 
    Before running, confirm the working directory is the PR worktree resolved
    in [Step 1.5](#step-15-resolve-the-pr-worktree-cwd-routing) — `git rev-parse
    --show-toplevel` is that checkout and `git rev-parse HEAD` equals
    `current_head` — with no uncommitted edits. When the session is rooted in a
    different repo than the PR, the `cd` from Step 1.5 supplies this; the
-   persisted working directory is what `/code-review` audits. Then invoke
-   `/code-review high --fix` with no path arguments so it audits the whole branch
-   diff against `origin/main`. Do not delta-scope to commits added since the
-   prior clean SHA, do not scope to a single file, do not scope to bugbot's
-   flagged paths. A partial-scope round does not count and cannot set
-   `code_review_clean_at`. Invoke `/code-review high --fix` so the pre-catch pass
-   gets broad coverage regardless of the session's current effort.
+   persisted working directory is the cwd the review audits.
+
+   Route every CODE_REVIEW pass through the host-aware helper
+   `invoke_code_review.py`. Mode decision inputs are the host profile (detected
+   by the helper) and the caller's session model short alias:
+
+   ```bash
+   python "$HOME/.claude/scripts/invoke_code_review.py" \
+     --cwd "$(git rev-parse --show-toplevel)" \
+     --session-model <session-model-alias>
+   ```
+
+   The helper prints one JSON object on stdout only:
+   `{mode, served_command, returncode, dirty_tree}`. Chain mode sets cwd to the
+   PR worktree and redirects stdin from the empty stream so the spawn does not
+   wait for interactive input. The chain process never commits and never pushes
+   — commit and push belong to this step via the shared fix protocol.
+
+   Match the first mode whose predicate holds:
+
+   - **`mode == "in_session"`** (Claude host and session model is opus): run
+     `/code-review high --fix` in this session with no path arguments so it
+     audits the whole branch diff against `origin/main`. After it returns, a
+     non-empty `git status --porcelain` means fixes applied (`dirty_tree`
+     equivalent).
+   - **`mode == "chain"`** (any other host, or a Claude session on any model
+     other than opus): the helper already ran the headless review
+     (`claude -p "/code-review high --fix" --model opus` through the chain
+     runner) with cwd set to the PR worktree. Read `dirty_tree` from the JSON:
+     `true` means fixes applied; `false` means clean.
+
+   Do not delta-scope to commits added since the prior clean SHA, do not scope
+   to a single file, do not scope to bugbot's flagged paths. A partial-scope
+   round does not count and cannot set `code_review_clean_at`.
 
 c. Decide (two branches; match first whose predicate holds):
 
-   - **`/code-review` applied fixes (working tree changed):** Commit the
+   - **Fixes applied (working tree dirty / `dirty_tree` true):** Commit the
      applied fixes in one commit → push, following the shared fix protocol
      commit and push steps ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md)). Reset
      push-invalidated markers per [ground-rules.md](ground-rules.md) /
@@ -214,7 +243,7 @@ c. Decide (two branches; match first whose predicate holds):
      `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`). Stay
      `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
      re-enters the internal passes on the new HEAD.
-   - **Clean (no changes applied):** Set
+   - **Clean (no changes applied / `dirty_tree` false):** Set
      `code_review_clean_at = current_head`, `phase = BUGTEAM`. Continue
      BUGTEAM in same tick — back-to-back convergence requires code-review and
      bugteam clean on the same HEAD before the terminal gates run.
