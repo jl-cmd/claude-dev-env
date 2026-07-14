@@ -21,7 +21,12 @@ SESSION_MODEL_PHRASE = "session model"
 IN_SESSION_MODE = "in_session"
 CHAIN_MODE = "chain"
 DIRTY_TREE_KEY = "dirty_tree"
+RETURNCODE_KEY = "returncode"
+SERVED_COMMAND_KEY = "served_command"
+SUCCESSFUL_SERVE_PHRASE = "successful serve"
+FAILED_REVIEW_PHRASE = "Failed review"
 CODE_REVIEW_CLEAN_AT = "code_review_clean_at"
+CLEAN_STAMP_HELPER = "is_code_review_clean_stamp_allowed"
 NEVER_COMMITS_PHRASE = "never commits"
 NEVER_PUSHES_PHRASE = "never pushes"
 EMPTY_STDIN_PHRASE = "empty"
@@ -56,6 +61,11 @@ def test_per_tick_code_review_names_helper_and_mode_inputs() -> None:
     assert IN_SESSION_MODE in code_review_section
     assert CHAIN_MODE in code_review_section
     assert DIRTY_TREE_KEY in code_review_section
+    assert RETURNCODE_KEY in code_review_section
+    assert SERVED_COMMAND_KEY in code_review_section
+    assert SUCCESSFUL_SERVE_PHRASE in code_review_section
+    assert FAILED_REVIEW_PHRASE in code_review_section
+    assert CLEAN_STAMP_HELPER in code_review_section
     assert HIGH_EFFORT_SLASH in code_review_section
     assert OPUS_MODEL in code_review_section
     assert NEVER_COMMITS_PHRASE in code_review_section
@@ -74,8 +84,23 @@ def test_skill_step_five_checklist_names_helper_and_mode_inputs() -> None:
     assert IN_SESSION_MODE in step_five_checklist
     assert CHAIN_MODE in step_five_checklist
     assert DIRTY_TREE_KEY in step_five_checklist
+    assert RETURNCODE_KEY in step_five_checklist
+    assert SERVED_COMMAND_KEY in step_five_checklist
+    assert SUCCESSFUL_SERVE_PHRASE in step_five_checklist
     assert HIGH_EFFORT_SLASH in step_five_checklist
     assert OPUS_MODEL in step_five_checklist
     assert NEVER_COMMITS_PHRASE in step_five_checklist
     assert NEVER_PUSHES_PHRASE in step_five_checklist
     assert CODE_REVIEW_CLEAN_AT in step_five_checklist
+
+
+def test_per_tick_clean_stamp_requires_successful_serve() -> None:
+    code_review_section = _code_review_section(_read_markdown(PER_TICK_MARKDOWN_PATH))
+    assert FAILED_REVIEW_PHRASE in code_review_section
+    assert "returncode != 0" in code_review_section
+    assert "null" in code_review_section
+    assert SERVED_COMMAND_KEY in code_review_section
+    assert "do not set" in code_review_section.lower() or "Do not set" in code_review_section
+    assert CODE_REVIEW_CLEAN_AT in code_review_section
+    assert SUCCESSFUL_SERVE_PHRASE in code_review_section
+    assert DIRTY_TREE_KEY in code_review_section

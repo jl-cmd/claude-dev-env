@@ -214,7 +214,10 @@ b. Run the built-in `/code-review high --fix` on the FULL `origin/main...HEAD`
    `{mode, served_command, returncode, dirty_tree}`. Chain mode sets cwd to the
    PR worktree and redirects stdin from the empty stream so the spawn does not
    wait for interactive input. The chain process never commits and never pushes
-   — commit and push belong to this step via the shared fix protocol.
+   — commit and push belong to this step via the shared fix protocol. On
+   `ChainConfigurationError` or host `ValueError`, the helper still prints that
+   JSON shape (non-zero `returncode`, null `served_command`) and exits non-zero
+   — never a traceback-only failure.
 
    Match the first mode whose predicate holds:
 
@@ -222,19 +225,28 @@ b. Run the built-in `/code-review high --fix` on the FULL `origin/main...HEAD`
      `/code-review high --fix` in this session with no path arguments so it
      audits the whole branch diff against `origin/main`. After it returns, a
      non-empty `git status --porcelain` means fixes applied (`dirty_tree`
-     equivalent).
+     equivalent). Treat a failed in-session slash command the same as a failed
+     review: do not set `code_review_clean_at`.
    - **`mode == "chain"`** (any other host, or a Claude session on any model
      other than opus): the helper already ran the headless review
      (`claude -p "/code-review high --fix" --model opus` through the chain
-     runner) with cwd set to the PR worktree. Read `dirty_tree` from the JSON:
-     `true` means fixes applied; `false` means clean.
+     runner) with cwd set to the PR worktree. Read `returncode`,
+     `served_command`, and `dirty_tree` from the JSON. A successful serve is
+     `returncode == 0` with a non-null `served_command`. `dirty_tree` true
+     means fixes applied; `dirty_tree` false is clean only after a successful
+     serve.
 
    Do not delta-scope to commits added since the prior clean SHA, do not scope
    to a single file, do not scope to bugbot's flagged paths. A partial-scope
    round does not count and cannot set `code_review_clean_at`.
 
-c. Decide (two branches; match first whose predicate holds):
+c. Decide (three branches; match first whose predicate holds):
 
+   - **Failed review (`returncode != 0`, or chain mode with null
+     `served_command`):** The review did not complete a successful serve. Do
+     not set `code_review_clean_at`. Stay `phase = CODE_REVIEW`, schedule next
+     wakeup, return. A failed chain often leaves `dirty_tree` false — that is
+     not a clean stamp.
    - **Fixes applied (working tree dirty / `dirty_tree` true):** Commit the
      applied fixes in one commit → push, following the shared fix protocol
      commit and push steps ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md)). Reset
@@ -243,10 +255,13 @@ c. Decide (two branches; match first whose predicate holds):
      `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`). Stay
      `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
      re-enters the internal passes on the new HEAD.
-   - **Clean (no changes applied / `dirty_tree` false):** Set
+   - **Clean (successful serve: `returncode == 0`, chain `served_command`
+     non-null when `mode == chain`, and `dirty_tree` false):** Set
      `code_review_clean_at = current_head`, `phase = BUGTEAM`. Continue
      BUGTEAM in same tick — back-to-back convergence requires code-review and
-     bugteam clean on the same HEAD before the terminal gates run.
+     bugteam clean on the same HEAD before the terminal gates run. Helper
+     contract: `is_code_review_clean_stamp_allowed` is true only for this
+     branch.
 
 ### `phase == BUGTEAM`
 
