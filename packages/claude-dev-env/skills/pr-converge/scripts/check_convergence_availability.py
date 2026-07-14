@@ -5,8 +5,9 @@
     flag / resolved settings disable the reviewer  -> waived, note "copilot_down"
     copilot out of quota                           -> waived, "copilot unavailable: <reason>"
     bugbot settings-disabled (opt-out / no opt-in) -> waived, "bugbot_down"
-    copilot quota available                         -> enforced, no note
-    copilot probe error / indeterminate             -> enforced, probe_error_reason set
+    copilot quota available                         -> not waived (live gates run)
+    copilot probe error / indeterminate             -> not waived; probe_error_reason set;
+                                                       live gates still run (no hard-fail)
 
 When ``~/.claude/settings.json`` is readable it is the sole source for both
 ``CLAUDE_REVIEWS_DISABLED`` and ``CLAUDE_REVIEWS_ENABLED``. The process env is
@@ -174,10 +175,10 @@ def _probe_copilot_quota() -> ReviewerWaiver:
     ::
 
         exit == out-of-quota (1)  -> waived, "copilot unavailable: <msg>"
-        exit == available (0)     -> enforced
+        exit == available (0)     -> not waived (live gates run)
         exit == API down / no account / other non-zero
-                                  -> enforced, probe_error_reason set
-        probe raises              -> enforced, probe_error_reason set
+                                  -> not waived; probe_error_reason set (live gates run)
+        probe raises              -> not waived; probe_error_reason set (live gates run)
     """
     try:
         quota_decision = evaluate_copilot_quota(

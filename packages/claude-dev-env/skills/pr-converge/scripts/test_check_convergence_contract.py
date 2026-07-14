@@ -26,6 +26,7 @@ from types import ModuleType
 import pytest
 
 import _pr_converge_path_setup  # noqa: F401
+import check_convergence_availability
 from pr_converge_skill_constants.constants import EXIT_CODE_GH_ERROR
 
 _SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
@@ -79,19 +80,6 @@ EXPECTED_COPILOT_DOWN_STDOUT = (
 )
 
 EXPECTED_FAIL_SUMMARY = "One or more pre-conditions not met — do not mark ready.\n"
-
-EXPECTED_COPILOT_PROBE_ERROR_STDOUT = (
-    "HEAD: abcdef1\n\n"
-    "1. bugbot_clean_at == current_head: PASS — clean\n"
-    "2. bugbot review body clean: PASS — clean\n"
-    "3. bugteam_clean_at == current_head: PASS — clean\n"
-    "4. copilot_clean_at == current_head: FAIL — enforced (probe error: quota API down)\n"
-    "5. zero unresolved bot threads: PASS — clean\n"
-    "6. PR is mergeable: PASS — clean\n"
-    "7. no pending requested reviews: FAIL — enforced (probe error: quota API down)\n\n"
-    "One or more pre-conditions not met — do not mark ready.\n"
-)
-
 
 def _load_check_convergence() -> ModuleType:
     if str(_PR_CONVERGE_DIRECTORY) not in sys.path:
@@ -338,32 +326,51 @@ def test_main_derives_bugteam_post_blocked_from_env_when_flag_omitted(
     assert captured_bugteam_post_blocked == [True]
 
 
-def test_copilot_probe_error_fail_lines_match_the_pinned_contract(
+def test_copilot_probe_error_still_runs_live_gates(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """A probe error must not hard-fail; live GitHub gates decide pass/fail."""
     _patch_gates_clean(monkeypatch)
+    live_copilot_calls: list[str] = []
+    live_pending_calls: list[str] = []
+
+    def _recording_bot_review(**_keywords: object) -> tuple[bool, str]:
+        live_copilot_calls.append("copilot")
+        return True, "clean"
+
+    def _recording_pending(**_keywords: object) -> tuple[bool, str]:
+        live_pending_calls.append("pending")
+        return True, "clean"
+
+    monkeypatch.setattr(check_convergence, "_check_bot_review", _recording_bot_review)
+    monkeypatch.setattr(
+        check_convergence, "_check_no_pending_reviews", _recording_pending
+    )
     monkeypatch.setattr(
         check_convergence,
-        "_check_bot_review",
-        lambda **_keywords: (_ for _ in ()).throw(
-            AssertionError("copilot live gate must not run on probe error")
+        "_resolve_copilot_waiver",
+        lambda _flag: check_convergence_availability.ReviewerWaiver(
+            False, "", "quota API down"
         ),
     )
     monkeypatch.setattr(
         check_convergence,
-        "_check_no_pending_reviews",
-        lambda **_keywords: (_ for _ in ()).throw(
-            AssertionError("pending live gate must not run on probe error")
-        ),
+        "_resolve_bugbot_waiver",
+        lambda _flag: check_convergence_availability.ReviewerWaiver(True, "bugbot_down", ""),
     )
-    exit_code = check_convergence.check_all(
-        owner="o",
-        repo="r",
-        number=1,
-        is_bugbot_down=False,
-        is_copilot_down=False,
-        is_bugteam_post_blocked=False,
-        copilot_probe_error_reason="quota API down",
+    exit_code = check_convergence.main(
+        [
+            "--owner",
+            "o",
+            "--repo",
+            "r",
+            "--pr-number",
+            "1",
+            "--bugbot-down",
+        ]
     )
-    assert capsys.readouterr().out == EXPECTED_COPILOT_PROBE_ERROR_STDOUT
-    assert exit_code == 1
+    captured = capsys.readouterr().out
+    assert live_copilot_calls == ["copilot"]
+    assert live_pending_calls == ["pending"]
+    assert "enforced (probe error" not in captured
+    assert exit_code == 0

@@ -16,11 +16,11 @@ Each bypass flag closes one reviewer gate when that reviewer is unavailable.
 the Copilot review and pending-review gates. ``--bugteam-post-blocked`` skips
 the bugteam CLEAN-review gate.
 
-Copilot and Bugbot waivers are disk-authoritative: when ``~/.claude/settings.json``
-is readable its env block is the single source; the frozen process env is only a
-fallback when that disk read fails, and the fallback is logged. Bugteam's opt-out
-is env-only via ``_resolve_bugteam_post_blocked``. A probe error enforces the
-gate and prints the reason on the FAIL line.
+Copilot and Bugbot waivers are disk-authoritative.
+When ``~/.claude/settings.json`` is readable, its env block is the single source.
+The frozen process env is only a fallback when that disk read fails (logged once).
+Bugteam's opt-out is env-only via ``_resolve_bugteam_post_blocked``.
+A probe error does not waive the gate; the live GitHub checks still run.
 """
 
 from __future__ import annotations
@@ -60,7 +60,6 @@ from pr_converge_scripts_constants.convergence_gate_constants import (
     FIXTURE_KEY_REVIEWS,
     FIXTURE_KEY_UNRESOLVED_BOT_THREADS_DETAIL,
     FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED,
-    GATE_PROBE_ERROR_DETAIL_TEMPLATE,
 )
 from pr_converge_skill_constants.constants import (
     ALL_COPILOT_CLEAN_REVIEW_STATES,
@@ -113,8 +112,6 @@ class GateContext(NamedTuple):
     bugbot_bypass_note: str = BUGBOT_DOWN_BYPASS_NOTE
     copilot_bypass_note: str = COPILOT_DOWN_BYPASS_NOTE
     fixture: ConvergenceFixture | None = None
-    bugbot_probe_error_reason: str = ""
-    copilot_probe_error_reason: str = ""
 
 
 def _is_bugteam_review(review_body: str) -> bool:
@@ -185,20 +182,8 @@ def _bypassed_note(bypass_note: str) -> str:
     return f"bypassed ({bypass_note})"
 
 
-def _probe_error_detail(probe_error_reason: str) -> str:
-    """Format the FAIL detail line when a reviewer probe error enforces the gate."""
-    return GATE_PROBE_ERROR_DETAIL_TEMPLATE.format(reason=probe_error_reason)
-
-
 def _bugbot_conditions(context: GateContext) -> list[GateCondition]:
     """Build the Bugbot gate conditions, bypassed when Bugbot is down."""
-    if context.bugbot_probe_error_reason:
-        return [
-            (
-                "bugbot_clean_at == current_head",
-                (False, _probe_error_detail(context.bugbot_probe_error_reason)),
-            )
-        ]
     if context.is_bugbot_down:
         return [
             (
@@ -256,11 +241,6 @@ def _bugteam_condition(context: GateContext) -> GateCondition:
 
 def _copilot_review_condition(context: GateContext) -> GateCondition:
     """Build the Copilot review gate condition, bypassed when Copilot is down."""
-    if context.copilot_probe_error_reason:
-        return (
-            "copilot_clean_at == current_head",
-            (False, _probe_error_detail(context.copilot_probe_error_reason)),
-        )
     if context.is_copilot_down:
         return (
             "copilot_clean_at == current_head",
@@ -288,11 +268,6 @@ def _copilot_review_condition(context: GateContext) -> GateCondition:
 
 def _pending_reviews_condition(context: GateContext) -> GateCondition:
     """Build the pending-requested-reviews condition, bypassed when Copilot is down."""
-    if context.copilot_probe_error_reason:
-        return (
-            "no pending requested reviews",
-            (False, _probe_error_detail(context.copilot_probe_error_reason)),
-        )
     if context.is_copilot_down:
         return (
             "no pending requested reviews",
@@ -446,8 +421,6 @@ def check_all(
     is_bugteam_post_blocked: bool,
     bugbot_bypass_note: str = BUGBOT_DOWN_BYPASS_NOTE,
     copilot_bypass_note: str = COPILOT_DOWN_BYPASS_NOTE,
-    bugbot_probe_error_reason: str = "",
-    copilot_probe_error_reason: str = "",
 ) -> int:
     """Run every convergence gate and print one PASS/FAIL line per condition.
 
@@ -460,8 +433,6 @@ def check_all(
         is_bugteam_post_blocked: True skips the bugteam CLEAN-review gate.
         bugbot_bypass_note: Detail note printed when the bugbot gate is bypassed.
         copilot_bypass_note: Detail note printed when the Copilot gates are bypassed.
-        bugbot_probe_error_reason: Non-empty hard-fails the bugbot gate without live checks.
-        copilot_probe_error_reason: Non-empty hard-fails the Copilot gates without live checks.
 
     Returns:
         0 when every gate passes, 1 when at least one gate fails.
@@ -478,8 +449,6 @@ def check_all(
         bugbot_bypass_note=bugbot_bypass_note,
         copilot_bypass_note=copilot_bypass_note,
         fixture=None,
-        bugbot_probe_error_reason=bugbot_probe_error_reason,
-        copilot_probe_error_reason=copilot_probe_error_reason,
     )
     return _evaluate_convergence(context)
 
@@ -603,11 +572,17 @@ def _resolve_bugteam_post_blocked(is_bugteam_post_blocked_flag: bool) -> bool:
     return is_bugteam_post_blocked_flag or is_bugteam_disabled_via_env()
 
 
-def main(all_arguments: list[str]) -> int:
+def main(
+    all_arguments: list[str],
+    bugbot_bypass_note: str = BUGBOT_DOWN_BYPASS_NOTE,
+    copilot_bypass_note: str = COPILOT_DOWN_BYPASS_NOTE,
+) -> int:
     """Run the script end-to-end against parsed CLI arguments.
 
     Args:
         all_arguments: Argument list excluding the program name.
+        bugbot_bypass_note: Note printed when the bugbot gate is bypassed.
+        copilot_bypass_note: Note printed when the Copilot gates are bypassed.
 
     Returns:
         0 on full convergence, 1 on one or more gate failures.
@@ -616,10 +591,10 @@ def main(all_arguments: list[str]) -> int:
     fixture_path = getattr(arguments, "fixture", None)
     if fixture_path:
         bugbot_waiver = _waiver_from_cli_flag(
-            arguments.bugbot_down, BUGBOT_DOWN_BYPASS_NOTE
+            arguments.bugbot_down, bugbot_bypass_note
         )
         copilot_waiver = _waiver_from_cli_flag(
-            arguments.copilot_down, COPILOT_DOWN_BYPASS_NOTE
+            arguments.copilot_down, copilot_bypass_note
         )
         fixture = _load_convergence_fixture(Path(fixture_path))
         return _check_all_from_fixture(
@@ -630,8 +605,8 @@ def main(all_arguments: list[str]) -> int:
             is_bugbot_down=bugbot_waiver.is_waived,
             is_copilot_down=copilot_waiver.is_waived,
             is_bugteam_post_blocked=arguments.bugteam_post_blocked,
-            bugbot_bypass_note=bugbot_waiver.bypass_note,
-            copilot_bypass_note=copilot_waiver.bypass_note,
+            bugbot_bypass_note=bugbot_waiver.bypass_note or bugbot_bypass_note,
+            copilot_bypass_note=copilot_waiver.bypass_note or copilot_bypass_note,
         )
     bugbot_waiver = _resolve_bugbot_waiver(arguments.bugbot_down)
     copilot_waiver = _resolve_copilot_waiver(arguments.copilot_down)
@@ -643,10 +618,8 @@ def main(all_arguments: list[str]) -> int:
         is_bugbot_down=bugbot_waiver.is_waived,
         is_copilot_down=copilot_waiver.is_waived,
         is_bugteam_post_blocked=is_bugteam_post_blocked,
-        bugbot_bypass_note=bugbot_waiver.bypass_note,
-        copilot_bypass_note=copilot_waiver.bypass_note,
-        bugbot_probe_error_reason=bugbot_waiver.probe_error_reason,
-        copilot_probe_error_reason=copilot_waiver.probe_error_reason,
+        bugbot_bypass_note=bugbot_waiver.bypass_note or bugbot_bypass_note,
+        copilot_bypass_note=copilot_waiver.bypass_note or copilot_bypass_note,
     )
 
 
