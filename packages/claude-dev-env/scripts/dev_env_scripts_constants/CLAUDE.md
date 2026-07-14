@@ -9,6 +9,7 @@ Named constants for scripts in `scripts/`. Follows the project convention that t
 | `timing.py` | `sweep_empty_dirs.py` — `DEFAULT_AGE_SECONDS` (smallest age before an empty directory is eligible for removal) and `DEFAULT_POLL_INTERVAL` (seconds between sweep passes in continuous-watch mode) |
 | `gh_artifact_upload_constants.py` | `gh_artifact_upload.py` — the `artifacts` release tag, title, and notes body, the GitHub CLI binary name, the asset-name timestamp format and template, the asset download URL template, the notes-file suffix, and the text encoding |
 | `claude_chain_constants.py` | `claude_chain_runner.py` — the chain config filename and home subdirectory, the usage-limit signature text, the per-binary status labels, the default timeout, CLI flag and separator tokens, config JSON keys, invalid-shape reason text, config-error and exhausted-chain message templates, and CLI exit codes |
+| `grok_worker_constants.py` | `grok_worker_preflight.py` — the grok binary name and CLI flags, the auth and ping leader-socket filenames, the ping cache filename, keys, and TTL, the subprocess timeouts, the install manifest and agents-directory names, the role-to-agent-files map, the fallthrough reason strings, the stdout line templates, the exit codes, and the auth-failure and usage-exhaustion signature lists |
 | `__init__.py` | Empty package marker |
 
 ## Convention

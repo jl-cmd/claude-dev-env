@@ -1,1500 +1,109 @@
+"""Run the code-rules validators over a resolved git file set.
+
+::
+
+    default mode: git diff since merge-base, joined with untracked files
+    --staged:     validate the staged index; --paths: validate explicit files
+    every mode ends by naming how many files it inspected
+
+This entry module wires the ``code_rules_gate_parts`` submodules into one CLI
+and re-exports their surface for the test suite.
+"""
+
 import argparse
-import ast
-import importlib.util
-import os
-import re
-import subprocess
 import sys
-from collections.abc import Callable, Iterator
 from pathlib import Path
 
-parent_directory = str(Path(__file__).resolve().parent)
-if parent_directory not in sys.path:
-    sys.path.insert(0, parent_directory)
 
-from pr_loop_shared_constants.code_rules_gate_constants import (  # noqa: E402
-    ALL_CODE_FILE_EXTENSIONS,
-    ALL_GIT_DIFF_CACHED_NAME_ONLY_NULL_TERMINATED_COMMAND,
-    ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX,
-    ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
-    ALL_PYTEST_CONFIG_FILE_SECTIONS,
-    ALL_PYTEST_MODULE_INVOCATION,
-    ALL_TEST_FILENAME_GLOB_SUFFIXES,
-    ALL_TEST_FILENAME_SUFFIXES,
-    ALL_VENV_DIRECTORY_NAMES,
-    ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
-    BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX,
-    BANNED_NOUN_SPAN_GROUP_INDEX,
-    BANNED_NOUN_VIOLATION_PATTERN,
-    CODE_RULES_GATE_PYTHON_ENV_VAR,
-    CODE_RULES_GATE_PYTHONPATH_ENV_VAR,
-    COMMAND_LINE_ARGUMENT_SEPARATOR_LENGTH,
-    DUPLICATE_BODY_DEFINITION_LINE_GROUP_INDEX,
-    DUPLICATE_BODY_SPAN_GROUP_INDEX,
-    DUPLICATE_BODY_VIOLATION_PATTERN,
-    EXPECTED_NON_RENAME_COLUMN_COUNT,
-    EXPECTED_RENAME_COLUMN_COUNT,
-    FUNCTION_LENGTH_DEFINITION_LINE_GROUP_INDEX,
-    FUNCTION_LENGTH_SPAN_GROUP_INDEX,
-    FUNCTION_LENGTH_VIOLATION_PATTERN,
-    GIT_NAME_STATUS_ADDED_PREFIX,
-    GIT_NAME_STATUS_RENAMED_PREFIX,
-    ISOLATION_DEFINITION_LINE_GROUP_INDEX,
-    ISOLATION_SPAN_GROUP_INDEX,
-    ISOLATION_VIOLATION_PATTERN,
-    MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS,
-    MAX_VIOLATIONS_PER_CHECK,
-    MINIMUM_STAGED_PYTEST_PYTHON_MAJOR,
-    MINIMUM_STAGED_PYTEST_PYTHON_MINOR,
-    PYTHON_FILE_EXTENSION,
-    PYTHONPATH_ENV_VAR,
-    STAGED_PYTEST_TIMEOUT_SECONDS,
-    STAGED_TEST_FAILURE_HEADER,
-    STAGED_TEST_GROUP_FAILURE_MESSAGE,
-    TEST_CONFTEST_FILENAME,
-    TEST_FILENAME_PREFIX,
-    TESTS_PATH_SEGMENT,
-)
-from pr_loop_shared_constants.preflight_constants import (  # noqa: E402
-    PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
-)
-from pr_loop_shared_constants.inline_duplicate_body_span_constants import (  # noqa: E402
-    INLINE_DUPLICATE_BODY_ENCLOSING_LINE_GROUP_INDEX,
-    INLINE_DUPLICATE_BODY_ENCLOSING_SPAN_GROUP_INDEX,
-    INLINE_DUPLICATE_BODY_HELPER_LINE_GROUP_INDEX,
-    INLINE_DUPLICATE_BODY_HELPER_SPAN_GROUP_INDEX,
-    INLINE_DUPLICATE_BODY_VIOLATION_PATTERN,
-)
-from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
-    TERMINOLOGY_SWEEP_GATE_HEADER,
-)
-from terminology_sweep import (  # noqa: E402
-    repository_environment,
-    staged_terminology_findings,
-)
-
-ValidateContentCallable = Callable[..., list[str]]
+def _ensure_scripts_directory_on_path() -> None:
+    """Add this file's directory to sys.path so the parts package resolves."""
+    scripts_directory = str(Path(__file__).resolve().parent)
+    if scripts_directory not in sys.path:
+        sys.path.insert(0, scripts_directory)
 
 
-def hunk_header_pattern() -> re.Pattern[str]:
-    return re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+_ensure_scripts_directory_on_path()
 
-
-def violation_line_pattern() -> re.Pattern[str]:
-    return re.compile(r"^Line (\d+):")
-
-
-def resolve_claude_dev_env_root(starting_path: Path) -> Path:
-    """Walk up from *starting_path* to the claude-dev-env package root.
-
-    Args:
-        starting_path: A path inside the worktree; the function climbs to
-            find the ancestor containing ``hooks/blocking/code_rules_enforcer.py``.
-
-    Returns:
-        The resolved package root that contains the enforcer file.
-
-    Raises:
-        SystemExit: When no ancestor contains the enforcer.
-    """
-    starting = Path(starting_path).resolve()
-    enforcer_relative = Path("hooks") / "blocking" / "code_rules_enforcer.py"
-    for each_candidate in [starting, *starting.parents]:
-        if (each_candidate / enforcer_relative).is_file():
-            return each_candidate
-    print(
-        f"code_rules_gate: could not locate {enforcer_relative} above {starting}",
-        file=sys.stderr,
+try:
+    from code_rules_gate_parts import (
+        added_line_maps,
+        enforcer_loading,
+        gate_arguments,
+        gate_running,
+        git_blob_readers,
+        git_file_sets,
+        staged_test_running,
+        violation_scoping,
+        wrapper_plumb_check,
     )
-    raise SystemExit(2)
-
-
-def _resolve_package_root_absolute(starting_path: Path) -> Path:
-    enforcer_relative = Path("hooks") / "blocking" / "code_rules_enforcer.py"
-    for each_starting_form in (
-        Path(starting_path).absolute(),
-        Path(starting_path).resolve(),
-    ):
-        for each_candidate in [each_starting_form, *each_starting_form.parents]:
-            if (each_candidate / enforcer_relative).is_file():
-                return each_candidate
-    raise SystemExit(2)
-
-
-def load_validate_content() -> ValidateContentCallable:
-    """Load ``code_rules_enforcer.validate_content`` for in-process use.
-
-    Returns:
-        The ``validate_content`` callable from the enforcer module.
-
-    Raises:
-        SystemExit: When the package root cannot be located or the
-            enforcer module cannot be loaded from disk.
-    """
-    package_root = resolve_claude_dev_env_root(Path(__file__).resolve())
-    enforcer_path = package_root / "hooks" / "blocking" / "code_rules_enforcer.py"
-    if not enforcer_path.is_file():
-        message = f"code_rules_gate: missing enforcer at {enforcer_path}"
-        print(message, file=sys.stderr)
-        raise SystemExit(2)
-    specification = importlib.util.spec_from_file_location(
-        "code_rules_enforcer",
-        enforcer_path,
+    from pr_loop_shared_constants.code_rules_gate_constants import (
+        ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
+        ALL_PYTEST_MODULE_INVOCATION,
+        ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
+        EMPTY_FILE_SET_EXIT_CODE,
+        EMPTY_FILE_SET_MESSAGE,
+        INSPECTED_COUNT_MESSAGE,
+        MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS,
+        MINIMUM_STAGED_PYTEST_PYTHON_MAJOR,
+        MINIMUM_STAGED_PYTEST_PYTHON_MINOR,
     )
-    if specification is None or specification.loader is None:
-        print("code_rules_gate: could not load code_rules_enforcer.", file=sys.stderr)
-        raise SystemExit(2)
-    module = importlib.util.module_from_spec(specification)
-    package_root_for_imports = _resolve_package_root_absolute(Path(__file__).absolute())
-    hooks_root_path = str(package_root_for_imports / "hooks")
-    while hooks_root_path in sys.path:
-        sys.path.remove(hooks_root_path)
-    sys.path.insert(0, hooks_root_path)
-    saved_hooks_constants_modules = {
-        each_module_name: sys.modules.pop(each_module_name)
-        for each_module_name in [
-            each_key for each_key in list(sys.modules)
-            if each_key == "hooks_constants" or each_key.startswith("hooks_constants.")
-        ]
-    }
-    try:
-        specification.loader.exec_module(module)
-    finally:
-        while hooks_root_path in sys.path:
-            sys.path.remove(hooks_root_path)
-        for each_module_name in [
-            each_key for each_key in list(sys.modules)
-            if each_key == "hooks_constants" or each_key.startswith("hooks_constants.")
-        ]:
-            sys.modules.pop(each_module_name, None)
-        sys.modules.update(saved_hooks_constants_modules)
-    return module.validate_content
-
-
-def resolve_merge_base(repository_root: Path, base_reference: str) -> str:
-    """Return the merge-base SHA between HEAD and *base_reference*.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        base_reference: The git reference to merge-base against.
-
-    Returns:
-        The stripped merge-base SHA.
-
-    Raises:
-        SystemExit: When ``git merge-base`` returns non-zero.
-    """
-    merge_result = subprocess.run(
-        ["git", "merge-base", "HEAD", base_reference],
-        cwd=str(repository_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        env=repository_environment(),
+    from pr_loop_shared_constants.preflight_constants import (
+        PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
     )
-    if merge_result.returncode != 0:
-        print(
-            f"code_rules_gate: git merge-base HEAD {base_reference} failed:\n"
-            f"{merge_result.stderr}",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    return merge_result.stdout.strip()
-
-
-def filter_paths_under_prefixes(
-    all_file_paths: list[Path],
-    repository_root: Path,
-    all_prefixes: list[str],
-) -> list[Path]:
-    """Filter *all_file_paths* to entries falling under the supplied prefixes.
-
-    Args:
-        all_file_paths: Resolved file paths to filter.
-        repository_root: Repository root used to compute relative paths.
-        all_prefixes: Repository-relative POSIX prefixes; each path must
-            equal one prefix or be nested beneath it to pass through.
-
-    Returns:
-        The subset of *all_file_paths* whose relative POSIX path matches one
-        of the prefixes. When *all_prefixes* is empty, returns the input
-        list unchanged.
-    """
-    if not all_prefixes:
-        return all_file_paths
-    normalized_prefixes = [
-        each_prefix.strip().replace("\\", "/").rstrip("/")
-        for each_prefix in all_prefixes
-        if each_prefix.strip()
-    ]
-    if not normalized_prefixes:
-        return all_file_paths
-    resolved_root = repository_root.resolve()
-    filtered: list[Path] = []
-    for each_path in all_file_paths:
-        try:
-            relative_posix = each_path.resolve().relative_to(resolved_root).as_posix()
-        except ValueError:
-            continue
-        if any(
-            relative_posix == each_prefix
-            or relative_posix.startswith(each_prefix + "/")
-            for each_prefix in normalized_prefixes
-        ):
-            filtered.append(each_path)
-    return filtered
-
-
-def paths_from_git_staged(repository_root: Path) -> list[Path]:
-    """Return absolute paths for every file in the staged index.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-
-    Returns:
-        List of absolute paths for staged files. Names whose bytes cannot
-        be decoded as Unicode are logged and skipped.
-
-    Raises:
-        SystemExit: When ``git diff --cached --name-only -z`` returns
-            non-zero.
-    """
-    name_result = subprocess.run(
-        list(ALL_GIT_DIFF_CACHED_NAME_ONLY_NULL_TERMINATED_COMMAND),
-        cwd=str(repository_root),
-        capture_output=True,
-        check=False,
-        env=repository_environment(),
-    )
-    if name_result.returncode != 0:
-        stderr_text = name_result.stderr.decode("utf-8", errors="replace")
-        print(
-            f"code_rules_gate: git diff --cached --name-only -z failed:\n{stderr_text}",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    raw_paths = name_result.stdout.split(b"\x00")
-    resolved_paths = []
-    for each_raw_path in raw_paths:
-        if not each_raw_path:
-            continue
-        try:
-            relative_path = each_raw_path.decode("utf-8")
-        except UnicodeDecodeError:
-            print(
-                f"code_rules_gate: skipping staged path with non-UTF-8 filename: {each_raw_path!r}",
-                file=sys.stderr,
-            )
-            continue
-        resolved_paths.append(repository_root / relative_path)
-    return resolved_paths
-
-
-def staged_file_line_count(
-    repository_root: Path,
-    relative_path_posix: str,
-) -> int:
-    """Return the staged-blob line count for *relative_path_posix*.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        relative_path_posix: Repository-relative POSIX path of the staged
-            file.
-
-    Returns:
-        The staged content line count, or zero when the blob is empty.
-
-    Raises:
-        SystemExit: When ``git show :<path>`` returns non-zero.
-    """
-    show_result = subprocess.run(
-        ["git", "show", f":{relative_path_posix}"],
-        cwd=str(repository_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        env=repository_environment(),
-    )
-    if show_result.returncode != 0:
-        print(
-            f"code_rules_gate: git show :{relative_path_posix} failed:\n"
-            f"{show_result.stderr}",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    staged_content = show_result.stdout
-    if not staged_content:
-        return 0
-    return len(staged_content.splitlines())
-
-
-def is_staged_file_newly_added(
-    repository_root: Path,
-    relative_path_posix: str,
-) -> bool:
-    """Check whether *relative_path_posix* is newly added in the staged diff.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        relative_path_posix: Repository-relative POSIX path to inspect.
-
-    Returns:
-        True when the first non-empty name-status line begins with the git
-        added-prefix; False otherwise.
-
-    Raises:
-        SystemExit: When ``git diff --cached --name-status`` returns
-            non-zero.
-    """
-    status_result = subprocess.run(
-        ["git", "diff", "--cached", "--name-status", "--", relative_path_posix],
-        cwd=str(repository_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        env=repository_environment(),
-    )
-    if status_result.returncode != 0:
-        print(
-            f"code_rules_gate: git diff --cached --name-status failed for "
-            f"{relative_path_posix}:\n{status_result.stderr}",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    for each_line in status_result.stdout.splitlines():
-        stripped_line = each_line.strip()
-        if stripped_line:
-            return stripped_line.startswith(GIT_NAME_STATUS_ADDED_PREFIX)
-    return False
-
-
-def added_lines_for_staged_file(
-    repository_root: Path,
-    relative_path_posix: str,
-) -> set[int]:
-    """Return added line numbers within the staged diff for one file.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        relative_path_posix: Repository-relative POSIX path to inspect.
-
-    Returns:
-        Set of line numbers (1-indexed) added in the staged diff. When the
-        file is newly added, returns every line in the staged blob.
-
-    Raises:
-        SystemExit: When the staged diff command returns non-zero.
-    """
-    diff_result = subprocess.run(
-        ["git", "diff", "--cached", "--unified=0", "--", relative_path_posix],
-        cwd=str(repository_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        env=repository_environment(),
-    )
-    if diff_result.returncode != 0:
-        print(
-            f"code_rules_gate: git diff --cached --unified=0 failed for {relative_path_posix}:\n"
-            f"{diff_result.stderr}",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    if diff_result.stdout.strip():
-        return parse_added_line_numbers(diff_result.stdout)
-    if is_staged_file_newly_added(repository_root, relative_path_posix):
-        total_lines = staged_file_line_count(repository_root, relative_path_posix)
-        if total_lines > 0:
-            return set(range(1, total_lines + 1))
-    return set()
-
-
-def added_lines_by_file_staged(
-    repository_root: Path,
-    all_file_paths: list[Path],
-) -> dict[Path, set[int]]:
-    """Build a per-file map of staged-added line numbers.
-
-    Args:
-        repository_root: Repository root for diff invocations.
-        all_file_paths: File paths whose added lines should be collected.
-
-    Returns:
-        Mapping from resolved file path to the set of staged-added line
-        numbers.
-    """
-    resolved_root = repository_root.resolve()
-    added_by_path: dict[Path, set[int]] = {}
-    for each_path in all_file_paths:
-        try:
-            resolved = each_path.resolve()
-        except OSError:
-            continue
-        try:
-            relative = resolved.relative_to(resolved_root)
-        except ValueError:
-            continue
-        relative_posix = str(relative).replace("\\", "/")
-        added_numbers = added_lines_for_staged_file(resolved_root, relative_posix)
-        added_by_path[resolved] = added_numbers
-    return added_by_path
-
-
-def paths_from_git_diff(repository_root: Path, base_reference: str) -> list[Path]:
-    """Return absolute paths for every file changed since *base_reference*.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        base_reference: The git reference to merge-base against.
-
-    Returns:
-        List of absolute paths changed since the merge-base of HEAD and
-        *base_reference*.
-
-    Raises:
-        SystemExit: When the ``git diff --name-only`` command returns
-            non-zero.
-    """
-    merge_base = resolve_merge_base(repository_root, base_reference)
-    diff_command = list(ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX) + [
-        f"{merge_base}..HEAD"
-    ]
-    name_result = subprocess.run(
-        diff_command,
-        cwd=str(repository_root),
-        capture_output=True,
-        check=False,
-        env=repository_environment(),
-    )
-    if name_result.returncode != 0:
-        stderr_text = name_result.stderr.decode("utf-8", errors="replace")
-        print(
-            f"code_rules_gate: git diff --name-only -z failed:\n{stderr_text}",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    raw_paths = name_result.stdout.split(b"\x00")
-    resolved_paths: list[Path] = []
-    for each_raw_path in raw_paths:
-        if not each_raw_path:
-            continue
-        try:
-            relative_path = each_raw_path.decode("utf-8")
-        except UnicodeDecodeError:
-            print(
-                f"code_rules_gate: skipping diff path with non-UTF-8 filename: {each_raw_path!r}",
-                file=sys.stderr,
-            )
-            continue
-        resolved_paths.append(repository_root / relative_path)
-    return resolved_paths
-
-
-def is_code_path(file_path: Path) -> bool:
-    suffix = file_path.suffix.lower()
-    return suffix in ALL_CODE_FILE_EXTENSIONS
-
-
-def is_test_path(file_path: str) -> bool:
-    """Return True when *file_path* matches CODE_RULES.md test-file detection patterns.
-
-    Mirrors the test-file detection rule documented in CODE_RULES.md:
-    filename matches test_*.py OR *_test.py OR *.test.* OR *.spec.* OR
-    conftest.py, OR path contains the segment /tests/.
-
-    Args:
-        file_path: Path string to classify; backslashes are normalized to
-            forward slashes before pattern matching.
-
-    Returns:
-        True when the path matches any test-file pattern; False otherwise.
-    """
-    normalized_posix = file_path.replace("\\", "/")
-    filename_only = normalized_posix.rsplit("/", maxsplit=1)[-1]
-    if TESTS_PATH_SEGMENT in normalized_posix:
-        return True
-    if filename_only == TEST_CONFTEST_FILENAME:
-        return True
-    if filename_only.startswith(TEST_FILENAME_PREFIX) and filename_only.endswith(
-        PYTHON_FILE_EXTENSION
-    ):
-        return True
-    if any(
-        filename_only.endswith(each_suffix)
-        for each_suffix in ALL_TEST_FILENAME_SUFFIXES
-    ):
-        return True
-    if any(
-        each_glob_suffix in filename_only
-        for each_glob_suffix in ALL_TEST_FILENAME_GLOB_SUFFIXES
-    ):
-        return True
-    return False
-
-
-def _iter_calls_excluding_nested_functions(node: ast.AST) -> Iterator[ast.Call]:
-    for each_child in ast.iter_child_nodes(node):
-        if isinstance(each_child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        if isinstance(each_child, ast.Call):
-            yield each_child
-            continue
-        yield from _iter_calls_excluding_nested_functions(each_child)
-
-
-def _module_level_optional_kwargs_by_name(tree: ast.Module) -> dict[str, set[str]]:
-    function_signatures: dict[str, set[str]] = {}
-    for each_node in ast.iter_child_nodes(tree):
-        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            optional_kwargs: set[str] = set()
-            for each_kwonly, each_default in zip(
-                each_node.args.kwonlyargs, each_node.args.kw_defaults
-            ):
-                if each_default is not None:
-                    optional_kwargs.add(each_kwonly.arg)
-            positional_defaults = each_node.args.defaults
-            positional_args_with_defaults = (
-                each_node.args.args[-len(positional_defaults):]
-                if positional_defaults
-                else []
-            )
-            for each_positional_arg in positional_args_with_defaults:
-                optional_kwargs.add(each_positional_arg.arg)
-            function_signatures[each_node.name] = optional_kwargs
-    return function_signatures
-
-
-def _class_method_node_ids(tree: ast.Module) -> set[int]:
-    class_method_node_ids: set[int] = set()
-    for each_class_def in ast.walk(tree):
-        if not isinstance(each_class_def, ast.ClassDef):
-            continue
-        for each_class_body_node in each_class_def.body:
-            if isinstance(
-                each_class_body_node, (ast.FunctionDef, ast.AsyncFunctionDef)
-            ):
-                class_method_node_ids.add(id(each_class_body_node))
-    return class_method_node_ids
-
-
-def _wrapper_dropped_kwarg_findings(
-    wrapper_node: ast.FunctionDef | ast.AsyncFunctionDef,
-    kwargs_by_function_name: dict[str, set[str]],
-) -> Iterator[str]:
-    wrapper_kwargs = kwargs_by_function_name.get(wrapper_node.name, set())
-    for each_call in _iter_calls_excluding_nested_functions(wrapper_node):
-        if isinstance(each_call.func, ast.Name):
-            delegate_name = each_call.func.id
-        elif isinstance(each_call.func, ast.Attribute):
-            delegate_name = each_call.func.attr
-        else:
-            continue
-        delegate_kwargs = kwargs_by_function_name.get(delegate_name)
-        if delegate_kwargs is None:
-            continue
-        missing = delegate_kwargs - wrapper_kwargs
-        if missing:
-            yield (
-                f"Line {wrapper_node.lineno}: Wrapper {wrapper_node.name!r} drops optional kwargs {sorted(missing)!r} of delegate {delegate_name!r}"
-            )
-
-
-def check_wrapper_plumb_through(content: str, file_path: str) -> list[str]:
-    """Flag calls inside public functions that drop a same-file delegate's optional kwargs.
-
-    Walks the AST. For every public function (name does not start with '_'),
-    inspects every ast.Call inside its body and emits one finding per call
-    whose target name matches a same-file function that exposes optional
-    kwargs the enclosing public function does not also accept. Emission is
-    capped at MAX_VIOLATIONS_PER_CHECK findings per call to run_gate.
-
-    Limitations:
-    - Only module-level FunctionDef nodes contribute signatures, and ClassDef
-      methods are skipped both as signature sources and as wrapper candidates:
-      a class method's signature is unrelated to a free-function delegate's
-      keyword surface, so treating it as a wrapper produces false positives.
-    - ast.Attribute calls match by attribute name only; the receiver type is
-      not checked, so `self.fetch(...)` and `other.fetch(...)` both match a
-      module-level `fetch` definition.
-    - Nested call expressions inside another call's arguments are not treated as
-      separate call sites; only the enclosing Call is inspected. This avoids
-      false positives where a callee nested as an argument is confused with a
-      top-level delegate invocation (for example `delegate(helper(x))`).
-
-    Args:
-        content: File content as a single string for AST parsing.
-        file_path: Repository-relative POSIX path of the file (used to
-            skip non-Python code extensions and test files early).
-
-    Returns:
-        List of violation strings, one per dropped optional kwarg. Empty for
-        a non-Python file, a test file, or a file with a syntax error.
-    """
-    non_python_code_extensions = ALL_CODE_FILE_EXTENSIONS - {PYTHON_FILE_EXTENSION}
-    lowercase_file_path = file_path.lower()
-    if any(
-        lowercase_file_path.endswith(each_extension)
-        for each_extension in non_python_code_extensions
-    ):
-        return []
-    if is_test_path(file_path):
-        return []
-    try:
-        tree = ast.parse(content)
-    except SyntaxError:
-        return []
-    function_signatures = _module_level_optional_kwargs_by_name(tree)
-    class_method_node_ids = _class_method_node_ids(tree)
-    issues: list[str] = []
-    for each_node in ast.walk(tree):
-        if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        if id(each_node) in class_method_node_ids:
-            continue
-        if each_node.name.startswith("_"):
-            continue
-        for each_finding in _wrapper_dropped_kwarg_findings(each_node, function_signatures):
-            issues.append(each_finding)
-            if len(issues) >= MAX_VIOLATIONS_PER_CHECK:
-                return issues
-    return issues
-
-
-def parse_added_line_numbers(unified_diff_text: str) -> set[int]:
-    """Extract added line numbers from unified-diff text.
-
-    Args:
-        unified_diff_text: Output from ``git diff --unified=0``.
-
-    Returns:
-        Set of newly-added line numbers (1-indexed) extracted from the
-        hunk headers.
-    """
-    header_regex = hunk_header_pattern()
-    added_line_numbers: set[int] = set()
-    for each_line in unified_diff_text.splitlines():
-        header_match = header_regex.match(each_line)
-        if header_match is None:
-            continue
-        new_start_text, new_count_text = header_match.groups()
-        new_start = int(new_start_text)
-        new_count = 1 if new_count_text is None else int(new_count_text)
-        if new_count <= 0:
-            continue
-        for each_number in range(new_start, new_start + new_count):
-            added_line_numbers.add(each_number)
-    return added_line_numbers
-
-
-def is_file_new_at_base(
-    repository_root: Path,
-    merge_base: str,
-    relative_path_posix: str,
-) -> bool:
-    """Check whether *relative_path_posix* did not exist at *merge_base*.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        merge_base: The merge-base SHA against which to check existence.
-        relative_path_posix: Repository-relative POSIX path to inspect.
-
-    Returns:
-        True when ``git cat-file -e`` fails to find the blob at the merge
-        base (i.e. the file was added on the HEAD side); False otherwise.
-    """
-    cat_result = subprocess.run(
-        ["git", "cat-file", "-e", f"{merge_base}:{relative_path_posix}"],
-        cwd=str(repository_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        env=repository_environment(),
-    )
-    return cat_result.returncode != 0
-
-
-def added_lines_for_file(
-    repository_root: Path,
-    merge_base: str,
-    relative_path_posix: str,
-) -> set[int]:
-    """Return added line numbers for *relative_path_posix* since *merge_base*.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        merge_base: The merge-base SHA against which to diff.
-        relative_path_posix: Repository-relative POSIX path to inspect.
-
-    Returns:
-        Set of line numbers (1-indexed) added on the HEAD side of the diff.
-
-    Raises:
-        SystemExit: When the diff command returns non-zero.
-    """
-    diff_result = subprocess.run(
-        [
-            "git",
-            "diff",
-            "--unified=0",
-            f"{merge_base}..HEAD",
-            "--",
-            relative_path_posix,
-        ],
-        cwd=str(repository_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        env=repository_environment(),
-    )
-    if diff_result.returncode != 0:
-        print(
-            f"code_rules_gate: git diff --unified=0 failed for {relative_path_posix}:\n"
-            f"{diff_result.stderr}",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    if not diff_result.stdout.strip():
-        return set()
-    return parse_added_line_numbers(diff_result.stdout)
-
-
-def whole_file_line_set(file_path: Path) -> set[int]:
-    """Return the set of line numbers covering an entire file.
-
-    Args:
-        file_path: Path to the file whose line span should be summarized.
-
-    Returns:
-        Set of line numbers (1-indexed) covering every line in *file_path*,
-        or an empty set when the file is unreadable or empty.
-    """
-    try:
-        total_lines = len(file_path.read_text(encoding="utf-8").splitlines())
-    except (OSError, UnicodeDecodeError) as read_error:
-        print(
-            f"code_rules_gate: skipping unreadable file {file_path}: {read_error}",
-            file=sys.stderr,
-        )
-        return set()
-    if total_lines <= 0:
-        return set()
-    return set(range(1, total_lines + 1))
-
-
-def renamed_file_source_map_since(
-    repository_root: Path,
-    merge_base: str,
-) -> dict[str, str]:
-    """Return a mapping from rename-destination path to rename-source path.
-
-    Runs `git diff --name-status -M -z merge_base..HEAD` and collects both
-    paths of every rename entry (status code starting with R, e.g. `R100`).
-    Keys are destination posix paths; values are source posix paths.
-
-    The -z flag asks git for null-terminated, unquoted output. A path
-    holding a tab or newline byte then survives column and line splitting
-    unmangled. Each rename record emits three null-terminated tokens
-    (status, source, destination). Every other status record emits two
-    (status, path).
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        merge_base: The merge-base SHA against which to diff.
-
-    Returns:
-        Mapping from rename-destination POSIX path to rename-source POSIX
-        path. Empty when no rename records are present.
-
-    Raises:
-        SystemExit: When ``git diff --name-status`` returns non-zero.
-    """
-    name_status_result = subprocess.run(
-        ["git", "diff", "--name-status", "-M", "-z", f"{merge_base}..HEAD"],
-        cwd=str(repository_root),
-        capture_output=True,
-        check=False,
-        env=repository_environment(),
-    )
-    if name_status_result.returncode != 0:
-        stderr_text = name_status_result.stderr.decode("utf-8", errors="replace")
-        print(
-            f"code_rules_gate: git diff --name-status -M -z failed:\n"
-            f"{stderr_text}",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    null_separated_tokens = [
-        each_token.decode("utf-8", errors="replace")
-        for each_token in name_status_result.stdout.split(b"\x00")
-        if each_token
-    ]
-    rename_source_by_destination: dict[str, str] = {}
-    next_token_index = 0
-    while next_token_index < len(null_separated_tokens):
-        status_code = null_separated_tokens[next_token_index]
-        if status_code.startswith(GIT_NAME_STATUS_RENAMED_PREFIX):
-            if next_token_index + EXPECTED_RENAME_COLUMN_COUNT > len(
-                null_separated_tokens
-            ):
-                break
-            source_path = null_separated_tokens[next_token_index + 1].replace(
-                "\\", "/"
-            )
-            destination_path = null_separated_tokens[next_token_index + 2].replace(
-                "\\", "/"
-            )
-            rename_source_by_destination[destination_path] = source_path
-            next_token_index += EXPECTED_RENAME_COLUMN_COUNT
-            continue
-        next_token_index += EXPECTED_NON_RENAME_COLUMN_COUNT
-    return rename_source_by_destination
-
-
-def added_lines_for_renamed_file(
-    repository_root: Path,
-    merge_base: str,
-    source_posix: str,
-    destination_posix: str,
-) -> set[int]:
-    """Return added line numbers for a renamed file via blob comparison.
-
-    Compares `merge_base:source_posix` against `HEAD:destination_posix`
-    to surface only truly added lines, ignoring lines that already existed
-    in the source file before the rename. Falls back to whole-file coverage
-    when the source blob is absent at the merge base (i.e. the source was
-    itself a new or renamed file that landed earlier in the branch).
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        merge_base: The merge-base SHA against which to compare blobs.
-        source_posix: Rename-source POSIX path at the merge base.
-        destination_posix: Rename-destination POSIX path at HEAD.
-
-    Returns:
-        Set of line numbers (1-indexed) added on the HEAD side of the
-        comparison; empty on diff failure.
-    """
-    diff_result = subprocess.run(
-        [
-            "git",
-            "diff",
-            "--unified=0",
-            f"{merge_base}:{source_posix}",
-            f"HEAD:{destination_posix}",
-        ],
-        cwd=str(repository_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        env=repository_environment(),
-    )
-    if diff_result.returncode != 0:
-        print(
-            f"code_rules_gate: git diff failed for renamed file {merge_base}:{source_posix} "
-            f"vs HEAD:{destination_posix} (returncode={diff_result.returncode}); "
-            f"stderr={diff_result.stderr.strip()!r}",
-            file=sys.stderr,
-        )
-        return set()
-    if not diff_result.stdout.strip():
-        return set()
-    return parse_added_line_numbers(diff_result.stdout)
-
-
-def added_lines_by_file(
-    repository_root: Path,
-    base_reference: str,
-    all_file_paths: list[Path],
-) -> dict[Path, set[int]]:
-    """Build a per-file map of added line numbers across the branch.
-
-    Args:
-        repository_root: Repository root for diff invocations.
-        base_reference: The git reference to merge-base against.
-        all_file_paths: File paths whose added lines should be collected.
-
-    Returns:
-        Mapping from resolved file path to the set of line numbers added
-        on the HEAD side, with renames resolved to compare against the
-        original source path.
-    """
-    merge_base = resolve_merge_base(repository_root, base_reference)
-    resolved_root = repository_root.resolve()
-    rename_source_map = renamed_file_source_map_since(resolved_root, merge_base)
-    added_by_path: dict[Path, set[int]] = {}
-    for each_path in all_file_paths:
-        try:
-            resolved = each_path.resolve()
-        except OSError:
-            continue
-        try:
-            relative = resolved.relative_to(resolved_root)
-        except ValueError:
-            continue
-        relative_posix = str(relative).replace("\\", "/")
-        if relative_posix in rename_source_map:
-            added_numbers = added_lines_for_renamed_file(
-                resolved_root,
-                merge_base,
-                rename_source_map[relative_posix],
-                relative_posix,
-            )
-        else:
-            added_numbers = added_lines_for_file(
-                resolved_root, merge_base, relative_posix
-            )
-            if not added_numbers and resolved.is_file():
-                if is_file_new_at_base(resolved_root, merge_base, relative_posix):
-                    added_numbers = whole_file_line_set(resolved)
-        added_by_path[resolved] = added_numbers
-    return added_by_path
-
-
-def extract_violation_line_number(violation_text: str) -> int | None:
-    """Return the line number captured by the gate's violation-line regex.
-
-    Args:
-        violation_text: A single violation string of the form ``Line N: ...``.
-
-    Returns:
-        The integer line number captured in the prefix, or None when the
-        text does not match the violation-line pattern.
-    """
-    match_result = violation_line_pattern().match(violation_text)
-    if match_result is None:
-        return None
-    return int(match_result.group(1))
-
-
-def function_length_span_range(violation_text: str) -> range | None:
-    """Return the declared line range of a function-length violation, or None.
-
-    The enforcer's function-length message carries the definition line and
-    the function's line span: ``Function 'NAME' (defined at line X) is Y
-    lines - ...``. The function occupies lines ``X`` through ``X + Y - 1``
-    inclusive.
-
-    Args:
-        violation_text: A single violation string emitted by the enforcer.
-
-    Returns:
-        A ``range`` covering the function's declared line span, or None when
-        the text is not a function-length violation.
-    """
-    span_match = FUNCTION_LENGTH_VIOLATION_PATTERN.search(violation_text)
-    if span_match is None:
-        return None
-    definition_line = int(span_match.group(FUNCTION_LENGTH_DEFINITION_LINE_GROUP_INDEX))
-    line_span = int(span_match.group(FUNCTION_LENGTH_SPAN_GROUP_INDEX))
-    return range(definition_line, definition_line + line_span)
-
-
-def isolation_span_range(violation_text: str) -> range | None:
-    """Return the enclosing test-function line range of an isolation violation.
-
-    The enforcer's HOME/TMP isolation message carries the enclosing test
-    function's definition line and span: ``Line N: Test 'NAME' (defined at
-    line X, spanning Y lines) probes ...``. The function occupies lines ``X``
-    through ``X + Y - 1`` inclusive, so a signature-line change that
-    un-isolates an unchanged-body probe is scoped by the same span the
-    enforcer uses rather than by the ``Line N:`` probe line alone.
-
-    Args:
-        violation_text: A single violation string emitted by the enforcer.
-
-    Returns:
-        A ``range`` covering the enclosing test function's declared line span,
-        or None when the text is not an isolation violation.
-    """
-    span_match = ISOLATION_VIOLATION_PATTERN.search(violation_text)
-    if span_match is None:
-        return None
-    definition_line = int(span_match.group(ISOLATION_DEFINITION_LINE_GROUP_INDEX))
-    line_span = int(span_match.group(ISOLATION_SPAN_GROUP_INDEX))
-    return range(definition_line, definition_line + line_span)
-
-
-def banned_noun_span_range(violation_text: str) -> range | None:
-    """Return the one-line binding span of a banned-noun violation, or None.
-
-    The enforcer's banned-noun message carries the binding line and a one-line
-    span: ``Line N: Identifier 'NAME' ... (binding span at line X, spanning 1
-    lines)``. A banned-noun binding is a point fact about one identifier, so the
-    span is always the binding line alone (``X`` through ``X``) — never the
-    enclosing function span. Scoping to the binding line keeps a pre-existing
-    parameter or local-name binding out of scope when an unrelated line of its
-    enclosing function is edited.
-
-    Args:
-        violation_text: A single violation string emitted by the enforcer.
-
-    Returns:
-        A ``range`` covering the binding's one-line span, or None when the text
-        is not a banned-noun violation.
-    """
-    span_match = BANNED_NOUN_VIOLATION_PATTERN.search(violation_text)
-    if span_match is None:
-        return None
-    definition_line = int(span_match.group(BANNED_NOUN_DEFINITION_LINE_GROUP_INDEX))
-    line_span = int(span_match.group(BANNED_NOUN_SPAN_GROUP_INDEX))
-    return range(definition_line, definition_line + line_span)
-
-
-def duplicate_body_span_range(violation_text: str) -> range | None:
-    """Return the copied function's source line range of a duplicate-body issue.
-
-    The duplicate-body message carries the copied function's definition line and
-    its full body span: ``Function 'NAME' duplicates location.py::name — ...
-    (duplicate body span at line X, spanning Y lines)``. The function occupies
-    lines ``X`` through ``X + Y - 1`` inclusive.
-
-    So a duplicate of a sibling helper blocks only when the diff touches the
-    copied function. An unrelated edit that leaves a pre-existing copy
-    untouched keeps it advisory. This matches the span-scoped PreToolUse
-    Write/Edit behavior rather than blocking every duplicate-body message
-    unconditionally.
-
-    Args:
-        violation_text: A single violation string emitted by the enforcer.
-
-    Returns:
-        A ``range`` covering the copied function's declared line span, or None
-        when the text is not a duplicate-body violation.
-    """
-    span_match = DUPLICATE_BODY_VIOLATION_PATTERN.search(violation_text)
-    if span_match is None:
-        return None
-    definition_line = int(span_match.group(DUPLICATE_BODY_DEFINITION_LINE_GROUP_INDEX))
-    line_span = int(span_match.group(DUPLICATE_BODY_SPAN_GROUP_INDEX))
-    return range(definition_line, definition_line + line_span)
-
-
-def inline_duplicate_body_span_lines(violation_text: str) -> frozenset[int] | None:
-    """Return the union of both spans of a same-file inline-duplicate issue, or None.
-
-    The same-file inline-duplicate message names two functions that share a body:
-    the helper and the enclosing function carrying the inline copy. The live
-    Write/Edit hook scopes the violation by the union of both spans. It blocks
-    when an edit touches either function. So the message carries both spans:
-    ``(inline duplicate body spans: helper at line H spanning P lines,
-    enclosing at line E spanning Q lines)``.
-
-    The two spans can be disjoint: an unrelated function may sit between the
-    helper and its inline copy. This returns the union as a line-number set
-    rather than a single contiguous range. A range covering the gap would
-    wrongly block an edit confined to that intervening function, which the
-    PreToolUse path leaves unflagged.
-
-    Args:
-        violation_text: A single violation string emitted by the enforcer.
-
-    Returns:
-        The frozenset of every line in the helper span and the enclosing span, or
-        None when the text is not a same-file inline-duplicate violation.
-    """
-    span_match = INLINE_DUPLICATE_BODY_VIOLATION_PATTERN.search(violation_text)
-    if span_match is None:
-        return None
-    helper_line = int(span_match.group(INLINE_DUPLICATE_BODY_HELPER_LINE_GROUP_INDEX))
-    helper_span = int(span_match.group(INLINE_DUPLICATE_BODY_HELPER_SPAN_GROUP_INDEX))
-    enclosing_line = int(
-        span_match.group(INLINE_DUPLICATE_BODY_ENCLOSING_LINE_GROUP_INDEX)
-    )
-    enclosing_span = int(
-        span_match.group(INLINE_DUPLICATE_BODY_ENCLOSING_SPAN_GROUP_INDEX)
-    )
-    helper_lines = range(helper_line, helper_line + helper_span)
-    enclosing_lines = range(enclosing_line, enclosing_line + enclosing_span)
-    return frozenset(helper_lines) | frozenset(enclosing_lines)
-
-
-def _all_span_range_extractors() -> tuple[Callable[[str], range | None], ...]:
-    return (
-        function_length_span_range,
-        isolation_span_range,
-        banned_noun_span_range,
-        duplicate_body_span_range,
-    )
-
-
-def enclosing_span_range(violation_text: str) -> range | None:
-    """Return the enclosing-unit line range of a span-tagged violation, or None.
-
-    Every diff-scoped enforcer check tags its message with an enclosing-unit
-    span fragment. This dispatcher tries each span extractor from
-    ``_all_span_range_extractors``, so the gate reconstructs every scoped
-    check's span through one shared mechanism. Adding a new scoped check
-    means adding one extractor to that registry rather than threading a new
-    branch through ``split_violations_by_scope``.
-
-    Args:
-        violation_text: A single violation string emitted by the enforcer.
-
-    Returns:
-        The first non-None span range any extractor recovers, or None when the
-        text carries no enclosing-unit span fragment.
-    """
-    for each_extractor in _all_span_range_extractors():
-        span_range = each_extractor(violation_text)
-        if span_range is not None:
-            return span_range
-    return None
-
-
-def split_violations_by_scope(
-    all_issues: list[str],
-    all_added_line_numbers: set[int] | None,
-) -> tuple[list[str], list[str]]:
-    """Partition issues into blocking vs advisory based on touched lines.
-
-    Args:
-        all_issues: Violation strings emitted by the enforcer.
-        all_added_line_numbers: Lines added in the current diff, or None
-            to treat every violation as blocking.
-
-    Returns:
-        Tuple ``(blocking, advisory)``. When *all_added_line_numbers* is
-        None, every issue is blocking. A same-file inline-duplicate violation
-        carries both the helper span and the enclosing span;
-        ``inline_duplicate_body_span_lines`` reconstructs their union as a
-        line-number set, and the violation is blocking when an added line falls
-        in either span — matching the live Write/Edit hook's union scoping. Every
-        other diff-scoped violation (function-length, HOME/TMP isolation,
-        banned-noun, cross-file duplicate-body) carries one enclosing-unit span
-        fragment that ``enclosing_span_range`` reconstructs through one shared
-        extractor registry; such a violation is blocking
-        when its declared span intersects the added lines (the unit grew or its
-        signature changed in this diff) and advisory otherwise (a pre-existing
-        untouched unit). Every other issue is blocking when its ``Line N:``
-        prefix names an added line and advisory otherwise.
-    """
-    if all_added_line_numbers is None:
-        return list(all_issues), []
-    blocking: list[str] = []
-    advisory: list[str] = []
-    for each_issue in all_issues:
-        inline_duplicate_lines = inline_duplicate_body_span_lines(each_issue)
-        if inline_duplicate_lines is not None:
-            if inline_duplicate_lines & all_added_line_numbers:
-                blocking.append(each_issue)
-            else:
-                advisory.append(each_issue)
-            continue
-        span_range = enclosing_span_range(each_issue)
-        if span_range is not None:
-            if any(each_line in all_added_line_numbers for each_line in span_range):
-                blocking.append(each_issue)
-            else:
-                advisory.append(each_issue)
-            continue
-        violation_line = extract_violation_line_number(each_issue)
-        if violation_line is None:
-            blocking.append(each_issue)
-            continue
-        if violation_line in all_added_line_numbers:
-            blocking.append(each_issue)
-        else:
-            advisory.append(each_issue)
-    return blocking, advisory
-
-
-def print_violation_section(
-    header_message: str,
-    violations_by_file: dict[Path, list[str]],
-    repository_root: Path,
-) -> None:
-    """Print a labeled block of violations grouped by relative path.
-
-    Args:
-        header_message: Section header to write to stderr.
-        violations_by_file: Mapping from absolute file path to the list of
-            violation strings to render under that path.
-        repository_root: Repository root used to compute relative paths.
-    """
-    print(header_message, file=sys.stderr)
-    resolved_root = repository_root.resolve()
-    for each_path in sorted(violations_by_file.keys()):
-        relative = each_path.relative_to(resolved_root)
-        print(f"{relative}:", file=sys.stderr)
-        for each_issue in violations_by_file[each_path]:
-            print(f"  {each_issue}", file=sys.stderr)
-
-
-def read_prior_committed_content(
-    repository_root: Path, relative_path_posix: str
-) -> str:
-    """Return the HEAD-committed content for *relative_path_posix*.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        relative_path_posix: Repository-relative POSIX path to read.
-
-    Returns:
-        The committed file content at HEAD, or an empty string when the
-        path is not tracked or ``git show`` returns non-zero.
-    """
-    show_result = subprocess.run(
-        ["git", "show", f"HEAD:{relative_path_posix}"],
-        cwd=str(repository_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        env=repository_environment(),
-    )
-    if show_result.returncode != 0:
-        return ""
-    return show_result.stdout
-
-
-def read_staged_content(
-    repository_root: Path, relative_path_posix: str
-) -> str | None:
-    """Return the staged-blob content for *relative_path_posix*.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        relative_path_posix: Repository-relative POSIX path to read.
-
-    Returns:
-        The staged blob content, or None when the path is not staged, when
-        ``git show`` returns non-zero, or when the staged bytes are not
-        decodable Unicode (the caller skips and fails closed).
-    """
-    git_show_process = subprocess.run(
-        ["git", "show", f":{relative_path_posix}"],
-        cwd=str(repository_root),
-        capture_output=True,
-        check=False,
-        env=repository_environment(),
-    )
-    if git_show_process.returncode != 0:
-        return None
-    try:
-        return git_show_process.stdout.decode(encoding="utf-8")
-    except UnicodeDecodeError:
-        return None
-
-
-def staged_blob_exists(
-    repository_root: Path, relative_path_posix: str
-) -> bool:
-    """Report whether *relative_path_posix* is present in the staged index.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        relative_path_posix: Repository-relative POSIX path to probe.
-
-    Returns:
-        True when the path is staged for add or modify (its blob exists in the
-        index); False when it is absent, such as a staged deletion.
-    """
-    git_cat_file_process = subprocess.run(
-        ["git", "cat-file", "-e", f":{relative_path_posix}"],
-        cwd=str(repository_root),
-        capture_output=True,
-        check=False,
-        env=repository_environment(),
-    )
-    return git_cat_file_process.returncode == 0
-
-
-def _path_is_eligible_for_validation(
-    resolved_path: Path,
-    repository_root: Path,
-    read_staged_content_flag: bool,
-) -> bool:
-    """Decide whether *resolved_path* should be validated by the gate.
-
-    Args:
-        resolved_path: A resolved candidate path already confirmed to live
-            under *repository_root*.
-        repository_root: Repository root used to compute the relative path.
-        read_staged_content_flag: When True, require staged-index presence so
-            files staged for add or modify are validated and staged deletions
-            are skipped; when False, require working-tree presence.
-
-    Returns:
-        True when the path carries a code extension and exists in the source
-        the gate will read; False otherwise.
-    """
-    if not is_code_path(resolved_path):
-        return False
-    if read_staged_content_flag:
-        relative_posix = str(
-            resolved_path.relative_to(repository_root.resolve())
-        ).replace("\\", "/")
-        return staged_blob_exists(repository_root.resolve(), relative_posix)
-    return resolved_path.is_file()
-
-
-def _scoped_violations_for_file(
-    validate_content: ValidateContentCallable,
-    resolved_path: Path,
-    repository_root: Path,
-    all_added_lines_for_file: set[int] | None,
-    read_staged_content_flag: bool = False,
-) -> tuple[list[str], list[str]] | None:
-    """Validate one resolved file and partition its violations by diff scope.
-
-    Args:
-        validate_content: The enforcer ``validate_content`` callable.
-        resolved_path: The resolved code file to validate.
-        repository_root: Repository root used to resolve the relative path.
-        all_added_lines_for_file: Lines added in the current diff for this file,
-            or None to treat every violation as blocking.
-        read_staged_content_flag: When True, source the content from the staged
-            blob so it matches the staged diff that scoped the added lines.
-
-    Returns:
-        ``(blocking, advisory)`` for the file, or None when the file is
-        unreadable (the caller logs and skips it).
-    """
-    relative_posix = str(
-        resolved_path.relative_to(repository_root.resolve())
-    ).replace("\\", "/")
-    if read_staged_content_flag:
-        staged_content = read_staged_content(repository_root.resolve(), relative_posix)
-        if staged_content is None:
-            print(f"code_rules_gate: skip unreadable {resolved_path}", file=sys.stderr)
-            return None
-        content = staged_content
-    else:
-        try:
-            content = resolved_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            print(f"code_rules_gate: skip unreadable {resolved_path}", file=sys.stderr)
-            return None
-    prior_content = read_prior_committed_content(
-        repository_root.resolve(), relative_posix
-    )
-    issues = validate_content(
-        content,
-        relative_posix,
-        prior_content,
-        defer_scope_to_caller=True,
-        sibling_directory=resolved_path.parent,
-    )
-    issues.extend(check_wrapper_plumb_through(content, relative_posix))
-    if not issues:
-        return [], []
-    return split_violations_by_scope(issues, all_added_lines_for_file)
-
-
-def run_gate(
-    validate_content: ValidateContentCallable,
-    all_file_paths: list[Path],
-    repository_root: Path,
-    all_added_lines_by_path: dict[Path, set[int]] | None = None,
-    read_staged_content_flag: bool = False,
-) -> int:
-    """Run the gate over *all_file_paths* and emit a partitioned report.
-
-    Args:
-        validate_content: The enforcer ``validate_content`` callable.
-        all_file_paths: File paths to inspect.
-        repository_root: Repository root used to resolve relative paths.
-        all_added_lines_by_path: Optional per-file added-line maps used to
-            partition issues into blocking vs advisory.
-        read_staged_content_flag: When True, validate each file's staged blob
-            so the content source matches the staged diff.
-
-    Returns:
-        Zero when every targeted file was validated and no blocking violation
-        was found. Non-zero when any blocking violation was reported OR when
-        one or more files could not be read (a skipped file means the gate
-        could not vouch for it).
-    """
-    blocking_by_file, advisory_by_file, skipped_unreadable_count = (
-        _collect_partitioned_violations(
-            validate_content,
-            all_file_paths,
-            repository_root,
-            all_added_lines_by_path,
-            read_staged_content_flag,
-        )
-    )
-    return _report_partitioned_violations(
-        blocking_by_file,
-        advisory_by_file,
-        repository_root,
-        all_added_lines_by_path is None,
-        skipped_unreadable_count,
-    )
-
-
-def _collect_partitioned_violations(
-    validate_content: ValidateContentCallable,
-    all_file_paths: list[Path],
-    repository_root: Path,
-    all_added_lines_by_path: dict[Path, set[int]] | None,
-    read_staged_content_flag: bool = False,
-) -> tuple[dict[Path, list[str]], dict[Path, list[str]], int]:
-    """Validate every targeted file and partition results by diff scope.
-
-    Args:
-        validate_content: The enforcer ``validate_content`` callable.
-        all_file_paths: File paths to inspect.
-        repository_root: Repository root used to resolve relative paths.
-        all_added_lines_by_path: Optional per-file added-line maps used to
-            partition issues into blocking vs advisory.
-        read_staged_content_flag: When True, validate each file's staged blob
-            so the content source matches the staged diff.
-
-    Returns:
-        ``(blocking_by_file, advisory_by_file, skipped_unreadable_count)`` where
-        the skipped count increments for every changed file that could not be
-        read, so the caller can fail closed on unvalidated files.
-    """
-    blocking_by_file: dict[Path, list[str]] = {}
-    advisory_by_file: dict[Path, list[str]] = {}
-    skipped_unreadable_count = 0
-    for each_path in sorted(set(all_file_paths)):
-        try:
-            resolved = each_path.resolve()
-        except OSError:
-            continue
-        try:
-            resolved.relative_to(repository_root.resolve())
-        except ValueError:
-            continue
-        if not _path_is_eligible_for_validation(
-            resolved, repository_root, read_staged_content_flag
-        ):
-            continue
-        all_added_lines_for_file = (
-            None
-            if all_added_lines_by_path is None
-            else all_added_lines_by_path.get(resolved)
-        )
-        scoped_violations = _scoped_violations_for_file(
-            validate_content, resolved, repository_root,
-            all_added_lines_for_file, read_staged_content_flag,
-        )
-        if scoped_violations is None:
-            skipped_unreadable_count += 1
-            continue
-        blocking, advisory = scoped_violations
-        if blocking:
-            blocking_by_file[resolved] = blocking
-        if advisory:
-            advisory_by_file[resolved] = advisory
-    return blocking_by_file, advisory_by_file, skipped_unreadable_count
+    from terminology_sweep import repository_environment, staged_terminology_findings
+except ImportError as import_error:
+    raise ImportError(
+        "code_rules_gate: could not import its code_rules_gate_parts submodules; "
+        "ensure the pr-loop scripts directory is importable."
+    ) from import_error
+
+subprocess = git_file_sets.subprocess
+
+resolve_claude_dev_env_root = enforcer_loading.resolve_claude_dev_env_root
+load_validate_content = enforcer_loading.load_validate_content
+ValidateContentCallable = enforcer_loading.ValidateContentCallable
+
+resolve_merge_base = git_file_sets.resolve_merge_base
+paths_from_git_staged = git_file_sets.paths_from_git_staged
+paths_from_git_diff = git_file_sets.paths_from_git_diff
+paths_from_git_untracked = git_file_sets.paths_from_git_untracked
+filter_paths_under_prefixes = git_file_sets.filter_paths_under_prefixes
+is_staged_file_newly_added = git_file_sets.is_staged_file_newly_added
+staged_file_line_count = git_file_sets.staged_file_line_count
+staged_unified_diff_text = git_file_sets.staged_unified_diff_text
+
+read_prior_committed_content = git_blob_readers.read_prior_committed_content
+read_staged_content = git_blob_readers.read_staged_content
+staged_blob_exists = git_blob_readers.staged_blob_exists
+
+parse_added_line_numbers = violation_scoping.parse_added_line_numbers
+hunk_header_pattern = violation_scoping.hunk_header_pattern
+violation_line_pattern = violation_scoping.violation_line_pattern
+extract_violation_line_number = violation_scoping.extract_violation_line_number
+function_length_span_range = violation_scoping.function_length_span_range
+isolation_span_range = violation_scoping.isolation_span_range
+banned_noun_span_range = violation_scoping.banned_noun_span_range
+duplicate_body_span_range = violation_scoping.duplicate_body_span_range
+inline_duplicate_body_span_lines = violation_scoping.inline_duplicate_body_span_lines
+enclosing_span_range = violation_scoping.enclosing_span_range
+split_violations_by_scope = violation_scoping.split_violations_by_scope
+
+added_lines_for_file = added_line_maps.added_lines_for_file
+added_lines_for_renamed_file = added_line_maps.added_lines_for_renamed_file
+renamed_file_source_map_since = added_line_maps.renamed_file_source_map_since
+added_lines_by_file = added_line_maps.added_lines_by_file
+is_file_new_at_base = added_line_maps.is_file_new_at_base
+whole_file_line_set = added_line_maps.whole_file_line_set
+
+check_wrapper_plumb_through = wrapper_plumb_check.check_wrapper_plumb_through
+is_code_path = wrapper_plumb_check.is_code_path
+is_test_path = wrapper_plumb_check.is_test_path
+
+run_gate = gate_running.run_gate
+print_violation_section = gate_running.print_violation_section
+_collect_partitioned_violations = gate_running._collect_partitioned_violations
+_scoped_violations_for_file = gate_running._scoped_violations_for_file
+_report_terminology_findings = gate_running._report_terminology_findings
 
 
 def _report_partitioned_violations(
@@ -1504,406 +113,100 @@ def _report_partitioned_violations(
     is_whole_file_scope: bool,
     skipped_unreadable_count: int,
 ) -> int:
-    """Print the blocking and advisory sections and return the gate exit code.
+    """Print the violation sections and return the gate exit code.
+
+    Importers outside this directory (the code-verifier spawn-preflight hook)
+    call this surface with the partition spread across positional arguments,
+    so this wrapper keeps that calling shape and folds the pieces into the
+    ``PartitionedViolations`` tuple the gate-running module consumes.
 
     Args:
         blocking_by_file: Blocking violations grouped by resolved file path.
         advisory_by_file: Advisory violations grouped by resolved file path.
-        repository_root: Repository root used to compute relative paths.
-        is_whole_file_scope: True when no per-file added-line map was supplied,
-            which selects the whole-file header wording.
-        skipped_unreadable_count: Count of changed files that could not be read;
-            a non-zero count forces a non-zero exit because the gate cannot
-            vouch for those files.
+        repository_root: Repository root for computing relative paths.
+        is_whole_file_scope: True when findings cover whole files, not a diff.
+        skipped_unreadable_count: Count of files skipped due to read errors.
 
     Returns:
-        Zero when no blocking violation was found and no file was skipped;
-        non-zero otherwise.
+        The gate exit code: 1 when anything blocks, 0 otherwise.
     """
-    blocking_count = sum(len(each_list) for each_list in blocking_by_file.values())
-    advisory_count = sum(len(each_list) for each_list in advisory_by_file.values())
-    if blocking_count:
-        if is_whole_file_scope:
-            header = f"code_rules_gate: {blocking_count} violation(s) reported."
-        else:
-            header = (
-                f"code_rules_gate: {blocking_count} violation(s) "
-                "introduced on changed lines:"
-            )
-        print_violation_section(header, blocking_by_file, repository_root)
-    if advisory_count:
-        if blocking_count:
-            print("", file=sys.stderr)
-        print_violation_section(
-            (
-                f"code_rules_gate: {advisory_count} pre-existing violation(s) "
-                "in touched files (advisory, not blocking):"
-            ),
-            advisory_by_file,
-            repository_root,
-        )
-    if skipped_unreadable_count:
-        print(
-            f"code_rules_gate: {skipped_unreadable_count} file(s) "
-            "skipped due to read errors; gate cannot vouch for those files.",
-            file=sys.stderr,
-        )
-    if blocking_count or skipped_unreadable_count:
-        return 1
-    return 0
+    return gate_running._report_partitioned_violations(
+        (blocking_by_file, advisory_by_file, skipped_unreadable_count),
+        repository_root,
+        is_whole_file_scope,
+    )
+
+run_staged_test_files = staged_test_running.run_staged_test_files
+_staged_test_file_paths = staged_test_running._staged_test_file_paths
+_resolve_owning_test_root = staged_test_running._resolve_owning_test_root
+_group_staged_tests_by_root = staged_test_running._group_staged_tests_by_root
+_batched_pytest_arguments = staged_test_running._batched_pytest_arguments
+_resolve_gate_python_executable = staged_test_running._resolve_gate_python_executable
+_staged_pytest_environment = staged_test_running._staged_pytest_environment
+_relative_pytest_argument = staged_test_running._relative_pytest_argument
+_run_pytest_for_group = staged_test_running._run_pytest_for_group
+
+parse_arguments = gate_arguments.parse_arguments
+
+__all__ = [
+    "ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS",
+    "ALL_PYTEST_MODULE_INVOCATION",
+    "ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS",
+    "MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS",
+    "MINIMUM_STAGED_PYTEST_PYTHON_MAJOR",
+    "MINIMUM_STAGED_PYTEST_PYTHON_MINOR",
+    "PYTEST_NO_TESTS_COLLECTED_EXIT_CODE",
+    "repository_environment",
+    "subprocess",
+]
 
 
-def _staged_test_file_paths(repository_root: Path) -> list[Path]:
-    """Return the staged Python test files that exist under a repository.
+def added_lines_for_staged_file(repository_root: Path, relative_path_posix: str) -> set[int]:
+    """Return added line numbers within the staged diff for one file.
 
     Args:
-        repository_root: The repository root whose staged index is read.
+        repository_root: Repository root used as the ``git -C`` target.
+        relative_path_posix: Repository-relative POSIX path to inspect.
 
     Returns:
-        The staged paths whose extension is Python, whose name matches a
-        test-file pattern, and which exist on disk.
+        Line numbers added in the staged diff, or the whole staged blob when
+        the file is newly added.
     """
-    all_test_paths: list[Path] = []
-    for each_path in paths_from_git_staged(repository_root):
-        if each_path.suffix != PYTHON_FILE_EXTENSION:
+    diff_text = staged_unified_diff_text(repository_root, relative_path_posix)
+    if diff_text.strip():
+        return parse_added_line_numbers(diff_text)
+    if is_staged_file_newly_added(repository_root, relative_path_posix):
+        total_lines = staged_file_line_count(repository_root, relative_path_posix)
+        if total_lines > 0:
+            return set(range(1, total_lines + 1))
+    return set()
+
+
+def added_lines_by_file_staged(
+    repository_root: Path, all_file_paths: list[Path]
+) -> dict[Path, set[int]]:
+    """Build a per-file map of staged-added line numbers.
+
+    Args:
+        repository_root: Repository root for diff invocations.
+        all_file_paths: File paths whose staged-added lines are collected.
+
+    Returns:
+        Mapping from resolved file path to its staged-added line numbers.
+    """
+    resolved_root = repository_root.resolve()
+    added_by_path: dict[Path, set[int]] = {}
+    for each_path in all_file_paths:
+        resolved = added_line_maps._resolved_under_root(each_path, resolved_root)
+        if resolved is None:
             continue
-        if is_test_path(str(each_path)) and each_path.is_file():
-            all_test_paths.append(each_path)
-    return all_test_paths
-
-
-def _directory_holds_pytest_config(directory: Path) -> bool:
-    """Return True when *directory* holds a recognized pytest configuration file."""
-    for each_filename, each_required_section in ALL_PYTEST_CONFIG_FILE_SECTIONS:
-        config_path = directory / each_filename
-        if not config_path.is_file():
-            continue
-        if each_required_section is None:
-            return True
-        try:
-            config_text = config_path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        if each_required_section in config_text:
-            return True
-    return False
-
-
-def _resolve_owning_test_root(test_file_path: Path, repository_root: Path) -> Path:
-    """Return the nearest ancestor of *test_file_path* that owns a pytest config.
-
-    Walks up from the test file to the first directory holding a pytest config,
-    stopping at *repository_root*, which is the fallback when none is found.
-
-    Args:
-        test_file_path: The staged test file to resolve a root for.
-        repository_root: The repository root that bounds the upward walk.
-
-    Returns:
-        The resolved owning test root directory.
-    """
-    resolved_repository_root = repository_root.resolve()
-    for each_ancestor in test_file_path.resolve().parents:
-        if _directory_holds_pytest_config(each_ancestor):
-            return each_ancestor
-        if each_ancestor == resolved_repository_root:
-            return resolved_repository_root
-    return resolved_repository_root
-
-
-def _group_staged_tests_by_root(
-    all_test_paths: list[Path],
-    repository_root: Path,
-) -> dict[Path, list[Path]]:
-    """Group *all_test_paths* by their owning pytest-config root.
-
-    Args:
-        all_test_paths: The staged test files to partition.
-        repository_root: The repository root that bounds each upward walk.
-
-    Returns:
-        A mapping from owning test root to the staged test files under it.
-    """
-    tests_by_root: dict[Path, list[Path]] = {}
-    for each_test_path in all_test_paths:
-        owning_root = _resolve_owning_test_root(each_test_path, repository_root)
-        tests_by_root.setdefault(owning_root, []).append(each_test_path)
-    return tests_by_root
-
-
-def _venv_python_relative_path() -> tuple[str, ...]:
-    """Return the venv-relative python executable path segments for this platform.
-
-    Returns:
-        The Windows ``Scripts/python.exe`` segments on Windows, the POSIX
-        ``bin/python`` segments on every other platform.
-    """
-    if os.name == "nt":
-        return ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS
-    return ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS
-
-
-def _venv_python_executable(repository_root: Path) -> Path | None:
-    """Return the first existing venv interpreter under *repository_root*.
-
-    Checks each directory name in ``ALL_VENV_DIRECTORY_NAMES`` in order and
-    returns the platform-specific interpreter path the first time it exists
-    on disk.
-
-    Args:
-        repository_root: The repository root to search for a venv directory.
-
-    Returns:
-        The resolved interpreter path, or None when no candidate exists.
-    """
-    relative_python_path = _venv_python_relative_path()
-    for each_venv_directory_name in ALL_VENV_DIRECTORY_NAMES:
-        candidate_path = repository_root.joinpath(
-            each_venv_directory_name, *relative_python_path
-        )
-        if candidate_path.is_file():
-            return candidate_path
-    return None
-
-
-def _resolve_gate_python_executable(repository_root: Path) -> str:
-    """Return the interpreter the staged-test subprocess runs under.
-
-    Resolves in order: the ``CODE_RULES_GATE_PYTHON`` environment variable
-    when set, then the first existing project venv interpreter under
-    *repository_root*, then the interpreter running the gate itself.
-
-    Args:
-        repository_root: The repository root used to locate a project venv.
-
-    Returns:
-        The absolute path (or command name) of the interpreter to invoke.
-    """
-    configured_python = os.environ.get(CODE_RULES_GATE_PYTHON_ENV_VAR)
-    if configured_python:
-        return configured_python
-    venv_python = _venv_python_executable(repository_root)
-    if venv_python is not None:
-        return str(venv_python)
-    return sys.executable
-
-
-def _staged_pytest_environment() -> dict[str, str]:
-    """Return the subprocess environment for the staged-test pytest run.
-
-    Starts from ``repository_environment()`` (the GIT_-scrubbed process
-    environment) and, when ``CODE_RULES_GATE_PYTHONPATH`` is set, prepends
-    its value to ``PYTHONPATH`` so a resolved venv interpreter that lacks the
-    project on its default path can still import it.
-
-    Returns:
-        The environment mapping to pass to the staged-test subprocess.
-    """
-    environment = repository_environment()
-    configured_pythonpath = os.environ.get(CODE_RULES_GATE_PYTHONPATH_ENV_VAR)
-    if not configured_pythonpath:
-        return environment
-    existing_pythonpath = environment.get(PYTHONPATH_ENV_VAR, "")
-    environment[PYTHONPATH_ENV_VAR] = (
-        configured_pythonpath
-        if not existing_pythonpath
-        else os.pathsep.join([configured_pythonpath, existing_pythonpath])
-    )
-    return environment
-
-
-def _relative_pytest_argument(test_path: Path, group_root: Path) -> str:
-    """Express *test_path* as a pytest argument relative to *group_root*.
-
-    *group_root* is already the pytest working directory, so the relative form
-    names the same file in far fewer characters.
-
-    Example::
-
-        group_root = C:/repo/package
-        ok:   C:/repo/package/tests/test_a.py -> "tests/test_a.py"
-        flag: C:/elsewhere/test_b.py         -> no relative form; passed absolute
-
-    Args:
-        test_path: The staged test file to express as a pytest argument.
-        group_root: The pytest working directory for the group.
-
-    Returns:
-        The path relative to *group_root* when *test_path* sits under it,
-        otherwise the absolute path unchanged.
-    """
-    try:
-        return str(test_path.relative_to(group_root))
-    except ValueError:
-        return str(test_path)
-
-
-def _batched_pytest_arguments(
-    all_pytest_arguments: list[str], character_budget: int
-) -> list[list[str]]:
-    """Split pytest path arguments into command-line-length-safe batches.
-
-    Windows rejects a command line past 32767 characters with WinError 206, so a
-    large staged set passed in one invocation crashes the gate and denies the
-    commit. Each batch takes arguments until the next one would push its joined
-    length past *character_budget*.
-
-    Example::
-
-        character_budget = 10
-        arguments        = ["aaaa", "bbbb", "cccc"]
-        ok:   [["aaaa", "bbbb"], ["cccc"]]  - every batch within budget
-        flag: [["aaaa", "bbbb", "cccc"]]    - 14 characters, over budget
-
-    Args:
-        all_pytest_arguments: The path arguments to distribute, in order.
-        character_budget: The joined length each batch must stay within. An
-            argument wider than the budget on its own still lands in a batch
-            by itself, so no argument is ever dropped.
-
-    Returns:
-        One argument list per pytest invocation, preserving input order.
-    """
-    all_batches: list[list[str]] = []
-    current_batch: list[str] = []
-    current_length = 0
-    for each_argument in all_pytest_arguments:
-        argument_length = len(each_argument) + COMMAND_LINE_ARGUMENT_SEPARATOR_LENGTH
-        if current_batch and current_length + argument_length > character_budget:
-            all_batches.append(current_batch)
-            current_batch = []
-            current_length = 0
-        current_batch.append(each_argument)
-        current_length += argument_length
-    if current_batch:
-        all_batches.append(current_batch)
-    return all_batches
-
-
-def _pytest_batch_exit_code(all_batch_command: list[str], group_root: Path) -> int:
-    """Run one pytest invocation and normalize its exit code.
-
-    Args:
-        all_batch_command: The full argv for this pytest invocation.
-        group_root: The owning test root used as the working directory.
-
-    Returns:
-        0 when the batch passes or collects no tests; pytest's non-zero exit
-        code otherwise.
-    """
-    pytest_process = subprocess.run(
-        all_batch_command,
-        cwd=str(group_root),
-        timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
-        check=False,
-        env=_staged_pytest_environment(),
-    )
-    if pytest_process.returncode == PYTEST_NO_TESTS_COLLECTED_EXIT_CODE:
-        return 0
-    return pytest_process.returncode
-
-
-def _run_pytest_for_group(
-    group_root: Path, all_group_test_paths: list[Path], repository_root: Path
-) -> int:
-    """Run pytest over one group's test files with the working directory at its root.
-
-    Paths are passed relative to *group_root* (the subprocess working directory)
-    and split into batches whose joined command line stays within
-    ``MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS``, so a large staged set never
-    trips the Windows 32767-character limit. A staged set that fits the budget runs
-    as one invocation, exactly as an unbatched run did.
-
-    Example::
-
-        ok:   3 staged tests   -> 1 pytest invocation, argv well under the budget
-        flag: 800 staged tests -> 1 pytest invocation, argv over the Windows limit
-                                  (WinError 206); batching splits it across several
-
-    Args:
-        group_root: The owning test root used as the pytest working directory.
-        all_group_test_paths: The staged test files that share *group_root*.
-        repository_root: The repository root used to resolve a project venv
-            interpreter when ``CODE_RULES_GATE_PYTHON`` is not set.
-
-    Returns:
-        0 when every batch passes or collects nothing; the first failing batch's
-        non-zero pytest exit code otherwise.
-    """
-    all_fixed_command = [
-        _resolve_gate_python_executable(repository_root),
-        *ALL_PYTEST_MODULE_INVOCATION,
-    ]
-    fixed_command_length = sum(
-        len(each_part) + COMMAND_LINE_ARGUMENT_SEPARATOR_LENGTH
-        for each_part in all_fixed_command
-    )
-    all_batches = _batched_pytest_arguments(
-        [
-            _relative_pytest_argument(each_path, group_root)
-            for each_path in all_group_test_paths
-        ],
-        MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS - fixed_command_length,
-    )
-    first_failing_exit_code = 0
-    for each_batch in all_batches:
-        batch_exit_code = _pytest_batch_exit_code(
-            [*all_fixed_command, *each_batch], group_root
-        )
-        if batch_exit_code != 0 and first_failing_exit_code == 0:
-            first_failing_exit_code = batch_exit_code
-    return first_failing_exit_code
-
-
-def run_staged_test_files(repository_root: Path) -> int:
-    """Run pytest over the staged test files and return the gate exit code.
-
-    Groups the staged test files by their owning pytest-config root and runs one
-    pytest session per group with the working directory at that root, so two
-    packages that expose a same-named top-level package never share one session
-    and shadow each other's imports.
-
-    Args:
-        repository_root: The repository root the staged test files belong to.
-
-    Returns:
-        0 when no test file is staged, when every group collects no tests, or
-        when every group passes. The first failing group's non-zero pytest exit
-        code otherwise, which blocks the commit.
-    """
-    all_test_paths = _staged_test_file_paths(repository_root)
-    if not all_test_paths:
-        return 0
-    tests_by_root = _group_staged_tests_by_root(all_test_paths, repository_root)
-    first_failing_exit_code = 0
-    for each_group_root in sorted(tests_by_root):
-        group_exit_code = _run_pytest_for_group(
-            each_group_root, tests_by_root[each_group_root], repository_root
-        )
-        if group_exit_code != 0:
-            print(
-                STAGED_TEST_GROUP_FAILURE_MESSAGE.format(group_root=each_group_root),
-                file=sys.stderr,
-            )
-            if first_failing_exit_code == 0:
-                first_failing_exit_code = group_exit_code
-    if first_failing_exit_code != 0:
-        print(STAGED_TEST_FAILURE_HEADER, file=sys.stderr)
-    return first_failing_exit_code
+        relative_posix = str(resolved.relative_to(resolved_root)).replace("\\", "/")
+        added_by_path[resolved] = added_lines_for_staged_file(resolved_root, relative_posix)
+    return added_by_path
 
 
 def _staged_pytest_exit_code_for_current_python(repository_root: Path) -> int:
     """Run the staged test files, or skip them on a Python below the minimum.
-
-    ::
-
-        running (3, 11), minimum (3, 12)  ->  log a notice and return 0 (skipped)
-        running (3, 12), minimum (3, 12)  ->  run pytest over the staged tests
-
-    The staged tests call newer-Python APIs, so an older interpreter fails them
-    for the environment rather than for a code defect. On such a runtime this
-    step is skipped so the gap does not block the commit, while the terminology
-    and code-rules checks still run.
 
     Args:
         repository_root: The repository root whose staged test files run.
@@ -1918,87 +221,102 @@ def _staged_pytest_exit_code_for_current_python(repository_root: Path) -> int:
         MINIMUM_STAGED_PYTEST_PYTHON_MINOR,
     )
     if running_version < minimum_version:
-        print(
+        sys.stderr.write(
             f"code_rules_gate: Python {running_version} is below the staged-test "
-            f"minimum {minimum_version}; skipping the staged "
-            "pytest step (environment gap, not a code failure).",
-            file=sys.stderr,
+            f"minimum {minimum_version}; skipping the staged pytest step.\n"
         )
         return 0
     return run_staged_test_files(repository_root)
 
 
-def _report_terminology_findings(all_findings: list[str]) -> None:
-    """Print the terminology-sweep findings, when any, to standard error.
+def _deduplicate_paths(all_paths: list[Path]) -> list[Path]:
+    """Return *all_paths* with duplicates removed, preserving first-seen order."""
+    return list(dict.fromkeys(all_paths))
 
-    Args:
-        all_findings: The near-miss findings from the staged terminology sweep.
+
+def _report_empty_file_set() -> int:
+    """Report an empty resolved file set loudly and exit non-zero.
+
+    Zero candidate files means the gate inspected nothing, and a bad merge
+    base or a wrong directory produces exactly this state. A quiet pass here
+    would be trusted like a real pass (issue #62), so the run refuses with
+    its own exit code, distinct from the violation and error codes. A set
+    emptied only by the ``--only-under`` scope never reaches this reporter.
     """
-    if not all_findings:
-        return
-    print(
-        TERMINOLOGY_SWEEP_GATE_HEADER.format(finding_count=len(all_findings)),
-        file=sys.stderr,
+    sys.stderr.write(EMPTY_FILE_SET_MESSAGE + "\n")
+    sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
+    return EMPTY_FILE_SET_EXIT_CODE
+
+
+def _run_explicit_paths_mode(
+    validate_content: enforcer_loading.ValidateContentCallable,
+    arguments: argparse.Namespace,
+    repository_root: Path,
+) -> int:
+    """Validate the explicit paths named on the command line."""
+    all_explicit_paths = [repository_root / each_path for each_path in arguments.paths]
+    return run_gate(
+        validate_content,
+        all_explicit_paths,
+        repository_root,
+        all_added_lines_by_path=None,
     )
-    for each_finding in all_findings:
-        print(f"  {each_finding}", file=sys.stderr)
 
 
-def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
-    """Parse the command-line arguments for the code-rules gate.
+def _run_staged_mode(
+    validate_content: enforcer_loading.ValidateContentCallable,
+    arguments: argparse.Namespace,
+    repository_root: Path,
+) -> int:
+    """Validate the staged changes, run staged tests, and sweep terminology."""
+    _report_terminology_findings(staged_terminology_findings(repository_root))
+    staged_test_exit_code = _staged_pytest_exit_code_for_current_python(repository_root)
+    staged_file_paths = filter_paths_under_prefixes(
+        paths_from_git_staged(repository_root), repository_root, arguments.only_under
+    )
+    if not staged_file_paths:
+        sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
+        return staged_test_exit_code
+    staged_added_lines = added_lines_by_file_staged(repository_root, staged_file_paths)
+    gate_exit_code = run_gate(
+        validate_content,
+        staged_file_paths,
+        repository_root,
+        all_added_lines_by_path=staged_added_lines,
+        should_read_staged_content=True,
+    )
+    return gate_exit_code or staged_test_exit_code
 
-    Args:
-        all_arguments: Command-line argument list forwarded to argparse.
 
-    Returns:
-        The parsed argparse namespace with ``repo_root``, ``base``,
-        ``staged``, ``only_under``, and ``paths`` attributes.
+def _run_diff_mode(
+    validate_content: enforcer_loading.ValidateContentCallable,
+    arguments: argparse.Namespace,
+    repository_root: Path,
+) -> int:
+    """Validate the merge-base diff joined with the untracked files.
+
+    Zero candidates means nothing was inspected (bad wiring looks the same),
+    so that run refuses loudly. A set emptied only by the ``--only-under``
+    scope flows through ``run_gate`` over zero files and exits clean.
     """
-    parser = argparse.ArgumentParser(
-        description=(
-            "Run CODE_RULES validators (validate_content) on files in the working tree. "
-            "Default file set: git diff --name-only merge-base(base)..HEAD."
-        ),
+    all_candidate_paths = _deduplicate_paths(
+        paths_from_git_diff(repository_root, arguments.base)
+        + paths_from_git_untracked(repository_root)
     )
-    parser.add_argument(
-        "--repo-root",
-        type=Path,
-        default=None,
-        help="Repository root (default: cwd).",
+    if not all_candidate_paths:
+        return _report_empty_file_set()
+    file_paths = filter_paths_under_prefixes(
+        all_candidate_paths, repository_root, arguments.only_under
     )
-    parser.add_argument(
-        "--base",
-        default="origin/main",
-        help="Merge-base ref for git diff (default: origin/main).",
+    scoped_added_lines = (
+        added_lines_by_file(repository_root, arguments.base, file_paths) if file_paths else {}
     )
-    parser.add_argument(
-        "--staged",
-        action="store_true",
-        default=False,
-        help=(
-            "Scope to staged changes only (git diff --cached). "
-            "Blocks on violations introduced on staged-added lines; "
-            "reports pre-existing violations in touched files as advisory."
-        ),
+    return run_gate(
+        validate_content,
+        file_paths,
+        repository_root,
+        all_added_lines_by_path=scoped_added_lines,
     )
-    parser.add_argument(
-        "--only-under",
-        action="append",
-        default=[],
-        dest="only_under",
-        metavar="PREFIX",
-        help=(
-            "After resolving the merge-base diff, keep only files whose repo-relative path "
-            "uses POSIX slashes and starts with PREFIX or equals PREFIX (repeatable)."
-        ),
-    )
-    parser.add_argument(
-        "paths",
-        nargs="*",
-        type=Path,
-        help="Optional explicit files; if set, git diff is not used.",
-    )
-    return parser.parse_args(all_arguments)
 
 
 def main(all_arguments: list[str]) -> int:
@@ -2008,63 +326,18 @@ def main(all_arguments: list[str]) -> int:
         all_arguments: Command-line argument list forwarded to argparse.
 
     Returns:
-        The exit code from ``run_gate`` (``0`` clean, ``1`` blocking
-        violations).
+        The gate exit code for the selected mode.
     """
     arguments = parse_arguments(all_arguments)
     repository_root = (
-        arguments.repo_root.resolve()
-        if arguments.repo_root is not None
-        else Path.cwd().resolve()
+        arguments.repo_root.resolve() if arguments.repo_root is not None else Path.cwd().resolve()
     )
     validate_content = load_validate_content()
     if arguments.paths:
-        file_paths = [repository_root / each_path for each_path in arguments.paths]
-        return run_gate(
-            validate_content, file_paths, repository_root, all_added_lines_by_path=None
-        )
+        return _run_explicit_paths_mode(validate_content, arguments, repository_root)
     if arguments.staged:
-        all_terminology_findings = staged_terminology_findings(repository_root)
-        _report_terminology_findings(all_terminology_findings)
-        staged_test_exit_code = _staged_pytest_exit_code_for_current_python(
-            repository_root
-        )
-        staged_file_paths = paths_from_git_staged(repository_root)
-        staged_file_paths = filter_paths_under_prefixes(
-            staged_file_paths,
-            repository_root,
-            arguments.only_under,
-        )
-        if not staged_file_paths:
-            return staged_test_exit_code
-        staged_added_lines = added_lines_by_file_staged(
-            repository_root, staged_file_paths
-        )
-        gate_exit_code = run_gate(
-            validate_content,
-            staged_file_paths,
-            repository_root,
-            all_added_lines_by_path=staged_added_lines,
-            read_staged_content_flag=True,
-        )
-        return gate_exit_code or staged_test_exit_code
-    file_paths = paths_from_git_diff(repository_root, arguments.base)
-    file_paths = filter_paths_under_prefixes(
-        file_paths,
-        repository_root,
-        arguments.only_under,
-    )
-    if not file_paths:
-        return 0
-    scoped_added_lines = added_lines_by_file(
-        repository_root, arguments.base, file_paths
-    )
-    return run_gate(
-        validate_content,
-        file_paths,
-        repository_root,
-        all_added_lines_by_path=scoped_added_lines,
-    )
+        return _run_staged_mode(validate_content, arguments, repository_root)
+    return _run_diff_mode(validate_content, arguments, repository_root)
 
 
 if __name__ == "__main__":

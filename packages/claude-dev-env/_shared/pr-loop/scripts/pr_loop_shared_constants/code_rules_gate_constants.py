@@ -3,7 +3,16 @@
 import re
 
 MAX_VIOLATIONS_PER_CHECK: int = 3
-EXPECTED_TUPLE_PAIR_LENGTH: int = 2
+
+GATE_ERROR_EXIT_CODE: int = 2
+
+EMPTY_FILE_SET_EXIT_CODE: int = 3
+
+EMPTY_FILE_SET_MESSAGE: str = (
+    "code_rules_gate: the resolved file set is empty; nothing was inspected."
+)
+
+INSPECTED_COUNT_MESSAGE: str = "code_rules_gate: inspected {inspected_count} file(s)."
 
 FUNCTION_LENGTH_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
     r"\(defined at line (\d+)\) is (\d+) lines"
@@ -29,15 +38,7 @@ DUPLICATE_BODY_VIOLATION_PATTERN: re.Pattern[str] = re.compile(
 DUPLICATE_BODY_DEFINITION_LINE_GROUP_INDEX: int = 1
 DUPLICATE_BODY_SPAN_GROUP_INDEX: int = 2
 
-ALL_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset(
-    {".py", ".js", ".ts", ".tsx", ".jsx"}
-)
-
-ALL_LITERAL_KEYWORD_EXEMPTIONS: frozenset[str] = frozenset(
-    {"true", "false", "none", "null"}
-)
-
-CONFIG_PATH_SEGMENT: str = "/config/"
+ALL_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset({".py", ".js", ".ts", ".tsx", ".jsx"})
 
 TESTS_PATH_SEGMENT: str = "/tests/"
 
@@ -51,10 +52,6 @@ ALL_TEST_FILENAME_GLOB_SUFFIXES: tuple[str, ...] = (
 TEST_CONFTEST_FILENAME: str = "conftest.py"
 
 TEST_FILENAME_PREFIX: str = "test_"
-
-MINIMUM_COLUMN_NAME_LENGTH_AFTER_FIRST_CHAR: int = 2
-
-COLUMN_KEY_PATTERN_TEMPLATE: str = r"^[a-z][a-z0-9_]{{{minimum_length},}}$"
 
 GIT_NAME_STATUS_ADDED_PREFIX: str = "A"
 
@@ -81,6 +78,14 @@ ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX: tuple[str, ...] = (
     "-z",
 )
 
+ALL_GIT_LS_FILES_UNTRACKED_NULL_TERMINATED_COMMAND: tuple[str, ...] = (
+    "git",
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "-z",
+)
+
 
 ALL_PYTEST_MODULE_INVOCATION: tuple[str, ...] = (
     "-m",
@@ -96,7 +101,10 @@ PYTHONPATH_ENV_VAR: str = "PYTHONPATH"
 
 ALL_VENV_DIRECTORY_NAMES: tuple[str, ...] = (".venv", "venv")
 
-ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS: tuple[str, ...] = ("Scripts", "python.exe")
+ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS: tuple[str, ...] = (
+    "Scripts",
+    "python.exe",
+)
 
 ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS: tuple[str, ...] = ("bin", "python")
 
@@ -132,8 +140,7 @@ ALL_PYTEST_CONFIG_FILE_SECTIONS: tuple[tuple[str, str | None], ...] = (
 )
 
 STAGED_TEST_GROUP_FAILURE_MESSAGE: str = (
-    "code_rules_gate: staged test group rooted at {group_root} "
-    "failed under pytest; commit blocked."
+    "code_rules_gate: staged test group rooted at {group_root} failed under pytest; commit blocked."
 )
 
 MINIMUM_STAGED_PYTEST_PYTHON_MAJOR: int = 3

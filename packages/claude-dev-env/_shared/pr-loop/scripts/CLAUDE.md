@@ -13,7 +13,7 @@ Python scripts invoked at runtime by the PR-loop skills. Each script is a standa
 | `revoke_project_claude_permissions.py` | Removes the allow-rules and entries that `grant_project_claude_permissions.py` wrote; safe to run when no prior grant exists |
 | `code_rules_gate.py` | Pre-commit gate that runs `code_rules_enforcer` checks on staged Python files before a fix commit lands, and the terminology sweep over the staged diff |
 | `terminology_sweep.py` | Flags a prose term that near-misses an identifier introduced on added code lines of a unified diff (shared leading word, divergent tail) |
-| `reviews_disabled.py` | Shared helper for the reviewer opt-out and opt-in gates; parses `CLAUDE_REVIEWS_DISABLED` and `CLAUDE_REVIEWS_ENABLED` tokens to decide which reviewers run (bugbot is off by default and runs only when `CLAUDE_REVIEWS_ENABLED` lists it) |
+| `reviews_disabled.py` | Shared helper for the reviewer opt-out and opt-in gates; parses `CLAUDE_REVIEWS_DISABLED` tokens `bugteam`, `bugbot`, `copilot`, and `codex`, plus `CLAUDE_REVIEWS_ENABLED` for bugbot opt-in (bugbot is off by default and runs only when `CLAUDE_REVIEWS_ENABLED` lists it) |
 | `copilot_quota.py` | Copilot premium-request quota pre-check: resolves a configured GitHub account, reads its remaining `premium_interactions` quota via `gh api copilot_internal/user`, and exits 0 (run Copilot) or non-zero (skip: out of quota, API down, or no account configured) |
 | `reviewer_availability.py` | Unified reviewer-availability entry point for Copilot and Bugbot: reuses `copilot_quota.py` and `reviews_disabled.py` and exits 0 when the named `--reviewer` may be spawned, non-zero when it is opted out or (for Copilot) out of quota |
 | `fix_hookspath.py` | Repairs a malformed `core.hooksPath` global git config entry |
@@ -23,6 +23,7 @@ Python scripts invoked at runtime by the PR-loop skills. Each script is a standa
 
 | Entry | Description |
 |---|---|
+| `code_rules_gate_parts/` | The decomposed modules `code_rules_gate.py` wires together: enforcer loading, git file sets, blob readers, added-line maps, violation scoping, wrapper plumb-through, gate running, staged-test running, and argument parsing |
 | `pr_loop_shared_constants/` | Named constants used by the scripts above |
 | `tests/` | pytest suite for all scripts in this directory |
 

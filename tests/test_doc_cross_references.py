@@ -245,7 +245,7 @@ def test_pattern_detects_synthetic_missing_reference() -> None:
     candidate = "packages/this/path/does/not/exist.py"
     assert candidate in references, f"Matcher must extract the candidate, got: {references}"
     assert not (REPOSITORY_ROOT / candidate).exists(), (
-        f"Synthetic path must not actually exist, otherwise the assertion is vacuous"
+        "Synthetic path must not actually exist, otherwise the assertion is vacuous"
     )
 
 
@@ -257,3 +257,182 @@ def test_iter_repo_files_finds_files_when_repo_path_contains_skip_segment() -> N
         "(e.g., a checkout under '.../.claude/worktrees/...' or '.../venv/...'). "
         "Skip filtering must apply to repo-internal segments only."
     )
+
+
+AUTOCONVERGE_SKILL_MD: Path = (
+    REPOSITORY_ROOT
+    / "packages"
+    / "claude-dev-env"
+    / "skills"
+    / "autoconverge"
+    / "SKILL.md"
+)
+AUTOCONVERGE_CONVERGENCE_MD: Path = (
+    REPOSITORY_ROOT
+    / "packages"
+    / "claude-dev-env"
+    / "skills"
+    / "autoconverge"
+    / "reference"
+    / "convergence.md"
+)
+AUTOCONVERGE_CONVERGE_MJS: Path = (
+    REPOSITORY_ROOT
+    / "packages"
+    / "claude-dev-env"
+    / "skills"
+    / "autoconverge"
+    / "workflow"
+    / "converge.mjs"
+)
+WORKFLOW_TOOL_REQUIREMENT_PHRASE: str = "autoconverge requires the Workflow tool"
+RUN_CODE_REVIEW_LENS_SIGNATURE: str = "function runCodeReviewLens"
+CODE_QUALITY_AGENT_TYPE: str = "code-quality-agent"
+REPORT_ONLY_CONFIG_PHRASE: str = (
+    "report-only workflow agent — see runCodeReviewLens in "
+    "workflow/converge.mjs for its configuration"
+)
+REVIEW_LENS_BOUNDARY_HEADING: str = "## Review-lens boundary"
+CODE_REVIEW_LENS_BULLET: str = "**Code-review lens**"
+LINE_NUMBER_CITATION_PATTERN: re.Pattern[str] = re.compile(
+    r"(?:SKILL\.md|workflow/converge\.mjs):\d+"
+)
+RELATIVE_MARKDOWN_LINK_PATTERN: re.Pattern[str] = re.compile(
+    r"\((?P<relative>(?!https?://|#)[A-Za-z0-9_./-]+\.md)\)"
+)
+
+
+def _function_body_named(source: str, signature: str) -> str:
+    """Return the brace-delimited body of the first function matching signature.
+
+    Parses by symbol and brace depth only — never by line number.
+    """
+    signature_at = source.find(signature)
+    assert signature_at >= 0, f"source must declare {signature!r}"
+    opening_brace_at = source.find("{", signature_at)
+    assert opening_brace_at >= 0, f"{signature!r} must open a function body with '{{'"
+    depth = 0
+    for each_offset, each_character in enumerate(
+        source[opening_brace_at:], start=opening_brace_at
+    ):
+        if each_character == "{":
+            depth += 1
+        elif each_character == "}":
+            depth -= 1
+            if depth == 0:
+                return source[opening_brace_at : each_offset + 1]
+    raise AssertionError(f"{signature!r} body never closed its opening brace")
+
+
+def _relative_markdown_links_in(markdown_text: str) -> list[str]:
+    return [
+        each_match.group("relative")
+        for each_match in RELATIVE_MARKDOWN_LINK_PATTERN.finditer(markdown_text)
+    ]
+
+
+def test_autoconverge_skill_documents_review_lens_boundary() -> None:
+    skill_text = AUTOCONVERGE_SKILL_MD.read_text(encoding="utf-8")
+    convergence_text = AUTOCONVERGE_CONVERGENCE_MD.read_text(encoding="utf-8")
+
+    assert WORKFLOW_TOOL_REQUIREMENT_PHRASE in skill_text, (
+        "SKILL.md Requirements must state the live Workflow-tool phrase "
+        f"({WORKFLOW_TOOL_REQUIREMENT_PHRASE!r})"
+    )
+
+    assert AUTOCONVERGE_CONVERGE_MJS.is_file(), (
+        f"converge.mjs must exist on disk: {AUTOCONVERGE_CONVERGE_MJS}"
+    )
+    converge_source = AUTOCONVERGE_CONVERGE_MJS.read_text(encoding="utf-8")
+    assert RUN_CODE_REVIEW_LENS_SIGNATURE in converge_source, (
+        f"converge.mjs must declare {RUN_CODE_REVIEW_LENS_SIGNATURE!r}"
+    )
+    code_review_lens_body = _function_body_named(
+        converge_source, RUN_CODE_REVIEW_LENS_SIGNATURE
+    )
+    assert CODE_QUALITY_AGENT_TYPE in code_review_lens_body, (
+        f"{RUN_CODE_REVIEW_LENS_SIGNATURE} body must name agentType "
+        f"{CODE_QUALITY_AGENT_TYPE!r}; body was:\n{code_review_lens_body}"
+    )
+
+    assert REVIEW_LENS_BOUNDARY_HEADING in skill_text, (
+        "SKILL.md must include a Review-lens boundary section"
+    )
+    assert "reference/convergence.md" in skill_text, (
+        "SKILL.md Review-lens boundary must link to reference/convergence.md "
+        "as the canonical home for the Code-review lens bullet"
+    )
+    assert CODE_REVIEW_LENS_BULLET in convergence_text, (
+        "convergence.md must carry the canonical Code-review lens bullet"
+    )
+    assert "runCodeReviewLens" in convergence_text, (
+        "convergence.md Code-review lens bullet must cite runCodeReviewLens by symbol"
+    )
+    assert REPORT_ONLY_CONFIG_PHRASE in convergence_text, (
+        "convergence.md must state the report-only config pointer phrase "
+        f"({REPORT_ONLY_CONFIG_PHRASE!r})"
+    )
+    assert CODE_QUALITY_AGENT_TYPE in convergence_text, (
+        "convergence.md must name the code-review lens agent type "
+        f"({CODE_QUALITY_AGENT_TYPE})"
+    )
+
+    skill_boundary_start = skill_text.index(REVIEW_LENS_BOUNDARY_HEADING)
+    skill_boundary_end = skill_text.index("\n## ", skill_boundary_start + 1)
+    skill_boundary_section = skill_text[skill_boundary_start:skill_boundary_end]
+
+    code_review_bullet_at = convergence_text.index(CODE_REVIEW_LENS_BULLET)
+    next_bullet_match = re.search(
+        r"\n   - \*\*", convergence_text[code_review_bullet_at + 1 :]
+    )
+    if next_bullet_match is None:
+        code_review_bullet_section = convergence_text[code_review_bullet_at:]
+    else:
+        code_review_bullet_section = convergence_text[
+            code_review_bullet_at : code_review_bullet_at
+            + 1
+            + next_bullet_match.start()
+        ]
+
+    for each_doc_path, each_doc_text in (
+        (AUTOCONVERGE_SKILL_MD, skill_text),
+        (AUTOCONVERGE_CONVERGENCE_MD, convergence_text),
+    ):
+        line_citation_match = LINE_NUMBER_CITATION_PATTERN.search(each_doc_text)
+        assert line_citation_match is None, (
+            f"{each_doc_path.name} must not cite SKILL.md:<line> or "
+            f"workflow/converge.mjs:<start>[-<end>]; found "
+            f"{line_citation_match.group(0)!r}"
+        )
+
+    for each_section_label, each_section_text in (
+        ("SKILL.md Review-lens boundary", skill_boundary_section),
+        ("convergence.md Code-review lens bullet", code_review_bullet_section),
+    ):
+        lowered_section = each_section_text.lower()
+        assert "opus" not in lowered_section, (
+            f"{each_section_label} must not name model/effort config "
+            f"('opus'); that fact lives in runCodeReviewLens"
+        )
+        assert "medium" not in lowered_section, (
+            f"{each_section_label} must not name model/effort config "
+            f"('medium'); that fact lives in runCodeReviewLens"
+        )
+
+    for each_relative_path in _relative_markdown_links_in(skill_boundary_section):
+        resolved_from_skill = (
+            AUTOCONVERGE_SKILL_MD.parent / each_relative_path
+        ).resolve()
+        assert resolved_from_skill.is_file(), (
+            f"SKILL.md Review-lens boundary link must resolve on disk: "
+            f"{each_relative_path} -> {resolved_from_skill}"
+        )
+
+    for each_relative_path in _relative_markdown_links_in(code_review_bullet_section):
+        resolved_from_convergence = (
+            AUTOCONVERGE_CONVERGENCE_MD.parent / each_relative_path
+        ).resolve()
+        assert resolved_from_convergence.is_file(), (
+            f"convergence.md Code-review lens link must resolve on disk: "
+            f"{each_relative_path} -> {resolved_from_convergence}"
+        )

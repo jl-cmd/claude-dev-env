@@ -1,12 +1,22 @@
 # CLI contract
 
-Observed shape of the Codex CLI review surface the wrapper invokes. Fixture capture: `codex` 0.144.3.
+Observed shape of the Codex CLI review surface the skill classifies from. Fixture capture: `codex` 0.144.3.
 
 ## Command shape
 
-### `codex review`
+### Classifying path: `codex exec … review --json`
 
-Non-interactive code review.
+Skill classification (Step 4) reads only the JSONL stream from:
+
+```text
+codex exec [exec-options] review --json [review-options] [PROMPT]
+```
+
+`--json` is required for a classifiable success stream. Without `--json`, stdout is not a Step 4 input.
+
+### `codex review` (non-classifying)
+
+Plain `codex review` is a non-interactive review form. It is **not** the skill classifying path: bare `codex review --json` is not a supported classifiable form on the observed CLI (0.144.3). Do not feed plain `codex review` stdout into skill classification.
 
 | Form | Role |
 |---|---|
@@ -18,7 +28,7 @@ Non-interactive code review.
 | `--title <TITLE>` | Review title |
 | `--enable` / `--disable <FEATURE>` | Feature toggles |
 
-Exactly one target among `PROMPT`, `--uncommitted`, `--base`, and `--commit`. The four targets are mutually exclusive: a flag target never carries a positional `[PROMPT]`, and the custom-instructions text is itself the fourth target (PROMPT mode only).
+Exactly one target among `PROMPT`, `--uncommitted`, `--base`, and `--commit`. The four targets are mutually exclusive: a flag target never carries a positional `[PROMPT]`, and the custom-instructions text is itself the fourth target (PROMPT mode only). The same target flags apply under `codex exec … review`.
 
 Observed rejection when a flag target is combined with `[PROMPT]` (fixture: `codex` 0.144.3):
 
@@ -44,12 +54,12 @@ Subcommands: `resume`, `review`, `help`.
 | `--full-auto` | Full auto |
 | `--dangerously-bypass-approvals-and-sandbox` | Bypass approvals and sandbox |
 | `-C` / `--cd <DIR>` | Working directory |
-| `--json` | JSONL event stream on stdout |
+| `--json` | JSONL event stream on stdout (required for classification) |
 | `-o` / `--output-last-message` | Write last message to a path |
 
 ### Ordering rule
 
-`codex exec` options belong **before** the `review` subcommand.
+`codex exec` options belong **before** the `review` subcommand. Review options such as `--json` and `--uncommitted` follow `review`.
 
 - Parses: `codex exec review --json --uncommitted`
 - Fails (exit 2, usage on stderr): trailing `-C <DIR>` after `review` (`unexpected argument '-C' found`)
@@ -58,7 +68,7 @@ Run from the target repo directory, or place `-C <DIR>` before `review`.
 
 ## Success stream
 
-With `--json`, a successful run writes JSONL on stdout and exits 0.
+`codex exec … review --json` writes JSONL on stdout and exits 0 on success.
 
 1. `thread.started` — includes `thread_id`
 2. `turn.started`
@@ -121,6 +131,16 @@ Skill-level classes `down` / `clean` / `findings` are **not** produced here. The
 - Create `run_state_directory` before calling the wrapper; the wrapper writes `codex-review.jsonl` into that directory and does not create parents.
 - Treat `outcome_class` as the capture success signal; do not treat `exit_code == 0` alone as success.
 
+## Skill classification map
+
+Skill steps and loop re-entry use three skill-level classes. This page's raw CLI failure name is `codex_down` only.
+
+| Skill class (`SKILL.md` Step 4) | Maps from this page | Signal |
+|---|---|---|
+| `down` | Any `codex_down` row; unrecognized probe shape | Non-usable review |
+| `clean` | Success stream (exit 0 JSONL) with no finding bullets in the `agent_message` body | Usable review, zero addressable findings |
+| `findings` | Success stream (exit 0 JSONL) with one or more `- [P#] …` bullets in the `agent_message` body | Usable review with addressable findings |
+
 ## Auth surface
 
 - Credentials live under the Codex home directory as `auth.json`. `CODEX_HOME` relocates that directory. `cli_auth_credentials_store = "file"` pins the file store.
@@ -129,4 +149,22 @@ Skill-level classes `down` / `clean` / `findings` are **not** produced here. The
 
 ## Probe
 
-The wrapper probes `codex exec review --help` and treats any unrecognized shape as `codex_down`. Required target flags (`--base`, `--uncommitted`, `--commit`) must appear as whole tokens in the help text; longer lookalikes (`--baseline`, `--uncommitted-only`, `--commit-message`) do not count.
+Probe command: `codex exec review --help`. The wrapper probes this help surface and treats any unrecognized shape as `codex_down`.
+
+### Minimum shape signals
+
+The help text must include each of these greppable tokens as **whole tokens** (not mere substrings of longer flag names):
+
+| Signal | Role |
+|---|---|
+| `review` | Subcommand present under `codex exec` |
+| `--uncommitted` | Staged + unstaged + untracked target |
+| `--base` | Base-branch target |
+| `--commit` | Commit-SHA target |
+| `--json` | JSONL event stream on stdout |
+
+Longer lookalikes (`--baseline`, `--uncommitted-only`, `--commit-message`) do not satisfy the required target flags.
+
+### Fail-closed rule
+
+Any missing signal, non-zero probe exit, or missing binary is `codex_down` (skill class `down`). Do not continue to a review invoke when the probe fails.

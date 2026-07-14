@@ -20,20 +20,21 @@ Every invocation carries the caller's identity (`--skill <caller>`, e.g. `pr-con
 
 ## Gate 1: Reviewer opt-out (`CLAUDE_REVIEWS_DISABLED`)
 
-The `CLAUDE_REVIEWS_DISABLED` environment variable is a comma-separated token list (case-insensitive, whitespace-tolerant). Three tokens exist:
+The `CLAUDE_REVIEWS_DISABLED` environment variable is a comma-separated token list (case-insensitive, whitespace-tolerant). Four tokens exist:
 
 | Token | Disables |
 |---|---|
 | `bugteam` | The whole bug-audit family: `/bugteam`, `/qbug`, `/findbugs`, and audit dispatch in `/monitor-open-prs` |
 | `bugbot` | Cursor Bugbot triggering and polling |
 | `copilot` | GitHub Copilot review requests and polling |
+| `codex` | Codex reviewer requests and polling |
 
 Cursor Bugbot is off by default: it runs only when `CLAUDE_REVIEWS_ENABLED` lists `bugbot`, and a `bugbot` token in `CLAUDE_REVIEWS_DISABLED` keeps it off even when the opt-in lists it.
 
 Run the shared parser — never an inline shell parse:
 
 ```bash
-python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer <bugbot|bugteam|copilot>
+python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer <bugbot|bugteam|copilot|codex>
 ```
 
 - **Exit 0** — the named reviewer is disabled for this run (opted out, or, for Bugbot, off by default without the `CLAUDE_REVIEWS_ENABLED` opt-in). A skill whose whole run depends on that reviewer responds with its refusal line and stops. A copilot- or bugteam-dependent caller names the opt-out: `/<caller> is disabled via CLAUDE_REVIEWS_DISABLED.` A Bugbot-dependent caller off by default names the opt-in the run needs: `/<caller> is disabled: Cursor Bugbot needs a bugbot token in CLAUDE_REVIEWS_ENABLED.` A loop that merely includes the reviewer as one gate marks the reviewer down (`bugbot_down = true`, `copilot_down = true`) and continues on its remaining signals.
