@@ -1,13 +1,14 @@
 # Worker-spawn protocol
 
-Single home for the worker-spawn dispatcher contract. Skills that need a
-role-bound headless worker call
+Single home for the worker-spawn dispatcher contract and for Claude-only
+slash-step host routing. Skills that need a role-bound headless worker call
 [`scripts/resolve_worker_spawn.py`](../../scripts/resolve_worker_spawn.py)
 (or import `resolve_worker_spawn`) and read this page for the tier walk, inputs,
-JSON result shape, host rules, and setup.
+JSON result shape, host rules, and setup. Skills that run a Claude-only slash
+step (for example `/code-review`) read the code-review host-routing section.
 
-Composed helpers (preflight and headless runners) stay documented at their own
-modules; this page only states how the dispatcher uses them.
+Composed helpers (preflight, headless runners, and the code-review invoker)
+stay documented at their own modules; this page states how callers use them.
 
 ## Three tiers
 
@@ -125,6 +126,37 @@ After a grok fallthrough the dispatcher calls `detect_host_profile()` from
 Profiles are the real names `Claude` and `ThirdParty` (not a separate Grok host
 profile). Grok is tier 1 on every host; host profile only chooses the post-grok
 branch (Agent-tool handoff vs headless claude chain).
+
+## Code-review host routing
+
+Claude-only slash steps need a Claude Code harness. The built-in
+`/code-review` command is the main case. The host-routing pair is:
+
+- `detect_host_profile()` from `tier_model_ids` — same host detection as the
+  worker-spawn dispatcher above
+- `invoke_code_review` — host-aware invoker for `/code-review` (lives next to
+  `resolve_worker_spawn` under the package scripts tree)
+
+Mode decision:
+
+| Host profile | Session model | Mode | Who runs `/code-review` |
+|---|---|---|---|
+| `Claude` | `opus` | `in_session` | The calling skill runs the slash command in-process |
+| `Claude` | any other alias | `chain` | Headless spawn through `claude_chain_runner` |
+| `ThirdParty` | any | `chain` | Headless spawn through `claude_chain_runner` |
+
+The review always runs at effort **high** on model **opus**. Chain mode builds
+a single-turn prompt `/code-review high --fix`, pins `--model opus`, sets
+subprocess `cwd` to the PR working tree, and reads stdin from the empty stream
+so the spawn does not wait for input.
+
+After a chain run, a non-empty `git status --porcelain` means the review
+applied fixes. The calling host commits and pushes those fixes per the fix
+protocol. The chain process never commits or posts.
+
+GitHub transport (`pr-loop-cloud-transport`) is a separate axis from this
+harness branch. That skill routes `gh` vs MCP; it does not change which host
+can run Claude-only slash commands.
 
 ## Leader-socket rule
 
