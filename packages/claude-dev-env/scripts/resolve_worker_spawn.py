@@ -91,6 +91,11 @@ from tier_model_ids import detect_host_profile  # noqa: E402
 _HEADLESS_CHAIN_RUNNER_LOCK = threading.Lock()
 
 
+def _headless_chain_runner_lock() -> threading.Lock:
+    """Return the module lock that serializes headless chain-runner swaps."""
+    return _HEADLESS_CHAIN_RUNNER_LOCK
+
+
 @dataclass(frozen=True)
 class SpawnAttempt:
     """One tier try recorded in the dispatcher attempts trail."""
@@ -180,6 +185,7 @@ def _run_claude_with_headless_overrides(
             **all_keywords: object,
         ) -> subprocess.CompletedProcess[str]:
             del all_positionals
+            prompt_stdin.seek(0)
             completed_process: subprocess.CompletedProcess[str] = previous_runner(
                 all_invocation_tokens,
                 capture_output=True,

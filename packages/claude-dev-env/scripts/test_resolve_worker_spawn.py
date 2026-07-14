@@ -949,3 +949,66 @@ def test_headless_chain_runner_lock_serializes_distinct_cwds(
         second_working_directory,
     }
     assert chain_runner.chain_subprocess_runner is not None
+
+
+def test_usage_limit_fallover_delivers_full_prompt_to_each_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    prompt_file, working_directory, run_state_directory = _paths(tmp_path)
+    monkeypatch.setattr(
+        dispatcher,
+        "spawn_preflight_runner",
+        lambda **_keyword_arguments: _fallthrough_preflight(REASON_GROK_AUTH_FAILED),
+    )
+    monkeypatch.setattr(
+        dispatcher,
+        "spawn_host_profile_detector",
+        lambda *all_positionals, **all_keywords: HOST_PROFILE_THIRD_PARTY,
+    )
+    monkeypatch.setattr(
+        chain_runner,
+        "load_chain",
+        lambda _config_path: [
+            chain_runner.ChainEntry(command="claude", extra_args=()),
+            chain_runner.ChainEntry(command="claude-ev", extra_args=()),
+        ],
+    )
+    prompt_text_by_command: dict[str, str] = {}
+
+    def _reading_subprocess_runner(
+        all_invocation_tokens: Sequence[str],
+        *all_positionals: object,
+        **all_keywords: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del all_positionals
+        command_name = str(all_invocation_tokens[0])
+        read_prompt = getattr(all_keywords.get("stdin"), "read", None)
+        prompt_text_by_command[command_name] = read_prompt() if read_prompt else ""
+        is_primary = command_name == "claude"
+        return subprocess.CompletedProcess(
+            args=list(all_invocation_tokens),
+            returncode=(
+                FIXTURE_FAILED_RETURNCODE if is_primary else SPAWN_SERVED_EXIT_CODE
+            ),
+            stdout="usage limit reached" if is_primary else FIXTURE_CLAUDE_STDOUT,
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        chain_runner, "chain_subprocess_runner", _reading_subprocess_runner
+    )
+
+    outcome = dispatcher.resolve_worker_spawn(
+        role=DEFAULT_ROLE,
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
+        is_claude_tier_enabled=False,
+        run_state_directory=run_state_directory,
+        max_turns=DEFAULT_SPAWN_MAX_TURNS,
+    )
+
+    assert prompt_text_by_command["claude"] == FIXTURE_PROMPT_TEXT
+    assert prompt_text_by_command["claude-ev"] == FIXTURE_PROMPT_TEXT
+    assert outcome.tier_used == TIER_CLAUDE_HEADLESS
+    assert outcome.is_ok is True
