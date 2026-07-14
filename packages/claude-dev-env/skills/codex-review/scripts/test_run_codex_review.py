@@ -161,6 +161,9 @@ def _install_recorder(
 ) -> _SubprocessRecorder:
     recorder = _SubprocessRecorder(behavior_for_invocation)
     monkeypatch.setattr(wrapper, "codex_subprocess_runner", recorder)
+    monkeypatch.setattr(
+        wrapper, "_resolve_codex_command_prefix", lambda: [CODEX_BINARY_NAME]
+    )
     return recorder
 
 
@@ -781,3 +784,29 @@ def test_review_exit_0_stays_completed(
     assert review_outcome.outcome_class == OUTCOME_CLASS_COMPLETED
     assert review_outcome.exit_code == 0
     assert review_outcome.agent_message == AGENT_MESSAGE_BODY
+
+
+def test_resolve_prefix_wraps_windows_shim(monkeypatch: pytest.MonkeyPatch) -> None:
+    shim_path = r"C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.CMD"
+    monkeypatch.setattr(wrapper.shutil, "which", lambda _name: shim_path)
+    monkeypatch.setattr(wrapper.os, "name", "nt")
+
+    assert wrapper._resolve_codex_command_prefix() == ["cmd", "/c", shim_path]
+
+
+def test_resolve_prefix_uses_resolved_path_on_posix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolved_path = "/usr/local/bin/codex"
+    monkeypatch.setattr(wrapper.shutil, "which", lambda _name: resolved_path)
+    monkeypatch.setattr(wrapper.os, "name", "posix")
+
+    assert wrapper._resolve_codex_command_prefix() == [resolved_path]
+
+
+def test_resolve_prefix_falls_back_to_bare_name_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(wrapper.shutil, "which", lambda _name: None)
+
+    assert wrapper._resolve_codex_command_prefix() == [CODEX_BINARY_NAME]

@@ -17,10 +17,17 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from codex_review_scripts_constants.codex_usage_probe_constants import (
+    ALL_WINDOWS_SCRIPT_SUFFIXES,
+    WINDOWS_COMMAND_SHELL,
+    WINDOWS_COMMAND_SHELL_RUN_FLAG,
+    WINDOWS_OS_NAME,
+)
 from codex_review_scripts_constants.run_constants import (
     ALL_SHAPE_PROBE_REQUIRED_FLAGS,
     BASE_TARGET_FLAG,
@@ -99,6 +106,28 @@ def _down(*, exit_code: int, binary_version: str) -> CodexReviewOutcome:
     )
 
 
+def _resolve_codex_command_prefix() -> list[str]:
+    """Resolve the codex launch prefix, wrapping a Windows ``.cmd``/``.bat`` shim.
+
+    ::
+
+        POSIX codex on PATH   ->  ["/usr/local/bin/codex"]
+        Windows codex.cmd     ->  ["cmd", "/c", "C:\\...\\codex.cmd"]
+        codex not on PATH     ->  ["codex"]      (downstream FileNotFoundError)
+
+    ``CreateProcess`` resolves a bare name only against ``.exe``, so a bare
+    ``codex`` never finds the npm shim; the ``cmd /c`` wrap runs it.
+    """
+    codex_path = shutil.which(CODEX_BINARY_NAME)
+    if codex_path is None:
+        return [CODEX_BINARY_NAME]
+    if os.name == WINDOWS_OS_NAME and codex_path.lower().endswith(
+        ALL_WINDOWS_SCRIPT_SUFFIXES
+    ):
+        return [WINDOWS_COMMAND_SHELL, WINDOWS_COMMAND_SHELL_RUN_FLAG, codex_path]
+    return [codex_path]
+
+
 def _run_command(
     all_arguments: list[str],
     *,
@@ -148,7 +177,7 @@ def _parse_binary_version(version_stdout: str) -> str:
 
 def _probe_binary_version(timeout_seconds: int) -> tuple[str, int | None]:
     completion_or_exit = _safe_run(
-        [CODEX_BINARY_NAME, VERSION_FLAG],
+        [*_resolve_codex_command_prefix(), VERSION_FLAG],
         working_directory=None,
         timeout_seconds=timeout_seconds,
     )
@@ -161,7 +190,7 @@ def _probe_binary_version(timeout_seconds: int) -> tuple[str, int | None]:
 
 def _probe_review_shape(timeout_seconds: int) -> tuple[bool, int]:
     completion_or_exit = _safe_run(
-        [CODEX_BINARY_NAME, EXEC_SUBCOMMAND, REVIEW_SUBCOMMAND, HELP_FLAG],
+        [*_resolve_codex_command_prefix(), EXEC_SUBCOMMAND, REVIEW_SUBCOMMAND, HELP_FLAG],
         working_directory=None,
         timeout_seconds=timeout_seconds,
     )
@@ -220,7 +249,7 @@ def _build_review_arguments(
     commit_sha: str | None,
     is_prompt_target: bool,
 ) -> list[str]:
-    all_arguments = [CODEX_BINARY_NAME, EXEC_SUBCOMMAND]
+    all_arguments = [*_resolve_codex_command_prefix(), EXEC_SUBCOMMAND]
     if CODEX_MODEL_PIN:
         all_arguments.extend([MODEL_FLAG, CODEX_MODEL_PIN])
     all_arguments.extend([REVIEW_SUBCOMMAND, JSON_FLAG])

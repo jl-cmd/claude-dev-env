@@ -360,11 +360,11 @@ def _load_convergence_fixture(from_path: Path) -> ConvergenceFixture:
     typed_reviews = _sort_reviews_newest_first(
         [each for each in reviews if isinstance(each, dict)]
     )
-    is_threads_ok = payload.get(FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED, True)
+    is_threads_ok = payload.get(FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED, False)
     threads_detail = payload.get(
         FIXTURE_KEY_UNRESOLVED_BOT_THREADS_DETAIL, FIXTURE_DEFAULT_THREADS_DETAIL
     )
-    is_pending_ok = payload.get(FIXTURE_KEY_PENDING_REVIEWS_PASSED, True)
+    is_pending_ok = payload.get(FIXTURE_KEY_PENDING_REVIEWS_PASSED, False)
     pending_detail = payload.get(
         FIXTURE_KEY_PENDING_REVIEWS_DETAIL, FIXTURE_DEFAULT_PENDING_DETAIL
     )
