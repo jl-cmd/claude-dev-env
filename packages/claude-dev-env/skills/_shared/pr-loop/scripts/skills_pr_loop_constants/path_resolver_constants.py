@@ -153,6 +153,10 @@ FIX_OUTPUT_FORMAT_HEADLESS_TEMPLATE = (
 
 ALL_PYTHON_ONEXC_VERSION = (3, 12)
 
+FINDINGS_JSON_MUST_BE_LIST_MESSAGE = (
+    "findings-json root must be a JSON array of finding objects, got %s"
+)
+
 ALL_FINDING_BODY_ELEMENT_KEYS: tuple[str, ...] = (
     "title",
     "excerpt",

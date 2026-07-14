@@ -15,6 +15,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from skills_pr_loop_constants.path_resolver_constants import (
+    FINDINGS_JSON_MUST_BE_LIST_MESSAGE,
     FIX_COMMENT_POSTING_AGENT_TEXT,
     FIX_COMMENT_POSTING_HEADLESS_TEXT,
     FIX_OUTCOME_XML_TEMPLATE,
@@ -217,3 +218,45 @@ def test_main_headless_flavor_emits_outcome_path_on_stdout(
     assert "Do not post replies" in captured.out
     assert "Do not stage, commit, or push" in captured.out
     assert "add_reply_to_pull_request_comment" not in captured.out
+
+
+def test_main_rejects_object_root_findings_json(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    findings_json_path = tmp_path / "findings.json"
+    findings_json_path.write_text(
+        json.dumps({"findings": [{"severity": "P1", "file": "a.py"}]}),
+        encoding="utf-8",
+    )
+    exit_code = build_fix_prompt.main([
+        "--owner", "jl-cmd",
+        "--repo", "claude-dev-env",
+        "--pr-number", "99",
+        "--loop", "1",
+        "--head-ref", "feat/branch",
+        "--base-ref", "main",
+        "--worktree-path", "/tmp/wt",
+        "--findings-json", str(findings_json_path),
+    ])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    expected_message = FINDINGS_JSON_MUST_BE_LIST_MESSAGE % "dict"
+    assert expected_message in captured.err
+    assert captured.out == ""
+
+
+def test_build_fix_prompt_xml_rejects_null_root(tmp_path: Path) -> None:
+    findings_json_path = tmp_path / "findings.json"
+    findings_json_path.write_text("null", encoding="utf-8")
+    with pytest.raises(TypeError, match="JSON array"):
+        build_fix_prompt.build_fix_prompt_xml(
+            owner="jl-cmd",
+            repo="claude-dev-env",
+            pr_number=1,
+            loop=1,
+            head_ref="feat/branch",
+            base_ref="main",
+            worktree_path=Path("/tmp/wt"),
+            findings_json_path=findings_json_path,
+        )

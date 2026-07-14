@@ -8,7 +8,7 @@ Per-step obstacle guides for the `bugteam` skill. Each file addresses a specific
 |---|---|
 | `audit-assign-ids.md` | Assigning stable finding IDs in the audit output. |
 | `audit-capture-excerpts.md` | Capturing code excerpts for each finding. |
-| `audit-walk-categories.md` | Walking all A–P categories without skipping. |
+| `audit-walk-categories.md` | Walking all A–Q categories without skipping. |
 | `audit-write-xml.md` | Writing the outcome XML from an audit pass. |
 | `fix-append-summary.md` | Appending the fix summary to the outcome XML. |
 | `fix-apply-fixes.md` | Applying code fixes from the finding list. |

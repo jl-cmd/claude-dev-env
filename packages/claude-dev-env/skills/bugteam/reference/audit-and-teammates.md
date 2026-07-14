@@ -126,7 +126,7 @@ Repeat until an exit condition fires.
 
 ## AUDIT action
 
-Walk all A–P categories through the worker-spawn dispatcher
+Walk all A–Q categories through the worker-spawn dispatcher
 ([`worker-spawn.md`](../../../_shared/pr-loop/worker-spawn.md)). Every loop
 is a fresh process or a fresh agent context.
 
@@ -134,7 +134,7 @@ is a fresh process or a fresh agent context.
    per-PR workspace:
 
    ```bash
-   python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/build_audit_prompt.py" \
+   python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/build_audit_prompt.py" \
      --owner <O> --repo <R> --pr-number <N> --loop <L> \
      --head-ref <head> --base-ref <base> \
      --worktree-path <worktree_path> --run-temp-dir <run_temp_dir> \
@@ -149,7 +149,7 @@ is a fresh process or a fresh agent context.
    `bugteam` maps to primary agent `code-quality-agent`:
 
    ```bash
-   python "${CLAUDE_SKILL_DIR}/../../../scripts/resolve_worker_spawn.py" \
+   python "${CLAUDE_SKILL_DIR}/../../scripts/resolve_worker_spawn.py" \
      --role bugteam \
      --prompt-file "${run_temp_dir}/pr-<N>/loop-<L>.audit-prompt.xml" \
      --cwd <worktree_path> \
@@ -206,7 +206,7 @@ worker session after a non-zero gate).
 2. **Dispatch:**
 
    ```bash
-   python "${CLAUDE_SKILL_DIR}/../../../scripts/resolve_worker_spawn.py" \
+   python "${CLAUDE_SKILL_DIR}/../../scripts/resolve_worker_spawn.py" \
      --role clean-coder \
      --prompt-file "${run_temp_dir}/pr-<N>/loop-<L>.standards-fix-prompt.txt" \
      --cwd <worktree_path> \
@@ -255,7 +255,7 @@ Pass finding comment URL, comment id, and thread node id for each finding
    per-PR workspace:
 
    ```bash
-   python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/build_fix_prompt.py" \
+   python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/build_fix_prompt.py" \
      --owner <O> --repo <R> --pr-number <N> --loop <L> \
      --head-ref <head> --base-ref <base> \
      --worktree-path <worktree_path> \
@@ -268,7 +268,7 @@ Pass finding comment URL, comment id, and thread node id for each finding
    [`resolve_worker_spawn.py`](../../../scripts/resolve_worker_spawn.py):
 
    ```bash
-   python "${CLAUDE_SKILL_DIR}/../../../scripts/resolve_worker_spawn.py" \
+   python "${CLAUDE_SKILL_DIR}/../../scripts/resolve_worker_spawn.py" \
      --role clean-coder \
      --prompt-file "${run_temp_dir}/pr-<N>/loop-<L>.fix-prompt.xml" \
      --cwd <worktree_path> \
