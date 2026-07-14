@@ -145,9 +145,12 @@ def _format_resets_at(raw_resets_at: object) -> str | None:
     if isinstance(raw_resets_at, bool):
         return None
     if isinstance(raw_resets_at, (int, float)):
-        return datetime.fromtimestamp(
-            float(raw_resets_at), tz=timezone.utc
-        ).isoformat()
+        try:
+            return datetime.fromtimestamp(
+                float(raw_resets_at), tz=timezone.utc
+            ).isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
     if isinstance(raw_resets_at, str):
         stripped = raw_resets_at.strip()
         return stripped or None
