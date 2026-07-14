@@ -19,11 +19,13 @@ import sys
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
 from dev_env_scripts_constants.grok_worker_constants import (
     ALL_KNOWN_TOOL_PROFILES,
+    BATCH_LAUNCH_ERROR_STDERR_PREFIX,
     BATCH_SPEC_ROLE_KEY,
     BATCH_SPEC_SHOULD_PING_KEY,
     BATCH_SPEC_WORKERS_KEY,
@@ -50,6 +52,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     PROMPT_PART_JOIN_SEPARATOR,
     READONLY_DISALLOWED_TOOLS_VALUE,
     READONLY_PROFILE_PROMPT_HEADER,
+    REPORT_STREAM_JOIN_SEPARATOR,
     SUMMARY_CLASSIFICATION_KEY,
     SUMMARY_IS_OK_KEY,
     SUMMARY_IS_PREFLIGHT_USABLE_KEY,
@@ -242,7 +245,7 @@ def _require_worker_field(
     return all_worker_fields[field_name]
 
 
-def _require_positive_int(
+def _require_int_at_least(
     raw_field: object, field_name: str, minimum_accepted: int
 ) -> int:
     parsed_integer = _require_int(raw_field, field_name)
@@ -269,7 +272,7 @@ def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
         _require_worker_field(all_worker_fields, WORKER_SPEC_TOOL_PROFILE_KEY),
         WORKER_SPEC_TOOL_PROFILE_KEY,
     )
-    timeout_seconds = _require_positive_int(
+    timeout_seconds = _require_int_at_least(
         all_worker_fields.get(
             WORKER_SPEC_TIMEOUT_KEY, DEFAULT_WORKER_TIMEOUT_SECONDS
         ),
@@ -280,7 +283,7 @@ def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
         all_worker_fields.get(WORKER_SPEC_IS_REPO_ONLY_KEY, False),
         WORKER_SPEC_IS_REPO_ONLY_KEY,
     )
-    max_turns = _require_positive_int(
+    max_turns = _require_int_at_least(
         all_worker_fields.get(WORKER_SPEC_MAX_TURNS_KEY, DEFAULT_WORKER_MAX_TURNS),
         WORKER_SPEC_MAX_TURNS_KEY,
         MIN_WORKER_MAX_TURNS,
@@ -293,7 +296,8 @@ def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
     if agent_name is not None and not isinstance(agent_name, str):
         raise ValueError("worker agent_name must be a string or null")
     all_prompt_part_paths = tuple(
-        Path(str(each_part)) for each_part in all_prompt_parts
+        Path(_require_string(each_part, WORKER_SPEC_PROMPT_PARTS_KEY))
+        for each_part in all_prompt_parts
     )
     return WorkerSpec(
         role_name=role_name,
@@ -352,9 +356,14 @@ def _write_report_file(report_path: Path, report_text: str) -> None:
 
 
 def _report_text_from_outcome(outcome: GrokRunnerOutcome) -> str:
-    if outcome.stdout:
-        return outcome.stdout
-    return outcome.stderr
+    if outcome.is_ok:
+        return outcome.stdout or outcome.stderr
+    all_present_streams = [
+        each_stream
+        for each_stream in (outcome.stdout, outcome.stderr)
+        if each_stream
+    ]
+    return REPORT_STREAM_JOIN_SEPARATOR.join(all_present_streams)
 
 
 def _mint_worker_scratch_paths(run_state_directory: Path) -> WorkerScratchPaths:
@@ -445,7 +454,8 @@ def _error_report_for_exception(
     raised_exception: BaseException,
 ) -> WorkerReport:
     report_text = f"{type(raised_exception).__name__}: {raised_exception}"
-    _write_report_file(scratch_paths.report_path, report_text)
+    with suppress(OSError):
+        _write_report_file(scratch_paths.report_path, report_text)
     return WorkerReport(
         role_name=worker_spec.role_name,
         tool_profile=worker_spec.tool_profile,
@@ -602,6 +612,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 def main(all_command_arguments: list[str]) -> int:
     """Run the batch launcher for CLI arguments and print the summary JSON.
 
+    An unreadable, malformed, or invalid specification, and a run state
+    directory that cannot be created, each print one diagnostic line on stderr
+    and exit ``1`` rather than raising out of the CLI.
+
     Args:
         all_command_arguments: The argument vector after the program name.
 
@@ -610,11 +624,18 @@ def main(all_command_arguments: list[str]) -> int:
     """
     parser = _build_argument_parser()
     parsed_arguments = parser.parse_args(all_command_arguments)
-    batch_spec = load_batch_spec(parsed_arguments.specification_path)
-    batch_summary = run_grok_batch(
-        batch_spec=batch_spec,
-        run_state_directory=parsed_arguments.run_state_directory,
-    )
+    try:
+        batch_spec = load_batch_spec(parsed_arguments.specification_path)
+        batch_summary = run_grok_batch(
+            batch_spec=batch_spec,
+            run_state_directory=parsed_arguments.run_state_directory,
+        )
+    except (OSError, ValueError) as launch_error:
+        print(
+            f"{BATCH_LAUNCH_ERROR_STDERR_PREFIX}{launch_error}",
+            file=sys.stderr,
+        )
+        return 1
     print(json.dumps(batch_summary_as_dict(batch_summary)))
     if not batch_summary.is_preflight_usable:
         return 1

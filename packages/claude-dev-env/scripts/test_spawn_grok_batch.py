@@ -18,6 +18,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 import spawn_grok_batch as batch  # noqa: E402
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
+    BATCH_LAUNCH_ERROR_STDERR_PREFIX,
     BUILD_PROFILE_PROMPT_HEADER,
     CLASSIFICATION_ERROR,
     CLASSIFICATION_OK,
@@ -51,6 +52,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TOOL_PROFILE_READONLY,
     UTF8_ENCODING,
     WORKER_SPEC_MAX_TURNS_KEY,
+    WORKER_SPEC_PROMPT_PARTS_KEY,
     WORKER_SPEC_TIMEOUT_KEY,
 )
 from dev_env_scripts_constants.timing import WORKER_STAGGER_SECONDS  # noqa: E402
@@ -615,6 +617,165 @@ def test_worker_exception_preserves_partial_summary_json(
     assert broken_payload[SUMMARY_CLASSIFICATION_KEY] == CLASSIFICATION_ERROR
     assert broken_payload[SUMMARY_REPORT_TEXT_KEY]
     assert len(recorder.all_keyword_arguments) == 1
+
+
+def test_failed_worker_report_keeps_stderr_diagnostic_beside_stdout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path, role_marker="dying-worker")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    partial_stdout = "Finished auditing credit card picker skill"
+    fatal_stderr = "Error: ENOSPC disk full"
+    batch_spec = batch.load_batch_spec(
+        _write_batch_spec(
+            tmp_path,
+            all_worker_payloads=[
+                _worker_payload(
+                    role_name="dying-worker",
+                    all_prompt_parts=[str(header_part), str(body_part)],
+                    working_directory=working_directory,
+                    tool_profile=TOOL_PROFILE_BUILD,
+                )
+            ],
+        )
+    )
+    recorder = _RunnerRecorder(
+        {
+            "dying-worker": GrokRunnerOutcome(
+                is_ok=False,
+                returncode=1,
+                classification=CLASSIFICATION_ERROR,
+                stdout=partial_stdout,
+                stderr=fatal_stderr,
+            )
+        }
+    )
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    batch_summary = batch.run_grok_batch(
+        batch_spec=batch_spec,
+        run_state_directory=run_state_directory,
+    )
+
+    worker_report = batch_summary.all_worker_reports[0]
+    written_report = Path(worker_report.report_path).read_text(encoding=UTF8_ENCODING)
+    assert partial_stdout in worker_report.report_text
+    assert fatal_stderr in worker_report.report_text
+    assert fatal_stderr in written_report
+
+
+def test_successful_worker_report_stays_stdout_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path, role_marker="noisy-worker")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    batch_spec = batch.load_batch_spec(
+        _write_batch_spec(
+            tmp_path,
+            all_worker_payloads=[
+                _worker_payload(
+                    role_name="noisy-worker",
+                    all_prompt_parts=[str(header_part), str(body_part)],
+                    working_directory=working_directory,
+                    tool_profile=TOOL_PROFILE_BUILD,
+                )
+            ],
+        )
+    )
+    recorder = _RunnerRecorder(
+        {
+            "noisy-worker": GrokRunnerOutcome(
+                is_ok=True,
+                returncode=0,
+                classification=CLASSIFICATION_OK,
+                stdout=FIXTURE_REPORT_TEXT,
+                stderr="warning: telemetry disabled",
+            )
+        }
+    )
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    batch_summary = batch.run_grok_batch(
+        batch_spec=batch_spec,
+        run_state_directory=run_state_directory,
+    )
+
+    assert batch_summary.all_worker_reports[0].report_text == FIXTURE_REPORT_TEXT
+
+
+def test_load_batch_spec_rejects_non_string_prompt_part(tmp_path: Path) -> None:
+    header_part, _ = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="null-part-worker",
+        all_prompt_parts=[str(header_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload[WORKER_SPEC_PROMPT_PARTS_KEY] = [str(header_part), None]
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError, match=WORKER_SPEC_PROMPT_PARTS_KEY):
+        batch.load_batch_spec(specification_path)
+
+
+def test_malformed_spec_exits_one_with_stderr_diagnostic(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    specification_path = tmp_path / "broken-spec.json"
+    specification_path.write_text('{"workers": [', encoding=UTF8_ENCODING)
+    run_state_directory = tmp_path / "run-state"
+
+    exit_code = batch.main(
+        [
+            "--spec",
+            str(specification_path),
+            "--run-temp-dir",
+            str(run_state_directory),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert BATCH_LAUNCH_ERROR_STDERR_PREFIX in captured.err
+
+
+def test_missing_spec_file_exits_one_with_stderr_diagnostic(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = batch.main(
+        [
+            "--spec",
+            str(tmp_path / "absent-spec.json"),
+            "--run-temp-dir",
+            str(tmp_path / "run-state"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert BATCH_LAUNCH_ERROR_STDERR_PREFIX in captured.err
 
 
 def test_require_int_rejects_bool() -> None:

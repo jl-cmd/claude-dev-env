@@ -263,6 +263,12 @@ DEBUG_FILENAME_SUFFIX: str = ".log"
 PROMPT_PART_JOIN_SEPARATOR: str = "\n\n"
 """Separator inserted between prompt part file bodies when assembling a worker prompt."""
 
+REPORT_STREAM_JOIN_SEPARATOR: str = "\n\n"
+"""Separator between the stdout and stderr bodies of a failed worker's report text."""
+
+BATCH_LAUNCH_ERROR_STDERR_PREFIX: str = "batch launch failed: "
+"""Prefix on the stderr line the CLI prints when a spec cannot load or a batch cannot start."""
+
 BUILD_PROFILE_PROMPT_HEADER: str = (
     "Tool profile: build. Never commit, push, or call gh.\n\n"
 )
