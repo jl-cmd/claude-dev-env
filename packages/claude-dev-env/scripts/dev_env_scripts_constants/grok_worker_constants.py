@@ -1,8 +1,7 @@
-"""Named constants for the grok worker preflight soft gate and headless runner.
+"""Named constants for the grok worker preflight soft gate.
 
 Per the project's configuration conventions, every scalar and structural
-constant the preflight and the headless runner need lives here rather than
-inline in the modules.
+constant the preflight needs lives here rather than inline in the module.
 """
 
 from __future__ import annotations
@@ -76,7 +75,7 @@ REASON_GROK_BINARY_MISSING: str = "grok_binary_missing"
 """Fallthrough reason when the grok binary is not resolvable on PATH."""
 
 REASON_GROK_AUTH_FAILED: str = "grok_auth_failed"
-"""Catch-all fallthrough for non-usage failures (auth, timeout, launch, missing streams)."""
+"""Fallthrough reason when ``grok models`` exits non-zero or is unusable."""
 
 REASON_CLAUDE_DEV_ENV_CONFIG_MISSING: str = "claude_dev_env_config_missing"
 """Fallthrough reason when the install manifest or role agents are absent."""
@@ -113,6 +112,7 @@ UTF8_DECODE_ERRORS: str = "replace"
 
 ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
     "http 429",
+    "status 429",
     "rate limit",
     "quota exceeded",
     "insufficient credit",
@@ -127,11 +127,13 @@ ALL_USAGE_EXHAUSTION_SIGNATURES: tuple[str, ...] = ALL_USAGE_LIMIT_SIGNATURES
 
 ALL_AUTH_FAILURE_SIGNATURES: tuple[str, ...] = (
     "http 401",
+    "status 401",
     "unauthorized",
     "invalid key",
     "not logged in",
     "unauthenticated",
     "authentication failed",
+    "not authenticated",
     "please log in",
     "login required",
 )
@@ -182,14 +184,82 @@ CLASSIFICATION_TIMEOUT: str = "timeout"
 CLASSIFICATION_ERROR: str = "error"
 """Outcome classification for a non-zero exit that matches no known signature."""
 
+DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
+"""Default timeout applied to one headless worker invocation, in seconds."""
+
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
 
 LAUNCH_FAILURE_RETURN_CODE: int = -2
-"""Return code when the grok process cannot be launched (missing binary, permission, etc.)."""
+"""Return code when the grok process cannot be launched (permission, other OSError)."""
 
 LAUNCH_FAILURE_STDERR_PREFIX: str = "failed to launch: "
 """Prefix for the non-empty stderr diagnostic returned on a launch OSError."""
 
 KILL_GRACE_TIMEOUT_SECONDS: int = 10
 """Seconds to wait for a killed process to reap its pipes before giving up on its streams."""
+
+MISSING_BINARY_RETURN_CODE: int = 127
+"""Return code recorded when the grok binary is not found on PATH."""
+
+GROK_BINARY_NOT_FOUND_STDERR: str = f"{GROK_BINARY_NAME} not found"
+"""Stderr text returned when the grok binary cannot be resolved on PATH."""
+TIER_GROK: int = 1
+"""Dispatcher tier number for the headless grok worker path."""
+
+TIER_CLAUDE_AGENT: int = 2
+"""Dispatcher tier number for the in-host claude_agent_required handoff."""
+
+TIER_CLAUDE_HEADLESS: int = 3
+"""Dispatcher tier number for the headless claude chain path."""
+
+REASON_CLAUDE_AGENT_REQUIRED: str = "claude_agent_required"
+"""Fallthrough reason when the caller must run claude_agent_required itself."""
+
+REASON_PROMPT_FILE_MISSING: str = "prompt_file_missing"
+"""Config reason when the dispatcher CLI prompt file path is absent or unreadable."""
+
+DEFAULT_SPAWN_MAX_TURNS: int = 8
+"""Default max-turns applied to the headless grok worker when the caller names none."""
+
+SPAWN_SERVED_EXIT_CODE: int = 0
+"""CLI exit code when a dispatcher tier served the call."""
+
+SPAWN_EXHAUSTED_EXIT_CODE: int = 2
+"""CLI exit code when no dispatcher tier served the call."""
+
+SPAWN_CONFIG_ERROR_EXIT_CODE: int = 3
+"""CLI exit code when the claude chain configuration is missing or invalid."""
+
+RESULT_KEY_TIER_USED: str = "tier_used"
+"""JSON result key naming the tier that served the call, or null."""
+
+RESULT_KEY_OK: str = "ok"
+"""JSON result key holding whether the served call completed successfully."""
+
+RESULT_KEY_ATTEMPTS: str = "attempts"
+"""JSON result key holding the ordered list of tier attempts."""
+
+RESULT_KEY_OUTPUT: str = "output"
+"""JSON result key holding captured worker stdout from the serving tier."""
+
+RESULT_KEY_RETURNCODE: str = "returncode"
+"""JSON result key holding the process return code from the last tier run."""
+
+ATTEMPT_KEY_TIER: str = "tier"
+"""JSON attempt key naming the tier number tried."""
+
+ATTEMPT_KEY_OK: str = "ok"
+"""JSON attempt key holding whether that tier completed successfully."""
+
+ATTEMPT_KEY_REASON: str = "reason"
+"""JSON attempt key holding the fallthrough or handoff reason string."""
+
+CLI_TIMEOUT_FLAG: str = "--timeout-seconds"
+"""CLI flag naming the per-tier timeout in seconds."""
+
+CLI_ENABLE_CLAUDE_TIER_FLAG: str = "--enable-claude-tier"
+"""CLI flag that enables the headless claude chain tier on a Claude host."""
+
+EMPTY_OUTPUT: str = ""
+"""Empty captured output when no tier produced stdout."""

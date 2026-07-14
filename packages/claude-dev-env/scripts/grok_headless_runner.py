@@ -6,6 +6,9 @@ caller-supplied run state directory, captures stdout/stderr/returncode, kills
 the process on timeout, and classifies failures via signature lists in
 ``dev_env_scripts_constants.grok_worker_constants``.
 
+Dual-match policy matches preflight: when both usage and auth signatures appear
+in the same streams, auth wins (``CLASSIFICATION_AUTH_FAILURE``).
+
 Import ``run_headless_worker`` for the outcome object::
 
     outcome = run_headless_worker(
@@ -37,6 +40,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     CLASSIFICATION_USAGE_LIMIT,
     CWD_FLAG,
     GROK_BINARY_NAME,
+    GROK_BINARY_NOT_FOUND_STDERR,
     GROK_MODEL_PIN,
     KILL_GRACE_TIMEOUT_SECONDS,
     LAUNCH_FAILURE_RETURN_CODE,
@@ -45,6 +49,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
     MAX_TURNS_FLAG,
+    MISSING_BINARY_RETURN_CODE,
     MODEL_FLAG,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
@@ -113,12 +118,8 @@ def _combined_text(stdout_text: str, stderr_text: str) -> str:
     return f"{stdout_text}{stderr_text}".lower()
 
 
-def _matches_any_signature(
-    combined_text: str, all_signatures: tuple[str, ...]
-) -> bool:
-    return any(
-        each_signature in combined_text for each_signature in all_signatures
-    )
+def _matches_any_signature(combined_text: str, all_signatures: tuple[str, ...]) -> bool:
+    return any(each_signature in combined_text for each_signature in all_signatures)
 
 
 def _classify_completion(
@@ -133,12 +134,8 @@ def _classify_completion(
             stderr=stderr_text,
         )
     combined_text = _combined_text(stdout_text, stderr_text)
-    is_usage_limit = _matches_any_signature(
-        combined_text, ALL_USAGE_LIMIT_SIGNATURES
-    )
-    is_auth_failure = _matches_any_signature(
-        combined_text, ALL_AUTH_FAILURE_SIGNATURES
-    )
+    is_usage_limit = _matches_any_signature(combined_text, ALL_USAGE_LIMIT_SIGNATURES)
+    is_auth_failure = _matches_any_signature(combined_text, ALL_AUTH_FAILURE_SIGNATURES)
     if is_usage_limit and not is_auth_failure:
         return GrokRunnerOutcome(
             is_ok=False,
@@ -164,9 +161,11 @@ def _classify_completion(
     )
 
 
-def _normalize_stream(stream_payload: str | None) -> str:
+def _normalize_stream(stream_payload: str | bytes | None) -> str:
     if stream_payload is None:
         return ""
+    if isinstance(stream_payload, bytes):
+        return stream_payload.decode(UTF8_ENCODING, errors=UTF8_DECODE_ERRORS)
     return stream_payload
 
 
@@ -198,6 +197,16 @@ def _timeout_outcome(process: subprocess.Popen[str]) -> GrokRunnerOutcome:
     )
 
 
+def _missing_binary_outcome() -> GrokRunnerOutcome:
+    return GrokRunnerOutcome(
+        is_ok=False,
+        returncode=MISSING_BINARY_RETURN_CODE,
+        classification=CLASSIFICATION_ERROR,
+        stdout="",
+        stderr=GROK_BINARY_NOT_FOUND_STDERR,
+    )
+
+
 def _launch_failure_outcome(launch_error: OSError) -> GrokRunnerOutcome:
     diagnostic_text = f"{LAUNCH_FAILURE_STDERR_PREFIX}{launch_error}"
     return GrokRunnerOutcome(
@@ -221,12 +230,12 @@ def _invoke_process(
             encoding=UTF8_ENCODING,
             errors=UTF8_DECODE_ERRORS,
         )
+    except FileNotFoundError:
+        return _missing_binary_outcome()
     except OSError as launch_error:
         return _launch_failure_outcome(launch_error)
     try:
-        captured_stdout, captured_stderr = process.communicate(
-            timeout=timeout_seconds
-        )
+        captured_stdout, captured_stderr = process.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
         return _timeout_outcome(process)
     stdout_text = _normalize_stream(captured_stdout)
