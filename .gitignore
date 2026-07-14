@@ -19,6 +19,7 @@ _npv/
 
 # Bugteam workflow artifacts
 .bugteam-pr*-loop*.outcomes.xml
+.bugteam-pr*-loop*.fix-outcomes.xml
 post_pr_replies.ps1
 
 # Eval artifacts

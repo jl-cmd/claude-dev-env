@@ -4,14 +4,14 @@ Runs an audit-fix loop on an open pull request until all findings are resolved o
 
 ## Purpose
 
-Each loop: a `code-quality-agent` (fresh context, all A–P audit categories) produces an outcome XML; a `clean-coder` agent applies every fix; the lead commits, pushes, and posts a GitHub PR review (APPROVE on clean, REQUEST_CHANGES with inline anchored comments on dirty). Grants `.claude/**` write permissions at the start and revokes them at the end.
+Each loop: a `code-quality-agent` (fresh context, all A–Q audit categories) produces an outcome XML; a `clean-coder` agent applies every fix; the lead commits, pushes, and posts a GitHub PR review (APPROVE on clean, REQUEST_CHANGES with inline anchored comments on dirty). Grants `.claude/**` write permissions at the start and revokes them at the end.
 
 ## Key files
 
 | File | Purpose |
 |---|---|
 | `SKILL.md` | Hub — pre-flight call, refusals, the audit-posting step (runs the shared `post_audit_thread.py` helper), progress checklist, and situation-to-reference table. Read this first. |
-| `PROMPTS.md` | Spawn XML, A–P category bindings, outcome XML schemas. |
+| `PROMPTS.md` | Spawn XML, A–Q category bindings, outcome XML schemas. |
 | `CONSTRAINTS.md` | Invariants — what the loop must never violate. |
 | `EXAMPLES.md` | Exit scenarios: converged, cap-reached, stuck, refusal, mixed-outcome. |
 | `sources.md` | Doc URLs and verbatim quotes cited in the skill body. |

@@ -29,6 +29,7 @@ from skills_pr_loop_constants.path_resolver_constants import (
     ALL_FIX_EXECUTION_STEPS,
     ALL_FIX_EXECUTION_STEPS_HEADLESS,
     ALL_FIX_PROMPT_FLAVORS,
+    FINDINGS_JSON_MUST_BE_LIST_MESSAGE,
     FIX_COMMENT_POSTING_AGENT_TEXT,
     FIX_COMMENT_POSTING_HEADLESS_TEXT,
     FIX_OUTPUT_FORMAT_AGENT_TEXT,
@@ -136,6 +137,11 @@ def build_fix_prompt_xml(
         Root <spawn_prompt> element.
     """
     findings_data = json.loads(findings_json_path.read_text(encoding="utf-8"))
+    if not isinstance(findings_data, list):
+        findings_type_name = type(findings_data).__name__
+        raise TypeError(
+            FINDINGS_JSON_MUST_BE_LIST_MESSAGE % findings_type_name
+        )
 
     root = Element("spawn_prompt", {"role": "fix", "loop": str(loop)})
 
@@ -148,15 +154,14 @@ def build_fix_prompt_xml(
     SubElement(context, "worktree_path").text = worktree_path.as_posix()
 
     bugs_elem = SubElement(root, "bugs")
-    if isinstance(findings_data, list):
-        for each_finding in findings_data:
-            if isinstance(each_finding, dict):
-                bug = SubElement(bugs_elem, "bug")
-                for each_key, each_field_detail in each_finding.items():
-                    child = SubElement(bug, each_key)
-                    child.text = (
-                        str(each_field_detail) if each_field_detail is not None else ""
-                    )
+    for each_finding in findings_data:
+        if isinstance(each_finding, dict):
+            bug = SubElement(bugs_elem, "bug")
+            for each_key, each_field_detail in each_finding.items():
+                child = SubElement(bug, each_key)
+                child.text = (
+                    str(each_field_detail) if each_field_detail is not None else ""
+                )
 
     execution = SubElement(root, "execution")
     for each_step in _all_execution_steps(flavor):
@@ -276,7 +281,7 @@ def main(all_arguments: list[str]) -> int:
             findings_json_path=findings_path,
             flavor=arguments.flavor,
         )
-    except (json.JSONDecodeError, OSError) as exc:
+    except (json.JSONDecodeError, OSError, TypeError) as exc:
         print(f"emit_fix_prompt failed: {exc}", file=sys.stderr)
         return 1
     sys.stdout.write(xml_output)

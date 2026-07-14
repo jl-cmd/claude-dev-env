@@ -2,7 +2,7 @@
 
 ## Constraints
 
-- **Full A–P audit every loop, no exceptions.** PR size, "focused audit," "team overhead," "CODE_RULES already passed" — not valid reasons. Empty `<findings/>` for any category is a valid result. The audit agent walks all A–P rubrics each loop.
+- **Full A–Q audit every loop, no exceptions.** PR size, "focused audit," "team overhead," "CODE_RULES already passed" — not valid reasons. Empty `<findings/>` for any category is a valid result. The audit agent walks all A–Q rubrics each loop.
 - **One run per invocation, multi-PR supported.** All PRs in a single /bugteam invocation share one `run_temp_dir`. Per-PR identity lives in the subagent name prefix (`bugfind-pr<N>-loop<L>` / `bugfix-pr<N>-loop<L>`) and the `<run_temp_dir>/pr-<N>/` subfolder containing that PR's git worktree, diff patches, and outcome XML files.
 - **Grant before any spawn, revoke before any return.** Step 0 grants project `.claude/**` permissions; Step 4 (`pr-loop-lifecycle` Close) revokes. Both are mandatory. Revoke runs on every exit path including error, cap-reached, and stuck.
 - **Fresh worker per loop.** Both bugfind and bugfix route through the worker-spawn dispatcher (or a fresh Agent-tool context on tier 2). Reusing a worker across loops accumulates context — defeats clean-room.
