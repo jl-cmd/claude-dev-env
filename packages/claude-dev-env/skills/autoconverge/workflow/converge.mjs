@@ -562,6 +562,9 @@ function runConvergenceCheck(context) {
   const reviewerOptOut = reviewerOptOutTokens.length > 0
     ? `   Reviewer(s) opted out this run (${reviewerOptOutTokens.join(', ')}), so before gh pr ready export the token(s) in this same shell session so the independent mark-ready blocker hook's convergence re-check — which re-runs check_convergence.py with no flags — inherits the bypass through the env:\n      bash: export CLAUDE_REVIEWS_DISABLED="${reviewerOptOutTokens.join(',')}"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "${reviewerOptOutTokens.join(',')}")\n`
     : ''
+  const codexCleanAtNote = context.codexCleanAt
+    ? `   The Codex gate reported clean on this HEAD, so the --codex-clean-at flag above satisfies this same-shell check. The independent mark-ready blocker hook re-runs check_convergence.py with no flags, and it reads the Codex clean stamp only from the single-PR job-dir state file, so before gh pr ready persist the stamp there: merge {"codex_clean_at": "${context.codexCleanAt}"} into the file named pr-converge-state.json inside the directory named by the CLAUDE_JOB_DIR environment variable (create the file with just that key when it does not exist yet, and preserve any keys already in it). When CLAUDE_JOB_DIR is unset there is no durable stamp for the flagless re-check to read, so export the codex opt-out token in this same shell instead so the re-check inherits the bypass:\n      bash: export CLAUDE_REVIEWS_DISABLED="codex"   (PowerShell: $env:CLAUDE_REVIEWS_DISABLED = "codex")\n`
+    : ''
   return convergeReadOnlyAgent(
     `Run the convergence gate for ${prCoordinates} on HEAD ${context.head} and, only when every gate passes, mark the PR ready. Do not edit code.\n\n` +
       `1. Run: python "${CONFIG.sharedScripts}/check_convergence.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber}${bugbotDownFlag}${copilotDownFlag}${codexDownFlag}${codexCleanAtFlag}${bugteamPostBlockedFlag}\n` +
@@ -571,6 +574,7 @@ function runConvergenceCheck(context) {
       `   Exit 2 -> retry once; if it still errors, set pass:false, failures:["check_convergence gh error"].\n\n` +
       `2. Only when step 1 set pass:true, mark the PR ready and confirm it left draft state:\n` +
       reviewerOptOut +
+      codexCleanAtNote +
       `   Run: gh pr ready ${input.prNumber} --repo ${input.owner}/${input.repo}\n` +
       `   Re-query the draft state: gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .draft\n` +
       `   Set ready:true only when the re-query prints false (the PR is no longer a draft); set ready:false when gh pr ready errors or the re-query still prints true.\n` +

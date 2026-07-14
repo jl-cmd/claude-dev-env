@@ -192,6 +192,35 @@ test('the merged FINALIZE check receives codexDown and codexCleanAt and passes m
   assert.match(checkBody, /if \(context\.codexDown\) reviewerOptOutTokens\.push\('codex'\)/);
 });
 
+test('runConvergenceCheck tells the finalize agent to persist codex_clean_at for the flagless mark-ready re-check', () => {
+  const checkBody = functionBody('runConvergenceCheck');
+  assert.match(
+    checkBody,
+    /codexCleanAtNote/,
+    'expected a dedicated note when the Codex gate stamped clean on HEAD',
+  );
+  assert.match(
+    checkBody,
+    /pr-converge-state\.json/,
+    'expected the note to name the job-dir state file the mark-ready blocker re-reads',
+  );
+  assert.match(
+    checkBody,
+    /codex_clean_at/,
+    'expected the note to write the codex_clean_at key the flagless re-check resolves',
+  );
+  assert.match(
+    checkBody,
+    /CLAUDE_JOB_DIR/,
+    'expected the note to locate the state file under CLAUDE_JOB_DIR',
+  );
+  assert.match(
+    checkBody,
+    /CLAUDE_REVIEWS_DISABLED.*codex|export the codex opt-out token/i,
+    'expected a codex opt-out export fallback when CLAUDE_JOB_DIR is unset',
+  );
+});
+
 test('CONFIG points at the codex-review scripts directory', () => {
   assert.match(
     convergeSource,
