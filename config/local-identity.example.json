@@ -1,4 +1,5 @@
 {
   "github_owner_scopes": ["example-owner"],
-  "nas": { "host": "nas.example.local", "ssh_user": "operator", "ssh_port": 22 }
+  "nas": { "host": "nas.example.local", "ssh_user": "operator", "ssh_port": 22 },
+  "pii_allowlisted_values": { "example-owner/example-repo": ["user@example.com"] }
 }

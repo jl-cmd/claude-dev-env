@@ -7,7 +7,7 @@ imports them and re-exports their surface for the test suite.
 
 | File | Purpose |
 |---|---|
-| `repository_exemption.py` | Resolves a commit's origin owner/repo slug and decides whether the repository skips the staged PII scan |
+| `repository_exemption.py` | Resolves a commit's origin owner/repo slug, decides whether the repository skips the staged PII scan, and resolves the exact values that repository allows past the scan |
 | `repository_resolution.py` | Reads the repository a commit command targets — composing multiple `-C` values and a leading `cd`/`pushd` — and builds the deny reason naming the path when the repository root does not resolve |
 | `__init__.py` | Package marker |
 

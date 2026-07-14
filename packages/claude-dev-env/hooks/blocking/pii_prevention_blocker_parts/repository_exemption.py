@@ -1,10 +1,12 @@
-"""Per-repository PII-scan exemption keyed on the origin remote's owner/repo slug.
+"""Per-repository PII-scan exemption and allowlist keyed on origin owner/repo.
 
 A commit's repository is exempt from the staged PII scan when its
 ``remote.origin.url`` resolves to an ``owner/repo`` slug named in
 ``CLAUDE_PII_EXEMPT_REPOS`` or the ``pii_exempt_repositories`` list in
 ``~/.claude/local-identity.json``. A repository without a readable origin remote
-is never exempt (fail-closed to scanning).
+is never exempt (fail-closed to scanning). Exact values listed under
+``pii_allowlisted_values`` for the same slug may pass the scan in that
+repository only.
 """
 
 from __future__ import annotations
@@ -20,7 +22,10 @@ try:
     for each_bootstrap_directory in (_blocking_directory, _hooks_directory):
         if each_bootstrap_directory not in sys.path:
             sys.path.insert(0, each_bootstrap_directory)
-    from hooks_constants.local_identity import pii_exempt_repository_slugs
+    from hooks_constants.local_identity import (
+        pii_allowlisted_values_by_repository,
+        pii_exempt_repository_slugs,
+    )
     from hooks_constants.pii_prevention_constants import (
         ALL_GIT_ORIGIN_URL_COMMAND,
         ALL_NETWORK_GIT_URL_SCHEMES,
@@ -39,6 +44,28 @@ except ImportError as import_error:
         "repository_exemption: cannot import its sibling constants; "
         "ensure the blocking and hooks directories are importable."
     ) from import_error
+
+
+def repository_allowlisted_values(repository_root: Path) -> frozenset[str]:
+    """Return the exact values the repository at *repository_root* may carry.
+
+    ::
+
+        origin slug in the allowlist mapping  ->  that repo's frozenset of values
+        no origin remote, or slug not mapped  ->  frozenset()
+
+    Args:
+        repository_root: Repository whose origin owner/repo slug keys the
+            per-repository PII allowlist.
+
+    Returns:
+        The exact literal values the repository's commits and writes may carry
+        past the PII scan, or an empty set when the repository has none.
+    """
+    origin_slug = _repository_origin_slug(repository_root)
+    if origin_slug is None:
+        return frozenset()
+    return pii_allowlisted_values_by_repository().get(origin_slug, frozenset())
 
 
 def _strip_trailing_path_separators(origin_url: str) -> str:
