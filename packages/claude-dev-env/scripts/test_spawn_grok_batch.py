@@ -19,10 +19,13 @@ if str(_SCRIPTS_DIR) not in sys.path:
 import spawn_grok_batch as batch  # noqa: E402
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     BUILD_PROFILE_PROMPT_HEADER,
+    CLASSIFICATION_ERROR,
     CLASSIFICATION_OK,
     CLASSIFICATION_USAGE_LIMIT,
     DEBUG_FILE_FLAG,
     DEFAULT_ROLE,
+    DEFAULT_WORKER_MAX_TURNS,
+    DEFAULT_WORKER_TIMEOUT_SECONDS,
     DISABLE_WEB_SEARCH_FLAG,
     DISALLOWED_TOOLS_FLAG,
     LEADER_SOCKET_FILENAME_PREFIX,
@@ -47,6 +50,8 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TOOL_PROFILE_BUILD,
     TOOL_PROFILE_READONLY,
     UTF8_ENCODING,
+    WORKER_SPEC_MAX_TURNS_KEY,
+    WORKER_SPEC_TIMEOUT_KEY,
 )
 from dev_env_scripts_constants.timing import WORKER_STAGGER_SECONDS  # noqa: E402
 from grok_headless_runner import GrokRunnerOutcome  # noqa: E402
@@ -546,3 +551,179 @@ def test_main_prints_summary_json(
     assert (
         summary_payload[SUMMARY_WORKERS_KEY][0][SUMMARY_ROLE_NAME_KEY] == "cli-worker"
     )
+
+
+def test_worker_exception_preserves_partial_summary_json(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    header_good, body_good = _write_prompt_parts(tmp_path, role_marker="good-worker")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    missing_prompt_part = tmp_path / "does-not-exist-prompt.txt"
+    specification_path = _write_batch_spec(
+        tmp_path,
+        all_worker_payloads=[
+            _worker_payload(
+                role_name="good-worker",
+                all_prompt_parts=[str(header_good), str(body_good)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+            ),
+            _worker_payload(
+                role_name="broken-worker",
+                all_prompt_parts=[str(missing_prompt_part)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+            ),
+        ],
+    )
+    recorder = _RunnerRecorder({"good-worker": _ok_outcome()})
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    exit_code = batch.main(
+        [
+            "--spec",
+            str(specification_path),
+            "--run-temp-dir",
+            str(run_state_directory),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    summary_payload = json.loads(captured.out)
+    all_worker_payloads = summary_payload[SUMMARY_WORKERS_KEY]
+    assert exit_code == 1
+    assert isinstance(all_worker_payloads, list)
+    assert len(all_worker_payloads) == 2
+    report_by_role_name = {
+        each_payload[SUMMARY_ROLE_NAME_KEY]: each_payload
+        for each_payload in all_worker_payloads
+    }
+    good_payload = report_by_role_name["good-worker"]
+    broken_payload = report_by_role_name["broken-worker"]
+    assert good_payload[SUMMARY_IS_OK_KEY] is True
+    assert good_payload[SUMMARY_CLASSIFICATION_KEY] == CLASSIFICATION_OK
+    assert good_payload[SUMMARY_REPORT_TEXT_KEY] == FIXTURE_REPORT_TEXT
+    assert broken_payload[SUMMARY_IS_OK_KEY] is False
+    assert broken_payload[SUMMARY_CLASSIFICATION_KEY] == CLASSIFICATION_ERROR
+    assert broken_payload[SUMMARY_REPORT_TEXT_KEY]
+    assert len(recorder.all_keyword_arguments) == 1
+
+
+def test_require_int_rejects_bool() -> None:
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        batch._require_int(True, WORKER_SPEC_TIMEOUT_KEY)
+    assert batch._require_int(600, WORKER_SPEC_TIMEOUT_KEY) == 600
+
+
+def test_load_batch_spec_rejects_boolean_timeout(tmp_path: Path) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="bool-timeout-worker",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload[WORKER_SPEC_TIMEOUT_KEY] = True
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError, match=WORKER_SPEC_TIMEOUT_KEY):
+        batch.load_batch_spec(specification_path)
+
+
+def test_load_batch_spec_missing_worker_keys_raise_value_error(
+    tmp_path: Path,
+) -> None:
+    specification_path = tmp_path / "empty-worker-spec.json"
+    specification_path.write_text(
+        json.dumps(
+            {
+                "role": "x",
+                "should_ping": False,
+                "workers": [{}],
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+
+    with pytest.raises(ValueError) as raised_error:
+        batch.load_batch_spec(specification_path)
+
+    assert not isinstance(raised_error.value, KeyError)
+    assert "role_name" in str(raised_error.value).lower() or "missing" in str(
+        raised_error.value
+    ).lower() or "must be" in str(raised_error.value).lower()
+
+
+def test_load_batch_spec_rejects_non_positive_timeout_and_max_turns(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+
+    zero_timeout_dir = tmp_path / "zero-timeout"
+    zero_timeout_dir.mkdir()
+    zero_timeout_payload = _worker_payload(
+        role_name="zero-timeout",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+        timeout_seconds=0,
+    )
+    zero_timeout_path = _write_batch_spec(
+        zero_timeout_dir,
+        all_worker_payloads=[zero_timeout_payload],
+    )
+    with pytest.raises(ValueError, match=WORKER_SPEC_TIMEOUT_KEY):
+        batch.load_batch_spec(zero_timeout_path)
+
+    negative_turns_dir = tmp_path / "negative-turns"
+    negative_turns_dir.mkdir()
+    negative_turns_payload = _worker_payload(
+        role_name="negative-turns",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    negative_turns_payload[WORKER_SPEC_MAX_TURNS_KEY] = -1
+    negative_turns_path = _write_batch_spec(
+        negative_turns_dir,
+        all_worker_payloads=[negative_turns_payload],
+    )
+    with pytest.raises(ValueError, match=WORKER_SPEC_MAX_TURNS_KEY):
+        batch.load_batch_spec(negative_turns_path)
+
+
+def test_load_batch_spec_accepts_default_timeout_and_max_turns(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = {
+        "role_name": "defaults-worker",
+        "prompt_parts": [str(header_part), str(body_part)],
+        "cwd": str(working_directory),
+        "tool_profile": TOOL_PROFILE_BUILD,
+    }
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    batch_spec = batch.load_batch_spec(specification_path)
+
+    assert len(batch_spec.all_workers) == 1
+    assert batch_spec.all_workers[0].timeout_seconds == DEFAULT_WORKER_TIMEOUT_SECONDS
+    assert batch_spec.all_workers[0].max_turns == DEFAULT_WORKER_MAX_TURNS

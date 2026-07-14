@@ -21,6 +21,7 @@ import grok_headless_runner as runner  # noqa: E402
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     AGENT_FLAG,
     ALWAYS_APPROVE_FLAG,
+    BINARY_MISSING_RETURN_CODE,
     CLASSIFICATION_AUTH_FAILURE,
     CLASSIFICATION_ERROR,
     CLASSIFICATION_OK,
@@ -35,6 +36,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
     PROMPT_FILE_FLAG,
+    TIMEOUT_RETURN_CODE,
 )
 
 FIXTURE_GROK_BINARY_VERSION = "0.2.99 (b1b49ccb71) [stable]"
@@ -292,6 +294,83 @@ def test_classifies_error_on_unknown_failure(
     assert outcome.is_ok is False
     assert outcome.returncode == 2
     assert outcome.classification == CLASSIFICATION_ERROR
+
+
+def test_file_not_found_is_error_not_timeout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding="utf-8")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+
+    def _raise_file_not_found(
+        _invocation: list[str], **_keyword_arguments: object
+    ) -> object:
+        raise FileNotFoundError(GROK_BINARY_NAME)
+
+    monkeypatch.setattr(runner, "runner_popen", _raise_file_not_found)
+    outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        max_turns=DEFAULT_MAX_TURNS,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+
+    assert outcome.is_ok is False
+    assert outcome.classification == CLASSIFICATION_ERROR
+    assert outcome.returncode == BINARY_MISSING_RETURN_CODE
+    assert outcome.returncode != TIMEOUT_RETURN_CODE
+    assert GROK_BINARY_NAME in outcome.stderr
+    assert "not found on PATH" in outcome.stderr
+    assert outcome.stderr != ""
+
+
+def test_classifies_usage_limit_still_matches_real_fixture(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_process = _FakeProcess(
+        returncode=1, stderr=FIXTURE_USAGE_LIMIT_STDERR
+    )
+    outcome, _, _, _, _ = _run_once(monkeypatch, tmp_path, fake_process)
+
+    assert outcome.classification == CLASSIFICATION_USAGE_LIMIT
+
+
+def test_credit_card_text_is_error_not_usage_limit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_process = _FakeProcess(
+        returncode=1,
+        stderr="invalid credit card field mapping on invoice line",
+    )
+    outcome, _, _, _, _ = _run_once(monkeypatch, tmp_path, fake_process)
+
+    assert outcome.is_ok is False
+    assert outcome.classification == CLASSIFICATION_ERROR
+    assert outcome.classification != CLASSIFICATION_USAGE_LIMIT
+
+
+def test_bare_near_miss_tokens_are_not_usage_limit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    all_near_miss_stderr = (
+        "vendor code 42901 rejected the payload",
+        "please verify credit before retry",
+        "adjust disk quota on volume",
+    )
+    for each_index, each_stderr in enumerate(all_near_miss_stderr):
+        each_case_directory = tmp_path / f"near-miss-{each_index}"
+        each_case_directory.mkdir()
+        fake_process = _FakeProcess(returncode=1, stderr=each_stderr)
+        outcome, _, _, _, _ = _run_once(
+            monkeypatch, each_case_directory, fake_process
+        )
+        assert outcome.classification == CLASSIFICATION_ERROR, each_stderr
+        assert outcome.classification != CLASSIFICATION_USAGE_LIMIT, each_stderr
 
 
 def test_scratch_paths_stay_under_run_state_directory(

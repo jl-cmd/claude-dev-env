@@ -28,6 +28,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     BATCH_SPEC_SHOULD_PING_KEY,
     BATCH_SPEC_WORKERS_KEY,
     BUILD_PROFILE_PROMPT_HEADER,
+    CLASSIFICATION_ERROR,
     CLI_BATCH_SPEC_FLAG,
     CLI_RUN_STATE_DIR_FLAG,
     DEBUG_FILE_FLAG,
@@ -40,6 +41,8 @@ from dev_env_scripts_constants.grok_worker_constants import (
     DISALLOWED_TOOLS_FLAG,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
+    MIN_WORKER_MAX_TURNS,
+    MIN_WORKER_TIMEOUT_SECONDS,
     OUTPUT_FILENAME_PREFIX,
     OUTPUT_FILENAME_SUFFIX,
     PROMPT_FILENAME_PREFIX,
@@ -62,6 +65,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     TOOL_PROFILE_BUILD,
     TOOL_PROFILE_READONLY,
     UTF8_ENCODING,
+    WORKER_EXCEPTION_RETURN_CODE,
     WORKER_SPEC_AGENT_NAME_KEY,
     WORKER_SPEC_CWD_KEY,
     WORKER_SPEC_IS_REPO_ONLY_KEY,
@@ -152,7 +156,9 @@ def assemble_worker_prompt(
 
     ::
 
-        assemble_worker_prompt(parts=(header, body), tool_profile="build")
+        assemble_worker_prompt(
+            all_prompt_part_paths=(header, body), tool_profile="build"
+        )
         ok: starts with BUILD_PROFILE_PROMPT_HEADER and joins part bodies
 
     Args:
@@ -217,7 +223,7 @@ def _require_string(raw_field: object, field_name: str) -> str:
 
 
 def _require_int(raw_field: object, field_name: str) -> int:
-    if not isinstance(raw_field, int):
+    if isinstance(raw_field, bool) or not isinstance(raw_field, int):
         raise ValueError(f"worker {field_name} must be an int")
     return raw_field
 
@@ -228,31 +234,56 @@ def _require_bool(raw_field: object, field_name: str) -> bool:
     return raw_field
 
 
+def _require_worker_field(
+    all_worker_fields: dict[str, object], field_name: str
+) -> object:
+    if field_name not in all_worker_fields:
+        raise ValueError(f"worker missing required field: {field_name}")
+    return all_worker_fields[field_name]
+
+
+def _require_positive_int(
+    raw_field: object, field_name: str, minimum_accepted: int
+) -> int:
+    parsed_integer = _require_int(raw_field, field_name)
+    if parsed_integer < minimum_accepted:
+        raise ValueError(
+            f"worker {field_name} must be >= {minimum_accepted}"
+        )
+    return parsed_integer
+
+
 def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
     role_name = _require_string(
-        all_worker_fields[WORKER_SPEC_ROLE_NAME_KEY], WORKER_SPEC_ROLE_NAME_KEY
+        _require_worker_field(all_worker_fields, WORKER_SPEC_ROLE_NAME_KEY),
+        WORKER_SPEC_ROLE_NAME_KEY,
     )
-    all_prompt_parts = all_worker_fields[WORKER_SPEC_PROMPT_PARTS_KEY]
+    all_prompt_parts = _require_worker_field(
+        all_worker_fields, WORKER_SPEC_PROMPT_PARTS_KEY
+    )
     working_directory = _require_string(
-        all_worker_fields[WORKER_SPEC_CWD_KEY], WORKER_SPEC_CWD_KEY
+        _require_worker_field(all_worker_fields, WORKER_SPEC_CWD_KEY),
+        WORKER_SPEC_CWD_KEY,
     )
     tool_profile = _require_string(
-        all_worker_fields[WORKER_SPEC_TOOL_PROFILE_KEY],
+        _require_worker_field(all_worker_fields, WORKER_SPEC_TOOL_PROFILE_KEY),
         WORKER_SPEC_TOOL_PROFILE_KEY,
     )
-    timeout_seconds = _require_int(
+    timeout_seconds = _require_positive_int(
         all_worker_fields.get(
             WORKER_SPEC_TIMEOUT_KEY, DEFAULT_WORKER_TIMEOUT_SECONDS
         ),
         WORKER_SPEC_TIMEOUT_KEY,
+        MIN_WORKER_TIMEOUT_SECONDS,
     )
     is_repo_only = _require_bool(
         all_worker_fields.get(WORKER_SPEC_IS_REPO_ONLY_KEY, False),
         WORKER_SPEC_IS_REPO_ONLY_KEY,
     )
-    max_turns = _require_int(
+    max_turns = _require_positive_int(
         all_worker_fields.get(WORKER_SPEC_MAX_TURNS_KEY, DEFAULT_WORKER_MAX_TURNS),
         WORKER_SPEC_MAX_TURNS_KEY,
+        MIN_WORKER_MAX_TURNS,
     )
     agent_name = all_worker_fields.get(WORKER_SPEC_AGENT_NAME_KEY)
     if not isinstance(all_prompt_parts, list) or not all_prompt_parts:
@@ -407,6 +438,27 @@ def _build_worker_report(
     )
 
 
+def _error_report_for_exception(
+    *,
+    worker_spec: WorkerSpec,
+    scratch_paths: WorkerScratchPaths,
+    raised_exception: BaseException,
+) -> WorkerReport:
+    report_text = f"{type(raised_exception).__name__}: {raised_exception}"
+    _write_report_file(scratch_paths.report_path, report_text)
+    return WorkerReport(
+        role_name=worker_spec.role_name,
+        tool_profile=worker_spec.tool_profile,
+        returncode=WORKER_EXCEPTION_RETURN_CODE,
+        classification=CLASSIFICATION_ERROR,
+        is_ok=False,
+        report_text=report_text,
+        report_path=str(scratch_paths.report_path),
+        leader_socket=str(scratch_paths.leader_socket_path),
+        prompt_path=str(scratch_paths.prompt_path),
+    )
+
+
 def _launch_one_worker(
     *,
     worker_spec: WorkerSpec,
@@ -415,20 +467,27 @@ def _launch_one_worker(
 ) -> WorkerReport:
     batch_sleep(worker_index * WORKER_STAGGER_SECONDS)
     scratch_paths = _mint_worker_scratch_paths(run_state_directory)
-    _write_assembled_prompt(
-        worker_spec=worker_spec,
-        prompt_path=scratch_paths.prompt_path,
-    )
-    outcome = _invoke_worker(
-        worker_spec=worker_spec,
-        scratch_paths=scratch_paths,
-        run_state_directory=run_state_directory,
-    )
-    return _build_worker_report(
-        worker_spec=worker_spec,
-        outcome=outcome,
-        scratch_paths=scratch_paths,
-    )
+    try:
+        _write_assembled_prompt(
+            worker_spec=worker_spec,
+            prompt_path=scratch_paths.prompt_path,
+        )
+        outcome = _invoke_worker(
+            worker_spec=worker_spec,
+            scratch_paths=scratch_paths,
+            run_state_directory=run_state_directory,
+        )
+        return _build_worker_report(
+            worker_spec=worker_spec,
+            outcome=outcome,
+            scratch_paths=scratch_paths,
+        )
+    except (OSError, ValueError, RuntimeError) as raised_exception:
+        return _error_report_for_exception(
+            worker_spec=worker_spec,
+            scratch_paths=scratch_paths,
+            raised_exception=raised_exception,
+        )
 
 
 def run_grok_batch(

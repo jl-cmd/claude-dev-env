@@ -30,6 +30,8 @@ from dev_env_scripts_constants.grok_worker_constants import (
     ALL_AUTH_FAILURE_SIGNATURES,
     ALL_USAGE_LIMIT_SIGNATURES,
     ALWAYS_APPROVE_FLAG,
+    BINARY_MISSING_RETURN_CODE,
+    BINARY_NOT_FOUND_STDERR_TEMPLATE,
     CLASSIFICATION_AUTH_FAILURE,
     CLASSIFICATION_ERROR,
     CLASSIFICATION_OK,
@@ -199,12 +201,15 @@ def _invoke_process(
             encoding=UTF8_ENCODING,
         )
     except FileNotFoundError:
+        binary_missing_message = BINARY_NOT_FOUND_STDERR_TEMPLATE.format(
+            binary_name=GROK_BINARY_NAME
+        )
         return GrokRunnerOutcome(
             is_ok=False,
-            returncode=TIMEOUT_RETURN_CODE,
+            returncode=BINARY_MISSING_RETURN_CODE,
             classification=CLASSIFICATION_ERROR,
             stdout="",
-            stderr="",
+            stderr=binary_missing_message,
         )
     try:
         captured_stdout, captured_stderr = process.communicate(

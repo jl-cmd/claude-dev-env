@@ -1,7 +1,9 @@
-"""Named constants for the grok worker preflight soft gate.
+"""Named constants for the grok worker preflight, headless runner, and batch launcher.
 
-Per the project's configuration conventions, every scalar and structural
-constant the preflight needs lives here rather than inline in the module.
+``grok_worker_preflight.py``, ``grok_headless_runner.py``, and
+``spawn_grok_batch.py`` share this module. Per project configuration
+conventions, every scalar and structural constant those scripts need lives
+here rather than inline in the modules.
 """
 
 from __future__ import annotations
@@ -108,16 +110,16 @@ UTF8_ENCODING: str = "utf-8"
 """Encoding used for subprocess text mode and the ping cache file."""
 
 ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
-    "429",
     "rate limit",
-    "credit",
-    "quota",
     "usage limit",
     "out of usage",
     "quota exceeded",
     "usage exhausted",
+    "insufficient credit",
+    "http 429",
+    "status 429",
 )
-"""Case-insensitive substrings that mark a non-zero exit as a usage-limit failure."""
+"""Case-insensitive multi-token phrases that mark a non-zero exit as a usage-limit failure."""
 
 ALL_USAGE_EXHAUSTION_SIGNATURES: tuple[str, ...] = ALL_USAGE_LIMIT_SIGNATURES
 """Alias used by the preflight soft gate for the same usage-limit signatures."""
@@ -187,6 +189,21 @@ DEFAULT_WORKER_MAX_TURNS: int = 8
 
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
+
+BINARY_MISSING_RETURN_CODE: int = 127
+"""Return code recorded when the grok binary is not found on PATH (distinct from timeout)."""
+
+BINARY_NOT_FOUND_STDERR_TEMPLATE: str = "{binary_name} not found on PATH"
+"""Stable stderr diagnostic when Popen raises FileNotFoundError for the grok binary."""
+
+MIN_WORKER_TIMEOUT_SECONDS: int = 1
+"""Minimum accepted worker timeout_seconds in a batch specification."""
+
+MIN_WORKER_MAX_TURNS: int = 1
+"""Minimum accepted worker max_turns in a batch specification."""
+
+WORKER_EXCEPTION_RETURN_CODE: int = 1
+"""Return code recorded on a WorkerReport when the worker body raises before a process runs."""
 
 TOOL_PROFILE_READONLY: str = "readonly"
 """Tool profile that removes write, edit, and shell tools from the worker."""
