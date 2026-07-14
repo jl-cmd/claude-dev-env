@@ -28,7 +28,16 @@ Plain `codex review` is a non-interactive review form. It is **not** the skill c
 | `--title <TITLE>` | Review title |
 | `--enable` / `--disable <FEATURE>` | Feature toggles |
 
-Exactly one target among `PROMPT`, `--uncommitted`, `--base`, and `--commit`. The same target flags apply under `codex exec … review`.
+Exactly one target among `PROMPT`, `--uncommitted`, `--base`, and `--commit`. The four targets are mutually exclusive: a flag target never carries a positional `[PROMPT]`, and the custom-instructions text is itself the fourth target (PROMPT mode only). The same target flags apply under `codex exec … review`.
+
+Observed rejection when a flag target is combined with `[PROMPT]` (fixture: `codex` 0.144.3):
+
+```text
+error: the argument '--uncommitted' cannot be used with '[PROMPT]'
+Usage: codex exec review --json --uncommitted [PROMPT]
+```
+
+Exit code 2.
 
 ### `codex exec`
 
@@ -80,13 +89,49 @@ Each bullet is followed by an explanation paragraph. Priority tags use the `[P1]
 
 ## Failure classes
 
-All observed failures classify as `codex_down`.
+All observed CLI failures map to wrapper `outcome_class=codex_down`.
 
 | Class | Exit | Stream | Observed message shape |
 |---|---|---|---|
 | `codex_down` | 1 | Plain text on stderr; no JSONL | Config-load rejection, e.g. `Error loading config.toml: unknown variant 'default', expected 'fast' or 'flex' in 'service_tier'` |
 | `codex_down` | 1 | JSONL on stdout | `error` event whose message embeds a 400 `invalid_request_error` JSON (`The '<model>' model is not supported when using Codex with a ChatGPT account.` / `The '<model>' model requires a newer version of Codex.`), then `item.completed` `agent_message` `Review was interrupted...`, then `turn.failed` repeating the embedded error |
 | `codex_down` | 2 | Usage text on stderr; no JSONL | Argument / CLI parse error (e.g. unexpected option after `review`) |
+
+## Wrapper capture boundary
+
+Entrypoint: `scripts/run_codex_review.py` → `run_codex_review(...)`.
+
+The wrapper is **capture only**. It returns one of two classes:
+
+| Wrapper class | Meaning |
+|---|---|
+| `completed` | Review process exited 0; JSONL stream written under `run_state_directory` |
+| `codex_down` | Binary missing, timeout, decode failure, shape miss, or non-zero review exit |
+
+Skill-level classes `down` / `clean` / `findings` are **not** produced here. The skill (Step 4) maps:
+
+| Skill class | Source |
+|---|---|
+| `down` | Wrapper `codex_down` |
+| `clean` | Wrapper `completed` and findings parse empty |
+| `findings` | Wrapper `completed` and findings parse non-empty |
+
+### Capture fields
+
+| Field | Role |
+|---|---|
+| `outcome_class` | Success signal for the capture boundary (`completed` / `codex_down`) |
+| `exit_code` | Process status only (or a sentinel). May be `0` while `outcome_class` is `codex_down` (shape probe exits 0 but required flags are missing) |
+| `binary_version` | Parsed `codex --version` string, or empty |
+| `jsonl_path` | Path to captured stdout JSONL, or `None` when review did not run |
+| `agent_message` | Last JSONL `agent_message` text when present; on non-zero review exit, falls back to stderr when JSONL has no agent message |
+
+### Caller contracts
+
+- Create `run_state_directory` before calling the wrapper; the wrapper writes `codex-review.jsonl` into that directory and does not create parents.
+- A missing `repository_directory` or `run_state_directory` raises `ValueError`. Both are checked before any Codex process starts, so a bad path costs no review run.
+- Treat `outcome_class` as the capture success signal; do not treat `exit_code == 0` alone as success.
+- `codex-review.jsonl` holds the stream's own line endings, so the captured file matches the bytes Codex wrote to stdout.
 
 ## Skill classification map
 
@@ -106,19 +151,22 @@ Skill steps and loop re-entry use three skill-level classes. This page's raw CLI
 
 ## Probe
 
-Probe command: `codex exec review --help`.
+Probe command: `codex exec review --help`. The wrapper probes this help surface and treats any unrecognized shape as `codex_down`.
 
 ### Minimum shape signals
 
-The help text must include each of these greppable tokens:
+The `review` subcommand is proven by the probe itself: a CLI without it exits non-zero on `codex exec review --help`, which is already a `codex_down` signal.
+
+The help text must then include each of these four flags as a **whole token** (not a mere substring of a longer flag name):
 
 | Signal | Role |
 |---|---|
-| `review` | Subcommand present under `codex exec` |
 | `--uncommitted` | Staged + unstaged + untracked target |
 | `--base` | Base-branch target |
 | `--commit` | Commit-SHA target |
 | `--json` | JSONL event stream on stdout |
+
+Longer lookalikes (`--baseline`, `--uncommitted-only`, `--commit-message`) do not satisfy the required target flags.
 
 ### Fail-closed rule
 

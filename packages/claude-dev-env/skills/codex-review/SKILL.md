@@ -21,7 +21,7 @@ Respond with the quoted line exactly and stop:
 
 - Opt-out gate exit 0: `/codex-review is disabled via CLAUDE_REVIEWS_DISABLED.`
 - Version or shape probe reports Codex unavailable: `/codex-review cannot run: Codex CLI is missing or the shape probe failed.`
-- Classification is `down`: `/codex-review cannot complete: Codex reviewer is down.`
+- Skill class is `down` (wrapper `outcome_class` is `codex_down`): `/codex-review cannot complete: Codex reviewer is down.`
 
 Gate exits other than 0 or 1 are blockers: stop without a probe or review invoke. Do not invent an opt-out refusal for a non-opt-out failure.
 
@@ -79,22 +79,25 @@ Do not invent a synthetic commit range when a base branch is available. Loop-cal
 
 ### Step 3: Run classifying review
 
-Run Codex against the chosen target on the classifying path only.
+Call `scripts/run_codex_review.py` (`run_codex_review`) against the chosen target on the classifying path.
 
 - **Classifying command:** `codex exec [options] review --json …` — this is the only path that emits the success JSONL stream Step 4 reads. Full surface: [reference/cli-contract.md](reference/cli-contract.md).
 - **Non-classifying form:** plain `codex review` (no `exec`, no `--json`) is not a classification input on the observed CLI; do not feed its stdout into Step 4.
-- **`scripts/` surface:** this package's `scripts/` directory holds named constants only. The headless wrapper entrypoint is sister work and is not present here.
-- **Interim classify path:** agents classify only from the `codex exec … review --json` JSONL stream via the skill-class map in Step 4. Do not invent a non-JSONL parse. Fail closed on probe miss, non-usable stream, or `codex_down`.
+- **Contract owner:** [reference/cli-contract.md](reference/cli-contract.md) — wrapper entrypoint, required arguments (target, repo root, run-state directory), capture fields, and exit codes.
+- **Wrapper boundary (capture only):** returns `completed` or `codex_down`, plus `exit_code`, `binary_version`, `jsonl_path`, and `agent_message`. It does not emit skill classes `down` / `clean` / `findings` and does not parse findings.
+- **This skill's job:** pass the Step 2 target, ensure `run_state_directory` exists, and hand the capture outcome to Step 4. Do not parse raw Codex stdout inline outside the documented parser path. Fail closed on probe miss, non-usable stream, or `codex_down`.
 
 ### Step 4: Classify outcome
 
-Map the JSONL observation to exactly one skill-level class:
+Map the wrapper capture (and its JSONL observation) to exactly one skill-level class:
 
-| Class | Meaning | Next action |
-|---|---|---|
-| `down` | Codex did not produce a usable review (tool failure, auth, crash) | Refuse with the down line; stop |
-| `clean` | Review completed with no findings against the target | Report one-line clean summary; stop |
-| `findings` | Review completed with one or more addressable findings | Continue to Step 5 |
+| Skill class | From wrapper | Meaning | Next action |
+|---|---|---|---|
+| `down` | `outcome_class == codex_down` | Codex did not produce a usable review (tool failure, auth, crash, shape miss) | Refuse with the down line; stop |
+| `clean` | `outcome_class == completed` and findings parse empty | Review completed with no findings against the target | Report one-line clean summary; stop |
+| `findings` | `outcome_class == completed` and findings parse non-empty | Review completed with one or more addressable findings | Continue to Step 5 |
+
+`outcome_class` is the capture success signal. A process `exit_code` of 0 does not mean success when the wrapper already set `codex_down` (for example a shape probe that exits 0 but lacks required flags).
 
 #### Skill class ↔ CLI observation map
 
@@ -104,7 +107,7 @@ Map the JSONL observation to exactly one skill-level class:
 | `clean` | Success stream (exit 0 JSONL) with no finding bullets in the `agent_message` body | Usable review, zero addressable findings |
 | `findings` | Success stream (exit 0 JSONL) whose `agent_message` carries one or more `- [P#] …` bullets | Usable review with addressable findings |
 
-Raw CLI failure vocabulary is `codex_down` only ([reference/cli-contract.md](reference/cli-contract.md)). Skill steps and loop re-entry use `down` / `clean` / `findings`.
+Raw CLI failure vocabulary is `codex_down` only ([reference/cli-contract.md](reference/cli-contract.md)). Skill steps and loop re-entry use `down` / `clean` / `findings`. Classification rules, findings parse, and payload fields live in [reference/cli-contract.md](reference/cli-contract.md).
 
 ### Step 5: Route findings into the shared fix protocol
 
@@ -143,9 +146,9 @@ Claude: [same flow; after findings, applies pr-fix-protocol, then re-runs the cl
 
 ## Gotchas
 
-- **Opt-out uses `CLAUDE_REVIEWS_DISABLED=codex`.** Step 0 exit 0 means refuse with the opt-out line; exit 1 means continue; any other exit is a blocker.
+- **Opt-out uses `CLAUDE_REVIEWS_DISABLED=codex`.** Step 0 exit 0 means refuse with the opt-out line; exit 1 means continue; any other exit is a blocker. The shared gate must list `codex` among known reviewers for Step 0 to accept the flag.
 - **Only `codex exec … review --json` JSONL is classifiable.** Plain `codex review` stdout is non-classifying. Only a Step 4 `findings` class enters Step 5.
-- **`scripts/` holds constants only.** The headless wrapper entrypoint is sister work; agents do not invent a non-JSONL parse in this package.
+- **Wrapper capture is not skill classification.** Step 5 consumes the skill-class payload from Step 4 (`down` / `clean` / `findings`), built from the wrapper's capture fields and the findings parse.
 - **Uncommitted targets have no review threads.** Fix protocol reply-and-resolve applies only when a PR carries threads; local-only runs stop after the fix commit path the protocol allows without a PR.
 
 ## File index
@@ -154,13 +157,15 @@ Claude: [same flow; after findings, applies pr-fix-protocol, then re-runs the cl
 |---|---|
 | `SKILL.md` | Hub: opt-out, probe, target, classifying review, classify, fix handoff |
 | `CLAUDE.md` | Package map for agents opening this skill |
-| `reference/cli-contract.md` | Observed CLI surface, probe signals, `codex_down`, skill-class map |
+| `reference/cli-contract.md` | Observed CLI surface, wrapper capture, probe signals, skill-class map |
 | `reference/loop-integration.md` | PR-loop target pick and re-entry after fixes |
-| `scripts/codex_review_scripts_constants/` | Named constants only (wrapper entrypoint is sister work) |
+| `scripts/run_codex_review.py` | Headless capture wrapper (`run_codex_review`) |
+| `scripts/test_run_codex_review.py` | Behavioral tests for the capture wrapper |
+| `scripts/codex_review_scripts_constants/run_constants.py` | Importable named constants for the capture wrapper |
 
 ## Folder map
 
 - `SKILL.md` — orchestration steps and refusals.
 - `CLAUDE.md` — purpose, trigger, key files.
-- `reference/` — cli-contract and loop-integration detail.
-- `scripts/codex_review_scripts_constants/` — importable constants package (no wrapper entrypoint here).
+- `reference/` — stable homes for cli-contract and loop-integration detail.
+- `scripts/` — capture wrapper, tests, and constants package.

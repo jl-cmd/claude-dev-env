@@ -127,24 +127,23 @@ def test_cli_contract_probe_lists_minimum_shape_signals() -> None:
     assert "`review`" in cli_contract_text
 
 
-def test_scripts_surface_is_constants_only_wrapper_is_sister_work() -> None:
+def test_scripts_surface_names_capture_wrapper_and_constants() -> None:
     skill_text = _read_skill_text()
     package_map_text = PACKAGE_MAP_PATH.read_text(encoding="utf-8")
     constants_map_text = (
         SKILL_DIRECTORY / "scripts" / "codex_review_scripts_constants" / "CLAUDE.md"
     ).read_text(encoding="utf-8")
+    wrapper_path = SKILL_DIRECTORY / "scripts" / "run_codex_review.py"
 
-    assert (
-        "constants only" in skill_text.lower() or "Named constants only" in skill_text
-    )
-    assert "sister work" in skill_text.lower()
-    assert "non-JSONL" in skill_text or "non-jsonl" in skill_text.lower()
-    assert "sister work" in package_map_text.lower()
-    assert (
-        "constants only" in package_map_text.lower()
-        or "Named constants only" in package_map_text
-    )
-    assert "sister work" in constants_map_text.lower()
+    assert wrapper_path.is_file()
+    assert "run_codex_review.py" in skill_text
+    assert "run_codex_review.py" in package_map_text
+    assert "capture only" in skill_text.lower() or "capture-only" in skill_text.lower()
+    assert "completed" in skill_text
+    assert "codex_down" in skill_text
+    assert "non-classifying" in skill_text.lower()
+    assert "run_constants.py" in constants_map_text
+    assert "run_codex_review.py" in constants_map_text
 
 
 def test_uncommitted_includes_untracked() -> None:

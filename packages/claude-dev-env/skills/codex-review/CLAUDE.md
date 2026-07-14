@@ -4,23 +4,25 @@ Runs OpenAI Codex as a local PR or uncommitted-diff reviewer: opt-out gate, vers
 
 ## Purpose
 
-One Codex review pass per invocation. The skill owns sequence and skill-level classification (`down` / `clean` / `findings`) from the exec+JSONL stream. Shared peers own opt-out parsing (`reviews_disabled.py` / `reviewer-gates`) and the fix sequence (`pr-fix-protocol`). Observed raw CLI surface, probe signals, and `codex_down` failure classes live under `reference/cli-contract.md`; PR-loop wiring lives under `reference/loop-integration.md`.
+One Codex review pass per invocation. The skill owns sequence and skill-level classification (`down` / `clean` / `findings`). The headless wrapper is capture-only (`completed` / `codex_down` plus raw fields). Shared peers own opt-out parsing (`reviews_disabled.py` / `reviewer-gates`) and the fix sequence (`pr-fix-protocol`). Observed raw CLI surface, wrapper capture contract, probe signals, and classification map live under `reference/cli-contract.md`; PR-loop wiring lives under `reference/loop-integration.md`.
 
 ## Key files
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Flow: opt-out → probe → target → classifying review → classify → fix handoff; refusals; sub-skills table; ground rules. |
-| `reference/cli-contract.md` | Observed Codex CLI review surface: classifying `codex exec … review --json` path, non-classifying plain `codex review`, success JSONL stream, finding-bullet format, `codex_down` failure classes, auth, minimum probe signals, and the skill-class map. |
+| `SKILL.md` | Flow skeleton: opt-out → probe → target → wrapper → classify → fix handoff; refusals; sub-skills table; ground rules. |
+| `reference/cli-contract.md` | Observed CLI surface, wrapper capture (`completed` / `codex_down`), probe signals, skill classes (`down` / `clean` / `findings`). |
 | `reference/loop-integration.md` | Base-branch vs `--uncommitted` (staged + unstaged + untracked) target pick; re-entry after a fix push; skill-class vocabulary for orchestrators. |
-| `scripts/codex_review_scripts_constants/` | Named constants only. The headless wrapper entrypoint is sister work. |
+| `scripts/run_codex_review.py` | Headless capture wrapper: probes, single-target argv, JSONL capture, `completed` / `codex_down`. |
+| `scripts/test_run_codex_review.py` | Behavioral tests for `run_codex_review`. |
+| `scripts/codex_review_scripts_constants/run_constants.py` | Named constants package for skill scripts: binary name, flags, prompt, probe pattern, timeout, exit sentinels, JSONL keys, capture outcome labels. |
 
 ## Subdirectories
 
 | Directory | Role |
 |---|---|
 | `reference/` | Progressive-disclosure pages for cli-contract and loop-integration. |
-| `scripts/` | Constants package only; no wrapper entrypoint in this package. |
+| `scripts/` | Capture wrapper, tests, and constants package. |
 
 ## Environment opt-out
 
@@ -36,4 +38,4 @@ Set `CLAUDE_REVIEWS_DISABLED=codex` to disable. This package does not re-parse `
 
 ## Scripts surface
 
-`scripts/` holds named constants only. The headless wrapper entrypoint is sister work. Agents classify only from a `codex exec … review --json` JSONL stream via the skill-class map; do not invent a non-JSONL parse.
+`scripts/` holds the capture wrapper (`run_codex_review.py`), its tests, and named constants. The wrapper returns capture fields only (`completed` / `codex_down`); agents map those fields to skill classes via the skill-class map. Classify only from a `codex exec … review --json` JSONL stream; do not invent a non-JSONL parse.
