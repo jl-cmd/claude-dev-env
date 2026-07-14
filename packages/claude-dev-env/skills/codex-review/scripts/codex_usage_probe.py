@@ -27,6 +27,7 @@ never blocks on missing data. Require review only when
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -145,9 +146,14 @@ def _format_resets_at(raw_resets_at: object) -> str | None:
     if isinstance(raw_resets_at, bool):
         return None
     if isinstance(raw_resets_at, (int, float)):
-        return datetime.fromtimestamp(
-            float(raw_resets_at), tz=timezone.utc
-        ).isoformat()
+        if not math.isfinite(raw_resets_at):
+            return None
+        try:
+            return datetime.fromtimestamp(
+                float(raw_resets_at), tz=timezone.utc
+            ).isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
     if isinstance(raw_resets_at, str):
         stripped = raw_resets_at.strip()
         return stripped or None
@@ -159,6 +165,8 @@ def _window_used_percent(all_window_fields: Mapping[str, object]) -> float | Non
     if isinstance(raw_used_percent, bool):
         return None
     if isinstance(raw_used_percent, (int, float)):
+        if not math.isfinite(raw_used_percent):
+            return None
         return float(raw_used_percent)
     return None
 
@@ -170,6 +178,8 @@ def _window_duration_minutes(
     if isinstance(raw_duration, bool):
         return None
     if isinstance(raw_duration, (int, float)):
+        if not math.isfinite(raw_duration):
+            return None
         return int(raw_duration)
     return None
 

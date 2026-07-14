@@ -448,7 +448,7 @@ test('resolveCopilotDown clears the bypass for a retry outcome', () => {
   assert.equal(resolveCopilotDown({ kind: 'retry' }), false);
 });
 
-test('the standards-only Copilot sub-path resets copilotDown before FINALIZE', () => {
+test('the standards-only Copilot sub-path resets copilotDown before CODEX', () => {
   const standardsBranchStart = convergeSource.indexOf(
     'isStandardsOnlyRound(roundFindings)',
   );
