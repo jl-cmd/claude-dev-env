@@ -97,7 +97,8 @@ def _try_parse_structured_findings(reviewer_text: str) -> list[CodexFinding] | N
             if not isinstance(each_entry, dict):
                 continue
             all_findings.append(_finding_from_structured_fields(each_entry))
-        return all_findings
+        if all_findings or not parsed_payload:
+            return all_findings
     return None
 
 
