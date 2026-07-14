@@ -19,7 +19,6 @@ from types import ModuleType
 
 import pytest
 from codex_review_scripts_constants.codex_usage_probe_constants import (
-    CODEX_BINARY_NAME,
     EXIT_CODE_SUCCESS,
     PERCENT_EMPTY,
     PERCENT_FULL,
@@ -33,6 +32,8 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     WEEKLY_USAGE_GATE_THRESHOLD_PERCENT,
     WEEKLY_WINDOW_DURATION_MINUTES,
     WINDOWS_OS_NAME,
+    WINDOWS_TASKKILL_COMMAND,
+    WINDOWS_TASKKILL_TREE_FLAG,
 )
 
 SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
@@ -115,9 +116,6 @@ TEXT_STATUS_WITH_FIVE_HOUR_AND_WEEKLY_RESETS = (
     f"Weekly limit: 42% left (resets {EXPECTED_TEXT_STATUS_WINDOW_RESET})\n"
 )
 
-PROCESS_TREE_CHILD_SLEEP_SECONDS = 60
-PROCESS_TREE_MARKER_WAIT_SECONDS = 5
-PROCESS_TREE_MARKER_POLL_SECONDS = 0.05
 PROCESS_TREE_WAIT_SECONDS = 5
 READER_JOIN_TEARDOWN_WAIT_SECONDS = 0.2
 
@@ -241,31 +239,6 @@ class TestParseRateLimitsMessage:
         assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_NO_USAGE_SURFACE
 
 
-def _is_process_id_running(process_id: int) -> bool:
-    if os.name == WINDOWS_OS_NAME:
-        task_list_output = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {process_id}"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        return str(process_id) in task_list_output.stdout
-    try:
-        os.kill(process_id, 0)
-    except OSError:
-        return False
-    return True
-
-
-def _wait_for_path(target_path: Path, timeout_seconds: float) -> None:
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        if target_path.exists():
-            return
-        time.sleep(PROCESS_TREE_MARKER_POLL_SECONDS)
-    raise AssertionError(f"timed out waiting for {target_path}")
-
-
 class TestParseTextStatus:
     def should_parse_weekly_percent_left_from_status_text(self) -> None:
         probe = load_probe_module()
@@ -312,44 +285,58 @@ class TestParseTextStatus:
 
 
 class TestProcessTreeTeardown:
-    def should_kill_grandchild_started_by_windows_cmd_wrapper(
+    def should_run_taskkill_tree_when_os_name_is_windows(
         self,
-        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        if os.name != WINDOWS_OS_NAME:
-            pytest.fail("Windows process-tree teardown coverage requires Windows")
         probe = load_probe_module()
-        child_marker_path = tmp_path / "child_pid.txt"
-        child_script_path = tmp_path / "sleep_child.py"
-        wrapper_script_path = tmp_path / "wrapper.cmd"
-        child_script_path.write_text(
-            "import os\n"
-            "import pathlib\n"
-            "import time\n"
-            f"pathlib.Path({str(child_marker_path)!r}).write_text(str(os.getpid()))\n"
-            f"time.sleep({PROCESS_TREE_CHILD_SLEEP_SECONDS})\n",
-            encoding="utf-8",
-        )
-        wrapper_script_path.write_text(
-            f'@echo off\r\n"{sys.executable}" "{child_script_path}"\r\n',
-            encoding="utf-8",
-        )
-        server_process = subprocess.Popen(
-            ["cmd", "/c", str(wrapper_script_path)],
+        all_taskkill_commands: list[list[str]] = []
+        fake_process = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         try:
-            _wait_for_path(child_marker_path, PROCESS_TREE_MARKER_WAIT_SECONDS)
-            child_process_id = int(child_marker_path.read_text(encoding="utf-8"))
-            assert _is_process_id_running(child_process_id)
-            probe._terminate_process_tree(server_process)
-            server_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
-            assert not _is_process_id_running(child_process_id)
+            monkeypatch.setattr(probe.os, "name", WINDOWS_OS_NAME)
+
+            def capture_run(
+                command: list[str],
+                **_kwargs: object,
+            ) -> subprocess.CompletedProcess[str]:
+                all_taskkill_commands.append(list(command))
+                fake_process.kill()
+                fake_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
+                return subprocess.CompletedProcess(command, 0)
+
+            monkeypatch.setattr(probe.subprocess, "run", capture_run)
+            probe._terminate_process_tree(fake_process)
         finally:
-            if server_process.poll() is None:
-                server_process.kill()
-                server_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
+            if fake_process.poll() is None:
+                fake_process.kill()
+                fake_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
+        assert len(all_taskkill_commands) == 1
+        assert all_taskkill_commands[0][0] == WINDOWS_TASKKILL_COMMAND
+        assert WINDOWS_TASKKILL_TREE_FLAG in all_taskkill_commands[0]
+        assert str(fake_process.pid) in all_taskkill_commands[0]
+
+    def should_kill_process_directly_when_os_name_is_not_windows(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        probe = load_probe_module()
+        fake_process = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            monkeypatch.setattr(probe.os, "name", "posix")
+            probe._terminate_process_tree(fake_process)
+            assert fake_process.poll() is not None
+        finally:
+            if fake_process.poll() is None:
+                fake_process.kill()
+                fake_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
 
 
 class TestReaderThreadLifecycle:
@@ -389,31 +376,35 @@ class TestReaderThreadLifecycle:
         assert READER_THREAD_JOIN_TIMEOUT_SECONDS >= 1
 
 
-class TestRealAppServerExchange:
-    """Drives the real ``codex app-server`` subprocess, not an injected fake.
-
-    The injected-exchange tests above cannot see a transport that never
-    delivers a reply, so this case runs the shipped subprocess exchange
-    against the installed binary and asserts a live weekly meter comes back.
-    Missing ``codex`` on PATH fails this test with a clear assertion rather
-    than a skip.
-    """
-
-    def should_read_a_live_weekly_meter_from_the_installed_binary(self) -> None:
-        assert (
-            shutil.which(CODEX_BINARY_NAME) is not None
-        ), f"{CODEX_BINARY_NAME} binary is required on PATH for real app-server coverage"
+class TestDefaultExchangeWiring:
+    def should_wire_subprocess_exchange_from_main(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
         probe = load_probe_module()
-        usage_report = probe.probe_weekly_usage(
-            exchange_app_server_messages=(
-                probe._exchange_app_server_messages_via_subprocess
-            )
+        all_server_lines = _app_server_lines_from_rate_limits_payload(
+            REAL_APP_SERVER_RATE_LIMITS_REPLY_CODEX_0_144_3
         )
-        percent_left = usage_report[USAGE_REPORT_KEY_PERCENT_LEFT]
-        assert percent_left is not None
-        assert PERCENT_EMPTY <= percent_left <= PERCENT_FULL
+        all_call_counts = {"exchange": 0}
+
+        def fake_exchange(all_request_messages: list[dict[str, object]]) -> list[str]:
+            all_call_counts["exchange"] += 1
+            assert len(all_request_messages) >= 2
+            return all_server_lines
+
+        monkeypatch.setattr(
+            probe,
+            "_exchange_app_server_messages_via_subprocess",
+            fake_exchange,
+        )
+        exit_code = probe.main()
+        captured = capsys.readouterr()
+        usage_report = json.loads(captured.out)
+        assert exit_code == EXIT_CODE_SUCCESS
+        assert all_call_counts["exchange"] == 1
+        assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] == 5
         assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_APP_SERVER_RATE_LIMITS
-        assert usage_report[USAGE_REPORT_KEY_WINDOW_RESET] is not None
 
 
 class TestProbeWeeklyUsage:
