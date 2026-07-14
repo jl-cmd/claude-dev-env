@@ -139,8 +139,10 @@ any bot threads with a deferral note, and reports the deferral in
 - Usage at/below threshold or null → skip with no stamp; the machine checklist
   applies the same rule.
 - Above threshold → run the codex-review wrapper against the PR base branch.
-  Findings → fix and return to CONVERGE. Clean → stamp `codexCleanAt` and pass
-  `--codex-clean-at` into the convergence check.
+  Non–code-standard findings → fix and return to CONVERGE.
+  Standards-only findings → defer a follow-up, stamp `codexCleanAt`, and move to the
+  convergence check (no fix push).
+  Clean → stamp `codexCleanAt` and pass `--codex-clean-at` into the convergence check.
 
 **Convergence check**:
 

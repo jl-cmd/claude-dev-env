@@ -276,8 +276,8 @@ test('the Copilot gate prompt tiers each finding and returns the review URL', ()
 
 test('the COPILOT phase returns blocker user-review only when inconclusive findings remain after verification, carrying the verifier-noted payload with no auto-fix in the branch', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
-  const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", copilotPhaseStart);
-  const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
+  const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {", copilotPhaseStart);
+  const copilotPhase = convergeSource.slice(copilotPhaseStart, codexPhaseStart);
   const userReviewGuardStart = copilotPhase.indexOf('inconclusive.length > 0');
   assert.notEqual(userReviewGuardStart, -1, 'expected the user-review return to be guarded by inconclusive.length > 0');
   const userReviewBranch = copilotPhase.slice(userReviewGuardStart, userReviewGuardStart + 600);
@@ -296,8 +296,8 @@ test('the COPILOT phase returns blocker user-review only when inconclusive findi
 
 test('the COPILOT phase awaits verifyCodeConcernFindings exactly once, inside the code-concern guard', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
-  const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", copilotPhaseStart);
-  const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
+  const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {", copilotPhaseStart);
+  const copilotPhase = convergeSource.slice(copilotPhaseStart, codexPhaseStart);
   const guardStart = copilotPhase.indexOf('if (codeConcern.length > 0)');
   assert.notEqual(guardStart, -1, 'expected the verification to sit behind a codeConcern.length > 0 guard');
   const verifyCalls = convergeSource.match(/await verifyCodeConcernFindings\(/g) || [];
@@ -308,8 +308,8 @@ test('the COPILOT phase awaits verifyCodeConcernFindings exactly once, inside th
 
 test('the all-refuted / empty-roundFindings COPILOT path advances to CODEX with the gate passed', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
-  const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", copilotPhaseStart);
-  const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
+  const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {", copilotPhaseStart);
+  const copilotPhase = convergeSource.slice(copilotPhaseStart, codexPhaseStart);
   const emptyRoundStart = copilotPhase.indexOf('roundFindings.length === 0');
   assert.notEqual(emptyRoundStart, -1, 'expected the COPILOT phase to handle an empty roundFindings set after verification');
   const emptyRoundBranch = copilotPhase.slice(emptyRoundStart, emptyRoundStart + 300);
@@ -319,8 +319,8 @@ test('the all-refuted / empty-roundFindings COPILOT path advances to CODEX with 
 
 test('the COPILOT phase folds confirmed findings through attachVerifiedRepro into the round fix list', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
-  const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", copilotPhaseStart);
-  const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
+  const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {", copilotPhaseStart);
+  const copilotPhase = convergeSource.slice(copilotPhaseStart, codexPhaseStart);
   assert.match(
     copilotPhase,
     /roundFindings = \[\.\.\.selfHealing, \.\.\.confirmed\.map\(\(each\) => attachVerifiedRepro\(each\)\)\]/,
@@ -480,12 +480,12 @@ test('the standards-only Copilot sub-path resets copilotDown before CODEX', () =
 test('the COPILOT phase recomputes copilotDown from each gate outcome via resolveCopilotDown', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
   assert.notEqual(copilotPhaseStart, -1, 'expected a COPILOT phase block');
-  const finalizePhaseStart = convergeSource.indexOf(
-    "if (phase === 'FINALIZE') {",
+  const codexPhaseStart = convergeSource.indexOf(
+    "if (phase === 'CODEX') {",
     copilotPhaseStart,
   );
-  assert.notEqual(finalizePhaseStart, -1, 'expected a FINALIZE phase block after COPILOT');
-  const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
+  assert.notEqual(codexPhaseStart, -1, 'expected a CODEX phase block after COPILOT');
+  const copilotPhase = convergeSource.slice(copilotPhaseStart, codexPhaseStart);
   assert.match(
     copilotPhase,
     /copilotDown = resolveCopilotDown\(copilotOutcome\)/,
@@ -588,7 +588,7 @@ test('a copilotDisabled run reaches CODEX with --copilot-down', () => {
   assert.match(
     convergenceCheckBody,
     /context\.copilotDown \? ' --copilot-down' : ''/,
-    'expected the convergence check to pass --copilot-down when the bypassed copilotDown reaches FINALIZE',
+    'expected the convergence check to pass --copilot-down when the bypassed copilotDown reaches FINALIZE via CODEX',
   );
 });
 

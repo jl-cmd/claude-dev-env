@@ -92,8 +92,9 @@ Each reviewer-down condition below skips its own convergence-check gate. The fla
   null or at/below the shared threshold (`is_codex_review_required` false), the
   gate skips without a stamp; the convergence check applies the same rule. When
   the wrapper classifies `codex_down`, the gate sets `codexDown` and advances.
-  A clean required run stamps `codexCleanAt` for `--codex-clean-at`. Findings
-  re-enter CONVERGE through the existing fix path.
+  A clean required run stamps `codexCleanAt` for `--codex-clean-at`. Non-code-standard
+  findings re-enter CONVERGE through the existing fix path. Standards-only findings
+  defer a follow-up, stamp `codexCleanAt`, and advance to FINALIZE (no fix push).
 - **A lens agent dies** — when one parallel reading lens returns null (a terminal
   agent failure), the round proceeds on the surviving lenses. A real defect it
   would have caught surfaces in a later round or at the convergence check. A dead
