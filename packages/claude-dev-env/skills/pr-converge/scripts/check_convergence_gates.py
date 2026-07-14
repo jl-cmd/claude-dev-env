@@ -73,7 +73,10 @@ def _get_pr_head_sha(*, owner: str, repo: str, number: int) -> str:
         raise SystemExit(EXIT_CODE_GH_ERROR) from None
     if not isinstance(pr_object, dict):
         raise SystemExit(EXIT_CODE_GH_ERROR)
-    head_sha: object = pr_object.get("head", {}).get("sha")
+    head_object = pr_object.get("head")
+    if not isinstance(head_object, dict):
+        raise SystemExit(EXIT_CODE_GH_ERROR)
+    head_sha: object = head_object.get("sha")
     if not isinstance(head_sha, str):
         raise SystemExit(EXIT_CODE_GH_ERROR)
     return head_sha
