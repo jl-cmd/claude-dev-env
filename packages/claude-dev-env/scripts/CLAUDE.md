@@ -11,7 +11,6 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `grok_worker_preflight.py` | Static soft gate that decides whether the headless grok tier is usable: resolves the `grok` binary on PATH, probes auth with `grok models`, and confirms `claude-dev-env` is installed for a role; an opt-in `--ping` runs one cached live single-turn call. A non-zero exit signals callers to fall through to the next tier |
 | `grok_headless_runner.py` | Runs one worker role as a headless `grok` process: builds the headless argv, mints a unique per-invocation `--leader-socket` path under the run-state directory, captures stdout/stderr/returncode, kills the process on timeout, and classifies the outcome as ok, usage limit, auth failure, timeout, or error. Import `run_headless_worker` for the outcome object |
 | `resolve_worker_spawn.py` | Dispatches a worker role through the grok headless tier and a claude fallback, printing a structured JSON outcome that names the tier that served the call and the ordered tier attempts; usable as an imported module (`resolve_worker_spawn`) or a CLI |
-
 | `setup_project_paths.py` | One-time bootstrap: discovers git repos via `es.exe` (Everything) and writes `~/.claude/project-paths.json`; never hardcodes scan roots |
 | `sweep_empty_dirs.py` | Deletes empty directories older than a configurable age under a given root; runs once (`--once`) or in continuous-watch mode |
 | `sync_to_cursor.py` | Entry point for syncing Claude rules to Cursor `.mdc` files; delegates to the `sync_to_cursor/` package |

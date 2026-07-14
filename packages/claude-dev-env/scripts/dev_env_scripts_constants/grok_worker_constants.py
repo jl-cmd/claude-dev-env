@@ -105,35 +105,39 @@ CLI_RUN_STATE_DIR_FLAG: str = "--run-temp-dir"
 """CLI flag naming the run-scoped state directory for sockets and the ping cache."""
 
 UTF8_ENCODING: str = "utf-8"
-UTF8_DECODE_ERRORS: str = "replace"
 """Encoding used for subprocess text mode and the ping cache file."""
 
+UTF8_DECODE_ERRORS: str = "replace"
+"""``errors=`` value for subprocess text decode so invalid bytes never yield None streams."""
+
 ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
-    "429",
+    "http 429",
+    "status 429",
     "rate limit",
-    "credit",
-    "quota",
+    "quota exceeded",
+    "insufficient credit",
     "usage limit",
     "out of usage",
-    "quota exceeded",
     "usage exhausted",
 )
-"""Case-insensitive substrings that mark a non-zero exit as a usage-limit failure."""
+"""Case-insensitive phrase signatures that mark a non-zero exit as a usage-limit failure."""
 
 ALL_USAGE_EXHAUSTION_SIGNATURES: tuple[str, ...] = ALL_USAGE_LIMIT_SIGNATURES
 """Alias used by the preflight soft gate for the same usage-limit signatures."""
 
 ALL_AUTH_FAILURE_SIGNATURES: tuple[str, ...] = (
-    "401",
+    "http 401",
+    "status 401",
     "unauthorized",
     "invalid key",
     "not logged in",
     "unauthenticated",
     "authentication failed",
+    "not authenticated",
     "please log in",
     "login required",
 )
-"""Case-insensitive substrings that mark a non-zero completion as an auth failure."""
+"""Case-insensitive phrase signatures that mark a non-zero completion as an auth failure."""
 
 PROMPT_FILE_FLAG: str = "--prompt-file"
 """CLI flag that points grok at a prompt file for headless single-turn work."""
@@ -186,12 +190,20 @@ DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
 
+LAUNCH_FAILURE_RETURN_CODE: int = -2
+"""Return code when the grok process cannot be launched (permission, other OSError)."""
+
+LAUNCH_FAILURE_STDERR_PREFIX: str = "failed to launch: "
+"""Prefix for the non-empty stderr diagnostic returned on a launch OSError."""
+
+KILL_GRACE_TIMEOUT_SECONDS: int = 10
+"""Seconds to wait for a killed process to reap its pipes before giving up on its streams."""
+
 MISSING_BINARY_RETURN_CODE: int = 127
 """Return code recorded when the grok binary is not found on PATH."""
 
 GROK_BINARY_NOT_FOUND_STDERR: str = f"{GROK_BINARY_NAME} not found"
 """Stderr text returned when the grok binary cannot be resolved on PATH."""
-
 TIER_GROK: int = 1
 """Dispatcher tier number for the headless grok worker path."""
 
