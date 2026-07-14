@@ -1,5 +1,161 @@
 # Changelog
 
+## [2.0.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v1.95.0...claude-dev-env-v2.0.0) (2026-07-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* GROK_BUILD and ADVISOR_HOST_PROFILE=Grok are not accepted; there is no back-compat alias for the old names.
+
+### Features
+
+* **codex-review:** add weekly usage probe CLI ([8a634b3](https://github.com/jl-cmd/claude-dev-env/commit/8a634b3be418a8e091775244ca3792f3727180df))
+* **codex-review:** add weekly usage probe CLI ([e883c87](https://github.com/jl-cmd/claude-dev-env/commit/e883c875119e69a9cf4e4ce9af8668102a11deed))
+* **codex-review:** parse JSONL findings and down-classify failures ([2e01955](https://github.com/jl-cmd/claude-dev-env/commit/2e0195579f7886468f984dc5ae4a1a8baa85486f))
+* **codex-review:** parse JSONL findings and down-classify failures ([9664e1b](https://github.com/jl-cmd/claude-dev-env/commit/9664e1b8db7367300f75aaae0a5a88bb70cbf3a3))
+* **codex-review:** run_codex_review.py headless review wrapper ([8ef0848](https://github.com/jl-cmd/claude-dev-env/commit/8ef0848ae4072cb110bc83529d5faacd4824fa1f))
+* **codex-review:** run_codex_review.py headless review wrapper ([046ca1b](https://github.com/jl-cmd/claude-dev-env/commit/046ca1b01e1010986e467397a3c40765d4ffc65a))
+* **codex-review:** scaffold the skill package ([9e666ee](https://github.com/jl-cmd/claude-dev-env/commit/9e666eeda9bdf1fa3e224e5651781c9d6b784241))
+* **codex-review:** scaffold the skill package ([74cc86b](https://github.com/jl-cmd/claude-dev-env/commit/74cc86b691340e59626b8399f8e28dd0a345c861))
+* **grok-spawn:** add skill for headless grok worker fleets ([39dbdec](https://github.com/jl-cmd/claude-dev-env/commit/39dbdec8dc9948dc06c69883ba272f611de82997))
+* **grok-spawn:** add skill for headless grok worker fleets ([6ccb69e](https://github.com/jl-cmd/claude-dev-env/commit/6ccb69e30be39ef55c8d5d4d682bb2b3679f0d8b))
+* **pr-loop:** add codex reviewer opt-out token ([ff606fa](https://github.com/jl-cmd/claude-dev-env/commit/ff606fa042ab91be76f8ff1b63cb070bafa86515))
+* **pr-loop:** add codex reviewer opt-out token ([f33cf37](https://github.com/jl-cmd/claude-dev-env/commit/f33cf37bc7d1a16e945c8d480013ffd0c0bcbfe7))
+* **scripts:** add grok_headless_runner.py ([043f7bf](https://github.com/jl-cmd/claude-dev-env/commit/043f7bf083081a803e3a9e22211a1e132932bdb4))
+* **scripts:** add grok_headless_runner.py ([0648f0c](https://github.com/jl-cmd/claude-dev-env/commit/0648f0c090f24eb0b753abb522c66c870f7d7a2b))
+* **scripts:** add grok_headless_runner.py ([e748909](https://github.com/jl-cmd/claude-dev-env/commit/e74890957d2c028d005bce9be5b432ae9372a652))
+* **scripts:** add grok_worker_preflight.py static soft gate ([acb75ce](https://github.com/jl-cmd/claude-dev-env/commit/acb75ceb911e58d760a5268605adecbd2ac6cb9d))
+* **scripts:** add grok_worker_preflight.py static soft gate ([8df82c6](https://github.com/jl-cmd/claude-dev-env/commit/8df82c61524497623322bb646c3d1197f710a804))
+* **scripts:** add resolve_worker_spawn.py tier dispatcher ([056bcaa](https://github.com/jl-cmd/claude-dev-env/commit/056bcaaec049674d12b8eb8b04e3be968c5b1389))
+* **scripts:** add resolve_worker_spawn.py tier dispatcher ([8d4a675](https://github.com/jl-cmd/claude-dev-env/commit/8d4a675ac5dfd741836dad47f6e644cabd3641f6))
+* **scripts:** add spawn_grok_batch.py fleet launcher ([0b68fc1](https://github.com/jl-cmd/claude-dev-env/commit/0b68fc1c067b768e17197342cef47eb6494159db))
+* **scripts:** add spawn_grok_batch.py fleet launcher ([1ed1d75](https://github.com/jl-cmd/claude-dev-env/commit/1ed1d75ebca39f48224dac4f9ea9801261e7e9dd))
+
+
+### Bug Fixes
+
+* address review feedback on tdd_enforcer decisions ([d1917f1](https://github.com/jl-cmd/claude-dev-env/commit/d1917f1772b8136f4f94179d96f6b64201c8ab5a))
+* address review feedback on tdd_enforcer decisions ([b5ff308](https://github.com/jl-cmd/claude-dev-env/commit/b5ff308faab9cdb4b24c27c77c3535aab82b1938))
+* **codex-review,pr-converge:** resolve Windows codex path and fail-closed fixtures ([3198b18](https://github.com/jl-cmd/claude-dev-env/commit/3198b18f1bd85f38f75fbd4bc171a452b3213b17))
+* **codex-review:** align opt-out docs with live codex gate token ([59a9658](https://github.com/jl-cmd/claude-dev-env/commit/59a9658dd95288250332c9813f61bb0f78696e44))
+* **codex-review:** align scaffold docs and registration tests ([3428d09](https://github.com/jl-cmd/claude-dev-env/commit/3428d09de37c81599dfdaf738392b0d9eb9aa314))
+* **codex-review:** align shape probe, cwd validation, and prompt format ([97a9daa](https://github.com/jl-cmd/claude-dev-env/commit/97a9daa4a1f95e2be0a61330a3ae1c3eb0d214f7))
+* **codex-review:** attribute down refusal to skill class ([6a67b47](https://github.com/jl-cmd/claude-dev-env/commit/6a67b47c831d47df7fc76c512bfbae6f0cdb8085))
+* **codex-review:** document non-0/1 opt-out gate exits ([dadf584](https://github.com/jl-cmd/claude-dev-env/commit/dadf5841cb8fb93af0abd2707fe283ee1d4c4c78))
+* **codex-review:** harden capture wrapper and skill boundary docs ([66d5598](https://github.com/jl-cmd/claude-dev-env/commit/66d55985ba4343dbcafa83548617fda301287ca7))
+* **codex-review:** hold app-server stdin open until rate-limits reply ([91f9f17](https://github.com/jl-cmd/claude-dev-env/commit/91f9f1743d13c4246ded0f4ec5d8cdd372d3b0b1))
+* **codex-review:** lock exec+json classify path and probe signals ([f276241](https://github.com/jl-cmd/claude-dev-env/commit/f276241f358b38d21b1eabb10f125cf8a345c716))
+* **codex-review:** preserve JSONL newlines and validate run-state dir ([503b9f4](https://github.com/jl-cmd/claude-dev-env/commit/503b9f4604ef2c309f4c9debdc7b583720d1bb90))
+* **codex-review:** reject non-weekly windows and harden usage probe ([096ddc8](https://github.com/jl-cmd/claude-dev-env/commit/096ddc83ec68bf73ad07817f1a6a35a2eda235d0))
+* **codex-review:** soft-fail overflow resetsAt and inventory constants module ([5e5d167](https://github.com/jl-cmd/claude-dev-env/commit/5e5d16797c9e8d3a22e1f1f414d288f36bc591dc))
+* **codex-review:** tear down app-server process tree and scope text reset ([bcd8222](https://github.com/jl-cmd/claude-dev-env/commit/bcd8222befd791469e0174170ac5d1fb8fb6b5fb))
+* **codex-review:** tighten classifier markers and structured parse fallthrough ([e094504](https://github.com/jl-cmd/claude-dev-env/commit/e0945045bd62a03e3d4534139af9e8aa9fe350f2))
+* **grokify:** assert E3 agent load; unify field priority helper ([b9c750a](https://github.com/jl-cmd/claude-dev-env/commit/b9c750a104f53f571a93ca27e00576c6f07f9617))
+* **grokify:** case-insensitive E4 hooks log markers ([e2cdf5f](https://github.com/jl-cmd/claude-dev-env/commit/e2cdf5fc4987b3870f3b2fc78878dfc8d9acb07b))
+* **grokify:** correct spawn capability claims and add opt-in evals ([83cc4b3](https://github.com/jl-cmd/claude-dev-env/commit/83cc4b3c107701a4ccca22d55e8d95ed4ba0fe6b))
+* **grokify:** correct spawn capability claims and add opt-in evals ([cbd07c2](https://github.com/jl-cmd/claude-dev-env/commit/cbd07c2967ef4b02f2086a39648816eaac58e7a6))
+* **grokify:** drop always-true isProbePresent from E4 return ([aa0d65e](https://github.com/jl-cmd/claude-dev-env/commit/aa0d65e5d87f90bf46f487a4d30b4016deaeeaa4))
+* **grokify:** harden JSON brace extraction and stream field pick ([57507da](https://github.com/jl-cmd/claude-dev-env/commit/57507da2daba62df504ddb3f3104465dcab96f6f))
+* **grokify:** parse last balanced JSON object from prose ([7848567](https://github.com/jl-cmd/claude-dev-env/commit/7848567f3cd4c9131c20c840e212ae1cb9f6510d))
+* **grokify:** prefer terminal stream result event in extractResultText ([32b67b9](https://github.com/jl-cmd/claude-dev-env/commit/32b67b9c6ba2ae1c20eb9fc42b7f67ecbe173910))
+* **grokify:** shorten leader sockets and prefer text over message ([5a96698](https://github.com/jl-cmd/claude-dev-env/commit/5a9669868976c30f2d83c074840238828f0273e9))
+* **grokify:** strengthen E2/E4 capability eval assertions ([69c31ae](https://github.com/jl-cmd/claude-dev-env/commit/69c31ae5a478a598b1c8790cab8b17fa59e52331))
+* **grokify:** tighten E5 absence check and spawnSync bounds ([a254132](https://github.com/jl-cmd/claude-dev-env/commit/a25413248286664e983d0a91544c35d2c19b8256))
+* **hooks:** pending-intent records break the inventory/orphan-row deadlock ([72b0ddd](https://github.com/jl-cmd/claude-dev-env/commit/72b0ddd9e8df5646fe3ac611a9603733d54be71f))
+* **hooks:** pending-intent records break the inventory/orphan-row deadlock ([9e8fb7d](https://github.com/jl-cmd/claude-dev-env/commit/9e8fb7dbf771a0a04948d40d86ccdb55c492415c))
+* **hooks:** pending-intent records break the inventory/orphan-row deadlock ([bd87ec1](https://github.com/jl-cmd/claude-dev-env/commit/bd87ec17259e3c92ecfcfaaecb81d41c490bff0f))
+* **hooks:** resolve inventory/orphan-row deadlock in pending-intent records ([ffd886a](https://github.com/jl-cmd/claude-dev-env/commit/ffd886a499d71e6d489eb2e3ae70c120aac86c78))
+* **hooks:** tdd_enforcer allows restoring a removed file that git tracks ([ad22e6c](https://github.com/jl-cmd/claude-dev-env/commit/ad22e6cf71d943f5d0627a4c8aaf1c4421136dee))
+* **hooks:** tdd_enforcer allows restoring a removed file that git tracks ([adb9f5c](https://github.com/jl-cmd/claude-dev-env/commit/adb9f5cd6a984fde8783efd84b8bee293041d6d8))
+* **hooks:** tdd_enforcer allows restoring a removed file that git tracks ([2a80dd9](https://github.com/jl-cmd/claude-dev-env/commit/2a80dd951bb3f5b77d39cbec934070e9ec3f3b99))
+* **hooks:** tdd_enforcer allows restoring a removed file that git tracks ([b9dc848](https://github.com/jl-cmd/claude-dev-env/commit/b9dc848b18077a61094ab13aed6fd1aa418bd806))
+* **install,pr-converge:** harden skill prune set and fixture review order ([16658e2](https://github.com/jl-cmd/claude-dev-env/commit/16658e21642404f656ab4e8cc5c02885e9bf3199))
+* inventory closeout skill and drop duplicate constants allowlist entry ([e74b50e](https://github.com/jl-cmd/claude-dev-env/commit/e74b50e1cd733376454b2998a8db5dbca6756213))
+* **pr-converge:** fail closed on unparseable pending-reviewers JSON ([d97e534](https://github.com/jl-cmd/claude-dev-env/commit/d97e534f6ea6737e0402a38acf6feb285ff5eb9d))
+* **pr-converge:** guard gh head SHA JSON parse in convergence gates ([12d09b8](https://github.com/jl-cmd/claude-dev-env/commit/12d09b8ff23db4bdece673fa7723a89cbee5cfc8))
+* **pr-loop:** address review feedback on gate empty-set exit ([527fc80](https://github.com/jl-cmd/claude-dev-env/commit/527fc801ebfd5f761392f0c98d6af0f50b998070))
+* **pr-loop:** address review feedback on gate empty-set exit ([93cff06](https://github.com/jl-cmd/claude-dev-env/commit/93cff0648808e50c6d069a9af07b11391273c86a))
+* **pr-loop:** code_rules_gate exits loudly when it inspects zero files ([ae74464](https://github.com/jl-cmd/claude-dev-env/commit/ae744644cdc172f55e53153156ff6d933fefe8f1))
+* **pr-loop:** code_rules_gate exits loudly when it inspects zero files ([bd7f4e4](https://github.com/jl-cmd/claude-dev-env/commit/bd7f4e45f26443c63d73424a7f2f332b544cdcf8))
+* **pr-loop:** document codex in reviews_disabled module docstring ([6b582a1](https://github.com/jl-cmd/claude-dev-env/commit/6b582a16a8d88323f91b02ea7f91eb514f8c1dda))
+* **pr-loop:** empty diff-mode candidate set refuses loudly; scoped-empty exits clean ([94dd03a](https://github.com/jl-cmd/claude-dev-env/commit/94dd03acf48d73f62fca9e09cf56dd0b22768a27))
+* **scripts:** apply code-review polish to grok headless runner ([06549c3](https://github.com/jl-cmd/claude-dev-env/commit/06549c353033a2ee0200e3d417bff7e3402b8ce3))
+* **scripts:** bound post-kill communicate and trim dead signatures ([8f0756b](https://github.com/jl-cmd/claude-dev-env/commit/8f0756b069de111bffbe8f20d6a6e37a92d10f0d))
+* **scripts:** deliver Claude prompt via -p and map role to agent stem ([aa8b09b](https://github.com/jl-cmd/claude-dev-env/commit/aa8b09bc0bc828cb02cc83e672da9a9c3f7836b6))
+* **scripts:** deliver Claude prompt via stdin and plumb --agent ([4decd49](https://github.com/jl-cmd/claude-dev-env/commit/4decd498e89d798639f6e474360ffc22e25ee9ad))
+* **scripts:** expose debug path and distinct exception returncode ([a2984a6](https://github.com/jl-cmd/claude-dev-env/commit/a2984a606e6b083b5a020ee68c79dee3080b21c2))
+* **scripts:** harden batch worker reports and CLI error exits ([ecee572](https://github.com/jl-cmd/claude-dev-env/commit/ecee572680199a89b460b92ee70ac7e9635f08ba))
+* **scripts:** harden grok fleet runner and batch launcher ([edb9b62](https://github.com/jl-cmd/claude-dev-env/commit/edb9b623adc41cc2a60a788a35e7ae6ebcd43759))
+* **scripts:** harden grok preflight soft-gate and document modules ([0c8c78d](https://github.com/jl-cmd/claude-dev-env/commit/0c8c78dcd0bced2fabf717f79c4496ce5be88058))
+* **scripts:** harden grok runner classification and launch errors ([ca2f630](https://github.com/jl-cmd/claude-dev-env/commit/ca2f630d221be1077701dcc1a0f7f5673c7a5e23))
+* **scripts:** isolate report writes and reject empty agent_name ([c4b9aad](https://github.com/jl-cmd/claude-dev-env/commit/c4b9aadbe456da3efd9192f8b15733c7bb0b44c3))
+* **scripts:** reseek Claude prompt stdin on chain fallover ([a34c72c](https://github.com/jl-cmd/claude-dev-env/commit/a34c72c8bfe38cf0d3cce1dcf9ee02d9d7a2549e))
+* **scripts:** restore phrase signatures and headless preflight parity ([00e4c1c](https://github.com/jl-cmd/claude-dev-env/commit/00e4c1ce11cce39d94e1f5b5f2945dcc8a5334e8))
+* **scripts:** separate stdout/stderr before signature matching ([b8323a5](https://github.com/jl-cmd/claude-dev-env/commit/b8323a5164b303fa35d9c90409161d86901284c7))
+* **scripts:** soft-fail uncreatable run-state dir in grok preflight CLI ([f70ce70](https://github.com/jl-cmd/claude-dev-env/commit/f70ce706afb3daae6627b6972e3e9626ad0804dc))
+* **scripts:** tighten grok auth and usage signature phrases ([15aaf48](https://github.com/jl-cmd/claude-dev-env/commit/15aaf4852f56a9966ec57cc113da60d996716d2f))
+* **scripts:** tighten grok auth signatures and timing docs ([5d3b5ed](https://github.com/jl-cmd/claude-dev-env/commit/5d3b5edc08bc23975a12fbf3ec2f4c68c638f095))
+* **scripts:** treat prompt open failures as config errors ([45eb73d](https://github.com/jl-cmd/claude-dev-env/commit/45eb73d8b65ee53cfdd30bb3642350e1000bacc2))
+* **scripts:** treat undecoded grok streams and ensure cache dir ([0a833aa](https://github.com/jl-cmd/claude-dev-env/commit/0a833aa7353cc78e1ddc6d9669e47524e1938a7a))
+* **scripts:** widen named worker exception isolation in batch launcher ([355509e](https://github.com/jl-cmd/claude-dev-env/commit/355509e3e6f882a3b7c312b7effdfb40b51950c7))
+
+
+### Documentation
+
+* **autoconverge:** review-lens boundary with durable citations ([6b213f7](https://github.com/jl-cmd/claude-dev-env/commit/6b213f7747233e4320d696d18308079a125ef307))
+* **autoconverge:** review-lens boundary with durable citations ([e0f34db](https://github.com/jl-cmd/claude-dev-env/commit/e0f34db2a96de48eda3cbc69779d952bd830d2ed))
+* **codex-review:** align constants CLAUDE.md with flag_token_pattern ([6c5bb80](https://github.com/jl-cmd/claude-dev-env/commit/6c5bb80de15bbf470ddab9e50c4822f6d73e7d53))
+* **grokify:** document GROK_BIN override for capability evals ([1b4f065](https://github.com/jl-cmd/claude-dev-env/commit/1b4f065216ff2e3996750ed4abed2642e1873d35))
+* **grokify:** inventory parse-payload tests in SKILL and evals README ([ecf2e93](https://github.com/jl-cmd/claude-dev-env/commit/ecf2e9392746f19fdbf927452825505f07c10d6b))
+* **hooks:** name every constant in the two parts config/ inventory rows ([a6661d6](https://github.com/jl-cmd/claude-dev-env/commit/a6661d6488a73515dc395e362f8b6851117af74d))
+* **pr-loop:** add worker-spawn protocol reference ([1591bbf](https://github.com/jl-cmd/claude-dev-env/commit/1591bbf35252f11fe07eca5cadcb8eb90d20e8d0))
+* **pr-loop:** add worker-spawn protocol reference ([0430dbf](https://github.com/jl-cmd/claude-dev-env/commit/0430dbfca4ebd4002129cb6fb2cb2cc113ceed9a))
+* **pr-loop:** align worker-spawn protocol with base dispatcher ([315f6a3](https://github.com/jl-cmd/claude-dev-env/commit/315f6a355fafc0165d23e6e898da23795ca48df6))
+* **pr-loop:** clarify exit-3 is non-file prompt path ([6342ebf](https://github.com/jl-cmd/claude-dev-env/commit/6342ebf6e00b30e607eb2744a56e4374deb70e28))
+* **pr-loop:** document prompt_file_missing as exit 3 ([4859bdb](https://github.com/jl-cmd/claude-dev-env/commit/4859bdb4962cc02b79ee1ec06163d46f6679fa43))
+* **pr-loop:** wire grok-spawn into worker guidance ([17cc095](https://github.com/jl-cmd/claude-dev-env/commit/17cc0951f686d58c9d4ba43ddb4369830372f29c))
+* **scripts:** inventory grok fleet scripts in CLAUDE tables ([0faae57](https://github.com/jl-cmd/claude-dev-env/commit/0faae579c0f76c411208961fdd541e5b82bfaf57))
+* **scripts:** soft-word run_state_directory mkdir in grok preflight ([2263221](https://github.com/jl-cmd/claude-dev-env/commit/2263221b287f0aab810586d366e13741a7c0b118))
+
+
+### Maintenance
+
+* **advisor:** tier-mismatch message names live success tokens ([ef6ab60](https://github.com/jl-cmd/claude-dev-env/commit/ef6ab60c2a186f7cf1490402e04e35142f4a1cc7))
+* **advisor:** tier-mismatch message names live success tokens ([8e70b2c](https://github.com/jl-cmd/claude-dev-env/commit/8e70b2cff5cf1852726f39604771f94df5f05c50))
+* fix mypy unused-ignore on Linux CI ([#57](https://github.com/jl-cmd/claude-dev-env/issues/57)) ([3d93769](https://github.com/jl-cmd/claude-dev-env/commit/3d9376989c81405e3fb5a142d354b5870786c09c))
+* fix PLW1510 in health_check and drop carve-out ([8e936da](https://github.com/jl-cmd/claude-dev-env/commit/8e936da75aad792d7332af1e7b465452a45f3090)), closes [#57](https://github.com/jl-cmd/claude-dev-env/issues/57)
+* fix PLW1510 in ruff/mypy integration helpers ([3b33e42](https://github.com/jl-cmd/claude-dev-env/commit/3b33e4200562f4b8faf5b4b449cd64d7b1e7d6dd)), closes [#57](https://github.com/jl-cmd/claude-dev-env/issues/57)
+* **pr-converge:** add check_convergence --fixture offline replay ([736e0b5](https://github.com/jl-cmd/claude-dev-env/commit/736e0b5514229a4efcbf048599e0d4c7b320a7c3))
+* **pr-converge:** add check_convergence --fixture offline replay ([024b812](https://github.com/jl-cmd/claude-dev-env/commit/024b8127088004799f7b92344d2c3ad4e655f060))
+* shrink [#57](https://github.com/jl-cmd/claude-dev-env/issues/57) production carve-outs and retighten mypy ([27dc8df](https://github.com/jl-cmd/claude-dev-env/commit/27dc8dffa1100198438742bfb34b0edacd1500f2))
+* shrink [#57](https://github.com/jl-cmd/claude-dev-env/issues/57) production carve-outs and retighten mypy ([31dc39c](https://github.com/jl-cmd/claude-dev-env/commit/31dc39c9d23f91e04e3896c529146efd654a8c8a))
+* shrink PLW1510 carve-outs for health_check and integrations ([#57](https://github.com/jl-cmd/claude-dev-env/issues/57)) ([1c6c7c7](https://github.com/jl-cmd/claude-dev-env/commit/1c6c7c7813579da3e10f738ed9627f43e20ff010))
+
+
+### Refactoring
+
+* **codex-review:** simplify usage probe text and server parsers ([bc06307](https://github.com/jl-cmd/claude-dev-env/commit/bc0630778494f5d599fdc28d0080581ecf6552cd))
+* **grokify:** DRY envelope field priority; document E3 agent override ([342b047](https://github.com/jl-cmd/claude-dev-env/commit/342b047b85249366147fb1b0ca5f28e571638c43))
+* **grokify:** DRY shared launchEval helper in capability evals ([8d134d7](https://github.com/jl-cmd/claude-dev-env/commit/8d134d7f8e66419ae7a2e3e151d539a3485f03fc))
+* rename Grok host profile to third party ([4e39d08](https://github.com/jl-cmd/claude-dev-env/commit/4e39d08b0181ef91800b63a1cc2d7bd7a30dd1d7))
+* **scripts:** share returncode resolution in grok headless runner ([849b81d](https://github.com/jl-cmd/claude-dev-env/commit/849b81db426225218a4c0756ffe4498cd3e5bdcd))
+
+
+### Performance
+
+* **grokify:** defer launch failure message; name spawn tool constant ([da24103](https://github.com/jl-cmd/claude-dev-env/commit/da241036a159a71afeec9ad4045265ec2bc642a0))
+
+
+### Style
+
+* **codex-review:** ruff-format test_skill_scaffold ([66e0c2a](https://github.com/jl-cmd/claude-dev-env/commit/66e0c2a390ce2b21686e7bda66bd8b60d443f6ad))
+
+
+### Tests
+
+* **codex-review:** drop unused imports from portable probe tests ([df33d73](https://github.com/jl-cmd/claude-dev-env/commit/df33d73de361b1c6bfa6ea8804ca94d42753bafe))
+* **codex-review:** make process-tree and exchange tests CI-portable ([e22d9d5](https://github.com/jl-cmd/claude-dev-env/commit/e22d9d537c7e2871604b8be699e8a4e5dfc8d269))
+
 ## [1.95.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v1.94.0...claude-dev-env-v1.95.0) (2026-07-13)
 
 
