@@ -16,6 +16,7 @@ CODEX_MODEL_PIN = ""
 CODEX_HOME_ENV_VAR = "CODEX_HOME"
 DEFAULT_TIMEOUT_SECONDS = 600
 JSONL_CAPTURE_FILENAME = "codex-review.jsonl"
+JSONL_CAPTURE_NEWLINE = ""
 UTF8_ENCODING = "utf-8"
 VERSION_PROBE_PATTERN = r"codex(?:-cli)?\s+(\d+\.\d+\.\d+)"
 OUTCOME_CLASS_CODEX_DOWN = "codex_down"
@@ -30,13 +31,15 @@ JSONL_ENTRY_COMPLETED_TYPE = "item.completed"
 JSONL_AGENT_MESSAGE_TYPE = "agent_message"
 JSONL_AGENT_MESSAGE_TEXT_KEY = "text"
 CUSTOM_INSTRUCTIONS_PROMPT = (
-    "Return findings inside one fenced JSON code block. "
-    "The block body must be a JSON array. "
-    "Each element is an object with keys title, priority, file, line_range, and body. "
-    "When there are no findings, return an empty JSON array in that fenced block."
+    "Write a one-line review summary, then the heading Review comment:, then "
+    "zero or more finding bullets. Each bullet must use the form "
+    "- [P1] <title> — <path>:<start>-<end> "
+    "followed by an explanation paragraph. Use the same [P#] priority tags. "
+    "When there are no findings, omit finding bullets after the summary."
 )
 ALL_SHAPE_PROBE_REQUIRED_FLAGS = (
     BASE_TARGET_FLAG,
     UNCOMMITTED_TARGET_FLAG,
     COMMIT_TARGET_FLAG,
+    JSON_FLAG,
 )

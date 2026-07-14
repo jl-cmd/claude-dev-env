@@ -47,9 +47,9 @@ HELP_TEXT_WITH_TARGETS = (
     "      --json\n"
 )
 VERSION_STDOUT = "codex-cli 0.144.3\n"
-AGENT_MESSAGE_BODY = (
-    "No issues found.\n\n```json\n[]\n```"
-)
+EXPECTED_BINARY_VERSION = "0.144.3"
+AGENT_MESSAGE_BODY = "No issues found.\n\n```json\n[]\n```"
+CARRIAGE_RETURN_LINE_ENDING = b"\r\n"
 SUCCESS_JSONL = "\n".join(
     [
         json.dumps({"type": "thread.started", "thread_id": "thread-1"}),
@@ -74,6 +74,20 @@ SUCCESS_JSONL = "\n".join(
         ),
     ]
 ) + "\n"
+
+
+@pytest.fixture
+def repository_directory(tmp_path: Path) -> Path:
+    existing_repository_directory = tmp_path / "repo"
+    existing_repository_directory.mkdir()
+    return existing_repository_directory
+
+
+@pytest.fixture
+def run_state_directory(tmp_path: Path) -> Path:
+    existing_run_state_directory = tmp_path / "run_state"
+    existing_run_state_directory.mkdir()
+    return existing_run_state_directory
 
 
 class _SubprocessRecorder:
@@ -147,6 +161,9 @@ def _install_recorder(
 ) -> _SubprocessRecorder:
     recorder = _SubprocessRecorder(behavior_for_invocation)
     monkeypatch.setattr(wrapper, "codex_subprocess_runner", recorder)
+    monkeypatch.setattr(
+        wrapper, "_resolve_codex_command_prefix", lambda: [CODEX_BINARY_NAME]
+    )
     return recorder
 
 
@@ -174,13 +191,34 @@ def _healthy_probe_then_review(
     return behavior
 
 
+def _healthy_probe_then_failing_shape(
+    shape_stdout: str,
+) -> Callable[[list[str]], subprocess.CompletedProcess[str] | BaseException]:
+    def behavior(
+        all_arguments: list[str],
+    ) -> subprocess.CompletedProcess[str] | BaseException:
+        if _is_version_probe(all_arguments):
+            return _completed(all_arguments, 0, stdout=VERSION_STDOUT)
+        if _is_shape_probe(all_arguments):
+            return _completed(all_arguments, 0, stdout=shape_stdout)
+        raise AssertionError("review must not run after a failed shape probe")
+
+    return behavior
+
+
+def _only_review_invocation(recorder: _SubprocessRecorder) -> list[str]:
+    return next(
+        each_invocation
+        for each_invocation in recorder.all_invocations
+        if _is_review_run(each_invocation)
+    )
+
+
 def test_argv_assembly_for_uncommitted_target(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
 
     review_outcome = wrapper.run_codex_review(
@@ -189,11 +227,7 @@ def test_argv_assembly_for_uncommitted_target(
         is_uncommitted=True,
     )
 
-    review_invocation = next(
-        each_invocation
-        for each_invocation in recorder.all_invocations
-        if _is_review_run(each_invocation)
-    )
+    review_invocation = _only_review_invocation(recorder)
     assert review_invocation == [
         CODEX_BINARY_NAME,
         EXEC_SUBCOMMAND,
@@ -206,12 +240,10 @@ def test_argv_assembly_for_uncommitted_target(
 
 
 def test_argv_assembly_for_base_branch_target(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
     base_branch = "origin/main"
 
@@ -221,11 +253,7 @@ def test_argv_assembly_for_base_branch_target(
         base_branch=base_branch,
     )
 
-    review_invocation = next(
-        each_invocation
-        for each_invocation in recorder.all_invocations
-        if _is_review_run(each_invocation)
-    )
+    review_invocation = _only_review_invocation(recorder)
     assert review_invocation == [
         CODEX_BINARY_NAME,
         EXEC_SUBCOMMAND,
@@ -238,12 +266,10 @@ def test_argv_assembly_for_base_branch_target(
 
 
 def test_argv_assembly_for_commit_target(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
     commit_sha = "abc123def456"
 
@@ -253,11 +279,7 @@ def test_argv_assembly_for_commit_target(
         commit_sha=commit_sha,
     )
 
-    review_invocation = next(
-        each_invocation
-        for each_invocation in recorder.all_invocations
-        if _is_review_run(each_invocation)
-    )
+    review_invocation = _only_review_invocation(recorder)
     assert review_invocation == [
         CODEX_BINARY_NAME,
         EXEC_SUBCOMMAND,
@@ -270,12 +292,10 @@ def test_argv_assembly_for_commit_target(
 
 
 def test_argv_assembly_for_prompt_target(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
 
     review_outcome = wrapper.run_codex_review(
@@ -284,11 +304,7 @@ def test_argv_assembly_for_prompt_target(
         is_prompt_target=True,
     )
 
-    review_invocation = next(
-        each_invocation
-        for each_invocation in recorder.all_invocations
-        if _is_review_run(each_invocation)
-    )
+    review_invocation = _only_review_invocation(recorder)
     assert review_invocation == [
         CODEX_BINARY_NAME,
         EXEC_SUBCOMMAND,
@@ -303,27 +319,14 @@ def test_argv_assembly_for_prompt_target(
 
 
 def test_shape_probe_missing_target_flags_returns_codex_down(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
-
-    def behavior(
-        all_arguments: list[str],
-    ) -> subprocess.CompletedProcess[str] | BaseException:
-        if _is_version_probe(all_arguments):
-            return _completed(all_arguments, 0, stdout=VERSION_STDOUT)
-        if _is_shape_probe(all_arguments):
-            return _completed(
-                all_arguments,
-                0,
-                stdout="Usage: codex exec review\n  --legacy-only\n",
-            )
-        raise AssertionError("review must not run after a failed shape probe")
-
-    recorder = _install_recorder(monkeypatch, behavior)
+    recorder = _install_recorder(
+        monkeypatch,
+        _healthy_probe_then_failing_shape("Usage: codex exec review\n  --legacy-only\n"),
+    )
 
     review_outcome = wrapper.run_codex_review(
         repository_directory=repository_directory,
@@ -332,41 +335,30 @@ def test_shape_probe_missing_target_flags_returns_codex_down(
     )
 
     assert review_outcome.outcome_class == OUTCOME_CLASS_CODEX_DOWN
-    assert review_outcome.binary_version == "0.144.3"
+    assert review_outcome.binary_version == EXPECTED_BINARY_VERSION
     assert review_outcome.agent_message == ""
     assert review_outcome.jsonl_path is None
     assert not any(
         _is_review_run(each_invocation)
         for each_invocation in recorder.all_invocations
     )
-    for each_required_flag in ALL_SHAPE_PROBE_REQUIRED_FLAGS:
-        assert each_required_flag in HELP_TEXT_WITH_TARGETS
 
 
 def test_shape_probe_lookalike_flags_do_not_match_required_tokens(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     lookalike_help_text = (
         "Usage: codex exec review [OPTIONS]\n"
         "      --baseline <BRANCH>\n"
         "      --commit-message <TEXT>\n"
         "      --uncommitted-only\n"
+        "      --json-output\n"
     )
-
-    def behavior(
-        all_arguments: list[str],
-    ) -> subprocess.CompletedProcess[str] | BaseException:
-        if _is_version_probe(all_arguments):
-            return _completed(all_arguments, 0, stdout=VERSION_STDOUT)
-        if _is_shape_probe(all_arguments):
-            return _completed(all_arguments, 0, stdout=lookalike_help_text)
-        raise AssertionError("review must not run after a failed shape probe")
-
-    recorder = _install_recorder(monkeypatch, behavior)
+    recorder = _install_recorder(
+        monkeypatch, _healthy_probe_then_failing_shape(lookalike_help_text)
+    )
 
     review_outcome = wrapper.run_codex_review(
         repository_directory=repository_directory,
@@ -386,13 +378,10 @@ def test_shape_probe_lookalike_flags_do_not_match_required_tokens(
 
 
 def test_shape_probe_nonzero_help_returns_codex_down(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
-
     def behavior(
         all_arguments: list[str],
     ) -> subprocess.CompletedProcess[str] | BaseException:
@@ -416,17 +405,13 @@ def test_shape_probe_nonzero_help_returns_codex_down(
 
     assert review_outcome.outcome_class == OUTCOME_CLASS_CODEX_DOWN
     assert review_outcome.exit_code == 2
-    assert review_outcome.outcome_class != OUTCOME_CLASS_COMPLETED
 
 
 def test_missing_binary_returns_codex_down(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
-
     def behavior(
         all_arguments: list[str],
     ) -> subprocess.CompletedProcess[str] | BaseException:
@@ -446,12 +431,10 @@ def test_missing_binary_returns_codex_down(
 
 
 def test_jsonl_capture_and_agent_message_extraction(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
 
     review_outcome = wrapper.run_codex_review(
@@ -464,9 +447,9 @@ def test_jsonl_capture_and_agent_message_extraction(
     assert review_outcome.outcome_class == OUTCOME_CLASS_COMPLETED
     assert review_outcome.exit_code == 0
     assert review_outcome.jsonl_path == expected_jsonl_path
-    assert expected_jsonl_path.read_text(encoding="utf-8") == SUCCESS_JSONL
+    assert expected_jsonl_path.read_text(encoding=UTF8_ENCODING) == SUCCESS_JSONL
     assert review_outcome.agent_message == AGENT_MESSAGE_BODY
-    assert review_outcome.binary_version == "0.144.3"
+    assert review_outcome.binary_version == EXPECTED_BINARY_VERSION
     review_keyword_arguments = next(
         each_keyword_arguments
         for each_invocation, each_keyword_arguments in zip(
@@ -484,14 +467,30 @@ def test_jsonl_capture_and_agent_message_extraction(
     assert review_keyword_arguments["check"] is False
 
 
-def test_unicode_decode_error_returns_codex_down(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_jsonl_capture_preserves_stream_line_endings(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
+    _install_recorder(monkeypatch, _healthy_probe_then_review())
 
+    review_outcome = wrapper.run_codex_review(
+        repository_directory=repository_directory,
+        run_state_directory=run_state_directory,
+        is_uncommitted=True,
+    )
+
+    assert review_outcome.jsonl_path is not None
+    captured_bytes = review_outcome.jsonl_path.read_bytes()
+    assert CARRIAGE_RETURN_LINE_ENDING not in captured_bytes
+    assert captured_bytes == SUCCESS_JSONL.encode(UTF8_ENCODING)
+
+
+def test_unicode_decode_error_returns_codex_down(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
+) -> None:
     def behavior(
         all_arguments: list[str],
     ) -> subprocess.CompletedProcess[str] | BaseException:
@@ -511,13 +510,10 @@ def test_unicode_decode_error_returns_codex_down(
 
 
 def test_timeout_returns_codex_down(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
-
     def behavior(
         all_arguments: list[str],
     ) -> subprocess.CompletedProcess[str] | BaseException:
@@ -543,12 +539,11 @@ def test_timeout_returns_codex_down(
 
 
 def test_codex_home_env_is_passed_through_when_set(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     codex_home_directory = tmp_path / "codex_home"
     codex_home_directory.mkdir()
     monkeypatch.setenv(CODEX_HOME_ENV_VAR, str(codex_home_directory))
@@ -568,12 +563,10 @@ def test_codex_home_env_is_passed_through_when_set(
 
 
 def test_rejects_multiple_targets(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
 
     with pytest.raises(ValueError):
@@ -588,12 +581,10 @@ def test_rejects_multiple_targets(
 
 
 def test_rejects_missing_target(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
 
     with pytest.raises(ValueError):
@@ -605,13 +596,85 @@ def test_rejects_missing_target(
     assert recorder.all_invocations == []
 
 
-def test_model_pin_assembles_model_flag_before_review_subcommand(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_shape_probe_missing_json_flag_returns_codex_down(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
+    help_without_json = (
+        "Usage: codex exec review [OPTIONS]\n"
+        "      --uncommitted\n"
+        "      --base <BRANCH>\n"
+        "      --commit <SHA>\n"
+    )
+    recorder = _install_recorder(
+        monkeypatch, _healthy_probe_then_failing_shape(help_without_json)
+    )
+
+    review_outcome = wrapper.run_codex_review(
+        repository_directory=repository_directory,
+        run_state_directory=run_state_directory,
+        is_uncommitted=True,
+    )
+
+    assert review_outcome.outcome_class == OUTCOME_CLASS_CODEX_DOWN
+    assert review_outcome.jsonl_path is None
+    assert not any(
+        _is_review_run(each_invocation)
+        for each_invocation in recorder.all_invocations
+    )
+    assert JSON_FLAG not in help_without_json
+    assert JSON_FLAG in ALL_SHAPE_PROBE_REQUIRED_FLAGS
+
+
+def test_missing_repository_directory_raises_value_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    run_state_directory: Path,
+) -> None:
+    missing_repository_directory = tmp_path / "missing-repo"
+    recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
+
+    with pytest.raises(ValueError, match="repository_directory"):
+        wrapper.run_codex_review(
+            repository_directory=missing_repository_directory,
+            run_state_directory=run_state_directory,
+            is_uncommitted=True,
+        )
+
+    assert recorder.all_invocations == []
+
+
+def test_missing_run_state_directory_raises_before_any_codex_process(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    repository_directory: Path,
+) -> None:
+    missing_run_state_directory = tmp_path / "missing-run-state"
+    recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
+
+    with pytest.raises(ValueError, match="run_state_directory"):
+        wrapper.run_codex_review(
+            repository_directory=repository_directory,
+            run_state_directory=missing_run_state_directory,
+            is_uncommitted=True,
+        )
+
+    assert recorder.all_invocations == []
+
+
+def test_custom_instructions_prompt_demands_finding_bullet_format() -> None:
+    assert "- [P1]" in CUSTOM_INSTRUCTIONS_PROMPT
+    assert "Review comment:" in CUSTOM_INSTRUCTIONS_PROMPT
+    assert "fenced JSON" not in CUSTOM_INSTRUCTIONS_PROMPT
+    assert "JSON array" not in CUSTOM_INSTRUCTIONS_PROMPT
+
+
+def test_model_pin_assembles_model_flag_before_review_subcommand(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
+) -> None:
     model_pin = "gpt-5-codex"
     monkeypatch.setattr(wrapper, "CODEX_MODEL_PIN", model_pin)
     recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
@@ -622,11 +685,7 @@ def test_model_pin_assembles_model_flag_before_review_subcommand(
         is_uncommitted=True,
     )
 
-    review_invocation = next(
-        each_invocation
-        for each_invocation in recorder.all_invocations
-        if _is_review_run(each_invocation)
-    )
+    review_invocation = _only_review_invocation(recorder)
     model_flag_index = review_invocation.index(MODEL_FLAG)
     review_subcommand_index = review_invocation.index(REVIEW_SUBCOMMAND)
     assert review_invocation[model_flag_index : model_flag_index + 2] == [
@@ -637,12 +696,10 @@ def test_model_pin_assembles_model_flag_before_review_subcommand(
 
 
 def test_review_exit_1_config_error_classifies_codex_down(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     config_error_stderr = (
         "Error loading config.toml: unknown variant 'default', "
         "expected 'fast' or 'flex' in 'service_tier'\n"
@@ -666,7 +723,7 @@ def test_review_exit_1_config_error_classifies_codex_down(
     assert review_outcome.exit_code == 1
     assert review_outcome.agent_message == config_error_stderr
     assert review_outcome.jsonl_path is not None
-    assert review_outcome.jsonl_path.read_text(encoding="utf-8") == ""
+    assert review_outcome.jsonl_path.read_text(encoding=UTF8_ENCODING) == ""
     assert any(
         _is_review_run(each_invocation)
         for each_invocation in recorder.all_invocations
@@ -674,12 +731,10 @@ def test_review_exit_1_config_error_classifies_codex_down(
 
 
 def test_review_exit_2_argument_error_classifies_codex_down(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     argument_error_stderr = (
         "error: the argument '--uncommitted' cannot be used with '[PROMPT]'\n"
         "Usage: codex exec review --json --uncommitted [PROMPT]\n"
@@ -703,7 +758,7 @@ def test_review_exit_2_argument_error_classifies_codex_down(
     assert review_outcome.exit_code == 2
     assert review_outcome.agent_message == argument_error_stderr
     assert review_outcome.jsonl_path is not None
-    assert review_outcome.jsonl_path.read_text(encoding="utf-8") == ""
+    assert review_outcome.jsonl_path.read_text(encoding=UTF8_ENCODING) == ""
     assert any(
         _is_review_run(each_invocation)
         for each_invocation in recorder.all_invocations
@@ -711,12 +766,10 @@ def test_review_exit_2_argument_error_classifies_codex_down(
 
 
 def test_review_exit_0_stays_completed(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    repository_directory: Path,
+    run_state_directory: Path,
 ) -> None:
-    repository_directory = tmp_path / "repo"
-    repository_directory.mkdir()
-    run_state_directory = tmp_path / "run_state"
-    run_state_directory.mkdir()
     _install_recorder(
         monkeypatch,
         _healthy_probe_then_review(review_returncode=0, review_stdout=SUCCESS_JSONL),
@@ -731,3 +784,29 @@ def test_review_exit_0_stays_completed(
     assert review_outcome.outcome_class == OUTCOME_CLASS_COMPLETED
     assert review_outcome.exit_code == 0
     assert review_outcome.agent_message == AGENT_MESSAGE_BODY
+
+
+def test_resolve_prefix_wraps_windows_shim(monkeypatch: pytest.MonkeyPatch) -> None:
+    shim_path = r"C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.CMD"
+    monkeypatch.setattr(wrapper.shutil, "which", lambda _name: shim_path)
+    monkeypatch.setattr(wrapper.os, "name", "nt")
+
+    assert wrapper._resolve_codex_command_prefix() == ["cmd", "/c", shim_path]
+
+
+def test_resolve_prefix_uses_resolved_path_on_posix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolved_path = "/usr/local/bin/codex"
+    monkeypatch.setattr(wrapper.shutil, "which", lambda _name: resolved_path)
+    monkeypatch.setattr(wrapper.os, "name", "posix")
+
+    assert wrapper._resolve_codex_command_prefix() == [resolved_path]
+
+
+def test_resolve_prefix_falls_back_to_bare_name_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(wrapper.shutil, "which", lambda _name: None)
+
+    assert wrapper._resolve_codex_command_prefix() == [CODEX_BINARY_NAME]

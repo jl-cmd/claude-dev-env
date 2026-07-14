@@ -143,6 +143,35 @@ def test_is_copilot_disabled_via_env_true_when_listed_among_other_tokens(
     assert reviews_disabled.is_bugbot_disabled_via_env() is True
 
 
+def test_is_codex_disabled_via_env_returns_true_when_env_lists_codex(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "codex")
+    assert reviews_disabled.is_codex_disabled_via_env() is True
+
+
+def test_is_codex_disabled_via_env_returns_false_when_env_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    assert reviews_disabled.is_codex_disabled_via_env() is False
+
+
+def test_is_codex_disabled_via_env_returns_false_when_only_bugbot_listed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    assert reviews_disabled.is_codex_disabled_via_env() is False
+
+
+def test_is_codex_disabled_via_env_true_when_listed_among_other_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", " BugBot , CoDex ")
+    assert reviews_disabled.is_codex_disabled_via_env() is True
+    assert reviews_disabled.is_bugbot_disabled_via_env() is True
+
+
 def test_cli_main_returns_zero_when_named_reviewer_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -185,3 +214,17 @@ def test_cli_main_returns_one_for_copilot_when_only_bugbot_disabled(
 ) -> None:
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
     assert reviews_disabled.main(["--reviewer", "copilot"]) == 1
+
+
+def test_cli_main_supports_codex_reviewer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "codex")
+    assert reviews_disabled.main(["--reviewer", "codex"]) == 0
+
+
+def test_cli_main_returns_one_for_codex_when_only_bugbot_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    assert reviews_disabled.main(["--reviewer", "codex"]) == 1

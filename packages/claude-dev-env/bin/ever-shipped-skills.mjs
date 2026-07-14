@@ -24,6 +24,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'bg-agent',
     'bugteam',
     'caveman',
+    'closeout',
     'code',
     'codex-review',
     'copilot-finding-triage',

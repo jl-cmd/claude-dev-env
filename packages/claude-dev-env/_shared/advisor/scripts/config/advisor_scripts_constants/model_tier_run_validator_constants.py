@@ -70,7 +70,7 @@ ATTEMPT_ORDER_MISMATCH_MESSAGE: str = (
     "spawn tries do not walk the candidate tiers in ladder order"
 )
 SELECTED_TIER_MISMATCH_MESSAGE: str = (
-    "selected_tier does not match the first successful bind (spawned or self)"
+    "selected_tier does not match the first successful bind (spawned or cli)"
 )
 SELECTED_TIER_NOT_NULL_MESSAGE: str = (
     "selected_tier must be null when no spawn try succeeded"

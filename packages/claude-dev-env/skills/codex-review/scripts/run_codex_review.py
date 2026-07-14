@@ -17,10 +17,17 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from codex_review_scripts_constants.codex_usage_probe_constants import (
+    ALL_WINDOWS_SCRIPT_SUFFIXES,
+    WINDOWS_COMMAND_SHELL,
+    WINDOWS_COMMAND_SHELL_RUN_FLAG,
+    WINDOWS_OS_NAME,
+)
 from codex_review_scripts_constants.run_constants import (
     ALL_SHAPE_PROBE_REQUIRED_FLAGS,
     BASE_TARGET_FLAG,
@@ -35,6 +42,7 @@ from codex_review_scripts_constants.run_constants import (
     JSONL_AGENT_MESSAGE_TEXT_KEY,
     JSONL_AGENT_MESSAGE_TYPE,
     JSONL_CAPTURE_FILENAME,
+    JSONL_CAPTURE_NEWLINE,
     JSONL_ENTRY_COMPLETED_TYPE,
     JSONL_ENTRY_KEY,
     JSONL_EVENT_TYPE_KEY,
@@ -98,6 +106,28 @@ def _down(*, exit_code: int, binary_version: str) -> CodexReviewOutcome:
     )
 
 
+def _resolve_codex_command_prefix() -> list[str]:
+    """Resolve the codex launch prefix, wrapping a Windows ``.cmd``/``.bat`` shim.
+
+    ::
+
+        POSIX codex on PATH   ->  ["/usr/local/bin/codex"]
+        Windows codex.cmd     ->  ["cmd", "/c", "C:\\...\\codex.cmd"]
+        codex not on PATH     ->  ["codex"]      (downstream FileNotFoundError)
+
+    ``CreateProcess`` resolves a bare name only against ``.exe``, so a bare
+    ``codex`` never finds the npm shim; the ``cmd /c`` wrap runs it.
+    """
+    codex_path = shutil.which(CODEX_BINARY_NAME)
+    if codex_path is None:
+        return [CODEX_BINARY_NAME]
+    if os.name == WINDOWS_OS_NAME and codex_path.lower().endswith(
+        ALL_WINDOWS_SCRIPT_SUFFIXES
+    ):
+        return [WINDOWS_COMMAND_SHELL, WINDOWS_COMMAND_SHELL_RUN_FLAG, codex_path]
+    return [codex_path]
+
+
 def _run_command(
     all_arguments: list[str],
     *,
@@ -129,6 +159,8 @@ def _safe_run(
             timeout_seconds=timeout_seconds,
         )
     except FileNotFoundError:
+        if working_directory is not None and not working_directory.is_dir():
+            raise
         return MISSING_BINARY_EXIT_CODE
     except subprocess.TimeoutExpired:
         return TIMEOUT_EXIT_CODE
@@ -145,7 +177,7 @@ def _parse_binary_version(version_stdout: str) -> str:
 
 def _probe_binary_version(timeout_seconds: int) -> tuple[str, int | None]:
     completion_or_exit = _safe_run(
-        [CODEX_BINARY_NAME, VERSION_FLAG],
+        [*_resolve_codex_command_prefix(), VERSION_FLAG],
         working_directory=None,
         timeout_seconds=timeout_seconds,
     )
@@ -158,7 +190,7 @@ def _probe_binary_version(timeout_seconds: int) -> tuple[str, int | None]:
 
 def _probe_review_shape(timeout_seconds: int) -> tuple[bool, int]:
     completion_or_exit = _safe_run(
-        [CODEX_BINARY_NAME, EXEC_SUBCOMMAND, REVIEW_SUBCOMMAND, HELP_FLAG],
+        [*_resolve_codex_command_prefix(), EXEC_SUBCOMMAND, REVIEW_SUBCOMMAND, HELP_FLAG],
         working_directory=None,
         timeout_seconds=timeout_seconds,
     )
@@ -203,6 +235,13 @@ def _require_single_target(
         )
 
 
+def _require_existing_directory(directory_path: Path, parameter_name: str) -> None:
+    if not directory_path.is_dir():
+        raise ValueError(
+            f"{parameter_name} is not an existing directory: {directory_path}"
+        )
+
+
 def _build_review_arguments(
     *,
     base_branch: str | None,
@@ -210,7 +249,7 @@ def _build_review_arguments(
     commit_sha: str | None,
     is_prompt_target: bool,
 ) -> list[str]:
-    all_arguments = [CODEX_BINARY_NAME, EXEC_SUBCOMMAND]
+    all_arguments = [*_resolve_codex_command_prefix(), EXEC_SUBCOMMAND]
     if CODEX_MODEL_PIN:
         all_arguments.extend([MODEL_FLAG, CODEX_MODEL_PIN])
     all_arguments.extend([REVIEW_SUBCOMMAND, JSON_FLAG])
@@ -281,7 +320,11 @@ def _capture_review_run(
     jsonl_text = completion_or_exit.stdout or ""
     stderr_text = completion_or_exit.stderr or ""
     jsonl_path = run_state_directory / JSONL_CAPTURE_FILENAME
-    jsonl_path.write_text(jsonl_text, encoding=UTF8_ENCODING)
+    jsonl_path.write_text(
+        jsonl_text,
+        encoding=UTF8_ENCODING,
+        newline=JSONL_CAPTURE_NEWLINE,
+    )
     review_returncode = completion_or_exit.returncode
     if review_returncode != 0:
         return CodexReviewOutcome(
@@ -338,7 +381,10 @@ def run_codex_review(
         stderr on a failed review when JSONL has no agent message).
 
     Raises:
-        ValueError: When zero targets or more than one target is selected.
+        ValueError: When zero targets or more than one target is selected, or
+            when ``repository_directory`` or ``run_state_directory`` is not an
+            existing directory. Both directories are checked before any Codex
+            process starts, so a bad path costs no review run.
     """
     _require_single_target(
         base_branch=base_branch,
@@ -346,6 +392,8 @@ def run_codex_review(
         commit_sha=commit_sha,
         is_prompt_target=is_prompt_target,
     )
+    _require_existing_directory(repository_directory, "repository_directory")
+    _require_existing_directory(run_state_directory, "run_state_directory")
     resolved_timeout_seconds = (
         DEFAULT_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
     )

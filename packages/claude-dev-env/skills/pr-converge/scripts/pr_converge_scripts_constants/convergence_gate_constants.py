@@ -1,10 +1,13 @@
 """Named constants for the convergence gate IO leaves.
 
-Holds the short-SHA length, the join separators for gate detail strings, and
-the GraphQL query that lists a PR's review threads.
+Holds the short-SHA length, the review field key the newest-first sort reads,
+the join separators for gate detail strings, the fixture payload keys, and the
+GraphQL query that lists a PR's review threads.
 """
 
 SHORT_SHA_LENGTH: int = 7
+
+REVIEW_SUBMITTED_AT_KEY: str = "submitted_at"
 
 THREAD_PATH_JOIN_SEPARATOR: str = "; "
 
