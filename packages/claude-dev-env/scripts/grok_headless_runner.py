@@ -37,11 +37,13 @@ from dev_env_scripts_constants.grok_worker_constants import (
     CLASSIFICATION_USAGE_LIMIT,
     CWD_FLAG,
     GROK_BINARY_NAME,
+    GROK_BINARY_NOT_FOUND_STDERR,
     GROK_MODEL_PIN,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
     MAX_TURNS_FLAG,
+    MISSING_BINARY_RETURN_CODE,
     MODEL_FLAG,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
@@ -113,9 +115,7 @@ def _matches_any_signature(
     stdout_text: str, stderr_text: str, all_signatures: tuple[str, ...]
 ) -> bool:
     combined_text = _combined_text(stdout_text, stderr_text)
-    return any(
-        each_signature in combined_text for each_signature in all_signatures
-    )
+    return any(each_signature in combined_text for each_signature in all_signatures)
 
 
 def _classify_completion(
@@ -129,9 +129,7 @@ def _classify_completion(
             stdout=stdout_text,
             stderr=stderr_text,
         )
-    if _matches_any_signature(
-        stdout_text, stderr_text, ALL_USAGE_LIMIT_SIGNATURES
-    ):
+    if _matches_any_signature(stdout_text, stderr_text, ALL_USAGE_LIMIT_SIGNATURES):
         return GrokRunnerOutcome(
             is_ok=False,
             returncode=returncode,
@@ -139,9 +137,7 @@ def _classify_completion(
             stdout=stdout_text,
             stderr=stderr_text,
         )
-    if _matches_any_signature(
-        stdout_text, stderr_text, ALL_AUTH_FAILURE_SIGNATURES
-    ):
+    if _matches_any_signature(stdout_text, stderr_text, ALL_AUTH_FAILURE_SIGNATURES):
         return GrokRunnerOutcome(
             is_ok=False,
             returncode=returncode,
@@ -172,9 +168,7 @@ def _timeout_outcome(process: subprocess.Popen[str]) -> GrokRunnerOutcome:
     stdout_text = _normalize_stream(captured_stdout)
     stderr_text = _normalize_stream(captured_stderr)
     returncode = (
-        process.returncode
-        if process.returncode is not None
-        else TIMEOUT_RETURN_CODE
+        process.returncode if process.returncode is not None else TIMEOUT_RETURN_CODE
     )
     return GrokRunnerOutcome(
         is_ok=False,
@@ -199,23 +193,19 @@ def _invoke_process(
     except FileNotFoundError:
         return GrokRunnerOutcome(
             is_ok=False,
-            returncode=TIMEOUT_RETURN_CODE,
+            returncode=MISSING_BINARY_RETURN_CODE,
             classification=CLASSIFICATION_ERROR,
             stdout="",
-            stderr="",
+            stderr=GROK_BINARY_NOT_FOUND_STDERR,
         )
     try:
-        captured_stdout, captured_stderr = process.communicate(
-            timeout=timeout_seconds
-        )
+        captured_stdout, captured_stderr = process.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
         return _timeout_outcome(process)
     stdout_text = _normalize_stream(captured_stdout)
     stderr_text = _normalize_stream(captured_stderr)
     returncode = (
-        process.returncode
-        if process.returncode is not None
-        else TIMEOUT_RETURN_CODE
+        process.returncode if process.returncode is not None else TIMEOUT_RETURN_CODE
     )
     return _classify_completion(returncode, stdout_text, stderr_text)
 

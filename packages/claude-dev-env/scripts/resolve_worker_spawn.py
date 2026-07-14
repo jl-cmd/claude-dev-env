@@ -9,8 +9,9 @@ Walk order:
    On a Claude host with the claude tier disabled, stop with
    ``claude_agent_required`` so the calling skill runs the Agent tool.
    On a third-party host, or when the claude tier is enabled, tier 3 runs
-   ``claude_chain_runner.run_claude`` with ``-p --prompt-file ... --output-format json``
-   and stdin redirected to null.
+   ``claude_chain_runner.run_claude`` with ``-p <prompt text> --output-format json``,
+   stdin redirected to null, and subprocess ``cwd`` set to the caller's working
+   directory.
 
 Import ``resolve_worker_spawn`` for the outcome object, or run as a CLI::
 
@@ -48,12 +49,12 @@ from claude_chain_runner import (  # noqa: E402
     run_claude,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
+    ALL_AGENT_FILENAMES_BY_ROLE,
     ATTEMPT_KEY_OK,
     ATTEMPT_KEY_REASON,
     ATTEMPT_KEY_TIER,
     CLI_CWD_FLAG,
     CLI_ENABLE_CLAUDE_TIER_FLAG,
-    CLI_PROMPT_FILE_FLAG,
     CLI_ROLE_FLAG,
     CLI_RUN_STATE_DIR_FLAG,
     CLI_TIMEOUT_FLAG,
@@ -77,6 +78,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TIER_CLAUDE_AGENT,
     TIER_CLAUDE_HEADLESS,
     TIER_GROK,
+    UTF8_ENCODING,
 )
 from grok_headless_runner import GrokRunnerOutcome, run_headless_worker  # noqa: E402
 from grok_worker_preflight import PreflightOutcome, run_preflight  # noqa: E402
@@ -120,17 +122,24 @@ TextCapturingSubprocessRunner = Callable[
 ]
 
 
-def _attempt(
-    tier: int, *, is_ok: bool, reason: str | None
-) -> SpawnAttempt:
+def _attempt(tier: int, *, is_ok: bool, reason: str | None) -> SpawnAttempt:
     return SpawnAttempt(tier=tier, is_ok=is_ok, reason=reason)
 
 
+def _primary_agent_name_for_role(role: str) -> str:
+    all_agent_filenames = ALL_AGENT_FILENAMES_BY_ROLE.get(role)
+    if all_agent_filenames is None:
+        return role
+    if not all_agent_filenames:
+        return role
+    return Path(all_agent_filenames[0]).stem
+
+
 def _build_claude_arguments(prompt_file: Path) -> list[str]:
+    prompt_text = prompt_file.read_text(encoding=UTF8_ENCODING)
     return [
         SINGLE_TURN_FLAG,
-        PROMPT_FILE_FLAG,
-        str(prompt_file),
+        prompt_text,
         OUTPUT_FORMAT_FLAG,
         OUTPUT_FORMAT_JSON,
     ]
@@ -154,12 +163,16 @@ def _stdin_handle_from_keywords(all_keywords: dict[str, object]) -> int:
     return subprocess.DEVNULL
 
 
-def _run_claude_with_stdin_redirected(
-    all_claude_arguments: list[str], *, timeout_seconds: int
+def _run_claude_with_headless_overrides(
+    all_claude_arguments: list[str],
+    *,
+    timeout_seconds: int,
+    working_directory: Path,
 ) -> ChainInvocationOutcome:
     previous_runner = chain_runner.chain_subprocess_runner
+    working_directory_path = str(working_directory)
 
-    def _runner_with_stdin_redirect(
+    def _runner_with_headless_overrides(
         all_invocation_tokens: Sequence[str],
         *all_positionals: object,
         **all_keywords: object,
@@ -172,11 +185,12 @@ def _run_claude_with_stdin_redirected(
             timeout=_timeout_seconds_from_keywords(all_keywords),
             check=False,
             stdin=_stdin_handle_from_keywords(all_keywords),
+            cwd=working_directory_path,
         )
         return completed_process
 
-    redirected_runner: TextCapturingSubprocessRunner = _runner_with_stdin_redirect
-    setattr(chain_runner, "chain_subprocess_runner", redirected_runner)
+    headless_runner: TextCapturingSubprocessRunner = _runner_with_headless_overrides
+    setattr(chain_runner, "chain_subprocess_runner", headless_runner)
     try:
         return spawn_claude_runner(
             all_claude_arguments, timeout_seconds=timeout_seconds
@@ -210,9 +224,7 @@ def _served_claude_outcome(
 ) -> SpawnOutcome:
     is_served = chain_outcome.served_command is not None
     is_ok = is_served and chain_outcome.returncode == SPAWN_SERVED_EXIT_CODE
-    all_attempts.append(
-        _attempt(TIER_CLAUDE_HEADLESS, is_ok=is_ok, reason=None)
-    )
+    all_attempts.append(_attempt(TIER_CLAUDE_HEADLESS, is_ok=is_ok, reason=None))
     if not is_served:
         return SpawnOutcome(
             tier_used=None,
@@ -233,12 +245,15 @@ def _served_claude_outcome(
 def _run_tier_claude_headless(
     *,
     prompt_file: Path,
+    working_directory: Path,
     timeout_seconds: int,
     all_attempts: list[SpawnAttempt],
 ) -> SpawnOutcome:
     all_claude_arguments = _build_claude_arguments(prompt_file)
-    chain_outcome = _run_claude_with_stdin_redirected(
-        all_claude_arguments, timeout_seconds=timeout_seconds
+    chain_outcome = _run_claude_with_headless_overrides(
+        all_claude_arguments,
+        timeout_seconds=timeout_seconds,
+        working_directory=working_directory,
     )
     return _served_claude_outcome(all_attempts, chain_outcome)
 
@@ -246,6 +261,7 @@ def _run_tier_claude_headless(
 def _after_grok_fallthrough(
     *,
     prompt_file: Path,
+    working_directory: Path,
     timeout_seconds: int,
     is_claude_tier_enabled: bool,
     all_attempts: list[SpawnAttempt],
@@ -259,6 +275,7 @@ def _after_grok_fallthrough(
         )
     return _run_tier_claude_headless(
         prompt_file=prompt_file,
+        working_directory=working_directory,
         timeout_seconds=timeout_seconds,
         all_attempts=all_attempts,
     )
@@ -273,13 +290,14 @@ def _run_tier_grok(
     max_turns: int,
     timeout_seconds: int,
 ) -> GrokRunnerOutcome:
+    agent_name = _primary_agent_name_for_role(role)
     return spawn_grok_runner(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
         max_turns=max_turns,
         timeout_seconds=timeout_seconds,
-        agent_name=role,
+        agent_name=agent_name,
     )
 
 
@@ -287,14 +305,14 @@ def _record_preflight_fallthrough(
     preflight_outcome: PreflightOutcome,
     *,
     prompt_file: Path,
+    working_directory: Path,
     timeout_seconds: int,
     is_claude_tier_enabled: bool,
 ) -> SpawnOutcome:
-    all_attempts = [
-        _attempt(TIER_GROK, is_ok=False, reason=preflight_outcome.reason)
-    ]
+    all_attempts = [_attempt(TIER_GROK, is_ok=False, reason=preflight_outcome.reason)]
     return _after_grok_fallthrough(
         prompt_file=prompt_file,
+        working_directory=working_directory,
         timeout_seconds=timeout_seconds,
         is_claude_tier_enabled=is_claude_tier_enabled,
         all_attempts=all_attempts,
@@ -318,6 +336,7 @@ def _record_grok_fallthrough(
     grok_outcome: GrokRunnerOutcome,
     *,
     prompt_file: Path,
+    working_directory: Path,
     timeout_seconds: int,
     is_claude_tier_enabled: bool,
 ) -> SpawnOutcome:
@@ -330,6 +349,7 @@ def _record_grok_fallthrough(
     ]
     return _after_grok_fallthrough(
         prompt_file=prompt_file,
+        working_directory=working_directory,
         timeout_seconds=timeout_seconds,
         is_claude_tier_enabled=is_claude_tier_enabled,
         all_attempts=all_attempts,
@@ -350,9 +370,9 @@ def resolve_worker_spawn(
     """Walk the worker-spawn tiers and return the structured outcome.
 
     Args:
-        role: Worker role name passed to preflight and as the grok agent name.
+        role: Worker role name for preflight; mapped to a primary agent stem for grok.
         prompt_file: Path to the prompt file for headless workers.
-        working_directory: Working directory for the headless grok process.
+        working_directory: Working directory for grok and claude headless tiers.
         timeout_seconds: Timeout applied to each tier invocation.
         is_claude_tier_enabled: When True, allow tier 3 on a Claude host.
         run_state_directory: Run-scoped directory for leader sockets and cache.
@@ -370,6 +390,7 @@ def resolve_worker_spawn(
         return _record_preflight_fallthrough(
             preflight_outcome,
             prompt_file=prompt_file,
+            working_directory=working_directory,
             timeout_seconds=timeout_seconds,
             is_claude_tier_enabled=is_claude_tier_enabled,
         )
@@ -387,6 +408,7 @@ def resolve_worker_spawn(
     return _record_grok_fallthrough(
         grok_outcome,
         prompt_file=prompt_file,
+        working_directory=working_directory,
         timeout_seconds=timeout_seconds,
         is_claude_tier_enabled=is_claude_tier_enabled,
     )
@@ -425,10 +447,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         CLI_ROLE_FLAG,
         default=DEFAULT_ROLE,
-        help="Worker role name for preflight and the grok agent flag.",
+        help="Worker role name for preflight; mapped to a primary agent for grok.",
     )
     parser.add_argument(
-        CLI_PROMPT_FILE_FLAG,
+        PROMPT_FILE_FLAG,
         dest="prompt_file",
         required=True,
         type=Path,
@@ -439,7 +461,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         dest="working_directory",
         required=True,
         type=Path,
-        help="Working directory for the headless grok process.",
+        help="Working directory for headless grok and claude workers.",
     )
     parser.add_argument(
         CLI_TIMEOUT_FLAG,

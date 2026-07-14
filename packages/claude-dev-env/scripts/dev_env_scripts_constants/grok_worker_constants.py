@@ -185,6 +185,12 @@ DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
 
+MISSING_BINARY_RETURN_CODE: int = 127
+"""Return code recorded when the grok binary is not found on PATH."""
+
+GROK_BINARY_NOT_FOUND_STDERR: str = f"{GROK_BINARY_NAME} not found"
+"""Stderr text returned when the grok binary cannot be resolved on PATH."""
+
 TIER_GROK: int = 1
 """Dispatcher tier number for the headless grok worker path."""
 
@@ -232,9 +238,6 @@ ATTEMPT_KEY_OK: str = "ok"
 
 ATTEMPT_KEY_REASON: str = "reason"
 """JSON attempt key holding the fallthrough or handoff reason string."""
-
-CLI_PROMPT_FILE_FLAG: str = "--prompt-file"
-"""CLI flag naming the prompt file path for the dispatcher."""
 
 CLI_CWD_FLAG: str = "--cwd"
 """CLI flag naming the working directory for the worker process."""

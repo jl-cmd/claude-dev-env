@@ -28,13 +28,16 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CLASSIFICATION_USAGE_LIMIT,
     CWD_FLAG,
     GROK_BINARY_NAME,
+    GROK_BINARY_NOT_FOUND_STDERR,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
     MAX_TURNS_FLAG,
+    MISSING_BINARY_RETURN_CODE,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
     PROMPT_FILE_FLAG,
+    TIMEOUT_RETURN_CODE,
 )
 
 FIXTURE_GROK_BINARY_VERSION = "0.2.99 (b1b49ccb71) [stable]"
@@ -154,9 +157,7 @@ def test_argv_assembly_includes_required_flags(
     assert MAX_TURNS_FLAG in invocation
     assert str(DEFAULT_MAX_TURNS) in invocation
     assert LEADER_SOCKET_FLAG in invocation
-    leader_socket_path = Path(
-        invocation[invocation.index(LEADER_SOCKET_FLAG) + 1]
-    )
+    leader_socket_path = Path(invocation[invocation.index(LEADER_SOCKET_FLAG) + 1])
     assert leader_socket_path.parent == run_state_directory
     assert leader_socket_path.name.startswith(LEADER_SOCKET_FILENAME_PREFIX)
     assert leader_socket_path.name.endswith(LEADER_SOCKET_FILENAME_SUFFIX)
@@ -208,23 +209,17 @@ def test_unique_leader_socket_path_per_call(
     )
 
     first_socket = Path(
-        recorder.invocations[0][
-            recorder.invocations[0].index(LEADER_SOCKET_FLAG) + 1
-        ]
+        recorder.invocations[0][recorder.invocations[0].index(LEADER_SOCKET_FLAG) + 1]
     )
     second_socket = Path(
-        recorder.invocations[1][
-            recorder.invocations[1].index(LEADER_SOCKET_FLAG) + 1
-        ]
+        recorder.invocations[1][recorder.invocations[1].index(LEADER_SOCKET_FLAG) + 1]
     )
     assert first_socket != second_socket
     assert first_socket.parent == run_state_directory
     assert second_socket.parent == run_state_directory
 
 
-def test_timeout_kills_process(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_timeout_kills_process(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     fake_process = _FakeProcess(
         returncode=0, stderr="still running", should_timeout=True
     )
@@ -243,9 +238,7 @@ def test_timeout_kills_process(
 def test_classifies_usage_limit_from_fixture(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    fake_process = _FakeProcess(
-        returncode=1, stderr=FIXTURE_USAGE_LIMIT_STDERR
-    )
+    fake_process = _FakeProcess(returncode=1, stderr=FIXTURE_USAGE_LIMIT_STDERR)
     outcome, _, _, _, _ = _run_once(monkeypatch, tmp_path, fake_process)
 
     assert outcome.is_ok is False
@@ -258,9 +251,7 @@ def test_classifies_usage_limit_from_fixture(
 def test_classifies_auth_failure_from_fixture(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    fake_process = _FakeProcess(
-        returncode=1, stderr=FIXTURE_AUTH_FAILURE_STDERR
-    )
+    fake_process = _FakeProcess(returncode=1, stderr=FIXTURE_AUTH_FAILURE_STDERR)
     outcome, _, _, _, _ = _run_once(monkeypatch, tmp_path, fake_process)
 
     assert outcome.is_ok is False
@@ -284,9 +275,7 @@ def test_classifies_ok_on_zero_exit(
 def test_classifies_error_on_unknown_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    fake_process = _FakeProcess(
-        returncode=2, stderr=FIXTURE_GENERIC_FAILURE_STDERR
-    )
+    fake_process = _FakeProcess(returncode=2, stderr=FIXTURE_GENERIC_FAILURE_STDERR)
     outcome, _, _, _, _ = _run_once(monkeypatch, tmp_path, fake_process)
 
     assert outcome.is_ok is False
@@ -306,10 +295,43 @@ def test_scratch_paths_stay_under_run_state_directory(
 
     assert outcome.is_ok is True
     invocation = recorder.invocations[0]
-    leader_socket_path = Path(
-        invocation[invocation.index(LEADER_SOCKET_FLAG) + 1]
-    )
+    leader_socket_path = Path(invocation[invocation.index(LEADER_SOCKET_FLAG) + 1])
     assert leader_socket_path.is_relative_to(run_state_directory)
     assert not leader_socket_path.is_relative_to(repo_root)
     written_inside_repo = list(repo_root.rglob("*"))
     assert written_inside_repo == []
+
+
+def test_missing_binary_returns_dedicated_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding="utf-8")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+
+    def _raise_file_not_found(
+        invocation: list[str], **keyword_arguments: object
+    ) -> object:
+        del invocation, keyword_arguments
+        raise FileNotFoundError(GROK_BINARY_NAME)
+
+    monkeypatch.setattr(runner, "runner_popen", _raise_file_not_found)
+    outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        max_turns=DEFAULT_MAX_TURNS,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+
+    assert outcome.is_ok is False
+    assert outcome.classification == CLASSIFICATION_ERROR
+    assert outcome.returncode == MISSING_BINARY_RETURN_CODE
+    assert outcome.returncode != TIMEOUT_RETURN_CODE
+    assert outcome.stderr != ""
+    assert GROK_BINARY_NAME in outcome.stderr
+    assert "not found" in outcome.stderr
+    assert outcome.stderr == GROK_BINARY_NOT_FOUND_STDERR

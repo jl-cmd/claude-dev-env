@@ -23,6 +23,7 @@ from claude_chain_runner import (  # noqa: E402
     ChainInvocationOutcome,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
+    ALL_AGENT_FILENAMES_BY_ROLE,
     ATTEMPT_KEY_OK,
     ATTEMPT_KEY_REASON,
     ATTEMPT_KEY_TIER,
@@ -31,7 +32,6 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CLASSIFICATION_USAGE_LIMIT,
     CLI_CWD_FLAG,
     CLI_ENABLE_CLAUDE_TIER_FLAG,
-    CLI_PROMPT_FILE_FLAG,
     CLI_ROLE_FLAG,
     CLI_RUN_STATE_DIR_FLAG,
     CLI_TIMEOUT_FLAG,
@@ -64,10 +64,14 @@ HOST_PROFILE_THIRD_PARTY = "ThirdParty"
 
 FIXTURE_GROK_STDOUT = '{"tier":"grok","status":"done"}'
 FIXTURE_CLAUDE_STDOUT = '{"tier":"claude","status":"done"}'
+FIXTURE_PROMPT_TEXT = "do the work"
 FIXTURE_GROK_RETURNCODE = 0
 FIXTURE_CLAUDE_RETURNCODE = 0
 FIXTURE_FAILED_RETURNCODE = 1
 FIXTURE_ROLE = "code-quality-agent"
+EXPECTED_PRIMARY_AGENT_FOR_DEFAULT_ROLE = Path(
+    ALL_AGENT_FILENAMES_BY_ROLE[DEFAULT_ROLE][0]
+).stem
 
 
 def _usable_preflight() -> PreflightOutcome:
@@ -130,7 +134,7 @@ def _claude_exhausted() -> ChainInvocationOutcome:
 
 def _paths(tmp_path: Path) -> tuple[Path, Path, Path]:
     prompt_file = tmp_path / "prompt.txt"
-    prompt_file.write_text("do the work", encoding="utf-8")
+    prompt_file.write_text(FIXTURE_PROMPT_TEXT, encoding="utf-8")
     working_directory = tmp_path / "project"
     working_directory.mkdir()
     run_state_directory = tmp_path / "run-state"
@@ -146,6 +150,8 @@ class SeamCallLog:
     claude_arguments: list[str] | None = None
     host_profile_calls: int = 0
     is_stdin_redirected: bool = False
+    claude_working_directory: Path | None = None
+    grok_keyword_arguments: dict[str, object] | None = None
 
 
 def _install_seams(
@@ -162,17 +168,24 @@ def _install_seams(
         call_log.preflight_calls += 1
         return preflight_outcome
 
-    def fake_grok(**_keyword_arguments: object) -> GrokRunnerOutcome:
+    def fake_grok(**keyword_arguments: object) -> GrokRunnerOutcome:
         call_log.grok_calls += 1
+        call_log.grok_keyword_arguments = dict(keyword_arguments)
         assert grok_outcome is not None
         return grok_outcome
 
     def fake_claude(
         all_claude_arguments: list[str], *, timeout_seconds: int
     ) -> ChainInvocationOutcome:
-        del timeout_seconds
         call_log.claude_calls += 1
         call_log.claude_arguments = list(all_claude_arguments)
+        chain_runner.chain_subprocess_runner(
+            ["claude", *all_claude_arguments],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
         if isinstance(claude_outcome, BaseException):
             raise claude_outcome
         assert isinstance(claude_outcome, ChainInvocationOutcome)
@@ -190,8 +203,6 @@ def _install_seams(
     monkeypatch.setattr(dispatcher, "spawn_claude_runner", fake_claude)
     monkeypatch.setattr(dispatcher, "spawn_host_profile_detector", fake_host_profile)
 
-    original_subprocess_runner = chain_runner.chain_subprocess_runner
-
     def _tracking_subprocess_runner(
         all_invocation_tokens: Sequence[str],
         *all_positionals: object,
@@ -200,27 +211,15 @@ def _install_seams(
         del all_positionals
         if all_keywords.get("stdin") is subprocess.DEVNULL:
             call_log.is_stdin_redirected = True
-        maybe_timeout = all_keywords.get("timeout")
-        timeout_seconds: float | None = (
-            float(maybe_timeout)
-            if isinstance(maybe_timeout, (int, float))
-            else None
+        maybe_cwd = all_keywords.get("cwd")
+        if maybe_cwd is not None:
+            call_log.claude_working_directory = Path(str(maybe_cwd))
+        return subprocess.CompletedProcess(
+            args=list(all_invocation_tokens),
+            returncode=0,
+            stdout="{}",
+            stderr="",
         )
-        maybe_stdin = all_keywords.get("stdin")
-        stdin_handle: int | None = (
-            maybe_stdin if isinstance(maybe_stdin, int) else None
-        )
-        completed_process: subprocess.CompletedProcess[str] = (
-            original_subprocess_runner(
-                all_invocation_tokens,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                check=False,
-                stdin=stdin_handle,
-            )
-        )
-        return completed_process
 
     monkeypatch.setattr(
         chain_runner, "chain_subprocess_runner", _tracking_subprocess_runner
@@ -255,6 +254,8 @@ def test_grok_ok_serves_tier_one(
     assert call_log.grok_calls == 1
     assert call_log.claude_calls == 0
     assert call_log.host_profile_calls == 0
+    assert call_log.grok_keyword_arguments is not None
+    assert call_log.grok_keyword_arguments["agent_name"] == FIXTURE_ROLE
     assert len(spawn_outcome.all_attempts) == 1
     assert spawn_outcome.all_attempts[0].tier == TIER_GROK
     assert spawn_outcome.all_attempts[0].is_ok is True
@@ -319,13 +320,16 @@ def test_grok_auth_failed_on_third_party_runs_tier_three(
     assert spawn_outcome.tier_used == TIER_CLAUDE_HEADLESS
     assert spawn_outcome.captured_stdout == FIXTURE_CLAUDE_STDOUT
     assert call_log.claude_calls == 1
+    assert call_log.claude_arguments is not None
+    assert PROMPT_FILE_FLAG not in call_log.claude_arguments
     assert call_log.claude_arguments == [
         SINGLE_TURN_FLAG,
-        PROMPT_FILE_FLAG,
-        str(prompt_file),
+        FIXTURE_PROMPT_TEXT,
         OUTPUT_FORMAT_FLAG,
         OUTPUT_FORMAT_JSON,
     ]
+    assert call_log.is_stdin_redirected is True
+    assert call_log.claude_working_directory == working_directory
     assert spawn_outcome.all_attempts[0].tier == TIER_GROK
     assert spawn_outcome.all_attempts[0].reason == CLASSIFICATION_AUTH_FAILURE
     assert spawn_outcome.all_attempts[1].tier == TIER_CLAUDE_HEADLESS
@@ -347,7 +351,7 @@ def test_tier_three_exhausted_returns_exit_two(
         [
             CLI_ROLE_FLAG,
             FIXTURE_ROLE,
-            CLI_PROMPT_FILE_FLAG,
+            PROMPT_FILE_FLAG,
             str(prompt_file),
             CLI_CWD_FLAG,
             str(working_directory),
@@ -380,7 +384,7 @@ def test_config_error_returns_exit_three(
         [
             CLI_ROLE_FLAG,
             FIXTURE_ROLE,
-            CLI_PROMPT_FILE_FLAG,
+            PROMPT_FILE_FLAG,
             str(prompt_file),
             CLI_CWD_FLAG,
             str(working_directory),
@@ -437,7 +441,7 @@ def test_cli_stdout_carries_only_json_result(
         [
             CLI_ROLE_FLAG,
             FIXTURE_ROLE,
-            CLI_PROMPT_FILE_FLAG,
+            PROMPT_FILE_FLAG,
             str(prompt_file),
             CLI_CWD_FLAG,
             str(working_directory),
@@ -452,9 +456,9 @@ def test_cli_stdout_carries_only_json_result(
     captured = capsys.readouterr()
     assert captured.err == ""
     parsed_payload = json.loads(captured.out)
-    assert captured.out == json.dumps(parsed_payload) + "\n" or captured.out.strip() == json.dumps(
+    assert captured.out == json.dumps(
         parsed_payload
-    )
+    ) + "\n" or captured.out.strip() == json.dumps(parsed_payload)
     reparsed = json.loads(captured.out.strip())
     assert reparsed is not None
     assert set(reparsed.keys()) == {
@@ -551,7 +555,7 @@ def test_enable_claude_tier_flag_reaches_tier_three_on_claude_host(
         [
             CLI_ROLE_FLAG,
             FIXTURE_ROLE,
-            CLI_PROMPT_FILE_FLAG,
+            PROMPT_FILE_FLAG,
             str(prompt_file),
             CLI_CWD_FLAG,
             str(working_directory),
@@ -565,5 +569,38 @@ def test_enable_claude_tier_flag_reaches_tier_three_on_claude_host(
 
     assert exit_code == SPAWN_SERVED_EXIT_CODE
     assert call_log.claude_calls == 1
+    assert call_log.is_stdin_redirected is True
+    assert call_log.claude_working_directory == working_directory
+    assert call_log.claude_arguments is not None
+    assert PROMPT_FILE_FLAG not in call_log.claude_arguments
+    assert SINGLE_TURN_FLAG in call_log.claude_arguments
+    assert OUTPUT_FORMAT_JSON in call_log.claude_arguments
     parsed_payload = json.loads(capsys.readouterr().out)
     assert parsed_payload[RESULT_KEY_TIER_USED] == TIER_CLAUDE_HEADLESS
+
+
+def test_default_role_maps_to_primary_agent_stem(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    prompt_file, working_directory, run_state_directory = _paths(tmp_path)
+    call_log = _install_seams(
+        monkeypatch,
+        grok_outcome=_grok_ok(),
+    )
+
+    spawn_outcome = dispatcher.resolve_worker_spawn(
+        role=DEFAULT_ROLE,
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
+        is_claude_tier_enabled=False,
+        run_state_directory=run_state_directory,
+        max_turns=DEFAULT_SPAWN_MAX_TURNS,
+    )
+
+    assert spawn_outcome.is_ok is True
+    assert call_log.grok_keyword_arguments is not None
+    agent_name = call_log.grok_keyword_arguments["agent_name"]
+    assert agent_name == EXPECTED_PRIMARY_AGENT_FOR_DEFAULT_ROLE
+    assert agent_name != DEFAULT_ROLE
+    assert agent_name != "bugteam"
