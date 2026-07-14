@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 from types import ModuleType
 
@@ -20,6 +23,7 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     EXIT_CODE_SUCCESS,
     PERCENT_EMPTY,
     PERCENT_FULL,
+    READER_THREAD_JOIN_TIMEOUT_SECONDS,
     SOURCE_APP_SERVER_RATE_LIMITS,
     SOURCE_NO_USAGE_SURFACE,
     SOURCE_TEXT_STATUS,
@@ -28,6 +32,7 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     USAGE_REPORT_KEY_WINDOW_RESET,
     WEEKLY_USAGE_GATE_THRESHOLD_PERCENT,
     WEEKLY_WINDOW_DURATION_MINUTES,
+    WINDOWS_OS_NAME,
 )
 
 SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
@@ -100,8 +105,21 @@ PRIMARY_ONLY_SESSION_WINDOW_REPLY = json.dumps(
 )
 
 EXPECTED_TEXT_STATUS_WINDOW_RESET = "2026-07-19T23:49:08+00:00"
+EXPECTED_FIVE_HOUR_WINDOW_RESET = "2026-07-01T00:00:00+00:00"
 
 NO_USAGE_SURFACE_LOGIN_STATUS_OUTPUT = "Logged in using ChatGPT\n"
+
+TEXT_STATUS_WITH_FIVE_HOUR_AND_WEEKLY_RESETS = (
+    "Status\n"
+    f"5-hour limit: 60% left (resets {EXPECTED_FIVE_HOUR_WINDOW_RESET})\n"
+    f"Weekly limit: 42% left (resets {EXPECTED_TEXT_STATUS_WINDOW_RESET})\n"
+)
+
+PROCESS_TREE_CHILD_SLEEP_SECONDS = 60
+PROCESS_TREE_MARKER_WAIT_SECONDS = 5
+PROCESS_TREE_MARKER_POLL_SECONDS = 0.05
+PROCESS_TREE_WAIT_SECONDS = 5
+READER_JOIN_TEARDOWN_WAIT_SECONDS = 0.2
 
 NO_RATE_LIMITS_APP_SERVER_REPLY = json.dumps(
     {
@@ -223,6 +241,31 @@ class TestParseRateLimitsMessage:
         assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_NO_USAGE_SURFACE
 
 
+def _is_process_id_running(process_id: int) -> bool:
+    if os.name == WINDOWS_OS_NAME:
+        task_list_output = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {process_id}"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return str(process_id) in task_list_output.stdout
+    try:
+        os.kill(process_id, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _wait_for_path(target_path: Path, timeout_seconds: float) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if target_path.exists():
+            return
+        time.sleep(PROCESS_TREE_MARKER_POLL_SECONDS)
+    raise AssertionError(f"timed out waiting for {target_path}")
+
+
 class TestParseTextStatus:
     def should_parse_weekly_percent_left_from_status_text(self) -> None:
         probe = load_probe_module()
@@ -244,6 +287,21 @@ class TestParseTextStatus:
             == EXPECTED_TEXT_STATUS_WINDOW_RESET
         )
 
+    def should_prefer_weekly_reset_when_five_hour_reset_appears_first(self) -> None:
+        probe = load_probe_module()
+        usage_report = probe.parse_text_usage_status(
+            TEXT_STATUS_WITH_FIVE_HOUR_AND_WEEKLY_RESETS
+        )
+        assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] == 42.0
+        assert (
+            usage_report[USAGE_REPORT_KEY_WINDOW_RESET]
+            == EXPECTED_TEXT_STATUS_WINDOW_RESET
+        )
+        assert usage_report[USAGE_REPORT_KEY_WINDOW_RESET] != (
+            EXPECTED_FIVE_HOUR_WINDOW_RESET
+        )
+        assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_TEXT_STATUS
+
     def should_yield_null_for_login_status_without_usage(self) -> None:
         probe = load_probe_module()
         usage_report = probe.parse_text_usage_status(
@@ -251,6 +309,84 @@ class TestParseTextStatus:
         )
         assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] is None
         assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_NO_USAGE_SURFACE
+
+
+class TestProcessTreeTeardown:
+    def should_kill_grandchild_started_by_windows_cmd_wrapper(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        if os.name != WINDOWS_OS_NAME:
+            pytest.fail("Windows process-tree teardown coverage requires Windows")
+        probe = load_probe_module()
+        child_marker_path = tmp_path / "child_pid.txt"
+        child_script_path = tmp_path / "sleep_child.py"
+        wrapper_script_path = tmp_path / "wrapper.cmd"
+        child_script_path.write_text(
+            "import os\n"
+            "import pathlib\n"
+            "import time\n"
+            f"pathlib.Path({str(child_marker_path)!r}).write_text(str(os.getpid()))\n"
+            f"time.sleep({PROCESS_TREE_CHILD_SLEEP_SECONDS})\n",
+            encoding="utf-8",
+        )
+        wrapper_script_path.write_text(
+            f'@echo off\r\n"{sys.executable}" "{child_script_path}"\r\n',
+            encoding="utf-8",
+        )
+        server_process = subprocess.Popen(
+            ["cmd", "/c", str(wrapper_script_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            _wait_for_path(child_marker_path, PROCESS_TREE_MARKER_WAIT_SECONDS)
+            child_process_id = int(child_marker_path.read_text(encoding="utf-8"))
+            assert _is_process_id_running(child_process_id)
+            probe._terminate_process_tree(server_process)
+            server_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
+            assert not _is_process_id_running(child_process_id)
+        finally:
+            if server_process.poll() is None:
+                server_process.kill()
+                server_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
+
+
+class TestReaderThreadLifecycle:
+    def should_join_stdout_reader_after_process_tree_teardown(self) -> None:
+        probe = load_probe_module()
+        is_exchange_over = threading.Event()
+        all_server_lines: list[str] = []
+
+        def collect_until_event(
+            _server_stdout: object,
+            collected_lines: list[str],
+            exchange_over: threading.Event,
+        ) -> None:
+            collected_lines.append("reader-started")
+            time.sleep(READER_JOIN_TEARDOWN_WAIT_SECONDS)
+            collected_lines.append("reader-finished")
+            exchange_over.set()
+
+        reader_thread = threading.Thread(
+            target=collect_until_event,
+            args=(None, all_server_lines, is_exchange_over),
+            daemon=True,
+        )
+        reader_thread.start()
+        finished_process = subprocess.Popen(
+            [sys.executable, "-c", "pass"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        finished_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
+        probe._teardown_app_server_exchange(
+            server_process=finished_process,
+            reader_thread=reader_thread,
+        )
+        assert reader_thread.is_alive() is False
+        assert all_server_lines == ["reader-started", "reader-finished"]
+        assert READER_THREAD_JOIN_TIMEOUT_SECONDS >= 1
 
 
 class TestRealAppServerExchange:

@@ -66,8 +66,10 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     PERCENT_EMPTY,
     PERCENT_FULL,
     PRIMARY_WINDOW_KEY,
+    PROCESS_TREE_WAIT_TIMEOUT_SECONDS,
     RATE_LIMITS_KEY,
     RATE_LIMITS_REQUEST_ID,
+    READER_THREAD_JOIN_TIMEOUT_SECONDS,
     RESETS_AT_KEY,
     SECONDARY_WINDOW_KEY,
     SOURCE_APP_SERVER_RATE_LIMITS,
@@ -87,6 +89,10 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     WINDOWS_COMMAND_SHELL,
     WINDOWS_COMMAND_SHELL_RUN_FLAG,
     WINDOWS_OS_NAME,
+    WINDOWS_TASKKILL_COMMAND,
+    WINDOWS_TASKKILL_FORCE_FLAG,
+    WINDOWS_TASKKILL_PID_FLAG,
+    WINDOWS_TASKKILL_TREE_FLAG,
 )
 
 
@@ -248,8 +254,13 @@ def parse_rate_limits_message(message_text: str) -> UsageReport:
     return _parse_rate_limits_snapshot(all_rate_limit_fields)
 
 
-def _text_status_report(percent_left: float, status_text: str) -> UsageReport:
-    reset_match = re.search(TEXT_WINDOW_RESET_PATTERN, status_text)
+def _text_status_report(
+    percent_left: float,
+    status_text: str,
+    search_from_index: int,
+) -> UsageReport:
+    weekly_scoped_text = status_text[search_from_index:]
+    reset_match = re.search(TEXT_WINDOW_RESET_PATTERN, weekly_scoped_text)
     window_reset = (
         reset_match.group("reset").strip() if reset_match is not None else None
     )
@@ -272,13 +283,21 @@ def parse_text_usage_status(status_text: str) -> UsageReport:
     left_match = re.search(TEXT_WEEKLY_PERCENT_LEFT_PATTERN, status_text)
     if left_match is not None:
         percent_left = _clamp_percent(float(left_match.group("percent")))
-        return _text_status_report(percent_left, status_text)
+        return _text_status_report(
+            percent_left,
+            status_text,
+            search_from_index=left_match.start(),
+        )
     used_match = re.search(TEXT_WEEKLY_USED_PERCENT_PATTERN, status_text)
     if used_match is not None:
         percent_left = _clamp_percent(
             float(PERCENT_FULL) - float(used_match.group("percent"))
         )
-        return _text_status_report(percent_left, status_text)
+        return _text_status_report(
+            percent_left,
+            status_text,
+            search_from_index=used_match.start(),
+        )
     return _null_usage_report()
 
 
@@ -356,6 +375,53 @@ def _collect_server_lines(
     is_exchange_over.set()
 
 
+def _terminate_process_tree(server_process: subprocess.Popen[str]) -> None:
+    """Stop the app-server process and any children it launched.
+
+    On Windows the probe may wrap a ``.cmd``/``.bat`` shim as ``cmd /c``, so
+    ``Popen.pid`` is ``cmd.exe``. Killing only that process leaves the real
+    Codex app-server grandchild alive and holding stdout. ``taskkill /T``
+    tears down the whole tree; other platforms use ``kill()``.
+    """
+    if server_process.poll() is not None:
+        return
+    process_id = server_process.pid
+    if process_id is None:
+        return
+    if os.name == WINDOWS_OS_NAME:
+        subprocess.run(
+            [
+                WINDOWS_TASKKILL_COMMAND,
+                WINDOWS_TASKKILL_FORCE_FLAG,
+                WINDOWS_TASKKILL_TREE_FLAG,
+                WINDOWS_TASKKILL_PID_FLAG,
+                str(process_id),
+            ],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            server_process.wait(timeout=PROCESS_TREE_WAIT_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            server_process.kill()
+        return
+    server_process.kill()
+    try:
+        server_process.wait(timeout=PROCESS_TREE_WAIT_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _teardown_app_server_exchange(
+    server_process: subprocess.Popen[str],
+    reader_thread: threading.Thread,
+) -> None:
+    """Terminate the process tree, then join the stdout reader before return."""
+    _terminate_process_tree(server_process)
+    reader_thread.join(timeout=READER_THREAD_JOIN_TIMEOUT_SECONDS)
+
+
 def _exchange_app_server_messages_via_subprocess(
     all_request_messages: list[dict[str, object]],
 ) -> list[str]:
@@ -368,7 +434,7 @@ def _exchange_app_server_messages_via_subprocess(
     The server treats end-of-input on stdin as a shutdown signal, so it exits
     without answering when stdin closes right after the requests are written.
     Stdin is held open until the rate-limits reply arrives or the timeout runs
-    out, then the server is torn down.
+    out, then the process tree is torn down and the stdout reader is joined.
 
     Args:
         all_request_messages: JSON-RPC request/notification objects to send.
@@ -394,7 +460,7 @@ def _exchange_app_server_messages_via_subprocess(
         server_stdin = server_process.stdin
         server_stdout = server_process.stdout
         if server_stdin is None or server_stdout is None:
-            server_process.kill()
+            _terminate_process_tree(server_process)
             raise OSError("codex app-server offered no stdio pipes")
         reader_thread = threading.Thread(
             target=_collect_server_lines,
@@ -407,7 +473,10 @@ def _exchange_app_server_messages_via_subprocess(
             server_stdin.flush()
             is_exchange_over.wait(timeout=APP_SERVER_TIMEOUT_SECONDS)
         finally:
-            server_process.kill()
+            _teardown_app_server_exchange(
+                server_process=server_process,
+                reader_thread=reader_thread,
+            )
     return list(all_server_lines)
 
 
