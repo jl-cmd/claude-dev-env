@@ -94,6 +94,14 @@ ALL_FIX_EXECUTION_STEPS = [
     "Post an inline reply on the finding thread confirming the fix.",
 ]
 
+ALL_FIX_EXECUTION_STEPS_HEADLESS = [
+    "Read the finding and verify it against the current file at file:line.",
+    "Write a failing test that reproduces the bug.",
+    "Implement the smallest change that resolves the finding.",
+    "Run the full test suite — confirm the new test and all existing tests pass.",
+    "Leave the working tree dirty with your edits. Do not stage, commit, or push.",
+]
+
 ALL_FIX_CONSTRAINT_TEXTS = [
     "Work exclusively within the worktree directory.",
     "Change only the lines directly related to each finding.",
@@ -104,6 +112,44 @@ ALL_FIX_CONSTRAINT_TEXTS = [
     "Double-quote every path in shell commands and write paths with "
     "forward slashes (e.g. C:/Users/...), even on Windows.",
 ]
+
+ALL_FIX_CONSTRAINT_TEXTS_HEADLESS = [
+    "Work exclusively within the worktree directory.",
+    "Change only the lines directly related to each finding.",
+    "Every fix must have a corresponding test.",
+    "Remove deprecated code directly and update all call sites.",
+    "Handle each error case with a named exception type.",
+    "Do not stage, commit, or push. The lead owns git write operations.",
+    "Do not use TaskCreate, MCP tools, or Artifact tools.",
+    "Double-quote every path in shell commands and write paths with "
+    "forward slashes (e.g. C:/Users/...), even on Windows.",
+]
+
+FIX_PROMPT_FLAVOR_AGENT = "agent"
+FIX_PROMPT_FLAVOR_HEADLESS = "headless"
+ALL_FIX_PROMPT_FLAVORS = frozenset({
+    FIX_PROMPT_FLAVOR_AGENT,
+    FIX_PROMPT_FLAVOR_HEADLESS,
+})
+
+FIX_COMMENT_POSTING_AGENT_TEXT = (
+    "After commit, post one reply per finding thread via the GitHub MCP "
+    "add_reply_to_pull_request_comment tool, then resolve the thread."
+)
+FIX_COMMENT_POSTING_HEADLESS_TEXT = (
+    "Do not post replies or resolve threads. Use gh only when you must read "
+    "PR metadata. Write per-finding outcomes into the outcome XML named in "
+    "<output_format>. The lead session posts replies after the worker exits."
+)
+FIX_OUTPUT_FORMAT_AGENT_TEXT = (
+    "After posting replies, write the complete fix outcome XML "
+    "(schema in PROMPTS.md)."
+)
+FIX_OUTPUT_FORMAT_HEADLESS_TEMPLATE = (
+    "Write the complete fix outcome XML to {outcome_path}. "
+    "Leave commit_sha empty when the lead commits after you exit. "
+    "Do not use TaskCreate, MCP tools, or Artifact tools."
+)
 
 ALL_PYTHON_ONEXC_VERSION = (3, 12)
 

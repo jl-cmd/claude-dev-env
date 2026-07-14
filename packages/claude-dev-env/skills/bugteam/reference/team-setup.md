@@ -110,8 +110,14 @@ truth.
   `<run_temp_dir>` and pass that literal path to every shell command that follows.
 
 - **Subagent roles (spawned per loop, not at invocation start):**
-  - `bugfind` — `code-quality-agent`, model opus (Opus 4.7 at default xhigh effort)
-  - `bugfix` — `clean-coder`, no model pin (the lead picks the model per task)
+  - `bugfind` — `code-quality-agent`, model opus; routes through
+    `resolve_worker_spawn.py` with role `bugteam` (primary agent
+    `code-quality-agent`)
+  - `bugfix` — `clean-coder`, model opus; routes through
+    `resolve_worker_spawn.py` with role `clean-coder` (primary agent
+    `clean-coder`). Tier 2 Agent spawn pins `model="opus"`.
+  - `standards-fix` — `clean-coder` via the same dispatcher role; 5-round
+    cap; tier 2 pins `model="opus"` and `mode="bypassPermissions"`
 
 ### Loop state block
 
