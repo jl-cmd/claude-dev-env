@@ -1,10 +1,12 @@
-"""Per-repository PII-scan exemption keyed on the origin remote's owner/repo slug.
+"""Per-repository PII-scan exemption and allowlist keyed on origin owner/repo.
 
 A commit's repository is exempt from the staged PII scan when its
 ``remote.origin.url`` resolves to an ``owner/repo`` slug named in
 ``CLAUDE_PII_EXEMPT_REPOS`` or the ``pii_exempt_repositories`` list in
 ``~/.claude/local-identity.json``. A repository without a readable origin remote
-is never exempt (fail-closed to scanning).
+is never exempt (fail-closed to scanning). Exact values listed under
+``pii_allowlisted_values`` for the same slug may pass the scan in that
+repository only.
 """
 
 from __future__ import annotations

@@ -104,18 +104,38 @@ def _collect_write_edit_texts(
     return file_path, []
 
 
+def _findings_after_allowlist(
+    text: str, all_allowlisted_values: frozenset[str]
+) -> list[PiiFinding]:
+    """Return PII findings in *text* whose matched text is not allowlisted."""
+    return [
+        each_finding
+        for each_finding in scan_text_for_pii(text)
+        if each_finding.matched_text not in all_allowlisted_values
+    ]
+
+
 def _first_findings_in_texts(
     all_texts: list[str], all_allowlisted_values: frozenset[str] = frozenset()
 ) -> list[PiiFinding]:
     for each_text in all_texts:
-        all_findings = [
-            each_finding
-            for each_finding in scan_text_for_pii(each_text)
-            if each_finding.matched_text not in all_allowlisted_values
-        ]
+        all_findings = _findings_after_allowlist(each_text, all_allowlisted_values)
         if all_findings:
             return all_findings
     return []
+
+
+def _existing_ancestor_directory(file_path: str) -> str | None:
+    """Return the nearest existing ancestor directory of *file_path*, or None.
+
+    PreToolUse runs before Write creates nested parents, so the immediate parent
+    may not exist yet; git resolution needs a directory that is already on disk.
+    """
+    starting_directory = Path(file_path).parent
+    for each_ancestor in (starting_directory, *starting_directory.parents):
+        if each_ancestor.exists():
+            return str(each_ancestor)
+    return None
 
 
 def _write_path_allowlisted_values(file_path: str) -> frozenset[str]:
@@ -136,7 +156,10 @@ def _write_path_allowlisted_values(file_path: str) -> frozenset[str]:
         return frozenset()
     if not pii_allowlisted_values_by_repository():
         return frozenset()
-    repository_root = resolve_repository_root(str(Path(file_path).parent))
+    resolution_directory = _existing_ancestor_directory(file_path)
+    if resolution_directory is None:
+        return frozenset()
+    repository_root = resolve_repository_root(resolution_directory)
     if repository_root is None:
         return frozenset()
     return repository_allowlisted_values(repository_root)
@@ -150,7 +173,8 @@ def evaluate_write_edit_payload(
     """Return a deny reason when Write/Edit/MultiEdit content carries PII.
 
     A value in the target repository's PII allowlist is dropped from the
-    findings, so a write under that repository's tree may carry it.
+    findings, so a write under that repository's tree may carry it. Repository
+    resolution for that allowlist runs only after a raw PII hit.
 
     Args:
         tool_name: The intercepted tool name.
@@ -164,14 +188,24 @@ def evaluate_write_edit_payload(
     if tool_name not in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
         return None
     file_path, all_texts = _collect_write_edit_texts(tool_name, all_tool_input)
-    all_scan_allowlisted_values = (
-        all_allowlisted_values | _write_path_allowlisted_values(file_path)
-    )
-    all_findings = _first_findings_in_texts(all_texts, all_scan_allowlisted_values)
-    if not all_findings:
-        return None
-    gate_surface = f"file write ({file_path or 'unknown path'})"
-    return build_deny_reason(all_findings, gate_surface)
+    resolved_allowlisted_values: frozenset[str] | None = None
+    for each_text in all_texts:
+        all_raw_findings = scan_text_for_pii(each_text)
+        if not all_raw_findings:
+            continue
+        if resolved_allowlisted_values is None:
+            resolved_allowlisted_values = (
+                all_allowlisted_values | _write_path_allowlisted_values(file_path)
+            )
+        all_findings = [
+            each_finding
+            for each_finding in all_raw_findings
+            if each_finding.matched_text not in resolved_allowlisted_values
+        ]
+        if all_findings:
+            gate_surface = f"file write ({file_path or 'unknown path'})"
+            return build_deny_reason(all_findings, gate_surface)
+    return None
 
 
 def evaluate_post_body_texts(

@@ -125,3 +125,44 @@ def test_unlisted_value_in_the_allowlisted_repo_is_blocked(
     )
     assert deny_reason is not None
     assert "email" in deny_reason
+
+
+def test_clean_write_payload_skips_repository_resolution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    identity_path = tmp_path / "local-identity.json"
+    _write_allowlist_identity(identity_path, _ALLOW_SLUG, _assembled_fixture_email())
+    monkeypatch.setenv("CLAUDE_LOCAL_IDENTITY_PATH", str(identity_path))
+    repository_root = tmp_path / "repo"
+    _init_repo_with_github_origin(repository_root, _ALLOW_SLUG)
+
+    def _fail_if_called(_working_directory: str | None) -> None:
+        raise AssertionError(
+            "resolve_repository_root should not run for a payload with no PII"
+        )
+
+    monkeypatch.setattr(
+        sys.modules["pii_payload_scan"], "resolve_repository_root", _fail_if_called
+    )
+    deny_reason = evaluate_write_edit_payload(
+        "Write",
+        {
+            "file_path": str(repository_root / "notes.md"),
+            "content": "nothing sensitive here\n",
+        },
+    )
+    assert deny_reason is None
+
+
+def test_allowlisted_value_under_missing_nested_parent_is_allowed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    allowed_value = _assembled_fixture_email()
+    identity_path = tmp_path / "local-identity.json"
+    _write_allowlist_identity(identity_path, _ALLOW_SLUG, allowed_value)
+    monkeypatch.setenv("CLAUDE_LOCAL_IDENTITY_PATH", str(identity_path))
+    repository_root = tmp_path / "repo"
+    _init_repo_with_github_origin(repository_root, _ALLOW_SLUG)
+    nested_target = repository_root / "new_dir" / "deeper" / "notes.md"
+    assert not nested_target.parent.exists()
+    assert _write_deny_reason(nested_target, allowed_value) is None

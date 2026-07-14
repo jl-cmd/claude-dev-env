@@ -16,7 +16,9 @@ module so the hooks.json wiring and every importer resolve unchanged.
 
 A repository named in ``CLAUDE_PII_EXEMPT_REPOS`` or the ``pii_exempt_repositories``
 list in ``~/.claude/local-identity.json`` skips the staged-commit scan; a
-repository without a readable origin remote is never exempt.
+repository without a readable origin remote is never exempt. Exact values listed
+under ``pii_allowlisted_values`` for a repository's origin slug may pass the
+Write/Edit and staged-commit scans in that repository only.
 """
 
 from __future__ import annotations
