@@ -264,6 +264,7 @@ def _capture_review_run(
     jsonl_text = completion_or_exit.stdout or ""
     stderr_text = completion_or_exit.stderr or ""
     jsonl_path = run_state_directory / JSONL_CAPTURE_FILENAME
+    run_state_directory.mkdir(parents=True, exist_ok=True)
     jsonl_path.write_text(jsonl_text, encoding=UTF8_ENCODING)
     review_returncode = completion_or_exit.returncode
     if review_returncode != 0:

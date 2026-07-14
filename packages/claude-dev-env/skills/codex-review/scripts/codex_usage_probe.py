@@ -359,12 +359,6 @@ def _usage_report_from_server_lines(all_server_lines: Sequence[str]) -> UsageRep
         usage_report = parse_rate_limits_message(each_line)
         if usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] is not None:
             return usage_report
-        if usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_APP_SERVER_RATE_LIMITS:
-            return usage_report
-    for each_line in all_server_lines:
-        usage_report = parse_rate_limits_message(each_line)
-        if RATE_LIMITS_KEY in each_line:
-            return usage_report
     return _null_usage_report()
 
 
