@@ -9,12 +9,21 @@ from pathlib import Path
 from types import ModuleType
 from xml.etree.ElementTree import Element
 
+import pytest
+
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from skills_pr_loop_constants.path_resolver_constants import (
     ALL_AUDIT_CATEGORY_ENTRIES,
+    AUDIT_COMMENT_POSTING_AGENT_TEXT,
+    AUDIT_COMMENT_POSTING_HEADLESS_TEXT,
+    AUDIT_OUTPUT_FORMAT_AGENT_TEXT,
+    AUDIT_OUTPUT_FORMAT_HEADLESS_TEMPLATE,
+    AUDIT_PROMPT_FLAVOR_AGENT,
+    AUDIT_PROMPT_FLAVOR_HEADLESS,
+    OUTCOME_XML_TEMPLATE,
 )
 
 _CATEGORY_RUBRICS_DIR = _SCRIPTS_DIR.parents[3] / "audit-rubrics" / "category_rubrics"
@@ -257,3 +266,115 @@ def test_parse_arguments_reads_pr_body_file_path() -> None:
         "--pr-body-file", "/tmp/body.md",
     ])
     assert arguments.pr_body_file == Path("/tmp/body.md")
+
+
+def test_parse_arguments_defaults_flavor_to_agent() -> None:
+    arguments = build_audit_prompt.parse_arguments([
+        "--owner", "jl-cmd",
+        "--repo", "claude-dev-env",
+        "--pr-number", "422",
+        "--loop", "1",
+        "--head-ref", "feat/branch",
+        "--base-ref", "main",
+        "--worktree-path", "/tmp/wt",
+        "--run-temp-dir", "/tmp/rt",
+    ])
+    assert arguments.flavor == AUDIT_PROMPT_FLAVOR_AGENT
+
+
+def test_parse_arguments_reads_headless_flavor() -> None:
+    arguments = build_audit_prompt.parse_arguments([
+        "--owner", "jl-cmd",
+        "--repo", "claude-dev-env",
+        "--pr-number", "422",
+        "--loop", "1",
+        "--head-ref", "feat/branch",
+        "--base-ref", "main",
+        "--worktree-path", "/tmp/wt",
+        "--run-temp-dir", "/tmp/rt",
+        "--flavor", AUDIT_PROMPT_FLAVOR_HEADLESS,
+    ])
+    assert arguments.flavor == AUDIT_PROMPT_FLAVOR_HEADLESS
+
+
+def test_agent_flavor_comment_posting_names_mcp_tool() -> None:
+    root = build_audit_prompt.build_audit_prompt_xml(
+        owner="jl-cmd",
+        repo="claude-dev-env",
+        pr_number=422,
+        loop=1,
+        head_ref="feat/branch",
+        base_ref="main",
+        worktree_path=Path("/tmp/bugteam-pr-422/worktree"),
+        run_temp_dir=Path("/tmp/bugteam-pr-422"),
+        flavor=AUDIT_PROMPT_FLAVOR_AGENT,
+    )
+    comment_posting = root.find("comment_posting")
+    assert comment_posting is not None
+    assert comment_posting.text == AUDIT_COMMENT_POSTING_AGENT_TEXT
+    output_format = root.find("output_format")
+    assert output_format is not None
+    assert output_format.text == AUDIT_OUTPUT_FORMAT_AGENT_TEXT
+
+
+def test_headless_flavor_writes_outcome_path_and_forbids_mcp() -> None:
+    worktree_path = Path("/tmp/bugteam-pr-422/worktree")
+    pr_number = 422
+    loop = 3
+    root = build_audit_prompt.build_audit_prompt_xml(
+        owner="jl-cmd",
+        repo="claude-dev-env",
+        pr_number=pr_number,
+        loop=loop,
+        head_ref="feat/branch",
+        base_ref="main",
+        worktree_path=worktree_path,
+        run_temp_dir=Path("/tmp/bugteam-pr-422"),
+        flavor=AUDIT_PROMPT_FLAVOR_HEADLESS,
+    )
+    comment_posting = root.find("comment_posting")
+    assert comment_posting is not None
+    assert comment_posting.text == AUDIT_COMMENT_POSTING_HEADLESS_TEXT
+    assert "MCP" not in (comment_posting.text or "")
+    assert "TaskCreate" not in (comment_posting.text or "")
+    assert "gh" in (comment_posting.text or "")
+    assert "post_audit_thread.py" in (comment_posting.text or "")
+
+    expected_outcome_path = (
+        worktree_path / OUTCOME_XML_TEMPLATE.format(number=pr_number, loop=loop)
+    ).as_posix()
+    output_format = root.find("output_format")
+    assert output_format is not None
+    assert output_format.text == AUDIT_OUTPUT_FORMAT_HEADLESS_TEMPLATE.format(
+        outcome_path=expected_outcome_path,
+    )
+    assert expected_outcome_path in (output_format.text or "")
+    assert "TaskCreate" in (output_format.text or "")
+    assert "MCP" in (output_format.text or "")
+
+
+def test_main_headless_flavor_emits_outcome_path_on_stdout(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    worktree_path = "/tmp/bugteam-pr-99/worktree"
+    exit_code = build_audit_prompt.main([
+        "--owner", "jl-cmd",
+        "--repo", "claude-dev-env",
+        "--pr-number", "99",
+        "--loop", "2",
+        "--head-ref", "feat/branch",
+        "--base-ref", "main",
+        "--worktree-path", worktree_path,
+        "--run-temp-dir", "/tmp/bugteam-pr-99",
+        "--flavor", AUDIT_PROMPT_FLAVOR_HEADLESS,
+    ])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    expected_outcome = (
+        Path(worktree_path)
+        / OUTCOME_XML_TEMPLATE.format(number=99, loop=2)
+    ).as_posix()
+    assert expected_outcome in captured.out
+    assert "post_audit_thread.py" in captured.out
+    assert "Do not post reviews" in captured.out
+    assert "add_comment_to_pending_review" not in captured.out

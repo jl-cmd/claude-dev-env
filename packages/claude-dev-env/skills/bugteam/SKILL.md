@@ -3,16 +3,18 @@ name: bugteam
 description: >-
   Open pull request audit–fix until convergence: CODE_RULES gate, clean-room
   audit (`code-quality-agent`, opus) and fix (`clean-coder`), per-loop
-  GitHub reviews, 20-audit cap; grant then revoke `.claude/**`. Spawns
-  background subagents (`Agent(..., run_in_background=true)`). Triggers: '/bugteam', 'run
-  the bug team', 'auto-fix the PR until clean', 'loop audit and fix'.
+  GitHub reviews, 20-audit cap; grant then revoke `.claude/**`. AUDIT routes
+  through `resolve_worker_spawn.py` (headless tiers or Agent-tool fallback).
+  Triggers: '/bugteam', 'run the bug team', 'auto-fix the PR until clean',
+  'loop audit and fix'.
 ---
 
 # Bugteam
 
-Audit–fix until convergence. Bugfind: `code-quality-agent`, fresh context each
-loop, auditing all A–P categories. Bugfix: `clean-coder`. Hard cap: 20 audit
-loops. Grant `.claude/**` at start, revoke always at end.
+Audit–fix until convergence. Bugfind: `code-quality-agent`, fresh process or
+fresh agent context each loop, auditing all A–P categories via the
+worker-spawn dispatcher. Bugfix: `clean-coder`. Hard cap: 20 audit loops.
+Grant `.claude/**` at start, revoke always at end.
 
 The audit agent loads the A–P category rubrics from
 `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/` alongside
