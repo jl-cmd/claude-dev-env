@@ -20,6 +20,8 @@ Three checks, in order; the first failure routes to the cloud transport:
 
 A read-scoped account passes checks 1 and 2 and fails check 3 — the PR-loop skills push fix commits, so `push: false` means the local path stalls at its first push while the MCP transport carries the run.
 
+GitHub MCP substitution covers `gh` operations only. It does not make Claude-only slash commands (for example `/code-review`) runnable. Those steps go through the chain-spawn helper documented in [`worker-spawn.md`](../../_shared/pr-loop/worker-spawn.md#code-review-host-routing) (`detect_host_profile` + `invoke_code_review`). Transport (`gh` vs MCP) and harness (Claude vs third-party) are separate axes.
+
 ## Cloud transport workflow
 
 Copy this checklist and check off items as you complete them:
