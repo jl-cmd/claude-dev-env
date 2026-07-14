@@ -13,14 +13,16 @@ One Codex review pass per invocation. The skill owns sequence and classification
 | `SKILL.md` | Flow skeleton: opt-out → probe → target → wrapper → classify → fix handoff; refusals; sub-skills table; ground rules. |
 | `reference/cli-contract.md` | CLI version/shape probe, wrapper entrypoint and I/O contract, classification classes (`down` / `clean` / `findings`). |
 | `reference/loop-integration.md` | Base-branch vs uncommitted target pick; how PR-loop orchestrators re-enter after a fix push. |
-| `scripts/codex_review_scripts_constants/` | Named constants package for skill scripts (scaffold shell). |
+| `scripts/codex_usage_probe.py` | Weekly usage probe CLI: app-server rate-limits read, null-on-unknown JSON report. |
+| `scripts/test_codex_usage_probe.py` | Unit tests for the weekly usage probe and gate helper. |
+| `scripts/codex_review_scripts_constants/codex_usage_probe_constants.py` | Named constants for the weekly usage probe. |
 
 ## Subdirectories
 
 | Directory | Role |
 |---|---|
 | `reference/` | Progressive-disclosure pages for cli-contract and loop-integration. |
-| `scripts/` | Future wrapper helpers and their constants package. |
+| `scripts/` | Skill CLIs (usage probe) and their constants package. |
 
 ## Environment opt-out
 

@@ -70,7 +70,7 @@ TEXT_WEEKLY_USED_PERCENT_PATTERN = (
 )
 TEXT_WINDOW_RESET_PATTERN = (
     r"(?i)(?:weekly\s+)?(?:resets?|reset\s+at|window\s+reset)"
-    r"[:\s]+(?P<reset>[^\n]+)"
+    r"[:\s]+(?P<reset>[^\s)\].,;]+)"
 )
 
 EXIT_CODE_SUCCESS = 0

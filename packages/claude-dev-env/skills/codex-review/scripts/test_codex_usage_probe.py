@@ -19,6 +19,7 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     PERCENT_FULL,
     SOURCE_APP_SERVER_RATE_LIMITS,
     SOURCE_NO_USAGE_SURFACE,
+    SOURCE_TEXT_STATUS,
     USAGE_REPORT_KEY_PERCENT_LEFT,
     USAGE_REPORT_KEY_SOURCE,
     USAGE_REPORT_KEY_WINDOW_RESET,
@@ -55,6 +56,8 @@ REAL_APP_SERVER_RATE_LIMITS_REPLY_CODEX_0_144_3 = json.dumps(
     }
 )
 
+SESSION_WINDOW_DURATION_MINUTES = 300
+
 DUAL_WINDOW_APP_SERVER_RATE_LIMITS_REPLY = json.dumps(
     {
         "id": 2,
@@ -63,7 +66,7 @@ DUAL_WINDOW_APP_SERVER_RATE_LIMITS_REPLY = json.dumps(
                 "limitId": "codex",
                 "primary": {
                     "usedPercent": 40,
-                    "windowDurationMins": 300,
+                    "windowDurationMins": SESSION_WINDOW_DURATION_MINUTES,
                     "resetsAt": 1783958400,
                 },
                 "secondary": {
@@ -75,6 +78,25 @@ DUAL_WINDOW_APP_SERVER_RATE_LIMITS_REPLY = json.dumps(
         },
     }
 )
+
+PRIMARY_ONLY_SESSION_WINDOW_REPLY = json.dumps(
+    {
+        "id": 2,
+        "result": {
+            "rateLimits": {
+                "limitId": "codex",
+                "primary": {
+                    "usedPercent": 10,
+                    "windowDurationMins": SESSION_WINDOW_DURATION_MINUTES,
+                    "resetsAt": 1783958400,
+                },
+                "secondary": None,
+            }
+        },
+    }
+)
+
+EXPECTED_TEXT_STATUS_WINDOW_RESET = "2026-07-19T23:49:08+00:00"
 
 NO_USAGE_SURFACE_LOGIN_STATUS_OUTPUT = "Logged in using ChatGPT\n"
 
@@ -164,6 +186,16 @@ class TestParseRateLimitsMessage:
         )
         assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] == 80
         assert usage_report[USAGE_REPORT_KEY_WINDOW_RESET] is not None
+        assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_APP_SERVER_RATE_LIMITS
+
+    def should_return_null_when_only_non_weekly_session_window(self) -> None:
+        probe = load_probe_module()
+        usage_report = probe.parse_rate_limits_message(
+            PRIMARY_ONLY_SESSION_WINDOW_REPLY
+        )
+        assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] is None
+        assert usage_report[USAGE_REPORT_KEY_WINDOW_RESET] is None
+        assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_NO_USAGE_SURFACE
 
     def should_return_null_percent_when_rate_limits_empty(self) -> None:
         probe = load_probe_module()
@@ -187,7 +219,11 @@ class TestParseTextStatus:
         probe = load_probe_module()
         usage_report = probe.parse_text_usage_status(TEXT_STATUS_WITH_WEEKLY_LEFT)
         assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] == 42.0
-        assert usage_report[USAGE_REPORT_KEY_WINDOW_RESET] is not None
+        assert (
+            usage_report[USAGE_REPORT_KEY_WINDOW_RESET]
+            == EXPECTED_TEXT_STATUS_WINDOW_RESET
+        )
+        assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_TEXT_STATUS
 
     def should_yield_null_for_login_status_without_usage(self) -> None:
         probe = load_probe_module()
@@ -396,5 +432,31 @@ class TestMainExitCodes:
             probe,
             "_exchange_app_server_messages_via_subprocess",
             error_payload_exchange,
+        )
+        _assert_main_yields_null_skip_report(probe, capsys)
+
+    def should_exit_zero_with_null_report_when_unicode_decode_error(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        probe = load_probe_module()
+
+        def unicode_decode_error_exchange(
+            all_request_messages: list[dict[str, object]],
+        ) -> list[str]:
+            del all_request_messages
+            raise UnicodeDecodeError(
+                "utf-8",
+                b"\xff",
+                0,
+                1,
+                "invalid start byte",
+            )
+
+        monkeypatch.setattr(
+            probe,
+            "_exchange_app_server_messages_via_subprocess",
+            unicode_decode_error_exchange,
         )
         _assert_main_yields_null_skip_report(probe, capsys)

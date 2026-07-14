@@ -192,10 +192,6 @@ def _select_weekly_window(
     for each_window in all_candidate_windows:
         if _window_duration_minutes(each_window) == WEEKLY_WINDOW_DURATION_MINUTES:
             return each_window
-    if isinstance(secondary_payload, Mapping):
-        return secondary_payload
-    if isinstance(primary_payload, Mapping):
-        return primary_payload
     return None
 
 
@@ -394,6 +390,7 @@ def main() -> int:
         OSError,
         subprocess.TimeoutExpired,
         subprocess.SubprocessError,
+        UnicodeDecodeError,
     ):
         print(json.dumps(_null_usage_report()))
         return EXIT_CODE_SUCCESS
