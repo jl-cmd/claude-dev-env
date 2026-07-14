@@ -11,7 +11,7 @@ One Codex review pass per invocation. The skill owns sequence and classification
 | File | Purpose |
 |---|---|
 | `SKILL.md` | Flow skeleton: opt-out → probe → target → wrapper → classify → fix handoff; refusals; sub-skills table; ground rules. |
-| `reference/cli-contract.md` | CLI version/shape probe, wrapper entrypoint and I/O contract, classification classes (`down` / `clean` / `findings`). |
+| `reference/cli-contract.md` | Codex CLI surface, wrapper entrypoint I/O (`completed` / `codex_down`), and skill class mapping (`down` / `clean` / `findings`). |
 | `reference/loop-integration.md` | Base-branch vs uncommitted target pick; how PR-loop orchestrators re-enter after a fix push. |
 | `scripts/run_codex_review.py` | Wrapper entrypoint that invokes Codex and returns completed or codex_down plus agent_message. |
 | `scripts/parse_codex_findings.py` | Parses reviewer text into structured or freeform finding records. |

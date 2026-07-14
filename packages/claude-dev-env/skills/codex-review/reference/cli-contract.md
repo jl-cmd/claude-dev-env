@@ -96,3 +96,28 @@ All observed failures classify as `codex_down`.
 ## Probe
 
 The wrapper probes `codex exec review --help` and treats any unrecognized shape as `codex_down`.
+
+## Wrapper I/O (`run_codex_review`)
+
+`scripts/run_codex_review.py` returns a `CodexReviewOutcome`:
+
+| Field | Role |
+|---|---|
+| `outcome_class` | `completed` when review JSONL was captured; `codex_down` on probe, launch, timeout, decode, or nonzero review failure |
+| `detail_class` | `completed` or a failure class from `codex_down_classifier` |
+| `exit_code` | Last process exit or a sentinel (`124` timeout, `126` decode, `127` missing binary, `125` unsupported shape) |
+| `binary_version` | Parsed `codex --version` string, or empty |
+| `jsonl_path` | Path to captured JSONL, or None when the review did not run |
+| `agent_message` | Final agent_message text from the JSONL stream |
+
+## Skill classification (`down` / `clean` / `findings`)
+
+The skill maps wrapper output plus `parse_codex_findings(agent_message)`:
+
+| Skill class | Rule |
+|---|---|
+| `down` | `outcome_class == codex_down` |
+| `clean` | `outcome_class == completed` and findings are empty or a sole floor finding with empty title/priority/file (clean prose) |
+| `findings` | `outcome_class == completed` and freeform bullets or structured finding objects name defects |
+
+A freeform clean narrative without bullets or a structured empty array is `clean`, not `findings`.

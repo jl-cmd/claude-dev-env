@@ -90,10 +90,10 @@ Map the wrapper result plus the findings parser to exactly one class:
 | Class | Meaning | Next action |
 |---|---|---|
 | `down` | Wrapper `outcome_class` is `codex_down` (tool failure, auth, crash) | Refuse with the down line; stop |
-| `clean` | Wrapper completed and `parse_codex_findings(agent_message)` is empty | Report one-line clean summary; stop |
-| `findings` | Wrapper completed and the parser returns one or more findings | Continue to Step 5 |
+| `clean` | Wrapper completed and the findings list has no addressable items | Report one-line clean summary; stop |
+| `findings` | Wrapper completed and freeform or structured findings name a defect | Continue to Step 5 |
 
-`run_codex_review` returns `completed` or `codex_down` plus captured text. `parse_codex_findings` turns `agent_message` into the findings list. Classification rules and payload fields live in [reference/cli-contract.md](reference/cli-contract.md).
+`run_codex_review` returns `completed` or `codex_down` plus captured text. `parse_codex_findings` turns `agent_message` into the findings list. Empty list or a sole floor finding with empty title/priority/file (clean prose with no freeform bullets and no structured array) is `clean`. Freeform `- [P*]` lines or structured finding objects are `findings`. Wrapper I/O and class mapping live in [reference/cli-contract.md](reference/cli-contract.md).
 
 ### Step 5: Route findings into the shared fix protocol
 
