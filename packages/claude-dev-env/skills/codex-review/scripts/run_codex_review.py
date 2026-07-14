@@ -129,6 +129,8 @@ def _safe_run(
             timeout_seconds=timeout_seconds,
         )
     except FileNotFoundError:
+        if working_directory is not None and not working_directory.is_dir():
+            raise
         return MISSING_BINARY_EXIT_CODE
     except subprocess.TimeoutExpired:
         return TIMEOUT_EXIT_CODE
@@ -338,7 +340,8 @@ def run_codex_review(
         stderr on a failed review when JSONL has no agent message).
 
     Raises:
-        ValueError: When zero targets or more than one target is selected.
+        ValueError: When zero targets or more than one target is selected, or
+            when ``repository_directory`` is not an existing directory.
     """
     _require_single_target(
         base_branch=base_branch,
@@ -346,6 +349,10 @@ def run_codex_review(
         commit_sha=commit_sha,
         is_prompt_target=is_prompt_target,
     )
+    if not repository_directory.is_dir():
+        raise ValueError(
+            f"repository_directory is not an existing directory: {repository_directory}"
+        )
     resolved_timeout_seconds = (
         DEFAULT_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
     )

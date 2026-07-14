@@ -355,6 +355,7 @@ def test_shape_probe_lookalike_flags_do_not_match_required_tokens(
         "      --baseline <BRANCH>\n"
         "      --commit-message <TEXT>\n"
         "      --uncommitted-only\n"
+        "      --json-output\n"
     )
 
     def behavior(
@@ -603,6 +604,72 @@ def test_rejects_missing_target(
         )
 
     assert recorder.all_invocations == []
+
+
+def test_shape_probe_missing_json_flag_returns_codex_down(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository_directory = tmp_path / "repo"
+    repository_directory.mkdir()
+    run_state_directory = tmp_path / "run_state"
+    run_state_directory.mkdir()
+    help_without_json = (
+        "Usage: codex exec review [OPTIONS]\n"
+        "      --uncommitted\n"
+        "      --base <BRANCH>\n"
+        "      --commit <SHA>\n"
+    )
+
+    def behavior(
+        all_arguments: list[str],
+    ) -> subprocess.CompletedProcess[str] | BaseException:
+        if _is_version_probe(all_arguments):
+            return _completed(all_arguments, 0, stdout=VERSION_STDOUT)
+        if _is_shape_probe(all_arguments):
+            return _completed(all_arguments, 0, stdout=help_without_json)
+        raise AssertionError("review must not run after a failed shape probe")
+
+    recorder = _install_recorder(monkeypatch, behavior)
+
+    review_outcome = wrapper.run_codex_review(
+        repository_directory=repository_directory,
+        run_state_directory=run_state_directory,
+        is_uncommitted=True,
+    )
+
+    assert review_outcome.outcome_class == OUTCOME_CLASS_CODEX_DOWN
+    assert review_outcome.jsonl_path is None
+    assert not any(
+        _is_review_run(each_invocation)
+        for each_invocation in recorder.all_invocations
+    )
+    assert JSON_FLAG not in help_without_json
+    assert JSON_FLAG in ALL_SHAPE_PROBE_REQUIRED_FLAGS
+
+
+def test_missing_repository_directory_raises_value_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    missing_repository_directory = tmp_path / "missing-repo"
+    run_state_directory = tmp_path / "run_state"
+    run_state_directory.mkdir()
+    recorder = _install_recorder(monkeypatch, _healthy_probe_then_review())
+
+    with pytest.raises(ValueError, match="repository_directory"):
+        wrapper.run_codex_review(
+            repository_directory=missing_repository_directory,
+            run_state_directory=run_state_directory,
+            is_uncommitted=True,
+        )
+
+    assert recorder.all_invocations == []
+
+
+def test_custom_instructions_prompt_demands_finding_bullet_format() -> None:
+    assert "- [P1]" in CUSTOM_INSTRUCTIONS_PROMPT
+    assert "Review comment:" in CUSTOM_INSTRUCTIONS_PROMPT
+    assert "fenced JSON" not in CUSTOM_INSTRUCTIONS_PROMPT
+    assert "JSON array" not in CUSTOM_INSTRUCTIONS_PROMPT
 
 
 def test_model_pin_assembles_model_flag_before_review_subcommand(
