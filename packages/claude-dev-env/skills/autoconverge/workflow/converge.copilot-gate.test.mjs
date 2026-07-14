@@ -306,7 +306,7 @@ test('the COPILOT phase awaits verifyCodeConcernFindings exactly once, inside th
   assert.ok(verifyCallIndex > guardStart, 'expected the verifyCodeConcernFindings call to sit inside the code-concern guard');
 });
 
-test('the all-refuted / empty-roundFindings COPILOT path advances to FINALIZE with the gate passed', () => {
+test('the all-refuted / empty-roundFindings COPILOT path advances to CODEX with the gate passed', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
   const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", copilotPhaseStart);
   const copilotPhase = convergeSource.slice(copilotPhaseStart, finalizePhaseStart);
@@ -314,7 +314,7 @@ test('the all-refuted / empty-roundFindings COPILOT path advances to FINALIZE wi
   assert.notEqual(emptyRoundStart, -1, 'expected the COPILOT phase to handle an empty roundFindings set after verification');
   const emptyRoundBranch = copilotPhase.slice(emptyRoundStart, emptyRoundStart + 300);
   assert.match(emptyRoundBranch, /copilotDown = false/, 'expected the empty-roundFindings path to clear copilotDown');
-  assert.match(emptyRoundBranch, /phase = 'FINALIZE'/, 'expected the empty-roundFindings path to advance to FINALIZE');
+  assert.match(emptyRoundBranch, /phase = 'CODEX'/, 'expected the empty-roundFindings path to advance to CODEX');
 });
 
 test('the COPILOT phase folds confirmed findings through attachVerifiedRepro into the round fix list', () => {
@@ -405,15 +405,15 @@ test('runConvergenceCheck wires the --copilot-down flag from the copilotDown con
   );
 });
 
-test('the COPILOT phase routes a down outcome to FINALIZE with the gate bypassed', () => {
+test('the COPILOT phase routes a down outcome to CODEX with the gate bypassed', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
   assert.notEqual(copilotPhaseStart, -1, 'expected a COPILOT phase block');
   const downBranchStart = convergeSource.indexOf("copilotOutcome.kind === 'down'", copilotPhaseStart);
   assert.notEqual(downBranchStart, -1, 'expected the COPILOT phase to handle a down outcome');
-  const downBranch = convergeSource.slice(downBranchStart, downBranchStart + 400);
+  const downBranch = convergeSource.slice(downBranchStart, downBranchStart + 700);
   assert.match(downBranch, /copilotDown = true/);
   assert.match(downBranch, /copilotNote =/);
-  assert.match(downBranch, /phase = 'FINALIZE'/);
+  assert.match(downBranch, /phase = 'CODEX'/);
 });
 
 test('resolveCopilotDown reports down only for a down outcome', () => {
@@ -448,7 +448,7 @@ test('resolveCopilotDown clears the bypass for a retry outcome', () => {
   assert.equal(resolveCopilotDown({ kind: 'retry' }), false);
 });
 
-test('the standards-only Copilot sub-path resets copilotDown before FINALIZE', () => {
+test('the standards-only Copilot sub-path resets copilotDown before CODEX', () => {
   const standardsBranchStart = convergeSource.indexOf(
     'isStandardsOnlyRound(roundFindings)',
   );
@@ -459,19 +459,19 @@ test('the standards-only Copilot sub-path resets copilotDown before FINALIZE', (
   );
   const standardsBranch = convergeSource.slice(standardsBranchStart, standardsBranchStart + 800);
   const resetIndex = standardsBranch.indexOf('copilotDown = false');
-  const finalizeIndex = standardsBranch.indexOf("phase = 'FINALIZE'");
+  const codexIndex = standardsBranch.indexOf("phase = 'CODEX'");
   assert.notEqual(
     resetIndex,
     -1,
     'expected the standards-only sub-path to reset copilotDown so a recovered Copilot is not bypassed',
   );
-  assert.notEqual(finalizeIndex, -1, 'expected the standards-only sub-path to reach FINALIZE');
+  assert.notEqual(codexIndex, -1, 'expected the standards-only sub-path to reach CODEX');
   assert.ok(
-    resetIndex < finalizeIndex,
-    'expected copilotDown to be cleared before the transition to FINALIZE',
+    resetIndex < codexIndex,
+    'expected copilotDown to be cleared before the transition to CODEX',
   );
   assert.match(
-    standardsBranch.slice(0, finalizeIndex),
+    standardsBranch.slice(0, codexIndex),
     /copilotNote = null/,
     'expected the standards-only sub-path to clear the stale copilotNote alongside copilotDown',
   );
@@ -552,7 +552,7 @@ test('the COPILOT phase short-circuits on the unified reviewer-down gate before 
   );
   assert.match(beforeGate, /copilotDown = true/, 'expected the bypass to mark copilotDown');
   assert.match(beforeGate, /copilotNote =/, 'expected the bypass to set a copilotNote');
-  assert.match(beforeGate, /phase = 'FINALIZE'/, 'expected the bypass to advance to FINALIZE');
+  assert.match(beforeGate, /phase = 'CODEX'/, 'expected the bypass to advance to CODEX');
   assert.match(beforeGate, /continue/, 'expected the bypass to continue without spawning the gate agent');
 });
 
@@ -574,7 +574,7 @@ test('copilotDown initializes from input.copilotDisabled so the pre-check decisi
   );
 });
 
-test('a copilotDisabled run reaches FINALIZE with --copilot-down', () => {
+test('a copilotDisabled run reaches CODEX with --copilot-down', () => {
   const copilotPhaseStart = convergeSource.indexOf("if (phase === 'COPILOT') {");
   const bypassStart = convergeSource.indexOf(
     'if (resolveReviewerDown(reviewerAvailability?.copilot, input.copilotDisabled || false))',
@@ -583,7 +583,7 @@ test('a copilotDisabled run reaches FINALIZE with --copilot-down', () => {
   assert.notEqual(bypassStart, -1, 'expected the unified resolveReviewerDown bypass in the COPILOT phase');
   const bypassBlock = convergeSource.slice(bypassStart, bypassStart + 800);
   assert.match(bypassBlock, /copilotDown = true/, 'expected the bypass to set copilotDown');
-  assert.match(bypassBlock, /phase = 'FINALIZE'/, 'expected the bypass to advance to FINALIZE');
+  assert.match(bypassBlock, /phase = 'CODEX'/, 'expected the bypass to advance to CODEX');
   const convergenceCheckBody = functionBody('runConvergenceCheck');
   assert.match(
     convergenceCheckBody,
@@ -673,8 +673,8 @@ test('every standards-deferral call site routes the create through openStandards
   const onceCalls = convergeSource.match(/await openStandardsFollowUpOnce\(/g) || [];
   assert.equal(
     onceCalls.length,
-    3,
-    'expected the converge-round, terminal-Bugbot, and Copilot standards call sites to all defer to openStandardsFollowUpOnce',
+    4,
+    'expected the converge-round, terminal-Bugbot, Copilot, and Codex standards call sites to all defer to openStandardsFollowUpOnce',
   );
   const directCreates = convergeSource.match(/await spawnStandardsFollowUp\(/g) || [];
   assert.equal(

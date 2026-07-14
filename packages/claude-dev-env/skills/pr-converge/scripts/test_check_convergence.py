@@ -107,8 +107,15 @@ def _raise_if_called(gate_label: str) -> Callable[..., tuple[bool, str]]:
     return _stub
 
 
+def _null_codex_percent_left() -> float | None:
+    return None
+
+
 def _patch_all_gates_passing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(check_convergence, "_get_pr_head_sha", _passing_head_sha)
+    monkeypatch.setattr(
+        check_convergence, "_probe_codex_percent_left", _null_codex_percent_left
+    )
     for each_gate_name in _ALL_LEAF_GATE_NAMES:
         monkeypatch.setattr(check_convergence, each_gate_name, _passing_gate)
 
@@ -283,8 +290,15 @@ def should_bypass_bugbot_gates_when_bugbot_down_is_true(
         check_convergence, "_check_bugbot_not_dirty", _raise_if_called("_check_bugbot_not_dirty")
     )
     exit_code = check_convergence.check_all(
-        owner="o", repo="r", number=1, is_bugbot_down=True, is_copilot_down=False
-    , is_bugteam_post_blocked=False)
+        owner="o",
+        repo="r",
+        number=1,
+        is_bugbot_down=True,
+        is_copilot_down=False,
+        is_bugteam_post_blocked=False,
+        is_codex_down=False,
+        live_codex_clean_at=None,
+    )
     assert "bypassed (bugbot_down)" in capsys.readouterr().out
     assert exit_code == 0
 
@@ -298,8 +312,15 @@ def should_bypass_copilot_gates_when_copilot_down_is_true(
         check_convergence, "_check_no_pending_reviews", _raise_if_called("_check_no_pending_reviews")
     )
     exit_code = check_convergence.check_all(
-        owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=True
-    , is_bugteam_post_blocked=False)
+        owner="o",
+        repo="r",
+        number=1,
+        is_bugbot_down=False,
+        is_copilot_down=True,
+        is_bugteam_post_blocked=False,
+        is_codex_down=False,
+        live_codex_clean_at=None,
+    )
     assert "bypassed (copilot_down)" in capsys.readouterr().out
     assert exit_code == 0
 
@@ -342,8 +363,15 @@ def should_propagate_systemexit_from_get_pr_head_sha(monkeypatch: pytest.MonkeyP
     )
     with pytest.raises(SystemExit) as exc_info:
         check_convergence.check_all(
-            owner="o", repo="r", number=1, is_bugbot_down=False, is_copilot_down=False
-        , is_bugteam_post_blocked=False)
+            owner="o",
+            repo="r",
+            number=1,
+            is_bugbot_down=False,
+            is_copilot_down=False,
+            is_bugteam_post_blocked=False,
+            is_codex_down=False,
+            live_codex_clean_at=None,
+        )
     assert exc_info.value.code == EXIT_CODE_GH_ERROR
 
 
@@ -367,6 +395,8 @@ def should_derive_copilot_down_from_env_when_main_omits_the_flag(
         is_bugbot_down: bool,
         is_copilot_down: bool,
         is_bugteam_post_blocked: bool = False,
+        is_codex_down: bool = False,
+        live_codex_clean_at: str | None = None,
         **_bypass_note_kwargs: str,
     ) -> int:
         captured_copilot_down.append(is_copilot_down)
@@ -397,9 +427,12 @@ def should_print_probe_reason_on_the_bypassed_copilot_gate_line(
         is_bugbot_down=False,
         is_copilot_down=True,
         is_bugteam_post_blocked=False,
+        is_codex_down=False,
+        live_codex_clean_at=None,
         copilot_bypass_note="copilot unavailable: out of premium quota",
     )
     captured_stdout = capsys.readouterr().out
     probe_line = "bypassed (copilot unavailable: out of premium quota)"
     assert captured_stdout.count(probe_line) == 2
     assert exit_code == 0
+

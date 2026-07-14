@@ -7,7 +7,7 @@
 - **Bugbot findings on the current SHA mean fix-then-push-then-re-enter
   CODE_REVIEW,** so the internal passes re-clear the new HEAD before the terminal
   Bugbot gate runs again.
-- **All `*_clean_at`, `merge_state_status`, and `bugbot_down` reset on every push.**
+- **All `*_clean_at`, `merge_state_status`, and `bugbot_down` / `codex_down` reset on every push.**
 - **`bugbot run` comment is load-bearing.** Literal phrase exactly —
   empirically the only re-trigger Cursor Bugbot recognizes.
 - **Production edits go through `clean-coder`, except `/code-review high --fix`.**

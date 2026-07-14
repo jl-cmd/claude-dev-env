@@ -16,6 +16,11 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+
+SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPTS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIRECTORY))
+
 from codex_review_scripts_constants.codex_usage_probe_constants import (
     EXIT_CODE_SUCCESS,
     PERCENT_FULL,
@@ -33,7 +38,6 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     WINDOWS_TASKKILL_TREE_FLAG,
 )
 
-SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
 PROBE_PATH = SCRIPTS_DIRECTORY / "codex_usage_probe.py"
 
 REAL_APP_SERVER_RATE_LIMITS_REPLY_CODEX_0_144_3 = json.dumps(
@@ -455,6 +459,34 @@ class TestProbeWeeklyUsage:
         )
         assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] is None
         assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_NO_USAGE_SURFACE
+
+
+class TestProbeWeeklyUsageViaSubprocess:
+    def should_report_usage_from_the_real_subprocess_exchange(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        probe = load_probe_module()
+        all_server_lines = _app_server_lines_from_rate_limits_payload(
+            REAL_APP_SERVER_RATE_LIMITS_REPLY_CODEX_0_144_3
+        )
+
+        def fake_subprocess_exchange(
+            all_request_messages: list[dict[str, object]],
+        ) -> list[str]:
+            assert len(all_request_messages) >= 2
+            return all_server_lines
+
+        monkeypatch.setattr(
+            probe,
+            "_exchange_app_server_messages_via_subprocess",
+            fake_subprocess_exchange,
+        )
+
+        usage_report = probe.probe_weekly_usage_via_subprocess()
+
+        assert usage_report[USAGE_REPORT_KEY_PERCENT_LEFT] == 5
+        assert usage_report[USAGE_REPORT_KEY_SOURCE] == SOURCE_APP_SERVER_RATE_LIMITS
 
 
 class TestGateThresholdHelper:

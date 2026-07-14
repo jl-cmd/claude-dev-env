@@ -312,8 +312,8 @@ test('each fix push, each lens-retry, and the convergence repair invalidate the 
   const invalidationMatches = convergeSource.match(/^ +head = null$/gm) || [];
   assert.equal(
     invalidationMatches.length,
-    8,
-    'expected head invalidation after the static-sweep fix push, the CONVERGE fix push, the terminal-Bugbot fix push, the COPILOT fix push, the convergence repair, the all-lenses-dead retry, the not-clean-no-findings retry, and the all-clean no-lens-ran clean-audit refusal',
+    9,
+    'expected head invalidation after the static-sweep fix push, the CONVERGE fix push, the terminal-Bugbot fix push, the COPILOT fix push, the CODEX fix push, the convergence repair, the all-lenses-dead retry, the not-clean-no-findings retry, and the all-clean no-lens-ran clean-audit refusal',
   );
 });
 
@@ -617,8 +617,8 @@ test('every standards-deferral call site builds standardsNote from the spawnStan
   const callSiteUses = convergeSource.match(/standardsNote = standardsDeferralNote\(/g) || [];
   assert.equal(
     callSiteUses.length,
-    3,
-    'expected the converge-round, terminal-Bugbot, and Copilot standards call sites to each build standardsNote via standardsDeferralNote(...)',
+    4,
+    'expected the converge-round, terminal-Bugbot, Copilot, and Codex standards call sites to each build standardsNote via standardsDeferralNote(...)',
   );
   assert.doesNotMatch(
     convergeSource,
@@ -1234,7 +1234,7 @@ test('the FINALIZE phase drives the merged check and reads ready from its result
   const finalizeStart = convergeSource.indexOf("if (phase === 'FINALIZE') {");
   assert.notEqual(finalizeStart, -1, 'expected a FINALIZE phase block');
   const finalizeBody = convergeSource.slice(finalizeStart, finalizeStart + 1000);
-  assert.match(finalizeBody, /runConvergenceCheck\(\{ head, bugbotDown, copilotDown, bugteamPostBlocked: cleanAuditNote !== null \}\)/);
+  assert.match(finalizeBody, /runConvergenceCheck\(\{ head, bugbotDown, copilotDown, codexDown, codexCleanAt, bugteamPostBlocked: cleanAuditNote !== null \}\)/);
   assert.match(finalizeBody, /classifyReadyOutcome\(finalizeResult\)/);
   assert.doesNotMatch(
     finalizeBody,

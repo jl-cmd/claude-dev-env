@@ -17,7 +17,7 @@ obligations and the same-tick re-entry rule.
 - Writes `last_action: "fix_pushed"`, `current_head: <new SHA>`,
   `bugbot_clean_at: null`, `code_review_clean_at: null`,
   `bugteam_clean_at: null`, `copilot_clean_at: null`,
-  `merge_state_status: null`, `bugbot_down: false`,
+  `merge_state_status: null`, `bugbot_down: false`, `codex_down: false`,
   `phase: "CODE_REVIEW"`, `status: "awaiting_code_review"`, `last_updated`
   (ISO-8601 UTC) to `state.json` (per §Concurrency).
 - Goes idle. Orchestrator spawns a follow-up `general-purpose` agent for the

@@ -27,6 +27,7 @@ never blocks on missing data. Require review only when
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -152,6 +153,8 @@ def _format_resets_at(raw_resets_at: object) -> str | None:
     if isinstance(raw_resets_at, bool):
         return None
     if isinstance(raw_resets_at, (int, float)):
+        if not math.isfinite(raw_resets_at):
+            return None
         try:
             return datetime.fromtimestamp(
                 float(raw_resets_at), tz=timezone.utc
@@ -169,6 +172,8 @@ def _window_used_percent(all_window_fields: Mapping[str, object]) -> float | Non
     if isinstance(raw_used_percent, bool):
         return None
     if isinstance(raw_used_percent, (int, float)):
+        if not math.isfinite(raw_used_percent):
+            return None
         return float(raw_used_percent)
     return None
 
@@ -180,6 +185,8 @@ def _window_duration_minutes(
     if isinstance(raw_duration, bool):
         return None
     if isinstance(raw_duration, (int, float)):
+        if not math.isfinite(raw_duration):
+            return None
         return int(raw_duration)
     return None
 
@@ -503,6 +510,25 @@ def probe_weekly_usage(
     all_request_messages = _build_app_server_request_messages()
     all_server_lines = exchange_app_server_messages(all_request_messages)
     return _usage_report_from_server_lines(all_server_lines)
+
+
+def probe_weekly_usage_via_subprocess() -> UsageReport:
+    """Probe weekly usage against the real ``codex app-server`` subprocess.
+
+    ::
+
+        probe_weekly_usage_via_subprocess()
+        # ok: {"percent_left": 62.0, "window_reset": ..., "source": ...}
+
+    The production entry point for every caller that has no exchange seam of
+    its own to inject.
+
+    Returns:
+        The usage report with percent_left, window_reset, and source.
+    """
+    return probe_weekly_usage(
+        exchange_app_server_messages=_exchange_app_server_messages_via_subprocess
+    )
 
 
 def main() -> int:

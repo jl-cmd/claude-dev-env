@@ -37,7 +37,7 @@ Run the shared parser — never an inline shell parse:
 python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer <bugbot|bugteam|copilot|codex>
 ```
 
-- **Exit 0** — the named reviewer is disabled for this run (opted out, or, for Bugbot, off by default without the `CLAUDE_REVIEWS_ENABLED` opt-in). A skill whose whole run depends on that reviewer responds with its refusal line and stops. A copilot- or bugteam-dependent caller names the opt-out: `/<caller> is disabled via CLAUDE_REVIEWS_DISABLED.` A Bugbot-dependent caller off by default names the opt-in the run needs: `/<caller> is disabled: Cursor Bugbot needs a bugbot token in CLAUDE_REVIEWS_ENABLED.` A loop that merely includes the reviewer as one gate marks the reviewer down (`bugbot_down = true`, `copilot_down = true`) and continues on its remaining signals.
+- **Exit 0** — the named reviewer is disabled for this run (opted out, or, for Bugbot, off by default without the `CLAUDE_REVIEWS_ENABLED` opt-in). A skill whose whole run depends on that reviewer responds with its refusal line and stops. A copilot- or bugteam-dependent caller names the opt-out: `/<caller> is disabled via CLAUDE_REVIEWS_DISABLED.` A Bugbot-dependent caller off by default names the opt-in the run needs: `/<caller> is disabled: Cursor Bugbot needs a bugbot token in CLAUDE_REVIEWS_ENABLED.` A loop that merely includes the reviewer as one gate marks the reviewer down (`bugbot_down = true`, `copilot_down = true`, `codex_down = true`) and continues on its remaining signals.
 - **Exit 1** — the reviewer is available; continue.
 
 ## Gate 2: Copilot quota pre-check (once per run)
@@ -94,11 +94,12 @@ When a reviewer is down, `check_convergence.py` must skip that reviewer's gate s
 |---|---|---|
 | Bugbot down or off | `--bugbot-down` | `bugbot` |
 | Copilot down or opted out | `--copilot-down` | `copilot` |
+| Codex down or opted out | `--codex-down` | `codex` |
 | Bugteam CLEAN post blocked | `--bugteam-post-blocked` | `bugteam` |
 
-The caller passes the flag on its own `check_convergence.py` run. The flag alone does not reach the independent mark-ready blocker hook, which re-runs `check_convergence.py` with no flags on `gh pr ready`. Each flag also honors its token: `check_convergence.py` reads the same bypass from `CLAUDE_REVIEWS_DISABLED`. So export the matching token in the same shell before `gh pr ready`, and the hook's no-flag re-check inherits the bypass through the env. Combine tokens with commas when more than one reviewer is down (`CLAUDE_REVIEWS_DISABLED="copilot,bugteam"`).
+The caller passes the flag on its own `check_convergence.py` run. The flag alone does not reach the independent mark-ready blocker hook, which re-runs `check_convergence.py` with no flags on `gh pr ready`. Each flag also honors its token: `check_convergence.py` reads the same bypass from `CLAUDE_REVIEWS_DISABLED`. So export the matching token in the same shell before `gh pr ready`, and the hook's no-flag re-check inherits the bypass through the env. Combine tokens with commas when more than one reviewer is down (`CLAUDE_REVIEWS_DISABLED="copilot,bugteam,codex"`).
 
-The `bugteam` token here means the bugteam CLEAN-review gate is skipped for this convergence check. It does not disable the bugbot or copilot gates: each token is scoped to its own reviewer.
+The `bugteam` token here means the bugteam CLEAN-review gate is skipped for this convergence check. It does not disable the bugbot, copilot, or codex gates: each token is scoped to its own reviewer.
 
 ## Gotchas
 
