@@ -43,6 +43,9 @@ from pr_loop_shared_constants.claude_settings_keys_constants import (
     CLAUDE_SETTINGS_ENVIRONMENT_KEY,
     CLAUDE_SETTINGS_PERMISSIONS_KEY,
 )
+from stale_worktree_rule_sweep import (  # noqa: E402
+    sweep_stale_worktree_rules_from_settings,
+)
 
 
 def add_rules_to_allow_list(
@@ -285,8 +288,9 @@ def grant_permissions_for_current_directory() -> None:
     project_path = _resolve_project_path_or_exit()
     grant_rule_sets = _build_grant_rule_sets(project_path)
     settings = load_settings(claude_user_settings_path)
+    worktree_sweep_removed_count = sweep_stale_worktree_rules_from_settings(settings)
     change_counts = _apply_grant(settings, project_path, grant_rule_sets)
-    if sum(change_counts) == 0:
+    if sum(change_counts) + worktree_sweep_removed_count == 0:
         _print_no_change_notice(project_path, claude_user_settings_path)
         return
     save_settings(claude_user_settings_path, settings)
