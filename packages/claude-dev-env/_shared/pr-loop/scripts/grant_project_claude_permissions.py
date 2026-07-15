@@ -1,4 +1,4 @@
-"""Grant Edit/Write/Read permissions on the current directory's .claude tree.
+"""Grant Edit/Read permissions on the current directory's .claude tree.
 
 Run from the project root whose .claude/** you want a Claude Code session
 (including spawned subagents) to edit without prompting. Writes idempotent
@@ -145,6 +145,19 @@ def add_auto_mode_environment_entry(
     return 0
 
 
+def _is_stale_trust_entry(
+    candidate_entry: object,
+    project_path: str,
+    prefix: str,
+    protected_entry: str | None,
+) -> bool:
+    if not is_trust_entry_for_project(candidate_entry, project_path, prefix):
+        return False
+    if protected_entry is not None and candidate_entry == protected_entry:
+        return False
+    return True
+
+
 def purge_stale_trust_entries(
     all_settings: dict[str, object],
     project_path: str,
@@ -153,22 +166,11 @@ def purge_stale_trust_entries(
 ) -> int:
     """Remove every prior trust entry for the project from autoMode.environment.
 
-    A trust entry is any string in autoMode.environment whose prefix matches
-    the trust-entry marker and that contains the project's .claude/** path.
-    Purging stale entries before adding the current template prevents
-    accumulation across template revisions. The optional protected_entry
-    survives the purge so an entry byte-identical to the one about to be
-    re-added is not removed and re-added on every invocation, preserving the
-    idempotency contract documented on grant_permissions_for_current_directory.
-
     Args:
         all_settings: The parsed settings dictionary.
         project_path: The POSIX-style project root path.
         prefix: The literal prefix that marks a trust entry.
-        protected_entry: Optional entry text that, when byte-equal to a
-            candidate, prevents removal. Pass the freshly-formatted current
-            template entry from grant to preserve idempotency. Revoke passes
-            None so every matching entry is removed.
+        protected_entry: When byte-equal to a candidate, prevents its removal.
 
     Returns:
         Number of stale entries removed.
@@ -179,36 +181,15 @@ def purge_stale_trust_entries(
     existing_environment = auto_mode_section.get(CLAUDE_SETTINGS_ENVIRONMENT_KEY)
     if not isinstance(existing_environment, list):
         return 0
-
-    def _should_purge_candidate(candidate_entry: object) -> bool:
-        if not is_trust_entry_for_project(candidate_entry, project_path, prefix):
-            return False
-        if protected_entry is not None and candidate_entry == protected_entry:
-            return False
-        return True
-
     return remove_matching_entries_from_list(
         existing_environment,
-        _should_purge_candidate,
+        lambda candidate_entry: _is_stale_trust_entry(
+            candidate_entry, project_path, prefix, protected_entry
+        ),
     )
 
 
-def grant_permissions_for_current_directory() -> None:
-    """Grant Edit/Write/Read permissions for the current project directory.
-
-    Reads the current project path, constructs permission rules from config
-    constants, and writes them to ~/.claude/settings.json atomically. Adds
-    deny rules for agent-config paths so edits to settings, hooks, commands,
-    agents, skills, mcp.json, and CLAUDE.md still require per-edit user
-    approval. Purges any prior trust entries for this project before writing
-    the current template to prevent accumulation across template revisions.
-
-    Raises:
-        SystemExit: When the current directory is not a valid project root.
-        ValueError: Propagated from get_current_project_path() when the path
-                    contains glob metacharacters.
-    """
-    claude_user_settings_path: Path = get_claude_user_settings_path()
+def _resolve_project_path_or_exit() -> str:
     project_root_path = Path.cwd()
     if not is_valid_project_root(project_root_path):
         print(
@@ -217,7 +198,12 @@ def grant_permissions_for_current_directory() -> None:
             file=sys.stderr,
         )
         raise SystemExit(1)
-    project_path = get_current_project_path()
+    return get_current_project_path()
+
+
+def _build_grant_rule_sets(
+    project_path: str,
+) -> tuple[list[str], list[str], str]:
     all_permission_rules = build_permission_rules(
         project_path, ALL_PERMISSION_ALLOW_TOOLS
     )
@@ -229,52 +215,84 @@ def grant_permissions_for_current_directory() -> None:
     environment_entry = AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE.format(
         project_path=project_path
     )
-    settings = load_settings(claude_user_settings_path)
-    allow_rules_added_count = add_rules_to_allow_list(settings, all_permission_rules)
-    deny_rules_added_count = add_rules_to_deny_list(
-        settings, all_agent_config_deny_rules
+    return (all_permission_rules, all_agent_config_deny_rules, environment_entry)
+
+
+def _apply_grant(
+    all_settings: dict[str, object],
+    project_path: str,
+    all_grant_rule_sets: tuple[list[str], list[str], str],
+) -> tuple[int, int, int, int, int]:
+    all_permission_rules, all_agent_config_deny_rules, environment_entry = (
+        all_grant_rule_sets
     )
-    directories_added_count = add_directory_to_additional_directories(
-        settings, project_path
-    )
-    stale_trust_entries_purged_count = purge_stale_trust_entries(
-        settings,
+    allow_added = add_rules_to_allow_list(all_settings, all_permission_rules)
+    deny_added = add_rules_to_deny_list(all_settings, all_agent_config_deny_rules)
+    dirs_added = add_directory_to_additional_directories(all_settings, project_path)
+    purged = purge_stale_trust_entries(
+        all_settings,
         project_path,
         AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX,
         protected_entry=environment_entry,
     )
-    environment_entries_added_count = add_auto_mode_environment_entry(
-        settings, environment_entry
-    )
-    total_changes_count = (
-        allow_rules_added_count
-        + deny_rules_added_count
-        + directories_added_count
-        + stale_trust_entries_purged_count
-        + environment_entries_added_count
-    )
-    if total_changes_count == 0:
-        print(f"Project path: {project_path}")
-        print(f"Settings file: {claude_user_settings_path}")
-        print("No changes needed; settings file left untouched.")
-        return
-    save_settings(claude_user_settings_path, settings)
+    env_added = add_auto_mode_environment_entry(all_settings, environment_entry)
+    return (allow_added, deny_added, dirs_added, purged, env_added)
+
+
+def _print_no_change_notice(
+    project_path: str, claude_user_settings_path: Path
+) -> None:
     print(f"Project path: {project_path}")
     print(f"Settings file: {claude_user_settings_path}")
-    print(
-        f"Allow rules added: {allow_rules_added_count} of {len(all_permission_rules)}"
+    print("No changes needed; settings file left untouched.")
+
+
+def _print_grant_summary(
+    project_path: str,
+    claude_user_settings_path: Path,
+    all_grant_rule_sets: tuple[list[str], list[str], str],
+    all_change_counts: tuple[int, int, int, int, int],
+) -> None:
+    all_permission_rules, all_agent_config_deny_rules, _ = all_grant_rule_sets
+    allow_added, deny_added, dirs_added, purged, env_added = all_change_counts
+    print(f"Project path: {project_path}")
+    print(f"Settings file: {claude_user_settings_path}")
+    print(f"Allow rules added: {allow_added} of {len(all_permission_rules)}")
+    print(f"Deny rules added: {deny_added} of {len(all_agent_config_deny_rules)}")
+    print(f"Additional directories added: {dirs_added}")
+    if purged > 0:
+        print(f"Stale auto-mode environment entries purged: {purged}")
+    print(f"Auto-mode environment entries added: {env_added}")
+
+
+def grant_permissions_for_current_directory() -> None:
+    """Grant Edit/Read permissions for the current project directory.
+
+    Builds allow and agent-config deny rules from config, writes them to the
+    user settings, and prints the counts applied. A fresh grant reports::
+
+        Allow rules added: 2 of 2
+        Deny rules added: 14 of 14
+        Additional directories added: 1
+        Auto-mode environment entries added: 1
+
+    Raises:
+        SystemExit: When the current directory is not a valid project root.
+        ValueError: Propagated from get_current_project_path() when the path
+                    contains glob metacharacters.
+    """
+    claude_user_settings_path: Path = get_claude_user_settings_path()
+    project_path = _resolve_project_path_or_exit()
+    grant_rule_sets = _build_grant_rule_sets(project_path)
+    settings = load_settings(claude_user_settings_path)
+    change_counts = _apply_grant(settings, project_path, grant_rule_sets)
+    if sum(change_counts) == 0:
+        _print_no_change_notice(project_path, claude_user_settings_path)
+        return
+    save_settings(claude_user_settings_path, settings)
+    _print_grant_summary(
+        project_path, claude_user_settings_path, grant_rule_sets, change_counts
     )
-    print(
-        f"Deny rules added: {deny_rules_added_count} of "
-        f"{len(all_agent_config_deny_rules)}"
-    )
-    print(f"Additional directories added: {directories_added_count}")
-    if stale_trust_entries_purged_count > 0:
-        print(
-            f"Stale auto-mode environment entries purged: "
-            f"{stale_trust_entries_purged_count}"
-        )
-    print(f"Auto-mode environment entries added: {environment_entries_added_count}")
 
 
 if __name__ == "__main__":
