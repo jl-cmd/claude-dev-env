@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.0.0...claude-dev-env-v2.0.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* convert unmatched Write() deny rule in settings template to its Edit() twin ([ce9bc3e](https://github.com/jl-cmd/claude-dev-env/commit/ce9bc3e6f39edc7a219099b26bb80b33f98fef09))
+
 ## [2.0.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v1.95.0...claude-dev-env-v2.0.0) (2026-07-14)
 
 
