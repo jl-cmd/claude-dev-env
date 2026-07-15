@@ -21,12 +21,8 @@ delegating to Sonnet-5 workers came out cheaper and faster
 than a solo frontier agent held to the same verification rigor, with
 84-98% of the team's input tokens billed at the worker rate.
 
-Claude Code has no `multiagent` coordinator field or Managed-Agents-style
-`create_agent`/`send_to_agent` primitives; this skill reaches the same
-shape with the tools Claude Code already has. Under this skill the session
-is the orchestrator. In Claude Code the user always talks to the session and never to a
-subagent, so the session is the user's sole interface: all user-facing
-communication flows through it. It spawns and resumes executor subagents
+Under this skill the session
+is the orchestrator. It spawns and resumes executor subagents
 — `clean-coder` and the like — and those executors do every bit of the
 execution: the code edits, the build runs, the test runs. The orchestrating
 session drives the plan and routes hard decisions to the shared advisor
@@ -64,16 +60,11 @@ session drives the plan and routes hard decisions to the shared advisor
    shared advisor bind (Claude warm `session-advisor`, or a third-party host's
    Claude CLI bind — run step 3 only when none exists yet), then skip straight to step 4.
 
-2. **Register the discipline reminder.** By default, schedule it with
-   `ScheduleWakeup` at `delaySeconds: 1200`, prompt `/orchestrator-refresh`,
-   where each refresh re-schedules the next one — a 1200-second wakeup costs
-   one prompt-cache miss per firing and nothing more (see Gotchas). The loop
-   mechanism (`/loop 20m /orchestrator-refresh`) is the escape hatch when
-   `ScheduleWakeup` is not available. Either way the reminder is the
-   enforcement surface: each firing re-asserts the discipline while the run is
-   in flight.
+2. **Register the discipline reminder.** schedule it with
+   `ScheduleWakeup` at `delaySeconds: 1800`, prompt `/orchestrator-refresh`,
+   where each refresh re-schedules the next one.
 
-3. **Bind the shared advisor before any executor.** Detect the host profile
+3. **Bind a shared advisor before any executor.** Detect the host profile
    first (see Host profiles in
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)).
    On a **Claude host**, follow the Warm-up procedure in that doc (Agent spawn
@@ -160,7 +151,7 @@ Routing rules:
 
 ## Agent reuse (non-negotiable)
 
-- **Resume before you spawn, always.** A warm agent carries its context and
+- **Resume before you spawn, always.** A warm agent (active within the past 59 minutes)  carries its context and
   cached tokens; a fresh spawn starts cold and pays to rebuild both.
   Resume the existing workflow agent by name or `agentId` when it holds
   relevant context. Prefer that path every time an existing workflow agent
