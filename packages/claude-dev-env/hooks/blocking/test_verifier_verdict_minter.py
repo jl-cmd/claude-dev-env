@@ -69,6 +69,36 @@ def _write_sidecar(agent_transcript_file: pathlib.Path, agent_type: str) -> None
     )
 
 
+def _write_verdict_transcript(agent_transcript_file: pathlib.Path, verdict_body: str) -> None:
+    verdict_text = f"ok\n```verdict\n{verdict_body}\n```\n"
+    agent_transcript_file.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": verdict_text}]},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _make_repo(tmp_path: pathlib.Path) -> pathlib.Path:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    return repo_root
+
+
+def _mint_payload(
+    agent_transcript_file: pathlib.Path, repo_root: pathlib.Path, agent_id: str
+) -> dict[str, str]:
+    return {
+        "agent_transcript_path": str(agent_transcript_file),
+        "cwd": str(repo_root),
+        "agent_id": agent_id,
+    }
+
+
 def test_resolves_subagent_type_from_sidecar(tmp_path: pathlib.Path) -> None:
     agent_transcript = tmp_path / "agent-7.jsonl"
     agent_transcript.write_text("", encoding="utf-8")
@@ -141,7 +171,7 @@ def test_verifier_type_without_a_verdict_mints_nothing(tmp_path: pathlib.Path) -
     assert mint_for_payload(payload) is None
 
 
-def _init_repo_with_upstream_and_edit(repo_root: pathlib.Path) -> None:
+def _init_repo_with_upstream(repo_root: pathlib.Path) -> None:
     subprocess.run(["git", "-C", str(repo_root), "init", "-q"], check=True)
     subprocess.run(
         ["git", "-C", str(repo_root), "config", "user.email", "verifier@test"], check=True
@@ -151,37 +181,20 @@ def _init_repo_with_upstream_and_edit(repo_root: pathlib.Path) -> None:
     subprocess.run(["git", "-C", str(repo_root), "add", "-A"], check=True)
     subprocess.run(["git", "-C", str(repo_root), "commit", "-qm", "init"], check=True)
     subprocess.run(["git", "-C", str(repo_root), "branch", "-f", "origin/main", "HEAD"], check=True)
+
+
+def _init_repo_with_upstream_and_edit(repo_root: pathlib.Path) -> None:
+    _init_repo_with_upstream(repo_root)
     (repo_root / "module.py").write_text("answer = 2\n", encoding="utf-8")
 
 
 def test_clean_verifier_verdict_mints_a_verdict_file(tmp_path: pathlib.Path) -> None:
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
+    repo_root = _make_repo(tmp_path)
     _init_repo_with_upstream_and_edit(repo_root)
     agent_transcript = tmp_path / "agent-7.jsonl"
-    agent_transcript.write_text(
-        json.dumps(
-            {
-                "type": "assistant",
-                "message": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": 'ok\n```verdict\n{"all_pass": true, "findings": []}\n```\n',
-                        }
-                    ]
-                },
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    _write_verdict_transcript(agent_transcript, '{"all_pass": true, "findings": []}')
     _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
-    payload = {
-        "agent_transcript_path": str(agent_transcript),
-        "cwd": str(repo_root),
-        "agent_id": "a02b9583eedc74093",
-    }
+    payload = _mint_payload(agent_transcript, repo_root, "a02b9583eedc74093")
     verdict_path = mint_for_payload(payload)
     try:
         assert verdict_path is not None
@@ -199,7 +212,8 @@ def _deny_rules() -> list[str]:
 
 
 def test_settings_deny_verdict_directory_write() -> None:
-    assert "Write($HOME/.claude/verification/**)" in _deny_rules()
+    assert "Edit($HOME/.claude/verification/**)" in _deny_rules()
+    assert "Write($HOME/.claude/verification/**)" not in _deny_rules()
 
 
 def test_settings_deny_verdict_directory_edit() -> None:
@@ -209,87 +223,28 @@ def test_settings_deny_verdict_directory_edit() -> None:
 def test_minter_refuses_when_attested_hash_equals_empty_surface_hash(
     tmp_path: pathlib.Path,
 ) -> None:
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
+    repo_root = _make_repo(tmp_path)
     _init_repo_with_upstream_and_edit(repo_root)
     attested_empty = empty_surface_hash()
     verdict_fence = json.dumps(
         {"all_pass": True, "findings": [], "manifest_sha256": attested_empty}
     )
     agent_transcript = tmp_path / "agent-7.jsonl"
-    agent_transcript.write_text(
-        json.dumps(
-            {
-                "type": "assistant",
-                "message": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"ok\n```verdict\n{verdict_fence}\n```\n",
-                        }
-                    ]
-                },
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    _write_verdict_transcript(agent_transcript, verdict_fence)
     _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
-    payload = {
-        "agent_transcript_path": str(agent_transcript),
-        "cwd": str(repo_root),
-        "agent_id": "empty-surface-1",
-    }
+    payload = _mint_payload(agent_transcript, repo_root, "empty-surface-1")
     assert mint_for_payload(payload) is None
 
 
 def test_minter_refuses_when_recomputed_surface_is_empty(
     tmp_path: pathlib.Path,
 ) -> None:
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    subprocess.run(["git", "-C", str(repo_root), "init", "-q"], check=True)
-    subprocess.run(
-        ["git", "-C", str(repo_root), "config", "user.email", "verifier@test"],
-        check=True,
-    )
-    subprocess.run(
-        ["git", "-C", str(repo_root), "config", "user.name", "verifier"],
-        check=True,
-    )
-    (repo_root / "module.py").write_text("answer = 1\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(repo_root), "add", "-A"], check=True)
-    subprocess.run(
-        ["git", "-C", str(repo_root), "commit", "-qm", "init"], check=True
-    )
-    subprocess.run(
-        ["git", "-C", str(repo_root), "branch", "-f", "origin/main", "HEAD"],
-        check=True,
-    )
+    repo_root = _make_repo(tmp_path)
+    _init_repo_with_upstream(repo_root)
     agent_transcript = tmp_path / "agent-7.jsonl"
-    agent_transcript.write_text(
-        json.dumps(
-            {
-                "type": "assistant",
-                "message": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": 'ok\n```verdict\n{"all_pass": true, "findings": []}\n```\n',
-                        }
-                    ]
-                },
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    _write_verdict_transcript(agent_transcript, '{"all_pass": true, "findings": []}')
     _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
-    payload = {
-        "agent_transcript_path": str(agent_transcript),
-        "cwd": str(repo_root),
-        "agent_id": "empty-recompute-1",
-    }
+    payload = _mint_payload(agent_transcript, repo_root, "empty-recompute-1")
     assert mint_for_payload(payload) is None
 
 
@@ -297,23 +252,7 @@ def test_resolves_none_when_sidecar_absent_even_with_verdict_fence(
     tmp_path: pathlib.Path,
 ) -> None:
     agent_transcript = tmp_path / "agent-7.jsonl"
-    agent_transcript.write_text(
-        json.dumps(
-            {
-                "type": "assistant",
-                "message": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": 'ok\n```verdict\n{"all_pass": true, "findings": []}\n```\n',
-                        }
-                    ]
-                },
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    _write_verdict_transcript(agent_transcript, '{"all_pass": true, "findings": []}')
     payload = {"agent_transcript_path": str(agent_transcript)}
     assert resolved_subagent_type(payload) is None
 
@@ -321,67 +260,25 @@ def test_resolves_none_when_sidecar_absent_even_with_verdict_fence(
 def test_does_not_mint_when_sidecar_absent_but_transcript_has_verdict(
     tmp_path: pathlib.Path,
 ) -> None:
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
+    repo_root = _make_repo(tmp_path)
     _init_repo_with_upstream_and_edit(repo_root)
     agent_transcript = tmp_path / "agent-7.jsonl"
-    agent_transcript.write_text(
-        json.dumps(
-            {
-                "type": "assistant",
-                "message": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": 'ok\n```verdict\n{"all_pass": true, "findings": []}\n```\n',
-                        }
-                    ]
-                },
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    payload = {
-        "agent_transcript_path": str(agent_transcript),
-        "cwd": str(repo_root),
-        "agent_id": "no-sidecar-1",
-    }
+    _write_verdict_transcript(agent_transcript, '{"all_pass": true, "findings": []}')
+    payload = _mint_payload(agent_transcript, repo_root, "no-sidecar-1")
     assert mint_for_payload(payload) is None
 
 
 def test_attested_manifest_hash_binds_over_cwd_surface(tmp_path: pathlib.Path) -> None:
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
+    repo_root = _make_repo(tmp_path)
     _init_repo_with_upstream_and_edit(repo_root)
     attested_hash = "c" * 64
-    agent_transcript = tmp_path / "agent-7.jsonl"
     verdict_fence = json.dumps(
         {"all_pass": True, "findings": [], "manifest_sha256": attested_hash}
     )
-    agent_transcript.write_text(
-        json.dumps(
-            {
-                "type": "assistant",
-                "message": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"ok\n```verdict\n{verdict_fence}\n```\n",
-                        }
-                    ]
-                },
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    agent_transcript = tmp_path / "agent-7.jsonl"
+    _write_verdict_transcript(agent_transcript, verdict_fence)
     _write_sidecar(agent_transcript, MINTING_AGENT_TYPE)
-    payload = {
-        "agent_transcript_path": str(agent_transcript),
-        "cwd": str(repo_root),
-        "agent_id": "attest-1",
-    }
+    payload = _mint_payload(agent_transcript, repo_root, "attest-1")
     verdict_path = mint_for_payload(payload)
     try:
         assert verdict_path is not None
