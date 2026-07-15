@@ -161,6 +161,24 @@ Routing rules:
 - **Name the agent to resume.** When a PLAN from the shared advisor fits a warm
   agent, name which agent to resume and where.
 
+## Task ledger discipline
+
+The task list is the run's ledger, and it must be reconcilable against the live
+agents at any moment. Four invariants hold at all times:
+
+1. **No untracked work.** Every unit of delegated work has a task BEFORE its
+   executor spawns — TaskCreate first, then Agent.
+2. **Ownership is live.** At spawn, set the task `in_progress` with `owner` =
+   the executor's agent name. One task, one owner.
+3. **Completion follows evidence.** A task turns `completed` only when the
+   executor's result is back AND merged into run state — never on dispatch,
+   never on a self-report alone (see `workers-done-before-complete`).
+4. **Dependencies mirror the plan.** Phase order is encoded as `blockedBy`
+   links, updated the moment the plan changes.
+
+Reconcile on every state change (spawn, completion notification, plan change)
+and on every `/orchestrator-refresh` firing.
+
 ## Constraints
 
 - One `/orchestrator` per session; the invocation guard blocks a second
