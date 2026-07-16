@@ -418,7 +418,6 @@ def test_tightened_auth_phrases_still_classify_auth_failure(
         assert outcome.classification == CLASSIFICATION_AUTH_FAILURE, each_stderr
 
 
-def test_dual_match_prefers_auth_failure_over_usage_limit(
 def test_missing_binary_returns_dedicated_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
