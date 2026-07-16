@@ -41,7 +41,7 @@ def test_scan_detects_job_scratch_path_forward_slash() -> None:
 
 
 def test_scan_detects_worktree_path() -> None:
-    text = r"edited .claude\worktrees\feature\file.py"
+    text = r"edited C:\Users\me\.claude\worktrees\feature\file.py"
     assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
 
 
@@ -69,6 +69,53 @@ def test_scan_detects_claude_job_dir_token() -> None:
 def test_scan_clean_body_returns_none() -> None:
     text = "The failing table is pasted below:\n| case | result |\n| a | pass |"
     assert scan_text_for_volatile_marker(text) is None
+
+
+def test_scan_bare_backticked_worktree_mention_is_allowed() -> None:
+    text = "the `.claude/worktrees/` prefix sits in ALL_TOOLING_STATE_PREFIXES"
+    assert scan_text_for_volatile_marker(text) is None
+
+
+def test_scan_bare_start_of_text_worktree_mention_is_allowed() -> None:
+    text = ".claude/worktrees/ entries are skipped by the manifest"
+    assert scan_text_for_volatile_marker(text) is None
+
+
+def test_scan_windows_absolute_worktree_path_is_detected() -> None:
+    text = r"C:\Users\me\.claude\worktrees\wt-1\notes.md"
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
+def test_scan_home_anchored_worktree_path_is_detected() -> None:
+    text = "~/.claude/worktrees/wt-2/file.py"
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
+def test_scan_posix_absolute_job_scratch_path_is_detected() -> None:
+    text = "/home/me/.claude-editor/jobs/j1/log.txt"
+    assert scan_text_for_volatile_marker(text) == ".claude-editor/jobs/"
+
+
+def test_scan_bare_parenthesized_job_scratch_mention_is_allowed() -> None:
+    text = "(.claude-editor/jobs/) as a directory name in prose"
+    assert scan_text_for_volatile_marker(text) is None
+
+
+def test_scan_bare_mention_before_anchored_path_is_detected() -> None:
+    text = (
+        ".claude/worktrees/ is the manifest key; the live path is "
+        r"C:\Users\me\.claude\worktrees\wt-1\notes.md"
+    )
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
+def test_scan_unchanged_bare_markers_still_detected() -> None:
+    assert scan_text_for_volatile_marker(r"saved to %TEMP%\x") == "%temp%"
+    assert scan_text_for_volatile_marker("log at /tmp/x") == "/tmp/"
+    assert (
+        scan_text_for_volatile_marker(r"C:\Users\x\AppData\Local\Temp\y")
+        == "appdata/local/temp"
+    )
 
 
 def test_gh_comment_with_job_scratch_path_is_blocked() -> None:
@@ -147,7 +194,7 @@ def test_mcp_issue_comment_body_blocked() -> None:
 
 
 def test_mcp_review_comment_param_blocked() -> None:
-    tool_input: dict[str, object] = {"comment": r"see .claude\worktrees\x\file"}
+    tool_input: dict[str, object] = {"comment": r"see C:\Users\me\.claude\worktrees\x\file"}
     assert _body_names_volatile_path(
         "mcp__plugin_github_github__add_reply_to_pull_request_comment", tool_input
     )
@@ -175,6 +222,21 @@ def test_extract_gh_post_body_texts_returns_inline_and_file(tmp_path: pathlib.Pa
     all_texts = extract_gh_post_body_texts(command)
     assert "inline body" in all_texts
     assert "file body text" in all_texts
+
+
+def test_gh_issue_edit_quoting_bare_constant_is_allowed(tmp_path: pathlib.Path) -> None:
+    body_file = tmp_path / "issue_body.md"
+    body_file.write_text(
+        "The manifest skips these tooling-state prefixes:\n"
+        '    ".claude/worktrees/",\n'
+        '    ".claude-editor/jobs/",\n'
+        "Neither is a machine-local path.",
+        encoding="utf-8",
+    )
+    command = f"gh issue edit 134 --body-file {body_file}"
+    all_body_texts = extract_gh_post_body_texts(command)
+    assert all_body_texts
+    assert hook_module._first_volatile_marker(all_body_texts) is None
 
 
 def test_hook_subprocess_denies_volatile_gh_comment() -> None:

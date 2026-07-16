@@ -19,9 +19,14 @@ ALL_GH_POST_SUBCOMMANDS: dict[str, frozenset[str]] = {
     "issue": frozenset({"create", "comment", "edit"}),
 }
 
-ALL_VOLATILE_PATH_MARKERS: tuple[str, ...] = (
+PATH_ANCHOR_CHARACTER: str = "/"
+
+ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS: tuple[str, ...] = (
     ".claude-editor/jobs/",
     ".claude/worktrees/",
+)
+
+ALL_BARE_VOLATILE_PATH_MARKERS: tuple[str, ...] = (
     "appdata/local/temp",
     "/tmp/",
     "%temp%",

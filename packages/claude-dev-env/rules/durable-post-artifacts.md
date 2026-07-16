@@ -26,6 +26,8 @@ Handle the two kinds of content differently:
 
 Both slash directions count.
 
+The worktree and job-scratch entries count only as part of a machine-local path — a `/` or `\` sits right before them, as in a drive-letter path (`C:\Users\me\.claude\worktrees\wt\f.py`), a home path (`~/.claude/worktrees/wt`), or a POSIX absolute path (`/home/me/.claude-editor/jobs/j/log.txt`). A bare repo-relative mention of the directory name on its own — a quoted config constant or plain prose — reads as text and passes.
+
 ## Enforcement
 
 The `volatile_path_in_post_blocker` PreToolUse hook reads the body of each `gh` post command and each GitHub MCP post call, scans it for these markers, and blocks the post when it finds one. For a `--body-file`, the hook reads the file and scans its contents, so writing the body to a temp file and passing it with `--body-file` stays allowed — what the hook rejects is a volatile path inside the text that gets posted.
