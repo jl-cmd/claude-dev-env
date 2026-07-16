@@ -30,10 +30,6 @@ def _load_shared_module() -> ModuleType:
 _SHARED_MODULE = _load_shared_module()
 
 
-def _install_fixed_user_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(os, "getuid", lambda: FIXED_USER_ID, raising=False)
-
-
 def _point_temporary_directory_at(monkeypatch: pytest.MonkeyPatch, temporary_root: Path) -> None:
     monkeypatch.setattr(tempfile, "gettempdir", lambda: str(temporary_root))
 
@@ -76,7 +72,6 @@ def _session_payload() -> dict[str, str]:
 def test_returns_true_for_file_inside_reconstructed_scratchpad(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     throwaway_script = scratchpad_directory / "one_off_tool.py"
@@ -90,7 +85,6 @@ def test_returns_true_for_file_inside_reconstructed_scratchpad(
 def test_returns_false_for_file_outside_scratchpad(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     _build_scratchpad_directory(tmp_path)
     project_module = tmp_path / "elsewhere" / "orders.py"
@@ -103,7 +97,6 @@ def test_returns_false_for_file_outside_scratchpad(
 def test_resolves_symlink_into_scratchpad_to_true(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     real_script = scratchpad_directory / "real_tool.py"
@@ -117,7 +110,6 @@ def test_resolves_symlink_into_scratchpad_to_true(
 def test_symlink_resolving_outside_scratchpad_is_false(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     real_target_outside = tmp_path / "outside_target.py"
@@ -134,7 +126,6 @@ def test_symlink_resolving_outside_scratchpad_is_false(
 def test_missing_session_id_signal_returns_false(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     monkeypatch.delenv(SESSION_ID_ENVIRONMENT_VARIABLE, raising=False)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
@@ -153,7 +144,6 @@ def test_exempt_without_working_directory_signal(
     """The platform-safe predicate keys on the session id and the temp-directory path
     shape, so a payload carrying the session id alone still exempts a real scratchpad
     target even when it omits the working directory."""
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     throwaway_script = scratchpad_directory / "one_off_tool.py"
@@ -170,7 +160,6 @@ def test_exempt_on_windows_without_getuid(
 ) -> None:
     """On Windows the os.getuid attribute is absent, and a real scratchpad target still
     resolves as exempt through its temp-directory path shape and session id."""
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     throwaway_script = scratchpad_directory / "one_off_tool.py"
@@ -185,7 +174,6 @@ def test_exempt_on_windows_without_getuid(
 def test_nonexistent_scratchpad_directory_returns_false(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     mangled_working_directory = WORKING_DIRECTORY.replace("/", "-")
     unbuilt_target = (
@@ -203,7 +191,6 @@ def test_nonexistent_scratchpad_directory_returns_false(
 
 
 def test_empty_file_path_returns_false(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     _build_scratchpad_directory(tmp_path)
 
