@@ -259,6 +259,8 @@ def evaluate_write_edit_payload(
     if tool_name not in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
         return None
     file_path, all_texts = _collect_write_edit_texts(tool_name, all_tool_input)
+    if not all_texts:
+        return None
     if _target_is_ephemeral_outside_repository(file_path, hook_payload):
         return None
     return _write_deny_reason_for_texts(all_texts, file_path, all_allowlisted_values)

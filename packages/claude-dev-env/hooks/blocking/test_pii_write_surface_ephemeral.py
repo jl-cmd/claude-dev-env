@@ -138,6 +138,17 @@ def test_windows_shaped_scratchpad_write_is_skipped(
     assert _write_deny_reason(scratch_target, _bot_trailer_address(), payload) is None
 
 
+def test_write_with_no_scannable_texts_returns_none(tmp_path: Path) -> None:
+    target_path = tmp_path / "empty-write.md"
+    assert (
+        evaluate_write_edit_payload(
+            "Write",
+            {"file_path": str(target_path), "content": ""},
+        )
+        is None
+    )
+
+
 def test_entry_point_threads_payload_session_id_to_scratchpad_skip(
     monkeypatch: pytest.MonkeyPatch,
     harness_scratchpad: tuple[Path, str],
