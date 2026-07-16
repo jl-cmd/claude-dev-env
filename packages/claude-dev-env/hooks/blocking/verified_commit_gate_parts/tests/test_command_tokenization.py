@@ -4,12 +4,45 @@ import re
 
 from verified_commit_gate_parts.command_tokenization import (
     collapse_line_continuations,
+    command_carries_trailing_marker,
     containing_quoted_span,
     git_word_match_gates,
     is_inside_quoted_region,
     quoted_spans,
     strip_token_quotes,
 )
+
+VERIFY_SKIP_MARKER = "# verify-skip"
+
+
+def test_command_carries_trailing_marker_true_for_a_real_trailing_comment() -> None:
+    command_text = f'git commit -m "wire up" {VERIFY_SKIP_MARKER}'
+    assert command_carries_trailing_marker(command_text, VERIFY_SKIP_MARKER)
+
+
+def test_command_carries_trailing_marker_false_when_marker_sits_inside_quotes() -> None:
+    command_text = f'git commit -m "explain the {VERIFY_SKIP_MARKER} hatch"'
+    assert not command_carries_trailing_marker(command_text, VERIFY_SKIP_MARKER)
+
+
+def test_command_carries_trailing_marker_true_with_trailing_words_after_marker() -> None:
+    command_text = f"git commit -m x {VERIFY_SKIP_MARKER} please"
+    assert command_carries_trailing_marker(command_text, VERIFY_SKIP_MARKER)
+
+
+def test_command_carries_trailing_marker_false_when_hash_abuts_a_prior_hash() -> None:
+    command_text = f"git commit -m x #{VERIFY_SKIP_MARKER}"
+    assert not command_carries_trailing_marker(command_text, VERIFY_SKIP_MARKER)
+
+
+def test_command_carries_trailing_marker_false_when_hash_abuts_a_closing_quote() -> None:
+    command_text = f'git commit -m "msg"{VERIFY_SKIP_MARKER}'
+    assert not command_carries_trailing_marker(command_text, VERIFY_SKIP_MARKER)
+
+
+def test_command_carries_trailing_marker_true_when_real_comment_follows_quoted_mention() -> None:
+    command_text = f'git commit -m "see {VERIFY_SKIP_MARKER}" {VERIFY_SKIP_MARKER}'
+    assert command_carries_trailing_marker(command_text, VERIFY_SKIP_MARKER)
 
 
 def test_collapse_line_continuations_joins_a_split_git_word() -> None:
