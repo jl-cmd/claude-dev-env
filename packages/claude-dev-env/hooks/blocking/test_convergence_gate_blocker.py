@@ -255,6 +255,13 @@ def test_parse_repo_flag_short_alias() -> None:
     )
 
 
+def test_parse_repo_flag_short_alias_attached_value() -> None:
+    assert hook_module._parse_repo_flag("gh pr ready 161 -Rsample-owner/target-repo") == (
+        "sample-owner",
+        "target-repo",
+    )
+
+
 def test_parse_repo_flag_absent_returns_none() -> None:
     assert hook_module._parse_repo_flag("gh pr ready 418") is None
 
