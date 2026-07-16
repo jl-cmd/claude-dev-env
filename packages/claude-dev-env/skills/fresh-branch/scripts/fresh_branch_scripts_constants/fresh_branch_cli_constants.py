@@ -15,10 +15,13 @@ ALL_AGENT_DETECTION_MARKERS: tuple[tuple[str, str], ...] = (
     ("CURSOR_TRACE_ID", "cursor"),
     ("CODEX_HOME", "codex"),
     ("CODEX_CI", "codex"),
-    ("GROK_BUILD_SESSION", "grok"),
+    ("GROK_AGENT", "grok"),
     ("CLAUDECODE", "claude"),
     ("CLAUDE_CODE_ENTRYPOINT", "claude"),
 )
+
+PATH_SEGMENT_CURRENT = "."
+PATH_SEGMENT_PARENT = ".."
 
 WINDOWS_PLATFORM_PREFIX = "win"
 ALL_WINDOWS_USER_SCRATCH_PARTS = ("AppData", "Local", "Temp")
@@ -48,10 +51,18 @@ GIT_BRANCH_FLAG = "-b"
 GIT_VERIFY_FLAG = "--verify"
 GIT_QUIET_FLAG = "--quiet"
 GIT_SHOW_TOPLEVEL = "--show-toplevel"
+GIT_CHECK_REF_FORMAT = "check-ref-format"
+GIT_BRANCH_FORMAT_FLAG = "--branch"
 GIT_REMOTE_PREFIX = "origin/"
 GIT_REFS_REMOTES_PREFIX = "refs/remotes/"
+GIT_REMOTE_NAME_ORIGIN = "origin"
 
 ERROR_BRANCH_NAME_REQUIRED = "branch name is required"
+ERROR_BRANCH_NAME_UNSAFE = (
+    "branch name must be a relative path without '.' or '..' segments"
+)
+ERROR_WORKTREE_PATH_OUTSIDE_ROOT = "worktree path escapes agent root: %s"
+ERROR_CLI_ARGUMENTS = "invalid or missing command-line arguments"
 ERROR_AGENT_SLUG_INVALID = "agent slug must be lowercase letters, digits, or hyphens"
 ERROR_REPO_NOT_GIT = "path is not inside a git repository: %s"
 ERROR_BASE_REF_MISSING = "base ref not found after fetch: %s"

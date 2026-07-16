@@ -19,6 +19,7 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
 from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
     DEFAULT_AGENT_SLUG,
     DEFAULT_BASE_REF,
+    ERROR_CLI_ARGUMENTS,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
     FRESH_BRANCH_AGENT_ENV_VAR,
@@ -45,7 +46,7 @@ ALL_AGENT_ENV_MARKERS = (
     "CURSOR_TRACE_ID",
     "CODEX_HOME",
     "CODEX_CI",
-    "GROK_BUILD_SESSION",
+    "GROK_AGENT",
     "CLAUDECODE",
     "CLAUDE_CODE_ENTRYPOINT",
 )
@@ -193,6 +194,15 @@ class TestResolveAgentSlug:
         monkeypatch.setenv("CODEX_HOME", "/tmp/codex")
         assert module.resolve_agent_slug(None) == "codex"
 
+    def should_detect_grok_from_marker(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        clear_agent_environment(monkeypatch)
+        monkeypatch.setenv("GROK_AGENT", "1")
+        assert module.resolve_agent_slug(None) == "grok"
+
     def should_default_to_claude_when_no_markers(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -248,6 +258,72 @@ class TestResolveUniqueWorktreePath:
         preferred_path.mkdir()
         unique_path = module.resolve_unique_worktree_path(preferred_path)
         assert unique_path == tmp_path / "feature-one-2"
+
+
+class TestNormalizeBaseRef:
+    def should_expand_bare_branch_name_to_origin_tracking_ref(self) -> None:
+        module = load_create_fresh_branch_module()
+        assert module.normalize_base_ref(MAIN_BRANCH_NAME) == DEFAULT_BASE_REF
+
+    def should_preserve_explicit_remote_tracking_ref(self) -> None:
+        module = load_create_fresh_branch_module()
+        assert module.normalize_base_ref(DEFAULT_BASE_REF) == DEFAULT_BASE_REF
+
+    def should_preserve_non_origin_remote_ref(self) -> None:
+        module = load_create_fresh_branch_module()
+        assert module.normalize_base_ref("upstream/dev") == "upstream/dev"
+
+
+class TestBranchNamePathSafety:
+    def should_reject_parent_segments_without_mkdir_outside(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        agent_scratch_parent = tmp_path / "agent-scratch"
+        agent_scratch_parent.mkdir()
+        monkeypatch.setattr(module.sys, "platform", "linux")
+        monkeypatch.setattr(
+            module.tempfile,
+            "gettempdir",
+            lambda: str(agent_scratch_parent),
+        )
+        escaped_path = agent_scratch_parent / "escape"
+        with pytest.raises(ValueError, match="relative path"):
+            module.create_fresh_branch(
+                branch_name="fix/../../escape",
+                repo_path=tmp_path / "unused-repo",
+                agent_slug="claude",
+                base_ref=DEFAULT_BASE_REF,
+            )
+        assert not escaped_path.exists()
+        assert not (agent_scratch_parent / "claude").exists()
+
+    def should_reject_absolute_branch_without_mkdir_outside(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        agent_scratch_parent = tmp_path / "agent-scratch"
+        agent_scratch_parent.mkdir()
+        outside_target = tmp_path / "outside-evil"
+        monkeypatch.setattr(module.sys, "platform", "linux")
+        monkeypatch.setattr(
+            module.tempfile,
+            "gettempdir",
+            lambda: str(agent_scratch_parent),
+        )
+        with pytest.raises(ValueError, match="relative path"):
+            module.create_fresh_branch(
+                branch_name=str(outside_target),
+                repo_path=tmp_path / "unused-repo",
+                agent_slug="claude",
+                base_ref=DEFAULT_BASE_REF,
+            )
+        assert not outside_target.exists()
+        assert not (agent_scratch_parent / "claude").exists()
 
 
 class TestCreateFreshBranchIntegration:
@@ -344,6 +420,47 @@ class TestCreateFreshBranchIntegration:
                 base_ref=DEFAULT_BASE_REF,
             )
 
+    def should_use_remote_tracking_tip_for_bare_base_name(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        empty_hooks_path = tmp_path / "repo" / "empty-hooks"
+        origin_tip_before = read_head_commit(repository_path)
+        (repository_path / SEED_FILE_NAME).write_text("local-only\n", encoding="utf-8")
+        run_git(
+            ["add", SEED_FILE_NAME],
+            repository_path,
+            empty_hooks_path=empty_hooks_path,
+        )
+        run_git(
+            ["commit", "-m", "local advance"],
+            repository_path,
+            empty_hooks_path=empty_hooks_path,
+        )
+        local_main_commit = read_head_commit(repository_path)
+        assert local_main_commit != origin_tip_before
+        agent_scratch_parent = tmp_path / "agent-scratch"
+        monkeypatch.setattr(module.sys, "platform", "linux")
+        monkeypatch.setattr(
+            module.tempfile,
+            "gettempdir",
+            lambda: str(agent_scratch_parent),
+        )
+        success_payload = module.create_fresh_branch(
+            branch_name="fix/bare-base",
+            repo_path=repository_path,
+            agent_slug="claude",
+            base_ref=MAIN_BRANCH_NAME,
+        )
+        worktree_path = Path(success_payload[PAYLOAD_KEY_WORKTREE_PATH])
+        assert success_payload[PAYLOAD_KEY_BASE_REF] == DEFAULT_BASE_REF
+        assert success_payload[PAYLOAD_KEY_BASE_COMMIT] == origin_tip_before
+        assert read_head_commit(worktree_path) == origin_tip_before
+        assert read_head_commit(worktree_path) != local_main_commit
+
 
 class TestMainCli:
     def should_print_success_json_and_exit_zero(
@@ -410,3 +527,94 @@ class TestMainCli:
         error_payload = json.loads(captured.out)
         assert PAYLOAD_KEY_ERROR in error_payload
         assert "git repository" in error_payload[PAYLOAD_KEY_ERROR]
+
+    def should_print_error_json_when_branch_name_flag_missing(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        monkeypatch.setattr(sys, "argv", ["create_fresh_branch.py"])
+        exit_code = module.main()
+        captured = capsys.readouterr()
+        assert exit_code == EXIT_CODE_FAILURE
+        error_payload = json.loads(captured.out)
+        assert error_payload[PAYLOAD_KEY_ERROR] == ERROR_CLI_ARGUMENTS
+
+    def should_print_error_json_for_parent_segment_branch_name(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        agent_scratch_parent = tmp_path / "agent-scratch"
+        agent_scratch_parent.mkdir()
+        escaped_path = agent_scratch_parent / "escape"
+        monkeypatch.setattr(module.sys, "platform", "linux")
+        monkeypatch.setattr(
+            module.tempfile,
+            "gettempdir",
+            lambda: str(agent_scratch_parent),
+        )
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "create_fresh_branch.py",
+                "--branch-name",
+                "../escape",
+                "--repo",
+                str(repository_path),
+                "--agent",
+                "claude",
+            ],
+        )
+        exit_code = module.main()
+        captured = capsys.readouterr()
+        assert exit_code == EXIT_CODE_FAILURE
+        error_payload = json.loads(captured.out)
+        assert PAYLOAD_KEY_ERROR in error_payload
+        assert "relative path" in error_payload[PAYLOAD_KEY_ERROR]
+        assert not escaped_path.exists()
+        assert not (agent_scratch_parent / "claude").exists()
+
+    def should_print_error_json_for_absolute_branch_name(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        agent_scratch_parent = tmp_path / "agent-scratch"
+        agent_scratch_parent.mkdir()
+        outside_target = tmp_path / "outside-evil"
+        monkeypatch.setattr(module.sys, "platform", "linux")
+        monkeypatch.setattr(
+            module.tempfile,
+            "gettempdir",
+            lambda: str(agent_scratch_parent),
+        )
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "create_fresh_branch.py",
+                "--branch-name",
+                str(outside_target),
+                "--repo",
+                str(repository_path),
+                "--agent",
+                "claude",
+            ],
+        )
+        exit_code = module.main()
+        captured = capsys.readouterr()
+        assert exit_code == EXIT_CODE_FAILURE
+        error_payload = json.loads(captured.out)
+        assert PAYLOAD_KEY_ERROR in error_payload
+        assert "relative path" in error_payload[PAYLOAD_KEY_ERROR]
+        assert not outside_target.exists()
+        assert not (agent_scratch_parent / "claude").exists()

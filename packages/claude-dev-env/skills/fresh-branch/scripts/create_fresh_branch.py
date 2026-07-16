@@ -34,18 +34,24 @@ from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
     ERROR_BASE_COMMIT_LOOKUP,
     ERROR_BASE_REF_MISSING,
     ERROR_BRANCH_NAME_REQUIRED,
+    ERROR_BRANCH_NAME_UNSAFE,
+    ERROR_CLI_ARGUMENTS,
     ERROR_FETCH_FAILED,
     ERROR_REPO_NOT_GIT,
     ERROR_UNIQUE_PATH_EXHAUSTED,
     ERROR_WORKTREE_FAILED,
+    ERROR_WORKTREE_PATH_OUTSIDE_ROOT,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
     FRESH_BRANCH_AGENT_ENV_VAR,
     GIT_BRANCH_FLAG,
+    GIT_BRANCH_FORMAT_FLAG,
+    GIT_CHECK_REF_FORMAT,
     GIT_COMMAND,
     GIT_FETCH,
     GIT_QUIET_FLAG,
     GIT_REFS_REMOTES_PREFIX,
+    GIT_REMOTE_NAME_ORIGIN,
     GIT_REMOTE_PREFIX,
     GIT_REV_PARSE,
     GIT_SHOW_REF,
@@ -54,6 +60,8 @@ from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
     GIT_WORKTREE,
     GIT_WORKTREE_ADD,
     MAXIMUM_UNIQUE_PATH_ATTEMPTS,
+    PATH_SEGMENT_CURRENT,
+    PATH_SEGMENT_PARENT,
     PAYLOAD_KEY_AGENT,
     PAYLOAD_KEY_BASE_COMMIT,
     PAYLOAD_KEY_BASE_REF,
@@ -154,6 +162,32 @@ def resolve_unique_worktree_path(preferred_path: Path) -> Path:
     raise RuntimeError(ERROR_UNIQUE_PATH_EXHAUSTED % preferred_path)
 
 
+def normalize_base_ref(base_ref: str) -> str:
+    """Return a remote-tracking ref for bare branch names.
+
+    ::
+
+        normalize_base_ref("main")         # ok: "origin/main"
+        normalize_base_ref("origin/main")  # ok: "origin/main"
+        normalize_base_ref("upstream/dev") # ok: "upstream/dev"
+
+    Bare names expand to ``origin/<name>`` so worktree start-points use the
+    remote-tracking tip that ``git fetch`` updates, not a stale local branch.
+
+    Args:
+        base_ref: User-supplied base ref or bare branch name.
+
+    Returns:
+        Normalized ref used for fetch, commit lookup, and worktree add.
+    """
+    cleaned_base_ref = base_ref.strip()
+    if not cleaned_base_ref:
+        return DEFAULT_BASE_REF
+    if "/" not in cleaned_base_ref:
+        return f"{GIT_REMOTE_PREFIX}{cleaned_base_ref}"
+    return cleaned_base_ref
+
+
 def create_fresh_branch(
     branch_name: str,
     repo_path: Path,
@@ -177,28 +211,38 @@ def create_fresh_branch(
         Success payload mapping.
 
     Raises:
-        ValueError: When branch_name is empty.
+        ValueError: When branch_name is empty or path-unsafe.
         RuntimeError: On git or path failures.
     """
     cleaned_branch = branch_name.strip()
     if not cleaned_branch:
         raise ValueError(ERROR_BRANCH_NAME_REQUIRED)
+    _validate_branch_name_for_worktree_path(cleaned_branch)
+    resolved_base_ref = normalize_base_ref(base_ref)
     repo_root = _resolve_repo_root(repo_path)
-    _fetch_base_ref(repo_root, base_ref)
-    base_commit = _resolve_base_commit(repo_root, base_ref)
+    _fetch_base_ref(repo_root, resolved_base_ref)
+    base_commit = _resolve_base_commit(repo_root, resolved_base_ref)
     agent_worktree_root = resolve_agent_worktree_root(agent_slug)
     preferred_path = agent_worktree_root / cleaned_branch
+    _assert_path_is_under_agent_root(
+        candidate_path=preferred_path,
+        agent_worktree_root=agent_worktree_root,
+    )
     worktree_path = resolve_unique_worktree_path(preferred_path)
+    _assert_path_is_under_agent_root(
+        candidate_path=worktree_path,
+        agent_worktree_root=agent_worktree_root,
+    )
     _create_worktree_branch(
         repo_root,
         branch_name=cleaned_branch,
         worktree_path=worktree_path,
-        base_ref=base_ref,
+        base_ref=resolved_base_ref,
     )
     return {
         PAYLOAD_KEY_BRANCH: cleaned_branch,
         PAYLOAD_KEY_WORKTREE_PATH: str(worktree_path.resolve()),
-        PAYLOAD_KEY_BASE_REF: base_ref,
+        PAYLOAD_KEY_BASE_REF: resolved_base_ref,
         PAYLOAD_KEY_BASE_COMMIT: base_commit,
         PAYLOAD_KEY_AGENT: agent_slug,
         PAYLOAD_KEY_REPO_ROOT: str(repo_root),
@@ -232,6 +276,41 @@ def _normalize_agent_slug(raw_agent: str) -> str:
     if re.fullmatch(AGENT_SLUG_PATTERN, agent_slug) is None:
         raise ValueError(ERROR_AGENT_SLUG_INVALID)
     return agent_slug
+
+
+def _validate_branch_name_for_worktree_path(branch_name: str) -> None:
+    branch_as_path = Path(branch_name)
+    if branch_as_path.is_absolute():
+        raise ValueError(ERROR_BRANCH_NAME_UNSAFE)
+    for each_segment in branch_as_path.parts:
+        if each_segment in (PATH_SEGMENT_CURRENT, PATH_SEGMENT_PARENT):
+            raise ValueError(ERROR_BRANCH_NAME_UNSAFE)
+    _assert_git_accepts_branch_name(branch_name)
+
+
+def _assert_git_accepts_branch_name(branch_name: str) -> None:
+    completed = _run_git(
+        [GIT_CHECK_REF_FORMAT, GIT_BRANCH_FORMAT_FLAG, branch_name],
+        working_directory=Path.cwd(),
+    )
+    if completed.returncode != 0:
+        raise ValueError(ERROR_BRANCH_NAME_UNSAFE)
+
+
+def _assert_path_is_under_agent_root(
+    candidate_path: Path,
+    agent_worktree_root: Path,
+) -> None:
+    resolved_candidate = candidate_path.resolve()
+    resolved_root = agent_worktree_root.resolve()
+    if resolved_candidate == resolved_root:
+        return
+    try:
+        resolved_candidate.relative_to(resolved_root)
+    except ValueError as error:
+        raise ValueError(
+            ERROR_WORKTREE_PATH_OUTSIDE_ROOT % candidate_path,
+        ) from error
 
 
 def _resolve_repo_root(repo_path: Path) -> Path:
@@ -315,16 +394,21 @@ def _parse_arguments() -> argparse.Namespace:
         default=DEFAULT_BASE_REF,
         help=f"Base ref to fetch and branch from (default: {DEFAULT_BASE_REF}).",
     )
-    return parser.parse_args()
+    try:
+        return parser.parse_args()
+    except SystemExit as exit_error:
+        if exit_error.code in (EXIT_CODE_SUCCESS, None):
+            raise
+        raise ValueError(ERROR_CLI_ARGUMENTS) from exit_error
 
 
 def _split_remote_ref(base_ref: str) -> tuple[str, str]:
     if base_ref.startswith(GIT_REMOTE_PREFIX):
-        return GIT_REMOTE_PREFIX.rstrip("/"), base_ref[len(GIT_REMOTE_PREFIX) :]
+        return GIT_REMOTE_NAME_ORIGIN, base_ref[len(GIT_REMOTE_PREFIX) :]
     if "/" in base_ref:
         remote_name, remote_branch = base_ref.split("/", 1)
         return remote_name, remote_branch
-    return GIT_REMOTE_PREFIX.rstrip("/"), base_ref
+    return GIT_REMOTE_NAME_ORIGIN, base_ref
 
 
 def _is_ref_present(repo_root: Path, base_ref: str) -> bool:
