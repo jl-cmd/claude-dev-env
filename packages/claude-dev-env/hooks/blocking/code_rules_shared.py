@@ -411,8 +411,7 @@ def is_ephemeral_path(file_path: str, hook_payload: dict | None = None) -> bool:
     harness session scratchpad. The session scratchpad match reads the session id
     from the payload when one is supplied, and from the harness environment
     variable otherwise, so a caller that holds no payload still gets the match.
-    This is the shared predicate the code-rules gate, the doc-language gates, and
-    the PII gate consult to decide path exemption.
+    Repo gates that exempt throwaway paths call this shared predicate.
 
     Args:
         file_path: The candidate path to classify.

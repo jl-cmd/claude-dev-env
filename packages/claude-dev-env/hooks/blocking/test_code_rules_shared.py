@@ -160,10 +160,9 @@ def test_exempt_on_windows_without_getuid(
 ) -> None:
     """On Windows the os.getuid attribute is absent, and a real scratchpad target still
     resolves as exempt through its temp-directory path shape and session id."""
-    _point_temporary_directory_at(monkeypatch, tmp_path)
-    scratchpad_directory = _build_scratchpad_directory(tmp_path)
+    _simulate_windows_platform(monkeypatch, tmp_path)
+    scratchpad_directory = _build_windows_scratchpad_directory(tmp_path)
     throwaway_script = scratchpad_directory / "one_off_tool.py"
-    monkeypatch.delattr(os, "getuid", raising=False)
 
     assert (
         _SHARED_MODULE.is_under_session_scratchpad(str(throwaway_script), _session_payload())
