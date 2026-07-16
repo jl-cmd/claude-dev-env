@@ -23,7 +23,7 @@ chained command does not bind the gate to the wrong PR::
                                                 -> PR_URL_OWNER_REPO_NUMBER_PATTERN
 """
 
-GH_PR_READY_ANCHOR_PATTERN: str = r"\bgh\s+pr\s+ready\b"
+GH_PR_READY_ANCHOR_PATTERN: str = r"\bgh\s+pr\s+ready\b(?![^&|;\n]*--undo)"
 
 COMMAND_SEPARATOR_PATTERN: str = r"&&|\|\||;|\||\n"
 

@@ -271,3 +271,10 @@ def test_chained_pr_url_does_not_misbind_the_gate(
         ("cwd-owner", "cwd-repo"),
     )
     assert identity == ("cwd-owner", "cwd-repo", 161)
+
+
+def test_ready_segment_skips_a_leading_undo_invocation() -> None:
+    assert (
+        hook_module._ready_command_segment("gh pr ready --undo && gh pr ready 161")
+        == "gh pr ready 161"
+    )
