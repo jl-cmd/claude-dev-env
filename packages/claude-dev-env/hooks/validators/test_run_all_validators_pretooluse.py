@@ -44,6 +44,22 @@ class TestPreToolUseGate:
         assert '"permissionDecision": "deny"' in completed.stdout
         assert "Magic Values" in completed.stdout
 
+    def test_write_violating_content_to_ephemeral_scratch_path_is_allowed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+        completed = run_gate(
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": "/tmp/scratch_calculate.py",
+                    "content": VIOLATING_PYTHON_SOURCE,
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert "deny" not in completed.stdout
+
     def test_write_with_clean_content_allows(self) -> None:
         completed = run_gate(
             {

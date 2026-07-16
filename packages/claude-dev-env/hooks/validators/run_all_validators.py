@@ -32,6 +32,7 @@ _hooks_directory_on_path = str(hooks_dir.resolve())
 if _hooks_directory_on_path not in sys.path:
     sys.path.insert(0, _hooks_directory_on_path)
 
+from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
     apply_edits,
@@ -821,9 +822,12 @@ def _evaluate_pre_tool_use_payload() -> None:
     """Read the PreToolUse payload from stdin and deny a violating file write.
 
     Reconstructs the proposed post-edit content of the one target file and runs
-    the file-scoped validators against it. Emits a deny decision naming each
-    failing validator when any fires; writes nothing for a clean file, an
-    unparseable payload, or a payload no validator covers.
+    the file-scoped validators against it. The path-based exemption decision runs
+    against the real target path from the payload, so an ephemeral scratch or
+    session scratchpad target passes without validation even though the content
+    is validated through a temporary copy. Emits a deny decision naming each
+    failing validator when any fires; writes nothing for a clean file, an exempt
+    target, an unparseable payload, or a payload no validator covers.
     """
     pre_tool_use_payload = json.load(sys.stdin)
     if not isinstance(pre_tool_use_payload, dict):
@@ -834,6 +838,8 @@ def _evaluate_pre_tool_use_payload() -> None:
         return
     file_path = tool_input.get("file_path", "")
     if not isinstance(file_path, str) or not file_path:
+        return
+    if is_ephemeral_path(file_path, pre_tool_use_payload):
         return
     proposed_content = reconstruct_proposed_content(tool_name, tool_input)
     if not proposed_content:
