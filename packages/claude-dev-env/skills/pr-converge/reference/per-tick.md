@@ -253,8 +253,8 @@ c. Decide (three branches; match first whose predicate holds):
 
    - **Failed review (`returncode != 0`, or chain mode with null
      `served_command`):** The review did not complete a successful serve. Do
-     not set `code_review_clean_at`. Stay `phase = CODE_REVIEW`, schedule next
-     wakeup, return. A failed chain often leaves `dirty_tree` false — that is
+     not set `code_review_clean_at`. Stay `phase = CODE_REVIEW`, apply Step 4 pacer
+     (ScheduleWakeup or portable continue/poll), return. A failed chain often leaves `dirty_tree` false — that is
      not a clean stamp.
    - **Fixes applied (working tree dirty / `dirty_tree` true):** Commit the
      applied fixes in one commit → push, following the shared fix protocol
@@ -262,7 +262,7 @@ c. Decide (three branches; match first whose predicate holds):
      push-invalidated markers per [ground-rules.md](ground-rules.md) /
      [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
      `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`). Stay
-     `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
+     `phase = CODE_REVIEW`, apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return. Every fix push
      re-enters the internal passes on the new HEAD.
    - **Clean (successful serve: `returncode == 0`, chain `served_command`
      non-null when `mode == chain`, and `dirty_tree` false):** Set
@@ -327,7 +327,7 @@ d. Decide based on post-bugteam state — order matters. Check
 pushed-during-bugteam FIRST so a convergence report against a stale HEAD
 never falsely terminates:
    - **Audit pushed this tick (clean-at fields reset in step b):**
-     `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
+     `phase = CODE_REVIEW`, apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return. Every fix push
      re-enters the internal passes on the new HEAD.
    - **Convergence AND no push:** the internal passes are clean on
      `current_head`. Stamp `bugteam_clean_at = current_head`, then
@@ -337,8 +337,8 @@ never falsely terminates:
      ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [fix-protocol.md](fix-protocol.md)). Reset push-invalidated markers
      per [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
      (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
-     `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
-     next wakeup, return.
+     `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, apply Step 4 pacer
+     (ScheduleWakeup or portable continue/poll), return.
 
 ### `phase == BUGBOT` (terminal gate)
 
@@ -395,7 +395,7 @@ pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_
 c. Decide (four branches; match first whose predicate holds):
    - **No bugbot review yet, OR latest review's `commit_id` ≠
      `current_head`:** Re-trigger bugbot (Step 3), set `bugbot_clean_at =
-     null`, reset `inline_lag_streak = 0`, schedule next wakeup, return to the
+     null`, reset `inline_lag_streak = 0`, apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return to the
      Bugbot gate next tick.
    - **`commit_id == current_head` AND zero unaddressed inline AND review
      body clean:** Set `bugbot_clean_at = current_head`, reset
@@ -411,7 +411,7 @@ c. Decide (four branches; match first whose predicate holds):
      `state.json`: the clean-coder teammate executes the fix, writes
      `state.json`, goes idle; the next tick re-enters CODE_REVIEW on the new
      HEAD. No `state.json` (single-PR): the lead executes it, stays
-     `phase = CODE_REVIEW`. Schedule next wakeup, return.
+     `phase = CODE_REVIEW`. Apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return.
 
 ### `phase == COPILOT_WAIT`
 
@@ -444,12 +444,12 @@ b. Decide (three branches; match first whose predicate holds):
      (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
      `bugbot_acknowledged_at`, `codex_down`). **Set `phase = CODE_REVIEW`**
      (NOT COPILOT_WAIT) — every fix push re-enters the internal passes on the
-     new HEAD. Schedule next wakeup, return.
+     new HEAD. Apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return.
    - **No Copilot review at `current_head` yet:** Increment
      `copilot_wait_count` (init 0 on COPILOT_WAIT entry; reset to 0 on
      every push and on every successful Copilot review). `>= 3` → hard
      blocker per [stop-conditions.md](stop-conditions.md). Otherwise
-     schedule next wakeup (360s), return.
+     apply Step 4 pacer (ScheduleWakeup or portable continue/poll; 360s wait), return.
 
 **Non-negotiable:** After any Copilot fix push, `phase` MUST route to
 `CODE_REVIEW`. Never cycle COPILOT_WAIT → fix → COPILOT_WAIT. The

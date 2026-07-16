@@ -225,14 +225,17 @@ why it was not decisive.
 
 The wait for a human belongs to the orchestrating session. On a
 `blocker: "user-review"` return, run the
-[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) skill: send the
-ntfy notification (the per-finding summary and evidence note plus the `reviewUrl`
-Copilot review link), then hold for the user's response by pacer:
+[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) skill for the ntfy
+page only (the per-finding summary and evidence note plus the `reviewUrl`
+Copilot review link), then hold for the user's response by pacer. On
+`pacer=portable`, override triage's hold step — ntfy plus the portable hold
+below; do not follow triage's `ScheduleWakeup` / `send_later` path.
 
-- **`pacer=workflow`** — 45-minute `ScheduleWakeup`.
-- **`pacer=portable`** — in-session poll or handoff per
-  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)
-  (no `ScheduleWakeup`).
+- **`pacer=workflow`** — triage hold: 45-minute `ScheduleWakeup` (or
+  `send_later` when that is the host arm).
+- **`pacer=portable`** — portable hold only: in-session poll or handoff per
+  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md);
+  never `ScheduleWakeup` or `send_later`.
 
 When the user answers within the window, follow their direction. When the
 window closes with no response, run normal teardown and report the
@@ -288,15 +291,18 @@ On teardown entry, when `~/.claude/runtime/pr-loop/bugteam-pr-<N>/handoff.json`
 exists, read its `completed_steps` and skip any checkpoint the list already
 names, so a resumed run performs only the checkpoints left.
 
-On a `blocker: "user-review"` return, the workflow held one or more code-concern
-findings that stayed inconclusive after the executed-check verification stage.
-Run the [`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate before
+On a `blocker: "user-review"` return under `pacer=workflow`, the workflow held
+one or more code-concern findings that stayed inconclusive after the
+executed-check verification stage. Run the
+[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate before
 teardown: send the ntfy alert with the per-finding summary and evidence note and
-the `userReview.reviewUrl` link, then hold with a 45-minute `ScheduleWakeup`. Act
-on the user's direction when it arrives inside the window; when the window closes
-with no response, fall through to normal teardown and report the
-`userReview.findings` un-reviewed. The PR stays a draft in this path — the
-workflow marked nothing ready.
+the `userReview.reviewUrl` link, then hold with a 45-minute `ScheduleWakeup` (or
+`send_later` when that is the host arm). Act on the user's direction when it
+arrives inside the window; when the window closes with no response, fall through
+to normal teardown and report the `userReview.findings` un-reviewed. The PR
+stays a draft in this path — the workflow marked nothing ready. Under
+`pacer=portable`, use the portable teardown hold above (ntfy plus in-session
+poll or handoff; never `ScheduleWakeup`).
 
 Before the checkpoints, when the workflow returned a non-null `copilotNote`
 (the Copilot gate was bypassed), query the PR's reviews once more for a

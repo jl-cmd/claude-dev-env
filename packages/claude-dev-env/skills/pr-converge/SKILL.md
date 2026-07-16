@@ -96,10 +96,16 @@ auto-fix; code-concern verify then confirmed / refuted / inconclusive).
 - Self-healing and **confirmed** findings join the fix tick on `current_head`;
   after push, reset clean-at SHAs, set `phase = CODE_REVIEW`, return to Step 5.
 - **Refuted** findings resolve clean on the thread; no phase change.
-- One or more **inconclusive** findings: do not mark ready. Run the triage
-  skill's user gate (ntfy + 45-minute hold across ticks; persist the deadline so
-  each tick reads it on entry). Act on the user's direction inside the window;
-  on timeout, teardown and report the findings un-reviewed.
+- One or more **inconclusive** findings: do not mark ready. Page via the
+  triage skill's ntfy step, then hold by pacer:
+  - **`pacer=schedule_wakeup`** — triage user gate (`ScheduleWakeup` /
+    `send_later` 45-minute hold across ticks; persist the deadline so each tick
+    reads it on entry).
+  - **`pacer=portable`** — in-session deadline poll or handoff per
+    [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md);
+    never `ScheduleWakeup` or `send_later`.
+  Act on the user's direction inside the window; on timeout, teardown and report
+  the findings un-reviewed.
 - Enter `COPILOT_WAIT` only from gate (d) after requesting a Copilot review
   (Step 7 → 7a). Stay on `COPILOT_WAIT` until a review surfaces at
   `current_head`, `copilot_wait_count >= 3` hard-blocks, or `copilot_down`
