@@ -13,7 +13,13 @@ Search files instantly on Windows using the Everything command-line interface (e
 
 ## Hard limits
 
-Scope and fallback policy: `packages/claude-dev-env/rules/es-exe-file-search.md`.
+Every search carries a scope: a project path or registry token, an `ext:` filter, a `dm:` date filter, a `size:` filter, or a name pattern. A bare whole-drive scan or a network-share sweep is out of bounds — narrow the search to what you need.
+
+When `es.exe` fails or returns nothing, self-heal first: fall back to the `Glob` tool (name and path patterns) or `Grep` (file contents), and report the outage so the reader knows the index was unavailable. When self-healing also fails, ask the user through `AskUserQuestion` with a short analysis and next-step options.
+
+## Registry tokens
+
+The `es_exe_path_rewriter` hook resolves scope tokens before the command runs. A `{project-name}` placeholder or a bare registry key from `~/.claude/project-paths.json` becomes its quoted absolute path in the command. The hook allows and rewrites — it never blocks — so a search scoped to a registered project names the project token and lets the hook fill in the path.
 
 ## Instructions
 

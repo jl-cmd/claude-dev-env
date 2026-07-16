@@ -19,6 +19,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     ALL_SOFTWARE_TERMS,
@@ -323,6 +324,13 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     raw_tool_input = payload_by_key.get("tool_input", {})
     if not isinstance(raw_tool_name, str) or not isinstance(raw_tool_input, dict):
         return None
+
+    if raw_tool_name in ALL_WRITE_EDIT_TOOL_NAMES:
+        target_file_path = raw_tool_input.get("file_path", "")
+        if isinstance(target_file_path, str) and is_ephemeral_path(
+            target_file_path, payload_by_key
+        ):
+            return None
 
     prose_text = _collect_prose_for_tool(raw_tool_name, raw_tool_input)
     if not prose_text:

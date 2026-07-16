@@ -1,15 +1,13 @@
 ---
 name: closeout
 description: >-
-  Harvests session obstacles into GitHub issues backed by quoted evidence at
-  session end, validates each draft with the user, dedupes against open and
-  closed issues, routes each to its repo, files children then a parent
-  checklist, and prints a computed cloud handoff prompt. Triggers: /closeout,
-  close out this session, close out the session, file the session obstacles,
-  session closeout, harvest session obstacles, end-of-session issue filing.
-  Near-miss: not session-log, which journals the session to the vault; closeout
-  files GitHub issues and prints a handoff prompt, and writes no session
-  journal.
+  Harvests session obstacles into GitHub issues backed by quoted evidence:
+  validates each draft with the user, dedupes against open and closed issues,
+  files children under a parent checklist, and prints a cloud handoff prompt.
+  Triggers: /closeout, close out this session, close out the session, file the
+  session obstacles, session closeout, harvest session obstacles, end-of-session
+  issue filing. Not session-log (vault journal) — closeout files issues and
+  writes no journal.
 ---
 
 # Closeout

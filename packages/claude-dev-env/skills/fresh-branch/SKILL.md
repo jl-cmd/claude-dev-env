@@ -1,71 +1,122 @@
 ---
 name: fresh-branch
-description: Creates a fresh branch for the current repo based on origin main. Always fetches actual origin main rather than relying on local main. Suggests possible branch names via AskUserQuestion when context is available, or prompts the user to provide a name directly. Triggers on "fresh branch", "new branch from main", "/fresh-branch", "start fresh".
+description: >-
+  Fresh git branch from origin/main in an isolated temp worktree (never checkout -b in the caller tree).
+  Triggers: fresh branch, new branch from main, /fresh-branch, start fresh, clean branch off main,
+  worktree branch, branch in temp.
 ---
 
 # fresh-branch
 
-## Overview
-
-Creates a new branch from `origin/main` (always fresh-fetched, never stale local main). Designed as a shared primitive: other skills (e.g. gotcha) invoke `/fresh-branch` to create a clean branch for their own PR workflows.
+Creates a new branch from a fresh-fetched `origin/main` inside an isolated git worktree under the agent temp root. Shared primitive: other skills invoke `/fresh-branch` when they need a clean branch without touching the caller's dirty tree.
 
 **Announce at start:** "Creating a fresh branch from origin/main."
 
-## Instructions
+## When this applies
 
-### Phase 1 — Fetch origin main
+- User or caller wants a **new** branch based on current `origin/main`.
+- Caller needs the branch path/name as a return value for a later PR step.
 
-Always fetch `origin/main` directly. Do not rely on the local `main` branch, which may be stale.
+**Does not apply (refuse with the quoted line):**
 
-```
-git fetch origin main
-```
+- Switch to an existing branch → `Use git switch / checkout for an existing branch; /fresh-branch only creates new ones.`
+- Push or open a PR → `This skill only creates the branch worktree; push and PR are separate.`
 
-Confirm the fetch succeeded. If it fails (no network, no remote), report the error and stop.
-
-### Phase 2 — Determine branch name
-
-Branch names follow the repo's convention: lowercase, hyphen-separated, descriptive prefix.
-
-**When context is available (the caller or prior conversation provides a topic):**
-
-Suggest 2–4 branch names via `AskUserQuestion`. The suggestions should be short, descriptive, and follow the `prefix/description` or `description` convention visible in recent `git log` output.
-
-Poll recent branch naming patterns to inform suggestions:
+## Checklist
 
 ```
-git branch -r --sort=-committerdate | head -20
+- [ ] Phase 1 — confirm repo context (cwd or --repo)
+- [ ] Phase 2 — resolve branch name (AskUserQuestion when needed)
+- [ ] Phase 3 — execute the create script; parse JSON
+- [ ] Phase 4 — report branch, worktree_path, base_commit; return to caller
 ```
 
-**When no context is available:**
+## Phase 1 — Repo context
 
-Ask the user to provide a branch name directly via `AskUserQuestion` with `multiSelect: false` and a free-text option.
+Work against the repository the user has open (or the path the caller names). The script resolves the git toplevel from `--repo` (default `.`). Do not invent a different clone.
 
-### Phase 3 — Create the branch
+## Phase 2 — Branch name (high freedom)
 
-```
-git checkout -b <branch-name> origin/main
-```
+Branch names: lowercase, hyphen-separated, optional `prefix/description`.
 
-The `-b` flag creates the branch and checks it out. Basing on `origin/main` (not local `main`) guarantees the branch starts from the true latest state.
-
-Confirm success:
+**When a topic is available:** suggest 2–4 names via `AskUserQuestion`. Poll recent remote names for local convention:
 
 ```
-git rev-parse --abbrev-ref HEAD
-git log --oneline -1
+git branch -r --sort=-committerdate
 ```
 
-### Phase 4 — Report
+(Take a short head of that list in the shell you use; do not require Unix `head`.)
 
-State the new branch name and its base commit. If invoked as a subroutine by another skill, return the branch name so the caller can proceed (e.g., creating a PR from it).
+**When no topic:** ask for a name via `AskUserQuestion` (`multiSelect: false`, free-text option).
 
-## What this skill does NOT do
+## Phase 3 — Create branch (execute the script)
 
-- Does not push the branch. The caller decides when and whether to push.
-- Does not create a PR. Use `gh pr create` separately.
-- Does not switch an existing branch. It always creates a new one.
+**Execute** the bundled CLI (do not reimplement with ad-hoc `git checkout -b`):
+
+```
+python "${CLAUDE_SKILL_DIR}/scripts/create_fresh_branch.py" --branch-name "<name>"
+```
+
+Optional flags:
+
+| Flag | Role |
+|------|------|
+| `--repo <path>` | Source repo (default: current directory) |
+| `--agent <slug>` | Temp segment: `claude`, `grok`, `cursor`, `codex`, … |
+| `--base <ref>` | Base ref (default: `origin/main`) |
+
+Agent resolution inside the script: `--agent` → `FRESH_BRANCH_AGENT` env → host markers → `claude`.
+
+Worktree path:
+
+- Windows: `${USERPROFILE}/AppData/Local/Temp/<agent>/<branch-name>`
+- Else: `${tmpdir}/<agent>/<branch-name>`
+- If the path exists, the script suffixes `-2`, `-3`, …
+
+On exit 0, stdout is one JSON object:
+
+| Field | Meaning |
+|-------|---------|
+| `branch` | Created branch name |
+| `worktree_path` | Absolute path of the new worktree |
+| `base_ref` | Base ref used |
+| `base_commit` | SHA at that ref after fetch |
+| `agent` | Host slug used in the path |
+| `repo_root` | Source repository root |
+
+On non-zero exit, stdout is `{"error": "..."}`. Report the error and stop. Do not fall back to `git checkout -b` in the caller tree.
+
+## Phase 4 — Report
+
+State `branch`, `worktree_path`, and `base_commit`. When invoked as a subroutine, return those fields so the caller can continue (for example open a PR from that worktree).
+
+Further edits for the new branch belong in `worktree_path`, not in the caller's original cwd.
+
+## Constraints
+
+- Never `git checkout -b` (or equivalent) in the caller's working tree.
+- Always fetch the base ref through the script (default `origin/main`).
+- Do not push. Do not open a PR.
+- Do not switch an existing branch; only create.
 
 ## Gotchas
 
-See the gotcha reference at the bottom of this file. When a new gotcha is discovered during use, invoke `/gotcha` to add it here.
+- **Dirty caller cwd blocks `checkout -b` and pollutes the tree.** Phase 3 always uses `git worktree add -b` into `Temp/<agent>/…`. If you reconstruct Phase 3 by hand with `checkout -b` in the session cwd, local modifications block the checkout and leave the user on a half-switched branch.
+- **Caller HEAD must stay put.** After success, the original repo's checked-out branch and dirty files are unchanged; only the new worktree has the new branch.
+- **Branch name collision.** If the branch already exists, the script exits non-zero with `{"error":...}`. Pick a new name; do not delete remote branches unless the user asks.
+- **Path already occupied.** A leftover folder at the preferred worktree path gets a numeric suffix (`-2`, …); report the path from JSON, not the path you assumed.
+
+## File index
+
+| File | Purpose |
+|------|---------|
+| `SKILL.md` | This hub: phases, checklist, constraints, gotchas |
+| `CLAUDE.md` | Package map for agents browsing the skill folder |
+| `scripts/create_fresh_branch.py` | **Execute** — deterministic fetch + worktree branch CLI |
+| `scripts/test_create_fresh_branch.py` | Real-repo tests for agent/path/CLI behavior |
+| `scripts/fresh_branch_scripts_constants/` | Named constants for the CLI |
+
+## Folder map
+
+- `scripts/` — executable CLI, tests, constants package
+- `scripts/fresh_branch_scripts_constants/` — importable `UPPER_SNAKE` values

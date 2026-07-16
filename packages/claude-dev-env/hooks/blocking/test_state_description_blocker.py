@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 _BLOCKING_DIR = str(Path(__file__).resolve().parent)
 _HOOKS_ROOT = str(Path(__file__).resolve().parent.parent)
 if _BLOCKING_DIR not in sys.path:
@@ -205,6 +207,19 @@ def test_detects_now_uses_in_markdown():
     assert result.returncode == 0
     output = json.loads(result.stdout)
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_markdown_at_ephemeral_path_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "/tmp/api.md",
+            "content": VIOLATION_MD_INSTEAD,
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
 
 
 def test_detects_edit_new_string():

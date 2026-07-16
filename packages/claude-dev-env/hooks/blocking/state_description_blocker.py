@@ -19,8 +19,9 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
+from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 from hooks_constants.state_description_blocker_constants import (  # noqa: E402
     ALL_BLOCK_COMMENT_EXTENSIONS,
     ALL_BLOCK_COMMENT_ONLY_EXTENSIONS,
@@ -296,6 +297,8 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
 
     file_path = tool_input.get("file_path", "")
     if not isinstance(file_path, str) or not file_path:
+        return None
+    if is_ephemeral_path(file_path, payload_by_key):
         return None
     if not (is_markdown_file(file_path) or is_comment_bearing_file(file_path)):
         return None

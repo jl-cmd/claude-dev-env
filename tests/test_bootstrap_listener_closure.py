@@ -30,6 +30,11 @@ MANUAL_COPY_MARKER = "Or copy manually"
 FENCED_BLOCK_DELIMITER = "```"
 LINE_BREAK = "\n"
 
+SYNC_WORKFLOW_ABSOLUTE_PATH = REPO_ROOT / LISTENER_WORKFLOW_PATH
+STEP_LIST_ITEM_PREFIX = "- "
+CHECKOUT_STEP_USES_PREFIX = "- uses: actions/checkout@"
+FETCH_DEPTH_FULL_HISTORY_DECLARATION = "fetch-depth: 0"
+
 
 def extract_manual_copy_block(document_text: str) -> str:
     marker_index = document_text.index(MANUAL_COPY_MARKER)
@@ -65,3 +70,43 @@ class TestManualCopyDocInstallsEveryRequiredPath:
 
         for each_required_path in REQUIRED_LISTENER_PATHS:
             assert each_required_path in manual_copy_block
+
+
+def leading_space_width(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def extract_checkout_step_block(workflow_text: str) -> str:
+    all_lines = workflow_text.splitlines()
+    checkout_index = next(
+        (
+            each_index
+            for each_index, each_line in enumerate(all_lines)
+            if each_line.lstrip().startswith(CHECKOUT_STEP_USES_PREFIX)
+        ),
+        -1,
+    )
+    assert checkout_index >= 0, "sync workflow declares no actions/checkout step"
+
+    checkout_indent = leading_space_width(all_lines[checkout_index])
+    block_lines = [all_lines[checkout_index]]
+    for each_line in all_lines[checkout_index + 1 :]:
+        starts_next_step = each_line.lstrip().startswith(STEP_LIST_ITEM_PREFIX)
+        if starts_next_step and leading_space_width(each_line) <= checkout_indent:
+            break
+        block_lines.append(each_line)
+    return LINE_BREAK.join(block_lines)
+
+
+class TestSyncListenerCheckoutFetchesFullHistory:
+    """The drift guard finds the prior bot commit with ``git log``, which walks
+    the full history. A shallow depth-1 checkout shows only the tip commit, so a
+    bot commit under later commits stays invisible and the guard reports a first
+    sync. The checkout declares ``fetch-depth: 0`` to fetch the whole history.
+    """
+
+    def should_declare_full_history_fetch_depth_on_the_sync_checkout(self) -> None:
+        workflow_text = SYNC_WORKFLOW_ABSOLUTE_PATH.read_text(encoding="utf-8")
+        checkout_step_block = extract_checkout_step_block(workflow_text)
+
+        assert FETCH_DEPTH_FULL_HISTORY_DECLARATION in checkout_step_block

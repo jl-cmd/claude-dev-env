@@ -1,12 +1,11 @@
 ---
 name: autoconverge
 description: >-
-  Drives one draft PR to convergence in one autonomous run: a deterministic static
-  sweep, then code review, bug audit, and self-review on one HEAD, all fixes in one
-  commit, then Bugbot, Copilot, and Codex as terminal confirmation gates before ready.
-  Use when the user says '/autoconverge', 'autoconverge this PR', 'converge this
-  PR in one run', 'run the converge workflow', or 'drive the PR to ready
-  autonomously'.
+  Drives one draft PR to convergence in one autonomous run: static sweep, then
+  code review, bug audit, and self-review on one HEAD, fixes in one commit, then
+  Bugbot, Copilot, and Codex as terminal gates before ready. Use when the user
+  says '/autoconverge', 'autoconverge this PR', 'converge this PR in one run',
+  'run the converge workflow', or 'drive the PR to ready autonomously'.
 ---
 
 # Autoconverge
@@ -161,50 +160,14 @@ skips a reviewer that is down or out of quota without re-probing. This list is t
 
 ## Copilot findings — tier, verify, then route
 
-The Copilot gate tiers each finding: a **self-healing** finding (style, type
-hints, imports, formatting, magic-value extraction, test-only or doc-vs-code
-fixes — nothing that changes observable runtime behavior) flows into the fix
-round with no user notification. A **code-concern** finding (logic, security,
-data handling, error-handling semantics, concurrency — the tier whenever in
-doubt) goes to a verification stage before any routing.
-
-Each code-concern finding gets its own verifier agent, all in parallel, inside
-the workflow. A verdict is conclusive only when an actual check ran: the verifier
-executes a command against the flagged HEAD — running the code path with crafted
-inputs, forcing the claimed error condition, or running a purpose-built test —
-and captures its output. The verdict carries
-`{ verdict, checkCommand, checkOutput, evidence }`; a conclusive verdict with an
-empty `checkCommand` or `checkOutput` downgrades to inconclusive.
-
-- **confirmed** — the check reproduces the defect. The finding becomes
-  self-healing: it joins the fix round carrying its repro, and the fix re-runs
-  that same check, adds a regression test where the suite covers the surface,
-  lands in one commit, pushes, and replies on the thread with the fix SHA and the
-  before/after output. No page.
-- **refuted** — the check shows the code already behaves correctly in the exact
-  scenario the finding claims is broken. The workflow replies on the thread with
-  the command and output, resolves it, and counts it clean. No page.
-- **inconclusive** — everything else, and the verifier's default: no runnable
-  check exists, the check is infeasible here, the results are ambiguous, or the
-  fix needs a product decision. Any doubt sorts here. Only inconclusive findings
-  page the user.
-
-A round whose code concerns all confirm or refute never returns
-`blocker: "user-review"`. On one or more inconclusive findings, the workflow
-stops with `converged: false`, `blocker: "user-review"`, and a `userReview`
-field carrying
-`{ reviewUrl, findings: [{ file, line, severity, tier, title, evidence }] }` —
-`evidence` is the verifier's one-line note stating what check was attempted and
-why it was not decisive.
-
-A background workflow cannot hold for a human, so the wait belongs to the
-orchestrating session. On a `blocker: "user-review"` return, run the
-[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) skill: send the
-ntfy notification (the per-finding summary and evidence note plus the `reviewUrl`
-Copilot review link), then hold with a 45-minute `ScheduleWakeup` for the user's
-response. When the user answers within the window, follow their direction. When
-the window closes with no response, run normal teardown and report the
-inconclusive findings un-reviewed.
+The Copilot gate tiers each finding (self-healing vs code-concern), verifies
+each code concern with an executed check against the flagged HEAD, and returns a
+confirmed / refuted / inconclusive verdict — full semantics and the `userReview`
+return contract in
+[`reference/copilot-findings.md`](reference/copilot-findings.md). Only
+inconclusive findings return `blocker: "user-review"`; the orchestrating session
+handles that hold in Teardown via the
+[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) skill.
 
 ## Budget stop
 
@@ -338,6 +301,7 @@ also carries the Conventional-Commit title rule each hardening PR must meet.
 - `workflow/render_report.py` — builds the closing convergence insights HTML report, taking the summary from `--summary-file`.
 - `workflow/autoconverge_report_constants/` — named constants for the report builder and the summary prompt.
 - `reference/convergence.md` — the whole loop: reuse pass, round shape, terminal gates, model tiers, ready definition.
+- `reference/copilot-findings.md` — the Copilot gate tiering, per-finding verification, and the `userReview` return contract.
 - `reference/stop-conditions.md` — every way the run ends short of ready, including the budget stop.
 - `reference/gotchas.md` — hard-won failure lessons.
 - `reference/closing-report.md` — the closing HTML report: data source, build steps, publishing.

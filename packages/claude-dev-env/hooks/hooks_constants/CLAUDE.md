@@ -20,6 +20,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `code_verifier_spawn_preflight_gate_constants.py` | Subagent type, merge-tree command flags, timeouts, and deny-message text for the code-verifier spawn pre-flight gate |
 | `command_dispatch_constants.py` | Command-word regex, command-key access pattern, tokenization pattern, and anchors for the unanchored command-dispatch meta-gate |
 | `convergence_branch_constants.py` | Branch and worktree naming patterns for the convergence gate |
+| `convergence_gate_blocker_constants.py` | The full-PR-URL and `--repo`/`-R` flag parse patterns that key the convergence gate to the PR its command names |
 | `conventional_pr_title_gate_constants.py` | Bash tool name, gh executable basenames and pr create/edit subcommand tokens, title/repo flag names, semantic-title-CI workflow markers, the Conventional Commits type list and title pattern, the semantic-pull-request action `types:` input pattern, and block-message text for the conventional-PR-title gate |
 | `dead_argparse_argument_constants.py` | Patterns for detecting unused argparse arguments |
 | `dead_config_field_constants.py` | Patterns for detecting unused `*Config` / `*Selectors` dataclass fields |
@@ -32,7 +33,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
-| `harness_scratchpad_constants.py` | Fixed path components (`claude-` user-directory prefix, separator replacement, `scratchpad` leaf name) and payload keys that rebuild the harness session scratchpad directory for the code-rules and TDD gate exemptions |
+| `harness_scratchpad_constants.py` | Fixed path components (`claude` / `claude-` user-directory name and prefix, `scratchpad` leaf name), the PreToolUse session-id payload key, and the `CLAUDE_CODE_SESSION_ID` environment variable name that the code-rules and TDD gates use to recognize an existing harness session scratchpad directory |
 | `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
 | `hook_log_extractor_constants.py` | Neon table name, offset state file path, timeouts, and outcome-type mapping for the hook-log extractor |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
@@ -42,6 +43,8 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `local_identity.py` | Loader for local machine values: NAS host, ssh user, and ssh port the ssh enforcer guards (`CLAUDE_NAS_*` / `~/.claude/local-identity.json` with placeholder defaults), the PII commit-scan exempt-repo slug set (`CLAUDE_PII_EXEMPT_REPOS` / `pii_exempt_repositories`), and the per-repository allowlisted-values mapping (`pii_allowlisted_values`, keyed by owner/repo slug) read from the git-ignored local file whose path `CLAUDE_LOCAL_IDENTITY_PATH` may point elsewhere; also composes the ssh enforcer's two deny messages that quote the NAS values |
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
+| `mypy_integration_constants.py` | Path markers (``.git``, ``.py``, ``pyproject.toml``) for mypy project-root resolution |
+| `mypy_validator_cache_constants.py` | Cache paths and tunables for the mypy_validator per-session caches |
 | `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, launcher-wrapper set, shell control-operator tokens and split pattern, leading-assignment and duration patterns, and the batch-mode pattern for the NAS ssh binary enforcer |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |
 | `orphan_css_class_constants.py` | Scan radius and selector patterns for the orphan-CSS-class check |

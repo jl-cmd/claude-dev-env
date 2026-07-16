@@ -21,15 +21,19 @@ Create a skill with these parameters:
 **Composition plan:** [related skills; sub-skills with when/produces/missing; leaf vs orchestrator]
 **Description (exact frontmatter string):** [capability stem. Triggers: phrase, phrase, ...]
   — Trigger catalog only per description-field.md. No story prose.
+**Deterministic inventory:** [each process step → class → home path → paired test]
+  — Per deterministic-elements.md. Deterministic steps must be code/artifacts, not prose-only.
 
 Produce:
 1. SKILL.md with hub layout (principle, gotchas, when-applies, process, file index, folder map)
 2. Frontmatter description set to the exact trigger-catalog string above
 3. Sub-skills table in body when composition plan lists peer skills
-4. Companion files as needed (reference docs, workflow steps, templates)
-5. Every file under 500 lines; TOC on files over 100 lines
-6. File index listing every file and its purpose
-7. No reimplementation of steps owned by named sub-skills
+4. Companion files as needed (reference docs, workflow steps, templates, scripts)
+5. Scripts/workflows for every deterministic inventory row; body only points and handles exit codes
+6. Skill scripts follow CODE_RULES (`*_constants/`, types, specific errors, paired tests)
+7. Every file under 500 lines; TOC on files over 100 lines
+8. File index listing every file and its purpose
+9. No reimplementation of steps owned by named sub-skills
 ```
 
 ### Refine skill handoff
@@ -44,9 +48,11 @@ Refine this existing skill:
 **What to preserve:** [working content — do not touch]
 **Description rewrite (if activation issue):** [exact new trigger-catalog string]
 **Composition change (if modularity issue):** [sub-skills to add/invoke or split plan]
+**Deterministic fix (if prose-only mechanical work):** [steps to extract → script/workflow/template paths + tests]
 
 Constraint: Only change what the observations demand. Do not reorganize working content.
 Description must remain a trigger catalog (description-field.md), never story prose.
+Deterministic steps must not remain prose-only (deterministic-elements.md).
 ```
 
 ## Spawning a test subagent
@@ -78,27 +84,30 @@ Scan the transcript for:
 3. **Re-read files** — Did Claude re-read the same file multiple times? That content should be in SKILL.md.
 4. **Gotcha moments** — Where did Claude make a wrong choice? That's a gotcha candidate.
 5. **Script usage** — Did Claude execute scripts as expected, or did it try to read them instead?
-6. **Tool call errors** — Any "tool not found" or path errors? Fix references.
+6. **Prose-as-code** — Did Claude reconstruct a multi-step mechanical sequence from markdown when a script should have run? Flag as deterministic-elements failure.
+7. **Tool call errors** — Any "tool not found" or path errors? Fix references.
 
 ## Delegating self-audit
 
-After building, spawn a subagent to run the checklist independently:
+After building, spawn a subagent to run the audit independently (task-tool first):
 
 ```
 Agent(
   subagent_type="general-purpose",
-  description="Self-audit skill against checklist",
+  description="Self-audit skill via task seeds",
   prompt="Read the skill at [skill-path]/SKILL.md and all companion files.
 
-Then read the self-audit checklist at [skill-builder-path]/references/self-audit-checklist.md.
+Then read the self-audit task seeds at [skill-builder-path]/references/self-audit-checklist.md.
 
-Check every item. For each: PASS, FAIL with specific file:line evidence and what to fix, or N/A with reason.
+Register every bullet as a session task (TaskCreate / TodoWrite). Complete each with PASS, FAIL+file:line+fix, or N/A+reason. Do not use markdown checkboxes as the tracker.
 
 Report as:
 ## Audit Results
-[ ] Item 1: PASS
-[ ] Item 2: FAIL — [file:line] — [what's wrong and how to fix]
-..."
+- PASS: N
+- N/A: M
+- FAIL fixed: K
+- Remaining FAIL (must be empty): …
+"
 )
 ```
 
