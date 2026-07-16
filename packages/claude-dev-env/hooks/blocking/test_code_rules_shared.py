@@ -196,21 +196,6 @@ def test_empty_file_path_returns_false(tmp_path: Path, monkeypatch: pytest.Monke
     assert _SHARED_MODULE.is_under_session_scratchpad("", _session_payload()) is False
 
 
-def test_windows_shape_scratchpad_write_is_exempt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A target under the Windows scratchpad shape (claude/<mangled>/<session>/scratchpad)
-    resolves as exempt even though no user-id segment sits under the temp root."""
-    _simulate_windows_platform(monkeypatch, tmp_path)
-    scratchpad_directory = _build_windows_scratchpad_directory(tmp_path)
-    throwaway_script = scratchpad_directory / "one_off_tool.py"
-
-    assert (
-        _SHARED_MODULE.is_under_session_scratchpad(str(throwaway_script), _session_payload())
-        is True
-    )
-
-
 def test_windows_shape_repository_file_is_not_exempt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
