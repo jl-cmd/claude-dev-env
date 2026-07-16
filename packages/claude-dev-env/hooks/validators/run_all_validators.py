@@ -884,23 +884,31 @@ def _enclosing_function_name_by_line(content: str) -> dict[int, str]:
 
 
 def _violation_line_number(output_line: str) -> int:
-    """Return the source line a ``file:line: message`` violation names.
+    """Return the source line a validator's location prefix names.
 
     ::
 
-        /pkg/legacy_module.py:37: magic number  -> line number 37
-        a summary line with no file location    -> line number 0
+        /pkg/legacy_module.py:37: magic number    -> line number 37
+        /pkg/legacy_module.py:37:5: F401 unused   -> line number 37
+        a summary line with no file location      -> line number 0
+
+    A location prefix reads ``file:line`` for a check module and ``file:line:col``
+    for ruff, so the line is the first colon-delimited field that is all digits.
+    A Windows drive letter (``C:``) and the path itself never form an all-digit
+    field, so the first digit field is the line for both shapes.
 
     Args:
         output_line: One printed ``Violation`` line from a validator.
 
     Returns:
-        The parsed line number, or 0 when the text carries no ``file:line:``
+        The parsed line number, or 0 when the text carries no ``file:line``
         prefix.
     """
     prefix_before_message = output_line.partition(": ")[0]
-    line_text = prefix_before_message.rpartition(":")[2]
-    return int(line_text) if line_text.isdigit() else 0
+    for each_field in prefix_before_message.split(":"):
+        if each_field.isdigit():
+            return int(each_field)
+    return 0
 
 
 def _identity_scope(output_line: str, name_by_line: dict[int, str]) -> str:

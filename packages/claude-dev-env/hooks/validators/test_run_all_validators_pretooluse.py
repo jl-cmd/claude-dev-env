@@ -13,7 +13,11 @@ from unittest.mock import patch
 
 import pytest
 
-from .run_all_validators import main, run_validators_entrypoint_subprocess
+from .run_all_validators import (
+    _violation_line_number,
+    main,
+    run_validators_entrypoint_subprocess,
+)
 
 CLEAN_PYTHON_SOURCE = (
     "def add_two_numbers(first_number: int, second_number: int) -> int:\n"
@@ -232,3 +236,23 @@ class TestBaselineScopedGate:
         assert completed.returncode == 0, completed.stderr
         assert '"permissionDecision": "deny"' not in completed.stdout
         assert "Code Quality" in completed.stderr
+
+
+class TestViolationLineNumber:
+    def test_ruff_line_col_prefix_returns_line_not_column(self) -> None:
+        ruff_shaped_line = "/pkg/legacy_module.py:37:5: F401 `os` imported but unused"
+
+        assert _violation_line_number(ruff_shaped_line) == 37
+
+    def test_windows_drive_prefix_returns_line(self) -> None:
+        windows_shaped_line = r"C:\repo\tmp\legacy_module.py:37:5: F401 unused import"
+
+        assert _violation_line_number(windows_shaped_line) == 37
+
+    def test_check_module_line_prefix_returns_line(self) -> None:
+        check_module_line = "/pkg/legacy_module.py:37: magic number 199"
+
+        assert _violation_line_number(check_module_line) == 37
+
+    def test_summary_line_without_location_returns_zero(self) -> None:
+        assert _violation_line_number("Found 3 errors.") == 0
