@@ -5,8 +5,8 @@ the session's system prompt. The layout carries a harness user directory
 (``claude`` on Windows, ``claude-<uid>`` on POSIX), a mangled working-directory
 segment, the session id, and a ``scratchpad`` leaf:
 ``<tempdir>/<user-dir>/<mangled-cwd>/<session-id>/scratchpad``. These constants
-name the fixed path components the code-rules and TDD gates match to recognize
-that directory from the signals a hook process reads: the session id in the
+name the fixed path components the code-rules, TDD, and doc-language gates match
+to recognize that directory from the signals a hook process reads: the session id in the
 PreToolUse payload or the ``CLAUDE_CODE_SESSION_ID`` environment variable, and
 the temp-directory root.
 """
