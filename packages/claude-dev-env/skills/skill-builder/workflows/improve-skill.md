@@ -52,10 +52,14 @@ Failure classification:
 | Claude over-explains basics | Skill states what Claude already knows | Principles: Concision |
 | Claude follows instructions too rigidly | Skill railroads instead of guiding | Principles: Degree of freedom |
 | Claude makes same mistake repeatedly | Missing gotcha | Principles: Gotchas |
-| Claude errors on script execution | Script doesn’t handle errors, missing deps | Principles: Scripts |
+| Claude errors on script execution | Script doesn’t handle errors, missing deps | Principles: Scripts + `deterministic-elements.md` CODE_RULES bar |
 | Output format is wrong | Missing template or examples | Principles: Templates and examples |
+| Mechanical sequence only in markdown | Deterministic work left as prose | `deterministic-elements.md` — extract to scripts/workflow |
+| Detection/validation is a giant one-liner in body | Executable logic not in `scripts/` | `deterministic-elements.md` |
+| Fenced Python/JS in SKILL.md is the real implementation | Code not shipped as a file | Extract to `scripts/` or `workflow/` + paired test |
+| Script has magic literals / no tests | CODE_RULES bar missed | `deterministic-elements.md` + CODE_RULES |
 
-When scope or activation is in play, re-read `${CLAUDE_SKILL_DIR}/references/skill-modularity.md` and `${CLAUDE_SKILL_DIR}/references/description-field.md`.
+When scope, activation, or deterministic placement is in play, re-read `${CLAUDE_SKILL_DIR}/references/skill-modularity.md`, `${CLAUDE_SKILL_DIR}/references/description-field.md`, and `${CLAUDE_SKILL_DIR}/references/deterministic-elements.md`.
 
 **Output:** Diagnosis per failure — which best practice was violated.
 
@@ -69,11 +73,12 @@ When scope or activation is in play, re-read `${CLAUDE_SKILL_DIR}/references/ski
 
 For each diagnosis from Step 2:
 
-1. Read the matching reference (`description-field.md`, `skill-modularity.md`, `progressive-disclosure.md`, or SKILL.md principles).
+1. Read the matching reference (`description-field.md`, `skill-modularity.md`, `deterministic-elements.md`, `progressive-disclosure.md`, or SKILL.md principles).
 2. Make the minimum change that addresses the failure.
 3. For description failures: rewrite frontmatter into a trigger catalog (capability stem + Triggers list); strip story prose.
 4. For modularity failures: add sub-skills table, split packages, or thin the orchestrator; do not paste peer skill procedures.
-5. Verify the fix doesn’t break anything that was working.
+5. For deterministic failures: extract mechanical work to `scripts/` / `workflow/` / `templates/` / `reference/`; body only points and handles exit codes; apply CODE_RULES + paired tests to new code.
+6. Verify the fix doesn’t break anything that was working.
 
 Delegate larger rewrites to `/skill-writer` using the refine-skill handoff from delegation-map.md.
 
@@ -122,6 +127,7 @@ Present to the user:
 3. **What changed** — delta summary (files modified, lines added/removed).
 4. **Description** — final frontmatter if rewritten (paste the trigger catalog).
 5. **Composition** — sub-skills or splits if modularity changed.
-6. **New gotchas added** — list of gotchas captured.
-7. **Audit summary** — post-fix audit results.
-8. **Suggested re-test** — a concrete task to verify the fix with Claude B.
+6. **Deterministic extracts** — scripts/workflows/templates added or moved out of prose.
+7. **New gotchas added** — list of gotchas captured.
+8. **Audit summary** — post-fix audit results.
+9. **Suggested re-test** — a concrete task to verify the fix with Claude B.

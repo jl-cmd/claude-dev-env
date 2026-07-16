@@ -66,13 +66,14 @@ If any check fails, rewrite. Show before/after. The after form must match `descr
 
 ---
 
-## Step 2: Progressive disclosure and modularity audit
+## Step 2: Progressive disclosure, modularity, and deterministic audit
 
-**Goal:** Verify within-skill structure and cross-skill modularity.
+**Goal:** Verify within-skill structure, cross-skill modularity, and deterministic placement.
 
 1. Apply hard rules in `${CLAUDE_SKILL_DIR}/references/progressive-disclosure.md`.
 2. Apply modularity rules in `${CLAUDE_SKILL_DIR}/references/skill-modularity.md`.
-3. Cross-check matching items on `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
+3. Apply deterministic-elements rules in `${CLAUDE_SKILL_DIR}/references/deterministic-elements.md`.
+4. Cross-check matching items on `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
 
 ### Common fixes
 
@@ -81,8 +82,10 @@ If any check fails, rewrite. Show before/after. The after form must match `descr
 - Missing TOC → add to files over 100 lines
 - Multi-capability package → split or orchestrator + named sub-skills
 - Silent reimplementation → invoke peer skill by name; add Sub-skills table
+- Mechanical sequence / fenced program / giant detector only in body → extract to `scripts/` or `workflow/`; point from process steps; add paired tests and `*_constants/` as needed
+- Verbatim templates inline → `templates/`; long fixed tables → `reference/`
 
-**Output:** Verified structure and composition (and edits if needed).
+**Output:** Verified structure, composition, and deterministic placement (and edits if needed).
 
 ---
 
@@ -104,14 +107,14 @@ If any check fails, rewrite. Show before/after. The after form must match `descr
 
 ## Step 4: Full self-audit
 
-**Goal:** Complete checklist pass including description and modularity items.
+**Goal:** Complete checklist pass including description, modularity, and deterministic items.
 
 Same as new-skill Step 5 and improve-skill Step 5:
 
 1. Read `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
 2. Check every item. Fix failures. Re-check.
 3. All items must be PASS or N/A.
-4. Description items and modularity items are never N/A for a delivered skill (sub-skills table alone may be N/A for pure leaf skills).
+4. Description items, modularity items, and process-step classification are never N/A for a delivered skill (sub-skills table alone may be N/A for pure leaf skills; script/test rows are N/A only when the package has zero code files and every step is judgment).
 
 **Output:** Completed checklist.
 
@@ -125,8 +128,9 @@ Present to the user:
 
 1. **Description** — final trigger-catalog string (paste it).
 2. **Composition** — sub-skills or leaf status.
-3. **File structure** — folder map with line counts.
-4. **Gotchas** — current gotcha count and most recent additions.
-5. **Audit summary** — "All checklist items: N passed, M N/A."
-6. **Before/after** — description rewrite and structural changes if any.
-7. **Maintenance notes** — what to watch for, when to re-audit.
+3. **Deterministic inventory** — any extracts to scripts/templates/reference.
+4. **File structure** — folder map with line counts.
+5. **Gotchas** — current gotcha count and most recent additions.
+6. **Audit summary** — "All checklist items: N passed, M N/A."
+7. **Before/after** — description rewrite and structural changes if any.
+8. **Maintenance notes** — what to watch for, when to re-audit.

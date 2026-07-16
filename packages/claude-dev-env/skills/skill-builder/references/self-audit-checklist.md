@@ -60,19 +60,28 @@ Source synthesis: [Anthropic best practices](https://platform.claude.com/docs/en
 - [ ] **Domain layout appropriate** — If multiple domains, organized by domain (reference/finance.md, reference/sales.md).
   > Pattern 2 — domain-specific organization.
 
-## Code and scripts (if applicable)
+## Deterministic elements
 
+Mandatory for every skill. Spec: `deterministic-elements.md`. Progressive disclosure alone does not satisfy these items.
+
+- [ ] **Process steps classified** — Every process step is marked deterministic, judgment, or borderline (inventory in gap analysis or equivalent).
+  > "One of the most powerful tools you can give Claude is code."
+- [ ] **Deterministic steps are not prose-only** — Each deterministic step has a real path under `scripts/`, `workflow/`, `templates/`, or `reference/` — not only markdown steps, fenced source, or a giant shell one-liner in the body.
+  > "These can include deterministic scripts or tools for maximum robustness."
+- [ ] **Body points at code** — SKILL.md names when to run each script, what it prints, and how to treat non-zero exit; it does not restate the algorithm.
+  > "Make clear in your instructions whether Claude should execute the script or read it as reference."
+- [ ] **No executable-only fences** — Full programs meant to run do not live only inside `SKILL.md` code fences.
+- [ ] **CODE_RULES on skill scripts** — Any `scripts/` or `workflow/` code uses named constants (`*_constants/` or equivalent), type annotations where the language supports them, specific error handling, and no banned identifier/prefix patterns from CODE_RULES.
+- [ ] **Paired tests for new scripts** — Each new production script path ships a paired test in the same delivery (N/A only when the package has zero code files).
 - [ ] **Scripts solve, don't punt** — Error handling explicit, no raw exceptions for Claude to figure out.
   > "Handle error conditions rather than punting to Claude."
-- [ ] **No voodoo constants** — Every magic number has a documented justification.
-  > "Configuration parameters should be justified and documented."
 - [ ] **Execute vs read intent clear** — "Run script.py" (execute) vs "See script.py for algorithm" (read).
   > "Make clear in your instructions whether Claude should execute the script or read it as reference."
-- [ ] **Dependencies listed** — Required packages stated, verified as available.
+- [ ] **Dependencies listed** — Required packages stated, verified as available (N/A when no scripts).
   > "List required packages in your SKILL.md and verify they're available."
-- [ ] **MCP tools fully qualified** — `ServerName:tool_name` format.
+- [ ] **MCP tools fully qualified** — `ServerName:tool_name` format when MCP tools appear.
   > "Always use fully qualified tool names to avoid 'tool not found' errors."
-- [ ] **Plan-validate-execute for high-stakes ops** — Verifiable intermediate outputs before destructive actions.
+- [ ] **Plan-validate-execute for high-stakes ops** — Verifiable intermediate outputs before destructive actions (N/A when no high-stakes ops).
   > "Catches errors early: validation finds problems before changes are applied."
 
 ## Setup and memory (if applicable)
@@ -106,4 +115,4 @@ Mandatory for every skill. Spec: `skill-modularity.md`. Progressive disclosure (
 
 ## Usage
 
-Copy this checklist into your response after building. Check off each item. Any item that fails → fix before delivering. Any item marked "if applicable" that doesn't apply → mark N/A with a one-line reason. Sub-skills table may be N/A for pure leaf skills; single capability boundary and no-monolith never are.
+Copy this checklist into your response after building. Check off each item. Any item that fails → fix before delivering. Any item marked "if applicable" that doesn't apply → mark N/A with a one-line reason. Sub-skills table may be N/A for pure leaf skills; single capability boundary and no-monolith never are. Process-step classification and "deterministic steps are not prose-only" never are N/A — pure-judgment skills still inventory steps and mark each as judgment.

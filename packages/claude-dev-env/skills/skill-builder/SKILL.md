@@ -2,9 +2,10 @@
 name: skill-builder
 description: >-
   Skill lifecycle: classify, scaffold, write via skill-writer, self-audit, compose
-  sub-skills, polish description triggers. Triggers: build a skill, new skill
-  workflow, improve this skill, optimize skill description, skill development
-  lifecycle, skill modularity, skill composition, description trigger catalog.
+  sub-skills, polish description triggers, enforce deterministic scripts. Triggers:
+  build a skill, new skill workflow, improve this skill, optimize skill description,
+  skill development lifecycle, skill modularity, skill composition, description
+  trigger catalog, deterministic skill scripts.
 ---
 
 # Skill Builder
@@ -22,6 +23,7 @@ Highest-signal content. Append a bullet each time a skill build fails in a new w
 - Story-form `description` burns always-on context and weakens selection — rewrite to capability stem + `Triggers:` list (`description-field.md`).
 - Multi-capability packages fail modularity audit — split or thin orchestrator + named sub-skills (`skill-modularity.md`).
 - Skipping the composition plan before Write reintroduces silent reimplementation of peer skills.
+- Deterministic steps written only as prose (fenced source, giant `rg` lines, multi-step mechanical sequences) fail audit — extract to `scripts/` / `workflow/` / `templates/` / `reference/` (`deterministic-elements.md`).
 
 ## When this skill applies
 
@@ -128,6 +130,14 @@ Multi-step processes get `[ ]` checklists. Quality-critical operations get feedb
 
 > "One of the most powerful tools you can give Claude is code — letting Claude spend its turns on composition rather than reconstructing boilerplate."
 
+### Deterministic elements (mandatory classification)
+
+Any skill element that is **deterministic** (same inputs → same outputs; machine-checkable success) ships as code or a fixed artifact — not prose-only steps. Judgment, routing, and refusals stay in markdown.
+
+Full rules, inventory table, CODE_RULES bar for skill scripts, and anti-patterns: [`references/deterministic-elements.md`](references/deterministic-elements.md).
+
+New-skill Gather records a deterministic-elements inventory before write. Self-audit items for this section are mandatory on every delivery (pure-judgment skills mark script rows N/A with evidence).
+
 ### Setup and memory
 
 > "Think through the Setup — some skills may need to be set up with context from the user. A good pattern is to store this in a config.json file."
@@ -142,7 +152,7 @@ Multi-step processes get `[ ]` checklists. Quality-critical operations get feedb
 
 > No Windows paths. Don’t offer too many options — provide a default with escape hatch. Avoid time-sensitive claims. Use consistent terminology. No deeply nested references.
 
-Also: story-form descriptions; monolith multi-capability skills; silent reimplementation of peer skills; nested folders used as fake sub-skills.
+Also: story-form descriptions; monolith multi-capability skills; silent reimplementation of peer skills; nested folders used as fake sub-skills; deterministic logic only in prose or fenced source.
 
 ## Self-audit
 
@@ -153,11 +163,12 @@ After every build, improvement, or polish pass, run the mandatory checklist at `
 skill-builder orchestrates; skill-writer authors. The handoff packet from Step 4 must include:
 
 - Skill type and folder structure
-- Gap analysis or observation findings (composition plan + description triggers)
+- Gap analysis or observation findings (composition plan + description triggers + deterministic inventory)
 - Degree of freedom assessment
 - Initial gotchas
 - Composition plan: related skills, sub-skills to invoke, split decisions
 - Description trigger catalog: capability stem + trigger phrases (not prose)
+- Deterministic elements inventory: each process step classified; code paths + paired tests
 - Any constraints
 
 See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact patterns.
@@ -171,12 +182,13 @@ See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact patterns.
 | `references/progressive-disclosure.md` | Folder conventions, hub pattern, hard rules |
 | `references/skill-modularity.md` | Cross-skill modularity, sub-skills, composition plan |
 | `references/description-field.md` | Description as trigger catalog (not story prose) |
-| `references/self-audit-checklist.md` | Mandatory post-build audit (core, modularity, description) |
+| `references/deterministic-elements.md` | Deterministic steps must be code; CODE_RULES bar for skill scripts |
+| `references/self-audit-checklist.md` | Mandatory post-build audit (core, modularity, description, deterministic) |
 | `references/delegation-map.md` | Subagent handoff patterns and transcript guidance |
 | `workflows/new-skill.md` | Full lifecycle for new skills (6 steps) |
 | `workflows/improve-skill.md` | Observation-first flow for existing skills (6 steps) |
 | `workflows/polish-skill.md` | Description trigger-catalog audit and final validation (5 steps) |
-| `templates/gap-analysis.md` | Gaps, composition plan, description triggers |
+| `templates/gap-analysis.md` | Gaps, composition plan, description triggers, deterministic inventory |
 
 ## Folder map
 
