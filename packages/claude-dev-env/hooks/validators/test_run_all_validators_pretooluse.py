@@ -116,3 +116,119 @@ class TestCliModeRegression:
         captured = capsys.readouterr()
         assert exit_code == 1
         assert "PRE-PUSH VALIDATOR RESULTS" in captured.out
+
+
+def _over_long_function_source(function_name: str) -> str:
+    """Return a syntactically clean function whose only defect is exceeding 30 lines."""
+    body_lines = "".join("    running_total = running_total + 1\n" for _ in range(35))
+    return (
+        f"def {function_name}(running_total: int) -> int:\n"
+        f"{body_lines}"
+        "    return running_total\n"
+    )
+
+
+CLEAN_MARKER_FUNCTION = "def clean_marker() -> int:\n    return 1\n"
+CLEAN_MARKER_EDITED = (
+    "def clean_marker() -> int:\n    computed_value = 1\n    return computed_value\n"
+)
+MAGIC_VALUE_MARKER_FUNCTION = "def clean_marker() -> int:\n    return 199\n"
+PRE_EXISTING_VIOLATION_SOURCE = (
+    _over_long_function_source("over_long_function") + "\n" + CLEAN_MARKER_FUNCTION
+)
+DEAD_CONSTANT_HOOK_PATH = (
+    Path(__file__).resolve().parent.parent / "blocking" / "code_rules_dead_module_constant.py"
+)
+ATTRIBUTE_EDIT_ANCHOR = "        elif isinstance(each_node, ast.Import | ast.ImportFrom):\n"
+ATTRIBUTE_EDIT_REPLACEMENT = (
+    "        elif isinstance(each_node, ast.Attribute):\n"
+    "            referenced_names.add(each_node.attr)\n"
+    "        elif isinstance(each_node, ast.Import | ast.ImportFrom):\n"
+)
+
+
+class TestBaselineScopedGate:
+    def test_clean_edit_to_violating_file_is_allowed_with_warning(self, tmp_path: Path) -> None:
+        target_file = tmp_path / "legacy_module.py"
+        target_file.write_text(PRE_EXISTING_VIOLATION_SOURCE, encoding="utf-8")
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": CLEAN_MARKER_FUNCTION,
+                    "new_string": CLEAN_MARKER_EDITED,
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' not in completed.stdout
+        assert "Code Quality" in completed.stderr
+
+    def test_edit_introducing_new_violation_denies_naming_only_the_new_one(
+        self, tmp_path: Path
+    ) -> None:
+        target_file = tmp_path / "legacy_module.py"
+        target_file.write_text(PRE_EXISTING_VIOLATION_SOURCE, encoding="utf-8")
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": CLEAN_MARKER_FUNCTION,
+                    "new_string": MAGIC_VALUE_MARKER_FUNCTION,
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' in completed.stdout
+        assert "Magic Values" in completed.stdout
+        assert "Code Quality" not in completed.stdout
+
+    def test_new_violation_in_clean_file_denies(self, tmp_path: Path) -> None:
+        target_file = tmp_path / "clean_module.py"
+        target_file.write_text(CLEAN_MARKER_FUNCTION, encoding="utf-8")
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": "    return 1\n",
+                    "new_string": "    return 199\n",
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' in completed.stdout
+        assert "Magic Values" in completed.stdout
+
+    def test_clean_edit_to_clean_file_is_allowed(self, tmp_path: Path) -> None:
+        target_file = tmp_path / "clean_module.py"
+        target_file.write_text(CLEAN_MARKER_FUNCTION, encoding="utf-8")
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": "    return 1\n",
+                    "new_string": "    computed_value = 1\n    return computed_value\n",
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert "deny" not in completed.stdout
+
+    def test_attribute_edit_to_pristine_dead_constant_hook_is_allowed_with_warning(self) -> None:
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(DEAD_CONSTANT_HOOK_PATH),
+                    "old_string": ATTRIBUTE_EDIT_ANCHOR,
+                    "new_string": ATTRIBUTE_EDIT_REPLACEMENT,
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' not in completed.stdout
+        assert "Code Quality" in completed.stderr

@@ -6,6 +6,7 @@ Exit code 0 = all checks pass, 1 = violations found.
 # pragma: no-tdd-gate
 
 import argparse
+import ast
 import json
 import os
 import subprocess
@@ -779,6 +780,22 @@ def validate_proposed_file(
         return run_file_scoped_validators([temporary_file])
 
 
+def _validator_summaries(results: List[ValidatorResult]) -> str:
+    """Join one ``name (checks): output`` summary per result with a separator.
+
+    Args:
+        results: The validator results to summarize.
+
+    Returns:
+        The joined summary text shared by the deny reason and the warning.
+    """
+    validator_summary_separator = " | "
+    return validator_summary_separator.join(
+        f"{each_result.name} (checks {each_result.checks}): {each_result.output.strip()}"
+        for each_result in results
+    )
+
+
 def _proposed_content_deny_reason(failed_results: List[ValidatorResult]) -> str:
     """Compose the deny reason naming each failing validator and its output.
 
@@ -788,15 +805,9 @@ def _proposed_content_deny_reason(failed_results: List[ValidatorResult]) -> str:
     Returns:
         The composed ``permissionDecisionReason`` text.
     """
-    violation_summaries = [
-        f"{each_result.name} (checks {each_result.checks}): {each_result.output.strip()}"
-        for each_result in failed_results
-    ]
-    deny_reason_item_separator = " | "
-    joined_summaries = deny_reason_item_separator.join(violation_summaries)
     return (
         f"BLOCKED: [validators] {len(failed_results)} "
-        f"validator(s) failed: {joined_summaries}"
+        f"validator(s) failed: {_validator_summaries(failed_results)}"
     )
 
 
@@ -818,16 +829,256 @@ def _emit_pre_tool_use_deny(deny_reason: str) -> None:
     sys.stdout.flush()
 
 
-def _evaluate_pre_tool_use_payload() -> None:
-    """Read the PreToolUse payload from stdin and deny a violating file write.
+def _record_function_spans(
+    parent_node: ast.AST, name_prefix: str, name_by_line: dict[int, str]
+) -> None:
+    """Assign each line inside a function to that function's qualified name.
 
-    Reconstructs the proposed post-edit content of the one target file and runs
-    the file-scoped validators against it. The path-based exemption decision runs
-    against the real target path from the payload, so an ephemeral scratch or
-    session scratchpad target passes without validation even though the content
-    is validated through a temporary copy. Emits a deny decision naming each
-    failing validator when any fires; writes nothing for a clean file, an exempt
-    target, an unparseable payload, or a payload no validator covers.
+    Inner functions overwrite the enclosing name, so a line resolves to its
+    innermost function; a method resolves to ``Class.method``.
+
+    Args:
+        parent_node: The AST node whose children are walked.
+        name_prefix: The dotted qualifier accumulated from enclosing scopes.
+        name_by_line: The line-to-name map filled in place.
+    """
+    for each_child in ast.iter_child_nodes(parent_node):
+        if isinstance(each_child, ast.ClassDef):
+            _record_function_spans(each_child, f"{name_prefix}{each_child.name}.", name_by_line)
+        elif isinstance(each_child, ast.FunctionDef | ast.AsyncFunctionDef):
+            qualified_name = f"{name_prefix}{each_child.name}"
+            last_line = each_child.end_lineno or each_child.lineno
+            for each_line in range(each_child.lineno, last_line + 1):
+                name_by_line[each_line] = qualified_name
+            _record_function_spans(each_child, f"{qualified_name}.", name_by_line)
+        else:
+            _record_function_spans(each_child, name_prefix, name_by_line)
+
+
+def _enclosing_function_name_by_line(content: str) -> dict[int, str]:
+    """Map each source line to its innermost enclosing function's qualified name.
+
+    ::
+
+        def outer():             # lines 1-4 -> "outer"
+            def inner():         # lines 2-3 -> "outer.inner"
+                return None
+            return inner
+        log_start()              # line 6 -> "" (module scope)
+
+    Args:
+        content: The full source text to parse.
+
+    Returns:
+        A line-to-name map; a line outside every function has no entry, so a
+        lookup yields the empty string for module scope. An unparseable source
+        yields an empty map.
+    """
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return {}
+    name_by_line: dict[int, str] = {}
+    _record_function_spans(tree, "", name_by_line)
+    return name_by_line
+
+
+def _violation_line_number(output_line: str) -> int:
+    """Return the source line a ``file:line: message`` violation names.
+
+    ::
+
+        /pkg/legacy_module.py:37: magic number  -> line number 37
+        a summary line with no file location    -> line number 0
+
+    Args:
+        output_line: One printed ``Violation`` line from a validator.
+
+    Returns:
+        The parsed line number, or 0 when the text carries no ``file:line:``
+        prefix.
+    """
+    prefix_before_message = output_line.partition(": ")[0]
+    line_text = prefix_before_message.rpartition(":")[2]
+    return int(line_text) if line_text.isdigit() else 0
+
+
+def _identity_scope(output_line: str, name_by_line: dict[int, str]) -> str:
+    """Return the enclosing-function name a single violation line belongs to.
+
+    Args:
+        output_line: One printed ``Violation`` line from a validator.
+        name_by_line: The line-to-name map for the content that produced it.
+
+    Returns:
+        The enclosing function's qualified name, or the empty string for a
+        module-scope or unlocatable violation.
+    """
+    return name_by_line.get(_violation_line_number(output_line), "")
+
+
+def _failed_results(all_results: List[ValidatorResult]) -> List[ValidatorResult]:
+    """Return the results that fired — not passed and not skipped."""
+    return [
+        each_result
+        for each_result in all_results
+        if not each_result.passed and not each_result.skipped
+    ]
+
+
+def _violation_identities(
+    failed_results: List[ValidatorResult], content: str
+) -> set[tuple[str, str]]:
+    """Return one ``(validator name, enclosing function)`` key per violation line.
+
+    Keying on the enclosing function rather than the raw line number keeps a
+    key stable when an edit shifts or lengthens that function, so a pre-existing
+    violation still matches its baseline twin after the edit.
+
+    Args:
+        failed_results: The validator results that fired.
+        content: The source text those results were produced against.
+
+    Returns:
+        The set of violation identity keys.
+    """
+    name_by_line = _enclosing_function_name_by_line(content)
+    return {
+        (each_result.name, _identity_scope(each_output_line, name_by_line))
+        for each_result in failed_results
+        for each_output_line in each_result.output.splitlines()
+    }
+
+
+def _baseline_violation_identities(file_path: str) -> set[tuple[str, str]]:
+    """Return the violation identities the on-disk file already carries.
+
+    Args:
+        file_path: The write's target path, read as the pre-edit baseline.
+
+    Returns:
+        The baseline identity set, empty when the file is absent or empty.
+    """
+    baseline_content = _read_target_file_content(file_path)
+    if not baseline_content:
+        return set()
+    baseline_failed = _failed_results(validate_proposed_file(file_path, baseline_content))
+    return _violation_identities(baseline_failed, baseline_content)
+
+
+def _result_with_output(
+    source_result: ValidatorResult, all_output_lines: List[str]
+) -> ValidatorResult:
+    """Return a copy of *source_result* carrying only *all_output_lines*."""
+    output_line_separator = "\n"
+    return ValidatorResult(
+        name=source_result.name,
+        checks=source_result.checks,
+        passed=False,
+        output=output_line_separator.join(all_output_lines),
+    )
+
+
+def _partition_output_lines(
+    each_result: ValidatorResult,
+    name_by_line: dict[int, str],
+    all_baseline_identities: set[tuple[str, str]],
+) -> tuple[List[str], List[str]]:
+    """Split one result's lines into new and pre-existing by baseline identity.
+
+    Args:
+        each_result: The failing validator result to split.
+        name_by_line: The line-to-name map for the proposed content.
+        all_baseline_identities: The identities the baseline already carries.
+
+    Returns:
+        A ``(new_lines, preexisting_lines)`` pair.
+    """
+    all_new_lines: List[str] = []
+    all_preexisting_lines: List[str] = []
+    for each_output_line in each_result.output.splitlines():
+        identity = (each_result.name, _identity_scope(each_output_line, name_by_line))
+        target_lines = (
+            all_preexisting_lines if identity in all_baseline_identities else all_new_lines
+        )
+        target_lines.append(each_output_line)
+    return all_new_lines, all_preexisting_lines
+
+
+def _scope_new_and_preexisting(
+    all_proposed_failed_results: List[ValidatorResult],
+    proposed_content: str,
+    all_baseline_identities: set[tuple[str, str]],
+) -> tuple[List[ValidatorResult], List[ValidatorResult]]:
+    """Group proposed violations into newly-introduced and pre-existing results.
+
+    Args:
+        all_proposed_failed_results: The validators that fired on the proposed file.
+        proposed_content: The reconstructed post-edit source text.
+        all_baseline_identities: The identities the on-disk baseline already carries.
+
+    Returns:
+        A ``(new_results, preexisting_results)`` pair, each result carrying only
+        the output lines of its group.
+    """
+    name_by_line = _enclosing_function_name_by_line(proposed_content)
+    all_new_results: List[ValidatorResult] = []
+    all_preexisting_results: List[ValidatorResult] = []
+    for each_result in all_proposed_failed_results:
+        all_new_lines, all_preexisting_lines = _partition_output_lines(
+            each_result, name_by_line, all_baseline_identities
+        )
+        if all_new_lines:
+            all_new_results.append(_result_with_output(each_result, all_new_lines))
+        if all_preexisting_lines:
+            all_preexisting_results.append(
+                _result_with_output(each_result, all_preexisting_lines)
+            )
+    return all_new_results, all_preexisting_results
+
+
+def _emit_pre_existing_warning(all_preexisting_results: List[ValidatorResult]) -> None:
+    """Write a stderr advisory naming each pre-existing violation left in place."""
+    advisory_summaries = _validator_summaries(all_preexisting_results)
+    sys.stderr.write(
+        "[run_all_validators] allowed with warning: "
+        f"pre-existing violation(s) unchanged: {advisory_summaries}\n"
+    )
+    sys.stderr.flush()
+
+
+def _decide_pre_tool_use(file_path: str, proposed_content: str) -> None:
+    """Deny only violations absent from the baseline; warn on the ones that persist.
+
+    Args:
+        file_path: The write's target path.
+        proposed_content: The reconstructed post-edit content of that file.
+    """
+    all_proposed_failed = _failed_results(
+        validate_proposed_file(file_path, proposed_content)
+    )
+    if not all_proposed_failed:
+        return
+    all_baseline_identities = _baseline_violation_identities(file_path)
+    all_new_results, all_preexisting_results = _scope_new_and_preexisting(
+        all_proposed_failed, proposed_content, all_baseline_identities
+    )
+    if all_preexisting_results:
+        _emit_pre_existing_warning(all_preexisting_results)
+    if all_new_results:
+        _emit_pre_tool_use_deny(_proposed_content_deny_reason(all_new_results))
+
+
+def _evaluate_pre_tool_use_payload() -> None:
+    """Read the PreToolUse payload from stdin and deny only newly-introduced violations.
+
+    The path-based exemption decision runs against the real target path from the
+    payload, so an ephemeral scratch or session scratchpad target passes without
+    validation before any baseline-scoped decision runs. For a non-exempt target,
+    each violation is keyed by its validator name and enclosing function, then
+    compared against the on-disk baseline. A key the baseline lacks denies the
+    write. A key the baseline already carries passes with a stderr advisory.
+    Writes nothing for a clean file, an exempt target, or an unparseable payload.
     """
     pre_tool_use_payload = json.load(sys.stdin)
     if not isinstance(pre_tool_use_payload, dict):
@@ -844,14 +1095,7 @@ def _evaluate_pre_tool_use_payload() -> None:
     proposed_content = reconstruct_proposed_content(tool_name, tool_input)
     if not proposed_content:
         return
-    all_results = validate_proposed_file(file_path, proposed_content)
-    failed_results = [
-        each_result
-        for each_result in all_results
-        if not each_result.passed and not each_result.skipped
-    ]
-    if failed_results:
-        _emit_pre_tool_use_deny(_proposed_content_deny_reason(failed_results))
+    _decide_pre_tool_use(file_path, proposed_content)
 
 
 def run_pre_tool_use_gate() -> int:
