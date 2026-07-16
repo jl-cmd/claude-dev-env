@@ -88,5 +88,6 @@ ok; `1` = contract failure; `2` = usage error.
 
 ## Fail closed
 
-Contract failures only (auth, worktree, unresolvable gates, wait caps). Never
-“tool missing” for Workflow/ScheduleWakeup after pacer=`portable`.
+Never abort solely because Workflow or ScheduleWakeup is missing once
+pacer=`portable`. Fail closed on contract failures only: auth, worktree,
+unresolvable gates, and wait caps.

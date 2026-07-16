@@ -168,7 +168,6 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     RESULT_KEY_STATUS,
     RESULT_KEY_TICK_COUNT,
     RESULT_KEY_WAIT_SECONDS,
-    SERVED_COMMAND_IN_SESSION,
     STATE_FILENAME,
     STATE_JSON_INDENT,
     STATE_KEY_CODEX_CLEAN_AT,
@@ -634,14 +633,7 @@ def _is_successful_serve(*, returncode: int, served_command: str) -> bool:
     Returns:
         Whether the serve counts as successful for phase advance.
     """
-    if returncode != 0:
-        return False
-    normalized_command = served_command.strip()
-    return (
-        normalized_command == ""
-        or normalized_command == SERVED_COMMAND_IN_SESSION
-        or bool(normalized_command)
-    )
+    return returncode == 0
 
 
 def run_after_code_review(
@@ -1057,8 +1049,8 @@ def _after_copilot_surfaced(
             _error_payload(f"unknown classification: {classification!r}"),
             EXIT_USAGE_ERROR,
         )
-    all_state["copilot_wait_count"] = 0
     if classification == CLASSIFICATION_DIRTY:
+        all_state["copilot_wait_count"] = 0
         all_state["phase"] = PHASE_CODE_REVIEW
         return _finish_ok(
             all_state,

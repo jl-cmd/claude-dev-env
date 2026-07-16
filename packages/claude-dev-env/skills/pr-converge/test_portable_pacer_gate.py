@@ -61,6 +61,7 @@ def test_portable_driver_protocol_exists() -> None:
     assert "check_convergence.py" in portable_text
     assert "invoke_code_review.py" in portable_text
     assert "resolve_worker_spawn.py" in portable_text
-    assert "Never** abort solely because" in portable_text or (
-        "Never abort solely because" in portable_text
-    )
+    assert "build_converge_task_list.py" in portable_text
+    assert "all_runnable_reviews_clean_same_head" in portable_text
+    assert "portable_converge_driver.py" in portable_text
+    assert "Never abort solely because" in portable_text

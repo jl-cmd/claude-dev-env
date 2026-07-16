@@ -34,6 +34,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     PHASE_BUGTEAM,
     PHASE_BUGBOT,
     PHASE_CODE_REVIEW,
+    PHASE_COPILOT_WAIT,
     PHASE_READY,
     RESULT_KEY_BLOCKER,
     RESULT_KEY_NEXT,
@@ -227,6 +228,42 @@ def test_copilot_wait_poll_emits_delay(state_file: Path) -> None:
     assert exit_code == EXIT_SUCCESS
     assert payload[RESULT_KEY_NEXT] == NEXT_POLL_WAIT
     assert payload[RESULT_KEY_WAIT_SECONDS] == DEFAULT_WAIT_SECONDS
+
+
+def test_after_copilot_surfaced_clean_checks_ready(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state["copilot_down"] = False
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_copilot_wait(
+        state_file=state_file,
+        is_review_surfaced=True,
+        classification="clean",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_CHECK_READY
+    assert payload[RESULT_KEY_PHASE] == PHASE_READY
+    reloaded = driver.load_state(state_file)
+    assert reloaded["copilot_clean_at"] == "abc123"
+
+
+def test_after_copilot_surfaced_absent_keeps_waiting(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state["copilot_down"] = False
+    state["copilot_wait_count"] = 0
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_copilot_wait(
+        state_file=state_file,
+        is_review_surfaced=True,
+        classification="absent",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_POLL_WAIT
+    assert payload[RESULT_KEY_PHASE] == PHASE_COPILOT_WAIT
+    reloaded = driver.load_state(state_file)
+    assert reloaded["copilot_clean_at"] is None
+    assert reloaded["copilot_wait_count"] == 1
 
 
 def test_after_ready_check_zero_marks_ready(state_file: Path) -> None:
