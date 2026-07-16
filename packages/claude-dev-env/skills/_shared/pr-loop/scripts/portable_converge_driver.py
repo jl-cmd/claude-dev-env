@@ -17,7 +17,7 @@ ready decisions from prose. It runs this CLI, reads JSON, and either:
 
     portable_converge_driver.py after-code-review --state-file PATH \\
         --returncode 0 --dirty-tree 0 --current-head SHA \\
-        --served-command empty string when in_session or unset
+        --served-command ''|in_session|chain-command
 
     portable_converge_driver.py after-bugteam --state-file PATH \\
         --pushed 0|1 --converged 0|1 --current-head SHA
@@ -34,6 +34,10 @@ ready decisions from prose. It runs this CLI, reads JSON, and either:
         --check-exit 0|1|2 --current-head SHA
 
     portable_converge_driver.py show-state --state-file PATH
+
+Successful code-review serve: returncode 0 and served_command is empty
+(in_session default), the ``in_session`` token, or any non-empty chain
+command. Non-zero returncode is always a failed serve.
 """
 
 from __future__ import annotations
@@ -65,6 +69,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     ALL_CLASSIFICATIONS,
     ALL_GIT_REV_PARSE_HEAD_ARGV,
     BLOCKER_COPILOT_WAIT_CAP,
+    BLOCKER_INLINE_LAG_CAP,
     BLOCKER_NOT_PORTABLE,
     BLOCKER_PREFLIGHT,
     BLOCKER_REVIEW_FAILED,
@@ -108,6 +113,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     EXIT_CONTRACT_ERROR,
     EXIT_SUCCESS,
     EXIT_USAGE_ERROR,
+    INLINE_LAG_STREAK_CAP,
     INVOKE_CODE_REVIEW_RELATIVE_PATH,
     NEXT_APPLY_FIXES,
     NEXT_CHECK_READY,
@@ -268,9 +274,7 @@ def _reset_push_invalidated_markers(all_state: dict[str, object]) -> None:
     all_state["merge_state_status"] = None
     all_state["copilot_wait_count"] = 0
     all_state["inline_lag_streak"] = 0
-    if not all_state.get("copilot_down"):
-        pass
-    all_state["bugbot_down"] = bool(all_state.get("bugbot_down"))
+    all_state["bugbot_down"] = False
 
 
 def _code_review_commands(
@@ -544,6 +548,36 @@ def run_open_run(
     )
 
 
+def _is_successful_serve(*, returncode: int, served_command: str) -> bool:
+    """Return True when code-review completed a successful serve.
+
+    ::
+
+        returncode 0 + served_command ''          -> True  (in_session)
+        returncode 0 + served_command in_session  -> True
+        returncode 0 + served_command claude.exe  -> True  (chain)
+        returncode 1 + any served_command         -> False
+
+    Empty served_command with returncode 0 is the in_session default
+    path. Non-zero returncode always fails regardless of command text.
+
+    Args:
+        returncode: Helper process exit code.
+        served_command: Empty, ``in_session``, or chain command path.
+
+    Returns:
+        Whether the serve counts as successful for phase advance.
+    """
+    if returncode != 0:
+        return False
+    normalized_command = served_command.strip()
+    return (
+        normalized_command == ""
+        or normalized_command == SERVED_COMMAND_IN_SESSION
+        or bool(normalized_command)
+    )
+
+
 def run_after_code_review(
     *,
     state_file: Path,
@@ -558,7 +592,8 @@ def run_after_code_review(
         state_file: Loop state path.
         returncode: Helper process exit code.
         is_dirty_tree: Working tree dirty after review.
-        served_command: Non-empty when chain mode served successfully.
+        served_command: Empty or ``in_session`` for in-session serve;
+            non-empty chain binary path for chain mode.
         current_head: SHA after the review step.
 
     Returns:
@@ -568,9 +603,9 @@ def run_after_code_review(
     all_state["current_head"] = current_head
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
 
-    is_successful_serve = returncode == 0 and (
-        bool(served_command.strip())
-        or served_command == SERVED_COMMAND_IN_SESSION
+    is_successful_serve = _is_successful_serve(
+        returncode=returncode,
+        served_command=served_command,
     )
     if not is_successful_serve:
         all_state["phase"] = PHASE_CODE_REVIEW
@@ -752,6 +787,17 @@ def _after_bugbot_dirty(
         )
     streak = int(all_state.get("inline_lag_streak") or 0) + 1
     all_state["inline_lag_streak"] = streak
+    if streak >= INLINE_LAG_STREAK_CAP:
+        all_state["phase"] = PHASE_BLOCKED
+        all_state["blocker"] = BLOCKER_INLINE_LAG_CAP
+        return _finish_ok(
+            all_state,
+            state_file,
+            next_action=NEXT_STOP_BLOCKED,
+            all_commands=_EMPTY_COMMANDS,
+            wait_seconds=None,
+            blocker=BLOCKER_INLINE_LAG_CAP,
+        )
     all_state["phase"] = PHASE_BUGBOT
     return _finish_ok(
         all_state,
