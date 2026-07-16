@@ -1,10 +1,6 @@
 # Pending disposition / long-term deselects (not Skip markers on tests).
 # See tests/CLAUDE.md local-only register for why.
 
-# Session pollution when full tests/ collects fan_out + sync_ai_rules (sys.modules["config"]).
-# See issue #20. Do not remove without an owner disposition.
-tests/test_fan_out_dispatch.py::TestImportKeepsAlreadyLoadedConfig::should_leave_an_already_imported_config_module_in_sys_modules
-
 # Linux is_ephemeral OS-temp production gap — long-term deselect; tracked in #57 (not fixed under migration).
 packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_ephemeral.py::test_should_return_false_for_os_tempfile_gettempdir_root
 

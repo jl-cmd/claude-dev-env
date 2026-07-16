@@ -447,7 +447,11 @@ class TestScriptEntrypointImportPath:
 
 
 class TestImportKeepsAlreadyLoadedConfig:
-    def should_leave_an_already_imported_config_module_in_sys_modules(self) -> None:
+    def should_leave_an_already_imported_config_module_in_sys_modules(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setitem(sys.modules, "config", config)
+
         fan_out_dispatch._ensure_repo_root_on_sys_path()
 
         assert sys.modules.get("config") is config
