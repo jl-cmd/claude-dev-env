@@ -50,7 +50,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `research-mode.md` | Three anti-hallucination constraints: say "I don't know", verify with citations, quote for factual grounding |
 | `right-sized-engineering.md` | Simple over clever; functions over classes; concrete over abstract |
 | `self-contained-docs.md` | Every document is fully self-contained; no references to the conversation that produced it |
-| `shell-invocation-policy.md` | All Windows shell commands use `pwsh`; `powershell.exe`, `cmd /c`, and `bash -c` are blocked |
+| `shell-invocation-policy.md` | All Windows shell commands use `pwsh`; `Audit-ShellPolicy.ps1` reports the non-`pwsh` forms in the `settings.json` permission rules and `Migrate-ShellPolicy.ps1` rewrites them to `pwsh`, both run on demand, not as a live gate |
 | `tdd.md` | Test-driven development: red → green → refactor, no production code before a failing test |
 | `testing.md` | Test quality and infrastructure standards |
 | `vault-context.md` | Search Obsidian vault for prior sessions and decisions before substantive project work |

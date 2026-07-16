@@ -803,13 +803,13 @@ test('managedHookScriptRelativePathsFromSourceRoots unions managed scripts acros
             hooks: { Stop: [{ matcher: '', hooks: [{ command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_rules_enforcer.py' }] }] },
         });
         writeHooksJsonAtRoot(dependencyRoot, {
-            hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pwsh_enforcer.py' }] }] },
+            hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/example_hook.py' }] }] },
         });
 
         const relativePaths = managedHookScriptRelativePathsFromSourceRoots([builtinRoot, dependencyRoot]);
 
         assert.ok(relativePaths.has('blocking/code_rules_enforcer.py'));
-        assert.ok(relativePaths.has('blocking/pwsh_enforcer.py'));
+        assert.ok(relativePaths.has('blocking/example_hook.py'));
         for (const foldedPath of FOLDED_HOOK_RELATIVE_PATHS) {
             assert.ok(relativePaths.has(foldedPath), `folded hook ${foldedPath} must always be in the managed set`);
         }
