@@ -3,8 +3,10 @@
 # suite and Package suite steps. Source this file (do not execute it) so the
 # deselect_args array lands in the calling shell. Blank and comment lines are
 # skipped and carriage returns stripped. Self-verifies that the flag count
-# equals the non-comment line count so a list edit that drops a node ID surfaces
-# as a failing step rather than a silently shorter deselect set.
+# from the builder loop equals an independent recount of the non-comment lines,
+# so a builder-loop change that silently drops flags surfaces as a failing step.
+# Both passes read the same files, so an edit to the lists themselves shifts
+# both counts together and is out of this check's reach.
 
 deselect_source_lists=(
   .github/ci/live-post-audit-deselects.txt
