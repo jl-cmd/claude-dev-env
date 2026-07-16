@@ -94,7 +94,18 @@ Each record's `deferredPrs` is that PR's own list of draft hardening PRs, and
 `allDeferredPrs` is every record's `deferredPrs` flattened into one list. The
 top-level `converged` is true only when every PR converged.
 
-## Multi-PR teardown (on workflow completion)
+## Multi-PR teardown
+
+### `pacer=portable`
+
+For each PR worktree, run the single-PR **Teardown → pacer=portable** path in
+[`SKILL.md`](../SKILL.md) (`pr-loop-lifecycle` Close, no Workflow journal
+report). Write one durable handoff per PR with that PR's `--pr-number` and
+resume command `/autoconverge <PR URL>`. Revoke project permissions once per
+repository after every PR's close. Print one summary line per PR as
+`#<prNumber>: <converged | blocked> — rounds <N>, final <finalSha>[, blocker <blocker>]`.
+
+### `pacer=workflow` (on workflow completion)
 
 Run the single-PR Teardown in [`SKILL.md`](../SKILL.md) once per entry in
 `results`, using that PR's `owner`, `repo`, `prNumber`, and `finalSha`, and its

@@ -351,8 +351,10 @@ When the user names several PRs, run the multi-PR path in
 [`reference/multi-pr.md`](reference/multi-pr.md): one worktree per PR
 (`git worktree add` on each head ref, strict pre-flight per worktree, one
 permission grant per repository, one Copilot quota check for the whole run),
-then a single `workflow/converge_multi.mjs` launch with one entry per PR, then
-the single-PR teardown once per `results` entry and a one-line-per-PR summary.
+then launch by pacer — `pacer=workflow`: one `workflow/converge_multi.mjs`
+call with one entry per PR; `pacer=portable`: portable driver once per PR
+(serial or host fan-out) — then single-PR teardown once per PR and a
+one-line-per-PR summary.
 
 ## Self-closing loop: converge the deferred PRs
 
