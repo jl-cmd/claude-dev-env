@@ -117,7 +117,8 @@ jobs:
             pytest-xdist \
             pyyaml \
             psycopg \
-            mypy
+            mypy \
+            ruff
 
       - name: Configure git identity for test repos
         run: |
@@ -161,7 +162,8 @@ jobs:
             pytest-xdist \
             pyyaml \
             psycopg \
-            mypy
+            mypy \
+            ruff
 
       - name: Configure git identity for test repos
         run: |
