@@ -134,6 +134,37 @@ def test_run_mypy_check_still_flags_genuine_type_error(
     assert mypy_result.error_count >= 1
 
 
+def test_run_mypy_check_accepts_relative_path_under_nested_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A repo-relative target under a nested project root is still readable.
+
+    ::
+
+        cwd=repo_root; changed file listed as repo-relative pkg/tool.py
+        pkg/ holds its own pyproject.toml -> resolution root is repo_root/pkg
+        flag (defect): mypy runs from repo_root/pkg with the repo-relative arg
+                       -> "can't read file", spurious failure
+        ok  (fixed):   arg resolved to an absolute path -> mypy reads it
+    """
+    repo_root = tmp_path / "repo_root"
+    nested_package = repo_root / "pkg"
+    nested_package.mkdir(parents=True)
+    (repo_root / ".git").mkdir()
+    (nested_package / "pyproject.toml").write_text(
+        "[project]\nname = 'nested'\n", encoding="utf-8"
+    )
+    (nested_package / "module.py").write_text(
+        "sample_number: int = 1\n", encoding="utf-8"
+    )
+
+    monkeypatch.chdir(repo_root)
+    relative_target = Path("pkg") / "module.py"
+    mypy_result = run_mypy_check([relative_target])
+
+    assert mypy_result.passed, mypy_result.output
+
+
 def test_mypy_result_dataclass() -> None:
     """Test MypyResult dataclass creation."""
     result = MypyResult(passed=True, output="test", error_count=0)

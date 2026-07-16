@@ -186,7 +186,9 @@ def run_mypy_check(files: list[Path]) -> MypyResult:
 
     python_source_suffix = PYTHON_SOURCE_SUFFIX
     all_py_files = [
-        str(each_file) for each_file in files if each_file.suffix == python_source_suffix
+        str(each_file.resolve())
+        for each_file in files
+        if each_file.suffix == python_source_suffix
     ]
     if not all_py_files:
         return MypyResult(passed=True, output="No Python files", error_count=0)
