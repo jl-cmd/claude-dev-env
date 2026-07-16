@@ -33,6 +33,24 @@ python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
 When `pacer` is not `portable`, use the skill’s native Workflow or
 ScheduleWakeup path. When `pacer=portable`, use the control script below.
 
+## Isolation and worktree
+
+1. When the tool list includes `EnterWorktree`, call it (same contract as the
+   Claude-host skills).
+2. When `EnterWorktree` is absent, isolate with git worktree machinery:
+   - Prefer an existing worktree already on the PR head ref under
+     `.claude/worktrees/` (or another dedicated worktree path).
+   - Otherwise `git fetch origin <headRefName>` and
+     `git worktree add <path> <headRefName>` (or `gh pr checkout <N>` into a
+     dedicated directory), then `cd` into that checkout.
+3. Confirm the working directory is the PR’s own repo on the PR head SHA:
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <O> --repo <R> --mode strict`.
+   Non-zero exit → report the `ABORT` line and stop.
+4. Cross-repo routing follows pr-converge Step 1.5: every local review and edit
+   runs with cwd set to the **PR worktree**.
+
+`open-run` runs the same strict preflight before seeding state.
+
 ## Control script
 
 ```
@@ -52,7 +70,27 @@ ok; `1` = contract failure; `2` = usage error.
 | `after-codex` | From classification clean / dirty / down |
 | `after-copilot-wait` | From review surfaced / wait cap |
 | `after-ready-check` | From check_convergence exit |
-| `show-state` | Echo state; rehydrate `commands` when next=`run_code_review` |
+| `show-state` | Echo state; rehydrate `commands` / `wait_seconds` for pending next |
+
+## Continuous tick loop
+
+After transport check, PR scope, isolation, permission grant, and the once-per-run
+Copilot quota pre-check:
+
+1. Seed or restore state via `open-run` or `show-state` (and handoff
+   `state-copy.json` when resuming).
+2. Run the driver command for the current step; read JSON `next` / `commands` /
+   `wait_seconds`.
+3. On non-terminal `next`:
+   - Write state and handoff when the after-* payload says so.
+   - If `next` is `poll_wait`, sleep `wait_seconds` only, then re-poll and call
+     the matching after-*.
+   - If `next` is immediate work, continue in the same turn without sleeping.
+4. On `mark_ready` / `stop_blocked` / named stop: run lifecycle Close, print the
+   entry skill’s exit block, omit further pacing.
+5. External reviewers remain skippable the same way as Claude-host runs when
+   opted out or down. Push and head-change reset push-invalidated markers
+   (`*_clean_at`, `merge_state_status`, `bugbot_down`, `codex_down`).
 
 ## Agent loop (judgment only)
 
@@ -75,6 +113,23 @@ ok; `1` = contract failure; `2` = usage error.
 | `check_ready` | Run `commands` (check_convergence) | `after-ready-check` |
 | `mark_ready` | Run `commands` (`gh pr ready`) | teardown |
 | `stop_blocked` | Teardown; print blocker | stop |
+
+## Autoconverge entry on portable pacer
+
+When `/autoconverge` selects `pacer=portable`:
+
+- Complete autoconverge pre-flight (scope, draft ownership, strict worktree,
+  grant, Copilot quota).
+- Drive the continuous tick loop above (scripted phase machine) until ready
+  or a documented blocker.
+- Skip `Workflow({ scriptPath: converge.mjs })` — that path requires the
+  Workflow tool.
+- Teardown uses the lifecycle Close path; the Workflow-only closing HTML
+  journal report is optional and skipped when no workflow run id exists.
+- Resume command on handoff: `/autoconverge <PR URL>`.
+
+When `/autoconverge` selects `pacer=workflow`, follow the skill’s Workflow
+sections unchanged.
 
 ## Helpers (scripted)
 

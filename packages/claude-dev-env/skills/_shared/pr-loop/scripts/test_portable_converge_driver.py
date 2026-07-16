@@ -27,6 +27,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     NEXT_MARK_READY,
     NEXT_POLL_WAIT,
     NEXT_RUN_BUGTEAM,
+    NEXT_RUN_BUGBOT_GATE,
     NEXT_RUN_CODE_REVIEW,
     NEXT_RUN_CODEX,
     NEXT_STOP_BLOCKED,
@@ -156,9 +157,9 @@ def test_after_bugteam_pushed_resets_to_code_review(state_file: Path) -> None:
     reloaded = driver.load_state(state_file)
     assert reloaded["code_review_clean_at"] is None
     assert reloaded["current_head"] == "def456"
-    assert reloaded["bugbot_down"] is True
+    assert reloaded["bugbot_down"] is False
     assert reloaded["copilot_down"] is True
-    assert reloaded[STATE_KEY_CODEX_DOWN] is True
+    assert reloaded[STATE_KEY_CODEX_DOWN] is False
     assert reloaded[STATE_KEY_CODEX_CLEAN_AT] is None
     assert reloaded["inline_lag_streak"] == 0
 
@@ -588,6 +589,10 @@ def test_show_state_ready_with_pending_mark_ready(state_file: Path) -> None:
     )
     assert show_exit == EXIT_SUCCESS
     assert payload[RESULT_KEY_NEXT] == NEXT_MARK_READY
+    all_commands = payload["commands"]
+    assert isinstance(all_commands, list)
+    assert all_commands[0] == "gh"
+    assert "ready" in all_commands
 
 
 def test_show_state_ready_without_pending_defaults_to_mark_ready(
@@ -625,6 +630,8 @@ def test_show_state_echoes_pending_check_ready(state_file: Path) -> None:
     assert exit_code == EXIT_SUCCESS
     assert payload[RESULT_KEY_NEXT] == NEXT_CHECK_READY
     assert payload[RESULT_KEY_PHASE] == PHASE_READY
+    joined = _command_joined(payload)
+    assert "check_convergence.py" in joined
 
 
 def _command_joined(payload: dict[str, object]) -> str:
@@ -719,8 +726,8 @@ def test_after_code_review_head_change_resets_push_markers(
     assert reloaded["bugteam_clean_at"] is None
     assert reloaded["copilot_clean_at"] is None
     assert reloaded[STATE_KEY_CODEX_CLEAN_AT] is None
-    assert reloaded["bugbot_down"] is True
-    assert reloaded[STATE_KEY_CODEX_DOWN] is True
+    assert reloaded["bugbot_down"] is False
+    assert reloaded[STATE_KEY_CODEX_DOWN] is False
     assert reloaded["inline_lag_streak"] == 0
     assert reloaded["current_head"] == "def456"
 
@@ -763,4 +770,103 @@ def test_copilot_surfaced_absent_increments_from_two(state_file: Path) -> None:
         assert payload[RESULT_KEY_NEXT] == NEXT_STOP_BLOCKED
     else:
         assert payload[RESULT_KEY_NEXT] == NEXT_POLL_WAIT
+
+def test_show_state_rehydrates_poll_wait_seconds(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state[STATE_KEY_PENDING_NEXT] = NEXT_POLL_WAIT
+    state["phase"] = PHASE_COPILOT_WAIT
+    driver.save_state(state_file, state)
+    payload, exit_code = driver._dispatch_show_state(  # noqa: SLF001
+        type(
+            "Namespace",
+            (),
+            {"state_file": str(state_file)},
+        )()
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_POLL_WAIT
+    assert payload[RESULT_KEY_WAIT_SECONDS] == DEFAULT_WAIT_SECONDS
+
+
+def test_after_bugteam_head_change_resets_down_flags(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state["current_head"] = "abc123"
+    state["code_review_clean_at"] = "abc123"
+    state["bugbot_down"] = True
+    state[STATE_KEY_CODEX_DOWN] = True
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_bugteam(
+        state_file=state_file,
+        is_pushed=False,
+        is_converged=True,
+        current_head="def456",
+    )
+    assert exit_code == EXIT_SUCCESS
+    reloaded = driver.load_state(state_file)
+    assert reloaded["bugbot_down"] is False
+    assert reloaded[STATE_KEY_CODEX_DOWN] is False
+    assert reloaded["code_review_clean_at"] is None
+    assert reloaded["current_head"] == "def456"
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_BUGBOT_GATE
+
+
+def test_after_ready_check_head_change_resets_markers(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state["current_head"] = "abc123"
+    state["code_review_clean_at"] = "abc123"
+    state["bugbot_down"] = True
+    state[STATE_KEY_CODEX_DOWN] = True
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_ready_check(
+        state_file=state_file,
+        check_exit=0,
+        current_head="def456",
+    )
+    assert exit_code == EXIT_SUCCESS
+    reloaded = driver.load_state(state_file)
+    assert reloaded["bugbot_down"] is False
+    assert reloaded[STATE_KEY_CODEX_DOWN] is False
+    assert reloaded["code_review_clean_at"] is None
+    assert reloaded["current_head"] == "def456"
+    assert payload[RESULT_KEY_NEXT] == NEXT_MARK_READY
+
+
+def test_after_codex_dirty_resets_down_flags(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state[STATE_KEY_CODEX_REQUIRED] = True
+    state["bugbot_down"] = True
+    state[STATE_KEY_CODEX_DOWN] = True
+    state["code_review_clean_at"] = "abc123"
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_codex(
+        state_file=state_file,
+        classification="dirty",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_APPLY_FIXES
+    reloaded = driver.load_state(state_file)
+    assert reloaded["bugbot_down"] is False
+    assert reloaded[STATE_KEY_CODEX_DOWN] is False
+    assert reloaded["code_review_clean_at"] is None
+
+
+def test_after_bugbot_down_rebuilds_task_list(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state["bugbot_down"] = False
+    state["tasks"] = []
+    state["runnable_review_ids"] = ["code_review"]
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_bugbot(
+        state_file=state_file,
+        classification="down",
+        current_head="abc123",
+        is_inline_lag=False,
+    )
+    assert exit_code == EXIT_SUCCESS
+    reloaded = driver.load_state(state_file)
+    assert reloaded["bugbot_down"] is True
+    all_runnable = reloaded.get("runnable_review_ids")
+    assert isinstance(all_runnable, list)
+    assert "bugbot" not in all_runnable
 

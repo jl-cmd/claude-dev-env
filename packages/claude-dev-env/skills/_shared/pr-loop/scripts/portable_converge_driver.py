@@ -39,9 +39,9 @@ ready decisions from prose. It runs this CLI, reads JSON, and either:
 
     portable_converge_driver.py show-state --state-file PATH
 
-Successful code-review serve: returncode 0 and served_command is empty
-(in_session default), the ``in_session`` token, or any non-empty chain
-command. Non-zero returncode is always a failed serve.
+Successful code-review serve: returncode 0 only. ``served_command`` is
+informational (empty / ``in_session`` / chain argv) and does not decide
+success. Non-zero returncode is always a failed serve.
 
 After Bugbot clean or down, the machine runs the Codex step (or the
 codex-down / not-required waiver) before COPILOT_WAIT or check_ready.
@@ -321,6 +321,35 @@ def _reset_push_invalidated_markers(all_state: dict[str, object]) -> None:
     all_state["copilot_wait_count"] = 0
     all_state["bugbot_wait_count"] = 0
     all_state["inline_lag_streak"] = 0
+    all_state["bugbot_down"] = False
+    all_state[STATE_KEY_CODEX_DOWN] = False
+
+
+def _sync_task_list_from_down_flags(all_state: dict[str, object]) -> None:
+    all_task_list = build_converge_task_list(
+        is_bugbot_down=bool(all_state.get("bugbot_down")),
+        is_copilot_down=bool(all_state.get("copilot_down")),
+        is_codex_down=bool(all_state.get(STATE_KEY_CODEX_DOWN)),
+        is_codex_required=bool(all_state.get(STATE_KEY_CODEX_REQUIRED)),
+    )
+    all_state["tasks"] = all_task_list["tasks"]
+    all_state["final_task_id"] = all_task_list["final_task_id"]
+    all_state["runnable_review_ids"] = all_task_list["runnable_review_ids"]
+    all_state["done_when"] = all_task_list["done_when"]
+
+
+def _maybe_reset_on_head_change(
+    all_state: dict[str, object], current_head: str
+) -> None:
+    prior_head = all_state.get("current_head")
+    if (
+        isinstance(prior_head, str)
+        and prior_head
+        and prior_head != current_head
+    ):
+        _reset_push_invalidated_markers(all_state)
+        _sync_task_list_from_down_flags(all_state)
+    all_state["current_head"] = current_head
 
 
 def _code_review_commands(
@@ -689,22 +718,15 @@ def run_after_code_review(
         state_file: Loop state path.
         returncode: Helper process exit code.
         is_dirty_tree: Working tree dirty after review.
-        served_command: Empty or ``in_session`` for in-session serve;
-            non-empty chain binary path for chain mode.
+        served_command: Informational only (empty, ``in_session``, or chain
+            argv). Success is decided solely by ``returncode == 0``.
         current_head: SHA after the review step.
 
     Returns:
         Payload and process exit code.
     """
     all_state = load_state(state_file)
-    prior_head = all_state.get("current_head")
-    if (
-        isinstance(prior_head, str)
-        and prior_head
-        and prior_head != current_head
-    ):
-        _reset_push_invalidated_markers(all_state)
-    all_state["current_head"] = current_head
+    _maybe_reset_on_head_change(all_state, current_head)
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
 
     del served_command
@@ -840,11 +862,12 @@ def run_after_bugteam(
         Payload and process exit code.
     """
     all_state = load_state(state_file)
-    all_state["current_head"] = current_head
+    _maybe_reset_on_head_change(all_state, current_head)
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
 
     if is_pushed:
         _reset_push_invalidated_markers(all_state)
+        _sync_task_list_from_down_flags(all_state)
         all_state["phase"] = PHASE_CODE_REVIEW
         return _finish_ok(
             all_state,
@@ -874,6 +897,7 @@ def _after_bugbot_down(
     state_file: Path,
 ) -> tuple[dict[str, object], int]:
     all_state["bugbot_down"] = True
+    _sync_task_list_from_down_flags(all_state)
     return _advance_after_bugbot_resolved(all_state, state_file)
 
 
@@ -950,11 +974,12 @@ def run_after_codex(
             EXIT_USAGE_ERROR,
         )
     all_state = load_state(state_file)
-    all_state["current_head"] = current_head
+    _maybe_reset_on_head_change(all_state, current_head)
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
 
     if classification == CLASSIFICATION_DIRTY:
         _reset_push_invalidated_markers(all_state)
+        _sync_task_list_from_down_flags(all_state)
         all_state["phase"] = PHASE_CODE_REVIEW
         return _finish_ok(
             all_state,
@@ -967,6 +992,7 @@ def run_after_codex(
 
     if classification == CLASSIFICATION_DOWN:
         all_state[STATE_KEY_CODEX_DOWN] = True
+        _sync_task_list_from_down_flags(all_state)
         return _advance_after_codex_resolved(all_state, state_file)
 
     all_state[STATE_KEY_CODEX_CLEAN_AT] = current_head
@@ -997,7 +1023,7 @@ def run_after_bugbot(
             EXIT_USAGE_ERROR,
         )
     all_state = load_state(state_file)
-    all_state["current_head"] = current_head
+    _maybe_reset_on_head_change(all_state, current_head)
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
 
     if classification == CLASSIFICATION_DOWN:
@@ -1082,6 +1108,7 @@ def _after_copilot_down(
     state_file: Path,
 ) -> tuple[dict[str, object], int]:
     all_state["copilot_down"] = True
+    _sync_task_list_from_down_flags(all_state)
     all_state["phase"] = PHASE_READY
     return _finish_ok(
         all_state,
@@ -1142,7 +1169,7 @@ def run_after_copilot_wait(
         Payload and process exit code.
     """
     all_state = load_state(state_file)
-    all_state["current_head"] = current_head
+    _maybe_reset_on_head_change(all_state, current_head)
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
     if not is_review_surfaced:
         return _after_copilot_not_surfaced(all_state, state_file)
@@ -1171,7 +1198,7 @@ def run_after_ready_check(
         Payload and process exit code.
     """
     all_state = load_state(state_file)
-    all_state["current_head"] = current_head
+    _maybe_reset_on_head_change(all_state, current_head)
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
     if check_exit == 0:
         all_state["phase"] = PHASE_READY
@@ -1397,6 +1424,14 @@ def _dispatch_show_state(
         all_payload[RESULT_KEY_COMMANDS] = _code_review_commands_from_state(
             all_state
         )
+    elif next_action == NEXT_CHECK_READY:
+        all_payload[RESULT_KEY_COMMANDS] = (
+            _check_convergence_commands_from_state(all_state)
+        )
+    elif next_action == NEXT_MARK_READY:
+        all_payload[RESULT_KEY_COMMANDS] = _mark_ready_commands(all_state)
+    elif next_action == NEXT_POLL_WAIT:
+        all_payload[RESULT_KEY_WAIT_SECONDS] = DEFAULT_WAIT_SECONDS
     return all_payload, EXIT_SUCCESS
 
 
