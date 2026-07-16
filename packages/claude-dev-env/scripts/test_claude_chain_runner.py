@@ -1,6 +1,7 @@
 """Behavioral tests for the claude fallback-chain runner."""
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -470,3 +471,62 @@ def test_chain_config_path_points_at_home_config() -> None:
     config_path = runner.chain_config_path()
     assert config_path.name == CONFIG_FILENAME
     assert CLAUDE_HOME_SUBDIRECTORY in config_path.parts
+
+
+def test_real_subprocess_capture_replaces_undecodable_bytes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry(sys.executable)])
+    monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    child_code = 'import sys; sys.stdout.buffer.write(b"ok \\x90 end")'
+    chain_result = runner.run_claude(["-c", child_code], timeout_seconds=60)
+    assert chain_result.served_command == sys.executable
+    assert chain_result.returncode == 0
+    assert chain_result.stdout == "ok � end"
+
+
+def test_real_subprocess_capture_preserves_utf8_text(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry(sys.executable)])
+    monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    child_code = 'import sys; sys.stdout.buffer.write("report ✅ done".encode("utf-8"))'
+    chain_result = runner.run_claude(["-c", child_code], timeout_seconds=60)
+    assert chain_result.served_command == sys.executable
+    assert chain_result.returncode == 0
+    assert chain_result.stdout == "report ✅ done"
+
+
+def test_cli_emits_utf8_when_console_encoding_is_legacy(tmp_path: Path) -> None:
+    tmp_home = tmp_path / "home"
+    claude_directory = tmp_home / CLAUDE_HOME_SUBDIRECTORY
+    claude_directory.mkdir(parents=True)
+    config_file = claude_directory / CONFIG_FILENAME
+    config_file.write_text(
+        json.dumps({CONFIG_CHAIN_KEY: [_entry(sys.executable)]}),
+        encoding=UTF8_ENCODING,
+    )
+    runner_script = _SCRIPTS_DIR / "claude_chain_runner.py"
+    child_code = 'import sys; sys.stdout.buffer.write("report ✅".encode("utf-8"))'
+    legacy_console_encoding = "cp1252"
+    child_environment = dict(os.environ)
+    child_environment["USERPROFILE"] = str(tmp_home)
+    child_environment["HOME"] = str(tmp_home)
+    child_environment["PYTHONIOENCODING"] = legacy_console_encoding
+    child_environment.pop("PYTHONUTF8", None)
+    runner_command = [
+        sys.executable,
+        str(runner_script),
+        CLI_ARGUMENTS_SEPARATOR,
+        "-c",
+        child_code,
+    ]
+    completed = subprocess.run(
+        runner_command,
+        capture_output=True,
+        env=child_environment,
+        timeout=60,
+    )
+    assert completed.returncode == 0
+    assert b"Traceback" not in completed.stderr
+    assert "report ✅" in completed.stdout.decode(UTF8_ENCODING)

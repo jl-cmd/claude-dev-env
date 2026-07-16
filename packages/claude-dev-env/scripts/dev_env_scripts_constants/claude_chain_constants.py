@@ -9,6 +9,9 @@ from __future__ import annotations
 UTF8_ENCODING: str = "utf-8"
 """Encoding used to read the chain configuration file."""
 
+CODEC_ERROR_STRATEGY: str = "replace"
+"""Codec error handler that maps any unencodable or undecodable value to a marker."""
+
 CLAUDE_HOME_SUBDIRECTORY: str = ".claude"
 """Per-user directory under the home directory that holds the chain config."""
 

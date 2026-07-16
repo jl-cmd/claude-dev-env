@@ -27,11 +27,13 @@ Import ``run_claude`` for the outcome object, or run the module as a CLI::
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 from dev_env_scripts_constants.claude_chain_constants import (
     ALL_USAGE_LIMIT_SIGNATURES,
@@ -48,6 +50,7 @@ from dev_env_scripts_constants.claude_chain_constants import (
     CLAUDE_HOME_SUBDIRECTORY,
     CLI_ARGUMENTS_SEPARATOR,
     CLI_TIMEOUT_FLAG,
+    CODEC_ERROR_STRATEGY,
     CONFIG_CHAIN_EMPTY_REASON,
     CONFIG_CHAIN_KEY,
     CONFIG_CHAIN_NOT_LIST_REASON,
@@ -315,6 +318,8 @@ def run_claude(
                 _build_invocation(each_entry, all_claude_arguments),
                 capture_output=True,
                 text=True,
+                encoding=UTF8_ENCODING,
+                errors=CODEC_ERROR_STRATEGY,
                 timeout=timeout_seconds,
                 check=False,
             )
@@ -396,5 +401,13 @@ def main(all_command_arguments: list[str]) -> int:
     return chain_outcome.returncode
 
 
+def _reconfigure_stream_to_utf8(stream: TextIO) -> None:
+    """Reconfigure *stream* to emit UTF-8, replacing any unmappable character."""
+    if isinstance(stream, io.TextIOWrapper):
+        stream.reconfigure(encoding=UTF8_ENCODING, errors=CODEC_ERROR_STRATEGY)
+
+
 if __name__ == "__main__":
+    _reconfigure_stream_to_utf8(sys.stdout)
+    _reconfigure_stream_to_utf8(sys.stderr)
     sys.exit(main(sys.argv[1:]))
