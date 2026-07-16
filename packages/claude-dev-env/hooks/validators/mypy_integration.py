@@ -58,6 +58,28 @@ def _pyproject_contains_tool_mypy(pyproject_path: Path) -> bool:
     return isinstance(tool_table, dict) and "mypy" in tool_table
 
 
+def _ancestor_directories(starting_file: Path) -> list[Path]:
+    """Return *starting_file*'s directory and every parent, nearest first.
+
+    ::
+
+        repo/pkg/mod.py -> [repo/pkg, repo, ... , filesystem root]
+        repo/pkg/       -> [repo/pkg, repo, ... , filesystem root]
+
+    A file resolves to its containing directory; a directory resolves to
+    itself, so both ancestor walks below start from the same first candidate.
+
+    Args:
+        starting_file: The file (or directory) the walk begins from.
+
+    Returns:
+        The resolved starting directory followed by each of its parents.
+    """
+    resolved_starting_file = starting_file.resolve()
+    walk_origin = resolved_starting_file.parent if resolved_starting_file.is_file() else resolved_starting_file
+    return [walk_origin, *walk_origin.parents]
+
+
 def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
     """Walk up from a starting file to locate a pyproject.toml that configures mypy.
 
@@ -76,9 +98,7 @@ def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
         and the filesystem root.
     """
     pyproject_filename_for_lookup = PYPROJECT_FILENAME
-    resolved_starting_file = starting_file.resolve()
-    current_directory = resolved_starting_file.parent if resolved_starting_file.is_file() else resolved_starting_file
-    for each_candidate_directory in [current_directory, *current_directory.parents]:
+    for each_candidate_directory in _ancestor_directories(starting_file):
         candidate_pyproject = each_candidate_directory / pyproject_filename_for_lookup
         if candidate_pyproject.is_file() and _pyproject_contains_tool_mypy(candidate_pyproject):
             return candidate_pyproject
@@ -107,9 +127,7 @@ def find_module_resolution_root(starting_file: Path) -> Path | None:
     """
     git_entry_name = GIT_DIRECTORY_NAME
     pyproject_filename = PYPROJECT_FILENAME
-    resolved_starting_file = starting_file.resolve()
-    search_origin = resolved_starting_file.parent if resolved_starting_file.is_file() else resolved_starting_file
-    for each_candidate_directory in [search_origin, *search_origin.parents]:
+    for each_candidate_directory in _ancestor_directories(starting_file):
         has_git_entry = (each_candidate_directory / git_entry_name).exists()
         has_pyproject = (each_candidate_directory / pyproject_filename).is_file()
         if has_git_entry or has_pyproject:
