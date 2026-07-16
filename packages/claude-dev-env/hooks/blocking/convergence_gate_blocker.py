@@ -23,6 +23,7 @@ from blocking.pr_description_pr_number import (  # noqa: E402
 )
 from hooks_constants.convergence_gate_blocker_constants import (  # noqa: E402
     ALL_GH_PR_VIEW_NUMBER_COMMAND,
+    BASH_LINE_CONTINUATION_PATTERN,
     COMMAND_SEPARATOR_PATTERN,
     GH_PR_READY_ANCHOR_PATTERN,
     GH_REPO_FLAG,
@@ -42,12 +43,15 @@ def _ready_command_segment(command: str) -> str:
         ^^^^^^^^^^^^^^^^                            clipped -> returned segment
 
     Scanning only this segment keeps a ``--repo`` flag or PR URL that belongs to
-    a chained command from binding the gate to the wrong PR.
+    a chained command from binding the gate to the wrong PR. A backslash-newline
+    continuation is folded to a space before the separator search, so a
+    ``--repo`` flag written on a continued line stays inside the segment.
     """
     ready_match = re.search(GH_PR_READY_ANCHOR_PATTERN, command)
     if ready_match is None:
         return command
     ready_tail = command[ready_match.start() :]
+    ready_tail = re.sub(BASH_LINE_CONTINUATION_PATTERN, " ", ready_tail)
     separator_match = re.search(COMMAND_SEPARATOR_PATTERN, ready_tail)
     if separator_match is None:
         return ready_tail

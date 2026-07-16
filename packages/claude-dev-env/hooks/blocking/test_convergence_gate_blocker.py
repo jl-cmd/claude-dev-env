@@ -278,6 +278,26 @@ def test_ready_segment_clips_at_command_separator() -> None:
     )
 
 
+def test_ready_segment_keeps_repo_flag_on_a_continued_line() -> None:
+    segment = hook_module._ready_command_segment(
+        "gh pr ready 161 \\\n  --repo target-owner/target-repo"
+    )
+    assert "--repo" in segment
+    assert "target-owner/target-repo" in segment
+
+
+def test_continued_repo_flag_binds_the_gate_to_the_named_repo(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 \\\n  --repo target-owner/target-repo",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("target-owner", "target-repo", 161)
+
+
 def test_chained_repo_flag_does_not_misbind_the_gate(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:

@@ -27,6 +27,8 @@ GH_PR_READY_ANCHOR_PATTERN: str = r"\bgh\s+pr\s+ready\b(?![^&|;\n]*--undo)"
 
 COMMAND_SEPARATOR_PATTERN: str = r"&&|\|\||;|\||\n"
 
+BASH_LINE_CONTINUATION_PATTERN: str = r"\\\r?\n[ \t]*"
+
 PR_URL_OWNER_REPO_NUMBER_PATTERN: str = (
     r"https://github\.com/(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)/pull/(?P<number>\d+)"
 )
