@@ -172,10 +172,16 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     RESULT_KEY_WAIT_SECONDS,
     STATE_FILENAME,
     STATE_JSON_INDENT,
+    MARK_READY_GH_BINARY,
+    MARK_READY_PR_TOKEN,
+    MARK_READY_REPO_FLAG,
+    MARK_READY_SUBCOMMAND,
     STATE_KEY_CODEX_CLEAN_AT,
     STATE_KEY_CODEX_DOWN,
     STATE_KEY_CODEX_REQUIRED,
+    STATE_KEY_CWD,
     STATE_KEY_PENDING_NEXT,
+    STATE_KEY_SESSION_MODEL,
     STATE_STAGING_SUFFIX,
     STATUS_ERROR,
     STATUS_OK,
@@ -255,6 +261,8 @@ def build_initial_state(
     pr_number: int,
     is_codex_down: bool = False,
     is_codex_required: bool = False,
+    session_model: str = DEFAULT_SESSION_MODEL,
+    cwd_path: str | None = None,
 ) -> dict[str, object]:
     """Build the initial portable loop state for a PR head.
 
@@ -268,6 +276,8 @@ def build_initial_state(
         pr_number: Pull request number.
         is_codex_down: Codex gate skipped (disabled or opted out).
         is_codex_required: Codex is required by usage/policy for this run.
+        session_model: Alias passed to invoke_code_review on re-entry.
+        cwd_path: PR worktree path for invoke_code_review --cwd.
 
     Returns:
         New state mapping at ``CODE_REVIEW``.
@@ -296,6 +306,8 @@ def build_initial_state(
         "pr_number": pr_number,
         "blocker": None,
         STATE_KEY_PENDING_NEXT: NEXT_RUN_CODE_REVIEW,
+        STATE_KEY_SESSION_MODEL: session_model,
+        STATE_KEY_CWD: cwd_path,
     }
 
 
@@ -324,6 +336,37 @@ def _code_review_commands(
         str(cwd_path),
         "--session-model",
         session_model,
+    ]
+
+
+def _code_review_commands_from_state(
+    all_state: Mapping[str, object],
+) -> list[str]:
+    stored_cwd = all_state.get(STATE_KEY_CWD)
+    stored_session_model = all_state.get(STATE_KEY_SESSION_MODEL)
+    if isinstance(stored_cwd, str) and stored_cwd:
+        cwd_path = Path(stored_cwd)
+    else:
+        cwd_path = Path.cwd()
+    if isinstance(stored_session_model, str) and stored_session_model:
+        session_model = stored_session_model
+    else:
+        session_model = DEFAULT_SESSION_MODEL
+    return _code_review_commands(
+        cwd_path=cwd_path, session_model=session_model
+    )
+
+
+def _mark_ready_commands(all_state: Mapping[str, object]) -> list[str]:
+    owner = str(all_state["owner"])
+    repo = str(all_state["repo"])
+    return [
+        MARK_READY_GH_BINARY,
+        MARK_READY_PR_TOKEN,
+        MARK_READY_SUBCOMMAND,
+        str(all_state["pr_number"]),
+        MARK_READY_REPO_FLAG,
+        f"{owner}/{repo}",
     ]
 
 
@@ -417,10 +460,13 @@ def _finish_ok(
     all_extra_fields: Mapping[str, object] | None = None,
 ) -> tuple[dict[str, object], int]:
     all_state[STATE_KEY_PENDING_NEXT] = next_action
+    resolved_commands = all_commands
+    if next_action == NEXT_RUN_CODE_REVIEW:
+        resolved_commands = _code_review_commands_from_state(all_state)
     save_state(state_file, all_state)
     all_payload = _base_ok_payload(all_state, state_file)
     all_payload[RESULT_KEY_NEXT] = next_action
-    all_payload[RESULT_KEY_COMMANDS] = all_commands
+    all_payload[RESULT_KEY_COMMANDS] = resolved_commands
     if wait_seconds is not None:
         all_payload[RESULT_KEY_WAIT_SECONDS] = wait_seconds
     if blocker is not None:
@@ -518,6 +564,8 @@ def _seed_open_run_task_list_and_finish(
         owner=owner,
         repo=repo,
         pr_number=pr_number,
+        session_model=session_model,
+        cwd_path=str(cwd_path),
     )
     all_state["tasks"] = all_task_list["tasks"]
     all_state["final_task_id"] = all_task_list["final_task_id"]
@@ -649,6 +697,13 @@ def run_after_code_review(
         Payload and process exit code.
     """
     all_state = load_state(state_file)
+    prior_head = all_state.get("current_head")
+    if (
+        isinstance(prior_head, str)
+        and prior_head
+        and prior_head != current_head
+    ):
+        _reset_push_invalidated_markers(all_state)
     all_state["current_head"] = current_head
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
 
@@ -1125,14 +1180,7 @@ def run_after_ready_check(
             all_state,
             state_file,
             next_action=NEXT_MARK_READY,
-            all_commands=[
-                "gh",
-                "pr",
-                "ready",
-                str(all_state["pr_number"]),
-                "--repo",
-                f"{all_state['owner']}/{all_state['repo']}",
-            ],
+            all_commands=_mark_ready_commands(all_state),
             wait_seconds=None,
             blocker=None,
         )
@@ -1343,7 +1391,12 @@ def _dispatch_show_state(
     state_file = Path(parsed_arguments.state_file)
     all_state = load_state(state_file)
     all_payload = _base_ok_payload(all_state, state_file)
-    all_payload[RESULT_KEY_NEXT] = _resolve_show_state_next(all_state)
+    next_action = _resolve_show_state_next(all_state)
+    all_payload[RESULT_KEY_NEXT] = next_action
+    if next_action == NEXT_RUN_CODE_REVIEW:
+        all_payload[RESULT_KEY_COMMANDS] = _code_review_commands_from_state(
+            all_state
+        )
     return all_payload, EXIT_SUCCESS
 
 

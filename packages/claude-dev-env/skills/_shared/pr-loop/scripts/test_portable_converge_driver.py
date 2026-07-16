@@ -65,6 +65,8 @@ def state_file(tmp_path: Path) -> Path:
         owner="owner",
         repo="repo",
         pr_number=220,
+        session_model="third-party",
+        cwd_path=str(tmp_path / "worktree"),
     )
     driver.save_state(path, state)
     return path
@@ -623,3 +625,142 @@ def test_show_state_echoes_pending_check_ready(state_file: Path) -> None:
     assert exit_code == EXIT_SUCCESS
     assert payload[RESULT_KEY_NEXT] == NEXT_CHECK_READY
     assert payload[RESULT_KEY_PHASE] == PHASE_READY
+
+
+def _command_joined(payload: dict[str, object]) -> str:
+    all_commands = payload["commands"]
+    assert isinstance(all_commands, list)
+    return " ".join(str(each_token) for each_token in all_commands)
+
+
+def test_after_code_review_failed_serve_emits_code_review_commands(
+    state_file: Path,
+) -> None:
+    payload, exit_code = driver.run_after_code_review(
+        state_file=state_file,
+        returncode=1,
+        is_dirty_tree=False,
+        served_command="",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODE_REVIEW
+    joined = _command_joined(payload)
+    assert "invoke_code_review.py" in joined
+    assert "--session-model" in joined
+    assert "third-party" in joined
+    all_commands = payload["commands"]
+    assert isinstance(all_commands, list)
+    assert len(all_commands) > 0
+
+
+def test_after_bugteam_pushed_emits_code_review_commands(
+    state_file: Path,
+) -> None:
+    payload, exit_code = driver.run_after_bugteam(
+        state_file=state_file,
+        is_pushed=True,
+        is_converged=False,
+        current_head="def456",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODE_REVIEW
+    joined = _command_joined(payload)
+    assert "invoke_code_review.py" in joined
+    assert "--session-model" in joined
+
+
+def test_show_state_rehydrates_code_review_commands(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state[STATE_KEY_PENDING_NEXT] = NEXT_RUN_CODE_REVIEW
+    state["phase"] = PHASE_CODE_REVIEW
+    driver.save_state(state_file, state)
+    payload, exit_code = driver._dispatch_show_state(  # noqa: SLF001
+        type(
+            "Namespace",
+            (),
+            {"state_file": str(state_file)},
+        )()
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODE_REVIEW
+    joined = _command_joined(payload)
+    assert "invoke_code_review.py" in joined
+    assert "--session-model" in joined
+    assert "third-party" in joined
+
+
+def test_after_code_review_head_change_resets_push_markers(
+    state_file: Path,
+) -> None:
+    state = driver.load_state(state_file)
+    state["current_head"] = "abc123"
+    state["code_review_clean_at"] = "abc123"
+    state["bugbot_clean_at"] = "abc123"
+    state["bugteam_clean_at"] = "abc123"
+    state["copilot_clean_at"] = "abc123"
+    state[STATE_KEY_CODEX_CLEAN_AT] = "abc123"
+    state["bugbot_down"] = True
+    state[STATE_KEY_CODEX_DOWN] = True
+    state["inline_lag_streak"] = 2
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_code_review(
+        state_file=state_file,
+        returncode=0,
+        is_dirty_tree=False,
+        served_command="claude.exe",
+        current_head="def456",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_BUGTEAM
+    reloaded = driver.load_state(state_file)
+    assert reloaded["code_review_clean_at"] == "def456"
+    assert reloaded["bugbot_clean_at"] is None
+    assert reloaded["bugteam_clean_at"] is None
+    assert reloaded["copilot_clean_at"] is None
+    assert reloaded[STATE_KEY_CODEX_CLEAN_AT] is None
+    assert reloaded["bugbot_down"] is True
+    assert reloaded[STATE_KEY_CODEX_DOWN] is True
+    assert reloaded["inline_lag_streak"] == 0
+    assert reloaded["current_head"] == "def456"
+
+
+def test_copilot_surfaced_absent_preserves_wait_count_to_cap(
+    state_file: Path,
+) -> None:
+    state = driver.load_state(state_file)
+    state["copilot_down"] = False
+    state["copilot_wait_count"] = COPILOT_WAIT_HARD_CAP - 1
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_copilot_wait(
+        state_file=state_file,
+        is_review_surfaced=True,
+        classification="absent",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_STOP_BLOCKED
+    assert payload[RESULT_KEY_BLOCKER] == BLOCKER_COPILOT_WAIT_CAP
+    reloaded = driver.load_state(state_file)
+    assert reloaded["copilot_wait_count"] == COPILOT_WAIT_HARD_CAP
+
+
+def test_copilot_surfaced_absent_increments_from_two(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state["copilot_down"] = False
+    state["copilot_wait_count"] = 2
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_copilot_wait(
+        state_file=state_file,
+        is_review_surfaced=True,
+        classification="absent",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    reloaded = driver.load_state(state_file)
+    assert reloaded["copilot_wait_count"] == 3
+    if COPILOT_WAIT_HARD_CAP <= 3:
+        assert payload[RESULT_KEY_NEXT] == NEXT_STOP_BLOCKED
+    else:
+        assert payload[RESULT_KEY_NEXT] == NEXT_POLL_WAIT
+

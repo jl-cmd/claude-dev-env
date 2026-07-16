@@ -139,6 +139,13 @@ STATE_KEY_PENDING_NEXT: str = "pending_next"
 STATE_KEY_CODEX_DOWN: str = "codex_down"
 STATE_KEY_CODEX_REQUIRED: str = "codex_required"
 STATE_KEY_CODEX_CLEAN_AT: str = "codex_clean_at"
+STATE_KEY_SESSION_MODEL: str = "session_model"
+STATE_KEY_CWD: str = "cwd"
+
+MARK_READY_GH_BINARY: str = "gh"
+MARK_READY_PR_TOKEN: str = "pr"
+MARK_READY_SUBCOMMAND: str = "ready"
+MARK_READY_REPO_FLAG: str = "--repo"
 
 CHECK_CONVERGENCE_OWNER_FLAG: str = "--owner"
 CHECK_CONVERGENCE_REPO_FLAG: str = "--repo"

@@ -49,9 +49,10 @@ ok; `1` = contract failure; `2` = usage error.
 | `after-code-review` | From returncode / dirty_tree / served_command |
 | `after-bugteam` | From pushed / converged |
 | `after-bugbot` | From classification / inline lag |
+| `after-codex` | From classification clean / dirty / down |
 | `after-copilot-wait` | From review surfaced / wait cap |
 | `after-ready-check` | From check_convergence exit |
-| `show-state` | Echo state |
+| `show-state` | Echo state; rehydrate `commands` when next=`run_code_review` |
 
 ## Agent loop (judgment only)
 
@@ -68,6 +69,7 @@ ok; `1` = contract failure; `2` = usage error.
 | `apply_fixes_and_push` | Fix protocol; commit; push | re-review then `after-code-review` |
 | `run_bugteam` | resolve_worker_spawn / bugteam body | `after-bugteam` |
 | `run_bugbot_gate` | Bugbot helper scripts | `after-bugbot` |
+| `run_codex_review` | Run Codex review step | `after-codex` |
 | `request_copilot_review` | Request Copilot | `after-copilot-wait` |
 | `poll_wait` | Sleep `wait_seconds` only | re-poll then after-* |
 | `check_ready` | Run `commands` (check_convergence) | `after-ready-check` |
