@@ -356,7 +356,7 @@ def _existing_scratchpad_root(
     """
     if not all_relative_parts or not _is_harness_user_directory(all_relative_parts[0]):
         return None
-    for each_session_index in range(1, len(all_relative_parts) - 1):
+    for each_session_index in range(2, len(all_relative_parts) - 1):
         leaf_index = each_session_index + 1
         if all_relative_parts[each_session_index] != session_id:
             continue
@@ -365,7 +365,8 @@ def _existing_scratchpad_root(
         scratchpad_root = os.path.join(
             real_temp_root, *all_relative_parts[: leaf_index + 1]
         )
-        return scratchpad_root if os.path.isdir(scratchpad_root) else None
+        if os.path.isdir(scratchpad_root):
+            return scratchpad_root
     return None
 
 
@@ -411,8 +412,8 @@ def is_ephemeral_path(file_path: str, hook_payload: dict | None = None) -> bool:
     harness session scratchpad. The session scratchpad match reads the session id
     from the payload when one is supplied, and from the harness environment
     variable otherwise, so a caller that holds no payload still gets the match.
-    The PreToolUse validator gate consults this shared predicate to skip a
-    throwaway target before it validates a file write.
+    One call answers path exemption for both families, so a gate that skips
+    throwaway paths need not repeat the two checks itself.
 
     Args:
         file_path: The candidate path to classify.
