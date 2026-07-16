@@ -23,4 +23,6 @@ Reference documentation installed into `~/.claude/docs/` by `bin/install.mjs`. T
 
 ## Load pattern
 
-Rules reference these docs with `@~/.claude/docs/<file>.md` to pull them into context only when needed, rather than loading every doc on every session start.
+A rule points to a doc with the path wrapped in backticks, such as `@~/.claude/docs/<file>.md`. The backticks make it a plain pointer: Claude Code reads the doc only when a rule, skill, or agent opens it, so the doc stays out of session-start context. The same path without backticks expands into context at launch when it sits in a file that loads at session start.
+
+The `InstructionsLoaded` hook confirms this: a bare `@`-import fires an `include` load event; a backtick-wrapped path fires none.
