@@ -8,6 +8,8 @@ Compact reference for agents. ⚡ marks rules enforced by `code_rules_enforcer.p
 
 **Keep existing comments in place.** Only evaluate comments on lines you are actively changing. Do not add new inline comments in production code — write self-documenting code. Docstrings (module/class/function) are always allowed. Test files are exempt. The hook treats the two directions differently: adding a new inline comment blocks the edit, while removing an existing comment prints a stderr advisory and lets the edit through.
 
+Scaffolding and placeholder code carry a `TODO:` comment naming the permanent implementation and why the code is temporary — the documented exception to the no-new-comments rule.
+
 ---
 
 ## CORE PRINCIPLES
@@ -16,6 +18,7 @@ Compact reference for agents. ⚡ marks rules enforced by `code_rules_enforcer.p
 - **Centralized configuration** — every constant lives in ONE place (`config/`).
 - **Reuse before create** — search first, import second, create last.
 - **Encapsulation enables cleaner naming** — `isMaxLevel(level)` > `level >= MAXIMUM_LEVEL`.
+- **Construction logic lives in the model** — path/URL building, formatting, and transformations belong on the model or service that owns the data; a string pattern built at two or more call sites moves to a method there.
 
 ---
 
@@ -37,7 +40,7 @@ Before writing ANY constant: search `config/` for the exact value → semantic m
 
 ## 5. NO ABBREVIATIONS
 
-Full words only (`context`, not `ctx`). Exceptions: `i`/`j`/`k` in loops, `e` for exception. Naming patterns: loop vars `each_*`; booleans `is_/has_/should_/can_/was_/did_`; collections `all_*`; maps `X_by_Y`; preposition params (`from_path=`, `to=`, `into=`). Banned names: `result`, `data`, `output`, `response`, `value`, `item`, `temp`. Banned prefixes: `handle`, `process`, `manage`, `do`.
+Full words only (`context`, not `ctx`). Exceptions: `i`/`j`/`k` in loops, `e` for exception. Naming patterns: loop vars `each_*`; booleans `is_/has_/should_/can_/was_/did_`; collections `all_*`; maps `X_by_Y`; preposition params (`from_path=`, `to=`, `into=`). Banned names: `result`, `data`, `output`, `response`, `value`, `item`, `temp`. Banned prefixes: `handle`, `process`, `manage`, `do`. Name a component for what it IS — `Overlay`, `Validator`, `InvoicePreview`.
 
 ---
 
@@ -55,6 +58,7 @@ Advisory only, never blocking: soft advisory at >= 400 lines, strong nudge at >=
 
 **Simple > Clever. Functions > Classes. Concrete > Abstract.**
 Never: ABC for single impl, DI frameworks, factory for single type. Always: functions when no state, concrete classes, simple imports.
+Parameters follow YAGNI: add an optional parameter when a caller varies the value; when every call site passes the same value, make it required or inline the constant. Remove parameters no caller passes and no body reads.
 
 ## 7.5 SOLID PRINCIPLES
 

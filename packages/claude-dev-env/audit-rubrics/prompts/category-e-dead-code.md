@@ -66,7 +66,7 @@ Inline the artifact under this section using the section types defined in the ch
 **E8. Stub / placeholder code without TODO**
 - Distinguish real-behavior `pass` / `continue` / empty-handler bodies (intentional swallowing of expected exceptions, no-op branches that exist to satisfy a contract) from scaffolding stubs.
 - Real-behavior bodies do NOT require a TODO; the audit must state the rationale (e.g., "rmdir race with concurrent writer is intentionally swallowed").
-- Scaffolding bodies (`pass`, `...`, `raise NotImplementedError`, empty `else { }`, single-statement `return None` placeholders) without a `# TODO` comment ARE Category E findings under the project's "Document Temporary Code" rule.
+- Scaffolding bodies (`pass`, `...`, `raise NotImplementedError`, empty `else { }`, single-statement `return None` placeholders) without a `# TODO` comment ARE Category E findings under the project's `CODE_RULES.md` → "COMMENT PRESERVATION" rule.
 - Adversarial probes for proof-of-absence: (a) any empty brace block in PowerShell / TypeScript / Go (`{ }` with no statements)? (b) any function whose entire body is `pass` / `return` / `return None`? (c) any branch that exits cleanly only because the surrounding loop is no-op for an empty input — is the no-op intentional or a placeholder?
 
 **E9. Constants-module exports with no importer**
@@ -165,7 +165,7 @@ ID prefix: `find`.
 - `sweep_empty_dirs.py` line 28: the second `except OSError: continue` similarly is intended behavior (skip the directory whose ctime is unreadable), not a stub.
 - No `...` literal anywhere in the four files.
 - No `raise NotImplementedError` anywhere.
-- No `# TODO` markers in the diff — the project's own rule (`code-standards.md` → "Document Temporary Code") requires TODOs only for scaffolding/placeholder code. The two `pass`/`continue` bodies above are production behavior, not scaffolding.
+- No `# TODO` markers in the diff — the project's own rule (`CODE_RULES.md` → "COMMENT PRESERVATION") requires TODOs only for scaffolding/placeholder code. The two `pass`/`continue` bodies above are production behavior, not scaffolding.
 - Adversarial probes for proof-of-absence: (a) does the PowerShell script have an empty `else { }` or empty branch body? — scan lines 14-71 for any `{ }` with no statements between the braces. (b) does any function body consist of a single `pass` or `return` with no work done? — every function body in this PR performs at least one statement. (c) does the `Status` branch (lines 14-31) exit cleanly even when `$task.Triggers` is empty? — the `foreach` loop at line 26 is a no-op for an empty collection, which is correct behavior, not a stub.
 
 **E9. Constants-module exports with no importer**
