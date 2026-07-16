@@ -4,7 +4,7 @@
 
 ## The marker
 
-Adding the comment `# verify-skip` to the Bash command exempts that single commit or push from the gate. The hook (`hooks/blocking/verified_commit_gate.py`, marker constant `VERIFICATION_BYPASS_MARKER`) matches the marker anywhere in the raw command text and lets the command run without a minted verdict.
+Appending the comment `# verify-skip` as a trailing shell comment to the Bash command exempts that single commit or push from the gate. The hook (`hooks/blocking/verified_commit_gate.py`, marker constant `VERIFICATION_BYPASS_MARKER`) recognizes the marker only when its leading `#` sits at a word boundary and outside every quoted region — a genuine comment, not a data-only mention inside a quoted commit message or `gh` body — and lets the command run without a minted verdict.
 
 ## When the marker is allowed
 

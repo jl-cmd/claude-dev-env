@@ -49,6 +49,13 @@ try:
         ALL_GATED_TOOL_NAMES,
         VERIFICATION_BYPASS_MARKER,
     )
+    from config.verified_commit_gate_output_constants import (
+        GATE_HOOK_MODULE_NAME,
+        PRE_TOOL_USE_HOOK_EVENT_NAME,
+    )
+    from verified_commit_gate_parts.command_tokenization import (
+        command_carries_trailing_marker,
+    )
     from verified_commit_gate_parts.deny_payload import build_deny_payload
     from verified_commit_gate_parts.deny_reason import deny_reason_for_directory
     from verified_commit_gate_parts.gated_invocations import gated_repo_directories
@@ -64,8 +71,8 @@ except ImportError as import_error:
 def _log_and_emit_deny(deny_reason: str, tool_name: str) -> None:
     """Log the block and write the deny payload to stdout."""
     log_hook_block(
-        calling_hook_name="verified_commit_gate.py",
-        hook_event="PreToolUse",
+        calling_hook_name=GATE_HOOK_MODULE_NAME,
+        hook_event=PRE_TOOL_USE_HOOK_EVENT_NAME,
         block_reason=deny_reason,
         tool_name=tool_name if isinstance(tool_name, str) else None,
     )
@@ -76,8 +83,9 @@ def main() -> None:
     """Read the PreToolUse payload and decide whether to allow the command.
 
     Allows the command without a verdict when it carries the verification
-    bypass marker (``VERIFICATION_BYPASS_MARKER``), a manual on-the-fly
-    override; otherwise denies an unverified commit or push.
+    bypass marker (``VERIFICATION_BYPASS_MARKER``) as a genuine trailing shell
+    comment outside every quoted region, a manual on-the-fly override;
+    otherwise denies an unverified commit or push.
     """
     try:
         pretooluse_payload = json.load(sys.stdin)
@@ -89,7 +97,7 @@ def main() -> None:
     command_text = pretooluse_payload.get("tool_input", {}).get("command", "")
     if not command_text:
         return
-    if VERIFICATION_BYPASS_MARKER in command_text:
+    if command_carries_trailing_marker(command_text, VERIFICATION_BYPASS_MARKER):
         return
     session_directory = pretooluse_payload.get("cwd", ".")
     transcript_path = pretooluse_payload.get("transcript_path", "")

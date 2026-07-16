@@ -6,9 +6,10 @@ and when a fresh verification is required instead.
 """
 
 VERIFY_SKIP_ADDITIONAL_CONTEXT = (
-    "The verified-commit gate honors a one-command escape hatch: adding the "
-    "marker '# verify-skip' to the blocked command bypasses the gate for "
-    "that command only. It is allowed only when the branch surface is the "
+    "The verified-commit gate honors a one-command escape hatch: appending the "
+    "marker '# verify-skip' as a trailing shell comment (outside every quoted "
+    "region) to the blocked command bypasses the gate for that command only. "
+    "It is allowed only when the branch surface is the "
     "same code a code-verifier already passed clean and the gate is "
     "blocking on a verdict that does not cover it (an unminted verdict, "
     "staging churn, or a reverted concurrent write) — confirm the verified "

@@ -89,6 +89,38 @@ def containing_quoted_span(
     return None
 
 
+def command_carries_trailing_marker(command_text: str, marker: str) -> bool:
+    """Decide whether a marker appears as a real trailing shell comment.
+
+    ::
+
+        git commit -m "wire up" # verify-skip     -> True  (real comment)
+        git commit -m "the # verify-skip hatch"   -> False (inside quotes)
+
+    The marker counts only when its leading ``#`` sits at a word boundary and
+    outside every quoted region, so a data-only mention does not trip it.
+
+    Args:
+        command_text: The raw command string from the tool payload.
+        marker: The comment marker to detect (for example ``# verify-skip``).
+
+    Returns:
+        True when the marker begins a real trailing comment outside quotes.
+    """
+    all_quoted_spans = quoted_spans(command_text)
+    search_start = 0
+    while True:
+        marker_index = command_text.find(marker, search_start)
+        if marker_index < 0:
+            return False
+        preceding_character = command_text[marker_index - 1] if marker_index > 0 else ""
+        begins_at_word_boundary = marker_index == 0 or preceding_character.isspace()
+        is_outside_quotes = not is_inside_quoted_region(marker_index, all_quoted_spans)
+        if begins_at_word_boundary and is_outside_quotes:
+            return True
+        search_start = marker_index + 1
+
+
 def strip_token_quotes(token_text: str) -> str:
     """Remove quote characters from a token's edges.
 

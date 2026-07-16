@@ -103,3 +103,32 @@ def test_deny_payload_carries_verify_skip_additional_context(
     assert "# verify-skip" in additional_context
     assert "already passed clean" in additional_context
     assert "fresh verification" in additional_context
+
+
+def test_marker_inside_a_quoted_message_still_denies(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: pathlib.Path,
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    work_dir = _make_gated_repo(tmp_path)
+    quoted_marker_command = 'git commit -m "docs: explain the # verify-skip escape hatch"'
+    _run_gate_main(monkeypatch, quoted_marker_command, work_dir)
+    deny_payload = json.loads(capsys.readouterr().out)
+    assert deny_payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_marker_as_a_trailing_comment_bypasses(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: pathlib.Path,
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    work_dir = _make_gated_repo(tmp_path)
+    trailing_marker_command = 'git commit -m "wire up feature" # verify-skip'
+    _run_gate_main(monkeypatch, trailing_marker_command, work_dir)
+    assert capsys.readouterr().out == ""

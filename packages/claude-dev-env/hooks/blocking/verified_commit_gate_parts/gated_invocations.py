@@ -59,17 +59,36 @@ def _record_directory_option(
     return repo_directory, work_tree_directory
 
 
+def _resolved_option_value(
+    attached_value: str | None, all_following_tokens: list[str], option_index: int
+) -> str | None:
+    """Read a value-taking option's value: attached (``--opt=v``) or the next token.
+
+    An attached value is used as given, even when it is the empty string
+    (``--work-tree=``), so an empty value never falls through to read the
+    following subcommand token as the value.
+
+    Args:
+        attached_value: The ``=``-attached value, or None when none was attached.
+        all_following_tokens: Quote-stripped tokens after the ``git`` word.
+        option_index: Index of the value-taking option token.
+
+    Returns:
+        The attached value when present, otherwise the separate value token.
+    """
+    if attached_value is not None:
+        return attached_value
+    return value_after_option(all_following_tokens, option_index)
+
+
 def gated_invocation_directory(all_following_tokens: list[str]) -> tuple[bool, str | None]:
-    """Walk the tokens after a ``git`` word to its first subcommand.
+    """Walk the quote-stripped tokens after a ``git`` word to its subcommand.
 
     ``git stash push`` is not gated ("push" is an argument); ``git commit -m
     x`` is gated ("commit" sits in subcommand position).
 
-    Args:
-        all_following_tokens: Quote-stripped tokens after the ``git`` word.
-
     Returns:
-        Whether the first subcommand is gated, and its ``-C``/``--work-tree`` directory.
+        Whether the subcommand is gated, and its ``-C``/``--work-tree`` directory.
     """
     repo_directory: str | None = None
     work_tree_directory: str | None = None
@@ -78,7 +97,9 @@ def gated_invocation_directory(all_following_tokens: list[str]) -> tuple[bool, s
         each_token = all_following_tokens[token_index]
         option_name, attached_value = split_option_value(each_token)
         if option_name in VALUE_TAKING_GIT_OPTIONS:
-            option_value = attached_value or value_after_option(all_following_tokens, token_index)
+            option_value = _resolved_option_value(
+                attached_value, all_following_tokens, token_index
+            )
             repo_directory, work_tree_directory = _record_directory_option(
                 option_name, option_value, repo_directory, work_tree_directory
             )

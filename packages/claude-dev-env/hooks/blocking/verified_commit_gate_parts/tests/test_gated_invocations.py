@@ -45,3 +45,17 @@ def test_gated_repo_directories_honors_a_dash_c_flag() -> None:
 
 def test_gated_repo_directories_empty_for_a_non_gated_subcommand() -> None:
     assert gated_repo_directories("git status", "/session") == []
+
+
+def test_gated_invocation_directory_reads_an_empty_work_tree_value_not_the_subcommand() -> None:
+    is_gated, work_tree_directory = gated_invocation_directory(
+        ["--work-tree=", "commit", "-m", "x"]
+    )
+    assert is_gated
+    assert work_tree_directory == ""
+
+
+def test_gated_repo_directories_gates_an_empty_work_tree_against_the_session() -> None:
+    assert gated_repo_directories("git --work-tree= commit -m x", "/session") == [
+        os.path.join("/session", "")
+    ]
