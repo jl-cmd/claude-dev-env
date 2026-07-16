@@ -389,6 +389,36 @@ BEFORE writing:
 [12] One abstraction level throughout?
 ```
 
+## Pre-Check Loop — Validate Candidate Content Before Each Write
+
+The write gate reports every violation in one denial, so a blocked write is a poor place to find a rule. Run the checker on the candidate content first, read the verdict, fix each line, and re-run until the verdict is clean. Then call Write or Edit, and the write lands on the first try.
+
+### The two local surfaces
+
+- **`code_rules_enforcer.py --check <candidate> [--as <target>]`** — the full CODE_RULES verdict on one complete candidate file. Stage the candidate at any path and point `--as` at the real destination. The `--as` target drives every path-based decision (test-file detection, `config/` exemption, hook-infrastructure exemption), so a candidate staged in a temp folder is judged as if it sat at its destination. Exit `0` is clean or an exempt target; `1` is one or more violations, each on its own line, or an unreadable candidate; `2` is a malformed flag sequence.
+- **`run_all_validators.py`** — the validator suite over the git-changed files: Ruff, Mypy, type safety, magic values, abbreviations, and more. `--pre-tool-use` runs the same suite as a gate on one proposed write from stdin. `--health` reports whether the suite runs.
+
+Point `--as` at the file's real production path. When `--as` names an exempt path, the check returns `0` for a candidate that carries violations, so a wrong target hides the verdict you want.
+
+### The loop
+
+1. Build the full candidate content.
+2. Stage it at a temp path with the Write tool or the PowerShell tool.
+3. Run `code_rules_enforcer.py --check <staged path> --as <real destination>`.
+4. Read every reported line and fix each one in the candidate.
+5. Re-run step 3. A fix can raise a fresh violation: a magic number pulled to a module constant needs the `ALL_` collection prefix, and that rename can leave the source constant with no reader; a long function split to meet the length target can push the file past the length advisory. Loop steps 3 through 5 until the verdict is clean.
+6. Call Write or Edit with the clean content.
+
+Re-running the checker after each fix catches the rework a single pass misses, so the write clears the gate one time.
+
+### Windows shell shape
+
+Create every multi-line script with the PowerShell tool or the Write tool. A bash heredoc on Windows strips backslashes from paths and garbles multi-line Python, so a heredoc-built script fails in ways its source text hides. For a wait-for-condition step, drive a Monitor until-loop; a `sleep && tail` poll chain blocks the turn and misses the moment the condition flips.
+
+### Mining session transcripts
+
+When reading transcripts under the user projects directory, pass explicit file paths to the reader, or search through Python or `Select-String`. A `.gitignore` holding `*` in that tree makes ripgrep and Grep directory recursion return zero matches with no error, so a recursive pattern reads as a clean miss even when files match.
+
 ## Constants Protocol
 
 Decision tree before writing any constant:
