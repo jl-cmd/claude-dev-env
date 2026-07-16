@@ -42,7 +42,27 @@ each PR its own checkout with `git worktree add`. For each PR the user named:
    non-zero exit sets `copilotDisabled: true` on every entry, so each child skips
    the Copilot gate with no agent spawned.
 
-## Launch the multi-PR workflow
+## Launch
+
+Select the pacer once for the multi-PR run (same helper as single-PR):
+
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
+  --skill autoconverge \
+  --has-workflow <0|1> \
+  --has-schedule-wakeup <0|1>
+```
+
+### `pacer=portable`
+
+Do **not** call `Workflow`. For each PR worktree from pre-flight, run the
+continuous portable driver in
+[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+(serial, or host fan-out when the host can isolate workers). One teardown per
+PR after that PR reaches ready or a named blocker. Shared Copilot quota and
+permission grants from multi-PR pre-flight still apply once.
+
+### `pacer=workflow`
 
 Call the `Workflow` tool against the fan-out script, passing the absolute path of
 `converge.mjs` and one entry per PR:

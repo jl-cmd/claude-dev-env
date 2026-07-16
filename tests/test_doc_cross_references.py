@@ -284,7 +284,12 @@ AUTOCONVERGE_CONVERGE_MJS: Path = (
     / "workflow"
     / "converge.mjs"
 )
-WORKFLOW_TOOL_REQUIREMENT_PHRASE: str = "autoconverge requires the Workflow tool"
+SELECT_CONVERGE_PACER_SCRIPT: str = "select_converge_pacer.py"
+PACER_PORTABLE_TOKEN: str = "pacer=portable"
+DO_NOT_ABORT_WORKFLOW_MISSING_PHRASE: str = (
+    "Do not abort** because the Workflow tool is missing"
+)
+PORTABLE_DRIVER_DOC_NAME: str = "portable-driver.md"
 RUN_CODE_REVIEW_LENS_SIGNATURE: str = "function runCodeReviewLens"
 CODE_QUALITY_AGENT_TYPE: str = "code-quality-agent"
 REPORT_ONLY_CONFIG_PHRASE: str = (
@@ -334,9 +339,24 @@ def test_autoconverge_skill_documents_review_lens_boundary() -> None:
     skill_text = AUTOCONVERGE_SKILL_MD.read_text(encoding="utf-8")
     convergence_text = AUTOCONVERGE_CONVERGENCE_MD.read_text(encoding="utf-8")
 
-    assert WORKFLOW_TOOL_REQUIREMENT_PHRASE in skill_text, (
-        "SKILL.md Requirements must state the live Workflow-tool phrase "
-        f"({WORKFLOW_TOOL_REQUIREMENT_PHRASE!r})"
+    assert SELECT_CONVERGE_PACER_SCRIPT in skill_text, (
+        "SKILL.md Requirements must name the pacer selection helper "
+        f"({SELECT_CONVERGE_PACER_SCRIPT!r})"
+    )
+    assert PACER_PORTABLE_TOKEN in skill_text, (
+        "SKILL.md Requirements must document the portable pacer branch "
+        f"({PACER_PORTABLE_TOKEN!r})"
+    )
+    assert DO_NOT_ABORT_WORKFLOW_MISSING_PHRASE in skill_text, (
+        "SKILL.md Requirements must forbid aborting solely for a missing "
+        f"Workflow tool ({DO_NOT_ABORT_WORKFLOW_MISSING_PHRASE!r})"
+    )
+    assert PORTABLE_DRIVER_DOC_NAME in skill_text, (
+        "SKILL.md must link the shared portable driver protocol "
+        f"({PORTABLE_DRIVER_DOC_NAME!r})"
+    )
+    assert "autoconverge requires the Workflow tool" not in skill_text, (
+        "SKILL.md must not keep the abort-only Workflow-tool requirement"
     )
 
     assert AUTOCONVERGE_CONVERGE_MJS.is_file(), (

@@ -15,29 +15,38 @@ Use on **draft PR**. Cursor Bugbot and `/bugteam` re-run after each push. Fix
 findings between rounds until back-to-back clean on same `HEAD`, then mark
 PR ready for review.
 
-Run every tick in parent harness session. Pacing lives in
-[`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md) (read before Step 4); see [Pacing
-workflow](#pacing-workflow).
+Run every tick in the parent harness session. Pacing depends on the selected
+pacer from pre-flight (`select_converge_pacer.py`):
+
+- `schedule_wakeup` — [`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
+- `portable` — [`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+
+See [Pacing workflow](#pacing-workflow).
 
 Every BUGTEAM tick runs **bugteam** — never hand-rolled substitute. Fix
-protocol per [fix-protocol.md](fix-protocol.md). Pacing stays in main session via
-`ScheduleWakeup` (pre-flight aborts when absent).
+protocol per [fix-protocol.md](fix-protocol.md). Pacing stays in the main
+session (native `ScheduleWakeup` or the portable continuous driver).
 
 ## Invocation modes
 
-- **`/pr-converge`** runs one tick, then Step 4 schedules the next via
-  `ScheduleWakeup`. Omit the next wakeup only on convergence or **Stop
-  conditions**.
+- **`/pr-converge` with `pacer=schedule_wakeup`** runs one tick, then Step 4
+  schedules the next via `ScheduleWakeup`. Omit the next wakeup only on
+  convergence or **Stop conditions**.
+- **`/pr-converge` with `pacer=portable`** runs ticks continuously in-session
+  (poll waits at the same delays); write handoff at budget boundaries. See
+  the portable driver.
 
 ## Pacing workflow
 
-Read [`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
+When `pacer=schedule_wakeup`, read
+[`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
 (installed copy under `$HOME/.claude/skills/pr-converge/workflows/`) before
-Step 4. The pre-flight gate guarantees `ScheduleWakeup` is invokable; the
-workflow file specifies delays, prompts, and convergence cleanup.
+Step 4. When `pacer=portable`, read
+[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+and skip `ScheduleWakeup` calls.
 
 - **`/pr-converge`** (default): loops until convergence. After each tick
-  (unless converged or stopped), run **Step 4**.
+  (unless converged or stopped), run **Step 4** using the selected pacer.
 
 ## Step 1: Resolve current HEAD and PR context
 
@@ -508,8 +517,11 @@ base), never an invented commit range.
 
 ## Step 4: Loop pacing
 
-**`ScheduleWakeup` field hints** (prefer [Pacing
-workflow](#pacing-workflow)):
+Apply the pacer selected at pre-flight ([Pacing workflow](#pacing-workflow)).
+
+### `pacer=schedule_wakeup`
+
+**`ScheduleWakeup` field hints:**
 
 - `delaySeconds: 360` after bugbot re-trigger. Exception:
   BUGBOT inline-lag branch uses `delaySeconds: 90` (no re-trigger;
@@ -520,6 +532,21 @@ workflow](#pacing-workflow)):
 
 **On convergence:** apply **Convergence** section of
 `../workflows/schedule-wakeup-loop.md` (omit wakeups).
+
+### `pacer=portable`
+
+Do **not** call `ScheduleWakeup`. After writing state and handoff:
+
+- **Immediate work next** → continue the next tick in the same turn.
+- **Wait next** (Bugbot queued, COPILOT_WAIT with no review yet) → poll
+  in-session for the same delay (`360` default, `90` on Bugbot inline-lag),
+  then resume the same step. Honor the same hard caps as the ScheduleWakeup
+  path.
+- **Budget too low for a full tick** → stop at the tick boundary; print
+  `/pr-converge <PR URL>` and the persisted phase.
+
+Full portable rules:
+[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md).
 
 ## Bugteam execution
 
