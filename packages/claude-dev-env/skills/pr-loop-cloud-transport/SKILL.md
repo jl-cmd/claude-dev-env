@@ -1,6 +1,6 @@
 ---
 name: pr-loop-cloud-transport
-description: Runs any PR-loop skill in a Claude Code session whose gh CLI cannot act on the PR — the binary is absent, gh auth status fails, or the active login cannot act on the PR's owner. A six-step transport workflow loads the GitHub MCP schemas, fixes origin/HEAD before pushes, keys review rules to the live MCP identity, routes every GitHub operation through the gh-to-MCP substitution matrix, reads Copilot status from what lands on the PR, and self-checks the posts the gh-text hooks cannot gate. Use at run start when pr-converge, autoconverge, bugteam, qbug, findbugs, fixbugs, monitor-open-prs, or copilot-review runs in a cloud session, when `command -v gh` or `gh auth status` fails, or when an MCP tool call fails with InputValidationError.
+description: Runs any PR-loop skill in a Claude Code session whose gh CLI cannot act on the PR. Use at run start when pr-converge, autoconverge, bugteam, qbug, findbugs, fixbugs, monitor-open-prs, or copilot-review runs in a cloud session, when `command -v gh` or `gh auth status` fails, or when an MCP tool call fails with InputValidationError.
 ---
 
 # PR-loop cloud transport

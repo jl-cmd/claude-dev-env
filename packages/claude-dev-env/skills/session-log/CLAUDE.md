@@ -12,7 +12,8 @@ Produces a self-contained HTML session report shaped to the session's character 
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Hub — six steps, gotchas, backend detection, frontmatter contract, run-and-report checklist. Single-file skill; no companion files. |
+| `SKILL.md` | Hub — six steps, gotchas, backend detection, run-and-report checklist. |
+| `templates/frontmatter.md` | The session-page frontmatter contract and the Step 3 notes block. |
 
 ## Six steps
 

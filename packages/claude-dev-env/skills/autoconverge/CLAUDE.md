@@ -21,6 +21,7 @@ Drives one draft PR to convergence in a single autonomous workflow run. Each rou
 | `workflow/convergence_summary.py` | Builds the convergence-summary agent prompt over the merged findings. |
 | `workflow/render_report.py` | Builds the closing HTML report from the merged journal and summary. |
 | `reference/convergence.md` | Round shape: the static sweep, the three parallel internal lenses, deduplication, fix commit, the terminal Bugbot, Copilot, and Codex gates, and the ready definition. |
+| `reference/copilot-findings.md` | The Copilot gate tiering, per-finding verification, and the `userReview` return contract. |
 | `reference/stop-conditions.md` | Every way the run ends short of ready, including the budget stop. |
 | `reference/gotchas.md` | Hard-won failure lessons. |
 | `reference/closing-report.md` | The closing HTML report: data source, build steps, publishing. |

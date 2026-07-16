@@ -1,13 +1,11 @@
 ---
 name: copilot-finding-triage
 description: >-
-  Sorts each Copilot gate finding from a converge run into one of two tiers, then
-  verifies each code concern with an executed check before routing it: a
-  self-healing finding is auto-fixed, pushed, and counted toward convergence with
-  no user page; a confirmed or refuted code concern is handled by the run with its
-  check evidence; only a code concern the check leaves inconclusive pages the user
-  over ntfy and holds the run behind a 45-minute gate. Triggers: 'copilot finding
-  triage', 'user review gate', 'tier copilot findings', 'triage the copilot gate'.
+  Tiers each Copilot gate finding from a converge run, verifies each code concern
+  with an executed check, then routes it — auto-fix a self-healing finding,
+  resolve a refuted one, page the user only for an inconclusive one. Triggers:
+  'copilot finding triage', 'user review gate', 'tier copilot findings', 'triage
+  the copilot gate'.
 ---
 
 # Copilot Finding Triage

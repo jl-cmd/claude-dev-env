@@ -6,6 +6,7 @@ Reference documents for the `pr-converge` skill. These files define the per-tick
 
 | File | Purpose |
 |---|---|
+| `progress-checklist.md` | The per-tick eleven-step checklist (Step 0 open → Step 11 report), each step pointing to its spoke file |
 | `per-tick.md` | Step-by-step procedure for one tick (resolve HEAD, run the internal CODE_REVIEW and BUGTEAM phases, then the terminal BUGBOT and COPILOT_WAIT gates, schedule next wakeup) |
 | `convergence-gates.md` | Six gates that must all pass before the PR is marked ready for review |
 | `fix-protocol.md` | pr-converge deltas on the `pr-fix-protocol` skill: multi-PR teammate obligations and the same-tick bugbot re-trigger rule |
