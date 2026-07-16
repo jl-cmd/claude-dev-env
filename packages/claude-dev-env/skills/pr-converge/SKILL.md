@@ -27,6 +27,14 @@ skill through its substitution matrix.
 
 ## Pre-flight
 
+### Task list (step 1)
+
+After down/opt-out flags are known, build the work list with
+`build_converge_task_list.py` only (same script as autoconverge). Register every
+task; **final task** is always `all_runnable_reviews_clean_same_head`. Complete
+that final task only when every runnable review is CLEAN on the same HEAD.
+On `pacer=portable`, `open-run` returns the same list.
+
 ### Pacer selection
 
 Scan the tool list for `ScheduleWakeup`. Record whether it is present, then

@@ -1,14 +1,27 @@
 # Portable converge driver
 
-Shared pacer path for `/pr-converge` and `/autoconverge` when the host has no
-Claude-native pacer. One converge product: same phase machine, same helpers,
-same `check_convergence.py` ready definition. The host only changes **how**
-the loop advances, not **whether** it may run.
+**Rule: deterministic control is script-only.** Phase transitions, wait delays,
+clean stamps, ready decisions, task lists, and “what next” never live as prose
+for the agent to invent. The agent runs scripts, reads JSON, and only performs
+judgment steps the JSON names.
+
+## Step 1 — task list (every autoconverge / portable run)
+
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/build_converge_task_list.py" \
+  [--bugbot-down 0|1] [--copilot-down 0|1] \
+  [--codex-down 0|1] [--codex-required 0|1]
+```
+
+Register every `tasks[]` entry on the session task list. **Final task id is
+always** `all_runnable_reviews_clean_same_head`. The run is complete only when
+that final task is completed: every runnable code review is CLEAN on one
+shared HEAD. Do not invent tasks in prose.
+
+`open-run` embeds the same list (`tasks`, `runnable_review_ids`,
+`final_task_id`, `done_when`).
 
 ## Pacer selection
-
-Before pre-flight, scan the tool list and select a pacer. The helper makes the
-rule mechanical:
 
 ```
 python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
@@ -17,130 +30,63 @@ python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
   --has-schedule-wakeup <0|1>
 ```
 
-Stdout is one JSON object with `pacer` one of:
+When `pacer` is not `portable`, use the skill’s native Workflow or
+ScheduleWakeup path. When `pacer=portable`, use the control script below.
 
-| `pacer` | When | How the loop advances |
-|---|---|---|
-| `workflow` | `autoconverge` and tool list includes `Workflow` | `workflow/converge.mjs` via the Workflow tool |
-| `schedule_wakeup` | `pr-converge` and tool list includes `ScheduleWakeup` | One tick per invocation; next tick via `ScheduleWakeup` |
-| `portable` | Native pacer for that skill is absent | This document: continuous in-session ticks |
+## Control script
 
-Fail closed only when the PR or repo contract cannot be met (auth, wrong
-worktree, unresolvable gates). **Never** abort solely because `Workflow` or
-`ScheduleWakeup` is missing.
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/portable_converge_driver.py" <command> ...
+```
 
-Both entry skills remain valid on a portable host: `/autoconverge` and
-`/pr-converge` each complete when invoked. On `pacer=portable`, both drive the
-same continuous tick loop below. Autoconverge's Claude-host Workflow path and
-its parallel-lens round shape stay available when `Workflow` is present.
+Stdout JSON: `status`, `next`, `phase`, `state_file`, optional `commands`,
+`wait_seconds`, `blocker`, and on `open-run` the task-list fields. Exit `0` =
+ok; `1` = contract failure; `2` = usage error.
 
-## What the portable path reuses
-
-| Concern | Source of truth |
+| Command | Deterministic effect |
 |---|---|
-| Phase machine (CODE_REVIEW → BUGTEAM → BUGBOT → gates → ready) | `pr-converge/SKILL.md` progress checklist + `pr-converge/reference/per-tick.md` |
-| Code-review lens | `python "$HOME/.claude/scripts/invoke_code_review.py" --cwd <PR-worktree> --session-model <alias>` (ThirdParty → Claude chain) |
-| Bugteam audit / fix workers | `bugteam` skill; workers via `resolve_worker_spawn.py` (Grok headless, then Claude headless on third-party) |
-| Fix commit, push, reply, resolve | `_shared/pr-loop/fix-protocol.md` + skill deltas |
-| External gate opt-out / down | `CLAUDE_REVIEWS_DISABLED`, `--bugbot-down`, `--copilot-down`, `--codex-down`, `reviewer-gates` |
-| Ready definition | `pr-converge/scripts/check_convergence.py` exit 0, then mark ready. That script shells out to `gh`; it needs a working `gh` in the session. On a cloud host without `gh`, either build a fixture snapshot from MCP reads and pass `--fixture`, or apply the `pr-loop-cloud-transport` readiness equivalent before mark-ready. |
-| Open / close | `pr-loop-lifecycle` |
-| Durable resume | `write_handoff.py` under `~/.claude/runtime/pr-loop/` |
+| `open-run` | Require `portable`; preflight; seed state + task list; next=`run_code_review` |
+| `after-code-review` | From returncode / dirty_tree / served_command |
+| `after-bugteam` | From pushed / converged |
+| `after-bugbot` | From classification / inline lag |
+| `after-copilot-wait` | From review surfaced / wait cap |
+| `after-ready-check` | From check_convergence exit |
+| `show-state` | Echo state |
 
-Do not invent ad-hoc review or fix spawns when these helpers exist.
+## Agent loop (judgment only)
 
-## Session bound (honest limit)
+1. Run the driver command for the current step.
+2. If JSON `commands` is non-empty, run that argv (scripted helper).
+3. Map JSON `next` to the single judgment action; report back via the matching
+   `after-*` command.
+4. Mark session tasks complete only when the scripted stamps say so; complete
+   the final task only when every runnable review is clean on the same HEAD.
 
-A portable run lives inside **one agent session**. There is no durable
-host-level wake outside that session. Budget and context therefore bound how
-many ticks complete before a handoff.
+| `next` | Agent does | Report with |
+|---|---|---|
+| `run_code_review` | Run `commands` | `after-code-review` |
+| `apply_fixes_and_push` | Fix protocol; commit; push | re-review then `after-code-review` |
+| `run_bugteam` | resolve_worker_spawn / bugteam body | `after-bugteam` |
+| `run_bugbot_gate` | Bugbot helper scripts | `after-bugbot` |
+| `request_copilot_review` | Request Copilot | `after-copilot-wait` |
+| `poll_wait` | Sleep `wait_seconds` only | re-poll then after-* |
+| `check_ready` | Run `commands` (check_convergence) | `after-ready-check` |
+| `mark_ready` | Run `commands` (`gh pr ready`) | teardown |
+| `stop_blocked` | Teardown; print blocker | stop |
 
-- Drive ticks continuously while budget covers a full clean tick (same rule as
-  pr-converge budget-aware boundaries).
-- When budget does not cover another full tick, **stop at a tick boundary**:
-  write `pr-converge-state.json`, write the durable handoff, print the resume
-  command (`/pr-converge <PR URL>` or `/autoconverge <PR URL>`), and end.
-- `check_convergence.py` re-derives readiness from live PR state. A fresh
-  session that resumes from handoff does not trust a prior "clean" claim
-  without re-running the gate on the live HEAD.
-- Wait phases (Bugbot CI, Copilot review surface) use **in-session poll** at the
-  same delays the ScheduleWakeup path uses (`360` seconds default; `90` seconds
-  on the Bugbot inline-lag branch). When the session cannot hold a long poll,
-  write handoff and stop rather than skipping the wait and inventing a clean.
+## Helpers (scripted)
 
-## Isolation and worktree
+| Concern | Script |
+|---|---|
+| Task list | `build_converge_task_list.py` |
+| Pacer | `select_converge_pacer.py` |
+| Worktree | `preflight_worktree.py` |
+| Code review | `$HOME/.claude/scripts/invoke_code_review.py` |
+| Workers | `$HOME/.claude/scripts/resolve_worker_spawn.py` |
+| Ready | `pr-converge/scripts/check_convergence.py` |
+| Handoff | `write_handoff.py` |
 
-1. When the tool list includes `EnterWorktree`, call it (same contract as the
-   Claude-host skills).
-2. When `EnterWorktree` is absent, isolate with git worktree machinery:
-   - Prefer an existing worktree already on the PR head ref under
-     `.claude/worktrees/` (or another dedicated worktree path).
-   - Otherwise `git fetch origin <headRefName>` and
-     `git worktree add <path> <headRefName>` (or `gh pr checkout <N>` into a
-     dedicated directory), then `cd` into that checkout.
-3. Confirm the working directory is the PR's own repo on the PR head SHA:
-   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <O> --repo <R> --mode strict`.
-   Non-zero exit → report the `ABORT` line and stop.
-4. Cross-repo routing follows pr-converge Step 1.5: every local review and edit
-   runs with cwd set to the **PR worktree**.
+## Fail closed
 
-## Continuous tick loop
-
-After transport check, PR scope, isolation, permission grant, and the once-per-run
-Copilot quota pre-check:
-
-1. Seed or restore state (`pr-converge-state.json` and/or handoff `state-copy.json`).
-2. Run **one full tick** from the pr-converge progress checklist for the current
-   `phase` (CODE_REVIEW entry each new HEAD after a fix push).
-3. On tick exit that needs another tick (non-terminal):
-   - Write state and handoff.
-   - If the next step is a **wait** (Bugbot queued, COPILOT_WAIT with no review
-     yet), poll in-session for the configured delay, then continue at the same
-     step; honor the same hard caps (`copilot_wait_count >= 3`, Bugbot down
-     detection, etc.).
-   - If the next step is **immediate work**, continue in the same turn without
-     sleeping.
-4. On convergence (`check_convergence.py` exit 0 + mark ready) or a named
-   stop condition: run `pr-loop-lifecycle` Close, print the entry skill's exit
-   block, omit further pacing.
-5. External reviewers remain skippable the same way as Claude-host runs when
-   opted out or down.
-
-## Autoconverge entry on portable pacer
-
-When `/autoconverge` selects `pacer=portable`:
-
-- Complete autoconverge pre-flight (scope, draft ownership, strict worktree,
-  grant, Copilot quota).
-- Drive the continuous tick loop above (pr-converge phase machine) until ready
-  or a documented blocker.
-- Skip `Workflow({ scriptPath: converge.mjs })` — that path requires the
-  Workflow tool.
-- Teardown uses the lifecycle Close path; the Workflow-only closing HTML
-  journal report is optional and skipped when no workflow run id exists.
-- Resume command on handoff: `/autoconverge <PR URL>`.
-
-When `/autoconverge` selects `pacer=workflow`, follow the skill's Workflow
-sections unchanged.
-
-## Exit shapes
-
-Portable runs print the entry skill's final report block:
-
-```
-/pr-converge exit: converged|blocked
-Loops: <N>
-Final commit: <SHA>
-```
-
-or
-
-```
-/autoconverge exit: converged|blocked
-Rounds: <N>
-Final commit: <finalSha>
-Blocker: <blocker>   # only when blocked
-```
-
-A blocked exit names a contract or gate blocker (auth, worktree, hard
-mergeability, wait cap, budget handoff) — never "tool missing."
+Contract failures only (auth, worktree, unresolvable gates, wait caps). Never
+“tool missing” for Workflow/ScheduleWakeup after pacer=`portable`.

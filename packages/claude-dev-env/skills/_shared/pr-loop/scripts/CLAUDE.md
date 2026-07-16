@@ -15,6 +15,7 @@ Python scripts that run the PR audit-fix loop at runtime. Both `bugteam` and `pr
 | `teardown_worktrees.py` | Removes per-PR worktrees after a clean loop exit. |
 | `write_handoff.py` | Writes durable resume-handoff files under the run's `~/.claude/runtime/pr-loop` directory at each converge checkpoint. |
 | `select_converge_pacer.py` | Selects `workflow`, `schedule_wakeup`, or `portable` for pr-converge / autoconverge from host tool flags. |
+| `build_converge_task_list.py` | Step-1 task list: runnable review gates + final all_runnable_reviews_clean_same_head. |
 | `portable_converge_driver.py` | portable_converge_driver phase machine: open-run and post-step transitions emit JSON next/commands only. |
 | `_path_resolver.py` | Resolves workspace and worktree paths from PR owner, repo, and number. |
 | `_cli_utils.py` | Shared CLI argument parsing helpers (argparse wrappers). |

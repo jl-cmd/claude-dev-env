@@ -50,6 +50,7 @@ _self_dir = Path(__file__).resolve().parent
 if str(_self_dir) not in sys.path:
     sys.path.insert(0, str(_self_dir))
 
+from build_converge_task_list import build_converge_task_list  # noqa: E402
 from select_converge_pacer import (  # noqa: E402
     parse_bool_flag,
     select_converge_pacer,
@@ -75,6 +76,8 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     CLI_BUGBOT_DOWN_FLAG,
     CLI_CHECK_CONVERGENCE_EXIT_FLAG,
     CLI_CLASSIFICATION_FLAG,
+    CLI_CODEX_DOWN_FLAG,
+    CLI_CODEX_REQUIRED_FLAG,
     CLI_CONVERGED_FLAG,
     CLI_COPILOT_DOWN_FLAG,
     CLI_CURRENT_HEAD_FLAG,
@@ -343,6 +346,7 @@ def _finish_ok(
     all_commands: list[str],
     wait_seconds: int | None,
     blocker: str | None,
+    all_extra_fields: Mapping[str, object] | None = None,
 ) -> tuple[dict[str, object], int]:
     save_state(state_file, all_state)
     all_payload = _base_ok_payload(all_state, state_file)
@@ -352,6 +356,8 @@ def _finish_ok(
         all_payload[RESULT_KEY_WAIT_SECONDS] = wait_seconds
     if blocker is not None:
         all_payload[RESULT_KEY_BLOCKER] = blocker
+    if all_extra_fields is not None:
+        all_payload.update(dict(all_extra_fields))
     return all_payload, EXIT_SUCCESS
 
 
@@ -412,6 +418,53 @@ def _read_git_head(
     return head_process.stdout.strip(), None, EXIT_SUCCESS
 
 
+def _seed_open_run_task_list_and_finish(
+    *,
+    current_head: str,
+    entry_skill: str,
+    is_copilot_down: bool,
+    is_bugbot_down: bool,
+    is_codex_down: bool,
+    is_codex_required: bool,
+    owner: str,
+    repo: str,
+    pr_number: int,
+    state_file: Path,
+    cwd_path: Path,
+    session_model: str,
+) -> tuple[dict[str, object], int]:
+    all_task_list = build_converge_task_list(
+        is_bugbot_down=is_bugbot_down,
+        is_copilot_down=is_copilot_down,
+        is_codex_down=is_codex_down,
+        is_codex_required=is_codex_required,
+    )
+    all_state = build_initial_state(
+        current_head=current_head,
+        entry_skill=entry_skill,
+        is_copilot_down=is_copilot_down,
+        is_bugbot_down=is_bugbot_down,
+        owner=owner,
+        repo=repo,
+        pr_number=pr_number,
+    )
+    all_state["tasks"] = all_task_list["tasks"]
+    all_state["final_task_id"] = all_task_list["final_task_id"]
+    all_state["runnable_review_ids"] = all_task_list["runnable_review_ids"]
+    all_state["done_when"] = all_task_list["done_when"]
+    return _finish_ok(
+        all_state,
+        state_file,
+        next_action=NEXT_RUN_CODE_REVIEW,
+        all_commands=_code_review_commands(
+            cwd_path=cwd_path, session_model=session_model
+        ),
+        wait_seconds=None,
+        blocker=None,
+        all_extra_fields=all_task_list,
+    )
+
+
 def run_open_run(
     *,
     entry_skill: str,
@@ -425,8 +478,10 @@ def run_open_run(
     session_model: str,
     is_copilot_down: bool,
     is_bugbot_down: bool,
+    is_codex_down: bool = False,
+    is_codex_required: bool = False,
 ) -> tuple[dict[str, object], int]:
-    """Select pacer, require portable, preflight worktree, seed state.
+    """Select pacer, require portable, preflight worktree, seed state + tasks.
 
     Args:
         entry_skill: Converge entry skill name.
@@ -438,11 +493,15 @@ def run_open_run(
         cwd_path: PR worktree path.
         state_dir: Directory for ``pr-converge-state.json``.
         session_model: Alias passed to invoke_code_review.
-        is_copilot_down: Skip Copilot for the run.
-        is_bugbot_down: Skip Bugbot for the run.
+        is_copilot_down: Skip Copilot as a runnable review.
+        is_bugbot_down: Skip Bugbot as a runnable review.
+        is_codex_down: Skip Codex as a runnable review.
+        is_codex_required: Codex is required by usage/policy for this run.
 
     Returns:
-        Payload and process exit code.
+        Payload and process exit code. Payload includes the scripted task list
+        from ``build_converge_task_list.py``; final task is all runnable reviews
+        CLEAN on the same HEAD.
     """
     selection = select_converge_pacer(
         entry_skill=entry_skill,
@@ -469,25 +528,19 @@ def run_open_run(
             "git rev-parse HEAD failed", blocker=BLOCKER_PREFLIGHT
         ), head_exit
     state_dir.mkdir(parents=True, exist_ok=True)
-    state_file = state_dir / STATE_FILENAME
-    all_state = build_initial_state(
+    return _seed_open_run_task_list_and_finish(
         current_head=current_head,
         entry_skill=selection.entry_skill,
         is_copilot_down=is_copilot_down,
         is_bugbot_down=is_bugbot_down,
+        is_codex_down=is_codex_down,
+        is_codex_required=is_codex_required,
         owner=owner,
         repo=repo,
         pr_number=pr_number,
-    )
-    return _finish_ok(
-        all_state,
-        state_file,
-        next_action=NEXT_RUN_CODE_REVIEW,
-        all_commands=_code_review_commands(
-            cwd_path=cwd_path, session_model=session_model
-        ),
-        wait_seconds=None,
-        blocker=None,
+        state_file=state_dir / STATE_FILENAME,
+        cwd_path=cwd_path,
+        session_model=session_model,
     )
 
 
@@ -945,16 +998,9 @@ def run_after_ready_check(
     )
 
 
-def build_argument_parser() -> argparse.ArgumentParser:
-    """Build the multi-command CLI parser.
-
-    Returns:
-        Configured argument parser.
-    """
-    parser = argparse.ArgumentParser(description=CLI_DESCRIPTION)
-    all_subparsers = parser.add_subparsers(dest="command", required=True)
-
-    open_run_parser = all_subparsers.add_parser(COMMAND_OPEN_RUN)
+def _register_open_run_arguments(
+    open_run_parser: argparse.ArgumentParser,
+) -> None:
     open_run_parser.add_argument(CLI_SKILL_FLAG, required=True)
     open_run_parser.add_argument(CLI_HAS_WORKFLOW_FLAG, required=True)
     open_run_parser.add_argument(CLI_HAS_SCHEDULE_WAKEUP_FLAG, required=True)
@@ -968,6 +1014,21 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     open_run_parser.add_argument(CLI_COPILOT_DOWN_FLAG, default="0")
     open_run_parser.add_argument(CLI_BUGBOT_DOWN_FLAG, default="0")
+    open_run_parser.add_argument(CLI_CODEX_DOWN_FLAG, default="0")
+    open_run_parser.add_argument(CLI_CODEX_REQUIRED_FLAG, default="0")
+
+
+def build_argument_parser() -> argparse.ArgumentParser:
+    """Build the multi-command CLI parser.
+
+    Returns:
+        Configured argument parser.
+    """
+    parser = argparse.ArgumentParser(description=CLI_DESCRIPTION)
+    all_subparsers = parser.add_subparsers(dest="command", required=True)
+
+    open_run_parser = all_subparsers.add_parser(COMMAND_OPEN_RUN)
+    _register_open_run_arguments(open_run_parser)
 
     after_review_parser = all_subparsers.add_parser(COMMAND_AFTER_CODE_REVIEW)
     after_review_parser.add_argument(CLI_STATE_FILE_FLAG, required=True)
@@ -1028,6 +1089,8 @@ def _dispatch_open_run(
         session_model=parsed_arguments.session_model,
         is_copilot_down=parse_bool_flag(parsed_arguments.copilot_down),
         is_bugbot_down=parse_bool_flag(parsed_arguments.bugbot_down),
+        is_codex_down=parse_bool_flag(parsed_arguments.codex_down),
+        is_codex_required=parse_bool_flag(parsed_arguments.codex_required),
     )
 
 

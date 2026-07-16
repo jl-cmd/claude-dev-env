@@ -100,6 +100,8 @@ CLI_REVIEW_SURFACED_FLAG: str = "--review-surfaced"
 CLI_INLINE_LAG_FLAG: str = "--inline-lag"
 CLI_BUGBOT_DOWN_FLAG: str = "--bugbot-down"
 CLI_COPILOT_DOWN_FLAG: str = "--copilot-down"
+CLI_CODEX_DOWN_FLAG: str = "--codex-down"
+CLI_CODEX_REQUIRED_FLAG: str = "--codex-required"
 CLI_CURRENT_HEAD_FLAG: str = "--current-head"
 CLI_CHECK_CONVERGENCE_EXIT_FLAG: str = "--check-exit"
 

@@ -83,6 +83,22 @@ orchestrating session's own steps, and the script's agent-prompt text carries
 
 ## Pre-flight (main session)
 
+0. **Build the task list (step 1 of every run).** After Copilot quota / down
+   flags and Codex required/down are known, run only:
+
+   ```
+   python "$HOME/.claude/skills/_shared/pr-loop/scripts/build_converge_task_list.py" \
+     --bugbot-down <0|1> --copilot-down <0|1> \
+     --codex-down <0|1> --codex-required <0|1>
+   ```
+
+   Register every `tasks[]` entry on the session task list. **Final task** is
+   always `all_runnable_reviews_clean_same_head` (`done_when` in the JSON).
+   The run is complete only when that final task is completed — all runnable
+   code reviews CLEAN on the same HEAD. Do not invent tasks in prose. On
+   `pacer=portable`, `open-run` returns the same list; still register it as
+   step 1 before driving reviews.
+
 1. **Enter a worktree.** When `EnterWorktree` is in the tool list, call it with
    no arguments before any `gh`, `git`, file read, or edit. `gh`/`git` Bash
    calls do not auto-isolate, so isolation is mandatory. If it fails, report
