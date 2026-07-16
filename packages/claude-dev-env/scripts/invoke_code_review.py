@@ -59,6 +59,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     CHAIN_CONFIG_ERROR_EXIT_CODE,
 )
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
+    ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS,
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
     CODE_REVIEW_PROMPT,
@@ -296,6 +297,11 @@ def _run_claude_with_empty_stdin(
                 timeout_for_run = float(maybe_timeout)
             else:
                 timeout_for_run = None
+            forwarded_text_codec = {
+                each_key: all_keywords[each_key]
+                for each_key in ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS
+                if each_key in all_keywords
+            }
             completed_process: subprocess.CompletedProcess[str] = previous_runner(
                 all_invocation_tokens,
                 capture_output=True,
@@ -304,6 +310,7 @@ def _run_claude_with_empty_stdin(
                 check=False,
                 stdin=subprocess.DEVNULL,
                 cwd=working_directory_path,
+                **forwarded_text_codec,
             )
             return completed_process
 
