@@ -26,6 +26,7 @@ packages = [
     "codex_review_scripts_constants",
     "dev_env_scripts_constants",
     "advisor_scripts_constants",
+    "fresh_branch_scripts_constants",
 ]
 
 [tool.setuptools.package-dir]
@@ -41,3 +42,4 @@ copilot_finding_triage_constants = "skills/copilot-finding-triage/scripts/copilo
 codex_review_scripts_constants = "skills/codex-review/scripts/codex_review_scripts_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
 advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"
+fresh_branch_scripts_constants = "skills/fresh-branch/scripts/fresh_branch_scripts_constants"
