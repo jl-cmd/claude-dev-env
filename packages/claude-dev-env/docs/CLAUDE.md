@@ -14,6 +14,9 @@ Reference documentation installed into `~/.claude/docs/` by `bin/install.mjs`. T
 | `PR_DESCRIPTION_GUIDE.md` | Authoritative reference for the `pr-description-writer` agent; PR body shapes derived from a 120-PR Anthropic corpus |
 | `DJANGO_PATTERNS.md` | Django-specific coding patterns |
 | `REACT_PATTERNS.md` | React-specific coding patterns |
+| `agent-spawn-protocol.md` | Full agent-spawn protocol behind the `rules/agent-spawn-protocol.md` kernel: context-sufficiency check, `/prompt-generator` prompt crafting, and the spawn step |
+| `nas-ssh-invocation.md` | Full NAS ssh policy behind the `rules/nas-ssh-invocation.md` kernel: the OpenSSH binary form, config sources, and hook enforcement |
+| `worker-completion-gate.md` | Full worker-completion gate behind the `rules/workers-done-before-complete.md` kernel: the checklist, examples, and run-state records |
 
 ## Subdirectory
 
