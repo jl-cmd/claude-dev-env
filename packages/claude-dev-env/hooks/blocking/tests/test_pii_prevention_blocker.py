@@ -142,7 +142,6 @@ def test_commit_with_missing_local_identity_still_blocks_the_value(
     assert deny_reason is not None
     assert "email" in deny_reason
 
-
 def _init_repo_with_staged_pii(repository_root: Path) -> None:
     repository_root.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-q"], cwd=repository_root, check=True)
