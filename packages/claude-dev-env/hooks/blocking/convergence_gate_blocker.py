@@ -19,10 +19,13 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from hooks_constants.convergence_gate_blocker_constants import (  # noqa: E402
+    ALL_GH_PR_VIEW_NUMBER_COMMAND,
     COMMAND_SEPARATOR_PATTERN,
     GH_PR_READY_ANCHOR_PATTERN,
+    GH_REPO_FLAG,
     PR_URL_OWNER_REPO_NUMBER_PATTERN,
     REPO_OVERRIDE_FLAG_PATTERN,
+    REPO_SLUG_TEMPLATE,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
@@ -69,22 +72,25 @@ def _resolve_target_identity(command: str, cwd: str | None) -> tuple[str, str, i
 
     A full PR URL in the command yields all three. A --repo/-R flag yields
     the repository while the PR number resolves from the command number or
-    the cwd. With neither present, both the repository and the number
-    resolve from the cwd.
+    the named repository's current-branch PR. With neither present, both the
+    repository and the number resolve from the cwd.
     """
     ready_segment = _ready_command_segment(command)
     pr_url_identity = _parse_pr_url(ready_segment)
     if pr_url_identity is not None:
         return pr_url_identity
 
-    pr_number = _resolve_pr_number(ready_segment, cwd)
+    repo_flag_identity = _parse_repo_flag(ready_segment)
+    from_owner: str | None = None
+    from_repo: str | None = None
+    if repo_flag_identity is not None:
+        from_owner, from_repo = repo_flag_identity
+    pr_number = _resolve_pr_number(ready_segment, cwd, from_owner, from_repo)
     if pr_number is None:
         return None
 
-    repo_flag_identity = _parse_repo_flag(ready_segment)
-    if repo_flag_identity is not None:
-        flag_owner, flag_repo = repo_flag_identity
-        return flag_owner, flag_repo, pr_number
+    if from_owner is not None and from_repo is not None:
+        return from_owner, from_repo, pr_number
 
     cwd_identity = _resolve_owner_repo(cwd)
     if cwd_identity is None:
@@ -93,13 +99,25 @@ def _resolve_target_identity(command: str, cwd: str | None) -> tuple[str, str, i
     return cwd_owner, cwd_repo, pr_number
 
 
-def _resolve_pr_number(command: str, cwd: str | None) -> int | None:
+def _resolve_pr_number(
+    command: str,
+    cwd: str | None,
+    from_owner: str | None,
+    from_repo: str | None,
+) -> int | None:
     direct_match = re.search(r"\bgh\s+pr\s+ready\s+(\d+)", command)
     if direct_match:
         return int(direct_match.group(1))
+    all_view_arguments = list(ALL_GH_PR_VIEW_NUMBER_COMMAND)
+    if from_owner is not None and from_repo is not None:
+        all_view_arguments = [
+            *all_view_arguments,
+            GH_REPO_FLAG,
+            REPO_SLUG_TEMPLATE.format(owner=from_owner, repo=from_repo),
+        ]
     try:
         completed_process = subprocess.run(
-            ["gh", "pr", "view", "--json", "number", "--jq", ".number"],
+            all_view_arguments,
             capture_output=True,
             text=True,
             cwd=cwd or None,

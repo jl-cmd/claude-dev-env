@@ -53,15 +53,32 @@ def test_does_not_match_gh_issue_close() -> None:
 
 
 def test_extracts_pr_number_from_command() -> None:
-    assert _resolve_pr_number("gh pr ready 418", None) == 418
+    assert _resolve_pr_number("gh pr ready 418", None, None, None) == 418
 
 
 def test_extracts_pr_number_with_flags() -> None:
-    assert _resolve_pr_number("gh pr ready 99 --undo", None) == 99
+    assert _resolve_pr_number("gh pr ready 99 --undo", None, None, None) == 99
 
 
 def test_returns_none_when_no_number_and_no_repo() -> None:
-    assert _resolve_pr_number("gh pr ready", "/nonexistent/path") is None
+    assert _resolve_pr_number("gh pr ready", "/nonexistent/path", None, None) is None
+
+
+def test_number_resolution_binds_gh_view_to_named_repo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_commands: list[list[str]] = []
+
+    def fake_run(all_arguments: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured_commands.append(all_arguments)
+        return subprocess.CompletedProcess(args=all_arguments, returncode=0, stdout="500\n", stderr="")
+
+    monkeypatch.setattr(hook_module.subprocess, "run", fake_run)
+    assert _resolve_pr_number("gh pr ready", None, "flag-owner", "flag-repo") == 500
+    assert captured_commands
+    for each_command in captured_commands:
+        assert "--repo" in each_command
+        assert "flag-owner/flag-repo" in each_command
 
 
 def test_matches_gh_pr_ready_in_compound_command() -> None:

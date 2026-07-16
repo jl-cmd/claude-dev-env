@@ -34,3 +34,15 @@ PR_URL_OWNER_REPO_NUMBER_PATTERN: str = (
 REPO_OVERRIDE_FLAG_PATTERN: str = (
     r"(?:^|\s)(?:--repo|-R)(?:=|\s+)(?:[\w.-]+/)*(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)"
 )
+
+ALL_GH_PR_VIEW_NUMBER_COMMAND: tuple[str, ...] = (
+    "gh",
+    "pr",
+    "view",
+    "--json",
+    "number",
+    "--jq",
+    ".number",
+)
+GH_REPO_FLAG: str = "--repo"
+REPO_SLUG_TEMPLATE: str = "{owner}/{repo}"
