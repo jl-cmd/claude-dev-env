@@ -1,9 +1,11 @@
 # Full Python + JS test suites on every PR and main push.
 #
-# Path filters (dorny/paths-filter, per-job): pure root-docs / inert-path PRs skip
-# the python and javascript jobs. Push to main always runs the full suite.
-# v1 keeps all of packages/claude-dev-env/** in both filters because package
-# markdown is fixture-bearing.
+# Path filters (dorny/paths-filter, per-job): the package-suite, root-suite, and
+# javascript jobs each run only when their filter matches on a PR; push to main
+# always runs the full suite. The root-suite filter adds docs, scripts, and
+# workflow paths on top of the package-suite filter, so a docs-only PR runs the
+# root suite and skips the package suite. All of packages/claude-dev-env/** stays
+# in every filter because package markdown is fixture-bearing.
 #
 # Absorbs the former path-filter job (ci-sync-ai-rules.yml): the full root suite
 # covers tests/test_sync_ai_rules.py and tests/test_fan_out_dispatch.py on every
@@ -19,14 +21,11 @@
 #   - Issue #21 listed hooks/blocking/test_gh_artifact_upload.py; amended to the
 #     real path packages/claude-dev-env/scripts/tests/test_gh_artifact_upload.py.
 #
-# Quality gate (#23): runs packages/claude-dev-env/scripts/check.ps1 (ruff + mypy
-# + enforcer pytest). CI builds PYTEST_ADDOPTS from the same four .github/ci/
-# deselect lists so the gate matches the documented deselect set. Local
-# `check.ps1` without PYTEST_ADDOPTS may run more tests — deliberate: the CI
-# gate is script + tools + documented deselect set, not a strict local mirror.
-# check.ps1 runs pytest from hooks/blocking with relative file globs; node IDs
-# stay full repo-relative paths (pytest rootdir is the monorepo root), so no
-# prefix stripping is required for deselects to match.
+# Quality gate (#23): runs packages/claude-dev-env/scripts/check.ps1 -SkipTests
+# (ruff + mypy). The enforcer pytest suite runs in the package-suite job under
+# the same event gating, so the quality gate carries the static-analysis tools
+# only. The bare local `check.ps1` (no -SkipTests) stays the full ruff + mypy +
+# pytest gate.
 #
 # basetemp lives under RUNNER_TEMP (not OS temp root, not inside the repo) so
 # is_ephemeral_script_path Linux exemptions do not treat pytest temp paths as
@@ -54,8 +53,10 @@ jobs:
   changes:
     name: Detect path changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
-      python: ${{ steps.filter.outputs.python }}
+      package_suite: ${{ steps.filter.outputs.package_suite }}
+      root_suite: ${{ steps.filter.outputs.root_suite }}
       javascript: ${{ steps.filter.outputs.javascript }}
     steps:
       - uses: actions/checkout@v5
@@ -64,7 +65,7 @@ jobs:
         id: filter
         with:
           filters: |
-            python:
+            package_suite:
               - '**/*.py'
               - 'pytest.ini'
               - 'pyproject.toml'
@@ -75,6 +76,21 @@ jobs:
               - '.github/ci/**'
               - 'AGENTS.md'
               - 'config/**'
+            root_suite:
+              - '**/*.py'
+              - 'pytest.ini'
+              - 'pyproject.toml'
+              - 'packages/claude-dev-env/**'
+              - 'tests/**'
+              - '.github/scripts/**'
+              - '.github/workflows/ci-tests.yml'
+              - '.github/ci/**'
+              - 'AGENTS.md'
+              - 'config/**'
+              - 'docs/**'
+              - 'scripts/**'
+              - '.github/workflows/**'
+              - '.cursor/BUGBOT.md'
             javascript:
               - 'packages/claude-dev-env/**'
               - 'package.json'
@@ -83,8 +99,9 @@ jobs:
   python:
     name: Python suite (ubuntu)
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.python == 'true'
+    if: github.event_name != 'pull_request' || needs.changes.outputs.package_suite == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -100,123 +117,69 @@ jobs:
             pytest-xdist \
             pyyaml \
             psycopg \
-            mypy \
-            ruff
+            mypy
 
       - name: Configure git identity for test repos
         run: |
-          git config --global user.email "ci@github.com"
+          git config --global user.email "ci@example.com"
           git config --global user.name "CI"
 
       - name: Prepare pytest basetemp under RUNNER_TEMP
         run: |
-          mkdir -p "$RUNNER_TEMP/pytest-basetemp-root"
           mkdir -p "$RUNNER_TEMP/pytest-basetemp-pkg"
-
-      - name: Root suite (tests/)
-        env:
-          GITHUB_STEP_SUMMARY: ${{ runner.temp }}/pytest-step-summary-root.md
-        run: |
-          set -euo pipefail
-          deselect_args=()
-          for list_file in \
-            .github/ci/live-post-audit-deselects.txt \
-            .github/ci/windows-semantics-node-ids.txt \
-            .github/ci/known-pending-deselects.txt \
-            .github/ci/author-swap-deselects.txt
-          do
-            while IFS= read -r node_id || [ -n "${node_id}" ]; do
-              node_id="${node_id//$'\r'/}"
-              case "${node_id}" in
-                ''|\#*) continue ;;
-              esac
-              deselect_args+=(--deselect="${node_id}")
-            done < "${list_file}"
-          done
-          expected_deselect_count=0
-          for list_file in \
-            .github/ci/live-post-audit-deselects.txt \
-            .github/ci/windows-semantics-node-ids.txt \
-            .github/ci/known-pending-deselects.txt \
-            .github/ci/author-swap-deselects.txt
-          do
-            while IFS= read -r node_id || [ -n "${node_id}" ]; do
-              node_id="${node_id//$'\r'/}"
-              case "${node_id}" in
-                ''|\#*) continue ;;
-              esac
-              expected_deselect_count=$((expected_deselect_count + 1))
-            done < "${list_file}"
-          done
-          deselect_flag_count=${#deselect_args[@]}
-          echo "deselect flag count=${deselect_flag_count} expected non-comment lines=${expected_deselect_count}"
-          if [ "${deselect_flag_count}" -ne "${expected_deselect_count}" ]; then
-            echo "ERROR: deselect_args length (${deselect_flag_count}) != expected non-comment line count (${expected_deselect_count})"
-            exit 1
-          fi
-          for each_deselect_flag in "${deselect_args[@]}"; do
-            case "${each_deselect_flag}" in
-              *test_fan_out_dispatch.py*)
-                echo "known-pending deselect: ${each_deselect_flag}"
-                ;;
-            esac
-          done
-          python -m pytest tests/ \
-            --basetemp="$RUNNER_TEMP/pytest-basetemp-root" \
-            -q \
-            -n auto \
-            "${deselect_args[@]}"
 
       - name: Package suite
         env:
           GITHUB_STEP_SUMMARY: ${{ runner.temp }}/pytest-step-summary-pkg.md
         run: |
           set -euo pipefail
-          deselect_args=()
-          for list_file in \
-            .github/ci/live-post-audit-deselects.txt \
-            .github/ci/windows-semantics-node-ids.txt \
-            .github/ci/known-pending-deselects.txt \
-            .github/ci/author-swap-deselects.txt
-          do
-            while IFS= read -r node_id || [ -n "${node_id}" ]; do
-              node_id="${node_id//$'\r'/}"
-              case "${node_id}" in
-                ''|\#*) continue ;;
-              esac
-              deselect_args+=(--deselect="${node_id}")
-            done < "${list_file}"
-          done
-          expected_deselect_count=0
-          for list_file in \
-            .github/ci/live-post-audit-deselects.txt \
-            .github/ci/windows-semantics-node-ids.txt \
-            .github/ci/known-pending-deselects.txt \
-            .github/ci/author-swap-deselects.txt
-          do
-            while IFS= read -r node_id || [ -n "${node_id}" ]; do
-              node_id="${node_id//$'\r'/}"
-              case "${node_id}" in
-                ''|\#*) continue ;;
-              esac
-              expected_deselect_count=$((expected_deselect_count + 1))
-            done < "${list_file}"
-          done
-          deselect_flag_count=${#deselect_args[@]}
-          echo "deselect flag count=${deselect_flag_count} expected non-comment lines=${expected_deselect_count}"
-          if [ "${deselect_flag_count}" -ne "${expected_deselect_count}" ]; then
-            echo "ERROR: deselect_args length (${deselect_flag_count}) != expected non-comment line count (${expected_deselect_count})"
-            exit 1
-          fi
-          for each_deselect_flag in "${deselect_args[@]}"; do
-            case "${each_deselect_flag}" in
-              *test_fan_out_dispatch.py*)
-                echo "known-pending deselect: ${each_deselect_flag}"
-                ;;
-            esac
-          done
+          source .github/ci/build-deselect-args.sh
           python -m pytest packages/claude-dev-env \
             --basetemp="$RUNNER_TEMP/pytest-basetemp-pkg" \
+            -q \
+            -n auto \
+            "${deselect_args[@]}"
+
+  python-root:
+    name: Root suite (ubuntu)
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.root_suite == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python test dependencies
+        run: |
+          pip install -e packages/claude-dev-env/ \
+            pytest \
+            pytest-xdist \
+            pyyaml \
+            psycopg \
+            mypy
+
+      - name: Configure git identity for test repos
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+
+      - name: Prepare pytest basetemp under RUNNER_TEMP
+        run: |
+          mkdir -p "$RUNNER_TEMP/pytest-basetemp-root"
+
+      - name: Root suite (tests/)
+        env:
+          GITHUB_STEP_SUMMARY: ${{ runner.temp }}/pytest-step-summary-root.md
+        run: |
+          set -euo pipefail
+          source .github/ci/build-deselect-args.sh
+          python -m pytest tests/ \
+            --basetemp="$RUNNER_TEMP/pytest-basetemp-root" \
             -q \
             -n auto \
             "${deselect_args[@]}"
@@ -226,6 +189,7 @@ jobs:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.javascript == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -242,7 +206,10 @@ jobs:
 
   quality-gate:
     name: Quality gate (check.ps1)
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.package_suite == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -254,45 +221,16 @@ jobs:
       - name: Install quality-gate dependencies
         run: |
           pip install -e packages/claude-dev-env/ \
-            pytest \
             ruff \
             mypy
 
-      - name: "Run check.ps1 (full gate: ruff + mypy + enforcer pytest)"
+      - name: "Run check.ps1 -SkipTests (ruff + mypy)"
         shell: pwsh
         run: |
-          # Full check.ps1 gate (ruff + mypy + enforcer pytest). PYTEST_ADDOPTS carries
-          # basetemp under RUNNER_TEMP plus documented deselect lists. Local gate may run more tests (no deselects) - deliberate.
-          $allDeselectListFiles = @(
-            '.github/ci/live-post-audit-deselects.txt'
-            '.github/ci/windows-semantics-node-ids.txt'
-            '.github/ci/known-pending-deselects.txt'
-            '.github/ci/author-swap-deselects.txt'
-          )
-          $allDeselectFlags = [System.Collections.Generic.List[string]]::new()
-          $expectedDeselectCount = 0
-          foreach ($eachListFile in $allDeselectListFiles) {
-            foreach ($eachRawLine in Get-Content -LiteralPath $eachListFile) {
-              $eachNodeId = $eachRawLine -replace "`r", ''
-              if ([string]::IsNullOrWhiteSpace($eachNodeId)) { continue }
-              if ($eachNodeId.StartsWith('#')) { continue }
-              $allDeselectFlags.Add("--deselect=$eachNodeId")
-              $expectedDeselectCount++
-            }
-          }
-          $deselectFlagCount = $allDeselectFlags.Count
-          Write-Host "deselect flag count=$deselectFlagCount expected non-comment lines=$expectedDeselectCount"
-          if ($deselectFlagCount -ne $expectedDeselectCount) {
-            throw "deselect_args length ($deselectFlagCount) != expected non-comment line count ($expectedDeselectCount)"
-          }
-          # Full repo-relative node IDs match when check.ps1 runs pytest from
-          # hooks/blocking (pytest rootdir is the monorepo root). Do not strip
-          # the packages/claude-dev-env/hooks/blocking/ prefix.
-          $gateBasetemp = Join-Path $env:RUNNER_TEMP 'pytest-basetemp-gate'
-          New-Item -ItemType Directory -Force -Path $gateBasetemp | Out-Null
-          $env:PYTEST_ADDOPTS = "--basetemp=$gateBasetemp " + ($allDeselectFlags -join ' ')
-          Write-Host "PYTEST_ADDOPTS deselect count=$deselectFlagCount basetemp=$gateBasetemp"
-          $checkOutputLines = & pwsh -File packages/claude-dev-env/scripts/check.ps1 2>&1
+          # Static-analysis gate: ruff + mypy. The enforcer pytest suite runs in
+          # the package-suite job under the same event gating, so check.ps1 runs
+          # with -SkipTests here. The bare local check.ps1 stays the full gate.
+          $checkOutputLines = & pwsh -File packages/claude-dev-env/scripts/check.ps1 -SkipTests 2>&1
           $checkExitCode = $LASTEXITCODE
           $checkOutputLines | ForEach-Object { Write-Host $_ }
           $checkOutputText = ($checkOutputLines | Out-String)
@@ -305,7 +243,10 @@ jobs:
 
   windows-semantics:
     name: Windows-semantics micro-suite
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.package_suite == 'true'
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -315,7 +256,7 @@ jobs:
           cache: pip
 
       - name: Install Python test dependencies
-        run: pip install -e packages/claude-dev-env/ pytest pytest-xdist pyyaml psycopg mypy ruff
+        run: pip install -e packages/claude-dev-env/ pytest
 
       - name: Run windows-semantics node IDs
         shell: pwsh
