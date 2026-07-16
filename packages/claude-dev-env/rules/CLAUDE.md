@@ -5,7 +5,7 @@ paths:
 
 # rules
 
-Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. Claude Code loads these as always-on behavioral constraints for every session. Each `.md` file covers one named rule; hook-enforced rules are also backed by a Python hook in `hooks/`.
+Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule without `paths:` frontmatter loads at the start of every session; a rule with `paths:` frontmatter loads only when the session works with a file its globs match. The `InstructionsLoaded` log records that match as a `path_glob_match` event. Each `.md` file covers one named rule; hook-enforced rules are also backed by a Python hook in `hooks/`.
 
 ## Files
 

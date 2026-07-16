@@ -31,7 +31,7 @@ These come from the official Claude Code documentation; do not re-derive them.
 | Files in `.claude/rules/` without `paths:` frontmatter load **every** session | "Rules without `paths` frontmatter are loaded unconditionally and apply to all files" |
 | Path-scoped rules load **lazily** when matching files are accessed | "Rules can be scoped to specific files using YAML frontmatter with the `paths` field. These conditional rules only apply when Claude is working with files matching the specified patterns" |
 | Skills preload **metadata only** | "At startup, only the metadata (name and description) from all Skills is pre-loaded. Claude reads SKILL.md only when the Skill becomes relevant, and reads additional files only as needed" |
-| `@`-imports inside fenced/inline code blocks do not trigger imports | Empirical (verified in this skill's source session) — referenced files alongside backtick-wrapped `@` paths do not appear in session-start context |
+| `@`-imports inside fenced/inline code blocks do not trigger imports | Empirical (`InstructionsLoaded` hook): a bare `@`-import fires an `include` load event; the same path wrapped in backticks fires none, so the referenced file stays out of session-start context |
 
 ## Audit workflow
 
