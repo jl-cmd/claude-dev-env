@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 HOOK_SCRIPT_PATH = Path(__file__).parent / "plain_language_blocker.py"
 _HOOKS_DIR = str(Path(__file__).resolve().parent)
 _HOOKS_ROOT = str(Path(__file__).resolve().parent.parent)
@@ -183,6 +185,19 @@ def test_write_markdown_with_banned_term_is_denied(tmp_path: Path) -> None:
     }
     completed = _run_hook_with_payload(payload)
     assert _decision_from(completed) == "deny"
+
+
+def test_write_markdown_at_ephemeral_path_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "/tmp/notes.md",
+            "content": "This guide explains how to utilize the new cache layer.",
+        },
+    }
+    completed = _run_hook_with_payload(payload)
+    assert _decision_from(completed) is None
 
 
 def test_write_non_markdown_is_ignored(tmp_path: Path) -> None:
