@@ -18,6 +18,9 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from blocking.pr_description_pr_number import (  # noqa: E402
+    _extract_pr_number_from_command,
+)
 from hooks_constants.convergence_gate_blocker_constants import (  # noqa: E402
     ALL_GH_PR_VIEW_NUMBER_COMMAND,
     COMMAND_SEPARATOR_PATTERN,
@@ -26,9 +29,6 @@ from hooks_constants.convergence_gate_blocker_constants import (  # noqa: E402
     PR_URL_OWNER_REPO_NUMBER_PATTERN,
     REPO_OVERRIDE_FLAG_PATTERN,
     REPO_SLUG_TEMPLATE,
-)
-from blocking.pr_description_pr_number import (  # noqa: E402
-    _extract_pr_number_from_command,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
