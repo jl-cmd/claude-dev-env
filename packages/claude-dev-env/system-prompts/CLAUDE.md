@@ -1,16 +1,16 @@
 # system-prompts
 
-System prompt files installed into `~/.claude/system-prompts/` by `bin/install.mjs`. Claude Code loads these as the base persona and behavioral protocol for a session.
+System-prompt reference files installed into `~/.claude/system-prompts/` by `bin/install.mjs`. Rules and skills pull a file (or one of its sections) into context on demand by citing its installed path.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `software-engineer.xml` | Primary system prompt: defines the software engineering role, task-scope rules, output style, and the BDD `<behavior_protocol>` that rules in `rules/bdd.md` reference |
+| `software-engineer.xml` | Software-engineering reference: defines the engineering role, task-scope rules, output style, and the BDD `<behavior_protocol>` that `rules/bdd.md` cites on demand |
 
 ## Format
 
-Files use XML with named sections (`<role>`, `<task_scope>`, `<output_style>`, `<behavior_protocol>`, etc.). Claude Code injects the full file into the system prompt slot at session start.
+Files use XML with named sections (`<role>`, `<task_scope>`, `<output_style>`, `<behavior_protocol>`, etc.). A rule or skill cites a file, or one of its sections, to pull it into context when the task needs it.
 
 ## Adding a prompt
 

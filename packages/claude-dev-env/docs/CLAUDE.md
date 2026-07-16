@@ -14,8 +14,6 @@ Reference documentation installed into `~/.claude/docs/` by `bin/install.mjs`. T
 | `PR_DESCRIPTION_GUIDE.md` | Authoritative reference for the `pr-description-writer` agent; PR body shapes derived from a 120-PR Anthropic corpus |
 | `DJANGO_PATTERNS.md` | Django-specific coding patterns |
 | `REACT_PATTERNS.md` | React-specific coding patterns |
-| `emotion-informed-prompt-design.md` | Guidance for emotionally-aware prompt authoring |
-| `agents-md-alignment-plan.md` | Alignment between `AGENTS.md` review-tool rules and the local hook enforcement layer |
 
 ## Subdirectory
 
