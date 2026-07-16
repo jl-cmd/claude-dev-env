@@ -2,12 +2,12 @@
 name: autoconverge
 description: >-
   Drives one draft PR to convergence in one autonomous run with a host-selected
-  pacer (Workflow tool or portable continuous driver): a deterministic static
-  sweep, then code review, bug audit, and self-review on one HEAD, all fixes in
-  one commit, then Bugbot, Copilot, and Codex as terminal confirmation gates
-  before ready. Use when the user says '/autoconverge', 'autoconverge this PR',
-  'converge this PR in one run', 'run the converge workflow', or 'drive the PR
-  to ready autonomously'.
+  pacer. On workflow: three parallel lenses (code-review, bug-audit, self-review)
+  and one-commit fixes via converge.mjs. On portable: pr-converge continuous ticks
+  via portable-driver.md. Bugbot, Copilot, and Codex as terminal confirmation
+  gates before ready. Use when the user says '/autoconverge', 'autoconverge this
+  PR', 'converge this PR in one run', 'run the converge workflow', or 'drive the
+  PR to ready autonomously'.
 ---
 
 # Autoconverge
@@ -223,24 +223,36 @@ field carrying
 `evidence` is the verifier's one-line note stating what check was attempted and
 why it was not decisive.
 
-A background workflow cannot hold for a human, so the wait belongs to the
-orchestrating session. On a `blocker: "user-review"` return, run the
+The wait for a human belongs to the orchestrating session. On a
+`blocker: "user-review"` return, run the
 [`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) skill: send the
 ntfy notification (the per-finding summary and evidence note plus the `reviewUrl`
-Copilot review link), then hold with a 45-minute `ScheduleWakeup` for the user's
-response. When the user answers within the window, follow their direction. When
-the window closes with no response, run normal teardown and report the
+Copilot review link), then hold for the user's response by pacer:
+
+- **`pacer=workflow`** — 45-minute `ScheduleWakeup`.
+- **`pacer=portable`** — in-session poll or handoff per
+  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)
+  (no `ScheduleWakeup`).
+
+When the user answers within the window, follow their direction. When the
+window closes with no response, run normal teardown and report the
 inconclusive findings un-reviewed.
 
 ## Budget stop
 
-`converge.mjs` paces itself against the workflow `budget` API and stops at a
-round boundary when a full round does not fit —
-[`reference/stop-conditions.md`](reference/stop-conditions.md) § Budget stop
-gives the rule. On a `blocker: "budget"` return, write the durable handoff with
-the run id and the `Workflow({scriptPath, resumeFromRunId})` resume command
-before stopping, so a fresh session resumes the paced run without the stopped
-session's transcript.
+Branch the stop and resume path on the selected pacer. Full rule:
+[`reference/stop-conditions.md`](reference/stop-conditions.md) § Budget stop.
+
+- **`pacer=workflow`** — `converge.mjs` paces against the workflow `budget` API
+  and stops at a round boundary when a full round does not fit. On a
+  `blocker: "budget"` return, write the durable handoff with the run id and the
+  `Workflow({scriptPath, resumeFromRunId})` resume command before stopping, so a
+  fresh session resumes the paced run without the stopped session's transcript.
+- **`pacer=portable`** — stop at a tick boundary when the session cannot cover a
+  full clean tick; write the durable handoff and resume with
+  `/autoconverge <PR URL>` (see
+  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)).
+  Do not instruct a Workflow resume on the portable path.
 
 ## Teardown
 
