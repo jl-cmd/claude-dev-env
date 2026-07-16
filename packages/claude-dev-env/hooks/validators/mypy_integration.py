@@ -1,9 +1,30 @@
 """Mypy integration for static type checking."""
 
+import contextlib
 import subprocess
+import sys
+import tempfile
 import tomllib
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+
+_hooks_directory = str(Path(__file__).resolve().parent.parent)
+
+try:
+    from hooks_constants.mypy_integration_constants import (
+        GIT_DIRECTORY_NAME,
+        PYPROJECT_FILENAME,
+        PYTHON_SOURCE_SUFFIX,
+    )
+except ModuleNotFoundError:
+    if _hooks_directory not in sys.path:
+        sys.path.insert(0, _hooks_directory)
+    from hooks_constants.mypy_integration_constants import (
+        GIT_DIRECTORY_NAME,
+        PYPROJECT_FILENAME,
+        PYTHON_SOURCE_SUFFIX,
+    )
 
 
 @dataclass
@@ -54,7 +75,7 @@ def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
         table, or ``None`` when no such file exists between ``starting_file``
         and the filesystem root.
     """
-    pyproject_filename_for_lookup = "pyproject.toml"
+    pyproject_filename_for_lookup = PYPROJECT_FILENAME
     resolved_starting_file = starting_file.resolve()
     current_directory = resolved_starting_file.parent if resolved_starting_file.is_file() else resolved_starting_file
     for each_candidate_directory in [current_directory, *current_directory.parents]:
@@ -62,6 +83,97 @@ def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
         if candidate_pyproject.is_file() and _pyproject_contains_tool_mypy(candidate_pyproject):
             return candidate_pyproject
     return None
+
+
+def find_module_resolution_root(starting_file: Path) -> Path | None:
+    """Return the nearest ancestor directory that roots a project, else None.
+
+    A project root is the first ancestor holding a ``.git`` entry or a
+    ``pyproject.toml``. Mypy resolves a first-party import against its working
+    directory, so anchoring there binds ``config.*`` to the target file's own
+    project and keeps a foreign ``config`` in the caller's directory out of scope.
+
+    ::
+
+        target_repo/.git + target_repo/tools/x.py -> target_repo
+        /tmp/detached/x.py (no marker up-tree)      -> None
+
+    Args:
+        starting_file: The file (or directory) the walk begins from.
+
+    Returns:
+        The nearest ancestor Path that holds ``.git`` or ``pyproject.toml``,
+        or ``None`` when no such ancestor exists.
+    """
+    git_entry_name = GIT_DIRECTORY_NAME
+    pyproject_filename = PYPROJECT_FILENAME
+    resolved_starting_file = starting_file.resolve()
+    search_origin = resolved_starting_file.parent if resolved_starting_file.is_file() else resolved_starting_file
+    for each_candidate_directory in [search_origin, *search_origin.parents]:
+        has_git_entry = (each_candidate_directory / git_entry_name).exists()
+        has_pyproject = (each_candidate_directory / pyproject_filename).is_file()
+        if has_git_entry or has_pyproject:
+            return each_candidate_directory
+    return None
+
+
+def _first_module_resolution_root(all_py_files: list[str]) -> Path | None:
+    """Return the project root of the first rooted target file, or None."""
+    for each_py_file in all_py_files:
+        resolution_root = find_module_resolution_root(Path(each_py_file))
+        if resolution_root is not None:
+            return resolution_root
+    return None
+
+
+@contextlib.contextmanager
+def mypy_working_directory(all_py_files: list[str]) -> Iterator[str]:
+    """Yield the working directory mypy resolves first-party imports from.
+
+    ::
+
+        target_repo/tools/serialize_tool.py -> yields target_repo
+        /tmp/detached/serialize_tool.py       -> yields a fresh empty temp dir
+
+    A rooted file yields its project root so ``config.constants`` binds to the
+    target repo's own package; a detached file yields an isolated directory so
+    no foreign top-level package leaks in.
+
+    Args:
+        all_py_files: Absolute or relative paths of the Python files under check.
+
+    Yields:
+        A directory path string mypy should use as its working directory.
+    """
+    resolution_root = _first_module_resolution_root(all_py_files)
+    if resolution_root is not None:
+        yield str(resolution_root)
+        return
+    with tempfile.TemporaryDirectory() as isolated_directory:
+        yield isolated_directory
+
+
+def _mypy_config_argument(all_py_files: list[str]) -> list[str]:
+    """Return the ``--config-file`` argument for the first file with a mypy config."""
+    for each_py_file in all_py_files:
+        discovered_pyproject = find_pyproject_with_mypy_config(Path(each_py_file))
+        if discovered_pyproject is not None:
+            return ["--config-file", str(discovered_pyproject)]
+    return []
+
+
+def _run_mypy_subprocess(all_py_files: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run mypy over *all_py_files* from each file's own project root."""
+    config_argument = _mypy_config_argument(all_py_files)
+    with mypy_working_directory(all_py_files) as working_directory:
+        return subprocess.run(
+            ["mypy", *config_argument, "--ignore-missing-imports", "--no-error-summary"]
+            + all_py_files,
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=working_directory,
+        )
 
 
 def run_mypy_check(files: list[Path]) -> MypyResult:
@@ -72,29 +184,18 @@ def run_mypy_check(files: list[Path]) -> MypyResult:
     if not check_mypy_available():
         return MypyResult(passed=True, output="Mypy not installed - skipping", error_count=0)
 
-    py_files = [str(f) for f in files if f.suffix == ".py"]
-    if not py_files:
+    python_source_suffix = PYTHON_SOURCE_SUFFIX
+    all_py_files = [
+        str(each_file) for each_file in files if each_file.suffix == python_source_suffix
+    ]
+    if not all_py_files:
         return MypyResult(passed=True, output="No Python files", error_count=0)
 
-    config_argument: list[str] = []
-    for each_py_file in py_files:
-        discovered_pyproject = find_pyproject_with_mypy_config(Path(each_py_file))
-        if discovered_pyproject is not None:
-            config_argument = ["--config-file", str(discovered_pyproject)]
-            break
-
-    result = subprocess.run(
-        ["mypy", *config_argument, "--ignore-missing-imports", "--no-error-summary"]
-        + py_files,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    error_count = result.stdout.count(": error:")
+    completed_process = _run_mypy_subprocess(all_py_files)
+    error_count = completed_process.stdout.count(": error:")
 
     return MypyResult(
-        passed=result.returncode == 0,
-        output=result.stdout or result.stderr or "No type errors",
+        passed=completed_process.returncode == 0,
+        output=completed_process.stdout or completed_process.stderr or "No type errors",
         error_count=error_count,
     )

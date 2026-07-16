@@ -42,6 +42,8 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `local_identity.py` | Loader for local machine values: NAS host, ssh user, and ssh port the ssh enforcer guards (`CLAUDE_NAS_*` / `~/.claude/local-identity.json` with placeholder defaults), the PII commit-scan exempt-repo slug set (`CLAUDE_PII_EXEMPT_REPOS` / `pii_exempt_repositories`), and the per-repository allowlisted-values mapping (`pii_allowlisted_values`, keyed by owner/repo slug) read from the git-ignored local file whose path `CLAUDE_LOCAL_IDENTITY_PATH` may point elsewhere; also composes the ssh enforcer's two deny messages that quote the NAS values |
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
+| `mypy_integration_constants.py` | Path markers (``.git``, ``.py``, ``pyproject.toml``) for mypy project-root resolution |
+| `mypy_validator_cache_constants.py` | Cache paths and tunables for the mypy_validator per-session caches |
 | `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, launcher-wrapper set, shell control-operator tokens and split pattern, leading-assignment and duration patterns, and the batch-mode pattern for the NAS ssh binary enforcer |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |
 | `orphan_css_class_constants.py` | Scan radius and selector patterns for the orphan-CSS-class check |
